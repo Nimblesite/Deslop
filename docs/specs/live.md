@@ -105,10 +105,6 @@ Embedding refreshes are always low priority with bounded batches and yield state
 
 Progress is observable: `queued`, `starting`, `running`, `complete`, `failed`.
 
-The terminal phase is a function of **the embeddings the pass produced**, never of whether the pipeline returned a report. A refresh that indexed no subtrees while attempting some has produced no semantic axis at all: it terminates `failed`, with `done = 0` and a message naming the provider failure, and `latest_report` keeps the last good generation. Committing that embeddings-off snapshot and announcing `complete` would tell the user the semantic pass ran while every clone that needed it is missing from the report — a false negative with no surface on which to notice it. Pinned by `deslop-lsp/tests/embedding_failure_progress.rs`; `run_embedding_refresh` converts a zero-embedding pass into a typed refresh failure before any commit.
-
-The one-shot CLI is a different contract: it renders whatever the pass measured, and `EmbeddingProvenance` carries `attempted_subtrees` / `indexed_subtrees` / `failed_subtrees` so a wholly failed pass is visible in the report rather than suppressed (`deslop/tests/ollama_failures.rs`).
-
 A user-approved model switch from either live surface writes the shared workspace embedding settings (`.vscode/settings.json` keys `deslop.embedding.*`). The MCP must not hold a successful model change in process memory only — it writes the settings file so LSP picks it up on config reload.
 
 ### [LIVE-STATE] In-process state
@@ -138,16 +134,6 @@ After the **initial** full pipeline pass and after every **cold-pass install** (
 **Format:** canonical `Report` JSON — identical schema to `deslop --output report.json`.
 
 **Use:** the file is an **LSP-private startup cache**, not an IPC channel. On the next LSP startup, [LIVE-CACHE-SEED] (`AnalysisSession::try_seeded_from_cache`) loads it so the editor sees clusters within milliseconds while the cold full pass runs in the background.
-
-### [LIVE-CACHE-SEED-KEY] A seed must have been produced by this run's settings
-
-A cache seed is served to the editor **as an answer**, and an answer computed under different settings is a wrong answer, not a slightly old one. The seed was accepted on one condition — that the bytes deserialise as a `Report`. Nothing else was compared: not the tool version that produced it, not the `min_nodes` it was clustered at, not the configuration that scoped it, not the embedding provider that scored it. A report analysed at `--min-nodes 4` with embeddings on was therefore served verbatim to a session running at `--min-nodes 40` with embeddings off, and [LIVE-CLUSTER-OFFSET-FRESHNESS] then stamped current mtimes over those clusters, so the answer read as **fresh** rather than as a placeholder: byte offsets from a different analysis, pointing into files the editor has since changed, under a duplication figure the user is no longer asking for.
-
-The run that writes the state file therefore records its own identity in `{workspace_root}/.deslop/cache/live-report.key`, one component per line: tool version, canonicalised workspace root, `min_nodes`, the incremental flag, the resolved config path **and a digest of its bytes**, and the embedding mode plus provider/model/version/dimensions. The loader refuses a seed whose key is absent, unreadable, or different, and deletes the report so the next start is a cold pass. An absent key is a refusal, not a pass: a seed with no recorded provenance is a seed of unknown provenance, which is also how every cache written before the key existed is retired.
-
-The config **digest** is what makes an edited `.deslop.toml` invalidate the seed — the path alone never changes when the user edits it.
-
-Ordering is deliberate: the report is written first and the key second. A crash between them leaves the previous key, which either still describes the run — in which case the seed is an ordinary earlier generation, which is all a seed ever is — or does not, in which case it is refused. No interleaving produces an accepted incompatible seed. Implemented in `live/cache_seed_key.rs`.
 
 **Not written on:** per-keystroke incremental updates ([LIVE-SCHEDULER]) and embedding refresh commits — those used to spam the disk and contributed nothing to startup latency. The MCP no longer reads this file ([MCP-IPC-CLIENT]); it gets live state via the IPC socket. Stale-cache reads cannot leak hidden clusters because no one reads the cache except the LSP itself, post-restart, before its first cold pass overwrites it.
 
@@ -281,22 +267,12 @@ pub struct ReportDelta {
     pub clusters_added: Vec<ReportCluster>,
     pub clusters_removed: Vec<String>,
     pub clusters_updated: Vec<ReportCluster>,
-    pub literal_findings_added: Vec<LiteralFinding>,
-    pub literal_findings_removed: Vec<String>,
-    pub literal_findings_updated: Vec<LiteralFinding>,
-    pub metrics: RepoMetrics,
     pub cache_stats: CacheStats,
     pub tool_version: String,
 }
 ```
 
-`ChangeSummary` reports the three clone-cluster counts, the three literal-finding counts, and `worst_mass`; it contains no evidence score.
-
 Cluster ids are stable across runs ([REPORTING-CONTEXT §"How to read the report format"]). Clients that miss generations ask for a full snapshot via `report/get`, then resume delta consumption at the snapshot's generation.
-
-**A cluster whose id survived is updated when any cluster field changed.** Cluster diffing covers occurrence membership and locations, canonical extent, mass, truncation, diff tags, and rank. Pair evidence and pair classification are not cluster fields and travel only in an explicit pair-comparison response. The comparison is derived from the wire model rather than a hand-written observed-field list, so new cluster fields cannot silently bypass live refresh.
-
-`ReportCluster` therefore derives `PartialEq` in the generated wire module and the delta compares whole values. A field added to `docs/models/live-ipc.td` is covered the day it lands. `is_empty` — which gates the `report/changed` notification ([LIVE-NOTIFICATIONS]) — reads the same verdict. Pinned by `crates/deslop-core/tests/live_delta_field_coverage.rs`, which walks the rendered cluster's own JSON and mutates one scalar leaf at a time rather than naming the fields, so the test cannot drift either.
 
 ### [LIVE-QUERY-API] Query API (LSP-internal)
 
@@ -305,12 +281,10 @@ The `live` module exposes the `LiveApi` trait. The LSP holds a `LiveApi` impl an
 | Method | Input | Output | Purpose |
 |---|---|---|---|
 | `report/get` | `{}` | `Report` | Full current snapshot. |
-| `report/schemaDoc` | `{}` | `SchemaDocPayload` | Return the canonical report and pair-evidence schema markdown without embedding it in every report page. |
 | `report/delta` | `{ since_generation: u64 }` | `ReportDelta \| null` | Pull changes since a known generation. |
 | `report/forFile` | `{ path }` | `FileReport` | Clusters touching this file. |
 | `report/forRange` | `{ path, start_byte, end_byte }` | `Vec<ReportCluster>` | Clusters overlapping the byte range. |
 | `cluster/byId` | `{ id }` | `ReportCluster` | Fetch by stable id. |
-| `pair/compare` | `{ left: { path, start_byte, end_byte }, right: { path, start_byte, end_byte } }` | `PairComparison` | Recompute and return admission evidence for exactly the two named occurrences; never infer endpoints from a cluster. |
 | `duplicates/findSimilar` | `{ path, start_byte, end_byte }` or `{ snippet, language }` | `Vec<ReportCluster>` | Parse + fingerprint + LSH + embedding against the live index. No cache mutation. |
 | `embedding/listModels` | `{}` | `Vec<EmbeddingModelInfo>` | Enumerate available Ollama models. |
 | `embedding/setModel` | `{ provider_id, model_id, endpoint? }` | `EmbeddingProvenance \| null` | Switch the live embedding model; write workspace settings. |
@@ -341,7 +315,7 @@ The LSP pushes three notification types to LSP clients (VSIX, other editors):
 
 - `report/changed` — fires after every pass with a non-empty delta. Payload: `{ generation: u64, summary: ChangeSummary }`. Must fire for pure removals — suppressing it is a bug.
 - `analysis/state` — fires on `idle → running`, `running → idle`, and on scheduler errors.
-- `embedding/progress` — fires around embedding refreshes. Payload: `{ phase, provider_id, model_id, done, total, percent, message? }`. `percent` is `done / total` as a percentage, computed by the engine's single `percent` function ([METRICS-REPO](pipeline.md#metrics-repo)) so a progress readout is derived exactly where every other Deslop percentage is ([PRINCIPLES-ONE-CALCULATION](principles.md#principles-one-calculation)).
+- `embedding/progress` — fires around embedding refreshes. Payload: `{ phase, provider_id, model_id, done, total, message? }`.
 
 The MCP **is** an IPC subscriber. It opens one long-lived `report/subscribe` connection over the socket and re-emits each `report/changed` notification to its own client as `notifications/deslop/reportChanged` ([MCP-NOTIFICATIONS]). It never reads `.deslop/cache/live-report.json` and never watches the workspace.
 
@@ -378,15 +352,13 @@ The MCP resolves the endpoint per call: try the Unix socket where the platform h
 
 | Method | MCP tool consumer |
 |---|---|
-| `report/get` | `duplicates` |
-| `report/schemaDoc` | `schema-doc` |
-| `report/forFile` | `duplicates { path, … }` |
-| `report/forRange` | `duplicates { path, start_byte, end_byte, … }` |
+| `report/get` | `report-get`, `report-query`, top-offenders bookkeeping |
+| `report/forFile` | `report-for-file` |
+| `report/forRange` | `report-for-range` |
 | `cluster/byId` | `cluster-by-id` |
-| `pair/compare` | `compare-pair` |
-| `session/config` | `session` |
+| `session/config` | `session-config` |
 | `duplicates/findSimilar` | `find-similar` |
-| `embedding/listModels` / `embedding/setModel` | `session` |
+| `embedding/listModels` | `list-embedding-models` |
 | `deslop.lsp.refreshReport` | `rescan` |
 
 **Long-lived subscription**:
@@ -402,7 +374,7 @@ A cold-cache `deslop` batch run over a 100 K-LOC C# corpus with embeddings
 disabled (structural + token LSH passes only) completes in **< 30 s** on a release
 binary. This is the CLI counterpart to the daemon budgets above; the embedding
 pass is excluded because Ollama latency dominates and is bounded separately
-([FUSED-EMBED-PROVIDER]). The budget is validated **manually** against a release
+([FUSION-EMBED-PROVIDER]). The budget is validated **manually** against a release
 build on a real corpus — coverage-instrumented `cargo test` triples runtime, so
 the E2E suite carries only a lax anti-quadratic regression guard plus correctness
 assertions (every file analysed, ≥ 1 ranked cluster). Ratchet only.

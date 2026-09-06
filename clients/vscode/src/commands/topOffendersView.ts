@@ -10,26 +10,25 @@ import * as vscode from "vscode";
 
 import { ReportStore } from "../reportStore";
 import {
+  BUCKETS,
+  bucketLabels,
+  CATEGORIES,
+  categoryLabels,
   FacetFilter,
   ReportCluster,
-  SEVERITIES,
+  resolveBucket,
+  resolveCategory,
   sanitizeFacetFilter,
-  severityLabel,
-  Severity,
-  clusterBand,
 } from "../types/report";
-
-const FILTER_SEVERITIES_SETTING = "topOffenders.filterSeverities";
-const DESLOP_CONFIGURATION_NAMESPACE = "deslop";
 
 async function updateWorkspace(key: string, value: unknown): Promise<void> {
   await vscode.workspace
-    .getConfiguration(DESLOP_CONFIGURATION_NAMESPACE)
+    .getConfiguration("deslop")
     .update(key, value, vscode.ConfigurationTarget.Workspace);
 }
 
 export async function setTopOffendersGroupBy(
-  value: "cluster" | "file" | "folder" | "severity",
+  value: "cluster" | "file" | "folder" | "type",
 ): Promise<void> {
   await updateWorkspace("topOffenders.groupBy", value);
 }
@@ -38,57 +37,82 @@ export async function setTopOffendersSortBy(value: "impact" | "path"): Promise<v
   await updateWorkspace("topOffenders.sortBy", value);
 }
 
-// [FACET-TOP-OFFENDERS-FILTER] Reads the persisted severity facet array,
+export async function toggleTopOffendersSplitByLanguage(): Promise<void> {
+  const current = vscode.workspace
+    .getConfiguration("deslop")
+    .get<boolean>("topOffenders.splitByLanguage", false);
+  await updateWorkspace("topOffenders.splitByLanguage", !current);
+}
+
+// [FACET-TOP-OFFENDERS-FILTER] Reads the persisted facet filter arrays,
 // dropping unknown values (the typo fallback — a bad value must never
 // yield an empty tree).
 export function readTopOffendersFilter(): FacetFilter {
-  const config = vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE);
+  const config = vscode.workspace.getConfiguration("deslop");
   return sanitizeFacetFilter(
-    config.get<string[]>(FILTER_SEVERITIES_SETTING, []) ?? [],
+    config.get<string[]>("topOffenders.filterBuckets", []) ?? [],
+    config.get<string[]>("topOffenders.filterCategories", []) ?? [],
   );
 }
 
-/** True when the facet filter is active. Drives the
+/** True when any facet-filter axis is active. Drives the
  * `deslop.topOffendersFiltered` context key and toolbar icon state. */
 export function isTopOffendersFilterActive(): boolean {
-  const { severities } = readTopOffendersFilter();
-  return severities.length > 0;
+  const { buckets, categories } = readTopOffendersFilter();
+  return buckets.length > 0 || categories.length > 0;
 }
 
-// [FACET-TOP-OFFENDERS-FILTER] Clears the persisted filter — the
+// [FACET-TOP-OFFENDERS-FILTER] Clears both persisted filter axes — the
 // action bound to the filtered status row and the active-filter button.
 export async function clearTopOffendersFilter(): Promise<void> {
-  await updateWorkspace(FILTER_SEVERITIES_SETTING, []);
+  await updateWorkspace("topOffenders.filterBuckets", []);
+  await updateWorkspace("topOffenders.filterCategories", []);
 }
 
-/** One row of the Choose Filter QuickPick, remembering the wire value it
- * stands for. */
+/** One row of the Choose Filter QuickPick, remembering which axis and
+ * wire value it stands for. */
 interface FacetPickItem extends vscode.QuickPickItem {
-  wire: Severity;
+  axis: "bucket" | "category";
+  wire: string;
 }
 
-/** Rows for every severity band present in `clusters`, each with the
- * shared label and its live cluster count. Only present values are
- * offered. */
+/** Rows for every bucket and category present in `clusters`, each with
+ * the shared plain label and its live cluster count. Only present
+ * values are offered (`same_behavior` appears only when the embedding
+ * pass ran, #195). */
 function facetPickItems(clusters: ReportCluster[], current: FacetFilter): FacetPickItem[] {
   const noun = (count: number): string => (count === 1 ? "cluster" : "clusters");
-  return SEVERITIES.map((severity) => ({
-    severity,
-    count: clusters.filter((cluster) => clusterBand(cluster) === severity).length,
+  const buckets: FacetPickItem[] = BUCKETS.map((bucket) => ({
+    bucket,
+    count: clusters.filter((cluster) => resolveBucket(cluster) === bucket).length,
   }))
     .filter(({ count }) => count > 0)
-    .map(({ severity, count }) => ({
-      label: severityLabel(severity),
+    .map(({ bucket, count }) => ({
+      label: bucketLabels(bucket).plainTitle,
       description: `${count} ${noun(count)}`,
-      wire: severity,
-      picked: current.severities.includes(severity),
+      axis: "bucket",
+      wire: bucket,
+      picked: current.buckets.includes(bucket),
     }));
+  const categories: FacetPickItem[] = CATEGORIES.map((category) => ({
+    category,
+    count: clusters.filter((cluster) => resolveCategory(cluster) === category).length,
+  }))
+    .filter(({ count }) => count > 0)
+    .map(({ category, count }) => ({
+      label: categoryLabels(category).groupTitle,
+      description: `${count} ${noun(count)}`,
+      axis: "category",
+      wire: category,
+      picked: current.categories.includes(category),
+    }));
+  return [...buckets, ...categories];
 }
 
 // [FACET-TOP-OFFENDERS-FILTER] Choose Filter: a multi-select QuickPick
-// over the severity bands present in the current report. Selecting
-// nothing (and confirming) clears the filter; cancelling leaves it
-// untouched. Writes the persisted, workspace-scoped array.
+// over the buckets and categories present in the current report.
+// Selecting nothing (and confirming) clears the filter; cancelling
+// leaves it untouched. Writes both persisted, workspace-scoped arrays.
 export async function chooseTopOffendersFilter(store: ReportStore): Promise<void> {
   const clusters = store.current.visibleReport?.clusters ?? [];
   const items = facetPickItems(clusters, readTopOffendersFilter());
@@ -99,11 +123,15 @@ export async function chooseTopOffendersFilter(store: ReportStore): Promise<void
   const picked = await vscode.window.showQuickPick(items, {
     canPickMany: true,
     title: "Filter Top Offenders",
-    placeHolder: "Show only the selected severity bands (empty selection shows all)",
+    placeHolder: "Show only the selected clone types (empty selection shows all)",
   });
   if (!picked) return;
   await updateWorkspace(
-    FILTER_SEVERITIES_SETTING,
-    picked.map((item) => item.wire),
+    "topOffenders.filterBuckets",
+    picked.filter((item) => item.axis === "bucket").map((item) => item.wire),
+  );
+  await updateWorkspace(
+    "topOffenders.filterCategories",
+    picked.filter((item) => item.axis === "category").map((item) => item.wire),
   );
 }

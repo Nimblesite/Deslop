@@ -12,14 +12,14 @@
 //! structural fix is to advertise none of the standard providers at all,
 //! which these tests pin.
 
+mod common;
+
 use std::{path::Path, thread, time::Duration};
 
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 
-use crate::common::{
-    call, handshake, session::FixtureSession, spawn_lsp_on_fixture_guarded, LspGuard,
-};
+use crate::common::{call, handshake, spawn_lsp_on_fixture};
 
 const DEFINITION: &str = "textDocument/definition";
 const HOVER: &str = "textDocument/hover";
@@ -49,11 +49,12 @@ const FORBIDDEN_CAPABILITIES: &[&str] = &[
 
 #[test]
 fn initialize_advertises_no_standard_language_providers() -> Result<()> {
-    let session = FixtureSession::open("csharp-small")?;
-    let caps = session
-        .init
+    let (_workspace, mut child, mut stdin, mut stdout, _stderr) =
+        spawn_lsp_on_fixture("csharp-small")?;
+    let init = handshake(&mut stdin, &mut stdout)?;
+    let caps = init
         .pointer("/result/capabilities")
-        .ok_or_else(|| anyhow!("capabilities missing from initialize: {}", session.init))?;
+        .ok_or_else(|| anyhow!("capabilities missing from initialize: {init}"))?;
 
     for forbidden in FORBIDDEN_CAPABILITIES {
         assert!(
@@ -77,6 +78,7 @@ fn initialize_advertises_no_standard_language_providers() -> Result<()> {
         caps.get("diagnosticProvider").is_some(),
         "the additive clone diagnostics must still be advertised: {caps}"
     );
+    let _ = child.kill();
     Ok(())
 }
 
@@ -84,7 +86,7 @@ fn initialize_advertises_no_standard_language_providers() -> Result<()> {
 fn go_to_definition_is_never_answered_by_deslop() -> Result<()> {
     // F12 anywhere — including inside a clone range — must yield no Deslop
     // result, so the editor's own Go To Definition is the sole responder.
-    let (_workspace, _guard, mut stdin, mut stdout, alpha) = lsp_alpha_session()?;
+    let (_workspace, mut child, mut stdin, mut stdout, _stderr, alpha) = lsp_alpha_session()?;
 
     let response = call(
         &mut stdin,
@@ -99,6 +101,7 @@ fn go_to_definition_is_never_answered_by_deslop() -> Result<()> {
         definition_location(&response).is_none(),
         "Deslop must contribute no Go To Definition location — F12 belongs to the language server: {response}"
     );
+    let _ = child.kill();
     Ok(())
 }
 
@@ -107,7 +110,7 @@ fn go_to_definition_is_never_answered_by_deslop() -> Result<()> {
 fn hover_is_never_answered_by_deslop() -> Result<()> {
     // Hover belongs to the editor's language server. The clone card is an
     // additive client-side provider in the VSIX, not an LSP hover.
-    let (_workspace, _guard, mut stdin, mut stdout, alpha) = lsp_alpha_session()?;
+    let (_workspace, mut child, mut stdin, mut stdout, _stderr, alpha) = lsp_alpha_session()?;
 
     let response = call(
         &mut stdin,
@@ -127,6 +130,7 @@ fn hover_is_never_answered_by_deslop() -> Result<()> {
         !has_contents,
         "Deslop must contribute no hover contents — hover belongs to the language server: {response}"
     );
+    let _ = child.kill();
     Ok(())
 }
 
@@ -135,8 +139,8 @@ fn canonical_navigation_survives_via_additive_clone_diagnostics() -> Result<()> 
     // Removing the F12 overload must not cost the user canonical-occurrence
     // navigation: the additive clone diagnostic still links to the
     // canonical occurrence in the sibling file via `relatedInformation`.
-    let (_workspace, _guard, mut stdin, mut stdout, alpha) = lsp_alpha_session()?;
-    let _report = wait_for_clusters(&mut stdin, &mut stdout)?;
+    let (_workspace, mut child, mut stdin, mut stdout, _stderr, alpha) = lsp_alpha_session()?;
+    wait_for_clusters(&mut stdin, &mut stdout)?;
 
     let response = call(
         &mut stdin,
@@ -164,29 +168,7 @@ fn canonical_navigation_survives_via_additive_clone_diagnostics() -> Result<()> 
         "the clone diagnostic must link to the canonical occurrence in Beta.cs so navigation \
          survives without overloading F12: {response}"
     );
-
-    // [FUSED-PAIR-SIGNALS] The diagnostic is a cluster surface: it quotes
-    // the neutral `Duplicate code × count — mass` contract and renders no
-    // pair evidence.
-    let deslop_item = items
-        .iter()
-        .find(|item| item.get("source").and_then(Value::as_str) == Some("deslop"))
-        .ok_or_else(|| anyhow!("a deslop-sourced diagnostic: {response}"))?;
-    let message = deslop_item
-        .get("message")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("diagnostic carries a message: {deslop_item}"))?;
-    assert!(
-        message.contains(" × ") && message.contains("code") && message.contains("mass"),
-        "the neutral count and mass survive: {message}"
-    );
-    assert!(
-        !message.contains("structural")
-            && !message.contains("agreement")
-            && !message.contains("jaccard")
-            && !message.contains("embedding"),
-        "pair signals must not reach the diagnostic message: {message}"
-    );
+    let _ = child.kill();
     Ok(())
 }
 
@@ -194,8 +176,8 @@ fn canonical_navigation_survives_via_additive_clone_diagnostics() -> Result<()> 
 fn additive_code_lens_carries_deslops_own_jump_command_not_definition() -> Result<()> {
     // The additive clone code lens is how Deslop offers occurrence
     // navigation — via its own command, never by overloading F12.
-    let (_workspace, _guard, mut stdin, mut stdout, alpha) = lsp_alpha_session()?;
-    let _report = wait_for_clusters(&mut stdin, &mut stdout)?;
+    let (_workspace, mut child, mut stdin, mut stdout, _stderr, alpha) = lsp_alpha_session()?;
+    wait_for_clusters(&mut stdin, &mut stdout)?;
 
     let response = call(
         &mut stdin,
@@ -220,29 +202,7 @@ fn additive_code_lens_carries_deslops_own_jump_command_not_definition() -> Resul
         command, "deslop.jumpToNextOccurrence",
         "the lens must navigate via Deslop's own command, never textDocument/definition: {response}"
     );
-
-    // [FUSED-PAIR-SIGNALS] The lens is a cluster surface: it states the
-    // copy count and the jump action, and renders no pair evidence.
-    let title = first_lens
-        .pointer("/command/title")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("lens carries a title: {first_lens}"))?;
-    assert!(
-        title.starts_with("●● ") && title.ends_with(" — jump to next"),
-        "the pre-existing glyph, count and action survive: {title}"
-    );
-    assert!(
-        !title.contains('`'),
-        "a lens title is rendered verbatim — Markdown code spans would show as \
-         literal backticks: {title}"
-    );
-    assert!(
-        !title.contains("structural")
-            && !title.contains("agreement")
-            && !title.contains("jaccard")
-            && !title.contains("embedding"),
-        "pair signals must not reach the lens title: {title}"
-    );
+    let _ = child.kill();
     Ok(())
 }
 
@@ -252,8 +212,8 @@ fn refresh_command_re_evaluates_the_corpus_after_an_edit() -> Result<()> {
     // editing Alpha.cs away from its Beta.cs twin drops the clone, and the
     // refresh reports the removal. Exercises Deslop's own command surface,
     // which is wholly separate from any standard editor request.
-    let (_workspace, _guard, mut stdin, mut stdout, alpha) = lsp_alpha_session()?;
-    let _report = wait_for_clusters(&mut stdin, &mut stdout)?;
+    let (_workspace, mut child, mut stdin, mut stdout, _stderr, alpha) = lsp_alpha_session()?;
+    wait_for_clusters(&mut stdin, &mut stdout)?;
 
     std::fs::write(
         &alpha,
@@ -273,25 +233,28 @@ fn refresh_command_re_evaluates_the_corpus_after_an_edit() -> Result<()> {
         removed >= 1,
         "editing Alpha.cs away from Beta.cs must drop the clone on refresh: {response}"
     );
+    let _ = child.kill();
     Ok(())
 }
 
-/// Copies the `csharp-small` fixture, spawns the LSP under an armed
-/// [`LspGuard`], completes the handshake, and returns the workspace (keep it
-/// bound — dropping it deletes the workspace), the guard (keep it bound — it
-/// reaps the child and drains its stderr for the whole test, GH #370), the
-/// child's stdin/stdout, and the path to `Alpha.cs`.
+/// Copies the `csharp-small` fixture, spawns the LSP, completes the
+/// handshake, and returns the workspace (keep it bound — dropping it
+/// deletes the workspace), the child, its stdin/stdout, the child's
+/// stderr (keep it bound — dropping the read end early stalls the
+/// heavily-logging LSP on a full stderr pipe so it never answers), and
+/// the path to `Alpha.cs`.
 fn lsp_alpha_session() -> Result<(
     tempfile::TempDir,
-    LspGuard,
+    std::process::Child,
     std::process::ChildStdin,
     std::io::BufReader<std::process::ChildStdout>,
+    std::process::ChildStderr,
     std::path::PathBuf,
 )> {
-    let (workspace, guard, mut stdin, mut stdout) = spawn_lsp_on_fixture_guarded("csharp-small")?;
+    let (workspace, child, mut stdin, mut stdout, stderr) = spawn_lsp_on_fixture("csharp-small")?;
     let alpha = workspace.path().join("Alpha.cs");
     let _init = handshake(&mut stdin, &mut stdout)?;
-    Ok((workspace, guard, stdin, stdout, alpha))
+    Ok((workspace, child, stdin, stdout, stderr, alpha))
 }
 
 /// Extracts a definition target URI from any of the shapes the LSP allows
@@ -307,13 +270,11 @@ fn definition_location(response: &Value) -> Option<&Value> {
 }
 
 /// Polls `deslop/reportGet` until the analysis has produced at least one
-/// cluster, so the diagnostic pull has clone data to project. Returns the
-/// settled report so a caller can pin a rendered surface against the exact
-/// signal numbers the wire published.
+/// cluster, so the diagnostic pull has clone data to project.
 fn wait_for_clusters(
     stdin: &mut std::process::ChildStdin,
     stdout: &mut std::io::BufReader<std::process::ChildStdout>,
-) -> Result<Value> {
+) -> Result<()> {
     for _ in 0..60 {
         let response = call(stdin, stdout, REPORT_GET, &json!({}))?;
         let has_clusters = response
@@ -321,7 +282,7 @@ fn wait_for_clusters(
             .and_then(Value::as_array)
             .is_some_and(|clusters| !clusters.is_empty());
         if has_clusters {
-            return Ok(response);
+            return Ok(());
         }
         thread::sleep(Duration::from_millis(500));
     }

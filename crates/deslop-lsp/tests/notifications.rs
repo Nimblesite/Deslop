@@ -15,6 +15,7 @@ use std::{
 
 use anyhow::{anyhow, ensure, Result};
 
+mod common;
 use crate::common::*;
 
 type FrameResult = std::result::Result<serde_json::Value, String>;
@@ -36,7 +37,7 @@ fn vscode_core_notifications_are_implemented_or_explicitly_nooped() -> Result<()
     let (shutdown_id, shutdown) = request("shutdown", &serde_json::Value::Null)?;
     let _shutdown_response = send_and_recv(&mut stdin, &mut stdout, shutdown_id, &shutdown)?;
 
-    let stderr_text = shutdown_and_read_stderr(child, stdin, stderr)?;
+    let stderr_text = shutdown_and_read_stderr(child, stderr)?;
     assert!(
         !stderr_text.contains("not implemented"),
         "normal VS Code notifications must be implemented or explicit no-ops: {stderr_text}"
@@ -436,15 +437,10 @@ fn json_array_len(frame: &serde_json::Value, pointer: &str) -> Result<usize> {
         .ok_or_else(|| anyhow!("missing array field {pointer}: {frame}"))
 }
 
-/// Stops the child process and returns stderr. Takes `stdin` so the server
-/// ends on EOF rather than a signal — a signalled child writes no coverage
-/// profile, so killing it here would discard everything it executed.
-fn shutdown_and_read_stderr(
-    mut child: Child,
-    stdin: ChildStdin,
-    mut stderr: ChildStderr,
-) -> Result<String> {
-    let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
+/// Stops the child process and returns stderr.
+fn shutdown_and_read_stderr(mut child: Child, mut stderr: ChildStderr) -> Result<String> {
+    let _kill = child.kill();
+    let _wait = child.wait();
     let mut text = String::new();
     let _read = stderr.read_to_string(&mut text)?;
     Ok(text)

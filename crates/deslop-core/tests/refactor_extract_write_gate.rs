@@ -5,41 +5,11 @@
 //! loss the type-safety backstop cannot catch. Writes to span-*bound*
 //! names stay extractable: they vacate with the span.
 
-use anyhow::{anyhow, Result};
+mod common;
+
+use anyhow::Result;
 
 use crate::common::clusters::needle_cluster_plan;
-
-/// Asserts the span `needle` — present twice in `text`, parsed as
-/// `file_name`'s language — refuses the verbatim extract. `subject`
-/// names the write that trips [AUTOFIX-EXTRACT-PRECONDITIONS] rule 7.
-fn assert_refused(text: &str, needle: &str, file_name: &str, subject: &str) -> Result<()> {
-    let plan = needle_cluster_plan(text, needle, file_name)?;
-    assert!(
-        plan.is_none(),
-        "{subject} must refuse the extract \
-         ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 7, #280): {plan:?}"
-    );
-    Ok(())
-}
-
-/// Asserts the span `needle` still extracts because the name it writes
-/// is span-*bound*, and that `expected` is the one free variable that
-/// flows in.
-fn assert_span_bound_extract(
-    text: &str,
-    needle: &str,
-    file_name: &str,
-    expected: &str,
-) -> Result<()> {
-    let plan = needle_cluster_plan(text, needle, file_name)?
-        .ok_or_else(|| anyhow!("a span writing only its own binding must extract"))?;
-    assert_eq!(
-        plan.free_variables,
-        vec![expected.to_owned()],
-        "only `{expected}` flows in; the written `padded` is span-bound, not free"
-    );
-    Ok(())
-}
 
 /// C#: `total` is free (declared before the span) and written inside it
 /// via compound assignment — extraction must refuse.
@@ -70,12 +40,13 @@ fn csharp_written_free_variable_refused() -> Result<()> {
                 \x20   }\n\
                 }\n";
     let needle = "var taxed = amount * taxRate / 100;\n            total += amount + taxed;";
-    assert_refused(
-        text,
-        needle,
-        "InvoiceMath.cs",
-        "a span writing free `total`",
-    )
+    let plan = needle_cluster_plan(text, needle, "InvoiceMath.cs")?;
+    assert!(
+        plan.is_none(),
+        "a span writing free `total` must refuse the extract \
+         ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 7, #280): {plan:?}"
+    );
+    Ok(())
 }
 
 /// Python: `count += step` targets the *module* binding — augmented
@@ -90,7 +61,13 @@ fn python_augmented_assignment_of_free_name_refused() -> Result<()> {
                 count += step\n\
                 total = count * 2\n";
     let needle = "count += step\ntotal = count * 2";
-    assert_refused(text, needle, "gate.py", "a span writing free `count`")
+    let plan = needle_cluster_plan(text, needle, "gate.py")?;
+    assert!(
+        plan.is_none(),
+        "a span writing free `count` must refuse the extract \
+         ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 7, #280): {plan:?}"
+    );
+    Ok(())
 }
 
 /// Rust: `counter += 1` is a `compound_assignment_expr` writing the
@@ -111,7 +88,13 @@ fn rust_compound_assignment_of_free_name_refused() -> Result<()> {
                 \x20   counter\n\
                 }\n";
     let needle = "counter += 1;\n    counter += 2;";
-    assert_refused(text, needle, "gate.rs", "a span writing free `counter`")
+    let plan = needle_cluster_plan(text, needle, "gate.rs")?;
+    assert!(
+        plan.is_none(),
+        "a span writing free `counter` must refuse the extract \
+         ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 7, #280): {plan:?}"
+    );
+    Ok(())
 }
 
 /// C#: writes to a span-*bound* name (`padded` is declared inside the
@@ -135,7 +118,14 @@ fn csharp_write_of_span_bound_name_still_extracts() -> Result<()> {
                 \x20   }\n\
                 }\n";
     let needle = "var padded = size;\n        padded += 4;\n        return padded * 2;";
-    assert_span_bound_extract(text, needle, "Padding.cs", "size")
+    let plan = needle_cluster_plan(text, needle, "Padding.cs")?
+        .ok_or_else(|| anyhow::anyhow!("a span writing only its own binding must extract"))?;
+    assert_eq!(
+        plan.free_variables,
+        vec!["size".to_owned()],
+        "only `size` flows in; the written `padded` is span-bound, not free"
+    );
+    Ok(())
 }
 
 /// C#: `total++` mutates the free `total` with no assignment node at
@@ -161,7 +151,13 @@ fn csharp_increment_of_free_name_refused() -> Result<()> {
                 \x20   }\n\
                 }\n";
     let needle = "total++;\n        var report = total * 2;\n        return report;";
-    assert_refused(text, needle, "Bumper.cs", "an increment of free `total`")
+    let plan = needle_cluster_plan(text, needle, "Bumper.cs")?;
+    assert!(
+        plan.is_none(),
+        "an increment of free `total` must refuse the extract \
+         ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 7, #280): {plan:?}"
+    );
+    Ok(())
 }
 
 /// C#: `out total` mutates the free `total` through the callee — no
@@ -185,12 +181,13 @@ fn csharp_out_argument_write_of_free_name_refused() -> Result<()> {
                 \x20   }\n\
                 }\n";
     let needle = "int.TryParse(text, out total);\n        return total * 2;";
-    assert_refused(
-        text,
-        needle,
-        "Parser.cs",
-        "an `out` argument writing free `total`",
-    )
+    let plan = needle_cluster_plan(text, needle, "Parser.cs")?;
+    assert!(
+        plan.is_none(),
+        "an `out` argument writing free `total` must refuse the extract \
+         ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 7, #280): {plan:?}"
+    );
+    Ok(())
 }
 
 /// C#: tuple deconstruction rebinds both free names even though the
@@ -212,12 +209,13 @@ fn csharp_tuple_deconstruction_of_free_names_refused() -> Result<()> {
                 \x20   }\n\
                 }\n";
     let needle = "(min, max) = (max, min);\n        return min - max;";
-    assert_refused(
-        text,
-        needle,
-        "Swapper.cs",
-        "tuple deconstruction writing free `min`/`max`",
-    )
+    let plan = needle_cluster_plan(text, needle, "Swapper.cs")?;
+    assert!(
+        plan.is_none(),
+        "tuple deconstruction writing free `min`/`max` must refuse the extract \
+         ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 7, #280): {plan:?}"
+    );
+    Ok(())
 }
 
 /// C#: a write-only plain assignment (`total = 7;` — `total` never read
@@ -243,12 +241,13 @@ fn csharp_plain_write_only_target_refused() -> Result<()> {
                 \x20   }\n\
                 }\n";
     let needle = "total = 7;\n        return total + seed;";
-    assert_refused(
-        text,
-        needle,
-        "Resetter.cs",
-        "a write-only plain assignment to free `total`",
-    )
+    let plan = needle_cluster_plan(text, needle, "Resetter.cs")?;
+    assert!(
+        plan.is_none(),
+        "a write-only plain assignment to free `total` must refuse the extract \
+         ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 7, #280): {plan:?}"
+    );
+    Ok(())
 }
 
 /// Rust: plain assignment (`assignment_expression`, distinct from
@@ -270,12 +269,13 @@ fn rust_plain_assignment_of_free_name_refused() -> Result<()> {
                 \x20   counter\n\
                 }\n";
     let needle = "counter = counter + 1;\n    counter = counter + 2;";
-    assert_refused(
-        text,
-        needle,
-        "gate.rs",
-        "a plain assignment to free `counter`",
-    )
+    let plan = needle_cluster_plan(text, needle, "gate.rs")?;
+    assert!(
+        plan.is_none(),
+        "a plain assignment to free `counter` must refuse the extract \
+         ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 7, #280): {plan:?}"
+    );
+    Ok(())
 }
 
 /// Python: a span declaring `nonlocal` cannot relocate — the emitted
@@ -304,7 +304,13 @@ fn python_nonlocal_write_span_refused() -> Result<()> {
                 \x20   bump()\n\
                 \x20   return count\n";
     let needle = "nonlocal count\n        count += 1";
-    assert_refused(text, needle, "gate.py", "a span declaring `nonlocal count`")
+    let plan = needle_cluster_plan(text, needle, "gate.py")?;
+    assert!(
+        plan.is_none(),
+        "a span declaring `nonlocal count` must refuse the extract \
+         ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 7, #280): {plan:?}"
+    );
+    Ok(())
 }
 
 /// Python: `global` survives relocation — a module-scope helper in the
@@ -324,8 +330,9 @@ fn python_global_write_span_still_extracts() -> Result<()> {
                 \x20   global count\n\
                 \x20   count += 1\n";
     let needle = "global count\n    count += 1";
-    let plan = needle_cluster_plan(text, needle, "gate.py")?
-        .ok_or_else(|| anyhow!("a `global` span must extract — same module, same binding"))?;
+    let plan = needle_cluster_plan(text, needle, "gate.py")?.ok_or_else(|| {
+        anyhow::anyhow!("a `global` span must extract — same module, same binding")
+    })?;
     assert!(
         plan.free_variables.is_empty(),
         "`global count` binds `count`, so nothing flows in: {:?}",
@@ -347,5 +354,12 @@ fn python_write_of_span_bound_name_still_extracts() -> Result<()> {
                 padded += 4\n\
                 total = padded * 2\n";
     let needle = "padded = base\npadded += 4\ntotal = padded * 2";
-    assert_span_bound_extract(text, needle, "gate.py", "base")
+    let plan = needle_cluster_plan(text, needle, "gate.py")?
+        .ok_or_else(|| anyhow::anyhow!("a span writing only its own binding must extract"))?;
+    assert_eq!(
+        plan.free_variables,
+        vec!["base".to_owned()],
+        "only `base` flows in; the written `padded` is span-bound, not free"
+    );
+    Ok(())
 }

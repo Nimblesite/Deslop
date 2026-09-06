@@ -26,8 +26,9 @@ use deslop_core::{
     ast::ByteRange,
     cluster::Cluster,
     fingerprint::Fingerprint,
+    pair::PairScore,
     render_report,
-    report::{CacheStats, ParseCache},
+    report::CacheStats,
     report_metrics::AnalysedLines,
     state::{FileId, FileRegistry},
     EmbeddingProvenance, ExclusionConfig, Report, ReportInputs,
@@ -83,24 +84,8 @@ pub(crate) fn copy_fixture(name: &str) -> Result<tempfile::TempDir> {
 /// report; new suites reuse this instead of adding a copy.
 #[cfg(feature = "live")]
 pub(crate) fn live_session(root: &Path) -> Result<deslop_core::live::AnalysisSession> {
-    live_session_at(root, DEFAULT_LIVE_MIN_NODES)
-}
-
-/// The `min_nodes` floor every live suite uses unless it is testing the
-/// floor itself.
-#[cfg(feature = "live")]
-pub(crate) const DEFAULT_LIVE_MIN_NODES: u32 = 15;
-
-/// Builds an [`AnalysisSession`] over `root` at `min_nodes`, backed by
-/// the deterministic [`StubProvider`]. The `min_nodes`-varying twin of
-/// [`live_session`], for the suites that pin a different floor.
-#[cfg(feature = "live")]
-pub(crate) fn live_session_at(
-    root: &Path,
-    min_nodes: u32,
-) -> Result<deslop_core::live::AnalysisSession> {
     let provider = Arc::new(deslop_core::embedding::test_support::StubProvider::new());
-    deslop_core::live::AnalysisSession::new(root.to_path_buf(), min_nodes, false, None, provider)
+    deslop_core::live::AnalysisSession::new(root.to_path_buf(), 15, false, None, provider)
         .context("session")
 }
 
@@ -189,62 +174,6 @@ impl CapturedEvent {
     }
 }
 
-/// Reports whether `metadata` belongs to the crate under observation.
-/// One predicate shared by the capture and the interest anchor, so the
-/// two can never disagree about which callsites stay enabled.
-fn observes_core_target(metadata: &Metadata<'_>) -> bool {
-    metadata.target().starts_with("deslop_core")
-}
-
-/// A process-global `tracing` default whose only job is to sit in the
-/// callsite registry so no `deslop_core` callsite can ever cache
-/// `Interest::never` ([PIPELINE-OBSERVABILITY-STAGES], gh #435).
-///
-/// `tracing`'s callsite interest is computed lazily on first hit,
-/// against the dispatchers registered at that instant, and cached
-/// process-wide. A sibling test's pipeline running concurrently — with
-/// no subscriber anywhere in the registry — can first-hit a callsite
-/// while a capture test's scoped `with_default` rebuild is in flight,
-/// caching `never` and silencing that `tracing::info!` for every later
-/// test in the process. Anchoring an always-enabled global default
-/// before the first capture makes every interest computation see at
-/// least one enabled dispatcher, so the poisoned state is unreachable.
-/// Threads without a scoped capture dispatch here and the event is
-/// discarded, exactly as `NoSubscriber` discarded it before.
-#[derive(Debug)]
-struct CallsiteInterestAnchor;
-
-impl Subscriber for CallsiteInterestAnchor {
-    fn enabled(&self, metadata: &Metadata<'_>) -> bool {
-        observes_core_target(metadata)
-    }
-
-    fn new_span(&self, _span: &Attributes<'_>) -> Id {
-        Id::from_u64(1)
-    }
-
-    fn record(&self, _span: &Id, _values: &Record<'_>) {}
-
-    fn record_follows_from(&self, _span: &Id, _follows: &Id) {}
-
-    fn event(&self, _event: &Event<'_>) {}
-
-    fn enter(&self, _span: &Id) {}
-
-    fn exit(&self, _span: &Id) {}
-}
-
-/// Installs [`CallsiteInterestAnchor`] as the process-global default
-/// exactly once. A later `set_global_default` from another harness
-/// would be refused by `tracing`, and that is fine — any enabled global
-/// keeps the interest cache honest; this one is only the guarantee.
-fn anchor_callsite_interest() {
-    static ANCHOR: std::sync::Once = std::sync::Once::new();
-    ANCHOR.call_once(|| {
-        let _already_set = tracing::subscriber::set_global_default(CallsiteInterestAnchor);
-    });
-}
-
 /// An in-process `tracing::Subscriber` that records `deslop_core` events.
 #[derive(Debug)]
 pub(crate) struct CaptureSubscriber {
@@ -254,14 +183,13 @@ pub(crate) struct CaptureSubscriber {
 impl CaptureSubscriber {
     /// Builds a subscriber that pushes into the shared `captured` buffer.
     pub(crate) fn new(captured: CapturedEvents) -> Self {
-        anchor_callsite_interest();
         Self { captured }
     }
 }
 
 impl Subscriber for CaptureSubscriber {
     fn enabled(&self, metadata: &Metadata<'_>) -> bool {
-        observes_core_target(metadata)
+        metadata.target().starts_with("deslop_core")
     }
 
     fn new_span(&self, _span: &Attributes<'_>) -> Id {
@@ -346,47 +274,10 @@ impl Visit for FieldCollector {
 /// [`render_report`] path. Consolidated here from the byte-identical
 /// copies previously duplicated per test file (Deslop cluster
 /// `a59932844b88648e`).
-/// Groups member snippets into one source per distinct path — the
-/// member texts concatenated in order — and returns each member's
-/// `(path index, byte slice)` within its assembled file. This is what
-/// makes a same-file cluster representable at all: a path cannot carry
-/// two different whole-file contents (gh #398).
-/// One assembled file: its fixture-relative path and full source.
-type AssembledFile<'p> = (&'p str, String);
-/// One member's location: its file's path plus its slice of that file.
-type MemberSpan<'p> = (&'p str, ByteRange);
-
-fn assemble_member_files<'p>(
-    snippets: Vec<(&'p str, &str)>,
-) -> (Vec<AssembledFile<'p>>, Vec<MemberSpan<'p>>) {
-    let mut assembled: Vec<AssembledFile<'p>> = Vec::new();
-    let mut spans: Vec<MemberSpan<'p>> = Vec::new();
-    for (path, text) in snippets {
-        if !assembled.iter().any(|(seen, _)| *seen == path) {
-            assembled.push((path, String::new()));
-        }
-        for (seen, source) in &mut assembled {
-            if *seen == path {
-                let start = source.len();
-                source.push_str(text);
-                spans.push((
-                    path,
-                    ByteRange {
-                        start,
-                        end: source.len(),
-                    },
-                ));
-            }
-        }
-    }
-    (assembled, spans)
-}
-
 pub(crate) struct ReportFixture {
     scan_root: PathBuf,
     language: &'static str,
     registry: FileRegistry,
-    paths: HashMap<String, FileId>,
     file_languages: HashMap<FileId, &'static str>,
     sources: HashMap<FileId, Vec<u8>>,
     analysed_lines: AnalysedLines,
@@ -399,7 +290,6 @@ impl ReportFixture {
             scan_root: scan_root.to_owned(),
             language,
             registry: FileRegistry::new(),
-            paths: HashMap::new(),
             file_languages: HashMap::new(),
             sources: HashMap::new(),
             analysed_lines: HashMap::new(),
@@ -407,23 +297,12 @@ impl ReportFixture {
     }
 
     /// Registers `path` with `source` bytes exactly once and returns its
-    /// [`FileId`] — the same id on every call for one path, because one
-    /// path is one file (gh #398): `FileRegistry::register` appends
-    /// unconditionally, and a fixture registering per member forked the
-    /// same path into divergent ids, so every same-file cluster reached
-    /// the router as cross-file. Re-registering a path with different
-    /// bytes is a fixture bug and fails loudly.
+    /// [`FileId`]. Use with [`ReportFixture::fingerprint_at`] when one
+    /// file must carry several cluster members at distinct byte ranges —
+    /// `FileRegistry::register` appends unconditionally, so registering
+    /// per member would fork the same path into divergent ids.
     pub(crate) fn file(&mut self, path: &str, source: &str) -> FileId {
-        if let Some(existing) = self.paths.get(path) {
-            assert_eq!(
-                self.sources.get(existing).map(Vec::as_slice),
-                Some(source.as_bytes()),
-                "fixture path {path} re-registered with different source                  — one path has one content; pass members of one file                  through one `cluster` call or `fingerprint_at` ranges"
-            );
-            return *existing;
-        }
         let file_id = self.registry.register(self.scan_root.join(path));
-        let _old = self.paths.insert(path.to_owned(), file_id);
         let _old = self.sources.insert(file_id, source.as_bytes().to_vec());
         let _old = self.file_languages.insert(file_id, self.language);
         let _old = self.analysed_lines.insert(
@@ -449,42 +328,52 @@ impl ReportFixture {
         }
     }
 
-    /// Registers each snippet and returns one mass-only cluster.
+    /// Registers one whole-file source per snippet and clusters them.
     pub(crate) fn cluster(
         &mut self,
         id: &str,
         snippets: Vec<(&str, &str)>,
         node_count: usize,
+        signals: PairScore,
     ) -> Cluster {
-        let (assembled, spans) = assemble_member_files(snippets);
-        let registered: Vec<(&str, FileId)> = assembled
-            .iter()
-            .map(|(path, source)| (*path, self.file(path, source)))
-            .collect();
-        let mut members = Vec::new();
-        for (seed, (path, range)) in spans.iter().enumerate() {
-            for (registered_path, file_id) in &registered {
-                if registered_path == path {
-                    members.push(Self::fingerprint_at(*file_id, *range, node_count, seed));
-                }
-            }
-        }
+        let members = snippets
+            .into_iter()
+            .enumerate()
+            .map(|(index, (path, source))| self.member(path, source, node_count, index))
+            .collect::<Vec<_>>();
         Cluster {
             id: id.to_owned(),
             members,
-            mass: u64::try_from(node_count)
-                .unwrap_or(u64::MAX)
-                .saturating_mul(u64::try_from(spans.len().saturating_sub(1)).unwrap_or(u64::MAX)),
-            shape_family: None,
+            weight: 10_000.0,
+            signals,
+            content: deslop_core::content::ContentEvidence::unmeasured(),
         }
+    }
+
+    /// Registers `source` at `path` and returns a whole-file member.
+    fn member(
+        &mut self,
+        path: &str,
+        source: &str,
+        node_count: usize,
+        hash_seed: usize,
+    ) -> Fingerprint {
+        let file_id = self.file(path, source);
+        Self::fingerprint_at(
+            file_id,
+            ByteRange {
+                start: 0,
+                end: source.len(),
+            },
+            node_count,
+            hash_seed,
+        )
     }
 
     /// Renders `clusters` through the production report pipeline.
     pub(crate) fn render(&self, clusters: &[Cluster]) -> deslop_core::Report {
         let exclusion = ExclusionConfig::empty();
-        let parse_cache = ParseCache::new();
         render_report(ReportInputs {
-            shape_families: &[],
             clusters,
             registry: &self.registry,
             file_languages: &self.file_languages,
@@ -498,7 +387,6 @@ impl ReportFixture {
                 model_version: "test".to_owned(),
                 dimensions: 3,
                 attempted_subtrees: self.sources.len(),
-                succeeded_subtrees: self.sources.len(),
                 indexed_subtrees: self.sources.len(),
                 failed_subtrees: 0,
             }),
@@ -506,8 +394,6 @@ impl ReportFixture {
             sources: &self.sources,
             analysed_lines: &self.analysed_lines,
             boilerplate_ranges: &[],
-            diff: None,
-            parse_cache: &parse_cache,
         })
     }
 }

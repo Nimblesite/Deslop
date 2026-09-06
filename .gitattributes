@@ -2,10 +2,10 @@
 #
 # Git for Windows ships core.autocrlf=true in its system gitconfig, so without
 # an explicit attribute every text file checks out CRLF. That silently breaks
-# each script that matches lines exactly — scripts/release/stamp-release-version.mjs
+# each script that matches lines exactly — scripts/stamp-release-version.mjs
 # ("Cargo.toml is missing [workspace.package] version"),
-# scripts/release/test-release-workflow-contract.mjs ("missing workflow section"), and
-# scripts/actions/test-action-contract.mjs ("action.yml name line must be exactly ...").
+# scripts/test-release-workflow-contract.mjs ("missing workflow section"), and
+# scripts/test-action-contract.mjs ("action.yml name line must be exactly ...").
 # Those failures name the file, not the line endings, so they read as defects in
 # perfectly intact files and make `make ci` unrunnable on a Windows checkout.
 * text=auto eol=lf

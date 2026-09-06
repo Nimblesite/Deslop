@@ -102,13 +102,9 @@ fn singleton_cluster_summaries(clusters: &[Value]) -> Vec<String> {
         .collect()
 }
 
-/// Reads the cluster's visible membership — `occurrence_count` on the
-/// mass-only wire (the `size` field was removed with the bucket surface).
+/// Reads `cluster.size`, defaulting to zero for malformed rows.
 fn cluster_size(cluster: &Value) -> u64 {
-    cluster
-        .get("occurrence_count")
-        .and_then(Value::as_u64)
-        .unwrap_or(0)
+    cluster.get("size").and_then(Value::as_u64).unwrap_or(0)
 }
 
 /// Reads `cluster.occurrences_total`, defaulting to zero for malformed
@@ -121,20 +117,23 @@ fn occurrence_count(cluster: &Value) -> u64 {
 }
 
 /// Formats a compact failure line for one bad cluster.
-/// One-line summary for a singleton row.
 fn cluster_summary(cluster: &Value) -> String {
     format!(
-        "id={id} count={count} occurrences_total={total}",
-        id = cluster.get("id").and_then(Value::as_str).unwrap_or("?"),
-        count = cluster_size(cluster),
-        total = cluster
-            .get("occurrences_total")
-            .and_then(Value::as_u64)
-            .unwrap_or(0),
+        "id={} size={} occurrences_total={} weight={} summary={}",
+        string_field(cluster, "id"),
+        cluster_size(cluster),
+        occurrence_count(cluster),
+        number_field(cluster, "weight"),
+        string_field(cluster, "summary"),
     )
 }
 
+/// Reads a string field for failure output.
+fn string_field<'a>(value: &'a Value, name: &str) -> &'a str {
+    value.get(name).and_then(Value::as_str).unwrap_or("?")
+}
+
 /// Reads a numeric field for failure output.
-fn _unused_number_field(value: &Value, name: &str) -> f64 {
+fn number_field(value: &Value, name: &str) -> f64 {
     value.get(name).and_then(Value::as_f64).unwrap_or(0.0)
 }

@@ -2,7 +2,7 @@
 //! [CONFIG-EXCLUDE-DEPENDENCIES]. The real filesystem watcher must honour
 //! the same opt-in as the cold pipeline scan.
 
-use crate::common;
+mod common;
 
 use std::{fs, path::Path, time::Duration};
 
@@ -15,9 +15,6 @@ use common::{
 
 const REPORT_TIMEOUT: Duration = Duration::from_secs(20);
 const FILES: [&str; 2] = ["Alpha.cs", "Beta.cs"];
-const CLUSTERS_FIELD: &str = "clusters";
-const METRICS_FIELD: &str = "metrics";
-const FILES_ANALYSED_FIELD: &str = "files_analysed";
 
 /// [PRINCIPLES-LIVE-IS-REACTIVE] `include_dependencies = true` governs the
 /// whole watcher → scheduler → report loop. A first-party edit proves the OS
@@ -29,7 +26,7 @@ fn opted_in_dependency_creation_refreshes_the_live_lsp_report() -> Result<()> {
     let (_guard, mut stdin, mut stdout) = spawn_lsp_guarded(&root)?;
     let _initialize = handshake(&mut stdin, &mut stdout)?;
     let initial = wait_for_report_matching(&mut stdin, &mut stdout, REPORT_TIMEOUT, |report| {
-        at(report, FILES_ANALYSED_FIELD).as_u64() == Some(4)
+        at(report, "files_analysed").as_u64() == Some(4)
     })?;
     assert_initial_report(&initial);
 
@@ -37,17 +34,17 @@ fn opted_in_dependency_creation_refreshes_the_live_lsp_report() -> Result<()> {
     let first_party_source = fs::read_to_string(&first_party)?;
     fs::write(&first_party, unrelated_csharp())?;
     let changed = wait_for_report_matching(&mut stdin, &mut stdout, REPORT_TIMEOUT, |report| {
-        at(report, CLUSTERS_FIELD) != at(&initial, CLUSTERS_FIELD)
+        at(report, "clusters") != at(&initial, "clusters")
     })?;
     assert_changed_report(&changed, &initial);
 
     fs::write(&first_party, first_party_source)?;
     let restored = wait_for_report_matching(&mut stdin, &mut stdout, REPORT_TIMEOUT, |report| {
-        at(report, CLUSTERS_FIELD) == at(&initial, CLUSTERS_FIELD)
+        at(report, "clusters") == at(&initial, "clusters")
     })?;
     assert_eq!(
-        at(&restored, METRICS_FIELD),
-        at(&initial, METRICS_FIELD),
+        at(&restored, "metrics"),
+        at(&initial, "metrics"),
         "restore must converge"
     );
 
@@ -55,21 +52,18 @@ fn opted_in_dependency_creation_refreshes_the_live_lsp_report() -> Result<()> {
     let _bytes = fs::copy(fixture("csharp-small").join("Alpha.cs"), &dependency)?;
     let dependency_changed =
         wait_for_report_matching(&mut stdin, &mut stdout, REPORT_TIMEOUT, |report| {
-            at(report, FILES_ANALYSED_FIELD).as_u64() == Some(5)
+            at(report, "files_analysed").as_u64() == Some(5)
         })?;
     assert_eq!(
-        at(&dependency_changed, FILES_ANALYSED_FIELD),
+        at(&dependency_changed, "files_analysed"),
         5,
         "new dependency source must be analysed"
     );
     assert_ne!(
-        at(&dependency_changed, CLUSTERS_FIELD),
-        at(&restored, CLUSTERS_FIELD)
+        at(&dependency_changed, "clusters"),
+        at(&restored, "clusters")
     );
-    assert_ne!(
-        at(&dependency_changed, METRICS_FIELD),
-        at(&restored, METRICS_FIELD)
-    );
+    assert_ne!(at(&dependency_changed, "metrics"), at(&restored, "metrics"));
     Ok(())
 }
 
@@ -84,45 +78,45 @@ fn opted_in_dependency_edit_refreshes_clusters_metrics_and_occurrences() -> Resu
     assert_initialize_contract(&handshake(&mut stdin, &mut stdout)?);
 
     let initial = wait_for_report_matching(&mut stdin, &mut stdout, REPORT_TIMEOUT, |report| {
-        at(report, FILES_ANALYSED_FIELD).as_u64() == Some(4)
+        at(report, "files_analysed").as_u64() == Some(4)
     })?;
     assert_initial_report(&initial);
     assert_eq!(
-        json_path(&initial, &[METRICS_FIELD, "duplicated_files"]),
+        json_path(&initial, &["metrics", "duplicated_files"]),
         4,
         "{initial:#}"
     );
 
     fs::write(root.join("node_modules/pkg/Beta.cs"), unrelated_csharp())?;
     let changed = wait_for_report_matching(&mut stdin, &mut stdout, REPORT_TIMEOUT, |report| {
-        at(report, FILES_ANALYSED_FIELD).as_u64() == Some(4)
-            && at(report, CLUSTERS_FIELD) != at(&initial, CLUSTERS_FIELD)
+        at(report, "files_analysed").as_u64() == Some(4)
+            && at(report, "clusters") != at(&initial, "clusters")
     })?;
 
     assert_eq!(
-        at(&changed, FILES_ANALYSED_FIELD),
+        at(&changed, "files_analysed"),
         4,
         "edited dependency stays analysed"
     );
     assert_ne!(
-        at(&changed, CLUSTERS_FIELD),
-        at(&initial, CLUSTERS_FIELD),
+        at(&changed, "clusters"),
+        at(&initial, "clusters"),
         "cluster wire stayed stale"
     );
     assert_ne!(
-        at(&changed, METRICS_FIELD),
-        at(&initial, METRICS_FIELD),
+        at(&changed, "metrics"),
+        at(&initial, "metrics"),
         "repo metrics stayed stale"
     );
     assert!(
-        json_path(&changed, &[METRICS_FIELD, "duplicated_files"])
+        json_path(&changed, &["metrics", "duplicated_files"])
             .as_u64()
             .unwrap_or_default()
             < 4,
         "the unrelated dependency must leave the duplicate population: {changed:#}"
     );
     assert!(
-        json_path(&changed, &[METRICS_FIELD, "duplication_percent"])
+        json_path(&changed, &["metrics", "duplication_percent"])
             .as_f64()
             .unwrap_or(100.0)
             < 100.0,
@@ -161,18 +155,18 @@ fn assert_initial_report(report: &serde_json::Value) {
 
 fn assert_changed_report(changed: &serde_json::Value, previous: &serde_json::Value) {
     assert_eq!(
-        at(changed, FILES_ANALYSED_FIELD),
+        at(changed, "files_analysed"),
         4,
         "edited source stays analysed"
     );
     assert_ne!(
-        at(changed, CLUSTERS_FIELD),
-        at(previous, CLUSTERS_FIELD),
+        at(changed, "clusters"),
+        at(previous, "clusters"),
         "cluster wire must refresh"
     );
     assert_ne!(
-        at(changed, METRICS_FIELD),
-        at(previous, METRICS_FIELD),
+        at(changed, "metrics"),
+        at(previous, "metrics"),
         "metrics must refresh"
     );
 }

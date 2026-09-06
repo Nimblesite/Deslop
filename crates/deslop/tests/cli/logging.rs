@@ -1,16 +1,10 @@
-use super::support::*;
-
-const RUST_LOG_ENV: &str = "RUST_LOG";
-const LOG_TO_CONSOLE_FLAG: &str = "--log-to-console";
-const LOG_LEVEL_FLAG: &str = "--log-level";
-const TECHNICAL_FLAG: &str = "--technical";
-const DESLOP_INVOKED_MESSAGE: &str = "deslop invoked";
+use crate::support::*;
 
 /// Builds a `deslop` command against the `csharp-small` fixture writing
 /// its report under `<tmp>/report`. Every logging test shares this scan
 /// root + output layout; only the flag/env combination differs.
 fn csharp_small_command(tmp: &tempfile::TempDir) -> Result<Command> {
-    fixture_command(CSHARP_SMALL_FIXTURE, &tmp.path().join(REPORT_OUTPUT_STEM))
+    fixture_command("csharp-small", &tmp.path().join("report"))
 }
 
 /// Decodes the captured stderr of a finished assertion into an owned
@@ -25,8 +19,8 @@ fn default_run_writes_log_to_timestamped_file_not_stderr() -> Result<()> {
     let out = outputs_under(tmp.path());
     let mut cmd = csharp_small_command(&tmp)?;
     let assertion = cmd
-        .env_remove(RUST_LOG_ENV)
-        .args([MIN_NODES_FLAG, MIN_NODES_VALUE, NO_COLOR_FLAG])
+        .env_remove("RUST_LOG")
+        .args(["--min-nodes", "8", "--no-color"])
         .assert()
         .success();
     let stderr = stderr_text(&assertion)?;
@@ -59,7 +53,7 @@ fn default_run_writes_log_to_timestamped_file_not_stderr() -> Result<()> {
         .ok_or_else(|| anyhow::anyhow!("log_files vec unexpectedly empty"))?;
     let log_body = fs::read_to_string(&log_file)?;
     assert!(
-        log_body.contains(DESLOP_INVOKED_MESSAGE),
+        log_body.contains("deslop invoked"),
         "log file missing the invoked event: {log_body}"
     );
     Ok(())
@@ -72,18 +66,13 @@ fn log_to_console_flag_routes_events_to_stderr() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let mut cmd = csharp_small_command(&tmp)?;
     let assertion = cmd
-        .env_remove(RUST_LOG_ENV)
-        .args([
-            MIN_NODES_FLAG,
-            MIN_NODES_VALUE,
-            LOG_TO_CONSOLE_FLAG,
-            NO_COLOR_FLAG,
-        ])
+        .env_remove("RUST_LOG")
+        .args(["--min-nodes", "8", "--log-to-console", "--no-color"])
         .assert()
         .success();
     let stderr = stderr_text(&assertion)?;
     assert!(
-        stderr.contains(DESLOP_INVOKED_MESSAGE),
+        stderr.contains("deslop invoked"),
         "--log-to-console must surface the invoked event on stderr: {stderr}"
     );
     let log_files = find_timestamped_logs(tmp.path())?;
@@ -102,14 +91,8 @@ fn log_level_warn_suppresses_info_events() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let mut cmd = csharp_small_command(&tmp)?;
     let _assertion = cmd
-        .env_remove(RUST_LOG_ENV)
-        .args([
-            MIN_NODES_FLAG,
-            MIN_NODES_VALUE,
-            LOG_LEVEL_FLAG,
-            "warn",
-            NO_COLOR_FLAG,
-        ])
+        .env_remove("RUST_LOG")
+        .args(["--min-nodes", "8", "--log-level", "warn", "--no-color"])
         .assert()
         .success();
     let log_path = find_timestamped_logs(tmp.path())?
@@ -118,7 +101,7 @@ fn log_level_warn_suppresses_info_events() -> Result<()> {
         .ok_or_else(|| anyhow::anyhow!("no timestamped log file written"))?;
     let log_body = fs::read_to_string(&log_path)?;
     assert!(
-        !log_body.contains(DESLOP_INVOKED_MESSAGE),
+        !log_body.contains("deslop invoked"),
         "warn level must suppress the INFO invoked event: {log_body}"
     );
     Ok(())
@@ -132,12 +115,7 @@ fn preamble_announces_what_the_run_will_do() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let mut cmd = csharp_small_command(&tmp)?;
     let assertion = cmd
-        .args([
-            MIN_NODES_FLAG,
-            MIN_NODES_VALUE,
-            TECHNICAL_FLAG,
-            NO_COLOR_FLAG,
-        ])
+        .args(["--min-nodes", "8", "--technical", "--no-color"])
         .assert()
         .success();
     let stderr = stderr_text(&assertion)?;
@@ -167,7 +145,7 @@ fn no_color_flag_suppresses_ansi_escapes() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let mut cmd = csharp_small_command(&tmp)?;
     let assertion = cmd
-        .args([MIN_NODES_FLAG, MIN_NODES_VALUE, NO_COLOR_FLAG])
+        .args(["--min-nodes", "8", "--no-color"])
         .assert()
         .success();
     let stderr = stderr_text(&assertion)?;
@@ -189,7 +167,7 @@ fn color_force_env_emits_ansi_escapes() -> Result<()> {
     let assertion = cmd
         .env("DESLOP_FORCE_COLOR", "1")
         .env_remove("NO_COLOR")
-        .args([MIN_NODES_FLAG, MIN_NODES_VALUE])
+        .args(["--min-nodes", "8"])
         .assert()
         .success();
     let stderr = stderr_text(&assertion)?;
@@ -211,18 +189,13 @@ fn rust_log_env_controls_severity_filter() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let mut cmd = csharp_small_command(&tmp)?;
     let assertion = cmd
-        .env(RUST_LOG_ENV, "warn")
-        .args([
-            MIN_NODES_FLAG,
-            MIN_NODES_VALUE,
-            LOG_TO_CONSOLE_FLAG,
-            NO_COLOR_FLAG,
-        ])
+        .env("RUST_LOG", "warn")
+        .args(["--min-nodes", "8", "--log-to-console", "--no-color"])
         .assert()
         .success();
     let stderr = stderr_text(&assertion)?;
     assert!(
-        !stderr.contains(DESLOP_INVOKED_MESSAGE),
+        !stderr.contains("deslop invoked"),
         "RUST_LOG=warn must suppress INFO events: {stderr}"
     );
     Ok(())
@@ -238,7 +211,7 @@ fn no_color_env_overrides_force_color() -> Result<()> {
     let assertion = cmd
         .env("NO_COLOR", "1")
         .env("DESLOP_FORCE_COLOR", "1")
-        .args([MIN_NODES_FLAG, MIN_NODES_VALUE])
+        .args(["--min-nodes", "8"])
         .assert()
         .success();
     let stderr = stderr_text(&assertion)?;
@@ -256,22 +229,15 @@ fn no_color_env_overrides_force_color() -> Result<()> {
 // `write_cache_line` and is otherwise unreachable.
 #[test]
 fn technical_mode_surfaces_raw_cache_stats_line() -> Result<()> {
-    let (tmp, scan_root) = temp_scan_dir("src")?;
-    seed_scan_root(&fixture(CSHARP_SMALL_FIXTURE), &scan_root)?;
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
     // First run populates the cache.
-    run_scan(
-        &scan_root,
-        &tmp.path().join("first"),
-        &[MIN_NODES_FLAG, MIN_NODES_VALUE],
-    )?;
+    let mut first = deslop_command(&scan_root, &tmp.path().join("first"))?;
+    let _assertion = first.args(["--min-nodes", "8"]).assert().success();
     let mut second = deslop_command(&scan_root, &tmp.path().join("second"))?;
     let assertion = second
-        .args([
-            MIN_NODES_FLAG,
-            MIN_NODES_VALUE,
-            TECHNICAL_FLAG,
-            NO_COLOR_FLAG,
-        ])
+        .args(["--min-nodes", "8", "--technical", "--no-color"])
         .assert()
         .success();
     let stderr = stderr_text(&assertion)?;
@@ -290,13 +256,14 @@ fn technical_mode_surfaces_raw_cache_stats_line() -> Result<()> {
 #[test]
 fn technical_mode_surfaces_embedding_provenance_line() -> Result<()> {
     let server = crate::mock_ollama::MockOllama::spawn()?;
-    let (tmp, scan_root) = temp_scan_dir("src")?;
-    seed_scan_root(&fixture(CSHARP_SMALL_FIXTURE), &scan_root)?;
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join(REPORT_OUTPUT_STEM))?;
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let assertion = cmd
         .args([
-            MIN_NODES_FLAG,
-            MIN_NODES_VALUE,
+            "--min-nodes",
+            "8",
             "--embeddings",
             "required",
             "--embedding-provider",
@@ -306,7 +273,7 @@ fn technical_mode_surfaces_embedding_provenance_line() -> Result<()> {
             "--embedding-endpoint",
         ])
         .arg(server.endpoint())
-        .args([TECHNICAL_FLAG, NO_COLOR_FLAG])
+        .args(["--technical", "--no-color"])
         .assert()
         .success();
     let stderr = stderr_text(&assertion)?;
@@ -318,41 +285,28 @@ fn technical_mode_surfaces_embedding_provenance_line() -> Result<()> {
 }
 
 // Implements [UX-TECHNICAL-BREAKDOWN]: `--technical` prints the
-// researcher breakdown row with the mass-only column legend. Plain
-// mode uses friendly wording; this test guards the technical branch's
-// wire facts — cluster id, mass, occurrence count, canonical node
-// count and files — the fields the mass-only wire carries
-// ([RANK-MASS-SUM], [SEVERITY-BAND]). Taxonomy bucket labels were
-// retired with the cluster signals they named; pair-only values
-// (structural/Jaccard/embedding/content) appear only under an
-// explicit endpoint comparison.
+// researcher breakdown row with bracketed taxonomy labels. Plain mode
+// uses friendly wording; this test guards the taxonomy string the
+// technical branch emits. The csharp-small pair is a maximal Type-2
+// rename with every literal preserved, so [FUSION-CONTENT-GATE] rename
+// consistency routes it to the act-now `nearly_identical` bucket's
+// hybrid title ([CLONE-BUCKETS-DUAL-LABEL]).
 #[test]
 fn technical_mode_uses_type_taxonomy_in_breakdown_row() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let mut cmd = csharp_small_command(&tmp)?;
     let assertion = cmd
-        .args([
-            MIN_NODES_FLAG,
-            MIN_NODES_VALUE,
-            TECHNICAL_FLAG,
-            NO_COLOR_FLAG,
-        ])
+        .args(["--min-nodes", "8", "--technical", "--no-color"])
         .assert()
         .success();
     let stderr = stderr_text(&assertion)?;
     assert!(
-        stderr.contains("columns: rank, id, mass, occurrences, canonical AST nodes, files"),
-        "--technical must print the mass-only column legend: {stderr}"
+        stderr.contains("1 × Nearly identical code [Type-3]"),
+        "--technical must print the bracketed-taxonomy breakdown: {stderr}"
     );
     assert!(
-        stderr.contains("#1  Duplicate code [")
-            && stderr.contains("· mass 58 · 2 occurrences · 58 AST nodes"),
-        "--technical must print the mass-ranked cluster row with id, mass, occurrences, \
-         nodes and files: {stderr}"
-    );
-    assert!(
-        stderr.contains("Alpha.cs, Beta.cs"),
-        "--technical cluster row must name both files: {stderr}"
+        stderr.contains("#1  ● Nearly identical code [Type-3]"),
+        "--technical must print the bracketed taxonomy in the ranked row: {stderr}"
     );
     Ok(())
 }
@@ -366,8 +320,8 @@ fn plain_summary_on_empty_scan_root_has_no_worst_offender_line() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let empty = tmp.path().join("empty");
     fs::create_dir_all(&empty)?;
-    let mut cmd = deslop_command(&empty, &tmp.path().join(REPORT_OUTPUT_STEM))?;
-    let assertion = cmd.arg(NO_COLOR_FLAG).assert().success();
+    let mut cmd = deslop_command(&empty, &tmp.path().join("report"))?;
+    let assertion = cmd.arg("--no-color").assert().success();
     let stderr = stderr_text(&assertion)?;
     assert!(
         !stderr.contains("Worst offender"),

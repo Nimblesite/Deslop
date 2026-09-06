@@ -7,7 +7,6 @@
 //! (`--from-report`). Always emits the canonical JSON plus derived
 //! text and HTML views unless suppressed ([OUTPUT-SCHEMA-JSON]).
 
-mod diff_input;
 mod logging;
 mod output;
 mod rerun;
@@ -18,15 +17,14 @@ use std::{env, fs, io::Write as _, path::PathBuf, str::FromStr};
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use deslop_core::{
-    apply_only_changed, debug_ast_dump, validate_threshold_percent, version_contract_output,
-    ComponentKind, EmbeddingMode, EmbeddingSettings, ExclusionConfig, OllamaProvider, ParsedDiff,
-    PipelineSession, Report, ReportDelta, DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL,
+    debug_ast_dump, validate_threshold_percent, version_contract_output, ComponentKind,
+    EmbeddingMode, EmbeddingSettings, ExclusionConfig, OllamaProvider, PipelineSession, Report,
+    ReportDelta, ThresholdSource, ThresholdSummary, DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL,
     DEFAULT_PROVIDER_ID,
 };
 use tracing::Level;
 
 use crate::{
-    diff_input::{apply_threshold, gate_breached, load_diff, pipeline_error},
     logging::LogSink,
     output::{emit_all, load_report, write_file, FormatSelection, OutputPaths},
     rerun::{assemble_touched, parse_rerun_adds},
@@ -154,10 +152,6 @@ struct Cli {
     #[arg(long = "rerun-remove", value_name = "PATH", num_args = 1.., action = clap::ArgAction::Append)]
     rerun_remove: Vec<PathBuf>,
 
-    /// Diff-scoped reporting flags (`--diff`, `--only-changed`).
-    #[command(flatten)]
-    diff_scope: DiffFlags,
-
     /// Copy `SRC` to `DST` between the initial analysis and the rerun,
     /// then replay `DST` through [`PipelineSession::update_files`].
     /// Simulates a new file appearing mid-session: the initial corpus
@@ -167,33 +161,6 @@ struct Cli {
     /// the current working directory.
     #[arg(long = "rerun-add", value_name = "SRC=DST", num_args = 1.., action = clap::ArgAction::Append)]
     rerun_add: Vec<String>,
-}
-
-/// Diff-scoped reporting flags ([CLI-ARG-DIFF],
-/// [CLI-ARG-ONLY-CHANGED]). Same packing rationale as
-/// [`SuppressFlags`].
-#[derive(Debug, clap::Args)]
-struct DiffFlags {
-    /// Unified diff whose new-side added lines scope the report
-    /// ([CLI-ARG-DIFF]). `-` reads the diff from stdin. The scan still
-    /// covers the whole tree; the diff only tags and scopes the report.
-    /// A diff that does not byte-match the scanned tree is refused
-    /// (exit `2`), because a mis-tagged occurrence is a silent false
-    /// negative in a merge gate.
-    #[arg(
-        long,
-        value_name = "FILE",
-        conflicts_with_all = ["from_report", "rerun_touch", "rerun_remove", "rerun_add"],
-    )]
-    diff: Option<PathBuf>,
-
-    /// Omit clusters that do not intersect the diff from every rendered
-    /// format, count them in `clusters_outside_diff`, and reroute the
-    /// `--fail-over` gate to the diff-scoped percentage
-    /// ([CLI-ARG-ONLY-CHANGED], [METRICS-DIFF-SCOPE]) so legacy debt
-    /// cannot fail a pre-merge check. Requires `--diff`.
-    #[arg(long, requires = "diff")]
-    only_changed: bool,
 }
 
 /// Suppression flags for each output format. Packed into their own
@@ -314,8 +281,7 @@ fn run_cli() -> Result<()> {
         incremental = args.behaviour.incremental(),
         "deslop invoked",
     );
-    let outcome = match load_diff(&args).and_then(|diff| produce_report(&args, mode, diff.as_ref()))
-    {
+    let outcome = match produce_report(&args, mode, &formats) {
         Ok(outcome) => outcome,
         Err(err) => {
             summary::finish_err(color, &log_sink, &err);
@@ -324,9 +290,6 @@ fn run_cli() -> Result<()> {
     };
     let mut report = outcome.report;
     apply_threshold(&args, &mut report)?;
-    if args.diff_scope.only_changed {
-        apply_only_changed(&mut report);
-    }
     // The static schema_doc is served on demand (schema-doc / deslop://schema,
     // #110/#111); inlining ~13 KB of it into every rendered report drowns the
     // actual content and bloats the file. Drop it from the CLI output — the
@@ -351,9 +314,31 @@ fn run_cli() -> Result<()> {
             },
         },
     );
-    if gate_breached(&args, &report) {
+    if report.metrics.breached() {
         std::process::exit(3);
     }
+    Ok(())
+}
+
+/// Resolves the fail-over threshold from CLI flags + config file and
+/// writes the verdict into `report.metrics.threshold`. Per [EXIT-CODES]:
+/// `--no-fail-over` wins; `--fail-over` beats the config key; absence
+/// means no gate.
+fn apply_threshold(args: &Cli, report: &mut Report) -> Result<()> {
+    if let Some(percent) = args.fail_over {
+        report.metrics.threshold = ThresholdSummary::resolve(
+            percent,
+            ThresholdSource::Cli,
+            report.metrics.duplication_percent,
+        );
+        return Ok(());
+    }
+    if args.no_fail_over {
+        report.metrics.threshold = ThresholdSummary::none();
+        return Ok(());
+    }
+    report.metrics.threshold =
+        load_run_config(args)?.resolve_threshold(report.metrics.duplication_percent);
     Ok(())
 }
 
@@ -452,7 +437,7 @@ struct PipelineOutcome {
 fn produce_report(
     args: &Cli,
     mode: EmbeddingMode,
-    diff: Option<&ParsedDiff>,
+    _formats: &FormatSelection,
 ) -> Result<PipelineOutcome> {
     if let Some(source) = &args.from_report {
         return Ok(PipelineOutcome {
@@ -468,15 +453,14 @@ fn produce_report(
         batch_yield: None,
         progress: None,
     };
-    let (mut session, initial) = PipelineSession::initialise_with_diff(
+    let (mut session, initial) = PipelineSession::initialise(
         args.path.clone(),
         args.min_nodes,
         args.behaviour.incremental(),
         args.config.clone(),
         embedding(),
-        diff,
     )
-    .map_err(pipeline_error)?;
+    .context("analysis pipeline failed")?;
     let adds = parse_rerun_adds(&args.rerun_add)?;
     let touched = assemble_touched(args, &adds);
     if touched.is_empty() {

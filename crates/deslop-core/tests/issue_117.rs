@@ -3,17 +3,22 @@
 
 #![cfg(feature = "live")]
 
-use std::fs;
+use std::{fs, sync::Arc};
 
 use anyhow::{Context, Result};
-use deslop_core::report::ReportCluster;
+use deslop_core::{
+    embedding::test_support::StubProvider, live::AnalysisSession, report::ReportCluster,
+};
 
+mod common;
 use crate::common::*;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn live_update_removes_cluster_when_one_occurrence_remains() -> Result<()> {
     let tmp = copy_fixture("csharp-small")?;
-    let mut session = live_session(tmp.path())?;
+    let provider = Arc::new(StubProvider::new());
+    let mut session = AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, provider)
+        .context("session")?;
     let initial = session.report();
     let original = initial
         .clusters
@@ -68,8 +73,6 @@ async fn live_update_removes_cluster_when_one_occurrence_remains() -> Result<()>
 
 fn all_reported_clusters_have_peers(clusters: &[ReportCluster]) -> bool {
     clusters.iter().all(|cluster| {
-        cluster.occurrence_count >= 2
-            && cluster.occurrences.len() >= 2
-            && cluster.occurrences_total >= 2
+        cluster.size >= 2 && cluster.occurrences.len() >= 2 && cluster.occurrences_total >= 2
     })
 }

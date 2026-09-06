@@ -29,7 +29,7 @@
 
 use std::{
     fs,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc,
@@ -37,12 +37,10 @@ use std::{
 };
 
 use anyhow::{bail, Context, Result};
-use deslop_core::{
-    live::{AnalysisSession, AnalysisState, Clock, ReportChangedNotification, Scheduler, CAP_MS},
-    ReportDelta,
-};
+use deslop_core::live::{AnalysisState, Clock, Scheduler, CAP_MS};
 use tokio::sync::broadcast::{error::TryRecvError, Receiver};
 
+mod common;
 use crate::common::*;
 
 /// C# that clusters with the fixture's `Alpha.cs`, so if any gate were to
@@ -68,38 +66,6 @@ const DUPLICATE_SOURCE: &str = r"namespace Vendored
     }
 }
 ";
-
-/// A one-liner C# class sharing no structure with the fixture's clone pair, so
-/// writing it over `Alpha.cs` or `Beta.cs` is unambiguously a real edit;
-/// `addend` keeps successive rewrites of one file byte-distinct.
-fn differ_source(namespace: &str, addend: u8) -> String {
-    format!(
-        "namespace {namespace} {{ public class Differ {{ public int Run(int x) {{ return x + {addend}; }} }} }}\n"
-    )
-}
-
-/// Reports whether a pass produced no cluster churn whatsoever.
-fn delta_is_empty(delta: &ReportDelta) -> bool {
-    delta.clusters_added.is_empty()
-        && delta.clusters_removed.is_empty()
-        && delta.clusters_updated.is_empty()
-}
-
-/// Seeds a live session over `root`, with the generation the seed published.
-fn seeded_session(root: &Path) -> Result<(AnalysisSession, u64)> {
-    let session = live_session(root)?;
-    let generation = session.generation();
-    Ok((session, generation))
-}
-
-/// Feeds exactly one path through the session, the way a single watcher event
-/// or an LSP `didSave` does; `what` becomes the error context.
-fn apply_one(session: &mut AnalysisSession, path: &Path, what: &str) -> Result<ReportDelta> {
-    let changed = [path.to_path_buf()];
-    session
-        .apply_changes(&changed)
-        .with_context(|| what.to_owned())
-}
 
 /// Builds a workspace whose every extra path is *inert* — it can generate
 /// filesystem events forever without ever entering the corpus. One path per
@@ -152,8 +118,9 @@ fn workspace_with_inert_paths() -> Result<(tempfile::TempDir, Vec<PathBuf>, Vec<
 #[tokio::test(flavor = "multi_thread")]
 async fn inert_paths_never_publish_a_new_generation() -> Result<()> {
     let (tmp, inert, on_disk) = workspace_with_inert_paths()?;
-    let (mut session, baseline_generation) = seeded_session(tmp.path())?;
+    let mut session = live_session(tmp.path())?;
 
+    let baseline_generation = session.generation();
     let baseline = session.report();
     assert_eq!(
         baseline.files_analysed, 2,
@@ -185,7 +152,9 @@ async fn inert_paths_never_publish_a_new_generation() -> Result<()> {
             session.generation(),
         );
         assert!(
-            delta_is_empty(&delta),
+            delta.clusters_added.is_empty()
+                && delta.clusters_removed.is_empty()
+                && delta.clusters_updated.is_empty(),
             "round {round}: inert paths must yield an empty delta, got {delta:?}",
         );
     }
@@ -216,10 +185,13 @@ async fn inert_paths_never_publish_a_new_generation() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn unchanged_analysed_file_does_not_publish_new_generation() -> Result<()> {
     let tmp = copy_fixture("csharp-small")?;
-    let (mut session, baseline_generation) = seeded_session(tmp.path())?;
+    let mut session = live_session(tmp.path())?;
     let unchanged = tmp.path().join("Alpha.cs");
+    let baseline_generation = session.generation();
 
-    let _delta = apply_one(&mut session, &unchanged, "apply unchanged analysed file")?;
+    let _delta = session
+        .apply_changes(std::slice::from_ref(&unchanged))
+        .context("apply unchanged analysed file")?;
 
     assert_eq!(
         session.generation(),
@@ -236,8 +208,9 @@ async fn unchanged_analysed_file_does_not_publish_new_generation() -> Result<()>
 #[tokio::test(flavor = "multi_thread")]
 async fn a_real_edit_still_publishes_after_inert_rounds() -> Result<()> {
     let (tmp, inert, _on_disk) = workspace_with_inert_paths()?;
-    let (mut session, baseline_generation) = seeded_session(tmp.path())?;
+    let mut session = live_session(tmp.path())?;
 
+    let baseline_generation = session.generation();
     let _inert_delta = session.apply_changes(&inert).context("apply inert")?;
     assert_eq!(
         session.generation(),
@@ -246,8 +219,14 @@ async fn a_real_edit_still_publishes_after_inert_rounds() -> Result<()> {
     );
 
     let edited = tmp.path().join("Beta.cs");
-    fs::write(&edited, differ_source("Beta", 1)).context("write Beta")?;
-    let delta = apply_one(&mut session, &edited, "apply edit")?;
+    fs::write(
+        &edited,
+        b"namespace Beta { public class Differ { public int Run(int x) { return x + 1; } } }\n",
+    )
+    .context("write Beta")?;
+    let delta = session
+        .apply_changes(std::slice::from_ref(&edited))
+        .context("apply edit")?;
 
     assert_eq!(
         session.generation(),
@@ -255,7 +234,9 @@ async fn a_real_edit_still_publishes_after_inert_rounds() -> Result<()> {
         "a real edit must publish exactly one new generation",
     );
     assert!(
-        !delta_is_empty(&delta),
+        !(delta.clusters_added.is_empty()
+            && delta.clusters_removed.is_empty()
+            && delta.clusters_updated.is_empty()),
         "a real edit must produce a non-empty delta, got {delta:?}",
     );
     Ok(())
@@ -289,67 +270,6 @@ async fn await_pass_complete(state_rx: &mut Receiver<AnalysisState>) -> Result<(
     }
 }
 
-/// The rig both #314 suites drive: a live session behind the mutex the
-/// scheduler locks, a stand-in for the watcher's path feed, and the two
-/// broadcasts a subscriber reads. Owns the workspace and the scheduler handle,
-/// so the live loop lives exactly as long as the harness.
-struct SchedulerHarness {
-    /// The workspace root, kept alive for the test's lifetime.
-    tmp: tempfile::TempDir,
-    /// The session the scheduler and the test share.
-    session: Arc<tokio::sync::Mutex<AnalysisSession>>,
-    /// Stands in for the watcher's path feed.
-    events_tx: tokio::sync::mpsc::Sender<PathBuf>,
-    /// `report/changed`, exactly as a subscriber sees it.
-    report_rx: Receiver<ReportChangedNotification>,
-    /// `analysis/state`, read only to know when a pass has finished.
-    state_rx: Receiver<AnalysisState>,
-    /// The generation the seed published, before any pass ran.
-    baseline_generation: u64,
-    /// Held so the scheduler task outlives the assertions.
-    _scheduler: Scheduler,
-}
-
-impl SchedulerHarness {
-    /// Starts a scheduler over a fresh `csharp-small` copy, driven by
-    /// [`RunawayClock`] so a queued event is ready on the first tick.
-    fn start() -> Result<Self> {
-        let tmp = copy_fixture("csharp-small")?;
-        let (session, baseline_generation) = seeded_session(tmp.path())?;
-        let session = Arc::new(tokio::sync::Mutex::new(session));
-        let (events_tx, events_rx) = tokio::sync::mpsc::channel(8);
-        let scheduler = Scheduler::start(
-            Arc::clone(&session),
-            events_rx,
-            Arc::new(RunawayClock::default()),
-        );
-        Ok(Self {
-            report_rx: scheduler.subscribe_report_changed(),
-            state_rx: scheduler.subscribe_state(),
-            tmp,
-            session,
-            events_tx,
-            baseline_generation,
-            _scheduler: scheduler,
-        })
-    }
-
-    /// Queues one watcher event for `path` and blocks until the pass it
-    /// triggers has finished; `what` becomes the error context.
-    async fn pass(&mut self, path: &Path, what: &str) -> Result<()> {
-        self.events_tx
-            .send(path.to_path_buf())
-            .await
-            .with_context(|| format!("queue {what}"))?;
-        await_pass_complete(&mut self.state_rx).await
-    }
-
-    /// The session's current generation.
-    async fn generation(&self) -> u64 {
-        self.session.lock().await.generation()
-    }
-}
-
 /// Issue #314: the scheduler must stay silent when a pass leaves the
 /// generation where it was. `analysis/state` still reports the pass, because
 /// the panel's spinner is driven by it and costs one enum on the wire; what
@@ -357,33 +277,51 @@ impl SchedulerHarness {
 /// re-fetch a report it already holds.
 #[tokio::test(flavor = "multi_thread")]
 async fn no_op_pass_broadcasts_no_report_changed() -> Result<()> {
-    let mut harness = SchedulerHarness::start()?;
+    let tmp = copy_fixture("csharp-small")?;
+    let session = Arc::new(tokio::sync::Mutex::new(live_session(tmp.path())?));
+    let baseline_generation = session.lock().await.generation();
+    let (events_tx, events_rx) = tokio::sync::mpsc::channel(8);
+    let scheduler = Scheduler::start(
+        Arc::clone(&session),
+        events_rx,
+        Arc::new(RunawayClock::default()),
+    );
+    let mut report_rx = scheduler.subscribe_report_changed();
+    let mut state_rx = scheduler.subscribe_state();
 
-    let path = harness.tmp.path().join("Alpha.cs");
-    harness.pass(&path, "unchanged path").await?;
+    let path = tmp.path().join("Alpha.cs");
+    events_tx
+        .send(path.clone())
+        .await
+        .context("queue unchanged path")?;
+    await_pass_complete(&mut state_rx).await?;
     assert!(
-        matches!(harness.report_rx.try_recv(), Err(TryRecvError::Empty)),
+        matches!(report_rx.try_recv(), Err(TryRecvError::Empty)),
         "a pass over an unchanged analysed file must broadcast nothing — the \
          report is the object every subscriber already holds (#314)",
     );
     assert_eq!(
-        harness.generation().await,
-        harness.baseline_generation,
+        session.lock().await.generation(),
+        baseline_generation,
         "the no-op pass must leave the generation alone",
     );
 
     // The control. Suppressing every broadcast would pass the assertion
     // above and silence the live loop, so drive a real edit through the
     // same scheduler and require it to reach the same subscriber.
-    fs::write(&path, differ_source("Alpha", 2)).context("write Alpha")?;
-    harness.pass(&path, "real edit").await?;
-    let published = harness
-        .report_rx
+    fs::write(
+        &path,
+        b"namespace Alpha { public class Differ { public int Run(int x) { return x + 2; } } }\n",
+    )
+    .context("write Alpha")?;
+    events_tx.send(path).await.context("queue real edit")?;
+    await_pass_complete(&mut state_rx).await?;
+    let published = report_rx
         .try_recv()
         .context("a real edit must broadcast report/changed")?;
     assert_eq!(
         published.generation,
-        harness.baseline_generation.saturating_add(1),
+        baseline_generation.saturating_add(1),
         "the edit must publish exactly one generation past the baseline",
     );
     assert_eq!(
@@ -404,32 +342,52 @@ async fn no_op_pass_broadcasts_no_report_changed() -> Result<()> {
 /// whether subscribers have heard about this generation.
 #[tokio::test(flavor = "multi_thread")]
 async fn generation_advanced_out_of_band_still_reaches_subscribers() -> Result<()> {
-    let mut harness = SchedulerHarness::start()?;
+    let tmp = copy_fixture("csharp-small")?;
+    let session = Arc::new(tokio::sync::Mutex::new(live_session(tmp.path())?));
+    let baseline_generation = session.lock().await.generation();
+    let (events_tx, events_rx) = tokio::sync::mpsc::channel(8);
+    let scheduler = Scheduler::start(
+        Arc::clone(&session),
+        events_rx,
+        Arc::new(RunawayClock::default()),
+    );
+    let mut report_rx = scheduler.subscribe_report_changed();
+    let mut state_rx = scheduler.subscribe_state();
 
     // One quiet pass first, so the scheduler has definitely recorded the
     // baseline generation before the race below is set up.
-    let path = harness.tmp.path().join("Alpha.cs");
-    harness.pass(&path, "warm-up event").await?;
+    let path = tmp.path().join("Alpha.cs");
+    events_tx
+        .send(path.clone())
+        .await
+        .context("queue warm-up event")?;
+    await_pass_complete(&mut state_rx).await?;
 
     // The read path beats the watcher: the edit is already ingested, and
     // its generation was published to nobody.
-    fs::write(&path, differ_source("Alpha", 3)).context("write Alpha")?;
-    let mut guard = harness.session.lock().await;
-    let _delta = apply_one(&mut guard, &path, "out-of-band ingest")?;
+    fs::write(
+        &path,
+        b"namespace Alpha { public class Differ { public int Run(int x) { return x + 3; } } }\n",
+    )
+    .context("write Alpha")?;
+    let mut guard = session.lock().await;
+    let _delta = guard
+        .apply_changes(std::slice::from_ref(&path))
+        .context("out-of-band ingest")?;
     let silent_generation = guard.generation();
     drop(guard);
     assert_eq!(
         silent_generation,
-        harness.baseline_generation.saturating_add(1),
+        baseline_generation.saturating_add(1),
         "the out-of-band ingest must advance the generation",
     );
 
     // The watcher event for the same edit now arrives. Its bytes are
     // already in the corpus, so the pass itself changes nothing — and the
     // announcement still has to go out.
-    harness.pass(&path, "watcher event").await?;
-    let published = harness
-        .report_rx
+    events_tx.send(path).await.context("queue watcher event")?;
+    await_pass_complete(&mut state_rx).await?;
+    let published = report_rx
         .try_recv()
         .context("a generation nobody has heard about must still be broadcast")?;
     assert_eq!(
@@ -437,12 +395,12 @@ async fn generation_advanced_out_of_band_still_reaches_subscribers() -> Result<(
         "the broadcast must carry the generation the silent ingest produced",
     );
     assert_eq!(
-        harness.generation().await,
+        session.lock().await.generation(),
         silent_generation,
         "re-reading identical bytes must not advance the generation again",
     );
     assert!(
-        matches!(harness.report_rx.try_recv(), Err(TryRecvError::Empty)),
+        matches!(report_rx.try_recv(), Err(TryRecvError::Empty)),
         "exactly one announcement — the pass must not also emit a second",
     );
     Ok(())
@@ -454,11 +412,14 @@ async fn generation_advanced_out_of_band_still_reaches_subscribers() -> Result<(
 #[tokio::test(flavor = "multi_thread")]
 async fn deleting_an_analysed_file_still_publishes() -> Result<()> {
     let (tmp, _inert, _on_disk) = workspace_with_inert_paths()?;
-    let (mut session, baseline_generation) = seeded_session(tmp.path())?;
+    let mut session = live_session(tmp.path())?;
 
+    let baseline_generation = session.generation();
     let doomed = tmp.path().join("Beta.cs");
     fs::remove_file(&doomed).context("remove Beta")?;
-    let _delta = apply_one(&mut session, &doomed, "apply deletion")?;
+    let _delta = session
+        .apply_changes(std::slice::from_ref(&doomed))
+        .context("apply deletion")?;
 
     assert_eq!(
         session.generation(),

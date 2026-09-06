@@ -8,10 +8,12 @@
 //! with the LSP code-action suite. The fixtures a merge must *decline*
 //! live in `refactor_merge_refusals.rs`.
 
+mod common;
+
 use std::fs;
 
 use anyhow::{ensure, Context, Result};
-use deslop_core::wire_generated::{MergeParameter, MergePlan, MergeVerdict};
+use deslop_core::wire_generated::{MergePlan, MergeVerdict};
 use serde_json::Value;
 
 use crate::common::{
@@ -21,212 +23,104 @@ use crate::common::{
     },
 };
 
-/// One leaf-gap fixture whose top cluster must merge mechanically.
-/// Every language asserts the same shape — only these values differ, so
-/// a language that regressed would otherwise be a copy of its siblings.
-struct LeafgapCase {
-    /// Fixture directory under `tests/fixtures`.
-    fixture: &'static str,
-    /// The single source file inside that fixture.
-    file: &'static str,
-    /// Language the plan must record.
-    language: &'static str,
-    /// Helper-name prefix, in the language's casing convention.
-    helper_prefix: &'static str,
-    /// Declared parameter types, in declaration order.
-    parameter_types: &'static [&'static str],
-    /// Golden holding the applied buffer.
-    golden: &'static str,
-    /// Statements the duplicated bodies share verbatim; the merge must
-    /// leave each behind exactly once.
-    duplicated_statements: &'static [&'static str],
-}
-
-/// The C# leaf gap: a typed context parameter plus two literal holes,
-/// behind a `PascalCase` helper. The census omits the two leaf gaps
-/// (`"standard"`/`"premium"`, `100`/`250`) because they differ by
-/// construction and become parameters.
-const CSHARP_LEAFGAP: LeafgapCase = LeafgapCase {
-    fixture: "csharp-merge-leafgap",
-    file: "RateLimits.cs",
-    language: "csharp",
-    helper_prefix: "MergedFromCluster_",
-    parameter_types: &["RatePolicy", "string", "int"],
-    golden: "RateLimits.merged.cs",
-    duplicated_statements: &[
-        "policy.SetCeiling(label, ceiling);",
-        "policy.EnableAlerts(label);",
-        "policy.Audit(label, ceiling);",
-        "policy.Flush(label);",
-        "policy.Seal(ceiling);",
-        "policy.Commit();",
-    ],
-};
-
-/// The Rust leaf gap: a `snake_case` helper whose declared types must be
-/// real enough for `rustc` to accept the merged file.
-const RUST_LEAFGAP: LeafgapCase = LeafgapCase {
-    fixture: "rust-merge-leafgap",
-    file: "pricing.rs",
-    language: "rust",
-    helper_prefix: "merged_from_cluster_",
-    parameter_types: &["&mut Vec<(String, i64)>", "&'static str", "i64"],
-    golden: "pricing.merged.rs",
-    duplicated_statements: &[
-        "book.push((label.to_owned(), ceiling));",
-        "book.push((label.to_uppercase(), ceiling * 2));",
-        "book.push((label.to_lowercase(), ceiling + 7));",
-        "book.push((label.trim().to_owned(), ceiling - 1));",
-        "book.push((label.repeat(2), ceiling / 2));",
-        "book.sort();",
-    ],
-};
-
-/// The Dart leaf gap: a `lowerCamel` helper pinned by its golden, since
-/// CI has no Dart compiler.
-const DART_LEAFGAP: LeafgapCase = LeafgapCase {
-    fixture: "dart-merge-leafgap",
-    file: "pricing.dart",
-    language: "dart",
-    helper_prefix: "mergedFromCluster_",
-    parameter_types: &["List<String>", "String", "int"],
-    golden: "pricing.merged.dart",
-    duplicated_statements: &[
-        "book.add(label);",
-        "book.add(label.toUpperCase());",
-        "book.add(label.toLowerCase());",
-        "book.add(label.trim());",
-        "book.add(ceiling.toString());",
-        "book.sort();",
-    ],
-};
-
-/// The first mechanical plan of a single-file fixture.
-fn mechanical_plan(fixture_name: &str, file_name: &str) -> Result<MergePlan> {
-    first_mechanical(merge_plans(fixture_name, file_name)?)
-}
-
-/// Projects one field out of every helper parameter, in declaration
-/// order.
-fn map_parameters<'plan, Field>(
-    plan: &'plan MergePlan,
-    project: impl FnMut(&'plan MergeParameter) -> Field,
-) -> Vec<Field> {
-    plan.parameters.iter().map(project).collect()
-}
-
-/// The `(declared type, name)` pair of every helper parameter.
-fn parameter_signature(plan: &MergePlan) -> Vec<(&str, &str)> {
-    map_parameters(plan, |parameter| {
-        (parameter.type_name.as_str(), parameter.name.as_str())
-    })
-}
-
-/// The document URI the plan's wire `WorkspaceEdit` edits.
-fn edit_uri(plan: &MergePlan) -> Result<&str> {
-    plan.workspace_edit
-        .as_ref()
-        .context("wire edit present")?
-        .pointer("/documentChanges/0/textDocument/uri")
-        .and_then(Value::as_str)
-        .context("edit uri present")
-}
-
-/// Computes the fixture's first mechanical plan, asserts the shape every
-/// leaf-gap plan must record, then applies the wire edit and asserts the
-/// statement census plus the golden. Returns both so a language can
-/// assert its own extras.
-fn assert_leafgap_merge(case: &LeafgapCase) -> Result<(MergePlan, String)> {
-    let plan = mechanical_plan(case.fixture, case.file)?;
-    assert_plan_shape(&plan, case)?;
-    let applied = assert_merge_golden(
-        &plan,
-        case.fixture,
-        case.file,
-        case.golden,
-        case.duplicated_statements,
-    )?;
-    Ok((plan, applied))
-}
-
-/// The language, the deterministic helper name (the casing convention
-/// applied to the first six cluster-id characters), and the declared
-/// parameter types.
-fn assert_plan_shape(plan: &MergePlan, case: &LeafgapCase) -> Result<()> {
-    ensure!(
-        plan.language == case.language,
-        "language recorded, got {}",
-        plan.language
-    );
-    let cluster_prefix = plan.cluster_id.get(..6).unwrap_or_default();
-    let expected_name = format!("{}{cluster_prefix}", case.helper_prefix);
-    ensure!(
-        plan.helper_name == expected_name,
-        "deterministic helper name {expected_name} expected, got {}",
-        plan.helper_name
-    );
-    let types = map_parameters(plan, |parameter| parameter.type_name.as_str());
-    ensure!(
-        types.as_slice() == case.parameter_types,
-        "declared parameter types, got {types:?}"
-    );
-    Ok(())
-}
-
 /// [AUTOFIX-MERGE]: the leaf-gap fixture merges mechanically — typed
 /// context parameter, two positional literal parameters, lifted local
 /// renames, and a golden applied buffer.
 #[test]
 fn csharp_leafgap_cluster_merges_to_golden() -> Result<()> {
-    let (plan, _applied) = assert_leafgap_merge(&CSHARP_LEAFGAP)?;
-    assert_rate_limits_signature(&plan)?;
+    let plans = merge_plans("csharp-merge-leafgap", "RateLimits.cs")?;
+    let plan = first_mechanical(plans)?;
+
+    ensure!(plan.language == "csharp", "language recorded");
+    let expected_name = format!(
+        "MergedFromCluster_{}",
+        plan.cluster_id.get(..6).unwrap_or_default()
+    );
+    ensure!(
+        plan.helper_name == expected_name,
+        "deterministic helper name, got {}",
+        plan.helper_name
+    );
+    let signature: Vec<(String, String)> = plan
+        .parameters
+        .iter()
+        .map(|parameter| (parameter.type_name.clone(), parameter.name.clone()))
+        .collect();
+    ensure!(
+        signature
+            == vec![
+                ("RatePolicy".to_owned(), "policy".to_owned()),
+                ("string".to_owned(), "arg0".to_owned()),
+                ("int".to_owned(), "arg1".to_owned()),
+            ],
+        "typed parameter list (context + holes), got {signature:?}"
+    );
+    let site_args: Vec<Vec<String>> = plan
+        .parameters
+        .iter()
+        .map(|parameter| parameter.per_site_arguments.clone())
+        .collect();
+    ensure!(
+        site_args
+            == vec![
+                vec!["policy".to_owned(), "policy".to_owned()],
+                vec!["\"standard\"".to_owned(), "\"premium\"".to_owned()],
+                vec!["100".to_owned(), "250".to_owned()],
+            ],
+        "per-site argument lists, got {site_args:?}"
+    );
     ensure!(
         plan.helper_body.contains("var label = arg0;")
             && plan.helper_body.contains("var ceiling = arg1;"),
         "holes spliced with parameter names:\n{}",
         plan.helper_body
     );
-    let uri = edit_uri(&plan)?;
+
+    let uri = plan
+        .workspace_edit
+        .as_ref()
+        .and_then(|edit| edit.pointer("/documentChanges/0/textDocument/uri"))
+        .and_then(Value::as_str)
+        .context("edit uri present")?;
     ensure!(
         uri.starts_with("file://") && uri.ends_with("/RateLimits.cs"),
         "edit targets the fixture file, got {uri}"
     );
+    let _applied = assert_merge_golden(
+        &plan,
+        "csharp-merge-leafgap",
+        "RateLimits.cs",
+        "RateLimits.merged.cs",
+        RATE_LIMITS_BODY,
+    )?;
     Ok(())
 }
 
-/// The C# leaf-gap signature: the typed context parameter followed by
-/// the two literal holes, and the concrete argument every call site
-/// passes for each.
-fn assert_rate_limits_signature(plan: &MergePlan) -> Result<()> {
-    let signature = parameter_signature(plan);
-    ensure!(
-        signature
-            == [
-                ("RatePolicy", "policy"),
-                ("string", "arg0"),
-                ("int", "arg1")
-            ],
-        "typed parameter list (context + holes), got {signature:?}"
-    );
-    let site_arguments = map_parameters(plan, |parameter| parameter.per_site_arguments.clone());
-    ensure!(
-        site_arguments
-            == [
-                ["policy", "policy"],
-                ["\"standard\"", "\"premium\""],
-                ["100", "250"],
-            ],
-        "per-site argument lists, got {site_arguments:?}"
-    );
-    Ok(())
-}
+/// The statements duplicated across `ApplyStandard` and `ApplyPremium`
+/// — every call the two bodies share verbatim. The two leaf gaps
+/// (`"standard"`/`"premium"`, `100`/`250`) differ by construction and
+/// become parameters, so they are not part of the census.
+const RATE_LIMITS_BODY: &[&str] = &[
+    "policy.SetCeiling(label, ceiling);",
+    "policy.EnableAlerts(label);",
+    "policy.Audit(label, ceiling);",
+    "policy.Flush(label);",
+    "policy.Seal(ceiling);",
+    "policy.Commit();",
+];
 
 /// Asserts the RFC 8089 shape every wire `WorkspaceEdit` URI must have
 /// (issue #290): an empty authority and exactly three slashes, a
 /// forward-slash separated path ending at `tail`, and — because fixture
 /// paths are entirely unreserved — no percent-encoding whatsoever.
 fn ensure_rfc8089_uri(plan: &MergePlan, tail: &str) -> Result<()> {
-    let uri = edit_uri(plan)?;
+    let uri = plan
+        .workspace_edit
+        .as_ref()
+        .context("wire edit present")?
+        .pointer("/documentChanges/0/textDocument/uri")
+        .and_then(Value::as_str)
+        .context("edit uri present")?;
     let path = uri
         .strip_prefix("file:///")
         .with_context(|| format!("empty authority plus a rooted path expected, got {uri}"))?;
@@ -254,7 +148,7 @@ fn ensure_rfc8089_uri(plan: &MergePlan, tail: &str) -> Result<()> {
 /// clients cannot resolve the document.
 #[test]
 fn wire_edit_uri_is_rfc8089_for_the_platform_absolute_path() -> Result<()> {
-    let plan = mechanical_plan(CSHARP_LEAFGAP.fixture, CSHARP_LEAFGAP.file)?;
+    let plan = first_mechanical(merge_plans("csharp-merge-leafgap", "RateLimits.cs")?)?;
     ensure_rfc8089_uri(
         &plan,
         "/deslop/tests/fixtures/csharp-merge-leafgap/RateLimits.cs",
@@ -268,16 +162,16 @@ fn wire_edit_uri_is_rfc8089_for_the_platform_absolute_path() -> Result<()> {
 /// verbatim marker must not survive into the URI.
 #[test]
 fn wire_edit_uri_is_rfc8089_for_a_canonicalised_absolute_path() -> Result<()> {
-    let root = fs::canonicalize(fixture(CSHARP_LEAFGAP.fixture)).context("canonical fixture")?;
-    let plan = first_mechanical(merge_plans_under(&root, CSHARP_LEAFGAP.file)?)?;
+    let root = fs::canonicalize(fixture("csharp-merge-leafgap")).context("canonical fixture")?;
+    let plan = first_mechanical(merge_plans_under(&root, "RateLimits.cs")?)?;
     ensure_rfc8089_uri(&plan, "/csharp-merge-leafgap/RateLimits.cs")
 }
 
 /// Determinism: recomputing the plan yields identical JSON.
 #[test]
 fn csharp_leafgap_plan_is_deterministic() -> Result<()> {
-    let first = mechanical_plan(CSHARP_LEAFGAP.fixture, CSHARP_LEAFGAP.file)?;
-    let second = mechanical_plan(CSHARP_LEAFGAP.fixture, CSHARP_LEAFGAP.file)?;
+    let first = first_mechanical(merge_plans("csharp-merge-leafgap", "RateLimits.cs")?)?;
+    let second = first_mechanical(merge_plans("csharp-merge-leafgap", "RateLimits.cs")?)?;
     ensure!(
         serde_json::to_string(&first)? == serde_json::to_string(&second)?,
         "same cluster and source must produce identical plans"
@@ -290,15 +184,46 @@ fn csharp_leafgap_plan_is_deterministic() -> Result<()> {
 /// parameters are real types, not placeholders.
 #[test]
 fn rust_leafgap_merges_and_compiles() -> Result<()> {
-    let (_plan, applied) = assert_leafgap_merge(&RUST_LEAFGAP)?;
-    ensure_merged_rust_compiles(&applied)
-}
+    let plans = merge_plans("rust-merge-leafgap", "pricing.rs")?;
+    let plan = first_mechanical(plans)?;
+    ensure!(plan.language == "rust", "language recorded");
+    ensure!(
+        plan.helper_name
+            == format!(
+                "merged_from_cluster_{}",
+                plan.cluster_id.get(..6).unwrap_or_default()
+            ),
+        "snake_case deterministic helper name, got {}",
+        plan.helper_name
+    );
+    let types: Vec<&str> = plan
+        .parameters
+        .iter()
+        .map(|parameter| parameter.type_name.as_str())
+        .collect();
+    ensure!(
+        types == ["&mut Vec<(String, i64)>", "&'static str", "i64"],
+        "declared parameter types, got {types:?}"
+    );
 
-/// Type-checks a merged Rust buffer in a scratch directory.
-fn ensure_merged_rust_compiles(applied: &str) -> Result<()> {
+    let applied = assert_merge_golden(
+        &plan,
+        "rust-merge-leafgap",
+        "pricing.rs",
+        "pricing.merged.rs",
+        &[
+            "book.push((label.to_owned(), ceiling));",
+            "book.push((label.to_uppercase(), ceiling * 2));",
+            "book.push((label.to_lowercase(), ceiling + 7));",
+            "book.push((label.trim().to_owned(), ceiling - 1));",
+            "book.push((label.repeat(2), ceiling / 2));",
+            "book.sort();",
+        ],
+    )?;
+
     let staging = tempfile::tempdir()?;
-    let merged_file = staging.path().join(RUST_LEAFGAP.file);
-    fs::write(&merged_file, applied)?;
+    let merged_file = staging.path().join("pricing.rs");
+    fs::write(&merged_file, &applied)?;
     let output = std::process::Command::new("rustc")
         .args([
             "--edition",
@@ -324,7 +249,42 @@ fn ensure_merged_rust_compiles(applied: &str) -> Result<()> {
 /// the emitted shape).
 #[test]
 fn dart_leafgap_merges_to_golden() -> Result<()> {
-    let _merged = assert_leafgap_merge(&DART_LEAFGAP)?;
+    let plans = merge_plans("dart-merge-leafgap", "pricing.dart")?;
+    let plan = first_mechanical(plans)?;
+    ensure!(plan.language == "dart", "language recorded");
+    ensure!(
+        plan.helper_name
+            == format!(
+                "mergedFromCluster_{}",
+                plan.cluster_id.get(..6).unwrap_or_default()
+            ),
+        "lowerCamel deterministic helper name, got {}",
+        plan.helper_name
+    );
+    let types: Vec<&str> = plan
+        .parameters
+        .iter()
+        .map(|parameter| parameter.type_name.as_str())
+        .collect();
+    ensure!(
+        types == ["List<String>", "String", "int"],
+        "declared parameter types, got {types:?}"
+    );
+
+    let _applied = assert_merge_golden(
+        &plan,
+        "dart-merge-leafgap",
+        "pricing.dart",
+        "pricing.merged.dart",
+        &[
+            "book.add(label);",
+            "book.add(label.toUpperCase());",
+            "book.add(label.toLowerCase());",
+            "book.add(label.trim());",
+            "book.add(ceiling.toString());",
+            "book.sort();",
+        ],
+    )?;
     Ok(())
 }
 
@@ -333,8 +293,13 @@ fn dart_leafgap_merges_to_golden() -> Result<()> {
 /// only parameters are the typed context ones.
 #[test]
 fn consistent_renames_lift_without_parameters() -> Result<()> {
-    let plan = mechanical_plan("csharp-merge-rename", "RateMath.cs")?;
-    let names = map_parameters(&plan, |parameter| parameter.name.as_str());
+    let plans = merge_plans("csharp-merge-rename", "RateMath.cs")?;
+    let plan = first_mechanical(plans)?;
+    let names: Vec<&str> = plan
+        .parameters
+        .iter()
+        .map(|parameter| parameter.name.as_str())
+        .collect();
     ensure!(
         names == ["amounts", "taxRate"],
         "only context parameters survive a pure rename, got {names:?}"
@@ -351,8 +316,13 @@ fn consistent_renames_lift_without_parameters() -> Result<()> {
 /// declared type becomes a typed positional parameter.
 #[test]
 fn free_identifier_hole_becomes_typed_parameter() -> Result<()> {
-    let plan = mechanical_plan("csharp-merge-identhole", "Router.cs")?;
-    let signature = parameter_signature(&plan);
+    let plans = merge_plans("csharp-merge-identhole", "Router.cs")?;
+    let plan = first_mechanical(plans)?;
+    let signature: Vec<(&str, &str)> = plan
+        .parameters
+        .iter()
+        .map(|parameter| (parameter.type_name.as_str(), parameter.name.as_str()))
+        .collect();
     ensure!(
         signature == [("RatePolicy", "policy"), ("int", "arg0")],
         "typed positional identifier parameter, got {signature:?}"
@@ -377,27 +347,17 @@ fn free_identifier_hole_becomes_typed_parameter() -> Result<()> {
 #[test]
 fn three_site_merge_defaults_trailing_parameter() -> Result<()> {
     let root = fixture("csharp-merge-defaults");
-    let tiers = ["\"bronze\"", "\"silver\"", "\"gold\""];
-    let plan = synthetic_merge_plan(&root, "Tiers.cs", &tiers, span_for_body)?;
+    let plan = synthetic_merge_plan(
+        &root,
+        "Tiers.cs",
+        &["\"bronze\"", "\"silver\"", "\"gold\""],
+        span_for_body,
+    )?;
     ensure!(
         matches!(plan.verdict, MergeVerdict::Mechanical),
         "the three-site fixture merges mechanically, got {:?}",
         plan.verdict
     );
-    assert_trailing_default(&plan)?;
-    let edit = plan.workspace_edit.as_ref().context("edit present")?;
-    let rendered = edit.to_string();
-    ensure!(
-        rendered.contains("MergedFromCluster_") && rendered.contains("= 100"),
-        "the helper renders the default"
-    );
-    Ok(())
-}
-
-/// The trailing parameter of the three-site plan: it defaults to the
-/// modal value, is optional, and the two sites that pass that value
-/// elide it.
-fn assert_trailing_default(plan: &MergePlan) -> Result<()> {
     let ceiling = plan
         .parameters
         .last()
@@ -406,7 +366,17 @@ fn assert_trailing_default(plan: &MergePlan) -> Result<()> {
         ceiling.default_value.as_deref() == Some("100") && !ceiling.is_required,
         "trailing slot defaults to the modal value, got {ceiling:?}"
     );
-    let elided = &ceiling.per_site_arguments;
+    let edit = plan.workspace_edit.as_ref().context("edit present")?;
+    let rendered = edit.to_string();
+    ensure!(
+        rendered.contains("MergedFromCluster_") && rendered.contains("= 100"),
+        "the helper renders the default"
+    );
+    let elided = plan
+        .parameters
+        .last()
+        .map(|parameter| parameter.per_site_arguments.clone())
+        .unwrap_or_default();
     ensure!(
         elided
             .iter()

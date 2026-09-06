@@ -17,7 +17,7 @@ use crate::{
 use super::{
     super::{
         config::{EmbeddingSettings, PipelineConfig},
-        corpus::{log_skip_too_deep, parse_one_file, parser_for_language, CorpusBuildState},
+        corpus::{log_skip_too_deep, parse_one_file, parser_for_language},
     },
     PipelineSession,
 };
@@ -91,9 +91,8 @@ impl PipelineSession {
             .file_id_for(&absolute)
             .unwrap_or_else(|| self.registry.register(absolute.clone()));
         let config = self.pipeline_config_with_mode(embedding);
-        let mut build_stats = CorpusBuildState::default();
         let (cached, source, lines) =
-            match parse_one_file(file_id, &absolute, parser, &config, stats, &mut build_stats) {
+            match parse_one_file(file_id, &absolute, parser, &config, stats) {
                 Ok(parsed) => parsed,
                 // A pathologically deep file must not crash the long-lived
                 // server: drop it and keep serving, the same way an
@@ -116,17 +115,10 @@ impl PipelineSession {
             );
             return Ok(CorpusEffect::Untouched);
         }
-        tracing::debug!(
-            fingerprints = cached.fingerprints.len(),
-            signatures_built = build_stats.stats.signatures_built,
-            signatures_reused = build_stats.stats.signatures_reused,
-            "live change spliced into corpus",
-        );
         let ranges = collect_import_boilerplate_ranges(&cached.tree, language);
         self.replace_boilerplate_ranges(file_id, ranges);
         let _prev_lines = self.analysed_lines.insert(file_id, lines);
-        let path_key = super::store::relative_path_key(&absolute, &self.root);
-        self.store.upsert(file_id, path_key, cached);
+        let _prev = self.per_file.insert(file_id, cached);
         let _prev_source = self.sources.insert(file_id, source);
         let _prev_path = self.live_paths.insert(file_id, absolute);
         let _prev_lang = self.file_languages.insert(file_id, language);
@@ -236,7 +228,7 @@ impl PipelineSession {
             return CorpusEffect::Untouched;
         };
         let _removed_path = self.live_paths.remove(&file_id);
-        let _removed_records = self.store.remove(file_id);
+        let _removed_cache = self.per_file.remove(&file_id);
         let _removed_source = self.sources.remove(&file_id);
         let _removed_lang = self.file_languages.remove(&file_id);
         let _removed_lines = self.analysed_lines.remove(&file_id);
@@ -310,7 +302,7 @@ impl PipelineSession {
                 batch_yield: embedding.batch_yield,
                 progress: embedding.progress,
             },
-            incremental: self.effective_incremental(),
+            incremental: self.incremental,
         }
     }
 
@@ -325,7 +317,7 @@ impl PipelineSession {
             min_nodes: self.min_nodes,
             config_path: self.config_path.clone(),
             embedding,
-            incremental: self.effective_incremental(),
+            incremental: self.incremental,
         }
     }
 }

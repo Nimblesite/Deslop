@@ -7,6 +7,7 @@
 
 <div class="blog-container">
   <header class="blog-header">
+    <p class="blog-eyebrow">{{ "releases.eyebrow" | t(currentLang) | default("Release Index") }}</p>
     <h1>{{ "releases.title" | t(currentLang) | default("Releases") }}</h1>
     <p class="blog-subtitle">{{ "releases.subtitle" | t(currentLang) | default("Latest Deslop GitHub releases, VSIX artifacts, CLI archives, and checksums.") }}</p>
   </header>
@@ -29,7 +30,7 @@
           {% if release.prerelease %}<span class="post-card__sep">·</span>{{ "releases.prerelease" | t(currentLang) | default("Prerelease") }}{% endif %}
         </div>
         <a href="{{ release.url }}" class="post-card__title" target="_blank" rel="noopener noreferrer">{{ release.name | escape }}</a>
-        <p class="post-card__excerpt">{{ "releases.assetCount" | t(currentLang) | default("Artifacts") }}: {{ release.assets | length }}.</p>
+        <p class="post-card__excerpt">{{ "releases.cardSummary" | t(currentLang) | default("VSIX packages, CLI archives, checksums, and generated release notes are hosted on GitHub.") }} {{ "releases.assetCount" | t(currentLang) | default("Artifacts") }}: {{ release.assets | length }}.</p>
         {% if release.assets | length %}
         <div class="post-article__tags" aria-label="{{ "releases.assets" | t(currentLang) | default("Assets") }}">
           {% for asset in release.assets | limit(8) %}
@@ -45,6 +46,7 @@
     </article>
     {% endfor %}
   </div>
+  <p class="blog-subtitle">{{ "releases.generated" | t(currentLang) | default("This page is generated from GitHub Releases during the website build.") }}</p>
   {% else %}
   <div class="blog-empty">
     <p>{{ "releases.empty" | t(currentLang) | default("Release metadata was unavailable during this build. GitHub remains the source of truth.") }}</p>

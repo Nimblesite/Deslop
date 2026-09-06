@@ -13,11 +13,14 @@
 //! *chosen representative* loses that bridge the moment the bridge is
 //! not the representative, and reports one region as two.
 
+use std::collections::HashMap;
+
 use deslop_core::{
     ast::ByteRange,
-    cluster::{build_ranked_fused_clusters, Cluster, ClusterBuildInputs},
+    cluster::{build_ranked_fused_clusters, Cluster},
     fingerprint::Fingerprint,
-    pair::{FusedCluster, FusedEdge},
+    lsh::Signature,
+    pair::FusedCluster,
     state::{FileId, FileRegistry},
 };
 
@@ -37,48 +40,14 @@ fn member(file_id: FileId, start: usize, end: usize) -> Fingerprint {
 }
 
 /// Runs the production clustering stage over `members` as a single fused
-/// cluster carrying `edges`, and returns the ranked result. Every case in
-/// this file feeds the pipeline through here: the signature stand-ins,
-/// the empty embedding map and the fused-group shape are scaffolding
-/// rather than the thing under test, and a divergent respelling would
-/// mean two tests disagreeing about what the stage was actually fed.
-fn ranked_with_edges(members: &[Fingerprint], edges: Vec<FusedEdge>) -> Vec<Cluster> {
+/// cluster and returns the ranked result.
+fn ranked(members: &[Fingerprint]) -> Vec<Cluster> {
+    let signatures: Vec<Signature> = members.iter().map(|_| [11_u64; 128]).collect();
     let fused = [FusedCluster {
         members: (0..members.len()).collect(),
-        edges,
-        shape_family: None,
     }];
-    build_ranked_fused_clusters(&ClusterBuildInputs {
-        fingerprints: members,
-        fused_clusters: &fused,
-        trees: &[],
-        file_languages: &std::collections::HashMap::new(),
-        file_paths: &std::collections::HashMap::new(),
-    })
-}
-
-/// Runs the clustering stage with no surviving discovery edge, which is
-/// what a purely structural hash-identical bucket looks like.
-fn ranked(members: &[Fingerprint]) -> Vec<Cluster> {
-    ranked_with_edges(members, Vec::new())
-}
-
-/// One cluster's member byte ranges, in published order. Four call sites
-/// respelled this same `members.iter().map(..).collect()` chain; Deslop
-/// scored the copies `identical`/`nearly_identical` against this repo's
-/// own corpus, and a divergent respelling would have meant two tests
-/// disagreeing about what "the published range" is.
-fn member_ranges(cluster: &Cluster) -> Vec<(usize, usize)> {
-    cluster
-        .members
-        .iter()
-        .map(|found| (found.byte_range.start, found.byte_range.end))
-        .collect()
-}
-
-/// One surviving discovery edge between two fingerprint indices.
-fn edge(left: usize, right: usize) -> FusedEdge {
-    FusedEdge { left, right }
+    let vectors: HashMap<usize, Vec<f32>> = HashMap::new();
+    build_ranked_fused_clusters(members, &signatures, &vectors, &fused)
 }
 
 /// The occurrence byte ranges of the single published cluster.
@@ -89,16 +58,16 @@ fn occurrence_ranges(members: &[Fingerprint]) -> Vec<(usize, usize)> {
         1,
         "one fused group publishes one cluster, got {clusters:#?}"
     );
-    clusters.first().map(member_ranges).unwrap_or_default()
-}
-
-/// Asserts the occurrence ranges the collapse publishes for `members`.
-/// Four cases respelled the same bind-then-compare pair; Deslop scored
-/// the copies against this repo's own corpus. The observed ranges stay in
-/// the failure message, so a red test still names what it actually got.
-fn assert_occurrence_ranges(members: &[Fingerprint], expected: &[(usize, usize)], why: &str) {
-    let ranges = occurrence_ranges(members);
-    assert_eq!(ranges.as_slice(), expected, "{why}, got {ranges:?}");
+    clusters
+        .first()
+        .map(|cluster| {
+            cluster
+                .members
+                .iter()
+                .map(|found| (found.byte_range.start, found.byte_range.end))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// Two files, one of which carries a transitively-overlapping run.
@@ -150,15 +119,16 @@ fn a_transitively_overlapping_run_collapses_to_one_occurrence() {
 #[test]
 fn the_widest_window_of_a_run_represents_it_regardless_of_emission_order() {
     let (alpha, beta) = two_files();
-    assert_occurrence_ranges(
-        &[
-            member(alpha, 0, 40),
-            member(alpha, 30, 60),
-            member(alpha, 20, 200),
-            member(beta, 0, 200),
-        ],
-        &[(20, 200), (0, 200)],
-        "the 180-byte window represents the run",
+    let ranges = occurrence_ranges(&[
+        member(alpha, 0, 40),
+        member(alpha, 30, 60),
+        member(alpha, 20, 200),
+        member(beta, 0, 200),
+    ]);
+    assert_eq!(
+        ranges,
+        vec![(20, 200), (0, 200)],
+        "the 180-byte window represents the run, got {ranges:?}"
     );
 }
 
@@ -168,46 +138,17 @@ fn the_widest_window_of_a_run_represents_it_regardless_of_emission_order() {
 #[test]
 fn disjoint_windows_in_one_file_stay_separate_occurrences() {
     let (alpha, beta) = two_files();
-    assert_occurrence_ranges(
-        &[
-            member(alpha, 0, 100),
-            member(alpha, 200, 300),
-            member(beta, 0, 100),
-        ],
-        &[(0, 100), (200, 300), (0, 100)],
-        "two disjoint alpha windows and one beta window are three locations,",
+    let ranges = occurrence_ranges(&[
+        member(alpha, 0, 100),
+        member(alpha, 200, 300),
+        member(beta, 0, 100),
+    ]);
+    assert_eq!(
+        ranges,
+        vec![(0, 100), (200, 300), (0, 100)],
+        "two disjoint alpha windows and one beta window are three locations, \
+         got {ranges:?}"
     );
-}
-
-/// [PIPELINE-CLUSTER-EXACT-SCOPE]: within an overlapping run the wider
-/// authored view represents it — pair edge strength never enters the
-/// selection. A whole-file root `[0,200]` and a window `[10,150]`
-/// nested in it overlap in the same file, so the collapse publishes
-/// one canonical member per file: the root, because no pair grade may
-/// choose a view ([PIPELINE-CLUSTER-CLOSURE]). Reversing which edge is
-/// stronger — or deleting the edges entirely — must not change the
-/// published view.
-#[test]
-fn the_wider_member_represents_a_run_regardless_of_edge_strength() {
-    let (alpha, beta) = two_files();
-    let members = [
-        member(alpha, 0, 200),
-        member(alpha, 10, 150),
-        member(beta, 10, 150),
-    ];
-    for edges in [
-        vec![edge(0, 2), edge(1, 2)],
-        vec![edge(1, 2), edge(0, 2)],
-        Vec::new(),
-    ] {
-        let clusters = ranked_with_edges(&members, edges);
-        let ranges: Vec<Vec<(usize, usize)>> = clusters.iter().map(member_ranges).collect();
-        assert_eq!(
-            ranges,
-            vec![vec![(0, 200), (10, 150)]],
-            "the wider root represents the alpha run whatever the edges say"
-        );
-    }
 }
 
 /// Control: a run that collapses to a single location is not a

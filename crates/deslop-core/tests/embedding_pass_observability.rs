@@ -18,6 +18,7 @@ use deslop_core::{
     EmbeddingProvider, EmbeddingSpec, ProviderError,
 };
 
+mod common;
 use crate::common::*;
 
 const VECTOR_DIMS: usize = 4;

@@ -7,12 +7,12 @@ import syntaxHighlight from "@11ty/eleventy-plugin-syntaxhighlight";
 // every string has one source of truth.
 const BLOG_INDEX_META = {
   en: {
-    title: "Duplicate Code & AI Coding Agents Blog | Deslop",
+    title: "Blog",
     description:
       "Field notes on duplicate-code detection for AI coding agents — ranking, tree-sitter parsing, the MCP and LSP servers, and why prevention beats cleanup.",
   },
   zh: {
-    title: "重复代码与 AI 编码智能体博客 | Deslop",
+    title: "博客",
     description:
       "面向 AI 编码智能体的重复代码检测现场札记——排名机制、tree-sitter 解析、MCP 与 LSP 服务器，以及为何预防胜于清理。",
   },
@@ -21,11 +21,12 @@ const BLOG_INDEX_META = {
 /**
  * Builds the blog-index virtual template for one language. The default
  * language renders at /blog/ from `collections.posts`; every other language
- * renders at /<lang>/blog/ from `collections.<lang>posts`. One body, no
- * per-language copies.
+ * renders at /<lang>/blog/ from `collections.<lang>posts`, with nav links
+ * carrying the locale prefix. One body, no per-language copies.
  */
 const blogIndexOverride = (lang) => {
   const isDefault = lang === "en";
+  const langPrefix = isDefault ? "" : `/${lang}`;
   const meta = BLOG_INDEX_META[lang];
   const posts = isDefault ? "collections.posts" : `collections.${lang}posts`;
   const frontmatter = isDefault
@@ -39,20 +40,22 @@ ${frontmatter}
 ---
 <div class="blog-container">
   <header class="blog-header">
-    <p class="blog-eyebrow">{{ "blog.eyebrow" | t(lang) | default("Field notes") }}</p>
-    <h1>{{ "blog.indexTitle" | t(lang) | default("Duplicate-code engineering") }}</h1>
+    <p class="blog-eyebrow">{{ "blog.eyebrow" | t(lang) | default("The Manuscript · Field Notes") }}</p>
+    <h1>{{ "blog.title" | t(lang) | default("Blog") }}</h1>
     <p class="blog-subtitle">{{ "blog.subtitle" | t(lang) | default(site.description) }}</p>
   </header>
+
+  <nav class="blog-nav">
+    <a href="${langPrefix}/blog/tags/" class="blog-nav-link">{{ "blog.tags" | t(lang) | default("Tags") }}</a>
+    <a href="${langPrefix}/blog/categories/" class="blog-nav-link">{{ "blog.categories" | t(lang) | default("Categories") }}</a>
+  </nav>
 
   <div class="post-grid">
     {%- for post in ${posts} | sort(true, false, "date") -%}
     <article class="post-card{% if loop.first %} post-card--featured{% endif %}">
       <a href="{{ post.url }}" class="post-card__thumb" tabindex="-1" aria-hidden="true">
         <img src="{{ post.data.heroImage | default(site.ogImage) }}"
-             srcset="{{ post.data.heroImage | replace('.webp', '-800.webp') }} 800w, {{ post.data.heroImage }} 1600w"
-             sizes="(max-width: 40rem) calc(100vw - 3rem), (max-width: 64rem) 50vw, 42rem"
-             alt="" width="{{ post.data.heroImageWidth | default('1200') }}" height="{{ post.data.heroImageHeight | default('630') }}"
-             loading="lazy" decoding="async">
+             alt="" width="1200" height="630" loading="lazy" decoding="async">
       </a>
       <div class="post-card__body">
         <div class="post-card__meta">
@@ -80,12 +83,63 @@ const DOCS_LAYOUT_OVERRIDE = `---
 layout: layouts/base.njk
 ---
 
+{% block head %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "{{ title }}",
+  "description": "{{ description | default(site.description) }}",
+  "inLanguage": "{{ lang | default('en') }}"
+}
+</script>
+{% endblock %}
+
 {% set currentLang = lang | default('en') %}
 {% set langPrefix = "/" + currentLang if currentLang != defaultLanguage else "" %}
 {% set navPages = collections.all | eleventyNavigation %}
 
 <div class="docs-shell">
-  {% include "partials/docs-sidebar.njk" %}
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <div class="docs-sidebar__brand">
+      <h2>{{ "docs.brand" | t(currentLang) | default("The Manuscript") }}</h2>
+      <p class="docs-sidebar__version">{{ "docs.versionTag" | t(currentLang) | default("Live LSP + MCP · preview") }}</p>
+    </div>
+    <nav class="docs-sidebar__site-nav" aria-label="Site">
+      <a href="{{ langPrefix }}/" class="docs-sidebar__link">{{ "nav.home" | t(currentLang) | default("Home") }}</a>
+      {% for item in navigation.main %}
+      {% set navUrl = item.url %}
+      {% if not item.external and currentLang != defaultLanguage %}{% set navUrl = item.url | altLangUrl('en', currentLang) %}{% endif %}
+      <a href="{{ navUrl }}" class="docs-sidebar__link"{% if item.external %} target="_blank" rel="noopener noreferrer"{% endif %}>{{ item.text }}</a>
+      {% endfor %}
+    </nav>
+    <nav class="docs-sidebar__nav" aria-label="Documentation">
+      {% for entry in navPages %}
+      {% set entryLang = entry.url | extractLangFromUrl(defaultLanguage) %}
+      {% if entryLang == currentLang %}
+      <a href="{{ entry.url }}" class="docs-sidebar__link{% if page.url == entry.url %} is-active{% endif %}">
+        <span class="material-symbols-outlined">{{ entry.data.icon | default("article") }}</span>
+        <span class="docs-sidebar__label">{{ entry.title }}</span>
+      </a>
+      {% if entry.children.length %}
+      <div class="docs-sidebar__children">
+        {% for child in entry.children %}
+        <a href="{{ child.url }}" class="docs-sidebar__link docs-sidebar__link--child{% if page.url == child.url %} is-active{% endif %}">
+          <span class="docs-sidebar__label">{{ child.title }}</span>
+        </a>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% endif %}
+      {% endfor %}
+    </nav>
+    <div class="docs-sidebar__foot">
+      <a href="https://github.com/Nimblesite/Deslop" class="docs-sidebar__cta">
+        <span class="material-symbols-outlined">support_agent</span>
+        {{ "docs.communitySupport" | t(currentLang) | default("Community support") }}
+      </a>
+    </div>
+  </aside>
 
   <main class="docs-main">
     <article class="docs-article">
@@ -132,6 +186,34 @@ const BLOG_POST_LAYOUT_OVERRIDE = `---
 layout: layouts/base.njk
 ---
 
+{% block head %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "{{ title }}",
+  "description": "{{ description | default(site.description) }}",
+  "datePublished": "{{ date | dateToRfc3339 }}",
+  "dateModified": "{{ (updated | default(date)) | dateToRfc3339 }}",
+  "mainEntityOfPage": "{{ site.url }}{{ page.url }}",
+  "image": "{{ site.url }}{{ heroImage | default(ogImage) | default(site.ogImage) }}",{% if author %}
+  "author": {
+    "@type": "Person",
+    "name": "{{ author }}"
+  },{% endif %}
+  "publisher": {
+    "@type": "Organization",
+    "name": "{{ site.title }}",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "{{ site.url }}/assets/img/logo.png"
+    }
+  },
+  "inLanguage": "{{ lang | default('en') }}"
+}
+</script>
+{% endblock %}
+
 {% set langPrefix = "/" + lang if lang and lang != defaultLanguage else "" %}
 
 <article class="post-article">
@@ -146,7 +228,17 @@ layout: layouts/base.njk
     <p class="post-article__meta">
       <time datetime="{{ date | isoDate }}">{{ date | dateFormat(lang) }}</time>
       {% if author %} · <span class="post-article__author">{{ author }}</span>{% endif %}
+      {% if category %} · <a href="{{ langPrefix }}/blog/categories/{{ category | slugify }}/">{{ category | capitalize }}</a>{% endif %}
     </p>
+    {% if tags %}
+    <div class="post-article__tags">
+      {% for tag in tags %}
+      {% if tag != 'post' and tag != 'posts' %}
+      <a href="{{ langPrefix }}/blog/tags/{{ tag | slugify }}/" class="post-article__tag">{{ tag }}</a>
+      {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
   </header>
 
   <div class="prose">
@@ -162,9 +254,13 @@ layout: layouts/base.njk
 </article>
 `;
 
-// Project-owned shell. Techdoc ships this as a virtual template, so metadata,
-// localization, structured data, analytics, and the Nimblesite credit live in
-// one replacement instead of drifting across page layouts.
+// Footer override: swap the techdoc plugin's footer markup for one that
+// credits Nimblesite (the product owner) and links back to nimblesite.co.
+// Techdoc ships `layouts/base.njk` as a virtual template, so we replace it
+// wholesale. Two deliberate diffs from upstream: the Google Analytics
+// (gtag.js) snippet at the top of <head>, and the `footer-bottom` block.
+// Keep the rest in lock-step with the plugin's template or head tags will
+// drift.
 const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
 {#- Locale-safe i18n: derive the effective language and a locale-stripped base
     path straight from the URL, so language alternates never double-prefix
@@ -173,27 +269,6 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
     cluster entirely. -#}
 {%- set effLang = 'zh' if (page.url == '/zh/' or page.url.startsWith('/zh/')) else (lang | default('en')) -%}
 {%- set basePath = (page.url | replace('/zh/', '/')) if effLang == 'zh' else page.url -%}
-{%- set isHome = basePath == '/' -%}
-{%- set isDocsPage = basePath.startsWith('/docs/') or docsShell -%}
-{%- set isBlogPost = basePath.startsWith('/blog/') and basePath != '/blog/' -%}
-{%- set canonicalUrl = site.url + page.url -%}
-{%- set websiteId = site.url + '/#website' -%}
-{%- set organizationId = site.url + '/#organization' -%}
-{%- set webpageId = canonicalUrl + '#webpage' -%}
-{%- set breadcrumbId = canonicalUrl + '#breadcrumb' -%}
-{%- set currentTitle = title | default(site.title) -%}
-{%- set currentDescription = description | default(site.description) -%}
-{%- set homeUrl = site.url + ('/zh/' if effLang == 'zh' else '/') -%}
-{%- set homeName = 'nav.home' | t(effLang) | default('Home') -%}
-{%- set sectionName = '' -%}
-{%- set sectionUrl = '' -%}
-{%- if isDocsPage -%}
-  {%- set sectionName = 'nav.docs' | t(effLang) | default('Docs') -%}
-  {%- set sectionUrl = site.url + ('/zh/docs/' if effLang == 'zh' else '/docs/') -%}
-{%- elif basePath.startsWith('/blog/') -%}
-  {%- set sectionName = 'blog.title' | t(effLang) | default('Blog') -%}
-  {%- set sectionUrl = site.url + ('/zh/blog/' if effLang == 'zh' else '/blog/') -%}
-{%- endif -%}
 <html lang="{{ effLang }}">
 <head>
   <script>
@@ -219,6 +294,7 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
   <meta name="title" content="{{ title | default(site.title) }}">
   <meta name="description" content="{{ description | default(site.description) }}">
   {% if site.author %}<meta name="author" content="{{ site.author }}">{% endif %}
+  {% if site.keywords %}<meta name="keywords" content="{{ site.keywords }}">{% endif %}
   <meta name="robots" content="index, follow">
   <meta name="generator" content="Eleventy + techdoc">
   <meta name="theme-color" content="{{ site.themeColor | default('#0066cc') }}">
@@ -241,7 +317,7 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
   <link rel="alternate" hreflang="x-default" href="{{ site.url }}{{ basePath }}">
   {%- endif %}
 
-  <meta property="og:type" content="{% if isBlogPost %}article{% else %}website{% endif %}">
+  <meta property="og:type" content="{% if page.url.startsWith('/blog/') and page.url != '/blog/' %}article{% else %}website{% endif %}">
   <meta property="og:url" content="{{ site.url }}{{ page.url }}">
   <meta property="og:title" content="{{ title | default(site.title) }}">
   <meta property="og:description" content="{{ description | default(site.description) }}">
@@ -255,10 +331,10 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
   {% if pageOgImage %}
   <meta property="og:image" content="{{ site.url }}{{ pageOgImage }}">
   <meta property="og:image:secure_url" content="{{ site.url }}{{ pageOgImage }}">
-  <meta property="og:image:type" content="{{ pageOgImage | toImageMimeType }}">
+  <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="{{ pageOgImageWidth }}">
   <meta property="og:image:height" content="{{ pageOgImageHeight }}">
-  <meta property="og:image:alt" content="{{ ogImageAlt | default('social.defaultImageAlt' | t(effLang)) | default(site.title) }}">
+  <meta property="og:image:alt" content="{{ ogImageAlt | default(title | default(site.title)) }}">
   {% endif %}
 
   <meta name="twitter:card" content="summary_large_image">
@@ -268,7 +344,7 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
   {% if site.twitterSite %}<meta name="twitter:site" content="{{ site.twitterSite }}">{% endif %}
   {% if site.twitterCreator %}<meta name="twitter:creator" content="{{ site.twitterCreator }}">{% endif %}
   {% if pageOgImage %}<meta name="twitter:image" content="{{ site.url }}{{ pageOgImage }}">
-  <meta name="twitter:image:alt" content="{{ ogImageAlt | default('social.defaultImageAlt' | t(effLang)) | default(site.title) }}">{% endif %}
+  <meta name="twitter:image:alt" content="{{ ogImageAlt | default(title | default(site.title)) }}">{% endif %}
 
   <script type="application/ld+json">
   {
@@ -276,63 +352,50 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
     "@graph": [
       {
         "@type": "WebSite",
-        "@id": {{ websiteId | jsonValue | safe }},
-        "url": {{ (site.url + '/') | jsonValue | safe }},
-        "name": {{ site.title | jsonValue | safe }},
-        "description": {{ site.description | jsonValue | safe }},
-        "inLanguage": ["en", "zh"],
-        "publisher": { "@id": {{ organizationId | jsonValue | safe }} }
+        "@id": "{{ site.url }}/#website",
+        "url": "{{ site.url }}/",
+        "name": "{{ site.title }}",
+        "description": "{{ site.description }}",
+        "inLanguage": "{{ lang | default('en') }}"
       },
       {
-        "@type": "{% if isDocsPage %}TechArticle{% elif isBlogPost %}BlogPosting{% else %}WebPage{% endif %}",
-        "@id": {{ webpageId | jsonValue | safe }},
-        "url": {{ canonicalUrl | jsonValue | safe }},
-        "name": {{ currentTitle | jsonValue | safe }},{% if isDocsPage or isBlogPost %}
-        "headline": {{ currentTitle | jsonValue | safe }},{% endif %}
-        "description": {{ currentDescription | jsonValue | safe }},
-        "isPartOf": { "@id": {{ websiteId | jsonValue | safe }} },
-        "inLanguage": {{ effLang | jsonValue | safe }}{% if not isHome %},
-        "breadcrumb": { "@id": {{ breadcrumbId | jsonValue | safe }} }{% endif %}{% if isBlogPost %},
-        "datePublished": {{ date | dateToRfc3339 | jsonValue | safe }},
-        "dateModified": {{ (updated | default(date)) | dateToRfc3339 | jsonValue | safe }},
-        "image": {{ (site.url + pageOgImage) | jsonValue | safe }}{% endif %}{% if author and isBlogPost %},
+        "@type": "{% if page.url.startsWith('/docs/') %}TechArticle{% elif page.url.startsWith('/blog/') and page.url != '/blog/' %}BlogPosting{% else %}WebPage{% endif %}",
+        "@id": "{{ site.url }}{{ page.url }}#webpage",
+        "url": "{{ site.url }}{{ page.url }}",
+        "name": "{{ title | default(site.title) }}",
+        "description": "{{ description | default(site.description) }}",
+        "isPartOf": { "@id": "{{ site.url }}/#website" },
+        "inLanguage": "{{ lang | default('en') }}"{% if page.date %},
+        "datePublished": "{{ page.date | isoDate }}"{% endif %}{% if author %},
         "author": {
           "@type": "Person",
-          "name": {{ author | jsonValue | safe }}
-        }{% endif %}{% if isDocsPage or isBlogPost %},
-        "publisher": { "@id": {{ organizationId | jsonValue | safe }} }{% endif %}
+          "name": "{{ author }}"
+        }{% endif %}
       },
       {
-        "@type": "Organization",
-        "@id": {{ organizationId | jsonValue | safe }},
-        "name": "Nimblesite",
-        "url": "https://nimblesite.co",
-        "sameAs": ["https://github.com/Nimblesite"]
-      }{% if not isHome %},
-      {
         "@type": "BreadcrumbList",
-        "@id": {{ breadcrumbId | jsonValue | safe }},
+        "@id": "{{ site.url }}{{ page.url }}#breadcrumb",
         "itemListElement": [
           {
             "@type": "ListItem",
             "position": 1,
-            "name": {{ homeName | jsonValue | safe }},
-            "item": {{ homeUrl | jsonValue | safe }}
-          }{% if sectionName %},
+            "name": "Home",
+            "item": "{{ site.url }}/"
+          }{% if page.url != '/' %},
           {
             "@type": "ListItem",
             "position": 2,
-            "name": {{ sectionName | jsonValue | safe }},
-            "item": {{ sectionUrl | jsonValue | safe }}
-          }{% endif %}{% if not sectionName or isBlogPost or (isDocsPage and basePath != '/docs/') %},
-          {
-            "@type": "ListItem",
-            "position": {% if sectionName %}3{% else %}2{% endif %},
-            "name": {{ currentTitle | jsonValue | safe }},
-            "item": {{ canonicalUrl | jsonValue | safe }}
+            "name": "{{ title | default('Page') }}",
+            "item": "{{ site.url }}{{ page.url }}"
           }{% endif %}
         ]
-      }{% endif %}
+      },
+      {
+        "@type": "Organization",
+        "@id": "{{ site.url }}/#organization",
+        "name": "Nimblesite",
+        "url": "https://nimblesite.co"
+      }
     ]
   }
   </script>
@@ -344,28 +407,28 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
   {% if site.stylesheet %}<link rel="stylesheet" href="{{ site.stylesheet }}">{% endif %}
   {% block head %}{% endblock %}
 </head>
-<body class="{% if basePath.startsWith('/docs/') or docsShell %}is-docs{% endif %}{% if bodyClass %} {{ bodyClass }}{% endif %}">
-  <a href="#main-content" class="skip-link">{{ 'a11y.skipToContent' | t(effLang) | default('Skip to main content') }}</a>
+<body class="{% if page.url.startsWith('/docs/') %}is-docs{% endif %}">
+  <a href="#main-content" class="skip-link">Skip to main content</a>
 
   <header class="site-header">
     <nav class="nav">
       <div class="logo-wrap">
-        <a href="{% if effLang != defaultLanguage %}/{{ effLang }}/{% else %}/{% endif %}" class="logo">
+        <a href="{% if lang and lang != defaultLanguage %}/{{ lang }}/{% else %}/{% endif %}" class="logo">
           <img src="/assets/img/logo.svg" alt="" class="logo-mark" width="28" height="28" aria-hidden="true">
           <span class="logo-word">{{ site.name | default(site.title) }}</span>
         </a>
-        <span class="logo-badge" aria-label="{{ 'a11y.liveServer' | t(effLang) | default('Live analysis server') }}">
+        <span class="logo-badge" aria-label="Live analysis server">
           <span class="logo-badge__dot" aria-hidden="true"></span>live
         </span>
       </div>
 
       <ul class="nav-links">
         {% set navData = navigation %}
-        {% set currentLang = effLang %}
+        {% set currentLang = lang | default('en') %}
         {% for item in navData.main %}
         <li>
           {% set navUrl = item.url %}
-          {% if not item.external and not item.noLangPrefix and currentLang != defaultLanguage %}
+          {% if not item.external and currentLang != defaultLanguage %}
             {% set navUrl = item.url | altLangUrl('en', currentLang) %}
           {% endif %}
           <a href="{{ navUrl }}" {% if item.external %}target="_blank" rel="noopener noreferrer"{% endif %}
@@ -388,13 +451,13 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
         </div>
 
         {% if techdocOptions.features.darkMode %}
-        <button id="theme-toggle" class="theme-toggle" aria-label="{{ 'a11y.toggleTheme' | t(effLang) | default('Toggle dark mode') }}">
+        <button id="theme-toggle" class="theme-toggle" aria-label="Toggle dark mode">
           <span class="theme-icon-light">☀</span>
           <span class="theme-icon-dark">☾</span>
         </button>
         {% endif %}
 
-        <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-label="{{ 'a11y.toggleMenu' | t(effLang) | default('Toggle menu') }}">
+        <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-label="Toggle menu">
           <span></span>
           <span></span>
           <span></span>
@@ -409,14 +472,14 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
     {% block content %}{{ content | safe }}{% endblock %}
   </main>
 
-  {% if not hideFooter %}<footer class="site-footer">
+  <footer class="site-footer">
     <div class="footer-content">
       {% if navigation.footer %}
       <div class="footer-grid">
-        {% set currentLang = effLang %}
+        {% set currentLang = lang | default('en') %}
         {% for section in navigation.footer %}
         <div class="footer-section">
-          <h2>{% if section.i18nKey and currentLang != defaultLanguage %}{{ section.i18nKey | t(currentLang) | default(section.title) }}{% else %}{{ section.title }}{% endif %}</h2>
+          <h3>{% if section.i18nKey and currentLang != defaultLanguage %}{{ section.i18nKey | t(currentLang) | default(section.title) }}{% else %}{{ section.title }}{% endif %}</h3>
           <ul>
             {% for item in section.items %}
             {% set footerUrl = item.url %}
@@ -435,7 +498,7 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
         <p>&copy; {% year %} <a href="https://nimblesite.co" target="_blank" rel="noopener noreferrer">Nimblesite</a>. {{ site.name | default(site.title) }} is a Nimblesite product.</p>
       </div>
     </div>
-  </footer>{% endif %}
+  </footer>
 
   <script src="/techdoc/js/main.js" type="module"></script>
   <script src="/assets/js/drawer.js" type="module"></script>
@@ -454,9 +517,9 @@ const LLMS_TXT_OVERRIDE = `---json
   "eleventyExcludeFromCollections": true
 }
 ---
-# {{ site.title | default(site.name) | safe }}
+# {{ site.title | default(site.name) }}
 
-> {{ site.description | safe }}
+> {{ site.description }}
 
 ## Install
 
@@ -467,12 +530,12 @@ const LLMS_TXT_OVERRIDE = `---json
 
 ## Documentation
 {% for page in collections.docs %}
-- [{{ page.data.title | safe }}]({{ site.url }}{{ page.url }}){% if page.data.description %} — {{ page.data.description | safe }}{% endif %}
+- [{{ page.data.title }}]({{ site.url }}{{ page.url }}){% if page.data.description %} — {{ page.data.description }}{% endif %}
 {% endfor %}
 
 ## Blog Posts
 {% for post in collections.posts | reverse | limit(10) %}
-- [{{ post.data.title | safe }}]({{ site.url }}{{ post.url }}){% if post.data.excerpt or post.data.description %} — {{ post.data.excerpt | default(post.data.description) | safe }}{% endif %}
+- [{{ post.data.title }}]({{ site.url }}{{ post.url }}){% if post.data.excerpt or post.data.description %} — {{ post.data.excerpt | default(post.data.description) }}{% endif %}
 {% endfor %}
 
 ## Navigation
@@ -481,70 +544,6 @@ const LLMS_TXT_OVERRIDE = `---json
 - Blog: {{ site.url }}/blog/
 - Releases: {{ site.url }}/releases/
 - Source: https://github.com/Nimblesite/Deslop
-`;
-
-// A concise Atom feed is more useful than embedding every article body. It
-// also avoids passing whole HTML documents through a URL filter, which turns
-// the body into an encoded URL instead of valid feed content.
-const FEED_OVERRIDE = `---json
-{
-  "permalink": "feed.xml",
-  "eleventyExcludeFromCollections": true
-}
----
-<?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en">
-  <title>{{ site.title }}</title>
-  <subtitle>{{ site.description }}</subtitle>
-  <link href="{{ site.url }}/feed.xml" rel="self"/>
-  <link href="{{ site.url }}/"/>
-  <updated>{% if collections.posts | length > 0 %}{{ collections.posts | getNewestCollectionItemDate | dateToRfc3339 }}{% else %}1970-01-01T00:00:00.000Z{% endif %}</updated>
-  <id>{{ site.url }}/</id>
-  {% if site.author %}<author><name>{{ site.author }}</name></author>{% endif %}
-  {%- for post in collections.posts | reverse %}
-  <entry>
-    <title>{{ post.data.title }}</title>
-    <link href="{{ site.url }}{{ post.url }}"/>
-    <id>{{ site.url }}{{ post.url }}</id>
-    <published>{{ post.date | dateToRfc3339 }}</published>
-    <updated>{{ (post.data.updated | default(post.date)) | dateToRfc3339 }}</updated>
-    <summary type="text">{{ post.data.excerpt | default(post.data.description) }}</summary>
-  </entry>
-  {%- endfor %}
-</feed>
-`;
-
-// Only real publication dates belong in sitemap lastmod. Eleventy's implicit
-// file date changes with checkout/build time and would make evergreen pages
-// look freshly published on every build.
-const SITEMAP_OVERRIDE = `---json
-{
-  "permalink": "sitemap.xml",
-  "eleventyExcludeFromCollections": true
-}
----
-<?xml version="1.0" encoding="utf-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-{%- for item in collections.all %}
-  {% if item.url and item.url != '/404.html' %}
-  <url>
-    <loc>{{ site.url }}{{ item.url }}</loc>{% if item.data.tags and ('posts' in item.data.tags) %}
-    <lastmod>{{ (item.data.updated | default(item.date)) | dateToRfc3339 }}</lastmod>{% endif %}
-  </url>
-  {% endif %}
-{%- endfor %}
-</urlset>
-`;
-
-// Seven posts do not justify 26 thin tag/category archives, including several
-// one-post pages and duplicate Go/Golang archives. Keep the useful post
-// metadata but stop publishing the low-value taxonomy pages.
-const DISABLED_ARCHIVE_TEMPLATE = `---json
-{
-  "permalink": false,
-  "eleventyExcludeFromCollections": true
-}
----
 `;
 
 // robots.txt override: the plugin default `Disallow: /assets/` blocks every
@@ -622,19 +621,9 @@ Sitemap: {{ site.url }}/sitemap.xml
 const OVERRIDES = {
   "blog/index.njk": blogIndexOverride("en"),
   "zh/blog/index.njk": blogIndexOverride("zh"),
-  "blog/tags.njk": DISABLED_ARCHIVE_TEMPLATE,
-  "blog/tags-pages.njk": DISABLED_ARCHIVE_TEMPLATE,
-  "blog/categories.njk": DISABLED_ARCHIVE_TEMPLATE,
-  "blog/categories-pages.njk": DISABLED_ARCHIVE_TEMPLATE,
-  "zh/blog/tags.njk": DISABLED_ARCHIVE_TEMPLATE,
-  "zh/blog/tags-pages.njk": DISABLED_ARCHIVE_TEMPLATE,
-  "zh/blog/categories.njk": DISABLED_ARCHIVE_TEMPLATE,
-  "zh/blog/categories-pages.njk": DISABLED_ARCHIVE_TEMPLATE,
   "_includes/layouts/base.njk": BASE_LAYOUT_OVERRIDE,
   "_includes/layouts/docs.njk": DOCS_LAYOUT_OVERRIDE,
   "_includes/layouts/blog.njk": BLOG_POST_LAYOUT_OVERRIDE,
-  "feed.njk": FEED_OVERRIDE,
-  "sitemap.njk": SITEMAP_OVERRIDE,
   "llms.txt.njk": LLMS_TXT_OVERRIDE,
   "robots.txt.njk": ROBOTS_TXT_OVERRIDE,
 };
@@ -652,43 +641,7 @@ function overrideVirtualTemplates(eleventyConfig) {
   }
 }
 
-// The MIME type each social-card extension actually serves. `og:image:type`
-// used to be the literal string "image/png" for every page, so seven of the
-// eight blog posts — whose cards are JPEGs — declared a type their own file
-// does not have. Scrapers that trust the declaration over sniffing render a
-// broken card. The map is the whole vocabulary of image formats this site is
-// allowed to ship a social card in; an extension outside it is a build-time
-// error rather than a guess, because a silently wrong MIME type is exactly
-// the defect this replaced.
-const SOCIAL_IMAGE_MIME_TYPES = {
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".webp": "image/webp",
-};
-
 export default function (eleventyConfig) {
-  eleventyConfig.addFilter("toImageMimeType", (imagePath) => {
-    const extension = String(imagePath ?? "")
-      .slice(String(imagePath ?? "").lastIndexOf("."))
-      .toLowerCase();
-    const mimeType = SOCIAL_IMAGE_MIME_TYPES[extension];
-    if (!mimeType) {
-      throw new Error(
-        `og:image "${imagePath}" has extension "${extension}", which has no declared MIME type. ` +
-          `Add it to SOCIAL_IMAGE_MIME_TYPES or ship the card in one of: ${Object.keys(SOCIAL_IMAGE_MIME_TYPES).join(", ")}.`
-      );
-    }
-    return mimeType;
-  });
-
-  eleventyConfig.addFilter("jsonValue", (value) =>
-    JSON.stringify(value ?? "")
-      .replaceAll("<", "\\u003c")
-      .replaceAll(">", "\\u003e")
-      .replaceAll("&", "\\u0026")
-  );
-
   eleventyConfig.addPlugin(techdoc, {
     site: {
       name: "Deslop",

@@ -3,6 +3,8 @@
 //! `AnalysisSession`, gathers the in-memory inputs, and returns the
 //! mechanical plan — or a reasoned refusal, never a partial answer.
 
+mod common;
+
 use std::sync::Arc;
 
 use anyhow::{anyhow, ensure, Context, Result};
@@ -119,32 +121,40 @@ fn cache_seed_window_refuses_with_reason() -> Result<()> {
     Ok(())
 }
 
-/// [AUTOFIX-CONSOLIDATE-SURFACE]: a cross-file identical definition
-/// routes through the live glue to the consolidation engine and answers
-/// a mechanical plan carrying the multi-file `WorkspaceEdit`. The
-/// reported cluster is the byte-identical `normalise_labels` definition
-/// — the whole-file near-miss around it is a container echo the rescue
-/// refuses ([FUSED-SHARED-SUBTREE-ECHO]) — so the plan is mechanical,
-/// never a refusal that would leave a proven copy unconsolidated.
+/// [AUTOFIX-CONSOLIDATE-SURFACE] (issue #277): a cross-file identical
+/// definition routes through the live glue to the consolidation engine
+/// and answers a mechanical plan carrying the multi-file
+/// `WorkspaceEdit` and the consolidated symbol.
 #[test]
 fn live_session_consolidates_cross_file_cluster() -> Result<()> {
     let (_workspace, session) = live_session("rust-consolidate")?;
     let report = session.report();
     let cluster = crate::common::clusters::cross_file_identical_cluster(&report)?;
-    ensure!(
-        cluster.occurrences.len() == 2,
-        "the identical definition is reported once per module"
-    );
     let plan = merge_plan_for(&session, &cluster.id)
         .map_err(|error| anyhow!("merge_plan_for: {error}"))?;
     ensure!(
         matches!(plan.verdict, MergeVerdict::Mechanical),
-        "the identical `normalise_labels` definition consolidates mechanically, got {:?}",
+        "the sibling-module duplicate consolidates mechanically, got {:?}",
         plan.verdict
     );
     ensure!(
-        plan.workspace_edit.is_some(),
-        "mechanical plans carry the wire WorkspaceEdit"
+        plan.helper_name == "normalise_labels",
+        "the consolidated symbol rides in helper_name, got {}",
+        plan.helper_name
+    );
+    let edit = plan.workspace_edit.context("wire WorkspaceEdit present")?;
+    let edits = edit
+        .pointer("/documentChanges/0/edits")
+        .and_then(serde_json::Value::as_array)
+        .context("documentChanges carry the duplicate file's edits")?;
+    ensure!(edits.len() == 2, "deletion + import, got {}", edits.len());
+    let uri = edit
+        .pointer("/documentChanges/0/textDocument/uri")
+        .and_then(serde_json::Value::as_str)
+        .context("edited uri present")?;
+    ensure!(
+        uri.starts_with("file://") && uri.contains("pricing_"),
+        "absolute duplicate-file uri, got {uri}"
     );
     Ok(())
 }

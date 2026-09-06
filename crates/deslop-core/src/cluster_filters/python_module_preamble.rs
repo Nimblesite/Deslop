@@ -22,9 +22,10 @@ use std::collections::BTreeSet;
 use tree_sitter::Node;
 
 use super::{
-    language_cluster_shapes, parse_for, spans_multiple_files, trimmed_snippet_range, Snippet,
+    is_multi_member_language_cluster, parse_for, spans_multiple_files, trimmed_snippet_range,
+    Snippet,
 };
-use crate::ast::{named_children, ByteRange};
+use crate::ast::ByteRange;
 
 /// Top-level definition kinds that make up a Python test-module preamble.
 /// `class_definition` is intentionally excluded: class-shape false
@@ -40,9 +41,15 @@ const PREAMBLE_KINDS: &[&str] = &["function_definition", "decorated_definition"]
 /// not such a multi-definition run, or when two members are body
 /// equivalent (a genuine copy that must still surface).
 pub(super) fn is_module_preamble_sequence_cluster(snippets: &[Snippet<'_>]) -> bool {
-    spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id))
-        && language_cluster_shapes(snippets, "python", member_preamble_bodies)
-            .is_some_and(|bodies| all_member_bodies_distinct(&bodies))
+    if !is_multi_member_language_cluster(snippets, "python") {
+        return false;
+    }
+    if !spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id)) {
+        return false;
+    }
+    let bodies: Option<Vec<Vec<u8>>> = snippets.iter().map(member_preamble_bodies).collect();
+    let Some(bodies) = bodies else { return false };
+    all_member_bodies_distinct(&bodies)
 }
 
 /// Concatenates the bodies of the >=2 sibling top-level definitions the
@@ -66,8 +73,8 @@ fn member_preamble_bodies(snippet: &Snippet<'_>) -> Option<Vec<u8>> {
 /// whose byte span lies fully inside `range`, in source order. Does not
 /// recurse, so nested definitions never count toward the run.
 fn top_level_definitions_in_range(root: Node<'_>, range: ByteRange) -> Vec<Node<'_>> {
-    named_children(root)
-        .into_iter()
+    let mut cursor = root.walk();
+    root.named_children(&mut cursor)
         .filter(|child| PREAMBLE_KINDS.contains(&child.kind()))
         .filter(|child| child.start_byte() >= range.start && child.end_byte() <= range.end)
         .collect()
@@ -87,9 +94,11 @@ fn function_node(node: Node<'_>) -> Option<Node<'_>> {
     if node.kind() == "function_definition" {
         return Some(node);
     }
-    named_children(node)
-        .into_iter()
-        .find(|child| child.kind() == "function_definition")
+    let mut cursor = node.walk();
+    let function = node
+        .named_children(&mut cursor)
+        .find(|child| child.kind() == "function_definition");
+    function
 }
 
 /// Returns true when every member's concatenated body bytes are unique —

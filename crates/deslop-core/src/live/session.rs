@@ -6,7 +6,6 @@
 //! — nothing else holds mutable analysis state.
 
 use std::{
-    collections::HashSet,
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
 };
@@ -21,16 +20,15 @@ use crate::{
 };
 
 use super::{
-    cache_seed_key::CacheSeedKey,
     cluster_lookup::resolve_cluster_by_id_prefix,
     embedding_refresh::{CommittedEmbeddingRefresh, EmbeddingRefreshInput, EmbeddingRefreshJob},
     errors::LiveError,
     freshness::FreshnessTracker,
     session_helpers::{
-        append_ollama_models, cluster_overlaps_range, cluster_touches_path,
-        collapse_overlapping_clusters_for_range, earliest_byte_for_path, initialise_pipeline,
-        live_batch_yield, parse_and_hash_snippet, persist_state_file, truncate,
-        try_load_cached_report,
+        append_ollama_models, cluster_matches_any_hash, cluster_overlaps_range,
+        cluster_touches_path, collapse_overlapping_clusters_for_range, earliest_byte_for_path,
+        initialise_pipeline, live_batch_yield, parse_and_hash_snippet, persist_state_file,
+        truncate, try_load_cached_report,
     },
     watcher::{live_exclusion, publish_exclusion, LiveExclusion},
     wire::{
@@ -197,17 +195,7 @@ impl AnalysisSession {
         embedding_provider: Arc<dyn EmbeddingProvider>,
         mode: EmbeddingMode,
     ) -> Option<Self> {
-        // [LIVE-CACHE-SEED-KEY] A seed is served as an answer, so it
-        // must have been computed by a run with the same identity.
-        let key = CacheSeedKey::new(
-            &root,
-            min_nodes,
-            incremental,
-            config_path.as_deref(),
-            mode,
-            &embedding_provider.spec(),
-        );
-        let report = try_load_cached_report(&root, &key)?;
+        let report = try_load_cached_report(&root)?;
         let cluster_count = report.clusters.len();
         let session = Self::finalise(SessionInit {
             root,
@@ -349,23 +337,6 @@ impl AnalysisSession {
     #[must_use]
     pub fn report(&self) -> Arc<Report> {
         Arc::clone(&self.latest_report)
-    }
-
-    /// Recomputes admission evidence for two explicitly named occurrences.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`LiveError::AnalysisNotReady`] while a cache-seeded session
-    /// has no installed pipeline and forwards endpoint or provider errors
-    /// from [`PipelineSession::compare_pair`].
-    pub fn compare_pair(
-        &self,
-        params: &crate::report::PairComparisonParams,
-    ) -> Result<crate::report::PairComparison, LiveError> {
-        let pipeline = self.pipeline.as_ref().ok_or(LiveError::AnalysisNotReady)?;
-        let provider = (!matches!(self.embedding_mode, EmbeddingMode::Off))
-            .then_some(self.embedding_provider.as_ref());
-        pipeline.compare_pair(params, provider).map_err(Into::into)
     }
 
     /// In-process view of the installed pipeline, used by the merge
@@ -570,17 +541,7 @@ impl AnalysisSession {
             embedding_provenance: self.latest_report.embedding_provenance.clone(),
             exclusion_config_path: self.config_path.clone(),
             cache_root: crate::paths::cache_dir(&self.root),
-            // [CONFIG-INCREMENTAL-OPTOUT] The surfaced value is the
-            // *effective* mode — the request gated by the live config —
-            // never the raw request: a session asked to persist under
-            // `[analysis] incremental = false` runs every pass uncached,
-            // and reporting `true` here made the config surface claim a
-            // store no pass consults. Before the first pipeline exists
-            // nothing has run, so the request is the only honest answer.
-            incremental: self
-                .pipeline
-                .as_ref()
-                .map_or(self.incremental, PipelineSession::effective_incremental),
+            incremental: self.incremental,
         }
     }
 
@@ -647,18 +608,6 @@ impl AnalysisSession {
         job
     }
 
-    /// Whether `job` is still the latest selected-model request.
-    ///
-    /// Both terminal announcements are gated on this. A superseded job
-    /// must stay silent in **either** direction: announcing its
-    /// `complete` would publish a verdict for a model the user has
-    /// already replaced, and announcing its `failed` would overwrite the
-    /// newer job's verdict with a stale failure, since clients carry one
-    /// embedding-progress signal rather than one per revision.
-    pub(super) fn embedding_refresh_is_current(&self, job: &EmbeddingRefreshJob) -> bool {
-        job.revision == self.embedding_refresh_revision
-    }
-
     /// Commits a completed embedding refresh when it is still the
     /// latest selected-model request.
     pub(super) fn commit_embedding_refresh(
@@ -666,7 +615,7 @@ impl AnalysisSession {
         job: &EmbeddingRefreshJob,
         report: Report,
     ) -> Option<CommittedEmbeddingRefresh> {
-        if !self.embedding_refresh_is_current(job) {
+        if job.revision != self.embedding_refresh_revision {
             return None;
         }
         let previous_generation = self.generation;
@@ -775,7 +724,7 @@ impl AnalysisSession {
                 total_occurrences: 0,
             });
         }
-        let mut clusters = self.clusters_at_subtree_hashes(&snippet_hashes);
+        let mut clusters = self.clusters_matching_hashes(&snippet_hashes);
         truncate(&mut clusters, max_results);
         let total_occurrences: usize = clusters.iter().map(crate::report::occurrence_count).sum();
         Ok(FindSimilarResult {
@@ -785,33 +734,12 @@ impl AnalysisSession {
         })
     }
 
-    /// Returns the report clusters whose occurrences carry any of
-    /// `snippet_hashes` — the content join behind snippet `find_similar`.
-    ///
-    /// A snippet has no workspace identity, so it can only be located
-    /// by content: each hash resolves to the live fingerprints that
-    /// carry it, their ranges are joined to the report through
-    /// [`report_for_range_in`] (the same lookup the open-range variant
-    /// uses), and the surviving clusters keep report order with no
-    /// duplicates. The public cluster id cannot take part: since gh
-    /// #430 it mixes the members' paths, so it is not derivable from a
-    /// pathless snippet's digests at all.
-    fn clusters_at_subtree_hashes(&self, snippet_hashes: &[[u8; 32]]) -> Vec<ReportCluster> {
-        let Some(pipeline) = self.pipeline.as_ref() else {
-            return Vec::new();
-        };
-        let matched_ids: HashSet<String> = pipeline
-            .subtree_occurrences(snippet_hashes)
-            .iter()
-            .flat_map(|(path, range)| {
-                report_for_range_in(&self.latest_report, path, range.start, range.end)
-            })
-            .map(|cluster| cluster.id)
-            .collect();
+    /// Returns clusters whose stable id matches one of `snippet_hashes`.
+    fn clusters_matching_hashes(&self, snippet_hashes: &[[u8; 32]]) -> Vec<ReportCluster> {
         self.latest_report
             .clusters
             .iter()
-            .filter(|cluster| matched_ids.contains(&cluster.id))
+            .filter(|cluster| cluster_matches_any_hash(cluster, snippet_hashes))
             .cloned()
             .collect()
     }
@@ -839,26 +767,7 @@ impl AnalysisSession {
     /// cold-pass install — never on per-keystroke incremental updates.
     /// Best-effort: failures are logged but never propagated.
     fn write_state_file(&self) {
-        persist_state_file(
-            &self.root,
-            self.latest_report.as_ref(),
-            self.generation,
-            &self.cache_seed_key(),
-        );
-    }
-
-    /// [LIVE-CACHE-SEED-KEY] The identity of this session's analysis
-    /// settings, recorded beside the state file so the next startup can
-    /// tell a re-usable seed from an incompatible one.
-    fn cache_seed_key(&self) -> CacheSeedKey {
-        CacheSeedKey::new(
-            &self.root,
-            self.min_nodes,
-            self.incremental,
-            self.config_path.as_deref(),
-            self.embedding_mode,
-            &self.embedding_provider.spec(),
-        )
+        persist_state_file(&self.root, self.latest_report.as_ref(), self.generation);
     }
 
     /// Asserts `path` is under the workspace root.

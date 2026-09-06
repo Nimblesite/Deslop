@@ -2,7 +2,7 @@
 //! MCP transports ([LIVE-QUERY-API], [LIVE-NOTIFICATIONS]).
 //!
 //! Every wire type is generated from `docs/models/live-ipc.td` by
-//! `scripts/typediagram/generate.mjs` and re-exported from
+//! `scripts/typediagram-gen.mjs` and re-exported from
 //! [`crate::wire_generated`]. This module re-exports them at the
 //! historical `crate::live::wire` path and hosts the [`ChangeSummary`]
 //! `from_delta` constructor (the only logic kept hand-written; the
@@ -17,24 +17,22 @@ pub use crate::wire_generated::{
 };
 
 impl ChangeSummary {
-    /// Builds a [`ChangeSummary`] from a [`ReportDelta`].
+    /// Builds a [`ChangeSummary`] from a [`ReportDelta`]. `worst_weight`
+    /// is the maximum weight among the clusters surfaced by the delta;
+    /// `0.0` when nothing changed.
     #[must_use]
     pub fn from_delta(delta: &ReportDelta) -> Self {
-        let worst_mass = delta
+        let worst_weight = delta
             .clusters_added
             .iter()
             .chain(delta.clusters_updated.iter())
-            .map(|cluster| cluster.mass)
-            .max()
-            .unwrap_or(0);
+            .map(|cluster| cluster.weight)
+            .fold(0.0_f64, f64::max);
         Self {
             clusters_added: delta.clusters_added.len(),
             clusters_removed: delta.clusters_removed.len(),
             clusters_updated: delta.clusters_updated.len(),
-            literal_findings_added: delta.literal_findings_added.len(),
-            literal_findings_removed: delta.literal_findings_removed.len(),
-            literal_findings_updated: delta.literal_findings_updated.len(),
-            worst_mass,
+            worst_weight,
         }
     }
 }

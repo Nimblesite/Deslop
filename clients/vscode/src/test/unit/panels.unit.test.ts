@@ -23,7 +23,7 @@ suite("webview handleMessage", () => {
     try {
       await handleMessage(store, {
         kind: "open/occurrence",
-        occurrence: {path: "/tmp/doesnotexist.cs", start_byte: 0, end_byte: 1, hidden: false, start_line: 1, end_line: 2},
+        occurrence: { path: "/tmp/doesnotexist.cs", start_byte: 0, end_byte: 1, hidden: false },
       });
     } catch {
       // the command dispatch tries to open the file which doesn't exist;
@@ -37,18 +37,10 @@ suite("webview handleMessage", () => {
     await handleMessage(store, { kind: "open/cluster", id: 42 });
   });
 
-  test("compare/pair requires both explicit endpoints — single or missing endpoint is ignored", async () => {
+  test("compare/canonical dispatches when clusterId is a string", async () => {
     const store = new ReportStore();
-    // [VSIX-PAIR-COMPARE] The host never invents an endpoint: one-sided or
-    // empty payloads must fall through without dispatching a comparison.
-    await handleMessage(store, { kind: "compare/pair" });
-    await handleMessage(store, { kind: "compare/pair", left: { path: "a.ts", start_byte: 0, end_byte: 1 } });
-    await handleMessage(store, { kind: "compare/pair", right: { path: "b.ts", start_byte: 0, end_byte: 1 } });
-    await handleMessage(store, {
-      kind: "compare/pair",
-      left: { path: "a.ts", start_byte: 0, end_byte: 1 },
-      right: { path: "b.ts", start_byte: 0, end_byte: 1 },
-    });
+    await handleMessage(store, { kind: "compare/canonical", clusterId: "z" });
+    await handleMessage(store, { kind: "compare/canonical" });
   });
 
   test("refresh dispatches the workspace command", async () => {

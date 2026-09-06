@@ -19,6 +19,7 @@ use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 use std::io::BufReader;
 
+mod common;
 use crate::common::*;
 
 static NEXT_ID: AtomicI64 = AtomicI64::new(90_000);
@@ -31,12 +32,10 @@ static NEXT_ID: AtomicI64 = AtomicI64::new(90_000);
 fn report_get_handler_logs_elapsed_ms() -> Result<()> {
     let workspace = tempfile::tempdir()?;
     let mut child = spawn_logging_lsp(workspace.path())?;
-    let (stdin, _reader) = boot_and_report_get(&mut child)?;
+    let (_stdin, _reader) = boot_and_report_get(&mut child)?;
 
     thread::sleep(Duration::from_millis(400));
-    // EOF, never a signal: a signalled child never writes its coverage
-    // profile, so killing here deletes every line the server executed.
-    drop(stdin);
+    let _ = child.kill();
     let output = child.wait_with_output()?;
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
 
@@ -111,47 +110,9 @@ fn cpu_report_returns_structured_snapshot_after_report_get() -> Result<()> {
         "cpu report must expose pending watcher work even when it is zero: {result}"
     );
 
-    // EOF, never a signal: a signalled child writes no coverage profile.
-    drop(stdin);
+    let _ = child.kill();
     let _output = child.wait_with_output()?;
     Ok(())
-}
-
-/// Audience: HUMAN (maintainer). [TEST-SELECTION] The required test
-/// matrix must enable every cargo feature a `#[cfg]`-gated test in this
-/// crate depends on, and the only honest proof of that is an assertion
-/// compiled unconditionally into the same target.
-///
-/// `profile_dir_writes_non_empty_firefox_profile_on_shutdown` below is
-/// gated on `profiling`. With the feature off that test is not skipped,
-/// it is *absent*: nothing compiles it, nothing lints it, nothing covers
-/// it, and nothing reports that it did not run — which is the one
-/// failure mode `#[ignore = ".."]` exists to prevent and the reason
-/// `docs/specs/release.md` allows no other mechanism. It was absent from
-/// every gate until the Makefile's `_TEST_FEATURES` began enabling
-/// `deslop-lsp/profiling`, and `--all-features` linting then found
-/// `missing_docs` violations in code no ordinary run had ever compiled.
-///
-/// This test is what stops that being quietly undone. It carries no
-/// `#[cfg]`, so it is in every build of this target, and it fails the
-/// moment the required command stops passing the feature.
-#[test]
-fn the_required_test_matrix_enables_the_profiling_feature() {
-    // Bound rather than asserted in place: `assert!(cfg!(..))` reads as a
-    // constant assertion to clippy, and the binding is what the state
-    // actually is — read once, then checked.
-    let profiling_is_enabled: bool = cfg!(feature = "profiling");
-    assert!(
-        profiling_is_enabled,
-        "`deslop-lsp/profiling` is off, so \
-         `profile_dir_writes_non_empty_firefox_profile_on_shutdown` was \
-         not compiled and did not run. Run the suite through the \
-         Makefile — `make test`, `make test-shard` or `make coverage` — \
-         which pass `_TEST_FEATURES`. If the feature was deliberately \
-         dropped from that set, the gated test must become a plain \
-         `#[ignore = \"..\"]` in the same change so the \
-         [TEST-SELECTION-SKIP] registry can see it."
-    );
 }
 
 /// Audience: HUMAN. Issue #29. A maintainer must be able to ask a user

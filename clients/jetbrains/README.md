@@ -14,7 +14,7 @@ The screenshot above is the **VS Code reference client**. The JetBrains plugins 
 
 Once installed, the plugin runs automatically — minimal configuration:
 
-1. **Open a supported file** (`.cs`, `.rs`, `.py`, `.dart`, `.js`, `.mjs`, `.cjs`, `.jsx`, `.ts`, `.tsx`, `.php`, `.fs`, `.fsx`, or `.go`). This starts `deslop-lsp`. Nothing runs until a supported file is open — opening a project alone does nothing.
+1. **Open a supported file** (`.cs`, `.rs`, `.py`, `.dart`, `.js`, `.mjs`, `.cjs`, `.jsx`, `.ts`, or `.tsx`). This starts `deslop-lsp`. Nothing runs until a supported file is open — opening a project alone does nothing.
 2. **Read the live warnings.** Duplicated regions are underlined in the editor and listed in the **Problems** tool window with source `deslop`.
 3. **Open the full report.** Click the **Deslop** tool window (right-hand stripe) — it shows the worst-offenders report and renders it on first open. It then **refreshes live**: as you edit, the server pushes `deslop/reportChanged` and the panel re-renders in place (without stealing focus), exactly like the VS Code client. The toolbar **Refresh** button forces a full re-analysis, and `Tools` → **Deslop: Open HTML Report** opens the same tool window.
 
@@ -29,25 +29,25 @@ Modules:
 - **`deslop-shared`** — binary resolution, settings, the `deslop-lsp` command line, and the shared report UI. Compiled against IntelliJ IDEA Community 2024.3 (the declared `since-build` floor) using only `com.intellij.modules.platform` APIs, so it loads in every IDE family. Owns the tests.
 - **`deslop-lsp4ij`** — registers a `com.redhat.devtools.lsp4ij.LanguageServerFactory` mapped to the parser extension set, plus the **Deslop** tool window.
 
-The surface starts `deslop-lsp` for C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, and Go files, resolves the binary from the bundled plugin `bin/<platform>/` directory first (then `PATH`), and launches with embeddings off until a settings page and picker land. `DESLOP_BINARY_DIR` (host binary) and `DESLOP_LSP_BUNDLE_DIR` (all-platform release layout) are build-time staging variables, not runtime resolver sources.
+The surface starts `deslop-lsp` for C#, Rust, Python, Dart, JavaScript, and TypeScript files, resolves the binary from the bundled plugin `bin/<platform>/` directory first (then `PATH`), and launches with embeddings off until a settings page and picker land. `DESLOP_BINARY_DIR` (host binary) and `DESLOP_LSP_BUNDLE_DIR` (all-platform release layout) are build-time staging variables, not runtime resolver sources.
 
-Build and verify the plugin zip (the CI/release packaging gate):
+Build and verify the plugin zip (the public package gate):
 
 ```bash
-make _jetbrains-package
+make jetbrains-package
 ```
 
 That composes `_jetbrains-build` (builds the zip), `_jetbrains-verify`
 (Gradle project + archive-structure checks), and
-`scripts/deployment/verify-jetbrains-package.mjs`. To build, install, and wire up the
+`scripts/verify-jetbrains-package.mjs`. To build, install, and wire up the
 plugin (plus its LSP4IJ dependency) in one step on macOS, use:
 
 ```bash
 make android-studio-rebuild
 ```
 
-The individual steps behind those two targets, runnable on their own when
-iterating:
+The granular steps are internal `_`-prefixed targets — hidden from the IDE
+task list, run them directly when iterating:
 
 - `make _jetbrains-build` — build the plugin zip.
 - `make _jetbrains-verify` — Gradle project + archive-structure checks.

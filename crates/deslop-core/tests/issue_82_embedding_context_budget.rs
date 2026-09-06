@@ -65,35 +65,12 @@ fn issue_82_embedding_pass_skips_oversized_subtrees_before_provider_dispatch() -
         provenance.failed_subtrees > 0,
         "oversized subtrees should be counted as skipped failures"
     );
-    // The coverage identity is in OCCURRENCE units. `indexed_subtrees`
-    // is not: [REPORTING-CONTEXT] defines it as the count of *unique*
-    // snippets fed into ANN and says outright that it is "lower than
-    // `attempted_subtrees` when duplicate snippets collapse before
-    // indexing". This assertion previously read
-    // `attempted == indexed + failed`, which is that spec's negation —
-    // it could only hold while the pass re-indexed one point per
-    // occurrence, and it went red the moment GH #357 made the collapse
-    // real. The identity a reader actually needs is that no occurrence
-    // vanishes silently, so it is stated over `succeeded_subtrees`.
     assert_eq!(
         provenance.attempted_subtrees,
         provenance
-            .succeeded_subtrees
+            .indexed_subtrees
             .saturating_add(provenance.failed_subtrees),
-        "every attempted occurrence must be accounted for as succeeded or \
-         skipped — a subtree that is neither has silently vanished"
-    );
-    assert!(
-        provenance.indexed_subtrees <= provenance.succeeded_subtrees,
-        "ANN is fed one point per *distinct* snippet, so index points can \
-         never outnumber the occurrences they represent: indexed {} > \
-         succeeded {}",
-        provenance.indexed_subtrees,
-        provenance.succeeded_subtrees
-    );
-    assert!(
-        provenance.succeeded_subtrees > 0,
-        "in-budget subtrees must be embedded, not merely attempted"
+        "attempted subtrees should equal indexed plus skipped"
     );
 
     Ok(())

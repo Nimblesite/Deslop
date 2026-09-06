@@ -17,6 +17,7 @@
 //! still surface — the raw-bytes-differ escape hatch that keeps genuine
 //! copy-paste visible.
 
+mod common;
 use crate::common::*;
 
 /// `min-nodes` low enough to admit the per-struct and field-run subtrees the
@@ -39,8 +40,9 @@ fn distinct_struct_field_runs_are_not_reported_as_duplication() -> Result<()> {
         })
         .map(|cluster| {
             format!(
-                "cluster {id} files={files:?}",
+                "cluster {id} bucket={bucket} files={files:?}",
                 id = cluster_id(cluster),
+                bucket = cluster_bucket(cluster),
                 files = occurrence_files(cluster),
             )
         })

@@ -26,7 +26,7 @@ use std::{fs, time::Duration};
 use anyhow::{anyhow, ensure, Context, Result};
 use serde_json::{json, Value};
 
-use crate::common;
+mod common;
 use common::{
     cluster_ids, copied_fixture, initialized_mcp, lsp_workspace_with_socket,
     spawn_lsp_and_wait_for_socket, structured_content, wait_for_path, SOCKET_TIMEOUT,
@@ -187,9 +187,9 @@ fn call_report_get(mcp: &mut common::McpHandle, offset: u64, limit: u64) -> Resu
     let response = mcp.request(
         "tools/call",
         &json!({
-            "name": "duplicates",
+            "name": "report-get",
             "arguments": {"offset": offset, "limit": limit},
         }),
     )?;
-    structured_content(&response, "duplicates")
+    structured_content(&response, "report-get")
 }

@@ -6,13 +6,14 @@
 
 use std::{
     collections::BTreeSet,
+    fs,
     path::{Path, PathBuf},
 };
 
 use anyhow::{Context, Result};
 use serde_json::Value;
 
-use crate::common::scan_dir::run_report_min_nodes;
+mod common;
 use crate::common::*;
 
 fn deslop_core_lang_dir() -> Result<PathBuf> {
@@ -23,6 +24,17 @@ fn deslop_core_lang_dir() -> Result<PathBuf> {
         .join("deslop-core")
         .join("src")
         .join("lang"))
+}
+
+fn run_report(scan_root: &Path) -> Result<Value> {
+    let tmp = tempfile::tempdir()?;
+    let output = tmp.path().join("report");
+    let _assertion = deslop_cmd(scan_root, &output)?
+        .args(["--min-nodes", "30", "--embeddings", "off"])
+        .assert()
+        .success();
+    let body = fs::read_to_string(output.with_extension("json"))?;
+    Ok(serde_json::from_str(&body)?)
 }
 
 fn cluster_paths(cluster: &Value) -> BTreeSet<&str> {
@@ -44,12 +56,11 @@ fn language_parser_adapter_clusters(report: &Value, scan_root: &Path) -> Result<
         for occurrence in occurrences(cluster) {
             let text = occurrence_text(scan_root, occurrence)?;
             if is_language_parser_adapter_text(&text) {
-                let first_line = text
-                    .lines()
-                    .next()
-                    .ok_or_else(|| anyhow::anyhow!("empty reported occurrence: {text:?}"))?
-                    .trim();
-                snippets.push(format!("{}: {}", occurrence_path(occurrence)?, first_line));
+                snippets.push(format!(
+                    "{}: {}",
+                    occurrence_path(occurrence)?,
+                    text.lines().next().unwrap_or_default().trim(),
+                ));
             }
         }
         if snippets.len() >= target_files.len() {
@@ -76,7 +87,7 @@ fn rust_language_parser_trait_impl_boilerplate_does_not_surface() -> Result<()> 
         scan_root.join("rust_lang.rs").is_file(),
         "test must scan deslop-core/src/lang"
     );
-    let report = run_report_min_nodes(&scan_root, "30")?;
+    let report = run_report(&scan_root)?;
     let offenders = language_parser_adapter_clusters(&report, &scan_root)?;
     assert!(
         offenders.is_empty(),

@@ -67,7 +67,7 @@ pub fn resolve_cluster_by_id_prefix<'a>(
 #[cfg(test)]
 mod tests {
     use super::{resolve_cluster_by_id_prefix, MIN_CLUSTER_ID_PREFIX_LEN};
-    use crate::{live::errors::LiveError, report::ReportCluster};
+    use crate::{live::errors::LiveError, report::ReportCluster, wire_generated::ReportSignals};
 
     /// Builds a `ReportCluster` with just the canonical id populated.
     /// Every other field is zeroed so the prefix-resolution helper is
@@ -75,10 +75,25 @@ mod tests {
     /// is wire-generated (no `Default` derive) so we spell out each
     /// field explicitly.
     fn cluster_with_id(id: &str) -> ReportCluster {
-        let mut cluster = crate::report_fixtures::fixture_cluster(id, Vec::new());
-        cluster.canonical_node_count = 0;
-        crate::report_fixtures::restamp_fixture(&mut cluster);
-        cluster
+        ReportCluster {
+            id: id.to_owned(),
+            weight: 0.0,
+            size: 0,
+            canonical_node_count: 0,
+            signals: ReportSignals {
+                structural: 0.0,
+                token_jaccard: 0.0,
+                embedding_cos: 0.0,
+                fused: 0.0,
+            },
+            bucket: String::new(),
+            category: String::new(),
+            occurrences: Vec::new(),
+            occurrences_total: 0,
+            occurrences_truncated: false,
+            summary: String::new(),
+            interpretation: String::new(),
+        }
     }
 
     /// The 7-hex slug from the VSIX hover bubble must

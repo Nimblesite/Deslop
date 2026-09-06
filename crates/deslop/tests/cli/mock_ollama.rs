@@ -42,27 +42,6 @@ pub(crate) enum MockBehavior {
     /// Every real embed request returns finite-JSON values that overflow
     /// `f32`. Exercises provider-output validation before cache/index use.
     OverflowingEmbeddings,
-    /// Answers the provider-construction handshake — `GET /api/tags`
-    /// then the `POST /api/embed` dimension probe — and stops accepting
-    /// connections the moment that probe is answered, so every request
-    /// after construction fails at the transport.
-    ///
-    /// Models a provider that is reachable when the user selects it and
-    /// gone by the time the background refresh runs: the machine slept,
-    /// the container was recycled, the model was unloaded. Deterministic
-    /// because it ends on the construction handshake rather than on a
-    /// clock or a request count.
-    VanishAfterProviderHandshake,
-}
-
-/// Everything one mock instance needs to answer `/api/embed`: the
-/// failure behaviour plus the declared semantic ground truth.
-#[derive(Clone, Debug)]
-struct MockConfig {
-    /// How embed requests succeed or fail.
-    behavior: MockBehavior,
-    /// Declared behaviour-equivalence groups ([`MockOllama::spawn_semantic`]).
-    semantic_groups: Arc<Vec<Vec<String>>>,
 }
 
 /// In-process mock Ollama HTTP server that returns deterministic
@@ -98,42 +77,6 @@ impl MockOllama {
 
     /// Spawns a mock that answers `/api/embed` according to `behavior`.
     pub(crate) fn spawn_with(behavior: MockBehavior) -> Result<Self> {
-        Self::spawn_configured(MockConfig {
-            behavior,
-            semantic_groups: Arc::new(Vec::new()),
-        })
-    }
-
-    /// Spawns a happy-path mock that additionally embeds a declared
-    /// semantic verdict: every snippet containing any marker of one
-    /// group receives a shared dominant component, so same-group
-    /// snippets measure a high cosine regardless of how differently
-    /// they are written. This is how a test states the ground truth a
-    /// real semantic model would report for behaviour-equivalent
-    /// implementations — content shingles cannot express "same
-    /// behaviour, different text", which is the entire Type-4 category
-    /// (`dart_issue_119_embedding_role_mismatch`). Unmarked snippets
-    /// keep the honest shingle vector (#369).
-    pub(crate) fn spawn_semantic(groups: &[&[&str]]) -> Result<Self> {
-        let owned = groups
-            .iter()
-            .map(|group| group.iter().map(ToString::to_string).collect())
-            .collect();
-        Self::spawn_configured(MockConfig {
-            behavior: MockBehavior::Happy,
-            semantic_groups: Arc::new(owned),
-        })
-    }
-
-    /// Spawns a mock that answers the provider-construction handshake
-    /// and is then unreachable
-    /// ([`MockBehavior::VanishAfterProviderHandshake`]).
-    pub(crate) fn spawn_vanishing_after_handshake() -> Result<Self> {
-        Self::spawn_with(MockBehavior::VanishAfterProviderHandshake)
-    }
-
-    /// Spawns the HTTP acceptor thread for one mock configuration.
-    fn spawn_configured(config: MockConfig) -> Result<Self> {
         let listener = TcpListener::bind("127.0.0.1:0")?;
         listener.set_nonblocking(true)?;
         let addr = listener.local_addr()?;
@@ -152,7 +95,7 @@ impl MockOllama {
                 server_max.as_ref(),
                 server_max_input.as_ref(),
                 server_truncation.as_ref(),
-                &config,
+                behavior,
             );
         });
         Ok(Self {
@@ -204,7 +147,7 @@ fn serve(
     max_embed_batch_len: &AtomicUsize,
     max_embed_input_chars: &AtomicUsize,
     embed_truncation_enabled: &AtomicBool,
-    config: &MockConfig,
+    behavior: MockBehavior,
 ) {
     while !stop.load(Ordering::SeqCst) {
         match listener.accept() {
@@ -212,18 +155,13 @@ fn serve(
                 // Switch accepted stream to blocking so read_request never gets
                 // WouldBlock on large (> 1 024 B) request bodies — issue #57.
                 let _ = stream.set_nonblocking(false);
-                let answered_probe = handle_stream(
+                handle_stream(
                     stream,
                     max_embed_batch_len,
                     max_embed_input_chars,
                     embed_truncation_enabled,
-                    config,
+                    behavior,
                 );
-                if answered_probe
-                    && matches!(config.behavior, MockBehavior::VanishAfterProviderHandshake)
-                {
-                    return;
-                }
             }
             Err(error) if error.kind() == ErrorKind::WouldBlock => {
                 thread::sleep(Duration::from_millis(5));
@@ -233,28 +171,24 @@ fn serve(
     }
 }
 
-/// Answers one request. Returns whether it was the `/api/embed`
-/// dimension probe — the last step of provider construction, which
-/// [`MockBehavior::VanishAfterProviderHandshake`] uses as its cue.
 fn handle_stream(
     mut stream: TcpStream,
     max_embed_batch_len: &AtomicUsize,
     max_embed_input_chars: &AtomicUsize,
     embed_truncation_enabled: &AtomicBool,
-    config: &MockConfig,
-) -> bool {
+    behavior: MockBehavior,
+) {
     let Ok(request) = read_request(&mut stream) else {
-        return false;
+        return;
     };
     let response = response_for(
         &request,
         max_embed_batch_len,
         max_embed_input_chars,
         embed_truncation_enabled,
-        config,
+        behavior,
     );
     let _ = stream.write_all(response.as_bytes());
-    request.path == "/api/embed" && is_dimension_probe(&request.body)
 }
 
 #[derive(Debug)]
@@ -333,7 +267,7 @@ fn response_for(
     max_embed_batch_len: &AtomicUsize,
     max_embed_input_chars: &AtomicUsize,
     embed_truncation_enabled: &AtomicBool,
-    config: &MockConfig,
+    behavior: MockBehavior,
 ) -> String {
     match request.path.as_str() {
         "/api/tags" => json_response("200 OK", &tags_body()),
@@ -342,10 +276,7 @@ fn response_for(
         // vector width even while real embeds are being rejected.
         "/api/embed" if is_dimension_probe(&request.body) => {
             let inputs = request_inputs(&request.body).unwrap_or_default();
-            let embeddings: Vec<Vec<f32>> = inputs
-                .iter()
-                .map(|text| embed_vector(text, &config.semantic_groups))
-                .collect();
+            let embeddings: Vec<Vec<f32>> = inputs.iter().map(|text| embed_vector(text)).collect();
             json_response("200 OK", &json!({ "embeddings": embeddings }))
         }
         "/api/embed" => {
@@ -355,25 +286,20 @@ fn response_for(
                 max_embed_input_chars,
                 embed_truncation_enabled,
             );
-            embed_response(&request.body, config)
+            embed_response(&request.body, behavior)
         }
         _ => json_response("404 Not Found", &json!({ "error": "not found" })),
     }
 }
 
-fn embed_response(body: &str, config: &MockConfig) -> String {
+fn embed_response(body: &str, behavior: MockBehavior) -> String {
     let inputs = request_inputs(body).unwrap_or_default();
-    match config.behavior {
+    match behavior {
         MockBehavior::RejectAllEmbeds => context_length_error(),
         MockBehavior::RejectMultiInputEmbeds if inputs.len() > 1 => context_length_error(),
         MockBehavior::OverflowingEmbeddings => overflowing_response(inputs.len()),
-        MockBehavior::Happy
-        | MockBehavior::RejectMultiInputEmbeds
-        | MockBehavior::VanishAfterProviderHandshake => {
-            let embeddings: Vec<Vec<f32>> = inputs
-                .iter()
-                .map(|text| embed_vector(text, &config.semantic_groups))
-                .collect();
+        MockBehavior::Happy | MockBehavior::RejectMultiInputEmbeds => {
+            let embeddings: Vec<Vec<f32>> = inputs.iter().map(|text| embed_vector(text)).collect();
             json_response("200 OK", &json!({ "embeddings": embeddings }))
         }
     }
@@ -392,12 +318,25 @@ fn context_length_error() -> String {
     )
 }
 
-#[path = "mock_embedding_vector.rs"]
-mod mock_embedding_vector;
+/// Returns a 4-lane deterministic vector seeded by `text` length and
+/// first byte. Stable across runs so cache round-trip tests keep
+/// converging.
+///
+/// This measures length residues, not content: two constant lanes floor
+/// every pair near 1.0 and `sin` aliases over length, so a 67-byte
+/// parameter list and an 865-byte arithmetic chain score 0.99997 while
+/// the near-verbatim clone they were drawn from scores lower. Every
+/// `embedding_cos` assertion in the suite is calibrated against that
+/// noise. Replacing it with a content-similarity vector is GH #369 —
+/// the replacement works but makes the `O(N^2 * D)` exact pair pass
+/// intractable at the width it needs (GH #366).
+fn embed_vector(text: &str) -> Vec<f32> {
+    let len_bits = u16::try_from(text.len() & 0xffff).unwrap_or(0);
+    let len = f32::from(len_bits);
+    let first = f32::from(text.bytes().next().unwrap_or(0));
+    vec![len.sin(), first.cos(), 0.5_f32, -0.5_f32]
+}
 
-use mock_embedding_vector::embed_vector;
-
-/// True when the body is the provider's one-input dimension probe.
 fn is_dimension_probe(body: &str) -> bool {
     request_inputs(body).is_some_and(|inputs| inputs == ["deslop"])
 }

@@ -16,15 +16,6 @@ use deslop_core::{config::ClonePolicy, live::transport::IpcMode};
 
 use crate::backend::LspEmbeddingConfig;
 
-/// Startup flag setting the analysis worker-thread count.
-pub(crate) const WORKER_THREADS_FLAG: &str = "--worker-threads";
-/// Startup flag lowering the analysis threads' scheduling priority.
-pub(crate) const NICE_FLAG: &str = "--nice";
-/// Startup flag choosing the IPC transport (stdio or TCP).
-pub(crate) const IPC_TRANSPORT_FLAG: &str = "--ipc-transport";
-/// Startup flag restricting ranking to structural evidence.
-pub(crate) const RANKING_STRUCTURAL_ONLY_FLAG: &str = "--ranking-structural-only";
-
 /// Fully parsed startup configuration for the LSP app layer.
 #[derive(Debug, Clone)]
 pub struct LspStartup {
@@ -56,11 +47,6 @@ pub enum LspAction {
         /// Exact bytes to write to stdout.
         output: String,
     },
-    /// Print the command-line help and exit successfully ([LSP-CLI-HELP]).
-    Help {
-        /// Exact bytes to write to stdout.
-        output: String,
-    },
     /// Start the LSP server with parsed configuration.
     Serve(LspStartup),
 }
@@ -79,11 +65,6 @@ where
     if let Some(output) = version_contract(&args)? {
         return Ok(LspAction::Version { output });
     }
-    if crate::help::requests_help(&args) {
-        return Ok(LspAction::Help {
-            output: crate::help::help_output(),
-        });
-    }
     Ok(LspAction::Serve(startup_from_args(&args)?))
 }
 
@@ -92,17 +73,15 @@ where
 /// # Errors
 ///
 /// Returns argument, stdout, runtime, or server startup errors.
-pub fn run_process_result<I, S, W, R>(args: I, mut stdout: W, runner: R) -> Result<ExitCode>
+pub fn run_process_result<I, S, W, R>(args: I, mut stdout: W, runner: R) -> Result<()>
 where
     I: IntoIterator<Item = S>,
     S: Into<String>,
     W: Write,
-    R: FnOnce(LspStartup) -> Result<ExitCode>,
+    R: FnOnce(LspStartup) -> Result<()>,
 {
     match action_from_args(args)? {
-        LspAction::Version { output } | LspAction::Help { output } => {
-            write_stdout(&mut stdout, &output).map(|()| ExitCode::SUCCESS)
-        }
+        LspAction::Version { output } => write_version(&mut stdout, &output),
         LspAction::Serve(startup) => runner(startup),
     }
 }
@@ -113,7 +92,7 @@ where
     I: IntoIterator<Item = S>,
     S: Into<String>,
     W: Write,
-    R: FnOnce(LspStartup) -> Result<ExitCode>,
+    R: FnOnce(LspStartup) -> Result<()>,
 {
     // Install the subscriber at the process boundary so diagnostics reach
     // stderr on *every* path — including argv parse errors that never reach
@@ -122,7 +101,7 @@ where
     // process exits 1 silently. `try_init` makes it idempotent.
     init_tracing();
     match run_process_result(args, stdout, runner) {
-        Ok(code) => code,
+        Ok(()) => ExitCode::SUCCESS,
         Err(error) => failure_exit(&error),
     }
 }
@@ -132,35 +111,23 @@ where
 /// # Errors
 ///
 /// Returns Tokio runtime construction or injected server errors.
-pub fn run_startup_with<F, Fut, T>(startup: LspStartup, server: F) -> Result<T>
+pub fn run_startup_with<F, Fut>(startup: LspStartup, server: F) -> Result<()>
 where
     F: FnOnce(PathBuf, u32, LspEmbeddingConfig, IpcMode) -> Fut,
-    Fut: std::future::Future<Output = Result<T>>,
+    Fut: std::future::Future<Output = Result<()>>,
 {
     let _profile_guard = crate::profiling::LspProfileGuard::from_env();
-    #[cfg(unix)]
     apply_process_nice(startup.nice)?;
-    #[cfg(not(unix))]
-    apply_process_nice(startup.nice);
     if let Some(policy) = startup.ranking_structural_only {
         deslop_core::state::set_structural_only_override(policy);
     }
     log_startup(&startup);
-    let runtime = build_runtime(startup.worker_threads)?;
-    let outcome = runtime.block_on(server(
+    build_runtime(startup.worker_threads)?.block_on(server(
         startup.workspace_root,
         startup.min_nodes,
         startup.embedding,
         startup.ipc_mode,
-    ));
-    // The stdio reader is a `spawn_blocking` task parked inside a read that
-    // only returns at EOF, and dropping a runtime joins its blocking tasks.
-    // A client that says `exit` never closes stdin, so waiting here wedges
-    // the process in `Runtime::drop` forever — one abandoned analyser per
-    // editor window ever opened ([LSP-LIFECYCLE]). The serve loop has
-    // already finished by this point, so there is nothing left to wait for.
-    runtime.shutdown_background();
-    outcome
+    ))
 }
 
 /// Collects argv into owned strings so all downstream parsing borrows one slice.
@@ -174,9 +141,7 @@ where
 
 /// Returns the version-contract output when argv requested it.
 fn version_contract(args: &[String]) -> Result<Option<String>> {
-    if let Some(output) =
-        version_contract_output(args, crate::help::BINARY_NAME, ComponentKind::Lsp)?
-    {
+    if let Some(output) = version_contract_output(args, "deslop-lsp", ComponentKind::Lsp)? {
         return Ok(Some(output));
     }
     Ok(requests_version(args).then(String::new))
@@ -213,14 +178,14 @@ fn parse_workspace_root(args: &[String]) -> Result<PathBuf> {
         .skip(1)
         .find(|arg| !arg.starts_with('-'))
         .map(PathBuf::from)
-        .ok_or_else(|| anyhow!("usage: {} <workspace-root>", crate::help::BINARY_NAME))
+        .ok_or_else(|| anyhow!("usage: deslop-lsp <workspace-root>"))
 }
 
 /// Reads the optional `--worker-threads` value, defaulting to Tokio behavior.
 fn parse_worker_threads(args: &[String]) -> Result<usize> {
     for (index, arg) in args.iter().enumerate() {
-        if arg == WORKER_THREADS_FLAG {
-            return parse_required_usize(args, index, WORKER_THREADS_FLAG);
+        if arg == "--worker-threads" {
+            return parse_required_usize(args, index, "--worker-threads");
         }
     }
     Ok(0)
@@ -229,8 +194,8 @@ fn parse_worker_threads(args: &[String]) -> Result<usize> {
 /// Reads the optional `--nice` value, defaulting to no priority change.
 fn parse_nice(args: &[String]) -> Result<i32> {
     for (index, arg) in args.iter().enumerate() {
-        if arg == NICE_FLAG {
-            let nice = parse_required_i32(args, index, NICE_FLAG)?;
+        if arg == "--nice" {
+            let nice = parse_required_i32(args, index, "--nice")?;
             if !(-20..=19).contains(&nice) {
                 return Err(anyhow!("--nice must be in the range -20..=19"));
             }
@@ -245,8 +210,8 @@ fn parse_nice(args: &[String]) -> Result<i32> {
 /// loopback on Windows).
 fn parse_ipc_mode(args: &[String]) -> Result<IpcMode> {
     for (index, arg) in args.iter().enumerate() {
-        if arg == IPC_TRANSPORT_FLAG {
-            return match required_flag_value(args, index, IPC_TRANSPORT_FLAG)? {
+        if arg == "--ipc-transport" {
+            return match required_flag_value(args, index, "--ipc-transport")? {
                 "unix" => Ok(IpcMode::Unix),
                 "tcp" => Ok(IpcMode::Tcp),
                 other => Err(anyhow!(
@@ -263,8 +228,8 @@ fn parse_ipc_mode(args: &[String]) -> Result<IpcMode> {
 /// `.deslop.toml`.
 fn parse_ranking_structural_only(args: &[String]) -> Result<Option<ClonePolicy>> {
     for (index, arg) in args.iter().enumerate() {
-        if arg == RANKING_STRUCTURAL_ONLY_FLAG {
-            let value = required_flag_value(args, index, RANKING_STRUCTURAL_ONLY_FLAG)?;
+        if arg == "--ranking-structural-only" {
+            let value = required_flag_value(args, index, "--ranking-structural-only")?;
             return value
                 .parse::<ClonePolicy>()
                 .map(Some)
@@ -296,7 +261,7 @@ fn reject_unsupported_startup_flags(args: &[String]) -> Result<()> {
     let mut index = 2;
     while let Some(arg) = args.get(index) {
         match arg.as_str() {
-            WORKER_THREADS_FLAG | NICE_FLAG | IPC_TRANSPORT_FLAG | RANKING_STRUCTURAL_ONLY_FLAG => {
+            "--worker-threads" | "--nice" | "--ipc-transport" | "--ranking-structural-only" => {
                 index = index.saturating_add(2);
             }
             "--debug" | "--stdio" => index = index.saturating_add(1),
@@ -333,7 +298,6 @@ fn build_runtime(worker_threads: usize) -> Result<Runtime> {
 }
 
 /// Applies the user-requested process nice value when configured.
-#[cfg(unix)]
 fn apply_process_nice(nice: i32) -> Result<()> {
     if nice == 0 {
         return Ok(());
@@ -349,12 +313,11 @@ fn apply_process_nice_impl(nice: i32) -> Result<()> {
     Ok(())
 }
 
-/// Ignores `--nice` on targets where POSIX priorities do not exist.
+/// Ignores `--nice` on non-Unix targets where POSIX priorities do not exist.
 #[cfg(not(unix))]
-fn apply_process_nice(nice: i32) {
-    if nice != 0 {
-        tracing::warn!(nice, "--nice is only supported on macOS/Linux");
-    }
+fn apply_process_nice_impl(nice: i32) -> Result<()> {
+    tracing::warn!(nice, "--nice is only supported on macOS/Linux");
+    Ok(())
 }
 
 /// Initialises tracing diagnostics against `RUST_LOG`.
@@ -367,8 +330,8 @@ fn init_tracing() {
         .try_init();
 }
 
-/// Writes exact user-facing bytes — version contract or help — to stdout.
-fn write_stdout<W: Write>(stdout: &mut W, output: &str) -> Result<()> {
+/// Writes exact version-contract bytes to stdout.
+fn write_version<W: Write>(stdout: &mut W, output: &str) -> Result<()> {
     stdout.write_all(output.as_bytes())?;
     Ok(())
 }

@@ -10,7 +10,7 @@ namespace BetaScaffolding
             }
             int secondAccumulator = secondOffset;
             int secondScratch = secondThreshold;
-            for (int secondStep = secondOffset; secondStep < secondInput; secondStep = secondStep + 2)
+            for (int secondStep = secondOffset; secondStep < secondInput; secondStep = secondStep + 1)
             {
                 secondAccumulator = secondAccumulator + secondStep;
                 secondScratch = secondScratch + secondStep;

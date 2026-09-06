@@ -1,6 +1,6 @@
 //! Structured observability helpers for the embedding pass.
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 /// Millisecond threshold for a slow provider batch warning.
 const SLOW_PROVIDER_CALL_MS: u64 = 2_000;
@@ -71,7 +71,7 @@ impl EmbeddingObserver {
             cache_misses = self.cache_misses,
             queued_for_provider,
             shared_snippet_inputs = self.shared_snippet_inputs,
-            elapsed_ms = crate::observe::duration_ms(self.cache_started.elapsed()),
+            elapsed_ms = elapsed_millis(self.cache_started.elapsed()),
             "embedding cache phase complete"
         );
     }
@@ -93,7 +93,7 @@ impl EmbeddingObserver {
 
     /// Emits the final embedding pass summary.
     pub(super) fn log_final(&self, pair_count: usize, embedded: usize, failed: usize) {
-        let total_pass_ms = crate::observe::duration_ms(self.pass_started.elapsed());
+        let total_pass_ms = elapsed_millis(self.pass_started.elapsed());
         tracing::info!(
             target: "deslop_core::pipeline::embedding_pass",
             pair_count,
@@ -130,7 +130,7 @@ impl EmbeddingObserver {
 
     /// Emits completion and slow-call events for one provider batch.
     fn finish_provider_batch(&mut self, batch: &TimedProviderBatch) {
-        let elapsed_ms = crate::observe::duration_ms(batch.started.elapsed());
+        let elapsed_ms = elapsed_millis(batch.started.elapsed());
         self.provider_elapsed_ms.push(elapsed_ms);
         self.provider_tokens = self.provider_tokens.saturating_add(batch.tokens);
         log_provider_complete(batch, elapsed_ms);
@@ -202,6 +202,11 @@ fn log_slow_provider_batch(batch: &TimedProviderBatch, elapsed_ms: u64) {
             "embedding provider batch slow"
         );
     }
+}
+
+/// Converts a duration into saturated whole milliseconds.
+fn elapsed_millis(duration: Duration) -> u64 {
+    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
 }
 
 /// Calculates an integer percentage without floating-point casts.

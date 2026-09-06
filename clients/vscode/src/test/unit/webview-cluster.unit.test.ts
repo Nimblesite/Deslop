@@ -6,18 +6,12 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as ts from "typescript";
 
-const DOC_TEXT_LINK_COMPONENT = "DocTextLink";
-const CLUSTER_ID_TOPIC_CONSTANT = "CLUSTER_ID_TOPIC";
-const CLUSTER_ID_TOPIC_VALUE = "cluster-id";
-const OCCURRENCE_IDENTIFIER = "occurrence";
-const SHORT_OCCURRENCE_IDENTIFIER = "o";
-
 function clusterWebviewSourcePath(): string {
   return path.resolve(__dirname, "../../../webview-ui/src/cluster/main.tsx");
 }
 
-function occurrenceListSourcePath(): string {
-  return path.resolve(__dirname, "../../../webview-ui/src/cluster/OccurrenceList.tsx");
+function signalStripSourcePath(): string {
+  return path.resolve(__dirname, "../../../webview-ui/src/components/SignalStrip.tsx");
 }
 
 function helpBubbleSourcePath(): string {
@@ -33,14 +27,8 @@ function parseClusterWebview(): ts.SourceFile {
   return parseSource(clusterWebviewSourcePath());
 }
 
-function parseOccurrenceList(): ts.SourceFile {
-  return parseSource(occurrenceListSourcePath());
-}
-
-function parseClusterRenderer(): ts.SourceFile[] {
-  // The help copy is a real render surface: the panel's titles fold in
-  // PANEL_HELP, so hover-copy assertions must see the same text users see.
-  return [parseClusterWebview(), parseOccurrenceList(), parseHelpBubble()];
+function parseSignalStrip(): ts.SourceFile {
+  return parseSource(signalStripSourcePath());
 }
 
 function parseHelpBubble(): ts.SourceFile {
@@ -69,7 +57,7 @@ function descendants(root: ts.Node, predicate: (node: ts.Node) => boolean): ts.N
 function hasOccurrenceByteAccess(node: ts.Node, propertyName: string): boolean {
   return ts.isPropertyAccessExpression(node) &&
     ts.isIdentifier(node.expression) &&
-    [OCCURRENCE_IDENTIFIER, SHORT_OCCURRENCE_IDENTIFIER].includes(node.expression.text) &&
+    node.expression.text === "o" &&
     node.name.text === propertyName;
 }
 
@@ -142,10 +130,6 @@ function jsxButtons(root: ts.SourceFile): ts.JsxOpeningLikeElement[] {
   ) as ts.JsxOpeningLikeElement[];
 }
 
-function clusterRendererButtons(): ts.JsxOpeningLikeElement[] {
-  return parseClusterRenderer().flatMap(jsxButtons);
-}
-
 function onClickText(button: ts.JsxOpeningLikeElement): string {
   return jsxAttribute(button, "onClick")?.initializer?.getText() ?? "";
 }
@@ -167,19 +151,11 @@ function stringCorpus(root: ts.SourceFile): string {
   return parts.join("\n");
 }
 
-function clusterRendererCorpus(): string {
-  return parseClusterRenderer().map(stringCorpus).join("\n");
-}
-
-// The source text of a template expression: its head, every
-// interpolated expression verbatim, and every span's literal tail — the
-// same reconstruction `stringCorpus` performs, extended with expression
-// text so assertions can pin which variable a label is built from.
-function templateText(expr: ts.TemplateExpression): string {
-  const parts = [expr.head.text];
-  for (const span of expr.templateSpans) {
-    parts.push(span.expression.getText());
-    parts.push(span.literal.text);
+function templateText(node: ts.TemplateLiteral): string {
+  if (ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
+  const parts: string[] = [node.head.text];
+  for (const span of node.templateSpans) {
+    parts.push("${", span.expression.getText(), "}", span.literal.text);
   }
   return parts.join("");
 }
@@ -220,7 +196,7 @@ suite("cluster webview occurrence locations", () => {
     // [VSIX-WEBVIEW] / issue #8: cluster detail occurrence rows must
     // show the same human editor target the Open button navigates to.
     assert.deepEqual(
-      findOccurrenceLocationRenderings(parseOccurrenceList()),
+      findOccurrenceLocationRenderings(parseClusterWebview()),
       ["file + human line/column"],
       "cluster detail webview must show occurrence file plus human line and column",
     );
@@ -228,7 +204,7 @@ suite("cluster webview occurrence locations", () => {
 
   test("does not render byte offsets as the visible occurrence location", () => {
     assert.deepEqual(
-      findRenderedByteLocations(parseOccurrenceList()),
+      findRenderedByteLocations(parseClusterWebview()),
       [],
       "cluster detail webview must not show start_byte/end_byte as user-facing location text",
     );
@@ -256,7 +232,7 @@ suite("cluster webview occurrence locations", () => {
   });
 
   test("every cluster webview button has hover text and an accessible label", () => {
-    const buttons = clusterRendererButtons();
+    const buttons = jsxButtons(parseClusterWebview());
     assert.ok(buttons.length >= 5, "Open, Compare, prev, next, and help buttons must render");
     for (const button of buttons) {
       assert.ok(jsxAttribute(button, "title"), `button missing hover title: ${button.getText()}`);
@@ -268,48 +244,36 @@ suite("cluster webview occurrence locations", () => {
   });
 
   test("cluster webview hover copy explains visible data and actions", () => {
-    const corpus = clusterRendererCorpus();
+    const corpus = stringCorpus(parseClusterWebview());
     for (const phrase of [
       "Cluster ",
       "Rank ",
-      // [VSIX-PAIR-COMPARE] The mass help copy explains the ranking metric
-      // with the honest term — weight/bucket language is retired.
-      "This cluster's duplicated mass",
+      "Weight is Deslop's duplication impact score",
       "Canonical occurrence",
       "Hidden means this path matched report_hide configuration",
       "Open this occurrence in VS Code",
-      "Select two occurrences to enable compare",
-      "Compare opens a diff between the two occurrences you selected",
+      "Compare is disabled on the canonical occurrence",
       "Previous cluster",
       "Next cluster",
       "Detailed keyboard help",
-      "semantic match",
+      "AI match",
     ]) {
       assert.match(corpus, new RegExp(escapeRegExp(phrase)), `missing hover copy: ${phrase}`);
-    }
-    // The retired implicit-compare and weight/bucket copy must stay gone.
-    for (const gone of [
-      "Compare is disabled on the canonical occurrence",
-      "Weight is this cluster's duplicated mass",
-    ]) {
-      assert.doesNotMatch(corpus, new RegExp(escapeRegExp(gone)), `retired copy resurfaced: ${gone}`);
     }
   });
 
   test("cluster webview links visible explanations to website docs", () => {
-    // The panel is the cluster view plus its help bubble; every docs topic
-    // it carries is a cluster-level fact. Pair-only signal topics have no
-    // place here because the panel renders no pair evidence
-    // ([FUSED-PAIR-SIGNALS]).
-    const corpus = clusterRendererCorpus();
+    const corpus = stringCorpus(parseClusterWebview());
     for (const phrase of [
       "cluster-id",
-      "duplicate-code",
+      "clone-bucket",
       "ai-match",
       "rank",
-      "mass",
+      "weight",
+      "size",
       "occurrence-count",
       "canonical",
+      "signals",
       "occurrences",
       "occurrence-location",
       "hidden-occurrence",
@@ -320,47 +284,12 @@ suite("cluster webview occurrence locations", () => {
     ]) {
       assert.match(corpus, new RegExp(escapeRegExp(phrase)), `missing docs topic: ${phrase}`);
     }
-    for (const gone of [
-      "content-evidence",
-      "structural",
-      "jaccard",
-      "agreement",
-      "rename-consistency",
-      "literal-fraction",
-    ]) {
-      assert.doesNotMatch(
-        corpus,
-        new RegExp(escapeRegExp(gone)),
-        `pair-only signal topic must not appear on the cluster panel: ${gone}`,
-      );
-    }
   });
 
   test("cluster id is rendered as a docs link", () => {
-    const root = parseClusterWebview();
-    const topicConstant = descendants(root, (node) => {
-      if (!ts.isVariableDeclaration(node) || !ts.isIdentifier(node.name)) return false;
-      const initializer = node.initializer;
-      return node.name.text === CLUSTER_ID_TOPIC_CONSTANT &&
-        initializer !== undefined &&
-        ts.isStringLiteral(initializer) &&
-        initializer.text === CLUSTER_ID_TOPIC_VALUE;
-    });
-    const linkedTopics = descendants(root, (node) => {
-      if (!ts.isJsxOpeningElement(node)) return false;
-      if (node.tagName.getText(root) !== DOC_TEXT_LINK_COMPONENT) return false;
-      const topic = node.attributes.properties.find(
-        (property): property is ts.JsxAttribute =>
-          ts.isJsxAttribute(property) && property.name.getText(root) === "topic",
-      );
-      if (topic?.initializer === undefined || !ts.isJsxExpression(topic.initializer)) return false;
-      const expression = topic.initializer.expression;
-      return expression !== undefined &&
-        ts.isIdentifier(expression) &&
-        expression.text === CLUSTER_ID_TOPIC_CONSTANT;
-    });
-    assert.equal(topicConstant.length, 1, "cluster-id docs topic must have one named constant");
-    assert.ok(linkedTopics.length > 0, "cluster id must link to its docs section");
+    const sourceText = parseClusterWebview().getFullText();
+    assert.match(sourceText, /DocTextLink/, "cluster panel must render docs links");
+    assert.match(sourceText, /topic="cluster-id"/, "cluster id must link to its docs section");
   });
 
   test("severity badge label leads with the stable slug, not the volatile #N rank (#146)", () => {
@@ -395,30 +324,16 @@ suite("cluster webview occurrence locations", () => {
     }
   });
 
-  test("the cluster panel renders no signal hover copy", () => {
-    // The admission signals are pair measurements and never touch the
-    // cluster ([FUSED-PAIR-SIGNALS]). The panel carries no signal strip,
-    // no signal formatter, and no signal help copy — asserted negatively so
-    // the leak cannot quietly return.
-    const corpus = [stringCorpus(parseClusterWebview()), stringCorpus(parseHelpBubble())].join("\n");
-    for (const gone of [
-      "Combined clone score",
+  test("signal strip hover copy explains every score", () => {
+    const corpus = `${stringCorpus(parseSignalStrip())}\n${stringCorpus(parseHelpBubble())}`;
+    for (const phrase of [
       "AST-shape similarity",
       "Token-overlap similarity",
       "Semantic similarity",
+      "Combined clone score",
       "Current value",
-      "How much of the matched content",
-      "consistent identifier renaming",
-      "literal data rather than logic",
-      "CONTENT EVIDENCE",
-      "ELECTED PAIR",
-      "SignalStrip",
     ]) {
-      assert.doesNotMatch(
-        corpus,
-        new RegExp(escapeRegExp(gone)),
-        `pair-only signal copy must not render on the cluster panel: ${gone}`,
-      );
+      assert.match(corpus, new RegExp(escapeRegExp(phrase)), `missing signal hover: ${phrase}`);
     }
   });
 

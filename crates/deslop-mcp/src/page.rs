@@ -1,65 +1,64 @@
-//! Paginated mass-only duplicate-cluster pages.
+//! Paginated report-page builder shared by `report-get` + `report-query`.
+//!
+//! Implements [MCP-TOOL-REPORT-PAGINATION] and [MCP-TOOL-REPORT-QUERY]:
+//! the live wire returns one [`ReportPage`] per call, each carrying
+//! headline metrics plus a slim slice of [`ClusterSummary`] entries
+//! (no `members[]`, no full `occurrences[]`). The full record lives
+//! behind `cluster-by-id`. Forcing the agent to ask for the deep dive
+//! by id is what keeps a single page survivable on a real workspace
+//! (where the unsliced report has hit 4 MB+ in production).
 
 use deslop_core::{
     pipeline::language_for_path,
-    report::{occurrence_count, Report, ReportCluster},
+    report::{Report, ReportCluster},
     wire_generated::{
-        ClusterSummary, DuplicateCluster, DuplicatesFilters, DuplicatesPage, OccurrenceSummary,
-        RepoMetrics, ReportPageInfo,
+        ClusterSummary, OccurrenceSummary, RepoMetrics, ReportPage, ReportPageFilters,
+        ReportPageInfo,
     },
 };
 
-/// Page cursor and optional metrics detail.
+/// The agent's page request: zero-based `offset`, cap on returned
+/// items, and whether the per-file metrics breakdown is wanted. The MCP
+/// layer rejects missing pagination fields up front, so by the time we
+/// see them they are always present.
 #[derive(Debug, Clone, Copy)]
 pub struct Pagination {
-    /// Zero-based matched-cluster offset.
+    /// Zero-based cluster index to start at (within the matched set).
     pub offset: usize,
-    /// Maximum returned clusters.
+    /// Maximum number of clusters to return on this page.
     pub limit: usize,
-    /// Whether per-file metrics are included.
+    /// Whether to carry `metrics.per_file`. Off unless the agent asks.
     pub include_per_file: bool,
 }
 
-/// Wire detail selected by the caller.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Detail {
-    /// Full cluster records with an occurrence budget.
-    Full,
-    /// Compact cluster summaries without occurrences.
-    Summary,
-}
-
-/// Inputs that control a duplicates page.
-#[derive(Debug, Clone, Copy)]
-pub struct PageShape {
-    /// Pagination cursor.
-    pub pagination: Pagination,
-    /// Summary or full rows.
-    pub detail: Detail,
-    /// Total occurrence budget for full rows.
-    pub max_occurrences: usize,
-}
-
-/// Builds a mass-ranked duplicate page from already-scoped candidates.
+/// Builds a [`ReportPage`] over `report` with the matched-and-paged
+/// cluster slice. `filters` is the echoed input — pass an empty
+/// [`ReportPageFilters`] to opt out of the echoed `filters` field.
 #[must_use]
 pub fn build_page(
     report: &Report,
     generation: u64,
-    candidates: &[ReportCluster],
-    shape: PageShape,
-    filters: &DuplicatesFilters,
-) -> DuplicatesPage {
-    let matched: Vec<&ReportCluster> = candidates
+    pagination: Pagination,
+    filters: &ReportPageFilters,
+) -> ReportPage {
+    let matched: Vec<&ReportCluster> = report
+        .clusters
         .iter()
         .filter(|cluster| matches_filters(filters, cluster))
         .collect();
     let total_clusters = matched.len();
-    let total_occurrences = matched
+    let slice_start = pagination.offset.min(total_clusters);
+    let slice_end = slice_start
+        .saturating_add(pagination.limit)
+        .min(total_clusters);
+    let summaries: Vec<ClusterSummary> = matched
+        .get(slice_start..slice_end)
+        .unwrap_or_default()
         .iter()
-        .map(|cluster| occurrence_count(cluster))
-        .sum();
-    let clusters = selected_page(&matched, shape);
-    DuplicatesPage {
+        .map(|cluster| cluster_summary_from(cluster))
+        .collect();
+    let returned = summaries.len();
+    ReportPage {
         tool_version: report.tool_version.clone(),
         generation,
         files_analysed: report.files_analysed,
@@ -67,149 +66,109 @@ pub fn build_page(
         clusters_hidden: report.clusters_hidden,
         embedding_provenance: report.embedding_provenance.clone(),
         cache_stats: report.cache_stats,
-        metrics: page_metrics(report, shape.pagination.include_per_file),
+        metrics: page_metrics(report, pagination.include_per_file),
+        action_hints: report.action_hints.clone(),
         total_clusters,
-        total_occurrences,
         page: ReportPageInfo {
-            offset: shape.pagination.offset,
-            limit: shape.pagination.limit,
-            returned: clusters.len(),
+            offset: pagination.offset,
+            limit: pagination.limit,
+            returned,
         },
-        clusters,
-        filters: filters.clone(),
+        clusters: summaries,
+        filters: echo_filters(filters),
     }
 }
 
-/// Selects, projects, and budgets the requested page.
-fn selected_page(matched: &[&ReportCluster], shape: PageShape) -> Vec<DuplicateCluster> {
-    let start = shape.pagination.offset.min(matched.len());
-    let end = start
-        .saturating_add(shape.pagination.limit)
-        .min(matched.len());
-    let selected = matched.get(start..end).unwrap_or_default();
-    match shape.detail {
-        Detail::Summary => selected
-            .iter()
-            .map(|cluster| DuplicateCluster::Summary(cluster_summary(cluster)))
-            .collect(),
-        Detail::Full => budgeted_full_rows(selected, shape.max_occurrences),
-    }
-}
-
-/// Applies the total occurrence budget to full rows.
-fn budgeted_full_rows(clusters: &[&ReportCluster], budget: usize) -> Vec<DuplicateCluster> {
-    let mut used = 0_usize;
-    clusters
-        .iter()
-        .map_while(|cluster| budget_cluster(cluster, budget, &mut used))
-        .map(DuplicateCluster::Full)
-        .collect()
-}
-
-/// Copies one cluster with at most the remaining occurrence budget.
-fn budget_cluster(
-    cluster: &ReportCluster,
-    budget: usize,
-    used: &mut usize,
-) -> Option<ReportCluster> {
-    if *used >= budget {
-        return None;
-    }
-    let mut copy = cluster.clone();
-    copy.occurrences_total = occurrence_count(&copy);
-    let remaining = budget.saturating_sub(*used);
-    if copy.occurrences.len() > remaining {
-        copy.occurrences.truncate(remaining);
-        copy.occurrences_truncated = true;
-    }
-    *used = used.saturating_add(copy.occurrences.len());
-    Some(copy)
-}
-
-/// Removes large per-file metrics unless explicitly requested.
+/// Builds the page's metrics block.
+///
+/// `per_file` carries one row per analysed file. On a workspace with a
+/// thousand files — or a few hundred deeply nested ones — that block
+/// outweighs the entire 200 KB tool-result budget before a single
+/// cluster is added, which made every `report-query` overflow. It is
+/// opt-in; the headline totals are always present.
 fn page_metrics(report: &Report, include_per_file: bool) -> RepoMetrics {
     let mut metrics = report.metrics.clone();
     if !include_per_file {
-        metrics.per_file.clear();
-        metrics.folders.clear();
+        metrics.per_file = Vec::new();
     }
     metrics
 }
 
-/// Applies only cluster-owned filters.
-fn matches_filters(filters: &DuplicatesFilters, cluster: &ReportCluster) -> bool {
-    filter_min_size(filters, cluster)
-        && filter_severity(filters, cluster)
-        && filter_language(filters, cluster)
-        && filter_path(filters, cluster)
-}
-
-/// Applies the canonical extent floor.
-fn filter_min_size(filters: &DuplicatesFilters, cluster: &ReportCluster) -> bool {
-    match filters.min_size {
-        Some(minimum) => cluster.canonical_node_count >= minimum,
-        None => true,
+/// Returns whether `cluster` satisfies every active filter on `filters`.
+fn matches_filters(filters: &ReportPageFilters, cluster: &ReportCluster) -> bool {
+    if let Some(min) = filters.min_score {
+        if cluster.weight < min {
+            return false;
+        }
     }
-}
-
-/// Applies engine-stamped mass severity bands.
-fn filter_severity(filters: &DuplicatesFilters, cluster: &ReportCluster) -> bool {
-    match filters.severities.as_ref() {
-        Some(values) => values.iter().any(|value| value == &cluster.rank_band),
-        None => true,
+    if let Some(min) = filters.min_size {
+        if cluster.canonical_node_count < min {
+            return false;
+        }
     }
-}
-
-/// Applies language filters derived from the stable first occurrence.
-fn filter_language(filters: &DuplicatesFilters, cluster: &ReportCluster) -> bool {
-    match filters.languages.as_ref() {
-        Some(values) => values
-            .iter()
-            .any(|value| value == cluster_language(cluster)),
-        None => true,
+    if let Some(bucket) = filters.bucket.as_deref() {
+        if cluster.bucket != bucket {
+            return false;
+        }
     }
-}
-
-/// Applies occurrence-path substring filtering.
-fn filter_path(filters: &DuplicatesFilters, cluster: &ReportCluster) -> bool {
-    match filters.path_contains.as_ref() {
-        Some(needle) => cluster
+    if let Some(language) = filters.language.as_deref() {
+        let detected = cluster
             .occurrences
-            .iter()
-            .any(|occurrence| occurrence.path.to_string_lossy().contains(needle)),
-        None => true,
+            .first()
+            .map_or("unknown", |occ| language_for_path(&occ.path));
+        if detected != language {
+            return false;
+        }
+    }
+    if let Some(needle) = filters.path_contains.as_deref() {
+        let any = cluster.occurrences.iter().any(|occ| {
+            occ.path
+                .to_str()
+                .is_some_and(|path_str| path_str.contains(needle))
+        });
+        if !any {
+            return false;
+        }
+    }
+    true
+}
+
+/// Returns a clone of `filters` when at least one knob is set, or
+/// `None` so the empty echo block is omitted from the wire entirely.
+fn echo_filters(filters: &ReportPageFilters) -> Option<ReportPageFilters> {
+    let any_set = filters.language.is_some()
+        || filters.bucket.is_some()
+        || filters.path_contains.is_some()
+        || filters.min_score.is_some()
+        || filters.min_size.is_some();
+    if any_set {
+        Some(filters.clone())
+    } else {
+        None
     }
 }
 
-/// Returns the stable first occurrence's language id.
-fn cluster_language(cluster: &ReportCluster) -> &'static str {
-    cluster
+/// Builds a compact page row from a full report cluster.
+fn cluster_summary_from(cluster: &ReportCluster) -> ClusterSummary {
+    let first_occurrence = cluster.occurrences.first().map(|occ| OccurrenceSummary {
+        path: occ.path.to_string_lossy().into_owned(),
+        start_byte: occ.start_byte,
+        end_byte: occ.end_byte,
+        start_line: occ.start_line,
+        end_line: occ.end_line,
+    });
+    let language = cluster
         .occurrences
         .first()
-        .map_or("unknown", |occurrence| language_for_path(&occurrence.path))
-}
-
-/// Builds a compact mass-only cluster row.
-fn cluster_summary(cluster: &ReportCluster) -> ClusterSummary {
+        .map_or("unknown", |occ| language_for_path(&occ.path));
+    let occurrence_count = cluster.occurrences_total.max(cluster.size);
     ClusterSummary {
         id: cluster.id.clone(),
-        rank: cluster.rank,
-        rank_band: cluster.rank_band.clone(),
-        mass: cluster.mass,
+        bucket: cluster.bucket.clone(),
+        score: cluster.weight,
         size_nodes: cluster.canonical_node_count,
-        occurrence_count: cluster.occurrence_count,
-        language: cluster_language(cluster).to_owned(),
-        first_occurrence: cluster.occurrences.first().map(occurrence_summary),
-    }
-}
-
-/// Builds one navigation occurrence.
-fn occurrence_summary(occurrence: &deslop_core::report::ReportOccurrence) -> OccurrenceSummary {
-    OccurrenceSummary {
-        path: occurrence.path.to_string_lossy().into_owned(),
-        start_byte: occurrence.start_byte,
-        end_byte: occurrence.end_byte,
-        start_line: occurrence.start_line,
-        end_line: occurrence.end_line,
+        occurrence_count,
+        language: language.to_owned(),
+        first_occurrence,
     }
 }

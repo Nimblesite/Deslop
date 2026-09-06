@@ -27,36 +27,78 @@
 //!     arguments are suppressed (#70) — each paired with a genuine clone
 //!     that must still surface, proving the suppression stays targeted.
 
+use std::{fs, path::Path};
+
 use anyhow::Result;
 
-use crate::common::signals::{
-    assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
-};
+mod common;
 use crate::common::*;
 
-/// Drives the `deslop` binary over the named fixture at `min_nodes` and
-/// returns the parsed JSON report, asserting the process exited cleanly.
 fn run_cli(fixture_name: &str, min_nodes: u32) -> Result<serde_json::Value> {
     let tmp = tempfile::tempdir()?;
-    let output = tmp.path().join("report");
-    let min_nodes = min_nodes.to_string();
-    let _assertion = deslop_cmd(&fixture(fixture_name), &output)?
-        .args(["--min-nodes", min_nodes.as_str()])
+    let out = tmp.path().join("report.json");
+    let _assertion = deslop_cmd(&fixture(fixture_name), &tmp.path().join("report"))?
+        .arg("--min-nodes")
+        .arg(min_nodes.to_string())
         .assert()
         .success();
-    load_json(&output.with_extension("json"))
+    let json = fs::read_to_string(&out)?;
+    Ok(serde_json::from_str(&json)?)
 }
 
-// [FUSED-SIGNALS-THREE-LAYER] Type-2 Dart clones (identical after
+fn clusters(report: &serde_json::Value) -> Vec<&serde_json::Value> {
+    report
+        .pointer("/clusters")
+        .and_then(serde_json::Value::as_array)
+        .map(|values| values.iter().collect())
+        .unwrap_or_default()
+}
+
+fn signal(cluster: &serde_json::Value, key: &str) -> f64 {
+    cluster
+        .pointer(&format!("/signals/{key}"))
+        .and_then(serde_json::Value::as_f64)
+        .unwrap_or(f64::NAN)
+}
+
+fn occurrence_files(cluster: &serde_json::Value) -> Vec<String> {
+    cluster
+        .pointer("/occurrences")
+        .and_then(serde_json::Value::as_array)
+        .map(|occ| {
+            occ.iter()
+                .filter_map(|occurrence| {
+                    occurrence
+                        .get("path")
+                        .and_then(serde_json::Value::as_str)
+                        .map(|path| {
+                            Path::new(path).file_name().map_or_else(
+                                || path.to_owned(),
+                                |name| name.to_string_lossy().into_owned(),
+                            )
+                        })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn is_exact_one(value: f64) -> bool {
+    (value - 1.0).abs() <= f64::EPSILON
+}
+
+fn spans_both(cluster: &serde_json::Value, left: &str, right: &str) -> bool {
+    let files: std::collections::BTreeSet<String> = occurrence_files(cluster).into_iter().collect();
+    files.contains(left) && files.contains(right)
+}
+
+// [FUSION-SIGNALS-THREE-LAYER] Type-2 Dart clones (identical after
 // normalisation, every identifier renamed) must produce both
 // `structural = 1.0` and `token_jaccard = 1.0` — the structural pass
 // proves the Merkle hashes match and the MinHash pass proves identical
-// k-gram sets map to identical signatures. On the mass-only wire the
-// same fact is proven from the corpus bytes: the occurrences slice to
-// identical source text ([PIPELINE-CLUSTER-CLOSURE]).
+// k-gram sets map to identical signatures.
 #[test]
-fn dart_type2_clone_is_byte_identical_and_spans_both_files() -> Result<()> {
-    let scan_root = fixture("dart-small");
+fn dart_type2_clone_has_structural_and_token_jaccard_of_one() -> Result<()> {
     let report = run_cli("dart-small", 10)?;
     let clusters = clusters(&report);
     assert!(
@@ -65,26 +107,27 @@ fn dart_type2_clone_is_byte_identical_and_spans_both_files() -> Result<()> {
     );
     let top = clusters
         .first()
+        .copied()
         .ok_or_else(|| anyhow::anyhow!("dart-small must produce at least one cluster"))?;
-    // A Type-2 clone is a rename: its occurrences differ in raw bytes
-    // (`compute(input)` against `run(limit)`), so the wire proves it by
-    // admission plus the byte truth that it is NOT a verbatim copy
-    // ([PIPELINE-CLUSTER-CLOSURE]).
-    assert_structural_only_contract(top, "Dart Type-2 clone");
+    let structural = signal(top, "structural");
+    let token_jaccard = signal(top, "token_jaccard");
     assert!(
-        !has_verbatim_pair(&scan_root, top)?,
-        "the Type-2 Dart clone is a rename — its occurrences must differ in \
-         raw bytes, never be byte-identical: {top:#}",
+        is_exact_one(structural),
+        "Type-2 Dart clone must have structural = 1.0, got {structural}",
     );
-    let files = cluster_file_set(top);
     assert!(
-        files.contains("alpha.dart") && files.contains("beta.dart"),
-        "the Type-2 cluster must span both alpha.dart and beta.dart, got {files:?}",
+        is_exact_one(token_jaccard),
+        "Type-2 Dart clone must have token_jaccard = 1.0 (identical k-gram sets), \
+         got {token_jaccard}",
+    );
+    assert!(
+        spans_both(top, "alpha.dart", "beta.dart"),
+        "the Type-2 cluster must span both alpha.dart and beta.dart",
     );
     Ok(())
 }
 
-// [FUSED-SIGNALS-THREE-LAYER] Two Dart functions sharing control-flow
+// [FUSION-SIGNALS-THREE-LAYER] Two Dart functions sharing control-flow
 // sub-structure (`if (_ < _) { return _; }`, `for (...) { _ = _ + _; }`)
 // but differing in body length are a genuine Type-3 near-miss. The shared
 // subtrees must surface as a cross-file cluster with `structural = 1.0`,
@@ -96,39 +139,33 @@ fn dart_type2_clone_is_byte_identical_and_spans_both_files() -> Result<()> {
 // The signature-only sibling match — the two `int f(int)` headers, whose
 // bodies differ — is a known false positive ([CLONE-NOISE-SIGNATURE-ONLY],
 // #154) and is correctly suppressed; it must NOT be what carries the
-// cluster, so we require substantive shape evidence, not a header match.
-//
-// The bound is two-sided ([FUSED-SHARED-SUBTREE], gh #408). It once
-// required `structural == 1.0`, which only a byte-identical *fragment*
-// nested inside the near-miss can satisfy — and reporting that fragment
-// instead of the enclosing method is the recall hole #408 describes. A
-// one-statement Type-3 near-miss cannot be Merkle-exact by
-// construction, so exactness would mean the whole-method clone was
-// missed. `dart-type3`'s enclosing pair measures 0.877; the
-// signature-only header match it must not be measures far below the
-// admission floor.
+// cluster, so we require a genuine `structural = 1.0` body match.
 #[test]
 fn dart_near_miss_produces_genuine_cross_file_structural_cluster() -> Result<()> {
-    let scan_root = fixture("dart-type3");
     let report = run_cli("dart-type3", 8)?;
-    let cluster = expect_cluster_spanning(&report, &["delta.dart", "epsilon.dart"])?;
-    // Admission is the near-miss proof on the mass-only wire: the
-    // enclosing pair cleared the shared-subtree bar or it would not be a
-    // cluster. The byte-level truth is that the view is a near-miss, not
-    // a verbatim copy — the whole point of gh #408 is that the enclosing
-    // method differs by the extra statement.
+    let clusters = clusters(&report);
+    let cross_file = clusters
+        .iter()
+        .find(|cluster| spans_both(cluster, "delta.dart", "epsilon.dart"));
+    let Some(cluster) = cross_file else {
+        anyhow::bail!(
+            "dart-type3 must produce a cross-file cluster spanning delta.dart and \
+             epsilon.dart; got clusters: {clusters:#?}"
+        );
+    };
+    let structural = signal(cluster, "structural");
     assert!(
-        !has_verbatim_pair(&scan_root, cluster)?,
-        "the reported view must be the enclosing near-miss (bytes differ by the \
-         extra statement), not a Merkle-exact fragment nested inside it (gh #408): \
-         {cluster:#}",
+        is_exact_one(structural),
+        "the cross-file Dart near-miss cluster must reach structural = 1.0 on the shared \
+         subtree (genuine Type-3 detection via the structural path), got {structural}",
     );
-    assert_structural_only_contract(cluster, "dart-type3");
-    assert_no_pair_surface_on_cluster(cluster, "dart-type3");
-    let occurrence_count = occurrences(cluster).len();
+    let occurrences = cluster
+        .pointer("/occurrences")
+        .and_then(serde_json::Value::as_array)
+        .map_or(0, Vec::len);
     assert!(
-        occurrence_count >= 2,
-        "a clone cluster must have at least two occurrences, got {occurrence_count}",
+        occurrences >= 2,
+        "a clone cluster must have at least two occurrences, got {occurrences}",
     );
     Ok(())
 }
@@ -141,7 +178,8 @@ fn dart_near_miss_produces_genuine_cross_file_structural_cluster() -> Result<()>
 fn dissimilar_dart_functions_never_form_a_cross_file_cluster() -> Result<()> {
     let report = run_cli("dart-dissimilar-functions", 8)?;
     for cluster in clusters(&report) {
-        let files = cluster_file_set(cluster);
+        let files: std::collections::BTreeSet<String> =
+            occurrence_files(cluster).into_iter().collect();
         assert!(
             files.len() <= 1,
             "dissimilar Dart functions must not cluster across files; got files {files:?}",
@@ -151,34 +189,19 @@ fn dissimilar_dart_functions_never_form_a_cross_file_cluster() -> Result<()> {
 }
 
 // [PIPELINE-DETERMINISM] Two CLI runs over the same Dart corpus must
-// produce identical cluster ids, spans and occurrence counts — proves
-// the fingerprint and render paths are deterministic across process
-// restarts. The `token_jaccard` bit-pin is gone with the signals
-// surface; cluster identity (id + occurrence spans) is what consumers
-// actually hold across sessions ([PIPELINE-DETERMINISM]).
+// produce bit-identical `token_jaccard` values — proves the MinHash
+// (blake3 XOF) signature path is deterministic across process restarts.
 #[test]
-fn dart_report_is_deterministic_across_runs() -> Result<()> {
+fn dart_token_jaccard_is_deterministic_across_runs() -> Result<()> {
     let run1 = run_cli("dart-small", 10)?;
     let run2 = run_cli("dart-small", 10)?;
-    let jaccards1: Vec<(String, u64, u64)> = clusters(&run1)
+    let jaccards1: Vec<u64> = clusters(&run1)
         .iter()
-        .map(|cluster| {
-            (
-                cluster_id(cluster).to_owned(),
-                cluster_size(cluster),
-                field(cluster, "mass").as_u64().unwrap_or(0),
-            )
-        })
+        .map(|cluster| signal(cluster, "token_jaccard").to_bits())
         .collect();
-    let jaccards2: Vec<(String, u64, u64)> = clusters(&run2)
+    let jaccards2: Vec<u64> = clusters(&run2)
         .iter()
-        .map(|cluster| {
-            (
-                cluster_id(cluster).to_owned(),
-                cluster_size(cluster),
-                field(cluster, "mass").as_u64().unwrap_or(0),
-            )
-        })
+        .map(|cluster| signal(cluster, "token_jaccard").to_bits())
         .collect();
     assert!(
         !jaccards1.is_empty(),
@@ -186,8 +209,7 @@ fn dart_report_is_deterministic_across_runs() -> Result<()> {
     );
     assert_eq!(
         jaccards1, jaccards2,
-        "cluster identity (id, occurrence count, mass) must be identical across runs \
-         on the same Dart corpus",
+        "token_jaccard values must be bit-identical across runs on the same Dart corpus",
     );
     Ok(())
 }
@@ -196,7 +218,17 @@ fn dart_report_is_deterministic_across_runs() -> Result<()> {
 /// clusters are dropped before serialisation, so every cluster here is
 /// one a human is actually shown.
 fn any_cluster_spans(report: &serde_json::Value, left: &str, right: &str) -> bool {
-    cluster_spanning(report, &[left, right]).is_some()
+    clusters(report)
+        .iter()
+        .any(|cluster| spans_both(cluster, left, right))
+}
+
+/// Count of clusters the renderer analysed but hid from the ranked report.
+fn clusters_hidden(report: &serde_json::Value) -> u64 {
+    report
+        .pointer("/clusters_hidden")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0)
 }
 
 // [EXCLUSION-CONFIG] #95 — Dart code generators (`*.g.dart`,
@@ -336,18 +368,9 @@ fn dart_literal_variation_calls_are_suppressed() -> Result<()> {
         !any_cluster_spans(&report, "events_alpha.dart", "events_beta.dart"),
         "calls varying only in string-literal arguments must not surface (#70)",
     );
-    // The mass-only wire decides the family at admission: its members
-    // carry near-zero authored-content agreement (every literal differs),
-    // so the content gate rejects them below the floor
-    // ([FUSED-CONTENT-GATE]) and the literal-variation filter never sees
-    // them. The liveness proof is the byte-identical control below: the
-    // same run admits and publishes it, so the family's absence is an
-    // admission decision, never a scan that stopped looking.
     assert!(
-        field(&report, "files_analysed")
-            .as_u64()
-            .is_some_and(|files| files >= 2),
-        "the event files must be parsed: {report:#}"
+        clusters_hidden(&report) >= 1,
+        "the literal-variation call cluster must be actively hidden (#70)",
     );
     assert!(
         any_cluster_spans(&report, "summary_alpha.dart", "summary_beta.dart"),

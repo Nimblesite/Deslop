@@ -1,12 +1,12 @@
-//! The per-cluster `language` label contract over the `duplicates`
+//! The per-cluster `language` label contract over the `report-query`
 //! wire, shared by every language that regressed it.
 //!
 //! The MCP page summary once derived each cluster's language from a
 //! hand-maintained extension → id map inside `deslop-mcp` — a drifted
 //! copy of the renderer's mapping. Whatever it omitted surfaced as
-//! `language: "unknown"`, breaking both the label and the `duplicates`
-//! language filter: `.dart` (#164) and later `.fs` (#270), on a language
-//! the analyzer was actually running.
+//! `language: "unknown"`, breaking both the label and the
+//! `report-query` language filter: `.dart` (#164) and later `.fs`
+//! (#270), on a language the analyzer was actually running.
 //!
 //! The recurrence is the point. The assertion is identical for every
 //! language — only the fixture, the extension and the expected id
@@ -14,15 +14,9 @@
 //! one-line call rather than another copy of the map's blind spot.
 
 use anyhow::{ensure, Result};
-use serde_json::Value;
+use serde_json::{json, Value};
 
-use super::{
-    copied_fixture_named, initialized_mcp, request_duplicates_summary,
-    spawn_lsp_and_wait_for_socket, structured_content,
-};
-
-/// Clusters requested per page: enough to hold every cluster the fixtures surface.
-const PAGE_LIMIT: u64 = 50;
+use super::{call_tool, copied_fixture_named, initialized_mcp, spawn_lsp_and_wait_for_socket};
 
 /// Drives the real `deslop-lsp` + `deslop-mcp` binaries against
 /// `fixture`, and asserts every cluster whose representative occurrence
@@ -41,9 +35,10 @@ pub fn assert_language_label_over_mcp(
     let _lsp_guard = spawn_lsp_and_wait_for_socket(workspace.path())?;
 
     let mut mcp = initialized_mcp(workspace.path())?;
-    let page = structured_content(
-        &request_duplicates_summary(&mut mcp, PAGE_LIMIT)?,
-        "duplicates",
+    let page = call_tool(
+        &mut mcp,
+        "report-query",
+        &json!({ "offset": 0, "limit": 50 }),
     )?;
     let languages = cluster_languages_for_extension(&page, extension);
 

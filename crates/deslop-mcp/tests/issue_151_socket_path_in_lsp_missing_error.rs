@@ -11,22 +11,21 @@
 #![cfg(unix)]
 
 use anyhow::{ensure, Result};
+use serde_json::json;
 use tempfile::TempDir;
 
-use crate::common;
-use common::{
-    error_and_message, expected_socket_fragment, initialized_mcp, request_duplicates_summary,
-};
-
-/// Clusters requested per page; the error path never reads them.
-const PAGE_LIMIT: u64 = 5;
+mod common;
+use common::{error_and_message, expected_socket_fragment, initialized_mcp};
 
 #[test]
 fn issue_151_top_offenders_error_names_socket_path_when_lsp_absent() -> Result<()> {
     let workspace = TempDir::new()?;
     // Intentionally do NOT spawn an LSP. The socket file is absent.
     let mut mcp = initialized_mcp(workspace.path())?;
-    let response = request_duplicates_summary(&mut mcp, PAGE_LIMIT)?;
+    let response = mcp.request(
+        "tools/call",
+        &json!({ "name": "top-offenders", "arguments": { "n": 5 } }),
+    )?;
     let (_error, message) = error_and_message(&response)?;
 
     let socket_fragment = expected_socket_fragment(workspace.path())?;

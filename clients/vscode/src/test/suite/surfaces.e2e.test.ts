@@ -6,8 +6,6 @@ import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import { activateExtension, sleep } from "./helpers";
 
-const SURFACE_SETTLE_MS = 500;
-
 async function openFixture(name: string): Promise<vscode.TextEditor> {
   const fixture = process.env["DESLOP_TEST_FIXTURE"];
   assert.ok(fixture, "fixture path must be set");
@@ -25,7 +23,7 @@ suite("surfaces", () => {
 
   test("Top Offenders tree yields at least one root node", async () => {
     // Wait for initial report seeding; tree reads from the store.
-    await sleep(SURFACE_SETTLE_MS);
+    await sleep(500);
     // The tree is created at activation, covered by the activation test.
     // Here we ensure the tree data provider has been registered:
     const cmds = await vscode.commands.getCommands(true);
@@ -34,17 +32,17 @@ suite("surfaces", () => {
 
   test("opening a fixture editor drives the decoration redraw pipeline", async () => {
     await openFixture("Alpha.cs");
-    await sleep(SURFACE_SETTLE_MS);
+    await sleep(500);
   });
 
   test("editing a fixture triggers the decoration redraw pipeline", async () => {
     const editor = await openFixture("Alpha.cs");
     await editor.edit((b) => b.insert(new vscode.Position(0, 0), "// edit\n"));
-    await sleep(SURFACE_SETTLE_MS);
+    await sleep(500);
     await editor.edit((b) =>
       b.delete(new vscode.Range(new vscode.Position(0, 0), new vscode.Position(1, 0))),
     );
-    await sleep(SURFACE_SETTLE_MS);
+    await sleep(500);
   });
 
   test("bubble ghost mode renders after an edit", async () => {
@@ -64,11 +62,11 @@ suite("surfaces", () => {
     await cfg.update("liveBubble.enabled", false, vscode.ConfigurationTarget.Workspace);
     const editor = await openFixture("Alpha.cs");
     await editor.edit((b) => b.insert(new vscode.Position(0, 0), " "));
-    await sleep(SURFACE_SETTLE_MS);
+    await sleep(500);
     // [VSIX-STATE-DIRTY] (#130): undo the synthetic edit before the suite exits
     // so the dirty set does not leak into the cluster navigation suite. Without
     // this, the visible projection elides any cluster whose only Alpha.cs peer
-    // gets filtered out, and comparePair's canonical-report lookup is
+    // gets filtered out, and compareWithCanonical's canonical-report lookup is
     // the contract that defends us — but tests must not rely on that alone.
     await editor.edit((b) =>
       b.delete(new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 1))),

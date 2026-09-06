@@ -4,6 +4,8 @@
 //! and non-exact-bucket clusters must all be silently refused —
 //! `Ok(None)`, never an error, never a partial plan.
 
+mod common;
+
 use std::fs;
 
 use anyhow::{anyhow, ensure, Context, Result};
@@ -18,10 +20,6 @@ use crate::common::{
     clusters::{both_spans, needle_cluster_plan, report_occurrence, synthetic_report_cluster},
     fixture,
 };
-
-const INVOICE_MATH_FILE: &str = "InvoiceMath.cs";
-const IDENTICAL_BUCKET: &str = "identical";
-const METRICS_FILE: &str = "metrics.py";
 
 /// Asserts that no cluster in the fixture's ranked report yields an
 /// extract plan for `file_name`.
@@ -39,8 +37,9 @@ fn assert_no_plan(fixture_name: &str, file_name: &str) -> Result<()> {
         let plan = refactor::compute_plan(cluster, &source, parser.as_ref())?;
         ensure!(
             plan.is_none(),
-            "{fixture_name}: cluster {} must be refused, got a plan",
-            cluster.id
+            "{fixture_name}: cluster {} (bucket {}) must be refused, got a plan",
+            cluster.id,
+            cluster.bucket
         );
     }
     Ok(())
@@ -76,7 +75,7 @@ type Span = (usize, usize);
 /// The positive fixture's source plus its two full statement-run spans
 /// (`var total…` through `return total;`).
 fn positive_fixture() -> Result<(Vec<u8>, Span, Span)> {
-    let source = fs::read_to_string(fixture("csharp-extract-type1").join(INVOICE_MATH_FILE))?;
+    let source = fs::read_to_string(fixture("csharp-extract-type1").join("InvoiceMath.cs"))?;
     let (first_start, _) = both_spans(&source, "var total = 0;")?;
     let (_, second_start) = both_spans(&source, "var total = 0;")?;
     let ((_, first_end), (_, second_end)) = both_spans(&source, "return total;")?;
@@ -102,11 +101,11 @@ fn single_occurrence_refused() -> Result<()> {
     let (source, first, _) = positive_fixture()?;
     let cluster = synthetic_report_cluster(
         vec![report_occurrence(
-            INVOICE_MATH_FILE,
+            "InvoiceMath.cs",
             (first.0, first.1),
             false,
         )],
-        IDENTICAL_BUCKET,
+        "identical",
     );
     assert_refused(&cluster, &source, "single occurrence")
 }
@@ -118,10 +117,10 @@ fn truncated_cluster_refused() -> Result<()> {
     let (source, first, second) = positive_fixture()?;
     let mut cluster = synthetic_report_cluster(
         vec![
-            report_occurrence(INVOICE_MATH_FILE, (first.0, first.1), false),
-            report_occurrence(INVOICE_MATH_FILE, (second.0, second.1), false),
+            report_occurrence("InvoiceMath.cs", (first.0, first.1), false),
+            report_occurrence("InvoiceMath.cs", (second.0, second.1), false),
         ],
-        IDENTICAL_BUCKET,
+        "identical",
     );
     cluster.occurrences_truncated = true;
     assert_refused(&cluster, &source, "truncated cluster")
@@ -133,10 +132,10 @@ fn hidden_occurrence_refused() -> Result<()> {
     let (source, first, second) = positive_fixture()?;
     let cluster = synthetic_report_cluster(
         vec![
-            report_occurrence(INVOICE_MATH_FILE, (first.0, first.1), false),
-            report_occurrence(INVOICE_MATH_FILE, (second.0, second.1), true),
+            report_occurrence("InvoiceMath.cs", (first.0, first.1), false),
+            report_occurrence("InvoiceMath.cs", (second.0, second.1), true),
         ],
-        IDENTICAL_BUCKET,
+        "identical",
     );
     assert_refused(&cluster, &source, "hidden second occurrence")
 }
@@ -147,10 +146,10 @@ fn overlapping_ranges_refused() -> Result<()> {
     let (source, first, _) = positive_fixture()?;
     let cluster = synthetic_report_cluster(
         vec![
-            report_occurrence(INVOICE_MATH_FILE, (first.0, first.1), false),
-            report_occurrence(INVOICE_MATH_FILE, (first.0 + 10, first.1 + 10), false),
+            report_occurrence("InvoiceMath.cs", (first.0, first.1), false),
+            report_occurrence("InvoiceMath.cs", (first.0 + 10, first.1 + 10), false),
         ],
-        IDENTICAL_BUCKET,
+        "identical",
     );
     assert_refused(&cluster, &source, "overlapping ranges")
 }
@@ -163,32 +162,26 @@ fn mid_expression_refused() -> Result<()> {
     let (first, second) = both_spans(&text, "amount * taxRate / 100")?;
     let cluster = synthetic_report_cluster(
         vec![
-            report_occurrence(INVOICE_MATH_FILE, (first.0, first.1), false),
-            report_occurrence(INVOICE_MATH_FILE, (second.0, second.1), false),
+            report_occurrence("InvoiceMath.cs", (first.0, first.1), false),
+            report_occurrence("InvoiceMath.cs", (second.0, second.1), false),
         ],
-        IDENTICAL_BUCKET,
+        "identical",
     );
     assert_refused(&cluster, &source, "mid-expression range")
 }
 
 /// Non-exact buckets (weak LSH / semantic) never reach the slice proof.
 #[test]
-fn non_byte_equivalent_cluster_refused() -> Result<()> {
-    // The bucket surface is gone from the mass-only wire; the extract
-    // refusal is the byte truth: a cluster whose occurrences are not
-    // byte-equivalent after whitespace canonicalisation has no single
-    // extractable run ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 1). The
-    // second span is cut short so the two copies disagree.
+fn loose_bucket_refused() -> Result<()> {
     let (source, first, second) = positive_fixture()?;
-    let truncated_second = (second.0, second.0 + 40);
     let cluster = synthetic_report_cluster(
         vec![
-            report_occurrence(INVOICE_MATH_FILE, (first.0, first.1), false),
-            report_occurrence(INVOICE_MATH_FILE, truncated_second, false),
+            report_occurrence("InvoiceMath.cs", (first.0, first.1), false),
+            report_occurrence("InvoiceMath.cs", (second.0, second.1), false),
         ],
-        "non-byte-equivalent",
+        "loosely_similar",
     );
-    assert_refused(&cluster, &source, "non-byte-equivalent spans")
+    assert_refused(&cluster, &source, "loosely_similar bucket")
 }
 
 /// Languages without refactor tables (F# today) are refused at the
@@ -198,10 +191,10 @@ fn language_without_tables_refused() -> Result<()> {
     let (source, first, second) = positive_fixture()?;
     let cluster = synthetic_report_cluster(
         vec![
-            report_occurrence(INVOICE_MATH_FILE, (first.0, first.1), false),
-            report_occurrence(INVOICE_MATH_FILE, (second.0, second.1), false),
+            report_occurrence("InvoiceMath.cs", (first.0, first.1), false),
+            report_occurrence("InvoiceMath.cs", (second.0, second.1), false),
         ],
-        IDENTICAL_BUCKET,
+        "identical",
     );
     let parser = deslop_core::lang::fsharp::FSharpParser::new();
     ensure!(
@@ -241,7 +234,7 @@ fn block_without_enclosing_function_refused() -> Result<()> {
             report_occurrence("consts.rs", (first, first_end), false),
             report_occurrence("consts.rs", (second, second_end), false),
         ],
-        IDENTICAL_BUCKET,
+        "identical",
     );
     let parser = deslop_core::lang::rust_lang::RustParser::new();
     let plan = refactor::compute_plan(&cluster, source, &parser)
@@ -277,10 +270,10 @@ fn bindings_read_after_span_refused() -> Result<()> {
 /// retargeted it, pinned here as a refusal.
 #[test]
 fn csharp_binding_escaping_sibling_window_refused() -> Result<()> {
-    let source = fs::read_to_string(fixture("csharp-extract-type1").join(INVOICE_MATH_FILE))
+    let source = fs::read_to_string(fixture("csharp-extract-type1").join("InvoiceMath.cs"))
         .context("fixture source")?;
     let needle = "var total = 0;\n        foreach (var amount in amounts)\n        {\n            var taxed = amount * taxRate / 100;\n            total += amount + taxed;\n        }";
-    let plan = needle_cluster_plan(&source, needle, INVOICE_MATH_FILE)?;
+    let plan = needle_cluster_plan(&source, needle, "InvoiceMath.cs")?;
     ensure!(
         plan.is_none(),
         "the window binds `total`, which is read after the span — must refuse (issue #278)"
@@ -298,7 +291,7 @@ fn csharp_binding_escaping_sibling_window_refused() -> Result<()> {
 fn python_late_binding_function_read_refused() -> Result<()> {
     let text = "def show():\n    print(total)\n\n\ntotal = base + 1\noffset = total * 2\nmark = 0\ntotal = base + 1\noffset = total * 2\n";
     let needle = "total = base + 1\noffset = total * 2";
-    let plan = needle_cluster_plan(text, needle, METRICS_FILE)?;
+    let plan = needle_cluster_plan(text, needle, "metrics.py")?;
     ensure!(
         plan.is_none(),
         "a function defined before the span reads its bindings at call time — must refuse"
@@ -313,7 +306,7 @@ fn python_late_binding_function_read_refused() -> Result<()> {
 fn python_global_declaration_read_refused() -> Result<()> {
     let text = "def bump():\n    global total\n    return total + 1\n\n\ntotal = base + 1\noffset = total * 2\nmark = 0\ntotal = base + 1\noffset = total * 2\n";
     let needle = "total = base + 1\noffset = total * 2";
-    let plan = needle_cluster_plan(text, needle, METRICS_FILE)?;
+    let plan = needle_cluster_plan(text, needle, "metrics.py")?;
     ensure!(
         plan.is_none(),
         "a `global` declaration re-binds reads to module scope — must refuse"
@@ -329,7 +322,7 @@ fn python_global_declaration_read_refused() -> Result<()> {
 fn python_walrus_binding_read_after_span_refused() -> Result<()> {
     let text = "values = [1, 2]\npeak = max((last := item) for item in values)\nflag = peak > 0\nprint(last)\nvalues = [3, 4]\npeak = max((last := item) for item in values)\nflag = peak > 0\nprint(last)\n";
     let needle = "peak = max((last := item) for item in values)\nflag = peak > 0";
-    let plan = needle_cluster_plan(text, needle, METRICS_FILE)?;
+    let plan = needle_cluster_plan(text, needle, "metrics.py")?;
     ensure!(
         plan.is_none(),
         "a walrus binding hoists past the comprehension frame and is read after the span — must refuse"
@@ -346,7 +339,7 @@ fn python_walrus_binding_read_after_span_refused() -> Result<()> {
 fn python_single_statement_occurrence_extracts() -> Result<()> {
     let text = "total = base + 1\nmark = 0\ntotal = base + 1\nprint(mark)\n";
     let needle = "total = base + 1";
-    let plan = needle_cluster_plan(text, needle, METRICS_FILE)?
+    let plan = needle_cluster_plan(text, needle, "metrics.py")?
         .ok_or_else(|| anyhow!("a single-statement module-level span must extract"))?;
     ensure!(
         plan.free_variables == ["base"],
@@ -365,7 +358,7 @@ fn python_single_statement_occurrence_extracts() -> Result<()> {
 fn python_attribute_and_kwarg_names_after_span_extract() -> Result<()> {
     let text = "config = build(size)\ntag = str(config)\nmark = 0\nconfig = build(size)\ntag = str(config)\nrender(config=1)\nitem.config = 2\n";
     let needle = "config = build(size)\ntag = str(config)";
-    let plan = needle_cluster_plan(text, needle, METRICS_FILE)?
+    let plan = needle_cluster_plan(text, needle, "metrics.py")?
         .ok_or_else(|| anyhow!("attribute/kwarg positions are not reads — must extract"))?;
     ensure!(
         plan.free_variables == ["build", "size", "str"],

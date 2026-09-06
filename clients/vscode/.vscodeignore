@@ -3,11 +3,6 @@
 .vscode-test*.mjs
 .c8rc.json
 coverage/**
-# Playwright output. Belt and braces: playwright.config.mjs already moves
-# outputDir under target/, and scripts/package-contents-gate.mjs fails the
-# package if either rule ever lapses again (#472).
-test-results/**
-playwright.config.mjs
 coverage-thresholds.json
 src/**
 test/**

@@ -7,10 +7,13 @@
 //! announced with a `window/showMessage` warning, or the user's click
 //! silently does nothing.
 
-use crate::common;
+mod common;
 
-use anyhow::{ensure, Context, Result};
-use common::session::{FixtureSession, MERGE_OFFER_TITLE};
+use anyhow::{anyhow, ensure, Context, Result};
+use common::{
+    call_capturing, code_action_params, handshake, rewrite_offer, spawn_lsp_on_fixture_guarded,
+    wait_for_actions,
+};
 use serde_json::{json, Value};
 
 /// `window/showMessage` `MessageType::WARNING` wire value.
@@ -22,10 +25,18 @@ const WARNING: u64 = 2;
 /// (issue #282).
 #[test]
 fn refused_resolve_surfaces_showmessage_warning() -> Result<()> {
-    let mut session = FixtureSession::open("csharp-merge-leafdrift")?;
-    let offer = session.rewrite_offer("DriftLimits.cs", (4, 6), MERGE_OFFER_TITLE)?;
+    let (workspace, _guard, mut stdin, mut stdout) =
+        spawn_lsp_on_fixture_guarded("csharp-merge-drift")?;
+    let _init = handshake(&mut stdin, &mut stdout)?;
+    let file = workspace.path().join("DriftLimits.cs");
+    let uri = tower_lsp::lsp_types::Url::from_file_path(&file)
+        .map_err(|()| anyhow!("fixture path is absolute"))?;
+    let params = code_action_params(uri.as_str(), 4, 6);
+    let actions = wait_for_actions(&mut stdin, &mut stdout, &params)?;
+    let offer = rewrite_offer(&actions, "Merge duplicates into one parameterised helper")?;
 
-    let (resolved, mut frames) = session.call_capturing("codeAction/resolve", &offer)?;
+    let (resolved, mut frames) =
+        call_capturing(&mut stdin, &mut stdout, "codeAction/resolve", offer)?;
     let reason = resolved
         .pointer("/result/disabled/reason")
         .and_then(Value::as_str)
@@ -33,7 +44,8 @@ fn refused_resolve_surfaces_showmessage_warning() -> Result<()> {
         .to_owned();
     // Fence round-trip: anything the server sent while resolving is
     // flushed before this response, so the capture is deterministic.
-    let (_fence, late_frames) = session.call_capturing("deslop/reportGet", &json!({}))?;
+    let (_fence, late_frames) =
+        call_capturing(&mut stdin, &mut stdout, "deslop/reportGet", &json!({}))?;
     frames.extend(late_frames);
 
     let message = frames

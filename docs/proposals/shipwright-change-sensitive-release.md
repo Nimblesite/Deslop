@@ -30,7 +30,7 @@ notarized binaries and skip the matrix entirely — that is a contract change to
 
 ## Classifier contract
 
-`scripts/release/release-changes.py` diffs `prior-v*-tag .. <tag>` with **native git**
+`scripts/release-changes.py` diffs `prior-v*-tag .. <tag>` with **native git**
 (never `tj-actions/changed-files` — `SWR-SEC-ACTION-PINNING`) and emits:
 
 | output | meaning |

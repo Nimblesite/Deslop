@@ -1,4 +1,4 @@
-def extracted_from_cluster_ba8762(amounts, tax_rate):
+def extracted_from_cluster_8a7e8e(amounts, tax_rate):
     total = 0
     for amount in amounts:
         taxed = amount * tax_rate // 100
@@ -9,8 +9,8 @@ def extracted_from_cluster_ba8762(amounts, tax_rate):
 
 
 def total_with_tax(amounts, tax_rate):
-    extracted_from_cluster_ba8762(amounts, tax_rate)
+    extracted_from_cluster_8a7e8e(amounts, tax_rate)
 
 
 def subtotal_with_tax(amounts, tax_rate):
-    extracted_from_cluster_ba8762(amounts, tax_rate)
+    extracted_from_cluster_8a7e8e(amounts, tax_rate)

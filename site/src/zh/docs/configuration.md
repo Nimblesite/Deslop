@@ -1,18 +1,18 @@
 ---
 layout: layouts/docs.njk
 title: 配置与报告 — .deslop.toml、命令行参数、JSON 输出
-description: 使用 .deslop.toml 和 CLI 参数配置 Deslop。查看排除项、阈值、排名、分析设置、JSON/HTML/文本报告与退出码。
+description: 一处汇总 Deslop 的输入与输出 — .deslop.toml 的各个区段（exclude、report_hide、threshold、ranking、analysis、report）、无法关闭的内置规则、每一个命令行参数、三种报告格式，以及退出码。
+keywords: deslop, 配置, .deslop.toml, 命令行参数, exclude, report_hide, 阈值, 退出码, json 报告, html 报告
 eleventyNavigation:
   key: 配置
   order: 6
 icon: tune
-docsGroup: reference
 lang: zh
 ---
 
 # 配置与报告
 
-Deslop 从两处读取设置，并在每次运行中写出三份报告：
+Deslop 有两种配置方式：
 
 - **`.deslop.toml`** — 与代码放在一起、并纳入版本管理的文件。项目级策略写在这里：跳过什么、隐藏什么、何时让 CI 失败。
 - **命令行参数** — 单次运行的覆盖项。参数始终优先于对应的配置键。
@@ -23,7 +23,7 @@ Deslop 从两处读取设置，并在每次运行中写出三份报告：
 
 ### 文件位置
 
-Deslop 会在**扫描根目录**（你指向的目录）中查找 `.deslop.toml`。用 `--config` 可以指向别处：
+Deslop 会在**扫描根目录**（你指向的目录）旁查找 `.deslop.toml`。用 `--config` 可以指向别处：
 
 ```bash
 deslop .                          # 若存在则使用 ./.deslop.toml
@@ -238,11 +238,11 @@ structural_only = "ignore"
 | `--log-to-console` | 关 | 将日志发往 stderr，而非带时间戳的 `deslop-<timestamp>.log` 文件。 |
 | `--log-level <LEVEL>` | `info` | `error` \| `warn` \| `info` \| `debug` \| `trace`。被 `RUST_LOG` 覆盖。 |
 | `--no-color` | 关 | 关闭 stderr 前导与摘要中的颜色。 |
-| `--no-incremental` | 关 | 禁止读写 `<root>/.deslop/cache/` 下的磁盘指纹缓存和嵌入缓存。报告和日志仍会正常写出。 |
+| `--no-incremental` | 关 | **关闭** `<root>/.deslop/cache/` 下的磁盘指纹缓存。该缓存默认开启，未改动的文件在下次运行时会跳过解析；传入此参数可让被扫描的目录保持原样。 |
 
 ### 开发与模拟参数
 
-这些参数绕过或重放流水线，不属于常规使用：`--from-report <FILE>` 将已有的 JSON 报告重新渲染为 `.txt`/`.html`；`--debug-ast <FILE>` 打印单个文件的归一化 AST 后退出；`--rerun-touch`、`--rerun-remove` 和 `--rerun-add` 通过增量会话重放文件变更，以演练实时更新路径。
+这些参数绕过或重放流水线，不属于常规使用：`--from-report <FILE>` 将已有的 JSON 报告重新渲染为 `.txt`/`.html`；`--debug-ast <FILE>` 打印单个文件的规范化 AST 后退出；`--rerun-touch`、`--rerun-remove` 和 `--rerun-add` 通过增量会话重放文件变更，以演练实时更新路径。
 
 ## 优先级与环境
 
@@ -275,7 +275,7 @@ structural_only = "ignore"
 
 ### TXT — 终端格式
 
-`deslop-report.txt` 是 ASCII、按行组织、刻意保持朴素的格式。没有 ANSI 颜色，没有 Unicode 框线字符，没有分页转义码。可以无意外地通过管道送入 `head`、`grep`、`awk`。
+`deslop-report.txt` 是 ASCII、按行组织、刻意保持朴素的格式。没有 ANSI 颜色，没有 Unicode 制表符绘图，没有分页转义码。可以无意外地通过管道送入 `head`、`grep`、`awk`。
 
 ```
 deslop 0.0.0-dev -- 840 file(s), 142 cluster(s), 0 hidden
@@ -298,7 +298,7 @@ HTML 渲染器使用与 JSON 和 TXT 相同的排名和相同的簇摘要。它�
 
 - 语法高亮的示例代码片段，过长的片段和额外的出现位置会折叠进可展开的开关中
 - 每个重复组上的「AI 匹配」徽章和影响力标签
-- 在可折叠的「运行详情」页脚中，每组一张信号表（结构 / 词元 / 嵌入 / 融合）
+- 在可折叠的「运行详情」页脚中，每组一张信号表（结构 / token / 嵌入 / 融合）
 
 它不会额外提供：JSON 中没有的评分、超出 `summary` 字段的评论，或指向外部服务的链接。
 
@@ -307,7 +307,7 @@ HTML 渲染器使用与 JSON 和 TXT 相同的排名和相同的簇摘要。它�
 Deslop 写出的一切都会进入被扫描项目根目录下的单个 `.deslop/` 目录，或你通过 `--output` 传入的前缀。若只想生成 JSON 报告，请抑制另外两种格式：
 
 ```bash
-deslop . --notext --nohtml      # 写入 .deslop/deslop-report.json
+deslop . --notext --nohtml      # writes .deslop/deslop-report.json
 ```
 
 诊断信息与报告是分开的。默认情况下，诊断信息通过带结构化字段的 `tracing` 写入一个带时间戳的日志文件（`.deslop/logs/deslop-<timestamp>.log`）；传入 `--log-to-console` 可改为将其发送到 `stderr`。人类可读的前言和摘要始终输出到 `stderr`。
@@ -319,10 +319,10 @@ deslop . --notext --nohtml      # 写入 .deslop/deslop-report.json
 | 退出码 | 含义 |
 | --- | --- |
 | `0` | 已完成。重复低于阈值，或未设置阈值。 |
-| `1` | 运行时错误 — 扫描路径不存在、分析失败、I/O 错误，或一个标记为 `required` 的嵌入提供方无法访问。 |
+| `1` | 运行时错误 — 扫描路径不存在、分析失败、I/O 错误，或一个标记为 `required` 的嵌入提供方无法访问。绝不会是 panic。 |
 | `2` | 用法错误 — 未知标志，或超出范围 / 非有限的阈值，在运行开始前即被拒绝。 |
 | `3` | **阈值被突破。** 完整报告仍会写入磁盘，以便呈现这些重复。 |
 
-失败通过这些退出码和 `stderr` 上的结构化错误呈现。
+`deslop` 绝不会因用户输入而 panic。失败通过这些退出码和 `stderr` 上的结构化错误呈现。
 
 退出码 `3` 是 **CI 门禁**。它只在你主动启用时才会触发 — 通过传入 `--fail-over <percent>`，或设置 `[threshold] max_duplication_percent`。详见[基于重复阈值设置 CI 门禁](/zh/docs/#gate-ci-on-a-duplication-threshold)的演练，或直接使用 [GitHub Action](/zh/docs/github-action/)。

@@ -22,50 +22,46 @@
 
 use anyhow::Result;
 
+mod common;
 use crate::common::{verdict::*, *};
 
-/// Asserts the fixture's cross-file copy stayed visible across `files`
-/// with at least `minimum_loc` duplicated lines, and that `covers`
-/// accepts the reported occurrence texts — each control still names the
-/// exact ride-along it refuses to let the idiom vouch for. `why` states
-/// what a rejected text set would mean.
-fn expect_ride_along_reported(
-    fixture_name: &str,
-    files: &[&str],
-    minimum_loc: u64,
-    covers: fn(&[String]) -> bool,
-    why: &str,
-) -> Result<()> {
-    let scan_root = fixture(fixture_name);
+#[test]
+fn module_level_logic_is_not_excused_by_qualifying_tests() -> Result<()> {
+    let scan_root = fixture("python-dict-assert-module-logic");
     let report = run_report(&scan_root, 8)?;
-    let texts = expect_cross_file_duplicate(&scan_root, &report, files, 2, minimum_loc, false)?;
-    assert!(covers(&texts), "{why}: {texts:#?}");
+
+    let texts = expect_cross_file_duplicate(
+        &scan_root,
+        &report,
+        &["test_billing_flow.py", "test_invoice_flow.py"],
+        2,
+        2,
+    )?;
+    assert!(
+        texts.iter().all(|text| text.contains("build_session")),
+        "the duplicated module-level session wiring is executable logic and \
+         must be what the cluster reports: {texts:#?}"
+    );
     Ok(())
 }
 
 #[test]
-fn module_level_logic_is_not_excused_by_qualifying_tests() -> Result<()> {
-    expect_ride_along_reported(
-        "python-dict-assert-module-logic",
-        &["test_billing_flow.py", "test_invoice_flow.py"],
-        2,
-        |texts| texts.iter().all(|text| text.contains("build_session")),
-        "the duplicated module-level session wiring is executable logic and \
-         must be what the cluster reports",
-    )
-}
-
-#[test]
 fn an_unconsumed_payload_dictionary_is_not_excused() -> Result<()> {
-    expect_ride_along_reported(
-        "python-dict-assert-unconsumed",
+    let scan_root = fixture("python-dict-assert-unconsumed");
+    let report = run_report(&scan_root, 8)?;
+
+    let texts = expect_cross_file_duplicate(
+        &scan_root,
+        &report,
         &["test_quota_patch.py", "test_quota_put.py"],
+        2,
         6,
-        |texts| {
-            texts.iter().any(|text| text.contains("audit"))
-                && texts.iter().any(|text| text.contains("ledger"))
-        },
+    )?;
+    assert!(
+        texts.iter().any(|text| text.contains("audit"))
+            && texts.iter().any(|text| text.contains("ledger")),
         "the copied bodies including their unconsumed trail dictionaries are \
-         the duplication; the report must cover them",
-    )
+         the duplication; the report must cover them: {texts:#?}"
+    );
+    Ok(())
 }

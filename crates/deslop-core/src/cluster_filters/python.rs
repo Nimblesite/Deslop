@@ -19,14 +19,10 @@ use std::collections::BTreeSet;
 use tree_sitter::Node;
 
 use super::{
-    enclosing_kind, is_multi_member_language_cluster, language_cluster_shapes, node_contains_kind,
-    node_intersects_range, node_search::KindSearch, parse_for, raw_snippet_texts_differ,
-    spans_multiple_files, trimmed_snippet_range, Snippet,
+    enclosing_kind, is_multi_member_language_cluster, node_contains_kind, node_intersects_range,
+    parse_for, raw_snippet_texts_differ, spans_multiple_files, trimmed_snippet_range, Snippet,
 };
-use crate::{
-    ast::{named_children, ByteRange},
-    state::FileId,
-};
+use crate::{ast::ByteRange, state::FileId};
 
 /// Detects [CLONE-NOISE-PY-PYTEST-FIXTURE]: pytest fixture functions
 /// that create ORM rows all repeat the same session setup shape. The
@@ -62,9 +58,11 @@ fn is_pytest_fixture_snippet(snippet: &Snippet<'_>) -> bool {
 fn enclosing_python_function(root: Node<'_>, range: ByteRange) -> Option<Node<'_>> {
     enclosing_kind(root, range, &["function_definition"]).or_else(|| {
         let decorated = enclosing_kind(root, range, &["decorated_definition"])?;
-        named_children(decorated)
-            .into_iter()
-            .find(|child| child.kind() == "function_definition")
+        let mut cursor = decorated.walk();
+        let function = decorated
+            .named_children(&mut cursor)
+            .find(|child| child.kind() == "function_definition");
+        function
     })
 }
 
@@ -136,8 +134,9 @@ fn is_python_assertion_only_snippet(snippet: &Snippet<'_>) -> bool {
 /// Walks `body` and returns true when every named child overlapping
 /// `range` is an `assert_statement` with no nested call expressions.
 fn assert_only_body_in_range(body: Node<'_>, range: ByteRange) -> bool {
+    let mut cursor = body.walk();
     let mut saw_assert = false;
-    for child in named_children(body) {
+    for child in body.named_children(&mut cursor) {
         if !node_intersects_range(child, range) {
             continue;
         }
@@ -170,10 +169,14 @@ pub(super) fn python_function_name_starts_with(
 /// member is inside a pytest `test_*` function and at least one member
 /// uses a different set of dict keys.
 pub(super) fn is_test_dict_literal_cluster(snippets: &[Snippet<'_>]) -> bool {
-    language_cluster_shapes(snippets, "python", test_dict_literal_shape).is_some_and(|shapes| {
-        spans_multiple_files(shapes.iter().map(|shape| shape.file_id))
-            && dict_literal_key_sets_differ(&shapes)
-    })
+    if !is_multi_member_language_cluster(snippets, "python") {
+        return false;
+    }
+    let shapes: Option<Vec<DictLiteralShape>> =
+        snippets.iter().map(test_dict_literal_shape).collect();
+    let Some(shapes) = shapes else { return false };
+    spans_multiple_files(shapes.iter().map(|shape| shape.file_id))
+        && dict_literal_key_sets_differ(&shapes)
 }
 
 /// Per-member shape: the set of string keys declared by the dict
@@ -214,14 +217,44 @@ fn test_dict_literal_shape(snippet: &Snippet<'_>) -> Option<DictLiteralShape> {
 /// dictionary, or any non-dictionary value. Nested dictionaries (inside
 /// `pair.value`) are not counted as additional outer dictionaries.
 fn sole_dictionary_in_range(root: Node<'_>, range: ByteRange) -> Option<Node<'_>> {
-    KindSearch::enclosed(range, |kind| kind == "dictionary").sole_node(root)
+    let mut dictionaries = Vec::new();
+    collect_outer_dictionaries(root, range, &mut dictionaries);
+    let [dict] = dictionaries.as_slice() else {
+        return None;
+    };
+    Some(*dict)
+}
+
+/// Walks the tree collecting `dictionary` nodes fully enclosed by
+/// `range`. Stops descending once a `dictionary` is found so inner
+/// dictionaries (values of `pair`s) are not double-counted.
+fn collect_outer_dictionaries<'tree>(
+    node: Node<'tree>,
+    range: ByteRange,
+    out: &mut Vec<Node<'tree>>,
+) {
+    if node.end_byte() <= range.start || node.start_byte() >= range.end {
+        return;
+    }
+    if node.kind() == "dictionary"
+        && node.start_byte() >= range.start
+        && node.end_byte() <= range.end
+    {
+        out.push(node);
+        return;
+    }
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        collect_outer_dictionaries(child, range, out);
+    }
 }
 
 /// Returns the string keys of `dict` (`pair.key` children that are
 /// string literals). Ignores non-string keys.
 fn dict_literal_top_level_keys(dict: Node<'_>, source: &[u8]) -> BTreeSet<Vec<u8>> {
+    let mut cursor = dict.walk();
     let mut keys = BTreeSet::new();
-    for pair in named_children(dict) {
+    for pair in dict.named_children(&mut cursor) {
         if pair.kind() != "pair" {
             continue;
         }

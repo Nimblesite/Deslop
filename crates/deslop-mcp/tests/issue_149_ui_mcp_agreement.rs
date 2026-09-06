@@ -16,7 +16,7 @@ use std::{
 use anyhow::{anyhow, ensure, Context, Result};
 use serde_json::{json, Value};
 
-use crate::common;
+mod common;
 use common::{initialized_mcp, lsp_workspace_with_socket, structured_content, McpHandle};
 
 /// Lower bound for the slug shared with `clusterSlug()` in the VSIX
@@ -126,14 +126,14 @@ fn mcp_top_offenders_ids(mcp: &mut McpHandle, n: usize) -> Result<Vec<String>> {
     let response = mcp.request(
         "tools/call",
         &json!({
-            "name": "duplicates",
+            "name": "top-offenders",
             "arguments": {
                 "n": n.max(1),
                 "max_occurrences": 100_000_usize,
             }
         }),
     )?;
-    let payload = structured_content(&response, "duplicates")?;
+    let payload = structured_content(&response, "top-offenders")?;
     let clusters = payload
         .get("clusters")
         .and_then(Value::as_array)

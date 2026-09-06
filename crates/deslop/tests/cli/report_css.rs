@@ -9,7 +9,7 @@
 //! design-system CSS is inlined and that no unresolved `@import url(`
 //! leaks in its place.
 
-use super::support::*;
+use crate::support::*;
 
 // A renamed (Type-2) C# clone pair guarantees the report renders at
 // least one cluster card, so the `<style>` block is exercised on a real

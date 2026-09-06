@@ -15,13 +15,6 @@ use crate::Cli;
 #[derive(Debug)]
 pub(crate) struct UsageError(String);
 
-impl UsageError {
-    /// Builds a usage error carrying `message` verbatim.
-    pub(crate) fn new(message: impl Into<String>) -> Self {
-        Self(message.into())
-    }
-}
-
 impl std::fmt::Display for UsageError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str(&self.0)
@@ -50,8 +43,8 @@ impl FormatSelection {
             html: !args.suppress.nohtml,
         };
         if !selection.json && !selection.text && !selection.html {
-            return Err(UsageError::new(
-                "at least one of --nojson/--notext/--nohtml must remain enabled",
+            return Err(UsageError(
+                "at least one of --nojson/--notext/--nohtml must remain enabled".to_owned(),
             )
             .into());
         }
@@ -225,25 +218,6 @@ pub(crate) fn write_file(path: &std::path::Path, payload: &[u8]) -> Result<()> {
 pub(crate) fn load_report(path: &std::path::Path) -> Result<Report> {
     let source =
         fs::read_to_string(path).with_context(|| format!("read report {}", path.display()))?;
-    let mut report = serde_json::from_str::<Report>(&source)
-        .with_context(|| format!("parse report {}", path.display()))?;
-    migrate_legacy_embedding_coverage(&mut report);
-    Ok(report)
-}
-
-/// Reconstructs `succeeded_subtrees` for reports written before
-/// per-occurrence coverage counting existed. The field deserializes to
-/// zero when absent, and every writer honours
-/// `attempted = succeeded + failed`, so a zero alongside a non-zero
-/// `attempted - failed` can only be a legacy report; the reconstruction
-/// is the invariant solved for the missing term, and a no-op on every
-/// report that already honours it.
-fn migrate_legacy_embedding_coverage(report: &mut Report) {
-    if let Some(provenance) = report.embedding_provenance.as_mut() {
-        if provenance.succeeded_subtrees == 0 {
-            provenance.succeeded_subtrees = provenance
-                .attempted_subtrees
-                .saturating_sub(provenance.failed_subtrees);
-        }
-    }
+    serde_json::from_str::<Report>(&source)
+        .with_context(|| format!("parse report {}", path.display()))
 }

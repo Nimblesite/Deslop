@@ -15,7 +15,7 @@
 use anyhow::{anyhow, ensure, Context, Result};
 use serde_json::Value;
 
-use crate::common;
+mod common;
 use common::{lsp_workspace_with_socket, rescan_call, wait_for_state_then_init_mcp};
 
 /// One unique C# file body that shares no normalised subtrees with
@@ -146,11 +146,10 @@ fn issue_153_rescan_occurrence_offsets_reflect_post_edit_file() -> Result<()> {
     Ok(())
 }
 
-/// Extracts the `clusters` JSON array from the page a rescan payload
-/// wraps (`{ generation, summary, page }`, [MCP-TOOLS]).
+/// Extracts the `clusters` JSON array from a rescan payload.
 fn clusters_array(structured: &Value) -> Result<Vec<Value>> {
     structured
-        .pointer("/page/clusters")
+        .get("clusters")
         .and_then(Value::as_array)
         .cloned()
         .ok_or_else(|| anyhow!("rescan payload missing clusters array: {structured}"))

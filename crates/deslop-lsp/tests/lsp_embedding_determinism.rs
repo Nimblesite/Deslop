@@ -1,16 +1,18 @@
-//! [FUSED-STRATEGY-BOUNDED-MAX] / [PIPELINE-DETERMINISM]: bounded fused
+//! [FUSION-STRATEGY-BOUNDED-MAX] / [PIPELINE-DETERMINISM]: bounded fused
 //! confidence and reproducible snapshots across embedding refreshes.
 //! Drives the real `deslop-lsp` binary over stdio; no pipeline internals
 //! are called.
 
-use crate::common;
+#[path = "../../deslop/tests/cli/mock_ollama.rs"]
+mod mock_ollama;
+
+mod common;
 
 use std::{
     io::BufReader,
     process::{ChildStdin, ChildStdout},
 };
 
-use crate::mock_ollama::MockOllama;
 use anyhow::{anyhow, Result};
 use common::{
     at, call, handshake, path as json_path,
@@ -20,19 +22,18 @@ use common::{
     },
     spawn_lsp_guarded,
 };
+use mock_ollama::MockOllama;
 use serde_json::{json, Value};
 
 const SET_MODEL: &str = "deslop/embeddingSetModel";
 const LEDGER_FILES: [&str; 2] = ["ledger_a.ts", "ledger_c.ts"];
 
-/// [FUSED-STRATEGY-BOUNDED-MAX] / [PIPELINE-DETERMINISM]: selecting a model
+/// [FUSION-STRATEGY-BOUNDED-MAX] / [PIPELINE-DETERMINISM]: selecting a model
 /// through the editor-facing LSP method must expose honest bounded scores,
 /// and two full embedding refreshes over unchanged files must produce the
 /// same ordered clusters, identifiers, metrics, and signals.
 #[test]
-#[ignore = "[SKIP-UNFINISHED] GH #369 [FUSED-STRATEGY-BOUNDED-MAX] \
-            [PIPELINE-DETERMINISM] docs/plans/rename-recall-plan.md — the \
-            ts-mixed-band fixture loses its second correlated \
+#[ignore = "GH #369: the ts-mixed-band fixture loses its second correlated \
             signal through MockOllama's length-residue cosine, so the refresh \
             has no stable second cluster to reproduce. Assertions are intact \
             — run with `-- --ignored`."]

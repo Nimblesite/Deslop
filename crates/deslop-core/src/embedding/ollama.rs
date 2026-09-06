@@ -14,7 +14,7 @@ use crate::embedding::provider::{
 };
 
 // `OllamaModelInfo` is generated from `docs/models/live-ipc.td` by
-// `scripts/typediagram/generate.mjs`. Per CLAUDE.md the IPC model code is
+// `scripts/typediagram-gen.mjs`. Per CLAUDE.md the IPC model code is
 // not stored in git; the binding lives in `crate::wire_generated`.
 pub use crate::wire_generated::OllamaModelInfo;
 
@@ -226,7 +226,7 @@ fn probe_dimensions(endpoint: &str, model: &str) -> Result<usize, ProviderError>
 /// Centralises status handling and error-body capture so `embed`,
 /// `embed_batch`, and `probe_dimensions` behave identically.
 ///
-/// **Inputs are dispatched whole** ([FUSED-EMBED-PROVIDER]). The
+/// **Inputs are dispatched whole** ([FUSION-EMBED-PROVIDER]). The
 /// per-input budget belongs to the provider and is enforced *upstream*:
 /// a subtree longer than `max_input_chars` is counted in
 /// `failed_subtrees` and never reaches here, so everything that does is
@@ -284,7 +284,7 @@ struct EmbedRequest<'a> {
     input: Vec<String>,
     /// Always `false`: inputs are budget-approved upstream, so a
     /// provider-side trim could only replace a full subtree with a
-    /// prefix vector ([FUSED-EMBED-PROVIDER]).
+    /// prefix vector ([FUSION-EMBED-PROVIDER]).
     truncate: bool,
 }
 
@@ -337,7 +337,7 @@ fn ensure_dimensions(embedding: &[f32], expected: usize) -> Result<(), ProviderE
 /// errors are not symmetric: a budget slightly too small drops a
 /// subtree and says so in `failed_subtrees`, while one too large is
 /// rejected by the provider — never silently trimmed, since requests go
-/// out with `truncate: false` ([FUSED-EMBED-PROVIDER]).
+/// out with `truncate: false` ([FUSION-EMBED-PROVIDER]).
 const CHARS_PER_TOKEN: usize = 3;
 
 /// Request body for `POST /api/show`.

@@ -18,7 +18,7 @@ use std::{collections::BTreeSet, fs, path::Path};
 
 use anyhow::{Context, Result};
 
-use crate::common::signals::{assert_no_pair_surface_on_cluster, has_verbatim_pair};
+mod common;
 use crate::common::*;
 
 fn cluster_paths(cluster: &serde_json::Value) -> BTreeSet<String> {
@@ -81,12 +81,6 @@ fn non_identical_source_slices(slices: &[Vec<u8>]) -> bool {
         .is_some_and(|(first, rest)| rest.iter().any(|slice| slice != first))
 }
 
-/// The byte-identity consistency pin: `has_verbatim_pair` (which reads
-/// the source) and the occurrence slices must agree for every cluster —
-/// a byte-proven cluster must actually slice to identical bytes, and a
-/// cluster whose slices differ must not be byte-proven
-/// ([PIPELINE-CLUSTER-CLOSURE]). The `identical` bucket label is gone;
-/// this is the wire fact that used to be claimed by it.
 fn identical_clusters_with_different_source(
     report: &serde_json::Value,
     scan_root: &Path,
@@ -97,19 +91,16 @@ fn identical_clusters_with_different_source(
         .cloned()
         .unwrap_or_default();
     let mut offenders = Vec::new();
-    for cluster in &clusters {
+    for cluster in clusters
+        .iter()
+        .filter(|cluster| cluster_bucket(cluster) == "identical")
+    {
         let slices = occurrence_slices(cluster, scan_root)?;
-        let byte_proven = has_verbatim_pair(scan_root, cluster)?;
-        if byte_proven == non_identical_source_slices(&slices) {
+        if non_identical_source_slices(&slices) {
             offenders.push(format!(
-                "cluster {} spans {:?}: byte-proven={byte_proven} but slices                  {}",
+                "cluster {} spans {:?}",
                 cluster_id(cluster),
-                cluster_paths(cluster),
-                if non_identical_source_slices(&slices) {
-                    "differ"
-                } else {
-                    "are identical"
-                }
+                cluster_paths(cluster)
             ));
         }
     }
@@ -133,12 +124,9 @@ fn unrelated_csharp_xunit_classes_are_never_nearly_identical() -> Result<()> {
         .and_then(serde_json::Value::as_array)
         .cloned()
         .unwrap_or_default();
-    // [PIPELINE-CLUSTER-CLOSURE] The bucket that used to label the match is
-    // gone; the acceptance holds on the wire fact that matters: unrelated
-    // test classes must never be reported as *cross-file* duplication, so
-    // every visible cluster's occurrences live inside one file.
-    let cross_file: Vec<String> = clusters
+    let offenders: Vec<String> = clusters
         .iter()
+        .filter(|cluster| cluster_bucket(cluster) == "nearly_identical")
         .filter(|cluster| cluster_paths(cluster).len() >= 2)
         .map(|cluster| {
             let id = cluster_id(cluster);
@@ -147,13 +135,10 @@ fn unrelated_csharp_xunit_classes_are_never_nearly_identical() -> Result<()> {
         })
         .collect();
     assert!(
-        cross_file.is_empty(),
-        "unrelated C# xUnit test classes must not form a cross-file cluster \
-         (issue #44). Offending clusters: {cross_file:#?}"
+        offenders.is_empty(),
+        "unrelated C# xUnit test classes must not form a 'Nearly identical' \
+         cross-class cluster (issue #44). Offending clusters: {offenders:#?}"
     );
-    for cluster in &clusters {
-        assert_no_pair_surface_on_cluster(cluster, "csharp-unrelated-xunit");
-    }
     Ok(())
 }
 
@@ -167,9 +152,8 @@ fn csharp_assertion_blocks_with_different_literals_are_not_identical() -> Result
     let offenders = identical_clusters_with_different_source(&report, &scan_root)?;
     assert!(
         offenders.is_empty(),
-        "the byte-identity fact must be consistent (issue #64): a cluster \
-         cannot be byte-proven while its slices differ, or slice-identical \
-         while not byte-proven. Offending clusters: {offenders:#?}"
+        "C# assertion blocks with different literals must not be labelled \
+         identical (issue #64). Offending clusters: {offenders:#?}"
     );
     Ok(())
 }

@@ -1,62 +1,25 @@
-// Severity per [SEVERITY-MODEL] / [SEVERITY-COLOR]. Colors live in design.ts.
-//
-// Severity is a single channel: the engine-stamped mass rank band. The
-// retired per-bucket severity maps are invalid configuration
-// ([SEVERITY-CONFIG]); a cluster's colour cannot imply that it is
-// identical, near-identical, structural-only, semantic, or content-proven
-// ([SEVERITY-COLOR]).
+// Severity bucketing per [LSP-SEVERITY]. Colors live in design.ts.
 
-import { ReportCluster, Severity, clusterBand } from "./types/report";
+import { ReportCluster, Severity } from "./types/report";
 
-/** The four Deslop severity levels ([SEVERITY-DESLOP-MAP]). A cluster's
- * level is a pure function of its engine-stamped mass rank band — never
- * a pair signal or clone-kind classification. */
-export type DeslopSeverity = "error" | "warning" | "information" | "hint";
+export { SEVERITY_COLOR, SEVERITY_DOT } from "./design";
 
-/** Every Deslop severity level, in rank order. */
-export const DESLOP_SEVERITIES: readonly DeslopSeverity[] = [
-  "error",
-  "warning",
-  "information",
-  "hint",
-] as const;
-
-export { SEVERITY_COLOR, DESLOP_SEVERITY_COLOR, SEVERITY_DOT } from "./design";
-
-// [SEVERITY-DESLOP-MAP] Mass rank band → level. Shared by the CLI, HTML,
-// LSP, VSIX, and agent surfaces; consumers read `rank_band` and do not
-// recompute percentiles.
-const RANK_BAND_SEVERITY: Record<Severity, DeslopSeverity> = {
-  worst: "error",
-  top10: "warning",
-  mid: "information",
-  faint: "hint",
-};
-
-/** [SEVERITY-DESLOP-MAP] The Deslop severity level of a mass rank band. */
-export function deslopSeverityOf(severity: Severity): DeslopSeverity {
-  return RANK_BAND_SEVERITY[severity];
+export function rankPercentile(rank: number, total: number): number {
+  if (total <= 1) return 0;
+  return 1 - (rank - 1) / (total - 1);
 }
 
-/** The colour channel of a cluster, resolved from the engine's own band. */
-export function clusterSeverity(cluster: ReportCluster): DeslopSeverity {
-  return deslopSeverityOf(clusterBand(cluster));
+export function severityForRank(rank: number, total: number): Severity {
+  const pct = rankPercentile(rank, total);
+  if (pct >= 0.99) return "worst";
+  if (pct >= 0.9) return "top10";
+  if (pct >= 0.5) return "mid";
+  return "faint";
 }
 
-/** Both visual channels of one cluster. */
-export interface ResolvedSeverity {
-  /** Drives colour — the mass-band-derived Deslop severity. */
-  level: DeslopSeverity;
-  /** Drives glyph density — the engine's own `rank_band`
-   * ([SEVERITY-BAND]). */
-  band: Severity;
-}
-
-/**
- * [SEVERITY-COLOR] The single resolver every visual surface consumes.
- * Both channels are read from the engine-stamped band, never derived
- * from rank position or pair measurements.
- */
-export function resolveSeverity(cluster: ReportCluster): ResolvedSeverity {
-  return { level: clusterSeverity(cluster), band: clusterBand(cluster) };
+export function indexedSeverity(clusters: ReportCluster[]): Map<string, Severity> {
+  const total = clusters.length;
+  const out = new Map<string, Severity>();
+  clusters.forEach((cluster, i) => out.set(cluster.id, severityForRank(i + 1, total)));
+  return out;
 }

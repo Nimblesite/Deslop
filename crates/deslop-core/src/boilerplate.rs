@@ -136,26 +136,12 @@ fn ecmascript_carrier(kind: &str) -> bool {
     matches!(kind, "import_statement")
 }
 
-/// The clause every Go file opens with.
-const GO_PACKAGE_CLAUSE: &str = "package_clause";
-
 /// Go package-header and import carriers. A `package_clause` and an
 /// `import_declaration` (including the grouped `import (...)` form wrapping
 /// an `import_spec_list`) are file prologue, never duplicate logic — the Go
 /// analogue of C# `using` directives.
 fn go_carrier(kind: &str) -> bool {
-    kind == GO_PACKAGE_CLAUSE || kind == "import_declaration"
-}
-
-/// Returns true when `kind` is the clause `language` requires every file to
-/// open with — Go's `package` clause. An import is a line the author chose
-/// and may have copied along with the code below it; this clause is dictated
-/// by where the file lives and would read the same whether or not anything
-/// in the file was copied, so a whole-file view that includes it claims
-/// something nobody duplicated ([PIPELINE-FINGERPRINT-MERKLE-ROOT]).
-#[must_use]
-pub fn is_mandated_prologue(language: &str, kind: &str) -> bool {
-    language == "go" && kind == GO_PACKAGE_CLAUSE
+    matches!(kind, "package_clause" | "import_declaration")
 }
 
 /// Language-specific wrappers whose children encode prologue-only syntax.

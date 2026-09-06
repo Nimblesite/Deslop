@@ -11,28 +11,12 @@ For each file, parse with the selected language's tree-sitter grammar and walk t
 
 The synthetic `__file__` root spans the nodes normalization kept, not the tree-sitter parse root. The parse root covers leading and trailing trivia — a licence header, a comment block — that normalization has already dropped, so inheriting it reports bytes contributing zero nodes to the match: a whole-file occurrence opens on comments instead of the code it duplicates, and its start offset stops tracking edits that move that code. Real nodes keep their own span, because a declaration's braces belong to the duplication even when a comment sits between them. A file that normalizes to nothing keeps the parse root's span. Pinned by `crates/deslop-mcp/tests/issue_153_rescan_freshness.rs` ([LIVE-RESCAN-FRESHNESS]).
 
-### [PIPELINE-NORMALIZE-AST-OPERATOR] Operators survive normalization
-
-Every grammar here spells the operator of a binary, unary or compound-assignment expression as an **anonymous** token, and the walk above reads named children only. `alpha + beta` and `alpha - beta` therefore normalized to the same subtree with the same identifier frontier and the same literals: no stage downstream held any evidence that they differ. The pair measured `structural = 1.00`, `token_jaccard = 1.00`, `agreement = 1.00` — the engine's strongest evidence, made about code that computes a different answer. Sign errors and inverted comparisons are exactly the class of defect that survives review.
-
-Behaviour-bearing anonymous tokens are therefore kept as leaves **carrying their own token**: the normalized kind is `__op__+`, never a shared `__op__`. Operators must not collapse the way identifiers collapse to `__ident__` and literals to `__literal__`, because collapsing them breaks the premise the digest rests on. Identifiers and literals collapse because a rename and a constant edit preserve behaviour, so equal hashes mean *the same code up to renames* and unequal hashes mean the code itself differs — the premise [PIPELINE-CLUSTER-CLOSURE] applies to pair admission. An operator swap is neither a rename nor a literal edit, so a shared placeholder makes `alpha + beta` and `alpha - beta` hash identically and the fingerprint asserts a sameness that does not exist. Every stage reading the digest inherits it: `structural` saturates at 1.00, `token_jaccard` echoes it, the LSH bands collide, and [FUSED-CONTENT-GATE] is left pricing four disagreeing frontier positions out of twenty as a ten-percent discount, still routing the pair as near-identical. Discrimination belongs in the fingerprint, not in a downstream gate correcting for it.
-
-Type-2 recall is untouched. A consistently renamed clone changes identifiers and literals, which still collapse; it does not change its operators, so the operator leaves stay equal and the subtree still hashes identically.
-
-The prefix keeps the operator namespace disjoint from every grammar kind, so an operator can never be confused with a named production that happens to spell itself `in`, `is` or `not`. The leaf is also a **position on the content frontier** whose raw bytes are the operator, which is what lets the content stage report *which* positions disagreed rather than only that the shapes did.
-
-The list is an allowlist over token text, one list for every grammar because tree-sitter names an anonymous node by its own token: arithmetic, comparison, boolean (symbolic and worded), membership and identity, bitwise and shifts, compound assignment, null handling, and ranges. Framing stays out — brackets, commas, semicolons, colons, dots, arrows and the plain `=` of an assignment are already implied by the parent production, and keeping them would inflate every subtree with positions no two members can disagree on.
-
-Operators are a **third** content population, belonging to neither the identifier nor the literal one. There is no substitution that turns `+` into `-`, so counting an operator as an identifier would report a broken rename, and counting it as a literal would report a data table; `literal_fraction` is measured over the identifier/literal vocabulary alone so a data table stays exactly as literal-dominated as it was. An operator that changed is `substance_varies` on its own evidence.
-
-The same predicate is what `cluster_filters::body_shape` compares bodies by, so the signature-only and polymorphic suppressions no longer answer "these bodies are the same" about implementations that compute different answers. Pinned by `crates/deslop/tests/operator_drift_is_not_duplication.rs`, which asserts in the same run that a byte-identical control still buckets `identical` and still saturates — a normalization change wide enough to separate the operator families must not have separated everything.
-
 ### [PIPELINE-BOILERPLATE-FILTER] Boilerplate-only clone filtering
 Language front-ends classify syntax-only scaffolding before fingerprinting. Import declarations, C# `using` directives, namespace/package headers, Python decorators such as FastAPI route declarations, and equivalent module prologues are treated as **boilerplate carriers**, not business logic. A subtree or sibling window made only from these carriers is excluded from structural fingerprints, sibling-extension windows, token LSH input, and embedding input by default.
 
 Rationale: clone detection literature and mature tools normalize or filter irrelevant syntactic features before comparison. Repeated import blocks produce high-copy false positives that drown out actionable duplication. They are still useful style signals, so the renderer may emit a low-noise action hint rather than a clone warning.
 
-C# special case: if the same non-static `using` directives appear across many files in the same project, the human-facing hint is `Consider moving repeated usings to a global using file` and links to the affected namespaces. This is not a clone cluster and contributes neither mass nor `duplicated_loc`. The JSON/AI report may carry the suppressed byte ranges as `boilerplate_hints` so an agent can propose a safe `GlobalUsings.cs` or project-file `<Using Include="..." />` change.
+C# special case: if the same non-static `using` directives appear across many files in the same project, the human-facing hint is `Consider moving repeated usings to a global using file` and links to the affected namespaces. This is not a clone cluster and does not contribute to `weight` or `duplicated_loc`. The JSON/AI report may carry the suppressed byte ranges as `boilerplate_hints` so an agent can propose a safe `GlobalUsings.cs` or project-file `<Using Include="..." />` change.
 
 Configuration:
 
@@ -43,254 +27,85 @@ Configuration:
 ### [PIPELINE-FINGERPRINT-MERKLE] Structural fingerprint (Merkle)
 Bottom-up Merkle hash over `NormalizedNode`. Each node's hash combines its own `kind` string with the ordered hashes of its children using `blake3`. Each node stores `(hash, subtree_node_count, byte_range, file_id)`. Nodes whose subtree size is below `--min-nodes` are excluded from clustering per [DECISION-MIN-NODES].
 
-#### [PIPELINE-FINGERPRINT-MERKLE-ROOT] When the file root is a view
-
-The synthetic `__file__` root is hashed like any node, because its children's hashes fold into it, and by default it is also a candidate view: a module copied whole — import line and all — is one duplication at the extent of the file, and the same-file collapse of [PIPELINE-CLUSTER-EXACT-SCOPE] publishes it there rather than as the declaration below the import. Two cases deny the root a view of its own; its children are fingerprinted either way.
-
-- **It re-describes its only child.** [PIPELINE-NORMALIZE-AST] gives the root the extent of the nodes normalisation kept, so a file holding a single declaration yields a root whose bytes are that declaration's. Fingerprinting both reports one region twice — it double-counts in `clusters_total` and the duplication metric, and the embedding pass scores the two byte-identical spans a perfect match inside one file. The declaration is the view.
-- **The file carries a prologue its language mandates.** An import is a line the author chose and may have copied with the code beneath it; Go's `package` clause is dictated by the directory the file lives in and would read the same whether or not anything was copied. A whole-file view claims it as duplication, and being the widest range in its file it would win the same-file collapse over the declaration actually copied: two Go files holding one renamed function each were published as `alpha.go:1-13` against `beta.go:1-13`, `package` clause included, and a file holding a type plus two functions was published whole against a two-function run in its counterpart. The root's children and the sibling pass carry the copy instead, so a whole-file copy is still reported at the extent of what was copied. The mandated clauses are named per language in `boilerplate.rs` (`is_mandated_prologue`); today that is Go's `package_clause`.
-
-Implemented in `fingerprint.rs` (`is_viewless_root`). Pinned by `python_inherited_contract_boundary`, `js_ts_extensions`, `verbatim_subgroup_survives_noise` and `js_ts_false_positive_filters` (the whole-module view), `issue_343_sum_clamp_saturation` (the only-child rule), the Go scope contract every Go suite calls (`crates/deslop/tests/common/go_scope.rs`) with `cluster_extent_alignment` (the mandated prologue), and the per-language unit tests in `fingerprint/tests.rs`.
-
-### [PIPELINE-SIGNATURE-MEMO] MinHash construction is memoised by token-stream digest
-
-`MinHash` over the k-grams is a pure function of the token stream alone, so the memo — keyed by a length-prefixed blake3 digest of the stream — is exact by construction: a repeated stream gets the byte-identical signature of its first construction, and one corpus build pays for each distinct stream once. The memo spans a whole batch corpus build (cross-file, where the repetition lives) and one file on an incremental change pass. Fallback signatures never enter it: they are deliberately scoped to the fingerprint's byte range (#86) so unrelated empty streams cannot cluster through shared emptiness. Hit/miss counts are surfaced on the `fingerprint corpus built` record ([PIPELINE-OBSERVABILITY-STAGES]); the miss count is the distinct-stream population; retention is capped at `SIGNATURE_MEMO_MAX_ENTRIES`, so the memo's residency stays a bounded share of the memory budget on any corpus, post-cap streams being constructed fresh with identical output. Pinned by `a_repeated_token_stream_costs_one_minhash_construction` and `too_short_streams_never_touch_the_memo`.
-
 ### [PIPELINE-CLUSTER-EXACT] Exact subtree clustering
-Group `NormalizedNode` fingerprints by `hash` to propose exact candidate pairs. This covers Type-1 and normalized Type-2 deterministically in O(n). A hash bucket is not a cluster: each concrete pair must still pass [FUSED-STRATEGY-BOUNDED-MAX]. Candidate pairs are language-scoped by default per [CONFIG-CROSS-LANGUAGE]; the exact same hash may still be compared across languages when `.deslop.toml` opts into cross-language comparison.
-
-### [PIPELINE-CLUSTER-EXACT-SCOPE] Inside one declaration the widest view is the finding
-
-One duplication is fingerprinted at many depths, so several candidate views can cover the same region. Before pair admission, a same-file overlap run selects its physical view by authored scope and width only. When one view encloses another inside the same authored declaration, the enclosing view is proposed; otherwise the wider view is proposed, with stable byte-range ordering as the tie-breaker — except where two views straddle each other and one of them is a declaration ([PIPELINE-CLUSTER-EXACT-SCOPE-STRADDLE]). Pair scores cannot choose a view because no pair has been admitted yet.
-
-Declarations are read from the normalised tree and keyed by language. A view that is the declaration is treated as the enclosing authored scope. Pinned by the TypeScript, JavaScript, and F# scope fixtures, which assert proposed ranges and eventual admitted pairs without attaching a grade to a cluster.
-
-#### [PIPELINE-CLUSTER-EXACT-SCOPE-STRADDLE] A view that is the declaration beats a view that cuts through it
-
-Two views can overlap without either containing the other: one starts at a `namespace` line and ends in the middle of a method, the other is that method, modifier through closing brace. The first welds a cut-off body to whatever sits beside it — a namespace line, a class shell, a sibling member — and no author wrote that region. When two views straddle each other like this, the view whose range **is** a function-like declaration is the finding, whatever its width. Views where one contains the other are untouched by this rule: a whole file that holds a method whole is still the wider authored scope and still wins. Pinned by `issue_389_subsumption_modifier_straddle` (C#: the namespace-to-mid-method window loses to the authored `ReconcileEntries` method) and the `incremental-multilang` expectation table.
-
-#### [PIPELINE-CLUSTER-EXACT-SCOPE-SCRAPS] A view that is the function beats a window that merely wraps it
-
-A same-file window can enclose an authored function whole while adding only scraps around it — the two field declarations above a Dart accessor, a constructor line. Such a window is a view Deslop cut over a run of siblings, not something the author wrote, and it shares almost nothing beyond the function it wraps. When a window that is not itself a node of the tree encloses an authored function-like declaration and holds fewer than `admission.shared_subtree_min_node_count` nodes beyond it, the function is the finding, whatever the window's width. A node the author wrote — a class body, a module, a whole file holding the function — keeps the width rule of [PIPELINE-CLUSTER-EXACT-SCOPE] ([PIPELINE-FINGERPRINT-MERKLE-ROOT] says when the file root is such a view). Without this, one method of a seven-member family published as "fields plus method" while its six siblings published as methods. Pinned by `rename_needs_an_anchor` (Dart: every accessor publishes at its own extent).
-
-### [PIPELINE-CLUSTER-CLOSURE] Clusters are exactly the transitive closure of admitted pairs
-
-Candidate generation may propose a pair through exact fingerprints, token LSH, or embedding neighbours, but proposal is not admission. [FUSED-STRATEGY-BOUNDED-MAX] evaluates structural similarity, token Jaccard, embedding similarity, and content similarity for that exact pair. Only a pair that passes the complete admission contract becomes an edge.
-
-Clusters are formed as the connected components of the admitted-pair graph. No component-level average, edge selection, family score, label, or post-admission similarity judgement may add, remove, or redirect an admission edge. A bridge that passes admission legitimately connects its endpoints; a bridge that should not connect them must fail the pair admission rule. Tests pin the admitted edges and their closure.
-
-Two post-closure partitions follow, and neither revises admission, manufactures pair evidence, or classifies a component. [PIPELINE-CLUSTER-ELECT] splits a component that a token bridge welded out of two structural families, one cluster per region. Under [CLONE-NOISE-VERBATIM-SUBGROUP], a component that a noise filter convicts is replaced by its qualifying byte-identical families and members outside those families are dropped; a component no filter convicts is handed on untouched. Each rendered survivor receives mass from its own canonical extent and visible membership under [RANK-MASS-SUM].
-
-Pair evidence remains attached to the admitted edge. The resulting component owns identity, canonical extent, occurrence membership, mass, and mass-derived rank only.
-
-### [PIPELINE-CLUSTER-CANDIDATE-CONTAINER] Container candidates obey the same pair admission rule
-
-A class or sliding window is an ordinary candidate endpoint: it enters a component only through admitted pairs, and admission is never revised for it. Inside the component it meets one measured election — a container that merely concatenates a family the component already holds is elected out under [PIPELINE-CLUSTER-ELECT-CONTAINER], so the family publishes at its own extent — and the two post-closure partitions of [PIPELINE-CLUSTER-CLOSURE].
-
-### [PIPELINE-CLUSTER-ELECT] A token bridge may not weld two structural families into one cluster
-
-Clusters are the connected components of the admitted-pair graph, and that graph carries two kinds of edge. A **structural** edge joins members whose normalised subtrees hash to the same value — the same code, up to the identifier and literal renames normalisation erases. A **token** edge joins members an LSH band collision found merely similar. Transitive closure treats them alike, so a single token edge is enough to weld two structural families into one component.
-
-The component that results is a clone of nothing. Its members do not agree, so every content measure over the union reads low, the report demotes or hides it, and both real families are lost *to the presence of each other*. The loss grows with the corpus: the more code a scan reaches, the more token bridges it finds. On the `Polly` corpus a parameter-list family and a 628-occurrence mega-cluster of unrelated shapes reached the report exactly this way.
-
-The rule holds inside **one language** and is not applied outside it. Two normalised subtrees of one grammar differ because the code differs; two subtrees of *different* grammars differ because the grammars do, and nothing follows about whether either is a copy of the other. A component spanning languages exists only because [CONFIG-CROSS-LANGUAGE](exclusion.md#config-cross-language) was opted into, so splitting it per language would delete precisely the finding that opt-in asks for. Such components are left whole, as is any component whose languages cannot be resolved.
-
-Families of **two or more members** are the unit, taken before any signal is measured, and the members belonging to none are dropped. Splitting on the digest is safe in the direction that matters: two distinct hashes mean two distinct normalised subtrees, and no rename and no literal edit can produce that, because normalisation collapses exactly those.
-
-A family is not yet a finding, because one duplication is fingerprinted at many depths and each depth is its own family. Families are first merged into the **regions** they cover: two families describe one region when every occurrence of each shares bytes with some occurrence of the other. That is [PIPELINE-CLUSTER-SUBSUME]'s own coverage question, asked here so this pass never answers it — a copied method and the statement run inside it stay in one cluster, where the same-file overlap collapse and subsumption elect between the views.
-
-One-way coverage is not a nesting. A shallow shape duplicated across four files encloses a two-file clone in two of them and covers code that clone never reaches in the other two, so neither is a view of the other and both are real findings. Such a bridge is exactly what welds two disjoint clones into one component, and merging only on *mutual* coverage leaves it in its own region rather than gluing the corpus back together. Mutual coverage also fails one way when an enclosing view reaches **fewer** files than the run nested inside it — a whole-module shape shared by two files, and the function shape inside it that also appears in a third. Nothing was welded there, and splitting it would publish the enclosing view as a narrower cluster beneath the spread floors that were suppressing it — a false positive manufactured out of a finding the report had correctly withheld (`python_issue_112_dict_fixture`).
-
-A component is therefore split only when it spans **two or more regions** *and* two of those regions **share no byte**. Disjoint bytes are what make two regions distinct code, and distinct code is what a token edge welds. Where a component is split, it becomes one cluster per region: such a component is a merge, not an N-way clone, and reporting the regions separately publishes strictly more true duplication than reporting their union. A component covering **one** region is left whole — an ordinary Type-3 cluster with a fringe of near-misses is one region, and its fringe members are occurrences a reader wants.
-
-The mechanism is [CLONE-NOISE-VERBATIM-SUBGROUP]'s, one layer earlier and keyed on the subtree digest instead of the source bytes; both share `cluster_filters/family.rs`. Implemented in `cluster_filters/structural_families.rs`, run from `pipeline/session/render.rs` directly after closure. Pinned by `crates/deslop/tests/csharp_merged_clone_families.rs`, where a summing loop copied across two files and a multiplying loop copied across two more are each reported alone and, without this rule, reported **nothing at all** when scanned together; by the unit tests in `cluster_filters/structural_families/tests.rs`, which hold the region cases the E2E cannot reach — the four-file bridge, the nesting that must survive it, and the enclosing view whose nested run reaches a file it does not; and by `config_can_enable_cross_language_clusters` in `crates/deslop/tests/cross_language.rs` for the language boundary.
-
-### [PIPELINE-CLUSTER-ELECT-CONTAINER] A concatenation of a family is not a finding
-
-A token edge can also weld a structural family to the views that merely *contain* it — the class holding seven shape-identical methods, the sliding window spanning two of them. Left inside the component they destroy it from within: they glue every occurrence in a file into one overlapping run, and the same-file overlap collapse then publishes the family as one container occurrence per file. Seven findings become two, and the constructors, fields and imports between the methods are counted as duplicated.
-
-So before the region question is asked, members that **concatenate** a family are elected out of the component. A member concatenates a family when all of the following hold, each measured, none a heuristic in isolation:
-
-- the family **outnumbers** the member's own family — the container cannot express the occurrences it swallows;
-- the family supplies at least **two thirds of the member's bytes** — the boundary between "this duplication plus code that is not duplicated" and "a view of a finding that is real at full extent"; an encloser most of whose bytes are its own code is the extractable view subsumption must be allowed to elect;
-- every family occurrence carries the **copied-block node floor** (`VERBATIM_OVERTURN_MIN_NODES`, 16 nodes) — a run of byte-equal idiom lines, four `assert` statements that are most of a small test helper, confers no container standing however much of the umbrella it covers;
-- the member strictly encloses **two or more** family occurrences, and the family **overflows** the member's own family — or encloses one, when the member's own family is itself reportable and the enclosed family continues past it *in the member's own file*. One enclosed occurrence with no same-file continuation is ordinary nesting.
-
-The overflow test carries one forfeit: a view family whose own occurrences overlap one another in a file — sliding windows tiling a sibling row — forfeits the no-overflow exemption outright. The tiling counts the shared siblings twice, so its coverage is not an occurrence list a report could publish. A family that genuinely covers the enclosed family whole keeps its members: the window is the finding, and the shapes inside it are its fine structure.
-
-Implemented in `cluster_filters/structural_families/containers.rs`. Pinned by the container cases in `cluster_filters/structural_families/tests/container_tests.rs` and end-to-end by `rank_structural_only_policy` (all seven method occurrences at whole-method extents) and `rename_needs_an_anchor` (the published family windows contain the endpoint literal they were previously elected to exclude).
+Group `NormalizedNode` fingerprints by `hash`. Every bucket with ≥ 2 entries is a candidate clone cluster. Covers Type-1 and normalized Type-2 deterministically in O(n). Candidate pairs are language-scoped by default per [CONFIG-CROSS-LANGUAGE]; the exact same hash may still be compared across languages when `.deslop.toml` opts into cross-language comparison.
 
 ### [PIPELINE-CLUSTER-SUBSUME] Cross-cluster subsumption
-One physical duplication can be fingerprinted at several AST depths and therefore appear as several closure components covering the same bytes. Subsumption removes duplicate views; it never changes the membership of a component and never recomputes admission.
+One physical duplication is fingerprinted at several AST depths, so it can produce several clusters covering the same bytes — a duplicated method, and the run of single-statement clones inside it. Publishing both shows the user one duplicate twice and double-counts it in `clusters_total` and the duplication metric. Two independent questions decide the outcome.
 
-Two components describe the same physical duplication only when coverage is bidirectional by per-occurrence containment: every occurrence of each component contains, or is contained by, an occurrence of the other in the same file. Bare intersection and one-way coverage are insufficient. A view naming a file the other does not name is never dropped.
+**Are these one duplication?** Bidirectional coverage by per-occurrence containment: every occurrence of *each* cluster contains, or is contained by, an occurrence of the other in the same file. Pinned by `crates/deslop-core/tests/cluster_subsumption.rs`. Three weaker predicates each fail in a different direction:
 
-When two components describe the same duplication, the survivor is selected by file coverage, physical enclosure, occurrence coverage, duplicated mass, and stable cluster-id tie-breaking in that order. Structural, Jaccard, embedding, content, rename, literal, pair classification, and any presentation label are forbidden inputs. A view is published when no published view describes the same duplication and outranks it; every other view is absorbed by one that does. That is a property of the published set, not of the order views were met in, so whatever a view absorbed is judged again against the views that remain when it leaves the report ([PIPELINE-CLUSTER-SUBSUME-KERNEL]).
+- Requiring the whole occurrence *set* to nest misses the crossed case, where the depth difference falls on opposite sides in each file and neither set nests inside the other.
+- Accepting bare *intersection* deletes findings: two duplicated regions sharing the single byte where one ends and the next begins are two findings, and no other cluster reports the one that is dropped.
+- Accepting coverage in *either* direction alone deletes findings too. A wide cluster whose occurrences each happen to contain one member of a larger, differently-scoped cluster satisfies it — and a pair of byte-identical generated functions is then replaced by the one-line statement family nested inside them, which also reaches a file the functions never mention.
 
-Pinned by `crates/deslop-core/tests/cluster_subsumption/region.rs` and end-to-end overlap fixtures. Assertions must prove the survivor's files, occurrences, ranges, and mass; pair scores cannot be asserted on a cluster.
+**Which view survives?** File coverage first, then physical enclosure, then precision.
 
-#### [PIPELINE-CLUSTER-SUBSUME-STRADDLE] Two views that straddle a nested view are padded readings of it
-
-Two admitted windows can overlap without either containing the other: a byte-identical block with one differing statement kept on its left in one view and one differing statement kept on its right in the other. Each window clears the content floor on the strength of the block it shares, and their union does not, so neither can absorb the other and both would reach the report — the same block published twice, under two extents that each count a line the other refuses.
-
-When two components name the same files, every occurrence of each overlaps an occurrence of the other in its file, and a third component lies strictly inside both in every file, the two straddling views are dropped and the nested view is the finding. Straddles are looked for among the published views; the two are removed for good and their file set is resolved again without them, so whatever either had absorbed — through any verdict — is judged again and the nested view collects its own nested rivals. Two overlapping regions with no admitted view nested in both stay two findings, exactly as before: a shared byte, a half overlap, or an overhang is never enough on its own.
-
-Implemented in `cluster/subsume/kernel.rs`; pinned by `two_windows_straddling_one_nested_view_publish_that_view`, `a_view_that_yielded_to_a_straddler_is_released_when_it_dies` and `a_view_nested_in_only_one_straddler_leaves_both_published` in `crates/deslop-core/tests/cluster_subsumption/straddle.rs`, and by `cross_cluster_collapse::padded_windows_straddling_a_verbatim_block_publish_the_block` end to end.
-
-#### [PIPELINE-CLUSTER-SUBSUME-KERNEL] Survivors are a property of the published set, not of scan order
-
-The views over one file set, with the survivor order between every pair that describes the same duplication, form a directed graph: an edge runs from the preferred view to the view it re-describes. The published set is that graph's kernel — no published view is outranked by another published view, and every unpublished view is outranked by a published one. It is found by publishing, in rank order, whichever undecided view no undecided or published view outranks, and absorbing every undecided view of its region as it goes. A view whose absorber is later removed, whether outranked or dropped as a straddler, is therefore judged again against the views that remain, and nothing a removed view absorbed is forgotten.
-
-Implemented in `cluster/subsume/kernel.rs`; pinned by `a_view_released_by_its_absorber_is_judged_against_the_views_that_remain` in `crates/deslop-core/tests/cluster_subsumption/release.rs`, and by the report contract every subsumption test holds its result to: survivors in rank order with unique ids and the mass [RANK-MASS-SUM] gives them, no two survivors describing one duplication, and every unpublished view re-described by a survivor over its own files or straddling a nested view a survivor reports.
-
-#### [PIPELINE-CLUSTER-SUBSUME-CYCLE] A cycle in the survivor order is decided by coverage, mass and id
-
-Three views can each outrank the next: enclosure decides one pair, and the coverage-mass-id order decides the other two crossed pairs the opposite way. Then no view of the cycle is free of an undecided rival and no kernel exists. The view that leads on occurrence coverage, duplicated mass and stable id is published, and every other view of its region is absorbed by it — the tie-break the survivor order already ends in, applied once more. The region is still reported exactly once.
-
-Pinned by `three_views_that_outrank_each_other_in_a_cycle_publish_the_leader` in `crates/deslop-core/tests/cluster_subsumption/release.rs`.
-
-#### [PIPELINE-CLUSTER-SUBSUME-FILESET] Views are judged only against views over exactly their own files
-
-Every verdict above needs both views to name the same set of files: same-region coverage pairs each occurrence with a same-file partner in both directions, and a straddle demands file coverage both ways before it looks for a core, whose own occurrences must lie inside both straddlers in every file. Two views over different file sets therefore always keep each other, and a view is only ever absorbed, released or chosen as a core within its own file set.
-
-Each file set is resolved on its own, in rank order. On the Flutter corpus that is the difference between 217,045 views squared — a stage that held one core for half an hour without a record — and a sum of small squares. No verdict changes.
-
-The stage reports its counts — views, file sets, pairs evaluated, same-region pairs, absorptions, cycles, straddle rounds and straddlers — in a completion record and a fixed-interval progress record ([PIPELINE-OBSERVABILITY-STAGES]).
-
-Pinned by `each_file_set_is_judged_on_its_own` and `disjoint_file_sets_are_never_compared` in `crates/deslop-core/tests/cluster_subsumption/release.rs`.
+- **A view that names a file the survivor does not name is never dropped.** No other cluster reports that file's duplication, so the finding disappears rather than moving. When each view names a file the other does not, both are published.
+- Between views over one file set, the *enclosing* view is the duplication and the nested view re-describes it. Ranking weight must not decide: the fine-grained view always ranks heavier because it contributes one occurrence per statement, so weight-based selection renders a duplicated 60-statement method as 120 one-line occurrences and drops the method itself.
+- Between views over one file set at the same nesting, the structurally more precise view wins. An embedding-dominant view survives a more precise structural rival: it carries semantic evidence over the same bytes that the rival cannot express.
 
 ### [PIPELINE-DETERMINISM] Cross-run determinism
-Two runs of the pipeline over an unchanged corpus produce bit-identical deterministic output: identical MinHash signatures (blake3 XOF, fixed k-gram ordering), identical pair evidence (`token_jaccard` compared bit-for-bit), identical admitted pairs, closure components, cluster ids, mass, and ranking. Determinism is what makes persisted processing ([PIPELINE-INCREMENTAL]) sound and cluster ids stable across sessions. The embedding/ANN layer is the only approximate stage and is bounded separately ([FUSED-EMBED-PROVIDER]); a missed ANN neighbour only loses recall, never changes an already admitted pair.
+Two runs of the pipeline over an unchanged corpus produce bit-identical deterministic output: identical MinHash signatures (blake3 XOF, fixed k-gram ordering), identical fused signal scores (`token_jaccard` compared bit-for-bit), identical candidate sets, cluster ids, and ranking. Determinism is what makes the fingerprint cache ([PIPELINE-INCREMENTAL]) sound and cluster ids stable across sessions. The embedding/ANN layer is the only approximate stage and is bounded separately ([FUSION-EMBED-PROVIDER]); a missed ANN neighbour only loses recall, never changes existing cluster content.
 
 Determinism holds over corpus *state*, not edit history: identical paths and bytes produce an identical report whatever sequence of edits got there. Every pipeline ordering is therefore keyed by workspace-relative path (with the registration id only as a tie-breaker), never by `FileId` alone — ids are append-only, so removing and restoring a byte-identical file would otherwise reorder the corpus, move the LSH star centre, and change rendered ranges and metrics for identical source. Rendered occurrence order follows the same path-ordered corpus. Pinned by the LSP `history_determinism` suite, which cycles a config exclusion over live files and asserts the restored report is field-for-field identical.
 
-### [PIPELINE-OBSERVABILITY-STAGES] Long stages emit bounded aggregate records, never per-item events
+### [PIPELINE-INCREMENTAL] Incremental fingerprint cache
+On-disk cache keyed by `(language_id, tool_version, min_nodes, content_hash)`. Cache hit rehydrates both the structural fingerprints and the normalised AST from a compact little-endian binary blob, so unchanged files skip tree-sitter entirely; cache miss parses the file and persists the result. Any mismatch on the cache key — tool upgrade, grammar pin, `--min-nodes` change, source edit — degrades gracefully to a miss; stale blobs never leak into a run.
 
-Every corpus-scale stage reports what it did as aggregate gate counters in a completion record at `info`, plus fixed-interval progress records for stages long enough to be mistaken for a hang — so a default-level run of a large corpus is distinguishable from a stuck one, and the record volume is bounded by how long a stage runs, never by how much work it does. Per-item events in corpus-scale hot paths are `trace`: one `debug!` per measured pair produced 793,076 records on the corpus that motivated this, burying the stage events and measurably slowing the stage being diagnosed. Records carry counts, elapsed milliseconds, and substage attribution (`read_ms`/`parse_ms`/`fingerprint_ms`/`signature_ms` on `fingerprint corpus built`; gate counters on the shared-subtree rescue tally; `stage`/`clusters`/`elapsed_ms` on `cluster stage complete`) — never file contents or user paths. A completion record is emitted even when a stage found nothing: an absent event and an empty population are otherwise indistinguishable in a log.
+**Activation.** On by default on every surface. Incremental analysis is a first-class path, not a bolt-on: the LSP runs on it permanently, and a batch CLI run is just "incremental starting from an empty cache". `deslop --no-incremental` opts out for callers that must not write to the tree at all. Stats land on every report as `cache_stats { hits, misses }` at top level. Text renderer surfaces them as `cache: N hit / M miss`.
 
-### [PIPELINE-INCREMENTAL] Persisted processing — the parse store
-Deslop persists processing to disk and re-derives only what changed. Each stored artefact is a computation result addressed by exactly the content that determines it, and [PIPELINE-DETERMINISM] makes the stored result bit-identical to recomputing it — a content-addressed store with correctness invariants, not a discardable accelerator hint. "Cache" survives in the surface names (`.deslop/cache/`, `cache_stats`, `FingerprintCache`) and in hit/miss vocabulary; the semantics are the ones this section states.
+**[PIPELINE-INCREMENTAL-INVALIDATION] Invalidation is addressing, not bookkeeping.** The cache cannot serve a stale parse, because a stale parse is *unaddressable*: the blob's filename is `blake3(file contents)`, under path segments for language, tool version, and `min_nodes`. Edit a file with nothing watching — an agent writing, a `git checkout`, an editor with the LSP stopped — and its content hash changes, so the lookup lands on a path that does not exist and the file is re-parsed from disk. There is no mtime heuristic, no watcher-maintained index, and no invalidation step that could be skipped or get out of sync.
 
-The parse store holds one blob per `(language_id, tool_version, min_nodes, source_byte_hash)`. The hash is `blake3` over the file's **raw bytes** — never over a decoded string. A lossy decode collapses every maximal invalid UTF-8 subsequence to one U+FFFD, making the key non-injective: byte-distinct files share one entry and the second is served the first's tree and fingerprints (gh #382, pinned by `crates/deslop/tests/cache_key_lossy_utf8_collision.rs`). A hit rehydrates the structural fingerprints, the normalised AST, and the per-fingerprint MinHash signatures ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]) from a compact little-endian binary blob, so unchanged files skip tree-sitter *and* signature construction entirely; a miss parses the file, builds fingerprints and signatures, and persists the bundle. Before a hit is served, the fingerprints are re-derived from the rehydrated tree and compared with the stored records: any disagreement voids the blob — the stored signatures are positionally bound to the stored fingerprint list, so they are unattributable the moment that list cannot be reproduced — and the file takes the miss path, whose store self-heals the blob. Any mismatch on the key — tool upgrade, grammar pin, `--min-nodes` change, source edit — degrades gracefully to a miss; stale blobs never leak into a run.
+Two further properties make a cache-on-by-default CLI safe:
 
-**Activation.** On by default on every surface. Incremental analysis is a first-class path, not a bolt-on: the LSP runs on it permanently, and a batch CLI run is just "incremental starting from an empty store". `deslop --no-incremental` opts out per invocation for callers that must not write to the tree at all; `[analysis] incremental = false` in `.deslop.toml` ([CONFIG-INCREMENTAL-OPTOUT]) opts the whole workspace out on every surface without a flag. Stats land on every report as `cache_stats { hits, misses }` at top level. Text renderer surfaces them as `cache: N hit / M miss`.
-
-**[PIPELINE-INCREMENTAL-INVALIDATION] Invalidation is addressing, not bookkeeping.** The store cannot serve a stale parse, because a stale parse is *unaddressable*: the blob's filename is `blake3(file contents)`, under path segments for language, tool version, and `min_nodes`. Edit a file with nothing watching — an agent writing, a `git checkout`, an editor with the LSP stopped — and its content hash changes, so the lookup lands on a path that does not exist and the file is re-parsed from disk. There is no mtime heuristic, no watcher-maintained index, and no invalidation step that could be skipped or get out of sync.
-
-Two further properties make persistence-on-by-default safe for the CLI:
-
-- **Corpus membership never comes from the store.** Every run performs a fresh discovery walk, so files added or deleted while nothing was watching are picked up regardless of store state. A deleted file's blob is orphaned — never consulted, kept as revert reuse until [PIPELINE-INCREMENTAL-RETENTION] prunes it.
-- **A warm run and a cold run agree.** Wiping `.deslop/cache/` changes the `cache_stats` counters and nothing else about the report. The store never defines results — the source tree is the only source of truth; persistence only decides how much of it must be re-derived.
+- **Corpus membership never comes from the cache.** Every run performs a fresh discovery walk, so files added or deleted while nothing was watching are picked up regardless of cache state. A deleted file's blob is simply orphaned — unused, never consulted.
+- **A warm run and a cold run agree.** Wiping `.deslop/cache/` changes the `cache_stats` counters and nothing else about the report. The cache is an accelerator; the source tree is the only source of truth.
 
 The one artefact that *can* go stale is the live state file `live-report.json` ([LIVE-STATE-FILE]) — a whole-report snapshot, not a content-addressed entry. The CLI never reads it. The LSP seeds from it for instant warm-start and immediately runs a cold pass that replaces it, reporting `Running` until that pass installs ([LIVE-CACHE-SEED]).
 
-**Layout.** `<root>/.deslop/cache/fingerprints/<language_id>/<tool_version>/<min_nodes>/<source_byte_hash>.bin`. Shares `.deslop/cache/` with the embedding cache from [FUSED-EMBED-PROVIDER]; the two layers invalidate independently.
+**Layout.** `<root>/.deslop/cache/fingerprints/<language_id>/<tool_version>/<min_nodes>/<content_hash>.bin`. Shares `.deslop/cache/` with the embedding cache from [FUSION-EMBED-PROVIDER]; the two layers invalidate independently.
 
-**Format.** `u32` magic, then a 32-byte **binding digest** ([PIPELINE-INCREMENTAL-INTEGRITY]), then the payload: a recursive `NormalizedNode` tree (`u32 kind_len`, kind UTF-8 bytes, `u64 start`, `u64 end`, `u32 child_count`, children...), then `u64 fingerprint_count` followed by one `{ [u8;32] hash, u64 start, u64 end, u64 node_count }` record per fingerprint, then `u64 signature_count` followed by one 128×`u64` MinHash signature per fingerprint, positionally 1:1 with the fingerprint records. Decode rejects any blob whose signature count disagrees with its fingerprint count, and any blob whose payload does not consume the file exactly. No serde, no schema drift: the magic + tool-version path segment bracket every format change — the pre-signature and pre-digest layouts' magics decode as a plain miss and their blobs are rewritten in the current format.
-
-### [PIPELINE-INCREMENTAL-INTEGRITY] A blob is bound to its address
-
-The filename alone proves nothing about the bytes inside it: a corrupted payload keeps its filename, and a blob moved, swapped, or copied to another valid address decodes cleanly there. Both were reproduced serving wrong reports — corrupted MinHash payloads flipped `token_jaccard`, and a two-blob swap exchanged two files' rendered spans and buckets — so blob trust is part of the accuracy surface, not an optimisation detail.
-
-Every blob therefore carries a BLAKE3 **binding digest** over its payload and the full address that wrote it: language id, `min_nodes`, source-byte hash, the layout revision (the magic), the signature width, and a **semantic epoch** — a constant bumped when parsing, normalisation, fingerprinting, or signature construction changes meaning without changing layout, deliberately independent of the reused `0.0.0-dev` package version in the directory path. A lookup recomputes the digest from its *own* address before decoding anything. Corruption anywhere in the file, a blob under the wrong source hash, a blob copied across a language or `min_nodes` partition, trailing bytes, and a stale epoch all fail identically: a plain miss that re-parses from source and self-heals the blob, with the next pass hitting cleanly.
-
-Corrupt bytes may never crash the run either, and the digest is verified **before** a single payload byte is decoded — so ordinary corruption never reaches an allocation path at all. The bounds behind it hold even for a payload whose digest checks out:
-
-- **The read is bounded on the read, not on a prior measurement.** One handle does both jobs: the length comes off the opened file and the read is taken one byte *past* `MAX_BLOB_BYTES` (256 MiB), so a file that another binary grows mid-read is observable and refused rather than silently truncated into a valid-looking prefix. The buffer is reserved fallibly — an allocation the machine cannot satisfy is a miss, not an abort.
-- **Every decode-side length field is proven against the bytes actually remaining** before it sizes an allocation, so a corrupt count degrades to `InvalidData` rather than a capacity-overflow abort.
-- **A global node budget bounds the whole tree** (`MAX_DECODED_NODES`, 4 M). The byte bound alone is not enough: an encoded node costs 24 bytes on disk but a resident one costs several times that, so counts that pass the remaining-bytes test could still multiply into an allocation many times the file size. The budget is claimed per node *including the child slots that follow it*, so an absurd child count is refused before its `Vec` is reserved. `MAX_AST_DEPTH` bounds one path; this bounds a wide-but-shallow tree, which the depth guard cannot see.
-
-After the digest verifies, the served hit is still cross-checked by re-deriving fingerprints from the rehydrated tree ([PIPELINE-INCREMENTAL]), defence in depth against an encoder bug the digest would faithfully sign.
-
-**The semantic epoch is the one lever no equivalence test can pull.** Every other invalidation axis is addressed: change the source, the language, `min_nodes` or the blob layout and the lookup lands somewhere else. Change what a parse *means* — normalisation rules, a grammar pin, fingerprinting, signature construction — without changing the layout, and in a development build (where `tool_version` is the permanently-reused `0.0.0-dev`) every stored blob stays addressable. A warm run then serves the pre-change analysis, and no warm-versus-cold comparison can detect it because both sides are stale together. Release builds are stamped with their own version and partitioned on their own, so this can only ever mislead a development store. What catches a forgotten bump is the goldens that pin the pre-change analysis: the per-language `Sample.expected.ast` dumps ([PIPELINE-NORMALIZE-AST]) for parsing and normalisation, and the two committed report goldens for fingerprinting and signature construction. Each names the constant in its failure message, so the change that must bump it is the change that is told to, and `fpcache::tests::the_blob_format_revisions_are_pinned` makes the bump itself deliberate from the other direction.
-
-Pinned end-to-end by `crates/deslop/tests/cache_blob_integrity.rs` (tampered signature payload, same-partition blob swap, cross-language blob copy, truncation / trailing garbage / zeroed interior — each asserting exact miss accounting, truth-report equality, and clean healing) and at the unit level by `crates/deslop-core/src/fpcache/tests.rs` (wrong-address bindings, superseded magics, count and length bombs with valid digests, oversized files).
+**Format.** `u32` magic, then a recursive `NormalizedNode` tree (`u32 kind_len`, kind UTF-8 bytes, `u64 start`, `u64 end`, `u32 child_count`, children...), then `u64 fingerprint_count` followed by one `{ [u8;32] hash, u64 start, u64 end, u64 node_count }` record per fingerprint. No serde, no schema drift: the magic + tool-version path segment bracket every format change.
 
 **Failure modes.**
 
-- Corrupt, truncated, misaddressed, or oversized blob → treated as a miss, logged at `warn!`, overwritten by the next successful parse.
+- Corrupt or truncated blob → treated as a miss, logged at `warn!`, overwritten by the next successful parse.
 - Cache directory unavailable (permissions, read-only fs) → `FingerprintCache::open` fails, the pipeline falls back to the full parse path for the affected language, logs `warn!`, keeps running.
 - Blob write fails (e.g. disk full) → `warn!`, return the in-memory result, pipeline continues.
 
-Zero-zero stats indicate the pass ran without the store (`--no-incremental` passed, the `[analysis] incremental = false` config opt-out ([CONFIG-INCREMENTAL-OPTOUT]) applied, or discovery yielded nothing). Any non-zero counter proves the store was consulted.
-
-**Scope.** [PIPELINE-INCREMENTAL] governs persistence for the parse stage and for the per-fingerprint MinHash signatures stored beside it ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]) — the dominant cost of the LSH block. Everything further downstream — band collision enumeration, candidate pairing, clustering, ranking, metrics, rendering — recomputes in full on every pass regardless of how many files changed. Making that remaining cost track the size of the change is the rest of [PIPELINE-INCREMENTAL-ANALYSIS].
-
-### [PIPELINE-INCREMENTAL-RETENTION] The store prunes itself after every full pass
-
-A full pass is the one moment the live blob set is exactly known — every admissible file was read, so every blob the corpus can address is enumerable. Retention runs there and only there: never on a single-file change pass, and never when the store is disabled (the opt-out leaves the store untouched, [CONFIG-INCREMENTAL-OPTOUT]).
-
-- **Nothing is deleted while the store is under budget.** Two classes of blob look useless and are not. An **orphan** — a blob in the current partition whose source bytes left the corpus — is exactly the content-addressed reuse set for a revert or a branch switch, and [PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE] asserts a revert full-hits the store, so eager removal is a recall regression against that contract. A blob under **another tool version** is unaddressable by *this* binary but may belong to a different one still running against the same workspace — an LSP from the installed VSIX beside a freshly-built CLI. Deleting it destroys that binary's store for no space gain, so retention classifies it and leaves it.
-- **Over budget, eviction is by class, then age.** The classes in precedence order: **other-version** blobs first (this binary can never address them), then **orphans** (the current corpus does not reference them), then **live**. Within a class, oldest modification time first, path as the deterministic tie-break, stopping the moment the store fits. Class outranks age in both directions: the newest other-version blob is evicted before the oldest live one. Blobs under other `min_nodes` partitions of the current version count as live — a different invocation may still address them — and are age-ranked only. Evicting any blob is correctness-free: the next pass that addresses it misses, rebuilds from source, and self-heals ([PIPELINE-INCREMENTAL-INVALIDATION]).
-- **The budget is 2 GiB** over the whole fingerprint store (~11× the pinned tokio benchmark's 185.8 MiB store), so ordinary repositories never see an eviction at all.
-- Only `.bin` blobs are retention's to manage; foreign files are never touched. Every step is best-effort — an unremovable entry is skipped, never an error. The sweep logs counts only: `fingerprint store swept { other_version_blobs, orphan_blobs, evicted_blobs, store_bytes }`.
-
-Pinned end-to-end by `crates/deslop/tests/cache_retention.rs` (an edit cycle whose kept orphan lets the revert full-hit, live blobs byte-unchanged across sweeps, disabled-store passes leaving the store untouched) and at the unit level by `crates/deslop-core/src/fpcache/retention/tests.rs` (another tool version's partition classified but never swept under budget, class-before-age eviction across all three classes, orphan-before-live order, oldest-first fallback, budget stop condition, foreign-file safety, other-`min_nodes` liveness).
-
-### [PIPELINE-INCREMENTAL-ANALYSIS] Incremental analysis
-⏳ **Partially implemented.** Signature reuse ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]) is implemented and pinned by `crates/deslop/tests/signature_reuse.rs`. The equivalence contract is enforced end-to-end on both reuse paths: across separate processes by `crates/deslop/tests/incremental_equivalence.rs` (the on-disk parse store), inside one long-lived session by `crates/deslop/tests/live_session_equivalence.rs` (the in-memory splice), and across six languages sharing one store by `crates/deslop/tests/incremental_multilang_golden.rs` (committed cold golden, warm reproduction) and `crates/deslop/tests/incremental_multilang_matrix.rs` (per-language touch, delete, revert, edit-chain and parser-partition scenarios). The remaining downstream stages are tracked by gh #383.
-
-An **incremental pass** is one that is given the set of files whose content changed since a previous pass over the same corpus, and is permitted to reuse work from that pass. A **cold pass** reuses nothing.
-
-**[PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE] An incremental pass owes the cold report.** For any corpus state reachable by any sequence of edits, the report produced by an incremental pass must equal the report a cold pass produces for that same state — field for field: admitted pair records, cluster ids, occurrence paths and byte ranges, mass, ranking order, `metrics`, and `clusters_hidden`. `cache_stats` is the sole permitted difference. This follows from [PIPELINE-DETERMINISM] holding over corpus *state* rather than edit history: if two paths to the same state can produce different reports, the incremental path is wrong, not the cold one. A performance gain that costs equivalence is not a gain.
-
-**Any sequence of edits, not any sequence of processes.** There are two reuse paths and the contract binds both. A fresh batch invocation rebuilds its in-memory corpus from discovery and reuses only the on-disk parse store. A live session (`PipelineSession`) keeps the flat fingerprint / signature / tree store, the per-file sources, languages, line counts, boilerplate ranges and path map alive in memory and *splices* one file's records per change — a far larger reuse surface, and one no parse-store integrity check can vouch for, because the store was never consulted for the state a splice carried forward. `live_session_equivalence.rs` drives that path through the binary (`--rerun-add` / `--rerun-remove` mutate the tree between `initialise` and `update_files`) and compares the spliced report against a cold pass over a fresh tree in the same state: add, edit, remove, all three in one pass, edit-then-revert, and an add whose path sorts *ahead* of every existing file. The last one is not a variation for its own sake — the store holds one span per file in ascending workspace-relative-path order and a render borrows those slices as they are, so a splice that appends rather than inserting at the file's sort position renders that occurrence, and the `summary` line built from it, out of order while every other reading stays identical.
-
-**[PIPELINE-INCREMENTAL-ANALYSIS-REUSE] What may be reused.** Any value that is a pure function of content that did not change. Concretely: a MinHash signature is determined by one subtree's normalised token k-grams; a pair's structural and token-Jaccard scores are determined by its two subtrees. Neither depends on the rest of the corpus, so neither needs recomputing when the rest of the corpus is untouched. Values that depend on corpus-wide state — cluster mass, repo metrics, and the duplication percentage — are derived from the assembled cluster set and are recomputed every pass.
-
-*Implemented for per-language MinHash signatures.* Each file's signatures are built once at parse/load time and persisted in its parse-store blob, positionally 1:1 with its fingerprints ([PIPELINE-INCREMENTAL] Format); a warm pass attaches them instead of rebuilding, on both the batch and the live splice path. The reuse is observable as the `signatures_built` / `signatures_reused` structured fields on the `fingerprint corpus built` tracing event — a fully-warm pass reports `signatures_built=0` with `signatures_reused` equal to the fingerprint count. Cross-language signatures ([CONFIG-CROSS-LANGUAGE]) are opt-in audit state and stay render-time.
-
-**[PIPELINE-INCREMENTAL-ANALYSIS-ADDRESSING] Reuse is addressed, not bookkept.** Reused artefacts follow [PIPELINE-INCREMENTAL-INVALIDATION]: each is stored under a key derived from the content that determines it, so a stale artefact is *unaddressable* rather than merely unused. No mtime heuristics, no watcher-maintained validity index, no invalidation step that could be skipped or drift. A key derived from anything other than that content — a version string, a path, a lossy transform of the bytes — does not satisfy this and is a defect, not an optimisation. The key's language component is load-bearing in the same way: two byte-identical files routed to different parsers must occupy two entries, or the second is served a tree built under a grammar it was never parsed with. `crates/deslop/tests/incremental_multilang_matrix.rs` pins that partition against a mixed six-language corpus.
-
-**Corpus membership never comes from reuse.** As with the parse cache, every pass performs a fresh discovery walk. Files added or removed while nothing was watching are picked up regardless of what state was carried forward.
-
-**What is left, and what it was measured against (gh #383).** Everything downstream of signatures — band collision enumeration, candidate pairing, clustering, ranking, metrics, rendering — still recomputes corpus-wide on every pass. The attribution that ordered this work, taken on the pinned tokio corpus (release, `--embeddings off`), is what any future phase should re-measure against rather than re-derive:
-
-| stage, warm pass | share |
-|---|---|
-| parse-store load (decode, digest verify, fingerprint re-derivation) | ~23% |
-| LSH band enumeration | ~12–14% (was ~44% before `band_key` identity concatenation) |
-| pair classification + metrics + JSON write | ~25% |
-| candidate scoring, closure, rank, content | ~5% |
-
-Signature construction — ~69% of the LSH block before this work — is gone from the warm path entirely. Two design decisions are settled and should not be relitigated without new numbers. **Full signatures, not band hashes, are what the blob persists**: `estimate_jaccard` consumes full signatures for every candidate pair that reaches scoring, so persisting only the 32 band hashes per fingerprint (256 B against 1 KB) would force full-signature reconstruction for exactly the pairs that matter. **The recorded alternative for the banding phase** is to persist the band index (band → bucket → fingerprint hash) instead: an incremental pass evicts the changed files' fingerprints from their buckets, inserts the new ones, and reads off only the collisions involving them — O(k·N) rather than O(N²), which is what makes cost track change size. If that lands, the per-fingerprint signatures stop earning their bytes (~85% of the 185.8 MiB tokio store) and the blob can drop back to roughly its pre-signature shape.
-
-### [PIPELINE-DIFF-INGEST] Unified-diff ingestion and verification
-
-> **Status: shipped.** Pinned by `crates/deslop-core/src/diff_scope/` unit tests, `crates/deslop/tests/diff_scoped_reporting.rs`, `crates/deslop/tests/diff_scoped_ingest.rs` (the stale-diff refusal) and `crates/deslop/tests/diff_ingest_refusals.rs`.
-
-`--diff` ([cli.md §CLI-ARG-DIFF](cli.md)) is consumed by a strict line-oriented parser — exact structural prefixes and integer parsing, never pattern matching; an unrecognised construct rejects the whole diff (exit `2`) rather than guessing at spans. Recognised grammar: `diff --git` headers, `---`/`+++` file targets with `a/`/`b/` prefixes and C-quoted paths, rename/copy/similarity and `Binary files` lines, `@@ -l[,n] +l[,n] @@` hunks, and ` `/`+`/`-`/`\` body lines. Outside a copy section, only new-side **added** lines produce spans — context and deletions scope nothing, so a pure rename or a deletion-only hunk tags nothing. Spans are merged and sorted per file. Paths resolve against the working directory, then re-relativise to the scan root — the same form `ReportOccurrence.path` carries.
-
-**A hunk requires a target.** Any `diff ` line opens a file section, so junk followed by a valid-looking hunk would otherwise assemble a *pathless* section — one the verifier has no file to check and therefore skips, silently dropping its added lines from the scope and from `added_loc`, which lets `--fail-over 0` pass a run it should gate. A `@@` header in a section that has not seen a `+++` line is refused (exit `2`) naming that line. `+++ /dev/null` counts as seen: a deletion *has* a target line, it just names no new-side file. A section with no hunks at all needs no target.
-
-**A corpus miss is triaged, never blanket-ignored.** A repo-root diff legitimately touches files the scan never sees, so three misses stay ignorable and are counted on the `diff ingested` tracing event: a path outside the scan root, a path whose extension no registered language parser claims, and a path present on disk that discovery deliberately excluded ([EXCLUSION-CONFIG] or gitignore). A section claiming no new-side line at all — every hunk removes — is likewise nothing to verify. But a **supported, in-root** target the tree does not hold is a *stale diff*, not an out-of-scope file: it is refused (exit `2`) naming path and line, because ignoring it would silently zero the very scope a merge gate reads.
-
-**A git copy adds its whole target.** `copy from` / `copy to` are payload, not inert metadata. The target of a copy did not exist before the change, so every one of its lines is content this change introduced, and git states that in both of its copy shapes: a metadata-only copy (`similarity index 100%`, no hunks) asserts the target byte-equals the source, and a copy *with* hunks describes the target as the source plus a delta. Either way both halves are resolved, the byte-equality claim is verified against the tree, and the target's full `1..=line_count` range is added; hunks, when present, are verified like any other hunk but project nothing of their own, so the full range is never counted twice. The source is untouched by the copy and stays out of the scope. A dangling or duplicated copy half, a source or target the tree does not hold, and a `100%` claim the bytes contradict all refuse with exit `2`.
-
-`\ No newline at end of file` annotates the terminator of the line above it rather than being a body line of its own. It is recognised wherever it appears inside a file section — `git` emits it after the last line of a hunk, by which point the hunk's declared counts are already satisfied — and it consumes no count on either side, because counting it would shift every new-side line number after it and mis-tag the occurrences those numbers address. With no file section above it, it is junk like any other unrecognised line and rejects the diff.
-
-**The diff must describe the scanned tree.** Every context and added line of every hunk must byte-match the scanned file at the claimed new-side line number (line terminator excluded). The first mismatch aborts with exit `2` naming the file and line: a stale diff would tag the wrong occurrences, and under `--only-changed` a mis-tag is a silent false negative in a merge gate.
+Zero-zero stats indicate the pass ran without the cache (`--no-incremental` passed, or discovery yielded nothing). Any non-zero counter proves the cache was consulted.
 
 ### [PIPELINE-RANK-WORST-FIRST] Ranking: worst offenders first
 Before ranking, each cluster's occurrences are reduced to one member per **transitively overlapping run** per file. Fingerprinting emits one subtree per AST node, so a duplicated region yields a nest of overlapping windows over the same bytes; publishing more than one inflates the occurrence count, the cluster size, and the duplication percentage. Overlap is transitive, so the run's frontier is tracked separately from its representative: for `[0,100]`, `[90,110]`, `[105,200]` the bridging window is the narrowest and loses the width contest, and a sweep that tests the next window against the representative alone reports one region as two. The widest window of each run is the reported location; a cluster left with one location is not a duplicate and is dropped. Pinned by `crates/deslop-core/tests/cluster_overlap_collapse.rs`.
 
-Ranking uses the duplicated-mass formula owned by [RANK-MASS-SUM] below. Clusters sort by mass descending and cluster id ascending. Visible member count excludes [EXCLUSION-CONFIG] `report_hide` occurrences. No similarity evidence, pair classification, finding kind, confidence, policy multiplier, or spanned-LOC term changes mass.
+`weight = clone_node_count × (cluster_size − 1) × log2(1 + total_spanned_loc)`. Clusters are sorted by weight descending. A cluster with one member (no duplication) scores zero by construction. Later stages multiply in the fusion score from [FUSION-STRATEGY-BOUNDED-MAX]. For rendered (visible) ordering, `cluster_size` counts only non-hidden occurrences, so a mixed cluster's [EXCLUSION-CONFIG] `report_hide` members do not push it above fully-actionable clusters. The final ranking weight is multiplied by the clone-category coefficient from [RANK-CATEGORY] before the visible sort, so a data-table cluster ranks below comparable logic clones.
 
-The sort ends by stamping the ranking onto the report: `rank` (one-based, worst first) and `rank_band` ([severity.md §SEVERITY-BAND](severity.md#severity-band)) ride on every rendered cluster, so every consumer displays the repository's ranking rather than numbering rows from its own array position.
+### [RANK-CATEGORY] Clone category and the ranking policy
+Every cluster carries a **clone category** that is orthogonal to the similarity bucket of [taxonomy.md §CLONE-BUCKETS](taxonomy.md#clone-buckets). The canonical category table (seven values including the literal family) lives at [taxonomy.md §CLONE-CATEGORY-REGISTRY](taxonomy.md#clone-category-registry); this section governs the two fragment-clone categories. The bucket answers *"how similar are these copies?"*; the category answers *"is this repetition extractable logic or un-refactorable data?"*:
 
-### [RANK-MASS-SUM] Rank by duplicated mass only
+- `logic` — ordinary duplicated code. Full ranking weight. The default.
+- `data` — a data-structure literal repeated across sibling elements (e.g. a top-level `List<Model>` of near-identical constructor literals). Real repetition, but the constructor's purpose *is* to enumerate per-row fields; at best a user hoists a builder with defaults or moves the rows to a JSON/CSV/asset. Detected by [CLONE-NOISE-DART-DATA-TABLE-LITERAL].
 
-Duplicated mass is canonical nodes × additional visible occurrences. This formula is a Deslop product definition, not a result borrowed from the literature. Juergens et al. (ICSE 2009) establishes the fault risk of inconsistent clone changes, and Islam, Mondal, and Roy (SANER 2019) establishes that even micro-clones can be bug-prone; neither paper proposes this ranking equation. SonarQube's duplicated-line density is likewise a separate repository metric, not evidence for AST-node mass. Pair evidence already did its job at admission: an admitted edge either contributes to the closure or it does not. Once the cluster exists, only its extent and repeated membership determine mass. At equal mass, cluster id makes the order total and reproducible.
+The category drives a **three-way ranking policy** configured in `.deslop.toml` under `[ranking]` (see [CLONE-NOISE-DART-DATA-TABLE-LITERAL] for the keys):
 
-**For AI.** `mass = canonical_node_count × max(visible_members − 1, 0)`. `weight` has no independent definition: where the legacy word appears in an external explanation it means this exact mass. Sort by mass descending, then cluster id ascending. No other term is legal.
+- **keep** — both categories rank at full weight. Restores pre-category ordering.
+- **demote** (default) — `data` clusters are multiplied by `data_clone_weight` (default `0.15`, strictly in `(0.0, 1.0]`) so they rank below comparable `logic` clones but remain in the report, labelled `category="data"`. The multiplier is never zero, so a pathologically large verbatim blob can still rise.
+- **ignore** — `data` clusters are dropped from the report entirely (reuses the [EXCLUSION-CONFIG] cluster-hide path) and counted under `clusters_hidden`.
 
-### [RANK-CATEGORY] Category never changes mass
+`data` clusters carry a category-specific action hint ("consider a builder with default args, or move the rows to a JSON/CSV/asset") instead of the "extract the duplicate" hint. The category and its label travel on the JSON `ReportCluster.category` field so every downstream surface — text, HTML, and the VSIX tree — orders and labels identically from one source of truth ([OUTPUT-SCHEMA-JSON]).
 
-A detection-time finding kind may drive an explicit exclusion before ranking. It is not carried as clone-cluster similarity metadata and never multiplies, discounts, boosts, or tie-breaks cluster mass. Every surviving cluster is ranked by [RANK-MASS-SUM].
+### [RANK-STRUCTURAL-ONLY] Structural-only evidence and the ranking policy
 
-### [RANK-STRUCTURAL-ONLY] Pair evidence never changes mass
+`StructuralOnly` is the [taxonomy.md §CLONE-BUCKETS](taxonomy.md#clone-buckets) bucket for clusters whose **only positive evidence is the normalized AST shape** — `structural ≥ 0.99` with token and embedding support both below `STRUCTURAL_ONLY_MAX_SUPPORT` (0.05). Normalization strips identifiers and literals, so a sibling method family (REST CRUD endpoints, settings getters, builders) collides into one shape; the exact-structural pass also leaves `token_jaccard` *unscored* at `0.0`, so the triple alone cannot distinguish boilerplate from a true Type-2 rename. The history (#134 → #154 → #169 → #197) shows why shape-specific suppressions alone never closed the hole: each fix allowlisted one geometry (≥3-file scaffolding; single-file declaration families; Dart field registries) and every other geometry kept full `NearlyIdentical`-grade weight.
 
-`StructuralOnly` is a pair classification for a candidate whose normalized AST shape is strong but required content support is absent. It explains why that pair is rejected; it is not a cluster score and cannot be an edge in a closure. The retired `structural_only_weight`, `data_clone_weight`, and `demote` ranking modes are forbidden because they make weight mean something other than mass.
+This section closes the hole structurally:
+
+1. **One predicate.** `deslop-core::buckets::is_structural_only_signals` is the single source of truth, shared by the bucket routing (the wire label) and the ranking demotion. A cluster labelled `structural_only` is by construction the cluster the policy demotes — the #197 label/ranking divergence cannot recur.
+2. **Weight policy.** The `[ranking]` section gains `structural_only = "demote" | "ignore" | "keep"` (default **demote**) and `structural_only_weight` (default `0.15`, strictly in `(0.0, 1.0]`), exactly parallel to [RANK-CATEGORY]'s data knobs and validated by the same rule. The multiplier folds into the visible re-rank next to the category coefficient, so a shape-only family sinks below comparable token- or semantics-supported clones regardless of its file spread or declaration shape.
+3. **Existing suppressions stay.** Cross-file ≥3-member/≥3-file scaffolding still demotes to `LooselySimilar` (hidden, #134); single-file sibling-declaration families are still hidden by the AST pass (#197); Dart data registries stay with [RANK-CATEGORY] (#169). The weight policy catches everything those shapes miss (e.g. two-file method families split by Dart `part`/extension idioms).
+4. **Editor override.** The VS Code setting `deslop.ranking.structuralOnly` (`default` | `demote` | `ignore` | `keep`, [VSIX-SETTINGS-RANKING]) feeds `deslop-lsp --ranking-structural-only`, recorded once at startup in the central state module (`deslop-core::state`) and consulted by every config load — the editor channel wins over `.deslop.toml`; `default` defers to it.
+5. **Filterable.** The MCP `duplicates` filter block ([MCP-TOOL-FILTERS]) derives its `buckets` enum from `ClusterKind::all()`, so `structural_only` is filterable by agents (#195/#197).
 
 ### [RANK-STRUCTURAL-ONLY-FORWARDING] Proving a declaration is family noise
 
@@ -351,26 +166,75 @@ the data-flow shape instead, which is what separates a REST wrapper from a
 parameterisable method whose body binds locals, calls several collaborators and
 branches.
 
-One further guard bounds the hide: **no two proven wrappers may share a body**. Two sibling wrappers forwarding to the same route are a copy-paste bug — one of those calls is dead or misaimed — and one shared body disqualifies the suppression for the whole family. The comparison is on bodies, not on pair evidence or reported cluster scores. Pair content evidence has already been consumed by admission and is unavailable to this post-closure filter.
+Two further guards bound the hide. Content evidence must show the members differ
+in substance ([FUSION-CONTENT-GATE]). And **no two proven wrappers may share a
+body**: two sibling wrappers forwarding to the same route are a copy-paste bug —
+one of those calls is dead or misaimed — and one shared body disqualifies the
+suppression for the whole family. The comparison is on bodies, not on reported
+windows: sibling declarations differ in their method names, so their windows
+never compare equal even when the duplication is exact.
 
 Languages without a wired grammar table return false for shape 2, so their
 single-declaration windows are never hidden.
 
-### [RANK-LITERAL-FAMILY] Literal families use the same mass formula
+### [RANK-LITERAL-FAMILY] Literal-family weight formula and policy
 
-Literal-family findings ([CLONE-CATEGORY-REGISTRY] kinds `magic_literal`, `shadowed_constant`, `constant_duplicate`, `constant_drift`, and `constant_alias`) use the same mass definition without becoming clone closure components. A literal is one canonical node, so its mass is `visible_occurrences - 1`. A literal finding with fewer than two visible occurrences is dropped and counted in `literal_findings_hidden`. Length, file spread, kind, and policy never multiply, discount, boost, or tie-break its mass.
+Literal-family clusters ([CLONE-CATEGORY-REGISTRY] categories `magic_literal`,
+`shadowed_constant`, `constant_duplicate`, `constant_drift`, `constant_alias`) interleave in the
+**same** worst-first list as fragment clones — no separate section, no second sort; the facets
+([FACET-MODEL]) are how users isolate them. Their base weight is a deliberate, documented fork of
+[PIPELINE-RANK-WORST-FIRST], because `clone_node_count` degenerates at 1 for a bare literal token:
 
-Detection-time noise rules and explicit pre-ranking exclusion may decide whether a literal finding is visible. The retired `demote`, `magic_literal_weight`, and `constant_findings_weight` settings are forbidden because a surviving finding keeps its mass without modification.
+`weight = max(visible_occurrences − occurrence_floor + 1, 1) × length_factor × log2(1 + distinct_files)`
 
-### [RANK-UNUSED-PUBLIC] Unused-public markers never change mass
+where `occurrence_floor` is the category's minimum (3 for `magic_literal`, 2 elsewhere) — the
+`max(…, 1)` keeps the term positive when `report_hide` hides occurrences after the trigger
+counted them; `length_factor = min(content_chars(normalized_value), 40)` with `content_chars` =
+Unicode scalar count of the normalised value (escape sequences counted as spelled; for numbers,
+the canonical normalised spelling; for `constant_drift`, the longest variant value); and
+`distinct_files` counts files with visible occurrences. A literal-family cluster with fewer than 2
+visible occurrences is dropped and counted in `clusters_hidden`, matching the fragment-clone rule.
+The linear occurrence term follows Sonar's per-occurrence remediation model; the file-spread log
+term mirrors the existing `spanned_loc` factor and rewards the cross-file repetition that the
+literature ties to faults. Micro-findings are **not** down-ranked for being small — micro-clones
+are measurably more bug-prone than regular clones
+([reading-list.md](reading-list.md#read-list-literals)); a 40-site magic URL
+belongs in top offenders.
 
-The [LITERAL-UNUSED-MARKER] may label or filter a constant-family finding, but it never changes mass. The retired `unused_public = "boost"` mode and `unused_public_weight` setting are forbidden.
+Policy knobs in `[ranking]` (same `keep | demote | ignore` enum, validation, and
+`clusters_hidden` accounting as the data/structural-only knobs; editor channel per
+[LITERAL-CONFIG]):
+
+- `magic_literals = "keep"` (default) with `magic_literal_weight = 0.3` applied only under
+  `demote`. Default-keep is the evidence call: noise is controlled at detection time
+  ([LITERAL-NOISE], [LITERAL-CENSUS]), not by hiding confirmed findings.
+- `constant_findings = "keep"` (default) with `constant_findings_weight = 0.5` under `demote` —
+  one knob covering `constant_duplicate`, `constant_alias`, and `shadowed_constant`.
+- `constant_drift = "keep"` (default) | `"ignore"` — **no demote**: same-name-conflicting-values is
+  a correctness risk, never quietly down-weighted. Drift clusters stamp `nearly_identical`
+  ([LITERAL-WIRE]), which resolves to the warning tier under the default bucket-keyed severity
+  maps — severity has no category channel; it is keyed by bucket only (#177 tracks a category-keyed
+  override as out of scope here).
+
+### [RANK-UNUSED-PUBLIC] Unused-public-constant boost (monorepo)
+
+When the [LITERAL-UNUSED-MARKER] (literals.md) fires for **every** declaration occurrence in a
+constant-family cluster, the cluster's weight is multiplied by `unused_public_weight` — an
+**up**-weight, mirroring the `ClonePolicy` pattern with an inverted validation range:
+
+- `[ranking] unused_public = "boost"` (default) | `"ignore"`.
+- `unused_public_weight = 1.5`, finite, validated in `[1.0, 10.0]`.
+
+The boost (and the marker itself) only activates in a monorepo with a non-publishable declaring
+package (`[workspace] monorepo`, [LITERAL-UNUSED-MARKER]) — published public constants are exempt by
+design. Conservative 1.5× because confidence caps at 90: the marker raises a duplicate constant's
+priority, it never asserts deletability.
 
 ### [STATE-FILE-REGISTRY] File registry (the only global state)
 `deslop-core::state::FileRegistry` maps `FileId ↔ PathBuf`. This is the *only* place mutable state associated with a pipeline run may live. Instances are per-run (not process-global) so a future long-running daemon can keep multiple analyses side-by-side.
 
 ### [OUTPUT-SCHEMA-JSON] Canonical JSON schema
-JSON is the canonical report format ([PRINCIPLES-AUDIENCE-AGENT]). Text and HTML are derived from it — nothing lives in two places. Text is terse and AI-readable (ASCII, line-oriented, no colour). HTML is single-file, inline-CSS, and human-readable; its schema-reference section renders only when the report carries a non-empty `schema_doc`, which the CLI's rendered reports do not (see below).
+JSON is the canonical report format ([PRINCIPLES-AUDIENCE-AGENT]). Text and HTML are derived from it — nothing lives in two places. Text is terse and AI-readable (ASCII, line-oriented, no colour). HTML is single-file, inline-CSS, human-readable, and embeds the same `schema_doc` and `action_hints` the JSON carries so a human opening the file cold understands what they are looking at.
 
 Top level:
 
@@ -380,47 +244,20 @@ Top level:
 - `clusters_hidden: usize` — clusters that existed but were suppressed from `clusters` because every occurrence matched a [EXCLUSION-CONFIG] `report_hide` pattern. Surfaces the volume of ignored duplication without leaking the content.
 - `cache_stats: { hits: usize, misses: usize }` — incremental fingerprint-cache telemetry per [PIPELINE-INCREMENTAL]. Both zero when `--no-incremental` was passed; otherwise `hits + misses == files_analysed` for files whose language has a registered parser.
 - `metrics: RepoMetrics` — repo-wide duplication totals per [METRICS-REPO]. Always populated; zero when no duplication exists.
-- `schema_doc: String` — markdown explaining every field, signal, threshold, ranking formula, byte-range convention, and clone taxonomy, sourced via `include_str!` from `REPORTING-CONTEXT.md` so it cannot drift from the schema. The CLI ships the field **present but empty** in every rendered report (#110/#111) — inlining ~13 KB into each report drowns the actual content — and the document is served on demand instead (`schema-doc` tool, `deslop://schema` resource per [MCP-*]). Pinned by the committed report golden.
-- `embedding_provenance: Option<EmbeddingProvenance>` — provider/model identity plus `attempted_subtrees`, `succeeded_subtrees`, `indexed_subtrees`, and `failed_subtrees` so embedding coverage is visible. The first, second and fourth count **occurrences** and satisfy `attempted = succeeded + failed`; `indexed_subtrees` counts **distinct index points** and satisfies `indexed <= succeeded`. Mixing the two units is how a collapsed pass comes to look like a lossy one — `indexed/attempted` is not a coverage ratio. Duplicate successful snippets collapse before ANN indexing, and provider-rejected subtrees are omitted from the embedding ANN input; they are never represented as zero vectors.
+- `schema_doc: &'static str` — markdown explaining every field, signal, threshold, ranking formula, byte-range convention, and clone taxonomy. Shipped via `include_str!` so it cannot drift from the schema.
+- `action_hints: Vec<ActionHint>` — short playbook entries ("high structural + high jaccard → extract shared function", etc.) agents can consult before deciding how to act.
+- `embedding_provenance: Option<EmbeddingProvenance>` — provider/model identity plus `attempted_subtrees`, `indexed_subtrees`, and `failed_subtrees` so embedding coverage is visible. Duplicate successful snippets collapse before ANN indexing, and provider-rejected subtrees are omitted from the embedding ANN input; they are never represented as zero vectors.
 - `clusters: Vec<ReportCluster>` — ranked worst-offenders-first per [PIPELINE-RANK-WORST-FIRST].
-- `literal_findings: Vec<LiteralFinding>` — dedicated literal and constant findings per [LITERAL-WIRE], separate from clone clusters.
-- `literal_findings_total: usize` and `literal_findings_hidden: usize` — visible and omitted literal-finding counts; neither contributes to `clusters_total`.
-- `literal_findings_capped: bool` and `literal_max_findings: usize` — whether [LITERAL-NOISE]'s per-kind cap omitted findings and the configured cap that produced the report; `literal_max_findings == 0` means unlimited.
 
 `ReportCluster`:
 
-- `id`, `mass`, `canonical_node_count`, `rank`, `rank_band` — cluster identity, canonical extent, duplicated mass, and mass-derived order metadata.
+- `id`, `weight`, `size`, `canonical_node_count`, `signals { structural, token_jaccard, embedding_cos, fused }`, `summary` — as in v1.
+- `interpretation: String` (new in v2) — one-line synthesis computed from the signal combination ("Type-1 exact clone, safe to extract", "Type-3 near-miss, review before merging", "Low-information LSH-only match, treat as hint"). Derived, so rendering is deterministic.
 - `occurrences: Vec<ReportOccurrence>` — each with `path`, `start_byte`, `end_byte`, and `hidden: bool` (true when the occurrence matched a `report_hide` pattern per [EXCLUSION-CONFIG]).
 
-`ReportCluster` carries identity, canonical extent, occurrence membership, mass, and rank. Pair evidence is returned only by an explicit comparison of two occurrences.
+`--from-report <file.json>` skips analysis and re-renders the text + HTML views from a canonical JSON report. Keeps the rendering pipeline testable in isolation and makes re-formatting a cached report free.
 
-Default output paths, the format suppressors, and `--from-report` re-rendering are invocation behaviour, owned by [cli.md §OUTPUT-FORMAT-DERIVED](cli.md).
-
-#### [OUTPUT-SCHEMA-PATH-SEPARATOR] How a path is spelled
-
-Every workspace-relative path a report publishes — occurrence, per-file metric row, folder rollup, boilerplate hint, and the file named in a stale-diff refusal — is spelled with `/` between its segments, on every platform.
-
-A report is read somewhere other than the machine that wrote it: a Windows developer's report opened by a Linux merge gate, two platforms' reports compared in one dashboard, a path pasted from a report into a tool. A path is therefore part of the output contract and cannot be spelled the host's way. Rendering `src\billing\Invoice.cs` on one host and `src/billing/Invoice.cs` on another gives a consumer two different strings for one file, and every comparison it makes across the two is wrong.
-
-Only separators change. A Windows drive or UNC prefix keeps its own spelling, because it names a volume rather than a segment. Nothing is canonicalised, no `.`/`..` is collapsed, and no case is folded, so a spelled path still names exactly the file it named — which is what lets it stay a map key beside paths that were never spelled.
-
-This governs paths Deslop *publishes*. Paths Deslop *opens* keep the host's own separators, and so do diagnostics about the local filesystem, which name a location on this machine rather than a place in the analysed workspace.
-
-`deslop-core::paths::reported` is the single implementation; `report_render::relative_to_scan_root` and the diff verifier's `resolve_to_scan_root` are the only two callers, so every published path is built through one of them. Pinned end-to-end by `crates/deslop/tests/location_rendering.rs`, which sweeps every `path` in a rendered JSON report over a two-level corpus and re-asserts the spelling in the derived text and HTML.
-
-#### [OUTPUT-SCHEMA-DIFF-TAGS] Diff-scope tags
-
-> **Status: shipped.** Field presence and absence are both pinned by `crates/deslop/tests/diff_scoped_reporting.rs`.
-
-Under `--diff` ([cli.md §CLI-ARG-DIFF](cli.md)) the report carries the diff verdicts; without it every field below is **absent**, never defaulted `false` — a run given no diff asserts nothing about one. Intersection is closed-interval over the 1-indexed `start_line`/`end_line` the occurrence already carries; one added line inside an occurrence tags it, because touching a clone counts as touching the clone. `intersects_diff` ignores `hidden` occurrences, matching the [METRICS-REPO] projection; `is_newly_introduced` does **not** — a hidden pre-existing copy vetoes the flag, because content that already existed anywhere in the tree did not arrive with this change, and claiming otherwise in a merge gate would be a false accusation.
-
-- `ReportOccurrence.in_diff: Option<bool>` — the occurrence's lines intersect an added span for its path.
-- `ReportCluster.intersects_diff: Option<bool>` — ≥ 1 non-hidden occurrence in diff.
-- `ReportCluster.is_newly_introduced: Option<bool>` — `intersects_diff` holds **and** every occurrence, hidden included, is in diff (#364's "all occurrences" definition).
-- `clusters_outside_diff: Option<usize>` (top level) — clusters `--only-changed` omitted from `clusters`.
-- `metrics.diff: Option<DiffMetrics>` — [METRICS-DIFF-SCOPE].
-
-Modelled in [live-ipc.td](../models/live-ipc.td), regenerated, never hand-written; live/LSP/MCP sessions carry `None` throughout. Text and HTML derive from the tags: occurrence badges (`[in diff]` / `[existing]`) through the one shared occurrence renderer, a CSS-only "only diff-affected" toggle in HTML, and the `--only-changed` stderr delta summary ([cli.md §CLI-ARG-ONLY-CHANGED](cli.md)).
+The default invocation writes all three formats to disk (`.deslop/deslop-report.{json,txt,html}` under the scan root per [OUTPUT-DIR], or `<path>.{json,txt,html}` when `--output <path>` is given). `--nojson`, `--notext`, `--nohtml` suppress individual formats; at least one must remain enabled.
 
 ### [OUTPUT-DIR] Workspace output directory
 Everything Deslop writes for a scanned workspace lands under a single `.deslop/` directory at the **scan root**, so a user has exactly one path to gitignore, inspect, or delete, and the three surfaces never disagree about where a workspace's artefacts live:
@@ -434,7 +271,7 @@ Everything Deslop writes for a scanned workspace lands under a single `.deslop/`
     logs/deslop-<unix-seconds>.log # tracing sink ([UX-LOG-CONSOLE])
     cache/                         # derived state — safe to delete, always rebuildable
       fingerprints/                # [PIPELINE-INCREMENTAL]
-      embeddings/                  # [FUSED-EMBED-PROVIDER]
+      embeddings/                  # [FUSION-EMBED-PROVIDER]
       live-report.json             # [LIVE-STATE-FILE]
       deslop.sock deslop.port      # [LIVE-IPC-SOCKET], [LIVE-IPC-TCP]
 ```
@@ -453,37 +290,60 @@ The default HTML renderer embeds, for each occurrence, the source bytes covered 
 
 #### [OUTPUT-HUMAN-HTML-LANGUAGE-SECTIONS] Per-language sections
 
-`[report] split_by_language` in `.deslop.toml` (default `false`, with a `--split-by-language` CLI mirror) divides the report body into one `<section>` per language instead of the single `Duplicate groups` section. Cluster cards remain in engine mass order and are never grouped by pair classification. With the flag off, output is byte-identical to the single-section form. With it on, `write_clusters` groups clusters by the stable first occurrence's `language_for_path(...)`, emits one heading per language with its group count, preserves engine rank within each section, and orders sections by the lowest engine rank they contain.
+`[report] split_by_language` in `.deslop.toml` (default `false`, with a `--split-by-language` CLI mirror) divides the report body into one `<section>` per language instead of the single "Duplicate groups" section. In both modes cluster cards group into per-bucket expanders within each section ([FACET-HTML]). With the flag **off** the output is byte-identical to the single-section form — a hard no-regression invariant. With it **on**, `write_clusters` groups clusters by their canonical occurrence's `language_for_path(...)`, emits one `<h2>` per language carrying the language's display name and its group count, preserves worst-first order within each section, and orders sections by their worst cluster weight. The intro summary line ([OUTPUT-HUMAN-HTML]) gains a per-language breakdown. Each cluster is single-language ([CONFIG-CROSS-LANGUAGE]), so every group lands in exactly one section.
 
 ### [METRICS-REPO] Repo-wide duplication metrics
 
-One repository duplication percentage is computed deterministically from the visible cluster set and carried at `Report.metrics`. It is pure line coverage and drives the single fail-over gate in [EXIT-CODES]. Pair evidence never changes it.
+Two honest numbers, computed deterministically from the same visible cluster set the report already carries, living at `Report.metrics` and driving the fail-over gates in [EXIT-CODES]: the **mechanical** percentage below — pure line coverage, never weighted, the default gate — and the **evidence-weighted** companion of [METRICS-REPO-WEIGHTED].
 
 `RepoMetrics` fields:
 
 - `analysed_loc: u64` — physical lines across every file in `files_analysed`. Counted once per file, regardless of clustering. Lines are `\n`-terminated plus the trailing partial line if any; empty files contribute zero.
-- `duplicated_loc: u64` — lines covered by **≥ 2 clone occurrences across the whole corpus**, deduplicated per file so overlapping sibling-extension ranges do not double-count. Computed by projecting every `ReportOccurrence` from every non-hidden clone cluster onto a per-file `BTreeSet<line>`, unioning, and summing set sizes. Hidden occurrences (`[EXCLUSION-CONFIG]` `report_hide`) are excluded. Dedicated literal findings ([RANK-LITERAL-FAMILY]) are not clone clusters and never enter `duplicated_loc`, `duplication_percent`, or `clusters_total`. Every visible fragment-clone line counts equally. Pair classification and pair evidence are unavailable to this calculation.
+- `duplicated_loc: u64` — lines covered by **≥ 2 clone occurrences across the whole corpus**, deduplicated per file so overlapping sibling-extension ranges do not double-count. Computed by projecting every `ReportOccurrence` from every non-hidden cluster onto a per-file `BTreeSet<line>`, unioning, and summing set sizes. Hidden occurrences (`[EXCLUSION-CONFIG]` `report_hide`) are **excluded** so a noisy generated-code tier cannot inflate the metric. Literal-family clusters ([RANK-LITERAL-FAMILY]) are **excluded** from `duplicated_loc` / `duplication_percent` — the headline percentage keeps meaning fragment-clone duplication; `clusters_total` still counts them. Every visible bucket counts here at equal weight: a `structural_only` line is the same one line as a byte-proven `identical` line. That is deliberate — this is the coverage measure — and it is also why the metric can overstate actionable duplication (gh #344, #355); the bucket-sensitive view is [METRICS-REPO-WEIGHTED], never this field.
 - `duplication_percent: f64` — `100.0 × duplicated_loc / analysed_loc`, clamped into `[0.0, 100.0]`. Zero when `analysed_loc == 0`. Rounded to two decimals in text + HTML; carried at full `f64` precision in JSON.
-- `clusters_total: usize` — count of non-hidden clone clusters carried in `clusters`; always equals `clusters.len()` — including after `--only-changed` filtering, where the repo-wide count is recovered as `clusters_total + clusters_outside_diff` ([METRICS-DIFF-SCOPE]) — but is carried explicitly so downstream consumers do not re-derive it. Dedicated literal findings have their own count under [RANK-LITERAL-FAMILY].
+- `clusters_total: usize` — count of non-hidden clusters carried in `clusters`, literal-family included; always equals `clusters.len()` but is carried explicitly so downstream consumers don't re-derive it. Only fragment-clone clusters contribute lines to `duplicated_loc` — [RANK-LITERAL-FAMILY] clusters are excluded from the line projection, not from this count.
 - `duplicated_files: usize` — count of files containing at least one non-hidden clone occurrence. Upper-bounded by `files_analysed`.
-- `per_file: Vec<FileMetric>` — per-file breakdown, one `FileMetric { path, analysed_loc, duplicated_loc, duplication_percent }` per analysed file (clean files included with `duplicated_loc == 0` so percentage denominators stay exact). Same per-file line-set computation as the repo aggregate, scoped to one file; `duplication_percent` uses that file's own `analysed_loc` as the denominator. Sorted by `duplication_percent` desc, path tiebreaker. **`path` is rendered relative to the scan root**, the same form `ReportOccurrence.path` carries, so a consumer that opens a `FileMetric` must resolve it against the workspace exactly as it resolves an occurrence — treating it as absolute names a file that does not exist. Powers the per-file rows in [VSIX-METRICS-PANEL].
-- `folders: Vec<FileMetric>` — engine-computed per-folder rollup, one row per folder prefix containing at least one duplicated line. Each row sums the `analysed_loc` and `duplicated_loc` of every `per_file` row under the prefix — clean files included, keeping the denominator exact — and derives `duplication_percent` through the **same single `percent` function** as the repo and per-file figures. Consumers render these rows verbatim; recomputing a folder percentage (or re-summing folder LOC) outside the engine is prohibited — every duplication percentage on every surface traces back to this one function. Paths are scan-root-relative folder prefixes joined with `/` on every platform; sorted `duplication_percent` desc, path tiebreaker, exactly as `per_file`. Zero-duplication folders are omitted. `#[serde(default)]` on the wire so reports written before the field parse as empty. Powers the folder rows in [VSIX-METRICS-PANEL].
+- `per_file: Vec<FileMetric>` — per-file breakdown, one `FileMetric { path, analysed_loc, duplicated_loc, duplication_percent }` per analysed file (clean files included with `duplicated_loc == 0` so percentage denominators stay exact). Same per-file line-set computation as the repo aggregate, scoped to one file; `duplication_percent` uses that file's own `analysed_loc` as the denominator. Sorted by `duplication_percent` desc, path tiebreaker. **`path` is rendered relative to the scan root**, the same form `ReportOccurrence.path` carries, so a consumer that opens a `FileMetric` must resolve it against the workspace exactly as it resolves an occurrence — treating it as absolute names a file that does not exist. **Folders are not carried on the wire** — per-folder rollups are derived by consumers (the VSIX [VSIX-METRICS-PANEL], the HTML report) by summing the `analysed_loc` and `duplicated_loc` of every file under a path prefix, which keeps both numerator and denominator exact. Powers the per-folder/per-file breakdown in [VSIX-METRICS-PANEL].
 
-#### [METRICS-REPO-WEIGHTED] Evidence weighting is prohibited
+#### [METRICS-REPO-WEIGHTED] Evidence-weighted duplication percentage
 
-There is no evidence-weighted duplication percentage. Structural, Jaccard, embedding, and content evidence belong to pairs and decide admission; projecting any of them onto a closure component invents a cluster score. `bucket_weights`, `category_weights`, `WeightedMetrics`, `weighted_duplicated_loc`, `weighted_duplication_percent`, and a `[metrics]` weight table are forbidden wire and configuration fields.
+> **Status: specified, not shipped.** Lands with gh #344 per [weighted-metrics-plan.md](../plans/weighted-metrics-plan.md). Until it ships, `Report.metrics` carries only the mechanical fields above, and [EXIT-CODES-WEIGHTED] is unreachable.
 
-The text renderer prints one line: `repo: 12.4% duplicated (1 843 / 14 876 LOC, 27 clusters across 11 files)`. HTML renders the same engine-computed metric and colours it by the one fail-over threshold. JSON carries the same canonical value. No surface computes a companion figure.
+The mechanical numerator treats every visible line identically, so a repo full of shape-only boilerplate breaches a `--fail-over` gate exactly like a repo full of verbatim copy-paste (gh #344; gh #355 is a measured instance). Detection evidence is not uniform across clone classes — benchmark precision degrades as syntactic similarity falls ([Bellon et al. 2007](reading-list.md#read-list-metrics), [Svajlenko & Roy 2015](reading-list.md#read-list-metrics)), and case-studied shape-level cloning is frequently deliberate, benign boilerplate ([Kapser & Godfrey 2008](reading-list.md#read-list-metrics)). The weighted metric prices that evidence in; the mechanical metric stays the industry-comparable, exactly-reproducible default (unweighted duplicated-line density is the established CI gate — SonarQube's `duplicated_lines_density`).
 
-#### [METRICS-DIFF-SCOPE] Diff-scoped duplication percentage
+**Mechanism.** Same visible cluster set, same non-hidden occurrence projection, same literal-family exclusion, same per-file line sets as the mechanical metric — nothing about cluster selection changes. Each covered line then takes the weight of the strongest evidence covering it:
 
-> **Status: shipped.** Pinned by `crates/deslop/tests/diff_scoped_reporting.rs`.
+- `line_weight = max` over covering occurrences of `bucket_weight(cluster.bucket) × category_weight(cluster.category)`. **Max, never sum**: overlapping clusters cannot push a line past `1.0`, and provably-duplicated lines are not diluted by a coincident weak cluster.
+- `weighted_duplicated_loc: f64 = Σ line_weight` per file, summed as the mechanical union is.
+- `weighted_duplication_percent = clamp(100 × weighted_duplicated_loc / analysed_loc, 0, 100)` — same denominator, same clamp, same zero-corpus rule.
 
-Under `--diff`, `RepoMetrics` gains `diff: DiffMetrics { added_loc: u64, duplicated_added_loc: u64, duplication_percent: f64, threshold: ThresholdSummary }` — absent without the flag. Numerator: added lines covered by the same non-hidden, non-literal-family occurrence projection as `duplicated_loc`. Denominator: added lines in analysed files. The same clamp, rounding, and zero-denominator rules apply. The repository-wide fields are byte-identical with and without `--diff`; no knob may change `duplication_percent`.
+**Weights follow measured evidence class, not academic type number.** Deslop already routes weak evidence into its own buckets ([CLONE-BUCKETS-ROUTING]), so the discount attaches to the bucket, and to the category axis exactly as [RANK-CATEGORY] does. Defaults:
 
-Under `--only-changed` the [EXIT-CODES] mechanical gate reads `diff.duplication_percent` against the same threshold sources, and the report header names the scope (`threshold: 10.00% of added lines (ok)`). Without `--only-changed` the gate is untouched even when `--diff` is present — tagging alone must not move a CI verdict.
+| Key | Default | Rationale |
+|---|---|---|
+| `bucket_weights.identical` | `1.0` | Byte-equivalence proof ([CLONE-BUCKETS-IDENTICAL]). |
+| `bucket_weights.nearly_identical` | `1.0` | Token/anchor-proven Type-3 — the routing thresholds already demand strong content evidence. |
+| `bucket_weights.same_behavior` | `0.5` | Semantic evidence only, no syntactic proof; the WT3/T4 band is where benchmark agreement collapses (Svajlenko & Roy 2015). Visible in the gate, but an embedding model's judgment alone cannot fail CI. |
+| `bucket_weights.structural_only` | `0.15` | Shape is the only positive signal; equals [RANK-STRUCTURAL-ONLY]'s demote multiplier so ranking and metric tell one story. |
+| `bucket_weights.loosely_similar` | `0.0` | "Hint, not a directive" ([CLONE-BUCKETS]); a hint must not move a CI verdict. |
+| `category_weights.logic` | `1.0` | Ordinary duplicated logic. |
+| `category_weights.data` | `0.15` | Equals [RANK-CATEGORY]'s `data_clone_weight` default (gh #336). |
 
-`--only-changed` filtering never touches the repo-wide **line** metrics (`analysed_loc`, `duplicated_loc`, `duplication_percent`, `duplicated_files`, `per_file`, `threshold`), but `clusters_total` follows the filtered body so the [METRICS-REPO] invariant — the banner counts the list it sits above — survives filtering. The repo-wide cluster count stays recoverable as `clusters_total + clusters_outside_diff`, and that sum is what the repo-scoped line in text and HTML renders. Every surface derives its verdicts from the **governing** gate: the HTML banner's colour class and named threshold verdict come from `diff.threshold` whenever the CLI resolved one (its `source` is non-`none` only under `--only-changed`), so the page can never render green while the run exited `3`. The `--only-changed` delta summary (text, stderr, HTML banner tail) carries four reconciling figures — intersecting = newly introduced + cross-file-with-untouched-code, plus the omitted count — and a filtered-empty run says "no diff-affected duplication" with the omitted count, never that the codebase is clean.
+Weights are configured under `[metrics]` in `.deslop.toml` ([EXCLUSION-CONFIG]); each value must be finite and in `[0.0, 1.0]`, rejected otherwise with a `ConfigThreshold`-style error naming the config path (exit `2`). `0.0` is legal — it excludes the class from the weighted numerator only. Weights are per-bucket declared constants, **not** the fused confidence: fused is still being hardened (gh #343 lineage) and a percentage must be recomputable from the report alone by anyone holding the weight table.
+
+**Wire.** `RepoMetrics` gains `weighted: WeightedMetrics { duplicated_loc: f64, duplication_percent: f64, threshold: ThresholdSummary, bucket_weights, category_weights }` — the resolved weight table is echoed on the wire so every consumer can recompute the number from the report alone. `FileMetric` gains `weighted_duplicated_loc` / `weighted_duplication_percent`; folder rollups sum the weighted numerators exactly as the unweighted ones. Modelled in [live-ipc.td](../models/live-ipc.td), regenerated, never hand-written.
+
+**Invariants** (each is a test assertion): with all weights `≤ 1.0`, `weighted_duplication_percent ≤ duplication_percent`; with all weights `= 1.0` the two are equal to full `f64` precision; the mechanical fields are byte-identical with and without a `[metrics]` section — **no knob may ever change `duplication_percent`**.
+
+Deliberate non-metrics:
+
+- No weight-sum percentage. The ranking `weight` is a log-scaled quantity, not a fraction, and it never enters any percentage — the evidence weights above are declared constants echoed on the wire, a different thing entirely.
+- No fused-scaled percentage. A continuous confidence multiplier makes the number a function of the fusion internals and irreproducible from the report; revisit only if the bucket constants prove insufficient.
+- No single blended number. Replacing the mechanical percentage would break comparability with every other line-density tool and every existing ratcheted threshold; the two metrics ship side by side.
+- No byte-level percentage. Developers reason in lines; a 3-line and a 30-line occurrence are not interchangeable even if their byte counts are similar.
+- No "clone density per KLOC". Derivable from `duplicated_loc / analysed_loc * 1000`; we don't ship two spellings of the same ratio.
+
+The text renderer prints a one-line header: `repo: 12.4% duplicated (1 843 / 14 876 LOC, 27 clusters across 11 files)`. Once [METRICS-REPO-WEIGHTED] ships, the header carries the companion figure in the same line — `repo: 12.4% duplicated, 8.1% evidence-weighted (…)` — and never one without the other. HTML surfaces the same line in the report header and colours it by the fail-over threshold (green < threshold, red ≥ threshold, neutral when no threshold is set); when both gates are set, the breached one names itself. JSON is canonical; both renderers read from `metrics`.
 
 ### [EXIT-CODES] CLI exit codes and fail-over threshold
 
@@ -494,7 +354,7 @@ Exit codes:
 - `0` — analysis succeeded; no enabled gate breached.
 - `1` — unexpected runtime error (parse failure, I/O error, cache corruption that couldn't be recovered). Pre-existing behaviour; unchanged by this spec.
 - `2` — invalid CLI invocation (bad flag, incompatible combination, missing required argument). Pre-existing behaviour; unchanged.
-- `3` — **duplication threshold breached.** `metrics.duplication_percent > threshold` after a successful analysis. Under `--only-changed` the gate reads the diff-scoped percentage instead ([METRICS-DIFF-SCOPE]). The report is still written to disk in full so CI can surface the offenders.
+- `3` — **duplication threshold breached.** `metrics.duplication_percent > threshold` — or, once [METRICS-REPO-WEIGHTED] ships, `weighted_duplication_percent > weighted threshold` ([EXIT-CODES-WEIGHTED]) — after a successful analysis. The report is still written to disk in full so CI can surface the offenders.
 
 Threshold sources, highest precedence first:
 
@@ -504,8 +364,10 @@ Threshold sources, highest precedence first:
 
 A `--no-fail-over` flag (mutually exclusive with `--fail-over`) overrides a config-file threshold and restores the "report only" behaviour, so a developer can run the CLI locally against a repo whose CI gate they don't want to trip.
 
-#### [EXIT-CODES-WEIGHTED] Evidence-weighted gates are prohibited
+#### [EXIT-CODES-WEIGHTED] Evidence-weighted gate
 
-There is no `--fail-over-weighted`, `max_weighted_duplication_percent`, or weighted threshold on the wire. [EXIT-CODES] owns the one duplication-percentage gate. Pair evidence cannot alter a cluster metric or a repository gate.
+> Lands with [METRICS-REPO-WEIGHTED] (gh #344); unreachable until then.
+
+A second, independent gate over `weighted_duplication_percent`, mirroring the mechanical gate exactly: `--fail-over-weighted <percent>` (highest precedence), then `[threshold] max_weighted_duplication_percent`, then absent → not enforced. Same validation, same full-precision strictly-greater comparison, equality passes. The two gates compose: either breach → exit `3`; the single `--no-fail-over` flag disables **both** — "report only" means report only. The mechanical gate remains the documented default in CI recipes; the weighted gate is opt-in for teams that want boilerplate-shaped findings priced below proven copy-paste, and each gate's verdict is carried separately on the wire (`metrics.threshold` / `metrics.weighted.threshold`) so a breach always names the ceiling it crossed.
 
 The renderer always states the active threshold in the report header (`threshold: 10.00% (breached)` / `threshold: 10.00% (ok)` / `threshold: none`) so the report is self-explanatory when read out of context. The threshold value and breach flag are carried on `Report.metrics.threshold { percent: f64, breached: bool, source: "cli" | "config" | "none" }` so downstream tools do not re-derive the verdict.

@@ -2,15 +2,20 @@ import type { ComponentChildren, JSX } from "preact";
 
 const DOCS_BASE = "https://deslop.live/docs/vscode-cluster-panel/";
 
-/** Every helped element of the cluster panel. */
 export type HelpTopic =
   | "cluster-id"
-  | "duplicate-code"
+  | "clone-bucket"
   | "ai-match"
   | "rank"
-  | "mass"
+  | "weight"
+  | "size"
   | "occurrence-count"
   | "canonical"
+  | "signals"
+  | "structural"
+  | "jaccard"
+  | "embedding"
+  | "fused"
   | "occurrences"
   | "occurrence-location"
   | "hidden-occurrence"
@@ -19,28 +24,28 @@ export type HelpTopic =
   | "cluster-navigation"
   | "keyboard-shortcuts";
 
-const PANEL_HELP: Record<HelpTopic, string> = {
+const HELP_COPY: Record<HelpTopic, string> = {
   "cluster-id": "Stable identifier for this duplicate-code cluster.",
-  "duplicate-code": "Every cluster carries the same neutral title. Severity comes from the cluster's mass rank band, never a similarity bucket label.",
+  "clone-bucket": "Human label for the kind of clone Deslop detected.",
   "ai-match": "The embedding pass found a semantic match, not only a syntactic one.",
   rank: "Worst-first position of this cluster in the current report.",
-  mass: "This cluster's duplicated mass — the worst-first ranking metric.",
+  weight: "Duplication impact score used for worst-first ranking.",
+  size: "Number of cloned AST members represented by this cluster.",
   "occurrence-count": "Number of editor locations in this cluster.",
-  canonical: "First occurrence of the cluster — its canonical extent. Compare never uses it implicitly; pair comparison is explicit two-endpoint selection only.",
+  canonical: "First occurrence used as the comparison anchor.",
+  signals: "Four scores that explain why Deslop grouped these locations.",
+  structural: "AST-shape similarity after identifiers and literals are normalized.",
+  jaccard: "Token-overlap similarity after formatting and trivia are ignored.",
+  embedding: "Semantic similarity from the selected local embedding model.",
+  fused: "Combined clone score used to decide whether a pair is reportable.",
   occurrences: "The concrete locations where this cluster appears.",
   "occurrence-location": "File, line, and column that Open will navigate to.",
   "hidden-occurrence": "This occurrence matched report_hide configuration.",
   "open-action": "Open selects the clone range in the editor.",
-  "compare-action": "Compare opens a diff between the two occurrences you selected.",
+  "compare-action": "Compare opens a diff against the canonical occurrence.",
   "cluster-navigation": "Move between clusters without leaving this panel.",
   "keyboard-shortcuts": "Keyboard actions available while focus is in the panel.",
 };
-
-// [FUSED-PAIR-SIGNALS] The cluster panel renders cluster facts, never
-// signal bars: the measured axes describe one pair of occurrences and have
-// nothing to do with the cluster ([FUSED-CONTENT-GATE]). No signal help copy
-// lives here because no signal is rendered here.
-const HELP_COPY: Record<HelpTopic, string> = PANEL_HELP;
 
 interface HelpBubbleProps {
   topic: HelpTopic;

@@ -8,16 +8,6 @@ on:
       # ref Marketplace consumers conventionally pin an action to — must never
       # re-fire this pipeline and publish a release named "1". [ACTION-VERSION]
       - 'v[0-9]+.[0-9]+.[0-9]+*'
-  # Re-release an existing tag on demand. A bad release is rolled back by
-  # tagging the last known-good commit and dispatching it here: the tag push
-  # itself runs the workflow file stored AT that old commit, so a fix to this
-  # file can only take effect through a dispatch from main. [RELEASE-DISPATCH]
-  workflow_dispatch:
-    inputs:
-      release_tag:
-        description: "Existing tag to release (e.g. v0.34.0). Its commit must already be on main."
-        required: true
-        type: string
 
 permissions:
   contents: read
@@ -29,11 +19,9 @@ jobs:
     timeout-minutes: 10
     outputs:
       version: ${{ steps.extract.outputs.version }}
-      tag: ${{ steps.extract.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.release_tag || github.ref_name }}
           fetch-depth: 0
 
       - uses: actions/setup-node@v7
@@ -42,62 +30,55 @@ jobs:
 
       - name: Extract version from tag
         id: extract
-        env:
-          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
-        run: |
-          set -euo pipefail
-          echo "tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
-          echo "version=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      # [RELEASE-ONMAIN] Only code that reached main may be released.
-      # Fetch main WITHOUT --depth: a shallow fetch writes a graft that hides
-      # main's parents, so ancestry is invisible and the check passes only when
-      # the tag IS main's current tip. That made a rollback — releasing a
-      # known-good commit further back on main — impossible.
+      # [RELEASE-ONMAIN] Everything shipped must have come from main.
+      #
+      # Fetch main at FULL depth. --depth=1 writes a shallow graft that hides
+      # main's parents, so ancestry is invisible and this gate passed only when
+      # the tag was main's current tip -- it could never approve a rollback,
+      # the one moment it matters.
+      #
+      # A tag push runs the workflow file stored AT the tagged commit, so a
+      # broken gate can only be repaired at the tag itself. A release may
+      # therefore sit one commit above main when that commit changes THIS
+      # WORKFLOW and nothing else. Shipped code still has to be on main.
       - name: Ensure released commit is on main
-        env:
-          RELEASE_TAG: ${{ steps.extract.outputs.tag }}
         run: |
           set -euo pipefail
           git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
-          release_sha="$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
-          echo "Releasing ${RELEASE_TAG} (${release_sha})"
-          if git merge-base --is-ancestor "$release_sha" origin/main; then
-            echo "Released commit is on main."
+          if git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "Released commit $GITHUB_SHA is on main."
             exit 0
           fi
-          # A tag push runs the workflow stored AT the tagged commit, so a
-          # broken gate can only be repaired at the tag itself. Allow a release
-          # to sit one commit above main when that commit changes release
-          # workflows and nothing else; shipped code must still be on main.
           # Fail closed at every step. Do not lean on `set -e`: it is ignored
           # inside a command that is part of an && / || list, so an unchecked
           # failure here could wave through a commit that is not on main.
-          if ! parent="$(git rev-parse --verify --quiet "${release_sha}^")"; then
-            echo "::error::${release_sha} is not on main and has no parent to check."
+          if ! parent="$(git rev-parse --verify --quiet "${GITHUB_SHA}^")"; then
+            echo "::error::$GITHUB_SHA is not on main and has no parent to check."
             exit 1
           fi
           if ! git merge-base --is-ancestor "$parent" origin/main; then
-            echo "::error::Neither ${release_sha} nor its parent ${parent} is on main."
+            echo "::error::Neither $GITHUB_SHA nor its parent $parent is on main."
             exit 1
           fi
-          shipped="$(git diff --name-only "$parent" "$release_sha" \
+          shipped="$(git diff --name-only "$parent" "$GITHUB_SHA" \
             | { grep -v '^\.github/workflows/' || true; })"
           if [ -n "$shipped" ]; then
             echo "::error::Release commit changes shipped code: $shipped"
             exit 1
           fi
-          echo "Release commit sits on ${parent} (on main); changes release workflow only."
+          echo "Release commit sits on $parent (on main); changes release workflow only."
 
       # Shipwright manifest gate (DTK-MIG-DESLOP-CI-GATES, #41).
       # The manifest is the source of truth for activation checks and
       # release artifact verification; without stamping it here the
       # binary version verifier would fail the very next build.
       - name: Stamp release version
-        run: node scripts/release/stamp-release-version.mjs "${{ steps.extract.outputs.version }}"
+        run: node scripts/stamp-release-version.mjs "${{ steps.extract.outputs.version }}"
 
       - name: Validate deployment manifest
-        run: node scripts/deployment/verify-deployment-manifest.mjs shipwright.json
+        run: node scripts/verify-deployment-manifest.mjs shipwright.json
 
   # Change-sensitive release classifier (proposed Shipwright spec SWR-REL-CHANGES).
   # Diffs the pushed tag against the prior v* release and decides which surfaces
@@ -120,12 +101,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.release_tag || github.ref_name }}
           # Full history + tags so the classifier can diff against the prior release.
           fetch-depth: 0
       - name: Classify changed surfaces vs prior release
         id: classify
-        run: python3 scripts/release/release-changes.py --head "${{ inputs.release_tag || github.ref_name }}"
+        run: python3 scripts/release-changes.py --head "${{ github.ref_name }}"
 
   build:
     name: Build (${{ matrix.artifact_name }})
@@ -169,8 +149,6 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.version.outputs.tag }}
 
       - uses: actions/setup-node@v7
         with:
@@ -193,7 +171,7 @@ jobs:
         run: npm install -g typediagram@0.11.0
 
       - name: Stamp release version
-        run: node scripts/release/stamp-release-version.mjs "${{ needs.version.outputs.version }}"
+        run: node scripts/stamp-release-version.mjs "${{ needs.version.outputs.version }}"
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -252,7 +230,7 @@ jobs:
             windows-x64) _platform=win32-x64 ;;
             *) echo "unknown artifact ${{ matrix.artifact_name }}"; exit 1 ;;
           esac
-          node scripts/deployment/verify-deployment-binaries.mjs shipwright.json "target/${{ matrix.target }}/release" "$_platform"
+          node scripts/verify-deployment-binaries.mjs shipwright.json "target/${{ matrix.target }}/release" "$_platform"
 
       - name: Package archive (unix)
         if: matrix.os != 'windows-latest'
@@ -370,14 +348,12 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.version.outputs.tag }}
 
       - uses: actions/setup-node@v7
         with:
           node-version: "22.x"
 
-      - uses: actions/setup-java@v5.7.0
+      - uses: actions/setup-java@v5.6.0
         with:
           distribution: temurin
           java-version: "21"
@@ -390,7 +366,7 @@ jobs:
       # verifies its bundled binary against) to the tag version. The Gradle plugin
       # version is passed via -PdeslopVersion so the zip filenames match.
       - name: Stamp release version
-        run: node scripts/release/stamp-release-version.mjs "${{ needs.version.outputs.version }}"
+        run: node scripts/stamp-release-version.mjs "${{ needs.version.outputs.version }}"
 
       - uses: actions/download-artifact@v8
         with:
@@ -428,7 +404,7 @@ jobs:
             -PdeslopVersion="${{ needs.version.outputs.version }}"
 
       - name: Verify the plugin package
-        run: node scripts/deployment/verify-jetbrains-package.mjs
+        run: node scripts/verify-jetbrains-package.mjs
 
       - name: Upload JetBrains plugin
         uses: actions/upload-artifact@v7
@@ -471,7 +447,7 @@ jobs:
       - name: Create GitHub release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ needs.version.outputs.tag }}
+          tag_name: ${{ github.ref_name }}
           name: deslop ${{ needs.version.outputs.version }}
           files: release-files/*
           generate_release_notes: true
@@ -488,16 +464,13 @@ jobs:
     # prerelease never overwrites the live site. Deploy when the website changed or
     # on any full release (the site embeds version-derived content). Triggered by the
     # v* tag — never by a push to main.
-    if: ${{ !cancelled() && !contains(needs.version.outputs.tag, '-') && (needs.changes.outputs.website == 'true' || needs.changes.outputs.full == 'true') && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
+    if: ${{ !cancelled() && !contains(github.ref_name, '-') && (needs.changes.outputs.website == 'true' || needs.changes.outputs.full == 'true') && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
     permissions:
       actions: write
       contents: read
-      issues: read
       pages: write
       id-token: write
     uses: ./.github/workflows/deploy-pages.yml
-    with:
-      ref: ${{ needs.version.outputs.tag }}
 
   publish-homebrew:
     name: Publish Homebrew formula
@@ -701,12 +674,6 @@ jobs:
       contents: read
       id-token: write
     steps:
-      # publish-vsixes.mjs needs the tagged source. Must stay ahead of
-      # download-artifact, which checkout would otherwise wipe.
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.version.outputs.tag }}
-
       - uses: actions/setup-node@v7
         with:
           node-version: "22.x"
@@ -722,22 +689,38 @@ jobs:
           allow-no-subscriptions: true
 
       # One `vsce publish` per platform-specific VSIX — vsce silently uses only
-      # the first when several are globbed into a single call. The loop, the
-      # completeness check and the prerelease flag live in
-      # scripts/release/publish-vsixes.mjs, shared with publish-openvsx so the
-      # two registries cannot drift apart ([DEPLOY-PUBLISH-COMPLETE]). The
-      # short-lived Marketplace token is minted from the Entra OIDC session and
-      # passed to vsce through VSCE_PAT; no PAT secret is stored. See
-      # docs/specs/release.md.
+      # the first when several are globbed into a single call. The Marketplace
+      # forbids a SemVer prerelease suffix in the version field, so the VSIX is
+      # packaged with the core MAJOR.MINOR.PATCH (see stamp-release-version.mjs)
+      # and prerelease status is conveyed by the --pre-release flag for any
+      # hyphenated tag. The short-lived Marketplace token is minted from the
+      # Entra OIDC session and passed to vsce through VSCE_PAT; no PAT secret is
+      # stored. See docs/specs/release.md.
       - name: Publish each platform VSIX (Entra OIDC, no PAT)
         run: |
           set -euo pipefail
+          shopt -s globstar nullglob
+          flag=""
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            flag="--pre-release"
+            echo "Prerelease tag ${GITHUB_REF_NAME}; publishing with --pre-release"
+          fi
           VSCE_PAT="$(az account get-access-token \
             --resource 499b84ac-1321-427f-aa17-267ca6975798 \
             --query accessToken -o tsv)"
           echo "::add-mask::${VSCE_PAT}"
           export VSCE_PAT
-          node scripts/release/publish-vsixes.mjs --tool vsce
+          published=0
+          for vsix in artifacts/**/*.vsix; do
+            echo "Publishing ${vsix}"
+            npx --yes @vscode/vsce@3.9.2 publish --skip-duplicate ${flag} --packagePath "${vsix}"
+            published=$((published + 1))
+          done
+          if [ "${published}" -eq 0 ]; then
+            echo "::error::no VSIX artifacts found to publish"
+            exit 1
+          fi
+          echo "Published ${published} VSIX(es) to the Marketplace"
 
   publish-openvsx:
     name: Publish VSIX to Open VSX
@@ -752,12 +735,6 @@ jobs:
     permissions:
       contents: read
     steps:
-      # publish-vsixes.mjs needs the tagged source. Must stay ahead of
-      # download-artifact, which checkout would otherwise wipe.
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.version.outputs.tag }}
-
       - uses: actions/setup-node@v7
         with:
           node-version: "22.x"
@@ -771,4 +748,24 @@ jobs:
           OVSX_PAT: ${{ secrets.OPEN_VSX_PAT }}
         run: |
           set -euo pipefail
-          node scripts/release/publish-vsixes.mjs --tool ovsx
+          if [ -z "${OVSX_PAT:-}" ]; then
+            echo "::error::OPEN_VSX_PAT secret is not set; cannot publish to Open VSX"
+            exit 1
+          fi
+          shopt -s globstar nullglob
+          flag=""
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            flag="--pre-release"
+            echo "Prerelease tag ${GITHUB_REF_NAME}; publishing with --pre-release"
+          fi
+          published=0
+          for vsix in artifacts/**/*.vsix; do
+            echo "Publishing ${vsix}"
+            npx --yes ovsx@1.0.0 publish --skip-duplicate ${flag} --packagePath "${vsix}"
+            published=$((published + 1))
+          done
+          if [ "${published}" -eq 0 ]; then
+            echo "::error::no VSIX artifacts found to publish"
+            exit 1
+          fi
+          echo "Published ${published} VSIX(es) to Open VSX"

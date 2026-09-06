@@ -13,7 +13,7 @@ use tokio::sync::Mutex;
 use crate::{
     delta::ReportDelta,
     embedding::{EmbeddingProvider, ProviderRegistry, RegistryError},
-    report::{EmbeddingProvenance, PairComparison, PairComparisonParams, Report, ReportCluster},
+    report::{EmbeddingProvenance, Report, ReportCluster},
 };
 
 use super::{
@@ -53,17 +53,6 @@ pub trait LiveApi: Send + Sync + std::fmt::Debug {
     ///
     /// Returns [`LiveError::UnknownCluster`] when no cluster matches.
     async fn cluster_by_id(&self, id: &str) -> Result<ReportCluster, LiveError>;
-
-    /// `pair/compare` — evidence for exactly two caller-selected endpoints.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`LiveError`] when an endpoint is absent from the current
-    /// generation or active embedding evidence cannot be measured.
-    async fn pair_compare(
-        &self,
-        params: &PairComparisonParams,
-    ) -> Result<PairComparison, LiveError>;
 
     /// `merge/plan` — the mechanical call-site merge for a cluster
     /// ([AUTOFIX-MERGE-MCP]). Read-only; refusals arrive as
@@ -109,8 +98,13 @@ pub trait LiveApi: Send + Sync + std::fmt::Debug {
     /// `session/config` — resolved configuration snapshot.
     async fn session_config(&self) -> SessionConfig;
 
-    /// Returns every cluster mass in report order.
-    async fn all_cluster_masses(&self) -> Vec<u64>;
+    /// Returns every cluster weight in the live report, in cluster-id
+    /// order. Used by transports that need to bucket per-cluster
+    /// signals (e.g. LSP severity at [LSP-SEVERITY]) against the global
+    /// distribution rather than re-cloning the whole report. Cheaper
+    /// than `report_get().clusters.iter().map(weight).collect()`
+    /// because no cluster body is touched.
+    async fn all_cluster_weights(&self) -> Vec<f64>;
 }
 
 /// Concrete [`LiveApi`] implementation backed by an [`AnalysisSession`].
@@ -241,15 +235,6 @@ impl LiveApi for LiveService {
         guard.cluster_by_id(id)
     }
 
-    async fn pair_compare(
-        &self,
-        params: &PairComparisonParams,
-    ) -> Result<PairComparison, LiveError> {
-        let mut guard = self.inner.lock().await;
-        guard.refresh_if_stale();
-        guard.compare_pair(params)
-    }
-
     async fn merge_plan(
         &self,
         cluster_id: &str,
@@ -290,13 +275,13 @@ impl LiveApi for LiveService {
         guard.session_config()
     }
 
-    async fn all_cluster_masses(&self) -> Vec<u64> {
+    async fn all_cluster_weights(&self) -> Vec<f64> {
         let guard = self.inner.lock().await;
         guard
             .report()
             .clusters
             .iter()
-            .map(|cluster| cluster.mass)
+            .map(|cluster| cluster.weight)
             .collect()
     }
 }
@@ -335,7 +320,7 @@ async fn run_background_refresh(
         Ok(Ok((job, report))) => {
             commit_background_refresh(inner, previous_reports, job, report).await;
         }
-        Ok(Err(failure)) => report_background_error(inner, &failure).await,
+        Ok(Err(failure)) => report_background_error(&failure),
         Err(error) => tracing::error!(%error, "embedding refresh task failed"),
     }
 }
@@ -366,32 +351,10 @@ async fn commit_background_refresh(
     }
 }
 
-/// Emits progress and logs for a failed background refresh, when that
-/// refresh is still the one the user is waiting on.
-///
-/// The currency check mirrors the success path's
-/// ([`AnalysisSession::commit_embedding_refresh`]): a job the user has
-/// already superseded announces nothing. Without it a slow failing job
-/// could land its terminal `failed` *after* a newer job announced
-/// `complete`, and clients hold one embedding-progress signal rather
-/// than one per revision, so the stale failure would be the verdict on
-/// screen for a refresh that actually succeeded.
-async fn report_background_error(
-    inner: Arc<Mutex<AnalysisSession>>,
-    failure: &super::embedding_refresh::FailedEmbeddingRefresh,
-) {
-    let current = {
-        let guard = inner.lock().await;
-        guard.embedding_refresh_is_current(&failure.job)
-    };
-    if current {
-        failure.job.report_failed(failure.message.clone());
-    }
-    tracing::warn!(
-        error = %failure.message,
-        superseded = !current,
-        "embedding refresh failed",
-    );
+/// Emits progress and logs for a failed background refresh.
+fn report_background_error(failure: &super::embedding_refresh::FailedEmbeddingRefresh) {
+    failure.job.report_failed(failure.message.clone());
+    tracing::warn!(error = %failure.message, "embedding refresh failed");
 }
 
 /// Constructs an [`EmbeddingProvider`] from a `(provider_id, model_id,

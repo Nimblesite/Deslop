@@ -6,6 +6,8 @@
 //! columns. Token Jaccard alone clusters them; structural similarity is
 //! ~0 and embeddings agree. The cluster filter must drop those clusters.
 
+mod common;
+
 use crate::common::*;
 
 #[test]

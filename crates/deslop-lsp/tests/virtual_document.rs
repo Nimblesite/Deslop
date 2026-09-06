@@ -5,6 +5,8 @@
 //! `deslop://schema`, `deslop://report`, `deslop://cluster/<id>` — and
 //! returns a structured JSON-RPC error on malformed input.
 
+mod common;
+
 use std::{path::Path, thread, time::Duration};
 
 use anyhow::{anyhow, Result};
@@ -35,7 +37,7 @@ fn virtual_document_schema_returns_non_empty_markdown() -> Result<()> {
             || body.contains("Deslop"),
         "expected markdown-ish schema body; got: {body}"
     );
-    let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
+    let _ = child.kill();
     Ok(())
 }
 
@@ -64,16 +66,10 @@ fn virtual_document_report_returns_canonical_text() -> Result<()> {
         "expected render_text summary header; got: {body}"
     );
     assert!(
-        body.contains("\nrepo: ") && body.contains("\ncache: ") && body.contains("\n#1 ["),
+        body.contains("\nrepo: ") && body.contains("\n-- action hints --\n"),
         "expected canonical report sections from render_text; got: {body}"
     );
-    // The mass-only cutover retired the action-hints block from the
-    // rendered report; if it returns, the fat surface leaked back in.
-    assert!(
-        !body.contains("-- action hints --"),
-        "retired action-hints section must not leak into render_text; got: {body}"
-    );
-    let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
+    let _ = child.kill();
     Ok(())
 }
 
@@ -101,7 +97,7 @@ fn virtual_document_cluster_returns_cluster_markdown() -> Result<()> {
         body.contains(':') && (body.contains(".cs") || body.contains("bytes")),
         "cluster markdown must carry occurrence locations; got: {body}"
     );
-    let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
+    let _ = child.kill();
     Ok(())
 }
 
@@ -126,7 +122,7 @@ fn virtual_document_rejects_malformed_uri_with_invalid_params() -> Result<()> {
         Some(-32_602),
         "malformed uri must return JSON-RPC invalid params; got: {response}"
     );
-    let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
+    let _ = child.kill();
     Ok(())
 }
 
@@ -146,7 +142,7 @@ fn virtual_document_rejects_unknown_cluster_id() -> Result<()> {
         response.get("error").is_some(),
         "unknown cluster id must surface an error, not a fallback string: {response}"
     );
-    let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
+    let _ = child.kill();
     Ok(())
 }
 

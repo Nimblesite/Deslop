@@ -12,6 +12,8 @@ pub(super) struct Theme {
     pub dim: &'static str,
     /// Foreground green.
     pub green: &'static str,
+    /// Foreground yellow.
+    pub yellow: &'static str,
     /// Foreground red.
     pub red: &'static str,
     /// Foreground cyan (used for paths).
@@ -29,6 +31,7 @@ impl Theme {
                 bold: "\x1b[1m",
                 dim: "\x1b[2m",
                 green: "\x1b[32m",
+                yellow: "\x1b[33m",
                 red: "\x1b[31m",
                 cyan: "\x1b[36m",
                 reset: "\x1b[0m",
@@ -37,6 +40,7 @@ impl Theme {
                 bold: "",
                 dim: "",
                 green: "",
+                yellow: "",
                 red: "",
                 cyan: "",
                 reset: "",

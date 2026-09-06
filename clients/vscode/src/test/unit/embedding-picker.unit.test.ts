@@ -14,29 +14,7 @@ import {
 } from "../../commands/embeddingPicker";
 import { ReportStore } from "../../reportStore";
 import { EmbeddingModelInfo, ReportDelta } from "../../types/report";
-import { emptyReport, repoMetrics } from "./report.helpers";
-
-const OLLAMA_PROVIDER_ID = "ollama";
-const NOMIC_MODEL_ID = "nomic-embed-text";
-const STUB_PROVIDER_ID = "stub";
-const DEFAULT_MODEL_VERSION = "0";
-const DEFAULT_MODEL_DIMENSIONS = 768;
-const STUB_MODEL_DIMENSIONS = 64;
-const DESLOP_CONFIG_SECTION = "deslop";
-const EMBEDDING_MODE_SETTING = "embedding.mode";
-const EMBEDDING_PROVIDER_SETTING = "embedding.provider";
-const EMBEDDING_MODEL_SETTING = "embedding.model";
-const EMBEDDING_SET_MODEL_METHOD = "deslop/embeddingSetModel";
-const EMBEDDING_LIST_MODELS_METHOD = "deslop/embeddingListModels";
-const REPORT_DELTA_METHOD = "deslop/reportDelta";
-const EMBEDDINGS_OFF_MODE = "off";
-const EMBEDDINGS_AUTO_MODE = "auto";
-const CODE_MODEL_ID = "nomic-embed-code";
-const UNKNOWN_MODEL_ID = "unknown-model";
-const BROKEN_MODEL_ID = "broken-model";
-const STRING_FAILURE_MESSAGE = "string failure";
-const NONE_ENTRY_KIND = "none";
-const REFRESH_ENTRY_KIND = "refresh";
+import { repoMetrics } from "./report.helpers";
 
 function newStore(embedding?: {
   provider_id: string;
@@ -46,19 +24,26 @@ function newStore(embedding?: {
 }): ReportStore {
   const store = new ReportStore();
   store.setSnapshot(
-    emptyReport({
+    {
       tool_version: "x",
+      min_nodes: 30,
+      files_analysed: 0,
+      clusters_hidden: 0,
+      cache_stats: { hits: 0, misses: 0 },
       metrics: repoMetrics(),
+      schema_doc: "",
+      action_hints: [],
+      boilerplate_hints: [],
       embedding_provenance: embedding
         ? {
             attempted_subtrees: 0,
-            succeeded_subtrees: 0,
             indexed_subtrees: 0,
             failed_subtrees: 0,
             ...embedding,
           }
         : undefined,
-    }),
+      clusters: [],
+    },
     0,
   );
   return store;
@@ -72,8 +57,8 @@ function model(
   return {
     provider_id,
     model_id,
-    model_version: DEFAULT_MODEL_VERSION,
-    dimensions: DEFAULT_MODEL_DIMENSIONS,
+    model_version: "0",
+    dimensions: 768,
     recommended: false,
     reachable: true,
     ...overrides,
@@ -145,11 +130,11 @@ function installQuickPick(quickPick: FakeQuickPick): () => void {
 
 suite("embeddingPicker helpers", () => {
   test("isActive returns true only when provider + model match", () => {
-    const active = { provider_id: OLLAMA_PROVIDER_ID, model_id: NOMIC_MODEL_ID };
-    assert.equal(isActive(active, model(OLLAMA_PROVIDER_ID, NOMIC_MODEL_ID)), true);
-    assert.equal(isActive(active, model(OLLAMA_PROVIDER_ID, "other")), false);
-    assert.equal(isActive(active, model(STUB_PROVIDER_ID, NOMIC_MODEL_ID)), false);
-    assert.equal(isActive(null, model(OLLAMA_PROVIDER_ID, NOMIC_MODEL_ID)), false);
+    const active = { provider_id: "ollama", model_id: "nomic-embed-text" };
+    assert.equal(isActive(active, model("ollama", "nomic-embed-text")), true);
+    assert.equal(isActive(active, model("ollama", "other")), false);
+    assert.equal(isActive(active, model("stub", "nomic-embed-text")), false);
+    assert.equal(isActive(null, model("ollama", "nomic-embed-text")), false);
     assert.equal(isActive(active, undefined), false);
   });
 
@@ -169,14 +154,14 @@ suite("embeddingPicker helpers", () => {
   test("GH#127 normal picker can disable embeddings and hides deterministic stub", () => {
     const items = buildItems(
       [
-        model(OLLAMA_PROVIDER_ID, NOMIC_MODEL_ID, { recommended: true }),
-        model(STUB_PROVIDER_ID, STUB_PROVIDER_ID, { dimensions: STUB_MODEL_DIMENSIONS }),
+        model("ollama", "nomic-embed-text", { recommended: true }),
+        model("stub", "stub", { dimensions: 64 }),
       ],
       newStore({
-        provider_id: OLLAMA_PROVIDER_ID,
-        model_id: NOMIC_MODEL_ID,
-        model_version: DEFAULT_MODEL_VERSION,
-        dimensions: DEFAULT_MODEL_DIMENSIONS,
+        provider_id: "ollama",
+        model_id: "nomic-embed-text",
+        model_version: "0",
+        dimensions: 768,
       }),
     );
     const text = items.map((item) =>
@@ -191,7 +176,7 @@ suite("embeddingPicker helpers", () => {
     assert.deepEqual(
       {
         hasOffItem: Boolean(offItem),
-        offItemIsPickable: Boolean(offItem && offItem.entryKind !== NONE_ENTRY_KIND),
+        offItemIsPickable: Boolean(offItem && offItem.entryKind !== "none"),
         hidesStub: !text.some((value) => /\bstub\b|deterministic|CI-friendly/i.test(value)),
       },
       {
@@ -207,7 +192,14 @@ suite("embeddingPicker helpers", () => {
     const client = {
       sendRequest: () => Promise.reject(new Error("boom")),
     } as unknown as LanguageClient;
-    await setModel(client, model(OLLAMA_PROVIDER_ID, NOMIC_MODEL_ID));
+    await setModel(client, {
+      provider_id: "ollama",
+      model_id: "nomic-embed-text",
+      model_version: "0",
+      dimensions: 768,
+      recommended: false,
+      reachable: true,
+    });
   });
 
   test("setModel happy path persists the workspace config", async () => {
@@ -218,17 +210,24 @@ suite("embeddingPicker helpers", () => {
         return Promise.resolve(undefined);
       },
     } as unknown as LanguageClient;
-    await setModel(client, model(OLLAMA_PROVIDER_ID, CODE_MODEL_ID));
-    const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIG_SECTION);
-    assert.equal(calls.length, 1, `expected one RPC call, got ${JSON.stringify(calls)}`);
-    assert.equal(calls[0]?.method, EMBEDDING_SET_MODEL_METHOD);
-    assert.deepEqual(calls[0]?.params, {
-      provider_id: OLLAMA_PROVIDER_ID,
-      model_id: CODE_MODEL_ID,
+    await setModel(client, {
+      provider_id: "ollama",
+      model_id: "nomic-embed-code",
+      model_version: "0",
+      dimensions: 768,
+      recommended: false,
+      reachable: true,
     });
-    assert.equal(cfg.get<string>(EMBEDDING_PROVIDER_SETTING), OLLAMA_PROVIDER_ID);
-    assert.equal(cfg.get<string>(EMBEDDING_MODEL_SETTING), CODE_MODEL_ID);
-    assert.equal(cfg.get<string>(EMBEDDING_MODE_SETTING), EMBEDDINGS_AUTO_MODE);
+    const cfg = vscode.workspace.getConfiguration("deslop");
+    assert.equal(calls.length, 1, `expected one RPC call, got ${JSON.stringify(calls)}`);
+    assert.equal(calls[0]?.method, "deslop/embeddingSetModel");
+    assert.deepEqual(calls[0]?.params, {
+      provider_id: "ollama",
+      model_id: "nomic-embed-code",
+    });
+    assert.equal(cfg.get<string>("embedding.provider"), "ollama");
+    assert.equal(cfg.get<string>("embedding.model"), "nomic-embed-code");
+    assert.equal(cfg.get<string>("embedding.mode"), "auto");
   });
 
   test("setModel dispatches deslop/embeddingSetModel with the chosen provider + model", async () => {
@@ -239,18 +238,25 @@ suite("embeddingPicker helpers", () => {
         return Promise.resolve(undefined);
       },
     } as unknown as LanguageClient;
-    await setModel(client, model(OLLAMA_PROVIDER_ID, NOMIC_MODEL_ID));
-    const swap = calls.find((call) => call.method === EMBEDDING_SET_MODEL_METHOD);
-    const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIG_SECTION);
+    await setModel(client, {
+      provider_id: "ollama",
+      model_id: "nomic-embed-text",
+      model_version: "0",
+      dimensions: 768,
+      recommended: false,
+      reachable: true,
+    });
+    const swap = calls.find((call) => call.method === "deslop/embeddingSetModel");
+    const cfg = vscode.workspace.getConfiguration("deslop");
     assert.equal(calls.length, 1, `setModel must dispatch exactly one RPC: ${JSON.stringify(calls)}`);
     assert.ok(swap, `expected embeddingSetModel request; got ${JSON.stringify(calls)}`);
     assert.deepEqual(swap.params, {
-      provider_id: OLLAMA_PROVIDER_ID,
-      model_id: NOMIC_MODEL_ID,
+      provider_id: "ollama",
+      model_id: "nomic-embed-text",
     });
-    assert.equal(cfg.get<string>(EMBEDDING_PROVIDER_SETTING), OLLAMA_PROVIDER_ID);
-    assert.equal(cfg.get<string>(EMBEDDING_MODEL_SETTING), NOMIC_MODEL_ID);
-    assert.equal(cfg.get<string>(EMBEDDING_MODE_SETTING), EMBEDDINGS_AUTO_MODE);
+    assert.equal(cfg.get<string>("embedding.provider"), "ollama");
+    assert.equal(cfg.get<string>("embedding.model"), "nomic-embed-text");
+    assert.equal(cfg.get<string>("embedding.mode"), "auto");
   });
 
   test("setModelFromPicker marks the store's pending model BEFORE dispatching the RPC", async () => {
@@ -270,39 +276,43 @@ suite("embeddingPicker helpers", () => {
         return Promise.resolve(undefined);
       },
     } as unknown as LanguageClient;
-    await setModelFromPicker(client, store, model(OLLAMA_PROVIDER_ID, NOMIC_MODEL_ID));
-    const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIG_SECTION);
+    await setModelFromPicker(client, store, {
+      provider_id: "ollama",
+      model_id: "nomic-embed-text",
+      model_version: "0",
+      dimensions: 768,
+      recommended: false,
+      reachable: true,
+    });
+    const cfg = vscode.workspace.getConfiguration("deslop");
     assert.equal(calls.length, 1, `expected one RPC call, got ${JSON.stringify(calls)}`);
-    assert.equal(calls[0]?.method, EMBEDDING_SET_MODEL_METHOD);
+    assert.equal(calls[0]?.method, "deslop/embeddingSetModel");
     assert.deepEqual(calls[0]?.params, {
-      provider_id: OLLAMA_PROVIDER_ID,
-      model_id: NOMIC_MODEL_ID,
+      provider_id: "ollama",
+      model_id: "nomic-embed-text",
     });
     assert.ok(
-      events.includes(`rpc(${NOMIC_MODEL_ID})`),
+      events.includes("rpc(nomic-embed-text)"),
       `RPC must fire with pending model already set; got ${JSON.stringify(events)}`,
     );
     assert.deepEqual(
-      recorded.filter((value) => value === NOMIC_MODEL_ID),
-      [NOMIC_MODEL_ID],
+      recorded.filter((value) => value === "nomic-embed-text"),
+      ["nomic-embed-text"],
       `pending model must be emitted exactly once before RPC: ${JSON.stringify(recorded)}`,
     );
     assert.equal(
       store.current.pendingEmbeddingModel,
-      NOMIC_MODEL_ID,
+      "nomic-embed-text",
       "pending model stays set until the new report arrives",
     );
-    assert.equal(cfg.get<string>(EMBEDDING_PROVIDER_SETTING), OLLAMA_PROVIDER_ID);
-    assert.equal(cfg.get<string>(EMBEDDING_MODEL_SETTING), NOMIC_MODEL_ID);
-    assert.equal(cfg.get<string>(EMBEDDING_MODE_SETTING), EMBEDDINGS_AUTO_MODE);
+    assert.equal(cfg.get<string>("embedding.provider"), "ollama");
+    assert.equal(cfg.get<string>("embedding.model"), "nomic-embed-text");
+    assert.equal(cfg.get<string>("embedding.mode"), "auto");
   });
 
   test("buildItems marks the 'Ollama models' header as a non-pickable separator", () => {
     const items = buildItems(
-      [
-        model(OLLAMA_PROVIDER_ID, NOMIC_MODEL_ID),
-        model(STUB_PROVIDER_ID, STUB_PROVIDER_ID, { dimensions: STUB_MODEL_DIMENSIONS }),
-      ],
+      [model("ollama", "nomic-embed-text"), model("stub", "stub", { dimensions: 64 })],
       newStore(),
     );
     const header = items.find((i) => i.label === "Ollama models");
@@ -316,16 +326,16 @@ suite("embeddingPicker helpers", () => {
 
   test("buildItems groups ollama models + marks the active one", () => {
     const active = {
-      provider_id: OLLAMA_PROVIDER_ID,
-      model_id: NOMIC_MODEL_ID,
-      model_version: DEFAULT_MODEL_VERSION,
-      dimensions: DEFAULT_MODEL_DIMENSIONS,
+      provider_id: "ollama",
+      model_id: "nomic-embed-text",
+      model_version: "0",
+      dimensions: 768,
     };
     const items = buildItems(
       [
-        model(OLLAMA_PROVIDER_ID, NOMIC_MODEL_ID, { recommended: true }),
-        model(OLLAMA_PROVIDER_ID, UNKNOWN_MODEL_ID, { reachable: false }),
-        model(STUB_PROVIDER_ID, STUB_PROVIDER_ID, { dimensions: STUB_MODEL_DIMENSIONS }),
+        model("ollama", "nomic-embed-text", { recommended: true }),
+        model("ollama", "unknown-model", { reachable: false }),
+        model("stub", "stub", { dimensions: 64 }),
       ],
       newStore(active),
     );
@@ -335,7 +345,7 @@ suite("embeddingPicker helpers", () => {
     assert.match(nomic.description ?? "", /recommended/);
     // An unreachable model should be labelled 'offline' so the picker
     // surfaces provider-down state to the user.
-    const unknown = items.find((i) => i.label?.includes(UNKNOWN_MODEL_ID));
+    const unknown = items.find((i) => i.label?.includes("unknown-model"));
     assert.ok(unknown, "unknown-model entry should exist");
     assert.match(unknown.description ?? "", /offline/);
   });
@@ -383,8 +393,8 @@ suite("embeddingPicker helpers", () => {
     const client = {
       sendRequest: (method: string) => {
         requests.push(method);
-        if (method === EMBEDDING_LIST_MODELS_METHOD) {
-          return Promise.resolve([model(OLLAMA_PROVIDER_ID, NOMIC_MODEL_ID)]);
+        if (method === "deslop/embeddingListModels") {
+          return Promise.resolve([model("ollama", "nomic-embed-text")]);
         }
         return Promise.resolve(null);
       },
@@ -403,34 +413,24 @@ suite("embeddingPicker helpers", () => {
       quickPick.selectedItems = [];
       quickPick.activeItems = [];
       await quickPick.fireAccept();
-      await accept({ entryKind: NONE_ENTRY_KIND, label: "info row" });
+      await accept({ entryKind: "none", label: "info row" });
 
       // Selecting a model switches it through the LSP.
-      await accept({
-        entryKind: "model",
-        label: "m",
-        model: model(OLLAMA_PROVIDER_ID, NOMIC_MODEL_ID),
-      });
-      assert.ok(
-        requests.includes(EMBEDDING_SET_MODEL_METHOD),
-        "model selection switches the model",
-      );
+      await accept({ entryKind: "model", label: "m", model: model("ollama", "nomic-embed-text") });
+      assert.ok(requests.includes("deslop/embeddingSetModel"), "model selection switches the model");
 
       // The off row turns embeddings off and asks for the post-switch delta.
-      await accept({ entryKind: EMBEDDINGS_OFF_MODE, label: EMBEDDINGS_OFF_MODE });
-      assert.ok(
-        requests.includes(REPORT_DELTA_METHOD),
-        "the off path requests the post-switch delta",
-      );
+      await accept({ entryKind: "off", label: "off" });
+      assert.ok(requests.includes("deslop/reportDelta"), "the off path requests the post-switch delta");
 
       // Refresh re-enters the picker (covers the recursion branch).
-      await accept({ entryKind: REFRESH_ENTRY_KIND, label: REFRESH_ENTRY_KIND });
+      await accept({ entryKind: "refresh", label: "refresh" });
     } finally {
       restoreQuickPick();
-      const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIG_SECTION);
-      await cfg.update(EMBEDDING_MODE_SETTING, undefined, vscode.ConfigurationTarget.Workspace);
-      await cfg.update(EMBEDDING_PROVIDER_SETTING, undefined, vscode.ConfigurationTarget.Workspace);
-      await cfg.update(EMBEDDING_MODEL_SETTING, undefined, vscode.ConfigurationTarget.Workspace);
+      const cfg = vscode.workspace.getConfiguration("deslop");
+      await cfg.update("embedding.mode", undefined, vscode.ConfigurationTarget.Workspace);
+      await cfg.update("embedding.provider", undefined, vscode.ConfigurationTarget.Workspace);
+      await cfg.update("embedding.model", undefined, vscode.ConfigurationTarget.Workspace);
     }
   });
 
@@ -438,12 +438,12 @@ suite("embeddingPicker helpers", () => {
     // [REMOVE-STUB] Even if the wire payload accidentally carries a
     // stub-provider row, the picker must never surface it to the user.
     const items = buildItems(
-      [model(STUB_PROVIDER_ID, STUB_PROVIDER_ID, { dimensions: STUB_MODEL_DIMENSIONS })],
+      [model("stub", "stub", { dimensions: 64 })],
       newStore({
-        provider_id: STUB_PROVIDER_ID,
-        model_id: STUB_PROVIDER_ID,
-        model_version: DEFAULT_MODEL_VERSION,
-        dimensions: STUB_MODEL_DIMENSIONS,
+        provider_id: "stub",
+        model_id: "stub",
+        model_version: "0",
+        dimensions: 64,
       }),
     );
     const stubRow = items.find((item) =>
@@ -454,18 +454,18 @@ suite("embeddingPicker helpers", () => {
 
   test("setModel handles non-Error rejections", async () => {
     const client = {
-      sendRequest: () => Promise.reject(new Error(STRING_FAILURE_MESSAGE)),
+      sendRequest: () => Promise.reject(new Error("string failure")),
     } as unknown as LanguageClient;
-    await setModel(client, model(OLLAMA_PROVIDER_ID, BROKEN_MODEL_ID));
+    await setModel(client, model("ollama", "broken-model"));
   });
 
   test("setModelFromPicker clears pending state after a rejected request", async () => {
     const store = newStore();
     const client = {
-      sendRequest: () => Promise.reject(new Error(STRING_FAILURE_MESSAGE)),
+      sendRequest: () => Promise.reject(new Error("string failure")),
     } as unknown as LanguageClient;
 
-    await setModelFromPicker(client, store, model(OLLAMA_PROVIDER_ID, BROKEN_MODEL_ID));
+    await setModelFromPicker(client, store, model("ollama", "broken-model"));
     assert.equal(store.current.pendingEmbeddingModel, null);
   });
 });
@@ -477,9 +477,6 @@ function emptyDelta(toGeneration: number): ReportDelta {
     clusters_added: [],
     clusters_removed: [],
     clusters_updated: [],
-    literal_findings_added: [],
-    literal_findings_removed: [],
-    literal_findings_updated: [],
     metrics: repoMetrics(),
     cache_stats: { hits: 0, misses: 0 },
     tool_version: "x",
@@ -489,8 +486,8 @@ function emptyDelta(toGeneration: number): ReportDelta {
 suite("turn embeddings off", () => {
   teardown(async () => {
     await vscode.workspace
-      .getConfiguration(DESLOP_CONFIG_SECTION)
-      .update(EMBEDDING_MODE_SETTING, undefined, vscode.ConfigurationTarget.Workspace);
+      .getConfiguration("deslop")
+      .update("embedding.mode", undefined, vscode.ConfigurationTarget.Workspace);
   });
 
   test("turnEmbeddingsOff sends the off request, persists mode=off, and applies the returned delta", async () => {
@@ -499,7 +496,7 @@ suite("turn embeddings off", () => {
     const client = {
       sendRequest: (method: string, params: unknown) => {
         calls.push({ method, params });
-        if (method === REPORT_DELTA_METHOD) return Promise.resolve(emptyDelta(7));
+        if (method === "deslop/reportDelta") return Promise.resolve(emptyDelta(7));
         return Promise.resolve(null);
       },
     } as unknown as LanguageClient;
@@ -507,15 +504,13 @@ suite("turn embeddings off", () => {
     await turnEmbeddingsOff(client, store);
 
     assert.deepEqual(
-      calls.find((c) => c.method === EMBEDDING_SET_MODEL_METHOD)?.params,
-      { provider_id: EMBEDDINGS_OFF_MODE, model_id: EMBEDDINGS_OFF_MODE },
+      calls.find((c) => c.method === "deslop/embeddingSetModel")?.params,
+      { provider_id: "off", model_id: "off" },
       "the LSP must be told to switch the provider off",
     );
     assert.equal(
-      vscode.workspace
-        .getConfiguration(DESLOP_CONFIG_SECTION)
-        .get<string>(EMBEDDING_MODE_SETTING),
-      EMBEDDINGS_OFF_MODE,
+      vscode.workspace.getConfiguration("deslop").get<string>("embedding.mode"),
+      "off",
       "embedding.mode must persist as off so the next session stays off",
     );
     assert.equal(store.current.generation, 7, "the returned delta settles the new generation");
@@ -525,7 +520,7 @@ suite("turn embeddings off", () => {
     const store = newStore();
     const client = {
       sendRequest: (method: string) =>
-        method === REPORT_DELTA_METHOD ? Promise.resolve(null) : Promise.resolve(null),
+        method === "deslop/reportDelta" ? Promise.resolve(null) : Promise.resolve(null),
     } as unknown as LanguageClient;
 
     await turnEmbeddingsOff(client, store);

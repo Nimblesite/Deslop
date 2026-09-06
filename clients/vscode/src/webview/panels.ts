@@ -15,27 +15,6 @@ import { Report, ReportOccurrence } from "../types/report";
 
 type PanelKind = "cluster" | "report" | "duplication";
 
-const CLUSTER_PANEL_KIND: PanelKind = "cluster";
-const REPORT_PANEL_KIND: PanelKind = "report";
-const DUPLICATION_PANEL_KIND: PanelKind = "duplication";
-
-// [VSIX-PAIR-COMPARE] The wire endpoint identity: path plus byte range. A
-// payload without all three well-typed fields is not an endpoint.
-export interface PairEndpointPayload {
-  readonly path: string;
-  readonly start_byte: number;
-  readonly end_byte: number;
-}
-
-export function compareEndpointFromPayload(value: unknown): PairEndpointPayload | undefined {
-  if (typeof value !== "object" || value === null) return undefined;
-  const candidate = value as Partial<PairEndpointPayload>;
-  if (typeof candidate.path !== "string" || candidate.path.length === 0) return undefined;
-  if (typeof candidate.start_byte !== "number" || !Number.isFinite(candidate.start_byte)) return undefined;
-  if (typeof candidate.end_byte !== "number" || !Number.isFinite(candidate.end_byte)) return undefined;
-  return { path: candidate.path, start_byte: candidate.start_byte, end_byte: candidate.end_byte };
-}
-
 interface WebviewPanelState {
   panel: vscode.WebviewPanel;
   kind: PanelKind;
@@ -53,14 +32,14 @@ export function openClusterPanel(
   const existing = activePanels.get(key);
   if (existing) return existing.panel.reveal(vscode.ViewColumn.Active);
   const anchor = anchorForClusterId(store.current.report, clusterId);
-  const panel = createPanel(context, CLUSTER_PANEL_KIND, `Deslop: cluster ${clusterId}`);
-  const unsub = wirePanel(panel, store, CLUSTER_PANEL_KIND, { anchor });
+  const panel = createPanel(context, "cluster", `Deslop: cluster ${clusterId}`);
+  const unsub = wirePanel(panel, store, "cluster", { anchor });
   wireMessages(panel, store);
   panel.onDidDispose(() => {
     unsub.dispose();
     activePanels.delete(key);
   });
-  activePanels.set(key, { panel, kind: CLUSTER_PANEL_KIND, storeSubscription: unsub });
+  activePanels.set(key, { panel, kind: "cluster", storeSubscription: unsub });
 }
 
 // [VSIX-REPORT-WEBVIEW] Full report webview — the host pushes report
@@ -69,14 +48,14 @@ export function openReportPanel(context: vscode.ExtensionContext, store: ReportS
   const key = "report";
   const existing = activePanels.get(key);
   if (existing) return existing.panel.reveal(vscode.ViewColumn.Active);
-  const panel = createPanel(context, REPORT_PANEL_KIND, "Deslop: report");
-  const unsub = wirePanel(panel, store, REPORT_PANEL_KIND);
+  const panel = createPanel(context, "report", "Deslop: report");
+  const unsub = wirePanel(panel, store, "report");
   wireMessages(panel, store);
   panel.onDidDispose(() => {
     unsub.dispose();
     activePanels.delete(key);
   });
-  activePanels.set(key, { panel, kind: REPORT_PANEL_KIND, storeSubscription: unsub });
+  activePanels.set(key, { panel, kind: "report", storeSubscription: unsub });
 }
 
 // [VSIX-METRICS-REPORT] Duplication report — the headline of the
@@ -89,14 +68,14 @@ export function openDuplicationReportPanel(
   const key = "duplication";
   const existing = activePanels.get(key);
   if (existing) return existing.panel.reveal(vscode.ViewColumn.Active);
-  const panel = createPanel(context, DUPLICATION_PANEL_KIND, "Deslop: Duplication");
-  const unsub = wirePanel(panel, store, DUPLICATION_PANEL_KIND);
+  const panel = createPanel(context, "duplication", "Deslop: Duplication");
+  const unsub = wirePanel(panel, store, "duplication");
   wireMessages(panel, store);
   panel.onDidDispose(() => {
     unsub.dispose();
     activePanels.delete(key);
   });
-  activePanels.set(key, { panel, kind: DUPLICATION_PANEL_KIND, storeSubscription: unsub });
+  activePanels.set(key, { panel, kind: "duplication", storeSubscription: unsub });
 }
 
 function createPanel(
@@ -262,14 +241,9 @@ export async function handleMessage(_store: ReportStore, message: unknown): Prom
       if (occurrence) await vscode.commands.executeCommand("deslop.openOccurrence", occurrence);
       return;
     }
-    case "compare/pair": {
-      // [VSIX-PAIR-COMPARE] Both endpoints arrive explicitly from the
-      // webview's two-slot selection; the host never invents an endpoint.
-      const left = compareEndpointFromPayload(m["left"]);
-      const right = compareEndpointFromPayload(m["right"]);
-      if (left && right) {
-        await vscode.commands.executeCommand("deslop.comparePair", left, right);
-      }
+    case "compare/canonical": {
+      const id = typeof m["clusterId"] === "string" ? m["clusterId"] : null;
+      if (id) await vscode.commands.executeCommand("deslop.compareWithCanonical", id);
       return;
     }
     case "refresh":

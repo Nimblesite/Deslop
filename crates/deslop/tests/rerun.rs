@@ -7,76 +7,18 @@
 //! one invocation via `--rerun-touch <PATH>...`, and assert on the
 //! emitted `<base>.delta.json` alongside the normal report outputs.
 
-use std::{ffi::OsStr, fs, path::Path, path::PathBuf};
+use std::{fs, path::Path, path::PathBuf};
 
 use anyhow::Result;
-use assert_cmd::Command;
 use predicates::str::contains;
-use serde_json::Value;
 
-use crate::common::scan_dir::temp_scan_dir;
-use crate::common::{rerun_ops::*, *};
-
-/// Config body that excludes the `Beta.cs` half of the seeded clone pair.
-const EXCLUDE_BETA: &str = "[defaults]\nexclude = [\"**/Beta.cs\"]\n";
-
-/// The `--min-nodes` floor at which the seeded Alpha/Beta pair clusters.
-const SEEDED_MIN_NODES: &str = "8";
-
-/// A floor low enough for one small hand-written class to fingerprint.
-const SOLO_MIN_NODES: &str = "4";
+mod common;
+use crate::common::*;
 
 /// Returns the on-disk `<dir>/report.delta.json` path the CLI emits
 /// when `--rerun-touch` is passed with an `--output <dir>/report` base.
 fn delta_path(dir: &Path) -> PathBuf {
     dir.join("report.delta.json")
-}
-
-/// A temp dir plus its `src/` scan root, seeded from the `csharp-small`
-/// fixture — the mutable Alpha/Beta clone pair the scenarios below edit.
-/// The [`tempfile::TempDir`] comes back so the caller keeps the tree alive.
-fn seeded_root() -> Result<(tempfile::TempDir, PathBuf)> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    seed(&fixture("csharp-small"), &scan_root)?;
-    Ok((tmp, scan_root))
-}
-
-/// Runs one rerun scenario — `ops` at `min_nodes` over `scan_root`, writing
-/// under `<tmp>/report` — asserts the CLI succeeded, and returns the
-/// emitted delta.
-fn rerun_delta(
-    tmp: &Path,
-    scan_root: &Path,
-    min_nodes: &str,
-    ops: &[(&str, &OsStr)],
-) -> Result<Value> {
-    let mut cmd = rerun_cmd(scan_root, &tmp.join("report"), min_nodes, ops)?;
-    let _assertion = cmd.assert().success();
-    load_json(&delta_path(tmp))
-}
-
-/// Asserts `delta` spans the first rerun: generation 0 to generation 1.
-fn assert_first_generation_span(delta: &Value) {
-    assert_eq!(field(delta, "from_generation"), 0);
-    assert_eq!(field(delta, "to_generation"), 1);
-}
-
-/// Builds `deslop <scan_root> --output <out_base> --min-nodes <min_nodes>`
-/// followed by one `<flag> <value>` pair per entry in `ops`, ready for the
-/// caller to assert on. Every rerun scenario differs only in that tail.
-fn rerun_cmd(
-    scan_root: &Path,
-    out_base: &Path,
-    min_nodes: &str,
-    ops: &[(&str, &OsStr)],
-) -> Result<Command> {
-    let mut cmd = deslop_cmd(scan_root, out_base)?;
-    let _cmd = cmd.args(["--min-nodes", min_nodes]);
-    for (flag, value) in ops {
-        let _cmd = cmd.arg(flag).arg(value);
-    }
-    Ok(cmd)
 }
 
 // Implements [LIVE-STATE] touching a path whose content is unchanged
@@ -85,15 +27,21 @@ fn rerun_cmd(
 // `ReportDelta::between`.
 #[test]
 fn rerun_touch_with_unchanged_sources_emits_empty_delta() -> Result<()> {
-    let (tmp, scan_root) = seeded_root()?;
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed(&fixture("csharp-small"), &scan_root)?;
     let touched = scan_root.join("Alpha.cs");
-    let ops = [("--rerun-touch", touched.as_os_str())];
-    let delta = rerun_delta(tmp.path(), &scan_root, SEEDED_MIN_NODES, &ops)?;
-    assert!(
-        delta_path(tmp.path()).is_file(),
-        "delta file must be emitted"
-    );
-    assert_first_generation_span(&delta);
+    let mut cmd = deslop_cmd(&scan_root, &tmp.path().join("report"))?;
+    let _assertion = cmd
+        .args(["--min-nodes", "8", "--rerun-touch"])
+        .arg(&touched)
+        .assert()
+        .success();
+    let delta_json = delta_path(tmp.path());
+    assert!(delta_json.is_file(), "delta file must be emitted");
+    let delta = load_json(&delta_json)?;
+    assert_eq!(field(&delta, "from_generation"), 0);
+    assert_eq!(field(&delta, "to_generation"), 1);
     assert_eq!(
         array_len(&delta, "clusters_added"),
         0,
@@ -110,7 +58,9 @@ fn rerun_touch_with_unchanged_sources_emits_empty_delta() -> Result<()> {
 // sees the post-edit state, so the rerun is an idempotent refresh.
 #[test]
 fn rerun_touch_on_existing_file_reparses_via_update_files() -> Result<()> {
-    let (tmp, scan_root) = temp_scan_dir("src")?;
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    fs::create_dir_all(&scan_root)?;
     fs::write(
         scan_root.join("Alpha.cs"),
         "namespace Alpha\n{\n    public class Solo\n    {\n        public int Compute(int x)\n        {\n            return x + 1;\n        }\n    }\n}\n",
@@ -120,9 +70,15 @@ fn rerun_touch_on_existing_file_reparses_via_update_files() -> Result<()> {
         &beta,
         "namespace Beta\n{\n    public class Solo\n    {\n        public int Compute(int x)\n        {\n            return x + 1;\n        }\n    }\n}\n",
     )?;
-    let ops = [("--rerun-touch", beta.as_os_str())];
-    let delta = rerun_delta(tmp.path(), &scan_root, SOLO_MIN_NODES, &ops)?;
-    assert_first_generation_span(&delta);
+    let mut cmd = deslop_cmd(&scan_root, &tmp.path().join("report"))?;
+    let _assertion = cmd
+        .args(["--min-nodes", "4", "--rerun-touch"])
+        .arg(&beta)
+        .assert()
+        .success();
+    let delta = load_json(&tmp.path().join("report.delta.json"))?;
+    assert_eq!(field(&delta, "from_generation"), 0);
+    assert_eq!(field(&delta, "to_generation"), 1);
     assert_eq!(
         array_len(&delta, "clusters_added"),
         0,
@@ -136,18 +92,24 @@ fn rerun_touch_on_existing_file_reparses_via_update_files() -> Result<()> {
 // the two early-return branches of `apply_one_change`.
 #[test]
 fn rerun_touch_ignores_unsupported_and_out_of_root_paths() -> Result<()> {
-    let (tmp, scan_root) = seeded_root()?;
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed(&fixture("csharp-small"), &scan_root)?;
     // Irrelevant extension: `.md` has no registered parser.
     let readme = scan_root.join("NOTES.md");
     fs::write(&readme, "ignored by the parser\n")?;
     // Relative-looking path that canonicalises under the root: .cs so
     // the parser claims it, but the file does not exist → deletion no-op.
     let missing = PathBuf::from("Zeta.cs");
-    let ops = [
-        ("--rerun-touch", readme.as_os_str()),
-        ("--rerun-touch", missing.as_os_str()),
-    ];
-    let delta = rerun_delta(tmp.path(), &scan_root, SEEDED_MIN_NODES, &ops)?;
+    let mut cmd = deslop_cmd(&scan_root, &tmp.path().join("report"))?;
+    let _assertion = cmd
+        .args(["--min-nodes", "8", "--rerun-touch"])
+        .arg(&readme)
+        .arg("--rerun-touch")
+        .arg(&missing)
+        .assert()
+        .success();
+    let delta = load_json(&tmp.path().join("report.delta.json"))?;
     assert_eq!(
         array_len(&delta, "clusters_added"),
         0,
@@ -164,7 +126,9 @@ fn rerun_touch_ignores_unsupported_and_out_of_root_paths() -> Result<()> {
 // `apply_one_change` plus the `clusters_added` branch of `between`.
 #[test]
 fn rerun_add_introduces_new_file_and_reports_cluster_added() -> Result<()> {
-    let (tmp, scan_root) = temp_scan_dir("src")?;
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    fs::create_dir_all(&scan_root)?;
     // Seed with only Alpha.cs so the initial corpus has no clones.
     let alpha = fixture("csharp-small").join("Alpha.cs");
     let _bytes = fs::copy(&alpha, scan_root.join("Alpha.cs"))?;
@@ -172,9 +136,14 @@ fn rerun_add_introduces_new_file_and_reports_cluster_added() -> Result<()> {
     let staged = tmp.path().join("staged-Beta.cs");
     let _bytes = fs::copy(fixture("csharp-small").join("Beta.cs"), &staged)?;
     let dst = scan_root.join("Beta.cs");
-    let spec = add_spec(&staged, &dst);
-    let ops = [("--rerun-add", OsStr::new(&spec))];
-    let delta = rerun_delta(tmp.path(), &scan_root, SEEDED_MIN_NODES, &ops)?;
+    let spec = format!("{}={}", staged.display(), dst.display());
+    let mut cmd = deslop_cmd(&scan_root, &tmp.path().join("report"))?;
+    let _assertion = cmd
+        .args(["--min-nodes", "8", "--rerun-add"])
+        .arg(&spec)
+        .assert()
+        .success();
+    let delta = load_json(&delta_path(tmp.path()))?;
     assert!(
         array_len(&delta, "clusters_added") > 0,
         "staging a new file must surface a clusters_added entry: {delta:#}"
@@ -187,7 +156,9 @@ fn rerun_add_introduces_new_file_and_reports_cluster_added() -> Result<()> {
 // with a user-facing error before any analysis runs.
 #[test]
 fn rerun_add_rejects_spec_without_equals() -> Result<()> {
-    let (tmp, scan_root) = seeded_root()?;
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed(&fixture("csharp-small"), &scan_root)?;
     let mut cmd = deslop_cmd(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
         .args(["--rerun-add", "missing-equals-sign"])
@@ -203,10 +174,17 @@ fn rerun_add_rejects_spec_without_equals() -> Result<()> {
 // the `clusters_removed` branch of `ReportDelta::between`.
 #[test]
 fn rerun_remove_drops_clone_and_reports_cluster_removed() -> Result<()> {
-    let (tmp, scan_root) = seeded_root()?;
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed(&fixture("csharp-small"), &scan_root)?;
     let doomed = scan_root.join("Beta.cs");
-    let ops = [("--rerun-remove", doomed.as_os_str())];
-    let delta = rerun_delta(tmp.path(), &scan_root, SEEDED_MIN_NODES, &ops)?;
+    let mut cmd = deslop_cmd(&scan_root, &tmp.path().join("report"))?;
+    let _assertion = cmd
+        .args(["--min-nodes", "8", "--rerun-remove"])
+        .arg(&doomed)
+        .assert()
+        .success();
+    let delta = load_json(&delta_path(tmp.path()))?;
     assert!(
         array_len(&delta, "clusters_removed") > 0,
         "removing the only peer must surface a clusters_removed entry: {delta:#}"
@@ -225,14 +203,24 @@ fn rerun_remove_drops_clone_and_reports_cluster_removed() -> Result<()> {
 // clusters — instead of only re-rendering.
 #[test]
 fn issue_189_new_exclude_pattern_drops_existing_corpus_files() -> Result<()> {
-    let (tmp, scan_root) = seeded_root()?;
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed(&fixture("csharp-small"), &scan_root)?;
     // Stage a config that excludes Beta.cs; `--rerun-add` lands it at
     // the watched `<root>/.deslop.toml` between generation 0 and 1.
+    let staged = tmp.path().join("staged-deslop.toml");
+    fs::write(&staged, "[defaults]\nexclude = [\"**/Beta.cs\"]\n")?;
     let config_dst = scan_root.join(".deslop.toml");
-    let spec = staged_spec(tmp.path(), "staged-deslop.toml", EXCLUDE_BETA, &config_dst)?;
-    let ops = [("--rerun-add", OsStr::new(&spec))];
-    let delta = rerun_delta(tmp.path(), &scan_root, SEEDED_MIN_NODES, &ops)?;
-    assert_first_generation_span(&delta);
+    let spec = format!("{}={}", staged.display(), config_dst.display());
+    let mut cmd = deslop_cmd(&scan_root, &tmp.path().join("report"))?;
+    let _assertion = cmd
+        .args(["--min-nodes", "8", "--rerun-add"])
+        .arg(&spec)
+        .assert()
+        .success();
+    let delta = load_json(&delta_path(tmp.path()))?;
+    assert_eq!(field(&delta, "from_generation"), 0);
+    assert_eq!(field(&delta, "to_generation"), 1);
     assert!(
         array_len(&delta, "clusters_removed") > 0,
         "excluding Beta.cs must remove the Alpha/Beta clone cluster: {delta:#}"
@@ -251,19 +239,27 @@ fn issue_189_new_exclude_pattern_drops_existing_corpus_files() -> Result<()> {
 // `--config` override path rather than `<root>/.deslop.toml`.
 #[test]
 fn issue_189_removed_exclude_pattern_rediscovers_files() -> Result<()> {
-    let (tmp, scan_root) = seeded_root()?;
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed(&fixture("csharp-small"), &scan_root)?;
     // Initial pass excludes Beta.cs via an explicit override config,
     // so generation 0 sees only Alpha.cs and reports no clusters.
     let override_config = tmp.path().join("deslop.toml");
-    fs::write(&override_config, EXCLUDE_BETA)?;
-    let looser = "[defaults]\nexclude = []\n";
-    let spec = staged_spec(tmp.path(), "staged-looser.toml", looser, &override_config)?;
-    let ops = [
-        ("--config", override_config.as_os_str()),
-        ("--rerun-add", OsStr::new(&spec)),
-    ];
-    let delta = rerun_delta(tmp.path(), &scan_root, SEEDED_MIN_NODES, &ops)?;
-    assert_first_generation_span(&delta);
+    fs::write(&override_config, "[defaults]\nexclude = [\"**/Beta.cs\"]\n")?;
+    let staged = tmp.path().join("staged-looser.toml");
+    fs::write(&staged, "[defaults]\nexclude = []\n")?;
+    let spec = format!("{}={}", staged.display(), override_config.display());
+    let mut cmd = deslop_cmd(&scan_root, &tmp.path().join("report"))?;
+    let _assertion = cmd
+        .args(["--min-nodes", "8", "--config"])
+        .arg(&override_config)
+        .arg("--rerun-add")
+        .arg(&spec)
+        .assert()
+        .success();
+    let delta = load_json(&delta_path(tmp.path()))?;
+    assert_eq!(field(&delta, "from_generation"), 0);
+    assert_eq!(field(&delta, "to_generation"), 1);
     assert!(
         array_len(&delta, "clusters_added") > 0,
         "dropping the exclude must re-discover Beta.cs and surface its cluster: {delta:#}"
@@ -284,10 +280,17 @@ fn issue_189_removed_exclude_pattern_rediscovers_files() -> Result<()> {
 // report's metrics, since the server is the single source of truth.
 #[test]
 fn issue_199_delta_carries_recomputed_metrics() -> Result<()> {
-    let (tmp, scan_root) = seeded_root()?;
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed(&fixture("csharp-small"), &scan_root)?;
     let doomed = scan_root.join("Beta.cs");
-    let ops = [("--rerun-remove", doomed.as_os_str())];
-    let delta = rerun_delta(tmp.path(), &scan_root, SEEDED_MIN_NODES, &ops)?;
+    let mut cmd = deslop_cmd(&scan_root, &tmp.path().join("report"))?;
+    let _assertion = cmd
+        .args(["--min-nodes", "8", "--rerun-remove"])
+        .arg(&doomed)
+        .assert()
+        .success();
+    let delta = load_json(&delta_path(tmp.path()))?;
     let report = load_json(&tmp.path().join("report.json"))?;
     let delta_metrics = field(&delta, "metrics");
     let report_metrics = field(&report, "metrics");
@@ -322,32 +325,31 @@ fn issue_199_delta_carries_recomputed_metrics() -> Result<()> {
 // deletion so that an edit making it excluded drops it from the corpus.
 #[test]
 fn rerun_touch_on_excluded_path_drops_it_from_corpus() -> Result<()> {
-    let (tmp, scan_root) = seeded_root()?;
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed(&fixture("csharp-small"), &scan_root)?;
     // Initial run discovers both files (no exclusion); rerun applies a
     // config that excludes Beta.cs, so touching it drops it.
     let mut first = deslop_cmd(&scan_root, &tmp.path().join("first"))?;
     let _assertion = first
-        .args(["--min-nodes", SEEDED_MIN_NODES, "--nohtml", "--notext"])
+        .args(["--min-nodes", "8", "--nohtml", "--notext"])
         .assert()
         .success();
     let exclusion = tmp.path().join("deslop.toml");
-    fs::write(&exclusion, EXCLUDE_BETA)?;
-    let beta = scan_root.join("Beta.cs");
-    let ops = [
-        ("--config", exclusion.as_os_str()),
-        ("--rerun-touch", beta.as_os_str()),
-    ];
-    let mut second = rerun_cmd(
-        &scan_root,
-        &tmp.path().join("second"),
-        SEEDED_MIN_NODES,
-        &ops,
-    )?;
-    let _assertion = second.assert().success();
+    fs::write(&exclusion, "[defaults]\nexclude = [\"**/Beta.cs\"]\n")?;
+    let mut second = deslop_cmd(&scan_root, &tmp.path().join("second"))?;
+    let _assertion = second
+        .args(["--min-nodes", "8", "--config"])
+        .arg(&exclusion)
+        .arg("--rerun-touch")
+        .arg(scan_root.join("Beta.cs"))
+        .assert()
+        .success();
     let delta = load_json(&tmp.path().join("second.delta.json"))?;
     // The second initial pass already filters Beta.cs via exclusion, so
     // the rerun's drop-path branch is the relevant cover — the delta
     // simply reports no changes between gen 0 and gen 1.
-    assert_first_generation_span(&delta);
+    assert_eq!(field(&delta, "from_generation"), 0);
+    assert_eq!(field(&delta, "to_generation"), 1);
     Ok(())
 }

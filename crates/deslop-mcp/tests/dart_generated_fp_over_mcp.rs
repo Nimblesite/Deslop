@@ -2,7 +2,7 @@
 //!
 //! Drives the actual `deslop-lsp` + `deslop-mcp` binaries (never a fake
 //! server) against the `dart-mcp` fixture and asserts over the
-//! `duplicates` wire that generated `*.g.dart` serialisation clones are
+//! `top-offenders` wire that generated `*.g.dart` serialisation clones are
 //! hidden (#95 carried to Dart) while a genuine hand-written clone still
 //! surfaces. The engine is shared with the CLI, so this proves the MCP
 //! transport carries the Dart report-hide semantics end to end
@@ -13,7 +13,7 @@
 use anyhow::{ensure, Result};
 use serde_json::{json, Value};
 
-use crate::common;
+mod common;
 use common::{call_tool, copied_fixture_named, initialized_mcp, spawn_lsp_and_wait_for_socket};
 
 /// File names of every occurrence across all returned clusters.
@@ -34,7 +34,7 @@ fn occurrence_file_names(payload: &Value) -> Vec<String> {
 }
 
 /// Issue #95 over the MCP wire: a generated `.g.dart` self-duplicate must
-/// never reach `duplicates`, but the hand-written `computeCartTotal` /
+/// never reach `top-offenders`, but the hand-written `computeCartTotal` /
 /// `computeOrderTotal` Type-2 clone must — proving the suppression is
 /// targeted, not a blanket hide of every Dart cluster.
 #[test]
@@ -45,8 +45,8 @@ fn dart_generated_files_never_top_offenders_over_mcp() -> Result<()> {
     let mut mcp = initialized_mcp(workspace.path())?;
     let payload = call_tool(
         &mut mcp,
-        "duplicates",
-        &json!({ "offset": 0, "limit": 50, "max_occurrences": 100_000_usize }),
+        "top-offenders",
+        &json!({ "n": 50, "max_occurrences": 100_000_usize }),
     )?;
     let files = occurrence_file_names(&payload);
 
@@ -54,12 +54,12 @@ fn dart_generated_files_never_top_offenders_over_mcp() -> Result<()> {
         !files
             .iter()
             .any(|name| name == "cart.g.dart" || name == "order.g.dart"),
-        "generated `.g.dart` files must never appear in MCP duplicates; got {files:?}"
+        "generated `.g.dart` files must never appear in MCP top-offenders; got {files:?}"
     );
     ensure!(
         files.iter().any(|name| name == "cart_totals.dart")
             && files.iter().any(|name| name == "order_totals.dart"),
-        "the hand-written Dart clone must still surface over MCP duplicates; got {files:?}"
+        "the hand-written Dart clone must still surface over MCP top-offenders; got {files:?}"
     );
     Ok(())
 }

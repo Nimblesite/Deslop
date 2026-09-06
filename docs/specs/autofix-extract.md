@@ -2,8 +2,8 @@
 
 Deslop's mechanical autofixes rewrite duplicate code **without an AI in the loop and without changing behaviour.** The family, in escalating order of what each handles:
 
-1. **[AUTOFIX-EXTRACT]** — components whose required effective-span pairs are byte-identical post-trivia: emit one shared method, rewrite every occurrence as a call. One refactor, N call-site replacements, one `WorkspaceEdit`.
-2. **[AUTOFIX-MERGE]** — components whose required endpoint pairs have leaf-gap Type-2 or constrained Type-3 relations (the 50+-call-site case): anti-unify the occurrences into one parameterised helper whose differing leaves become parameters — with **default values** for positions that are constant across almost every site — then rewrite all sites.
+1. **[AUTOFIX-EXTRACT]** — true **Type-1** clusters (raw token streams byte-identical post-trivia): emit one shared method, rewrite every occurrence as a call. One refactor, N call-site replacements, one `WorkspaceEdit`.
+2. **[AUTOFIX-MERGE]** — **leaf-gap Type-2 / constrained Type-3** clusters (the 50+-call-site case): anti-unify the occurrences into one parameterised helper whose differing leaves become parameters — with **default values** for positions that are constant across (almost) every site — then rewrite all sites.
 3. **[AUTOFIX-CONSOLIDATE]** — an **identical definition duplicated across files**: keep one canonical copy, delete the duplicates, and rewrite imports/references everywhere.
 4. **[AUTOFIX-EXTRACT-AI]** — the **fallback** for what is genuinely not mechanical (structural drift, Type-4, intent-laden naming).
 
@@ -18,18 +18,18 @@ Two pillars make these actions zero-risk:
 
 When any precondition is undecidable or fails, the action **refuses and routes to `[AUTOFIX-EXTRACT-AI]`** — biased, per Opdyke, toward a false "unsafe" over a false "safe".
 
-## [AUTOFIX-EXTRACT-NORTH-STAR] Scope and non-goals of the verbatim action
+## [AUTOFIX-EXTRACT-NORTH-STAR] Scope and non-goals (the Type-1 verbatim action)
 
-This section governs `[AUTOFIX-EXTRACT]` specifically — the simplest action, pure tree-sitter, no semantic model. Components that require Type-2 leaf-gap endpoint relations and cross-file duplicates are handled mechanically by `[AUTOFIX-MERGE]` and `[AUTOFIX-CONSOLIDATE]` below.
+This section governs `[AUTOFIX-EXTRACT]` specifically — the simplest action, pure tree-sitter, no semantic model. Type-2 leaf-gap clusters and cross-file duplicates are **not** abandoned to AI; they are handled mechanically by `[AUTOFIX-MERGE]` and `[AUTOFIX-CONSOLIDATE]` below.
 
 What this is:
 
-- A best-effort refactor for a component whose every required effective-span pair passes the verbatim proof. No Roslyn / rust-analyzer / pyright dependency. The result is offered as a code action the user reviews and accepts.
+- A best-effort refactor for the unambiguously-easiest clone bucket. No Roslyn / rust-analyzer / pyright dependency. The result is offered as a code action the user reviews and accepts.
 - A power-user shortcut alongside the existing diagnostic, hover, and code lens — never the only suggested fix for a duplicate.
 
 What this is **not**:
 
-- **Not a non-byte-equivalent pair relation — that is `[AUTOFIX-MERGE]`.** Renamed identifiers or literals need per-site argument lists; the verbatim single-signature extract here cannot produce them. The mechanical answer is anti-unification ([AUTOFIX-MERGE]), not AI.
+- **Not Type-2 — that is `[AUTOFIX-MERGE]`.** Renamed identifiers/literals need per-site argument lists; the verbatim single-signature extract here cannot produce them. The mechanical answer is anti-unification ([AUTOFIX-MERGE]), not AI.
 - **Not cross-file — that is `[AUTOFIX-CONSOLIDATE]`.** This action requires all occurrences to share the same file URI; cross-file identical definitions are consolidated mechanically by `[AUTOFIX-CONSOLIDATE]`.
 - **Not cross-class in v1.** Even within a file, occurrences in two different classes are skipped.
 - **Not type-aware.** Parameter and return types are syntactic placeholders. The user accepts the result may not compile.
@@ -41,9 +41,7 @@ User-facing copy on the action: *"Extract identical code to shared method"*. Cav
 
 For a cluster `C` to be eligible, **all** of these must hold:
 
-1. **The effective rewrite spans are proven byte-equivalent.** The refactor layer verifies whitespace-canonicalised byte-equivalence on every concrete source/target pair of effective spans it will rewrite (rule 5) before offering the action. The proof is [CLONE-BUCKETS-IDENTICAL] rerun in-process on the exact bytes; no cluster label is consulted.
-
-   **Cluster membership is not sufficient proof for a rewrite.** Before an action can merge or delete occurrences, it requests pair evidence for every concrete source/target relation the edit relies on and requires the applicable [FUSED-CONTENT-GATE]. Byte-equivalence is proved pair by pair under [CLONE-BUCKETS-IDENTICAL].
+1. **The effective rewrite spans are proven byte-equivalent.** The cluster must sit in an exact-structural bucket (`Identical`, `NearlyIdentical`, or `StructuralOnly`), and the refactor layer verifies whitespace-canonicalised byte-equivalence on the **effective spans** it will rewrite (rule 5) before offering the action — the same proof `[CLONE-BUCKETS-IDENTICAL]` uses for the `Identical` bucket, re-run in-process on the exact bytes. The bucket alone is *not* sufficient: the pipeline's nested-cluster collapse (`[PIPELINE-CLUSTER-EXACT]` issue #50) keeps the *outer* view of a duplicated region, so the flagship case — two byte-identical method bodies behind differently-named signatures — always surfaces as a method-level Type-2 cluster, never as an `Identical` one. The slice proof, not the label, is the Type-1 gate. There is no `kind_detail` field; see [AUTOFIX-EXTRACT-DEPENDENCIES].
 2. `C.occurrences.len() ≥ 2`.
 3. Every occurrence resolves to the **same file URI**.
 4. Every occurrence's enclosing scope is a method/function (C#: method / property accessor / local function; Rust: `fn` / `impl fn`; Python: `def` / `async def` / module top-level), and every occurrence shares the **same enclosing parent one level up** (C#: same containing class; Rust: same `impl` block or same module; Python: same containing class or same module).
@@ -188,7 +186,7 @@ Coarse end-to-end only, per CLAUDE.md. `crates/deslop-lsp/tests/code_action.rs` 
 1. Opens a fixture C# file containing two byte-identical method bodies in the same class. Asserts a `refactor.extract` code action is offered, the `WorkspaceEdit` inserts a `private static` method, both occurrences become call sites, and the resulting buffer matches a golden snapshot.
 2. Same shape for Rust (free function inserted at module scope plus the `DeslopTodo` alias) and Python (function at module scope).
 3. Asserts **no** action is offered when:
-   - A required source/target pair is non-byte-equivalent because identifiers were renamed.
+   - The cluster is Type-2 (renamed identifiers between occurrences).
    - Occurrences span two files.
    - Occurrences are in different classes within the same file (C#).
    - Occurrence count is 1.
@@ -200,7 +198,7 @@ Goldens live under `crates/deslop-lsp/tests/fixtures/code_action/`. Test referen
 
 ## [AUTOFIX-EXTRACT-DEPENDENCIES] Hard prerequisites
 
-1. **Issue [#42](https://github.com/Nimblesite/Deslop/issues/42) — shipped** (PR #63). [CLONE-BUCKETS-IDENTICAL] established the byte-equivalence proof that separates a verbatim pair from a rename. The action reruns that proof on every effective rewrite pair; it never consumes a component label or score.
+1. **Issue [#42](https://github.com/Nimblesite/Deslop/issues/42) — shipped** (PR #63). The bucket distinguishes true Type-1 from Type-2 without a new field: `report_bucket_kind` demotes any signal-`Identical` cluster whose member slices are not whitespace-canonicalised byte-equivalent to `NearlyIdentical`, and upgrades proven byte-equivalent structural clusters to `Identical` (`[CLONE-BUCKETS-IDENTICAL]`, issues #66/#232). Without that precedent this action would have silently fired on Type-2 clusters and produced structurally-wrong refactors at every site (the call-site argument lists would not match the method signature, because Type-2 free-var names differ across occurrences). The verbatim action does not consume the label directly: the pipeline's nested-cluster collapse (`[PIPELINE-CLUSTER-EXACT]` #50) keeps the outer Type-2 view of a duplicated region, so the refactor layer runs the same whitespace-canonicalised byte-equivalence proof itself on the effective rewrite spans ([AUTOFIX-EXTRACT-PRECONDITIONS] rules 1 and 5) — every span the action rewrites is proven byte-equal before the action is offered.
 2. **`LanguageParser` trait extension** — new methods for free-variable computation (`binding_node_kinds`, `identifier_reference_kinds`) and for emitting language-shaped method declarations (`emit_extract_method`). The trait is the single extension point for languages; this work belongs there.
 
 ---
@@ -298,7 +296,7 @@ This is the one mechanical action needing **semantic depth** beyond tree-sitter:
 
 ### [AUTOFIX-CONSOLIDATE-GATE] Preconditions
 
-REFUSE unless pair evidence vouches for every concrete occurrence relation the edit will merge or delete, and unless all hold: every duplicate definition is reference-resolvable; consolidation introduces no name collision at the canonical location; no visibility/orphan-rule break; every dependent reference is in the change set or reachable via the workspace index. Cluster membership and mass alone never authorize a rewrite.
+REFUSE unless all hold: every duplicate definition is reference-resolvable; consolidation introduces no name collision at the canonical location; no visibility/orphan-rule break (Rust `pub`/crate visibility, trait orphan rule); every dependent reference is in the change set or reachable via the workspace index. The type-safety backstop applies — in typed languages a missed/incorrect import is an immediate compile error (Python only under strict typing).
 
 **v1 resolver scope (implementation status):** Rust sibling modules only — whole top-level `fn` definitions, byte-equivalent including the signature, canonical already visible (`pub`), duplicates in the canonical file's directory, one definition of the name per duplicate file. The rewrite is `use crate::<canonical module>::<name>;` plus the definition deletion; a duplicate file that would become empty refuses (deleting it needs the `mod` declaration rewritten — the `DeleteFile` branch of [AUTOFIX-CONSOLIDATE-EDIT] lands with the full resolver). All other languages refuse with a reason. The consolidation E2E compiles the rewritten crate with `rustc`.
 
@@ -315,7 +313,7 @@ REFUSE unless pair evidence vouches for every concrete occurrence relation the e
 
 Consolidation ships through the **same lazily-resolved channels** as [AUTOFIX-MERGE] — the engine routes by cluster shape; callers never pre-classify a cluster as merge-vs-consolidate:
 
-- **LSP.** `build_for_range` may offer consolidation only after pairwise byte-equivalence or the configured pair-content contract is proved for every occurrence the action will change. `codeAction/resolve` computes the plan and returns either the mechanical `WorkspaceEdit` or a disabled reason naming the failed pair check. Cluster mass affects priority only, never authorization.
+- **LSP.** `build_for_range` offers a `refactor.rewrite` action titled *"Consolidate identical duplicates into one canonical definition"* for any cluster in an exact-structural bucket with ≥2 visible, untruncated occurrences spanning ≥2 files. `codeAction/resolve` computes the plan: mechanical → the [AUTOFIX-CONSOLIDATE-EDIT] `WorkspaceEdit` (`documentChanges` across the duplicate files); refused → `disabled.reason` carrying the human-readable routing reason ([AUTOFIX-MERGE-CODE-ACTION] step 2's consolidate branch, now normative). A cross-file identical cluster therefore **never** silently offers nothing while its diagnostic promises "Safe to extract" — the pre-v1.1 dead end of issue #277.
 - **MCP/IPC.** The existing `merge-plan` tool (and the `merge/plan` IPC method behind it) routes multi-file clusters to the consolidation engine and answers with the same wire `MergePlan`: `verdict: mechanical` carrying the multi-file `workspace_edit` and the consolidated symbol list in `helper_name`, empty `parameters`; refusals answer `ai_or_human` with the reason. One tool remains the mechanical family's whole agent surface ([AUTOFIX-MERGE-MCP]); no new wire type is needed because `workspace_edit` is already opaque JSON.
 
 ## [AUTOFIX-CATALOG] The zero-risk mechanical-fix catalog
@@ -359,7 +357,7 @@ The `refactor` logic lives in `deslop-core`; the LSP layer only assembles the `W
 
 ## [AUTOFIX-EXTRACT-AI] AI-assisted extraction — the fallback after [AUTOFIX-MERGE]
 
-The mechanical paths above handle byte-identical pairs ([AUTOFIX-EXTRACT]), leaf-gap Type-2 or constrained Type-3 pairs ([AUTOFIX-MERGE]), and cross-file identical definitions ([AUTOFIX-CONSOLIDATE]) with no AI. The AI path applies only after explicit comparisons prove the concrete rewrite relations have structural or control-flow drift, semantic support, or a naming need that the deterministic scaffold cannot express. No relation is inferred from a component label. The AI fills name slots in a Deslop-built scaffold; Deslop synthesises and validates the edit deterministically.
+The mechanical paths above handle Type-1 ([AUTOFIX-EXTRACT]), leaf-gap Type-2 / constrained Type-3 ([AUTOFIX-MERGE]), and cross-file identical definitions ([AUTOFIX-CONSOLIDATE]) **with no AI**. The AI path is the **fallback** for the residue `[AUTOFIX-MERGE-GATE]` routes to `AiOrHuman`: clusters with **structural / control-flow drift** (gaps that are not confined to leaf positions), Type-4 semantic clones, or cases where a generalising parameter **name** materially aids readability. Even then the AI never writes code — it fills name slots in a Deslop-built scaffold (below), and Deslop synthesises the edit deterministically. (Renamed-identifier Type-2 is **not** a reason to invoke AI: `[AUTOFIX-MERGE]` derives parameter names mechanically; AI naming is only a readability polish.)
 
 This section specifies the **AI-assisted path**: maximally mechanical, with a tightly bounded AI slot for the non-deterministic bits. The AI never writes code, never edits files, and never sees the broader workspace. It fills named placeholders in a Deslop-built scaffold, and Deslop synthesises the final edit deterministically.
 
@@ -392,7 +390,7 @@ That is the entire AI surface. The AI **does not**:
 
 ### [AUTOFIX-EXTRACT-AI-SCAFFOLD] The mechanical scaffold
 
-Given a component whose required source/target relations are admitted non-byte-equivalent Type-2 or constrained Type-3 pairs, Deslop computes:
+Given a Type-2 or Type-3 cluster, Deslop computes:
 
 1. Slot count, ordered by first-source-position appearance, with each slot's candidate names (one per occurrence).
 2. The body string, rendered with `__deslop_param_<i>` placeholders in place of per-site identifiers, derived from the canonical occurrence.
@@ -419,10 +417,10 @@ The LSP **does not** expose this as a `textDocument/codeAction` in v1 — code a
 
 For a cluster `C` to be eligible:
 
-1. Every concrete source/target pair required by the rewrite is admitted, is non-byte-equivalent under [CLONE-BUCKETS-IDENTICAL], and has pair evidence appropriate to a Type-2 rename or Type-3 near-miss. Every occurrence's free-variable list agrees on slot count and slot source-position. No pair score or classification is read from the cluster.
-2. Same single-file constraint as the verbatim action ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 3).
+1. The cluster is a renamed Type-2 — post-#42 these surface as `ClusterKind::NearlyIdentical` with `structural ≥ 0.99 ∧ token_jaccard ≥ 0.99` but non-byte-equivalent slices (`[CLONE-BUCKETS-IDENTICAL]` demotion) — **or** a Type-3 `ClusterKind::NearlyIdentical`; in both cases every occurrence's free-variable list must agree on slot count and slot source-position.
+2. Same single-file constraint as Type-1 ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 3).
 3. Same single-class / single-module constraint ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 4).
-4. **Slot alignment succeeded** — every occurrence agrees on the count and source-position of free-variable slots. A component whose required Type-3 endpoint relations disagree in free-variable arity is skipped because the scaffold is undefined; no Type-3 label is read from the component.
+4. **Slot alignment succeeded** — every occurrence agrees on the count and source-position of free-variable slots. Type-3 clusters where occurrences differ in free-var arity are skipped (the scaffold is undefined).
 
 ### [AUTOFIX-EXTRACT-AI-VALIDATION] Validation on AI output
 

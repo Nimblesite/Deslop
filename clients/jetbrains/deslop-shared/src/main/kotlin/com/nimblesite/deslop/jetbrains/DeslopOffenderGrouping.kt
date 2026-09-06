@@ -19,7 +19,7 @@ internal enum class Axis(val displayName: String) {
     /** Groups by the clone `bucket` — the most important axis; identical clones cluster together across languages. */
     CLONE_TYPE("Clone type"),
 
-    /** Groups by the language the engine stamped on the cluster ([PIPELINE-LANG-TRAIT]). */
+    /** Groups by the source language derived from the first occurrence's file extension. */
     LANGUAGE("Language"),
 
     /** Groups by the parent directory of the first occurrence's path. */
@@ -31,7 +31,7 @@ internal enum class Axis(val displayName: String) {
         val path = cluster.firstOccurrence.path
         return when (this) {
             CLONE_TYPE -> cloneTypeLabel(cluster.bucket)
-            LANGUAGE -> DeslopSupportedFiles.languageName(cluster.language)
+            LANGUAGE -> DeslopSupportedFiles.languageLabel(extensionOf(path))
             FOLDER -> folderOf(path)
         }
     }
@@ -48,16 +48,10 @@ internal data class OffenderOccurrence(
 /** A duplicate cluster parsed from a report; always carries at least one occurrence. */
 internal data class OffenderCluster(
     val id: String,
-    /** The engine's one-based worst-first rank over the whole report ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]). */
-    val rank: Int,
     val weight: Double,
     val size: Int,
-    /** The engine's display count of this cluster's occurrences (`report::occurrence_count`). */
-    val occurrenceCount: Int,
     val bucket: String,
     val category: String?,
-    /** The engine's language id for the cluster ([PIPELINE-LANG-TRAIT]); empty on older reports. */
-    val language: String,
     val occurrences: List<OffenderOccurrence>,
 ) {
     /** First occurrence — the one the language/folder axes and navigation key off. */
@@ -78,12 +72,7 @@ internal class GroupNode internal constructor(
     val axis: Axis,
     val value: String,
     val clusterCount: Int,
-    /**
-     * Summed weight of the clusters beneath this group. Never displayed: it exists
-     * only to order sibling groups, so the group carrying more duplication sorts
-     * first. An ordering key over engine values, not a reported figure.
-     */
-    val weightTotal: Double,
+    val weight: Double,
     override val children: List<OffenderNode>,
 ) : OffenderNode() {
     override val label: String get() = "$value ($clusterCount)"
@@ -95,9 +84,7 @@ internal class ClusterNode internal constructor(
     override val children: List<OffenderNode>,
 ) : OffenderNode() {
     override val label: String
-        get() =
-            "${cluster.occurrenceCount} clones · ${baseNameOf(cluster.firstOccurrence.path)} · " +
-                "w=${cluster.weight.toLong()}"
+        get() = "${cluster.size} clones · ${baseNameOf(cluster.firstOccurrence.path)} · w=${cluster.weight.toLong()}"
 }
 
 /** An occurrence leaf, e.g. `lib/api/client.dart:10`. */
@@ -138,7 +125,7 @@ internal object DeslopOffenderGrouping {
         val remaining = axes.drop(1)
         return clusters.groupBy(axis::keyOf)
             .map { (value, members) -> groupNode(axis, value, members, remaining) }
-            .sortedByDescending(GroupNode::weightTotal)
+            .sortedByDescending(GroupNode::weight)
     }
 
     private fun groupNode(axis: Axis, value: String, members: List<OffenderCluster>, remaining: List<Axis>) =
@@ -148,13 +135,9 @@ internal object DeslopOffenderGrouping {
         ClusterNode(cluster, cluster.occurrences.map(::OccurrenceNode))
 }
 
-/**
- * Clusters in the engine's own worst-first order ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]).
- * Sorting by the stamped rank reproduces the report's ranking exactly, tie-break
- * included; re-deriving it from `weight` here would be a second ranking engine.
- */
+/** Clusters sorted worst-first (weight descending, stable), the user-visible ranking order. */
 private fun List<OffenderCluster>.worstFirst(): List<OffenderCluster> =
-    sortedBy(OffenderCluster::rank)
+    sortedByDescending(OffenderCluster::weight)
 
 /** Parses every well-formed cluster from a report JSON string, ignoring unknown keys. */
 private fun parseClusters(reportJson: String): List<OffenderCluster> =
@@ -166,16 +149,12 @@ private fun parseClusters(reportJson: String): List<OffenderCluster> =
 private fun parseCluster(node: JsonObject): OffenderCluster? {
     val occurrences = node["occurrences"]?.jsonArray.orEmpty().mapNotNull { parseOccurrence(it.jsonObject) }
     if (occurrences.isEmpty()) return null
-    val size = node.intOr("size", occurrences.size)
     return OffenderCluster(
         id = node.stringOr("id", ""),
-        rank = node.intOr("rank", 0),
         weight = node.doubleOr("weight", 0.0),
-        size = size,
-        occurrenceCount = node.intOr("occurrence_count", size),
+        size = node.intOr("size", occurrences.size),
         bucket = node.stringOr("bucket", ""),
         category = node.stringOrNull("category"),
-        language = node.stringOr("language", ""),
         occurrences = occurrences,
     )
 }
@@ -211,6 +190,10 @@ private fun folderOf(path: String): String {
 
 /** The final path segment of [path] (its file name), slash-normalised. */
 private fun baseNameOf(path: String): String = path.replace('\\', '/').substringAfterLast('/')
+
+/** The file extension of [path] (without the dot), or null when the file name has none. */
+private fun extensionOf(path: String): String? =
+    baseNameOf(path).takeIf { it.contains('.') }?.substringAfterLast('.')
 
 /** Folder label shown when a first occurrence has no parent directory. */
 private const val ROOT_FOLDER = "(root)"

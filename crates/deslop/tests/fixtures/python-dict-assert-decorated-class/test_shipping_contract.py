@@ -3,8 +3,8 @@ import pytest
 
 @pytest.mark.usefixtures("database")
 class TestShippingContract:
-    session = build_session("shipping", 30)
+    session = build_session("shipping", 45)
 
-    def test_total(self):
-        payload = {"invoice": {"total": 250}}
-        assert payload["invoice"]["total"] == 250
+    def test_manifest_weight(self):
+        payload = {"manifest": {"weight": 250}}
+        assert payload["manifest"]["weight"] == 250

@@ -10,25 +10,28 @@ import {
   resolveWorkspaceRoot,
   surfaceStartupFailure,
   syncEmbeddingSettingsToLsp,
+  wireNotifications,
 } from "../../extension";
-import { wireNotifications } from "../../notifications";
 import { LifecyclePhase, ReportStore } from "../../reportStore";
 import { AnalysisState, Report } from "../../types/report";
-import { emptyReport, repoMetrics } from "./report.helpers";
-
-const OLLAMA_PROVIDER_ID = "ollama";
-const DEFAULT_EMBEDDING_MODEL = "nomic-embed-text";
-const FAILED_LIFECYCLE_KIND = "failed";
-const AUTO_EMBEDDING_MODE = "auto";
+import { repoMetrics } from "./report.helpers";
 
 function reportWithEmbedding(
   embedding: Report["embedding_provenance"] = undefined,
 ): Report {
-  return emptyReport({
+  return {
     tool_version: "v",
+    min_nodes: 30,
+    files_analysed: 0,
+    clusters_hidden: 0,
+    cache_stats: { hits: 0, misses: 0 },
     metrics: repoMetrics(),
+    schema_doc: "",
+    action_hints: [],
+    boilerplate_hints: [],
     embedding_provenance: embedding,
-  });
+    clusters: [],
+  };
 }
 
 async function setEmbeddingConfig(values: {
@@ -39,8 +42,8 @@ async function setEmbeddingConfig(values: {
 }): Promise<void> {
   const cfg = vscode.workspace.getConfiguration("deslop");
   await cfg.update("embedding.mode", values.mode, vscode.ConfigurationTarget.Global);
-  await cfg.update("embedding.provider", values.provider ?? OLLAMA_PROVIDER_ID, vscode.ConfigurationTarget.Global);
-  await cfg.update("embedding.model", values.model ?? DEFAULT_EMBEDDING_MODEL, vscode.ConfigurationTarget.Global);
+  await cfg.update("embedding.provider", values.provider ?? "ollama", vscode.ConfigurationTarget.Global);
+  await cfg.update("embedding.model", values.model ?? "nomic-embed-text", vscode.ConfigurationTarget.Global);
   await cfg.update(
     "embedding.endpoint",
     values.endpoint ?? "http://127.0.0.1:11434",
@@ -50,7 +53,7 @@ async function setEmbeddingConfig(values: {
 
 async function resetDeslopConfig(): Promise<void> {
   const cfg = vscode.workspace.getConfiguration("deslop");
-  await setEmbeddingConfig({ mode: "off", provider: OLLAMA_PROVIDER_ID, model: DEFAULT_EMBEDDING_MODEL });
+  await setEmbeddingConfig({ mode: "off", provider: "ollama", model: "nomic-embed-text" });
   await cfg.update("minNodes", 30, vscode.ConfigurationTarget.Global);
   await cfg.update("incremental", true, vscode.ConfigurationTarget.Global);
   await cfg.update("configPath", "", vscode.ConfigurationTarget.Global);
@@ -77,7 +80,7 @@ suite("extension coverage branches", () => {
     await cfg.update("configPath", "/tmp/deslop.toml", vscode.ConfigurationTarget.Global);
     await setEmbeddingConfig({
       mode: "required",
-      provider: OLLAMA_PROVIDER_ID,
+      provider: "ollama",
       model: "nomic-embed-code",
       endpoint: "http://127.0.0.1:9000",
     });
@@ -85,7 +88,7 @@ suite("extension coverage branches", () => {
     assert.deepEqual(currentInitializationOptions(), {
       minNodes: 42,
       embedding: {
-        provider: OLLAMA_PROVIDER_ID,
+        provider: "ollama",
         model: "nomic-embed-code",
         endpoint: "http://127.0.0.1:9000",
         mode: "required",
@@ -99,9 +102,9 @@ suite("extension coverage branches", () => {
     const store = new ReportStore();
     surfaceStartupFailure(new Error("boom"), store);
 
-    assert.equal(store.current.lifecycle.kind, FAILED_LIFECYCLE_KIND);
+    assert.equal(store.current.lifecycle.kind, "failed");
     assert.match(
-      store.current.lifecycle.kind === FAILED_LIFECYCLE_KIND ? store.current.lifecycle.message : "",
+      store.current.lifecycle.kind === "failed" ? store.current.lifecycle.message : "",
       /failed to start/i,
     );
   });
@@ -133,18 +136,18 @@ suite("extension coverage branches", () => {
 
     stateCb?.({ state: "errored", message: "Analysis failed: bad fixture" });
     const failed: LifecyclePhase = store.current.lifecycle;
-    assert.equal(failed.kind, FAILED_LIFECYCLE_KIND);
+    assert.equal(failed.kind, "failed");
     assert.ok(
-      failed.kind === FAILED_LIFECYCLE_KIND && /Analysis failed/.test(failed.message),
+      failed.kind === "failed" && /Analysis failed/.test(failed.message),
       "errored analysis state must surface its message on the failed lifecycle",
     );
   });
 
   test("syncEmbeddingSettingsToLsp skips when no client or embeddings are off", async () => {
-    await setEmbeddingConfig({ mode: AUTO_EMBEDDING_MODE, provider: OLLAMA_PROVIDER_ID, model: DEFAULT_EMBEDDING_MODEL });
+    await setEmbeddingConfig({ mode: "auto", provider: "ollama", model: "nomic-embed-text" });
     await syncEmbeddingSettingsToLsp(new ReportStore(), () => undefined);
 
-    await setEmbeddingConfig({ mode: "off", provider: OLLAMA_PROVIDER_ID, model: DEFAULT_EMBEDDING_MODEL });
+    await setEmbeddingConfig({ mode: "off", provider: "ollama", model: "nomic-embed-text" });
     const client = {
       sendRequest: () => {
         throw new Error("must not be called");
@@ -154,7 +157,7 @@ suite("extension coverage branches", () => {
   });
 
   test("syncEmbeddingSettingsToLsp skips pending and already-active models", async () => {
-    await setEmbeddingConfig({ mode: AUTO_EMBEDDING_MODE, provider: OLLAMA_PROVIDER_ID, model: DEFAULT_EMBEDDING_MODEL });
+    await setEmbeddingConfig({ mode: "auto", provider: "ollama", model: "nomic-embed-text" });
     const client = {
       sendRequest: () => {
         throw new Error("must not be called");
@@ -162,18 +165,17 @@ suite("extension coverage branches", () => {
     } as unknown as LanguageClient;
 
     const pending = new ReportStore();
-    pending.setPendingEmbeddingModel(DEFAULT_EMBEDDING_MODEL);
+    pending.setPendingEmbeddingModel("nomic-embed-text");
     await syncEmbeddingSettingsToLsp(pending, () => client);
 
     const active = new ReportStore();
     active.setSnapshot(
       reportWithEmbedding({
-        provider_id: OLLAMA_PROVIDER_ID,
-        model_id: DEFAULT_EMBEDDING_MODEL,
+        provider_id: "ollama",
+        model_id: "nomic-embed-text",
         model_version: "0",
         dimensions: 768,
         attempted_subtrees: 0,
-        succeeded_subtrees: 0,
         indexed_subtrees: 0,
         failed_subtrees: 0,
       }),
@@ -184,8 +186,8 @@ suite("extension coverage branches", () => {
 
   test("syncEmbeddingSettingsToLsp clears pending model when the LSP rejects", async () => {
     await setEmbeddingConfig({
-      mode: AUTO_EMBEDDING_MODE,
-      provider: OLLAMA_PROVIDER_ID,
+      mode: "auto",
+      provider: "ollama",
       model: "broken-model",
       endpoint: "http://127.0.0.1:11434",
     });

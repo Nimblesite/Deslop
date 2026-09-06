@@ -81,7 +81,7 @@ pub fn compute_plan(
     let free_variables = scopes.first().map_or_else(Vec::new, |scope| {
         free_vars::free_variables(&scope.run, source, tables)
     });
-    if dataflow_refusal(&scopes, &free_variables, source, parser, scope_kinds).is_err() {
+    if !passes_dataflow_rules(&scopes, &free_variables, source, parser, scope_kinds) {
         return Ok(None);
     }
     let request = EmitRequest {
@@ -100,18 +100,16 @@ pub fn compute_plan(
 /// corrupt the enclosing code when rewritten as a call — and rule 7
 /// — a span writing one of its free variables would
 /// mutate the helper's parameter copy, silently losing the mutation.
-/// The extract tier refuses silently and discards the reason; the
-/// merge planner surfaces it before routing a byte-identical candidate
-/// to the verbatim extract action ([AUTOFIX-MERGE-SAFETY]).
-pub(crate) fn dataflow_refusal(
+/// The extract tier refuses silently; reasons are discarded.
+fn passes_dataflow_rules(
     scopes: &[preconditions::OccurrenceScope<'_>],
     free_variables: &[String],
     source: &[u8],
     parser: &dyn LanguageParser,
     scope_kinds: &'static tables::ScopeKinds,
-) -> Result<(), String> {
-    read_after::read_after_check(scopes, source, parser, scope_kinds)?;
-    read_after::write_in_span_check(scopes, free_variables, source, scope_kinds)
+) -> bool {
+    read_after::read_after_check(scopes, source, parser, scope_kinds).is_ok()
+        && read_after::write_in_span_check(scopes, free_variables, source, scope_kinds).is_ok()
 }
 
 /// Free variables of a raw statement run in first-reference order —

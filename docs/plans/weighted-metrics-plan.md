@@ -1,33 +1,48 @@
-# Remove evidence-weighted metrics — wholesale deletion plan
+# Evidence-weighted duplication metric — plan
 
-[METRICS-REPO-WEIGHTED](../specs/pipeline.md#metrics-repo-weighted) and [EXIT-CODES-WEIGHTED](../specs/pipeline.md#exit-codes-weighted) prohibit evidence-weighted repository figures and gates. Pair evidence cannot be projected onto a closure component or a covered line. This plan deletes the design and every partial implementation in one cutover; it does not preserve a dormant configuration or compatibility wire field.
+Implements [pipeline.md §METRICS-REPO-WEIGHTED](../specs/pipeline.md#metrics-repo-weighted) and [§EXIT-CODES-WEIGHTED](../specs/pipeline.md#exit-codes-weighted); config surface in [exclusion.md](../specs/exclusion.md). The spec is normative — this plan is sequencing, touch-list, and test contract only.
 
-## Contract
+**Problem.** `metrics.duplication_percent` counts every visible line at equal weight, so a `structural_only` family — evidence the tool itself labels "unverified, verify before extracting" — moves the CI gate exactly like byte-proven copy-paste. This is the open metrics row of gh **#344** (Gap 3 of the fused rollout), and gh **#355** is a measured instance: a Dart delegating-method family alone producing `duplication_percent = 13.71`.
 
-- The repository carries one duplication percentage: `100 × duplicated_loc / analysed_loc`, with the zero-denominator rule in [METRICS-REPO](../specs/pipeline.md#metrics-repo).
-- Each duplicated line counts once. Pair evidence, pair classification, finding kind, confidence, and severity do not scale it.
-- The repository has one threshold gate: `--fail-over` or `[threshold] max_duplication_percent`. No weighted gate exists.
-- Cluster mass is [RANK-MASS-SUM], not a metric percentage and not an input to `duplication_percent`.
+## Decisions (settled — do not reopen)
 
-## One destructive removal
+1. **Two metrics, not one formula.** The mechanical percentage is untouched, unconfigurable, and stays the default gate — it is the industry-comparable number (SonarQube `duplicated_lines_density` precedent) and every existing ratcheted threshold depends on its meaning. The weighted percentage ships beside it, always both on the wire.
+2. **Weights follow measured evidence class, not academic type number.** Per-bucket × per-category declared constants (defaults in the spec table: `identical`/`nearly_identical` 1.0, `same_behavior` 0.5, `structural_only` 0.15, `loosely_similar` 0.0; `data` 0.15). Grounding: [reading-list.md §metrics](../specs/reading-list.md#read-list-metrics) — Svajlenko & Roy 2015 (reliability degrades across similarity bands), Kapser & Godfrey 2008 (shape-level cloning is frequently benign), Bellon et al. 2007 (per-type precision differs).
+3. **Not fused-scaled.** A continuous confidence multiplier would make the percentage a function of fusion internals still being hardened (#343 lineage) and irreproducible from the report. Bucket constants, echoed on the wire, recomputable by anyone.
+4. **Per-line max-weight-wins.** Overlap takes the strongest covering evidence, never the sum — no line exceeds 1.0, and a weak cluster cannot dilute a proven one. Invariant: weighted ≤ mechanical whenever all weights ≤ 1.0; equal at all-1.0.
+5. **Two independent gates, one kill switch.** `--fail-over-weighted` / `[threshold] max_weighted_duplication_percent` mirror the mechanical gate; either breach exits `3`; `--no-fail-over` disables both.
+6. **Weighting is not a routing fix.** A misrouted cluster (e.g. the #283/#284/#285 promotions to `nearly_identical`) enters the weighted numerator at full weight; those stay separate accuracy bugs. The weighted metric prices honest labels — it does not launder dishonest ones.
 
-- [x] Remove the weighted metric, weighted gate, weight tables, and multipliers from the governing specifications.
-- [ ] Delete `WeightedMetrics`, weighted file/folder fields, resolved weight-table fields, and weighted threshold fields from `docs/models/live-ipc.td`; regenerate every Rust and TypeScript model.
-- [ ] Delete `[metrics.bucket_weights]`, `[metrics.category_weights]`, validation, defaults, CLI overrides, environment plumbing, and serialization.
-- [ ] Delete `--fail-over-weighted`, `max_weighted_duplication_percent`, two-gate resolution, weighted verdicts, and weighted exit-code branches.
-- [ ] Delete weighted numerator calculation, per-line evidence lookup, bucket/category weight lookup, weighted folder rollup, and every helper used only by them.
-- [ ] Delete weighted text, HTML, JSON, LSP, MCP, VSIX, site, and documentation rendering. Do not leave hidden fields, empty placeholders, deprecated aliases, or no-op switches.
-- [ ] Replace tests that assert weighted output with strict negative schema tests and positive mechanical-metric tests; never remove the underlying coverage assertions.
+## Work items, in order
 
-## Proof
+1. **Config** — `crates/deslop-core/src/config.rs`: parse `[metrics.bucket_weights]` / `[metrics.category_weights]`, validate finite `[0.0, 1.0]` (`ConfigThreshold`-style error naming the path; `0.0` legal, unlike `[ranking]`), resolve into a `MetricWeights` carried beside `RankingPolicy`.
+2. **Wire model** — `docs/models/live-ipc.td`: `WeightedMetrics { duplicated_loc: Float, duplication_percent: Float, threshold: ThresholdSummary, bucket_weights, category_weights }` on `RepoMetrics`; `weighted_duplicated_loc` / `weighted_duplication_percent` on `FileMetric`. Regenerate; never hand-edit generated code.
+3. **Computation** — `crates/deslop-core/src/report_metrics.rs`: in the existing `fold_cluster_lines` projection, carry each line's max effective weight alongside the `BTreeSet<u64>` union (same visible set, same hidden/literal-family exclusions — one projection, two aggregations, so the metrics cannot drift apart).
+4. **Gate** — `ThresholdSummary::resolve` reused for the weighted ceiling; `render_report` fills `metrics.weighted.threshold`; `crates/deslop/src/main.rs` adds `--fail-over-weighted`, extends `--no-fail-over` to both, maps either breach to exit `3`.
+5. **Renderers** — text/HTML header carries both figures per [METRICS-REPO]; JSON canonical. VSIX Duplication panel headline ([vsix.md §VSIX-METRICS-PANEL](../specs/vsix.md#vsix-metrics-panel)) and the metrics webview show the weighted figure beside the mechanical one; per-folder rollups sum weighted numerators.
+6. **Docs shipped to agents** — `REPORTING-CONTEXT.md` (`schema_doc`) gains the weighted fields and gate; fold into the #345 drift sweep. Update `site/src/docs/accuracy-transparency.md` from "specified, tracked in #344" to the shipped formula.
 
-- [ ] Black-box CLI tests assert exact `analysed_loc`, `duplicated_loc`, `duplication_percent`, per-file values, folder values, threshold source, breach flag, exit code, and rendered text/HTML.
-- [ ] Configuration tests reject every retired weighted key and flag with a named invalid-configuration or invalid-argument error.
-- [ ] Generated-model tests prove no weighted field or table exists in Rust or TypeScript.
-- [ ] Regression tests prove changing pair evidence without changing visible occurrence coverage cannot change repository metrics.
-- [ ] Repository-wide searches find no executable weighted-metric type, field, flag, config key, renderer, or compatibility branch.
-- [ ] Full CI and installed VSIX verification pass with the one mechanical metric on every surface.
+## Test contract (write first; watch each fail)
 
-## Completion
+Coarse E2E over fixture repos, asserting rendered reports — never internals:
 
-This plan is complete when the weighted design is absent from the wire, engine, configuration, CLI, renderers, clients, tests, and installed VSIX, and the one unweighted repository metric is identical on every surface.
+- **Mixed-evidence fixture**: one verbatim cross-file clone + one cross-file `structural_only` sibling family + one data table. Assert cluster set, buckets, occurrence counts and paths; assert exact `duplicated_loc`, `duplication_percent`, `weighted_duplicated_loc`, `weighted_duplication_percent` (hand-computed from the fixture's line counts and the default table); assert weighted < mechanical, and the echoed weight table on the wire.
+- **All-identical fixture**: weighted == mechanical at full `f64` precision.
+- **No-`[metrics]`-section invariance**: mechanical fields byte-identical across runs with and without a `[metrics]` section; with `structural_only = 0.0` the weighted numerator drops by exactly the family's line count and mechanical is unchanged.
+- **Overlap fixture**: a line covered by both an `identical` and a `structural_only` cluster counts `1.0` weighted — max, not `1.15`.
+- **Gate matrix**: mechanical-only breach, weighted-only breach, both, neither → exit codes `3/3/3/0`; equality passes both; `--no-fail-over` suppresses both; invalid weight → exit `2` naming the path.
+- **Config rejection**: `NaN`, `-0.1`, `1.5` each rejected.
+- **#355 fixture**: once its family is correctly hidden, both numerators exclude it; until then the weighted figure prices it at `0.15` — assert the current exact values so any drift is loud.
+- **Determinism**: two runs, identical weighted figures (extends the #301 corpus checks).
+
+Coverage thresholds ratchet in `coverage-thresholds.json` as usual.
+
+## Related issues
+
+- **#344** — primary tracker (metrics/gate row of the confidence rollout). This plan closes that row only; the other #344 surfaces stay in [fused-score-followups.md](fused-score-followups.md).
+- **#343** — fixed prerequisite: bucket labels now sit on bounded, content-gated evidence, which is what makes bucket-keyed weights meaningful.
+- **#355** — measured inflation instance; mitigated at 0.15 by this plan, actually fixed by its own routing repair.
+- **#336** — data-table precedent; `category_weights.data` default mirrors its ranking outcome.
+- **#345** — doc-drift sweep; item 6 rides with it (`schema_doc`, site page).
+- **#283/#284/#285** — routing promotions that weighting deliberately does not paper over (decision 6).
+- **#347** — the corpus gate should record both figures per repo once it runs, so the weighted metric gets real-repository baselines from day one.

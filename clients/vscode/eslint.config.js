@@ -209,13 +209,7 @@ const quickPickLifecyclePlugin = {
       },
       create(context) {
         const filename = normalizedFilename(context);
-        // The bootstrap (extension.ts seeds the initial report) and the
-        // serialised notification refresh path (notifications.ts) are the
-        // only two production callers allowed to refetch the full report.
-        const allowed =
-          filename.endsWith("/src/extension.ts") ||
-          filename.endsWith("/src/notifications.ts");
-        if (!isProductionVsixSource(context) || allowed) {
+        if (!isProductionVsixSource(context) || filename.endsWith("/src/extension.ts")) {
           return {};
         }
         return {
@@ -304,7 +298,6 @@ module.exports = tseslint.config(
       "*.vsix",
       "eslint.config.js",
       "esbuild.mjs",
-      "playwright.config.mjs",
       ".vscode-test.mjs",
       ".vscode-test-ollama.mjs",
       "scripts/**",

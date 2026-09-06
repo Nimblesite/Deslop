@@ -1,8 +1,8 @@
 # Deslop
 
-Live duplicate-code analysis inside your IDE. Inline warnings as you type,
-worst-offender view, and a live channel your AI agent can consult before it
-copy-pastes.
+Live duplicate and dead code analysis inside your IDE. Inline warnings as you
+type, worst-offender view, and a live channel your AI agent can consult before
+it copy-pastes.
 
 [Install for VS Code](https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live) ·
 [Add to GitHub Actions](https://deslop.live/docs/github-action/) ·
@@ -26,15 +26,8 @@ You can also install a platform-specific VSIX from the
 code --install-extension deslop-live-X.Y.Z-<target>.vsix
 ```
 
-The extension bundles the LSP server, MCP server, and CLI.
-
-### JetBrains IDEs
-
-The JetBrains plugin ships as a zip on the
-[releases page](https://github.com/Nimblesite/Deslop/releases/latest) — install
-it from disk, along with
-[LSP4IJ](https://plugins.jetbrains.com/plugin/23257-lsp4ij). It is not on the
-JetBrains Marketplace yet.
+The extension bundles the LSP server, MCP server, and CLI. JetBrains support is
+in development.
 
 ## Add it to your pipeline
 
@@ -42,15 +35,10 @@ JetBrains Marketplace yet.
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: Nimblesite/Deslop@vX.Y.Z
+- uses: Nimblesite/Deslop@v0.34.0
   with:
     fail-over: "5.0" # fail above 5% duplicated lines
 ```
-
-Substitute the [newest release](https://github.com/Nimblesite/Deslop/releases/latest)
-for `X.Y.Z` — the tag you pin *is* the CLI version the action installs. The
-[Action reference](https://deslop.live/docs/github-action/) renders the current
-number.
 
 The action analyses the workspace, uploads JSON, text, and HTML reports, and
 fails the job if duplication exceeds the threshold. It needs no token and only
@@ -79,10 +67,6 @@ scoop bucket add nimblesite https://github.com/Nimblesite/scoop-bucket
 scoop install deslop
 ```
 
-On macOS or Linux without Homebrew, `curl` the latest release archive instead —
-the [install docs](https://deslop.live/docs/#macos--linux-curl) have a
-checksum-verified snippet that always resolves the newest version.
-
 ## How it works
 
 Deslop parses code with tree-sitter and compares structure instead of merely
@@ -97,7 +81,7 @@ implementations across a repository.
 All three surfaces use the same analysis engine. The worst offenders come first
 so the report starts with the cleanup that matters most.
 
-Supported languages: C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP,
+Supported languages: C#, Rust, Python, Dart, JavaScript, TypeScript, TSX, PHP,
 F#, and Go.
 
 ## Connect a coding agent
@@ -118,18 +102,20 @@ deslop . --output ./report     # write report.json, report.txt, report.html
 ```
 
 Configuration lives in `.deslop.toml`. See the
-[configuration reference](https://deslop.live/docs/configuration/), and
-[report output](https://deslop.live/docs/configuration/#report-output) for the
-report files.
+[configuration reference](https://deslop.live/docs/configuration/) and
+[configuration and reports guide](https://deslop.live/docs/configuration/#report-output).
 
 ## Project direction — accuracy first
 
-Accuracy outranks features, languages, UI, and performance: every reported
-cluster must be a real duplicate, and every real duplicate must be reported.
-Fixing code that can cause a false positive or false negative comes before all
-other work.
+Deslop is proven useful across every language it parses. Accuracy is now the
+highest-value aim, ahead of features, languages, UI, and performance: every
+reported cluster must be a real duplicate, and every real duplicate must be
+reported. Fixing code that can cause a false positive or false negative
+outranks all other work.
 
-See [the messaging guide](docs/messaging.md) and
+Duplicate code is where Deslop starts, not where it ends — finding slop,
+preventing more, and removing it safely is the longer arc. See
+[the messaging guide](docs/messaging.md) and
 [the design specification](docs/specs/SPEC.md).
 
 ## Contributing

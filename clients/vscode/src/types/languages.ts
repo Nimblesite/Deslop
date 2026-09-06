@@ -5,22 +5,19 @@
 // `<select>` and grouping surface to derive from this registry instead
 // of hand-listing values.
 
-const JAVASCRIPT_LANGUAGE_ID = "javascript";
-const FSHARP_LANGUAGE_ID = "fsharp";
-
 const EXTENSION_LANGUAGE: Record<string, string> = {
   cs: "csharp",
   rs: "rust",
   py: "python",
   dart: "dart",
-  js: JAVASCRIPT_LANGUAGE_ID,
-  mjs: JAVASCRIPT_LANGUAGE_ID,
-  cjs: JAVASCRIPT_LANGUAGE_ID,
-  jsx: JAVASCRIPT_LANGUAGE_ID,
+  js: "javascript",
+  mjs: "javascript",
+  cjs: "javascript",
+  jsx: "javascript",
   ts: "typescript",
   tsx: "tsx",
-  fs: FSHARP_LANGUAGE_ID,
-  fsx: FSHARP_LANGUAGE_ID,
+  fs: "fsharp",
+  fsx: "fsharp",
   php: "php",
   go: "go",
 };
@@ -76,11 +73,11 @@ export const ANALYSED_LANGUAGE_IDS: readonly string[] = [
   "rust",
   "python",
   "dart",
-  JAVASCRIPT_LANGUAGE_ID,
+  "javascript",
   "javascriptreact",
   "typescript",
   "typescriptreact",
-  FSHARP_LANGUAGE_ID,
+  "fsharp",
   "php",
   "go",
 ];

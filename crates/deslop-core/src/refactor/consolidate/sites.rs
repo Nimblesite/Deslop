@@ -9,9 +9,13 @@ use std::{collections::HashMap, path::PathBuf};
 use tree_sitter::Node;
 
 use crate::{
-    ast::{named_children, ByteRange},
+    ast::ByteRange,
     lang::{shared::parse_source, LanguageParser},
-    refactor::{consolidate::DefinitionSite, preconditions::node_text, RefactorError},
+    refactor::{
+        consolidate::DefinitionSite,
+        preconditions::{named_children, node_text},
+        RefactorError,
+    },
     report::{ReportCluster, ReportOccurrence},
 };
 

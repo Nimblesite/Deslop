@@ -1,9 +1,9 @@
 //! `textDocument/codeLens` provider ([LSP-CODE-LENS]).
 //!
 //! Emits one code lens per occurrence in the requested file. The lens
-//! title carries only the cluster count, and the attached command jumps
-//! to the next occurrence. Pair evidence belongs exclusively to explicit
-//! two-endpoint comparison ([FUSED-PAIR-SIGNALS]).
+//! title carries cluster count + signals so a reader sees the full
+//! context without opening the report view, and the attached command
+//! jumps to the next occurrence.
 
 use std::path::Path;
 
@@ -54,13 +54,15 @@ fn lens_for_occurrence(cluster: &ReportCluster, occurrence_index: usize) -> Code
 }
 
 /// Builds the lens title. Spec-compliant two-dot severity glyph at
-/// the front, cluster count, then the jump action.
-///
-/// [FUSED-PAIR-SIGNALS] The admission signals are pair measurements and
-/// never touch the cluster; a code lens on one occurrence must not render
-/// them. The title states the cluster's copy count only.
+/// the front, cluster count, then the three signals.
 fn title_for(cluster: &ReportCluster) -> String {
-    format!("●● {} copies — jump to next", cluster.occurrence_count)
+    format!(
+        "●● {count} copies — structural {structural:.2} · jaccard {jaccard:.2} · embedding {embedding:.2} — jump to next",
+        count = cluster.size,
+        structural = cluster.signals.structural,
+        jaccard = cluster.signals.token_jaccard,
+        embedding = cluster.signals.embedding_cos,
+    )
 }
 
 /// Returns a zero-width range at position `(0, 0)` — the lens anchor.
@@ -82,14 +84,29 @@ fn zero_range() -> Range {
 mod tests {
     use super::*;
     use anyhow::{anyhow, Result};
-    use deslop_core::report::{ReportCluster, ReportOccurrence};
+    use deslop_core::report::{ReportOccurrence, ReportSignals};
     use std::path::PathBuf;
 
-    const ALPHA_FILE: &str = "Alpha.cs";
-    const PAIR_SIZE: usize = 2;
-
-    fn make_cluster(id: &str, occurrences: Vec<ReportOccurrence>) -> ReportCluster {
-        deslop_core::report_fixtures::fixture_cluster(id, occurrences)
+    fn make_cluster(id: &str, size: usize, occurrences: Vec<ReportOccurrence>) -> ReportCluster {
+        ReportCluster {
+            id: id.to_owned(),
+            weight: 10.0,
+            size,
+            canonical_node_count: 20,
+            signals: ReportSignals {
+                structural: 0.87,
+                token_jaccard: 0.72,
+                embedding_cos: 0.55,
+                fused: 2.14,
+            },
+            bucket: "nearly_identical".into(),
+            category: "logic".into(),
+            occurrences_total: occurrences.len(),
+            occurrences_truncated: false,
+            occurrences,
+            summary: "s".into(),
+            interpretation: "i".into(),
+        }
     }
 
     fn occurrence(path: &str, start: usize, end: usize) -> ReportOccurrence {
@@ -100,7 +117,6 @@ mod tests {
             start_line: 1,
             end_line: 1,
             hidden: false,
-            in_diff: None,
         }
     }
 
@@ -108,22 +124,23 @@ mod tests {
     fn build_for_file_emits_one_lens_per_matching_occurrence_with_full_command() -> Result<()> {
         let cluster = make_cluster(
             "cluster-alpha",
+            3,
             vec![
-                occurrence(ALPHA_FILE, 0, 10),
-                occurrence(ALPHA_FILE, 50, 80),
+                occurrence("Alpha.cs", 0, 10),
+                occurrence("Alpha.cs", 50, 80),
                 occurrence("Other.cs", 10, 20),
             ],
         );
         let total_occurrences = cluster.occurrences.len();
         let report = FileReport {
-            path: PathBuf::from(ALPHA_FILE),
+            path: PathBuf::from("Alpha.cs"),
             clusters: vec![cluster],
             total_occurrences,
         };
         let lenses = build_for_file(&report);
         assert_eq!(
             lenses.len(),
-            PAIR_SIZE,
+            2,
             "two matching occurrences → two lenses: {lenses:?}"
         );
         for (expected_index, lens) in lenses.iter().enumerate() {
@@ -139,7 +156,7 @@ mod tests {
                 .arguments
                 .as_ref()
                 .ok_or_else(|| anyhow!("command arguments populated"))?;
-            assert_eq!(arguments.len(), PAIR_SIZE, "cluster id + occurrence index");
+            assert_eq!(arguments.len(), 2, "cluster id + occurrence index");
             let first_arg = arguments.first().ok_or_else(|| anyhow!("first argument"))?;
             let second_arg = arguments.get(1).ok_or_else(|| anyhow!("second argument"))?;
             assert_eq!(*first_arg, serde_json::json!("cluster-alpha"));
@@ -154,19 +171,13 @@ mod tests {
                 "title starts with severity glyph + count: {}",
                 command.title
             );
-            // [FUSED-PAIR-SIGNALS] The lens is a cluster surface and
-            // renders no pair signals.
-            for (gone, axis) in [
-                ("structural 0.87", "shape"),
-                ("agreement 0.63", "content"),
-                ("rename 0.94", "rename"),
-            ] {
-                assert!(
-                    !command.title.contains(gone),
-                    "{axis} must not reach the lens title: {}",
-                    command.title
-                );
-            }
+            assert!(
+                command
+                    .title
+                    .contains("structural 0.87 · jaccard 0.72 · embedding 0.55"),
+                "title carries three signals to 2dp: {}",
+                command.title
+            );
             assert!(
                 command.title.ends_with(" — jump to next"),
                 "title ends with action: {}",
@@ -204,7 +215,7 @@ mod tests {
 
     #[test]
     fn build_for_file_with_no_matching_cluster_returns_empty_vec() {
-        let cluster = make_cluster("c", vec![occurrence("Other.cs", 0, 5)]);
+        let cluster = make_cluster("c", 2, vec![occurrence("Other.cs", 0, 5)]);
         let total_occurrences = cluster.occurrences.len();
         let report = FileReport {
             path: PathBuf::from("Alpha.cs"),
@@ -217,7 +228,7 @@ mod tests {
 
     #[test]
     fn lens_for_occurrence_preserves_cluster_id_and_index() -> Result<()> {
-        let cluster = make_cluster("xyz-789", vec![occurrence("A.cs", 0, 1)]);
+        let cluster = make_cluster("xyz-789", 5, vec![occurrence("A.cs", 0, 1)]);
         let lens = lens_for_occurrence(&cluster, 4);
         let command = lens.command.ok_or_else(|| anyhow!("command populated"))?;
         let arguments = command
@@ -227,7 +238,7 @@ mod tests {
         let second_arg = arguments.get(1).ok_or_else(|| anyhow!("second argument"))?;
         assert_eq!(*first_arg, serde_json::json!("xyz-789"));
         assert_eq!(*second_arg, serde_json::json!(4_usize));
-        assert!(command.title.contains("●● 1 copies"), "{}", command.title);
+        assert!(command.title.contains("●● 5 copies"), "{}", command.title);
         Ok(())
     }
 
@@ -242,53 +253,13 @@ mod tests {
     }
 
     #[test]
-    fn title_for_renders_copy_count_only() {
-        let cluster = make_cluster(
-            "c",
-            vec![occurrence("A.cs", 0, 1), occurrence("B.cs", 0, 1)],
-        );
+    fn title_for_formats_all_signals_to_two_decimal_places() {
+        let cluster = make_cluster("c", 7, vec![]);
         let title = title_for(&cluster);
-        assert_eq!(title, "●● 2 copies — jump to next");
-        assert!(title.ends_with("jump to next"), "{}", title);
-    }
-
-    // [FUSED-PAIR-SIGNALS] The admission signals are pair measurements and
-    // never touch the cluster; a code lens on one occurrence must not render
-    // them. The title states the copy count only.
-    #[test]
-    fn title_for_renders_no_pair_evidence() {
-        let cluster = make_cluster(
-            "c",
-            vec![occurrence("A.cs", 0, 1), occurrence("B.cs", 0, 1)],
-        );
-        let title = title_for(&cluster);
-        assert_eq!(title, "●● 2 copies — jump to next");
-        for (gone, axis) in [
-            ("structural", "shape"),
-            ("jaccard", "token"),
-            ("embedding", "embedding"),
-            ("agreement", "content"),
-            ("rename", "rename"),
-            ("literal", "literal"),
-            ("measured pair", "pair attribution"),
-        ] {
-            assert!(
-                !title.contains(gone),
-                "{axis} must not reach the lens title: {title}"
-            );
-        }
-        assert!(
-            !title.contains("fused"),
-            "no cluster fused score on any surface: {title}"
-        );
-    }
-
-    #[test]
-    fn title_never_renders_pair_scores() {
-        let cluster = make_cluster("unsourced", vec![]);
-        let title = title_for(&cluster);
-        assert_eq!(title, "●● 0 copies — jump to next");
-        assert!(!title.contains("structural"));
-        assert!(!title.contains("agreement"));
+        assert!(title.contains("●● 7 copies"), "{title}");
+        assert!(title.contains("structural 0.87"), "{title}");
+        assert!(title.contains("jaccard 0.72"), "{title}");
+        assert!(title.contains("embedding 0.55"), "{title}");
+        assert!(title.ends_with("jump to next"), "{title}");
     }
 }

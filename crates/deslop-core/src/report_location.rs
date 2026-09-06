@@ -14,17 +14,6 @@ pub fn format_occurrence(path: &Path, start_byte: usize, source: Option<&[u8]>) 
     }
 }
 
-/// Badge text for an occurrence's diff membership
-/// ([OUTPUT-SCHEMA-DIFF-TAGS]). `[in diff]` marks an occurrence whose
-/// lines the verified diff added; `[existing]` marks one that predates
-/// it. `None` on a run without `--diff`, so every no-diff surface
-/// stays byte-identical. The one shared badge source — text, HTML,
-/// and any future surface must call this, never restate the strings.
-#[must_use]
-pub fn diff_badge(in_diff: Option<bool>) -> Option<&'static str> {
-    in_diff.map(|added| if added { "[in diff]" } else { "[existing]" })
-}
-
 /// One-indexed line/column pair.
 struct DisplayPosition {
     /// One-indexed line.

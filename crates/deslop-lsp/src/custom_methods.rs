@@ -9,8 +9,8 @@ use deslop_core::{
     render::{render_cluster_markdown, render_text},
     report::{occurrence_count, Report, ReportCluster, LIVE_WIRE_OCCURRENCE_CAP},
     wire_generated::{
-        ClusterIdParams, PairComparisonParams, PathParams, RangeParams, ReportDeltaParams,
-        SetModelParams, VirtualDocumentParams,
+        ClusterIdParams, PathParams, RangeParams, ReportDeltaParams, SetModelParams,
+        VirtualDocumentParams,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -31,17 +31,13 @@ pub const REPORT_SCHEMA_DOC: &str = "deslop/reportSchemaDoc";
 /// Mirrors [`Report::truncate_for_wire`] but for a single cluster
 /// (used by `report/forFile` + `report/forRange`).
 fn truncate_cluster_for_wire(cluster: &mut ReportCluster) {
-    // `evidence_verdict` deliberately survives the blanking: it is a
-    // measured reading of signals the client can no longer recompute
-    // once the occurrence list is capped, and re-deriving it client-side
-    // is what the one-calculation rule forbids.
-    let count = occurrence_count(cluster);
-    cluster.occurrences_total = count;
-    cluster.occurrence_count = count;
+    cluster.occurrences_total = occurrence_count(cluster);
     if cluster.occurrences.len() > LIVE_WIRE_OCCURRENCE_CAP {
         cluster.occurrences.truncate(LIVE_WIRE_OCCURRENCE_CAP);
         cluster.occurrences_truncated = true;
     }
+    cluster.summary.clear();
+    cluster.interpretation.clear();
 }
 
 /// Method name for `deslop/reportGet`.
@@ -54,8 +50,6 @@ pub const REPORT_FOR_FILE: &str = "deslop/reportForFile";
 pub const REPORT_FOR_RANGE: &str = "deslop/reportForRange";
 /// Method name for `deslop/clusterById`.
 pub const CLUSTER_BY_ID: &str = "deslop/clusterById";
-/// Method name for `deslop/pairCompare`.
-pub const PAIR_COMPARE: &str = "deslop/pairCompare";
 /// Method name for `deslop/duplicatesFindSimilar`.
 pub const FIND_SIMILAR: &str = "deslop/duplicatesFindSimilar";
 /// Method name for `deslop/embeddingListModels`.
@@ -246,22 +240,6 @@ pub async fn cluster_by_id(
 ) -> LspResult<serde_json::Value> {
     match backend.service().cluster_by_id(&params.id).await {
         Ok(cluster) => Ok(serde_json::to_value(cluster).unwrap_or(serde_json::Value::Null)),
-        Err(error) => Err(into_jsonrpc(&error)),
-    }
-}
-
-/// Recomputes evidence for exactly the two requested occurrence endpoints.
-///
-/// # Errors
-///
-/// Returns a JSON-RPC error when either endpoint is absent from the current
-/// analysis generation or active embedding evidence cannot be measured.
-pub async fn pair_compare(
-    backend: &LspBackend,
-    params: PairComparisonParams,
-) -> LspResult<serde_json::Value> {
-    match backend.service().pair_compare(&params).await {
-        Ok(comparison) => Ok(serde_json::to_value(comparison).unwrap_or(serde_json::Value::Null)),
         Err(error) => Err(into_jsonrpc(&error)),
     }
 }

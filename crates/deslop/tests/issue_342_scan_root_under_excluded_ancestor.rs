@@ -22,13 +22,9 @@
 //! clustering.
 
 use anyhow::Result;
-use std::path::Path;
-
 use serde_json::Value;
 
-use crate::common::signals::{
-    assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
-};
+mod common;
 use crate::common::*;
 
 /// The two byte-identical files seeded into every scan root below.
@@ -47,7 +43,7 @@ const ANCESTOR_NAMES: [&str; 5] = ["dist", "build", "target", "vendor", "node_mo
 /// `<tmp>/<ancestors…>/innocent-repo/src` and returns the report for that
 /// scan root. An empty `ancestors` gives the control root, whose path
 /// contains no built-in exclude component.
-fn report_under(ancestors: &[&str]) -> Result<(tempfile::TempDir, std::path::PathBuf, Value)> {
+fn report_under(ancestors: &[&str]) -> Result<Value> {
     let tmp = tempfile::tempdir()?;
     let root = ancestors
         .iter()
@@ -55,14 +51,13 @@ fn report_under(ancestors: &[&str]) -> Result<(tempfile::TempDir, std::path::Pat
         .join("innocent-repo")
         .join("src");
     seed(&fixture("ts-type1-identical"), &root)?;
-    let report = run_report(&root, MIN_NODES)?;
-    Ok((tmp, root, report))
+    run_report(&root, MIN_NODES)
 }
 
 /// Asserts `report` contains the seeded clone pair in full — both files
-/// read, a cluster spanning them, and the byte-proven verbatim fact that
-/// pair earns from any other scan root ([PIPELINE-CLUSTER-CLOSURE]).
-fn assert_clone_reported(scan_root: &Path, report: &Value, label: &str) -> Result<()> {
+/// read, a cluster spanning them, and the byte-identical routing and
+/// signals that pair earns from any other scan root.
+fn assert_clone_reported(report: &Value, label: &str) -> Result<()> {
     assert_eq!(
         field(report, "files_analysed").as_u64(),
         Some(2),
@@ -73,13 +68,15 @@ fn assert_clone_reported(scan_root: &Path, report: &Value, label: &str) -> Resul
         "{label}: the seeded clone must be reported: {report:#}"
     );
     let clone = expect_cluster_spanning(report, &CLONE_FILES)?;
-    assert!(
-        has_verbatim_pair(scan_root, clone)?,
-        "{label}: a byte-identical pair must be byte-proven from the seeded \
-         source: {report:#}"
+    assert_eq!(
+        cluster_bucket(clone),
+        "identical",
+        "{label}: a byte-identical pair must route `identical`: {report:#}"
     );
-    assert_structural_only_contract(clone, label);
-    assert_no_pair_surface_on_cluster(clone, label);
+    assert!(
+        approx(signal(clone, "structural"), 1.0),
+        "{label}: structural must be 1.0: {report:#}"
+    );
     Ok(())
 }
 
@@ -87,25 +84,24 @@ fn assert_clone_reported(scan_root: &Path, report: &Value, label: &str) -> Resul
 fn a_scan_root_with_no_excluded_ancestor_reports_the_seeded_clone() -> Result<()> {
     // The control. If this fails the fixture or the harness moved, and the
     // ancestry assertions below would be vacuous rather than wrong.
-    let (_tmp, root, report) = report_under(&[])?;
-    assert_clone_reported(&root, &report, "control (no excluded ancestor)")
+    assert_clone_reported(&report_under(&[])?, "control (no excluded ancestor)")
 }
 
 #[test]
 fn a_repo_under_an_excluded_ancestor_still_reports_its_duplicates() -> Result<()> {
     for ancestor in ANCESTOR_NAMES {
-        let (_tmp, root, report) = report_under(&[ancestor])?;
-        assert_clone_reported(&root, &report, ancestor)?;
+        assert_clone_reported(&report_under(&[ancestor])?, ancestor)?;
     }
     Ok(())
 }
 
 #[test]
 fn nested_excluded_ancestors_are_ignored_to_any_depth() -> Result<()> {
-    let (_tmp, root, report) = report_under(&["build", "dist"])?;
-    assert_clone_reported(&root, &report, "build/dist")?;
-    let (_tmp, root, report) = report_under(&["node_modules", "pkg", "target"])?;
-    assert_clone_reported(&root, &report, "node_modules/pkg/target")
+    assert_clone_reported(&report_under(&["build", "dist"])?, "build/dist")?;
+    assert_clone_reported(
+        &report_under(&["node_modules", "pkg", "target"])?,
+        "node_modules/pkg/target",
+    )
 }
 
 /// Asserts no rendered occurrence sits under a `node_modules` component.
@@ -135,7 +131,7 @@ fn a_dependency_tree_inside_the_scan_root_is_still_excluded() -> Result<()> {
         &root.join("node_modules").join("pkg"),
     )?;
     let report = run_report(&root, MIN_NODES)?;
-    assert_clone_reported(&root, &report, "excluded ancestor with inner node_modules")?;
+    assert_clone_reported(&report, "excluded ancestor with inner node_modules")?;
     assert_no_dependency_leaked(&report);
     Ok(())
 }
@@ -150,8 +146,7 @@ fn a_scan_root_named_like_an_excluded_component_is_analysed() -> Result<()> {
         let tmp = tempfile::tempdir()?;
         let root = tmp.path().join(name);
         seed(&fixture("ts-type1-identical"), &root)?;
-        let report = run_report(&root, MIN_NODES)?;
-        assert_clone_reported(&root, &report, name)?;
+        assert_clone_reported(&run_report(&root, MIN_NODES)?, name)?;
     }
     Ok(())
 }
@@ -163,9 +158,9 @@ fn the_ancestor_directory_name_cannot_change_the_report() -> Result<()> {
     // and asserting the whole report is invariant to a directory name the
     // user never asked deslop to reason about is what stops a future
     // addition to BUILTIN_EXCLUDE_COMPONENTS from reintroducing this.
-    let (_tmp, _, control) = report_under(&[])?;
+    let control = report_under(&[])?;
     for ancestor in ANCESTOR_NAMES {
-        let (_tmp, _, nested) = report_under(&[ancestor])?;
+        let nested = report_under(&[ancestor])?;
         assert_eq!(
             field(&nested, "files_analysed"),
             field(&control, "files_analysed"),

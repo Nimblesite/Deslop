@@ -9,6 +9,7 @@
 
 use anyhow::Result;
 
+mod common;
 use crate::common::*;
 
 #[test]

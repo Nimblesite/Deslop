@@ -14,7 +14,7 @@
 
 use anyhow::Result;
 
-use crate::common;
+mod common;
 use common::language_label::assert_language_label_over_mcp;
 
 #[test]

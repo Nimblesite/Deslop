@@ -3,6 +3,8 @@
 //! related, but they are not actionable duplicate logic.
 //! Tests [CLONE-NOISE-PY-GENERATED-OUTPUT]
 
+mod common;
+
 use std::{fs, path::Path};
 
 use anyhow::Result;

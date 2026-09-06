@@ -19,8 +19,7 @@ This is the same binary the VS Code extension launches for its in-process MCP
 host, so the agent sees identical analysis whether it talks to Copilot Chat
 inside VS Code or to Codex over its own stdio MCP. Per
 [DEPLOY-EXTERNAL-MCP-CONSUMER] this is the only supported wiring outside of
-the release-locked PATH forms (brew/scoop, the published fail-closed curl
-installer). Pointing a client at `target/release/deslop-mcp` or
+the brew/scoop PATH form. Pointing a client at `target/release/deslop-mcp` or
 a `cargo install` artifact silently drifts the agent's analysis off the
 shipright-versioned wire contract and is forbidden by the rules in
 [CLAUDE.md](../../CLAUDE.md).
@@ -50,23 +49,32 @@ method, and InvalidParams (-32602) for bad arguments. The strict shape is what
 keeps stricter clients (Codex's `rmcp_client`) from tripping on an unexpected
 envelope.
 
-### [MCP-TOOLS] Seven core analysis tools
+### [MCP-TOOLS] Six tools
 
-> **Normative cutover.** The server exposes the seven core analysis tools below. The retired twelve-tool analysis-query surface is deleted wholesale; it is neither a compatibility alias nor an alternate mode. `duplicates` owns report queries, `session` owns session and embedding-model management, and `compare-pair` is the only pair-evidence tool. Orthogonal refactor tools remain governed by [AUTOFIX-MERGE-MCP] and [AUTOFIX-EXTRACT-AI-MCP-TOOLS]; they do not create another report or pair-evidence path.
+> **Status: ⏳ The six-tool surface is planned ([DECISION-MCP-SURFACE]).** The
+> shipped server still exposes the twelve-tool surface — `top-offenders`,
+> `report-get`, `report-query`, `report-for-file`, `report-for-range`,
+> `find-similar`, `cluster-by-id`, `rescan`, `schema-doc`, `session-config`,
+> `list-embedding-models`, `set-embedding-model`. The consolidation into
+> `duplicates` ([MCP-TOOL-DUPLICATES]), one `session` tool ([MCP-TOOL-SESSION]),
+> and the array-valued filter block ([MCP-TOOL-FILTERS]) has not landed; the
+> worst-first ranking, occurrence budget, consent gate, and registry-derived
+> enums those sections describe are implemented today on the current surface.
 
-**Exactly seven core analysis tools** ([DECISION-MCP-SURFACE]). Three calls carry the analysis product: `find-similar` before writing code, `duplicates` when fixing duplication, and `compare-pair` when inspecting one exact relation. The other four provide drill-in, freshness, session, and schema support. `tools/list` returns these seven plus the separately specified refactor tools that are implemented in the current build.
+**Exactly six tools** ([DECISION-MCP-SURFACE]). Two calls carry the product: **`find-similar`
+before writing code (prevention)** and **`duplicates` when fixing it (cure)**; the other four are
+drill-in, freshness, session, and schema support. `tools/list` returns these six and nothing else.
 
 | Tool | Role | One-line description shape |
 |---|---|---|
 | `find-similar` | **Prevention keystone.** Call BEFORE writing new code. | see [MCP-TOOL-FINDSIMILAR] |
-| `duplicates` | **The one report tool.** Mass-ranked clusters, worst-first; scope by path/range; filter by language or path ([MCP-TOOL-FILTERS]); `detail` picks slim or full payloads. | "Duplicate clusters ranked by mass. Start here when fixing duplicates." |
-| `compare-pair` | Evidence for two explicitly identified occurrences. | "Compare exactly two occurrences and return their pair admission evidence." |
+| `duplicates` | **The one report tool.** Ranked clusters, worst-first; scope by path/range; filter by bucket / category / language ([MCP-TOOL-FILTERS]); `detail` picks slim or full payloads. The zero-arg call returns the worst five clusters with full data. | "Ranked duplicate clusters, worst first. Filter with buckets (identical…), categories (magic_literal…). Start here when fixing duplicates." |
 | `cluster-by-id` | Escape hatch for one full cluster, no occurrence budget. | "Full cluster record by stable id (shown in report text and LSP diagnostics)." |
-| `rescan` | Force the LSP's full refresh, then return a fresh filtered `duplicates` page plus `generation` + change summary. Use when watcher lag is suspected. | accepts the same filter and pagination params as `duplicates`, plus `paths?` |
+| `rescan` | Force the LSP's full refresh, then return a fresh filtered `duplicates` page plus `generation` + change summary. Use when watcher lag is suspected. | accepts the same filter/shape params as `duplicates`, plus `paths?` |
 | `session` | Session metadata + embedding-model management in one tool: `action = "get"` (default) \| `"list-embedding-models"` \| `"set-embedding-model"`. | see [MCP-TOOL-SESSION] |
 | `schema-doc` | One-shot schema markdown for clients with weak resource support. | "One-shot report schema markdown. Call once for field meanings; report pages omit it by default." |
 
-All seven analysis tools are source-read-only except `session`'s `set-embedding-model` action ([MCP-EMBEDDING-CONSENT]); `rescan` never edits source, but it triggers the LSP's full refresh before returning. Refactor-tool mutation boundaries are specified under [AUTOFIX-*]. Every result is subject to the global payload cap; cap-truncation `next_action` hints name `duplicates`.
+All tools are source-read-only except `session`'s `set-embedding-model` action ([MCP-EMBEDDING-CONSENT]); `rescan` never edits source, but it triggers the LSP's full refresh before returning. Every result is subject to the global payload cap; cap-truncation `next_action` hints name `duplicates`.
 
 ### [MCP-TOOL-FILTERS] The shared filter block
 
@@ -76,16 +84,29 @@ builder, one wire `filters` echo type, one matching function — never per-tool 
 rule). This is the agent-side spelling of [FACET-MODEL]; same wire vocabulary as every UI surface.
 
 ```text
+buckets?:        [enum]   // ClusterKind::all() wire labels (e.g. "identical") — canonical
+                          // list: taxonomy.md [CLONE-BUCKETS]
+categories?:     [enum]   // CloneCategory::all() wire labels (e.g. "magic_literal") — canonical
+                          // list: taxonomy.md [CLONE-CATEGORY-REGISTRY]
 languages?:      [enum]   // the core language registry (the #170/#198 anti-drift fix)
 path_contains?:  string
-severities?:     [enum]   // engine-stamped mass severity only
+min_score?:      number
 min_size?:       integer
+name_contains?:  string   // substring on ReportCluster.constant_name ([LITERAL-WIRE])
+value_contains?: string   // substring on ReportCluster.literal_value
 ```
 
 Array params with empty/absent = no filtering; a one-element array is the single-value form. The
-Language values derive from the canonical parser registry. Pair classification, pair evidence, literal kind, category, and confidence are not cluster filters. Filtered tools echo the applied filters so transcripts are reproducible; `total_clusters` reflects the post-filter count.
+canonical phrase mappings (identical wording in [FACET-MODEL] rule 4): *"only pay attention to
+IDENTICAL code"* = `buckets: ["identical"]`; *"identical literals"* =
+`categories: ["magic_literal"]` optionally + `buckets: ["identical"]` (`shadowed_constant` is the
+separate prevention category). The value lists are never enumerated here or in the schema source —
+all three enums are **derived from the canonical registries at schema-build time**, so new buckets,
+categories, and languages become filterable with zero schema edits. Filtered tools echo the applied
+filters in their result so transcripts are reproducible; `total_clusters` reflects the post-filter
+count.
 
-The shared pagination block rides beside it on `duplicates` and `rescan`:
+The shared **shape block** rides beside it on `duplicates` and `rescan`:
 
 ```text
 limit?:           integer >= 1, default 5
@@ -93,9 +114,11 @@ offset?:          integer >= 0, default 0
 detail?:          "full" (default) | "summary"   // full = ReportCluster + occurrence budget;
                                                  // summary = slim ClusterSummary rows
 max_occurrences?: integer >= 1, default 15        // detail = "full" only ([MCP-OCCURRENCE-BUDGET])
+sort?:            "score" (default) | "occurrences" | "size"
+                  // score = weight desc; occurrences = occurrence_count desc;
+                  // size = size_nodes desc. Every sort tie-breaks by score desc then id asc,
+                  // so paging across ties is deterministic.
 ```
-
-Every page preserves the engine's mass-descending, cluster-id-ascending order. The MCP has no alternate score, occurrence-count, size, or client-local sort mode.
 
 `rescan` additionally accepts `paths?: [string]` — workspace-relative files the caller just
 changed, scoping the forced refresh to those files; absent = full refresh. Paths outside the
@@ -115,7 +138,7 @@ Output (`DuplicatesPage` — the one page wire type, whatever the scope or detai
 ```text
 {
   generation, tool_version, files_analysed, min_nodes, clusters_hidden,
-  embedding_provenance, cache_stats, metrics,
+  embedding_provenance, cache_stats, metrics, action_hints,
   total_clusters, total_occurrences,
   page: { offset, limit, returned },
   filters: { …echo of applied filter block… },
@@ -124,8 +147,9 @@ Output (`DuplicatesPage` — the one page wire type, whatever the scope or detai
 ```
 
 `ClusterSummary` (slim — no `occurrences[]`):
-`{ id, mass, size_nodes, occurrence_count, language, first_occurrence: { path, start_byte, end_byte, start_line, end_line } }`.
-Line numbers accompany byte offsets because humans reason in lines. The summary's `language` derives
+`{ id, bucket, category, score, size_nodes, occurrence_count, language, first_occurrence: { path, start_byte, end_byte, start_line, end_line } }`.
+Line numbers accompany byte offsets — humans reason in lines. `category` is on the summary row so
+literal-family findings are distinguishable without a drill-in. The summary's `language` derives
 from the canonical occurrence path via the **core parser registry's** extension map — the single
 source shared with the HTML renderer, so every registered language (Dart included, #164) reports
 its real id, never `"unknown"`.
@@ -168,7 +192,10 @@ exists beyond what this page shipped.
 **`page.returned`** counts clusters actually present in `clusters[]`, i.e. after any budget drop.
 **Per-cluster `occurrences_total`** stays accurate when a tail is dropped.
 
-**`cluster-by-id`** is the escape hatch: the full cluster, no budget (the agent asked for exactly one), capped at the live-wire occurrence cap of 100 per call. It accepts `offset?` (integer ≥ 0, default 0) over the occurrence list, so a large clone component is fully enumerable by paging until fewer than 100 come back. Dedicated literal findings are not addressable as clusters.
+**`cluster-by-id`** is the escape hatch: the full cluster, no budget (the agent asked for exactly
+one), capped at the live-wire occurrence cap of 100 per call. It accepts `offset?` (integer ≥ 0,
+default 0) over the occurrence list, so a >100-occurrence cluster — common for literal-family
+findings — is fully enumerable by paging until fewer than 100 come back.
 
 Tool descriptions lead with the budget so an LLM reading `tools/list` sees the contract before the
 first call. The budget behaviour is pinned by the issue-136 tests named in [MCP-TESTING].
@@ -208,11 +235,18 @@ Input variants:
 
 Both delegate to the LSP via [LIVE-IPC-SOCKET]. Budget: < 250 ms ([LIVE-PERF-BUDGETS]).
 
-The tool description keeps its prevention framing: **"Call BEFORE writing new code to PREVENT duplication."** `find-similar` returns clone clusters only. Dedicated literal findings remain a separate top-level collection in the canonical report available through `deslop://report`; they are never exposed as cluster filters or cluster fields.
+The tool description keeps its prevention framing verbatim in spirit: **"Call BEFORE writing new
+code to PREVENT duplication."** It additionally teaches the constant-prevention path: before
+declaring a new constant, query `duplicates { categories: ["shadowed_constant",
+"constant_duplicate"], name_contains/value_contains: … }` to find an existing canonical
+([LITERAL-CATEGORY-SHADOWED]).
 
-`find-similar` accepts the [MCP-TOOL-FILTERS] block and the uniform `limit` plus `max_occurrences` params.
+`find-similar` accepts the [MCP-TOOL-FILTERS] block (so an agent told to care only about identical
+code passes `buckets: ["identical"]` inside the prevention loop too) and the uniform `limit`
+(default 5, replacing the old `top_n`) + `max_occurrences` params.
 
-Output: top-`limit` clusters in report order by duplicated mass ([RANK-MASS-SUM](pipeline.md#rank-mass-sum)), carrying occurrences, mass, and the filter echo. Pair signals, classifications, and explanations are absent; `compare-pair` owns them.
+Output: top-`limit` clusters by fused score with signals, interpretation, action hints, occurrences,
+and the `filters` echo.
 
 Edge cases:
 
@@ -221,14 +255,6 @@ Edge cases:
 - Language not registered → `UnsupportedLanguageError` listing registered languages.
 - Snippet below `min-nodes` after normalisation → empty result with `below_min_nodes: true`.
 - LSP not running → `LspNotRunning` error.
-
-### [MCP-TOOL-COMPARE-PAIR] `compare-pair` — exact endpoint evidence
-
-Input is `PairComparisonParams { left, right }`; each endpoint is `{ path, start_byte, end_byte }`, and the endpoints must be distinct occurrences within the pinned workspace. A cluster id is invalid input because the server never chooses comparison endpoints from a component.
-
-Output is `PairComparison { left, right, evidence }`. The response echoes both endpoints and returns only that relation's structural similarity, token Jaccard, embedding cosine, content agreement, rename consistency, literal fraction, fused admission score, content-gate applicability and result, final admission result, optional pair classification, and engine-authored explanation. It contains no cluster mass. No value is cached or copied onto a cluster.
-
-The server recomputes or retrieves the endpoint-keyed pair record through `pair/compare`. Reversing endpoint order preserves the symmetric measurements and admission result while the echoed endpoint order follows the request. Replacing either endpoint asks a different question and cannot reuse evidence from the first pair.
 
 ### [MCP-TOOL-SESSION] `session` — metadata + embedding management
 
@@ -270,7 +296,7 @@ Three rules the descriptions follow:
 
 1. **Tell the agent when to call the tool.** `find-similar`: *"Before you write a new block, call this."* `duplicates`: *"Start here when fixing duplicates."*
 2. **Tell the agent what the result means.** `duplicates`: *"Worst offenders first."*
-3. **Keep cluster and pair vocabulary separate.** `duplicates` documents membership and mass filters; `compare-pair` documents pair classifications and evidence.
+3. **Name the filter vocabulary inline.** `duplicates` lists the bucket and category wire labels in its description so an agent instructed *"only pay attention to identical code"* maps the instruction to `buckets: ["identical"]` without reading the schema doc.
 
 A small tool list is itself prompt engineering: every extra tool is a description the agent must read and a wrong choice it can make.
 
@@ -285,16 +311,15 @@ A small tool list is itself prompt engineering: every extra tool is a descriptio
 
 `crates/deslop-mcp/tests/cli.rs` drives the real MCP binary over stdio with raw JSON-RPC frames. No mocking.
 
-- `initialize` + `tools/list` returns exactly the seven core analysis tools with matching schemas, plus only the separately specified refactor tools implemented in that build, and no `null` capability values.
+- `initialize` + `tools/list` returns exactly the six tools with matching schemas, no other tool names, and no `null` capability values.
 - `duplicates {}` returns 5 full clusters, budget applied, `total_clusters` + `total_occurrences` populated.
-- `duplicates { detail: "summary" }` pages: slim rows contain no `occurrences[]` or pair evidence, language is populated, and paging past the end returns empty `clusters[]` with `returned == 0`.
-- Each cluster filter is honoured independently and in combination; language values come from the parser registry; pair classifications and evidence fields are rejected as cluster filters.
+- `duplicates { detail: "summary" }` pages: slim rows (no `occurrences[]`), `category` + `language` populated (Dart fixtures report `dart`, not `unknown`), paging past the end returns empty `clusters[]` with `returned == 0`.
+- Each filter param honoured independently and in combination; `buckets: ["identical"]` returns only that bucket; `categories: ["magic_literal"]` returns only literal findings; unknown enum values rejected by schema; echoed `filters` reflect inputs; `total_clusters` is post-filter.
 - Scope: `duplicates { path }` returns the expected cluster; `{ path, start_byte, end_byte }` honours the range; range params without `path` → `InvalidParams`.
-- Cluster results remain in engine mass order; no tool-local sort can replace that order.
-- `cluster-by-id` returns the full clone cluster with `occurrences[]`, membership, canonical extent, mass, and rank fields only.
+- `sort: "occurrences"` and `"size"` reorder as specced; default remains score-descending.
+- `cluster-by-id` returns the full cluster with `occurrences[]` and the literal-family fields when present.
 - `rescan` returns `generation` + change summary + a filtered page; the issue-135/137/153 freshness behaviours hold (stale-watcher recovery, fresh generation, no stale ranges).
 - `session {}` returns the config; `list-embedding-models` action lists; `set-embedding-model` without `user_initiated: true` is rejected; with it, a follow-up `session {}` shows the new provenance.
 - `schema-doc` returns the same markdown as `resources/read deslop://schema`; pages omit inline `schema_doc`.
-- `find-similar` keystone cases remain: snippet match, unparseable input, below-min-nodes, and limit handling.
-- `compare-pair` requires two concrete endpoints and returns only that pair's `S`, `J`, `E`, `A`, `R`, literal fraction, admission result, and classification.
+- `find-similar` keystone cases unchanged (snippet match, unparseable input, below-min-nodes) plus `buckets` filtering and the `limit` rename.
 - `resources/read deslop://report` returns valid canonical JSON; a follow-up file-change triggers `notifications/resources/updated`.

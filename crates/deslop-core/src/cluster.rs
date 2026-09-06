@@ -1,7 +1,7 @@
 //! Clone cluster materialisation and ranking.
 //!
 //! Implements [PIPELINE-CLUSTER-EXACT], the fused-clustering output of
-//! [FUSED-STRATEGY-BOUNDED-MAX], and the "worst offenders first" scoring of
+//! [FUSION-STRATEGY-BOUNDED-MAX], and the "worst offenders first" scoring of
 //! [PIPELINE-RANK-WORST-FIRST]. Consumes [`FusedCluster`]s from
 //! [`crate::pair::cluster_by_transitive_closure`] — the two inputs
 //! contributing to those clusters are (a) exact structural buckets per
@@ -12,22 +12,21 @@
 use std::{
     collections::{BTreeMap, HashMap},
     hash::BuildHasher,
-    path::{Path, PathBuf},
 };
 
 use crate::{
-    ast::{ByteRange, NormalizedNode},
+    content::ContentEvidence,
     fingerprint::Fingerprint,
-    pair::{FusedCluster, SHARED_SUBTREE_MIN_NODE_COUNT},
+    lsh::Signature,
+    pair::{FusedCluster, PairScore},
     state::FileId,
 };
 
-/// The authored declaration an occurrence sits inside
-/// ([PIPELINE-CLUSTER-EXACT-SCOPE]).
-pub(crate) mod scope;
+/// Rendered-truth signal measurement ([FUSION-CLUSTER-SIGNALS]).
+mod signals;
 /// Cross-cluster subsumption ([PIPELINE-CLUSTER-SUBSUME]).
 mod subsume;
-use scope::DeclarationScopes;
+use signals::measured_signals;
 use subsume::collapse_cross_cluster_overlap;
 
 /// A set of fingerprints that share the same hash, i.e. a detected
@@ -40,12 +39,23 @@ pub struct Cluster {
     pub id: String,
     /// Members of the cluster, in discovery order.
     pub members: Vec<Fingerprint>,
-    /// Duplicated mass from [RANK-MASS-SUM]. Higher = more code to fix.
-    pub mass: u64,
-    /// The shape family this cluster was admitted out of, for the
-    /// report's family-level noise verdict
-    /// ([CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY]).
-    pub shape_family: Option<usize>,
+    /// Weight from [PIPELINE-RANK-WORST-FIRST]. Higher = worse offender.
+    pub weight: f64,
+    /// Measured signal breakdown ([FUSION-CLUSTER-SIGNALS]): the
+    /// per-signal mean over every unordered pair of the rendered
+    /// members — Merkle-hash equality for `structural`, `MinHash`
+    /// Jaccard for `token_jaccard`, vector cosine for `embedding_cos`.
+    /// Never aggregated from the discovery edges that glued the
+    /// transitive-closure component together.
+    pub signals: PairScore,
+    /// Measured raw-content evidence across the members'
+    /// normalisation-collapsed leaves ([FUSION-CONTENT-GATE]):
+    /// pooled byte agreement, Type-2 rename consistency, and literal
+    /// dominance ([CLONE-NOISE-LITERAL-TABLE]). Starts
+    /// [`ContentEvidence::unmeasured`];
+    /// `crate::content::attach_content_evidence` measures it during
+    /// render, before bucket routing and the ranking weight read it.
+    pub content: ContentEvidence,
 }
 
 /// Minimum number of logical locations required for a reportable
@@ -58,122 +68,128 @@ const MIN_REPORTABLE_MEMBERS: usize = 2;
 /// [`Cluster`] so the ranking and rendering stages do not have to know
 /// how the cluster was discovered.
 ///
-/// Cluster ids hash the smallest member's digest together with every
-/// member's workspace-relative path ([PIPELINE-DETERMINISM]),
-/// so identical fused clusters across runs always report the same id
-/// while same-shape findings in different workspaces remain distinct.
-/// Inputs accepted by [`build_ranked_fused_clusters`]. Grouped for the
-/// same reason [`crate::report::ReportInputs`] exists: the list
-/// outgrew the 7-argument function budget, and every field here is
-/// borrowed for the whole build so one struct keeps the call sites
-/// name-checked.
-#[derive(Debug)]
-pub struct ClusterBuildInputs<'a, L: BuildHasher> {
-    /// Every live fingerprint, flat, in corpus order.
-    pub fingerprints: &'a [Fingerprint],
-    /// Transitive-closure components to rehydrate.
-    pub fused_clusters: &'a [FusedCluster],
-    /// Normalised trees the fingerprints walk.
-    pub trees: &'a [NormalizedNode],
-    /// `FileId → language_id` for declaration-scope matching.
-    pub file_languages: &'a HashMap<FileId, &'static str, L>,
-    /// `FileId → workspace-relative path` — the second input of the
-    /// cluster id digest ([PIPELINE-DETERMINISM]).
-    pub file_paths: &'a HashMap<FileId, PathBuf>,
-}
-
-/// Builds ranked clusters from a fused-cluster list produced by
-/// [`crate::pair::cluster_by_transitive_closure`]. Each `FusedCluster`
-/// references fingerprint indices; this materialises the full [`Cluster`]
-/// so ranking and rendering need not know how the cluster was discovered.
+/// The signal breakdown is measured between each cluster's rendered
+/// occurrences ([FUSION-CLUSTER-SIGNALS]) from `signatures` and
+/// `embedding_vectors`. Cluster ids are derived from the smallest
+/// member's hash so identical fused clusters across runs always report
+/// the same id.
 #[must_use]
-pub fn build_ranked_fused_clusters<L: BuildHasher + Sync>(
-    inputs: &ClusterBuildInputs<'_, L>,
+pub fn build_ranked_fused_clusters<S: BuildHasher>(
+    fingerprints: &[Fingerprint],
+    signatures: &[Signature],
+    embedding_vectors: &HashMap<usize, Vec<f32>, S>,
+    fused_clusters: &[FusedCluster],
 ) -> Vec<Cluster> {
-    let mut clusters = reportable_clusters(
-        inputs,
-        &DeclarationScopes::new(inputs.trees, inputs.file_languages),
-    );
-    let dropped_below_min_members = inputs.fused_clusters.len().saturating_sub(clusters.len());
+    let mut clusters =
+        reportable_clusters(fingerprints, signatures, embedding_vectors, fused_clusters);
+    let dropped_below_min_members = fused_clusters.len().saturating_sub(clusters.len());
     clusters.sort_by(|left, right| {
         right
-            .mass
-            .cmp(&left.mass)
+            .weight
+            .partial_cmp(&left.weight)
+            .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| left.id.cmp(&right.id))
     });
     let collapsed = collapse_cross_cluster_overlap(clusters);
-    log_ranked_cluster_distribution(
-        &collapsed,
-        inputs.fused_clusters.len(),
-        dropped_below_min_members,
-    );
+    log_ranked_cluster_distribution(&collapsed, fused_clusters.len(), dropped_below_min_members);
     collapsed
 }
 
 /// Materialises every fused cluster that remains reportable.
-fn reportable_clusters<L: BuildHasher + Sync>(
-    inputs: &ClusterBuildInputs<'_, L>,
-    scopes: &DeclarationScopes<'_, impl BuildHasher + Sync>,
+fn reportable_clusters<S: BuildHasher>(
+    fingerprints: &[Fingerprint],
+    signatures: &[Signature],
+    embedding_vectors: &HashMap<usize, Vec<f32>, S>,
+    fused_clusters: &[FusedCluster],
 ) -> Vec<Cluster> {
-    inputs
-        .fused_clusters
+    fused_clusters
         .iter()
-        .filter_map(|fused| build_fused_cluster(inputs, fused, scopes))
+        .filter_map(|fused| build_fused_cluster(fingerprints, signatures, embedding_vectors, fused))
         .collect()
 }
 
 /// Emits the structured GH#45 ranked-cluster distribution summary.
 fn log_ranked_cluster_distribution(clusters: &[Cluster], input_total: usize, dropped: usize) {
-    let largest_mass = clusters.first().map_or(0, |cluster| cluster.mass);
+    let (largest_weight, mean_weight) = weight_summary(clusters);
     tracing::info!(
         total = clusters.len(),
         input_total,
         dropped_below_min_members = dropped,
-        largest_mass,
+        largest_weight,
+        mean_weight,
         "ranked clusters built",
     );
+}
+
+/// Returns `(largest_weight, mean_weight)` for a ranked cluster slice.
+fn weight_summary(clusters: &[Cluster]) -> (f64, f64) {
+    let largest = clusters.first().map_or(0.0, |cluster| cluster.weight);
+    let total = clusters.iter().map(|cluster| cluster.weight).sum::<f64>();
+    let divisor = u32::try_from(clusters.len()).map_or(f64::from(u32::MAX), f64::from);
+    let mean = if clusters.is_empty() {
+        0.0
+    } else {
+        total / divisor
+    };
+    (largest, mean)
 }
 
 /// Rehydrates a single `FusedCluster` into a reportable [`Cluster`].
 /// Same-file overlap collapse can reduce a fused group to one logical
 /// location; those groups are artifacts, not duplicates, and are
-/// dropped before ranking.
-fn build_fused_cluster<L: BuildHasher + Sync>(
-    inputs: &ClusterBuildInputs<'_, L>,
+/// dropped before ranking. Signals are measured **after** the collapse
+/// so they describe exactly the occurrences the report shows.
+fn build_fused_cluster<S: BuildHasher>(
+    fingerprints: &[Fingerprint],
+    signatures: &[Signature],
+    embedding_vectors: &HashMap<usize, Vec<f32>, S>,
     fused: &FusedCluster,
-    scopes: &DeclarationScopes<'_, impl BuildHasher>,
 ) -> Option<Cluster> {
-    let fingerprints = inputs.fingerprints;
-    let occurrence_indices = collapse_overlapping_per_file(fused, fingerprints, scopes);
+    let occurrence_indices = collapsed_member_indices(fingerprints, fused);
     if occurrence_indices.len() < MIN_REPORTABLE_MEMBERS {
         return None;
     }
+    let measured = measured_signals(
+        &occurrence_indices,
+        fingerprints,
+        signatures,
+        embedding_vectors,
+    );
     let members: Vec<Fingerprint> = occurrence_indices
         .iter()
         .filter_map(|index| fingerprints.get(*index).cloned())
         .collect();
-    Some(materialize_cluster(
-        members,
-        inputs.file_paths,
-        fused.shape_family,
-    ))
+    Some(materialize_cluster(members, measured))
+}
+
+/// Collects valid fingerprint indices for one fused cluster and
+/// collapses overlapping same-file artifacts. Indices (not cloned
+/// fingerprints) survive the collapse so signal measurement can reach
+/// each rendered occurrence's signature and embedding vector.
+fn collapsed_member_indices(fingerprints: &[Fingerprint], fused: &FusedCluster) -> Vec<usize> {
+    let raw_members: Vec<usize> = fused
+        .members
+        .iter()
+        .copied()
+        .filter(|index| *index < fingerprints.len())
+        .collect();
+    collapse_overlapping_per_file(raw_members, fingerprints)
 }
 
 /// Builds the final reportable cluster from already-filtered members.
-fn materialize_cluster(
-    members: Vec<Fingerprint>,
-    file_paths: &HashMap<FileId, PathBuf>,
-    shape_family: Option<usize>,
-) -> Cluster {
+fn materialize_cluster(members: Vec<Fingerprint>, signals: PairScore) -> Cluster {
     let size = members.len();
     let smallest_nodes = smallest_node_count(&members);
-    let mass = duplicate_mass(smallest_nodes, size);
-    let id_source = cluster_id_source(&members, file_paths);
+    let rank_nodes = refactor_potential_node_count(smallest_nodes, signals);
+    let spanned_bytes = spanned_byte_count(&members);
+    let weight = rank_weight(rank_nodes, size, spanned_bytes);
+    let id_source = cluster_id_source(&members);
     Cluster {
         id: encode_short_id(id_source),
         members,
-        mass,
-        shape_family,
+        weight,
+        signals,
+        content: ContentEvidence::unmeasured(),
     }
 }
 
@@ -186,41 +202,40 @@ fn smallest_node_count(members: &[Fingerprint]) -> usize {
         .unwrap_or(0)
 }
 
-/// Selects the deterministic hash source for the public cluster id
-/// ([PIPELINE-DETERMINISM]).
-///
-/// The smallest member's digest alone names every cluster that shares a
-/// normalised subtree: the #107 fixture stamps three unrelated
-/// same-shape findings — one per file — with one id, so `cluster-by-id`
-/// resolves to whichever is found first and the ranking tie-break stops
-/// being a total order. Hashing that digest together with every
-/// member's workspace-relative path keeps the id content-derived —
-/// identical clusters across runs still agree, because both inputs are
-/// functions of workspace state, never of registration history — while
-/// distinguishing findings that merely share a shape. `file_paths` must
-/// cover every member's file; an uncovered file degrades that member's
-/// contribution to empty and reintroduces the shape-only collision the
-/// id exists to prevent.
-fn cluster_id_source(members: &[Fingerprint], file_paths: &HashMap<FileId, PathBuf>) -> [u8; 32] {
-    let Some(smallest) = members.iter().min_by_key(|member| member.hash) else {
-        return [0_u8; 32];
-    };
-    let mut paths: Vec<&Path> = members
+/// Sums physical byte spans for the ranking formula.
+fn spanned_byte_count(members: &[Fingerprint]) -> u64 {
+    members
         .iter()
-        .map(|member| {
-            file_paths
-                .get(&member.file_id)
-                .map_or(Path::new(""), |path| path.as_path())
-        })
-        .collect();
-    paths.sort_unstable();
-    let mut hasher = blake3::Hasher::new();
-    let _ = hasher.update(&smallest.hash);
-    for path in paths {
-        let _ = hasher.update(path.as_os_str().as_encoded_bytes());
-        let _ = hasher.update(&[0]);
+        .map(|member| u64::try_from(member.byte_range.len()).unwrap_or(u64::MAX))
+        .fold(0_u64, u64::saturating_add)
+}
+
+/// Returns the node count used for ranking.
+///
+/// Low-structural Type-4 clusters often span a large interface-shaped AST
+/// region while only a small body fragment is actually refactorable. Keep the
+/// rendered `canonical_node_count` unchanged, but rank those clusters by a
+/// conservative refactor-potential fraction so exact duplicates stay ahead.
+fn refactor_potential_node_count(clone_node_count: usize, signals: PairScore) -> usize {
+    if signals.structural < LOW_STRUCTURAL_TYPE4_CEILING
+        && signals.embedding_cos >= TYPE4_EMBEDDING_FLOOR
+    {
+        clone_node_count
+            .saturating_mul(LOW_STRUCTURAL_TYPE4_WEIGHT_NUMERATOR)
+            .checked_div(LOW_STRUCTURAL_TYPE4_WEIGHT_DENOMINATOR)
+            .unwrap_or(clone_node_count)
+            .max(1)
+    } else {
+        clone_node_count
     }
-    *hasher.finalize().as_bytes()
+}
+
+/// Selects the deterministic hash source for the public cluster id.
+fn cluster_id_source(members: &[Fingerprint]) -> [u8; 32] {
+    members
+        .iter()
+        .min_by_key(|member| member.hash)
+        .map_or([0_u8; 32], |member| member.hash)
 }
 
 /// Collapses overlapping sibling-window occurrences that live in the
@@ -239,21 +254,11 @@ fn cluster_id_source(members: &[Fingerprint], file_paths: &HashMap<FileId, PathB
 /// files never collapse, no matter how their byte ranges relate. Two
 /// non-overlapping occurrences inside the same file also survive —
 /// only a transitively overlapping chain collapses to one canonical
-/// member. Within a run the representative is selected by authored
-/// scope and width only ([PIPELINE-CLUSTER-EXACT-SCOPE]): an enclosing
-/// view inside the same authored declaration stays; otherwise the
-/// wider byte range wins, with stable byte-range ordering as the
-/// tie-breaker. Pair grades never choose a view — a bridge that should
-/// not connect two components must fail pair admission, not be hidden
-/// by the collapse.
+/// member (the widest window, i.e. the largest byte span).
 #[must_use]
-fn collapse_overlapping_per_file(
-    fused: &FusedCluster,
-    fingerprints: &[Fingerprint],
-    scopes: &DeclarationScopes<'_, impl BuildHasher>,
-) -> Vec<usize> {
+fn collapse_overlapping_per_file(members: Vec<usize>, fingerprints: &[Fingerprint]) -> Vec<usize> {
     let mut by_file: BTreeMap<FileId, Vec<(usize, Fingerprint)>> = BTreeMap::new();
-    for index in fused.members.iter().copied() {
+    for index in members {
         let Some(member) = fingerprints.get(index) else {
             continue;
         };
@@ -264,7 +269,7 @@ fn collapse_overlapping_per_file(
     }
     let mut out: Vec<usize> = Vec::new();
     for bucket in by_file.into_values() {
-        out.extend(collapse_overlapping_single_file(bucket, scopes));
+        out.extend(collapse_overlapping_single_file(bucket));
     }
     // Corpus-index order, not `FileId` order: ids encode registration
     // history (a removed-and-restored file gets a fresh id), while the
@@ -276,12 +281,10 @@ fn collapse_overlapping_per_file(
 }
 
 /// Greedy sweep over one file's occurrences: sort by `(start, -end)`
-/// and keep one canonical member per overlapping run. The representative
-/// is the enclosing view when it shares an authored declaration with
-/// the candidate; otherwise the widest byte range (largest physical
-/// clone) wins, and equal-width ties keep the first-encountered member
-/// so the result stays deterministic across runs
-/// ([PIPELINE-CLUSTER-EXACT-SCOPE]).
+/// and keep one canonical member per overlapping run, choosing the
+/// member with the widest byte range (largest physical clone) as the
+/// representative. Equal-width ties keep the first-encountered member
+/// so the result stays deterministic across runs.
 ///
 /// The run's frontier is tracked separately from its representative
 /// ([PIPELINE-CLUSTER-EXACT]). Overlap is transitive, and the window
@@ -291,10 +294,7 @@ fn collapse_overlapping_per_file(
 /// finds `[105,200]` disjoint and publishes one physical region as two
 /// occurrences — inflating the cluster size, the occurrence list and the
 /// duplication percentage.
-fn collapse_overlapping_single_file(
-    mut bucket: Vec<(usize, Fingerprint)>,
-    scopes: &DeclarationScopes<'_, impl BuildHasher>,
-) -> Vec<usize> {
+fn collapse_overlapping_single_file(mut bucket: Vec<(usize, Fingerprint)>) -> Vec<usize> {
     bucket.sort_by_key(|(_, member)| {
         (
             member.byte_range.start,
@@ -302,216 +302,103 @@ fn collapse_overlapping_single_file(
         )
     });
     let mut runs: Vec<OverlapRun> = Vec::with_capacity(bucket.len());
-    for (index, member) in bucket {
-        let candidate = Occurrence {
-            index,
-            range: member.byte_range,
-            nodes: member.node_count,
-            declaration: scopes.enclosing(&member),
-            aligned: scopes.aligned_function(&member).is_some(),
-            authored: scopes.is_authored_node(&member),
-        };
+    for candidate in bucket {
         match runs.last_mut() {
-            Some(run) if run.reaches(candidate.range) => run.absorb(candidate),
+            Some(run) if run.reaches(&candidate.1) => run.absorb(candidate),
             _ => runs.push(OverlapRun::start(candidate)),
         }
     }
-    runs.into_iter()
-        .map(|run| run.representative.index)
-        .collect()
-}
-
-/// One same-file occurrence competing to represent an overlapping run.
-#[derive(Clone, Copy)]
-struct Occurrence {
-    /// Fingerprint index, which is what the run finally publishes.
-    index: usize,
-    /// Byte range this occurrence claims.
-    range: ByteRange,
-    /// Normalised nodes the occurrence holds.
-    nodes: usize,
-    /// The authored declaration it sits strictly inside, when the
-    /// grammar names one ([`DeclarationScopes::enclosing`]).
-    declaration: Option<ByteRange>,
-    /// The occurrence is an authored function — its range equals a
-    /// function-like declaration's ([`DeclarationScopes::aligned_function`]).
-    aligned: bool,
-    /// The occurrence is a node the author wrote rather than a window
-    /// cut over a run of siblings ([`DeclarationScopes::is_authored_node`]).
-    authored: bool,
-}
-
-impl Occurrence {
-    /// True when the two occupy one authored declaration's worth of
-    /// scope, so the enclosing view describes the other's code too.
-    ///
-    /// Two occurrences strictly inside the *same* declaration qualify.
-    /// So does the asymmetric case: `self` at or above declaration
-    /// level (no function production encloses it) against `other`
-    /// inside one. A whole-file view holding a function whole, against
-    /// an interior window of that same function, is the same
-    /// non-comparability seen from one level up — the window covers
-    /// less of what the file says, so the wider authored scope stays
-    /// the representative (`lsh_only_nearmiss_recall`).
-    fn shares_declaration_with(&self, other: &Self) -> bool {
-        match (self.declaration, other.declaration) {
-            (Some(mine), Some(theirs)) => mine == theirs,
-            (None, Some(_)) => true,
-            (_, None) => false,
-        }
-    }
-
-    /// True when this occurrence covers `other` and is wider on at
-    /// least one side.
-    fn encloses(&self, other: &Self) -> bool {
-        self.range.strictly_encloses(other.range)
-    }
-
-    /// True when this occurrence is a window — not a node the author
-    /// wrote — that encloses the authored function `function` with
-    /// fewer than the rescue node floor of sibling nodes around it: the
-    /// function plus scraps ([PIPELINE-CLUSTER-EXACT-SCOPE-SCRAPS]).
-    fn is_scraps_around(&self, function: &Self) -> bool {
-        !self.authored
-            && function.aligned
-            && self.encloses(function)
-            && self.nodes.saturating_sub(function.nodes) < SHARED_SUBTREE_MIN_NODE_COUNT
-    }
-
-    /// True when the two share bytes but neither covers the other, so
-    /// each starts or ends inside the other's region.
-    fn straddles(&self, other: &Self) -> bool {
-        self.range.partially_overlaps(other.range)
-    }
+    runs.into_iter().map(|run| run.representative).collect()
 }
 
 /// One transitively-overlapping run of same-file occurrences, reduced to
 /// the reported location plus the frontier the next window is tested
 /// against.
 struct OverlapRun {
-    /// The best occurrence so far — the one the report publishes for
-    /// this run.
-    representative: Occurrence,
+    /// Fingerprint index of the widest member so far — the occurrence
+    /// the report publishes for this run.
+    representative: usize,
+    /// Byte width of the representative, for the width contest.
+    width: usize,
     /// Highest end byte anywhere in the run, which is not always the
     /// representative's end.
     end: usize,
 }
 
 impl OverlapRun {
-    /// Opens a run at `first`.
-    fn start(first: Occurrence) -> Self {
+    /// Opens a run at `member`.
+    fn start((index, member): (usize, Fingerprint)) -> Self {
         Self {
-            end: first.range.end,
-            representative: first,
+            representative: index,
+            width: member.byte_range.len(),
+            end: member.byte_range.end,
         }
     }
 
     /// Returns `true` when `candidate` overlaps the run. Members arrive
     /// in ascending start order, so reaching past the frontier is the
     /// whole half-open overlap test.
-    fn reaches(&self, candidate: ByteRange) -> bool {
-        candidate.start < self.end
+    fn reaches(&self, candidate: &Fingerprint) -> bool {
+        candidate.byte_range.start < self.end
     }
 
-    /// Extends the run, promoting `candidate` to representative when it
-    /// outranks the incumbent ([`Self::displaces`]).
-    fn absorb(&mut self, candidate: Occurrence) {
-        self.end = self.end.max(candidate.range.end);
-        if self.displaces(&candidate) {
-            self.representative = candidate;
-        }
-    }
-
-    /// The wider authored scope displaces the incumbent; equal widths
-    /// keep the incumbent ([PIPELINE-CLUSTER-EXACT-SCOPE]).
-    ///
-    /// **Inside one declaration grades are never compared.**
-    /// A window nested in the occurrence it competes with measures a
-    /// higher cross-file edge exactly to the extent that it drops the
-    /// statements the two copies disagree on, so a grade contest inside
-    /// one authored declaration would keep whichever window omits the most.
-    /// The enclosing view therefore stays when it shares the authored
-    /// declaration with the candidate — `typescript-type3` pins the
-    /// enclosing `accumulate`/`aggregate` view winning over the 37-node
-    /// interior run that dropped the extra `running = running + 2` and
-    /// reported a Merkle-equal pair
-    /// (`js_ts_signatures::typescript_near_miss_produces_cross_file_structural_cluster`).
-    ///
-    /// Between views that do not share a declaration, width alone
-    /// decides; a bridge that should not connect two files must fail
-    /// pair admission, never be hidden by the collapse.
-    /// `fsharp_issue_339_sibling_window_rename` keeps passing because
-    /// the wider whole-module view never reaches the component (its
-    /// pair to the other module fails admission), so the exact sibling
-    /// window remains the only view of the region.
-    fn displaces(&self, candidate: &Occurrence) -> bool {
-        if let Some(verdict) = self.declaration_verdict(candidate) {
-            return verdict;
-        }
-        if let Some(verdict) = self.scraps_verdict(candidate) {
-            return verdict;
-        }
-        if self.representative.encloses(candidate)
-            && self.representative.shares_declaration_with(candidate)
-        {
-            return false;
-        }
-        // Authored scope and width only ([PIPELINE-CLUSTER-EXACT-SCOPE]).
-        // Pair grades cannot choose a view: a bridge that should not
-        // connect must fail pair admission, not be hidden by the
-        // collapse. Equal-width ties keep the incumbent, so the run
-        // stays deterministic across runs.
-        candidate.range.len() > self.representative.range.len()
-    }
-
-    /// [PIPELINE-CLUSTER-EXACT-SCOPE-SCRAPS] Between an authored function
-    /// and a window that encloses it with fewer than the rescue node
-    /// floor of siblings around it, the function is the finding. The
-    /// window is the function plus scraps — two field declarations, a
-    /// constructor line — and reporting it would publish one method of
-    /// a family at a different extent from its siblings. A node the
-    /// author wrote — a class body, a whole file — keeps the width rule.
-    /// `None` where the rule does not decide.
-    fn scraps_verdict(&self, candidate: &Occurrence) -> Option<bool> {
-        if self.representative.is_scraps_around(candidate) {
-            return Some(true);
-        }
-        if candidate.is_scraps_around(&self.representative) {
-            return Some(false);
-        }
-        None
-    }
-
-    /// [PIPELINE-CLUSTER-EXACT-SCOPE-STRADDLE] Between two views that
-    /// straddle each other, the one that *is* an authored declaration is
-    /// the finding. The other starts or ends inside a function it does
-    /// not contain, so it welds a cut-off body to whatever sits beside
-    /// it — a namespace line, a class shell, a sibling member — and no
-    /// width can make that region something the author wrote. Views
-    /// where one contains the other never reach this rule: a whole file
-    /// holding a method whole is still the wider authored scope.
-    /// `None` where the rule does not decide.
-    fn declaration_verdict(&self, candidate: &Occurrence) -> Option<bool> {
-        if !self.representative.straddles(candidate) {
-            return None;
-        }
-        match (self.representative.aligned, candidate.aligned) {
-            (true, _) => Some(false),
-            (false, true) => Some(true),
-            (false, false) => None,
+    /// Extends the run, promoting `member` to representative when it is
+    /// strictly wider than the incumbent.
+    fn absorb(&mut self, (index, member): (usize, Fingerprint)) {
+        self.end = self.end.max(member.byte_range.end);
+        if member.byte_range.len() > self.width {
+            self.representative = index;
+            self.width = member.byte_range.len();
         }
     }
 }
 
-/// Implements the [RANK-MASS-SUM] formula: duplicated mass only.
+/// Implements the [PIPELINE-RANK-WORST-FIRST] formula.
 ///
-/// `mass = canonical_node_count × max(visible_occurrences − 1, 0)`
+/// `weight = clone_node_count × (cluster_size − 1) × log2(1 + spanned_bytes)`
+///
+/// Values are capped at `f64`'s mantissa precision (2^53) before conversion;
+/// real-world inputs are orders of magnitude below that, so the clamp only
+/// protects against pathological inputs rather than reshaping the formula.
 #[must_use]
-pub(crate) fn duplicate_mass(canonical_node_count: usize, visible_occurrences: usize) -> u64 {
-    let nodes = u64::try_from(canonical_node_count).unwrap_or(u64::MAX);
-    let copies = u64::try_from(visible_occurrences.saturating_sub(1)).unwrap_or(u64::MAX);
-    nodes.saturating_mul(copies)
+fn rank_weight(clone_node_count: usize, cluster_size: usize, spanned_bytes: u64) -> f64 {
+    let nodes = lossless_f64_from_usize(clone_node_count);
+    let size_minus_one = lossless_f64_from_usize(cluster_size.saturating_sub(1));
+    let spanned = lossless_f64_from_u64(spanned_bytes.saturating_add(1));
+    nodes * size_minus_one * spanned.log2()
 }
+
+/// Converts `usize` to `f64`, clamping to 2^53 (the largest integer that
+/// round-trips through `f64`) to keep the cast precision-safe.
+fn lossless_f64_from_usize(value: usize) -> f64 {
+    u64::try_from(value).map_or(F64_MAX_EXACT_INTEGER, lossless_f64_from_u64)
+}
+
+/// Converts `u64` to `f64`, clamping to 2^53.
+fn lossless_f64_from_u64(value: u64) -> f64 {
+    let clamped = value.min(F64_MAX_EXACT_INTEGER_U64);
+    // `clamped` fits in 53 bits — split into two `u32` halves so no cast
+    // loses precision.
+    let high = u32::try_from(clamped >> 32).unwrap_or(u32::MAX);
+    let low = u32::try_from(clamped & u64::from(u32::MAX)).unwrap_or(u32::MAX);
+    f64::from(high) * F64_TWO_POW_32 + f64::from(low)
+}
+
+/// 2^53: largest integer exactly representable by `f64`.
+const F64_MAX_EXACT_INTEGER_U64: u64 = 1_u64 << 53;
+/// Same value as [`F64_MAX_EXACT_INTEGER_U64`], pre-converted.
+const F64_MAX_EXACT_INTEGER: f64 = 9_007_199_254_740_992.0;
+/// 2^32 as an `f64`. Used by [`lossless_f64_from_u64`] to reassemble 64-bit
+/// values without a direct `u64 as f64` cast.
+const F64_TWO_POW_32: f64 = 4_294_967_296.0;
+/// Structural ceiling below which Type-4 span size is treated as low-signal.
+const LOW_STRUCTURAL_TYPE4_CEILING: f64 = 0.10;
+/// Semantic confidence floor for Type-4 ranking dampening.
+const TYPE4_EMBEDDING_FLOOR: f64 = 0.90;
+/// Rank low-structural Type-4 clusters at 10% of their AST node span.
+const LOW_STRUCTURAL_TYPE4_WEIGHT_NUMERATOR: usize = 1;
+/// Denominator for the low-structural Type-4 ranking fraction.
+const LOW_STRUCTURAL_TYPE4_WEIGHT_DENOMINATOR: usize = 10;
 
 /// Shortens a full 32-byte hash to an 8-byte hex stable id for reporting.
 #[must_use]
@@ -547,9 +434,3 @@ const fn hex_nibble(nibble: u8) -> char {
         _ => 'f',
     }
 }
-
-/// Node floor at which an enclosed family has the standing of copied
-/// blocks rather than idiom lines, so a concatenation of it is elected
-/// out of the component in favour of the family itself
-/// ([PIPELINE-CLUSTER-ELECT-CONTAINER]).
-pub(crate) const VERBATIM_OVERTURN_MIN_NODES: usize = 16;

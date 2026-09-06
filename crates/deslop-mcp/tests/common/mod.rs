@@ -11,15 +11,13 @@
 
 #![allow(dead_code)]
 
-/// The per-cluster `language` label contract over `duplicates`,
+/// The per-cluster `language` label contract over `report-query`,
 /// shared by every language whose label regressed.
 pub mod language_label;
-/// Newline-delimited JSON-RPC over a child's stdio.
-pub mod rpc;
 
 use std::{
     fs,
-    io::{self, BufReader},
+    io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
     thread,
@@ -28,7 +26,6 @@ use std::{
 
 use anyhow::{anyhow, ensure, Context, Result};
 use assert_cmd::cargo::cargo_bin;
-use rpc::StdioRpc;
 use serde_json::{json, Value};
 use tempfile::TempDir;
 
@@ -67,8 +64,7 @@ pub fn copied_fixture_named(name: &str) -> Result<TempDir> {
     Ok(dst)
 }
 
-/// Recursively copies `src` into `dst`, creating `dst` as needed.
-pub fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
+fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
     fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {
         let entry = entry?;
@@ -99,52 +95,15 @@ pub fn spawn_lsp_with_args(root: &Path, extra_args: &[&str]) -> Result<Child> {
         .args(extra_args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(child_log_file(root, LSP_STDERR_LOG)?)
+        .stderr(Stdio::piped())
         .spawn()
         .context("spawn deslop-lsp")?;
     let mut stdin = child.stdin.take().context("lsp stdin")?;
     let mut stdout = BufReader::new(child.stdout.take().context("lsp stdout")?);
     lsp_handshake(&mut stdin, &mut stdout).context("lsp handshake")?;
     child.stdin = Some(stdin);
-    // Nothing in this suite reads the notifications the LSP keeps
-    // publishing after the handshake; keep draining them so the pipe
-    // can never fill and stall the server.
-    drain_in_background(stdout);
+    child.stdout = Some(stdout.into_inner());
     Ok(child)
-}
-
-/// The directory Deslop owns inside a workspace. Child logs are written
-/// beside its cache, where file discovery never looks.
-const DESLOP_DIR: &str = ".deslop";
-
-/// Where the LSP's stderr lands for the lifetime of a test workspace.
-const LSP_STDERR_LOG: &str = "lsp-stderr.log";
-
-/// Opens `<root>/.deslop/<name>` (appending) as a child's stderr.
-///
-/// Never `Stdio::piped()` for a stream nothing reads: the LSP logs at
-/// `info` on stderr — roughly 9 KiB per analysis pass — and a pipe with
-/// no reader blocks its writer once the OS buffer (64 KiB) is full. On
-/// Linux, where the file watcher adds a pass for every edit a test makes,
-/// the server wedged mid-pass holding the session lock and every IPC
-/// request behind it waited forever
-/// (`t6_seed_cache_does_not_advance_on_incremental_edits`). A file cannot
-/// fill, and the log stays readable for as long as the workspace lives.
-fn child_log_file(root: &Path, name: &str) -> Result<Stdio> {
-    let dir = root.join(DESLOP_DIR);
-    fs::create_dir_all(&dir).with_context(|| format!("create {}", dir.display()))?;
-    let file = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(dir.join(name))
-        .with_context(|| format!("open {name}"))?;
-    Ok(Stdio::from(file))
-}
-
-/// Drains `reader` on a background thread until the child closes it, so a
-/// stream the suite never reads cannot fill its pipe and block the child.
-fn drain_in_background<R: io::Read + Send + 'static>(mut reader: R) {
-    let _drain = thread::spawn(move || io::copy(&mut reader, &mut io::sink()));
 }
 
 fn lsp_handshake(stdin: &mut ChildStdin, stdout: &mut BufReader<ChildStdout>) -> Result<()> {
@@ -190,20 +149,15 @@ pub fn wait_for_path(path: &Path, timeout: Duration) -> Result<()> {
     }
 }
 
-/// Spawns an initialized LSP against `root` and blocks until it has
-/// published its IPC endpoint, returning a kill-on-drop guard for the LSP
-/// process. The caller MUST bind the returned `ChildKillOnDrop` to a live
-/// (named) local — dropping it early kills the LSP mid-test.
-///
-/// The artefact waited on comes from the engine ([LIVE-IPC-SOCKET],
-/// [LIVE-IPC-TCP]): Windows has no Unix-domain sockets and publishes a TCP
-/// endpoint record instead, so a wait spelled `deslop.sock` there times out
-/// against a server that came up seconds earlier.
+/// Spawns an initialized LSP against `root` and blocks until its IPC socket
+/// exists, returning a kill-on-drop guard for the LSP process. The caller
+/// MUST bind the returned `ChildKillOnDrop` to a live (named) local —
+/// dropping it early kills the LSP mid-test.
 pub fn spawn_lsp_and_wait_for_socket(root: &Path) -> Result<ChildKillOnDrop> {
     let lsp = spawn_lsp_and_initialize(root)?;
     let guard = ChildKillOnDrop(lsp);
-    let endpoint = deslop_core::live::transport::endpoint_path(root);
-    wait_for_path(&endpoint, SOCKET_TIMEOUT).context("wait for ipc endpoint")?;
+    let socket = root.join(".deslop/cache/deslop.sock");
+    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
     Ok(guard)
 }
 
@@ -215,60 +169,68 @@ pub fn spawn_lsp_and_wait_for_socket(root: &Path) -> Result<ChildKillOnDrop> {
 pub fn lsp_workspace_with_socket() -> Result<(TempDir, ChildKillOnDrop, PathBuf)> {
     let workspace = copied_fixture()?;
     let guard = spawn_lsp_and_wait_for_socket(workspace.path())?;
-    let endpoint = deslop_core::live::transport::endpoint_path(workspace.path());
-    Ok((workspace, guard, endpoint))
+    let socket = workspace.path().join(".deslop/cache/deslop.sock");
+    Ok((workspace, guard, socket))
 }
 
 /// Spawned MCP child + an id-tracked JSON-RPC request loop.
 pub struct McpHandle {
     child: Child,
-    rpc: StdioRpc,
+    stdin: ChildStdin,
+    stdout: BufReader<ChildStdout>,
+    next_id: i64,
 }
 
 impl McpHandle {
     /// Spawns the `deslop-mcp` binary against `root` over stdio.
     pub fn spawn(root: &Path) -> Result<Self> {
         let bin = env!("CARGO_BIN_EXE_deslop-mcp");
-        let mut command = Command::new(bin);
-        let _configured = command.arg("--root").arg(root);
-        Self::from_command(command)
-    }
-
-    /// Spawns the MCP binary from `working_directory` with `root_argument`.
-    ///
-    /// The explicit textual root is required by the wrong-root regression:
-    /// `.` must resolve against the process working directory before the
-    /// server binds its live LSP session ([MCP-ROOT-CANONICAL]).
-    pub fn spawn_with_root_argument(working_directory: &Path, root_argument: &str) -> Result<Self> {
-        let bin = env!("CARGO_BIN_EXE_deslop-mcp");
-        let mut command = Command::new(bin);
-        let _configured = command
+        let mut child = Command::new(bin)
             .arg("--root")
-            .arg(root_argument)
-            .current_dir(working_directory);
-        Self::from_command(command)
-    }
-
-    fn from_command(mut command: Command) -> Result<Self> {
-        let mut child = command
+            .arg(root)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
             .context("spawn deslop-mcp")?;
-        let rpc = StdioRpc::take(&mut child)?;
-        // The MCP logs to stderr and nothing here reads it; drain it so
-        // the pipe can never fill and stall a response
-        // ([`drain_in_background`]).
-        let stderr = child.stderr.take().context("mcp stderr")?;
-        drain_in_background(stderr);
-        Ok(Self { child, rpc })
+        let stdin = child.stdin.take().context("mcp stdin")?;
+        let stdout = BufReader::new(child.stdout.take().context("mcp stdout")?);
+        Ok(Self {
+            child,
+            stdin,
+            stdout,
+            next_id: 0,
+        })
     }
 
     /// Sends a JSON-RPC request and reads the matching response,
     /// skipping any pushed notifications in between.
     pub fn request(&mut self, method: &str, params: &Value) -> Result<Value> {
-        self.rpc.request(method, params)
+        self.next_id = self.next_id.saturating_add(1);
+        let id = self.next_id;
+        let payload = json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": method,
+            "params": params,
+        });
+        let mut bytes = serde_json::to_vec(&payload)?;
+        bytes.push(b'\n');
+        self.stdin.write_all(&bytes)?;
+        self.stdin.flush()?;
+        loop {
+            let mut line = String::new();
+            let read = self.stdout.read_line(&mut line)?;
+            ensure!(read > 0, "mcp stdout closed unexpectedly");
+            let frame: Value = serde_json::from_str(line.trim())
+                .with_context(|| format!("invalid mcp frame: {line}"))?;
+            if frame.get("id").and_then(Value::as_i64) == Some(id) {
+                return Ok(frame);
+            }
+            if frame.get("method").is_none() {
+                return Err(anyhow!("unexpected frame without id: {frame}"));
+            }
+        }
     }
 }
 
@@ -304,18 +266,19 @@ pub fn wait_for_state_then_init_mcp(workspace: &Path) -> Result<McpHandle> {
 /// Spawns + initializes an MCP child against `root`.
 pub fn initialized_mcp(root: &Path) -> Result<McpHandle> {
     let mut mcp = McpHandle::spawn(root)?;
-    initialize_mcp(&mut mcp)?;
-    Ok(mcp)
-}
-
-/// Performs the MCP `initialize` request for an already-spawned client.
-pub fn initialize_mcp(mcp: &mut McpHandle) -> Result<()> {
-    let response = mcp.rpc.initialize("phase5-e2e")?;
+    let response = mcp.request(
+        "initialize",
+        &json!({
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": { "name": "phase5-e2e", "version": "0.1.0" }
+        }),
+    )?;
     ensure!(
         response.get("error").is_none(),
         "MCP initialize failed: {response}"
     );
-    Ok(())
+    Ok(mcp)
 }
 
 /// Drives `tools/call` for `tool` with `arguments` and returns its
@@ -326,18 +289,6 @@ pub fn call_tool(mcp: &mut McpHandle, tool: &str, arguments: &Value) -> Result<V
         &json!({ "name": tool, "arguments": arguments }),
     )?;
     structured_content(&response, tool)
-}
-
-/// Requests one `duplicates` summary page of `limit` clusters, returning
-/// the raw JSON-RPC response so an error frame stays inspectable.
-pub fn request_duplicates_summary(mcp: &mut McpHandle, limit: u64) -> Result<Value> {
-    mcp.request(
-        "tools/call",
-        &json!({
-            "name": "duplicates",
-            "arguments": { "offset": 0, "limit": limit, "detail": "summary" }
-        }),
-    )
 }
 
 /// Extracts the `structuredContent` envelope from a successful tools/call.
@@ -352,7 +303,7 @@ pub fn structured_content(response: &Value, tool: &str) -> Result<Value> {
         .ok_or_else(|| anyhow!("response missing structuredContent: {response}"))
 }
 
-/// Returns the cluster ids on a `duplicates` page in stable order.
+/// Returns the cluster ids on a `report-get` page in stable order.
 pub fn cluster_ids(page: &Value) -> Vec<String> {
     page.get("clusters")
         .and_then(Value::as_array)
@@ -374,7 +325,7 @@ pub fn rescan_call(mcp: &mut McpHandle, paths: &[String]) -> Result<Value> {
             "name": "rescan",
             "arguments": {
                 "paths": paths,
-                "limit": 8,
+                "n": 8,
             }
         }),
     )?;
@@ -439,7 +390,6 @@ pub const KILLABLE_PARENT_SCRIPT: &str = r#"exec 3<&0; "$1" --root "$2" <&3 2>/d
 /// Reads the MCP pid the killable-parent shell prints on its stderr line.
 #[cfg(unix)]
 pub fn read_mcp_pid(child: &mut Child) -> Result<u32> {
-    use std::io::BufRead;
     let stderr = child.stderr.take().context("parent stderr")?;
     let mut stderr = BufReader::new(stderr);
     let mut pid_line = String::new();

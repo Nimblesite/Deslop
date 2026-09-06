@@ -1,68 +1,52 @@
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{fs, path::PathBuf};
 
 use anyhow::{anyhow, ensure, Context, Result};
 use deslop_core::{
-    report::{CacheStats, Report, ReportCluster, ReportOccurrence},
+    report::{CacheStats, Report, ReportCluster, ReportOccurrence, ReportSignals},
     report_metrics::RepoMetrics,
-    wire_generated::{MergePlan, MergeVerdict},
 };
 use tower_lsp::lsp_types::{CodeActionOrCommand, Position, Range};
 
 use super::*;
 
-/// Byte spans of the two duplicated statement runs in a fixture.
-type OccurrenceSpans = ((usize, usize), (usize, usize));
-
-/// Cluster id every report built here carries.
-const CLUSTER_ID: &str = "abcdef0123456789";
-
-/// Builds an LSP range from `(line, character)` pairs.
-fn range(start: (u32, u32), end: (u32, u32)) -> Range {
-    let position = |(line, character): (u32, u32)| Position { line, character };
-    Range {
-        start: position(start),
-        end: position(end),
-    }
+/// The shared C# Type-1 fixture backing every scenario here — the same
+/// file the E2E suites cluster ([AUTOFIX-EXTRACT-TESTING]).
+fn fixture_source() -> Result<String> {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../deslop/tests/fixtures/csharp-extract-type1/InvoiceMath.cs");
+    Ok(fs::read_to_string(path)?)
 }
 
-/// The range covering the first duplicated run in both C# fixtures.
-fn occurrence_range() -> Range {
-    range((4, 8), (5, 0))
-}
-
-/// Byte offset of the `nth` match of `needle` in `source`.
-fn nth_match(source: &str, needle: &str, nth: usize) -> Option<usize> {
-    source.match_indices(needle).nth(nth).map(|(at, _)| at)
-}
-
-/// Byte spans of the two duplicated statement runs in the Type-1 fixture.
-fn occurrence_spans(source: &str) -> Result<OccurrenceSpans> {
-    let end_needle = "return total;";
-    let run = |nth: usize| -> Result<(usize, usize)> {
-        let start =
-            nth_match(source, "var total = 0;", nth).with_context(|| format!("run {nth} start"))?;
-        let end = nth_match(source, end_needle, nth).with_context(|| format!("run {nth} end"))?;
-        Ok((start, end.saturating_add(end_needle.len())))
-    };
-    Ok((run(0)?, run(1)?))
-}
-
-/// Byte spans of the two renamed statement runs in the Type-2 fixture.
-fn renamed_spans(source: &str) -> Result<OccurrenceSpans> {
-    let first = source.find("var total = 0;").context("first body")?;
-    let second = source.find("var sum = 0;").context("second body")?;
-    Ok((
-        (first, first.saturating_add(200)),
-        (second, second.saturating_add(190)),
-    ))
+/// Byte spans of the two duplicated statement runs in the fixture.
+fn occurrence_spans(source: &str) -> Result<((usize, usize), (usize, usize))> {
+    let needle_start = "var total = 0;";
+    let needle_end = "return total;";
+    let first_start = source.find(needle_start).context("first run start")?;
+    let resume = first_start.saturating_add(needle_start.len());
+    let second_start = source
+        .get(resume..)
+        .and_then(|rest| rest.find(needle_start))
+        .map(|offset| resume.saturating_add(offset))
+        .context("second run start")?;
+    let first_end = source
+        .find(needle_end)
+        .map(|offset| offset.saturating_add(needle_end.len()))
+        .context("first run end")?;
+    let second_end = source
+        .get(first_end..)
+        .and_then(|rest| rest.find(needle_end))
+        .map(|offset| {
+            first_end
+                .saturating_add(offset)
+                .saturating_add(needle_end.len())
+        })
+        .context("second run end")?;
+    Ok(((first_start, first_end), (second_start, second_end)))
 }
 
 /// Wraps one proven-Identical cluster over the fixture spans in a
 /// minimal report.
-fn report_with_cluster(path: &Path, spans: OccurrenceSpans) -> Report {
+fn report_with_cluster(path: &std::path::Path, spans: ((usize, usize), (usize, usize))) -> Report {
     let occurrences = vec![occurrence(path, spans.0), occurrence(path, spans.1)];
     Report {
         tool_version: "test".to_owned(),
@@ -72,28 +56,32 @@ fn report_with_cluster(path: &Path, spans: OccurrenceSpans) -> Report {
         cache_stats: CacheStats::default(),
         metrics: RepoMetrics::default(),
         schema_doc: String::new(),
+        action_hints: Vec::new(),
         boilerplate_hints: Vec::new(),
         embedding_provenance: None,
-        clusters: vec![fixture_target_cluster(occurrences)],
-        clusters_outside_diff: None,
-        literal_findings: Vec::new(),
-        literal_findings_total: 0,
-        literal_findings_hidden: 0,
-        literal_findings_capped: false,
-        literal_max_findings: 0,
+        clusters: vec![ReportCluster {
+            id: "abcdef0123456789".to_owned(),
+            weight: 10.0,
+            size: 2,
+            canonical_node_count: 40,
+            signals: ReportSignals {
+                structural: 1.0,
+                token_jaccard: 1.0,
+                embedding_cos: 0.0,
+                fused: 1.0,
+            },
+            bucket: "identical".to_owned(),
+            category: "logic".to_owned(),
+            occurrences_total: 2,
+            occurrences,
+            occurrences_truncated: false,
+            summary: String::new(),
+            interpretation: String::new(),
+        }],
     }
 }
 
-/// The fixture's one byte-proven cluster, at the id the autofix suites
-/// address it by.
-fn fixture_target_cluster(occurrences: Vec<ReportOccurrence>) -> ReportCluster {
-    let mut cluster = deslop_core::report_fixtures::fixture_cluster(CLUSTER_ID, occurrences);
-    cluster.canonical_node_count = 40;
-    deslop_core::report_fixtures::restamp_fixture(&mut cluster);
-    cluster
-}
-
-fn occurrence(path: &Path, span: (usize, usize)) -> ReportOccurrence {
+fn occurrence(path: &std::path::Path, span: (usize, usize)) -> ReportOccurrence {
     ReportOccurrence {
         path: path.to_path_buf(),
         start_byte: span.0,
@@ -101,108 +89,18 @@ fn occurrence(path: &Path, span: (usize, usize)) -> ReportOccurrence {
         start_line: 0,
         end_line: 0,
         hidden: false,
-        in_diff: None,
     }
 }
 
-/// A checked-in E2E fixture copied into a temp dir, paired with the one-cluster
-/// report covering its duplicated spans ([AUTOFIX-EXTRACT-TESTING]).
-struct Fixture {
-    /// Kept alive so the written document stays on disk for the test.
-    _dir: tempfile::TempDir,
-    path: PathBuf,
-    uri: Url,
-    source: String,
-    report: Report,
-}
-
-impl Fixture {
-    /// Actions offered for `range` over this fixture's own document.
-    fn actions(&self, range: Range) -> Vec<CodeActionOrCommand> {
-        self.actions_for(&self.path, self.source.as_bytes(), range)
-    }
-
-    /// Actions offered for `range` against a substitute path and buffer.
-    fn actions_for(&self, path: &Path, source: &[u8], range: Range) -> Vec<CodeActionOrCommand> {
-        build_for_range(&self.report, path, &self.uri, source, range)
-    }
-}
-
-/// Copies `relative` out of the E2E fixture tree shared with the CLI
-/// suites, clustering the two spans `spans_of` finds in it.
-fn clustered_fixture(
-    relative: &str,
-    spans_of: impl Fn(&str) -> Result<OccurrenceSpans>,
-) -> Result<Fixture> {
-    let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../deslop/tests/fixtures");
-    let source = fs::read_to_string(fixtures.join(relative))?;
-    let name = Path::new(relative)
-        .file_name()
-        .context("fixture file name")?;
+fn fixture_setup() -> Result<(tempfile::TempDir, PathBuf, Url, String, Report)> {
+    let source = fixture_source()?;
     let dir = tempfile::tempdir()?;
-    let path = dir.path().join(name);
+    let path = dir.path().join("InvoiceMath.cs");
     fs::write(&path, &source)?;
     let uri = Url::from_file_path(&path).map_err(|()| anyhow!("absolute fixture path"))?;
-    let report = report_with_cluster(&path, spans_of(&source)?);
-    Ok(Fixture {
-        _dir: dir,
-        path,
-        uri,
-        source,
-        report,
-    })
-}
-
-/// The shared C# Type-1 fixture backing the extract scenarios.
-fn type1_fixture() -> Result<Fixture> {
-    clustered_fixture("csharp-extract-type1/InvoiceMath.cs", occurrence_spans)
-}
-
-/// Unwraps the code-action literal from one offered entry.
-fn action_literal(entry: &CodeActionOrCommand) -> Result<&CodeAction> {
-    let CodeActionOrCommand::CodeAction(action) = entry else {
-        return Err(anyhow!("expected a code action literal"));
-    };
-    Ok(action)
-}
-
-/// The lazy merge offer the server hands back before resolution.
-fn merge_offer() -> CodeAction {
-    CodeAction {
-        title: MERGE_ACTION_TITLE.to_owned(),
-        kind: Some(CodeActionKind::REFACTOR_REWRITE),
-        data: Some(serde_json::json!({ "cluster_id": CLUSTER_ID })),
-        ..CodeAction::default()
-    }
-}
-
-/// A mechanical merge plan carrying `workspace_edit` verbatim.
-fn mechanical_plan(workspace_edit: Option<serde_json::Value>) -> MergePlan {
-    MergePlan {
-        cluster_id: CLUSTER_ID.to_owned(),
-        language: "csharp".to_owned(),
-        verdict: MergeVerdict::Mechanical,
-        helper_name: "MergedFromCluster_abcdef".to_owned(),
-        helper_body: "var x = arg0;".to_owned(),
-        parameters: Vec::new(),
-        workspace_edit,
-    }
-}
-
-/// A single-edit `WorkspaceEdit` payload as the merge planner emits it.
-fn mechanical_workspace_edit() -> serde_json::Value {
-    serde_json::json!({
-        "documentChanges": [{
-            "textDocument": { "uri": "file:///tmp/a.cs", "version": null },
-            "edits": [{
-                "range": {
-                    "start": { "line": 0, "character": 0 },
-                    "end": { "line": 0, "character": 1 }
-                },
-                "newText": "x"
-            }]
-        }]
-    })
+    let spans = occurrence_spans(&source)?;
+    let report = report_with_cluster(&path, spans);
+    Ok((dir, path, uri, source, report))
 }
 
 /// [AUTOFIX-EXTRACT-CODE-ACTION]: an eligible cluster intersecting the
@@ -211,14 +109,26 @@ fn mechanical_workspace_edit() -> serde_json::Value {
 /// the requested document.
 #[test]
 fn eligible_cluster_yields_one_complete_action() -> Result<()> {
-    let fixture = type1_fixture()?;
-    let actions = fixture.actions(occurrence_range());
+    let (_dir, path, uri, source, report) = fixture_setup()?;
+    let range = Range {
+        start: Position {
+            line: 4,
+            character: 8,
+        },
+        end: Position {
+            line: 5,
+            character: 0,
+        },
+    };
+    let actions = build_for_range(&report, &path, &uri, source.as_bytes(), range);
     ensure!(
         actions.len() == 1,
         "exactly one action, got {}",
         actions.len()
     );
-    let action = action_literal(actions.first().context("first action")?)?;
+    let CodeActionOrCommand::CodeAction(action) = actions.first().context("first action")? else {
+        return Err(anyhow!("expected a code action literal"));
+    };
     ensure!(
         action.title == EXTRACT_ACTION_TITLE,
         "title mismatch: {}",
@@ -234,9 +144,7 @@ fn eligible_cluster_yields_one_complete_action() -> Result<()> {
         .as_ref()
         .and_then(|edit| edit.changes.as_ref())
         .context("edit changes present")?;
-    let edits = changes
-        .get(&fixture.uri)
-        .context("edits target the document")?;
+    let edits = changes.get(&uri).context("edits target the document")?;
     ensure!(edits.len() == 3, "3 edits expected, got {}", edits.len());
     ensure!(
         edits
@@ -259,8 +167,18 @@ fn eligible_cluster_yields_one_complete_action() -> Result<()> {
 /// A range that touches no occurrence yields no actions.
 #[test]
 fn range_outside_occurrences_yields_nothing() -> Result<()> {
-    let fixture = type1_fixture()?;
-    let actions = fixture.actions(range((0, 0), (0, 5)));
+    let (_dir, path, uri, source, report) = fixture_setup()?;
+    let range = Range {
+        start: Position {
+            line: 0,
+            character: 0,
+        },
+        end: Position {
+            line: 0,
+            character: 5,
+        },
+    };
+    let actions = build_for_range(&report, &path, &uri, source.as_bytes(), range);
     ensure!(actions.is_empty(), "no action outside occurrences");
     Ok(())
 }
@@ -268,9 +186,19 @@ fn range_outside_occurrences_yields_nothing() -> Result<()> {
 /// Unsupported file extensions have no parser and yield no actions.
 #[test]
 fn unsupported_language_yields_nothing() -> Result<()> {
-    let fixture = type1_fixture()?;
-    let unsupported = Path::new("InvoiceMath.txt");
-    let actions = fixture.actions_for(unsupported, fixture.source.as_bytes(), occurrence_range());
+    let (_dir, _path, uri, source, report) = fixture_setup()?;
+    let unsupported = std::path::Path::new("InvoiceMath.txt");
+    let range = Range {
+        start: Position {
+            line: 4,
+            character: 8,
+        },
+        end: Position {
+            line: 5,
+            character: 0,
+        },
+    };
+    let actions = build_for_range(&report, unsupported, &uri, source.as_bytes(), range);
     ensure!(actions.is_empty(), "no action for unsupported language");
     Ok(())
 }
@@ -279,8 +207,18 @@ fn unsupported_language_yields_nothing() -> Result<()> {
 /// meaningless.
 #[test]
 fn non_utf8_source_yields_nothing() -> Result<()> {
-    let fixture = type1_fixture()?;
-    let actions = fixture.actions_for(&fixture.path, &[0xFF, 0xFE, 0x00], range((0, 0), (9, 0)));
+    let (_dir, path, uri, _source, report) = fixture_setup()?;
+    let range = Range {
+        start: Position {
+            line: 0,
+            character: 0,
+        },
+        end: Position {
+            line: 9,
+            character: 0,
+        },
+    };
+    let actions = build_for_range(&report, &path, &uri, &[0xFF, 0xFE, 0x00], range);
     ensure!(actions.is_empty(), "no action for undecodable source");
     Ok(())
 }
@@ -290,10 +228,36 @@ fn non_utf8_source_yields_nothing() -> Result<()> {
 /// ([AUTOFIX-MERGE-CODE-ACTION] step 1).
 #[test]
 fn non_extractable_cluster_yields_lazy_merge_offer() -> Result<()> {
-    let fixture = clustered_fixture("csharp-extract-type2/RateMath.cs", renamed_spans)?;
-    let actions = fixture.actions(occurrence_range());
+    let source = fs::read_to_string(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../deslop/tests/fixtures/csharp-extract-type2/RateMath.cs"),
+    )?;
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("RateMath.cs");
+    fs::write(&path, &source)?;
+    let uri = Url::from_file_path(&path).map_err(|()| anyhow!("absolute fixture path"))?;
+    let first = source.find("var total = 0;").context("first body")?;
+    let second = source.find("var sum = 0;").context("second body")?;
+    let spans = (
+        (first, first.saturating_add(200)),
+        (second, second.saturating_add(190)),
+    );
+    let report = report_with_cluster(&path, spans);
+    let range = Range {
+        start: Position {
+            line: 4,
+            character: 8,
+        },
+        end: Position {
+            line: 5,
+            character: 0,
+        },
+    };
+    let actions = build_for_range(&report, &path, &uri, source.as_bytes(), range);
     ensure!(actions.len() == 1, "one merge offer, got {}", actions.len());
-    let action = action_literal(actions.first().context("first")?)?;
+    let CodeActionOrCommand::CodeAction(action) = actions.first().context("first")? else {
+        return Err(anyhow!("expected an action literal"));
+    };
     ensure!(
         action.title == MERGE_ACTION_TITLE,
         "merge title, got {}",
@@ -316,17 +280,42 @@ fn non_extractable_cluster_yields_lazy_merge_offer() -> Result<()> {
 /// step 2).
 #[test]
 fn resolved_action_attaches_edit_or_disables() -> Result<()> {
-    let offer = merge_offer();
-    let mechanical = mechanical_plan(Some(mechanical_workspace_edit()));
+    let offer = CodeAction {
+        title: MERGE_ACTION_TITLE.to_owned(),
+        kind: Some(CodeActionKind::REFACTOR_REWRITE),
+        data: Some(serde_json::json!({ "cluster_id": "abcdef0123456789" })),
+        ..CodeAction::default()
+    };
+    let mechanical = deslop_core::wire_generated::MergePlan {
+        cluster_id: "abcdef0123456789".to_owned(),
+        language: "csharp".to_owned(),
+        verdict: deslop_core::wire_generated::MergeVerdict::Mechanical,
+        helper_name: "MergedFromCluster_abcdef".to_owned(),
+        helper_body: "var x = arg0;".to_owned(),
+        parameters: Vec::new(),
+        workspace_edit: Some(serde_json::json!({
+            "documentChanges": [{
+                "textDocument": { "uri": "file:///tmp/a.cs", "version": null },
+                "edits": [{
+                    "range": {
+                        "start": { "line": 0, "character": 0 },
+                        "end": { "line": 0, "character": 1 }
+                    },
+                    "newText": "x"
+                }]
+            }]
+        })),
+    };
     let resolved = resolved_action(offer.clone(), &mechanical);
     ensure!(resolved.edit.is_some(), "mechanical plans attach the edit");
     ensure!(resolved.disabled.is_none(), "mechanical plans stay enabled");
 
-    let refused = MergePlan {
-        verdict: MergeVerdict::AiOrHuman {
+    let refused = deslop_core::wire_generated::MergePlan {
+        verdict: deslop_core::wire_generated::MergeVerdict::AiOrHuman {
             reason: "structural drift".to_owned(),
         },
-        ..mechanical_plan(None)
+        workspace_edit: None,
+        ..mechanical
     };
     let disabled = resolved_action(offer, &refused);
     ensure!(disabled.edit.is_none(), "refusals attach no edit");
@@ -345,12 +334,30 @@ fn resolved_action_attaches_edit_or_disables() -> Result<()> {
 /// silent no-op the user reads as success.
 #[test]
 fn resolved_action_disables_when_edit_is_unusable() -> Result<()> {
-    let offer = merge_offer();
+    let offer = CodeAction {
+        title: MERGE_ACTION_TITLE.to_owned(),
+        kind: Some(CodeActionKind::REFACTOR_REWRITE),
+        data: Some(serde_json::json!({ "cluster_id": "abcdef0123456789" })),
+        ..CodeAction::default()
+    };
+    let base = deslop_core::wire_generated::MergePlan {
+        cluster_id: "abcdef0123456789".to_owned(),
+        language: "csharp".to_owned(),
+        verdict: deslop_core::wire_generated::MergeVerdict::Mechanical,
+        helper_name: "MergedFromCluster_abcdef".to_owned(),
+        helper_body: "var x = arg0;".to_owned(),
+        parameters: Vec::new(),
+        workspace_edit: None,
+    };
     for (label, edit) in [
         ("missing edit", None),
         ("undeserializable edit", Some(serde_json::json!(42))),
     ] {
-        let resolved = resolved_action(offer.clone(), &mechanical_plan(edit));
+        let plan = deslop_core::wire_generated::MergePlan {
+            workspace_edit: edit,
+            ..base.clone()
+        };
+        let resolved = resolved_action(offer.clone(), &plan);
         ensure!(resolved.edit.is_none(), "{label}: no edit attaches");
         ensure!(
             resolved
