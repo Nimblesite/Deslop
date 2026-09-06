@@ -19,7 +19,7 @@ pub mod rpc;
 
 use std::{
     fs,
-    io::BufReader,
+    io::{self, BufReader},
     path::{Path, PathBuf},
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
     thread,
@@ -99,15 +99,52 @@ pub fn spawn_lsp_with_args(root: &Path, extra_args: &[&str]) -> Result<Child> {
         .args(extra_args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(child_log_file(root, LSP_STDERR_LOG)?)
         .spawn()
         .context("spawn deslop-lsp")?;
     let mut stdin = child.stdin.take().context("lsp stdin")?;
     let mut stdout = BufReader::new(child.stdout.take().context("lsp stdout")?);
     lsp_handshake(&mut stdin, &mut stdout).context("lsp handshake")?;
     child.stdin = Some(stdin);
-    child.stdout = Some(stdout.into_inner());
+    // Nothing in this suite reads the notifications the LSP keeps
+    // publishing after the handshake; keep draining them so the pipe
+    // can never fill and stall the server.
+    drain_in_background(stdout);
     Ok(child)
+}
+
+/// The directory Deslop owns inside a workspace. Child logs are written
+/// beside its cache, where file discovery never looks.
+const DESLOP_DIR: &str = ".deslop";
+
+/// Where the LSP's stderr lands for the lifetime of a test workspace.
+const LSP_STDERR_LOG: &str = "lsp-stderr.log";
+
+/// Opens `<root>/.deslop/<name>` (appending) as a child's stderr.
+///
+/// Never `Stdio::piped()` for a stream nothing reads: the LSP logs at
+/// `info` on stderr — roughly 9 KiB per analysis pass — and a pipe with
+/// no reader blocks its writer once the OS buffer (64 KiB) is full. On
+/// Linux, where the file watcher adds a pass for every edit a test makes,
+/// the server wedged mid-pass holding the session lock and every IPC
+/// request behind it waited forever
+/// (`t6_seed_cache_does_not_advance_on_incremental_edits`). A file cannot
+/// fill, and the log stays readable for as long as the workspace lives.
+fn child_log_file(root: &Path, name: &str) -> Result<Stdio> {
+    let dir = root.join(DESLOP_DIR);
+    fs::create_dir_all(&dir).with_context(|| format!("create {}", dir.display()))?;
+    let file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join(name))
+        .with_context(|| format!("open {name}"))?;
+    Ok(Stdio::from(file))
+}
+
+/// Drains `reader` on a background thread until the child closes it, so a
+/// stream the suite never reads cannot fill its pipe and block the child.
+fn drain_in_background<R: io::Read + Send + 'static>(mut reader: R) {
+    let _drain = thread::spawn(move || io::copy(&mut reader, &mut io::sink()));
 }
 
 fn lsp_handshake(stdin: &mut ChildStdin, stdout: &mut BufReader<ChildStdout>) -> Result<()> {
@@ -220,6 +257,11 @@ impl McpHandle {
             .spawn()
             .context("spawn deslop-mcp")?;
         let rpc = StdioRpc::take(&mut child)?;
+        // The MCP logs to stderr and nothing here reads it; drain it so
+        // the pipe can never fill and stall a response
+        // ([`drain_in_background`]).
+        let stderr = child.stderr.take().context("mcp stderr")?;
+        drain_in_background(stderr);
         Ok(Self { child, rpc })
     }
 
