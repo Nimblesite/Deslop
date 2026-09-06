@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Nimblesite/Deslop@v0.30.0
+      - uses: Nimblesite/Deslop@v0.34.0
         with:
           fail-over: "5.0"   # or omit to use [threshold] in .deslop.toml
 ```
@@ -35,7 +35,7 @@ The action needs no token and no permissions beyond the default `contents: read`
 
 ## Pinning and the CLI version
 
-**The tag you pin is the CLI version you get.** The `version` input defaults to `github.action_ref` with the leading `v` stripped, so `uses: Nimblesite/Deslop@v0.30.0` installs that same `deslop` release. The two cannot drift.
+**The tag you pin is the CLI version you get.** The `version` input defaults to `github.action_ref` with the leading `v` stripped, so `uses: Nimblesite/Deslop@v0.34.0` installs that same `deslop` release. The two cannot drift.
 
 Pin an exact version rather than a mutable ref — Dependabot bumps it for you. There is deliberately **no `@v1` alias**: a mutable major tag is exactly the supply-chain shape that pinning exists to avoid.
 
@@ -88,7 +88,7 @@ Outputs are published **even when the gate trips**, so a later step can comment 
 Report the number on every PR and let a human decide, rather than blocking the merge:
 
 ```yaml
-      - uses: Nimblesite/Deslop@v0.30.0
+      - uses: Nimblesite/Deslop@v0.34.0
         id: deslop
         with:
           no-fail-over: "true"   # measure without gating
@@ -117,7 +117,7 @@ Crucially, the reports are rendered and the artifact is uploaded **before** the 
 By default the action writes `deslop-report.json`, `deslop-report.txt` and `deslop-report.html` and uploads all three as a workflow artifact named `deslop-report`.
 
 ```yaml
-      - uses: Nimblesite/Deslop@v0.30.0
+      - uses: Nimblesite/Deslop@v0.34.0
         with:
           output: reports/duplication
           artifact-name: duplication-reports
