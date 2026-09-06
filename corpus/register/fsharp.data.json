@@ -11,7 +11,7 @@
   },
   "clearly_in": [
     {
-      "why": "The WithPath extension-method block is the plain block with the systematic rename X\u2192XWithPath applied throughout.",
+      "why": "The WithPath extension-method block is the plain block with the systematic rename X→XWithPath applied throughout.",
       "verified": "extracted and diffed the two source ranges (83 vs 83 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
       "occurrences": [
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:675-757",
@@ -19,7 +19,7 @@
       ]
     },
     {
-      "why": "getAllOf is getOneOf with the systematic oneOf\u2192allOf rename.",
+      "why": "getAllOf is getOneOf with the systematic oneOf→allOf rename.",
       "verified": "extracted and diffed the two source ranges (7 vs 7 lines): not byte-identical, similarity 0.97; differences are the systematic change described",
       "occurrences": [
         "src/FSharp.Data.Json.Core/JsonSchema.fs:181-187",
@@ -27,7 +27,7 @@
       ]
     },
     {
-      "why": "The WithPath extension-method block is the plain block with the systematic rename X\u2192XWithPath applied throughout.",
+      "why": "The WithPath extension-method block is the plain block with the systematic rename X→XWithPath applied throughout.",
       "verified": "extracted and diffed the two source ranges (33 vs 33 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
       "occurrences": [
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:736-768",
@@ -35,7 +35,7 @@
       ]
     },
     {
-      "why": "The WithPath extension-method block is the plain block with the systematic rename X\u2192XWithPath applied throughout.",
+      "why": "The WithPath extension-method block is the plain block with the systematic rename X→XWithPath applied throughout.",
       "verified": "extracted and diffed the two source ranges (33 vs 33 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
       "occurrences": [
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:725-757",
@@ -43,7 +43,7 @@
       ]
     },
     {
-      "why": "The WithPath extension-method block is the plain block with the systematic rename X\u2192XWithPath applied throughout.",
+      "why": "The WithPath extension-method block is the plain block with the systematic rename X→XWithPath applied throughout.",
       "verified": "extracted and diffed the two source ranges (34 vs 34 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
       "occurrences": [
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:746-779",
@@ -51,7 +51,7 @@
       ]
     },
     {
-      "why": "The WithPath extension-method block is the plain block with the systematic rename X\u2192XWithPath applied throughout.",
+      "why": "The WithPath extension-method block is the plain block with the systematic rename X→XWithPath applied throughout.",
       "verified": "extracted and diffed the two source ranges (33 vs 33 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
       "occurrences": [
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:664-696",
@@ -59,7 +59,7 @@
       ]
     },
     {
-      "why": "Http.Request is Http.RequestString with the systematic AsyncRequestString\u2194AsyncRequest rename over 36 lines.",
+      "why": "Http.Request is Http.RequestString with the systematic AsyncRequestString↔AsyncRequest rename over 36 lines.",
       "verified": "extracted and diffed the two source ranges (36 vs 36 lines): not byte-identical, similarity 1.00; differences are the systematic change described",
       "occurrences": [
         "src/FSharp.Data.Http/Http.fs:2369-2404",
@@ -67,7 +67,7 @@
       ]
     },
     {
-      "why": "The WithPath extension-method block is the plain block with the systematic rename X\u2192XWithPath applied throughout.",
+      "why": "The WithPath extension-method block is the plain block with the systematic rename X→XWithPath applied throughout.",
       "verified": "extracted and diffed the two source ranges (12 vs 12 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
       "occurrences": [
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:564-575",
@@ -75,15 +75,40 @@
       ]
     },
     {
-      "why": "The WithPath extension-method block is the plain block with the systematic rename X\u2192XWithPath applied throughout.",
+      "why": "The WithPath extension-method block is the plain block with the systematic rename X→XWithPath applied throughout.",
       "verified": "extracted and diffed the two source ranges (32 vs 32 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
       "occurrences": [
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:704-735",
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:555-586"
       ]
+    },
+    {
+      "why": "A fourteen-line net6-type downgrade/upgrade block appears verbatim twice in XmlProvider.fs.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 14 lines, conditional-compilation directives included.",
+      "occurrences": [
+        "src/FSharp.Data.DesignTime/Xml/XmlProvider.fs:155-168",
+        "src/FSharp.Data.DesignTime/Xml/XmlProvider.fs:90-103"
+      ]
+    },
+    {
+      "why": "HtmlOperations.fs carries the whole Descendants family twice: once plain and once as the WithPath variants. This window is the same block of extension members and their doc comments, with WithPath appended to every name.",
+      "verified": "Diffed both ranges out of source/: after stripping the literal 'WithPath' from both sides the two regions are identical, except for one doc-comment word ('name' against 'names') that differs in 1-2 places out of 33-89 lines.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:620-652",
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:769-801"
+      ]
     }
   ],
-  "clearly_out": [],
+  "clearly_out": [
+    {
+      "why": "One range declares HTTP method-name constants while the other is a large collection of World Bank JSON fixtures; these are unrelated code regions.",
+      "verified": "diff returned differences: 17 versus 151 lines; 1 hunk(s), 13 removed and 147 added lines",
+      "occurrences": [
+        "src/FSharp.Data.Http/Http.fs:57-73",
+        "tests/FSharp.Data.Core.Tests/WorldBankRuntime.fs:23-173"
+      ]
+    }
+  ],
   "not_clear": [
     {
       "why": "Single-line date-parse cases.",
@@ -149,7 +174,7 @@
       ]
     },
     {
-      "why": "2 identical pairBy lines \u2014 a short idiom.",
+      "why": "2 identical pairBy lines — a short idiom.",
       "occurrences": [
         "src/FSharp.Data.Runtime.Utilities/StructuralInference.fs:311-312",
         "src/FSharp.Data.Runtime.Utilities/StructuralInference.fs:331-332"
@@ -198,14 +223,14 @@
       ]
     },
     {
-      "why": "HtmlProvider doc sections on tables vs JSON-LD \u2014 prose.",
+      "why": "HtmlProvider doc sections on tables vs JSON-LD — prose.",
       "occurrences": [
         "docs/library/HtmlProvider.fsx:265-334",
         "docs/library/HtmlProvider.fsx:357-404"
       ]
     },
     {
-      "why": "Xml vs JsonProvider project-sample tests \u2014 same fixture, different access paths.",
+      "why": "Xml vs JsonProvider project-sample tests — same fixture, different access paths.",
       "occurrences": [
         "tests/FSharp.Data.Tests/XmlProvider.fs:129-141",
         "tests/FSharp.Data.Tests/JsonProvider.fs:550-564"
@@ -247,7 +272,7 @@
       ]
     },
     {
-      "why": "capitalizeFirstLetter vs trimHtml test groups \u2014 different functions.",
+      "why": "capitalizeFirstLetter vs trimHtml test groups — different functions.",
       "occurrences": [
         "tests/FSharp.Data.Core.Tests/NameUtils.fs:139-150",
         "tests/FSharp.Data.Core.Tests/NameUtils.fs:100-111"
@@ -289,14 +314,14 @@
       ]
     },
     {
-      "why": "CSS attribute-selector tests sharing the scaffold \u2014 genuinely repeated framework demo harness.",
+      "why": "CSS attribute-selector tests sharing the scaffold — genuinely repeated framework demo harness.",
       "occurrences": [
         "tests/FSharp.Data.Core.Tests/HtmlCssSelectors.fs:125-197",
         "tests/FSharp.Data.Core.Tests/HtmlCssSelectors.fs:71-124"
       ]
     },
     {
-      "why": "CsvProvider vs HtmlProvider doc headers \u2014 tutorial prose.",
+      "why": "CsvProvider vs HtmlProvider doc headers — tutorial prose.",
       "occurrences": [
         "docs/library/CsvProvider.fsx:17-94",
         "docs/library/HtmlProvider.fsx:12-78"
@@ -317,7 +342,7 @@
       ]
     },
     {
-      "why": "th vs td header-unit tests \u2014 systematic but the fixtures differ in row counts.",
+      "why": "th vs td header-unit tests — systematic but the fixtures differ in row counts.",
       "occurrences": [
         "tests/FSharp.Data.Tests/HtmlProvider.fs:101-114",
         "tests/FSharp.Data.Tests/HtmlProvider.fs:116-130"
@@ -331,7 +356,7 @@
       ]
     },
     {
-      "why": "HtmlAttribute vs HtmlNode extension headers \u2014 parallel pattern.",
+      "why": "HtmlAttribute vs HtmlNode extension headers — parallel pattern.",
       "occurrences": [
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:33-43",
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:483-497"
@@ -387,7 +412,7 @@
       ]
     },
     {
-      "why": "WithPath window with 33 vs 28 ragged boundaries \u2014 same twins, edges off.",
+      "why": "WithPath window with 33 vs 28 ragged boundaries — same twins, edges off.",
       "occurrences": [
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:631-663",
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:780-807"
@@ -443,7 +468,7 @@
       ]
     },
     {
-      "why": "Csv vs JsonStj benchmark harnesses \u2014 related but ragged.",
+      "why": "Csv vs JsonStj benchmark harnesses — related but ragged.",
       "occurrences": [
         "tests/FSharp.Data.Benchmarks/CsvBenchmarks.fs:1-55",
         "tests/FSharp.Data.Benchmarks/JsonStjBenchmarks.fs:49-84"
@@ -646,7 +671,7 @@
       ]
     },
     {
-      "why": "An active-pattern matched against its duplicate definition elsewhere \u2014 partial overlap.",
+      "why": "An active-pattern matched against its duplicate definition elsewhere — partial overlap.",
       "occurrences": [
         "src/FSharp.Data.Xml.Core/XmlInference.fs:16-24",
         "src/FSharp.Data.DesignTime/CommonProviderImplementation/Helpers.fs:55-58"
@@ -716,7 +741,7 @@
       ]
     },
     {
-      "why": "HTML vs XML doc transformation sections \u2014 prose.",
+      "why": "HTML vs XML doc transformation sections — prose.",
       "occurrences": [
         "docs/library/HtmlProvider.fsx:357-398",
         "docs/library/XmlProvider.fsx:449-480"
@@ -758,7 +783,7 @@
       ]
     },
     {
-      "why": "HtmlDocument Descendants vs HtmlNode DescendantsAndSelf \u2014 mismatched members of parallel families.",
+      "why": "HtmlDocument Descendants vs HtmlNode DescendantsAndSelf — mismatched members of parallel families.",
       "occurrences": [
         "src/FSharp.Data.Html.Core/HtmlDocumentOperations.fs:214-234",
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:653-674"
@@ -786,7 +811,7 @@
       ]
     },
     {
-      "why": "HtmlDocument vs HtmlAttribute module headers \u2014 parallel pattern.",
+      "why": "HtmlDocument vs HtmlAttribute module headers — parallel pattern.",
       "occurrences": [
         "src/FSharp.Data.Html.Core/HtmlDocumentOperations.fs:14-32",
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:15-29"
@@ -849,7 +874,7 @@
       ]
     },
     {
-      "why": "1 identical line \u2014 a short idiom.",
+      "why": "1 identical line — a short idiom.",
       "occurrences": [
         "tests/FSharp.Data.Core.Tests/JsonValue.fs:539-539",
         "tests/FSharp.Data.Core.Tests/JsonValue.fs:764-764"
@@ -977,7 +1002,7 @@
     {
       "why": "Demoted from CLEARLY IN. The judge called these a mirrored pair, but they are not one rename apart: `Can pluralize names` tests `pluralize` and `Can singularize names` tests `singularize`, the assertions are inverted (`check \"Author\" \"Authors\"` against `check \"Authors\" \"Author\"`), and the expected values differ line by line. What the two share is a two-line harness and a table shape - the idiom the test file invites, not the same code written twice.",
       "demoted_from": "clearly_in",
-      "judge_said": "Mirror of candidate 83 \u2014 pluralize vs singularize test lists.",
+      "judge_said": "Mirror of candidate 83 — pluralize vs singularize test lists.",
       "occurrences": [
         "tests/FSharp.Data.Core.Tests/NameUtils.fs:171-195",
         "tests/FSharp.Data.Core.Tests/NameUtils.fs:197-223"
@@ -986,7 +1011,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "The WithPath extension-method block is the plain block with the systematic rename X\u2192XWithPath applied throughout.",
+      "judge_said": "The WithPath extension-method block is the plain block with the systematic rename X→XWithPath applied throughout.",
       "occurrences": [
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:564-596",
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:713-745"
@@ -995,7 +1020,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "The WithPath extension-method block is the plain block with the systematic rename X\u2192XWithPath applied throughout.",
+      "judge_said": "The WithPath extension-method block is the plain block with the systematic rename X→XWithPath applied throughout.",
       "occurrences": [
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:555-640",
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:704-789"
@@ -1004,7 +1029,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "AsInteger is AsInteger64 with the systematic Int64\u2192Int32 rename throughout.",
+      "judge_said": "AsInteger is AsInteger64 with the systematic Int64→Int32 rename throughout.",
       "occurrences": [
         "src/FSharp.Data.Json.Core/JsonConversions.fs:40-45",
         "src/FSharp.Data.Json.Core/JsonConversions.fs:33-38"
@@ -1013,7 +1038,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "upgradeToDateTimeOffset is the downgrade function with the systematic downgrade\u2192upgrade and Date/TimeSpan\u2192DateTimeOffset renames.",
+      "judge_said": "upgradeToDateTimeOffset is the downgrade function with the systematic downgrade→upgrade and Date/TimeSpan→DateTimeOffset renames.",
       "occurrences": [
         "src/FSharp.Data.Runtime.Utilities/StructuralInference.fs:636-689",
         "src/FSharp.Data.Runtime.Utilities/StructuralInference.fs:714-763"
@@ -1022,7 +1047,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "The WithPath extension-method block is the plain block with the systematic rename X\u2192XWithPath applied throughout.",
+      "judge_said": "The WithPath extension-method block is the plain block with the systematic rename X→XWithPath applied throughout.",
       "occurrences": [
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:515-596",
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:664-745"
@@ -1040,7 +1065,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "The WithPath extension-method block is the plain block with the systematic rename X\u2192XWithPath applied throughout.",
+      "judge_said": "The WithPath extension-method block is the plain block with the systematic rename X→XWithPath applied throughout.",
       "occurrences": [
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:564-652",
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:713-801"
@@ -1058,7 +1083,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "The WithPath extension-method block is the plain block with the systematic rename X\u2192XWithPath applied throughout.",
+      "judge_said": "The WithPath extension-method block is the plain block with the systematic rename X→XWithPath applied throughout.",
       "occurrences": [
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:564-586",
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:713-735"
@@ -1067,7 +1092,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "The Json conversion-generator arms are the Text ones with the systematic JsonRuntime\u2192TextRuntime rename over 16 lines.",
+      "judge_said": "The Json conversion-generator arms are the Text ones with the systematic JsonRuntime→TextRuntime rename over 16 lines.",
       "occurrences": [
         "src/FSharp.Data.DesignTime/Json/JsonConversionsGenerator.fs:21-36",
         "src/FSharp.Data.DesignTime/CommonProviderImplementation/ConversionsGenerator.fs:19-34"
@@ -1076,7 +1101,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "The WithPath extension-method block is the plain block with the systematic rename X\u2192XWithPath applied throughout.",
+      "judge_said": "The WithPath extension-method block is the plain block with the systematic rename X→XWithPath applied throughout.",
       "occurrences": [
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:548-630",
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:697-779"
@@ -1094,7 +1119,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "getNumberProp is getStringProp with the systematic String\u2192Number rename.",
+      "judge_said": "getNumberProp is getStringProp with the systematic String→Number rename.",
       "occurrences": [
         "src/FSharp.Data.Json.Core/JsonSchema.fs:92-98",
         "src/FSharp.Data.Json.Core/JsonSchema.fs:100-106"
@@ -1103,7 +1128,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "tryToSingular is tryToPlural with the systematic Plural\u2194Singular rename.",
+      "judge_said": "tryToSingular is tryToPlural with the systematic Plural↔Singular rename.",
       "occurrences": [
         "src/FSharp.Data.Runtime.Utilities/Pluralizer.fs:233-239",
         "src/FSharp.Data.Runtime.Utilities/Pluralizer.fs:241-247"
@@ -1117,7 +1142,650 @@
         "tests/FSharp.Data.Core.Tests/NameUtilsProperties.fs:197-205",
         "tests/FSharp.Data.Core.Tests/NameUtilsProperties.fs:121-129"
       ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "src/FSharp.Data.DesignTime/Xml/XmlProvider.fs:185-189",
+        "src/FSharp.Data.DesignTime/Json/JsonProvider.fs:146-148"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/CsvRuntimeOperations.fs:117-134",
+        "tests/FSharp.Data.Core.Tests/CsvRuntimeOperations.fs:69-82"
+      ]
+    },
+    {
+      "why": "The ranges are similar, but the remaining changes are more than a clean systematic rename or are ordinary test/API scaffolding; I cannot call them copied without doubt.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/XmlExtensions.fs:218-223",
+        "tests/FSharp.Data.Core.Tests/XmlExtensions.fs:80-85"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material, but their boundaries are ragged or one side includes additional code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/XmlProvider.fs:1269-1290",
+        "tests/FSharp.Data.Tests/JsonProvider.fs:898-920"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:816-832",
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:506-525"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/StructuralInference.fs:300-302",
+        "tests/FSharp.Data.Core.Tests/StructuralInference.fs:278-280"
+      ]
+    },
+    {
+      "why": "The ranges are similar, but the remaining changes are more than a clean systematic rename or are ordinary test/API scaffolding; I cannot call them copied without doubt.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlCssSelectors.fs:138-141",
+        "src/FSharp.Data.Html.Core/HtmlCssSelectors.fs:125-128"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "src/FSharp.Data.DesignTime/Json/JsonGenerator.fs:687-688",
+        "src/FSharp.Data.DesignTime/Xml/XmlGenerator.fs:617-618"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/XmlProvider.fs:289-290",
+        "tests/FSharp.Data.Tests/XmlProvider.fs:283-284"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlDocumentOperations.fs:129-163",
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:490-525"
+      ]
+    },
+    {
+      "why": "The ranges are similar, but the remaining changes are more than a clean systematic rename or are ordinary test/API scaffolding; I cannot call them copied without doubt.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonSchema.fs:90-94",
+        "tests/FSharp.Data.Core.Tests/JsonSchema.fs:78-82"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "src/FSharp.Data.DesignTime/Json/JsonProvider.fs:172-193",
+        "src/FSharp.Data.DesignTime/Xml/XmlProvider.fs:212-233"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "src/FSharp.Data.Json.Core/JsonExtensions.fs:232-246",
+        "src/FSharp.Data.Json.Core/JsonExtensions.fs:253-270"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/CsvRuntimeOperations.fs:201-203",
+        "tests/FSharp.Data.Core.Tests/HtmlRuntimeTypes.fs:199-201"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material, but their boundaries are ragged or one side includes additional code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HtmlParser.fs:442-474",
+        "tests/FSharp.Data.Core.Tests/HtmlParser.fs:477-503"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/NameUtils.fs:139-150",
+        "tests/FSharp.Data.Core.Tests/NameUtils.fs:19-30"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material, but their boundaries are ragged or one side includes additional code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/FSharp.Data.Json.Core/JsonExtensions.fs:364-386",
+        "src/FSharp.Data.Json.Core/JsonExtensions.fs:335-355"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/CsvFile.fs:216-218",
+        "tests/FSharp.Data.Core.Tests/CsvFile.fs:234-236"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HtmlNodeSerialization.fs:114-116",
+        "tests/FSharp.Data.Core.Tests/HtmlNodeSerialization.fs:92-92"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material, but their boundaries are ragged or one side includes additional code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HtmlCssSelectors.fs:198-215",
+        "tests/FSharp.Data.Core.Tests/HtmlCssSelectors.fs:99-124"
+      ]
+    },
+    {
+      "why": "The ranges are similar, but the remaining changes are more than a clean systematic rename or are ordinary test/API scaffolding; I cannot call them copied without doubt.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonRuntime.fs:169-172",
+        "tests/FSharp.Data.Core.Tests/JsonRuntime.fs:179-182"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material, but their boundaries are ragged or one side includes additional code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HtmlParser.fs:212-221",
+        "tests/FSharp.Data.Core.Tests/HtmlParser.fs:272-280"
+      ]
+    },
+    {
+      "why": "The ranges are similar, but the remaining changes are more than a clean systematic rename or are ordinary test/API scaffolding; I cannot call them copied without doubt.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlParser.fs:584-594",
+        "src/FSharp.Data.Html.Core/HtmlParser.fs:573-583"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/CsvProvider.fs:329-330",
+        "tests/FSharp.Data.Tests/CsvProvider.fs:323-324"
+      ]
+    },
+    {
+      "why": "The ranges are similar, but the remaining changes are more than a clean systematic rename or are ordinary test/API scaffolding; I cannot call them copied without doubt.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonSchema.fs:90-94",
+        "tests/FSharp.Data.Core.Tests/JsonSchema.fs:84-88"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "tests/FSharp.Data.Benchmarks/HtmlBenchmarks.fs:15-47",
+        "tests/FSharp.Data.Benchmarks/JsonBenchmarks.fs:15-46"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "src/FSharp.Data.WorldBank.Core/WorldBankRuntime.fs:308-322",
+        "src/FSharp.Data.WorldBank.Core/WorldBankRuntime.fs:352-366"
+      ]
+    },
+    {
+      "why": "The ranges are similar, but the remaining changes are more than a clean systematic rename or are ordinary test/API scaffolding; I cannot call them copied without doubt.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/XmlProvider.fs:264-269",
+        "tests/FSharp.Data.Tests/XmlProvider.fs:257-262"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonValue.fs:662-662",
+        "tests/FSharp.Data.Core.Tests/JsonValue.fs:672-672"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:825-832",
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:833-842"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/XmlProvider.fs:197-197",
+        "tests/FSharp.Data.Tests/CsvProvider.fs:274-274"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/XmlInference.fs:174-174",
+        "tests/FSharp.Data.Core.Tests/XmlInference.fs:274-274"
+      ]
+    },
+    {
+      "why": "The ranges are similar, but the remaining changes are more than a clean systematic rename or are ordinary test/API scaffolding; I cannot call them copied without doubt.",
+      "occurrences": [
+        "src/FSharp.Data.DesignTime/Json/JsonGenerator.fs:783-787",
+        "src/FSharp.Data.DesignTime/Json/JsonGenerator.fs:759-763"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "src/FSharp.Data.Csv.Core/CsvRuntime.fs:530-530",
+        "src/FSharp.Data.Csv.Core/CsvRuntime.fs:523-523"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:563-600",
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:786-848"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "tests/FSharp.Data.Benchmarks/HtmlBenchmarks.fs:8-47",
+        "tests/FSharp.Data.Benchmarks/JsonStjBenchmarks.fs:49-84"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "src/FSharp.Data.DesignTime/Json/JsonProvider.fs:172-228",
+        "src/FSharp.Data.DesignTime/Xml/XmlProvider.fs:212-270"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/NameUtils.fs:174-195",
+        "tests/FSharp.Data.Core.Tests/NameUtils.fs:202-223"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HtmlParser.fs:553-555",
+        "tests/FSharp.Data.Core.Tests/HtmlParser.fs:278-280"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/NameUtils.fs:143-150",
+        "tests/FSharp.Data.Core.Tests/NameUtils.fs:113-120"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:713-735",
+        "src/FSharp.Data.Html.Core/HtmlDocumentOperations.fs:242-263"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/StructuralTypes.fs:101-102",
+        "tests/FSharp.Data.Core.Tests/StructuralTypes.fs:106-107"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonValue.fs:623-623",
+        "tests/FSharp.Data.Core.Tests/Http.fs:159-159"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "tests/FSharp.Data.DesignTime.Tests/SignatureTests.fs:50-50",
+        "tests/FSharp.Data.DesignTime.Tests/SignatureTests.fs:44-44"
+      ]
+    },
+    {
+      "why": "The ranges are similar, but the remaining changes are more than a clean systematic rename or are ordinary test/API scaffolding; I cannot call them copied without doubt.",
+      "occurrences": [
+        "tests/FSharp.Data.Benchmarks/CsvBenchmarks.fs:49-55",
+        "tests/FSharp.Data.Benchmarks/CsvBenchmarks.fs:41-47"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/StructuralInference.fs:102-102",
+        "tests/FSharp.Data.Core.Tests/StructuralInference.fs:118-118"
+      ]
+    },
+    {
+      "why": "The ranges are similar, but the remaining changes are more than a clean systematic rename or are ordinary test/API scaffolding; I cannot call them copied without doubt.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/XmlInference.fs:41-47",
+        "tests/FSharp.Data.Core.Tests/XmlInference.fs:32-38"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "src/FSharp.Data.WorldBank.Core/WorldBankRuntime.fs:317-322",
+        "src/FSharp.Data.WorldBank.Core/WorldBankRuntime.fs:358-363"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/CsvProvider.fs:724-727",
+        "tests/FSharp.Data.Tests/CsvProvider.fs:20-29"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonValueOptionExtensions.fs:150-150",
+        "tests/FSharp.Data.Core.Tests/JsonValueOptionExtensions.fs:110-110"
+      ]
+    },
+    {
+      "why": "The ranges are similar, but the remaining changes are more than a clean systematic rename or are ordinary test/API scaffolding; I cannot call them copied without doubt.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonValue.fs:742-749",
+        "tests/FSharp.Data.Core.Tests/JsonValue.fs:734-741"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/JsonProvider.fs:1062-1064",
+        "tests/FSharp.Data.Tests/XmlProvider.fs:1428-1430"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/Pluralizer.fs:60-62",
+        "tests/FSharp.Data.Core.Tests/Pluralizer.fs:183-185"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "src/FSharp.Data.Http/Http.fs:672-675",
+        "src/FSharp.Data.DesignTime/Xml/XmlGenerator.fs:30-32"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material, but their boundaries are ragged or one side includes additional code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/FSharp.Data.Http/Http.fs:2333-2368",
+        "src/FSharp.Data.Http/Http.fs:2405-2432"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:257-257",
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:270-270"
+      ]
+    },
+    {
+      "why": "The ranges are similar, but the remaining changes are more than a clean systematic rename or are ordinary test/API scaffolding; I cannot call them copied without doubt.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/XmlInference.fs:67-74",
+        "tests/FSharp.Data.Core.Tests/XmlInference.fs:76-83"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HtmlCssSelectors.fs:71-98",
+        "tests/FSharp.Data.Core.Tests/HtmlCssSelectors.fs:125-162"
+      ]
+    },
+    {
+      "why": "The ranges are similar, but the remaining changes are more than a clean systematic rename or are ordinary test/API scaffolding; I cannot call them copied without doubt.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/CsvReader.fs:239-251",
+        "tests/FSharp.Data.Core.Tests/CsvReader.fs:295-307"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonValue.fs:189-190",
+        "tests/FSharp.Data.Core.Tests/JsonValueOptionExtensions.fs:129-130"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/HtmlProvider.fs:174-187",
+        "tests/FSharp.Data.Tests/HtmlProvider.fs:208-225"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:26-27",
+        "src/FSharp.Data.Csv.Core/CsvInference.fs:517-532"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HtmlParser.fs:505-532",
+        "tests/FSharp.Data.Core.Tests/HtmlParser.fs:535-555"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:704-712",
+        "src/FSharp.Data.Html.Core/HtmlDocumentOperations.fs:171-182"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material, but their boundaries are ragged or one side includes additional code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/CsvProvider.fs:718-722",
+        "tests/FSharp.Data.Tests/CsvProvider.fs:491-494"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "docs/library/HtmlProvider.fsx:357-398",
+        "docs/library/JsonProvider.fsx:408-433"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HtmlParser.fs:315-316",
+        "tests/FSharp.Data.Core.Tests/HtmlParser.fs:297-298"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material, but their boundaries are ragged or one side includes additional code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:725-807",
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:576-663"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material, but their boundaries are ragged or one side includes additional code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/CsvProvider.fs:516-525",
+        "tests/FSharp.Data.Tests/CsvProvider.fs:527-537"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonRuntime.fs:27-28",
+        "tests/FSharp.Data.Core.Tests/JsonRuntime.fs:33-34"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/CsvParserProperties.fs:98-112",
+        "tests/FSharp.Data.Core.Tests/CsvParserProperties.fs:74-88"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "src/FSharp.Data.Json.Core/JsonExtensions.fs:132-143",
+        "src/FSharp.Data.Csv.Core/CsvExtensions.fs:30-40"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material, but their boundaries are ragged or one side includes additional code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/TextRuntime.fs:204-216",
+        "tests/FSharp.Data.Core.Tests/JsonRuntime.fs:148-161"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material, but their boundaries are ragged or one side includes additional code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/FSharp.Data.Xml.Core/XmlExtensions.fs:20-36",
+        "src/FSharp.Data.Json.Core/JsonValue.fs:590-602"
+      ]
+    },
+    {
+      "why": "The ranges are similar, but the remaining changes are more than a clean systematic rename or are ordinary test/API scaffolding; I cannot call them copied without doubt.",
+      "occurrences": [
+        "src/FSharp.Data.Csv.Core/CsvFile.fs:94-101",
+        "src/FSharp.Data.Csv.Core/CsvFile.fs:226-233"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HtmlTableCell.fs:37-45",
+        "tests/FSharp.Data.Core.Tests/HtmlTableCell.fs:27-35"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/StructuralTypes.fs:96-97",
+        "tests/FSharp.Data.Core.Tests/TextConversions.fs:263-264"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/JsonProvider.fs:496-497",
+        "tests/FSharp.Data.Core.Tests/CsvFile.fs:55-56"
+      ]
+    },
+    {
+      "why": "The ranges are similar, but the remaining changes are more than a clean systematic rename or are ordinary test/API scaffolding; I cannot call them copied without doubt.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/XmlInference.fs:198-202",
+        "tests/FSharp.Data.Core.Tests/XmlInference.fs:219-223"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests.CSharp/CsvExtensionsTests.cs:8-64",
+        "tests/FSharp.Data.Core.Tests.CSharp/JsonExtensionsTests.cs:65-120"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonSchema.fs:324-326",
+        "tests/FSharp.Data.Core.Tests/JsonRuntime.fs:209-211"
+      ]
+    },
+    {
+      "why": "The ranges are similar, but the remaining changes are more than a clean systematic rename or are ordinary test/API scaffolding; I cannot call them copied without doubt.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/CsvProvider.fs:38-43",
+        "tests/FSharp.Data.Tests/CsvProvider.fs:45-50"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "docs/library/WorldBank.fsx:9-60",
+        "docs/library/JsonProvider.fsx:9-70"
+      ]
+    },
+    {
+      "why": "The ranges are similar, but the remaining changes are more than a clean systematic rename or are ordinary test/API scaffolding; I cannot call them copied without doubt.",
+      "occurrences": [
+        "src/FSharp.Data.Csv.Core/CsvFile.fs:50-54",
+        "src/FSharp.Data.Csv.Core/CsvFile.fs:107-111"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/StructuralInference.fs:325-327",
+        "tests/FSharp.Data.Core.Tests/StructuralInference.fs:320-322"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/XmlInference.fs:174-174",
+        "tests/FSharp.Data.Core.Tests/XmlInference.fs:136-136"
+      ]
+    },
+    {
+      "why": "The shared material is only a one-to-three-line idiom or fragment, which is too short to call an obvious copied region.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:391-391",
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:366-366"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "src/FSharp.Data.WorldBank.Core/WorldBankRuntime.fs:355-366",
+        "src/FSharp.Data.WorldBank.Core/WorldBankRuntime.fs:427-436"
+      ]
+    },
+    {
+      "why": "The ranges are similar, but the remaining changes are more than a clean systematic rename or are ordinary test/API scaffolding; I cannot call them copied without doubt.",
+      "occurrences": [
+        "tests/FSharp.Data.DesignTime.Tests/TypeProviderInstantiation.fs:35-52",
+        "tests/FSharp.Data.DesignTime.Tests/TypeProviderInstantiation.fs:54-71"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "tests/FSharp.Data.Benchmarks/CsvBenchmarks.fs:6-55",
+        "tests/FSharp.Data.Benchmarks/JsonBenchmarks.fs:6-56"
+      ]
+    },
+    {
+      "why": "The comparison does not establish an obvious copied region, but there is not enough certainty to make the stronger CLEARLY OUT assertion.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/CsvReader.fs:219-226",
+        "tests/FSharp.Data.Core.Tests/StringExtensions.fs:122-129"
+      ]
+    },
+    {
+      "why": "The ranges are similar, but the remaining changes are more than a clean systematic rename or are ordinary test/API scaffolding; I cannot call them copied without doubt.",
+      "occurrences": [
+        "tests/FSharp.Data.DesignTime.Tests/TypeProviderInstantiation.fs:121-139",
+        "tests/FSharp.Data.DesignTime.Tests/TypeProviderInstantiation.fs:140-158"
+      ]
     }
-  ],
-  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 200 candidates at this commit and no pair was called CLEARLY OUT by all of them. 6 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing."
+  ]
 }

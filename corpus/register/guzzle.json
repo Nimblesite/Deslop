@@ -19,7 +19,7 @@
       ]
     },
     {
-      "why": "The cURL TLS-constant mapping is the stream one with the systematic STREAM_CRYPTO_PROTO\u2192CURL_SSLVERSION rename.",
+      "why": "The cURL TLS-constant mapping is the stream one with the systematic STREAM_CRYPTO_PROTO→CURL_SSLVERSION rename.",
       "verified": "extracted and diffed the two source ranges (9 vs 11 lines): not byte-identical, similarity 0.58; differences are the systematic change described",
       "occurrences": [
         "src/Handler/TlsVersion.php:55-63",
@@ -27,7 +27,7 @@
       ]
     },
     {
-      "why": "getName is getValue in SetCookie with the systematic Value\u2194Name rename over 14 lines.",
+      "why": "getName is getValue in SetCookie with the systematic Value↔Name rename over 14 lines.",
       "verified": "extracted and diffed the two source ranges (14 vs 14 lines): not byte-identical, similarity 0.89; differences are the systematic change described",
       "occurrences": [
         "src/Cookie/SetCookie.php:215-228",
@@ -99,7 +99,7 @@
       ]
     },
     {
-      "why": "formatCurlOption is formatCurlMultiOption with the systematic CURLOPT\u2194CURLMOPT rename over 23 lines.",
+      "why": "formatCurlOption is formatCurlMultiOption with the systematic CURLOPT↔CURLMOPT rename over 23 lines.",
       "verified": "extracted and diffed the two source ranges (23 vs 23 lines): not byte-identical, similarity 1.00; differences are the systematic change described",
       "occurrences": [
         "src/Handler/CurlMultiHandler.php:531-553",
@@ -113,9 +113,50 @@
         "tests/Handler/StreamHandlerTest.php:5063-5095",
         "tests/Handler/StreamHandlerTest.php:5132-5164"
       ]
+    },
+    {
+      "why": "The same sixteen-line MockHandler fixture - two closures recording requests and bodies, returning a 401 digest challenge then a 200 - appears three times in AuthMiddlewareTest.php.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 16 lines.",
+      "occurrences": [
+        "tests/AuthMiddlewareTest.php:259-274",
+        "tests/AuthMiddlewareTest.php:614-629"
+      ]
+    },
+    {
+      "why": "A fourteen-line SetCookie fixture with its comment appears verbatim twice in CookieJarTest.php.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 14 lines.",
+      "occurrences": [
+        "tests/Cookie/CookieJarTest.php:528-541",
+        "tests/Cookie/CookieJarTest.php:566-579"
+      ]
+    },
+    {
+      "why": "skipIfWindows and withProxyEnvironment are written out in full in both StreamHandlerTest.php and ProxyEnvTest.php.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 38 lines.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:2206-2243",
+        "tests/Handler/ProxyEnvTest.php:198-235"
+      ]
+    },
+    {
+      "why": "A thirteen-line CurlFactory/finish fixture appears verbatim twice in CurlFactoryTest.php.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 13 lines.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:6757-6769",
+        "tests/Handler/CurlFactoryTest.php:6475-6487"
+      ]
+    },
+    {
+      "why": "The same sixteen-line MockHandler fixture - two closures recording requests and bodies, returning a 401 digest challenge then a 200 - appears three times in AuthMiddlewareTest.php.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 16 lines.",
+      "occurrences": [
+        "tests/AuthMiddlewareTest.php:218-233",
+        "tests/AuthMiddlewareTest.php:259-274"
+      ]
     }
   ],
   "clearly_out": [],
+  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 200 candidates at this commit and no pair was called CLEARLY OUT by all of them. 3 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing.",
   "not_clear": [
     {
       "why": "Session-cookie variants with extra Domain fields.",
@@ -139,7 +180,7 @@
       ]
     },
     {
-      "why": "3 identical fixture lines \u2014 a short idiom.",
+      "why": "3 identical fixture lines — a short idiom.",
       "occurrences": [
         "tests/ClientTest.php:1711-1713",
         "tests/ClientTest.php:1670-1672"
@@ -356,7 +397,7 @@
       ]
     },
     {
-      "why": "TransportSharing vs Multiplexing class headers \u2014 different subjects.",
+      "why": "TransportSharing vs Multiplexing class headers — different subjects.",
       "occurrences": [
         "src/TransportSharing.php:1-18",
         "src/Multiplexing.php:1-28"
@@ -482,7 +523,7 @@
       ]
     },
     {
-      "why": "Multiplex guard vs Utils test \u2014 different subjects.",
+      "why": "Multiplex guard vs Utils test — different subjects.",
       "occurrences": [
         "tests/Handler/CurlFactoryTest.php:5166-5191",
         "tests/UtilsTest.php:239-261"
@@ -531,7 +572,7 @@
       ]
     },
     {
-      "why": "Digest challenge properties vs handler state properties \u2014 unrelated.",
+      "why": "Digest challenge properties vs handler state properties — unrelated.",
       "occurrences": [
         "src/Auth/DigestChallenge.php:11-29",
         "src/Handler/CurlFactory.php:154-185"
@@ -1058,7 +1099,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "The async half of ClientTrait is the sync half with the systematic request\u2192requestAsync/Async renames over 559 lines.",
+      "judge_said": "The async half of ClientTrait is the sync half with the systematic request→requestAsync/Async renames over 559 lines.",
       "occurrences": [
         "src/ClientTrait.php:110-668",
         "src/ClientTrait.php:756-1314"
@@ -1076,7 +1117,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "testValidatesSslKeyType is testValidatesCertType with the systematic cert\u2192ssl_key rename over 42 lines.",
+      "judge_said": "testValidatesSslKeyType is testValidatesCertType with the systematic cert→ssl_key rename over 42 lines.",
       "occurrences": [
         "tests/Handler/CurlFactoryTest.php:4040-4081",
         "tests/Handler/CurlFactoryTest.php:3943-3984"
@@ -1085,7 +1126,7 @@
     {
       "why": "Demoted from CLEARLY IN: only 48% of the tokens are shared - too little survives to call it one block written twice. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "ClientExceptionTest is ServerExceptionTest with the systematic Server\u2194Client rename over 32 lines.",
+      "judge_said": "ClientExceptionTest is ServerExceptionTest with the systematic Server↔Client rename over 32 lines.",
       "occurrences": [
         "tests/Exception/ServerExceptionTest.php:9-40",
         "tests/Exception/ClientExceptionTest.php:9-40"
@@ -1112,7 +1153,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "testPersistsToSession is testPersistsToFile with the systematic File\u2194Session jar rename over 40 lines.",
+      "judge_said": "testPersistsToSession is testPersistsToFile with the systematic File↔Session jar rename over 40 lines.",
       "occurrences": [
         "tests/Cookie/FileCookieJarTest.php:138-177",
         "tests/Cookie/SessionCookieJarTest.php:127-167"
@@ -1148,12 +1189,795 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "Mirror of candidate 4 \u2014 the anonymous Request subclass duplicated across handler tests.",
+      "judge_said": "Mirror of candidate 4 — the anonymous Request subclass duplicated across handler tests.",
       "occurrences": [
         "tests/Handler/StreamHandlerTest.php:5766-5793",
         "tests/Handler/CurlFactoryTest.php:10490-10517"
       ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Exception/RequestExceptionTest.php:44-56",
+        "tests/Exception/RequestExceptionTest.php:91-103"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:2713-2723",
+        "tests/Handler/CurlMultiHandlerTest.php:3440-3449"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:5698-5730",
+        "tests/Handler/CurlHandlerTest.php:131-162"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:5697-5699",
+        "tests/Handler/CurlFactoryTest.php:5671-5673"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:3140-3142",
+        "tests/Handler/CurlFactoryTest.php:3119-3121"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/ClientTest.php:1700-1702",
+        "tests/ClientTest.php:1679-1681"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:3320-3325",
+        "tests/Handler/CurlFactoryTest.php:3336-3341"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:7340-7365",
+        "tests/Handler/MockHandlerTest.php:224-245"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/Handler/MockHandlerTest.php:298-304",
+        "tests/Handler/CurlFactoryTest.php:7341-7348"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/RedirectMiddlewareTest.php:868-875",
+        "tests/RedirectMiddlewareTest.php:920-927"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/Handler/CurlHandlerTest.php:113-114",
+        "tests/Handler/StreamHandlerTest.php:5025-5032"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/Handler/MockHandlerTest.php:406-408",
+        "tests/Handler/MockHandlerTest.php:62-64"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:2377-2378",
+        "tests/Handler/StreamHandlerTest.php:2413-2415"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Cookie/CookieJarTest.php:370-372",
+        "tests/Cookie/CookieJarTest.php:711-713"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Cookie/FileCookieJarTest.php:304-305",
+        "tests/Cookie/FileCookieJarTest.php:292-293"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "src/Handler/CurlShareHandleState.php:207-211",
+        "src/Handler/CurlShareHandleState.php:117-121"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/CurlShareHandleStateTest.php:95-99",
+        "tests/Handler/CurlShareHandleStateTest.php:136-140"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:1941-1949",
+        "tests/Handler/CurlFactoryTest.php:1931-1939"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/RedirectMiddlewareTest.php:635-646",
+        "tests/RedirectMiddlewareTest.php:675-686"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/AuthMiddlewareTest.php:2060-2062",
+        "tests/Handler/HostValidatorTest.php:312-314"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:3714-3716",
+        "tests/Handler/CurlMultiHandlerTest.php:3742-3744"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:2269-2281",
+        "tests/Handler/CurlFactoryTest.php:2297-2309"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/PoolTest.php:8-13",
+        "tests/MiddlewareTest.php:8-13"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:4596-4600",
+        "tests/Handler/StreamHandlerTest.php:4556-4560"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/Handler/CurlHandlerTest.php:288-386",
+        "tests/Handler/CurlMultiHandlerTest.php:1636-1730"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/Cookie/FileCookieJarTest.php:336-401",
+        "tests/Cookie/SessionCookieJarTest.php:229-296"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:865-866",
+        "tests/RedirectMiddlewareTest.php:53-54"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:71-72",
+        "tests/Handler/StreamHandlerTest.php:5533-5534"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:2214-2217",
+        "tests/Handler/CurlFactoryTest.php:2457-2460"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:3748-3763",
+        "tests/Handler/CurlFactoryTest.php:3812-3827"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/ClientTest.php:1537-1596",
+        "tests/UtilsTest.php:316-361"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/DigestAuthIntegrationTest.php:116-119",
+        "tests/DigestAuthIntegrationTest.php:136-139"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "src/Cookie/CookieJar.php:382-384",
+        "src/AuthMiddleware.php:581-583"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "src/Handler/CurlFactory.php:16-22",
+        "src/Handler/StreamHandler.php:18-24"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:9129-9132",
+        "tests/Handler/CurlFactoryTest.php:9084-9087"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:5570-5572",
+        "tests/Handler/StreamHandlerTest.php:5582-5584"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:578-584",
+        "tests/Handler/StreamHandlerTest.php:543-549"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:3384-3387",
+        "tests/Handler/CurlMultiHandlerTest.php:379-382"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:471-473",
+        "tests/RedirectMiddlewareTest.php:595-597"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/ClientTest.php:2426-2427",
+        "tests/AuthMiddlewareTest.php:38-39"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/Handler/CurlHandlerTest.php:194-233",
+        "tests/Handler/CurlMultiHandlerTest.php:1848-1897"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/Exception/NetworkTimeoutExceptionTest.php:24-28",
+        "tests/Exception/NetworkExceptionTest.php:23-27"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/PrepareBodyMiddlewareTest.php:227-229",
+        "tests/PrepareBodyMiddlewareTest.php:59-61"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:3467-3469",
+        "tests/Handler/StreamHandlerTest.php:3477-3479"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/CurlHandlerTest.php:82-82",
+        "tests/Handler/CurlMultiHandlerTest.php:1120-1120"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:9036-9047",
+        "tests/Handler/CurlFactoryTest.php:9724-9735"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/UtilsTest.php:239-261",
+        "tests/Handler/CurlFactoryTest.php:4992-5017"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:2233-2244",
+        "tests/Handler/CurlMultiHandlerTest.php:2287-2298"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "src/Cookie/SetCookie.php:546-550",
+        "src/Handler/HeaderProcessor.php:135-149"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/CurlHandlerTest.php:177-181",
+        "tests/Handler/CurlMultiHandlerTest.php:1839-1843"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Cookie/CookieJarTest.php:1056-1059",
+        "tests/Cookie/CookieJarTest.php:1043-1046"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:7137-7139",
+        "tests/Handler/CurlFactoryTest.php:298-300"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/ClientTest.php:2899-2901",
+        "tests/ClientTest.php:2886-2888"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Handler/CurlHandler.php:59-65",
+        "src/Handler/CurlMultiHandler.php:240-244"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/ClientTest.php:1023-1025",
+        "tests/ClientTest.php:1046-1048"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:9737-9740",
+        "tests/Handler/CurlFactoryTest.php:8961-8964"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Auth/DigestAuthTest.php:235-237",
+        "tests/Auth/DigestAuthTest.php:282-284"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:8788-8789",
+        "tests/Handler/CurlFactoryTest.php:5907-5908"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/ClientTest.php:2938-2941",
+        "tests/ClientTest.php:94-97"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Cookie/SessionCookieJarTest.php:55-58",
+        "tests/Cookie/FileCookieJarTest.php:127-130"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/RetryMiddlewareTest.php:60-61",
+        "tests/RetryMiddlewareTest.php:102-103"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:8782-8789",
+        "tests/Handler/CurlFactoryTest.php:8751-8758"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:7109-7110",
+        "tests/Handler/CurlFactoryTest.php:7083-7084"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/ClientTest.php:1193-1195",
+        "tests/ClientTest.php:1268-1270"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:2338-2341",
+        "tests/Handler/StreamHandlerTest.php:4649-4653"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:6929-6938",
+        "tests/Handler/CurlFactoryTest.php:6954-6963"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:888-890",
+        "tests/Handler/CurlFactoryTest.php:1006-1008"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/PrepareBodyMiddlewareTest.php:384-386",
+        "tests/RedirectMiddlewareTest.php:582-584"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/Cookie/FileCookieJarTest.php:182-196",
+        "tests/Cookie/SessionCookieJarTest.php:192-208"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/Handler/ProxyEnvTest.php:30-33",
+        "tests/Handler/ProxyEnvTest.php:66-69"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/MessageFormatterTest.php:75-76",
+        "tests/MessageFormatterTest.php:80-81"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/AuthMiddlewareTest.php:1725-1727",
+        "tests/AuthMiddlewareTest.php:1452-1454"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/Handler/CurlHandlerTest.php:246-286",
+        "tests/Handler/CurlMultiHandlerTest.php:1564-1598"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:3406-3406",
+        "tests/Handler/StreamHandlerTest.php:3387-3387"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "src/Handler/StreamTlsSessionCache.php:244-244",
+        "src/Handler/StreamTlsSessionCache.php:245-245"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:1605-1614",
+        "tests/Handler/CurlMultiHandlerTest.php:1569-1578"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/ClientTest.php:1435-1467",
+        "tests/ClientTest.php:1392-1418"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/Handler/CurlVersionTest.php:441-463",
+        "tests/Handler/CurlVersionTest.php:374-396"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/ClientTest.php:2363-2365",
+        "tests/ClientTest.php:1769-1771"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:2479-2486",
+        "tests/Handler/CurlMultiHandlerTest.php:2335-2342"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:3574-3604",
+        "tests/Handler/CurlFactoryTest.php:8287-8313"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "src/Handler/CurlFactory.php:703-710",
+        "src/Handler/CurlFactory.php:694-701"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "src/Handler/CurlFactory.php:1-11",
+        "src/Handler/StreamHandler.php:1-11"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/AuthMiddlewareTest.php:1339-1341",
+        "tests/AuthMiddlewareTest.php:1428-1430"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Exception/HandlerClosedExceptionTest.php:30-35",
+        "tests/Exception/TransferExceptionTest.php:25-30"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/StreamTlsSessionCacheTest.php:45-53",
+        "tests/Handler/StreamTlsSessionCacheTest.php:55-63"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/Exception/NetworkTimeoutExceptionTest.php:19-36",
+        "tests/Exception/ConnectExceptionTest.php:19-35"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/RedirectMiddlewareTest.php:17-22",
+        "tests/Handler/StreamHandlerTest.php:35-40"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:4295-4303",
+        "tests/Handler/CurlHandlerTest.php:563-566"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:5071-5082",
+        "tests/Handler/StreamHandlerTest.php:5351-5362"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/AuthMiddlewareTest.php:473-478",
+        "tests/AuthMiddlewareTest.php:632-637"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:9101-9144",
+        "tests/Handler/CurlFactoryTest.php:9016-9055"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/RedirectMiddlewareTest.php:235-236",
+        "tests/ClientTest.php:1174-1175"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:7800-7810",
+        "tests/Handler/StreamHandlerTest.php:3548-3558"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/AuthMiddlewareTest.php:983-986",
+        "tests/AuthMiddlewareTest.php:1036-1039"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/AuthMiddlewareTest.php:1677-1681",
+        "tests/AuthMiddlewareTest.php:1536-1540"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:5327-5329",
+        "tests/Handler/CurlFactoryTest.php:5302-5304"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:3992-4037",
+        "tests/Handler/CurlFactoryTest.php:9647-9703"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "src/Handler/CurlMultiHandler.php:266-271",
+        "src/Cookie/SessionCookieJar.php:72-77"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/ClientTest.php:2465-2473",
+        "tests/ClientTest.php:2594-2603"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:1120-1120",
+        "tests/Handler/CurlMultiHandlerTest.php:1433-1433"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "src/Handler/CurlVersion.php:179-179",
+        "tests/Handler/CurlVersionTest.php:467-467"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Cookie/FileCookieJar.php:25-66",
+        "src/Cookie/SessionCookieJar.php:19-62"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:223-226",
+        "tests/Handler/CurlMultiHandlerTest.php:251-254"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/Exception/ResponseTransferExceptionTest.php:8-38",
+        "tests/Exception/ClientExceptionTest.php:22-39"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:3021-3023",
+        "tests/Handler/StreamHandlerTest.php:3066-3067"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "src/RedirectMiddleware.php:11-16",
+        "src/AuthMiddleware.php:13-18"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/RequestFramingTest.php:230-231",
+        "tests/Handler/RequestFramingTest.php:243-244"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/Handler/RequestFramingTest.php:398-408",
+        "tests/Handler/RequestFramingTest.php:372-382"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:8968-9013",
+        "tests/Handler/StreamHandlerTest.php:378-430"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/Cookie/SetCookieTest.php:432-437",
+        "tests/Cookie/SetCookieTest.php:483-488"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:5043-5052",
+        "tests/Handler/StreamHandlerTest.php:5316-5326"
+      ]
     }
-  ],
-  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 200 candidates at this commit and no pair was called CLEARLY OUT by all of them. 3 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing."
+  ]
 }

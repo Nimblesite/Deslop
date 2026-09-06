@@ -11,7 +11,7 @@
   },
   "clearly_in": [
     {
-      "why": "The after-context sink test is the before-context one with only SinkContextKind::Before\u2192After changed (2 of 20 lines).",
+      "why": "The after-context sink test is the before-context one with only SinkContextKind::Before→After changed (2 of 20 lines).",
       "verified": "extracted and diffed the two source ranges (20 vs 20 lines): 2 changed lines, similarity 0.99",
       "occurrences": [
         "crates/searcher/src/searcher/core.rs:561-580",
@@ -52,6 +52,7 @@
     }
   ],
   "clearly_out": [],
+  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 200 candidates at this commit and no pair was called CLEARLY OUT by all of them. 0 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing.",
   "not_clear": [
     {
       "why": "3 identical context-limiter lines.",
@@ -82,7 +83,7 @@
       ]
     },
     {
-      "why": "MaxColumns vs Threads flag impls \u2014 per-flag boilerplate, different docs/config.",
+      "why": "MaxColumns vs Threads flag impls — per-flag boilerplate, different docs/config.",
       "occurrences": [
         "crates/core/flags/defs.rs:4135-4174",
         "crates/core/flags/defs.rs:7085-7123"
@@ -138,7 +139,7 @@
       ]
     },
     {
-      "why": "Overrides vs ucp builder methods \u2014 unrelated crates.",
+      "why": "Overrides vs ucp builder methods — unrelated crates.",
       "occurrences": [
         "crates/ignore/src/walk.rs:833-846",
         "crates/pcre2/src/matcher.rs:205-228"
@@ -180,7 +181,7 @@
       ]
     },
     {
-      "why": "absolute_base vs glob accessors \u2014 different crates.",
+      "why": "absolute_base vs glob accessors — different crates.",
       "occurrences": [
         "crates/ignore/src/dir.rs:694-696",
         "crates/globset/src/lib.rs:206-208"
@@ -201,7 +202,7 @@
       ]
     },
     {
-      "why": "Dotall vs hidden builder methods \u2014 different crates.",
+      "why": "Dotall vs hidden builder methods — different crates.",
       "occurrences": [
         "crates/pcre2/src/matcher.rs:127-163",
         "crates/ignore/src/walk.rs:874-913"
@@ -222,7 +223,7 @@
       ]
     },
     {
-      "why": "is_ignore vs into_path \u2014 different APIs.",
+      "why": "is_ignore vs into_path — different APIs.",
       "occurrences": [
         "crates/ignore/src/incremental.rs:486-499",
         "crates/ignore/src/walk.rs:44-58"
@@ -236,7 +237,7 @@
       ]
     },
     {
-      "why": "One-file-system vs include-zero flag impls \u2014 boilerplate.",
+      "why": "One-file-system vs include-zero flag impls — boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:5456-5514",
         "crates/core/flags/defs.rs:3409-3455"
@@ -299,21 +300,21 @@
       ]
     },
     {
-      "why": "BlockBuffered vs LineBuffered flag impls \u2014 boilerplate.",
+      "why": "BlockBuffered vs LineBuffered flag impls — boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:594-655",
         "crates/core/flags/defs.rs:3911-3976"
       ]
     },
     {
-      "why": "Quiet vs Null flag impls \u2014 boilerplate.",
+      "why": "Quiet vs Null flag impls — boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:6071-6109",
         "crates/core/flags/defs.rs:5339-5375"
       ]
     },
     {
-      "why": "Hyperlink vs word builder methods \u2014 different crates.",
+      "why": "Hyperlink vs word builder methods — different crates.",
       "occurrences": [
         "crates/printer/src/path.rs:89-111",
         "crates/regex/src/matcher.rs:343-354"
@@ -327,14 +328,14 @@
       ]
     },
     {
-      "why": "Glob vs pre-glob flag impls \u2014 boilerplate.",
+      "why": "Glob vs pre-glob flag impls — boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:2590-2635",
         "crates/core/flags/defs.rs:5952-5996"
       ]
     },
     {
-      "why": "TypeClear vs TypeAdd flag impls \u2014 boilerplate.",
+      "why": "TypeClear vs TypeAdd flag impls — boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:7315-7374",
         "crates/core/flags/defs.rs:7402-7435"
@@ -446,7 +447,7 @@
       ]
     },
     {
-      "why": "Man-page vs help-text writers \u2014 different output formats.",
+      "why": "Man-page vs help-text writers — different output formats.",
       "occurrences": [
         "crates/core/flags/doc/man.rs:53-62",
         "crates/core/flags/doc/help.rs:150-161"
@@ -495,7 +496,7 @@
       ]
     },
     {
-      "why": "CaseSensitive vs SmartCase flag impls \u2014 boilerplate.",
+      "why": "CaseSensitive vs SmartCase flag impls — boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:714-754",
         "crates/core/flags/defs.rs:6515-6562"
@@ -649,7 +650,7 @@
       ]
     },
     {
-      "why": "PCRE2 vs Text flag impls \u2014 boilerplate.",
+      "why": "PCRE2 vs Text flag impls — boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:5706-5763",
         "crates/core/flags/defs.rs:7005-7057"
@@ -663,7 +664,7 @@
       ]
     },
     {
-      "why": "LineBuffered vs Binary flag impls \u2014 boilerplate.",
+      "why": "LineBuffered vs Binary flag impls — boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:3911-3958",
         "crates/core/flags/defs.rs:503-569"
@@ -740,7 +741,7 @@
       ]
     },
     {
-      "why": "SearcherBuilder vs PathPrinterBuilder \u2014 different crates.",
+      "why": "SearcherBuilder vs PathPrinterBuilder — different crates.",
       "occurrences": [
         "crates/searcher/src/searcher/mod.rs:510-556",
         "crates/printer/src/path.rs:89-122"
@@ -761,7 +762,7 @@
       ]
     },
     {
-      "why": "Null vs OnlyMatching flag impls \u2014 boilerplate.",
+      "why": "Null vs OnlyMatching flag impls — boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:5339-5389",
         "crates/core/flags/defs.rs:5513-5561"
@@ -782,7 +783,7 @@
       ]
     },
     {
-      "why": "WordRegexp vs LineRegexp flag impls \u2014 boilerplate.",
+      "why": "WordRegexp vs LineRegexp flag impls — boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:7891-7932",
         "crates/core/flags/defs.rs:4084-4122"
@@ -866,14 +867,14 @@
       ]
     },
     {
-      "why": "StopOnNonmatch vs NullData flag impls \u2014 boilerplate.",
+      "why": "StopOnNonmatch vs NullData flag impls — boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:6946-6982",
         "crates/core/flags/defs.rs:5388-5431"
       ]
     },
     {
-      "why": "Context vs BeforeContext flag impls \u2014 boilerplate.",
+      "why": "Context vs BeforeContext flag impls — boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:1074-1115",
         "crates/core/flags/defs.rs:417-455"
@@ -901,7 +902,7 @@
       ]
     },
     {
-      "why": "Matcher test-util vs searcher test-util \u2014 different crates.",
+      "why": "Matcher test-util vs searcher test-util — different crates.",
       "occurrences": [
         "crates/matcher/tests/util.rs:69-83",
         "crates/searcher/src/testutil.rs:64-84"
@@ -943,14 +944,14 @@
       ]
     },
     {
-      "why": "SearcherBuilder vs PathPrinterBuilder \u2014 different crates.",
+      "why": "SearcherBuilder vs PathPrinterBuilder — different crates.",
       "occurrences": [
         "crates/searcher/src/searcher/mod.rs:413-463",
         "crates/printer/src/path.rs:70-111"
       ]
     },
     {
-      "why": "StandardBuilder vs RegexMatcherBuilder \u2014 different crates.",
+      "why": "StandardBuilder vs RegexMatcherBuilder — different crates.",
       "occurrences": [
         "crates/printer/src/standard.rs:164-263",
         "crates/regex/src/matcher.rs:157-259"
@@ -1041,7 +1042,7 @@
       ]
     },
     {
-      "why": "DfaSizeLimit vs MaxFilesize flag impls \u2014 boilerplate.",
+      "why": "DfaSizeLimit vs MaxFilesize flag impls — boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:1582-1622",
         "crates/core/flags/defs.rs:4380-4419"
@@ -1090,14 +1091,14 @@
       ]
     },
     {
-      "why": "SearcherBuilder vs PathPrinterBuilder \u2014 different crates.",
+      "why": "SearcherBuilder vs PathPrinterBuilder — different crates.",
       "occurrences": [
         "crates/searcher/src/searcher/mod.rs:413-501",
         "crates/printer/src/path.rs:70-122"
       ]
     },
     {
-      "why": "NoIgnoreGlobal vs OneFileSystem flag impls \u2014 boilerplate.",
+      "why": "NoIgnoreGlobal vs OneFileSystem flag impls — boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:4909-4943",
         "crates/core/flags/defs.rs:5453-5499"
@@ -1206,7 +1207,629 @@
         "crates/index/src/literal.rs:73-99",
         "crates/index/src/literal.rs:101-127"
       ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:2826-2847",
+        "crates/core/flags/defs.rs:7704-7725"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/searcher/src/line_buffer.rs:766-773",
+        "crates/searcher/src/line_buffer.rs:741-748"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/ignore/src/default_types.rs:112-114",
+        "crates/ignore/src/default_types.rs:121-123"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/searcher/src/searcher/glue.rs:1248-1266",
+        "crates/searcher/src/searcher/glue.rs:1393-1415"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/ignore/src/overrides.rs:239-246",
+        "crates/ignore/src/overrides.rs:253-260"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/pcre2/src/matcher.rs:135-151",
+        "crates/ignore/src/walk.rs:932-949"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/searcher/src/testutil.rs:756-758",
+        "crates/searcher/src/testutil.rs:779-781"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:387-394",
+        "crates/core/flags/defs.rs:484-487"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/ignore/src/dir.rs:1291-1292",
+        "crates/ignore/src/dir.rs:1371-1372"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:3975-4025",
+        "crates/core/flags/defs.rs:4028-4081"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/regression.rs:130-134",
+        "tests/regression.rs:137-141"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:2571-2594",
+        "crates/printer/src/standard.rs:3085-3109"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:4483-4490",
+        "crates/core/flags/defs.rs:7059-7066"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/ignore/src/dir.rs:1304-1306",
+        "crates/ignore/src/walk.rs:2349-2351"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:5161-5207",
+        "crates/core/flags/defs.rs:4196-4249"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/misc.rs:498-510",
+        "tests/misc.rs:896-907"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:3496-3498",
+        "crates/printer/src/standard.rs:3467-3469"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:1135-1145",
+        "crates/core/flags/defs.rs:475-485"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:3755-3774",
+        "crates/printer/src/standard.rs:1982-2021"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/pcre2/src/matcher.rs:51-57",
+        "crates/regex/src/config.rs:183-189"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/ignore/src/dir.rs:1179-1182",
+        "crates/ignore/src/dir.rs:1204-1207"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:7980-7982",
+        "crates/core/flags/defs.rs:7976-7978"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:5513-5547",
+        "crates/core/flags/defs.rs:6071-6109"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/printer/src/path.rs:89-111",
+        "crates/printer/src/standard.rs:423-447"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:3174-3201",
+        "crates/core/flags/defs.rs:2590-2635"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/printer/src/summary.rs:187-267",
+        "crates/printer/src/standard.rs:140-221"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:3207-3211",
+        "crates/core/flags/defs.rs:6002-6006"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:260-296",
+        "crates/printer/src/json.rs:79-112"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:4124-4127",
+        "crates/core/flags/defs.rs:7874-7877"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:6138-6219",
+        "crates/core/flags/defs.rs:1582-1659"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:290-293",
+        "crates/core/flags/defs.rs:284-287"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/ignore/src/dir.rs:1376-1378",
+        "crates/ignore/src/dir.rs:1404-1406"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/globset/src/serde_impl.rs:69-75",
+        "crates/globset/src/serde_impl.rs:37-43"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/misc.rs:836-846",
+        "tests/regression.rs:413-423"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:1710-1714",
+        "crates/printer/src/standard.rs:1683-1687"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:1792-1794",
+        "crates/printer/src/standard.rs:1817-1819"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/ignore/src/dir.rs:1433-1435",
+        "crates/ignore/src/incremental.rs:1238-1240"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:6515-6562",
+        "crates/core/flags/defs.rs:3224-3266"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:5193-5244",
+        "crates/core/flags/defs.rs:5248-5317"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:6856-6862",
+        "crates/core/flags/defs.rs:6754-6760"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:2718-2745",
+        "crates/printer/src/standard.rs:2764-2795"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/ignore/src/incremental.rs:836-838",
+        "crates/ignore/src/incremental.rs:777-779"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/regex/src/literal.rs:794-795",
+        "crates/regex/src/literal.rs:805-806"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:7236-7288",
+        "crates/core/flags/defs.rs:7461-7510"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/printer/src/json.rs:908-921",
+        "crates/printer/src/summary.rs:799-812"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:1116-1118",
+        "crates/printer/src/standard.rs:1065-1067"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:3348-3407",
+        "crates/core/flags/defs.rs:2670-2728"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/ignore/src/incremental.rs:836-838",
+        "crates/ignore/src/incremental.rs:851-853"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:1182-1185",
+        "crates/core/flags/defs.rs:1192-1195"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/regex/src/literal.rs:324-329",
+        "crates/regex/src/literal.rs:340-345"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:467-472",
+        "crates/core/flags/defs.rs:7878-7883"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/ignore/src/dir.rs:1402-1404",
+        "crates/ignore/src/dir.rs:1417-1419"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:4235-4239",
+        "crates/core/flags/defs.rs:4574-4578"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:3808-3809",
+        "crates/printer/src/standard.rs:2954-2955"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/printer/src/path.rs:89-122",
+        "crates/searcher/src/searcher/mod.rs:431-501"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/searcher/src/searcher/glue.rs:1149-1207",
+        "crates/searcher/src/searcher/glue.rs:1097-1146"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:1323-1379",
+        "crates/core/flags/defs.rs:2250-2293"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/misc.rs:228-240",
+        "tests/misc.rs:461-472"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "crates/printer/src/summary.rs:1092-1102",
+        "crates/printer/src/summary.rs:1054-1064"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:7400-7461",
+        "crates/core/flags/defs.rs:7313-7399"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/ignore/src/dir.rs:1173-1183",
+        "crates/ignore/src/dir.rs:1186-1196"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/printer/src/json.rs:106-112",
+        "crates/printer/src/standard.rs:374-380"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:1074-1115",
+        "crates/core/flags/defs.rs:232-270"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/multiline.rs:28-43",
+        "tests/multiline.rs:72-89"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:423-429",
+        "crates/printer/src/summary.rs:299-302"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/globset/src/lib.rs:379-381",
+        "crates/globset/src/lib.rs:342-344"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/printer/src/summary.rs:877-888",
+        "crates/printer/src/json.rs:997-1002"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:4851-4859",
+        "crates/core/flags/defs.rs:5147-5154"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/globset/src/lib.rs:665-676",
+        "crates/globset/src/lib.rs:695-706"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/searcher/src/searcher/mod.rs:413-463",
+        "crates/searcher/src/searcher/mod.rs:495-539"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:164-263",
+        "crates/searcher/src/searcher/mod.rs:346-434"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/ignore/src/default_types.rs:246-248",
+        "crates/ignore/src/default_types.rs:125-127"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/searcher/src/searcher/glue.rs:897-912",
+        "crates/searcher/src/searcher/glue.rs:1066-1079"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:3736-3741",
+        "crates/core/flags/defs.rs:3684-3689"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/ignore/src/incremental.rs:609-616",
+        "crates/ignore/src/incremental.rs:618-625"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/ignore/src/incremental.rs:866-869",
+        "crates/ignore/src/incremental.rs:777-780"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:470-475",
+        "crates/core/flags/defs.rs:285-290"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/globset/src/lib.rs:379-381",
+        "crates/globset/src/glob.rs:142-144"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/matcher/src/lib.rs:726-730",
+        "crates/regex/src/matcher.rs:448-452"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/ignore/src/incremental.rs:639-641",
+        "crates/ignore/src/incremental.rs:691-693"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/globset/src/lib.rs:1170-1172",
+        "crates/printer/src/hyperlink/mod.rs:974-977"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/printer/src/jsont.rs:126-127",
+        "crates/printer/src/jsont.rs:78-79"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:5453-5499",
+        "crates/core/flags/defs.rs:5111-5145"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/searcher/src/lines.rs:386-390",
+        "crates/searcher/src/lines.rs:451-455"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:3525-3527",
+        "crates/printer/src/standard.rs:1896-1898"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/ignore/src/incremental.rs:1196-1198",
+        "crates/ignore/src/incremental.rs:1255-1257"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:594-637",
+        "crates/core/flags/defs.rs:503-569"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:463-466",
+        "crates/core/flags/defs.rs:278-281"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:2875-2901",
+        "crates/printer/src/standard.rs:2823-2848"
+      ]
     }
-  ],
-  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 200 candidates at this commit and no pair was called CLEARLY OUT by all of them. 0 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing."
+  ]
 }

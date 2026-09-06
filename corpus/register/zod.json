@@ -11,7 +11,7 @@
   },
   "clearly_in": [
     {
-      "why": "The _uuidv7 API block is the _uuidv6 one with the systematic v6\u2192v7 rename over 16 lines.",
+      "why": "The _uuidv7 API block is the _uuidv6 one with the systematic v6→v7 rename over 16 lines.",
       "verified": "extracted and diffed the two source ranges (16 vs 16 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
       "occurrences": [
         "packages/zod/src/v4/core/api.ts:162-177",
@@ -131,7 +131,7 @@
       ]
     },
     {
-      "why": "The starts_with issue-params block is the ends_with one with the systematic suffix\u2194prefix rename over 9 lines.",
+      "why": "The starts_with issue-params block is the ends_with one with the systematic suffix↔prefix rename over 9 lines.",
       "verified": "extracted and diffed the two source ranges (9 vs 9 lines): not byte-identical, similarity 0.96; differences are the systematic change described",
       "occurrences": [
         "packages/zod/src/v4/core/checks.ts:1087-1095",
@@ -155,7 +155,7 @@
       ]
     },
     {
-      "why": "The optional detached-method test is the nullable one with the systematic optional\u2194nullable rename over 6 lines.",
+      "why": "The optional detached-method test is the nullable one with the systematic optional↔nullable rename over 6 lines.",
       "verified": "extracted and diffed the two source ranges (6 vs 6 lines): not byte-identical, similarity 0.86; differences are the systematic change described",
       "occurrences": [
         "packages/zod/src/v4/classic/tests/detached-methods.test.ts:75-80",
@@ -217,9 +217,42 @@
         "packages/zod/src/v4/classic/tests/index.test.ts:44-67",
         "packages/zod/src/v4/mini/tests/index.test.ts:44-67"
       ]
+    },
+    {
+      "why": "packages/zod/src/v4/mini/tests and v4/classic/tests carry the same test files; these windows - up to 123 lines of describe/test blocks - are verbatim in both.",
+      "verified": "Diffed both ranges out of source/: byte-identical over the whole window.",
+      "occurrences": [
+        "packages/zod/src/v4/mini/tests/index.test.ts:174-191",
+        "packages/zod/src/v4/classic/tests/index.test.ts:174-191"
+      ]
+    },
+    {
+      "why": "The v3 and v4 test suites carry the same tests word for word; these windows are verbatim in both files.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 12-58 lines.",
+      "occurrences": [
+        "packages/zod/src/v3/tests/object.test.ts:186-199",
+        "packages/zod/src/v4/classic/tests/object.test.ts:195-208"
+      ]
+    },
+    {
+      "why": "A fifteen-line record test body appears verbatim twice in v4/classic/tests/record.test.ts.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 15 lines.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/record.test.ts:266-280",
+        "packages/zod/src/v4/classic/tests/record.test.ts:179-193"
+      ]
+    },
+    {
+      "why": "packages/zod/src/v4/mini/tests and v4/classic/tests carry the same test files; these windows - up to 123 lines of describe/test blocks - are verbatim in both.",
+      "verified": "Diffed both ranges out of source/: byte-identical over the whole window.",
+      "occurrences": [
+        "packages/zod/src/v4/mini/tests/codec.test.ts:27-42",
+        "packages/zod/src/v4/classic/tests/codec.test.ts:24-39"
+      ]
     }
   ],
   "clearly_out": [],
+  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 200 candidates at this commit and no pair was called CLEARLY OUT by all of them. 0 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing.",
   "not_clear": [
     {
       "why": "2 lines of differing schema parses.",
@@ -236,7 +269,7 @@
       ]
     },
     {
-      "why": "Per-type parse-test template repeated for boolean/symbol/etc \u2014 framework-invited repetition.",
+      "why": "Per-type parse-test template repeated for boolean/symbol/etc — framework-invited repetition.",
       "occurrences": [
         "packages/zod/src/v3/tests/primitive.test.ts:227-266",
         "packages/zod/src/v3/tests/primitive.test.ts:301-340"
@@ -348,7 +381,7 @@
       ]
     },
     {
-      "why": "v3 discriminator getters vs v4 json-schema override \u2014 different APIs.",
+      "why": "v3 discriminator getters vs v4 json-schema override — different APIs.",
       "occurrences": [
         "packages/zod/src/v3/types.ts:3162-3172",
         "packages/zod/src/v4/core/json-schema-generator.ts:65-75"
@@ -1073,7 +1106,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "The $ZodEmail interfaces are the $ZodGUID ones with the systematic guid\u2192email rename over 11 lines.",
+      "judge_said": "The $ZodEmail interfaces are the $ZodGUID ones with the systematic guid→email rename over 11 lines.",
       "occurrences": [
         "packages/zod/src/v4/core/schemas.ts:447-457",
         "packages/zod/src/v4/core/schemas.ts:494-506"
@@ -1082,7 +1115,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "The ZodMiniExactOptional interface block is the ZodMiniOptional one with the systematic optional\u2192exactOptional rename over 20 lines.",
+      "judge_said": "The ZodMiniExactOptional interface block is the ZodMiniOptional one with the systematic optional→exactOptional rename over 20 lines.",
       "occurrences": [
         "packages/zod/src/v4/mini/schemas.ts:1474-1493",
         "packages/zod/src/v4/mini/schemas.ts:1496-1515"
@@ -1091,7 +1124,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "The _base64url API block is the _url one with the systematic url\u2192base64url rename over 29 lines.",
+      "judge_said": "The _base64url API block is the _url one with the systematic url→base64url rename over 29 lines.",
       "occurrences": [
         "packages/zod/src/v4/core/api.ts:201-229",
         "packages/zod/src/v4/core/api.ts:454-482"
@@ -1109,7 +1142,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "The sk locale is the cs locale with every message translated \u2014 the same 121-line structure.",
+      "judge_said": "The sk locale is the cs locale with every message translated — the same 121-line structure.",
       "occurrences": [
         "packages/zod/src/v4/locales/sk.ts:1-121",
         "packages/zod/src/v4/locales/cs.ts:1-121"
@@ -1127,7 +1160,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "The az locale is the tr locale with every message translated \u2014 the same 110-line structure.",
+      "judge_said": "The az locale is the tr locale with every message translated — the same 110-line structure.",
       "occurrences": [
         "packages/zod/src/v4/locales/tr.ts:5-114",
         "packages/zod/src/v4/locales/az.ts:5-114"
@@ -1136,7 +1169,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "The pl locale is the nl locale with every message translated \u2014 the same ~41-line structure.",
+      "judge_said": "The pl locale is the nl locale with every message translated — the same ~41-line structure.",
       "occurrences": [
         "packages/zod/src/v4/locales/nl.ts:18-58",
         "packages/zod/src/v4/locales/pl.ts:18-59"
@@ -1145,7 +1178,7 @@
     {
       "why": "Demoted from CLEARLY IN: only 59% of the tokens are shared - too little survives to call it one block written twice. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "The zh-TW locale is the bn locale with every message translated \u2014 the same 52-line structure.",
+      "judge_said": "The zh-TW locale is the bn locale with every message translated — the same 52-line structure.",
       "occurrences": [
         "packages/zod/src/v4/locales/bn.ts:6-57",
         "packages/zod/src/v4/locales/zh-TW.ts:6-57"
@@ -1154,7 +1187,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "The _e164 API block is the _cidrv6 one with the systematic cidrv6\u2192e164 rename over 33 lines.",
+      "judge_said": "The _e164 API block is the _cidrv6 one with the systematic cidrv6→e164 rename over 33 lines.",
       "occurrences": [
         "packages/zod/src/v4/core/api.ts:420-452",
         "packages/zod/src/v4/core/api.ts:471-503"
@@ -1163,7 +1196,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "The nn locale is the no locale with the Nynorsk/Bokm\u00e5l message differences over the same 115-line structure.",
+      "judge_said": "The nn locale is the no locale with the Nynorsk/Bokmål message differences over the same 115-line structure.",
       "occurrences": [
         "packages/zod/src/v4/locales/no.ts:5-119",
         "packages/zod/src/v4/locales/nn.ts:5-119"
@@ -1172,12 +1205,767 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "The $ZodCheckStartsWith interfaces are the $ZodCheckEndsWith ones with the systematic suffix\u2194prefix rename over 40 lines.",
+      "judge_said": "The $ZodCheckStartsWith interfaces are the $ZodCheckEndsWith ones with the systematic suffix↔prefix rename over 40 lines.",
       "occurrences": [
         "packages/zod/src/v4/core/checks.ts:1059-1098",
         "packages/zod/src/v4/core/checks.ts:1015-1054"
       ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/zod/src/v4/mini/schemas.ts:708-745",
+        "packages/zod/src/v4/classic/schemas.ts:1347-1377"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/locales/fa.ts:109-116",
+        "packages/zod/src/v4/locales/hu.ts:100-107"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/core/api.ts:454-465",
+        "packages/zod/src/v4/core/api.ts:564-575"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/object.test.ts:227-233",
+        "packages/zod/src/v3/tests/object.test.ts:207-215"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/core/tests/compile.test.ts:452-454",
+        "packages/zod/src/v4/core/tests/compile.test.ts:1117-1119"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/mini/tests/assignability.test.ts:138-139",
+        "packages/zod/src/v4/classic/tests/assignability.test.ts:183-184"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/locales/gu.ts:68-70",
+        "packages/zod/src/v4/locales/bn.ts:68-70"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/bench/memory/schema-footprint.ts:59-60",
+        "packages/bench/memory/survey.ts:56-57"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/zod/src/v3/tests/primitive.test.ts:306-340",
+        "packages/zod/src/v3/tests/primitive.test.ts:169-201"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/core/schemas.ts:2165-2168",
+        "packages/zod/src/v4/core/schemas.ts:2059-2062"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/core/schemas.ts:710-723",
+        "packages/zod/src/v4/core/schemas.ts:755-768"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "packages/zod/src/v3/tests/bigint.test.ts:7-9",
+        "packages/zod/src/v4/classic/tests/bigint.test.ts:6-8"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/mini/schemas.ts:714-728",
+        "packages/zod/src/v4/mini/schemas.ts:1435-1449"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/tsc/bench/omit-extend.ts:30-40",
+        "packages/tsc/bench/omit-extend.ts:42-52"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/bench/compile-validate-vs-parse.ts:24-25",
+        "packages/bench/compile-validate-vs-parse.ts:39-40"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/tuple.test.ts:56-57",
+        "packages/zod/src/v3/tests/unions.test.ts:7-7"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/enum.test.ts:12-60",
+        "packages/zod/src/v3/tests/nativeEnum.test.ts:7-49"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/core/checks.ts:752-757",
+        "packages/zod/src/v4/core/checks.ts:592-597"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v3/tests/discriminated-unions.test.ts:9-12",
+        "packages/zod/src/v3/tests/discriminated-unions.test.ts:106-109"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/from-json-schema.ts:128-130",
+        "scripts/triage-signal.ts:439-441"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/refine.test.ts:221-253",
+        "packages/zod/src/v3/tests/refine.test.ts:149-176"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/locales/sk.ts:5-121",
+        "packages/zod/src/v4/locales/cs.ts:5-121"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/schemas.ts:729-753",
+        "packages/zod/src/v4/mini/schemas.ts:178-208"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/zod/src/v4/mini/schemas.ts:25-32",
+        "packages/zod/src/v4/classic/schemas.ts:65-71"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/optional.test.ts:21-23",
+        "packages/zod/src/v4/classic/tests/optional.test.ts:42-44"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/recursive-types.test.ts:71-120",
+        "packages/zod/src/v4/mini/tests/recursive-types.test.ts:72-122"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/core/schemas.ts:606-616",
+        "packages/zod/src/v4/core/schemas.ts:594-604"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/resolution/attw.test.ts:175-208",
+        "packages/resolution/attw.test.ts:31-157"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/zod/src/v3/tests/object.test.ts:243-243",
+        "packages/zod/src/v3/tests/partials.test.ts:79-84"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/bench/memory/survey.ts:40-42",
+        "packages/bench/memory/dict-mode.ts:16-18"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/bench/compile-validate-vs-parse.ts:94-97",
+        "packages/bench/compile-vs-arktype.ts:276-279"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/mini/schemas.ts:8-12",
+        "packages/zod/src/v4/classic/schemas.ts:33-37"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/to-json-schema.test.ts:1516-1518",
+        "packages/bench/compile-tuple.ts:10-11"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/zod/src/v4/core/api.ts:198-229",
+        "packages/zod/src/v4/core/api.ts:254-295"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/pipe.test.ts:5-8",
+        "packages/zod/src/v4/classic/tests/to-json-schema.test.ts:1861-1872"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/codec-examples.test.ts:510-515",
+        "packages/zod/src/v4/classic/tests/codec-examples.test.ts:497-506"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/partial.test.ts:277-278",
+        "packages/zod/src/v4/classic/tests/partial.test.ts:213-215"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/string.test.ts:559-567",
+        "packages/zod/src/v3/tests/string.test.ts:330-338"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/readonly.test.ts:24-25",
+        "packages/zod/src/v3/tests/set.test.ts:14-15"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/zod/src/v4/locales/ro.ts:100-121",
+        "packages/zod/src/v4/locales/km.ts:92-113"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/zod/src/v4/locales/ps.ts:18-59",
+        "packages/zod/src/v4/locales/ka.ts:18-62"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/locales/ar.ts:6-57",
+        "packages/zod/src/v4/locales/ko.ts:6-57"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/zod/src/v4/core/api.ts:1079-1088",
+        "packages/zod/src/v4/core/api.ts:1089-1101"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/zod/src/v4/core/api.ts:874-884",
+        "packages/zod/src/v4/core/api.ts:887-898"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/bench/bench-invalid.ts:27-56",
+        "packages/bench/compile-wrapper-cost.ts:104-132"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/zod/src/v3/types.ts:974-984",
+        "packages/zod/src/v3/types.ts:847-857"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/zod/src/v3/types.ts:2501-2506",
+        "packages/zod/src/v3/types.ts:2535-2544"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/zod/src/v3/tests/object.test.ts:42-74",
+        "packages/zod/src/v4/classic/tests/object.test.ts:40-68"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/string.test.ts:208-210",
+        "packages/zod/src/v4/classic/tests/string.test.ts:230-232"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/zod/src/v4/mini/schemas.ts:153-172",
+        "packages/zod/src/v4/mini/schemas.ts:263-299"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/zod/src/v4/mini/schemas.ts:833-843",
+        "packages/zod/src/v4/mini/schemas.ts:649-658"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/catch.test.ts:477-477",
+        "packages/zod/src/v4/classic/tests/catch.test.ts:478-478"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/zod/src/v4/core/api.ts:201-229",
+        "packages/zod/src/v4/core/api.ts:235-278"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/index.test.ts:642-676",
+        "packages/zod/src/v4/mini/tests/index.test.ts:718-752"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/to-json-schema.test.ts:4278-4278",
+        "packages/zod/src/v4/classic/tests/to-json-schema.test.ts:4333-4333"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/default.test.ts:337-340",
+        "packages/zod/src/v4/classic/tests/prefault.test.ts:45-48"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/locales/he.ts:199-204",
+        "packages/zod/src/v4/locales/he.ts:160-165"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/from-json-schema.test.ts:97-101",
+        "packages/zod/src/v4/classic/tests/from-json-schema.test.ts:84-88"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/function.test.ts:140-171",
+        "packages/zod/src/v4/classic/tests/function.test.ts:100-131"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/zod/src/v4/mini/schemas.ts:158-184",
+        "packages/zod/src/v4/mini/schemas.ts:273-311"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/cyclic-data.test.ts:268-271",
+        "packages/zod/src/v4/mini/tests/cyclic-data.test.ts:60-63"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "packages/zod/src/v3/tests/unions.test.ts:7-7",
+        "packages/zod/src/v4/classic/tests/union.test.ts:6-6"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/locales/sl.ts:77-80",
+        "packages/zod/src/v4/locales/is.ts:77-80"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v3/types.ts:2813-2822",
+        "packages/zod/src/v3/types.ts:2842-2851"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v3/tests/async-parsing.test.ts:227-229",
+        "packages/zod/src/v4/classic/tests/async-parsing.test.ts:241-243"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/zod/src/v3/tests/set.test.ts:41-75",
+        "packages/zod/src/v4/classic/tests/set.test.ts:35-72"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/zod/src/v4/locales/ms.ts:6-58",
+        "packages/zod/src/v4/locales/nl.ts:6-58"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/instance-footprint.test.ts:245-246",
+        "packages/zod/src/v4/classic/tests/instance-footprint.test.ts:227-229"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/bench/compile-wrapper-cost.ts:140-150",
+        "packages/bench/compile-wrapper-cost.ts:77-87"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/core/checks.ts:944-961",
+        "packages/zod/src/v4/core/checks.ts:922-939"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/string.test.ts:607-609",
+        "packages/zod/src/v3/tests/string.test.ts:384-386"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/string.test.ts:59-65",
+        "packages/zod/src/v4/classic/tests/string.test.ts:15-28"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v3/tests/primitive.test.ts:105-113",
+        "packages/zod/src/v3/tests/primitive.test.ts:57-65"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/zod/src/v3/tests/string.test.ts:736-796",
+        "packages/zod/src/v4/classic/tests/datetime.test.ts:212-249"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/core/api.ts:1585-1598",
+        "packages/zod/src/v4/core/api.ts:1626-1639"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/zod/src/v4/locales/hi.ts:72-77",
+        "packages/zod/src/v4/locales/yo.ts:77-83"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/from-json-schema.test.ts:736-743",
+        "packages/zod/src/v4/classic/tests/from-json-schema.test.ts:788-794"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "packages/zod/src/v3/tests/object.test.ts:227-227",
+        "packages/zod/src/v4/classic/tests/object.test.ts:247-247"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/docs/components/gold.tsx:50-55",
+        "packages/docs/components/bronze.tsx:38-50"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/bench/moltar-libs.ts:167-175",
+        "packages/bench/init.ts:69-81"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/zod/src/v4/locales/hu.ts:92-111",
+        "packages/zod/src/v4/locales/vi.ts:92-111"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/mini/schemas.ts:731-745",
+        "packages/zod/src/v4/mini/schemas.ts:749-763"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/deep-partial.ts:14-64",
+        "packages/zod/src/v4/mini/deep-partial.ts:7-61"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/core/compile.ts:1290-1291",
+        "packages/zod/src/v4/core/compile.ts:1256-1257"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/tsc/bench/omit-extend.ts:31-40",
+        "packages/tsc/bench/lots-of-objects.ts:12-18"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/bench/compile-endswith.ts:8-14",
+        "packages/bench/compile-startswith.ts:8-14"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/discriminated-unions.test.ts:33-40",
+        "packages/zod/src/v3/tests/discriminated-unions.test.ts:7-14"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/index.test.ts:930-933",
+        "packages/zod/src/v4/mini/tests/index.test.ts:1004-1007"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/schemas.ts:2693-2695",
+        "packages/zod/src/v4/core/schemas.ts:4768-4770"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/string.test.ts:7-9",
+        "packages/zod/src/v3/tests/string.test.ts:8-10"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/from-json-schema.test.ts:1395-1395",
+        "packages/zod/src/v4/classic/tests/from-json-schema.test.ts:1396-1396"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/zod/src/v4/mini/schemas.ts:1033-1038",
+        "packages/zod/src/v3/helpers/partialUtil.ts:15-16"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/compat.ts:68-72",
+        "packages/zod/src/v4/classic/compat.ts:56-60"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/index.test.ts:231-270",
+        "packages/zod/src/v4/mini/tests/index.test.ts:288-326"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/to-json-schema.test.ts:1516-1517",
+        "packages/zod/src/v4/classic/tests/to-json-schema.test.ts:1541-1543"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/zod/src/v3/tests/validations.test.ts:82-96",
+        "packages/zod/src/v4/classic/tests/validations.test.ts:205-243"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/string.test.ts:1156-1158",
+        "packages/zod/src/v4/classic/tests/string.test.ts:1164-1166"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/zod/src/v4/locales/nl.ts:62-93",
+        "packages/zod/src/v4/locales/cs.ts:74-92"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/core/parse.ts:191-196",
+        "packages/zod/src/v4/core/parse.ts:244-249"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/partial.test.ts:47-48",
+        "packages/zod/src/v4/classic/tests/partial.test.ts:49-50"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v3/tests/string.test.ts:567-569",
+        "packages/zod/src/v4/classic/tests/string.test.ts:932-934"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/zod/src/v4/mini/tests/string.test.ts:193-203",
+        "packages/zod/src/v4/mini/tests/string.test.ts:168-178"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/schemas.ts:1702-1726",
+        "packages/zod/src/v4/mini/schemas.ts:913-937"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/zod/src/v4/classic/schemas.ts:2108-2121",
+        "packages/zod/src/v4/mini/schemas.ts:1371-1385"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/core/api.ts:113-145",
+        "packages/zod/src/v4/core/api.ts:471-503"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/zod/src/v3/tests/default.test.ts:69-104",
+        "packages/zod/src/v3/tests/catch.test.ts:99-139"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/zod/src/v4/mini/tests/codec.test.ts:573-579",
+        "packages/zod/src/v4/classic/tests/in-out.test.ts:115-119"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/zod/src/v4/locales/is.ts:102-113",
+        "packages/zod/src/v4/locales/be.ts:166-177"
+      ]
     }
-  ],
-  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 200 candidates at this commit and no pair was called CLEARLY OUT by all of them. 0 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing."
+  ]
 }
