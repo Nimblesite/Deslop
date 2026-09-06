@@ -16,6 +16,7 @@ pub mod corpus_confidence;
 pub mod corpus_determinism;
 pub mod corpus_precision;
 pub mod corpus_scope;
+pub mod corpus_score;
 pub mod enclosure;
 pub mod reap;
 pub mod skip_contract;
@@ -23,13 +24,33 @@ pub mod skip_policy;
 pub mod test_target_parity;
 
 use std::{
+    fs,
     io::{BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
+use serde::de::DeserializeOwned;
 use serde_json::Value;
+
+/// Reads `path` as UTF-8 text, naming the file when it cannot be read.
+///
+/// # Errors
+///
+/// Returns an error naming `path` when it is missing or unreadable.
+pub fn read_text(path: &Path) -> Result<String> {
+    fs::read_to_string(path).with_context(|| format!("unreadable: {}", path.display()))
+}
+
+/// Reads `path` and parses it as JSON, naming the file in either failure.
+///
+/// # Errors
+///
+/// Returns an error naming `path` when it is unreadable or not valid JSON.
+pub fn read_json<T: DeserializeOwned>(path: &Path) -> Result<T> {
+    serde_json::from_str(&read_text(path)?).with_context(|| format!("not JSON: {}", path.display()))
+}
 
 /// Appends `.<ext>` to the file name of `base`, returning the new path.
 /// E.g. `with_ext("/tmp/report", "json")` is `/tmp/report.json`. Used by the

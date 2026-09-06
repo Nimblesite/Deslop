@@ -2,7 +2,6 @@
   "name": "tornado",
   "language": "python",
   "url": "https://github.com/tornadoweb/tornado.git",
-  "tag": "v6.5.8",
   "sha": "a55abe3e3bf59994f29b2f7084c46341f0d4f6a7",
   "why": "Reference Python async web framework; small enough to scan in seconds yet carries real cross-module duplication: sibling data-structure tests restated from one another, a hand-stamped demo suite, and copy-pasted raw-HTTP test scaffolding.",
   "ceilings": {

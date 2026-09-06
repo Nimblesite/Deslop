@@ -2,7 +2,6 @@
   "name": "jellyfin",
   "language": "csharp",
   "url": "https://github.com/jellyfin/jellyfin.git",
-  "tag": "v10.10.7",
   "sha": "aefb9b2cffca3ccb7a95d89af0d9fb2040de6ed3",
   "why": "Large well-known C# media server; broad service and controller surface.",
   "ceilings": {

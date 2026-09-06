@@ -14,16 +14,12 @@
 //! module locates those pins so `skip_policy_contract.rs` can require one
 //! for every feature a gated test depends on.
 
-use std::fs;
-
-use anyhow::{Context, Result};
-use deslop_core::lang::{rust_lang::RustParser, shared::parse_source, LanguageParser};
+use anyhow::Result;
 use tree_sitter::Node;
 
 use super::{
-    attribute_path, repo_root, rust_sources, text, workspace_relative, ATTRIBUTE_ITEM,
-    BLOCK_COMMENT, CFG_ATTRIBUTE, FUNCTION_ITEM, IDENTIFIER, LINE_COMMENT, RUST_LANGUAGE_ID,
-    TEST_ATTRIBUTE, TOKEN_TREE,
+    attribute_path, parse_rust_source, scan_workspace_sources, text, ATTRIBUTE_ITEM, BLOCK_COMMENT,
+    CFG_ATTRIBUTE, FUNCTION_ITEM, IDENTIFIER, LINE_COMMENT, TEST_ATTRIBUTE, TOKEN_TREE,
 };
 
 /// The `cfg!` macro: the only form that reports a feature's state at run
@@ -45,15 +41,7 @@ const STRING_CONTENT: &str = "string_content";
 ///
 /// Returns an error when a source file cannot be read or parsed.
 pub fn feature_liveness_pins() -> Result<Vec<(String, String)>> {
-    let root = repo_root();
-    let mut found = Vec::new();
-    for path in rust_sources(&root)? {
-        let file = workspace_relative(&root, &path);
-        let source = fs::read_to_string(&path)
-            .with_context(|| format!("unreadable Rust source: {}", path.display()))?;
-        found.extend(feature_liveness_pins_in(&source, &file)?);
-    }
-    found.sort();
+    let mut found = scan_workspace_sources(feature_liveness_pins_in)?;
     found.dedup();
     Ok(found)
 }
@@ -64,9 +52,7 @@ pub fn feature_liveness_pins() -> Result<Vec<(String, String)>> {
 ///
 /// Returns an error when `source` does not parse.
 pub fn feature_liveness_pins_in(source: &str, file: &str) -> Result<Vec<(String, String)>> {
-    let grammar = RustParser::new().grammar();
-    let tree = parse_source(RUST_LANGUAGE_ID, &grammar, source.as_bytes())
-        .with_context(|| format!("unparsable Rust source: {file}"))?;
+    let tree = parse_rust_source(source, file)?;
     let mut found = Vec::new();
     visit(tree.root_node(), source, file, &mut found);
     Ok(found)

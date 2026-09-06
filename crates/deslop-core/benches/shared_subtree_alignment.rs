@@ -1,12 +1,13 @@
 //! Command-line wrapper for the reproducible shared-subtree benchmark.
 
 use std::{
-    fs,
     io::{self, Write},
+    path::Path,
 };
 
 use anyhow::{Context, Result};
 use deslop_core::overlap::benchmark::{compare, measure, BenchmarkReport};
+use deslop_test_support::read_json;
 
 /// Default run label.
 const DEFAULT_LABEL: &str = "run";
@@ -26,7 +27,7 @@ fn main() -> Result<()> {
     let shape = argument(&arguments, 3).unwrap_or(DEFAULT_SHAPE);
     let mut report = measure(label, repetitions, shape).map_err(anyhow::Error::msg)?;
     if let Some(path) = baseline {
-        compare(&mut report, &read_report(path)?);
+        compare(&mut report, &read_json(Path::new(path))?);
     }
     emit(&report)
 }
@@ -47,12 +48,6 @@ fn repetitions(arguments: &[String]) -> Result<usize> {
         .context("repetitions must be a positive integer")?;
     anyhow::ensure!(value > 0, "repetitions must be positive");
     Ok(value)
-}
-
-/// Reads one previous benchmark artifact.
-fn read_report(path: &str) -> Result<BenchmarkReport> {
-    let bytes = fs::read(path).with_context(|| format!("failed to read baseline {path}"))?;
-    serde_json::from_slice(&bytes).with_context(|| format!("failed to parse baseline {path}"))
 }
 
 /// Writes the artifact to standard output.

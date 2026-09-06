@@ -31,6 +31,12 @@ pub struct ContentEvidence {
     pub agreement: f64,
     /// Pair-specific Type-2 rename evidence.
     pub rename_consistency: f64,
+    /// Whether the pair is a rename of the same code, whatever its
+    /// literals do: every substituted identifier position is explained
+    /// by one bijection, at least one substitution is corroborated, and
+    /// the copy keeps at least as many names as it renames
+    /// ([FUSED-CONTENT-GATE-RENAME]).
+    pub consistent_rename: bool,
     /// Symmetric literal share across both endpoint frontiers.
     pub literal_fraction: f64,
     /// Whether both endpoints resolved to authored content.
@@ -52,6 +58,7 @@ impl ContentEvidence {
         Self {
             agreement: 0.0,
             rename_consistency: 0.0,
+            consistent_rename: false,
             literal_fraction: 0.0,
             measured: false,
             contradiction: ContentContradiction::None,
@@ -134,6 +141,7 @@ fn pair_evidence<S: BuildHasher>(
             sources,
             scope,
         ),
+        consistent_rename: rename::pair_rename_is_consistent(left, right, sources),
         literal_fraction: pair_literal_fraction(left, right),
         measured: true,
         contradiction: ContentContradiction::None,

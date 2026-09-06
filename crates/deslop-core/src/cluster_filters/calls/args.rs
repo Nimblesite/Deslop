@@ -42,7 +42,18 @@ fn arg_shape(node: Node<'_>, source: &[u8], language: &str) -> ArgShape {
     if let Some(bytes) = literal_collection_bytes(inner, source, language) {
         return ArgShape::StringLiteral(bytes, false);
     }
+    if carries_statements(inner) {
+        return ArgShape::Body;
+    }
     ArgShape::Other
+}
+
+/// True when the argument's subtree holds a statement-shaped node — the
+/// body of a test case, a callback block — so the argument is authored
+/// logic rather than payload ([CLONE-NOISE-LITERAL-VARIATION-CALLS]).
+fn carries_statements(node: Node<'_>) -> bool {
+    super::is_statement_shape(node.kind())
+        || named_children(node).into_iter().any(carries_statements)
 }
 
 /// True when the string node embeds an interpolation — a Python

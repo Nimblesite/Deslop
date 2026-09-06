@@ -72,7 +72,14 @@ pub(super) const MAGIC: u32 = 0xC0DE_D180;
 /// leaves, so a warm run would keep both the inflated node counts and the
 /// LSH bands they shifted, and would go on publishing the gh #147
 /// `Vec<&str>` type annotations as `identical` at `fused 1.00`.
-pub(super) const SEMANTIC_EPOCH: u32 = 4;
+///
+/// Epoch 5: [PIPELINE-FINGERPRINT-MERKLE-ROOT] stopped emitting the
+/// synthetic file root as a view when the file carries the prologue its
+/// language mandates — Go's `package` clause. A store warmed under epoch
+/// 4 holds a whole-file fingerprint for every Go file, so a warm run would
+/// keep publishing `alpha.go:1-13` against `beta.go:1-13`, `package`
+/// clause included, after the cold run had stopped.
+pub(super) const SEMANTIC_EPOCH: u32 = 5;
 
 /// Bytes of blob header preceding the payload: the magic plus the
 /// 32-byte binding digest.

@@ -31,7 +31,7 @@
 use serde_json::Value;
 
 use crate::common::{
-    golden::*, incremental::*, multilang::*, multilang_warm::*,
+    go_scope::*, golden::*, incremental::*, multilang::*, multilang_warm::*,
     signals::assert_no_pair_surface_on_cluster, verdict::*, *,
 };
 
@@ -53,6 +53,9 @@ fn render_cold_multilang() -> Result<Vec<u8>> {
     )?;
     Ok(bytes)
 }
+
+/// The report every contract assertion below names in its failure.
+const GOLDEN_LABEL: &str = "committed golden";
 
 /// The command that regenerates the committed golden.
 const BLESS: &str =
@@ -85,12 +88,20 @@ fn cold_multilang_report_matches_committed_golden_byte_for_byte() -> Result<()> 
 #[test]
 fn committed_multilang_golden_satisfies_the_authored_contract() -> Result<()> {
     let golden = load_golden(&multilang_golden_path(), BLESS)?;
-    assert_multilang_contract(&golden, "committed golden")?;
+    assert_multilang_contract(&golden, GOLDEN_LABEL)?;
     assert_cold_header(&golden);
     assert_every_occurrence_is_a_real_clone(&golden)?;
     assert_one_cluster_per_language(&golden)?;
     assert_every_cluster_is_reported_exactly(&golden)?;
     assert_golden_metrics(&golden)?;
+    // [PIPELINE-CLUSTER-EXACT-SCOPE] The Go clone is the `func` in each
+    // file, not the file: no occurrence opens at row 1, carries the
+    // `package` clause, or swallows the banner and the unique top-level
+    // item above the function.
+    let corpus = multilang_corpus();
+    assert_go_authored_scope(&corpus, &golden, GOLDEN_LABEL)?;
+    assert_every_occurrence_opens_a_declaration(&corpus, &golden, GOLDEN_LABEL)?;
+    assert_symmetric_rows_everywhere(&golden, GOLDEN_LABEL);
     Ok(())
 }
 

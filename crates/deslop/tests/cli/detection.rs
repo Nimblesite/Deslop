@@ -1,4 +1,5 @@
 use super::support::*;
+use crate::common::go_scope::*;
 use crate::common::signals::{assert_no_pair_surface_on_cluster, has_verbatim_pair};
 
 const TYPE2_EXPECTED_FILES_ANALYSED: u64 = 2;
@@ -6,15 +7,32 @@ const TYPE2_EXPECTED_OCCURRENCES: usize = 2;
 const MINIMUM_DUPLICATED_MASS: u64 = 1;
 const VALID_MASS_RANK_BANDS: [&str; 4] = ["worst", "top10", "mid", "faint"];
 
+/// [LANG-CAND-GO] [PIPELINE-CLUSTER-EXACT-SCOPE] The Go fixtures this suite
+/// drives, with the `--min-nodes` each is driven at. Every report they
+/// produce must satisfy the authored-window contract in `common::go_scope`,
+/// so the fixture names are constants rather than literals repeated at each
+/// call site.
+const MIN_NODES_FLAG: &str = "--min-nodes";
+const GO_SMALL_FIXTURE: &str = "go-small";
+const GO_SMALL_MIN_NODES: &str = "10";
+const GO_SMALL_FIRST: &str = "alpha.go";
+const GO_SMALL_SECOND: &str = "beta.go";
+const GO_TYPE3_FIXTURE: &str = "go-type3";
+const GO_TYPE3_MIN_NODES: &str = "8";
+const GO_CLOSURE_FIXTURE: &str = "go-closure-signature-only";
+const GO_CLOSURE_MIN_NODES: &str = "8";
+const GO_PROLOGUE_FIXTURE: &str = "go-prologue-false-positive";
+const GO_PROLOGUE_MIN_NODES: &str = "15";
+const GO_DISSIMILAR_FIXTURE: &str = "go-dissimilar-functions";
+const GO_DISSIMILAR_MIN_NODES: &str = "8";
+
 /// Runs the CLI against `fixture(fixture_name)` with `--min-nodes
 /// <min_nodes>`, asserts the process succeeded, and returns the raw
 /// JSON report text. Shared by every detection test that drives a
 /// fixture with an explicit `--min-nodes` and then asserts on the
 /// rendered report.
 fn run_min_nodes(fixture_name: &str, min_nodes: &str) -> Result<String> {
-    let tmp = tempfile::tempdir()?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = fixture_command(fixture_name, &tmp.path().join("report"))?;
+    let (_tmp, out, mut cmd) = fixture_run(fixture_name)?;
     let _assertion = cmd.args(["--min-nodes", min_nodes]).assert().success();
     Ok(fs::read_to_string(&out.json)?)
 }
@@ -291,8 +309,21 @@ fn detects_type2_clone_in_fsharp_fixture() -> Result<()> {
 // [PIPELINE-LANG-TRAIT] Go Type-2 fixture: the report cluster is mass-only; any pair measurements require explicit endpoints.
 #[test]
 fn detects_type2_clone_in_go_fixture() -> Result<()> {
-    let json = run_min_nodes("go-small", "10")?;
-    assert_type2_report(&json, "alpha.go", "beta.go")?;
+    let (scan_root, report) =
+        run_with_args(GO_SMALL_FIXTURE, &[MIN_NODES_FLAG, GO_SMALL_MIN_NODES])?;
+    assert_type2_report(
+        &serde_json::to_string(&report)?,
+        GO_SMALL_FIRST,
+        GO_SMALL_SECOND,
+    )?;
+
+    // [PIPELINE-CLUSTER-EXACT-SCOPE] A Type-2 pair is the same authored
+    // declaration in both files. Neither half may reach back to row 1 for
+    // the package clause and import block, and because the two sides are
+    // the same shape they must cover the same number of rows.
+    assert_go_authored_scope(&scan_root, &report, GO_SMALL_FIXTURE)?;
+    assert_every_occurrence_opens_a_declaration(&scan_root, &report, GO_SMALL_FIXTURE)?;
+    assert_symmetric_rows_everywhere(&report, GO_SMALL_FIXTURE);
     Ok(())
 }
 
@@ -390,9 +421,16 @@ fn assert_enclosing_near_miss(
 // original "some cluster spans both files" assertion could not.
 #[test]
 fn detects_type3_clone_in_go_fixture() -> Result<()> {
-    let json = run_min_nodes("go-type3", "8")?;
-    let scan_root = fixture("go-type3");
+    let json = run_min_nodes(GO_TYPE3_FIXTURE, GO_TYPE3_MIN_NODES)?;
+    let scan_root = fixture(GO_TYPE3_FIXTURE);
+    let report: serde_json::Value = serde_json::from_str(&json)?;
     let clusters = report_clusters(&json)?;
+
+    // [PIPELINE-CLUSTER-EXACT-SCOPE] A near-miss is still one authored
+    // declaration on each side. No occurrence may open at row 1, carry the
+    // package clause or import block, or sit at a different depth from its
+    // counterpart.
+    assert_go_authored_scope(&scan_root, &report, GO_TYPE3_FIXTURE)?;
     assert_eq!(
         files_analysed(&json)?,
         2,
@@ -428,7 +466,13 @@ fn detects_type3_clone_in_go_fixture() -> Result<()> {
 // cross-file `identical` cluster. This test is that mutation's detector.
 #[test]
 fn go_closure_signature_only_match_is_suppressed() -> Result<()> {
-    let json = run_min_nodes("go-closure-signature-only", "8")?;
+    let json = run_min_nodes(GO_CLOSURE_FIXTURE, GO_CLOSURE_MIN_NODES)?;
+    let scan_root = fixture(GO_CLOSURE_FIXTURE);
+    let report: serde_json::Value = serde_json::from_str(&json)?;
+
+    // [PIPELINE-CLUSTER-EXACT-SCOPE] Suppressing the cross-file signature
+    // match does not license the survivors to take their whole file.
+    assert_go_authored_scope(&scan_root, &report, GO_CLOSURE_FIXTURE)?;
     assert_eq!(
         files_analysed(&json)?,
         2,
@@ -467,7 +511,15 @@ fn go_closure_signature_only_match_is_suppressed() -> Result<()> {
 // line 1 — the single worst offender in the report, and pure noise.
 #[test]
 fn go_package_and_import_prologue_never_becomes_a_cross_file_cluster() -> Result<()> {
-    let (scan_root, report) = run_with_args("go-prologue-false-positive", &["--min-nodes", "15"])?;
+    let (scan_root, report) = run_with_args(
+        GO_PROLOGUE_FIXTURE,
+        &[MIN_NODES_FLAG, GO_PROLOGUE_MIN_NODES],
+    )?;
+
+    // [PIPELINE-CLUSTER-EXACT-SCOPE] Whatever this report publishes, no
+    // occurrence may contain the `package` clause or `import` block, and
+    // none may open at row 1.
+    assert_go_authored_scope(&scan_root, &report, GO_PROLOGUE_FIXTURE)?;
     assert_eq!(
         require_u64(&report, "/files_analysed", "report")?,
         6,
@@ -510,8 +562,18 @@ fn dissimilar_fsharp_functions_across_files_stay_in_separate_clusters() -> Resul
 // single file.
 #[test]
 fn dissimilar_go_functions_across_files_stay_in_separate_clusters() -> Result<()> {
-    let json = run_min_nodes("go-dissimilar-functions", "8")?;
-    assert_every_cluster_single_file(&json, "Go")
+    let (scan_root, report) = run_with_args(
+        GO_DISSIMILAR_FIXTURE,
+        &[MIN_NODES_FLAG, GO_DISSIMILAR_MIN_NODES],
+    )?;
+    let json = serde_json::to_string(&report)?;
+    assert_every_cluster_single_file(&json, "Go")?;
+
+    // [PIPELINE-CLUSTER-EXACT-SCOPE] A single-file cluster is still bound
+    // by the authored window: it may not open at row 1 or swallow the
+    // package clause and import block above the function it reports.
+    assert_go_authored_scope(&scan_root, &report, GO_DISSIMILAR_FIXTURE)?;
+    assert_every_occurrence_opens_a_declaration(&scan_root, &report, GO_DISSIMILAR_FIXTURE)
 }
 
 // Audience: HUMAN. Zero-false-positive guard for Dart ([LANG-CAND-DART]).

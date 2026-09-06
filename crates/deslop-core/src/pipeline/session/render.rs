@@ -14,7 +14,7 @@ use std::{collections::HashMap, path::PathBuf, time::Instant};
 
 use crate::{
     cluster::{build_ranked_fused_clusters, ClusterBuildInputs},
-    cluster_filters::{split_noise_verbatim_families, ParseCache},
+    cluster_filters::{split_noise_verbatim_families, split_structural_families, ParseCache},
     error::CoreError,
     lsh::BandCollisionSource,
     overlap::apply_shared_subtree_rescue,
@@ -186,6 +186,19 @@ impl PipelineSession {
         // candidate pairs on a corpus-scale run, freed before the
         // memory-hungry measurement stages ([PERF-FLUTTER-TODO-MEMORY]).
         drop(pairs);
+        // [PIPELINE-CLUSTER-ELECT] A token bridge may not fuse two distinct
+        // structural families into one component that then reports
+        // neither: split welded components per structural family.
+        let stage_started = Instant::now();
+        let split_input = fused_clusters.len();
+        let fused_clusters =
+            split_structural_families(fused_clusters, fingerprints, &self.file_languages);
+        ledger.record(
+            "structural_family_split",
+            split_input,
+            fused_clusters.len(),
+            stage_started,
+        );
         // [CLONE-NOISE-VERBATIM-SUBGROUP] Partition a noise family off
         // the byte-identical copy it swept up *before* signals are
         // measured, so the surviving cluster is measured, bucketed and

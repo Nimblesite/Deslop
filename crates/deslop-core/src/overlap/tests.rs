@@ -60,13 +60,33 @@ fn root_hash(tree: &NormalizedNode) -> [u8; 32] {
         .map_or([0_u8; 32], |fingerprint| fingerprint.hash)
 }
 
-/// Measures overlap between two whole-file fixtures.
-fn overlap_of(left_source: &str, right_source: &str) -> Result<f64, String> {
+/// Parses `left_source` and `right_source` as two Rust files.
+fn parse_pair(left_source: &str, right_source: &str) -> Result<(Parsed, Parsed), String> {
     let mut registry = FileRegistry::new();
     let left_id = registry.register(PathBuf::from("left.rs"));
     let right_id = registry.register(PathBuf::from("right.rs"));
-    let left = parse(left_source, left_id)?;
-    let right = parse(right_source, right_id)?;
+    Ok((parse(left_source, left_id)?, parse(right_source, right_id)?))
+}
+
+/// Both endpoints' views over `trees`, which must hold each endpoint's
+/// file.
+fn endpoint_views(
+    trees: &[NormalizedNode],
+    left: &Fingerprint,
+    right: &Fingerprint,
+) -> Result<(EndpointView, EndpointView), String> {
+    let index = trees
+        .iter()
+        .map(|tree| (tree.file_id, tree))
+        .collect::<std::collections::HashMap<FileId, &NormalizedNode>>();
+    let left_view = build_view(&index, left).ok_or("the left endpoint resolves")?;
+    let right_view = build_view(&index, right).ok_or("the right endpoint resolves")?;
+    Ok((left_view, right_view))
+}
+
+/// Measures overlap between two whole-file fixtures.
+fn overlap_of(left_source: &str, right_source: &str) -> Result<f64, String> {
+    let (left, right) = parse_pair(left_source, right_source)?;
     let trees = vec![left.tree, right.tree];
     let mut measurer = OverlapMeasurer::new(&trees);
     Ok(measurer.overlap(&left.whole, &right.whole))
@@ -229,18 +249,7 @@ fn repeated_measurement_of_one_pair_is_stable() -> Result<(), String> {
 // alignment measures, which is the only way to compare them directly.
 #[test]
 fn the_large_tree_fallback_never_exceeds_the_alignment() -> Result<(), String> {
-    let mut registry = FileRegistry::new();
-    let left_id = registry.register(PathBuf::from("left.rs"));
-    let right_id = registry.register(PathBuf::from("right.rs"));
-    let left = parse(ACCUMULATE, left_id)?;
-    let right = parse(AGGREGATE_WITH_INSERTION, right_id)?;
-    let trees = [left.tree, right.tree];
-    let index = trees
-        .iter()
-        .map(|tree| (tree.file_id, tree))
-        .collect::<std::collections::HashMap<FileId, &NormalizedNode>>();
-    let left_view = build_view(&index, &left.whole).ok_or("the left endpoint resolves")?;
-    let right_view = build_view(&index, &right.whole).ok_or("the right endpoint resolves")?;
+    let (left_view, right_view) = views_of(ACCUMULATE, AGGREGATE_WITH_INSERTION)?;
     let aligned = aligned_shared_nodes(&left_view, &right_view);
     let credited = credit_shared_nodes(&left_view, &right_view);
     assert!(
@@ -305,18 +314,7 @@ fn alpha(seed: u32) -> u32 {
 /// asserts, on the case that separates a bijection from an alignment.
 #[test]
 fn the_fallback_never_credits_mass_no_ordered_alignment_can_reach() -> Result<(), String> {
-    let mut registry = FileRegistry::new();
-    let left_id = registry.register(PathBuf::from("left.rs"));
-    let right_id = registry.register(PathBuf::from("right.rs"));
-    let left = parse(ALPHA_THEN_BETA, left_id)?;
-    let right = parse(BETA_THEN_ALPHA, right_id)?;
-    let trees = [left.tree, right.tree];
-    let index = trees
-        .iter()
-        .map(|tree| (tree.file_id, tree))
-        .collect::<std::collections::HashMap<FileId, &NormalizedNode>>();
-    let left_view = build_view(&index, &left.whole).ok_or("the left endpoint resolves")?;
-    let right_view = build_view(&index, &right.whole).ok_or("the right endpoint resolves")?;
+    let (left_view, right_view) = views_of(ALPHA_THEN_BETA, BETA_THEN_ALPHA)?;
     let aligned = aligned_shared_nodes(&left_view, &right_view);
     let credited = credit_shared_nodes(&left_view, &right_view);
     assert!(
@@ -485,11 +483,7 @@ fn the_fallback_never_credits_a_nested_right_subtree_twice() -> Result<(), Strin
     let block = boost_block(40);
     let left_source = format!("{}\n{}", host_function(260, &block), rider_function(&block));
     let right_source = host_function(260, &block);
-    let mut registry = FileRegistry::new();
-    let left_id = registry.register(PathBuf::from("left.rs"));
-    let right_id = registry.register(PathBuf::from("right.rs"));
-    let left = parse(&left_source, left_id)?;
-    let right = parse(&right_source, right_id)?;
+    let (left, right) = parse_pair(&left_source, &right_source)?;
     assert!(
         right.whole.node_count > ALIGNMENT_MAX_NODES,
         "the fixture must exceed the alignment cap so the E2E path takes the \
@@ -497,12 +491,7 @@ fn the_fallback_never_credits_a_nested_right_subtree_twice() -> Result<(), Strin
         right.whole.node_count
     );
     let trees = [left.tree, right.tree];
-    let index = trees
-        .iter()
-        .map(|tree| (tree.file_id, tree))
-        .collect::<std::collections::HashMap<FileId, &NormalizedNode>>();
-    let left_view = build_view(&index, &left.whole).ok_or("the left endpoint resolves")?;
-    let right_view = build_view(&index, &right.whole).ok_or("the right endpoint resolves")?;
+    let (left_view, right_view) = endpoint_views(&trees, &left.whole, &right.whole)?;
     let aligned = aligned_shared_nodes(&left_view, &right_view);
     let credited = credit_shared_nodes(&left_view, &right_view);
     assert!(
@@ -598,19 +587,9 @@ impl Widget {
 /// Parses `left_source` and `right_source` into two files and returns
 /// their whole-file endpoint views.
 fn views_of(left_source: &str, right_source: &str) -> Result<(EndpointView, EndpointView), String> {
-    let mut registry = FileRegistry::new();
-    let left_id = registry.register(PathBuf::from("left.rs"));
-    let right_id = registry.register(PathBuf::from("right.rs"));
-    let left = parse(left_source, left_id)?;
-    let right = parse(right_source, right_id)?;
+    let (left, right) = parse_pair(left_source, right_source)?;
     let trees = [left.tree, right.tree];
-    let index = trees
-        .iter()
-        .map(|tree| (tree.file_id, tree))
-        .collect::<std::collections::HashMap<FileId, &NormalizedNode>>();
-    let left_view = build_view(&index, &left.whole).ok_or("the left endpoint resolves")?;
-    let right_view = build_view(&index, &right.whole).ok_or("the right endpoint resolves")?;
-    Ok((left_view, right_view))
+    endpoint_views(&trees, &left.whole, &right.whole)
 }
 
 // [FUSED-SHARED-SUBTREE-MEMO] The Flutter-scale blowup, captured at
@@ -814,11 +793,7 @@ fn a_small_endpoint_still_gets_credit_against_a_large_one() -> Result<(), String
     let block = boost_block(BLOCK_STATEMENTS);
     let small_source = rider_function(&block);
     let large_source = host_function(HOST_STATEMENTS, &block);
-    let mut registry = FileRegistry::new();
-    let small_id = registry.register(PathBuf::from("small.rs"));
-    let large_id = registry.register(PathBuf::from("large.rs"));
-    let small = parse(&small_source, small_id)?;
-    let large = parse(&large_source, large_id)?;
+    let (small, large) = parse_pair(&small_source, &large_source)?;
     assert!(
         small.whole.node_count <= ALIGNMENT_MAX_NODES,
         "the fixture's small endpoint must stay at or under the alignment cap, got {}",
@@ -831,12 +806,7 @@ fn a_small_endpoint_still_gets_credit_against_a_large_one() -> Result<(), String
         large.whole.node_count
     );
     let trees = [small.tree, large.tree];
-    let index = trees
-        .iter()
-        .map(|tree| (tree.file_id, tree))
-        .collect::<std::collections::HashMap<FileId, &NormalizedNode>>();
-    let small_view = build_view(&index, &small.whole).ok_or("the small endpoint resolves")?;
-    let large_view = build_view(&index, &large.whole).ok_or("the large endpoint resolves")?;
+    let (small_view, large_view) = endpoint_views(&trees, &small.whole, &large.whole)?;
     let credited = credit_shared_nodes(&small_view, &large_view);
     assert!(
         credited >= MIN_EXPECTED_SHARED_NODES,

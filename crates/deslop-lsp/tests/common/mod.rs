@@ -9,6 +9,7 @@
 #![allow(dead_code)]
 
 pub mod reports;
+pub mod session;
 
 use std::{
     fs,

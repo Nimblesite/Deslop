@@ -12,8 +12,8 @@ use std::collections::BTreeSet;
 use tree_sitter::Node;
 
 use super::{
-    is_multi_member_language_cluster, parse_for, spans_multiple_files, trimmed_snippet_range,
-    Snippet,
+    is_multi_member_language_cluster, language_cluster_shapes, node_search::KindSearch, parse_for,
+    spans_multiple_files, trimmed_snippet_range, Snippet,
 };
 use crate::{
     ast::{named_children, ByteRange},
@@ -27,14 +27,10 @@ use crate::{
 /// fires only when at least one member uses a different keyword-name
 /// set, so genuine copy-paste of one constructor stays visible.
 pub(super) fn is_kwargs_only_constructor_cluster(snippets: &[Snippet<'_>]) -> bool {
-    if !is_multi_member_language_cluster(snippets, "python") {
-        return false;
-    }
-    let shapes: Option<Vec<KwargsCtorShape>> =
-        snippets.iter().map(kwargs_constructor_shape).collect();
-    let Some(shapes) = shapes else { return false };
-    spans_multiple_files(shapes.iter().map(|shape| shape.file_id))
-        && kwargs_ctor_shapes_differ(&shapes)
+    language_cluster_shapes(snippets, "python", kwargs_constructor_shape).is_some_and(|shapes| {
+        spans_multiple_files(shapes.iter().map(|shape| shape.file_id))
+            && kwargs_ctor_shapes_differ(&shapes)
+    })
 }
 
 /// Per-member shape recorded for kwargs-only constructor clusters.
@@ -71,9 +67,8 @@ fn sole_class_constructor_call<'tree>(
     range: ByteRange,
     source: &[u8],
 ) -> Option<Node<'tree>> {
-    let mut calls = Vec::new();
-    collect_calls_in_range(root, range, &mut calls);
-    let constructors: Vec<Node<'tree>> = calls
+    let constructors: Vec<Node<'tree>> = call_search(range)
+        .nodes(root)
         .into_iter()
         .filter(|call| call_is_class_constructor(*call, source))
         .collect();
@@ -83,17 +78,10 @@ fn sole_class_constructor_call<'tree>(
     Some(*call)
 }
 
-/// Collects every `call` node fully enclosed by `range`.
-fn collect_calls_in_range<'tree>(node: Node<'tree>, range: ByteRange, out: &mut Vec<Node<'tree>>) {
-    if node.end_byte() <= range.start || node.start_byte() >= range.end {
-        return;
-    }
-    if node.kind() == "call" && node.start_byte() >= range.start && node.end_byte() <= range.end {
-        out.push(node);
-    }
-    for child in named_children(node) {
-        collect_calls_in_range(child, range, out);
-    }
+/// The search for every `call` node fully enclosed by `range`, nested
+/// calls included.
+fn call_search(range: ByteRange) -> KindSearch<impl Fn(&str) -> bool> {
+    KindSearch::enclosed(range, |kind| kind == "call").with_nested_hits()
 }
 
 /// Returns true when `call.function` is a single capitalised identifier
@@ -177,12 +165,7 @@ fn is_mapped_column_call_snippet(snippet: &Snippet<'_>) -> bool {
 
 /// Returns the sole Python call fully contained in `range`.
 fn sole_call_in_range(root: Node<'_>, range: ByteRange) -> Option<Node<'_>> {
-    let mut calls = Vec::new();
-    collect_calls_in_range(root, range, &mut calls);
-    let [call] = calls.as_slice() else {
-        return None;
-    };
-    Some(*call)
+    call_search(range).sole_node(root)
 }
 
 /// Per-member shape: set of `mapped_column`-bound attribute names

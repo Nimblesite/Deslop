@@ -78,7 +78,7 @@
 use tree_sitter::Node;
 
 use super::{
-    is_multi_member_language_cluster, node_intersects_range, parse_for,
+    is_multi_member_language_cluster, node_intersects_range, node_search::KindSearch, parse_for,
     python::python_function_name_starts_with, raw_snippet_texts_differ, spans_multiple_files,
     trimmed_snippet_range, Snippet,
 };
@@ -114,8 +114,9 @@ fn is_chained_dict_assert_snippet(snippet: &Snippet<'_>) -> bool {
     if !module_scope_is_idiom_only(tree.root_node(), range) {
         return false;
     }
-    let mut functions = Vec::new();
-    collect_intersecting_functions(tree.root_node(), range, &mut functions);
+    let functions = KindSearch::intersecting(range, |kind| kind == "function_definition")
+        .with_nested_hits()
+        .nodes(tree.root_node());
     !functions.is_empty()
         && functions
             .iter()
@@ -225,25 +226,6 @@ fn is_docstring_statement(statement: Node<'_>) -> bool {
         named_children(statement).as_slice(),
         [only] if only.kind() == "string" && !contains_interpolation(*only)
     )
-}
-
-/// Collects every `function_definition` whose bytes overlap `range` —
-/// the function enclosing a statement-level range, and the functions
-/// contained in a function- or module-level one.
-fn collect_intersecting_functions<'tree>(
-    node: Node<'tree>,
-    range: ByteRange,
-    out: &mut Vec<Node<'tree>>,
-) {
-    if !node_intersects_range(node, range) {
-        return;
-    }
-    if node.kind() == "function_definition" {
-        out.push(node);
-    }
-    for child in named_children(node) {
-        collect_intersecting_functions(child, range, out);
-    }
 }
 
 /// Returns true for a pytest `test_*` function whose body, within

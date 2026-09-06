@@ -2,7 +2,6 @@
   "name": "fsharp",
   "language": "fsharp",
   "url": "https://github.com/dotnet/fsharp.git",
-  "tag": "v15.2.302",
   "sha": "ba48c78076ef15cdfef89d0001c538f3f130421b",
   "why": "The F# compiler and tooling; the largest real F# codebase available.",
   "ceilings": {

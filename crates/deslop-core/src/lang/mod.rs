@@ -26,6 +26,7 @@ pub(crate) mod ecmascript;
 pub mod fsharp;
 pub mod go;
 pub mod javascript;
+mod merge_emit;
 pub mod php;
 pub mod python;
 pub mod rust_lang;

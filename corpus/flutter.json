@@ -2,7 +2,6 @@
   "name": "flutter",
   "language": "dart",
   "url": "https://github.com/flutter/flutter.git",
-  "tag": "3.38.9",
   "sha": "67323de285b00232883f53b84095eb72be97d35c",
   "why": "Largest widely-used Dart codebase. Heavy framework boilerplate makes it the sharpest available precision test, and its size is what exposes resource behaviour.",
   "ceilings": {

@@ -12,22 +12,23 @@
 
 use std::{
     fs,
-    io::{BufRead, BufReader, Write},
+    ops::{Deref, DerefMut},
     path::{Path, PathBuf},
-    process::{Child, ChildStdin, ChildStdout, Command, Stdio},
+    process::{Child, Command, Stdio},
     time::Duration,
 };
 
 use anyhow::{anyhow, Context, Result};
 use assert_cmd::cargo::cargo_bin;
-use deslop_core::live::transport::endpoint_path;
 use serde_json::{json, Value};
 use tempfile::TempDir;
 
 use crate::common;
-use common::{fixture_root, value_array, value_get};
-#[cfg(unix)]
-use common::{pid_exists, read_mcp_pid, terminate_pid, wait_for_pid_exit, KILLABLE_PARENT_SCRIPT};
+use common::{
+    copied_fixture, fixture_root,
+    rpc::{StdioRpc, MCP_PROTOCOL_VERSION},
+    spawn_lsp_and_wait_for_socket, value_array, value_get, ChildKillOnDrop,
+};
 
 const REPORT_GET_TOOL: &str = "report-get";
 const DUPLICATES_TOOL: &str = "duplicates";
@@ -93,7 +94,7 @@ const JSONRPC_VERSION: &str = "2.0";
 const SECOND_FILE_NAME: &str = "Two.cs";
 const MIN_SIZE_FIELD: &str = "min_size";
 const CLUSTERS_ARRAY_ERROR: &str = "clusters must be an array";
-const JSONRPC_FIELD: &str = "jsonrpc";
+
 const MCP_PROGRAM_NAME: &str = "deslop-mcp";
 const SNIPPET_FIELD: &str = "snippet";
 const LANGUAGES_POINTER: &str = "/languages";
@@ -106,7 +107,7 @@ const STRUCTURED_CLUSTERS_POINTER: &str = "/result/structuredContent/clusters";
 const PATHS_FIELD: &str = "paths";
 const SERVER_INFO_NAME_POINTER: &str = "/result/serverInfo/name";
 const RESCAN_TOOL: &str = "rescan";
-const MCP_PROTOCOL_VERSION_DATE: &str = "2024-11-05";
+
 const LIST_EMBEDDING_MODELS_TOOL: &str = "list-embedding-models";
 const CONTENT_TEXT_POINTER: &str = "/result/contents/0/text";
 const ENDPOINT_FIELD: &str = "endpoint";
@@ -115,7 +116,7 @@ const ROOT_FLAG: &str = "--root";
 const EMBEDDING_PROVENANCE_FIELD: &str = "embedding_provenance";
 const UNREACHABLE_OLLAMA_ENDPOINT: &str = "http://127.0.0.1:1";
 const SCHEMA_DOC_TOOL: &str = "schema-doc";
-const PARAMS_FIELD: &str = "params";
+
 const PROCESS_TIMEOUT_SECS: u64 = 30;
 const SHUTDOWN_TIMEOUT_SECS: u64 = 5;
 const POLL_INTERVAL_MILLIS: u64 = 50;
@@ -149,28 +150,28 @@ fn mcp_binary_path() -> &'static str {
 /// `live-report.json` fixture now exercise the full LSP→IPC→MCP chain.
 struct McpChild {
     child: Child,
-    stdin: ChildStdin,
-    stdout: BufReader<ChildStdout>,
-    next_id: i64,
+    /// The JSON-RPC link over the child's stdio.
+    rpc: StdioRpc,
     /// Companion LSP process. Reaped when this handle drops so the
     /// per-test workspace can be reclaimed without leaking sockets.
-    lsp: Option<LspGuard>,
+    lsp: Option<ChildKillOnDrop>,
     /// Owned per-test workspace clone. `Some` when [`McpChild::spawn`]
     /// copied a read-only fixture template; `None` when the caller
     /// passed an already-isolated path.
     workspace: Option<TempDir>,
 }
 
-/// Kill-on-drop wrapper for the companion LSP child. Lives as a
-/// standalone field on [`McpChild`] so the parent struct does not
-/// need its own `Drop` impl — that would lock down moves out of
-/// [`McpChild::stdin`] in `finish` / `close_stdin_and_wait`.
-struct LspGuard(Child);
+impl Deref for McpChild {
+    type Target = StdioRpc;
 
-impl Drop for LspGuard {
-    fn drop(&mut self) {
-        let _killed = self.0.kill();
-        let _waited = self.0.wait();
+    fn deref(&self) -> &StdioRpc {
+        &self.rpc
+    }
+}
+
+impl DerefMut for McpChild {
+    fn deref_mut(&mut self) -> &mut StdioRpc {
+        &mut self.rpc
     }
 }
 
@@ -185,17 +186,14 @@ impl McpChild {
     /// already-writable workspace directly; the helper will use it
     /// in place.
     fn spawn(root: &Path, extra_args: &[&str]) -> Result<Self> {
-        let (workspace_root, ownedworkspace) = if root == fixture_root() {
-            let temp = TempDir::new().context("alloc per-test workspace")?;
-            copy_dir_all(root, temp.path())?;
+        let (workspace_root, workspace) = if root == fixture_root() {
+            let temp = copied_fixture()?;
             (temp.path().to_path_buf(), Some(temp))
         } else {
             (root.to_path_buf(), None)
         };
-        let lsp = LspGuard(spawn_companion_lsp(&workspace_root)?);
-        wait_for_socket(&workspace_root)?;
-        let binary = mcp_binary_path();
-        let mut cmd = Command::new(binary);
+        let lsp = spawn_lsp_and_wait_for_socket(&workspace_root)?;
+        let mut cmd = Command::new(mcp_binary_path());
         let _ = cmd
             .arg(ROOT_FLAG)
             .arg(&workspace_root)
@@ -205,88 +203,27 @@ impl McpChild {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         let mut child = cmd.spawn().context("spawn deslop-mcp binary")?;
-        let stdin = child.stdin.take().context("child stdin")?;
-        let stdout = child.stdout.take().context("child stdout")?;
+        let rpc = StdioRpc::take(&mut child)?;
         Ok(Self {
             child,
-            stdin,
-            stdout: BufReader::new(stdout),
-            next_id: 0,
+            rpc,
             lsp: Some(lsp),
-            workspace: ownedworkspace,
+            workspace,
         })
     }
 
-    fn request(&mut self, method: &str, params: &Value) -> Result<Value> {
-        self.next_id = self.next_id.saturating_add(1);
-        let id = self.next_id;
-        let frame = json!({
-            (JSONRPC_FIELD): JSONRPC_VERSION,
-            (ID_FIELD): id,
-            (METHOD_FIELD): method,
-            (PARAMS_FIELD): params,
-        });
-        self.send_frame(&frame)?;
-        loop {
-            let response = self.read_frame()?;
-            let response_id = response.get(ID_FIELD).cloned().unwrap_or(Value::Null);
-            if response_id == json!(id) {
-                return Ok(response);
-            }
-            // Notifications mixed with responses: skip and keep reading.
-            if response.get(METHOD_FIELD).is_none() {
-                return Err(anyhow!("unexpected frame without id match: {response:?}"));
-            }
-        }
-    }
-
-    fn notify(&mut self, method: &str, params: &Value) -> Result<()> {
-        let frame = json!({
-            (JSONRPC_FIELD): JSONRPC_VERSION,
-            (METHOD_FIELD): method,
-            (PARAMS_FIELD): params,
-        });
-        self.send_frame(&frame)
-    }
-
-    fn read_frame(&mut self) -> Result<Value> {
-        let mut line = String::new();
-        let bytes = self.stdout.read_line(&mut line)?;
-        if bytes == 0 {
-            return Err(anyhow!("mcp stdout closed unexpectedly"));
-        }
-        serde_json::from_str(&line)
-            .with_context(|| format!("invalid JSON from mcp: frame was: {line}"))
-    }
-
-    fn send_frame(&mut self, frame: &Value) -> Result<()> {
-        let bytes = serde_json::to_vec(frame)?;
-        self.stdin.write_all(&bytes)?;
-        self.stdin.write_all(b"\n")?;
-        self.stdin.flush()?;
-        Ok(())
-    }
-
-    fn send_raw_line(&mut self, line: &str) -> Result<()> {
-        self.stdin.write_all(line.as_bytes())?;
-        self.stdin.write_all(b"\n")?;
-        self.stdin.flush()?;
-        Ok(())
-    }
-
     fn finish(self) -> std::process::ExitStatus {
-        // Destructure so we can move pieces independently. The
-        // companion LSP guard drops at the end of this scope and
-        // reaps the LSP child without an explicit `kill_companion_lsp`
-        // call ([MCP-IPC-CLIENT]).
+        // Destructure so we can move pieces independently. Dropping the
+        // link closes the child's stdin; the companion LSP guard drops
+        // at the end of this scope and reaps the LSP child without an
+        // explicit `kill_companion_lsp` call ([MCP-IPC-CLIENT]).
         let Self {
             mut child,
-            stdin,
+            rpc,
             lsp: _lsp,
             workspace: _workspace,
-            ..
         } = self;
-        drop(stdin);
+        drop(rpc);
         child
             .wait_timeout(Duration::from_secs(PROCESS_TIMEOUT_SECS))
             .ok()
@@ -310,78 +247,20 @@ impl McpChild {
             .map_or_else(|| fixture_root().to_path_buf(), |t| t.path().to_path_buf())
     }
 
-    fn close_stdin_and_wait(mut self, duration: Duration) -> Result<std::process::ExitStatus> {
-        drop(self.stdin);
-        self.child.wait_timeout(duration)?.ok_or_else(|| {
-            let _ = self.child.kill();
-            let _ = self.child.wait();
+    fn close_stdin_and_wait(self, duration: Duration) -> Result<std::process::ExitStatus> {
+        let Self {
+            mut child,
+            rpc,
+            lsp: _lsp,
+            workspace: _workspace,
+        } = self;
+        drop(rpc);
+        child.wait_timeout(duration)?.ok_or_else(|| {
+            let _ = child.kill();
+            let _ = child.wait();
             anyhow!("deslop-mcp did not exit within {duration:?} after stdin closed")
         })
     }
-}
-
-/// Spawns a companion `deslop-lsp` process and drives the LSP
-/// `initialize`+`initialized` handshake so the IPC socket is ready
-/// before the MCP child connects.
-fn spawn_companion_lsp(root: &Path) -> Result<Child> {
-    let mut child = deslop_test_support::spawn_deslop_lsp(root, Stdio::piped())
-        .context("spawn companion deslop-lsp")?;
-    let mut stdin = child.stdin.take().context("lsp stdin")?;
-    let mut stdout = BufReader::new(child.stdout.take().context("lsp stdout")?);
-    lsp_handshake(&mut stdin, &mut stdout).context("lsp initialize")?;
-    child.stdin = Some(stdin);
-    child.stdout = Some(stdout.into_inner());
-    Ok(child)
-}
-
-/// Sends the minimal `initialize` + `initialized` LSP handshake.
-fn lsp_handshake(stdin: &mut ChildStdin, stdout: &mut BufReader<ChildStdout>) -> Result<()> {
-    let init = json!({
-        (JSONRPC_FIELD): JSONRPC_VERSION,
-        (ID_FIELD): 1,
-        (METHOD_FIELD): "initialize",
-        (PARAMS_FIELD): {"processId": null, "rootUri": null, "capabilities": {}}
-    });
-    write_lsp_frame(stdin, &serde_json::to_string(&init)?)?;
-    let _response = read_lsp_frame(stdout)?;
-    let initialized = json!({(JSONRPC_FIELD): JSONRPC_VERSION, (METHOD_FIELD): "initialized", (PARAMS_FIELD): {}});
-    write_lsp_frame(stdin, &serde_json::to_string(&initialized)?)
-}
-
-/// Writes one LSP-framed JSON-RPC message.
-fn write_lsp_frame(stdin: &mut ChildStdin, payload: &str) -> Result<()> {
-    deslop_test_support::write_lsp_frame(stdin, payload)
-}
-
-/// Reads one LSP-framed JSON-RPC response and returns it as JSON.
-fn read_lsp_frame(reader: &mut BufReader<ChildStdout>) -> Result<Value> {
-    deslop_test_support::read_lsp_frame(reader)
-}
-
-/// Polls until the companion LSP has published the IPC endpoint this
-/// platform binds ([LIVE-IPC-SOCKET], [LIVE-IPC-TCP]). Failure after
-/// 30 s is fatal — the LSP is meant to bind within seconds.
-///
-/// Which artefact appears is the platform's choice, not the test's:
-/// Windows has no Unix-domain sockets and binds TCP loopback with a
-/// discovery record instead, so a poll hard-coded to `deslop.sock`
-/// there waits out the whole timeout against a server that bound
-/// correctly seconds earlier. The mode comes from the engine rather
-/// than from a `cfg` here, so the test cannot disagree with the code
-/// about which transport is in use.
-fn wait_for_socket(root: &Path) -> Result<()> {
-    let endpoint = endpoint_path(root);
-    let started = std::time::Instant::now();
-    while started.elapsed() < Duration::from_secs(PROCESS_TIMEOUT_SECS) {
-        if endpoint.exists() {
-            return Ok(());
-        }
-        std::thread::sleep(Duration::from_millis(POLL_INTERVAL_MILLIS));
-    }
-    Err(anyhow!(
-        "companion LSP did not publish {} within 30s",
-        endpoint.display()
-    ))
 }
 
 /// Polls `tool` (invoked with `args`) until its reported
@@ -441,17 +320,6 @@ impl WaitTimeout for Child {
     }
 }
 
-/// Read-only fixture root. The `.deslop/cache/live-report.json` state file
-/// is pre-committed alongside the source files so `StateFileBackend` can
-/// serve data without an LSP process.
-/// Copies the fixture (including `.deslop/cache/live-report.json`) to a
-/// writable temp directory for tests that mutate the workspace.
-fn copied_fixture_root() -> Result<TempDir> {
-    let temp = TempDir::new()?;
-    copy_dir_all(fixture_root(), temp.path())?;
-    Ok(temp)
-}
-
 /// Runs the `deslop` CLI against `root` and writes the JSON report to
 /// `{root}/.deslop/cache/live-report.json` so `StateFileBackend` can
 /// read it without an LSP process.
@@ -476,29 +344,8 @@ fn generate_state_file(root: &Path, min_nodes: u32) -> Result<()> {
     Ok(())
 }
 
-fn copy_dir_all(src: &Path, dst: &Path) -> Result<()> {
-    fs::create_dir_all(dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let target = dst.join(entry.file_name());
-        if entry.file_type()?.is_dir() {
-            copy_dir_all(&entry.path(), &target)?;
-        } else {
-            let _bytes = fs::copy(entry.path(), target)?;
-        }
-    }
-    Ok(())
-}
-
 fn init_session(child: &mut McpChild) -> Result<Value> {
-    child.request(
-        "initialize",
-        &json!({
-            "protocolVersion": MCP_PROTOCOL_VERSION_DATE,
-            "capabilities": {},
-            "clientInfo": { (NAME_FIELD): "mcp-e2e-harness", "version": "0.1.0" }
-        }),
-    )
+    child.initialize("mcp-e2e-harness")
 }
 
 /// Spawns an LSP+MCP pair against the read-only fixture template and
@@ -552,7 +399,7 @@ fn mutate_two_and_notify(child: &mut McpChild, temp: &Path) -> Result<()> {
 /// "unique / unknown file yields no clusters" tests, which only differ in the
 /// planted file and the tool they then call.
 fn workspace_with_extra_file(leaf: &str, contents: &str) -> Result<(TempDir, McpChild)> {
-    let workspace = copied_fixture_root()?;
+    let workspace = copied_fixture()?;
     std::fs::write(workspace.path().join(leaf), contents)?;
     let mut child = McpChild::spawn(workspace.path(), &[])?;
     let _ = init_session(&mut child)?;
@@ -567,35 +414,6 @@ fn assert_empty_page(page: &Value) -> Result<()> {
         .as_array()
         .is_some_and(Vec::is_empty));
     Ok(())
-}
-
-#[cfg(unix)]
-fn spawn_mcp_with_killable_parent(root: &Path) -> Result<(McpChild, u32)> {
-    let mut child = Command::new("/bin/sh")
-        .arg("-c")
-        .arg(KILLABLE_PARENT_SCRIPT)
-        .arg("deslop-mcp-parent")
-        .arg(mcp_binary_path())
-        .arg(root)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .context("spawn killable deslop-mcp parent shell")?;
-    let mcp_pid = read_mcp_pid(&mut child)?;
-    let stdin = child.stdin.take().context("parent stdin")?;
-    let stdout = child.stdout.take().context("parent stdout")?;
-    Ok((
-        McpChild {
-            child,
-            stdin,
-            stdout: BufReader::new(stdout),
-            next_id: 0,
-            lsp: None,
-            workspace: None,
-        },
-        mcp_pid,
-    ))
 }
 
 #[test]
@@ -650,6 +468,30 @@ fn structured_tool_result(result: &Value) -> Result<Value> {
         .ok_or_else(|| anyhow!("missing structuredContent in {result}"))
 }
 
+/// Arguments for the broadest `duplicates` page the harness requests.
+fn broad_page_arguments() -> Value {
+    json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): BROAD_RESULT_LIMIT })
+}
+
+/// The `total_clusters` of a broad `duplicates` page: the figure every
+/// mutation scenario compares before and after an edit.
+fn broad_cluster_count(child: &mut McpChild) -> Result<u64> {
+    let page =
+        structured_tool_result(&call_tool(child, DUPLICATES_TOOL, &broad_page_arguments())?)?;
+    Ok(value_get(&page, TOTAL_CLUSTERS_POINTER)?
+        .as_u64()
+        .unwrap_or(0))
+}
+
+/// Asserts the server still answers `tools/list`, then finishes the
+/// child: the liveness check every malformed-input scenario ends with.
+fn finish_after_tools_list(mut child: McpChild) -> Result<()> {
+    let response = child.request(TOOLS_LIST_METHOD, &json!({}))?;
+    assert!(value_get(&response, TOOLS_LIST_POINTER)?.is_array());
+    let _ = child.finish();
+    Ok(())
+}
+
 /// Spawns + initializes an MCP child against the read-only fixture, invokes
 /// `tool` with `arguments` through the success-path [`call_tool`], and returns
 /// the live child alongside the call's `structuredContent` payload. The child
@@ -682,7 +524,7 @@ fn initialize_returns_server_info_and_capabilities() -> Result<()> {
     assert_eq!(value_get(&response, "/jsonrpc")?, json!(JSONRPC_VERSION));
     assert_eq!(
         value_get(&response, "/result/protocolVersion")?,
-        json!(MCP_PROTOCOL_VERSION_DATE)
+        json!(MCP_PROTOCOL_VERSION)
     );
     assert_eq!(
         value_get(&response, SERVER_INFO_NAME_POINTER)?,
@@ -731,62 +573,6 @@ fn exits_within_five_seconds_after_stdio_stdin_closes() -> Result<()> {
     assert!(
         started.elapsed() < Duration::from_secs(SHUTDOWN_TIMEOUT_SECS),
         "stdin EOF must stop deslop-mcp within five seconds"
-    );
-    Ok(())
-}
-
-#[test]
-#[cfg(unix)]
-fn exits_when_launching_parent_disappears_with_stdio_open() -> Result<()> {
-    let (mut child, mcp_pid) = spawn_mcp_with_killable_parent(fixture_root())?;
-    assert_ne!(
-        mcp_pid,
-        child.child.id(),
-        "test must observe the mcp child separately from its shell parent"
-    );
-    assert!(pid_exists(mcp_pid)?, "mcp pid must exist before initialize");
-    assert!(
-        child.child.try_wait()?.is_none(),
-        "launcher parent must stay alive until killed by the test"
-    );
-    let response = init_session(&mut child)?;
-    assert_eq!(
-        value_get(&response, SERVER_INFO_NAME_POINTER)?,
-        json!(MCP_PROGRAM_NAME)
-    );
-    assert_eq!(
-        value_get(&response, "/result/protocolVersion")?,
-        json!(MCP_PROTOCOL_VERSION_DATE)
-    );
-
-    // Checked before the kill, not after. After it, "the mcp is still alive"
-    // is the negation of the contract this test exists to prove, and it holds
-    // only while the mcp has not yet noticed — so a server that reacts
-    // promptly fails here, and one that reacts at all fails under contention.
-    // Observed once in a full-workspace run. Before the kill the same fact is
-    // certain, and it is the fact that matters: the exit below belongs to this
-    // process rather than to one that was already gone.
-    assert!(
-        pid_exists(mcp_pid)?,
-        "mcp must be alive when its parent is killed, or its exit proves nothing"
-    );
-    child.child.kill()?;
-    let parent_status = child.child.wait()?;
-    assert!(
-        !parent_status.success(),
-        "launcher parent should be killed during orphan-exit test"
-    );
-    let exited = wait_for_pid_exit(mcp_pid, Duration::from_secs(SHUTDOWN_TIMEOUT_SECS))?;
-    if !exited {
-        terminate_pid(mcp_pid)?;
-    }
-    assert!(
-        exited,
-        "deslop-mcp must exit within 5s when its launching parent disappears"
-    );
-    assert!(
-        !pid_exists(mcp_pid)?,
-        "mcp pid must be gone once the orphan-exit wait has returned"
     );
     Ok(())
 }
@@ -2084,7 +1870,7 @@ fn set_embedding_model_preserves_shared_settings_and_endpoint() -> Result<()> {
 
 #[test]
 fn set_embedding_model_fails_when_shared_settings_cannot_be_written() -> Result<()> {
-    let workspace = copied_fixture_root()?;
+    let workspace = copied_fixture()?;
     fs::write(workspace.path().join(".vscode"), "not a directory")?;
     let mut child = McpChild::spawn(workspace.path(), &[])?;
     let _ = init_session(&mut child)?;
@@ -2281,23 +2067,13 @@ fn path_outside_root_is_rejected() -> Result<()> {
 fn notifications_initialized_is_accepted_silently() -> Result<()> {
     let mut child = spawn_and_init()?;
     child.notify("notifications/initialized", &json!({}))?;
-    let response = child.request(TOOLS_LIST_METHOD, &json!({}))?;
-    assert!(value_get(&response, TOOLS_LIST_POINTER)?.is_array());
-    let _ = child.finish();
-    Ok(())
+    finish_after_tools_list(child)
 }
 
 #[test]
 fn mark_changed_is_idempotent_across_second_session() -> Result<()> {
     let (temp, mut child) = two_file_workspace_with_state()?;
-    let first = structured_tool_result(&call_tool(
-        &mut child,
-        DUPLICATES_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): BROAD_RESULT_LIMIT }),
-    )?)?;
-    let first_count = value_get(&first, TOTAL_CLUSTERS_POINTER)?
-        .as_u64()
-        .unwrap_or(0);
+    let first_count = broad_cluster_count(&mut child)?;
     assert!(first_count >= 1, "expected at least one cluster initially");
     let _ = child.finish();
     std::fs::write(
@@ -2307,14 +2083,7 @@ fn mark_changed_is_idempotent_across_second_session() -> Result<()> {
     generate_state_file(temp.path(), FIXTURE_MIN_NODES)?;
     let mut second = McpChild::spawn(temp.path(), &[])?;
     let _ = init_session(&mut second)?;
-    let rerun = structured_tool_result(&call_tool(
-        &mut second,
-        DUPLICATES_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): BROAD_RESULT_LIMIT }),
-    )?)?;
-    let rerun_count = value_get(&rerun, TOTAL_CLUSTERS_POINTER)?
-        .as_u64()
-        .unwrap_or(0);
+    let rerun_count = broad_cluster_count(&mut second)?;
     assert!(
         rerun_count < first_count,
         "after mutating Two.cs, cluster count must drop; was {first_count}, now {rerun_count}"
@@ -2653,10 +2422,7 @@ fn cluster_by_id_missing_id_returns_invalid_params() -> Result<()> {
 fn mcp_sends_empty_line_and_server_keeps_going() -> Result<()> {
     let mut child = spawn_and_init()?;
     child.send_raw_line("")?;
-    let response = child.request(TOOLS_LIST_METHOD, &json!({}))?;
-    assert!(value_get(&response, TOOLS_LIST_POINTER)?.is_array());
-    let _ = child.finish();
-    Ok(())
+    finish_after_tools_list(child)
 }
 
 #[test]
@@ -2774,14 +2540,7 @@ fn binary_rejects_unknown_embedding_provider_at_init() -> Result<()> {
 #[test]
 fn files_changed_notification_triggers_reanalysis() -> Result<()> {
     let (temp, mut child) = two_file_workspace_with_state()?;
-    let before = structured_tool_result(&call_tool(
-        &mut child,
-        DUPLICATES_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): BROAD_RESULT_LIMIT }),
-    )?)?;
-    let before_count = value_get(&before, TOTAL_CLUSTERS_POINTER)?
-        .as_u64()
-        .unwrap_or(0);
+    let before_count = broad_cluster_count(&mut child)?;
     assert!(before_count >= 1, "expected at least one cluster");
     // Edit Two.cs so the clone disappears, regenerate the state file, then notify.
     mutate_two_and_notify(&mut child, temp.path())?;
@@ -2791,7 +2550,7 @@ fn files_changed_notification_triggers_reanalysis() -> Result<()> {
     let after = poll_total_clusters_below(
         &mut child,
         DUPLICATES_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): BROAD_RESULT_LIMIT }),
+        &broad_page_arguments(),
         before_count,
     )?;
     let after_count = value_get(&after, TOTAL_CLUSTERS_POINTER)?
@@ -2808,14 +2567,7 @@ fn files_changed_notification_triggers_reanalysis() -> Result<()> {
 #[test]
 fn issue_77_session_reports_incremental_true_after_mutation_reload() -> Result<()> {
     let (temp, mut child) = two_file_workspace_with_state()?;
-    let before_page = structured_tool_result(&call_tool(
-        &mut child,
-        DUPLICATES_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): BROAD_RESULT_LIMIT }),
-    )?)?;
-    let before_count = value_get(&before_page, TOTAL_CLUSTERS_POINTER)?
-        .as_u64()
-        .unwrap_or(0);
+    let before_count = broad_cluster_count(&mut child)?;
     assert!(before_count >= 1, "expected a cluster before mutation");
     let before_config = structured_tool_result(&call_tool(&mut child, SESSION_TOOL, &json!({}))?)?;
     let before_generation = value_get(&before_config, "/generation")?
@@ -2837,7 +2589,7 @@ fn issue_77_session_reports_incremental_true_after_mutation_reload() -> Result<(
     let after_page = poll_total_clusters_below(
         &mut child,
         DUPLICATES_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): BROAD_RESULT_LIMIT }),
+        &broad_page_arguments(),
         before_count,
     )?;
     let after_count = value_get(&after_page, TOTAL_CLUSTERS_POINTER)?
@@ -2881,21 +2633,14 @@ fn issue_89_rescan_tool_reloads_state_file_and_returns_fresh_duplicates() -> Res
     // `deslop.lsp.refreshReport` over IPC and the next read sees the
     // re-analysed state. Mutating source (not the seed cache) is the
     // only way to influence the LSP under the new architecture.
-    let workspace = copied_fixture_root()?;
+    let workspace = copied_fixture()?;
     let mut child = McpChild::spawn(workspace.path(), &[])?;
     let _ = init_session(&mut child)?;
     // Flush the LSP cold-pass install before measuring `before` so
     // the post-mutation rescan does not race a delayed background
     // commit that would re-introduce the stale cluster.
     let _flush = call_tool(&mut child, RESCAN_TOOL, &json!({}))?;
-    let before = structured_tool_result(&call_tool(
-        &mut child,
-        DUPLICATES_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): BROAD_RESULT_LIMIT }),
-    )?)?;
-    let before_count = value_get(&before, TOTAL_CLUSTERS_POINTER)?
-        .as_u64()
-        .unwrap_or(0);
+    let before_count = broad_cluster_count(&mut child)?;
     assert!(
         before_count >= 1,
         "expected at least one cluster before edit"
@@ -2945,10 +2690,7 @@ fn files_changed_notification_with_empty_paths_is_a_noop() -> Result<()> {
         &json!({ (PATHS_FIELD): [] }),
     )?;
     // Server must remain responsive after a no-op notification.
-    let response = child.request(TOOLS_LIST_METHOD, &json!({}))?;
-    assert!(value_get(&response, TOOLS_LIST_POINTER)?.is_array());
-    let _ = child.finish();
-    Ok(())
+    finish_after_tools_list(child)
 }
 
 /// [MCP-NOTIFICATIONS] After `notifications/deslop/filesChanged` the
@@ -2999,11 +2741,7 @@ fn files_changed_pushes_resources_updated_and_report_changed_notifications() -> 
     );
 
     // Server stays alive and responsive after pushing notifications.
-    let response = child.request(TOOLS_LIST_METHOD, &json!({}))?;
-    assert!(value_get(&response, TOOLS_LIST_POINTER)?.is_array());
-
-    let _ = child.finish();
-    Ok(())
+    finish_after_tools_list(child)
 }
 
 #[test]

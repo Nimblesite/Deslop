@@ -2,7 +2,6 @@
   "name": "hugo",
   "language": "go",
   "url": "https://github.com/gohugoio/hugo.git",
-  "tag": "v0.149.1",
   "sha": "57a784e027a264790ddf36c89b62200525a4561b",
   "why": "Popular Go static site generator; idiomatic error-handling repetition.",
   "ceilings": {

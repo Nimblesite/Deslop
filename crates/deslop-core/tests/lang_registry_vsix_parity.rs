@@ -16,9 +16,9 @@
 //! hover / inlay / LSP sync / grouping / filters) is guarded by
 //! `clients/vscode/src/test/unit/analysedLanguages.unit.test.ts`.
 
-use std::{collections::BTreeSet, fs, path::PathBuf};
+use std::{collections::BTreeSet, path::PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use deslop_core::pipeline::watched_source_extensions;
 use serde_json::Value;
 
@@ -34,10 +34,7 @@ fn manifest_path() -> PathBuf {
 
 /// The VSIX manifest parsed as structured data.
 fn vsix_manifest() -> Result<Value> {
-    let path = manifest_path();
-    let text = fs::read_to_string(&path)
-        .with_context(|| format!("read VSIX manifest at {}", path.display()))?;
-    serde_json::from_str(&text).context("parse VSIX manifest as JSON")
+    deslop_test_support::read_json(&manifest_path())
 }
 
 /// Every string in the manifest's top-level `field` array.

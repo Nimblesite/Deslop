@@ -44,6 +44,35 @@ pub(crate) fn outputs_under(dir: &Path) -> RunOutputs {
     }
 }
 
+/// Reads the raw JSON report text a run wrote under `<tmp>/report.json`.
+///
+/// Tests that assert on the report's *text* (a substring of the rendered
+/// JSON) read it through here rather than re-deriving the path.
+pub(crate) fn report_json_text(tmp: &TempDir) -> Result<String> {
+    Ok(fs::read_to_string(
+        tmp.path().join(REPORT_OUTPUT_STEM).with_extension("json"),
+    )?)
+}
+
+/// Opens a fixture-driven CLI scenario: a fresh temp dir, the three
+/// report paths the run will write under it, and a `deslop` command
+/// already pointed at the named fixture with `--output <tmp>/report`.
+/// The caller MUST bind the returned [`TempDir`] — dropping it deletes
+/// the workspace the command is about to write into.
+pub(crate) fn fixture_run(name: &str) -> Result<(TempDir, RunOutputs, Command)> {
+    let tmp = tempfile::tempdir()?;
+    let outputs = outputs_under(tmp.path());
+    let command = fixture_command(name, &tmp.path().join(REPORT_OUTPUT_STEM))?;
+    Ok((tmp, outputs, command))
+}
+
+/// Opens a fixture-driven CLI scenario that asserts only on the process
+/// result, not on the written report.
+pub(crate) fn fixture_run_command(name: &str) -> Result<(TempDir, Command)> {
+    let (tmp, _outputs, command) = fixture_run(name)?;
+    Ok((tmp, command))
+}
+
 pub(crate) fn deslop_command(scan_root: &Path, output_prefix: &Path) -> Result<Command> {
     let mut cmd = Command::cargo_bin("deslop")?;
     let _cmd = cmd.arg(scan_root).arg("--output").arg(output_prefix);
