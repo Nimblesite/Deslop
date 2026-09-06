@@ -108,6 +108,7 @@ pub(crate) mod verbatim_subgroup;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
+    ops::RangeInclusive,
     path::{Path, PathBuf},
 };
 
@@ -537,3 +538,39 @@ pub(crate) fn visible_cluster_lines(report: &Value) -> Vec<String> {
 /// explicitly with `use crate::common::go_scope::*;`, for the same reason
 /// as `signals`.
 pub(crate) mod go_scope;
+
+/// Asserts the cluster's occurrences are exactly `spans` in `file`, in line
+/// order. Anything wider has lumped in code that is not duplicated;
+/// anything narrower has published a fragment of the authored declaration
+/// instead of the declaration ([PIPELINE-CLUSTER-EXACT-SCOPE]).
+pub(crate) fn assert_occurrence_extents(
+    cluster: &Value,
+    file: &str,
+    spans: &[RangeInclusive<u64>],
+) -> Result<()> {
+    let mut extents: Vec<(String, u64, u64)> = occurrences(cluster)
+        .iter()
+        .map(|occurrence| {
+            Ok((
+                occurrence_path(occurrence)?.to_owned(),
+                field(occurrence, "start_line")
+                    .as_u64()
+                    .ok_or_else(|| anyhow::anyhow!("start_line missing: {occurrence:#}"))?,
+                field(occurrence, "end_line")
+                    .as_u64()
+                    .ok_or_else(|| anyhow::anyhow!("end_line missing: {occurrence:#}"))?,
+            ))
+        })
+        .collect::<Result<_>>()?;
+    extents.sort();
+    let expected: Vec<(String, u64, u64)> = spans
+        .iter()
+        .map(|lines| (file.to_owned(), *lines.start(), *lines.end()))
+        .collect();
+    assert_eq!(
+        extents, expected,
+        "each occurrence is the authored declaration, never its container \
+         and never a fragment of it: {cluster:#}"
+    );
+    Ok(())
+}

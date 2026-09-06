@@ -27,9 +27,9 @@ use crate::{
     ast::NormalizedNode,
     cluster::scope::DeclarationScopes,
     content::pair_content_agreement,
-    fingerprint::Fingerprint,
+    fingerprint::{ranges_overlap, Fingerprint},
     pair::{
-        alignment_required, crosses_files, CandidatePair, ExactFunctionAnchors,
+        alignment_required, crosses_files, CandidatePair, ExactClones,
         RESCUE_MIN_CONTENT_AGREEMENT, SHARED_SUBTREE_MIN_NODE_COUNT, SHARED_SUBTREE_MIN_OVERLAP,
     },
     state::FileId,
@@ -48,7 +48,13 @@ pub(super) struct RescueContext<'a, S, L: BuildHasher> {
     languages: &'a HashMap<FileId, &'static str, L>,
     /// The exact whole-function clones a container may not merely wrap
     /// ([FUSED-SHARED-SUBTREE-ECHO]).
-    anchors: ExactFunctionAnchors,
+    anchors: ExactClones,
+    /// The exact clones inside each file, for the same-file scope rule
+    /// ([FUSED-SHARED-SUBTREE-SAME-FILE]).
+    interiors: ExactClones,
+    /// Authored declarations per file, for the same-file scope rule
+    /// ([FUSED-SHARED-SUBTREE-SAME-FILE]).
+    scopes: DeclarationScopes<'a, L>,
 }
 
 impl<'a, S: BuildHasher, L: BuildHasher> RescueContext<'a, S, L> {
@@ -61,12 +67,65 @@ impl<'a, S: BuildHasher, L: BuildHasher> RescueContext<'a, S, L> {
         languages: &'a HashMap<FileId, &'static str, L>,
     ) -> Self {
         let scopes = DeclarationScopes::new(trees, languages);
+        let anchors = ExactClones::whole_functions_across_files(pairs, fingerprints, &scopes);
 
         Self {
             tree_index: trees.iter().map(|tree| (tree.file_id, tree)).collect(),
             sources,
             languages,
-            anchors: ExactFunctionAnchors::index(pairs, fingerprints, &scopes),
+            anchors,
+            interiors: ExactClones::within_one_file(pairs, fingerprints),
+            scopes,
+        }
+    }
+
+    /// [FUSED-SHARED-SUBTREE-SAME-FILE] Whether the rescue may measure
+    /// this pair at all.
+    ///
+    /// Across files every eligible pair is measured. Inside one file the
+    /// route is open only to two endpoints that are each a whole
+    /// authored declaration — modifier through closing brace — and are
+    /// disjoint. Two methods that drifted apart inside one file are the
+    /// same duplication as two that drifted apart across files; a window
+    /// cut over part of one, a nested view of another, and a table row
+    /// are none of them a declaration. Admitting those unioned a file's
+    /// subtrees into a single component that the same-file collapse then
+    /// reduced to one logical location, and the file's real duplication
+    /// disappeared rather than being reported
+    /// (`issue_119_role_gate_exercised`).
+    fn measures(&self, left: &Fingerprint, right: &Fingerprint) -> bool {
+        crosses_files(left, right)
+            || (!ranges_overlap(left, right)
+                && self.scopes.aligned_function(left).is_some()
+                && self.scopes.aligned_function(right).is_some()
+                && self.shares_a_copied_interior(left, right))
+    }
+
+    /// [FUSED-SHARED-SUBTREE-SAME-FILE] Whether the two declarations
+    /// still hold a copied interior: a Merkle-equal clone inside both of
+    /// them, substantive enough to clear the floor every rescued
+    /// endpoint clears ([`SHARED_SUBTREE_MIN_NODE_COUNT`]).
+    ///
+    /// This is the discriminator between a copy that drifted and a
+    /// family that never was one. `csharp-merge-drift`'s two methods
+    /// still share four whole statements outright, 32 nodes of authored
+    /// code the edit never touched, while the `dart-issue-197` settings
+    /// accessors share a skeleton and no statement at all: their overlap
+    /// is 0.81 to 0.88, indistinguishable from the drifted pair's 0.84,
+    /// and their raw-content agreement reaches 0.56 against its 0.55.
+    /// Shape and agreement cannot separate them. Copied code can.
+    fn shares_a_copied_interior(&self, left: &Fingerprint, right: &Fingerprint) -> bool {
+        self.interiors.enclosed_nodes(left, right) >= SHARED_SUBTREE_MIN_NODE_COUNT
+    }
+
+    /// The exact clones this pair could merely be echoing: across files
+    /// the whole-function runs, inside one file the file's own exact
+    /// clones ([FUSED-SHARED-SUBTREE-ECHO]).
+    fn echo_anchors(&self, left: &Fingerprint, right: &Fingerprint) -> &ExactClones {
+        if crosses_files(left, right) {
+            &self.anchors
+        } else {
+            &self.interiors
         }
     }
 }
@@ -192,10 +251,10 @@ fn measure_one<S: BuildHasher, L: BuildHasher>(
         return;
     };
     tally.eligible();
-    if !crosses_files(left, right) {
+    if !context.measures(left, right) {
         return;
     }
-    tally.cross_file();
+    tally.in_scope(crosses_files(left, right));
     pair.shared_subtree_overlap = measurer.rescue_overlap(left, right);
     record_rescue_verdict(pair, left, right, context, measurer, tally);
 }
@@ -250,7 +309,7 @@ fn is_container_echo<S: BuildHasher, L: BuildHasher>(
     right: &Fingerprint,
     context: &RescueContext<'_, S, L>,
 ) -> bool {
-    let Some(claimed) = context.anchors.claimed_nodes(left, right) else {
+    let Some(claimed) = context.echo_anchors(left, right).claimed_nodes(left, right) else {
         return false;
     };
     let larger = left.node_count.max(right.node_count);
@@ -263,206 +322,7 @@ fn usize_to_f64(nodes: usize) -> f64 {
     u32::try_from(nodes).map_or(f64::MAX, f64::from)
 }
 
+/// [PERF-FLUTTER-TODO-RESCUE] Sharded and serial rescue must agree.
 #[cfg(test)]
-mod shard_equivalence_tests {
-    //! [PERF-FLUTTER-TODO-RESCUE] The sharded rescue must produce the
-    //! byte-identical pair outcomes and counters as the serial path:
-    //! every measurement is a pure function of the corpus, so sharding
-    //! may change which thread computes a value but never the value
-    //! (`docs/release-audit.md`, "parallel rescue").
-
-    use std::path::PathBuf;
-
-    use super::{
-        apply_shared_subtree_rescue, measure_chunk, RescueContext, RescueTally, MIN_SHARD_WORK,
-    };
-    use crate::{
-        ast::NormalizedNode,
-        fingerprint::Fingerprint,
-        lang::LanguageParser,
-        pair::{
-            CandidatePair, PairScore, FUSED_THRESHOLD, LSH_ONLY_MIN_JACCARD,
-            LSH_ONLY_MIN_NODE_COUNT, SHARED_SUBTREE_MIN_JACCARD,
-        },
-        state::{FileId, FileRegistry},
-    };
-
-    /// One serial shard over `chunk`: the reference a single worker
-    /// computes, assembled from the very `measure_chunk` the workers
-    /// run so the reference can never drift from the live path.
-    fn run_shard<S: std::hash::BuildHasher, L: std::hash::BuildHasher>(
-        chunk: &mut [CandidatePair],
-        fingerprints: &[Fingerprint],
-        trees: &[NormalizedNode],
-        sources: &std::collections::HashMap<crate::state::FileId, Vec<u8>, S>,
-        languages: &std::collections::HashMap<crate::state::FileId, &'static str, L>,
-    ) -> (RescueTally, crate::overlap::MeasureStats) {
-        let mut measurer = crate::overlap::OverlapMeasurer::new(trees);
-        let mut tally = RescueTally::new();
-        let context = RescueContext::new(chunk, fingerprints, trees, sources, languages);
-        measure_chunk(chunk, fingerprints, &context, &mut measurer, &mut tally);
-        let stats = measurer.stats();
-        (tally, stats)
-    }
-
-    /// Parses `source` as Rust and fingerprints its root.
-    fn parse(source: &str, file_id: FileId) -> Result<(NormalizedNode, Fingerprint), String> {
-        let tree = crate::lang::rust_lang::RustParser
-            .parse_and_normalize(source.as_bytes(), file_id)
-            .map_err(|error| format!("the Rust fixture must parse: {error}"))?;
-        let whole = Fingerprint {
-            hash: [0_u8; 32],
-            file_id,
-            byte_range: tree.byte_range,
-            node_count: count_nodes(&tree),
-        };
-        Ok((tree, whole))
-    }
-
-    /// Total nodes in a subtree, including the root.
-    fn count_nodes(node: &NormalizedNode) -> usize {
-        node.children
-            .iter()
-            .map(count_nodes)
-            .fold(1, usize::saturating_add)
-    }
-
-    /// A wide function past every gate: well over the LSH-only floor
-    /// and large enough for real overlap measurement.
-    fn wide_function(statements: usize) -> String {
-        let body = (0..statements).fold(String::new(), |mut body, index| {
-            use std::fmt::Write as _;
-            let _written = writeln!(body, "    total = total + {index};");
-            body
-        });
-        format!("fn alpha(seed: u32) -> u32 {{\n    let mut total = seed;\n{body}    total\n}}\n")
-    }
-
-    /// A rescue-eligible cross-file pair over two whole-file endpoints.
-    fn eligible_pair(nodes: usize) -> CandidatePair {
-        CandidatePair {
-            left: 0,
-            right: 1,
-            endpoint_node_counts: (nodes, nodes),
-            lsh_only_node_floor: LSH_ONLY_MIN_NODE_COUNT,
-            lsh_only_min_jaccard: LSH_ONLY_MIN_JACCARD,
-            fused_min_score: FUSED_THRESHOLD,
-            shared_subtree_overlap: 0.0,
-            score: PairScore {
-                structural: 0.0,
-                token_jaccard: SHARED_SUBTREE_MIN_JACCARD,
-                embedding_cos: 0.0,
-            },
-        }
-    }
-
-    /// Twice [`MIN_SHARD_WORK`] pairs must measure identically whether
-    /// the population runs through the (thread-pooling) entry point or
-    /// one `run_shard` over the whole list — the serial reference a
-    /// worker computes. Shard boundaries are pinned separately: two
-    /// disjoint `run_shard` calls over the halves must reproduce the
-    /// whole-list values, and their merged tallies must account for
-    /// every pair. A blind rescue (zero measured) fails, it does not
-    /// pass vacuously.
-    #[test]
-    fn sharded_rescue_matches_serial_outcomes() -> Result<(), String> {
-        let pair_count = MIN_SHARD_WORK.get().saturating_mul(2);
-        let mut registry = FileRegistry::new();
-        let left_id = registry.register(PathBuf::from("left.rs"));
-        let right_id = registry.register(PathBuf::from("right.rs"));
-        let left_source = wide_function(120);
-        let right_source = wide_function(121);
-        let left = parse(&left_source, left_id)?;
-        let right = parse(&right_source, right_id)?;
-        let nodes = left.1.node_count;
-        let fingerprints = [left.1.clone(), right.1.clone()];
-        let trees = [left.0, right.0];
-        let sources = std::collections::HashMap::from([
-            (left_id, left_source.into_bytes()),
-            (right_id, right_source.into_bytes()),
-        ]);
-        let languages = std::collections::HashMap::from([(left_id, "rust"), (right_id, "rust")]);
-        let fixture = || {
-            (0..pair_count)
-                .map(|_| eligible_pair(nodes))
-                .collect::<Vec<_>>()
-        };
-
-        // The threaded entry point — whichever core count routes it.
-        let mut sharded = fixture();
-        apply_shared_subtree_rescue(&mut sharded, &fingerprints, &trees, &sources, &languages);
-
-        // The serial reference: one measurer, one tally, every pair.
-        let mut serial = fixture();
-        let (serial_tally, serial_stats) =
-            run_shard(&mut serial, &fingerprints, &trees, &sources, &languages);
-
-        for (index, (shard_pair, serial_pair)) in sharded.iter().zip(&serial).enumerate() {
-            assert!(
-                (shard_pair.shared_subtree_overlap - serial_pair.shared_subtree_overlap).abs()
-                    < f64::EPSILON,
-                "pair {index}: sharded overlap {} must equal serial {}",
-                shard_pair.shared_subtree_overlap,
-                serial_pair.shared_subtree_overlap
-            );
-            assert!(
-                shard_pair.shared_subtree_overlap > 0.0,
-                "pair {index}: the fixture is a real near-duplicate — a rescue that measures \
-                 nothing is blind, and overlap was {}",
-                shard_pair.shared_subtree_overlap
-            );
-        }
-
-        // Shard boundaries change nothing: halves measured as separate
-        // shards reproduce the whole-list values exactly.
-        let mut halved = fixture();
-        let midpoint = pair_count / 2;
-        let (head, tail) = halved.split_at_mut(midpoint);
-        let (head_tally, head_stats) = run_shard(head, &fingerprints, &trees, &sources, &languages);
-        let (tail_tally, tail_stats) = run_shard(tail, &fingerprints, &trees, &sources, &languages);
-        for (index, (half_pair, serial_pair)) in halved.iter().zip(&serial).enumerate() {
-            assert!(
-                (half_pair.shared_subtree_overlap - serial_pair.shared_subtree_overlap).abs()
-                    < f64::EPSILON,
-                "pair {index}: shard-split overlap {} must equal whole-list {}",
-                half_pair.shared_subtree_overlap,
-                serial_pair.shared_subtree_overlap
-            );
-        }
-
-        // The merged shard counters account for every pair, exactly as
-        // the module contract promises: absorb halves, compare to the
-        // whole-list tally, and check the stats fold.
-        let mut merged = head_tally;
-        merged.absorb(&tail_tally);
-        assert_eq!(
-            merged.scanned, serial_tally.scanned,
-            "merged shard tallies must count every scanned pair"
-        );
-        assert_eq!(
-            merged.eligible, serial_tally.eligible,
-            "merged shard tallies must count every eligible pair"
-        );
-        assert_eq!(
-            merged.cross_file, serial_tally.cross_file,
-            "merged shard tallies must count every cross-file pair"
-        );
-        assert_eq!(
-            merged.measured, serial_tally.measured,
-            "merged shard tallies must count every measured pair"
-        );
-        let u64_count = u64::try_from(pair_count).unwrap_or(u64::MAX);
-        assert_eq!(
-            merged.measured, u64_count,
-            "every fixture pair is eligible and cross-file: all {pair_count} must be measured, \
-             got {}",
-            merged.measured
-        );
-        let folded_stats = head_stats.add(tail_stats);
-        assert_eq!(
-            folded_stats.alignments, serial_stats.alignments,
-            "merged measurement stats must fold to the whole-list stats"
-        );
-        Ok(())
-    }
-}
+#[path = "rescue/shard_equivalence.rs"]
+mod shard_equivalence_tests;

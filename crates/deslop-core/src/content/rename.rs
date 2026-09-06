@@ -24,6 +24,11 @@ use super::{
     vacuous_share,
 };
 
+use literal_echo::{affirming_literal_count, literal_echoes, LiteralEchoes};
+
+/// Literal echoes of a rename, and the byte transform that proves one.
+mod literal_echo;
+
 /// Minimum occurrences of a substituted identifier pair before it counts
 /// as rename evidence ([TECH-PMATCH-BAKER]). In Baker's prev-encoding a
 /// parameter symbol's first occurrence matches anything and constrains
@@ -47,14 +52,10 @@ const RENAME_CORROBORATION_MIN_OCCURRENCES: usize = 2;
 /// routing floor.
 const RENAME_EVIDENCE_HALF_MASS: f64 = 4.0;
 
-/// Literal echoes of a rename ([REPAIR-RENAME-LITERAL-ECHO]).
-mod echo;
-
 /// The contradiction-free rename test ([FUSED-CONTENT-GATE-RENAME]).
 mod consistent;
 
 pub(super) use consistent::pair_rename_is_consistent;
-use echo::{affirming_literal_count, literal_echoes};
 
 /// Type-2 rename evidence between two members ([TECH-PMATCH-BAKER]): one
 /// pooled coverage over the pair's constrained identifier positions and
@@ -67,9 +68,11 @@ use echo::{affirming_literal_count, literal_echoes};
 /// rename family is the #197 sibling shape, and its literal axis must
 /// vouch on its own before a rename alone admits the pair.
 /// The pool opens only where the literal population affirms at all:
-/// aligned literals with zero preservation and zero echoes are the
+/// constrained literals with zero preservation and zero echoes are the
 /// #134 stride family — every substantive byte disagrees and nothing
-/// outside the substitution vouches, so the axis is `0.0`.
+/// outside the substitution vouches, so the axis is `0.0`. Which
+/// literals are constrained is [`LiteralEvidence::measure`]'s call
+/// ([FUSED-CONTENT-GATE-PARAMETER]).
 ///
 /// Baker's prev-encoding is the discriminator the deleted literal-anchor
 /// cliff could not provide: a substituted identifier pair seen once is
@@ -99,38 +102,141 @@ pub(super) fn pair_rename_consistency<S: BuildHasher>(
     if !frontiers_aligned(canonical, member) {
         return 0.0;
     }
-    let echoes = literal_echoes(canonical, member, sources);
+    let positions = literal_positions(canonical, member);
+    let echoes = literal_echoes(canonical, member, sources, &positions);
     let mapping = rename_mapping(
         &population(&canonical.keys, &member.keys, Population::Identifier),
         &echoes.per_substitution,
     );
-    let literal_total = population(&canonical.keys, &member.keys, Population::Literal).len();
-    let affirming_literals = affirming_literal_count(canonical, member, &echoes);
-    if affirming_literals == 0 && literal_total > 0 {
+    let literals = LiteralEvidence::measure(&positions, &echoes, &mapping);
+    if literals.affirming == 0 && literals.constrained > 0 {
         return 0.0;
     }
-    // A window carved from inside a function that carries no literal at
-    // all offers the substitution nothing to contradict — the literal
-    // that would is on the line the window left out — so a substitution
-    // corroborated only by its own repetition cannot anchor it. Its
-    // anchors are the positions the rename did not supply: identity
-    // identifiers ([FUSED-CONTENT-GATE-INTERIOR]). A whole authored
-    // function or module with no literal is judged as before.
-    let identifier_anchors = if scope.interior && literal_total == 0 {
-        mapping.identity
-    } else {
-        mapping.explained
-    };
-    let anchors = affirming_literals.saturating_add(identifier_anchors);
-    let coverage = if scope.same_file {
-        vacuous_share(affirming_literals, literal_total)
-            .min(vacuous_share(mapping.explained, mapping.constrained))
-    } else {
-        let explained = mapping.explained.saturating_add(affirming_literals);
-        let constrained = mapping.constrained.saturating_add(literal_total);
-        vacuous_share(explained, constrained)
-    };
+    let anchors = literals
+        .affirming
+        .saturating_add(mapping.anchors(scope, literals.aligned));
+    let coverage = literals.coverage(&mapping, scope);
     coverage * evidence_weight(coverage, anchors)
+}
+
+/// The pair's aligned literal positions, split into what the coverage
+/// must explain and what it does explain ([FUSED-CONTENT-GATE],
+/// [FUSED-CONTENT-GATE-PARAMETER]).
+struct LiteralEvidence {
+    /// Every aligned literal position, whatever it says.
+    aligned: usize,
+    /// Positions the coverage must explain — see
+    /// [`LiteralEvidence::measure`].
+    constrained: usize,
+    /// Positions that affirm the copy: preserved bytes or an echo of a
+    /// bijection-explained substitution.
+    affirming: usize,
+}
+
+impl LiteralEvidence {
+    /// Measures one pair's literal positions.
+    ///
+    /// A preserved literal and a literal echo affirm the copy at the
+    /// position itself. A drifted literal that echoes nothing
+    /// contradicts the *rename* the identifier bijection claims, so it
+    /// is constrained and unexplained — the `#134` stride family renames
+    /// consistently end to end and diverges at one aligned literal, and
+    /// that one position is the whole difference between it and a
+    /// reportable Type-2 clone.
+    ///
+    /// [FUSED-CONTENT-GATE-PARAMETER] Where the bijection claims no
+    /// rename — no substituted identifier position is corroborated —
+    /// there is no claim for a drifted literal to contradict, and
+    /// [TECH-PMATCH-BAKER]'s prev-encoding applies to the literal
+    /// alphabet exactly as it does to the identifier one: a substitution
+    /// seen *once* is an unconstrained wildcard. Two declarations whose
+    /// every identifier position is byte-identical and whose literals
+    /// each substitute once are one parameterised declaration, and those
+    /// literals are its parameters — `csharp-merge-manyholes` keeps
+    /// every identifier and every call and substitutes at all twelve
+    /// literal positions, which is what `[AUTOFIX-MERGE-GATE]`
+    /// independently calls a clone too parameterised to merge
+    /// mechanically.
+    ///
+    /// A *repeated* substitution is not a wildcard. It is the sibling
+    /// family's own subject carried through its body — the star-shadow
+    /// fixture's `ApplyAlpha` says `"alpha"` three times against
+    /// `"dup"` — and it stays constrained, so a sibling that shares a
+    /// shape and no byte cannot join the copy it sits beside. An
+    /// inconsistent substitution stays constrained too: it contradicts
+    /// the parameterisation as surely as it would a rename.
+    fn measure(
+        positions: &[LiteralPosition],
+        echoes: &LiteralEchoes,
+        mapping: &RenameMapping,
+    ) -> Self {
+        let affirming = affirming_literal_count(positions, echoes);
+        let pairs = literal_pairs(positions);
+        let bijection = ModalBijection::over(&substituted_pairs(&pairs));
+        let occurrences = pair_counts(pairs.iter().copied());
+        let constrained = if mapping.renames() {
+            positions.len()
+        } else {
+            positions
+                .iter()
+                .filter(|(index, keys)| {
+                    keys.0 == keys.1
+                        || echoes.positions.contains(index)
+                        || !bijection.explains(keys)
+                        || occurrences.get(keys).copied().unwrap_or_default()
+                            >= RENAME_CORROBORATION_MIN_OCCURRENCES
+                })
+                .count()
+        };
+        Self {
+            aligned: positions.len(),
+            constrained,
+            affirming,
+        }
+    }
+
+    /// The pooled coverage over this pair's constrained positions.
+    ///
+    /// A cross-file pair pools the literal and identifier populations
+    /// into one share. A same-file pair keeps the stricter min of the
+    /// two, matching the promote floor's conservatism: a same-file
+    /// rename family is the `#197` sibling shape, and its literal axis
+    /// must vouch on its own.
+    fn coverage(&self, mapping: &RenameMapping, scope: PairScope) -> f64 {
+        if scope.same_file {
+            return vacuous_share(self.affirming, self.constrained)
+                .min(vacuous_share(mapping.explained, mapping.constrained));
+        }
+        vacuous_share(
+            mapping.explained.saturating_add(self.affirming),
+            mapping.constrained.saturating_add(self.constrained),
+        )
+    }
+}
+
+/// One aligned literal position: its frontier index and the two content
+/// keys at it. The frontier is walked once per pair and every literal
+/// measure reads the result — the affirming count, the echo candidates,
+/// and [`LiteralEvidence`].
+pub(super) type LiteralPosition = (usize, (u64, u64));
+
+/// Aligned positions where both members carry a literal.
+fn literal_positions(canonical: &MemberContent, member: &MemberContent) -> Vec<LiteralPosition> {
+    canonical
+        .keys
+        .iter()
+        .zip(member.keys.iter())
+        .enumerate()
+        .filter(|(_, (left, right))| {
+            left.population == Population::Literal && right.population == Population::Literal
+        })
+        .map(|(index, (left, right))| (index, (left.key, right.key)))
+        .collect()
+}
+
+/// The key pairs of [`literal_positions`], for the literal bijection.
+fn literal_pairs(positions: &[LiteralPosition]) -> Vec<(u64, u64)> {
+    positions.iter().map(|(_, keys)| *keys).collect()
 }
 
 /// Rename-mapping evidence over one pair's aligned identifier positions
@@ -165,6 +271,32 @@ struct RenameMapping {
     /// rename's own proof, as opposed to a one-shot substitution that
     /// constrains nothing.
     corroborated: usize,
+}
+
+impl RenameMapping {
+    /// Whether the pair claims a rename at all: some substituted
+    /// identifier position is explained, so a bijection is asserting
+    /// that this copy was renamed rather than merely reused.
+    fn renames(&self) -> bool {
+        self.explained > self.identity
+    }
+
+    /// The identifier positions that anchor the proof.
+    ///
+    /// A window carved from inside a function that carries no literal at
+    /// all offers the substitution nothing to contradict — the literal
+    /// that would is on the line the window left out — so a substitution
+    /// corroborated only by its own repetition cannot anchor it. Its
+    /// anchors are the positions the rename did not supply: identity
+    /// identifiers ([FUSED-CONTENT-GATE-INTERIOR]). A whole authored
+    /// function or module with no literal is judged as before.
+    fn anchors(&self, scope: PairScope, aligned_literals: usize) -> usize {
+        if scope.interior && aligned_literals == 0 {
+            self.identity
+        } else {
+            self.explained
+        }
+    }
 }
 
 /// Measures [`RenameMapping`] for one pair's identifier positions,
@@ -227,7 +359,7 @@ fn rename_mapping(
 /// The aligned positions whose raw bytes differ — [TECH-PMATCH-BAKER]'s
 /// parameter alphabet, the population [`rename_mapping`] derives its
 /// bijection over.
-fn substituted_pairs(identifiers: &[(u64, u64)]) -> Vec<(u64, u64)> {
+pub(super) fn substituted_pairs(identifiers: &[(u64, u64)]) -> Vec<(u64, u64)> {
     identifiers
         .iter()
         .filter(|(left, right)| left != right)

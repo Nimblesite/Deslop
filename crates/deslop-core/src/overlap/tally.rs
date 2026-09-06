@@ -40,9 +40,16 @@ pub(super) struct RescueTally {
     /// threshold despite token corroboration, or carried by the token axis
     /// alone ([`crate::pair::alignment_required`]).
     pub(super) eligible: u64,
-    /// Eligible pairs whose endpoints live in different files — the
-    /// population handed to the measurer.
+    /// Eligible pairs whose endpoints live in different files — part of
+    /// the population handed to the measurer.
     pub(super) cross_file: u64,
+    /// Eligible pairs whose two endpoints are whole authored
+    /// declarations inside one file — the rest of that population
+    /// ([FUSED-SHARED-SUBTREE-SAME-FILE]). Counted apart from
+    /// `cross_file` because the same-file route is the narrow one: a
+    /// same-file count that climbs with corpus size is the scope rule
+    /// leaking, and conflating the two would hide it.
+    pub(super) same_file: u64,
     /// Cross-file pairs the measurer answered, from any route.
     pub(super) measured: u64,
     /// Measured pairs whose overlap cleared
@@ -78,6 +85,7 @@ impl RescueTally {
             scanned: 0,
             eligible: 0,
             cross_file: 0,
+            same_file: 0,
             measured: 0,
             rescued: 0,
             content_gate_rejected: 0,
@@ -96,9 +104,13 @@ impl RescueTally {
         bump(&mut self.eligible);
     }
 
-    /// Records one pair past the cross-file gate.
-    pub(super) fn cross_file(&mut self) {
-        bump(&mut self.cross_file);
+    /// Records one pair past the scope gate, on the side it came in.
+    pub(super) fn in_scope(&mut self, crosses_files: bool) {
+        if crosses_files {
+            bump(&mut self.cross_file);
+        } else {
+            bump(&mut self.same_file);
+        }
     }
 
     /// Records one measured pair and whether it cleared the admission
@@ -130,6 +142,7 @@ impl RescueTally {
         self.scanned = self.scanned.saturating_add(other.scanned);
         self.eligible = self.eligible.saturating_add(other.eligible);
         self.cross_file = self.cross_file.saturating_add(other.cross_file);
+        self.same_file = self.same_file.saturating_add(other.same_file);
         self.measured = self.measured.saturating_add(other.measured);
         self.rescued = self.rescued.saturating_add(other.rescued);
         self.content_gate_rejected = self
@@ -156,6 +169,7 @@ impl RescueTally {
             scanned = self.scanned,
             eligible = self.eligible,
             cross_file = self.cross_file,
+            same_file = self.same_file,
             measured = self.measured,
             rescued_pairs = self.rescued,
             content_gate_rejected = self.content_gate_rejected,

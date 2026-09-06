@@ -198,3 +198,54 @@ pub fn write_dart_data_table_fixture(src: &Path) -> Result<()> {
     )?;
     Ok(())
 }
+
+/// The body both copies of the star-shadow fixture's duplicated method
+/// share, byte for byte. One constant, so the two copies cannot drift
+/// into a near-miss and the assertions can name the copied bytes.
+pub const CSHARP_COPIED_BODY: &str = "        policy.SetCeiling(\"dup\", 250);\n        \
+     policy.EnableAlerts(\"dup\");\n        policy.Audit(\"dup\", 250);\n        \
+     policy.Commit();\n";
+
+/// The sibling's body: the same four statements over different literals,
+/// so it shares the copied pair's normalised shape and none of its bytes.
+const CSHARP_SIBLING_BODY: &str = "        policy.SetCeiling(\"alpha\", 100);\n        \
+     policy.EnableAlerts(\"alpha\");\n        policy.Audit(\"alpha\", 100);\n        \
+     policy.Commit();\n";
+
+/// Wraps `body` in a `Rates.cs` method declaration called `name`.
+fn csharp_rate_method(name: &str, body: &str) -> String {
+    format!("    public void {name}(RatePolicy policy)\n    {{\n{body}    }}\n")
+}
+
+/// Writes the same-file star-shadow fixture ([FUSED-CANDIDATE-BUCKET-STAR]
+/// / [FUSED-SHARED-SUBTREE-SAME-FILE]): one `Rates.cs` holding
+/// `ApplyDelta` and `ApplyEpsilon` over [`CSHARP_COPIED_BODY`], optionally
+/// preceded by `ApplyAlpha` — the same shape carrying different literals.
+///
+/// The sibling changes no byte of the copied pair. It shares the pair's
+/// structural hash, so it joins the pair's bucket and, sorting first,
+/// becomes the only member every other member is paired against. The
+/// copied pair is then never a candidate at all, and one unrelated
+/// sibling hides a copy-paste duplicate.
+///
+/// # Errors
+///
+/// Returns an error when the fixture directory or file cannot be written.
+pub fn write_csharp_star_shadow_fixture(src: &Path, with_sibling: bool) -> Result<()> {
+    std::fs::create_dir_all(src)?;
+    let sibling = if with_sibling {
+        format!(
+            "{}\n",
+            csharp_rate_method("ApplyAlpha", CSHARP_SIBLING_BODY)
+        )
+    } else {
+        String::new()
+    };
+    let copied = csharp_rate_method("ApplyDelta", CSHARP_COPIED_BODY);
+    let pasted = csharp_rate_method("ApplyEpsilon", CSHARP_COPIED_BODY);
+    std::fs::write(
+        src.join("Rates.cs"),
+        format!("public class Rates\n{{\n{sibling}{copied}\n{pasted}}}\n"),
+    )?;
+    Ok(())
+}

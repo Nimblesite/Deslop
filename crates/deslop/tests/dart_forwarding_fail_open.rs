@@ -105,6 +105,13 @@ struct Scenario {
     duplication_percent: f64,
     /// Small windows the lower floor admits and the noise bank convicts.
     hidden_at_lower_floor: u64,
+    /// Occurrence counts per visible cluster at [`LOWER_FLOOR`], when a
+    /// finer floor sees a duplication the shared one cannot fingerprint.
+    /// Empty where both floors report the same clusters.
+    finer_sizes: &'static [u64],
+    /// Every occurrence line at [`LOWER_FLOOR`], in report order, paired
+    /// with `finer_sizes`.
+    finer_lines: &'static [(u64, u64)],
     members: &'static [&'static str],
     literals: &'static [&'static str],
     why: &'static str,
@@ -120,6 +127,8 @@ const COMPUTING_PAIR: Scenario = Scenario {
     analysed_loc: 21,
     duplication_percent: 28.571_428_571_428_57,
     hidden_at_lower_floor: 0,
+    finer_sizes: &[],
+    finer_lines: &[],
     members: &["scaledDomestic", "scaledExport"],
     literals: &["* rate + 7", "* factor + 7"],
     why: "two one-statement Dart methods that multiply and add are liftable \
@@ -138,6 +147,8 @@ const BUSINESS_PAIR: Scenario = Scenario {
     analysed_loc: 48,
     duplication_percent: 16.666_666_666_666_664,
     hidden_at_lower_floor: 2,
+    finer_sizes: &[],
+    finer_lines: &[],
     members: &[
         "standardTotal",
         "premiumTotal",
@@ -162,6 +173,8 @@ const AFTER_DELEGATION: Scenario = Scenario {
     analysed_loc: 47,
     duplication_percent: 17.021_276_595_744_68,
     hidden_at_lower_floor: 1,
+    finer_sizes: &[],
+    finer_lines: &[],
     members: &[
         "standardTotal",
         "premiumTotal",
@@ -186,6 +199,8 @@ const BEFORE_DELEGATION: Scenario = Scenario {
     analysed_loc: 48,
     duplication_percent: 16.666_666_666_666_664,
     hidden_at_lower_floor: 0,
+    finer_sizes: &[],
+    finer_lines: &[],
     members: &["quarterlyFee", "annualCharge", "normalise", "client.submit"],
     literals: &["\"standard\"", "\"premium\"", "100", "250"],
     why: "the class computes on its own inputs through `normalise` and only \
@@ -204,6 +219,25 @@ const DUPLICATE_ROUTE_WRAPPER_FAMILY: Scenario = Scenario {
     analysed_loc: 45,
     duplication_percent: 33.333_333_333_333_33,
     hidden_at_lower_floor: 0,
+    // [FUSED-CANDIDATE-BUCKET-STAR] At eight nodes the wrappers' bodies
+    // are fingerprinted in their own right, and `resetDelta`'s and
+    // `resetEpsilon`'s are byte-identical — the dead route this fixture
+    // exists to catch, which its header says is "visible only in the
+    // proven bodies" because the declarations differ by name. The family
+    // view cannot show it; this one names it. Both publish: the narrow
+    // view covers a strict sub-region of the wide one, and
+    // [PIPELINE-CLUSTER-SUBSUME] treats one-sided containment as two
+    // findings rather than a re-description.
+    finer_sizes: &[DUPLICATE_ROUTE_FAMILY, PAIR],
+    finer_lines: &[
+        (22, 24),
+        (26, 28),
+        (30, 32),
+        (34, 36),
+        (38, 40),
+        (35, 35),
+        (39, 39),
+    ],
     members: &[
         "resetAlpha",
         "resetBeta",
@@ -275,6 +309,42 @@ fn assert_family(scenario: &Scenario, report: &Value, hidden: u64) {
     );
 }
 
+/// The lower floor's family, which may be finer than the shared one.
+///
+/// A floor fine enough to fingerprint a wrapper's body can prove a
+/// duplication the declaration view cannot express, so a scenario may
+/// name what that floor adds. The metrics do not move with it: the finer
+/// occurrences lie inside lines the wider view already counted.
+fn assert_lower_floor(scenario: &Scenario, report: &Value, hidden: u64) {
+    if scenario.finer_sizes.is_empty() {
+        assert_family(scenario, report, hidden);
+        return;
+    }
+    let why = scenario.why;
+    let sizes: Vec<u64> = clusters(report).iter().map(cluster_size).collect();
+    assert_eq!(
+        sizes, scenario.finer_sizes,
+        "{why} a finer floor proves the interior copy the declarations hide,          and publishes it beside them: {report:#}"
+    );
+    for cluster in clusters(report) {
+        assert_eq!(
+            occurrence_files(cluster),
+            vec![scenario.file.to_owned(); usize::try_from(cluster_size(cluster)).unwrap_or(0)],
+            "{why} every occurrence is in the one file: {cluster:#}"
+        );
+    }
+    assert_eq!(
+        reported_lines(report),
+        scenario.finer_lines,
+        "{why} every occurrence must be reported at its authored extent: {report:#}"
+    );
+    assert_eq!(
+        clusters_hidden(report),
+        hidden,
+        "{why} hidden count: {report:#}"
+    );
+}
+
 /// [METRICS-REPO] The file's figures, as the engine computed them.
 fn assert_metrics(scenario: &Scenario, report: &Value) -> Result<()> {
     let why = scenario.why;
@@ -314,18 +384,6 @@ fn assert_evidence(scenario: &Scenario, report: &Value) -> Result<Vec<String>> {
     assert_reported(&texts, scenario.members, MEMBERS_WHY);
     assert_reported(&texts, scenario.literals, LITERALS_WHY);
     Ok(texts)
-}
-
-/// Asserts every string in `evidence` reached the reported occurrence
-/// text. `why` says what the evidence is, so a failure names the missing
-/// proof rather than the needle.
-fn assert_reported(texts: &[String], evidence: &[&str], why: &str) {
-    for needle in evidence {
-        assert!(
-            texts.iter().any(|text| text.contains(needle)),
-            "{why}; {needle} must be reported: {texts:#?}"
-        );
-    }
 }
 
 /// [CLI-TEXT] The text renderer prints the same headline figures and
@@ -400,7 +458,7 @@ fn run_control(scenario: &Scenario) -> Result<Vec<String>> {
     assert_metrics(scenario, &higher)?;
 
     let (lower, _) = scan(scenario, LOWER_FLOOR, &[], 0)?;
-    assert_family(scenario, &lower, scenario.hidden_at_lower_floor);
+    assert_lower_floor(scenario, &lower, scenario.hidden_at_lower_floor);
     assert_metrics(scenario, &lower)?;
 
     assert_breached_fail_over(scenario)?;

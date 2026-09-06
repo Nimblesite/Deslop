@@ -69,7 +69,7 @@ const TEST_TARGET_KIND: &str = "test";
 ///
 /// Those counts are prose, and prose drifts. [`SKIPS_PER_ISSUE`] is what
 /// stops it drifting silently.
-const CURATED_SKIPS: [(&str, &str, u32); 18] = [
+const CURATED_SKIPS: [(&str, &str, u32); 17] = [
     (
         "crates/deslop-lsp/tests/lsp_embedding_determinism.rs",
         "lsp_embedding_refresh_is_bounded_and_reproducible",
@@ -147,11 +147,6 @@ const CURATED_SKIPS: [(&str, &str, u32); 18] = [
         "perf_sample_bounded_scan",
         422,
     ),
-    (
-        "crates/deslop/tests/type3_enclosing_method.rs",
-        "csharp_same_file_type3_reports_both_methods_in_one_cluster",
-        492,
-    ),
 ];
 
 /// How many curated skips each tracking issue owns.
@@ -161,7 +156,7 @@ const CURATED_SKIPS: [(&str, &str, u32); 18] = [
 /// #432–#435 entries when the registry held nine across #432–#434 and none
 /// for #435. That is a wrong answer to the question a reader is actually
 /// asking: which plan still owns this block of silence, and how much of it.
-const SKIPS_PER_ISSUE: [(u32, usize); 5] = [(369, 2), (422, 13), (489, 1), (491, 1), (492, 1)];
+const SKIPS_PER_ISSUE: [(u32, usize); 4] = [(369, 2), (422, 13), (489, 1), (491, 1)];
 
 /// How many skips each issue owns, counted from the registry itself.
 fn skips_by_issue() -> BTreeMap<u32, usize> {

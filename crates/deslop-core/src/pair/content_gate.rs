@@ -13,8 +13,8 @@ use crate::{
 };
 
 use super::{
-    token_carried, CandidatePair, ExactFunctionAnchors, EMBEDDING_SUPPORT_FLOOR,
-    LSH_ONLY_MIN_JACCARD, SHARED_SUBTREE_MIN_NODE_COUNT, SHARED_SUBTREE_MIN_OVERLAP,
+    token_carried, CandidatePair, ExactClones, EMBEDDING_SUPPORT_FLOOR, LSH_ONLY_MIN_JACCARD,
+    SHARED_SUBTREE_MIN_NODE_COUNT, SHARED_SUBTREE_MIN_OVERLAP,
 };
 
 /// Structural overlap at which normalised shape saturates the content guard.
@@ -42,7 +42,7 @@ pub(crate) fn apply_pair_content_gate<L>(
     let tree_index: HashMap<FileId, &NormalizedNode> =
         trees.iter().map(|tree| (tree.file_id, tree)).collect();
     let scopes = DeclarationScopes::new(trees, languages);
-    let anchors = ExactFunctionAnchors::index(pairs, fingerprints, &scopes);
+    let anchors = ExactClones::whole_functions_across_files(pairs, fingerprints, &scopes);
     pairs.retain(|pair| {
         pair_passes_content_gate(
             pair,
@@ -65,7 +65,7 @@ struct GateContext<'a, L: BuildHasher> {
     tree_index: &'a HashMap<FileId, &'a NormalizedNode>,
     /// The exact whole-function clones a token-only pair may not merely
     /// wrap ([FUSED-SHARED-SUBTREE-ECHO]).
-    anchors: &'a ExactFunctionAnchors,
+    anchors: &'a ExactClones,
     /// Authored declarations per file, for the interior-window rule
     /// ([FUSED-CONTENT-GATE-INTERIOR]).
     scopes: &'a DeclarationScopes<'a, L>,

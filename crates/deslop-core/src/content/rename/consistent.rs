@@ -10,7 +10,7 @@ use crate::state::FileId;
 
 use super::{
     super::frontier::{frontiers_aligned, leaf_bytes, population, MemberContent, Population},
-    literal_echoes, rename_mapping,
+    literal_echoes, literal_positions, rename_mapping,
 };
 
 /// Whether the pair is one code written twice under a consistent
@@ -59,7 +59,8 @@ fn corroboration<S: BuildHasher>(
     member: &MemberContent,
     sources: &HashMap<FileId, Vec<u8>, S>,
 ) -> BTreeMap<(u64, u64), usize> {
-    let mut counts = literal_echoes(canonical, member, sources).per_substitution;
+    let positions = literal_positions(canonical, member);
+    let mut counts = literal_echoes(canonical, member, sources, &positions).per_substitution;
     for (keys, siblings) in transformation_siblings(canonical, member, sources) {
         let slot = counts.entry(keys).or_insert(0_usize);
         *slot = slot.saturating_add(siblings);
