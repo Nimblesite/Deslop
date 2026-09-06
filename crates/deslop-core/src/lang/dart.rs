@@ -24,7 +24,10 @@ use crate::{
     ast::{named_children, NormalizedNode},
     error::CoreError,
     lang::{
-        merge_emit::{emit_merge_helper, plain_call, HelperDialect, HelperPlacement},
+        merge_emit::{
+            emit_merge_helper, plain_call, BraceStyle, HelperDialect, HelperPlacement,
+            InsertionPoint,
+        },
         shared::{build_normalised_root, intern_kind, parse_source, IDENTIFIER_KIND, LITERAL_KIND},
         LanguageParser,
     },
@@ -279,6 +282,7 @@ fn emit_merge(request: &MergeEmitRequest<'_, '_>) -> Option<MergeEmitOutcome> {
     let placement = HelperPlacement {
         insertion_offset: line_start_at(request.source, anchor),
         indent: line_indent_at(request.source, anchor),
+        point: InsertionPoint::LineStart,
     };
     Some(emit_merge_helper(request, &placement, &MERGE_DIALECT))
 }
@@ -288,6 +292,7 @@ fn emit_merge(request: &MergeEmitRequest<'_, '_>) -> Option<MergeEmitOutcome> {
 const MERGE_DIALECT: HelperDialect = HelperDialect {
     name_prefix: "mergedFromCluster_",
     indent_step: INDENT_STEP,
+    brace: BraceStyle::SameLine,
     parameter: merge_parameter_text,
     signature: merge_signature_text,
     call: plain_call,

@@ -20,6 +20,53 @@ pub(super) struct HelperPlacement {
     pub(super) insertion_offset: usize,
     /// Leading whitespace every line of the helper carries.
     pub(super) indent: String,
+    /// What the insertion offset sits after, which decides the line
+    /// breaks that join the helper to the text around it.
+    pub(super) point: InsertionPoint,
+}
+
+/// What a helper's insertion offset sits after.
+#[derive(Clone, Copy, Debug)]
+pub(super) enum InsertionPoint {
+    /// Directly after a container's opening brace, mid-line (C#: the
+    /// class body's `{`). A line break opens the helper, and the brace's
+    /// own line break — now after the helper — leaves the blank line
+    /// before whatever follows.
+    AfterOpeningBrace,
+    /// At the start of a line (Dart, Rust: the first occurrence's
+    /// function). Nothing precedes the helper on its line, so the
+    /// helper supplies the blank line that separates it from the
+    /// declaration it was written above.
+    LineStart,
+}
+
+impl InsertionPoint {
+    /// The line breaks written before and after the helper text.
+    const fn line_breaks(self) -> (&'static str, &'static str) {
+        match self {
+            Self::AfterOpeningBrace => ("\n", "\n"),
+            Self::LineStart => ("", "\n\n"),
+        }
+    }
+}
+
+/// Where a language puts the brace that opens the helper's body.
+#[derive(Clone, Copy, Debug)]
+pub(super) enum BraceStyle {
+    /// At the end of the declaration line (Dart, Rust).
+    SameLine,
+    /// On its own line at the helper's indent (C#, Allman style).
+    OwnLine,
+}
+
+impl BraceStyle {
+    /// The text between the declaration line and the body's first line.
+    fn opening(self, indent: &str) -> String {
+        match self {
+            Self::SameLine => " {".to_owned(),
+            Self::OwnLine => format!("\n{indent}{{"),
+        }
+    }
 }
 
 /// How one language spells a merged helper.
@@ -28,6 +75,8 @@ pub(super) struct HelperDialect {
     pub(super) name_prefix: &'static str,
     /// One indent level in this language.
     pub(super) indent_step: &'static str,
+    /// Where the brace opening the helper's body goes.
+    pub(super) brace: BraceStyle,
     /// Renders one typed parameter in a declaration list.
     pub(super) parameter: fn(&MergeParameter) -> String,
     /// Renders the declaration line, given the helper name and the
@@ -48,13 +97,22 @@ impl HelperDialect {
             .join(", ")
     }
 
-    /// The full helper text: declaration line, indented body, closing
-    /// brace, and the blank line that separates it from what follows.
-    fn helper_text(&self, request: &MergeEmitRequest<'_, '_>, indent: &str, name: &str) -> String {
+    /// The full helper text: declaration line, the brace where the
+    /// dialect puts it, indented body, closing brace, and the line
+    /// breaks the placement needs to sit between its neighbours.
+    fn helper_text(
+        &self,
+        request: &MergeEmitRequest<'_, '_>,
+        placement: &HelperPlacement,
+        name: &str,
+    ) -> String {
+        let indent = placement.indent.as_str();
         let statement_indent = format!("{indent}{}", self.indent_step);
         let signature = (self.signature)(name, &self.parameter_list(request));
+        let brace = self.brace.opening(indent);
+        let (leading, trailing) = placement.point.line_breaks();
         format!(
-            "{indent}{signature} {{\n{statement_indent}{}\n{indent}}}\n\n",
+            "{leading}{indent}{signature}{brace}\n{statement_indent}{}\n{indent}}}{trailing}",
             request.helper_body
         )
     }
@@ -78,7 +136,7 @@ pub(super) fn emit_merge_helper(
         .map(|site| (dialect.call)(request, &helper_name, site))
         .collect();
     MergeEmitOutcome {
-        insertion_text: dialect.helper_text(request, &placement.indent, &helper_name),
+        insertion_text: dialect.helper_text(request, placement, &helper_name),
         insertion_offset: placement.insertion_offset,
         helper_name,
         call_texts,

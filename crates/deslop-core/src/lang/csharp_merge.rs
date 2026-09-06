@@ -5,7 +5,9 @@
 use tree_sitter::Node;
 
 use crate::ast::named_children;
-use crate::lang::merge_emit::{emit_merge_helper, HelperDialect, HelperPlacement};
+use crate::lang::merge_emit::{
+    emit_merge_helper, BraceStyle, HelperDialect, HelperPlacement, InsertionPoint,
+};
 use crate::refactor::{
     emit::line_indent_at,
     merge::{site_arguments, MergeEmitOutcome, MergeEmitRequest},
@@ -121,15 +123,18 @@ pub(super) fn emit_merge(request: &MergeEmitRequest<'_, '_>) -> Option<MergeEmit
     let placement = HelperPlacement {
         insertion_offset: class_body.start_byte().checked_add(1)?,
         indent: format!("{class_indent}{INDENT_STEP}"),
+        point: InsertionPoint::AfterOpeningBrace,
     };
     Some(emit_merge_helper(request, &placement, &MERGE_DIALECT))
 }
 
 /// How C# spells a merged helper: a `private static void` method whose
-/// parameters are `Type name`, optionally carrying a default.
+/// parameters are `Type name`, optionally carrying a default, with the
+/// body's brace on its own line as C# convention has it.
 const MERGE_DIALECT: HelperDialect = HelperDialect {
     name_prefix: "MergedFromCluster_",
     indent_step: INDENT_STEP,
+    brace: BraceStyle::OwnLine,
     parameter: merge_parameter_text,
     signature: merge_signature_text,
     call: call_text,
