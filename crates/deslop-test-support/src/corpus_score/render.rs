@@ -10,20 +10,21 @@
 //! are never a row apart, because a comparison split across rows is one the
 //! reader has to reassemble by eye.
 
-use std::collections::BTreeMap;
+mod cells;
+
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Serialize;
+
+use cells::{
+    counted, cpu, header, megabytes, row, score_cell, seconds, signed, signed_amount,
+    signed_fraction, ABSENT,
+};
 
 use super::{
     gate::{Breach, CorpusChange, CorpusTotals, Degradation, Thresholds},
     RepoScore, RunCost,
 };
-
-/// Milliseconds in a second, so the wall-time column reads in seconds.
-const MS_PER_SECOND: f64 = 1000.0;
-/// What an absent or unmeasured figure prints as. Never zero: a run nobody
-/// measured must not read as a run that cost nothing.
-const ABSENT: &str = "—";
 
 /// One engine in a scored run.
 #[derive(Debug, Clone, Serialize)]
@@ -71,69 +72,6 @@ pub struct Scorecard {
     pub thresholds: BTreeMap<String, Thresholds>,
     /// Every threshold the last engine breached. Empty means the run passes.
     pub breaches: Vec<Breach>,
-}
-
-/// One markdown table row.
-fn row(cells: &[String]) -> String {
-    format!("| {} |", cells.join(" | "))
-}
-
-/// A header row and the divider under it, so a table can never disagree with
-/// its own width.
-fn header(cells: &[String]) -> Vec<String> {
-    let divider = format!("|{}|", vec!["---"; cells.len()].join("|"));
-    vec![row(cells), divider]
-}
-
-/// A percentage, or an explicit absence. Nothing judged must never print as a
-/// perfect score.
-fn score_cell(value: Option<f64>) -> String {
-    value.map_or_else(
-        || "not judged".to_owned(),
-        |percent| format!("{percent:.1}%"),
-    )
-}
-
-/// Milliseconds rendered as seconds.
-fn seconds(ms: u64) -> String {
-    format!("{:.2} s", as_f64(ms) / MS_PER_SECOND)
-}
-
-/// Mebibytes, or an explicit absence.
-fn megabytes(value: Option<u64>) -> String {
-    value.map_or_else(|| ABSENT.to_owned(), |mb| format!("{mb} MB"))
-}
-
-/// CPU seconds, or an explicit absence.
-fn cpu(value: Option<f64>) -> String {
-    value.map_or_else(|| ABSENT.to_owned(), |secs| format!("{secs:.2} s"))
-}
-
-/// Widening that keeps the lossy cast in one reviewed place.
-fn as_f64(value: u64) -> f64 {
-    u32::try_from(value).map_or(f64::from(u32::MAX), f64::from)
-}
-
-/// A signed count, so a change column reads without the reader subtracting.
-fn signed(delta: i64) -> String {
-    if delta == 0 {
-        ABSENT.to_owned()
-    } else {
-        format!("{delta:+}")
-    }
-}
-
-/// A signed measurement in its unit, or an explicit absence.
-fn signed_amount(delta: Option<i64>, unit: &str) -> String {
-    match delta {
-        Some(delta) if delta != 0 => format!("{delta:+} {unit}"),
-        _ => ABSENT.to_owned(),
-    }
-}
-
-/// A signed fractional measurement in its unit, or an explicit absence.
-fn signed_fraction(delta: Option<f64>, unit: &str) -> String {
-    delta.map_or_else(|| ABSENT.to_owned(), |delta| format!("{delta:+.1} {unit}"))
 }
 
 /// One cell per engine, in run order, out of a map keyed by engine id. Every
@@ -463,6 +401,25 @@ fn defects_section(card: &Scorecard) -> Vec<String> {
     lines
 }
 
+/// The scope of the run, stated before any figure: how many repositories were
+/// scanned, how many distinct languages they cover, and which. A green run over
+/// three repositories must never read like a green run over the whole corpus,
+/// for the same reason [CORPUS-CI] makes a scheduled run name what it skipped.
+fn scope_line(card: &Scorecard) -> String {
+    let languages: BTreeSet<&str> = card
+        .targets
+        .iter()
+        .map(|target| target.language.as_str())
+        .collect();
+    let named = languages.iter().copied().collect::<Vec<_>>().join(", ");
+    format!(
+        "Scope: {} across {} — {}.",
+        counted(card.targets.len(), "repository", "repositories"),
+        counted(languages.len(), "language", "languages"),
+        if named.is_empty() { ABSENT } else { &named }
+    )
+}
+
 /// Renders the whole scorecard.
 #[must_use]
 pub fn scorecard(card: &Scorecard) -> String {
@@ -470,6 +427,8 @@ pub fn scorecard(card: &Scorecard) -> String {
         "# Corpus accuracy scorecard".to_owned(),
         String::new(),
         format!("Generated {}.", card.generated_at),
+        String::new(),
+        scope_line(card),
         String::new(),
         "Scored against the clone registers in `corpus/register/` — independent ground truth \
          judged in isolation from this codebase (`docs/specs/corpus.md` [CORPUS-REGISTER]). \
