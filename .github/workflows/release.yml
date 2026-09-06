@@ -62,7 +62,32 @@ jobs:
           git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
           release_sha="$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
           echo "Releasing ${RELEASE_TAG} (${release_sha})"
-          git merge-base --is-ancestor "$release_sha" origin/main
+          if git merge-base --is-ancestor "$release_sha" origin/main; then
+            echo "Released commit is on main."
+            exit 0
+          fi
+          # A tag push runs the workflow stored AT the tagged commit, so a
+          # broken gate can only be repaired at the tag itself. Allow a release
+          # to sit one commit above main when that commit changes release
+          # workflows and nothing else; shipped code must still be on main.
+          # Fail closed at every step. Do not lean on `set -e`: it is ignored
+          # inside a command that is part of an && / || list, so an unchecked
+          # failure here could wave through a commit that is not on main.
+          if ! parent="$(git rev-parse --verify --quiet "${release_sha}^")"; then
+            echo "::error::${release_sha} is not on main and has no parent to check."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$parent" origin/main; then
+            echo "::error::Neither ${release_sha} nor its parent ${parent} is on main."
+            exit 1
+          fi
+          shipped="$(git diff --name-only "$parent" "$release_sha" \
+            | { grep -v '^\.github/workflows/' || true; })"
+          if [ -n "$shipped" ]; then
+            echo "::error::Release commit changes shipped code: $shipped"
+            exit 1
+          fi
+          echo "Release commit sits on ${parent} (on main); changes release workflow only."
 
       # Shipwright manifest gate (DTK-MIG-DESLOP-CI-GATES, #41).
       # The manifest is the source of truth for activation checks and
