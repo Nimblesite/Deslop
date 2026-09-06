@@ -547,3 +547,9 @@ const fn hex_nibble(nibble: u8) -> char {
         _ => 'f',
     }
 }
+
+
+/// Node floor an enclosed family must carry to have the standing of
+/// copied blocks rather than idiom lines
+/// ([PIPELINE-CLUSTER-ELECT-CONTAINER], `crate::cluster_filters`).
+pub(crate) const VERBATIM_OVERTURN_MIN_NODES: usize = 16;

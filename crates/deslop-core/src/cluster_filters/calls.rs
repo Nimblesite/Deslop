@@ -17,9 +17,6 @@ mod args;
 /// Assertion admission for the covered-statement rule.
 mod asserts;
 
-/// Bound-result flow for invariant adapter calls in scenario scaffolding.
-mod dataflow;
-
 /// Ordered-call scenario scaffolding classification.
 mod sequence;
 
@@ -79,11 +76,6 @@ pub(crate) struct CallShape {
     keywords: Vec<Option<Vec<u8>>>,
     /// Per-argument summary used for literal-variation detection.
     arguments: Vec<ArgShape>,
-    /// Local name this call's result is assigned to, when any.
-    result_binding: Option<Vec<u8>>,
-    /// Raw identifiers this call consumes, through its arguments or
-    /// through an invocation spelled inside its callee.
-    consumed_identifiers: Vec<Vec<u8>>,
 }
 
 /// Per-argument summary recorded for each call.
@@ -121,8 +113,6 @@ fn call_shape_from_node(call: Node<'_>, source: &[u8], language: &str) -> Option
         callee,
         keywords,
         arguments,
-        result_binding: dataflow::assigned_binding(call, source),
-        consumed_identifiers: dataflow::consumed_identifiers(call, source, call_kinds(language)),
     })
 }
 

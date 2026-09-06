@@ -3,19 +3,20 @@
 use std::sync::Arc;
 
 use super::{
-    call_sequence, pair_is_copy_paste, same_call_headers, sequence_position_differs, ArgShape,
-    CallShape,
+    call_sequence, pair_is_copy_paste, same_call_headers, sequence_position_differs, CallShape,
 };
 use crate::cluster_filters::{snippets::CallSequence, ParseCache, Snippet};
 
 /// Detects body-range clusters whose contained call sequence has the
 /// same callees but intentionally different literal test data.
 ///
-/// Every position must vary, except an invariant no-literal adapter whose
-/// bound result flows into a later varying call. Such an adapter is connective
-/// scenario plumbing, not an independent reusable assertion. An invariant
-/// literal-bearing call always blocks suppression, as does any invariant call
-/// whose result is not consumed by the varying payload.
+/// Every position must vary. A sequence in which some calls carry
+/// differing literals while others are invariant is not payload — the
+/// invariant calls are shared logic the members genuinely duplicate, and
+/// hiding the cluster would lose a real Type-2 clone. Two `[Fact]` tests
+/// that fetch different URLs and then run the same four assertions are
+/// the case this distinguishes: one varying call, four invariant ones.
+/// Scaffolding has nothing left once the literals are removed.
 pub(super) fn is_literal_variation_call_sequence(
     snippets: &[Snippet<'_>],
     cache: &ParseCache,
@@ -32,76 +33,22 @@ pub(super) fn is_literal_variation_call_sequence(
     }
     let sequences: Option<Vec<&[CallShape]>> =
         cells.iter().map(|cell| cell.shapes.as_deref()).collect();
-    sequences.is_some_and(|sequences| sequence_is_scenario_scaffolding(&sequences))
+    sequences.is_some_and(|sequences| every_sequence_position_varies(&sequences))
 }
 
-/// True when the members share one ordered call header and every invariant
-/// position is only a bound adapter into a later varying position.
-fn sequence_is_scenario_scaffolding(sequences: &[&[CallShape]]) -> bool {
+/// True when the members share one non-empty ordered call header and
+/// every position in it carries differing string literals — except a
+/// two-member pair whose differing literal is authored interpolation,
+/// which publishes (gh #467).
+fn every_sequence_position_varies(sequences: &[&[CallShape]]) -> bool {
     let Some(first) = sequences.first() else {
         return false;
     };
-    let shared_len = sequences.iter().map(|seq| seq.len()).min().unwrap_or(0);
-    if shared_len == 0 {
+    if first.is_empty() || !sequences.iter().all(|seq| same_call_headers(seq, first)) {
         return false;
     }
-    // Every member must carry the same ordered call header as a prefix.
-    // The overlap collapse selects the *widest* window per run
-    // ([PIPELINE-RANK-WORST-FIRST]), so one occurrence may sweep several
-    // scenario members: the shared skeleton is the shortest sequence, and
-    // the longer members are more of the same scenario, never a reason to
-    // decline the suppression the skeleton describes.
-    let Some(first_header) = first.get(..shared_len) else {
-        return false;
-    };
-    for sequence in sequences {
-        let Some(sequence_header) = sequence.get(..shared_len) else {
-            return false;
-        };
-        if !same_call_headers(sequence_header, first_header) {
-            return false;
-        }
-    }
-    let varying: Vec<bool> = (0..shared_len)
-        .map(|index| sequence_position_differs(sequences, index))
-        .collect();
-    varying.contains(&true)
-        && varying.iter().enumerate().all(|(index, differs)| {
-            *differs || invariant_position_flows_to_variation(sequences, &varying, index)
-        })
+    (0..first.len()).all(|index| sequence_position_differs(sequences, index))
         && !sequence_pair_is_copy_paste(sequences)
-}
-
-/// Whether one invariant no-literal call only adapts a bound value for a
-/// later literal-varying call in every member.
-fn invariant_position_flows_to_variation(
-    sequences: &[&[CallShape]],
-    varying: &[bool],
-    index: usize,
-) -> bool {
-    sequences.iter().all(|sequence| {
-        let Some(call) = sequence.get(index) else {
-            return false;
-        };
-        !call_has_string_literal(call)
-            && call.result_binding.as_ref().is_some_and(|binding| {
-                sequence
-                    .iter()
-                    .enumerate()
-                    .skip(index.saturating_add(1))
-                    .any(|(later, consumer)| {
-                        varying.get(later).copied().unwrap_or(false)
-                            && consumer.consumed_identifiers.contains(binding)
-                    })
-            })
-    })
-}
-
-/// Whether a call position carries authored string payload.
-fn call_has_string_literal(call: &CallShape) -> bool {
-    call.arguments
-        .iter()
-        .any(|argument| matches!(argument, ArgShape::StringLiteral(_, _)))
 }
 
 /// The sequence form of [`pair_is_copy_paste`]: same position, same

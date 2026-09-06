@@ -14,12 +14,13 @@ use std::{collections::HashMap, path::PathBuf, time::Instant};
 
 use crate::{
     cluster::{build_ranked_fused_clusters, ClusterBuildInputs},
-    cluster_filters::{split_noise_verbatim_families, ParseCache},
+    cluster_filters::{split_noise_verbatim_families, split_structural_families, ParseCache},
     error::CoreError,
     lsh::BandCollisionSource,
     overlap::apply_shared_subtree_rescue,
     pair::{
-        apply_pair_content_gate, candidate_pairs_for_language_policy, cluster_by_transitive_closure,
+        apply_embedding_role_guard, candidate_pairs_for_language_policy,
+        cluster_by_transitive_closure,
     },
     report::{render_report, CacheStats, Report, ReportInputs},
     state::FileId,
@@ -138,13 +139,7 @@ impl PipelineSession {
         // content, not just a Merkle-identical signature.
         let rescue_input = pairs.len();
         let stage_started = Instant::now();
-        apply_shared_subtree_rescue(
-            &mut pairs,
-            fingerprints,
-            trees,
-            &self.sources,
-            &self.file_languages,
-        );
+        apply_shared_subtree_rescue(&mut pairs, fingerprints, trees);
         ledger.record(
             "shared_subtree_rescue",
             rescue_input,
@@ -156,21 +151,12 @@ impl PipelineSession {
         // gate decides which edges weld. Noise conviction reads this
         // family; admission below still decides the clusters.
         let shape_families = cluster_by_transitive_closure(&pairs);
-        let content_input = pairs.len();
-        let stage_started = Instant::now();
-        apply_pair_content_gate(
+        apply_embedding_role_guard(
             &mut pairs,
             fingerprints,
-            trees,
             &self.sources,
             &self.file_languages,
             parse_cache,
-        );
-        ledger.record(
-            "pair_content_gate",
-            content_input,
-            pairs.len(),
-            stage_started,
         );
         let rescue_output = pairs.len();
         let stage_started = Instant::now();
@@ -186,6 +172,19 @@ impl PipelineSession {
         // candidate pairs on a corpus-scale run, freed before the
         // memory-hungry measurement stages ([PERF-FLUTTER-TODO-MEMORY]).
         drop(pairs);
+        // [PIPELINE-CLUSTER-ELECT] A token bridge may not fuse two distinct
+        // structural families into one component that then reports
+        // neither: split welded components per structural family.
+        let stage_started = Instant::now();
+        let split_input = fused_clusters.len();
+        let fused_clusters =
+            split_structural_families(fused_clusters, fingerprints, &self.file_languages);
+        ledger.record(
+            "structural_family_split",
+            split_input,
+            fused_clusters.len(),
+            stage_started,
+        );
         // [CLONE-NOISE-VERBATIM-SUBGROUP] Partition a noise family off
         // the byte-identical copy it swept up *before* signals are
         // measured, so the surviving cluster is measured, bucketed and

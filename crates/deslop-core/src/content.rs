@@ -160,19 +160,6 @@ fn pair_literal_fraction(left: &MemberContent, right: &MemberContent) -> f64 {
     member_count(literals) / member_count(vocabulary)
 }
 
-/// Measures pair agreement using an already-built tree index.
-pub(crate) fn pair_content_agreement<S: BuildHasher, L: BuildHasher>(
-    left: &Fingerprint,
-    right: &Fingerprint,
-    tree_index: &HashMap<FileId, &NormalizedNode>,
-    sources: &HashMap<FileId, Vec<u8>, S>,
-    languages: &HashMap<FileId, &'static str, L>,
-) -> f64 {
-    let left = member_content(left, tree_index, sources, languages);
-    let right = member_content(right, tree_index, sources, languages);
-    pair_agreement(left.as_ref(), right.as_ref())
-}
-
 /// Fraction of aligned authored positions whose raw bytes match.
 fn pair_agreement(left: Option<&MemberContent>, right: Option<&MemberContent>) -> f64 {
     let (Some(left), Some(right)) = (left, right) else {
