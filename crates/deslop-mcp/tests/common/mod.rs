@@ -19,7 +19,7 @@ pub mod rpc;
 
 use std::{
     fs,
-    io::{BufRead, BufReader},
+    io::BufReader,
     path::{Path, PathBuf},
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
     thread,
@@ -397,6 +397,7 @@ pub const KILLABLE_PARENT_SCRIPT: &str = r#"exec 3<&0; "$1" --root "$2" <&3 2>/d
 /// Reads the MCP pid the killable-parent shell prints on its stderr line.
 #[cfg(unix)]
 pub fn read_mcp_pid(child: &mut Child) -> Result<u32> {
+    use std::io::BufRead;
     let stderr = child.stderr.take().context("parent stderr")?;
     let mut stderr = BufReader::new(stderr);
     let mut pid_line = String::new();
