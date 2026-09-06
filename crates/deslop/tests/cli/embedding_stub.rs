@@ -41,17 +41,14 @@ fn run_ollama_pass(
 /// asserts it exits non-zero with `expected` on stderr. Shared by the
 /// argument/provider rejection tests.
 fn assert_cli_rejects(args: &[&str], expected: &str) -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
+    let (_tmp, mut cmd) = fixture_run_command("csharp-small")?;
     let _assertion = cmd.args(args).assert().failure().stderr(contains(expected));
     Ok(())
 }
 
 #[test]
 fn default_run_records_embeddings_off_provenance() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
+    let (_tmp, out, mut cmd) = fixture_run("csharp-small")?;
     let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     let json = fs::read_to_string(&out.json)?;
     assert!(
@@ -69,8 +66,7 @@ fn default_run_records_embeddings_off_provenance() -> Result<()> {
 // whether Ollama happens to be running on the developer machine.
 #[test]
 fn embeddings_required_hard_fails_when_provider_unreachable() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
+    let (_tmp, mut cmd) = fixture_run_command("csharp-small")?;
     let _assertion = cmd
         .args([
             "--min-nodes",
@@ -91,9 +87,7 @@ fn embeddings_required_hard_fails_when_provider_unreachable() -> Result<()> {
 // still produce a report with `embedding_provenance: null`.
 #[test]
 fn embeddings_auto_falls_back_when_provider_unreachable() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
+    let (_tmp, out, mut cmd) = fixture_run("csharp-small")?;
     let _assertion = cmd
         .args([
             "--min-nodes",

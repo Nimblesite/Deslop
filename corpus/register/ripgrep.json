@@ -1,0 +1,1835 @@
+{
+  "name": "ripgrep",
+  "language": "rust",
+  "url": "https://github.com/BurntSushi/ripgrep.git",
+  "sha": "3fce3b5bb0236da2df6d99672afb8a719642eca7",
+  "protocol": {
+    "spec": "docs/specs/corpus.md",
+    "spec_section": "[CORPUS-REGISTER]",
+    "judging_skill": ".agents/skills/judge-clone-pairs/SKILL.md",
+    "preparer_skill": ".agents/skills/clone-register-prepare/SKILL.md"
+  },
+  "clearly_in": [
+    {
+      "why": "The after-context sink test is the before-context one with only SinkContextKind::Before→After changed (2 of 20 lines).",
+      "verified": "extracted and diffed the two source ranges (20 vs 20 lines): 2 changed lines, similarity 0.99",
+      "occurrences": [
+        "crates/searcher/src/searcher/core.rs:561-580",
+        "crates/searcher/src/searcher/core.rs:592-611"
+      ]
+    },
+    {
+      "why": "identical 20-line JSON match assertion duplicated verbatim between two tests",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
+      "occurrences": [
+        "tests/json.rs:210-229",
+        "tests/json.rs:159-178"
+      ]
+    },
+    {
+      "why": "7 lines of the JSON sink test byte-identical twice in json.rs.",
+      "verified": "extracted both ranges from source and diffed: byte-identical over 7 lines",
+      "occurrences": [
+        "crates/printer/src/json.rs:1033-1039",
+        "crates/printer/src/json.rs:1049-1055"
+      ]
+    },
+    {
+      "why": "identical 11-line summary-printer test body duplicated verbatim between two tests",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
+      "occurrences": [
+        "crates/printer/src/summary.rs:1054-1064",
+        "crates/printer/src/summary.rs:921-931"
+      ]
+    },
+    {
+      "why": "PrefixStrategy and SuffixStrategy builders are the same 7 lines with Prefix systematically swapped for Suffix",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
+      "occurrences": [
+        "crates/globset/src/lib.rs:1043-1049",
+        "crates/globset/src/lib.rs:1035-1041"
+      ]
+    }
+  ],
+  "clearly_out": [],
+  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 200 candidates at this commit and no pair was called CLEARLY OUT by all of them. 0 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing.",
+  "not_clear": [
+    {
+      "why": "3 identical context-limiter lines.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:519-521",
+        "crates/printer/src/standard.rs:553-555"
+      ]
+    },
+    {
+      "why": "Different literal-extraction test cases.",
+      "occurrences": [
+        "crates/regex/src/literal.rs:812-816",
+        "crates/regex/src/literal.rs:868-872"
+      ]
+    },
+    {
+      "why": "rgtest fixtures for different binary scenarios.",
+      "occurrences": [
+        "tests/binary.rs:175-184",
+        "tests/binary.rs:411-419"
+      ]
+    },
+    {
+      "why": "Type-add vs ignore-precedence fixtures.",
+      "occurrences": [
+        "tests/misc.rs:290-329",
+        "tests/feature.rs:177-213"
+      ]
+    },
+    {
+      "why": "MaxColumns vs Threads flag impls — per-flag boilerplate, different docs/config.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:4135-4174",
+        "crates/core/flags/defs.rs:7085-7123"
+      ]
+    },
+    {
+      "why": "Context before/after parse variants.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:1173-1177",
+        "crates/core/flags/defs.rs:1166-1170"
+      ]
+    },
+    {
+      "why": "Different file-type table rows.",
+      "occurrences": [
+        "crates/ignore/src/default_types.rs:112-114",
+        "crates/ignore/src/default_types.rs:65-67"
+      ]
+    },
+    {
+      "why": "multi_line1 vs multi_line2 printer tests.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:3139-3204",
+        "crates/printer/src/standard.rs:3206-3265"
+      ]
+    },
+    {
+      "why": "Passthru context-flag variants.",
+      "occurrences": [
+        "tests/regression.rs:1265-1268",
+        "tests/regression.rs:1270-1273"
+      ]
+    },
+    {
+      "why": "Column vs max-filesize fixtures.",
+      "occurrences": [
+        "tests/feature.rs:342-357",
+        "tests/misc.rs:552-566"
+      ]
+    },
+    {
+      "why": "SearcherTester windows with different context counts.",
+      "occurrences": [
+        "crates/searcher/src/searcher/glue.rs:855-873",
+        "crates/searcher/src/searcher/glue.rs:1186-1206"
+      ]
+    },
+    {
+      "why": "Different gitignore assertion sets.",
+      "occurrences": [
+        "crates/ignore/src/incremental.rs:691-694",
+        "crates/ignore/src/incremental.rs:671-674"
+      ]
+    },
+    {
+      "why": "Overrides vs ucp builder methods — unrelated crates.",
+      "occurrences": [
+        "crates/ignore/src/walk.rs:833-846",
+        "crates/pcre2/src/matcher.rs:205-228"
+      ]
+    },
+    {
+      "why": "2-3 lines of prev() asserts.",
+      "occurrences": [
+        "crates/searcher/src/lines.rs:378-379",
+        "crates/searcher/src/lines.rs:436-438"
+      ]
+    },
+    {
+      "why": "Context-flag parse variants.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:1174-1177",
+        "crates/core/flags/defs.rs:1207-1210"
+      ]
+    },
+    {
+      "why": "3 identical capture asserts.",
+      "occurrences": [
+        "crates/matcher/tests/test_matcher.rs:118-120",
+        "crates/matcher/tests/test_matcher.rs:103-105"
+      ]
+    },
+    {
+      "why": "--files listing variants.",
+      "occurrences": [
+        "tests/regression.rs:1644-1646",
+        "tests/regression.rs:1653-1655"
+      ]
+    },
+    {
+      "why": "Color vs binary parse tests.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:865-868",
+        "crates/core/flags/defs.rs:580-583"
+      ]
+    },
+    {
+      "why": "absolute_base vs glob accessors — different crates.",
+      "occurrences": [
+        "crates/ignore/src/dir.rs:694-696",
+        "crates/globset/src/lib.rs:206-208"
+      ]
+    },
+    {
+      "why": "Ignore-file fixtures with different patterns.",
+      "occurrences": [
+        "crates/ignore/src/dir.rs:1303-1304",
+        "crates/ignore/src/dir.rs:1327-1328"
+      ]
+    },
+    {
+      "why": "Vimgrep vs smart-case fixtures.",
+      "occurrences": [
+        "tests/regression.rs:130-134",
+        "tests/regression.rs:252-256"
+      ]
+    },
+    {
+      "why": "Dotall vs hidden builder methods — different crates.",
+      "occurrences": [
+        "crates/pcre2/src/matcher.rs:127-163",
+        "crates/ignore/src/walk.rs:874-913"
+      ]
+    },
+    {
+      "why": "Multi-line vs word matcher tests.",
+      "occurrences": [
+        "crates/regex/src/matcher.rs:600-622",
+        "crates/regex/src/matcher.rs:560-568"
+      ]
+    },
+    {
+      "why": "Case vs mmap parse tests.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:756-763",
+        "crates/core/flags/defs.rs:4483-4490"
+      ]
+    },
+    {
+      "why": "is_ignore vs into_path — different APIs.",
+      "occurrences": [
+        "crates/ignore/src/incremental.rs:486-499",
+        "crates/ignore/src/walk.rs:44-58"
+      ]
+    },
+    {
+      "why": "Variable renames in fixture setup.",
+      "occurrences": [
+        "crates/ignore/src/dir.rs:1417-1418",
+        "crates/ignore/src/dir.rs:1438-1439"
+      ]
+    },
+    {
+      "why": "One-file-system vs include-zero flag impls — boilerplate.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:5456-5514",
+        "crates/core/flags/defs.rs:3409-3455"
+      ]
+    },
+    {
+      "why": "Binary rgtest fixtures.",
+      "occurrences": [
+        "tests/binary.rs:316-331",
+        "tests/binary.rs:162-171"
+      ]
+    },
+    {
+      "why": "Mirror of candidate 19.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:859-868",
+        "crates/core/flags/defs.rs:580-589"
+      ]
+    },
+    {
+      "why": "Vimgrep vs after-context fixtures.",
+      "occurrences": [
+        "tests/misc.rs:896-907",
+        "tests/misc.rs:448-459"
+      ]
+    },
+    {
+      "why": "3 lines differing in replacement strings.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:3525-3527",
+        "crates/printer/src/standard.rs:3496-3498"
+      ]
+    },
+    {
+      "why": "-A vs -B parse variants.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:290-300",
+        "crates/core/flags/defs.rs:475-485"
+      ]
+    },
+    {
+      "why": "Capture-group asserts with different groups.",
+      "occurrences": [
+        "crates/matcher/tests/test_matcher.rs:138-140",
+        "crates/matcher/tests/test_matcher.rs:118-120"
+      ]
+    },
+    {
+      "why": "Different printer-test configurations.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:3755-3774",
+        "crates/printer/src/standard.rs:1899-1920"
+      ]
+    },
+    {
+      "why": "Related scaffolding; not a certain copy.",
+      "occurrences": [
+        "crates/ignore/src/dir.rs:1153-1156",
+        "crates/ignore/src/dir.rs:1192-1195"
+      ]
+    },
+    {
+      "why": "BlockBuffered vs LineBuffered flag impls — boilerplate.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:594-655",
+        "crates/core/flags/defs.rs:3911-3976"
+      ]
+    },
+    {
+      "why": "Quiet vs Null flag impls — boilerplate.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:6071-6109",
+        "crates/core/flags/defs.rs:5339-5375"
+      ]
+    },
+    {
+      "why": "Hyperlink vs word builder methods — different crates.",
+      "occurrences": [
+        "crates/printer/src/path.rs:89-111",
+        "crates/regex/src/matcher.rs:343-354"
+      ]
+    },
+    {
+      "why": "max_matches multi-line test variants.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:2977-3001",
+        "crates/printer/src/standard.rs:2953-2976"
+      ]
+    },
+    {
+      "why": "Glob vs pre-glob flag impls — boilerplate.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:2590-2635",
+        "crates/core/flags/defs.rs:5952-5996"
+      ]
+    },
+    {
+      "why": "TypeClear vs TypeAdd flag impls — boilerplate.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:7315-7374",
+        "crates/core/flags/defs.rs:7402-7435"
+      ]
+    },
+    {
+      "why": "Different file-type table rows.",
+      "occurrences": [
+        "crates/ignore/src/default_types.rs:200-202",
+        "crates/ignore/src/default_types.rs:49-51"
+      ]
+    },
+    {
+      "why": "3 lines of ignore-file fixtures.",
+      "occurrences": [
+        "crates/ignore/src/dir.rs:1328-1330",
+        "crates/ignore/src/dir.rs:1318-1320"
+      ]
+    },
+    {
+      "why": "Count-matches vs count summary tests.",
+      "occurrences": [
+        "crates/printer/src/summary.rs:1010-1029",
+        "crates/printer/src/summary.rs:875-894"
+      ]
+    },
+    {
+      "why": "per_match vs byte_offset builder methods.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:260-296",
+        "crates/printer/src/standard.rs:347-380"
+      ]
+    },
+    {
+      "why": "Logging vs column parse tests.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:1571-1574",
+        "crates/core/flags/defs.rs:1060-1063"
+      ]
+    },
+    {
+      "why": "Trim fixture variants.",
+      "occurrences": [
+        "tests/feature.rs:679-692",
+        "tests/feature.rs:670-677"
+      ]
+    },
+    {
+      "why": "Base64 vs path-conversion asserts.",
+      "occurrences": [
+        "crates/printer/src/jsont.rs:287-292",
+        "crates/printer/src/hyperlink/mod.rs:1105-1121"
+      ]
+    },
+    {
+      "why": "byte_offset vs column printer tests.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:2369-2418",
+        "crates/printer/src/standard.rs:2419-2470"
+      ]
+    },
+    {
+      "why": "Engine-precedence parse variants.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:387-397",
+        "crates/core/flags/defs.rs:1845-1854"
+      ]
+    },
+    {
+      "why": "Docs of different flags.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:2316-2337",
+        "crates/core/flags/defs.rs:1411-1438"
+      ]
+    },
+    {
+      "why": "Searcher setup with different nesting.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:1794-1799",
+        "crates/printer/src/standard.rs:1837-1842"
+      ]
+    },
+    {
+      "why": "src vs tests fixture variables.",
+      "occurrences": [
+        "crates/ignore/src/dir.rs:1440-1442",
+        "crates/ignore/src/dir.rs:1444-1446"
+      ]
+    },
+    {
+      "why": "Ignore-flag fixtures.",
+      "occurrences": [
+        "tests/feature.rs:911-913",
+        "tests/feature.rs:832-834"
+      ]
+    },
+    {
+      "why": "Hyperlink-format parse variants.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:3152-3160",
+        "crates/core/flags/defs.rs:3141-3144"
+      ]
+    },
+    {
+      "why": "binary3 vs binary4 searcher tests.",
+      "occurrences": [
+        "crates/searcher/src/searcher/glue.rs:724-756",
+        "crates/searcher/src/searcher/glue.rs:759-788"
+      ]
+    },
+    {
+      "why": "Man-page vs help-text writers — different output formats.",
+      "occurrences": [
+        "crates/core/flags/doc/man.rs:53-62",
+        "crates/core/flags/doc/help.rs:150-161"
+      ]
+    },
+    {
+      "why": "Different literal-extraction cases.",
+      "occurrences": [
+        "crates/regex/src/literal.rs:729-731",
+        "crates/regex/src/literal.rs:716-718"
+      ]
+    },
+    {
+      "why": "3 lines differing in a variable name.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:1710-1714",
+        "crates/printer/src/standard.rs:1697-1701"
+      ]
+    },
+    {
+      "why": "Related scaffolding; not a certain copy.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:1807-1809",
+        "crates/printer/src/standard.rs:1782-1784"
+      ]
+    },
+    {
+      "why": "Different literal-extraction cases.",
+      "occurrences": [
+        "crates/regex/src/literal.rs:810-812",
+        "crates/regex/src/literal.rs:943-945"
+      ]
+    },
+    {
+      "why": "-B vs -A parse variants.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:478-482",
+        "crates/core/flags/defs.rs:293-297"
+      ]
+    },
+    {
+      "why": "mkdirp fixture lines in different tests.",
+      "occurrences": [
+        "crates/ignore/src/incremental.rs:769-771",
+        "crates/ignore/src/dir.rs:1472-1474"
+      ]
+    },
+    {
+      "why": "CaseSensitive vs SmartCase flag impls — boilerplate.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:714-754",
+        "crates/core/flags/defs.rs:6515-6562"
+      ]
+    },
+    {
+      "why": "Binary vs engine parse tests.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:7063-7074",
+        "crates/core/flags/defs.rs:1832-1846"
+      ]
+    },
+    {
+      "why": "no-ignore-exclude vs no-ignore-dot parse tests.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:4850-4893",
+        "crates/core/flags/defs.rs:4804-4846"
+      ]
+    },
+    {
+      "why": "103-127 line gitignore test suites with overlapping harness, ragged.",
+      "occurrences": [
+        "crates/ignore/tests/gitignore_matched_path_or_any_parents_tests.rs:192-318",
+        "crates/ignore/tests/gitignore_matched_path_or_any_parents_tests.rs:88-190"
+      ]
+    },
+    {
+      "why": "Sort vs sortr parse windows.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:6754-6760",
+        "crates/core/flags/defs.rs:6874-6880"
+      ]
+    },
+    {
+      "why": "Related scaffolding; not a certain copy.",
+      "occurrences": [
+        "crates/searcher/src/searcher/core.rs:285-290",
+        "crates/searcher/src/searcher/core.rs:316-321"
+      ]
+    },
+    {
+      "why": "CRLF/null-data parse variants.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:5437-5447",
+        "crates/core/flags/defs.rs:1512-1522"
+      ]
+    },
+    {
+      "why": "Gitignore vs commondir file handling.",
+      "occurrences": [
+        "crates/ignore/src/dir.rs:1076-1082",
+        "crates/ignore/src/dir.rs:1092-1098"
+      ]
+    },
+    {
+      "why": "Path-with/without-match summary tests.",
+      "occurrences": [
+        "crates/printer/src/summary.rs:1068-1086",
+        "crates/printer/src/summary.rs:1030-1048"
+      ]
+    },
+    {
+      "why": "Back-context vs dfa-size-limit fixtures.",
+      "occurrences": [
+        "tests/misc.rs:474-484",
+        "tests/feature.rs:380-391"
+      ]
+    },
+    {
+      "why": "Engine-precedence parse variants.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:387-395",
+        "crates/core/flags/defs.rs:1849-1855"
+      ]
+    },
+    {
+      "why": "Context-flag order variants.",
+      "occurrences": [
+        "tests/feature.rs:1099-1101",
+        "tests/feature.rs:1108-1110"
+      ]
+    },
+    {
+      "why": "3 lines of ignore-file fixtures.",
+      "occurrences": [
+        "crates/ignore/src/incremental.rs:1258-1260",
+        "crates/ignore/src/incremental.rs:777-779"
+      ]
+    },
+    {
+      "why": "2 lines of different literal cases.",
+      "occurrences": [
+        "crates/regex/src/literal.rs:817-818",
+        "crates/regex/src/literal.rs:805-806"
+      ]
+    },
+    {
+      "why": "Different file-type table rows.",
+      "occurrences": [
+        "crates/ignore/src/default_types.rs:199-201",
+        "crates/ignore/src/default_types.rs:43-45"
+      ]
+    },
+    {
+      "why": "Context-separator fixture variants.",
+      "occurrences": [
+        "tests/feature.rs:1114-1118",
+        "tests/feature.rs:1120-1131"
+      ]
+    },
+    {
+      "why": "Overrides vs gitignore matcher tests.",
+      "occurrences": [
+        "crates/ignore/src/incremental.rs:723-728",
+        "crates/ignore/src/incremental.rs:705-710"
+      ]
+    },
+    {
+      "why": "Custom-ignore vs gitignore matcher loops.",
+      "occurrences": [
+        "crates/ignore/src/dir.rs:628-661",
+        "crates/ignore/src/dir.rs:563-594"
+      ]
+    },
+    {
+      "why": "Different file-type table rows.",
+      "occurrences": [
+        "crates/ignore/src/default_types.rs:279-283",
+        "crates/ignore/src/default_types.rs:80-84"
+      ]
+    },
+    {
+      "why": "3 lines of ignore-file fixtures.",
+      "occurrences": [
+        "crates/ignore/src/incremental.rs:1244-1246",
+        "crates/ignore/src/incremental.rs:836-838"
+      ]
+    },
+    {
+      "why": "Context-limit parse variants.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:1207-1210",
+        "crates/core/flags/defs.rs:1192-1195"
+      ]
+    },
+    {
+      "why": "Stats vs submatch serialization fields.",
+      "occurrences": [
+        "crates/printer/src/stats.rs:166-169",
+        "crates/printer/src/jsont.rs:104-107"
+      ]
+    },
+    {
+      "why": "PCRE2 vs Text flag impls — boilerplate.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:5706-5763",
+        "crates/core/flags/defs.rs:7005-7057"
+      ]
+    },
+    {
+      "why": "Different literal-extraction cases.",
+      "occurrences": [
+        "crates/regex/src/literal.rs:863-866",
+        "crates/regex/src/literal.rs:802-805"
+      ]
+    },
+    {
+      "why": "LineBuffered vs Binary flag impls — boilerplate.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:3911-3958",
+        "crates/core/flags/defs.rs:503-569"
+      ]
+    },
+    {
+      "why": "Overlapping only_matching test windows, ragged.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:3237-3265",
+        "crates/printer/src/standard.rs:3173-3204"
+      ]
+    },
+    {
+      "why": "2 lines of differing sink fields.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:1093-1094",
+        "crates/printer/src/standard.rs:1131-1132"
+      ]
+    },
+    {
+      "why": "Line-number vs context parse tests.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:4018-4023",
+        "crates/core/flags/defs.rs:1133-1138"
+      ]
+    },
+    {
+      "why": "sort vs sortr parse windows.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:6754-6771",
+        "crates/core/flags/defs.rs:6856-6873"
+      ]
+    },
+    {
+      "why": "Fixture variable renames.",
+      "occurrences": [
+        "crates/ignore/src/dir.rs:1438-1440",
+        "crates/ignore/src/dir.rs:1402-1404"
+      ]
+    },
+    {
+      "why": "no-ignore-parent vs no-unicode parse tests.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:5043-5047",
+        "crates/core/flags/defs.rs:5322-5326"
+      ]
+    },
+    {
+      "why": "Type vs glob-negation fixtures.",
+      "occurrences": [
+        "tests/misc.rs:259-267",
+        "tests/misc.rs:331-339"
+      ]
+    },
+    {
+      "why": "hiargs field-assignment windows.",
+      "occurrences": [
+        "crates/core/flags/hiargs.rs:310-317",
+        "crates/core/flags/hiargs.rs:321-328"
+      ]
+    },
+    {
+      "why": "2 lines of different matchers.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:3753-3754",
+        "crates/printer/src/standard.rs:2954-2955"
+      ]
+    },
+    {
+      "why": "Git-dir fixture variants.",
+      "occurrences": [
+        "crates/ignore/src/incremental.rs:1012-1014",
+        "crates/ignore/src/incremental.rs:790-792"
+      ]
+    },
+    {
+      "why": "SearcherBuilder vs PathPrinterBuilder — different crates.",
+      "occurrences": [
+        "crates/searcher/src/searcher/mod.rs:510-556",
+        "crates/printer/src/path.rs:89-122"
+      ]
+    },
+    {
+      "why": "Overlap fixture variants.",
+      "occurrences": [
+        "tests/multiline.rs:6-10",
+        "tests/multiline.rs:14-18"
+      ]
+    },
+    {
+      "why": "Context sherlock tester windows, ragged.",
+      "occurrences": [
+        "crates/searcher/src/searcher/glue.rs:1097-1146",
+        "crates/searcher/src/searcher/glue.rs:1210-1267"
+      ]
+    },
+    {
+      "why": "Null vs OnlyMatching flag impls — boilerplate.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:5339-5389",
+        "crates/core/flags/defs.rs:5513-5561"
+      ]
+    },
+    {
+      "why": "Gitignore vs gitexclude matcher arms.",
+      "occurrences": [
+        "crates/ignore/src/dir.rs:579-585",
+        "crates/ignore/src/dir.rs:586-592"
+      ]
+    },
+    {
+      "why": "shortest_match vs find forwarders.",
+      "occurrences": [
+        "crates/matcher/src/lib.rs:1345-1351",
+        "crates/matcher/src/lib.rs:1171-1174"
+      ]
+    },
+    {
+      "why": "WordRegexp vs LineRegexp flag impls — boilerplate.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:7891-7932",
+        "crates/core/flags/defs.rs:4084-4122"
+      ]
+    },
+    {
+      "why": "Replacement vs context-line fixtures.",
+      "occurrences": [
+        "tests/misc.rs:228-240",
+        "tests/misc.rs:512-524"
+      ]
+    },
+    {
+      "why": "3 lines of color-match calls.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:1279-1281",
+        "crates/printer/src/standard.rs:1274-1276"
+      ]
+    },
+    {
+      "why": "per_match vs only_matching printer tests, ragged.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:3001-3084",
+        "crates/printer/src/standard.rs:3267-3350"
+      ]
+    },
+    {
+      "why": "pcre2 vs regex captures creation.",
+      "occurrences": [
+        "crates/pcre2/src/matcher.rs:331-341",
+        "crates/regex/src/matcher.rs:423-438"
+      ]
+    },
+    {
+      "why": "3 lines from different files.",
+      "occurrences": [
+        "crates/index/src/literal.rs:623-625",
+        "crates/searcher/src/testutil.rs:471-473"
+      ]
+    },
+    {
+      "why": "Overlapping multi_line test windows, ragged.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:3140-3206",
+        "crates/printer/src/standard.rs:3207-3267"
+      ]
+    },
+    {
+      "why": "max_matches fixture variants.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:2851-2890",
+        "crates/printer/src/standard.rs:2802-2838"
+      ]
+    },
+    {
+      "why": "no-unicode vs quiet parse tests.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:5325-5335",
+        "crates/core/flags/defs.rs:6117-6128"
+      ]
+    },
+    {
+      "why": "2-3 lines of ignore-file depth variants.",
+      "occurrences": [
+        "crates/ignore/src/incremental.rs:813-814",
+        "crates/ignore/src/incremental.rs:903-905"
+      ]
+    },
+    {
+      "why": "replacement preview1 vs preview2 tests.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:3619-3643",
+        "crates/printer/src/standard.rs:3646-3670"
+      ]
+    },
+    {
+      "why": "separator_search vs separator_context setters.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:374-380",
+        "crates/printer/src/standard.rs:391-397"
+      ]
+    },
+    {
+      "why": "StopOnNonmatch vs NullData flag impls — boilerplate.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:6946-6982",
+        "crates/core/flags/defs.rs:5388-5431"
+      ]
+    },
+    {
+      "why": "Context vs BeforeContext flag impls — boilerplate.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:1074-1115",
+        "crates/core/flags/defs.rs:417-455"
+      ]
+    },
+    {
+      "why": "Multiline vs binary fixtures.",
+      "occurrences": [
+        "tests/multiline.rs:28-43",
+        "tests/binary.rs:239-247"
+      ]
+    },
+    {
+      "why": "Summary vs standard separator setters.",
+      "occurrences": [
+        "crates/printer/src/summary.rs:299-302",
+        "crates/printer/src/standard.rs:407-413"
+      ]
+    },
+    {
+      "why": "Quit vs Convert binary detection tests.",
+      "occurrences": [
+        "crates/searcher/src/line_buffer.rs:815-821",
+        "crates/searcher/src/line_buffer.rs:911-917"
+      ]
+    },
+    {
+      "why": "Matcher test-util vs searcher test-util — different crates.",
+      "occurrences": [
+        "crates/matcher/tests/util.rs:69-83",
+        "crates/searcher/src/testutil.rs:64-84"
+      ]
+    },
+    {
+      "why": "JSON begin-event variants.",
+      "occurrences": [
+        "tests/json.rs:291-313",
+        "tests/json.rs:333-355"
+      ]
+    },
+    {
+      "why": "Fixture path variables.",
+      "occurrences": [
+        "crates/ignore/src/incremental.rs:982-984",
+        "crates/ignore/src/incremental.rs:1010-1012"
+      ]
+    },
+    {
+      "why": "Context-precedence parse variants.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:1168-1176",
+        "crates/core/flags/defs.rs:1183-1194"
+      ]
+    },
+    {
+      "why": "Path-with/without-match summary windows.",
+      "occurrences": [
+        "crates/printer/src/summary.rs:828-836",
+        "crates/printer/src/summary.rs:1031-1042"
+      ]
+    },
+    {
+      "why": "Trim vs no-messages parse tests.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:7225-7232",
+        "crates/core/flags/defs.rs:5147-5154"
+      ]
+    },
+    {
+      "why": "SearcherBuilder vs PathPrinterBuilder — different crates.",
+      "occurrences": [
+        "crates/searcher/src/searcher/mod.rs:413-463",
+        "crates/printer/src/path.rs:70-111"
+      ]
+    },
+    {
+      "why": "StandardBuilder vs RegexMatcherBuilder — different crates.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:164-263",
+        "crates/regex/src/matcher.rs:157-259"
+      ]
+    },
+    {
+      "why": "Different file-type table rows.",
+      "occurrences": [
+        "crates/ignore/src/default_types.rs:246-248",
+        "crates/ignore/src/default_types.rs:232-234"
+      ]
+    },
+    {
+      "why": "after_context vs multi_line accessors.",
+      "occurrences": [
+        "crates/searcher/src/searcher/mod.rs:919-932",
+        "crates/searcher/src/searcher/mod.rs:863-884"
+      ]
+    },
+    {
+      "why": "1 identical ban line.",
+      "occurrences": [
+        "crates/regex/src/ban.rs:29-29",
+        "crates/regex/src/ban.rs:20-20"
+      ]
+    },
+    {
+      "why": "Context-count tester variants.",
+      "occurrences": [
+        "crates/searcher/src/searcher/glue.rs:950-963",
+        "crates/searcher/src/searcher/glue.rs:1066-1079"
+      ]
+    },
+    {
+      "why": "4 lines of matcher asserts.",
+      "occurrences": [
+        "crates/ignore/src/incremental.rs:777-780",
+        "crates/ignore/src/incremental.rs:836-839"
+      ]
+    },
+    {
+      "why": "Context-flag parse variants.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:1123-1133",
+        "crates/core/flags/defs.rs:278-288"
+      ]
+    },
+    {
+      "why": "replacement preview2 vs preview1 tests.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:3645-3670",
+        "crates/printer/src/standard.rs:3618-3643"
+      ]
+    },
+    {
+      "why": "3 lines of matcher asserts.",
+      "occurrences": [
+        "crates/ignore/src/incremental.rs:797-799",
+        "crates/ignore/src/incremental.rs:973-975"
+      ]
+    },
+    {
+      "why": "2 lines of differing sink fields.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:1048-1049",
+        "crates/printer/src/standard.rs:1131-1132"
+      ]
+    },
+    {
+      "why": "3 lines of color-match calls.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:1280-1282",
+        "crates/printer/src/standard.rs:1275-1277"
+      ]
+    },
+    {
+      "why": "5 lines of matcher forwards across crates.",
+      "occurrences": [
+        "crates/matcher/src/lib.rs:855-859",
+        "crates/regex/src/matcher.rs:448-452"
+      ]
+    },
+    {
+      "why": "Misc vs feature smart-case fixtures.",
+      "occurrences": [
+        "tests/misc.rs:11-19",
+        "tests/feature.rs:205-213"
+      ]
+    },
+    {
+      "why": "DfaSizeLimit vs MaxFilesize flag impls — boilerplate.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:1582-1622",
+        "crates/core/flags/defs.rs:4380-4419"
+      ]
+    },
+    {
+      "why": "Different literal-extraction cases.",
+      "occurrences": [
+        "crates/regex/src/literal.rs:732-734",
+        "crates/regex/src/literal.rs:858-859"
+      ]
+    },
+    {
+      "why": "per_match vs byte_offset builder setters.",
+      "occurrences": [
+        "crates/ignore/src/incremental.rs:691-693",
+        "crates/ignore/src/incremental.rs:827-829"
+      ]
+    },
+    {
+      "why": "Context-flag order variants.",
+      "occurrences": [
+        "tests/regression.rs:1267-1270",
+        "tests/regression.rs:1262-1265"
+      ]
+    },
+    {
+      "why": "Standard vs Summary separator setters.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:423-463",
+        "crates/printer/src/summary.rs:299-333"
+      ]
+    },
+    {
+      "why": "SHERLOCK vs haystack variable.",
+      "occurrences": [
+        "crates/printer/src/json.rs:998-1003",
+        "crates/printer/src/json.rs:1028-1033"
+      ]
+    },
+    {
+      "why": "2 lines of differing serialize calls.",
+      "occurrences": [
+        "crates/printer/src/jsont.rs:126-127",
+        "crates/printer/src/jsont.rs:59-60"
+      ]
+    },
+    {
+      "why": "SearcherBuilder vs PathPrinterBuilder — different crates.",
+      "occurrences": [
+        "crates/searcher/src/searcher/mod.rs:413-501",
+        "crates/printer/src/path.rs:70-122"
+      ]
+    },
+    {
+      "why": "NoIgnoreGlobal vs OneFileSystem flag impls — boilerplate.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:4909-4943",
+        "crates/core/flags/defs.rs:5453-5499"
+      ]
+    },
+    {
+      "why": "Locator asserts for different line sets.",
+      "occurrences": [
+        "crates/searcher/src/lines.rs:431-435",
+        "crates/searcher/src/lines.rs:386-390"
+      ]
+    },
+    {
+      "why": "3 lines of differing builder settings.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:3573-3575",
+        "crates/printer/src/standard.rs:1896-1898"
+      ]
+    },
+    {
+      "why": "Hidden-file fixture variants.",
+      "occurrences": [
+        "crates/ignore/src/incremental.rs:1239-1241",
+        "crates/ignore/src/incremental.rs:1223-1225"
+      ]
+    },
+    {
+      "why": "Count vs count-matches parse tests.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:1380-1395",
+        "crates/core/flags/defs.rs:1443-1455"
+      ]
+    },
+    {
+      "why": "2 lines of different literal cases.",
+      "occurrences": [
+        "crates/regex/src/literal.rs:744-745",
+        "crates/regex/src/literal.rs:735-736"
+      ]
+    },
+    {
+      "why": "Binary rgtest fixtures.",
+      "occurrences": [
+        "tests/binary.rs:335-351",
+        "tests/binary.rs:423-431"
+      ]
+    },
+    {
+      "why": "Symlink vs other walk fixtures.",
+      "occurrences": [
+        "tests/misc.rs:819-834",
+        "tests/regression.rs:195-211"
+      ]
+    },
+    {
+      "why": "Engine vs encoding parse tests.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:1829-1839",
+        "crates/core/flags/defs.rs:1735-1744"
+      ]
+    },
+    {
+      "why": "heading false vs true printer tests.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:2173-2207",
+        "crates/printer/src/standard.rs:2209-2245"
+      ]
+    },
+    {
+      "why": "Different file-type table rows.",
+      "occurrences": [
+        "crates/ignore/src/default_types.rs:118-120",
+        "crates/ignore/src/default_types.rs:91-93"
+      ]
+    },
+    {
+      "why": "Context-flag parse variants.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:278-281",
+        "crates/core/flags/defs.rs:1123-1126"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "BeforeContext and AfterContext flag definitions and tests are the same 88 lines with before systematically swapped for after",
+      "occurrences": [
+        "crates/core/flags/defs.rs:417-504",
+        "crates/core/flags/defs.rs:232-319"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "messages and ignore_messages accessor pairs are the same 14 lines with the backing atomics systematically swapped",
+      "occurrences": [
+        "crates/core/messages.rs:108-115",
+        "crates/core/messages.rs:124-131"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "GramQuery::or and GramQuery::and normalizers are the same 27 lines with Or systematically swapped for And",
+      "occurrences": [
+        "crates/index/src/literal.rs:73-99",
+        "crates/index/src/literal.rs:101-127"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:2826-2847",
+        "crates/core/flags/defs.rs:7704-7725"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/searcher/src/line_buffer.rs:766-773",
+        "crates/searcher/src/line_buffer.rs:741-748"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/ignore/src/default_types.rs:112-114",
+        "crates/ignore/src/default_types.rs:121-123"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/searcher/src/searcher/glue.rs:1248-1266",
+        "crates/searcher/src/searcher/glue.rs:1393-1415"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/ignore/src/overrides.rs:239-246",
+        "crates/ignore/src/overrides.rs:253-260"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/pcre2/src/matcher.rs:135-151",
+        "crates/ignore/src/walk.rs:932-949"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/searcher/src/testutil.rs:756-758",
+        "crates/searcher/src/testutil.rs:779-781"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:387-394",
+        "crates/core/flags/defs.rs:484-487"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/ignore/src/dir.rs:1291-1292",
+        "crates/ignore/src/dir.rs:1371-1372"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:3975-4025",
+        "crates/core/flags/defs.rs:4028-4081"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/regression.rs:130-134",
+        "tests/regression.rs:137-141"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:2571-2594",
+        "crates/printer/src/standard.rs:3085-3109"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:4483-4490",
+        "crates/core/flags/defs.rs:7059-7066"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/ignore/src/dir.rs:1304-1306",
+        "crates/ignore/src/walk.rs:2349-2351"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:5161-5207",
+        "crates/core/flags/defs.rs:4196-4249"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/misc.rs:498-510",
+        "tests/misc.rs:896-907"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:3496-3498",
+        "crates/printer/src/standard.rs:3467-3469"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:1135-1145",
+        "crates/core/flags/defs.rs:475-485"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:3755-3774",
+        "crates/printer/src/standard.rs:1982-2021"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/pcre2/src/matcher.rs:51-57",
+        "crates/regex/src/config.rs:183-189"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/ignore/src/dir.rs:1179-1182",
+        "crates/ignore/src/dir.rs:1204-1207"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:7980-7982",
+        "crates/core/flags/defs.rs:7976-7978"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:5513-5547",
+        "crates/core/flags/defs.rs:6071-6109"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/printer/src/path.rs:89-111",
+        "crates/printer/src/standard.rs:423-447"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:3174-3201",
+        "crates/core/flags/defs.rs:2590-2635"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/printer/src/summary.rs:187-267",
+        "crates/printer/src/standard.rs:140-221"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:3207-3211",
+        "crates/core/flags/defs.rs:6002-6006"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:260-296",
+        "crates/printer/src/json.rs:79-112"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:4124-4127",
+        "crates/core/flags/defs.rs:7874-7877"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:6138-6219",
+        "crates/core/flags/defs.rs:1582-1659"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:290-293",
+        "crates/core/flags/defs.rs:284-287"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/ignore/src/dir.rs:1376-1378",
+        "crates/ignore/src/dir.rs:1404-1406"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/globset/src/serde_impl.rs:69-75",
+        "crates/globset/src/serde_impl.rs:37-43"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/misc.rs:836-846",
+        "tests/regression.rs:413-423"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:1710-1714",
+        "crates/printer/src/standard.rs:1683-1687"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:1792-1794",
+        "crates/printer/src/standard.rs:1817-1819"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/ignore/src/dir.rs:1433-1435",
+        "crates/ignore/src/incremental.rs:1238-1240"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:6515-6562",
+        "crates/core/flags/defs.rs:3224-3266"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:5193-5244",
+        "crates/core/flags/defs.rs:5248-5317"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:6856-6862",
+        "crates/core/flags/defs.rs:6754-6760"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:2718-2745",
+        "crates/printer/src/standard.rs:2764-2795"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/ignore/src/incremental.rs:836-838",
+        "crates/ignore/src/incremental.rs:777-779"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/regex/src/literal.rs:794-795",
+        "crates/regex/src/literal.rs:805-806"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:7236-7288",
+        "crates/core/flags/defs.rs:7461-7510"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/printer/src/json.rs:908-921",
+        "crates/printer/src/summary.rs:799-812"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:1116-1118",
+        "crates/printer/src/standard.rs:1065-1067"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:3348-3407",
+        "crates/core/flags/defs.rs:2670-2728"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/ignore/src/incremental.rs:836-838",
+        "crates/ignore/src/incremental.rs:851-853"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:1182-1185",
+        "crates/core/flags/defs.rs:1192-1195"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/regex/src/literal.rs:324-329",
+        "crates/regex/src/literal.rs:340-345"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:467-472",
+        "crates/core/flags/defs.rs:7878-7883"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/ignore/src/dir.rs:1402-1404",
+        "crates/ignore/src/dir.rs:1417-1419"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:4235-4239",
+        "crates/core/flags/defs.rs:4574-4578"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:3808-3809",
+        "crates/printer/src/standard.rs:2954-2955"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/printer/src/path.rs:89-122",
+        "crates/searcher/src/searcher/mod.rs:431-501"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/searcher/src/searcher/glue.rs:1149-1207",
+        "crates/searcher/src/searcher/glue.rs:1097-1146"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:1323-1379",
+        "crates/core/flags/defs.rs:2250-2293"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/misc.rs:228-240",
+        "tests/misc.rs:461-472"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "crates/printer/src/summary.rs:1092-1102",
+        "crates/printer/src/summary.rs:1054-1064"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:7400-7461",
+        "crates/core/flags/defs.rs:7313-7399"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/ignore/src/dir.rs:1173-1183",
+        "crates/ignore/src/dir.rs:1186-1196"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/printer/src/json.rs:106-112",
+        "crates/printer/src/standard.rs:374-380"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:1074-1115",
+        "crates/core/flags/defs.rs:232-270"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/multiline.rs:28-43",
+        "tests/multiline.rs:72-89"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:423-429",
+        "crates/printer/src/summary.rs:299-302"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/globset/src/lib.rs:379-381",
+        "crates/globset/src/lib.rs:342-344"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/printer/src/summary.rs:877-888",
+        "crates/printer/src/json.rs:997-1002"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:4851-4859",
+        "crates/core/flags/defs.rs:5147-5154"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/globset/src/lib.rs:665-676",
+        "crates/globset/src/lib.rs:695-706"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/searcher/src/searcher/mod.rs:413-463",
+        "crates/searcher/src/searcher/mod.rs:495-539"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:164-263",
+        "crates/searcher/src/searcher/mod.rs:346-434"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/ignore/src/default_types.rs:246-248",
+        "crates/ignore/src/default_types.rs:125-127"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/searcher/src/searcher/glue.rs:897-912",
+        "crates/searcher/src/searcher/glue.rs:1066-1079"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:3736-3741",
+        "crates/core/flags/defs.rs:3684-3689"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/ignore/src/incremental.rs:609-616",
+        "crates/ignore/src/incremental.rs:618-625"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/ignore/src/incremental.rs:866-869",
+        "crates/ignore/src/incremental.rs:777-780"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:470-475",
+        "crates/core/flags/defs.rs:285-290"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/globset/src/lib.rs:379-381",
+        "crates/globset/src/glob.rs:142-144"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/matcher/src/lib.rs:726-730",
+        "crates/regex/src/matcher.rs:448-452"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/ignore/src/incremental.rs:639-641",
+        "crates/ignore/src/incremental.rs:691-693"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/globset/src/lib.rs:1170-1172",
+        "crates/printer/src/hyperlink/mod.rs:974-977"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/printer/src/jsont.rs:126-127",
+        "crates/printer/src/jsont.rs:78-79"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:5453-5499",
+        "crates/core/flags/defs.rs:5111-5145"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/searcher/src/lines.rs:386-390",
+        "crates/searcher/src/lines.rs:451-455"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:3525-3527",
+        "crates/printer/src/standard.rs:1896-1898"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/ignore/src/incremental.rs:1196-1198",
+        "crates/ignore/src/incremental.rs:1255-1257"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:594-637",
+        "crates/core/flags/defs.rs:503-569"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "crates/core/flags/defs.rs:463-466",
+        "crates/core/flags/defs.rs:278-281"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "crates/printer/src/standard.rs:2875-2901",
+        "crates/printer/src/standard.rs:2823-2848"
+      ]
+    }
+  ]
+}

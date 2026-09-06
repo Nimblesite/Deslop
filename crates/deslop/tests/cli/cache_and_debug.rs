@@ -132,7 +132,7 @@ fn default_run_uses_the_cache() -> Result<()> {
         &tmp.path().join("report"),
         &[MIN_NODES_FLAG, MIN_NODES_VALUE],
     )?;
-    let json = fs::read_to_string(tmp.path().join("report.json"))?;
+    let json = report_json_text(&tmp)?;
     assert!(
         json.contains("\"misses\": 2"),
         "a bare run must consult the cache and miss on a cold tree: {json}"
@@ -160,7 +160,7 @@ fn no_incremental_flag_skips_the_cache() -> Result<()> {
         &tmp.path().join("report"),
         &[MIN_NODES_FLAG, MIN_NODES_VALUE, "--no-incremental"],
     )?;
-    let json = fs::read_to_string(tmp.path().join("report.json"))?;
+    let json = report_json_text(&tmp)?;
     assert!(
         json.contains("\"hits\": 0"),
         "--no-incremental must record zero hits: {json}"
@@ -319,7 +319,7 @@ fn cache_write_failure_is_degraded_not_fatal() -> Result<()> {
     let mut restore = fs::metadata(&locked_dir)?.permissions();
     restore.set_mode(0o755);
     fs::set_permissions(&locked_dir, restore)?;
-    let json = fs::read_to_string(tmp.path().join("report.json"))?;
+    let json = report_json_text(&tmp)?;
     assert!(
         json.contains("\"files_analysed\": 2"),
         "pipeline must still report both files: {json}"
@@ -371,7 +371,7 @@ fn synthetic_corpus_scale_smoke_test() -> Result<()> {
         elapsed.as_secs() < 180,
         "synthetic corpus ran for {elapsed:?} — something is catastrophically wrong",
     );
-    let json = fs::read_to_string(tmp.path().join("report.json"))?;
+    let json = report_json_text(&tmp)?;
     assert!(
         json.contains("\"files_analysed\": 10"),
         "synthetic corpus must analyse every generated file: {json}"
@@ -395,10 +395,9 @@ fn synthetic_corpus_scale_smoke_test() -> Result<()> {
 // below pins that behaviour so the bug cannot regress.
 #[test]
 fn bug_fixture_walks_trivial_class_body_without_panicking() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let mut cmd = fixture_command("bug-empty-class", &tmp.path().join("report"))?;
+    let (tmp, mut cmd) = fixture_run_command("bug-empty-class")?;
     let _assertion = cmd.args(["--min-nodes", "4"]).assert().success();
-    let json = fs::read_to_string(tmp.path().join("report.json"))?;
+    let json = report_json_text(&tmp)?;
     assert!(
         json.contains("\"files_analysed\": 1"),
         "empty-class fixture must still analyse its one file: {json}"

@@ -12,12 +12,19 @@ use std::{ffi::OsStr, fs, path::Path, path::PathBuf};
 use anyhow::Result;
 use assert_cmd::Command;
 use predicates::str::contains;
+use serde_json::Value;
 
 use crate::common::scan_dir::temp_scan_dir;
 use crate::common::{rerun_ops::*, *};
 
 /// Config body that excludes the `Beta.cs` half of the seeded clone pair.
 const EXCLUDE_BETA: &str = "[defaults]\nexclude = [\"**/Beta.cs\"]\n";
+
+/// The `--min-nodes` floor at which the seeded Alpha/Beta pair clusters.
+const SEEDED_MIN_NODES: &str = "8";
+
+/// A floor low enough for one small hand-written class to fingerprint.
+const SOLO_MIN_NODES: &str = "4";
 
 /// Returns the on-disk `<dir>/report.delta.json` path the CLI emits
 /// when `--rerun-touch` is passed with an `--output <dir>/report` base.
@@ -33,6 +40,26 @@ fn seeded_root() -> Result<(tempfile::TempDir, PathBuf)> {
     let scan_root = tmp.path().join("src");
     seed(&fixture("csharp-small"), &scan_root)?;
     Ok((tmp, scan_root))
+}
+
+/// Runs one rerun scenario — `ops` at `min_nodes` over `scan_root`, writing
+/// under `<tmp>/report` — asserts the CLI succeeded, and returns the
+/// emitted delta.
+fn rerun_delta(
+    tmp: &Path,
+    scan_root: &Path,
+    min_nodes: &str,
+    ops: &[(&str, &OsStr)],
+) -> Result<Value> {
+    let mut cmd = rerun_cmd(scan_root, &tmp.join("report"), min_nodes, ops)?;
+    let _assertion = cmd.assert().success();
+    load_json(&delta_path(tmp))
+}
+
+/// Asserts `delta` spans the first rerun: generation 0 to generation 1.
+fn assert_first_generation_span(delta: &Value) {
+    assert_eq!(field(delta, "from_generation"), 0);
+    assert_eq!(field(delta, "to_generation"), 1);
 }
 
 /// Builds `deslop <scan_root> --output <out_base> --min-nodes <min_nodes>`
@@ -61,13 +88,12 @@ fn rerun_touch_with_unchanged_sources_emits_empty_delta() -> Result<()> {
     let (tmp, scan_root) = seeded_root()?;
     let touched = scan_root.join("Alpha.cs");
     let ops = [("--rerun-touch", touched.as_os_str())];
-    let mut cmd = rerun_cmd(&scan_root, &tmp.path().join("report"), "8", &ops)?;
-    let _assertion = cmd.assert().success();
-    let delta_json = delta_path(tmp.path());
-    assert!(delta_json.is_file(), "delta file must be emitted");
-    let delta = load_json(&delta_json)?;
-    assert_eq!(field(&delta, "from_generation"), 0);
-    assert_eq!(field(&delta, "to_generation"), 1);
+    let delta = rerun_delta(tmp.path(), &scan_root, SEEDED_MIN_NODES, &ops)?;
+    assert!(
+        delta_path(tmp.path()).is_file(),
+        "delta file must be emitted"
+    );
+    assert_first_generation_span(&delta);
     assert_eq!(
         array_len(&delta, "clusters_added"),
         0,
@@ -95,11 +121,8 @@ fn rerun_touch_on_existing_file_reparses_via_update_files() -> Result<()> {
         "namespace Beta\n{\n    public class Solo\n    {\n        public int Compute(int x)\n        {\n            return x + 1;\n        }\n    }\n}\n",
     )?;
     let ops = [("--rerun-touch", beta.as_os_str())];
-    let mut cmd = rerun_cmd(&scan_root, &tmp.path().join("report"), "4", &ops)?;
-    let _assertion = cmd.assert().success();
-    let delta = load_json(&delta_path(tmp.path()))?;
-    assert_eq!(field(&delta, "from_generation"), 0);
-    assert_eq!(field(&delta, "to_generation"), 1);
+    let delta = rerun_delta(tmp.path(), &scan_root, SOLO_MIN_NODES, &ops)?;
+    assert_first_generation_span(&delta);
     assert_eq!(
         array_len(&delta, "clusters_added"),
         0,
@@ -124,9 +147,7 @@ fn rerun_touch_ignores_unsupported_and_out_of_root_paths() -> Result<()> {
         ("--rerun-touch", readme.as_os_str()),
         ("--rerun-touch", missing.as_os_str()),
     ];
-    let mut cmd = rerun_cmd(&scan_root, &tmp.path().join("report"), "8", &ops)?;
-    let _assertion = cmd.assert().success();
-    let delta = load_json(&delta_path(tmp.path()))?;
+    let delta = rerun_delta(tmp.path(), &scan_root, SEEDED_MIN_NODES, &ops)?;
     assert_eq!(
         array_len(&delta, "clusters_added"),
         0,
@@ -153,9 +174,7 @@ fn rerun_add_introduces_new_file_and_reports_cluster_added() -> Result<()> {
     let dst = scan_root.join("Beta.cs");
     let spec = add_spec(&staged, &dst);
     let ops = [("--rerun-add", OsStr::new(&spec))];
-    let mut cmd = rerun_cmd(&scan_root, &tmp.path().join("report"), "8", &ops)?;
-    let _assertion = cmd.assert().success();
-    let delta = load_json(&delta_path(tmp.path()))?;
+    let delta = rerun_delta(tmp.path(), &scan_root, SEEDED_MIN_NODES, &ops)?;
     assert!(
         array_len(&delta, "clusters_added") > 0,
         "staging a new file must surface a clusters_added entry: {delta:#}"
@@ -187,9 +206,7 @@ fn rerun_remove_drops_clone_and_reports_cluster_removed() -> Result<()> {
     let (tmp, scan_root) = seeded_root()?;
     let doomed = scan_root.join("Beta.cs");
     let ops = [("--rerun-remove", doomed.as_os_str())];
-    let mut cmd = rerun_cmd(&scan_root, &tmp.path().join("report"), "8", &ops)?;
-    let _assertion = cmd.assert().success();
-    let delta = load_json(&delta_path(tmp.path()))?;
+    let delta = rerun_delta(tmp.path(), &scan_root, SEEDED_MIN_NODES, &ops)?;
     assert!(
         array_len(&delta, "clusters_removed") > 0,
         "removing the only peer must surface a clusters_removed entry: {delta:#}"
@@ -214,11 +231,8 @@ fn issue_189_new_exclude_pattern_drops_existing_corpus_files() -> Result<()> {
     let config_dst = scan_root.join(".deslop.toml");
     let spec = staged_spec(tmp.path(), "staged-deslop.toml", EXCLUDE_BETA, &config_dst)?;
     let ops = [("--rerun-add", OsStr::new(&spec))];
-    let mut cmd = rerun_cmd(&scan_root, &tmp.path().join("report"), "8", &ops)?;
-    let _assertion = cmd.assert().success();
-    let delta = load_json(&delta_path(tmp.path()))?;
-    assert_eq!(field(&delta, "from_generation"), 0);
-    assert_eq!(field(&delta, "to_generation"), 1);
+    let delta = rerun_delta(tmp.path(), &scan_root, SEEDED_MIN_NODES, &ops)?;
+    assert_first_generation_span(&delta);
     assert!(
         array_len(&delta, "clusters_removed") > 0,
         "excluding Beta.cs must remove the Alpha/Beta clone cluster: {delta:#}"
@@ -248,11 +262,8 @@ fn issue_189_removed_exclude_pattern_rediscovers_files() -> Result<()> {
         ("--config", override_config.as_os_str()),
         ("--rerun-add", OsStr::new(&spec)),
     ];
-    let mut cmd = rerun_cmd(&scan_root, &tmp.path().join("report"), "8", &ops)?;
-    let _assertion = cmd.assert().success();
-    let delta = load_json(&delta_path(tmp.path()))?;
-    assert_eq!(field(&delta, "from_generation"), 0);
-    assert_eq!(field(&delta, "to_generation"), 1);
+    let delta = rerun_delta(tmp.path(), &scan_root, SEEDED_MIN_NODES, &ops)?;
+    assert_first_generation_span(&delta);
     assert!(
         array_len(&delta, "clusters_added") > 0,
         "dropping the exclude must re-discover Beta.cs and surface its cluster: {delta:#}"
@@ -276,9 +287,7 @@ fn issue_199_delta_carries_recomputed_metrics() -> Result<()> {
     let (tmp, scan_root) = seeded_root()?;
     let doomed = scan_root.join("Beta.cs");
     let ops = [("--rerun-remove", doomed.as_os_str())];
-    let mut cmd = rerun_cmd(&scan_root, &tmp.path().join("report"), "8", &ops)?;
-    let _assertion = cmd.assert().success();
-    let delta = load_json(&delta_path(tmp.path()))?;
+    let delta = rerun_delta(tmp.path(), &scan_root, SEEDED_MIN_NODES, &ops)?;
     let report = load_json(&tmp.path().join("report.json"))?;
     let delta_metrics = field(&delta, "metrics");
     let report_metrics = field(&report, "metrics");
@@ -318,7 +327,7 @@ fn rerun_touch_on_excluded_path_drops_it_from_corpus() -> Result<()> {
     // config that excludes Beta.cs, so touching it drops it.
     let mut first = deslop_cmd(&scan_root, &tmp.path().join("first"))?;
     let _assertion = first
-        .args(["--min-nodes", "8", "--nohtml", "--notext"])
+        .args(["--min-nodes", SEEDED_MIN_NODES, "--nohtml", "--notext"])
         .assert()
         .success();
     let exclusion = tmp.path().join("deslop.toml");
@@ -328,13 +337,17 @@ fn rerun_touch_on_excluded_path_drops_it_from_corpus() -> Result<()> {
         ("--config", exclusion.as_os_str()),
         ("--rerun-touch", beta.as_os_str()),
     ];
-    let mut second = rerun_cmd(&scan_root, &tmp.path().join("second"), "8", &ops)?;
+    let mut second = rerun_cmd(
+        &scan_root,
+        &tmp.path().join("second"),
+        SEEDED_MIN_NODES,
+        &ops,
+    )?;
     let _assertion = second.assert().success();
     let delta = load_json(&tmp.path().join("second.delta.json"))?;
     // The second initial pass already filters Beta.cs via exclusion, so
     // the rerun's drop-path branch is the relevant cover — the delta
     // simply reports no changes between gen 0 and gen 1.
-    assert_eq!(field(&delta, "from_generation"), 0);
-    assert_eq!(field(&delta, "to_generation"), 1);
+    assert_first_generation_span(&delta);
     Ok(())
 }

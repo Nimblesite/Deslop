@@ -73,15 +73,7 @@ const CELL_STRANGER_LINE: u64 = 4;
 const CONST_LOC_PER_FILE: u64 = 4;
 /// `(start_line, end_line)` for every occurrence of `cluster`, sorted.
 fn occurrence_ranges(cluster: &Value) -> Vec<(u64, u64)> {
-    let mut ranges: Vec<(u64, u64)> = occurrences(cluster)
-        .iter()
-        .map(|occurrence| {
-            (
-                field(occurrence, "start_line").as_u64().unwrap_or(0),
-                field(occurrence, "end_line").as_u64().unwrap_or(0),
-            )
-        })
-        .collect();
+    let mut ranges = cluster_line_spans(cluster);
     ranges.sort_unstable();
     ranges
 }

@@ -58,9 +58,7 @@ async fn live_slot() -> Option<SemaphorePermit<'static>> {
 /// tests in this file.
 fn csharp_small_session() -> Result<(tempfile::TempDir, AnalysisSession)> {
     let tmp = copy_fixture("csharp-small")?;
-    let provider = Arc::new(StubProvider::new());
-    let session = AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, provider)
-        .context("session")?;
+    let session = live_session(tmp.path())?;
     Ok((tmp, session))
 }
 
@@ -178,9 +176,7 @@ async fn live_loop_hides_cluster_after_deslop_toml_report_hide_edit() -> Result<
     let config_path = scan_root.join(".deslop.toml");
     fs::write(&config_path, b"[defaults]\n").context("seed .deslop.toml")?;
 
-    let provider = Arc::new(StubProvider::new());
-    let session =
-        AnalysisSession::new(scan_root.clone(), 15, false, None, provider).context("session")?;
+    let session = live_session(&scan_root)?;
     let pre = session.report();
     assert!(
         !pre.clusters.is_empty(),
@@ -255,9 +251,7 @@ async fn live_loop_evicts_newly_gitignored_tree_after_gitignore_edit() -> Result
             .with_context(|| format!("copy {source}"))?;
     }
 
-    let provider = Arc::new(StubProvider::new());
-    let session =
-        AnalysisSession::new(scan_root.clone(), 15, false, None, provider).context("session")?;
+    let session = live_session(&scan_root)?;
     let pre = session.report();
     assert_eq!(
         pre.files_analysed, 3,
@@ -315,9 +309,7 @@ async fn live_analysis_session_honors_scan_root_relative_report_hide() -> Result
         "[defaults]\nreport_hide = [\"benchmarks/fixtures/**\"]\n",
     )
     .context("write .deslop.toml")?;
-    let provider = Arc::new(StubProvider::new());
-    let session = AnalysisSession::new(scan_root.to_path_buf(), 15, false, None, provider)
-        .context("session")?;
+    let session = live_session(scan_root)?;
     let report = session.report();
     assert!(
         report.clusters.is_empty(),
@@ -469,9 +461,7 @@ async fn find_similar_on_unparseable_snippet_returns_unparseable_error() -> Resu
 async fn find_similar_on_below_min_nodes_snippet_returns_below_min_nodes_flag() -> Result<()> {
     let _slot = live_slot().await;
     let tmp = copy_fixture("csharp-small")?;
-    let provider = Arc::new(StubProvider::new());
-    let session = AnalysisSession::new(tmp.path().to_path_buf(), 1_000, false, None, provider)
-        .context("session")?;
+    let session = live_session_at(tmp.path(), 1_000)?;
     let request = FindSimilarRequest {
         input: FindSimilarInput::Snippet {
             snippet: "class A { void M() {} }".to_owned(),
@@ -707,9 +697,7 @@ async fn exercise_transport_hooks(service: &LiveService) -> Result<()> {
 
 /// Builds a fresh session lock around the temp fixture root.
 fn make_session_lock(root: &Path) -> Result<Arc<tokio::sync::Mutex<AnalysisSession>>> {
-    let provider = Arc::new(StubProvider::new());
-    let session =
-        AnalysisSession::new(root.to_path_buf(), 15, false, None, provider).context("session")?;
+    let session = live_session(root)?;
     Ok(Arc::new(tokio::sync::Mutex::new(session)))
 }
 

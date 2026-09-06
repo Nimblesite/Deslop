@@ -281,16 +281,7 @@ fn scan(
 /// Every occurrence's `(start_line, end_line)` across the visible
 /// clusters, in report order.
 fn reported_lines(report: &Value) -> Vec<(u64, u64)> {
-    clusters(report)
-        .iter()
-        .flat_map(occurrences)
-        .map(|occurrence| {
-            (
-                field(occurrence, "start_line").as_u64().unwrap_or(0),
-                field(occurrence, "end_line").as_u64().unwrap_or(0),
-            )
-        })
-        .collect()
+    report_line_spans(report)
 }
 
 /// The family, its occurrences and its hidden count, exactly.

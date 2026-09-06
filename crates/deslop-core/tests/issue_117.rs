@@ -3,21 +3,17 @@
 
 #![cfg(feature = "live")]
 
-use std::{fs, sync::Arc};
+use std::fs;
 
 use anyhow::{Context, Result};
-use deslop_core::{
-    embedding::test_support::StubProvider, live::AnalysisSession, report::ReportCluster,
-};
+use deslop_core::report::ReportCluster;
 
 use crate::common::*;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn live_update_removes_cluster_when_one_occurrence_remains() -> Result<()> {
     let tmp = copy_fixture("csharp-small")?;
-    let provider = Arc::new(StubProvider::new());
-    let mut session = AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, provider)
-        .context("session")?;
+    let mut session = live_session(tmp.path())?;
     let initial = session.report();
     let original = initial
         .clusters

@@ -36,6 +36,7 @@ REPLACE BROKEN CODE; DON'T WRITE NEW CODE WITH A DUPLICATE PATH
 ## Standing prohibitions
 
 - ⚠️ **Never kill a VS Code process**, including browser-hosted instances. The user cannot recover from this.
+- ⚠️ **Never host a report anywhere.** No Claude artifacts, no hosted pages, no external upload — for any result, scorecard, comparison or audit. **Every report is a markdown file, in this repository, produced MECHANICALLY by the code that ran the measurement.** A report typed up by an agent is not a report: the numbers cannot be reproduced, cannot be diffed, cannot be re-run, and the agent is free to be wrong. If a figure is worth reporting, the tool that measured it emits it. Point the user at the file path.
 - ⚠️ **No git.** No `add`, `commit`, `push`, `checkout`, `merge`, `rebase`, `worktree`. Never push to `main`, never stamp yourself as co-author. One branch at a time; never start a new branch when a feature branch exists; converge branches before other work. CI handles git. (`gh issue create` excepted.)
 - ⚠️ **No using text pattern matching on source code or structured data. No RegEx on code**. USE THE AST!
 - ⚠️ **Token discipline.** Check file size before reading. `Grep` over `Read`; use `offset`/`limit`. Smallest diff that solves the problem. Delete dead code, unused imports, stale comments. Call out irrelevant context — bloat degrades reasoning.
@@ -62,7 +63,7 @@ REPLACE BROKEN CODE; DON'T WRITE NEW CODE WITH A DUPLICATE PATH
 
 - **Files < 500 lines. Functions < 20 lines.** Refactor when over.
 - **NAMED CONSTANTS - not literals** Give values names and REUSE them. THIS INCLUDES TESTS. TESTS MUST LEVERAGE NAMED CONSTANTS; NOT RAW STRINGS
-- **Calcs like percentage calc only exist in ONE PLACE: Rust** ZERO calculations outside the core Rust code. E.g. no calcs in Typescript. Any calcs outside Rust is a HARD VIOLATION.
+- **Core calcs like percentage calc only exist in ONE PLACE: Rust** ZERO calculations outside the core Rust code. E.g. no calcs in Typescript. Any calcs outside Rust is a HARD VIOLATION. Note: this rule ONLY applies to the core duplication finding code. This is not true for scripts and utilities
 - **All threshold numbers are configurable** Define the defaults as constants but allow the user to override these in the config
 - **Never reference gh issues in code** Reference SPEC IDS only. A test can refer to a gh issue only if it's an explicit regression
 - **Act autonomously.** Do not stop for confirmation — except where the strict accuracy rule says STOP. Record assumptions and continue.

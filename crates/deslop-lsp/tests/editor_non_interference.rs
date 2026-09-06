@@ -17,7 +17,9 @@ use std::{path::Path, thread, time::Duration};
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 
-use crate::common::{call, handshake, spawn_lsp_on_fixture_guarded, LspGuard};
+use crate::common::{
+    call, handshake, session::FixtureSession, spawn_lsp_on_fixture_guarded, LspGuard,
+};
 
 const DEFINITION: &str = "textDocument/definition";
 const HOVER: &str = "textDocument/hover";
@@ -47,11 +49,11 @@ const FORBIDDEN_CAPABILITIES: &[&str] = &[
 
 #[test]
 fn initialize_advertises_no_standard_language_providers() -> Result<()> {
-    let (_workspace, _guard, mut stdin, mut stdout) = spawn_lsp_on_fixture_guarded("csharp-small")?;
-    let init = handshake(&mut stdin, &mut stdout)?;
-    let caps = init
+    let session = FixtureSession::open("csharp-small")?;
+    let caps = session
+        .init
         .pointer("/result/capabilities")
-        .ok_or_else(|| anyhow!("capabilities missing from initialize: {init}"))?;
+        .ok_or_else(|| anyhow!("capabilities missing from initialize: {}", session.init))?;
 
     for forbidden in FORBIDDEN_CAPABILITIES {
         assert!(

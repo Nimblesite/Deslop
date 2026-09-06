@@ -3,8 +3,7 @@
 use std::sync::Arc;
 
 use super::{
-    call_sequence, pair_is_copy_paste, same_call_headers, sequence_position_differs, ArgShape,
-    CallShape,
+    call_sequence, pair_is_copy_paste, same_call_headers, sequence_position_differs, CallShape,
 };
 use crate::cluster_filters::{snippets::CallSequence, ParseCache, Snippet};
 
@@ -67,9 +66,22 @@ fn sequence_is_scenario_scaffolding(sequences: &[&[CallShape]]) -> bool {
         .collect();
     varying.contains(&true)
         && varying.iter().enumerate().all(|(index, differs)| {
-            *differs || invariant_position_flows_to_variation(sequences, &varying, index)
+            *differs
+                || position_carries_body(sequences, index)
+                || invariant_position_flows_to_variation(sequences, &varying, index)
         })
         && !sequence_pair_is_copy_paste(sequences)
+}
+
+/// Whether the call at `index` carries a body in any member. Such a
+/// wrapper — a test case, a `describe` block — is neutral in the
+/// sequence: the calls of its body are the positions that decide, and
+/// its own header literal is never payload
+/// ([CLONE-NOISE-LITERAL-VARIATION-CALLS]).
+fn position_carries_body(sequences: &[&[CallShape]], index: usize) -> bool {
+    sequences
+        .iter()
+        .any(|sequence| sequence.get(index).is_some_and(CallShape::carries_body))
 }
 
 /// Whether one invariant no-literal call only adapts a bound value for a
@@ -83,7 +95,7 @@ fn invariant_position_flows_to_variation(
         let Some(call) = sequence.get(index) else {
             return false;
         };
-        !call_has_string_literal(call)
+        !call.carries_string_literal()
             && call.result_binding.as_ref().is_some_and(|binding| {
                 sequence
                     .iter()
@@ -95,13 +107,6 @@ fn invariant_position_flows_to_variation(
                     })
             })
     })
-}
-
-/// Whether a call position carries authored string payload.
-fn call_has_string_literal(call: &CallShape) -> bool {
-    call.arguments
-        .iter()
-        .any(|argument| matches!(argument, ArgShape::StringLiteral(_, _)))
 }
 
 /// The sequence form of [`pair_is_copy_paste`]: same position, same

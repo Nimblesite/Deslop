@@ -2,7 +2,6 @@
   "name": "tokio",
   "language": "rust",
   "url": "https://github.com/tokio-rs/tokio.git",
-  "tag": "tokio-1.49.0",
   "sha": "e3b89bbefa7564e2eba2fb9f849ef7bf87d60fad",
   "why": "The canonical Rust async runtime; heavy macro and feature-gated duplication.",
   "ceilings": {

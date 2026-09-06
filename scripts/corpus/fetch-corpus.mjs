@@ -2,11 +2,12 @@
 // (git-ignored) so the `corpus_*` accuracy and resource suite runs against
 // real code at a fixed commit.
 //
-// Determinism is the whole point: a manifest names both a tag and the SHA
-// that tag pointed at when the corpus was curated. The clone goes through
-// the tag (cheap, shallow) and the resulting HEAD is then verified against
-// the pinned SHA, so a moved or re-cut upstream tag fails loudly instead of
-// silently re-baselining the curated duplicate list.
+// Determinism is the whole point: a manifest pins one COMMIT ID and the fetch
+// asks the remote for exactly that commit. Never a tag and never a branch — a
+// version label is a name upstream can re-point at different source, and a
+// curated duplicate list read against different source asserts nothing. The
+// resulting HEAD is verified against the pin regardless, so any drift in what
+// the remote served fails loudly rather than silently re-baselining the list.
 //
 // Already-present clones at the right SHA are left alone, so re-running is
 // free. Pass `--force` to re-clone from scratch.
@@ -30,6 +31,17 @@ const selected = new Set(process.argv.slice(2).filter((arg) => !arg.startsWith("
 // still fails loudly instead of being silently skipped.
 const NON_MANIFEST = new Set(["known-failures.json"]);
 
+/// [CORPUS-PIN] The only pin a manifest may carry: a full git object name.
+const COMMIT_ID_LENGTH = 40;
+const COMMIT_ID_ALPHABET = "0123456789abcdef";
+const isCommitId = (value) =>
+  value.length === COMMIT_ID_LENGTH &&
+  [...value].every((character) => COMMIT_ID_ALPHABET.includes(character));
+/// How much of a commit id names a clone directory and reads in a log line.
+const SHORT_SHA_LENGTH = 12;
+/// Ceiling on any one git invocation; a hung fetch must not hang the corpus.
+const TIMEOUT_MS = 900_000;
+
 const manifests = readdirSync(manifestDir)
   .filter((name) => name.endsWith(".json") && !NON_MANIFEST.has(name))
   .map((name) => JSON.parse(readFileSync(join(manifestDir, name), "utf8")))
@@ -48,11 +60,17 @@ for (const manifest of manifests) {
   fetchRepo(manifest);
 }
 
-function fetchRepo({ name, url, tag, sha }) {
-  for (const [field, value] of Object.entries({ name, url, tag, sha })) {
+function fetchRepo({ name, url, sha }) {
+  for (const [field, value] of Object.entries({ name, url, sha })) {
     if (!value) throw new Error(`corpus manifest is missing "${field}"`);
   }
-  const target = join(cacheDir, `${name}-${tag}`);
+  if (!isCommitId(sha)) {
+    throw new Error(
+      `${name}: "${sha}" is not a ${COMMIT_ID_LENGTH}-character commit id. ` +
+        `Pin the commit, never a tag or a version.`,
+    );
+  }
+  const target = join(cacheDir, `${name}-${sha.slice(0, SHORT_SHA_LENGTH)}`);
 
   if (existsSync(target)) {
     if (!force && headSha(target) === sha) {
@@ -62,19 +80,24 @@ function fetchRepo({ name, url, tag, sha }) {
     rmSync(target, { recursive: true, force: true });
   }
 
-  console.log(`${name}: cloning ${url} @ ${tag}`);
-  run("git", ["clone", "--depth", "1", "--branch", tag, url, target]);
+  console.log(`${name}: fetching ${url} @ ${sha.slice(0, SHORT_SHA_LENGTH)}`);
+  mkdirSync(target, { recursive: true });
+  run("git", ["-c", "init.defaultBranch=main", "-C", target, "init", "--quiet"]);
+  run("git", ["-C", target, "remote", "add", "origin", url]);
+  if (!tryRun("git", ["-C", target, "fetch", "--quiet", "--depth", "1", "origin", sha])) {
+    console.log(`${name}: remote will not serve a single commit, fetching in full`);
+    run("git", ["-C", target, "fetch", "--quiet", "origin"]);
+  }
+  run("git", ["-C", target, "checkout", "--quiet", sha]);
 
   const actual = headSha(target);
   if (actual !== sha) {
     rmSync(target, { recursive: true, force: true });
     throw new Error(
-      `${name}: tag ${tag} resolved to ${actual}, but the manifest pins ${sha}. ` +
-        `Upstream moved the tag. Re-verify the curated duplicate list against the ` +
-        `new commit before updating corpus/${name}.json.`,
+      `${name}: checkout landed on ${actual}, but the manifest pins ${sha}.`,
     );
   }
-  console.log(`${name}: verified at ${sha.slice(0, 12)}`);
+  console.log(`${name}: verified at ${sha.slice(0, SHORT_SHA_LENGTH)}`);
 }
 
 function headSha(repo) {
@@ -85,11 +108,18 @@ function headSha(repo) {
   return result.status === 0 ? result.stdout.trim() : "";
 }
 
+function tryRun(command, args) {
+  return (
+    spawnSync(command, args, { encoding: "utf8", stdio: "pipe", timeout: TIMEOUT_MS })
+      .status === 0
+  );
+}
+
 function run(command, args) {
   const result = spawnSync(command, args, {
     encoding: "utf8",
     stdio: "inherit",
-    timeout: 900_000,
+    timeout: TIMEOUT_MS,
   });
   if (result.status !== 0) throw new Error(`${command} ${args.join(" ")} failed`);
 }

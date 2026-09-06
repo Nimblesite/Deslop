@@ -13,7 +13,7 @@ use crate::{
 };
 
 use super::{
-    CandidatePair, ExactClones, EMBEDDING_SUPPORT_FLOOR, LSH_ONLY_MIN_JACCARD,
+    token_carried, CandidatePair, ExactClones, EMBEDDING_SUPPORT_FLOOR, LSH_ONLY_MIN_JACCARD,
     SHARED_SUBTREE_MIN_NODE_COUNT, SHARED_SUBTREE_MIN_OVERLAP,
 };
 
@@ -119,7 +119,9 @@ impl GateVerdict {
         match self {
             Self::RoleMismatch | Self::ContainerEcho => false,
             Self::NotRequired => true,
-            Self::Measured { evidence, floor } => evidence.measured && evidence.support() >= *floor,
+            Self::Measured { evidence, floor } => {
+                evidence.measured && (evidence.consistent_rename || evidence.support() >= *floor)
+            }
         }
     }
 
@@ -184,11 +186,14 @@ fn gate_verdict<L: BuildHasher>(
 /// traceable without re-running the pipeline. Byte offsets and counts
 /// only — never source text ([PRINCIPLES-LOGGING]).
 fn log_gate_verdict(left: &Fingerprint, right: &Fingerprint, verdict: &GateVerdict) {
-    let (agreement, rename, floor) = match verdict {
-        GateVerdict::Measured { evidence, floor } => {
-            (evidence.agreement, evidence.rename_consistency, *floor)
-        }
-        _ => (0.0, 0.0, 0.0),
+    let (agreement, rename, consistent_rename, floor) = match verdict {
+        GateVerdict::Measured { evidence, floor } => (
+            evidence.agreement,
+            evidence.rename_consistency,
+            evidence.consistent_rename,
+            *floor,
+        ),
+        _ => (0.0, 0.0, false, 0.0),
     };
     tracing::trace!(
         route = verdict.route(),
@@ -202,6 +207,7 @@ fn log_gate_verdict(left: &Fingerprint, right: &Fingerprint, verdict: &GateVerdi
         right_nodes = right.node_count,
         agreement,
         rename,
+        consistent_rename,
         floor,
         admitted = verdict.admitted(),
         "content gate verdict",
@@ -217,12 +223,21 @@ fn embedding_needs_role_guard(pair: &CandidatePair) -> bool {
 }
 
 /// Whether saturated normalised evidence lacks an independent semantic route.
+///
+/// A token-carried pair is always measured: its token echo is its whole
+/// case, and the rescue pass has aligned its subtrees only to decide
+/// which floor that echo must clear ([`content_floor`]), never to excuse
+/// it from the guard. Without this, a pair whose measured overlap sat
+/// between the rescue floor and saturation — an interface against the
+/// `export` statement wrapping its renamed twin — passed with no content
+/// evidence at all (`ts-interfaces`).
 fn content_is_required(pair: &CandidatePair, left: &Fingerprint, right: &Fingerprint) -> bool {
     pair.score.embedding_cos < EMBEDDING_SUPPORT_FLOOR
         && (left.hash == right.hash
             || pair.score.structural >= SHAPE_IDENTICAL_FLOOR
             || pair.shared_subtree_overlap >= SHAPE_IDENTICAL_FLOOR
             || pair.score.token_jaccard >= SATURATING_TOKEN_FLOOR
+            || token_carried(pair)
             || lsh_only_pair_needs_content(pair, left, right))
 }
 

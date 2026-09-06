@@ -11,8 +11,9 @@
 use tree_sitter::Node;
 
 use super::{
-    contains_bytes, enclosing_kind, is_multi_member_language_cluster, node_contains_identifier,
-    parse_for, snippet_range_text, source_head, spans_multiple_files, trim_ascii_start, Snippet,
+    contains_bytes, enclosing_kind, is_multi_member_language_cluster, language_cluster_shapes,
+    node_contains_identifier, parse_for, snippet_range_text, source_head, spans_multiple_files,
+    trim_ascii_start, Snippet,
 };
 use crate::{ast::named_children, state::FileId};
 
@@ -22,15 +23,12 @@ use crate::{ast::named_children, state::FileId};
 /// test called the production minter/helper, it would stop proving the
 /// signing implementation.
 pub(super) fn is_jwt_hmac_independent_verifier_cluster(snippets: &[Snippet<'_>]) -> bool {
-    if !is_multi_member_language_cluster(snippets, "python") {
-        return false;
-    }
-    let shapes: Option<Vec<JwtHmacShape>> = snippets.iter().map(jwt_hmac_shape).collect();
-    let Some(shapes) = shapes else { return false };
-    spans_multiple_files(shapes.iter().map(|shape| shape.file_id))
-        && shapes.iter().all(|shape| shape.is_hs256_body)
-        && shapes.iter().any(|shape| shape.is_test_source)
-        && shapes.iter().any(|shape| !shape.is_test_source)
+    language_cluster_shapes(snippets, "python", jwt_hmac_shape).is_some_and(|shapes| {
+        spans_multiple_files(shapes.iter().map(|shape| shape.file_id))
+            && shapes.iter().all(|shape| shape.is_hs256_body)
+            && shapes.iter().any(|shape| shape.is_test_source)
+            && shapes.iter().any(|shape| !shape.is_test_source)
+    })
 }
 
 /// Distilled source-level shape for one HS256 signing occurrence.

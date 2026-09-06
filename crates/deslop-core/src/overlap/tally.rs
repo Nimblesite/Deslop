@@ -36,7 +36,9 @@ const RESCUE_PROGRESS_INTERVAL: u64 = 50_000;
 pub(super) struct RescueTally {
     /// Candidate pairs examined, whatever became of them.
     pub(super) scanned: u64,
-    /// Pairs the fused threshold would drop despite token corroboration.
+    /// Pairs whose alignment must be measured: dropped by the fused
+    /// threshold despite token corroboration, or carried by the token axis
+    /// alone ([`crate::pair::alignment_required`]).
     pub(super) eligible: u64,
     /// Eligible pairs whose endpoints live in different files — part of
     /// the population handed to the measurer.

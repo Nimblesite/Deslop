@@ -22,8 +22,7 @@ use std::collections::BTreeSet;
 use tree_sitter::Node;
 
 use super::{
-    is_multi_member_language_cluster, parse_for, spans_multiple_files, trimmed_snippet_range,
-    Snippet,
+    language_cluster_shapes, parse_for, spans_multiple_files, trimmed_snippet_range, Snippet,
 };
 use crate::ast::{named_children, ByteRange};
 
@@ -41,15 +40,9 @@ const PREAMBLE_KINDS: &[&str] = &["function_definition", "decorated_definition"]
 /// not such a multi-definition run, or when two members are body
 /// equivalent (a genuine copy that must still surface).
 pub(super) fn is_module_preamble_sequence_cluster(snippets: &[Snippet<'_>]) -> bool {
-    if !is_multi_member_language_cluster(snippets, "python") {
-        return false;
-    }
-    if !spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id)) {
-        return false;
-    }
-    let bodies: Option<Vec<Vec<u8>>> = snippets.iter().map(member_preamble_bodies).collect();
-    let Some(bodies) = bodies else { return false };
-    all_member_bodies_distinct(&bodies)
+    spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id))
+        && language_cluster_shapes(snippets, "python", member_preamble_bodies)
+            .is_some_and(|bodies| all_member_bodies_distinct(&bodies))
 }
 
 /// Concatenates the bodies of the >=2 sibling top-level definitions the

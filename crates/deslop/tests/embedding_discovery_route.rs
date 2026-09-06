@@ -23,7 +23,7 @@ use anyhow::Result;
 use serde_json::Value;
 
 use crate::common::{
-    embeddings::run_mock_embedding_report,
+    embeddings::{mock_embedding_run, run_mock_embedding_report},
     signals::{
         assert_no_pair_surface_on_cluster, assert_pair_metric, assert_structural_only_contract,
         compare_pair_with_embeddings, has_verbatim_pair, occurrence_for_file,
@@ -56,11 +56,7 @@ fn run_with_embeddings(server: &MockOllama, min_nodes: &str) -> Result<Value> {
 #[test]
 fn a_structurally_discovered_pair_does_not_require_an_embedding() -> Result<()> {
     let server = MockOllama::spawn()?;
-    let workspace = tempfile::tempdir()?;
-    seed(&fixture("csharp-small"), workspace.path())?;
-    let output = workspace.path().join("report");
-    let report =
-        run_mock_embedding_report(workspace.path(), &output, MIN_NODES_ARG, server.endpoint())?;
+    let (workspace, report) = mock_embedding_run(&server, "csharp-small", MIN_NODES_ARG)?;
     let cluster = expect_cluster_spanning(&report, &[LEFT_FILE, RIGHT_FILE])?;
     assert_structural_only_contract(cluster, "structurally discovered Type-2 pair");
     assert_no_pair_surface_on_cluster(cluster, "structurally discovered Type-2 pair");

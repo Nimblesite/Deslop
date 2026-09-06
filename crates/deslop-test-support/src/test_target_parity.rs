@@ -211,8 +211,7 @@ pub fn wiring(member: &str) -> Result<SuiteWiring> {
 
 /// Parses one `Cargo.toml`.
 fn read_manifest(path: &Path) -> Result<toml::Table> {
-    fs::read_to_string(path)
-        .with_context(|| format!("unreadable manifest: {}", path.display()))?
+    crate::read_text(path)?
         .parse()
         .with_context(|| format!("unparsable manifest: {}", path.display()))
 }
@@ -245,8 +244,7 @@ fn rust_file_name(path: &Path) -> Option<String> {
 /// The top-level files `tests/suite.rs` pulls in as modules.
 fn suite_modules(tests: &Path) -> Result<Reached> {
     let suite = tests.join(SUITE_FILE);
-    let source = fs::read_to_string(&suite)
-        .with_context(|| format!("unreadable suite root: {}", suite.display()))?;
+    let source = crate::read_text(&suite)?;
     suite_scan::scan(&source, tests)
         .with_context(|| format!("unparsable suite root: {}", suite.display()))
 }

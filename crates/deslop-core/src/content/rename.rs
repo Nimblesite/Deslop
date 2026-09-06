@@ -52,6 +52,11 @@ const RENAME_CORROBORATION_MIN_OCCURRENCES: usize = 2;
 /// routing floor.
 const RENAME_EVIDENCE_HALF_MASS: f64 = 4.0;
 
+/// The contradiction-free rename test ([FUSED-CONTENT-GATE-RENAME]).
+mod consistent;
+
+pub(super) use consistent::pair_rename_is_consistent;
+
 /// Type-2 rename evidence between two members ([TECH-PMATCH-BAKER]): one
 /// pooled coverage over the pair's constrained identifier positions and
 /// every aligned literal position, scaled by the smooth anchor-mass
@@ -257,6 +262,15 @@ struct RenameMapping {
     /// The explained positions whose raw bytes are equal on both sides —
     /// evidence the substitution did not supply.
     identity: usize,
+    /// Every substituted position the bijection explains, corroborated
+    /// or seen once — the names the copy renamed, which the names it
+    /// kept must at least match for the pair to be a rename rather than
+    /// a different vocabulary over one shape ([FUSED-CONTENT-GATE-RENAME]).
+    renamed: usize,
+    /// The renamed positions repetition or an echo corroborates — the
+    /// rename's own proof, as opposed to a one-shot substitution that
+    /// constrains nothing.
+    corroborated: usize,
 }
 
 impl RenameMapping {
@@ -308,9 +322,18 @@ fn rename_mapping(
     let substitutions = substituted_pairs(identifiers);
     let bijection = ModalBijection::over(&substitutions);
     let counts = pair_counts(substitutions.iter().copied());
-    let (mut constrained, mut explained, mut identity) = (0_usize, 0_usize, 0_usize);
+    let mut mapping = RenameMapping {
+        constrained: 0,
+        explained: 0,
+        identity: 0,
+        renamed: 0,
+        corroborated: 0,
+    };
     for pair in identifiers {
         let substituted = pair.0 != pair.1;
+        if substituted && bijection.explains(pair) {
+            mapping.renamed = mapping.renamed.saturating_add(1);
+        }
         let occurrences = counts
             .get(pair)
             .copied()
@@ -320,19 +343,17 @@ fn rename_mapping(
         if substituted && bijection.explains(pair) && !corroborated {
             continue;
         }
-        constrained = constrained.saturating_add(1);
+        mapping.constrained = mapping.constrained.saturating_add(1);
         if !substituted || bijection.explains(pair) {
-            explained = explained.saturating_add(1);
+            mapping.explained = mapping.explained.saturating_add(1);
         }
         if !substituted {
-            identity = identity.saturating_add(1);
+            mapping.identity = mapping.identity.saturating_add(1);
+        } else if bijection.explains(pair) {
+            mapping.corroborated = mapping.corroborated.saturating_add(1);
         }
     }
-    RenameMapping {
-        constrained,
-        explained,
-        identity,
-    }
+    mapping
 }
 
 /// The aligned positions whose raw bytes differ — [TECH-PMATCH-BAKER]'s

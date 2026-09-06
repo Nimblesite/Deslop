@@ -2,7 +2,6 @@
   "name": "nest",
   "language": "typescript",
   "url": "https://github.com/nestjs/nest.git",
-  "tag": "v11.1.28",
   "sha": "dfaa376170168d12d9d28bcfe137a9bacce579a3",
   "why": "Mainstream TypeScript framework; decorator-heavy with many sibling modules.",
   "ceilings": {

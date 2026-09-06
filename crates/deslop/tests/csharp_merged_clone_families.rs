@@ -1,4 +1,4 @@
-//! E2E regression for [PIPELINE-CLUSTER-EXACT-SCOPE] — one cluster may not
+//! E2E regression for [PIPELINE-CLUSTER-ELECT] — one cluster may not
 //! swallow two unrelated clone families and take both down with it.
 //!
 //! The `csharp-mcp` corpus holds two independent Type-2 pairs. Alpha's

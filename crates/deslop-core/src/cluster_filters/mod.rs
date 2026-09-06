@@ -122,6 +122,7 @@ mod declaration_family;
 mod ecmascript;
 mod family;
 mod forwarding;
+mod node_search;
 mod override_marker;
 mod polymorphic;
 mod python;
@@ -134,6 +135,7 @@ mod python_orm;
 mod role_compat;
 mod rust;
 mod snippets;
+mod structural_families;
 mod verbatim_subgroup;
 
 use std::{
@@ -147,6 +149,7 @@ use tree_sitter::Node;
 pub(crate) use declaration_family::is_single_file_declaration_family;
 pub use snippets::ParseCache;
 use snippets::{collect_snippets, parse_for, uniform_language, Snippet};
+pub(crate) use structural_families::split_structural_families;
 pub(crate) use verbatim_subgroup::{
     escapes_as_copy, noise_workers, split_noise_verbatim_families, NOISE_CHUNK_CLUSTERS,
 };
@@ -452,6 +455,20 @@ pub(super) fn spans_multiple_files(file_ids: impl IntoIterator<Item = FileId>) -
 /// keeps the "≥ 2 members, all one language" gate identical across filters.
 pub(super) fn is_multi_member_language_cluster(snippets: &[Snippet<'_>], language: &str) -> bool {
     snippets.len() >= 2 && snippets.iter().all(|snippet| snippet.language == language)
+}
+
+/// Returns every member's shape when `snippets` is a multi-member cluster
+/// written wholly in `language` and `shape_of` recognises every member;
+/// `None` otherwise. Every shape-comparing language filter opens this
+/// way, so the gate and the all-or-nothing collection live here once.
+pub(super) fn language_cluster_shapes<'snip, 'src, Shape>(
+    snippets: &'snip [Snippet<'src>],
+    language: &str,
+    shape_of: impl FnMut(&'snip Snippet<'src>) -> Option<Shape>,
+) -> Option<Vec<Shape>> {
+    is_multi_member_language_cluster(snippets, language)
+        .then(|| snippets.iter().map(shape_of).collect())
+        .flatten()
 }
 
 /// Returns true when at least two raw reported snippet ranges differ.

@@ -223,6 +223,12 @@ _ci-contract-tests: _vsix-node-modules
 	@node --test scripts/repository/posix-shell.test.mjs
 	@echo "==> Duplication-gate provenance gate ([CI-DESLOP])..."
 	@node --test scripts/repository/dup-gate-source.test.mjs
+	@echo "==> Accuracy-gate wiring gate ([CORPUS-SCORE])..."
+	@node --test scripts/repository/score-gate-source.test.mjs
+	@echo "==> Blinded judging folder gate ([CORPUS-REGISTER-WORKSPACE])..."
+	@node --test scripts/repository/judging-workspace.test.mjs
+	@echo "==> Verdict merge gate ([CORPUS-REGISTER-MERGE])..."
+	@node --test scripts/repository/verdict-merge.test.mjs
 	@echo "==> Test-selection gate ([TEST-SELECTION])..."
 	@node --test scripts/repository/test-selection.test.mjs
 	@echo "==> Coverage-isolation gate ([CI-COVERAGE-ISOLATION])..."
@@ -505,6 +511,46 @@ CORPUS_TESTS_FULL = corpus_flutter_dart corpus_jellyfin_csharp corpus_tokio_rust
 dup-gate: build
 	@echo "==> Duplication gate (.deslop.toml [threshold])..."
 	./target/release/deslop . --no-color
+
+# [CORPUS-SCORE] Accuracy gate. Scans the register-backed target repositories
+#   with the CURRENT build and scores every judged pair against the independent
+#   clone registers in `corpus/register/`, failing when a CLEARLY IN goes
+#   unreported or a CLEARLY OUT gets reported past the thresholds in
+#   `corpus/register/score-thresholds.json` — the single source of truth, never
+#   hardcoded here or in CI. Cluster totals and duplication percentages are
+#   printed as description and gate nothing. The workflow calls the same script,
+#   so a green local run means a green gate in CI.
+## score-gate: Fail when accuracy drops against the judged clone registers.
+##             This is the corpus run CI performs, one command, no arguments.
+score-gate:
+	./scripts/corpus/score-gate.sh
+
+# [CORPUS-SCORE] The two-engine comparison, one command and no arguments: the
+#   last released commit against the current HEAD, each engine rebuilt from a
+#   clean tree, both scored by one scorer built from the working tree. Scans
+#   every judged register rather than the CI slice — nobody waits on this one,
+#   and the whole point is the widest comparable measurement available.
+## compare: Compare the last release against HEAD across the whole register corpus.
+compare:
+	./scripts/compare-versions.sh
+
+# [CORPUS-REGISTER-WORKSPACE] The folder a clone judge is handed: repositories,
+#   reports and the judging skill, one workspace per repository the last
+#   comparison scanned. It is built OUTSIDE this repository on purpose — a judge
+#   who can read this source is contaminated and every verdict from that pass is
+#   void. Override the location with JUDGING_DIR.
+JUDGING_DIR ?= $(HOME)/clone-judging
+## judging-folder: Build the blinded folder a clone judge works through.
+judging-folder:
+	./scripts/corpus/prepare-judging.sh $(JUDGING_DIR)
+
+## merge-verdicts: Fold judged verdicts back into the clone registers. Takes
+##                 two or more judging folders. Imports ONLY the pairs every
+##                 source agrees on — the registers included; everything else
+##                 is left out and listed in docs/reports/verdict-merge.md.
+merge-verdicts:
+	@test -n "$(JUDGED_DIRS)" || { echo "set JUDGED_DIRS to two or more judging folders"; exit 1; }
+	@node scripts/corpus/merge-verdicts.mjs $(JUDGED_DIRS)
 
 # [DEPLOY-CI-GATES] CI/release deployment-drift gate: manifest schema, binary
 #   version contracts, release-workflow gates, and the verifier proof suite.
@@ -839,6 +885,10 @@ help:
 	@echo "  typediagram-gen        - Regenerate wire-format IPC models from docs/models/*.td"
 	@echo "  deployment-verify      - Validate deployment manifest and built binary contracts"
 	@echo "  test-ollama            - Ollama-gated Rust + VSIX tests (never in CI)"
+	@echo "  score-gate             - Score this build against the judged clone registers (what CI runs)"
+	@echo "  compare                - Compare the last release against HEAD across every register"
+	@echo "  judging-folder         - Build the blinded repos+reports+skill folder for a clone judge"
+	@echo "  merge-verdicts         - Import verdicts every source agrees on (JUDGED_DIRS=\"a b\")"
 	@echo "  test-corpus            - Accuracy + resource gate against pinned real repositories"
 	@echo "  test-corpus-ci         - test-corpus in baseline mode (reports tracked defects)"
 	@echo "  ci-ollama              - make ci plus make test-ollama"
