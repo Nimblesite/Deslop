@@ -31,6 +31,12 @@ pub struct ContentEvidence {
     pub agreement: f64,
     /// Pair-specific Type-2 rename evidence.
     pub rename_consistency: f64,
+    /// Whether the pair is a rename of the same code, whatever its
+    /// literals do: every substituted identifier position is explained
+    /// by one bijection, at least one substitution is corroborated, and
+    /// the copy keeps at least as many names as it renames
+    /// ([FUSED-CONTENT-GATE-RENAME]).
+    pub consistent_rename: bool,
     /// Symmetric literal share across both endpoint frontiers.
     pub literal_fraction: f64,
     /// Whether both endpoints resolved to authored content.
@@ -52,6 +58,7 @@ impl ContentEvidence {
         Self {
             agreement: 0.0,
             rename_consistency: 0.0,
+            consistent_rename: false,
             literal_fraction: 0.0,
             measured: false,
             contradiction: ContentContradiction::None,
@@ -134,6 +141,7 @@ fn pair_evidence<S: BuildHasher>(
             sources,
             scope,
         ),
+        consistent_rename: rename::pair_rename_is_consistent(left, right, sources),
         literal_fraction: pair_literal_fraction(left, right),
         measured: true,
         contradiction: ContentContradiction::None,
@@ -158,6 +166,19 @@ fn pair_literal_fraction(left: &MemberContent, right: &MemberContent) -> f64 {
         return 0.0;
     }
     member_count(literals) / member_count(vocabulary)
+}
+
+/// Measures pair agreement using an already-built tree index.
+pub(crate) fn pair_content_agreement<S: BuildHasher, L: BuildHasher>(
+    left: &Fingerprint,
+    right: &Fingerprint,
+    tree_index: &HashMap<FileId, &NormalizedNode>,
+    sources: &HashMap<FileId, Vec<u8>, S>,
+    languages: &HashMap<FileId, &'static str, L>,
+) -> f64 {
+    let left = member_content(left, tree_index, sources, languages);
+    let right = member_content(right, tree_index, sources, languages);
+    pair_agreement(left.as_ref(), right.as_ref())
 }
 
 /// Fraction of aligned authored positions whose raw bytes match.

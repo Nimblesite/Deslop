@@ -548,8 +548,8 @@ const fn hex_nibble(nibble: u8) -> char {
     }
 }
 
-
-/// Node floor an enclosed family must carry to have the standing of
-/// copied blocks rather than idiom lines
-/// ([PIPELINE-CLUSTER-ELECT-CONTAINER], `crate::cluster_filters`).
+/// Node floor at which an enclosed family has the standing of copied
+/// blocks rather than idiom lines, so a concatenation of it is elected
+/// out of the component in favour of the family itself
+/// ([PIPELINE-CLUSTER-ELECT-CONTAINER]).
 pub(crate) const VERBATIM_OVERTURN_MIN_NODES: usize = 16;

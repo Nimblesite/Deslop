@@ -135,6 +135,8 @@ mod issue_372_identical_snippet_cosine;
 mod issue_389_subsumption_modifier_straddle;
 #[path = "js_language_features.rs"]
 mod js_language_features;
+#[path = "js_literal_variation_calls.rs"]
+mod js_literal_variation_calls;
 #[path = "js_ts_clone_buckets.rs"]
 mod js_ts_clone_buckets;
 #[path = "js_ts_extensions.rs"]
@@ -275,6 +277,8 @@ mod ts_issue_284_produce_then_assert;
 mod ts_issue_285_diagnostic_scenarios;
 #[path = "type2_rename_anchor_floor.rs"]
 mod type2_rename_anchor_floor;
+#[path = "type2_rename_literal_drift.rs"]
+mod type2_rename_literal_drift;
 #[path = "type3_enclosing_method.rs"]
 mod type3_enclosing_method;
 #[path = "typescript_features.rs"]

@@ -17,6 +17,9 @@ mod args;
 /// Assertion admission for the covered-statement rule.
 mod asserts;
 
+/// Bound-result flow for invariant adapter calls in scenario scaffolding.
+mod dataflow;
+
 /// Ordered-call scenario scaffolding classification.
 mod sequence;
 
@@ -49,6 +52,11 @@ fn is_literal_variation_call_set(calls: Option<Vec<Arc<CallShape>>>) -> bool {
     let Some(first) = calls.first() else {
         return false;
     };
+    // A call carrying a body is judged by that body's own calls, which
+    // the sequence rule reads; its header literal proves nothing.
+    if calls.iter().any(|call| call.carries_body()) {
+        return false;
+    }
     if !calls.iter().all(|call| call.callee == first.callee) {
         return false;
     }
@@ -76,6 +84,29 @@ pub(crate) struct CallShape {
     keywords: Vec<Option<Vec<u8>>>,
     /// Per-argument summary used for literal-variation detection.
     arguments: Vec<ArgShape>,
+    /// Local name this call's result is assigned to, when any.
+    result_binding: Option<Vec<u8>>,
+    /// Raw identifiers this call consumes, through its arguments or
+    /// through an invocation spelled inside its callee.
+    consumed_identifiers: Vec<Vec<u8>>,
+}
+
+impl CallShape {
+    /// Whether any argument carries statements, making the call a body
+    /// holder rather than a literal-varying scaffold
+    /// ([CLONE-NOISE-LITERAL-VARIATION-CALLS]).
+    pub(super) fn carries_body(&self) -> bool {
+        self.arguments
+            .iter()
+            .any(|argument| matches!(argument, ArgShape::Body))
+    }
+
+    /// Whether any argument is authored string payload.
+    pub(super) fn carries_string_literal(&self) -> bool {
+        self.arguments
+            .iter()
+            .any(|argument| matches!(argument, ArgShape::StringLiteral(_, _)))
+    }
 }
 
 /// Per-argument summary recorded for each call.
@@ -85,6 +116,12 @@ enum ArgShape {
     /// f-string / interpolated string), and whether the literal embeds
     /// an interpolation — the authored-code signal of gh #467.
     StringLiteral(Vec<u8>, bool),
+    /// An argument carrying statements — a test body, a callback block.
+    /// Statements are authored logic the members duplicate, never
+    /// payload handed to a shared callee, so a call carrying one is
+    /// judged by that body and its literals prove nothing
+    /// ([CLONE-NOISE-LITERAL-VARIATION-CALLS]).
+    Body,
     /// Anything else — non-string literal, identifier, sub-expression.
     Other,
 }
@@ -113,6 +150,8 @@ fn call_shape_from_node(call: Node<'_>, source: &[u8], language: &str) -> Option
         callee,
         keywords,
         arguments,
+        result_binding: dataflow::assigned_binding(call, source),
+        consumed_identifiers: dataflow::consumed_identifiers(call, source, call_kinds(language)),
     })
 }
 
@@ -329,8 +368,21 @@ fn walk_argument_children(call: Node<'_>, walk: &Walk<'_>, out: &mut Vec<CallSha
 fn same_call_headers(calls: &[CallShape], expected: &[CallShape]) -> bool {
     calls.len() == expected.len()
         && calls.iter().zip(expected).all(|(call, base)| {
-            call.callee == base.callee && call.arity == base.arity && call.keywords == base.keywords
+            same_callee_where_it_matters(call, base)
+                && call.arity == base.arity
+                && call.keywords == base.keywords
         })
+}
+
+/// A literal-bearing position must name one callee — "the same helper
+/// called with different data" is the scaffold. A literal-free position
+/// is plumbing, and its callee may differ between members
+/// (`generateRust` in one scenario, `generateTypeScript` in another): it
+/// still has to be the bound-and-consumed adapter the sequence rule
+/// demands of every invariant position
+/// ([CLONE-NOISE-LITERAL-VARIATION-CALLS]).
+fn same_callee_where_it_matters(call: &CallShape, base: &CallShape) -> bool {
+    call.callee == base.callee || (!call.carries_string_literal() && !base.carries_string_literal())
 }
 
 /// Returns true when `index` has intentional literal variation across
@@ -379,6 +431,9 @@ const fn call_kinds(language: &str) -> &'static [&'static str] {
 /// ([CLONE-NOISE-LITERAL-VARIATION-CALLS]).
 fn has_differing_string_literals<'c>(calls: impl IntoIterator<Item = &'c CallShape>) -> bool {
     let calls: Vec<&CallShape> = calls.into_iter().collect();
+    if calls.iter().any(|call| call.carries_body()) {
+        return false;
+    }
     let Some(first) = calls.first() else {
         return false;
     };

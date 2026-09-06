@@ -145,8 +145,17 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
         let Some(&canonical) = run.first() else {
             return;
         };
+        let file_of = |index: usize| self.fingerprints.get(index).map(|entry| entry.file_id);
+        let canonical_file = file_of(canonical);
+        let foreign = run
+            .iter()
+            .copied()
+            .find(|index| file_of(*index) != canonical_file);
         for &other in run.iter().skip(1) {
             self.add_evidence(canonical, other, 1.0, 0.0);
+            if let Some(foreign) = foreign.filter(|_| file_of(other) == canonical_file) {
+                self.add_evidence(other, foreign, 1.0, 0.0);
+            }
         }
     }
 

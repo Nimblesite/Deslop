@@ -19,8 +19,7 @@ use crate::{
     lsh::BandCollisionSource,
     overlap::apply_shared_subtree_rescue,
     pair::{
-        apply_embedding_role_guard, candidate_pairs_for_language_policy,
-        cluster_by_transitive_closure,
+        apply_pair_content_gate, candidate_pairs_for_language_policy, cluster_by_transitive_closure,
     },
     report::{render_report, CacheStats, Report, ReportInputs},
     state::FileId,
@@ -139,7 +138,13 @@ impl PipelineSession {
         // content, not just a Merkle-identical signature.
         let rescue_input = pairs.len();
         let stage_started = Instant::now();
-        apply_shared_subtree_rescue(&mut pairs, fingerprints, trees);
+        apply_shared_subtree_rescue(
+            &mut pairs,
+            fingerprints,
+            trees,
+            &self.sources,
+            &self.file_languages,
+        );
         ledger.record(
             "shared_subtree_rescue",
             rescue_input,
@@ -151,12 +156,21 @@ impl PipelineSession {
         // gate decides which edges weld. Noise conviction reads this
         // family; admission below still decides the clusters.
         let shape_families = cluster_by_transitive_closure(&pairs);
-        apply_embedding_role_guard(
+        let content_input = pairs.len();
+        let stage_started = Instant::now();
+        apply_pair_content_gate(
             &mut pairs,
             fingerprints,
+            trees,
             &self.sources,
             &self.file_languages,
             parse_cache,
+        );
+        ledger.record(
+            "pair_content_gate",
+            content_input,
+            pairs.len(),
+            stage_started,
         );
         let rescue_output = pairs.len();
         let stage_started = Instant::now();

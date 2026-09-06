@@ -83,11 +83,14 @@ fn component(size: usize) -> FusedCluster {
                 .map(move |right| FusedEdge {
                     left: *left,
                     right: *right,
-                    strength: 1.0,
                 })
         })
         .collect();
-    FusedCluster { members, edges }
+    FusedCluster {
+        members,
+        edges,
+        shape_family: None,
+    }
 }
 
 /// The member index lists of `clusters`, for direct comparison.
@@ -237,6 +240,7 @@ fn every_component_in_the_batch_is_considered() {
     let untouched = FusedCluster {
         members: vec![0, 1],
         edges: Vec::new(),
+        shape_family: None,
     };
 
     assert_eq!(

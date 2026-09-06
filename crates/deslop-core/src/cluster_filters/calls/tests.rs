@@ -28,6 +28,14 @@ const SAME_A: &str = "def member_a():\n    greet(\"alice\")\n";
 /// The byte-identical counterpart.
 const SAME_B: &str = "def member_a():\n    greet(\"alice\")\n";
 
+/// gh #284 whole-scenario members: an invariant adapter whose bound
+/// result flows into the varying assertion through its receiver.
+const RECEIVER_FLOW_A: &str = "test(\"points an optional empty record at the null offset\", () => {\n  const schema = loadFixture(\"empty-record-optional.td\");\n  const generated = generateRust(schema, { tdbin: true });\n  expect(generated).toContain(\"pub marker: Option<EmptyMarker>\");\n});\n";
+/// The receiver-flow counterpart.
+const RECEIVER_FLOW_B: &str = "test(\"points a required empty record at the shared singleton\", () => {\n  const schema = loadFixture(\"empty-record-required.td\");\n  const generated = generateRust(schema, { tdbin: true });\n  expect(generated).toContain(\"pub marker: EmptyMarker\");\n});\n";
+/// The needle locating the adapter call.
+const ADAPTER_NEEDLE: &str = "generateRust(";
+
 /// The needle locating the call statement inside a member source.
 const CALL_NEEDLE: &str = "greet(";
 /// The needle locating the interpolation call.
@@ -101,6 +109,30 @@ fn ts_scenario_pair_verdict_through_the_noise_bank() {
     );
 }
 
+/// The gh #284 pair whose invariant adapter is consumed through the
+/// *receiver* of the varying call: `generateRust` binds `generated`,
+/// and `expect(generated).toContain("…")` reads it as the subject of
+/// the assertion rather than as an argument. The spec's adapter clause
+/// says a bound result that flows into a later varying call is
+/// connective plumbing, and a receiver is one way a value flows in, so
+/// the whole-scenario pair must be convicted.
+#[test]
+fn adapter_consumed_through_the_receiver_is_still_scaffolding() {
+    let corpus = Corpus::new()
+        .member(RECEIVER_FLOW_A, ADAPTER_NEEDLE)
+        .member(RECEIVER_FLOW_B, ADAPTER_NEEDLE)
+        .language("typescript");
+    let verdict = corpus.verdict();
+    assert_eq!(
+        verdict,
+        Some(NoiseFilter::LiteralCalls),
+        "the invariant `generateRust` adapter binds `generated`, which the \
+         varying `expect(generated).toContain(…)` consumes as its receiver; \
+         a value flowing into the callee is still flowing into the call, so \
+         the scenario pair is literal-variation scaffolding: {verdict:?}"
+    );
+}
+
 /// The member corpus: registered sources plus one whole-member
 /// fingerprint apiece, mirroring the whole-filter harness the
 /// polymorphic and dict-assert pins use.
@@ -164,4 +196,108 @@ impl Corpus {
             .collect();
         is_noise_pattern(&self.members, &sources, &languages, &ParseCache::new())
     }
+}
+
+/// Two TypeScript test cases with byte-identical multi-statement bodies
+/// and differing names: the bodies are the duplicate, the names are not
+/// payload, so the family must publish.
+const TS_TEST_A: &str = "it('renders the header', () => {\n  const view = mount(Header);\n  expect(view.text()).toContain('Deslop');\n  expect(view.find('nav').length).toBe(1);\n});\n";
+/// The counterpart, differing only in the test name.
+const TS_TEST_B: &str = "it('renders the footer', () => {\n  const view = mount(Header);\n  expect(view.text()).toContain('Deslop');\n  expect(view.find('nav').length).toBe(1);\n});\n";
+/// The needle locating the test-case call.
+const TS_TEST_NEEDLE: &str = "it(";
+
+/// Two Dart `group` wrappers, each holding one identical test body, whose
+/// only difference is the group name.
+const DART_GROUP_A: &str = "group('upload', () {\n  test('supports progress', () {\n    final bloc = CounterBloc();\n    expect(bloc.state, equals(0));\n  });\n});\n";
+/// The counterpart, differing only in the group name.
+const DART_GROUP_B: &str = "group('download', () {\n  test('supports progress', () {\n    final bloc = CounterBloc();\n    expect(bloc.state, equals(0));\n  });\n});\n";
+/// The needle locating the group call.
+const DART_GROUP_NEEDLE: &str = "group(";
+
+/// A call carrying a statement-bearing argument is judged by that body,
+/// never by the string literal beside it: two test cases whose bodies
+/// are copies are a clone, whatever their names say
+/// ([CLONE-NOISE-LITERAL-VARIATION-CALLS]).
+#[test]
+fn test_bodies_are_judged_by_their_statements_not_their_names() {
+    let verdict = Corpus::new()
+        .call_member(TS_TEST_A, TS_TEST_NEEDLE)
+        .call_member(TS_TEST_B, TS_TEST_NEEDLE)
+        .language("typescript")
+        .verdict();
+    assert_eq!(
+        verdict, None,
+        "the members' bodies are byte-identical statements, so the differing \
+         test name is not literal-variation payload: {verdict:?}"
+    );
+}
+
+/// The same rule one level up: a `group` wrapper carries a body, so its
+/// name is not payload and the wrapper pair must publish.
+#[test]
+fn dart_group_wrappers_carry_bodies_so_their_names_are_not_payload() {
+    let verdict = Corpus::new()
+        .call_member(DART_GROUP_A, DART_GROUP_NEEDLE)
+        .call_member(DART_GROUP_B, DART_GROUP_NEEDLE)
+        .language("dart")
+        .verdict();
+    assert_eq!(
+        verdict, None,
+        "a wrapper whose argument carries statements is authored logic, \
+         never scaffolding varying a literal: {verdict:?}"
+    );
+}
+
+impl Corpus {
+    /// Registers `source` and offers exactly the call that starts at
+    /// `needle` and ends at the source's last closing parenthesis as one
+    /// member, so the filter judges the call itself.
+    fn call_member(mut self, source: &'static str, needle: &str) -> Self {
+        assert!(
+            source.contains(needle) && source.contains(')'),
+            "fixture needle {needle:?} and a closing parenthesis must exist in the member source"
+        );
+        let start = source.find(needle).unwrap_or_default();
+        let end = source
+            .rfind(')')
+            .map_or(source.len(), |close| close.saturating_add(1));
+        let file_id = self.registry.register(PathBuf::from("src.py"));
+        self.sources.push((file_id, source));
+        self.members.push(Fingerprint {
+            hash: [0_u8; 32],
+            file_id,
+            byte_range: ByteRange { start, end },
+            node_count: 12,
+        });
+        self
+    }
+}
+
+/// The gh #284 shape across two producers: a Rust scenario and a
+/// TypeScript scenario share the produce-then-assert idiom, and the only
+/// literal-free position — the producer whose result the varying
+/// assertions consume — names a different helper in each.
+const PRODUCER_RUST: &str = "test(\"documents the generated Rust module\", () => {\n  const schema = loadFixture(\"documented-records.td\");\n  const generated = generateRust(schema, { tdbin: true });\n  expect(generated).toContain(\"pub struct Customer {\");\n});\n";
+/// The TypeScript counterpart, produced by a different helper.
+const PRODUCER_TYPESCRIPT: &str = "test(\"generates the Option scalar layout\", () => {\n  const schema = loadFixture(\"option-scalars.td\");\n  const generated = generateTypeScript(schema, { tdbin: true });\n  expect(generated).toContain(\"export type OptionScalars = {\");\n});\n";
+/// The needle locating each scenario's producer call.
+const PRODUCER_NEEDLE: &str = "loadFixture(";
+
+/// A literal-free adapter may name a different helper in each member:
+/// the scaffold is the produce-then-assert idiom, not the producer.
+#[test]
+fn a_renamed_literal_free_adapter_keeps_the_scenario_family_convicted() {
+    let verdict = Corpus::new()
+        .member(PRODUCER_RUST, PRODUCER_NEEDLE)
+        .member(PRODUCER_TYPESCRIPT, PRODUCER_NEEDLE)
+        .language("typescript")
+        .verdict();
+    assert_eq!(
+        verdict,
+        Some(NoiseFilter::LiteralCalls),
+        "the producer position carries no literal and its result flows into \
+         the varying assertion, so a different producer name is plumbing, \
+         not logic: {verdict:?}"
+    );
 }

@@ -85,6 +85,16 @@ impl<'trees, L: BuildHasher> DeclarationScopes<'trees, L> {
             .is_some_and(|tree| node_aligned_at(tree, member.byte_range))
     }
 
+    /// Whether the occurrence is a run of whole authored functions: its
+    /// range opens on a function-like declaration and closes on one
+    /// (the same one, for a single function), so it is an authored unit
+    /// rather than a window over parts of several
+    /// ([FUSED-SHARED-SUBTREE-ECHO]).
+    pub(crate) fn aligned_function_run(&self, member: &Fingerprint) -> bool {
+        self.function_grammar(member)
+            .is_some_and(|(tree, kinds)| function_run_bounds(tree, member.byte_range, kinds))
+    }
+
     /// The member's normalised tree and its language's function-like
     /// productions, or `None` when the file is unknown or the grammar
     /// names no such production.
@@ -145,4 +155,39 @@ fn aligned_function_at(
     deeper.or_else(|| {
         (kinds.contains(&node.kind) && node.byte_range == range).then_some(node.byte_range)
     })
+}
+
+/// Whether some descendant of `node` whose kind is in `kinds` opens
+/// exactly at `range.start` inside the range, and some such descendant
+/// closes exactly at `range.end` inside it.
+fn function_run_bounds(node: &NormalizedNode, range: ByteRange, kinds: &[&str]) -> bool {
+    let mut opens = false;
+    let mut closes = false;
+    function_run_edges(node, range, kinds, &mut opens, &mut closes);
+    opens && closes
+}
+
+/// Walks the subtree recording whether a function-like node inside
+/// `range` starts on its first byte (`opens`) or ends on its last
+/// (`closes`).
+fn function_run_edges(
+    node: &NormalizedNode,
+    range: ByteRange,
+    kinds: &[&str],
+    opens: &mut bool,
+    closes: &mut bool,
+) {
+    if node.byte_range.end <= range.start || node.byte_range.start >= range.end {
+        return;
+    }
+    if kinds.contains(&node.kind) && range.covers(node.byte_range) {
+        *opens |= node.byte_range.start == range.start;
+        *closes |= node.byte_range.end == range.end;
+    }
+    if *opens && *closes {
+        return;
+    }
+    for child in &node.children {
+        function_run_edges(child, range, kinds, opens, closes);
+    }
 }

@@ -18,9 +18,11 @@ use crate::fingerprint::Fingerprint;
 mod candidates;
 pub use candidates::{candidate_pairs, candidate_pairs_for_language_policy, LshPairs};
 
-/// Embedding role guard applied before transitive closure.
-mod role_guard;
-pub(crate) use role_guard::apply_embedding_role_guard;
+/// Pair-content admission guard applied before transitive closure.
+mod content_gate;
+mod echo;
+pub(crate) use content_gate::apply_pair_content_gate;
+pub(crate) use echo::ExactFunctionAnchors;
 
 /// Transitive-closure clustering over surviving pairs.
 mod closure;
@@ -424,6 +426,36 @@ pub(crate) fn rescue_eligible(pair: &CandidatePair) -> bool {
         && score.token_jaccard >= SHARED_SUBTREE_MIN_JACCARD
         && pair.endpoint_node_counts.0 >= SHARED_SUBTREE_MIN_NODE_COUNT
         && shared_subtree_can_reach_floor(pair.endpoint_node_counts)
+}
+
+/// True for a pair the token axis carries on its own: no structural
+/// anchor, no embedding support, Jaccard at the LSH-only floor, and the
+/// fused floor cleared on that echo alone. [FUSED-CONTENT-GATE] holds such
+/// a pair to the promote floor only when it is *unanchored* — when its
+/// shared-subtree alignment has been measured and failed
+/// [`SHARED_SUBTREE_MIN_OVERLAP`]. An unmeasured overlap reads as `0.0`,
+/// which is no alignment at all, so without a measurement the gate cannot
+/// tell a near-identical run of functions (`go-cluster-extent-alignment`:
+/// two writers renamed, one literal swapped for a constant) from the
+/// whole-file-against-interior-window echo the promote floor exists to
+/// refuse (#339). Sizes that cannot reach the overlap floor are left
+/// unmeasured: the gate's verdict would be the same.
+pub(crate) fn token_carried(pair: &CandidatePair) -> bool {
+    let score = pair.score.finite();
+    score.structural <= 0.0
+        && score.embedding_cos < EMBEDDING_SUPPORT_FLOOR
+        && score.token_jaccard >= LSH_ONLY_MIN_JACCARD
+        && score.bounded_fused() >= pair.fused_min_score
+        && pair.endpoint_node_counts.0 >= SHARED_SUBTREE_MIN_NODE_COUNT
+        && shared_subtree_can_reach_floor(pair.endpoint_node_counts)
+}
+
+/// True for a pair whose shared-subtree alignment the rescue pass
+/// measures: a rescue candidate ([`rescue_eligible`]), or a token-carried
+/// pair whose content floor turns on that measurement
+/// ([`token_carried`]).
+pub(crate) fn alignment_required(pair: &CandidatePair) -> bool {
+    rescue_eligible(pair) || token_carried(pair)
 }
 
 /// Whether endpoint sizes leave enough nodes for the smaller tree to
