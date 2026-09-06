@@ -10,6 +10,11 @@ name: Deploy GitHub Pages
 on:
   workflow_dispatch:
   workflow_call:
+    inputs:
+      ref:
+        description: "Ref to build the site from. Defaults to the calling ref, so a rollback release deploys the site of the commit it ships."
+        required: false
+        type: string
 
 permissions:
   actions: write
@@ -32,6 +37,8 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url || steps.deploy_retry.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - uses: actions/setup-node@v7
         with:
