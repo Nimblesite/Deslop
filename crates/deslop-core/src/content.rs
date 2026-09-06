@@ -73,14 +73,7 @@ pub fn measure_pair_content<S: BuildHasher, L: BuildHasher>(
     languages: &HashMap<FileId, &'static str, L>,
 ) -> ContentEvidence {
     let tree_index = tree_index_of(trees);
-    measure_pair_content_indexed(
-        left,
-        right,
-        &tree_index,
-        sources,
-        languages,
-        PairShape::default(),
-    )
+    measure_pair_content_indexed(left, right, &tree_index, sources, languages, false)
 }
 
 /// Measures both content axes using a caller-owned tree index.
@@ -94,24 +87,15 @@ pub(crate) fn measure_pair_content_indexed<S: BuildHasher, L: BuildHasher>(
     tree_index: &HashMap<FileId, &NormalizedNode>,
     sources: &HashMap<FileId, Vec<u8>, S>,
     languages: &HashMap<FileId, &'static str, L>,
-    shape: PairShape,
+    interior: bool,
 ) -> ContentEvidence {
     let scope = PairScope {
         same_file: left.file_id == right.file_id,
-        interior: shape.interior,
+        interior,
     };
     let left = member_content(left, tree_index, sources, languages);
     let right = member_content(right, tree_index, sources, languages);
     pair_evidence(left.as_ref().zip(right.as_ref()), sources, scope)
-}
-
-/// What the caller knows about where the two endpoints sit — the half
-/// of [`PairScope`] that only a caller holding the declaration scopes
-/// can answer.
-#[derive(Clone, Copy, Default)]
-pub(crate) struct PairShape {
-    /// Both endpoints are windows strictly inside an authored function.
-    pub(crate) interior: bool,
 }
 
 /// Where the two endpoints sit, for the rename axis's scope rules

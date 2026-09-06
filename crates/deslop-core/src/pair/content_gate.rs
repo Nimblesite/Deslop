@@ -7,7 +7,7 @@ use crate::{
     buckets::{CONTENT_PROMOTE_FLOOR, CONTENT_SUPPORT_FLOOR},
     cluster::scope::DeclarationScopes,
     cluster_filters::{is_embedding_role_mismatch, ParseCache},
-    content::{measure_pair_content_indexed, ContentEvidence, PairShape},
+    content::{measure_pair_content_indexed, ContentEvidence},
     fingerprint::Fingerprint,
     state::FileId,
 };
@@ -164,13 +164,15 @@ fn gate_verdict<L: BuildHasher>(
     if !content_is_required(pair, left, right) {
         return GateVerdict::NotRequired;
     }
+    let interior =
+        context.scopes.enclosing(left).is_some() && context.scopes.enclosing(right).is_some();
     let evidence = measure_pair_content_indexed(
         left,
         right,
         context.tree_index,
         context.sources,
         context.languages,
-        pair_shape(left, right, context),
+        interior,
     );
     GateVerdict::Measured {
         evidence,
@@ -204,19 +206,6 @@ fn log_gate_verdict(left: &Fingerprint, right: &Fingerprint, verdict: &GateVerdi
         admitted = verdict.admitted(),
         "content gate verdict",
     );
-}
-
-/// Where the pair's two endpoints sit, as the rename axis's scope rules
-/// need it ([FUSED-CONTENT-GATE-INTERIOR]).
-fn pair_shape<L: BuildHasher>(
-    left: &Fingerprint,
-    right: &Fingerprint,
-    context: &GateContext<'_, L>,
-) -> PairShape {
-    PairShape {
-        interior: context.scopes.enclosing(left).is_some()
-            && context.scopes.enclosing(right).is_some(),
-    }
 }
 
 /// Whether this pair needs embedding evidence rather than structural or
