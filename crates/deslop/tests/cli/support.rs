@@ -1,20 +1,8 @@
-pub(crate) use anyhow::Result;
+pub(crate) use anyhow::{Context, Result};
 pub(crate) use assert_cmd::Command;
 pub(crate) use predicates::str::contains;
 pub(crate) use serde_json::Value;
 pub(crate) use std::{fs, path::Path, path::PathBuf};
-pub(crate) use tempfile::TempDir;
-
-/// Shared CLI flag selecting the minimum AST node count.
-pub(crate) const MIN_NODES_FLAG: &str = "--min-nodes";
-/// Shared small-fixture node-count value.
-pub(crate) const MIN_NODES_VALUE: &str = "8";
-/// Shared CLI flag disabling ANSI colour sequences.
-pub(crate) const NO_COLOR_FLAG: &str = "--no-color";
-/// Shared output stem used by CLI integration tests.
-pub(crate) const REPORT_OUTPUT_STEM: &str = "report";
-/// Canonical small C# fixture name.
-pub(crate) const CSHARP_SMALL_FIXTURE: &str = "csharp-small";
 
 pub(crate) fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -36,41 +24,12 @@ pub(crate) struct RunOutputs {
 
 /// Renders the three output paths for an `--output <dir>/report` layout.
 pub(crate) fn outputs_under(dir: &Path) -> RunOutputs {
-    let base = dir.join(REPORT_OUTPUT_STEM);
+    let base = dir.join("report");
     RunOutputs {
         json: with_ext(&base, "json"),
         txt: with_ext(&base, "txt"),
         html: with_ext(&base, "html"),
     }
-}
-
-/// Reads the raw JSON report text a run wrote under `<tmp>/report.json`.
-///
-/// Tests that assert on the report's *text* (a substring of the rendered
-/// JSON) read it through here rather than re-deriving the path.
-pub(crate) fn report_json_text(tmp: &TempDir) -> Result<String> {
-    Ok(fs::read_to_string(
-        tmp.path().join(REPORT_OUTPUT_STEM).with_extension("json"),
-    )?)
-}
-
-/// Opens a fixture-driven CLI scenario: a fresh temp dir, the three
-/// report paths the run will write under it, and a `deslop` command
-/// already pointed at the named fixture with `--output <tmp>/report`.
-/// The caller MUST bind the returned [`TempDir`] — dropping it deletes
-/// the workspace the command is about to write into.
-pub(crate) fn fixture_run(name: &str) -> Result<(TempDir, RunOutputs, Command)> {
-    let tmp = tempfile::tempdir()?;
-    let outputs = outputs_under(tmp.path());
-    let command = fixture_command(name, &tmp.path().join(REPORT_OUTPUT_STEM))?;
-    Ok((tmp, outputs, command))
-}
-
-/// Opens a fixture-driven CLI scenario that asserts only on the process
-/// result, not on the written report.
-pub(crate) fn fixture_run_command(name: &str) -> Result<(TempDir, Command)> {
-    let (tmp, _outputs, command) = fixture_run(name)?;
-    Ok((tmp, command))
 }
 
 pub(crate) fn deslop_command(scan_root: &Path, output_prefix: &Path) -> Result<Command> {
@@ -93,46 +52,6 @@ pub(crate) fn fixture_command(name: &str, output_prefix: &Path) -> Result<Comman
     let mut cmd = deslop_command(&fixture(name), output_prefix)?;
     let _cmd = cmd.arg("--no-incremental");
     Ok(cmd)
-}
-
-/// Creates the temp workspace with an empty `<dir_name>` scan root
-/// inside it and returns both. The temp directory must outlive every
-/// read of the returned paths, so callers bind the [`TempDir`] —
-/// dropping it deletes the workspace.
-///
-/// Every CLI test needs this pairing; hand-rolling the three lines per
-/// test was the suite's largest scaffolding duplication cluster
-/// ([CI-DESLOP] ledger, gh #397).
-pub(crate) fn temp_scan_dir(dir_name: &str) -> Result<(TempDir, PathBuf)> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join(dir_name);
-    fs::create_dir_all(&scan_root)?;
-    Ok((tmp, scan_root))
-}
-
-/// Creates the temp workspace, builds a `<dir_name>` scan root inside
-/// it, seeds the root with `seed`, and renders the output paths under
-/// the same temp root. `seed` may be a fixture-writer function directly
-/// or a closure composing several writes; a no-op seed (`|_| Ok(())`)
-/// leaves the root empty.
-pub(crate) fn seeded_scan(
-    dir_name: &str,
-    seed: impl FnOnce(&Path) -> Result<()>,
-) -> Result<(TempDir, PathBuf, RunOutputs)> {
-    let (tmp, scan_root) = temp_scan_dir(dir_name)?;
-    seed(&scan_root)?;
-    let out = outputs_under(tmp.path());
-    Ok((tmp, scan_root, out))
-}
-
-/// Runs the CLI against `scan_root` with `--output <output_prefix>` and
-/// `args`, asserting the process succeeded. Callers that must inspect
-/// stderr/stdout build their own [`deslop_command`] instead — inspecting
-/// the streams is the point of those tests.
-pub(crate) fn run_scan(scan_root: &Path, output_prefix: &Path, args: &[&str]) -> Result<()> {
-    let mut cmd = deslop_command(scan_root, output_prefix)?;
-    let _assertion = cmd.args(args).assert().success();
-    Ok(())
 }
 
 /// Appends `.<ext>` to `base` by cloning and replacing the file name.

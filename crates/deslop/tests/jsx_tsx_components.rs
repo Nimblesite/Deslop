@@ -10,6 +10,7 @@
 
 use anyhow::Result;
 
+mod common;
 use crate::common::*;
 
 #[test]
@@ -20,7 +21,7 @@ fn tsx_renamed_components_cluster_nearly_identical() -> Result<()> {
         "jsx-tsx-components",
         10,
         &["TeamPanel.tsx", "UserPanel.tsx"],
-        false,
+        "nearly_identical",
     )
 }
 
@@ -30,12 +31,12 @@ fn js_and_jsx_renamed_components_cluster_across_extensions() -> Result<()> {
     // renamed: the plain-JS grammar parses JSX, and both are the
     // `javascript` language, so they cluster. The five identical CSS
     // class-name literals anchor the bijective prop rename, so
-    // [FUSED-CONTENT-GATE] routes the pair act-now `nearly_identical`.
+    // [FUSION-CONTENT-GATE] routes the pair act-now `nearly_identical`.
     assert_bucketed_clone(
         "jsx-js-components",
         10,
         &["OfferTile.js", "ProductCard.jsx"],
-        false,
+        "nearly_identical",
     )
 }
 
@@ -50,7 +51,7 @@ fn jsx_html_entity_and_plain_text_collapse_to_the_same_clone() -> Result<()> {
         "jsx-entity-invariance",
         8,
         &["Ampersand.jsx", "Plus.jsx"],
-        false,
+        "nearly_identical",
     )
 }
 

@@ -20,11 +20,8 @@ use anyhow::{ensure, Result};
 use serde_json::{json, Value};
 use tempfile::TempDir;
 
-use crate::common;
-use common::{error_and_message, initialized_mcp, request_duplicates_summary};
-
-/// Clusters requested per page; the error path never reads them.
-const PAGE_LIMIT: u64 = 5;
+mod common;
+use common::{error_and_message, initialized_mcp};
 
 #[test]
 fn issue_148_top_offenders_reports_version_mismatch_when_lsp_rejects_report_get() -> Result<()> {
@@ -34,7 +31,10 @@ fn issue_148_top_offenders_reports_version_mismatch_when_lsp_rejects_report_get(
     spawn_stale_lsp(&socket)?;
 
     let mut mcp = initialized_mcp(workspace.path())?;
-    let response = request_duplicates_summary(&mut mcp, PAGE_LIMIT)?;
+    let response = mcp.request(
+        "tools/call",
+        &json!({ "name": "top-offenders", "arguments": { "n": 5 } }),
+    )?;
 
     let (_error, message) = error_and_message(&response)?;
     ensure!(
@@ -64,7 +64,10 @@ fn issue_148_session_config_reports_version_mismatch_when_lsp_rejects_method() -
     spawn_stale_lsp(&socket)?;
 
     let mut mcp = initialized_mcp(workspace.path())?;
-    let response = mcp.request("tools/call", &json!({ "name": "session", "arguments": {} }))?;
+    let response = mcp.request(
+        "tools/call",
+        &json!({ "name": "session-config", "arguments": {} }),
+    )?;
 
     let (_error, message) = error_and_message(&response)?;
     ensure!(

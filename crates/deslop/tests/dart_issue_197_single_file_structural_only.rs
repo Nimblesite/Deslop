@@ -26,53 +26,70 @@
 //! locals, loop, and branch — see the `code_action` and `refactor_merge`
 //! suites, which must stay green alongside this one.
 
+use std::{fs, path::Path};
+
 use anyhow::Result;
+use serde_json::Value;
 
-use crate::common::{
-    scan_dir::run_report_min_nodes,
-    signals::{assert_no_pair_surface_on_cluster, assert_structural_only_contract},
-    *,
-};
+mod common;
+use crate::common::{verdict::*, *};
 
-const ANALYSED_FILES: u64 = 1;
-const NO_VISIBLE_CLUSTERS: usize = 0;
-/// Every same-shape sibling family the closure forms at this floor —
-/// the issue's 7- and 8-member settings families among them — is
-/// convicted by [RANK-STRUCTURAL-ONLY-FORWARDING] and counted here.
-const CONVICTED_FAMILIES: u64 = 5;
-const NO_DUPLICATED_LINES: u64 = 0;
-const NO_DUPLICATION_PERCENT: f64 = 0.0;
+fn run_report(scan_root: &Path) -> Result<Value> {
+    let tmp = tempfile::tempdir()?;
+    let output = tmp.path().join("report");
+    let _assertion = deslop_cmd(scan_root, &output)?
+        .args(["--min-nodes", "30", "--embeddings", "off"])
+        .assert()
+        .success();
+    let body = fs::read_to_string(output.with_extension("json"))?;
+    Ok(serde_json::from_str(&body)?)
+}
 
 #[test]
 fn single_file_structural_only_method_families_do_not_top_the_report() -> Result<()> {
     let scan_root = fixture("dart-issue-197-settings-getters");
-    let report = run_report_min_nodes(&scan_root, "30")?;
+    let report = run_report(&scan_root)?;
 
-    // [PIPELINE-CLUSTER-CLOSURE] The mass-only wire carries cluster facts
-    // only; the `structural_only` bucket, the token floor and the row-4
-    // signal triple are gone. Every family the closure forms is a
-    // convicted component, so each contributes one hidden-cluster count
-    // and none contributes output.
-    for cluster in clusters(&report) {
-        assert_no_pair_surface_on_cluster(cluster, "issue #197");
-        assert_structural_only_contract(cluster, "issue #197");
-    }
-    // [METRICS-REPO] A convicted component must not contribute a visible
-    // cluster, duplicated lines, or repository percentage.
-    assert_eq!(
-        field(&report, "files_analysed").as_u64(),
-        Some(ANALYSED_FILES)
-    );
-    assert_eq!(cluster_count(&report), NO_VISIBLE_CLUSTERS);
-    assert_eq!(clusters_hidden(&report), CONVICTED_FAMILIES);
-    assert_eq!(
-        metric_field(&report, "duplicated_loc").as_u64(),
-        Some(NO_DUPLICATED_LINES)
-    );
-    assert_eq!(
-        metric_field(&report, "duplication_percent").as_f64(),
-        Some(NO_DUPLICATION_PERCENT)
-    );
+    // [METRICS-REPO] The duplication metric counts only the clusters the
+    // report renders. Every family in this fixture is a hidden
+    // structural-only sibling-method family, so the metric must report zero
+    // duplication even though the families were detected (asserted via
+    // `clusters_hidden` below) — proving a structural-only shape match
+    // cannot inflate the percentage.
+    // The fixture reproduces the issue's two #1/#2 families (be951a686525
+    // size=7, 7f363063109f size=8); both must be suppressed via the
+    // hidden-cluster path so they still count toward visibility telemetry.
+    assert_fully_suppressed(&report, 2);
 
+    let clusters = report
+        .get("clusters")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let offenders: Vec<String> = clusters
+        .iter()
+        .filter(|cluster| cluster_bucket(cluster) == "structural_only")
+        .filter(|cluster| signal(cluster, "token_jaccard") < 0.1)
+        .filter(|cluster| cluster_size(cluster) >= 3)
+        .map(|cluster| {
+            format!(
+                "cluster {id} size={size} weight={weight:.0} signals={{structural={s:.2}, \
+                 token_jaccard={t:.2}, embedding_cos={e:.2}}}",
+                id = cluster.get("id").and_then(Value::as_str).unwrap_or("?"),
+                size = cluster_size(cluster),
+                weight = cluster.get("weight").and_then(Value::as_f64).unwrap_or(0.0),
+                s = signal(cluster, "structural"),
+                t = signal(cluster, "token_jaccard"),
+                e = signal(cluster, "embedding_cos"),
+            )
+        })
+        .collect();
+    assert!(
+        offenders.is_empty(),
+        "issue #197: a single-file structural_only sibling-method family \
+         (token_jaccard < 0.1, size >= 3) has no real evidence and must not \
+         surface in the ranked report regardless of file spread. Offending \
+         clusters: {offenders:#?}"
+    );
     Ok(())
 }

@@ -3,18 +3,12 @@
 //! literal of near-identical constructor rows (`List<HighlightData> = [
 //! HighlightData(...), … ]`) is un-refactorable *data*, not duplicated
 //! *logic*. Before #190 it dominated the ranking and buried genuine
-//! copy-pasted logic clones.
-//!
-//! The mass-only wire retired the `demote` ranking mode ([RANK-CATEGORY]:
-//! "the retired `demote`, `data_clone_weight`, and every
-//! evidence-weighted `[metrics]` table are forbidden") and the content
-//! gate rejects shape-only same-file pairs below the promote floor
-//! ([FUSED-CONTENT-GATE]). The data-table family therefore publishes
-//! nothing on the current wire while the byte-proven logic clone keeps
-//! its rank — the two assertions this suite pins end to end.
+//! copy-pasted logic clones. The three-way `[ranking] data_clones` policy
+//! demotes (default), drops (`ignore`), or restores (`keep` /
+//! `data_clone_weight = 1.0`) such tables, and labels them `category="data"`.
 //!
 //! Black-box E2E: drive the CLI against fixture repos and assert against the
-//! rendered JSON reports only.
+//! rendered JSON / text reports only.
 
 use std::{
     fs,
@@ -25,7 +19,7 @@ use anyhow::Result;
 use deslop_test_support::write_dart_data_table_fixture;
 use serde_json::Value;
 
-use crate::common::signals::{assert_no_pair_surface_on_cluster, has_verbatim_pair};
+mod common;
 use crate::common::*;
 
 fn report_path(tmp: &Path, stem: &str) -> PathBuf {
@@ -46,8 +40,38 @@ fn touches(report: &Value, file_name: &str) -> bool {
         .any(|cluster| cluster_touches(cluster, file_name))
 }
 
-/// Runs the CLI against `src`, writing JSON to `<tmp>/<stem>.json`, and
-/// returns the parsed JSON report.
+fn cluster_for<'a>(report: &'a Value, file_name: &str) -> Option<&'a Value> {
+    clusters(report)
+        .iter()
+        .find(|cluster| cluster_touches(cluster, file_name))
+}
+
+/// Zero-based rank of the cluster touching `file_name`, or [`usize::MAX`]
+/// when no cluster does — callers assert presence with `< usize::MAX`.
+fn rank_of(report: &Value, file_name: &str) -> usize {
+    clusters(report)
+        .iter()
+        .position(|cluster| cluster_touches(cluster, file_name))
+        .unwrap_or(usize::MAX)
+}
+
+fn category_of(report: &Value, file_name: &str) -> String {
+    cluster_for(report, file_name)
+        .and_then(|cluster| cluster.get("category"))
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_owned()
+}
+
+fn weight_of(report: &Value, file_name: &str) -> f64 {
+    cluster_for(report, file_name)
+        .and_then(|cluster| cluster.get("weight"))
+        .and_then(Value::as_f64)
+        .unwrap_or(0.0)
+}
+
+/// Runs the CLI against `src`, writing JSON (and text for the label
+/// assertion) to `<tmp>/<stem>.*`, and returns the parsed JSON report.
 fn run_cli(src: &Path, tmp: &Path, stem: &str, min_nodes: &str) -> Result<Value> {
     let mut cmd = deslop_cmd(src, &tmp.join(stem))?;
     let _assertion = cmd
@@ -63,54 +87,61 @@ fn write_ranking_config(src: &Path, body: &str) -> Result<()> {
     Ok(())
 }
 
-/// The byte-proven logic clone must head the report and the data-table
-/// family must publish nothing — the mass-only contract for every
-/// `data_clones` mode, since the content gate decides admission and no
-/// evidence factor may change rank ([RANK-MASS-SUM]).
-fn assert_logic_clone_leads_and_table_is_absent(report: &Value, scan_root: &Path) -> Result<()> {
-    let logic = clusters(report)
-        .iter()
-        .find(|cluster| cluster_touches(cluster, "scorer_a.dart"))
-        .ok_or_else(|| anyhow::anyhow!("logic clone must appear: {report:#}"))?;
-    assert_eq!(
-        clusters(report)
-            .iter()
-            .position(|cluster| std::ptr::eq(cluster, logic)),
-        Some(0),
-        "the byte-proven logic clone must rank first: {report:#}"
-    );
-    // The reported view spans the whole file including the differing class
-    // name, so the byte-proven *method* shows as the occurrence text rather
-    // than as a verbatim cluster; the admission + membership facts are the
-    // wire contract ([PIPELINE-CLUSTER-CLOSURE]).
-    let texts = occurrence_texts(scan_root, logic)?;
-    assert!(
-        texts.len() >= 2 && texts.iter().all(|text| text.contains("score(int v)")),
-        "the logic clone's duplicated method must be reported in both occurrences: {texts:#?}"
-    );
-    assert_no_pair_surface_on_cluster(logic, "issue #190 logic clone");
-    assert!(
-        !touches(report, "highlight_data.dart"),
-        "the data-table family must publish no cluster — the content gate \
-         rejects its shape-only rows below the promote floor \
-         ([FUSED-CONTENT-GATE]): {report:#}"
-    );
-    Ok(())
-}
-
 #[test]
-fn default_mode_ranks_logic_clone_first_and_publishes_no_data_table() -> Result<()> {
+fn default_demotes_data_table_below_logic_clone() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let src = tmp.path().join("src");
-    let scan_root = src.clone();
     write_dart_data_table_fixture(&src)?;
 
-    // [RANK-CATEGORY] core proof: with the DEFAULT policy the byte-proven
-    // logic clone outranks the data table, and the table publishes
-    // nothing — `demote` is retired and no evidence factor may change
-    // mass.
+    // [RANK-CATEGORY] assertion 1 (core proof): with the DEFAULT policy the
+    // logic clone outranks the data table even though the table has a larger
+    // raw size and node count.
     let report = run_cli(&src, tmp.path(), "default", "30")?;
-    assert_logic_clone_leads_and_table_is_absent(&report, &scan_root)?;
+    let logic_rank = rank_of(&report, "scorer_a.dart");
+    let data_rank = rank_of(&report, "highlight_data.dart");
+    assert!(
+        logic_rank < usize::MAX,
+        "logic clone must appear: {report:#}"
+    );
+    assert!(data_rank < usize::MAX, "data table must appear: {report:#}");
+    assert!(
+        logic_rank < data_rank,
+        "default demote must rank the logic clone above the data table: \
+         logic at #{logic_rank}, data at #{data_rank}\n{report:#}"
+    );
+
+    // [RANK-CATEGORY] assertion 2: the data cluster is labelled category=data;
+    // the logic cluster stays category=logic.
+    assert_eq!(
+        category_of(&report, "highlight_data.dart"),
+        "data",
+        "data table must be labelled data: {report:#}"
+    );
+    assert_eq!(
+        category_of(&report, "scorer_a.dart"),
+        "logic",
+        "logic clone must stay logic: {report:#}"
+    );
+    let logic_weight = weight_of(&report, "scorer_a.dart");
+    let data_weight = weight_of(&report, "highlight_data.dart");
+    assert!(
+        logic_weight > data_weight,
+        "demoted data weight must sit below the logic weight: \
+         logic={logic_weight}, data={data_weight}"
+    );
+
+    // The text report carries the human-readable "data table" chip and the
+    // builder / asset action sentence, so the demotion is visible to humans
+    // and not just an AI label.
+    let text = fs::read_to_string(tmp.path().join("default.txt"))?;
+    assert!(
+        text.contains("[data table]"),
+        "text report must carry the data-table chip: {text}"
+    );
+    assert!(
+        text.contains("move the rows to a JSON/CSV/asset"),
+        "text report must carry the builder/asset action hint for data: {text}"
+    );
     Ok(())
 }
 
@@ -118,30 +149,60 @@ fn default_mode_ranks_logic_clone_first_and_publishes_no_data_table() -> Result<
 fn ignore_mode_drops_data_table_keeps_logic_clone() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let src = tmp.path().join("src");
-    let scan_root = src.clone();
     write_dart_data_table_fixture(&src)?;
-    write_ranking_config(&src, "[visibility]\ndata_clones = \"ignore\"\n")?;
+    write_ranking_config(&src, "[ranking]\ndata_clones = \"ignore\"\n")?;
 
-    // [RANK-CATEGORY] ignore mode: the data table appears nowhere and the
-    // byte-proven logic clone survives at the top.
+    // [RANK-CATEGORY] assertion 3: ignore mode drops the data table entirely
+    // (it appears nowhere in the report) while the logic clone survives.
     let report = run_cli(&src, tmp.path(), "ignore", "30")?;
-    assert_logic_clone_leads_and_table_is_absent(&report, &scan_root)?;
+    assert!(
+        !touches(&report, "highlight_data.dart"),
+        "ignore mode must drop the data table from the report: {report:#}"
+    );
+    assert!(
+        touches(&report, "scorer_a.dart"),
+        "the logic clone must still appear under ignore mode: {report:#}"
+    );
+    assert_eq!(
+        category_of(&report, "scorer_a.dart"),
+        "logic",
+        "surviving logic clone stays logic: {report:#}"
+    );
+    assert!(
+        clusters_hidden(&report) >= 1,
+        "the dropped data table must be counted under clusters_hidden: {report:#}"
+    );
     Ok(())
 }
 
 #[test]
-fn keep_mode_keeps_logic_clone_first_and_publishes_no_data_table() -> Result<()> {
+fn keep_mode_restores_data_table_to_the_top() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let src = tmp.path().join("src");
-    let scan_root = src.clone();
     write_dart_data_table_fixture(&src)?;
-    write_ranking_config(&src, "[visibility]\ndata_clones = \"keep\"\n")?;
+    write_ranking_config(&src, "[ranking]\ndata_clone_weight = 1.0\n")?;
 
-    // [RANK-CATEGORY] keep mode: the table's fate is admission's, and
-    // admission rejects it below the promote floor; the logic clone keeps
-    // rank one.
+    // [RANK-CATEGORY] assertion 4: data_clone_weight = 1.0 restores the prior
+    // ordering — the larger data table tops the ranking again — proving the
+    // knob actually drives the weight. The category label is unchanged.
     let report = run_cli(&src, tmp.path(), "keep", "30")?;
-    assert_logic_clone_leads_and_table_is_absent(&report, &scan_root)?;
+    let data_rank = rank_of(&report, "highlight_data.dart");
+    let logic_rank = rank_of(&report, "scorer_a.dart");
+    assert!(data_rank < usize::MAX, "data table must appear: {report:#}");
+    assert!(
+        logic_rank < usize::MAX,
+        "logic clone must appear: {report:#}"
+    );
+    assert!(
+        data_rank < logic_rank,
+        "data_clone_weight = 1.0 must let the data table out-rank the logic clone: \
+         data at #{data_rank}, logic at #{logic_rank}\n{report:#}"
+    );
+    assert_eq!(
+        category_of(&report, "highlight_data.dart"),
+        "data",
+        "data table stays labelled data even at full weight: {report:#}"
+    );
     Ok(())
 }
 
@@ -183,13 +244,12 @@ fn invalid_data_clone_weight_is_rejected_with_a_clear_error() -> Result<()> {
 fn verbatim_copied_table_still_surfaces_as_duplication() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let src = tmp.path().join("src");
-    let scan_root = src.clone();
     fs::create_dir_all(&src)?;
 
     // A data TABLE copied verbatim across two files. The escape hatch
     // ([CLONE-NOISE-DART-DATA-TABLE-LITERAL]) requires ≥2 cluster members to
     // differ in raw bytes; a byte-for-byte cross-file copy does NOT, so the
-    // cluster stays a real duplicate at full mass — genuine copy-paste.
+    // cluster stays category=logic at full weight — genuine copy-paste.
     let table = "class Cfg {\n  const Cfg({this.a, this.b, this.c});\n  \
         final String a;\n  final int b;\n  final String c;\n}\n\n\
         const List<Cfg> table = [\n  Cfg(a: \"x1\", b: 1, c: \"p\"),\n  \
@@ -199,23 +259,20 @@ fn verbatim_copied_table_still_surfaces_as_duplication() -> Result<()> {
     fs::write(src.join("config_one.dart"), table)?;
     fs::write(src.join("config_two.dart"), table)?;
 
-    // [RANK-CATEGORY] the verbatim-copied table is NOT dropped — it
-    // surfaces as a genuine byte-proven cross-file duplicate.
+    // [RANK-CATEGORY] assertion 5: the verbatim-copied table is NOT demoted —
+    // it surfaces as a genuine cross-file duplicate, category=logic.
     let report = run_cli(&src, tmp.path(), "verbatim", "20")?;
-    let cluster = clusters(&report)
-        .iter()
-        .find(|cluster| {
-            cluster_touches(cluster, "config_one.dart")
-                && cluster_touches(cluster, "config_two.dart")
-        })
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "the cross-file verbatim copy must cluster across both files: {report:#}"
-            )
-        })?;
+    let spans_both = clusters(&report).iter().any(|cluster| {
+        cluster_touches(cluster, "config_one.dart") && cluster_touches(cluster, "config_two.dart")
+    });
     assert!(
-        has_verbatim_pair(&scan_root, cluster)?,
-        "a verbatim-copied table is real duplication and must be byte-proven: {cluster:#}"
+        spans_both,
+        "the cross-file verbatim copy must cluster across both files: {report:#}"
+    );
+    assert_eq!(
+        category_of(&report, "config_one.dart"),
+        "logic",
+        "a verbatim-copied table is real duplication and must NOT be demoted to data: {report:#}"
     );
     Ok(())
 }

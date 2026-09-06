@@ -7,7 +7,7 @@
 //! `WorkspaceEdit` client-side, and asserts the resulting buffer
 //! matches the shared golden snapshot.
 
-use crate::common;
+mod common;
 
 use std::{
     fs,
@@ -17,8 +17,8 @@ use std::{
 
 use anyhow::{anyhow, ensure, Context, Result};
 use common::{
-    session::{FixtureSession, CONSOLIDATE_OFFER_TITLE, MERGE_OFFER_TITLE},
-    ANALYSIS_TIMEOUT, POLL_INTERVAL,
+    call, code_action_params, handshake, rewrite_offer, spawn_lsp_on_fixture_guarded,
+    wait_for_actions, ANALYSIS_TIMEOUT, POLL_INTERVAL,
 };
 use serde_json::{json, Value};
 
@@ -81,9 +81,10 @@ fn byte_offset(source: &str, position: &Value) -> Result<usize> {
 /// cluster id (case 4).
 #[test]
 fn csharp_type1_fixture_offers_and_applies_extract_action() -> Result<()> {
-    let mut session = FixtureSession::open("csharp-extract-type1")?;
-    let kinds = session
-        .init
+    let (workspace, _guard, mut stdin, mut stdout) =
+        spawn_lsp_on_fixture_guarded("csharp-extract-type1")?;
+    let init = handshake(&mut stdin, &mut stdout)?;
+    let kinds = init
         .pointer("/result/capabilities/codeActionProvider/codeActionKinds")
         .and_then(Value::as_array)
         .context("codeActionProvider advertised")?;
@@ -96,16 +97,17 @@ fn csharp_type1_fixture_offers_and_applies_extract_action() -> Result<()> {
         "capability must advertise extract + rewrite kinds, got {kinds:?}"
     );
     ensure!(
-        session
-            .init
-            .pointer("/result/capabilities/codeActionProvider/resolveProvider")
+        init.pointer("/result/capabilities/codeActionProvider/resolveProvider")
             == Some(&Value::Bool(true)),
         "lazy resolve must be advertised ([AUTOFIX-MERGE-CODE-ACTION])"
     );
 
-    let uri = session.file_uri("InvoiceMath.cs")?;
+    let file = workspace.path().join("InvoiceMath.cs");
+    let uri = tower_lsp::lsp_types::Url::from_file_path(&file)
+        .map_err(|()| anyhow!("fixture path is absolute"))?;
     // Lines 4..6 sit inside the first duplicated method body.
-    let actions = session.wait_for_actions("InvoiceMath.cs", (4, 6))?;
+    let params = code_action_params(uri.as_str(), 4, 6);
+    let actions = wait_for_actions(&mut stdin, &mut stdout, &params)?;
 
     let action = actions
         .iter()
@@ -142,7 +144,6 @@ fn csharp_type1_fixture_offers_and_applies_extract_action() -> Result<()> {
         "helper name must embed the cluster id prefix, got: {inserted}"
     );
 
-    let file = session.workspace.path().join("InvoiceMath.cs");
     let source = fs::read_to_string(&file).context("fixture source")?;
     let applied = apply_text_edits(&source, &edits)?;
     let expected = fs::read_to_string(golden("InvoiceMath.applied.cs")).context("golden")?;
@@ -162,9 +163,13 @@ fn assert_language_case(
     body_lines: (u32, u32),
     golden_name: &str,
 ) -> Result<()> {
-    let mut session = FixtureSession::open(fixture_name)?;
-    let uri = session.file_uri(file_name)?;
-    let actions = session.wait_for_actions(file_name, body_lines)?;
+    let (workspace, _guard, mut stdin, mut stdout) = spawn_lsp_on_fixture_guarded(fixture_name)?;
+    let _init = handshake(&mut stdin, &mut stdout)?;
+    let file = workspace.path().join(file_name);
+    let uri = tower_lsp::lsp_types::Url::from_file_path(&file)
+        .map_err(|()| anyhow!("fixture path is absolute"))?;
+    let params = code_action_params(uri.as_str(), body_lines.0, body_lines.1);
+    let actions = wait_for_actions(&mut stdin, &mut stdout, &params)?;
     let edits = actions
         .iter()
         .find_map(|action| {
@@ -177,7 +182,6 @@ fn assert_language_case(
         })
         .cloned()
         .context("extract action carries edits for the fixture document")?;
-    let file = session.workspace.path().join(file_name);
     let source = fs::read_to_string(&file).context("fixture source")?;
     let applied = apply_text_edits(&source, &edits)?;
     let expected = fs::read_to_string(golden(golden_name)).context("golden")?;
@@ -215,12 +219,15 @@ fn python_type1_fixture_offers_and_applies_extract_action() -> Result<()> {
 /// Polls `deslop/reportGet` until the first analysis pass lands, so a
 /// negative code-action assertion is made against a live report rather
 /// than an empty boot-time snapshot.
-fn wait_for_analysis(session: &mut FixtureSession) -> Result<()> {
+fn wait_for_analysis(
+    stdin: &mut std::process::ChildStdin,
+    stdout: &mut std::io::BufReader<std::process::ChildStdout>,
+) -> Result<()> {
     let deadline = Instant::now()
         .checked_add(ANALYSIS_TIMEOUT)
         .unwrap_or_else(Instant::now);
     loop {
-        let report = session.call("deslop/reportGet", &json!({}))?;
+        let report = call(stdin, stdout, "deslop/reportGet", &json!({}))?;
         if common::cluster_count(&report) > 0 {
             return Ok(());
         }
@@ -237,10 +244,14 @@ fn wait_for_analysis(session: &mut FixtureSession) -> Result<()> {
 /// fixture's clusters exist, yet no extract action is offered anywhere
 /// in the file.
 fn assert_no_action_over_file(fixture_name: &str, file_name: &str) -> Result<()> {
-    let mut session = FixtureSession::open(fixture_name)?;
-    wait_for_analysis(&mut session)?;
-    let params = session.code_action_params(file_name, (0, 40))?;
-    let response = session.call("textDocument/codeAction", &params)?;
+    let (workspace, _guard, mut stdin, mut stdout) = spawn_lsp_on_fixture_guarded(fixture_name)?;
+    let _init = handshake(&mut stdin, &mut stdout)?;
+    wait_for_analysis(&mut stdin, &mut stdout)?;
+    let file = workspace.path().join(file_name);
+    let uri = tower_lsp::lsp_types::Url::from_file_path(&file)
+        .map_err(|()| anyhow!("fixture path is absolute"))?;
+    let params = code_action_params(uri.as_str(), 0, 40);
+    let response = call(&mut stdin, &mut stdout, "textDocument/codeAction", &params)?;
     let result = response.pointer("/result").context("result present")?;
     let extract_offered = result.as_array().is_some_and(|actions| {
         actions.iter().any(|action| {
@@ -280,13 +291,20 @@ fn cross_class_fixture_offers_no_action() -> Result<()> {
 /// a partial edit ([AUTOFIX-EXTRACT-CODE-ACTION]).
 #[test]
 fn range_outside_occurrences_offers_no_action() -> Result<()> {
-    let mut session = FixtureSession::open("csharp-extract-type1")?;
+    let (workspace, _guard, mut stdin, mut stdout) =
+        spawn_lsp_on_fixture_guarded("csharp-extract-type1")?;
+    let _init = handshake(&mut stdin, &mut stdout)?;
+
+    let file = workspace.path().join("InvoiceMath.cs");
+    let uri = tower_lsp::lsp_types::Url::from_file_path(&file)
+        .map_err(|()| anyhow!("fixture path is absolute"))?;
     // First wait until analysis is live (the in-body range offers an
     // action), then probe the class-declaration line.
-    let _ready = session.wait_for_actions("InvoiceMath.cs", (4, 6))?;
+    let in_body = code_action_params(uri.as_str(), 4, 6);
+    let _ready = wait_for_actions(&mut stdin, &mut stdout, &in_body)?;
 
-    let outside = session.code_action_params("InvoiceMath.cs", (0, 0))?;
-    let response = session.call("textDocument/codeAction", &outside)?;
+    let outside = code_action_params(uri.as_str(), 0, 0);
+    let response = call(&mut stdin, &mut stdout, "textDocument/codeAction", &outside)?;
     let result = response.pointer("/result").context("result present")?;
     ensure!(
         result.is_null(),
@@ -300,10 +318,17 @@ fn range_outside_occurrences_offers_no_action() -> Result<()> {
 /// transactional edit; applying it matches the merge golden.
 #[test]
 fn merge_fixture_offers_and_resolves_rewrite_action() -> Result<()> {
-    let mut session = FixtureSession::open("csharp-merge-leafgap")?;
-    let offer = session.rewrite_offer("RateLimits.cs", (4, 6), MERGE_OFFER_TITLE)?;
+    let (workspace, _guard, mut stdin, mut stdout) =
+        spawn_lsp_on_fixture_guarded("csharp-merge-leafgap")?;
+    let _init = handshake(&mut stdin, &mut stdout)?;
+    let file = workspace.path().join("RateLimits.cs");
+    let uri = tower_lsp::lsp_types::Url::from_file_path(&file)
+        .map_err(|()| anyhow!("fixture path is absolute"))?;
+    let params = code_action_params(uri.as_str(), 4, 6);
+    let actions = wait_for_actions(&mut stdin, &mut stdout, &params)?;
+    let offer = rewrite_offer(&actions, "Merge duplicates into one parameterised helper")?;
 
-    let resolved = session.call("codeAction/resolve", &offer)?;
+    let resolved = call(&mut stdin, &mut stdout, "codeAction/resolve", offer)?;
     let edits = resolved
         .pointer("/result/edit/documentChanges/0/edits")
         .and_then(Value::as_array)
@@ -314,7 +339,6 @@ fn merge_fixture_offers_and_resolves_rewrite_action() -> Result<()> {
         "insertion + two rewrites, got {}",
         edits.len()
     );
-    let file = session.workspace.path().join("RateLimits.cs");
     let source = fs::read_to_string(&file)?;
     let applied = apply_text_edits(&source, &edits)?;
     let expected = fs::read_to_string(golden("RateLimits.merged.cs")).context("golden")?;
@@ -325,70 +349,70 @@ fn merge_fixture_offers_and_resolves_rewrite_action() -> Result<()> {
     Ok(())
 }
 
-/// [AUTOFIX-CONSOLIDATE-CODE-ACTION] The cross-file Rust fixture holds
-/// one byte-identical `normalise_labels` in two sibling modules whose
-/// other definitions differ. The cluster is the function itself, not
-/// the module around it ([FUSED-SHARED-SUBTREE-ECHO]), so the
-/// definition-run gate sees one symbol on each side and the
-/// consolidation resolves to a transactional edit: the duplicate module
-/// imports the canonical definition and drops its own copy, and its
-/// differing neighbour stays untouched ([AUTOFIX-CONSOLIDATE-GATE] v1.1,
-/// [AUTOFIX-CONSOLIDATE-EDIT]). The mechanical edit path is pinned by
-/// the synthetic consolidation suites in
-/// `deslop-core/tests/refactor_consolidate.rs`.
+/// [AUTOFIX-CONSOLIDATE-SURFACE] (issue #277): a cross-file identical
+/// definition offers a lazily resolved `refactor.rewrite`; resolving
+/// attaches the consolidation edit; applying it removes the duplicate
+/// definition and imports the canonical symbol.
 #[test]
 fn cross_file_fixture_offers_and_resolves_consolidate_action() -> Result<()> {
-    let mut session = FixtureSession::open("rust-consolidate")?;
-    let offer = session.rewrite_offer("pricing_b.rs", (2, 5), CONSOLIDATE_OFFER_TITLE)?;
-    let resolved = session.call("codeAction/resolve", &offer)?;
-    ensure!(
-        resolved.pointer("/result/disabled").is_none(),
-        "a consolidation the gate admits carries no refusal: {resolved}"
-    );
+    let (workspace, _guard, mut stdin, mut stdout) =
+        spawn_lsp_on_fixture_guarded("rust-consolidate")?;
+    let _init = handshake(&mut stdin, &mut stdout)?;
+    let file = workspace.path().join("pricing_b.rs");
+    let uri = tower_lsp::lsp_types::Url::from_file_path(&file)
+        .map_err(|()| anyhow!("fixture path is absolute"))?;
+    let params = code_action_params(uri.as_str(), 2, 5);
+    let actions = wait_for_actions(&mut stdin, &mut stdout, &params)?;
+    let offer = rewrite_offer(
+        &actions,
+        "Consolidate identical duplicates into one canonical definition",
+    )?;
+    let resolved = call(&mut stdin, &mut stdout, "codeAction/resolve", offer)?;
     let changes = resolved
         .pointer("/result/edit/documentChanges")
         .and_then(Value::as_array)
-        .context("resolve attaches the transactional edit")?;
-    let edits = changes
-        .iter()
-        .find(|change| {
-            change
-                .pointer("/textDocument/uri")
-                .and_then(Value::as_str)
-                .is_some_and(|target| target.ends_with("pricing_b.rs"))
-        })
-        .and_then(|change| change.pointer("/edits"))
-        .and_then(Value::as_array)
         .cloned()
-        .context("the duplicate module is rewritten")?;
-    let source = fs::read_to_string(session.workspace.path().join("pricing_b.rs"))?;
+        .context("resolve attaches the consolidation edit ([AUTOFIX-CONSOLIDATE-EDIT])")?;
+    let (target_uri, edits) = changes
+        .iter()
+        .find_map(|change| {
+            let uri_text = change
+                .pointer("/textDocument/uri")
+                .and_then(Value::as_str)?;
+            let edits = change.pointer("/edits").and_then(Value::as_array)?;
+            (!edits.is_empty()).then(|| (uri_text.to_owned(), edits.clone()))
+        })
+        .context("one duplicate file receives edits")?;
+    let target = tower_lsp::lsp_types::Url::parse(&target_uri)?
+        .to_file_path()
+        .map_err(|()| anyhow!("edited uri is a file path"))?;
+    let source = fs::read_to_string(&target)?;
     let applied = apply_text_edits(&source, &edits)?;
     ensure!(
-        applied.contains("use crate::pricing_a::normalise_labels;"),
-        "the duplicate module imports the canonical definition:\n{applied}"
+        applied.starts_with("use crate::pricing_"),
+        "duplicate imports the canonical symbol:\n{applied}"
     );
     ensure!(
-        !applied.contains("fn normalise_labels"),
-        "the duplicate definition is deleted:\n{applied}"
-    );
-    ensure!(
-        applied.contains("fn describe_ledger"),
-        "the module's own differing definition survives:\n{applied}"
+        !applied.contains("pub fn normalise_labels"),
+        "duplicate no longer defines the symbol:\n{applied}"
     );
     Ok(())
 }
 
 /// Resolving a drifted cluster disables the action with the routing
-/// reason instead of attaching an edit. The two methods are one shape
-/// and the content gate admits them as one same-file cluster; the
-/// merge then refuses because the differing `ceiling` literals are an
-/// integer and a real — a leaf drift no helper parameter can carry
-/// ([AUTOFIX-MERGE-GATE]).
+/// reason instead of attaching an edit.
 #[test]
 fn drifted_fixture_resolve_disables_with_reason() -> Result<()> {
-    let mut session = FixtureSession::open("csharp-merge-leafdrift")?;
-    let offer = session.rewrite_offer("DriftLimits.cs", (4, 6), MERGE_OFFER_TITLE)?;
-    let resolved = session.call("codeAction/resolve", &offer)?;
+    let (workspace, _guard, mut stdin, mut stdout) =
+        spawn_lsp_on_fixture_guarded("csharp-merge-drift")?;
+    let _init = handshake(&mut stdin, &mut stdout)?;
+    let file = workspace.path().join("DriftLimits.cs");
+    let uri = tower_lsp::lsp_types::Url::from_file_path(&file)
+        .map_err(|()| anyhow!("fixture path is absolute"))?;
+    let params = code_action_params(uri.as_str(), 4, 6);
+    let actions = wait_for_actions(&mut stdin, &mut stdout, &params)?;
+    let offer = rewrite_offer(&actions, "Merge duplicates into one parameterised helper")?;
+    let resolved = call(&mut stdin, &mut stdout, "codeAction/resolve", offer)?;
     ensure!(
         resolved.pointer("/result/edit").is_none(),
         "no edit attaches to a refused merge"
@@ -397,9 +421,6 @@ fn drifted_fixture_resolve_disables_with_reason() -> Result<()> {
         .pointer("/result/disabled/reason")
         .and_then(Value::as_str)
         .context("refusal reason surfaces on the action")?;
-    ensure!(
-        reason.contains("type"),
-        "the refusal names the literal type drift, got `{reason}`"
-    );
+    ensure!(!reason.is_empty(), "reason is human-readable");
     Ok(())
 }

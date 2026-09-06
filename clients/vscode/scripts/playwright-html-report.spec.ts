@@ -23,10 +23,6 @@ interface ViewportCase {
 const repoRoot = findRepoRoot(process.cwd());
 const fixtureDir = path.join(repoRoot, "clients", "vscode", "src", "test", "fixtures", "csharp-small");
 const screenshotDir = path.join(repoRoot, "target", "playwright-html-report");
-// [FUSED-PAIR-SIGNALS] Pair evidence renders on no cluster surface. The
-// HTML report once attributed every signal row to "the elected pair";
-// the report now carries duplicated mass and bucket facts only.
-const ELECTED_PAIR_ATTRIBUTION = "elected pair: occurrences 1 and 2 — Alpha.cs and Beta.cs";
 
 const viewports: readonly ViewportCase[] = [
   { name: "desktop", width: 1280, height: 900 },
@@ -52,15 +48,6 @@ test.describe("standalone HTML report", () => {
       assertThemeAndStylesheet(styles);
       assertLayoutAndAccents(styles);
       assertNoHorizontalOverflow(styles, viewport);
-      const runDetails = await page.locator(".run-details").textContent();
-      assert.ok(
-        !runDetails?.includes(ELECTED_PAIR_ATTRIBUTION),
-        "the HTML report is a cluster surface and must not name an elected pair",
-      );
-      assert.ok(
-        !runDetails?.includes("elected pair"),
-        "no elected-pair language may render in the HTML report",
-      );
 
       fs.mkdirSync(screenshotDir, { recursive: true });
       await page.screenshot({

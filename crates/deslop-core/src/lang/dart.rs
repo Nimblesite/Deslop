@@ -21,27 +21,22 @@
 //! Shared walking / interning plumbing lives in [`super::shared`].
 
 use crate::{
-    ast::{named_children, NormalizedNode},
+    ast::NormalizedNode,
     error::CoreError,
     lang::{
-        merge_emit::{
-            emit_merge_helper, plain_call, BraceStyle, HelperDialect, HelperPlacement,
-            InsertionPoint,
-        },
         shared::{build_normalised_root, intern_kind, parse_source, IDENTIFIER_KIND, LITERAL_KIND},
         LanguageParser,
     },
     refactor::{
-        emit::{line_indent_at, line_start_at},
-        merge::{MergeEmitOutcome, MergeEmitRequest},
-        preconditions::{field_text, node_text},
+        emit::{cluster_id_prefix, line_indent_at, line_start_at},
+        merge::{plain_call_text, MergeEmitOutcome, MergeEmitRequest},
+        preconditions::{field_text, named_children, node_text},
         tables::{
             BindingKind, BoundaryKind, FrameKind, MergeTables, ReferenceTable, ScopeKinds,
             WriteKind,
         },
     },
     state::FileId,
-    wire_generated::MergeParameter,
 };
 
 /// Stable language identifier reported by [`DartParser::id`].
@@ -278,34 +273,46 @@ fn declared_type_of(function: tree_sitter::Node<'_>, name: &str, source: &[u8]) 
 /// function with real declared types above the first occurrence's
 /// function ([AUTOFIX-MERGE-NAMES]).
 fn emit_merge(request: &MergeEmitRequest<'_, '_>) -> Option<MergeEmitOutcome> {
-    let anchor = request.scopes.first()?.function?.start_byte();
-    let placement = HelperPlacement {
-        insertion_offset: line_start_at(request.source, anchor),
-        indent: line_indent_at(request.source, anchor),
-        point: InsertionPoint::LineStart,
-    };
-    Some(emit_merge_helper(request, &placement, &MERGE_DIALECT))
+    let first = request.scopes.first()?;
+    let function = first.function?;
+    let insertion_offset = line_start_at(request.source, function.start_byte());
+    let indent = line_indent_at(request.source, function.start_byte());
+    let helper_name = format!(
+        "mergedFromCluster_{}",
+        cluster_id_prefix(request.cluster_id)
+    );
+    let call_texts = (0..request.scopes.len())
+        .map(|site| plain_call_text(request.parameters, &helper_name, site))
+        .collect();
+    Some(MergeEmitOutcome {
+        insertion_text: merge_helper_text(request, &indent, &helper_name),
+        insertion_offset,
+        helper_name,
+        call_texts,
+    })
 }
 
-/// How Dart spells a merged helper: a lowerCamel top-level function
-/// whose parameters are `Type name`.
-const MERGE_DIALECT: HelperDialect = HelperDialect {
-    name_prefix: "mergedFromCluster_",
-    indent_step: INDENT_STEP,
-    brace: BraceStyle::SameLine,
-    parameter: merge_parameter_text,
-    signature: merge_signature_text,
-    call: plain_call,
-};
+/// Renders the merged helper with typed parameters.
+fn merge_helper_text(
+    request: &MergeEmitRequest<'_, '_>,
+    indent: &str,
+    helper_name: &str,
+) -> String {
+    let statement_indent = format!("{indent}{INDENT_STEP}");
+    let parameters = request
+        .parameters
+        .iter()
+        .map(|parameter| format!("{} {}", parameter.type_name, parameter.name))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        "{indent}void {helper_name}({parameters}) {{
+{statement_indent}{}
+{indent}}}
 
-/// Renders one Dart parameter as `Type name`.
-fn merge_parameter_text(parameter: &MergeParameter) -> String {
-    format!("{} {}", parameter.type_name, parameter.name)
-}
-
-/// Renders the Dart helper declaration line.
-fn merge_signature_text(helper_name: &str, parameters: &str) -> String {
-    format!("void {helper_name}({parameters})")
+",
+        request.helper_body
+    )
 }
 
 /// Maps a tree-sitter Dart node kind to its normalised form. Returns

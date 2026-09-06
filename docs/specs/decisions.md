@@ -7,7 +7,7 @@ Default `--min-nodes` = **30**. Subtrees below this threshold are excluded from 
 **Tuning procedure** (run once per release cycle against at least three real-world C# repos — production backend, test-heavy library, generated-code-heavy repo):
 
 1. Run with `--min-nodes` at each of `{15, 20, 25, 30, 40, 50}`. Save the JSON reports.
-2. For each run, inspect the top-20 clusters by `mass`. Record whether each reported component is genuine duplication, noise, or uncertain without assigning a pair classification to the component.
+2. For each run, inspect the top-20 clusters by `weight`. Classify each cluster as:
    - **Signal** — a real duplication a reasonable reviewer would want to deduplicate.
    - **Noise** — boilerplate (single-statement clones, trivial getters, default `ToString` overrides, test-only assertions repeated across many tests).
 3. The best default maximises **signal-in-top-20 / 20** across the three corpora. Break ties by picking the lower `--min-nodes` (better Type-3 recall).
@@ -66,13 +66,23 @@ holds; the census numbers are recorded here.
 
 **Census tuning procedure** (mirrors the [DECISION-MIN-NODES] procedure): run with default config
 over the reference corpora (this repository's crates + the multi-language fixture corpus); classify
-each literal finding kind's top 20 results as signal or noise; adjust the [LITERAL-NOISE] floors and ignore
+each category's top-20 clusters as signal or noise; adjust the [LITERAL-NOISE] floors and ignore
 sets and re-run until the [LITERAL-CENSUS] bound holds; record the corpus signature (repo, commit,
 LOC, language mix) and per-category counts next to this decision so the calibration is
 reproducible.
 
-### [DECISION-MCP-SURFACE] Seven core MCP analysis tools
+### [DECISION-MCP-SURFACE] Six MCP tools, not twelve
 
-> **Status: ⏳ Wholesale cutover.** The target contract is the seven-tool core analysis surface in [MCP-TOOLS]. The retired twelve-tool analysis-query surface is not a compatibility mode.
+> **Status: ⏳ Planned.** This records the *decision* to consolidate; the shipped server still exposes the twelve-tool surface ([mcp.md §MCP-TOOLS](mcp.md#mcp-tools)). The consolidation is the target, not yet landed.
 
-The old surface grew by accretion: overlapping report slicers and duplicate path-scoped calls exposed the same analysis through incompatible shapes. The replacement is exactly `find-similar`, `duplicates`, `compare-pair`, `cluster-by-id`, `rescan`, `session`, and `schema-doc`. `duplicates` owns cluster queries, while `compare-pair` is the only route to exact-endpoint admission evidence. Cluster filters cover cluster-owned language, path, canonical extent, and engine-stamped mass severity only; pair classification and literal finding kind never enter that filter block. Refactor tools specified by [AUTOFIX-MERGE-MCP] and [AUTOFIX-EXTRACT-AI-MCP-TOOLS] remain orthogonal and do not create alternate report or pair-evidence paths. There is no fallback surface.
+The twelve-tool surface grew by accretion: three overlapping report slicers (`top-offenders`,
+`report-get`, `report-query`) over one IPC snapshot, two spellings of one path-scoped predicate
+(`report-for-file`, `report-for-range`), and four plumbing tools. Agents had to learn that "full
+data" and "filterable" were mutually exclusive — a surface accident, not a real constraint — and the
+filter the user actually needs ("only identical code", "only literal findings") existed on exactly
+one slim tool. Decision: consolidate to six (`find-similar`, `duplicates`, `cluster-by-id`,
+`rescan`, `session`, `schema-doc`) with one shared filter block whose enums derive from the canonical
+registries ([MCP-TOOLS], [MCP-TOOL-FILTERS]). Every retired capability survives as a parameter
+spelling; migrated tests preserve every assertion. Fallback rule: if a major MCP client proves
+unable to handle the `session` action multiplexing, split `session` back into `session-config` +
+one `embedding-model` tool (seven total) — never back to twelve.

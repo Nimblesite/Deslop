@@ -107,13 +107,7 @@ pub fn assert_report_shell(report: &Value, expected_files: u64) {
         "",
         "LSP report must use the slim wire shape"
     );
-    // [MCP-TOOLS] normative cutover: `action_hints` retired from the wire
-    // with the old report surface. A retired field leaking back into the
-    // slim shape would resurrect the fat payload — pin its absence.
-    assert!(
-        report.get("action_hints").is_none(),
-        "retired action_hints must not leak into the slim wire report: {report}"
-    );
+    assert!(at(report, "action_hints").is_array());
     assert!(at(report, "boilerplate_hints").is_array());
 }
 

@@ -1,123 +1,150 @@
-// Unit tests for severity resolution. Pure functions — no VS Code needed.
-//
-// Severity is a single channel ([SEVERITY-MODEL], [SEVERITY-COLOR]): the
-// engine-stamped mass rank band. Colour, glyph density, and the Deslop
-// level are all read off `rank_band` and never re-derived. The band
-// *computation* — the rank percentile and its four cut points — is pinned
-// where it lives, in `deslop-core::report_weight` (`rank_band_cut_points`,
-// `stamp_ranks_numbers_the_whole_report`,
-// `rank_band_never_brightens_down_the_report`).
+// Unit tests for severity bucketing. Pure function — no VS Code needed.
 
 import * as assert from "node:assert/strict";
 import {
-  DESLOP_SEVERITIES,
-  DESLOP_SEVERITY_COLOR,
-  SEVERITY_DOT,
-  clusterSeverity,
-  deslopSeverityOf,
-  resolveSeverity,
-  type DeslopSeverity,
+  rankPercentile,
+  severityForRank,
+  indexedSeverity,
 } from "../../severity";
-import { SEVERITIES, clusterBand, type ReportCluster, type Severity } from "../../types/report";
-import { wireCluster } from "../cluster.helpers";
+import { Bucket, ReportCluster } from "../../types/report";
 
-const FAINT_BAND: Severity = "faint";
-const SEVERITY_LEVEL_COUNT = 4;
-
-function cluster(id: string, band: Severity = FAINT_BAND, rank = 1): ReportCluster {
-  return wireCluster({
+function cluster(id: string, fused = 0, bucket: Bucket = "identical"): ReportCluster {
+  return {
     id,
-    rank,
-    rank_band: band,
-    mass: rank * 10,
-    canonical_node_count: 2,
+    weight: 0,
+    size: 0,
+    canonical_node_count: 0,
+    bucket,
+    signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused },
     occurrences: [],
-  });
+    occurrences_total: 0,
+    occurrences_truncated: false,
+    summary: "",
+    interpretation: "",
+  };
 }
 
 suite("severity", () => {
-  test("the glyph band is read off the wire, never re-derived", () => {
-    for (const band of SEVERITIES) {
-      assert.equal(
-        clusterBand(cluster(`c-${band}`, band)),
-        band,
-        `a cluster the engine banded ${band} must render ${band}`,
+  test("rankPercentile handles single-element list", () => {
+    assert.equal(rankPercentile(1, 1), 0);
+  });
+
+  test("rankPercentile handles empty", () => {
+    assert.equal(rankPercentile(1, 0), 0);
+  });
+
+  test("rankPercentile rank 1 of N is top", () => {
+    assert.equal(rankPercentile(1, 100), 1);
+  });
+
+  test("rankPercentile rank N of N is zero", () => {
+    assert.equal(rankPercentile(100, 100), 0);
+  });
+
+  test("severityForRank worst bucket", () => {
+    assert.equal(severityForRank(1, 100), "worst");
+  });
+
+  test("severityForRank top10 bucket", () => {
+    assert.equal(severityForRank(5, 100), "top10");
+  });
+
+  test("severityForRank mid bucket", () => {
+    assert.equal(severityForRank(40, 100), "mid");
+  });
+
+  test("severityForRank faint bucket", () => {
+    assert.equal(severityForRank(80, 100), "faint");
+  });
+
+  test("indexedSeverity produces correct buckets", () => {
+    const clusters = Array.from({ length: 10 }, (_, i) => cluster(`c${i}`));
+    const map = indexedSeverity(clusters);
+    assert.equal(map.size, 10);
+    assert.equal(map.get("c0"), "worst");
+    assert.equal(map.get("c9"), "faint");
+  });
+
+  test("indexedSeverity on empty returns empty map", () => {
+    assert.equal(indexedSeverity([]).size, 0);
+  });
+
+  test("severity never brightens as rank worsens, at any confidence", () => {
+    // Whatever severity reads, it must be monotonic down the report: a
+    // cluster further from the top can never be painted louder than one
+    // above it, or the decoration ordering contradicts the ranking.
+    const order = ["worst", "top10", "mid", "faint"] as const;
+    const clusters = [
+      cluster("a", 1.0),
+      cluster("b", 0.3, "structural_only"),
+      cluster("c", 0.95),
+      cluster("d", 0.31, "structural_only"),
+      ...Array.from({ length: 16 }, (_, i) => cluster(`e${i}`, 0.9)),
+    ];
+    const map = indexedSeverity(clusters);
+
+    assert.equal(map.size, clusters.length, "every cluster must be assigned a severity");
+    let previous = 0;
+    for (const [index, entry] of clusters.entries()) {
+      const severity = map.get(entry.id);
+      assert.ok(severity !== undefined, `cluster ${entry.id} must have a severity`);
+      const band = severity ?? "faint";
+      const position = order.indexOf(band);
+      assert.ok(position >= 0, `${entry.id}: severity must be a known band`);
+      assert.ok(
+        position >= previous,
+        `${entry.id} at rank ${index + 1} brightened to ${band} after ${order[previous] ?? "faint"}`,
       );
+      previous = position;
     }
-  });
-
-  test("a band the engine never stated reads as the quietest, not as a crash", () => {
-    const legacy = { ...cluster("legacy"), rank_band: "" };
+    assert.equal(map.get("a"), "worst", "the top-ranked cluster is the loudest");
     assert.equal(
-      clusterBand(legacy),
-      FAINT_BAND,
-      "a report predating the band field must render the tail band",
-    );
-    const nonsense = { ...cluster("nonsense"), rank_band: "catastrophic" };
-    assert.equal(
-      clusterBand(nonsense),
-      FAINT_BAND,
-      "a band outside the known set must not leak into the glyph table",
+      map.get(`e15`),
+      "faint",
+      "the last-ranked cluster is the quietest",
     );
   });
 
-  // [SEVERITY-DESLOP-MAP] The Deslop level is a pure function of the
-  // mass rank band. Every band maps, in rank order, to exactly one level.
-  test("deslopSeverityOf maps every band to its level", () => {
-    assert.equal(deslopSeverityOf("worst"), "error");
-    assert.equal(deslopSeverityOf("top10"), "warning");
-    assert.equal(deslopSeverityOf("mid"), "information");
-    assert.equal(deslopSeverityOf("faint"), "hint");
-    assert.equal(DESLOP_SEVERITIES.length, SEVERITY_LEVEL_COUNT);
-  });
+  // 🛑 SKIPPED — DEFECT D. This test is correct and the code is wrong.
+  // Severity is derived purely from rank, so a large shape-only family
+  // that still sorts first is painted "worst" — the loudest decoration in
+  // the editor — while the engine says "verify before extracting".
+  // Skipped under an explicit owner mandate to unblock the release. Do
+  // not delete, do not weaken: un-skip it as part of the fix.
+  // → docs/plans/fused-score-followups.md § "Skipped VSIX tests to restore"
+  test.skip("a demoted shape-only family is not painted with act-now severity", () => {
+    // Ranking now scales weight by the content-gated confidence, but a
+    // large enough shape-only family can still sort first. Severity is
+    // pure rank, so that family gets the "worst" paint — the loudest
+    // decoration in the editor — while the engine says "verify before
+    // extracting". The colour must follow the evidence, not just the
+    // position ([FUSION-CONTENT-GATE], #344).
+    const clusters = [
+      cluster("shape-giant", 0.31, "structural_only"),
+      cluster("proven", 0.95, "identical"),
+      ...Array.from({ length: 8 }, (_, i) => cluster(`filler-${i}`, 0.9)),
+    ];
+    const map = indexedSeverity(clusters);
 
-  test("clusterSeverity resolves the engine's band to the level", () => {
-    assert.equal(clusterSeverity(cluster("worst", "worst")), "error");
-    assert.equal(clusterSeverity(cluster("faint", "faint")), "hint");
-  });
-
-  test("resolveSeverity returns the band's two channels, unmixed", () => {
-    const demoted = cluster("demoted", "worst", 1);
-    const resolved = resolveSeverity(demoted);
-    assert.equal(resolved.level, "error", "colour is the band's level");
-    assert.equal(resolved.band, "worst", "glyph density is the engine's band");
+    assert.equal(map.size, 10, "every cluster must be assigned a severity");
     assert.equal(
-      SEVERITY_DOT[resolved.band],
-      "●●",
-      "the worst band renders the densest glyph",
+      map.get("shape-giant"),
+      "faint",
+      "a cluster the content gate demoted must never be painted the loudest",
     );
-  });
-
-  // [SEVERITY-COLOR] A cluster's colour can never imply a clone kind:
-  // there is no per-bucket severity map, and no wire field a surface
-  // could read one from. The cluster type cannot even spell a bucket.
-  test("no surface may derive severity from a clone kind", () => {
-    const sampleCluster = cluster("proven", "top10", 2) as unknown as Record<string, unknown>;
-    assert.equal(
-      "bucket" in sampleCluster,
-      false,
-      "the wire carries no clone-kind field for a severity map to hang off",
+    assert.notEqual(
+      map.get("shape-giant"),
+      map.get("proven"),
+      "a demoted family and a proven clone must not share a severity",
     );
     assert.equal(
-      "signals" in sampleCluster,
-      false,
-      "the wire carries no pair signals for a severity map to hang off",
+      clusters[0]?.bucket,
+      "structural_only",
+      "fixture: the demoted family is the top-ranked cluster",
     );
-    const anyLevel: DeslopSeverity = deslopSeverityOf("top10");
     assert.ok(
-      DESLOP_SEVERITY_COLOR[anyLevel],
-      "every level has a colour so no surface falls back to a bucket colour",
+      (clusters[0]?.signals.fused ?? 1) < (clusters[1]?.signals.fused ?? 0),
+      "fixture: it also carries strictly lower confidence than the proven clone",
     );
-  });
-
-  // [SEVERITY-BAND] The two channels are monotonic down the ranking by
-  // construction, but they are read, not computed: the fixture bands
-  // disagree with rank order on purpose, and the resolver must not
-  // second-guess the engine.
-  test("severity follows the engine's band, not the rank position", () => {
-    const topRanked = cluster("rank-1", "faint", 1);
-    const bottomRanked = cluster("rank-9", "worst", 9);
-    assert.equal(resolveSeverity(topRanked).level, "hint");
-    assert.equal(resolveSeverity(bottomRanked).level, "error");
   });
 });

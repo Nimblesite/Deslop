@@ -22,13 +22,15 @@ mod limits;
 mod schemas;
 
 use handlers::{
-    call_cluster_by_id, call_compare_pair, call_duplicates, call_find_similar, call_merge_plan,
-    call_rescan, call_schema_doc, call_session,
+    call_cluster_by_id, call_find_similar, call_list_embedding_models, call_merge_plan,
+    call_report_for_file, call_report_for_range, call_report_get, call_report_query, call_rescan,
+    call_schema_doc, call_session_config, call_set_embedding_model, call_top_offenders,
 };
 use limits::cap_tool_result;
 use schemas::{
-    schema_cluster_by_id, schema_compare_pair, schema_duplicates, schema_empty,
-    schema_find_similar, schema_merge_plan, schema_rescan, schema_session,
+    schema_cluster_by_id, schema_empty, schema_find_similar, schema_merge_plan,
+    schema_report_for_file, schema_report_for_range, schema_report_get, schema_report_query,
+    schema_rescan, schema_set_embedding_model, schema_top_offenders,
 };
 
 /// Static definition of one MCP tool.
@@ -42,48 +44,79 @@ pub struct ToolDefinition {
     pub input_schema: fn() -> Value,
 }
 
-/// Static registry: exactly seven analysis tools plus the separately-specified
-/// merge refactor tool.
-const TOOLS: [ToolDefinition; 8] = [
+/// Static tool registry. `top-offenders` is the primary entry point.
+/// Descriptions stay ≤200 chars — detail belongs in the
+/// `deslop://schema` resource, not the `tools/list` payload.
+const TOOLS: [ToolDefinition; 13] = [
     ToolDefinition {
-        name: "find-similar",
-        description: "Call before writing code to prevent duplication. Returns mass-ranked clusters only; use compare-pair for pair evidence.",
-        input_schema: schema_find_similar,
-    },
-    ToolDefinition {
-        name: "duplicates",
-        description: "Duplicate clusters ranked by mass. Start here when fixing duplicates.",
-        input_schema: schema_duplicates,
-    },
-    ToolDefinition {
-        name: "compare-pair",
-        description: "Compare exactly two occurrences and return their pair admission evidence.",
-        input_schema: schema_compare_pair,
-    },
-    ToolDefinition {
-        name: "cluster-by-id",
-        description: "Full mass-only cluster record by stable id, with pageable occurrences.",
-        input_schema: schema_cluster_by_id,
+        name: "top-offenders",
+        description:
+            "Worst N duplicate clusters with full data (default n=5). Capped by max_occurrences (default 15). Verify before acting. See deslop://schema.",
+        input_schema: schema_top_offenders,
     },
     ToolDefinition {
         name: "rescan",
-        description: "Force the LSP refresh and return a fresh filtered duplicates page with change counts.",
+        description:
+            "Reload latest LSP state and return fresh top offenders. Same n/max_occurrences as top-offenders. Use when watcher lag is suspected.",
         input_schema: schema_rescan,
     },
     ToolDefinition {
-        name: "session",
-        description: "Get session metadata, list embedding models, or apply an explicitly user-selected model.",
-        input_schema: schema_session,
+        name: "report-get",
+        description: "Paginated slim cluster list, worst-first. Use top-offenders for full data.",
+        input_schema: schema_report_get,
+    },
+    ToolDefinition {
+        name: "report-query",
+        description:
+            "Slim paginated list with AND-combined filters: language, bucket, path_contains, min_score, min_size.",
+        input_schema: schema_report_query,
     },
     ToolDefinition {
         name: "schema-doc",
-        description: "One-shot report schema markdown. Call once for field meanings.",
+        description:
+            "One-shot report schema markdown. Call once for field meanings; report pages omit it by default.",
         input_schema: schema_empty,
+    },
+    ToolDefinition {
+        name: "report-for-file",
+        description: "All clusters whose occurrences touch this file.",
+        input_schema: schema_report_for_file,
+    },
+    ToolDefinition {
+        name: "report-for-range",
+        description: "Clusters overlapping a byte range. Call before refactoring a specific block.",
+        input_schema: schema_report_for_range,
+    },
+    ToolDefinition {
+        name: "find-similar",
+        description:
+            "Call BEFORE writing new code to PREVENT duplication: find similar clusters by byte range or snippet, reuse the canonical, avoid introducing new clones. Verify before acting.",
+        input_schema: schema_find_similar,
+    },
+    ToolDefinition {
+        name: "cluster-by-id",
+        description: "Full cluster record by stable id (shown in report text and LSP diagnostics).",
+        input_schema: schema_cluster_by_id,
     },
     ToolDefinition {
         name: "merge-plan",
         description: "Mechanical plan for a cluster BEFORE hand-editing: same-file clusters merge into one helper; cross-file identical definitions consolidate to one canonical copy. Verdict + WorkspaceEdit. Read-only.",
         input_schema: schema_merge_plan,
+    },
+    ToolDefinition {
+        name: "list-embedding-models",
+        description: "Enumerate available embedding models.",
+        input_schema: schema_empty,
+    },
+    ToolDefinition {
+        name: "set-embedding-model",
+        description: "Switch the embedding model. Requires user_initiated=true.",
+        input_schema: schema_set_embedding_model,
+    },
+    ToolDefinition {
+        name: "session-config",
+        description: "Session metadata: root, min-nodes, languages, generation counter.",
+        input_schema: schema_empty,
     },
 ];
 
@@ -122,7 +155,7 @@ pub fn tools_list_payload(languages: &[String]) -> Value {
 }
 
 /// Rewrites the closed `language` enum of every tool schema that filters
-/// by language (`find-similar`, `duplicates`) to `languages` — the
+/// by language (`find-similar`, `report-query`) to `languages` — the
 /// live engine's registered set. Schemas ship a compile-time enum as a
 /// fallback; this override keeps the advertised gate in lock-step with
 /// the runtime validator so it can never reject a language the engine
@@ -130,13 +163,8 @@ pub fn tools_list_payload(languages: &[String]) -> Value {
 fn apply_live_language_enum(tools: &mut [Value], languages: &[String]) {
     let enum_values: Vec<Value> = languages.iter().cloned().map(Value::from).collect();
     for tool in tools {
-        for pointer in [
-            "/inputSchema/properties/language/enum",
-            "/inputSchema/properties/languages/items/enum",
-        ] {
-            if let Some(slot) = tool.pointer_mut(pointer) {
-                *slot = Value::Array(enum_values.clone());
-            }
+        if let Some(slot) = tool.pointer_mut("/inputSchema/properties/language/enum") {
+            *slot = Value::Array(enum_values.clone());
         }
     }
 }
@@ -189,14 +217,19 @@ fn dispatch_inner(
     arguments: &Value,
 ) -> Result<Value, JsonRpcError> {
     match name {
-        "find-similar" => call_find_similar(backend, arguments),
-        "duplicates" => call_duplicates(backend, arguments),
-        "compare-pair" => call_compare_pair(backend, arguments),
-        "cluster-by-id" => call_cluster_by_id(backend, arguments),
+        "top-offenders" => call_top_offenders(backend, arguments),
         "rescan" => call_rescan(backend, arguments),
-        "session" => call_session(backend, arguments),
+        "report-get" => call_report_get(backend, arguments),
+        "report-query" => call_report_query(backend, arguments),
         "schema-doc" => call_schema_doc(backend),
+        "report-for-file" => call_report_for_file(backend, arguments),
+        "report-for-range" => call_report_for_range(backend, arguments),
+        "find-similar" => call_find_similar(backend, arguments),
+        "cluster-by-id" => call_cluster_by_id(backend, arguments),
         "merge-plan" => call_merge_plan(backend, arguments),
+        "list-embedding-models" => call_list_embedding_models(backend),
+        "set-embedding-model" => call_set_embedding_model(backend, arguments),
+        "session-config" => call_session_config(backend),
         other => Err(jsonrpc_error(
             crate::protocol::ErrorCode::MethodNotFound,
             format!("no tool named {other:?}"),

@@ -11,14 +11,10 @@
 
 #![allow(dead_code)]
 
-/// Legacy pair-signal assertion vocabulary pending explicit compare migration.
-/// Suites that assert on reported evidence import it explicitly with
+/// Fused-signal bands and assertion vocabulary ([FUSED-THRESHOLD]).
+/// Suites that assert on `signals.fused` import it explicitly with
 /// `use crate::common::signals::*;` — a glob re-export here would be an
-/// unused import in every binary that never touches that vocabulary.
-/// The two-sided contract every noise-family pin is judged by: the
-/// family stays hidden while a real clone in the same run stays visible.
-pub(crate) mod negative_pin;
-
+/// unused import in every binary that never touches the vocabulary.
 pub(crate) mod signals;
 
 /// The deterministic mock-embedder runner. Imported explicitly with
@@ -31,84 +27,9 @@ pub(crate) mod embeddings;
 /// `use crate::common::verdict::*;`, for the same reason as `signals`.
 pub(crate) mod verdict;
 
-/// Exact `cache_stats` assertions and the strip-and-compare view of
-/// [PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE]. Imported explicitly
-/// with `use crate::common::incremental::*;`, for the same reason as
-/// `signals`.
-pub(crate) mod incremental;
-
-/// The authored clone corpus, its cold ground truth, and the positive
-/// report-shape assertions both equivalence suites are judged by —
-/// the batch-process one and the live-session one. Imported explicitly
-/// with `use crate::common::clone_corpus::*;`, for the same reason as
-/// `signals`.
-pub(crate) mod clone_corpus;
-
-/// The `--rerun-add SRC=DST` spec vocabulary shared by every suite that
-/// mutates a tree between the initial analysis and the rerun. Imported
-/// explicitly with `use crate::common::rerun_ops::*;`, for the same
-/// reason as `signals`.
-pub(crate) mod rerun_ops;
-
-/// The six-language `incremental-multilang` fixture vocabulary. Imported
-/// explicitly with `use crate::common::multilang::*;`, for the same
-/// reason as `signals`.
-pub(crate) mod multilang;
-
-/// Warm-store scenarios over that fixture — the baseline, the targeted
-/// mutation, and the reuse accounting each mutation must produce.
-/// Imported explicitly with `use crate::common::multilang_warm::*;`, for
-/// the same reason as `signals`.
-pub(crate) mod multilang_warm;
-
-/// The GH #119 role-gate contract, asserted once for every language
-/// ([CLONE-NOISE-EMBEDDING-ROLE-MISMATCH]). Imported explicitly with
-/// `use crate::common::role_gate::*;`, for the same reason as `signals`.
-pub(crate) mod role_gate;
-
-/// The committed `diff-scope` fixture's vocabulary — what the patch
-/// adds, and how to drive the CLI over it. Imported explicitly with
-/// `use crate::common::diff_scope::*;`, for the same reason as
-/// `signals`.
-pub(crate) mod diff_scope;
-
-/// The committed-golden comparison and its `DESLOP_BLESS` regeneration
-/// path ([PIPELINE-DETERMINISM]). Imported explicitly with
-/// `use crate::common::golden::*;`, for the same reason as `signals`.
-pub(crate) mod golden;
-
-/// The three-file seeded Rust corpus the store-accounting suites share.
-/// Imported explicitly with `use crate::common::seeded::*;`, for the
-/// same reason as `signals`.
-pub(crate) mod seeded;
-
-/// The temp-workspace scaffold: a bound [`tempfile::TempDir`] plus an
-/// empty scan root inside it. Imported explicitly with
-/// `use crate::common::scan_dir::*;`, for the same reason as
-/// `signals`.
-pub(crate) mod scan_dir;
-
-/// Reading the on-disk parse store and a run's tracing log. Imported
-/// explicitly with `use crate::common::store::*;`, for the same reason
-/// as `signals`.
-pub(crate) mod store;
-
-/// Building a corpus on disk before the tool runs. Imported explicitly
-/// with `use crate::common::corpora::*;`, for the same reason as
-/// `signals`.
-pub(crate) mod corpora;
-
-/// The `verbatim-subgroup` fixture vocabulary, shared by the suite
-/// pinning that a copy survives an unrelated cluster member and the one
-/// pinning the price the cross-file arbitration accepts. Imported
-/// explicitly with `use crate::common::verbatim_subgroup::*;`, for the
-/// same reason as `signals`.
-pub(crate) mod verbatim_subgroup;
-
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
-    ops::RangeInclusive,
     path::{Path, PathBuf},
 };
 
@@ -117,25 +38,11 @@ pub(crate) use anyhow::Result;
 use assert_cmd::Command;
 use serde_json::Value;
 
-/// Absolute path to the named directory under `tests/fixtures`, falling
-/// back to the `deslop-mcp` crate's fixture tree.
-///
-/// The fallback is the mirror of `deslop-mcp`'s `copied_fixture_named`,
-/// which resolves the other way. A corpus that proves a detection defect
-/// through the MCP surface proves the same defect through the CLI, and
-/// the two suites must read the *same* bytes: a second copy of the
-/// fixture would let one suite go green while the code it pins is still
-/// broken under the other.
+/// Absolute path to the named directory under `tests/fixtures`.
 pub(crate) fn fixture(name: &str) -> PathBuf {
-    let local = Path::new(env!("CARGO_MANIFEST_DIR"))
+    Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
-        .join(name);
-    if local.is_dir() {
-        return local;
-    }
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../deslop-mcp/tests/fixtures")
         .join(name)
 }
 
@@ -160,17 +67,6 @@ pub(crate) fn deslop_cmd(scan_root: &Path, output_prefix: &Path) -> Result<Comma
         .arg(output_prefix)
         .arg("--no-incremental");
     Ok(cmd)
-}
-
-/// Writes two byte-identical source files (`a.<extension>`, `b.<extension>`)
-/// into a freshly created `dir`: the minimal corpus for a fully-duplicated
-/// repo, used to prove the duplication metric is language-agnostic.
-pub(crate) fn write_identical_pair(dir: &Path, extension: &str, source: &str) -> Result<()> {
-    fs::create_dir_all(dir)?;
-    for stem in ["a", "b"] {
-        fs::write(dir.join(format!("{stem}.{extension}")), source)?;
-    }
-    Ok(())
 }
 
 /// Runs `deslop <scan_root> <extra_args...> --output <tmp>/report` into a
@@ -248,45 +144,28 @@ pub(crate) fn occurrences(cluster: &Value) -> &[Value] {
         .unwrap_or_default()
 }
 
+/// A cluster's `bucket` label (e.g. `identical`), or `"?"` when absent.
+pub(crate) fn cluster_bucket(cluster: &Value) -> &str {
+    field(cluster, "bucket").as_str().unwrap_or("?")
+}
+
 /// A cluster's stable `id`, or `"?"` when absent.
-/// The 1-indexed `(start_line, end_line)` one reported occurrence
-/// covers. Line numbers, not byte offsets, so a failing assertion names
-/// the physical rows a reader can open.
-pub(crate) fn occurrence_line_span(occurrence: &Value) -> (u64, u64) {
-    (
-        field(occurrence, "start_line").as_u64().unwrap_or(0),
-        field(occurrence, "end_line").as_u64().unwrap_or(0),
-    )
-}
-
-/// Every occurrence's line span within one cluster, in report order.
-pub(crate) fn cluster_line_spans(cluster: &Value) -> Vec<(u64, u64)> {
-    occurrences(cluster)
-        .iter()
-        .map(occurrence_line_span)
-        .collect()
-}
-
-/// Every occurrence's line span across every visible cluster, in report
-/// order.
-pub(crate) fn report_line_spans(report: &Value) -> Vec<(u64, u64)> {
-    clusters(report)
-        .iter()
-        .flat_map(occurrences)
-        .map(occurrence_line_span)
-        .collect()
-}
-
 pub(crate) fn cluster_id(cluster: &Value) -> &str {
     field(cluster, "id").as_str().unwrap_or("?")
 }
 
-/// A cluster's occurrence count, or `0` when absent. The wire carries
-/// the count as `occurrence_count` (visible membership) with
-/// `occurrences_total` alongside; `size` was removed with the bucket
-/// surface.
+/// A cluster's `size` (its occurrence count), or `0` when absent.
 pub(crate) fn cluster_size(cluster: &Value) -> u64 {
-    field(cluster, "occurrence_count").as_u64().unwrap_or(0)
+    field(cluster, "size").as_u64().unwrap_or(0)
+}
+
+/// One component of a cluster's fused `signals` block (e.g. `token_jaccard`),
+/// or `0.0` when the named signal is absent.
+pub(crate) fn signal(cluster: &Value, key: &str) -> f64 {
+    cluster
+        .pointer(&format!("/signals/{key}"))
+        .and_then(Value::as_f64)
+        .unwrap_or_default()
 }
 
 /// Number of clusters the report rendered — the [METRICS-REPO] visible set.
@@ -295,7 +174,7 @@ pub(crate) fn cluster_count(report: &Value) -> usize {
 }
 
 /// True when `value` lies within `1e-9` of `target`. Lets a test pin an
-/// exact signal value (typically `0.0` or `1.0`) without tripping
+/// exact fused-signal value (typically `0.0` or `1.0`) without tripping
 /// the float-equality lint or carrying its own epsilon.
 pub(crate) fn approx(value: f64, target: f64) -> bool {
     (value - target).abs() <= 1e-9
@@ -330,32 +209,31 @@ pub(crate) fn expect_cluster_spanning<'a>(report: &'a Value, files: &[&str]) -> 
 /// token signal for `identical` / `nearly_identical`, a near-zero one for
 /// the structural-only routing (#134). Centralises the renamed-clone
 /// assertion every per-feature E2E test would otherwise repeat.
-///
-/// The bucket labels are gone from the wire; what remains provable is
-/// the byte-level truth the labels used to proxy: `byte_identical`
-/// asserts the clone's occurrences are byte-identical text, `false`
-/// asserts they are not (a rename/near-miss). Either way the cluster is
-/// asserted to be admitted, visible, mass-honest, and free of any
-/// pair-only surface ([PIPELINE-CLUSTER-CLOSURE]).
 pub(crate) fn assert_bucketed_clone(
     fixture_dir: &str,
     min_nodes: u32,
     files: &[&str],
-    byte_identical: bool,
+    bucket: &str,
 ) -> Result<()> {
-    let scan_root = fixture(fixture_dir);
-    let report = run_report(&scan_root, min_nodes)?;
+    let report = run_report(&fixture(fixture_dir), min_nodes)?;
     let clone = expect_cluster_spanning(&report, files)?;
-    signals::assert_structural_only_contract(clone, fixture_dir);
-    signals::assert_no_pair_surface_on_cluster(clone, fixture_dir);
     assert_eq!(
-        signals::has_verbatim_pair(&scan_root, clone)?,
-        byte_identical,
-        "{fixture_dir}: the fixture bytes determine whether the clone is a \
-         verbatim copy (identical) or a byte-distinct rename — the report \
-         must carry the clone either way, and the byte truth must match: \
-         {report:#}"
+        cluster_bucket(clone),
+        bucket,
+        "{fixture_dir} clone bucket mismatch: {report:#}"
     );
+    assert!(
+        approx(signal(clone, "structural"), 1.0),
+        "{fixture_dir} renamed clone must reach structural identity: {report:#}"
+    );
+    if bucket == "structural_only" {
+        signals::assert_structural_only_contract(clone, fixture_dir);
+    } else {
+        assert!(
+            approx(signal(clone, "token_jaccard"), 1.0),
+            "{fixture_dir} token layer must also be rename-invariant: {report:#}"
+        );
+    }
     Ok(())
 }
 
@@ -370,14 +248,6 @@ pub(crate) fn occurrence_path(occurrence: &Value) -> Result<&str> {
     field(occurrence, "path")
         .as_str()
         .ok_or_else(|| anyhow!("reported occurrence is missing path"))
-}
-
-/// True when an occurrence is rendered but marked hidden — present in a
-/// cluster's `size`, absent from the report a human reads and from every
-/// line metric. A count alone cannot see the difference, so assertions
-/// that care about *shown* occurrences ask this instead.
-pub(crate) fn occurrence_is_hidden(occurrence: &Value) -> bool {
-    field(occurrence, "hidden").as_bool().unwrap_or(false)
 }
 
 /// The relative paths of every occurrence in `cluster`, in report order.
@@ -465,6 +335,14 @@ pub(crate) fn per_file_metrics(report: &Value) -> &[Value] {
         .unwrap_or_default()
 }
 
+/// Count of a cluster's non-hidden (live) occurrences.
+pub(crate) fn live_occurrences(cluster: &Value) -> usize {
+    occurrences(cluster)
+        .iter()
+        .filter(|occurrence| !field(occurrence, "hidden").as_bool().unwrap_or(false))
+        .count()
+}
+
 /// Line-set cardinality as the `u64` the wire metric uses.
 pub(crate) fn line_count(lines: &BTreeSet<u64>) -> u64 {
     u64::try_from(lines.len()).unwrap_or(u64::MAX)
@@ -478,7 +356,7 @@ pub(crate) fn visible_duplicated_lines(report: &Value) -> BTreeMap<String, BTree
     let mut per_file: BTreeMap<String, BTreeSet<u64>> = BTreeMap::new();
     for cluster in clusters(report) {
         for occurrence in occurrences(cluster) {
-            if occurrence_is_hidden(occurrence) {
+            if field(occurrence, "hidden").as_bool().unwrap_or(false) {
                 continue;
             }
             let Some(path) = field(occurrence, "path").as_str() else {
@@ -504,73 +382,105 @@ pub(crate) fn visible_duplicated_loc(report: &Value) -> u64 {
         .sum()
 }
 
-/// One `id [bucket] path Lstart-end, ...` line per visible cluster — the
-/// complete published surface a full-set regression asserts against, so a
-/// mis-scoped view cannot hide behind a marker-based spot check.
-pub(crate) fn visible_cluster_lines(report: &Value) -> Vec<String> {
-    clusters(report)
-        .iter()
-        .map(|cluster| {
-            let spans: Vec<String> = occurrences(cluster)
-                .iter()
-                .map(|occurrence| {
-                    format!(
-                        "{} L{}-{}",
-                        field(occurrence, "path").as_str().unwrap_or("?"),
-                        field(occurrence, "start_line").as_u64().unwrap_or(0),
-                        field(occurrence, "end_line").as_u64().unwrap_or(0),
-                    )
-                })
-                .collect();
-            format!(
-                "{} [{}] {}",
-                field(cluster, "id").as_str().unwrap_or("?"),
-                field(cluster, "bucket").as_str().unwrap_or("?"),
-                spans.join(", ")
-            )
-        })
-        .collect()
+/// Writes two byte-identical source files (`a.<extension>`, `b.<extension>`)
+/// into a freshly created `dir`: the minimal corpus for a fully-duplicated
+/// repo, used to prove the duplication metric is language-agnostic.
+pub(crate) fn write_identical_pair(dir: &Path, extension: &str, source: &str) -> Result<()> {
+    fs::create_dir_all(dir)?;
+    for stem in ["a", "b"] {
+        fs::write(dir.join(format!("{stem}.{extension}")), source)?;
+    }
+    Ok(())
 }
 
-/// [PIPELINE-CLUSTER-EXACT-SCOPE] The Go authored-window contract, shared
-/// by every Go suite so a padded occurrence is caught wherever it appears
-/// rather than only in the fixture that first exposed it. Imported
-/// explicitly with `use crate::common::go_scope::*;`, for the same reason
-/// as `signals`.
-pub(crate) mod go_scope;
+/// A genuine copy-pasted F# function — byte-identical across two files.
+/// Shared recall-guard source for the #331/#336 shape-only fixtures.
+pub(crate) const FSHARP_GENUINE_CLONE: &str = "module ParseHelpers\n\n\
+    let accumulate (values: int list) (floor: int) =\n\
+    \x20   let mutable total = 0\n\
+    \x20   for value in values do\n\
+    \x20       if value > floor then\n\
+    \x20           total <- total + value * 2\n\
+    \x20       else\n\
+    \x20           total <- total - 1\n\
+    \x20   total\n";
 
-/// Asserts the cluster's occurrences are exactly `spans` in `file`, in line
-/// order. Anything wider has lumped in code that is not duplicated;
-/// anything narrower has published a fragment of the authored declaration
-/// instead of the declaration ([PIPELINE-CLUSTER-EXACT-SCOPE]).
-pub(crate) fn assert_occurrence_extents(
-    cluster: &Value,
-    file: &str,
-    spans: &[RangeInclusive<u64>],
-) -> Result<()> {
-    let mut extents: Vec<(String, u64, u64)> = occurrences(cluster)
-        .iter()
-        .map(|occurrence| {
-            Ok((
-                occurrence_path(occurrence)?.to_owned(),
-                field(occurrence, "start_line")
-                    .as_u64()
-                    .ok_or_else(|| anyhow::anyhow!("start_line missing: {occurrence:#}"))?,
-                field(occurrence, "end_line")
-                    .as_u64()
-                    .ok_or_else(|| anyhow::anyhow!("end_line missing: {occurrence:#}"))?,
-            ))
+/// One F# module holding a numeric array literal. Same length (same
+/// shape) across modules, entirely different values — the #336
+/// false-positive family.
+pub(crate) fn fsharp_table_file(module_name: &str, seed: usize) -> String {
+    let values: Vec<String> = (0_usize..24)
+        .map(|index| {
+            let mixed = seed
+                .saturating_mul(37)
+                .saturating_add(index.saturating_mul(13));
+            (mixed % 97).to_string()
         })
-        .collect::<Result<_>>()?;
-    extents.sort();
-    let expected: Vec<(String, u64, u64)> = spans
-        .iter()
-        .map(|lines| (file.to_owned(), *lines.start(), *lines.end()))
         .collect();
-    assert_eq!(
-        extents, expected,
-        "each occurrence is the authored declaration, never its container \
-         and never a fragment of it: {cluster:#}"
-    );
-    Ok(())
+    format!(
+        "module {module_name}\n\nlet lookup = [| {} |]\n",
+        values.join("; ")
+    )
+}
+
+/// The four distinct-value F# table files plus the byte-identical
+/// genuine clone pair — the canonical #336 corpus.
+pub(crate) fn fsharp_tables_corpus() -> Vec<(String, String)> {
+    let modules = ["TablesAlpha", "TablesBeta", "TablesGamma", "TablesDelta"];
+    let mut files: Vec<(String, String)> = modules
+        .iter()
+        .enumerate()
+        .map(|(index, module_name)| {
+            (
+                format!("tables_{index}.fs"),
+                fsharp_table_file(module_name, index),
+            )
+        })
+        .collect();
+    files.extend(genuine_pair(
+        "parse_a.fs",
+        "parse_b.fs",
+        FSHARP_GENUINE_CLONE,
+    ));
+    files
+}
+
+/// The two byte-identical files forming a genuine-clone recall guard.
+pub(crate) fn genuine_pair(first: &str, second: &str, source: &str) -> [(String, String); 2] {
+    [
+        (first.to_owned(), source.to_owned()),
+        (second.to_owned(), source.to_owned()),
+    ]
+}
+
+/// Writes `(file_name, source)` pairs into a temp scan root and returns
+/// the rendered report at `min_nodes`. Config rides along as an ordinary
+/// `.deslop.toml` entry in `files` when a test needs a policy override.
+pub(crate) fn report_for(files: &[(String, String)], min_nodes: u32) -> Result<Value> {
+    let tmp = tempfile::tempdir()?;
+    let root = tmp.path().join("src");
+    fs::create_dir_all(&root)?;
+    for (file_name, source) in files {
+        fs::write(root.join(file_name), source)?;
+    }
+    run_report(&root, min_nodes)
+}
+
+/// Zero-based rank of the first cluster whose occurrences include a file
+/// whose name satisfies `matches`, or `None` when no visible cluster does.
+pub(crate) fn rank_where(report: &Value, matches: impl Fn(&str) -> bool) -> Option<usize> {
+    clusters(report)
+        .iter()
+        .position(|cluster| cluster_file_set(cluster).iter().any(|name| matches(name)))
+}
+
+/// The `category` wire label of the first cluster touching a matching
+/// file name, or `""` when no visible cluster does. Resolves the cluster
+/// through [`rank_where`] so the two lookups can never disagree.
+pub(crate) fn category_where(report: &Value, matches: impl Fn(&str) -> bool) -> String {
+    rank_where(report, matches)
+        .and_then(|rank| clusters(report).get(rank))
+        .and_then(|cluster| field(cluster, "category").as_str())
+        .unwrap_or_default()
+        .to_owned()
 }

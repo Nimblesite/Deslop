@@ -4,9 +4,9 @@ func combine(bound int) int {
 	sum := 0
 	for step := 1; step <= bound; step++ {
 		if step%2 == 0 {
-		sum += step * 3
+			sum += step * 7
 		} else {
-		sum += 1
+			sum += 4
 		}
 	}
 	return sum

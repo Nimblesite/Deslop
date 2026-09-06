@@ -5,10 +5,10 @@ use std::{collections::HashMap, path::PathBuf};
 use anyhow::{Context, Result};
 use deslop_core::{
     ast::ByteRange,
-    cluster::{build_ranked_fused_clusters, ClusterBuildInputs},
+    cluster::build_ranked_fused_clusters,
     embedding::EmbeddingPair,
     fingerprint::Fingerprint,
-    lsh::{Signature, SignatureIndex, SIGNATURE_LEN},
+    lsh::{Signature, SIGNATURE_LEN},
     pair::{candidate_pairs, cluster_by_transitive_closure, FUSED_THRESHOLD, LSH_ONLY_MIN_JACCARD},
     state::{FileId, FileRegistry},
 };
@@ -23,13 +23,7 @@ fn issue_91_embedding_only_pair_survives_when_lsh_misses_match() -> Result<()> {
         cosine: 0.99,
     }];
 
-    let signature_index = SignatureIndex::from_slice(&signatures);
-    let candidates = candidate_pairs(
-        &fingerprints,
-        &signature_index,
-        &lsh_pairs,
-        &embedding_pairs,
-    );
+    let candidates = candidate_pairs(&fingerprints, &signatures, &lsh_pairs, &embedding_pairs);
     assert_eq!(candidates.len(), 1, "expected one fused candidate pair");
     let candidate = *candidates.first().context("one candidate pair expected")?;
     assert_eq!((candidate.left, candidate.right), (0, 1));
@@ -63,23 +57,37 @@ fn issue_91_embedding_only_pair_survives_when_lsh_misses_match() -> Result<()> {
     let cluster = clusters.first().context("one cluster expected")?;
     assert_eq!(cluster.members, vec![0, 1]);
 
-    // [FUSED-RANK-MASS] Pair evidence admitted the component above; the
-    // materialised cluster owns only membership and duplicated mass.
-    let rendered = build_ranked_fused_clusters(&ClusterBuildInputs {
-        fingerprints: &fingerprints,
-        fused_clusters: &clusters,
-        trees: &[],
-        file_languages: &HashMap::new(),
-        file_paths: &HashMap::new(),
-    });
+    // [FUSION-CLUSTER-SIGNALS] The report must show the cosine measured
+    // between the two rendered occurrences, not an average over the
+    // discovery edges that assembled the component.
+    let vectors = HashMap::from([(0, vec![1.0, 0.0]), (1, vec![0.99, 0.141_067_36])]);
+    let rendered = build_ranked_fused_clusters(&fingerprints, &signatures, &vectors, &clusters);
     assert_eq!(
         rendered.len(),
         1,
         "the embedding-only cluster must survive materialisation"
     );
     let rendered_cluster = rendered.first().context("one rendered cluster expected")?;
-    assert_eq!(rendered_cluster.members.len(), 2);
-    assert_eq!(rendered_cluster.mass, 80);
+    assert!(
+        rendered_cluster.signals.embedding_cos > 0.98,
+        "issue #91: the rendered cluster must carry its embedding evidence; got {}",
+        rendered_cluster.signals.embedding_cos
+    );
+    assert!(
+        (rendered_cluster.signals.embedding_cos - 0.99).abs() < 1e-5,
+        "rendered cosine must equal the measured vector cosine (0.99); got {}",
+        rendered_cluster.signals.embedding_cos
+    );
+    assert!(
+        rendered_cluster.signals.structural.abs() < f64::EPSILON,
+        "distinct Merkle hashes must measure structural exactly 0.0; got {}",
+        rendered_cluster.signals.structural
+    );
+    assert!(
+        rendered_cluster.signals.token_jaccard.abs() < f64::EPSILON,
+        "disjoint signatures must measure Jaccard exactly 0.0, proving this cluster is embedding-only in the report too; got {}",
+        rendered_cluster.signals.token_jaccard
+    );
     Ok(())
 }
 

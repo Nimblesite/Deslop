@@ -6,7 +6,6 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Deslop MCP server — live duplicate-code tools over stdio for Claude, Cursor, Codex, Continue, and any MCP-capable AI coding agent. Query the running analysis mid-generation, before a copy-paste happens."
-autotests = false
 
 [[bin]]
 name = "deslop-mcp"
@@ -39,18 +38,3 @@ tempfile.workspace = true
 
 [lints]
 workspace = true
-
-[[test]]
-name = "suite"
-path = "tests/suite.rs"
-
-# [CI-RELEASE-BUILD] [TEST-ONE-BINARY] `tcp_transport` stays its own test
-# target rather than a module of `suite`, because CI addresses it by target
-# name: `.github/workflows/ci.yml`'s Windows leg runs it with LLVM coverage,
-# the only place this Windows-only suite executes. Folding it into the
-# suite made that a hard `no test target named` error. Selecting it out of
-# the suite by test-name filter is not an option — a filter that matches
-# nothing exits 0, so a rename would silently stop running it (gh #412).
-[[test]]
-name = "tcp_transport"
-path = "tests/tcp_transport.rs"

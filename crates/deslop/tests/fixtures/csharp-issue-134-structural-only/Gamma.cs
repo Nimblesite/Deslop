@@ -10,7 +10,7 @@ namespace WidgetMachinery
             }
             int weldedTotal = idleAnchor;
             int rotaryWipe = latchBound;
-            for (int knobMotion = idleAnchor; knobMotion < spindleValue; knobMotion = knobMotion + 3)
+            for (int knobMotion = idleAnchor; knobMotion < spindleValue; knobMotion = knobMotion + 1)
             {
                 weldedTotal = weldedTotal + knobMotion;
                 rotaryWipe = rotaryWipe + knobMotion;

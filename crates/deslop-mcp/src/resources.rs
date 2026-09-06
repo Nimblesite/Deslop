@@ -27,10 +27,6 @@ pub const SCHEMA_URI: &str = "deslop://schema";
 const REPORT_MIME: &str = "application/json";
 /// MIME type for the schema doc (markdown).
 const SCHEMA_MIME: &str = "text/markdown";
-/// MCP resource-descriptor field carrying the resource URI.
-const RESOURCE_URI_FIELD: &str = "uri";
-/// MCP resource-descriptor field carrying the resource MIME type.
-const MIME_TYPE_FIELD: &str = "mimeType";
 
 /// Renders the `resources/list` response payload per MCP spec.
 #[must_use]
@@ -38,16 +34,16 @@ pub fn resources_list_payload() -> Value {
     json!({
         "resources": [
             {
-                (RESOURCE_URI_FIELD): REPORT_URI,
+                "uri": REPORT_URI,
                 "name": "Deslop live report",
                 "description": "Current duplication report, canonical JSON. Refreshed on every analysis pass.",
-                (MIME_TYPE_FIELD): REPORT_MIME,
+                "mimeType": REPORT_MIME,
             },
             {
-                (RESOURCE_URI_FIELD): SCHEMA_URI,
+                "uri": SCHEMA_URI,
                 "name": "Deslop report schema",
                 "description": "Markdown describing the report schema — field definitions, signal semantics, clone taxonomy.",
-                (MIME_TYPE_FIELD): SCHEMA_MIME,
+                "mimeType": SCHEMA_MIME,
             }
         ]
     })
@@ -67,8 +63,8 @@ pub fn read_resource(backend: &dyn McpBackend, uri: &str) -> Result<Value, JsonR
             let text = serde_json::to_string_pretty(&*report).unwrap_or_else(|_| "{}".to_owned());
             Ok(json!({
                 "contents": [{
-                    (RESOURCE_URI_FIELD): REPORT_URI,
-                    (MIME_TYPE_FIELD): REPORT_MIME,
+                    "uri": REPORT_URI,
+                    "mimeType": REPORT_MIME,
                     "text": text,
                 }]
             }))
@@ -77,8 +73,8 @@ pub fn read_resource(backend: &dyn McpBackend, uri: &str) -> Result<Value, JsonR
             let report = backend.report_get().map_err(backend_to_rpc)?;
             Ok(json!({
                 "contents": [{
-                    (RESOURCE_URI_FIELD): SCHEMA_URI,
-                    (MIME_TYPE_FIELD): SCHEMA_MIME,
+                    "uri": SCHEMA_URI,
+                    "mimeType": SCHEMA_MIME,
                     "text": report.schema_doc.clone(),
                 }]
             }))

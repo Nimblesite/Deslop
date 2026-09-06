@@ -36,12 +36,6 @@ const SAMPLE_FREQUENCY_HZ: i32 = 99;
 /// Firefox profile sampling interval corresponding to the pprof rate.
 #[cfg(all(feature = "profiling", unix))]
 const SAMPLE_INTERVAL_MS: u64 = 10;
-/// Process name recorded in the emitted Firefox profile.
-#[cfg(all(feature = "profiling", unix))]
-const PROCESS_NAME: &str = "deslop-lsp";
-/// Profile start time, in milliseconds, that samples are offset from.
-#[cfg(all(feature = "profiling", unix))]
-const REFERENCE_START_MS: f64 = 0.0;
 
 /// RAII holder for the optional process-wide CPU profiler.
 #[cfg(all(feature = "profiling", unix))]
@@ -166,14 +160,14 @@ fn write_firefox_profile(
 #[cfg(all(feature = "profiling", unix))]
 fn profile_from_report(report: &pprof::Report, started_at: SystemTime) -> Profile {
     let mut profile = Profile::new(
-        PROCESS_NAME,
+        "deslop-lsp",
         started_at.into(),
         SamplingInterval::from_millis(SAMPLE_INTERVAL_MS),
     );
     let process_handle = profile.add_process(
-        PROCESS_NAME,
+        "deslop-lsp",
         process::id(),
-        Timestamp::from_millis_since_reference(REFERENCE_START_MS),
+        Timestamp::from_millis_since_reference(0.0),
     );
     let mut threads = HashMap::new();
     let mut has_sample = false;
@@ -186,7 +180,7 @@ fn profile_from_report(report: &pprof::Report, started_at: SystemTime) -> Profil
         let stack = stack_for_frames(&mut profile, thread, frames);
         profile.add_sample(
             thread,
-            Timestamp::from_millis_since_reference(REFERENCE_START_MS),
+            Timestamp::from_millis_since_reference(0.0),
             stack,
             CpuDelta::ZERO,
             weight,
@@ -214,7 +208,7 @@ fn thread_for_frames(
             let thread = profile.add_thread(
                 process_handle,
                 tid,
-                Timestamp::from_millis_since_reference(REFERENCE_START_MS),
+                Timestamp::from_millis_since_reference(0.0),
                 false,
             );
             profile.set_thread_name(thread, &frames.thread_name_or_id());
@@ -257,10 +251,10 @@ fn add_no_sample_placeholder(profile: &mut Profile, process_handle: ProcessHandl
     let thread = profile.add_thread(
         process_handle,
         process::id(),
-        Timestamp::from_millis_since_reference(REFERENCE_START_MS),
+        Timestamp::from_millis_since_reference(0.0),
         true,
     );
-    profile.set_thread_name(thread, PROCESS_NAME);
+    profile.set_thread_name(thread, "deslop-lsp");
     let label = profile.intern_string("no pprof samples captured");
     let stack = profile.intern_stack_frames(
         thread,
@@ -273,15 +267,12 @@ fn add_no_sample_placeholder(profile: &mut Profile, process_handle: ProcessHandl
     );
     profile.add_sample(
         thread,
-        Timestamp::from_millis_since_reference(REFERENCE_START_MS),
+        Timestamp::from_millis_since_reference(0.0),
         stack,
         CpuDelta::ZERO,
         1,
     );
 }
-
-#[cfg(all(feature = "profiling", unix, test))]
-mod tests;
 
 /// No-op profiler holder for default builds and non-Unix targets.
 #[cfg(not(all(feature = "profiling", unix)))]

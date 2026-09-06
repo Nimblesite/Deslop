@@ -13,10 +13,7 @@ fn main() -> ExitCode {
     deslop_lsp::app::run_process(env::args(), std::io::stdout(), run_stdio_process)
 }
 
-/// Thin process-only adapter that binds the app layer to real stdio, and
-/// reports the exit code the base protocol fixes for how the session ended
-/// ([LSP-LIFECYCLE]).
-fn run_stdio_process(startup: LspStartup) -> Result<ExitCode> {
+/// Thin process-only adapter that binds the app layer to real stdio.
+fn run_stdio_process(startup: LspStartup) -> Result<()> {
     deslop_lsp::app::run_startup_with(startup, deslop_lsp::run_stdio)
-        .map(deslop_lsp::ServeEnd::exit_code)
 }

@@ -59,23 +59,6 @@ The JSON output must validate against Deployment Toolkit's
 `manifestVersion`, `name`, `version`, `kind`, `language`, and
 `product = "deslop"`.
 
-### [DEPLOY-BINARY-FILE-NAME] How a platform names a binary
-
-A component's file name is its `binaryName` plus, on Windows and only on Windows, `.exe`. The same name identifies the file `make build` leaves in `target/release`, the file a package must bundle under `bin/<platform>/`, and the file a gate looks for. There is one implementation of this rule and every gate reads it from there.
-
-The reason it is a rule rather than a convenience: a gate that carries its own copy, or leaves the rule out, reports a missing binary on the one platform that has it — a red gate for a green artifact, or worse, a check quietly performed against nothing.
-
-### [DEPLOY-GATE-PORTABILITY] Every gate runs everywhere the product ships
-
-A deployment gate must run on every platform this project publishes for, and must depend only on programs those platforms have. Reading and writing the archive formats we ship — a VSIX and a JetBrains plugin are both zip archives — happens in-process. Where a POSIX shell is genuinely required, it is resolved rather than named, so the shell that runs is the one the build already depends on.
-
-Two failures this prevents, both seen:
-
-- A gate that shells out to a program the platform does not ship does not report a weaker answer. It aborts before it checks anything, which is indistinguishable from having no gate — and it did so on the very platform whose artifact it exists to verify.
-- A gate that starts a subject the platform cannot execute gets an empty result and compares that against its expectation. Two empty strings are equal, so the gate passes while proving nothing. This is the more dangerous of the two, because it is green.
-
-A gate is therefore held to the platform it runs on: a proof that has to execute a staged binary uses a binary this host can run, and a rule about a *target* platform — how that platform names a file, which artifact it publishes — is proved for every published platform from any host, because such a proof needs to run nothing.
-
 ### [DEPLOY-PROTOCOL-VERSION] Protocol initialize version
 
 Long-running protocol binaries must report the same version during initialize
@@ -154,11 +137,9 @@ The unpacked VSIX is the canonical distribution surface per [DEPLOY-VSIX-PACKAGE
 Pointing an MCP client at any other binary breaks [DEPLOY-VERSION-CONTRACT] +
 [DEPLOY-PROTOCOL-VERSION]: a locally-built `target/release/deslop-mcp` would
 shadow the shipright-versioned bundle and silently drift the agent's analysis
-off the extension's wire contract. PATH-resolved deslop is supported only from
-release-locked installers: Homebrew and Scoop, which version the binary
-lock-step with the release, and the published fail-closed curl installer
-([DEPLOY-DOCS-INSTALLER-FAILCLOSED]), which pins a `DESLOP_TAG` and verifies a
-SHA-256 before anything reaches `~/.local/bin`.
+off the extension's wire contract. The only PATH-resolved form Deslop supports
+is for users who installed the CLI via Homebrew or Scoop, because those package
+managers version the binary lock-step with the release.
 
 Consequences for this repo:
 
@@ -172,8 +153,7 @@ Consequences for this repo:
 - Every doc that shows an MCP wiring snippet (`README.md`,
   `clients/vscode/README.md`, `docs/snippets/agents-md-recipe.md`,
   `site/src/docs/ai-integration.md`) leads with the absolute VSIX path and
-  documents the release-locked PATH forms (brew/scoop, the published curl
-  installer) as the only secondary alternatives.
+  documents the brew/scoop PATH form as the only secondary alternative.
 
 ### [DEPLOY-EXTENSION-BUNDLED-TESTS] Extension tests must use bundled binaries
 
@@ -193,10 +173,6 @@ binaries and fail if `deslop`, `deslop-lsp`, or `deslop-mcp` still resolve on
 `PATH`. This keeps extension tests honest: a missing or stale bundle cannot be
 masked by a developer machine install.
 
-A rebuild must also scrub *running* Deslop processes before it cleans anything. A `deslop`, `deslop-lsp`, or `deslop-mcp` left behind by an editor session or an abandoned test shadows the bundle the rebuild is about to produce, starves socket-bound integration tests, and on Windows — where the loader keeps an open handle to every running image — stops `cargo clean` from emptying `target/release` at all. Matching is by exact process name, so `cargo build -p deslop-lsp` survives untouched; a process that outlives a forced kill fails the target rather than being ignored. The matching, the terminate-then-force sequence, and the fail-closed re-check live in `scripts/repository/kill-deslop-processes.sh` so they can be tested without the target's destructive side effect, and `scripts/repository/kill-deslop-processes.test.mjs` (a `make lint` gate) drives that detection against a fixture process it owns and reaps.
-
-Every recipe in the `Makefile` is POSIX shell, so Windows runs them under Git Bash, found by absolute path through the overridable `GIT_BASH` variable. Resolving `bash.exe` by name instead finds WSL's copy in `System32`, which mounts a different filesystem and cannot see the checkout; handing the recipes to `powershell.exe` cannot work either, since PowerShell parses none of the `case`, `for`, `[ -f ]`, or `||` the recipes are built from. The same gate asserts both, together with the POSIX spelling of the `RM` and `MKDIR` helpers that recipes interpolate into those constructs.
-
 ### [DEPLOY-JETBRAINS-PACKAGE] JetBrains package contract
 
 The JetBrains plugin package must include `shipwright.json` at plugin
@@ -206,10 +182,6 @@ If the package bundles native helpers under plugin-root `bin/<platform>/`, each
 helper must be listed in the manifest. Startup failure must surface through a
 JetBrains notification or Event Log entry with the same expected/found/path
 details required by [DEPLOY-RESOLVER].
-
-### [DEPLOY-DOCS-INSTALLER-FAILCLOSED] Published curl installer fails closed
-
-The curl installer snippet on the docs pages (`site/src/docs/index.md`, `site/src/zh/docs/index.md`) is a published contract: when version resolution, either download, or SHA-256 verification fails, nothing may be extracted and nothing may be installed. The snippet therefore runs entirely inside one subshell under `set -euo pipefail`, downloads into a `mktemp -d` work directory removed by an `EXIT` trap, and only reaches `tar` and `install` after the checksum check passes. The subshell's exit status must not be tested by the surrounding command (no trailing `&& …`): bash 3.2 — the `/bin/bash` macOS ships — disables `set -e` inside a subshell whose status is tested, which silently reopens the fail-open path. `DESLOP_TAG` pins a release; `DESLOP_RELEASE_BASE` overrides the release mirror and doubles as the offline test seam. The no-sudo alternative creates `~/.local/bin` before installing. Both locales stay functionally identical; comments are the only translated lines. Enforced by `scripts/deployment/installer-snippet.test.mjs` (a `make lint` gate), which runs the exact published snippets against a local fixture release and proves a bad checksum yields a non-zero exit with no extraction, no install, and no leaked work directory.
 
 ### [DEPLOY-CI-GATES] CI and release gates
 

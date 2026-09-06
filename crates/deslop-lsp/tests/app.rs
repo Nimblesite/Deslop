@@ -15,34 +15,20 @@ use deslop_lsp::app::{
 use deslop_lsp::backend::LspEmbeddingConfig;
 use serde_json::Value;
 
-const PROGRAM_NAME: &str = "deslop-lsp";
-const TEST_WORKSPACE_ROOT: &str = "/tmp/ws";
-const VERSION_FLAG: &str = "--version";
-const STDIO_FLAG: &str = "--stdio";
-const IPC_TRANSPORT_FLAG: &str = "--ipc-transport";
-const RANKING_STRUCTURAL_ONLY_FLAG: &str = "--ranking-structural-only";
-const WORKER_THREADS_FLAG: &str = "--worker-threads";
-const NICE_FLAG: &str = "--nice";
-const OLLAMA_PROVIDER_ID: &str = "ollama";
-const UNSUPPORTED_STARTUP_FLAG: &str = "unsupported LSP startup flag";
-const USAGE_ERROR_PREFIX: &str = "usage: deslop-lsp";
-const ISSUE_201_WORKSPACE_ROOT: &str = "/tmp/deslop-201";
-const DEFAULT_MIN_NODES: u32 = 30;
-
 /// Plain `--version` prints the exact Deployment Toolkit contract and
 /// never attempts to start the server.
 #[test]
 fn plain_version_is_handled_before_server_startup() -> Result<()> {
-    let output = version_output(action_from_args([PROGRAM_NAME, VERSION_FLAG])?)?;
+    let output = version_output(action_from_args(["deslop-lsp", "--version"])?)?;
     assert_eq!(output, expected_plain_version());
-    assert!(output.starts_with(PROGRAM_NAME));
+    assert!(output.starts_with("deslop-lsp"));
     assert!(output.ends_with('\n'));
 
     let mut stdout = Vec::new();
     let mut runner_called = false;
-    let _code = run_process_result([PROGRAM_NAME, VERSION_FLAG], &mut stdout, |_| {
+    run_process_result(["deslop-lsp", "--version"], &mut stdout, |_| {
         runner_called = true;
-        Ok(ExitCode::SUCCESS)
+        Ok(())
     })?;
     assert!(!runner_called, "version preflight must not run the server");
     assert_eq!(String::from_utf8(stdout)?, expected_plain_version());
@@ -54,15 +40,15 @@ fn plain_version_is_handled_before_server_startup() -> Result<()> {
 #[test]
 fn json_version_is_handled_before_server_startup() -> Result<()> {
     let mut stdout = Vec::new();
-    let _code = run_process_result([PROGRAM_NAME, VERSION_FLAG, "--json"], &mut stdout, |_| {
-        Err::<ExitCode, _>(anyhow!(
+    run_process_result(["deslop-lsp", "--version", "--json"], &mut stdout, |_| {
+        Err(anyhow!(
             "server runner must not be called for version output"
         ))
     })?;
 
     let payload: Value = serde_json::from_slice(&stdout)?;
     assert_eq!(payload.get("manifestVersion"), Some(&Value::from(1)));
-    assert_eq!(payload.get("name"), Some(&Value::from(PROGRAM_NAME)));
+    assert_eq!(payload.get("name"), Some(&Value::from("deslop-lsp")));
     assert_eq!(
         payload.get("version").and_then(Value::as_str),
         Some(expected_version())
@@ -75,7 +61,7 @@ fn json_version_is_handled_before_server_startup() -> Result<()> {
 }
 
 fn expected_plain_version() -> String {
-    format!("{PROGRAM_NAME} {}\n", expected_version())
+    format!("deslop-lsp {}\n", expected_version())
 }
 
 fn expected_version() -> &'static str {
@@ -87,25 +73,25 @@ fn expected_version() -> &'static str {
 #[test]
 fn serve_action_carries_supported_startup_configuration() -> Result<()> {
     let startup = serve_startup(action_from_args([
-        PROGRAM_NAME,
+        "deslop-lsp",
         "/tmp/deslop-workspace",
-        WORKER_THREADS_FLAG,
+        "--worker-threads",
         "3",
-        NICE_FLAG,
+        "--nice",
         "5",
-        STDIO_FLAG,
+        "--stdio",
     ])?)?;
 
     assert_eq!(
         startup.workspace_root,
         PathBuf::from("/tmp/deslop-workspace")
     );
-    assert_eq!(startup.min_nodes, DEFAULT_MIN_NODES);
+    assert_eq!(startup.min_nodes, 30);
     assert_eq!(startup.worker_threads, 3);
     assert_eq!(startup.nice, 5);
     assert_eq!(startup.embedding.mode, EmbeddingMode::Off);
     assert_eq!(startup.embedding.mode.as_str(), "off");
-    assert_eq!(startup.embedding.provider_id, OLLAMA_PROVIDER_ID);
+    assert_eq!(startup.embedding.provider_id, "ollama");
     assert_eq!(startup.embedding.model_id, DEFAULT_OLLAMA_MODEL);
     assert_eq!(startup.embedding.endpoint, DEFAULT_OLLAMA_ENDPOINT);
     Ok(())
@@ -115,17 +101,17 @@ fn serve_action_carries_supported_startup_configuration() -> Result<()> {
 /// without driving the binary through subprocess coverage.
 #[test]
 fn serve_action_applies_documented_defaults() -> Result<()> {
-    let startup = serve_startup(action_from_args([PROGRAM_NAME, "/tmp/deslop-defaults"])?)?;
+    let startup = serve_startup(action_from_args(["deslop-lsp", "/tmp/deslop-defaults"])?)?;
     assert_eq!(
         startup.workspace_root,
         PathBuf::from("/tmp/deslop-defaults")
     );
-    assert_eq!(startup.min_nodes, DEFAULT_MIN_NODES);
+    assert_eq!(startup.min_nodes, 30);
     assert_eq!(startup.worker_threads, 0);
     assert_eq!(startup.nice, 0);
     assert_eq!(startup.embedding.mode, EmbeddingMode::Off);
     assert_eq!(startup.embedding.mode.as_str(), "off");
-    assert_eq!(startup.embedding.provider_id, OLLAMA_PROVIDER_ID);
+    assert_eq!(startup.embedding.provider_id, "ollama");
     assert_eq!(startup.embedding.model_id, DEFAULT_OLLAMA_MODEL);
     assert_eq!(startup.embedding.endpoint, DEFAULT_OLLAMA_ENDPOINT);
     Ok(())
@@ -137,19 +123,19 @@ fn serve_action_applies_documented_defaults() -> Result<()> {
 fn process_result_dispatches_serve_action_to_runner() -> Result<()> {
     let mut stdout = Vec::new();
     let mut observed: Option<LspStartup> = None;
-    let _code = run_process_result(
-        [PROGRAM_NAME, "/tmp/deslop-runner", "--worker-threads", "2"],
+    run_process_result(
+        ["deslop-lsp", "/tmp/deslop-runner", "--worker-threads", "2"],
         &mut stdout,
         |startup| {
             observed = Some(startup);
-            Ok(ExitCode::SUCCESS)
+            Ok(())
         },
     )?;
 
     let startup = observed.ok_or_else(|| anyhow!("server runner was not called"))?;
     assert!(stdout.is_empty(), "serve path must not write CLI stdout");
     assert_eq!(startup.workspace_root, PathBuf::from("/tmp/deslop-runner"));
-    assert_eq!(startup.min_nodes, DEFAULT_MIN_NODES);
+    assert_eq!(startup.min_nodes, 30);
     assert_eq!(startup.worker_threads, 2);
     assert_eq!(startup.nice, 0);
     assert_eq!(startup.embedding.mode, EmbeddingMode::Off);
@@ -160,13 +146,13 @@ fn process_result_dispatches_serve_action_to_runner() -> Result<()> {
 /// and reflects the injected runner result.
 #[test]
 fn process_exit_code_reflects_runner_result() {
-    let success = run_process([PROGRAM_NAME, "/tmp/deslop-ok"], Vec::<u8>::new(), |_| {
-        Ok(ExitCode::SUCCESS)
+    let success = run_process(["deslop-lsp", "/tmp/deslop-ok"], Vec::<u8>::new(), |_| {
+        Ok(())
     });
     assert_eq!(success, ExitCode::SUCCESS);
 
-    let failure = run_process([PROGRAM_NAME, "/tmp/deslop-fail"], Vec::<u8>::new(), |_| {
-        Err::<ExitCode, _>(anyhow!("server exploded"))
+    let failure = run_process(["deslop-lsp", "/tmp/deslop-fail"], Vec::<u8>::new(), |_| {
+        Err(anyhow!("server exploded"))
     });
     assert_eq!(failure, ExitCode::from(1));
 }
@@ -183,7 +169,7 @@ fn startup_dispatch_invokes_async_server_with_config() -> Result<()> {
         nice: 0,
         embedding: LspEmbeddingConfig {
             mode: EmbeddingMode::Required,
-            provider_id: OLLAMA_PROVIDER_ID.to_owned(),
+            provider_id: "ollama".to_owned(),
             model_id: "async-model".to_owned(),
             endpoint: "http://127.0.0.1:1234".to_owned(),
         },
@@ -209,7 +195,7 @@ fn startup_dispatch_invokes_async_server_with_config() -> Result<()> {
     assert_eq!(observed.workspace_root, PathBuf::from("/tmp/deslop-async"));
     assert_eq!(observed.min_nodes, 11);
     assert_eq!(observed.embedding.mode, EmbeddingMode::Required);
-    assert_eq!(observed.embedding.provider_id, OLLAMA_PROVIDER_ID);
+    assert_eq!(observed.embedding.provider_id, "ollama");
     assert_eq!(observed.embedding.model_id, "async-model");
     assert_eq!(observed.embedding.endpoint, "http://127.0.0.1:1234");
     assert_eq!(observed.ipc_mode, IpcMode::Tcp);
@@ -220,16 +206,16 @@ fn startup_dispatch_invokes_async_server_with_config() -> Result<()> {
 /// of being swallowed inside the runtime layer.
 #[test]
 fn startup_dispatch_propagates_async_server_error() -> Result<()> {
-    let startup = serve_startup(action_from_args([PROGRAM_NAME, "/tmp/deslop-error"])?)?;
+    let startup = serve_startup(action_from_args(["deslop-lsp", "/tmp/deslop-error"])?)?;
     let error = run_startup_with(
         startup,
         |_workspace_root, _min_nodes, _embedding, _ipc_mode| {
-            std::future::ready(Err::<(), _>(anyhow!("async server failed")))
+            std::future::ready(Err(anyhow!("async server failed")))
         },
     )
     .err()
     .ok_or_else(|| anyhow!("startup dispatch should have returned an error"))?;
-    assert!(render_error(&error).contains("async server failed"));
+    assert!(format!("{error:#}").contains("async server failed"));
     Ok(())
 }
 
@@ -237,22 +223,19 @@ fn startup_dispatch_propagates_async_server_error() -> Result<()> {
 /// messages users can act on.
 #[test]
 fn invalid_arguments_return_user_facing_errors() -> Result<()> {
-    assert_error_contains([PROGRAM_NAME], USAGE_ERROR_PREFIX)?;
+    assert_error_contains(["deslop-lsp"], "usage: deslop-lsp")?;
     assert_error_contains(
-        [PROGRAM_NAME, TEST_WORKSPACE_ROOT, WORKER_THREADS_FLAG],
+        ["deslop-lsp", "/tmp/ws", "--worker-threads"],
         "--worker-threads requires",
     )?;
+    assert_error_contains(["deslop-lsp", "/tmp/ws", "--nice"], "--nice requires")?;
     assert_error_contains(
-        [PROGRAM_NAME, TEST_WORKSPACE_ROOT, NICE_FLAG],
-        "--nice requires",
-    )?;
-    assert_error_contains(
-        [PROGRAM_NAME, TEST_WORKSPACE_ROOT, NICE_FLAG, "20"],
+        ["deslop-lsp", "/tmp/ws", "--nice", "20"],
         "--nice must be in the range",
     )?;
     assert_error_contains(
-        [PROGRAM_NAME, TEST_WORKSPACE_ROOT, "--unknown"],
-        UNSUPPORTED_STARTUP_FLAG,
+        ["deslop-lsp", "/tmp/ws", "--unknown"],
+        "unsupported LSP startup flag",
     )?;
     Ok(())
 }
@@ -263,32 +246,27 @@ fn invalid_arguments_return_user_facing_errors() -> Result<()> {
 #[test]
 fn ipc_transport_flag_parses_defaults_and_rejects() -> Result<()> {
     let tcp = serve_startup(action_from_args([
-        PROGRAM_NAME,
-        TEST_WORKSPACE_ROOT,
-        IPC_TRANSPORT_FLAG,
+        "deslop-lsp",
+        "/tmp/ws",
+        "--ipc-transport",
         "tcp",
     ])?)?;
     assert_eq!(tcp.ipc_mode, IpcMode::Tcp);
     let unix = serve_startup(action_from_args([
-        PROGRAM_NAME,
-        TEST_WORKSPACE_ROOT,
-        IPC_TRANSPORT_FLAG,
+        "deslop-lsp",
+        "/tmp/ws",
+        "--ipc-transport",
         "unix",
     ])?)?;
     assert_eq!(unix.ipc_mode, IpcMode::Unix);
-    let default = serve_startup(action_from_args([PROGRAM_NAME, TEST_WORKSPACE_ROOT])?)?;
+    let default = serve_startup(action_from_args(["deslop-lsp", "/tmp/ws"])?)?;
     assert_eq!(default.ipc_mode, IpcMode::platform_default());
     assert_error_contains(
-        [
-            PROGRAM_NAME,
-            TEST_WORKSPACE_ROOT,
-            IPC_TRANSPORT_FLAG,
-            "carrier-pigeon",
-        ],
+        ["deslop-lsp", "/tmp/ws", "--ipc-transport", "carrier-pigeon"],
         "--ipc-transport must be `unix` or `tcp`",
     )?;
     assert_error_contains(
-        [PROGRAM_NAME, TEST_WORKSPACE_ROOT, IPC_TRANSPORT_FLAG],
+        ["deslop-lsp", "/tmp/ws", "--ipc-transport"],
         "--ipc-transport requires",
     )?;
     Ok(())
@@ -301,45 +279,41 @@ fn ipc_transport_flag_parses_defaults_and_rejects() -> Result<()> {
 #[test]
 fn ranking_structural_only_flag_parses_applies_and_rejects() -> Result<()> {
     let demote = serve_startup(action_from_args([
-        PROGRAM_NAME,
-        TEST_WORKSPACE_ROOT,
-        RANKING_STRUCTURAL_ONLY_FLAG,
+        "deslop-lsp",
+        "/tmp/ws",
+        "--ranking-structural-only",
         "demote",
     ])?)?;
     assert_eq!(demote.ranking_structural_only, Some(ClonePolicy::Demote));
     let keep = serve_startup(action_from_args([
-        PROGRAM_NAME,
-        TEST_WORKSPACE_ROOT,
-        RANKING_STRUCTURAL_ONLY_FLAG,
+        "deslop-lsp",
+        "/tmp/ws",
+        "--ranking-structural-only",
         "keep",
     ])?)?;
     assert_eq!(keep.ranking_structural_only, Some(ClonePolicy::Keep));
-    let unset = serve_startup(action_from_args([PROGRAM_NAME, TEST_WORKSPACE_ROOT])?)?;
+    let unset = serve_startup(action_from_args(["deslop-lsp", "/tmp/ws"])?)?;
     assert_eq!(unset.ranking_structural_only, None);
     assert_error_contains(
         [
-            PROGRAM_NAME,
-            TEST_WORKSPACE_ROOT,
-            RANKING_STRUCTURAL_ONLY_FLAG,
+            "deslop-lsp",
+            "/tmp/ws",
+            "--ranking-structural-only",
             "shout",
         ],
         "--ranking-structural-only: expected demote|ignore|keep",
     )?;
     assert_error_contains(
-        [
-            PROGRAM_NAME,
-            TEST_WORKSPACE_ROOT,
-            RANKING_STRUCTURAL_ONLY_FLAG,
-        ],
+        ["deslop-lsp", "/tmp/ws", "--ranking-structural-only"],
         "--ranking-structural-only requires",
     )?;
 
     // Startup dispatch records the override in the central state
     // module so every later config load sees the editor's choice.
     let ignore = serve_startup(action_from_args([
-        PROGRAM_NAME,
-        TEST_WORKSPACE_ROOT,
-        RANKING_STRUCTURAL_ONLY_FLAG,
+        "deslop-lsp",
+        "/tmp/ws",
+        "--ranking-structural-only",
         "ignore",
     ])?)?;
     run_startup_with(
@@ -360,39 +334,29 @@ fn ranking_structural_only_flag_parses_applies_and_rejects() -> Result<()> {
 #[test]
 fn issue_83_legacy_startup_flags_are_rejected() -> Result<()> {
     assert_error_contains(
-        [PROGRAM_NAME, TEST_WORKSPACE_ROOT, "--min-nodes", "30"],
-        UNSUPPORTED_STARTUP_FLAG,
+        ["deslop-lsp", "/tmp/ws", "--min-nodes", "30"],
+        "unsupported LSP startup flag",
     )?;
     assert_error_contains(
-        [PROGRAM_NAME, TEST_WORKSPACE_ROOT, "--embeddings", "auto"],
-        UNSUPPORTED_STARTUP_FLAG,
+        ["deslop-lsp", "/tmp/ws", "--embeddings", "auto"],
+        "unsupported LSP startup flag",
     )?;
     assert_error_contains(
-        [
-            PROGRAM_NAME,
-            TEST_WORKSPACE_ROOT,
-            "--embedding-provider",
-            OLLAMA_PROVIDER_ID,
-        ],
-        UNSUPPORTED_STARTUP_FLAG,
+        ["deslop-lsp", "/tmp/ws", "--embedding-provider", "ollama"],
+        "unsupported LSP startup flag",
     )?;
     assert_error_contains(
-        [
-            PROGRAM_NAME,
-            TEST_WORKSPACE_ROOT,
-            "--embedding-model",
-            "unit-model",
-        ],
-        UNSUPPORTED_STARTUP_FLAG,
+        ["deslop-lsp", "/tmp/ws", "--embedding-model", "unit-model"],
+        "unsupported LSP startup flag",
     )?;
     assert_error_contains(
         [
-            PROGRAM_NAME,
-            TEST_WORKSPACE_ROOT,
+            "deslop-lsp",
+            "/tmp/ws",
             "--embedding-endpoint",
             "http://127.0.0.1:9999",
         ],
-        UNSUPPORTED_STARTUP_FLAG,
+        "unsupported LSP startup flag",
     )?;
     Ok(())
 }
@@ -410,12 +374,12 @@ fn issue_83_legacy_startup_flags_are_rejected() -> Result<()> {
 #[test]
 fn issue_201_transport_flag_is_never_the_workspace_root() -> Result<()> {
     // The exact argv from the crash log — no folder open, run mode.
-    let error = action_from_args([PROGRAM_NAME, STDIO_FLAG])
+    let error = action_from_args(["deslop-lsp", "--stdio"])
         .err()
         .ok_or_else(|| anyhow!("`deslop-lsp --stdio` must fail, not serve a bogus root"))?;
-    let rendered = render_error(&error);
+    let rendered = format!("{error:#}");
     assert!(
-        rendered.contains(USAGE_ERROR_PREFIX),
+        rendered.contains("usage: deslop-lsp"),
         "no positional root ⇒ usage error, got {rendered:?}",
     );
     assert!(
@@ -425,41 +389,35 @@ fn issue_201_transport_flag_is_never_the_workspace_root() -> Result<()> {
 
     // Debug launch with no folder: `buildServerArgs` yields `["--debug"]` and
     // the client appends `--stdio` → `deslop-lsp --debug --stdio`. Same rule.
-    assert_error_contains([PROGRAM_NAME, "--debug", STDIO_FLAG], USAGE_ERROR_PREFIX)?;
+    assert_error_contains(["deslop-lsp", "--debug", "--stdio"], "usage: deslop-lsp")?;
 
     // Happy path preserved: a real root followed by the appended transport
     // flag still resolves to the real root — exactly why a folder-open
     // session never hit this bug.
     let run = serve_startup(action_from_args([
-        PROGRAM_NAME,
-        ISSUE_201_WORKSPACE_ROOT,
-        STDIO_FLAG,
+        "deslop-lsp",
+        "/tmp/deslop-201",
+        "--stdio",
     ])?)?;
-    assert_eq!(run.workspace_root, PathBuf::from(ISSUE_201_WORKSPACE_ROOT));
+    assert_eq!(run.workspace_root, PathBuf::from("/tmp/deslop-201"));
     let debug = serve_startup(action_from_args([
-        PROGRAM_NAME,
-        ISSUE_201_WORKSPACE_ROOT,
+        "deslop-lsp",
+        "/tmp/deslop-201",
         "--debug",
-        STDIO_FLAG,
+        "--stdio",
     ])?)?;
-    assert_eq!(
-        debug.workspace_root,
-        PathBuf::from(ISSUE_201_WORKSPACE_ROOT)
-    );
+    assert_eq!(debug.workspace_root, PathBuf::from("/tmp/deslop-201"));
 
     // Robustness: the root is the first non-flag argument, not strictly
     // `args[1]`. Even if a future `vscode-languageclient` PREPENDED the
     // transport flag instead of appending it, the real root still resolves
     // — so that library change could never silently reopen the crash-loop.
     let prepended = serve_startup(action_from_args([
-        PROGRAM_NAME,
-        STDIO_FLAG,
-        ISSUE_201_WORKSPACE_ROOT,
+        "deslop-lsp",
+        "--stdio",
+        "/tmp/deslop-201",
     ])?)?;
-    assert_eq!(
-        prepended.workspace_root,
-        PathBuf::from(ISSUE_201_WORKSPACE_ROOT)
-    );
+    assert_eq!(prepended.workspace_root, PathBuf::from("/tmp/deslop-201"));
     Ok(())
 }
 
@@ -467,9 +425,7 @@ fn issue_201_transport_flag_is_never_the_workspace_root() -> Result<()> {
 fn version_output(action: LspAction) -> Result<String> {
     match action {
         LspAction::Version { output } => Ok(output),
-        other @ (LspAction::Serve(_) | LspAction::Help { .. }) => {
-            Err(anyhow!("expected version action, got {other:?}"))
-        }
+        other @ LspAction::Serve(_) => Err(anyhow!("expected version action, got {other:?}")),
     }
 }
 
@@ -477,9 +433,7 @@ fn version_output(action: LspAction) -> Result<String> {
 fn serve_startup(action: LspAction) -> Result<LspStartup> {
     match action {
         LspAction::Serve(startup) => Ok(startup),
-        other @ (LspAction::Version { .. } | LspAction::Help { .. }) => {
-            Err(anyhow!("expected serve action, got {other:?}"))
-        }
+        other @ LspAction::Version { .. } => Err(anyhow!("expected serve action, got {other:?}")),
     }
 }
 
@@ -488,15 +442,10 @@ fn assert_error_contains<const N: usize>(args: [&str; N], expected: &str) -> Res
     let error = action_from_args(args).err().ok_or_else(|| {
         anyhow!("expected argument parsing to fail with text containing {expected:?}")
     })?;
-    let rendered = render_error(&error);
+    let rendered = format!("{error:#}");
     assert!(
         rendered.contains(expected),
         "error {rendered:?} did not contain {expected:?}"
     );
     Ok(())
-}
-
-/// Renders the complete anyhow error chain with the one supported format.
-fn render_error(error: &anyhow::Error) -> String {
-    format!("{error:#}")
 }

@@ -10,6 +10,8 @@
 //! own test files showed 100%) even though `report-for-file` carried no
 //! cluster for it at all.
 
+mod common;
+
 use crate::common::*;
 
 #[test]
@@ -46,18 +48,22 @@ fn duplication_metric_excludes_hidden_clusters() -> Result<()> {
          covered by visible clusters"
     );
 
-    // `clusters_total` counts every cluster the body carries — the
-    // banner always equals `clusters.len()` ([METRICS-REPO]), so a
-    // hidden cluster is excluded by being dropped from the body, never
-    // by a second, divergent count.
-    let expected_clusters = u64::try_from(clusters(&report).len()).unwrap_or(u64::MAX);
+    // `clusters_total` counts only visible clusters with at least two live
+    // (non-hidden) occurrences.
+    let expected_clusters = u64::try_from(
+        clusters(&report)
+            .iter()
+            .filter(|cluster| live_occurrences(cluster) >= 2)
+            .count(),
+    )
+    .unwrap_or(u64::MAX);
     let reported_clusters = metric_field(&report, "clusters_total")
         .as_u64()
         .unwrap_or(u64::MAX);
     assert_eq!(
         reported_clusters, expected_clusters,
-        "clusters_total {reported_clusters} must equal the {expected_clusters} clusters \
-         the report body lists"
+        "clusters_total {reported_clusters} must match the {expected_clusters} visible \
+         contributing clusters"
     );
 
     Ok(())

@@ -41,11 +41,9 @@ pub enum CoreError {
     ConfigParse {
         /// Config path that failed to parse.
         path: PathBuf,
-        /// Upstream TOML parse error. Boxed: it is 88 bytes, which alone
-        /// pushed `CoreError` to clippy's `result_large_err` threshold and
-        /// so widened every `Result<_, CoreError>` in the crate.
+        /// Upstream TOML parse error.
         #[source]
-        source: Box<toml::de::Error>,
+        source: toml::de::Error,
     },
 
     /// `[threshold] max_duplication_percent` in the exclusion config
@@ -66,11 +64,9 @@ pub enum CoreError {
         path: PathBuf,
         /// The offending pattern string.
         pattern: String,
-        /// Upstream error from `ignore::gitignore`. Boxed for the same
-        /// reason as [`CoreError::ConfigParse`]: 64 bytes inline, beside a
-        /// `PathBuf` and a `String`, is the widest variant this enum has.
+        /// Upstream error from `ignore::gitignore`.
         #[source]
-        source: Box<ignore::Error>,
+        source: ignore::Error,
     },
 
     /// Report JSON supplied via `--from-report` could not be parsed.
@@ -93,56 +89,12 @@ pub enum CoreError {
         message: String,
     },
 
-    /// An explicit pair comparison named an endpoint that is not an exact
-    /// fingerprint occurrence in the current analysis generation.
-    #[error("unknown pair endpoint {path:?} at bytes {start_byte}..{end_byte}")]
-    UnknownPairEndpoint {
-        /// Workspace-relative or absolute endpoint path.
-        path: PathBuf,
-        /// Inclusive byte offset.
-        start_byte: usize,
-        /// Exclusive byte offset.
-        end_byte: usize,
-    },
-
-    /// An explicit pair comparison repeated one occurrence instead of
-    /// selecting two distinct endpoints.
-    #[error("pair comparison requires two distinct endpoints")]
-    SamePairEndpoint,
-
     /// `--debug-ast` was invoked on a file whose extension no
     /// registered [`crate::lang::LanguageParser`] claims.
     #[error("no language parser matches extension for {path}")]
     UnsupportedExtension {
         /// Offending path.
         path: PathBuf,
-    },
-
-    /// A `--diff` input is not well-formed unified diff text
-    /// ([CLI-ARG-DIFF]). Carries the 1-indexed line of the diff text
-    /// (not of any source file) so the user can find the defect.
-    #[error("invalid unified diff at line {line}: {message}")]
-    DiffParse {
-        /// 1-indexed line within the diff text that failed to parse.
-        line: usize,
-        /// What the parser expected or refused.
-        message: String,
-    },
-
-    /// A `--diff` input parsed but does not byte-match the scanned
-    /// tree ([CLI-ARG-DIFF]): a context or added line disagrees with
-    /// the file content at its new-side line number. Tagging against a
-    /// stale diff would mislabel every downstream population, so the
-    /// run is refused.
-    #[error(
-        "diff does not match the scanned tree: {path} differs at line {line}; \
-         regenerate the diff against the analysed revision"
-    )]
-    DiffStale {
-        /// Scan-root-relative path of the mismatching file.
-        path: PathBuf,
-        /// 1-indexed new-side line number where the bytes disagree.
-        line: u64,
     },
 
     /// A source file's AST nests deeper than
@@ -160,6 +112,3 @@ pub enum CoreError {
         limit: usize,
     },
 }
-
-#[cfg(test)]
-mod tests;

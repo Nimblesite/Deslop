@@ -3,7 +3,7 @@
 
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
-import { tempFile } from "./temp-file.helpers";
+import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
 
@@ -11,30 +11,35 @@ import { openCanonicalOccurrence } from "../../commands/register";
 import { canonicalOccurrenceForCluster } from "../../commands/treeMenus";
 import { ClusterNode } from "../../tree/providers";
 import { ReportCluster } from "../../types/report";
-import { occurrence, wireCluster } from "../cluster.helpers";
 
 function clusterWithRanges(
   id: string,
   occurrences: { path: string; start_byte: number; end_byte: number }[],
 ): ReportCluster {
-  return wireCluster({
+  return {
     id,
-    mass: 10,
-        occurrences: occurrences.map((o) =>
-    occurrence(o.path, o.start_byte, o.end_byte),
-  ),
-  });
+    weight: 10,
+    size: occurrences.length,
+    canonical_node_count: 4,
+    bucket: "identical",
+    signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
+    occurrences: occurrences.map((o) => ({ ...o, hidden: false })),
+    occurrences_total: 0,
+    occurrences_truncated: false,
+    summary: "",
+    interpretation: "interp",
+  };
 }
 
 function clusterNodeFor(c: ReportCluster): ClusterNode {
-  return new ClusterNode(c, "mid");
+  return new ClusterNode(c, 1, "mid");
 }
 
 suite("canonical file command", () => {
   test("canonicalOccurrenceForCluster returns the first occurrence", () => {
     const c = clusterWithRanges("c-canonical", [
-      {path: "src/canonical.cs", start_byte: 10, end_byte: 20},
-      {path: "src/sibling.cs", start_byte: 30, end_byte: 40},
+      { path: "src/canonical.cs", start_byte: 10, end_byte: 20 },
+      { path: "src/sibling.cs", start_byte: 30, end_byte: 40 },
     ]);
     const first = c.occurrences[0];
     assert.ok(first, "cluster must have a canonical occurrence");
@@ -42,7 +47,8 @@ suite("canonical file command", () => {
   });
 
   test("openCanonicalOccurrence opens the first occurrence at its line and column", async () => {
-    const { dir, file: canonical } = tempFile("cdd-canon-", "Canonical.cs");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-canon-"));
+    const canonical = path.join(dir, "Canonical.cs");
     const sibling = path.join(dir, "Sibling.cs");
     const source = "zero\n  canonical target\n";
     const startByte = Buffer.byteLength("zero\n  ", "utf8");

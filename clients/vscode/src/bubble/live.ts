@@ -1,26 +1,30 @@
 // Live duplication bubble — [VSIX-LIVE-BUBBLE].
 // Fires after every coalesced buffer edit. Calls deslop/duplicatesFindSimilar
-// on the most-recently-touched range; admission is `bubbleAdmits`: a
-// reported cluster renders — the engine's verdict, reached with content
-// evidence and byte proof this client never sees. Surfaces:
-//   primary: after-text decoration (severity dot + short verdict + count + canonical)
-// Ghost-line mode renders a whole-line after-text decoration instead.
-// Pair admission signals never render here ([FUSED-PAIR-SIGNALS]).
+// on the most-recently-touched range; if fused >= 0.85, renders:
+//   primary: after-text decoration (severity dot + bucket label + count + canonical)
+//   secondary: inlay hint with a 3-bar signal strip
+// Ghost-line mode uses a CodeLens on a phantom line.
 
 import * as vscode from "vscode";
 import { effect } from "@preact/signals-core";
 import type { LanguageClient } from "vscode-languageclient/node";
 
-import { COLOR, DESLOP_SEVERITY_COLOR } from "../design";
+import { clusterHoverMarkdown, clusterSlug } from "../clusterHover";
+import { COLOR, SEVERITY_COLOR, SEVERITY_DOT } from "../design";
+import { shortPath } from "../pathUtils";
 import { ReportStore } from "../reportStore";
-import { clusterSeverity } from "../severity";
-import { ReportCluster, clusterBand } from "../types/report";
-import { bubbleHover, ghostText, inlineText } from "./renderParts";
+import { indexedSeverity } from "../severity";
+import { ANALYSED_LANGUAGE_IDS } from "../types/languages";
+import {
+  FUSED_THRESHOLD,
+  ReportCluster,
+  Severity,
+  bucketLabels,
+  occurrenceCount,
+  resolveBucket,
+} from "../types/report";
 
 export { shortPath } from "../pathUtils";
-// The pure text renderers live in ./renderParts; re-exported so every
-// consumer keeps one import surface for the bubble.
-export * from "./renderParts";
 
 const DEBOUNCE_MS = 250;
 const BUDGET_MS = 250;
@@ -31,68 +35,18 @@ interface ActiveBubble {
   range: vscode.Range;
 }
 
-// [VSIX-STATE-DIRTY] Everything a `findSimilar` answer is only valid *for*,
-// captured before the request goes out: the store revision (client-owned
-// monotonic token — the wire generation can read the same value twice across
-// out-of-order snapshot completions, ABA), the document, and its version. By
-// the time the reply resolves any of the three may have moved on, and the
-// reply then describes a world that no longer exists. Retraction tombstones
-// cannot cover this on their own — a full snapshot settles and clears them,
-// so a probe older than the snapshot comes back to an empty ledger and would
-// repaint a cluster the snapshot authoritatively omitted.
-interface DispatchedAt {
-  revision: number;
-  uri: string;
-  version: number;
-}
-
-// One in-flight probe: its supersession epoch (only the newest probe may
-// touch the UI — success *or* failure), the cancellation source that a newer
-// probe or `dispose()` fires, the budget deadline, and the world it was
-// dispatched against.
-interface ProbeDispatch {
-  epoch: number;
-  doc: vscode.TextDocument;
-  range: vscode.Range;
-  cancellation: vscode.CancellationTokenSource;
-  // Set when the budget deadline fired: the edit cycle is skipped outright.
-  // Cancellation alone cannot enforce the deadline — `$/cancelRequest` is
-  // advisory and a server that ignores it still resolves the promise — so
-  // the expiry is recorded and `isSuperseded` rejects the late completion.
-  expired: boolean;
-  budget: vscode.Disposable;
-  dispatchedAt: DispatchedAt;
-}
-
-/**
- * Schedules the probe-budget deadline. Injectable so tests fire the
- * deadline deterministically instead of sleeping ([VSIX-LIVE-BUBBLE]).
- */
-export type BudgetScheduler = (expire: () => void, ms: number) => vscode.Disposable;
-
-const realBudgetScheduler: BudgetScheduler = (expire, ms) => {
-  const handle = setTimeout(expire, ms);
-  return { dispose: () => clearTimeout(handle) };
-};
-
 export class LiveBubble implements vscode.Disposable {
   private readonly bubbleDecoration: vscode.TextEditorDecorationType;
   private readonly ghostDecoration: vscode.TextEditorDecorationType;
+  private readonly inlayProvider: BubbleInlayProvider;
   private readonly disposables: vscode.Disposable[] = [];
   private active: ActiveBubble | null = null;
   private dismissedClusters = new Set<string>();
   private debounceTimer: NodeJS.Timeout | undefined;
-  // Bumped on every probe dispatch (and on dispose): a completion whose
-  // epoch no longer matches has been superseded and may not touch the UI.
-  private probeEpoch = 0;
-  // Cancellation source of the newest in-flight probe, so supersession and
-  // dispose() can cancel the request instead of letting it stall on.
-  private inflight: vscode.CancellationTokenSource | null = null;
 
   constructor(
     private readonly store: ReportStore,
     private readonly clientOf: () => LanguageClient | undefined,
-    private readonly scheduleBudget: BudgetScheduler = realBudgetScheduler,
   ) {
     this.bubbleDecoration = vscode.window.createTextEditorDecorationType({
       after: {
@@ -108,10 +62,15 @@ export class LiveBubble implements vscode.Disposable {
         color: COLOR.onSurfaceMuted,
       },
     });
+    this.inlayProvider = new BubbleInlayProvider();
 
     this.disposables.push(
       this.bubbleDecoration,
       this.ghostDecoration,
+      vscode.languages.registerInlayHintsProvider(
+        ANALYSED_LANGUAGE_IDS.map((language) => ({ language })),
+        this.inlayProvider,
+      ),
       // effect() tracks store.report (read inside clearRemovedActiveCluster).
       // Clears the bubble automatically when the active cluster disappears.
       { dispose: effect(() => this.clearRemovedActiveCluster()) },
@@ -158,11 +117,6 @@ export class LiveBubble implements vscode.Disposable {
 
   dispose(): void {
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
-    // Strand any in-flight probe: its epoch can never match again, and the
-    // cancel tells the server to stop working on a dead question.
-    this.probeEpoch += 1;
-    this.inflight?.cancel();
-    this.inflight = null;
     for (const d of this.disposables) d.dispose();
   }
 
@@ -181,94 +135,33 @@ export class LiveBubble implements vscode.Disposable {
     }, DEBOUNCE_MS);
   }
 
-  // Public for the test harness, which dispatches probes and settles their
-  // deferred responses out of order to drive the supersession races
-  // deterministically. Production dispatch goes through `onEdit`.
-  async probe(
+  private async probe(
     editor: vscode.TextEditor,
     change: vscode.TextDocumentContentChangeEvent,
   ): Promise<void> {
     const client = this.clientOf();
     if (!client) return;
-    const dispatch = this.beginProbe(editor.document, change);
+    const doc = editor.document;
+    const start = change.range.start;
+    const endOffset = doc.offsetAt(start) + change.text.length;
+    const end = doc.positionAt(endOffset);
+    const range = new vscode.Range(start, end);
+    const startByte = utf8ByteOffset(doc, start);
+    const endByte = utf8ByteOffset(doc, end);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), BUDGET_MS);
     try {
       const clusters = await client.sendRequest<ReportCluster[]>(
         "deslop/duplicatesFindSimilar",
-        requestParams(editor.document, dispatch.range),
-        dispatch.cancellation.token,
+        { path: doc.uri.fsPath, start_byte: startByte, end_byte: endByte },
       );
-      if (this.isSuperseded(dispatch)) return;
-      this.render(editor, dispatch.range, clusters);
+      clearTimeout(timeout);
+      this.render(editor, range, clusters);
     } catch {
-      // A failure may only clear the world it was asked about: a stalled
-      // probe rejecting (or acknowledging its cancellation) after a newer
-      // probe rendered must not erase that newer bubble.
-      if (this.isSuperseded(dispatch)) return;
+      clearTimeout(timeout);
       this.clearBubble();
-    } finally {
-      this.endProbe(dispatch);
     }
-  }
-
-  // Claims a new probe epoch and cancels the previous in-flight request:
-  // supersession both stops the stale work and — via the epoch — makes its
-  // eventual completion inert even if it settles after cancellation.
-  private beginProbe(
-    doc: vscode.TextDocument,
-    change: vscode.TextDocumentContentChangeEvent,
-  ): ProbeDispatch {
-    this.inflight?.cancel();
-    const cancellation = new vscode.CancellationTokenSource();
-    this.inflight = cancellation;
-    this.probeEpoch += 1;
-    const dispatch: ProbeDispatch = {
-      epoch: this.probeEpoch,
-      doc,
-      range: probeRange(doc, change),
-      cancellation,
-      expired: false,
-      budget: { dispose: () => undefined },
-      dispatchedAt: {
-        revision: this.store.current.revision,
-        uri: doc.uri.toString(),
-        version: doc.version,
-      },
-    };
-    dispatch.budget = this.scheduleBudget(() => expireProbe(dispatch), BUDGET_MS);
-    return dispatch;
-  }
-
-  // True when this completion may no longer touch the UI: its budget
-  // deadline fired, a newer probe was dispatched (or the bubble disposed)
-  // since, or the world it asked about has moved on. Both the success and
-  // the failure path gate on this.
-  private isSuperseded(dispatch: ProbeDispatch): boolean {
-    return (
-      dispatch.expired ||
-      dispatch.epoch !== this.probeEpoch ||
-      this.hasMovedOn(dispatch.doc, dispatch.dispatchedAt)
-    );
-  }
-
-  private endProbe(dispatch: ProbeDispatch): void {
-    dispatch.budget.dispose();
-    if (this.inflight === dispatch.cancellation) this.inflight = null;
-    dispatch.cancellation.dispose();
-  }
-
-  // True when the world the probe asked about is no longer the current one.
-  // Compares the store *revision*, not the wire generation: the revision is
-  // client-owned and strictly monotonic, so a snapshot relabelled with an
-  // older generation (ABA) still invalidates the answer. Takes the document
-  // it was dispatched against rather than reading the active editor: the
-  // reply is only valid for *that* buffer, and by the time it lands the user
-  // may have focused another one entirely.
-  hasMovedOn(doc: vscode.TextDocument, dispatchedAt: DispatchedAt): boolean {
-    return (
-      this.store.current.revision !== dispatchedAt.revision ||
-      doc.uri.toString() !== dispatchedAt.uri ||
-      doc.version !== dispatchedAt.version
-    );
   }
 
   // Public for test harness only — production call sites go through `probe()`.
@@ -285,7 +178,6 @@ export class LiveBubble implements vscode.Disposable {
       report.clusters,
       clusters,
       this.dismissedClusters,
-      this.store.current.retractedClusters,
     );
     if (!best) {
       this.clearBubble();
@@ -294,7 +186,8 @@ export class LiveBubble implements vscode.Disposable {
     if (this.active?.clusterId === best.id && this.active.range.isEqual(range))
       return;
 
-    const severity = clusterBand(best);
+    const severities = indexedSeverity(report.clusters);
+    const severity = severities.get(best.id) ?? "faint";
     const mode = vscode.workspace
       .getConfiguration("deslop")
       .get<string>("liveBubble.mode", "inline");
@@ -318,10 +211,7 @@ export class LiveBubble implements vscode.Disposable {
           renderOptions: {
             after: {
               contentText: inlineText(best, severity),
-              // [SEVERITY-COLOR] Colour is the severity channel; the dot inside
-              // `inlineText` is the same channel. The bubble carries the
-              // cluster's mass severity, never a clone-kind classification.
-              color: DESLOP_SEVERITY_COLOR[clusterSeverity(best)],
+              color: SEVERITY_COLOR[severity],
               fontStyle: "normal",
               fontWeight: "600",
             },
@@ -330,6 +220,7 @@ export class LiveBubble implements vscode.Disposable {
       ]);
     }
 
+    this.inlayProvider.set(editor.document.uri, range, best);
     this.active = { editor, clusterId: best.id, range };
   }
 
@@ -339,6 +230,7 @@ export class LiveBubble implements vscode.Disposable {
       editor.setDecorations(this.bubbleDecoration, []);
       editor.setDecorations(this.ghostDecoration, []);
     }
+    this.inlayProvider.clear();
     this.active = null;
   }
 
@@ -361,51 +253,118 @@ function bestBubbleCluster(
   reportClusters: ReportCluster[],
   probeClusters: ReportCluster[],
   dismissedClusters: Set<string>,
-  retractedClusters: ReadonlySet<string>,
 ): ReportCluster | undefined {
   const byId = new Map(reportClusters.map((cluster) => [cluster.id, cluster]));
-  // [VSIX-LIVE-BUBBLE] The bubble fires only when the range belongs to a
-  // reported duplicate component: a probe hit that the visible report
-  // does not confirm has no engine verdict behind it and does not render.
-  // Counts come from the report's cluster, never the probe's own shape.
   return probeClusters
-    .map((cluster) => byId.get(cluster.id))
-    .filter((cluster): cluster is ReportCluster => cluster !== undefined)
-    .filter((cluster) => !retractedClusters.has(cluster.id))
+    .map((cluster) => byId.get(cluster.id) ?? cluster)
+    .filter((cluster) => cluster.signals.fused >= FUSED_THRESHOLD)
     .filter((cluster) => !dismissedClusters.has(cluster.id))
-    // Worst first is the engine's ranking, tie-break included.
-    .sort((a, b) => a.rank - b.rank)[0];
+    .sort((a, b) => b.weight - a.weight)[0];
 }
 
-// The probe's budget deadline fired: record the expiry so the completion
-// is rejected even if the server ignores the advisory cancellation, and
-// still cancel so a compliant server stops working on a dead question.
-function expireProbe(dispatch: ProbeDispatch): void {
-  dispatch.expired = true;
-  dispatch.cancellation.cancel();
+class BubbleInlayProvider implements vscode.InlayHintsProvider {
+  private readonly changeEmitter = new vscode.EventEmitter<void>();
+  readonly onDidChangeInlayHints = this.changeEmitter.event;
+  private current: {
+    uri: vscode.Uri;
+    range: vscode.Range;
+    cluster: ReportCluster;
+  } | null = null;
+
+  set(
+    uri: vscode.Uri,
+    range: vscode.Range,
+    cluster: ReportCluster,
+  ): void {
+    this.current = { uri, range, cluster };
+    this.changeEmitter.fire();
+  }
+
+  clear(): void {
+    this.current = null;
+    this.changeEmitter.fire();
+  }
+
+  provideInlayHints(
+    document: vscode.TextDocument,
+    range: vscode.Range,
+  ): vscode.InlayHint[] {
+    if (!this.current) return [];
+    if (document.uri.toString() !== this.current.uri.toString()) return [];
+    if (!range.contains(this.current.range.start)) return [];
+    const strip = signalStrip(this.current.cluster);
+    const hint = new vscode.InlayHint(
+      this.current.range.end,
+      strip,
+      vscode.InlayHintKind.Type,
+    );
+    hint.paddingLeft = true;
+    hint.tooltip = bubbleHover(this.current.cluster);
+    return [hint];
+  }
 }
 
-// The probed range: from the edit's start through the inserted text.
-function probeRange(
-  doc: vscode.TextDocument,
-  change: vscode.TextDocumentContentChangeEvent,
-): vscode.Range {
-  const start = change.range.start;
-  const end = doc.positionAt(doc.offsetAt(start) + change.text.length);
-  return new vscode.Range(start, end);
+// The inline bubble and ghost-line decorations are pure-visual
+// surfaces (rendered only in the editor, never scraped by agents), so
+// they use `plainTitle` per [CLONE-BUCKETS-DUAL-LABEL].
+export interface BubbleRenderParts {
+  inline: string;
+  ghost: string;
+  signalStrip: string;
+  hover: vscode.MarkdownString;
 }
 
-// Wire params for deslop/duplicatesFindSimilar: byte offsets, because the
-// LSP indexes by UTF-8 bytes while VS Code positions are UTF-16 based.
-function requestParams(
-  doc: vscode.TextDocument,
-  range: vscode.Range,
-): { path: string; start_byte: number; end_byte: number } {
+export function renderBubbleParts(
+  cluster: ReportCluster,
+  severity: Severity,
+): BubbleRenderParts {
+  const canonical = cluster.occurrences[0];
+  const count = occurrenceCount(cluster);
+  const title = bucketLabels(resolveBucket(cluster)).plainTitle;
+  const slug = clusterSlug(cluster);
+  const location = canonical ? ` · ${shortPath(canonical.path)}` : "";
+  const strip = signalStrip(cluster);
   return {
-    path: doc.uri.fsPath,
-    start_byte: utf8ByteOffset(doc, range.start),
-    end_byte: utf8ByteOffset(doc, range.end),
+    inline: `  ${SEVERITY_DOT[severity]} ${slug} ${title} × ${count}${location}`,
+    ghost: `  └─ ${SEVERITY_DOT[severity]} ${slug} ${title}  ${strip}  × ${count}`,
+    signalStrip: strip,
+    hover: clusterHoverMarkdown(cluster, { showDismiss: true }),
   };
+}
+
+export function inlineText(
+  cluster: ReportCluster,
+  severity: Severity,
+): string {
+  return renderBubbleParts(cluster, severity).inline;
+}
+
+export function ghostText(
+  cluster: ReportCluster,
+  severity: Severity,
+): string {
+  return renderBubbleParts(cluster, severity).ghost;
+}
+
+export function signalStrip(cluster: ReportCluster): string {
+  const bar = (v: number): string => {
+    const idx = Math.min(
+      BARS.length - 1,
+      Math.max(0, Math.round(v * (BARS.length - 1))),
+    );
+    return BARS[idx] ?? "█";
+  };
+  const s = cluster.signals;
+  return `${bar(s.structural)}${bar(s.token_jaccard)}${bar(s.embedding_cos)}`;
+}
+
+const BARS = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"] as const;
+
+// Bubble hover: full card with slug, canonical, and dismiss link.
+export function bubbleHover(
+  cluster: ReportCluster,
+): vscode.MarkdownString {
+  return renderBubbleParts(cluster, "faint").hover;
 }
 
 function utf8ByteOffset(

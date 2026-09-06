@@ -24,6 +24,7 @@ use deslop_core::{
     EmbeddingProvider,
 };
 
+mod common;
 use crate::common::copy_fixture;
 
 #[test]

@@ -58,7 +58,7 @@ pub(crate) fn synthetic_merge_plan(
         )
         .context("file root")?;
     let parser = refactor::parser_for_path(&absolute).context("parser")?;
-    merge::compute_merge_plan(&cluster, &source, &file_root, &absolute, parser.as_ref())
+    merge::compute_merge_plan(&cluster, &source, file_root, &absolute, parser.as_ref())
         .map_err(|error| anyhow!("merge failed: {error}"))
 }
 
@@ -116,7 +116,7 @@ pub(crate) fn merge_plans_under(root: &Path, file_name: &str) -> Result<Vec<Merg
         .clusters
         .iter()
         .map(|cluster| {
-            merge::compute_merge_plan(cluster, &source, &file_root, &absolute, parser.as_ref())
+            merge::compute_merge_plan(cluster, &source, file_root, &absolute, parser.as_ref())
                 .map_err(|error| anyhow!("merge plan failed: {error}"))
         })
         .collect()
@@ -147,7 +147,7 @@ pub(crate) fn assert_all_refused_with(
 ) -> Result<()> {
     let plans = merge_plans(fixture_name, file_name)?;
     ensure!(!plans.is_empty(), "{fixture_name} produces clusters");
-    let mut reasons = Vec::new();
+    let mut matched = false;
     for plan in plans {
         let MergeVerdict::AiOrHuman { reason } = plan.verdict else {
             return Err(anyhow!(
@@ -155,13 +155,9 @@ pub(crate) fn assert_all_refused_with(
                 plan.cluster_id
             ));
         };
-        reasons.push(format!("{}: {reason}", plan.cluster_id));
+        matched = matched || reason.contains(needle);
     }
-    ensure!(
-        reasons.iter().any(|reason| reason.contains(needle)),
-        "{fixture_name}: some refusal names `{needle}`; actual refusals:\n{}",
-        reasons.join("\n")
-    );
+    ensure!(matched, "{fixture_name}: some refusal names `{needle}`");
     Ok(())
 }
 

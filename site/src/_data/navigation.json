@@ -11,49 +11,14 @@
       "url": "/blog/"
     },
     {
+      "text": "Releases",
+      "i18nKey": "nav.releases",
+      "url": "/releases/"
+    },
+    {
       "text": "GitHub",
       "url": "https://github.com/Nimblesite/Deslop",
       "external": true
-    }
-  ],
-  "docsGroups": [
-    {
-      "id": "start",
-      "i18nKey": "docsNav.start"
-    },
-    {
-      "id": "guides",
-      "i18nKey": "docsNav.guides"
-    },
-    {
-      "id": "reference",
-      "i18nKey": "docsNav.reference"
-    },
-    {
-      "id": "trust",
-      "i18nKey": "docsNav.trust"
-    }
-  ],
-  "docsExtras": [
-    {
-      "group": "reference",
-      "i18nKey": "nav.releases",
-      "url": "/releases/",
-      "icon": "new_releases"
-    },
-    {
-      "group": "trust",
-      "i18nKey": "docsNav.interactiveGraph",
-      "url": "/issues/",
-      "icon": "hub",
-      "noLangPrefix": true
-    },
-    {
-      "group": "trust",
-      "i18nKey": "docsNav.issuePlanner",
-      "url": "/issues/planner/",
-      "icon": "view_timeline",
-      "noLangPrefix": true
     }
   ],
   "footer": [
@@ -105,18 +70,6 @@
           "text": "Releases",
           "i18nKey": "footer.releases",
           "url": "/releases/"
-        },
-        {
-          "text": "Issue graph",
-          "i18nKey": "docsNav.interactiveGraph",
-          "url": "/issues/",
-          "noLangPrefix": true
-        },
-        {
-          "text": "Issue planner",
-          "i18nKey": "docsNav.issuePlanner",
-          "url": "/issues/planner/",
-          "noLangPrefix": true
         }
       ]
     },

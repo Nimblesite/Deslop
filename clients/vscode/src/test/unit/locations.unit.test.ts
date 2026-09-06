@@ -12,16 +12,18 @@ import {
 } from "../../locations";
 import { Report, ReportCluster } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
-import { occurrence, wireCluster } from "../cluster.helpers";
 
 suite("occurrence display locations", () => {
   test("projects a byte offset to one-indexed line and column", () => {
     const fixture = writeFixture();
     try {
       const startByte = fixture.source.indexOf("void Send");
-      const location = occurrenceDisplayLocation(
-        occurrence(fixture.file, startByte, startByte + "void Send".length),
-      );
+      const location = occurrenceDisplayLocation({
+        path: fixture.file,
+        start_byte: startByte,
+        end_byte: startByte + "void Send".length,
+        hidden: false,
+      });
       assert.deepEqual(location, {
         line: 4,
         column: 5,
@@ -57,9 +59,12 @@ suite("occurrence display locations", () => {
     const fixture = writeFixture();
     try {
       // Byte 7 lands at 'D' of 'Demo' on line 1 ('namespace Demo;').
-      const location = occurrenceDisplayLocation(
-        occurrence(fixture.file, 7, 11),
-      );
+      const location = occurrenceDisplayLocation({
+        path: fixture.file,
+        start_byte: 7,
+        end_byte: 11,
+        hidden: false,
+      });
       assert.equal(location?.line, 1, "first line must be line 1");
       assert.equal(location?.column, 8, "column is one-indexed past the prefix");
     } finally {
@@ -70,10 +75,12 @@ suite("occurrence display locations", () => {
   test("missing source file produces no display location", () => {
     // Covers the `readFileSync` catch → return undefined branch and
     // therefore the early-return in occurrenceDisplayLocation.
-    const location = occurrenceDisplayLocation({path: "/definitely/not/a/real/path/XYZ.cs",
+    const location = occurrenceDisplayLocation({
+      path: "/definitely/not/a/real/path/XYZ.cs",
       start_byte: 0,
       end_byte: 1,
-      hidden: false, start_line: 1, end_line: 2});
+      hidden: false,
+    });
     assert.equal(location, undefined);
   });
 
@@ -89,15 +96,15 @@ suite("occurrence display locations", () => {
     const shared = cluster(file, startByte);
     // Two occurrences in the SAME file — the old shape read it twice.
     shared.occurrences = [
-      occurrence(file, startByte, startByte + 4),
-      occurrence(file, startByte + 5, startByte + 9),
+      { path: file, start_byte: startByte, end_byte: startByte + 4, hidden: false },
+      { path: file, start_byte: startByte + 5, end_byte: startByte + 9, hidden: false },
     ];
 
     const enriched = reportWithDisplayLocations(report([shared]), reader);
     const occurrences = enriched.clusters[0]?.occurrences ?? [];
     assert.equal(occurrences.length, 2, "both occurrences survive the enrichment pass");
     assert.ok(
-      occurrences.every((item) => item.displayLocation?.label.startsWith(file)),
+      occurrences.every((occurrence) => occurrence.displayLocation?.label.startsWith(file)),
       "every occurrence in the shared file is enriched with a display location",
     );
     assert.equal(reads.get(file), 1, "the shared source file is read exactly once for the whole pass");
@@ -113,12 +120,19 @@ function writeFixture(): { dir: string; file: string; source: string } {
 }
 
 function cluster(file: string, startByte: number): ReportCluster {
-  return wireCluster({
+  return {
     id: "issue-8",
-    mass: 1,
+    weight: 1,
+    size: 1,
     canonical_node_count: 1,
-    occurrences: [occurrence(file, startByte, startByte + 9)],
-  });
+    bucket: "identical",
+    signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
+    occurrences: [{ path: file, start_byte: startByte, end_byte: startByte + 9, hidden: false }],
+    occurrences_total: 0,
+    occurrences_truncated: false,
+    summary: "",
+    interpretation: "",
+  };
 }
 
 function report(clusters: ReportCluster[]): Report {

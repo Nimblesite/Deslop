@@ -19,16 +19,16 @@
 //! 1.0 by definition, so any `identical` cluster reporting `< 0.9` is the
 //! GH #232 regression.
 
-use std::path::{Path, PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::scan_dir::run_report_min_nodes;
-use crate::common::{
-    occurrence_texts,
-    signals::{assert_no_pair_surface_on_cluster, assert_structural_only_contract},
-};
+mod common;
+use crate::common::deslop_cmd;
 
 fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -37,45 +37,73 @@ fn fixture(name: &str) -> PathBuf {
         .join(name)
 }
 
+fn run_report(scan_root: &Path) -> Result<Value> {
+    let tmp = tempfile::tempdir()?;
+    let output = tmp.path().join("report");
+    let _assertion = deslop_cmd(scan_root, &output)?
+        .args(["--min-nodes", "30", "--embeddings", "off"])
+        .assert()
+        .success();
+    let body = fs::read_to_string(output.with_extension("json"))?;
+    Ok(serde_json::from_str(&body)?)
+}
+
+fn cluster_bucket(cluster: &Value) -> &str {
+    cluster.get("bucket").and_then(Value::as_str).unwrap_or("?")
+}
+
+fn signal(cluster: &Value, key: &str) -> f64 {
+    cluster
+        .pointer(&format!("/signals/{key}"))
+        .and_then(Value::as_f64)
+        .unwrap_or_default()
+}
+
 #[test]
-fn byte_identical_clones_are_byte_proven_from_the_fixture() -> Result<()> {
+fn identical_bucket_byte_clones_report_token_jaccard_near_one() -> Result<()> {
     let scan_root = fixture("rust-issue-232-token-jaccard");
-    let report = run_report_min_nodes(&scan_root, "30")?;
+    let report = run_report(&scan_root)?;
     let clusters = report
         .get("clusters")
         .and_then(Value::as_array)
-        .ok_or_else(|| anyhow::anyhow!("report missing clusters: {report:#}"))?;
+        .cloned()
+        .unwrap_or_default();
+
+    let identical: Vec<&Value> = clusters
+        .iter()
+        .filter(|cluster| cluster_bucket(cluster) == "identical")
+        .collect();
     assert!(
-        !clusters.is_empty(),
-        "fixture must produce the byte-identical clone so the byte-proven \
-         fact is exercised: {report:#}"
+        !identical.is_empty(),
+        "fixture must produce the byte-identical clone in the `identical` \
+         bucket so the token_jaccard signal is exercised: {report:#}"
     );
-    // #232 acceptance on the mass-only wire: the sibling-window clone is
-    // reported (admission) and the byte-identical `render_header` +
-    // `render_footer` block is *inside* both reported occurrences — the
-    // byte truth that the window token-Jaccard used to proxy. The
-    // published view may be the wider near-miss that legitimately
-    // subsumes it ([PIPELINE-CLUSTER-SUBSUME]), so the pin is the block
-    // appearing verbatim in both reported slices, not a byte-proven
-    // *cluster* of its own.
+
+    let zeroed: Vec<String> = identical
+        .iter()
+        .filter(|cluster| signal(cluster, "token_jaccard") < 0.9)
+        .map(|cluster| {
+            format!(
+                "cluster {id} bucket=identical signals={{structural={s:.2}, \
+                 token_jaccard={t:.2}, embedding_cos={e:.2}}} \
+                 canonical_node_count={nodes}",
+                id = cluster.get("id").and_then(Value::as_str).unwrap_or("?"),
+                s = signal(cluster, "structural"),
+                t = signal(cluster, "token_jaccard"),
+                e = signal(cluster, "embedding_cos"),
+                nodes = cluster
+                    .get("canonical_node_count")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0),
+            )
+        })
+        .collect();
     assert!(
-        clusters.len() == 1,
-        "the fixture must report exactly one cluster (the whole-file \
-         near-miss subsumes the nested render window): {report:#}"
+        zeroed.is_empty(),
+        "issue #232: byte-identical (`identical`-bucket) clones must report \
+         token_jaccard ≈ 1.0, not the 0.0 sibling-window fallback. The \
+         Jaccard of two identical token multisets is 1.0 by definition. \
+         Offending clusters: {zeroed:#?}"
     );
-    for cluster in clusters {
-        assert_structural_only_contract(cluster, "rust-issue-232");
-        assert_no_pair_surface_on_cluster(cluster, "rust-issue-232");
-        let texts = occurrence_texts(&scan_root, cluster)?;
-        let both_carry_block = texts.len() >= 2
-            && texts
-                .iter()
-                .all(|text| text.contains("render_header") && text.contains("render_footer"));
-        assert!(
-            both_carry_block,
-            "both reported occurrences must carry the byte-identical \
-             render_header + render_footer block: {texts:#?}"
-        );
-    }
     Ok(())
 }

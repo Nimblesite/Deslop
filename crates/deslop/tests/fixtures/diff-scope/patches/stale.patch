@@ -1,9 +1,0 @@
-diff --git a/repo/src/caller.rs b/repo/src/caller.rs
-index 1111111..2222222 100644
---- a/repo/src/caller.rs
-+++ b/repo/src/caller.rs
-@@ -5,3 +5,4 @@ pub fn existing_entry(values: &[i64]) -> i64 {
-     }
-     total + 1
- }
-+// trailing comment the tree never gained

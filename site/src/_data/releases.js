@@ -1,16 +1,3 @@
-// `pin` below is the version every documented `uses:` pin and `version:` input
-// renders. It is held nowhere in git: the site is rebuilt and deployed after the
-// GitHub release exists, so resolving it here is what makes a committed pin
-// structurally unable to go stale. When the API is unreachable — an offline
-// build, a rate limit — it degrades to the same substitute-your-own token the
-// README shows, never to a broken `@v` with no version after it.
-//
-// `default` must stay this file's ONLY export. Eleventy hands templates the
-// module namespace of a `_data` file that exports anything else, never calling
-// the function, which blanks every `{{ releases.* }}` on the site silently and
-// at exit 0. Pinned by `test-action-contract.mjs`. [ACTION-VERSION-DOCS]
-import { PIN_PLACEHOLDER } from "../../../scripts/release/stamp-release-version.mjs";
-
 const RELEASES_URL = "https://github.com/Nimblesite/Deslop/releases";
 const LATEST_RELEASE_URL = `${RELEASES_URL}/latest`;
 const API_URL = "https://api.github.com/repos/Nimblesite/Deslop/releases?per_page=12";
@@ -50,7 +37,6 @@ const payload = (items, error = null) => {
   return {
     allUrl: RELEASES_URL,
     latestUrl: LATEST_RELEASE_URL,
-    pin: latest ? latest.version : PIN_PLACEHOLDER,
     generatedAt,
     generatedAtIso: generatedAt.toISOString(),
     latest,

@@ -1,5 +1,5 @@
 //! Discovery route is telemetry, never evidence
-//! ([FUSED-PAIR-SIGNALS], GH #351).
+//! ([FUSION-CLUSTER-SIGNALS], GH #351).
 //!
 //! A measured cosine belongs to the pair, not to the pass that surfaced
 //! it. `add_embedding_pair` used to discard `pair.cosine` whenever the
@@ -18,26 +18,16 @@
 //! their body by definition, so the more perfect the duplicate, the more
 //! certainly its embedding evidence was destroyed.
 
-use crate::mock_ollama::MockOllama;
+#[path = "cli/mock_ollama.rs"]
+mod mock_ollama;
+
+mod common;
+
 use anyhow::Result;
+use mock_ollama::MockOllama;
 use serde_json::Value;
 
-use crate::common::{
-    embeddings::{mock_embedding_run, run_mock_embedding_report},
-    signals::{
-        assert_no_pair_surface_on_cluster, assert_pair_metric, assert_structural_only_contract,
-        compare_pair_with_embeddings, has_verbatim_pair, occurrence_for_file,
-    },
-    *,
-};
-
-const MIN_NODES: u32 = 8;
-const MIN_NODES_ARG: &str = "8";
-const EXACT_SCORE: f64 = 1.0;
-const MISSING_SCORE: f64 = 0.0;
-const LEFT_FILE: &str = "Alpha.cs";
-const RIGHT_FILE: &str = "Beta.cs";
-const EXACT_COPY_FILE: &str = "AlphaCopy.cs";
+use crate::common::{embeddings::run_mock_embedding_report, *};
 
 /// Scans `csharp-small` with the deterministic mock embedder wired in at
 /// the given `min_nodes`, so the same corpus can be reached through
@@ -49,32 +39,44 @@ fn run_with_embeddings(server: &MockOllama, min_nodes: &str) -> Result<Value> {
     run_mock_embedding_report(workspace.path(), &output, min_nodes, server.endpoint())
 }
 
-// A pair the structural pass already holds must still be admitted when no
-// embedding vector is available for that exact pair. The canonical
-// enclosing views differ by class name, but their normalised structure and
-// consistent rename evidence independently meet pair admission.
+/// Highest cosine rendered on any visible cluster.
+fn peak_embedding_cos(report: &Value) -> f64 {
+    clusters(report)
+        .iter()
+        .map(|cluster| signal(cluster, "embedding_cos"))
+        .fold(0.0_f64, f64::max)
+}
+
+// A pair the structural pass already holds must still render the cosine
+// the embedding pass measured for it. Rendering 0.0 for a pair the
+// provider scored is the report asserting a measurement that never
+// happened.
 #[test]
-fn a_structurally_discovered_pair_does_not_require_an_embedding() -> Result<()> {
+fn a_structurally_discovered_pair_still_renders_its_measured_cosine() -> Result<()> {
     let server = MockOllama::spawn()?;
-    let (workspace, report) = mock_embedding_run(&server, "csharp-small", MIN_NODES_ARG)?;
-    let cluster = expect_cluster_spanning(&report, &[LEFT_FILE, RIGHT_FILE])?;
-    assert_structural_only_contract(cluster, "structurally discovered Type-2 pair");
-    assert_no_pair_surface_on_cluster(cluster, "structurally discovered Type-2 pair");
-    let comparison = compare_pair_with_embeddings(
-        workspace.path(),
-        MIN_NODES,
-        occurrence_for_file(cluster, LEFT_FILE)?,
-        occurrence_for_file(cluster, RIGHT_FILE)?,
-    )?;
-    assert_pair_metric(
-        comparison.evidence.embedding_cos,
-        MISSING_SCORE,
-        "the optional embedding axis is absent for this explicit pair",
-    );
+    let report = run_with_embeddings(&server, "8")?;
     assert!(
-        comparison.evidence.admitted,
-        "the explicit pair must remain admitted: {comparison:#?}"
+        cluster_count(&report) > 0,
+        "the fixture must produce at least one visible cluster: {report:#}"
     );
+    let structural_clusters: Vec<&Value> = clusters(&report)
+        .iter()
+        .filter(|cluster| signal(cluster, "structural") > 0.99)
+        .collect();
+    assert!(
+        !structural_clusters.is_empty(),
+        "the fixture must produce a structurally-proven cluster, or this test \
+         cannot observe the discard: {report:#}"
+    );
+    for cluster in structural_clusters {
+        assert!(
+            signal(cluster, "embedding_cos") > 0.0,
+            "cluster {id} was proven structurally and measured by the provider, \
+             yet renders embedding_cos = 0 — the pass that found it first \
+             decided what the user sees: {report:#}",
+            id = cluster_id(cluster),
+        );
+    }
     Ok(())
 }
 
@@ -92,8 +94,9 @@ fn changing_the_discovery_route_never_erases_the_embedding_axis() -> Result<()> 
             "{label}: the fixture must stay visible at both thresholds: {report:#}"
         );
         assert!(
-            cluster_count(report) > 0,
-            "{label}: the fixture must stay visible at both thresholds: {report:#}"
+            peak_embedding_cos(report) > 0.0,
+            "{label}: every visible cluster renders embedding_cos = 0, so the \
+             measured evidence was dropped on this route: {report:#}"
         );
     }
     assert_eq!(
@@ -105,41 +108,23 @@ fn changing_the_discovery_route_never_erases_the_embedding_axis() -> Result<()> 
     Ok(())
 }
 
-// Embedding evidence must survive content-hash deduplication. The exact
-// copy shares the source body with `Alpha`, so its vector is deduplicated
-// at provider dispatch but must fan back out to both explicit endpoints.
+// Embedding evidence must survive content-hash deduplication. Two
+// byte-identical bodies share one provider request by design; the result
+// has to fan back out to every fingerprint in the group, or the most
+// perfect duplicates are exactly the ones rendered as unmeasured.
 #[test]
-fn byte_identical_bodies_each_retain_their_measured_embedding() -> Result<()> {
+fn byte_identical_bodies_each_receive_the_shared_vector() -> Result<()> {
     let server = MockOllama::spawn()?;
-    let workspace = tempfile::tempdir()?;
-    seed(&fixture("csharp-small"), workspace.path())?;
-    let _copied = std::fs::copy(
-        workspace.path().join(LEFT_FILE),
-        workspace.path().join(EXACT_COPY_FILE),
-    )?;
-    let output = workspace.path().join("report");
-    let report =
-        run_mock_embedding_report(workspace.path(), &output, MIN_NODES_ARG, server.endpoint())?;
-    let cluster = expect_cluster_spanning(&report, &[LEFT_FILE, EXACT_COPY_FILE])?;
-    assert!(
-        has_verbatim_pair(workspace.path(), cluster)?,
-        "the copied file must preserve an exact pair: {cluster:#}"
+    let report = run_with_embeddings(&server, "8")?;
+    let measured = clusters(&report)
+        .iter()
+        .filter(|cluster| signal(cluster, "embedding_cos") > 0.0)
+        .count();
+    assert_eq!(
+        measured,
+        cluster_count(&report),
+        "every visible cluster was submitted to the provider, so every one must \
+         carry a measured cosine: {report:#}"
     );
-    let comparison = compare_pair_with_embeddings(
-        workspace.path(),
-        MIN_NODES,
-        occurrence_for_file(cluster, LEFT_FILE)?,
-        occurrence_for_file(cluster, EXACT_COPY_FILE)?,
-    )?;
-    assert_pair_metric(
-        comparison.evidence.embedding_cos,
-        EXACT_SCORE,
-        "identical endpoints retain their deduplicated embedding",
-    );
-    assert!(
-        comparison.evidence.admitted,
-        "the exact pair must remain admitted: {comparison:#?}"
-    );
-    assert_no_pair_surface_on_cluster(cluster, "deduplicated exact pair");
     Ok(())
 }

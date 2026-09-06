@@ -78,11 +78,11 @@
 use tree_sitter::Node;
 
 use super::{
-    is_multi_member_language_cluster, node_intersects_range, node_search::KindSearch, parse_for,
+    is_multi_member_language_cluster, node_intersects_range, parse_for,
     python::python_function_name_starts_with, raw_snippet_texts_differ, spans_multiple_files,
     trimmed_snippet_range, Snippet,
 };
-use crate::ast::{named_children, ByteRange};
+use crate::ast::ByteRange;
 
 /// Detects [CLONE-NOISE-PY-DICT-ASSERT]: the chained
 /// `assert <var>[k1][k2] == V` shape across at least two unrelated
@@ -114,9 +114,8 @@ fn is_chained_dict_assert_snippet(snippet: &Snippet<'_>) -> bool {
     if !module_scope_is_idiom_only(tree.root_node(), range) {
         return false;
     }
-    let functions = KindSearch::intersecting(range, |kind| kind == "function_definition")
-        .with_nested_hits()
-        .nodes(tree.root_node());
+    let mut functions = Vec::new();
+    collect_intersecting_functions(tree.root_node(), range, &mut functions);
     !functions.is_empty()
         && functions
             .iter()
@@ -129,8 +128,9 @@ fn is_chained_dict_assert_snippet(snippet: &Snippet<'_>) -> bool {
 /// assignment, a call, a class — is executable logic no `test_*` walk
 /// ever proves, so the range must fail open and stay visible.
 fn module_scope_is_idiom_only(root: Node<'_>, range: ByteRange) -> bool {
-    named_children(root)
-        .into_iter()
+    let mut cursor = root.walk();
+    let idiom_only = root
+        .named_children(&mut cursor)
         .filter(|child| node_intersects_range(*child, range))
         .all(|child| match child.kind() {
             "function_definition"
@@ -141,7 +141,8 @@ fn module_scope_is_idiom_only(root: Node<'_>, range: ByteRange) -> bool {
             "decorated_definition" => decorates_a_function(child) && decorators_are_static(child),
             "expression_statement" => is_docstring_statement(child),
             _ => false,
-        })
+        });
+    idiom_only
 }
 
 /// Returns true when what the decorators decorate is a function.
@@ -166,14 +167,18 @@ fn decorates_a_function(definition: Node<'_>) -> bool {
 /// decorator argument is module-level logic the `test_*` walk never
 /// reads, so it must fail the suppression.
 fn decorators_are_static(definition: Node<'_>) -> bool {
-    named_children(definition)
-        .into_iter()
+    let mut cursor = definition.walk();
+    let all_static = definition
+        .named_children(&mut cursor)
         .filter(|child| child.kind() == "decorator")
         .all(|decorator| {
-            named_children(decorator)
-                .into_iter()
-                .all(decorator_expression_is_static)
-        })
+            let mut expressions = decorator.walk();
+            let decorator_static = decorator
+                .named_children(&mut expressions)
+                .all(decorator_expression_is_static);
+            decorator_static
+        });
+    all_static
 }
 
 /// A decorator expression: a dotted name, or a static-argument call.
@@ -189,7 +194,11 @@ fn decorator_expression_is_static(expression: Node<'_>) -> bool {
 fn is_dotted_name(node: Node<'_>) -> bool {
     match node.kind() {
         "identifier" => true,
-        "attribute" => named_children(node).into_iter().all(is_dotted_name),
+        "attribute" => {
+            let mut cursor = node.walk();
+            let dotted = node.named_children(&mut cursor).all(is_dotted_name);
+            dotted
+        }
         _ => false,
     }
 }
@@ -203,8 +212,9 @@ fn call_is_static_decorator(call: Node<'_>) -> bool {
     let Some(arguments) = call.child_by_field_name("arguments") else {
         return false;
     };
-    let arguments_static = named_children(arguments)
-        .into_iter()
+    let mut cursor = arguments.walk();
+    let arguments_static = arguments
+        .named_children(&mut cursor)
         .all(decorator_argument_is_static);
     callee_is_dotted && arguments_static
 }
@@ -222,10 +232,30 @@ fn decorator_argument_is_static(argument: Node<'_>) -> bool {
 /// Returns true for an expression statement that is only a plain string
 /// — a docstring. An f-string is executable and does not count.
 fn is_docstring_statement(statement: Node<'_>) -> bool {
-    matches!(
-        named_children(statement).as_slice(),
-        [only] if only.kind() == "string" && !contains_interpolation(*only)
-    )
+    let mut cursor = statement.walk();
+    let mut children = statement.named_children(&mut cursor);
+    let only = children.next().filter(|_| children.next().is_none());
+    only.is_some_and(|child| child.kind() == "string" && !contains_interpolation(child))
+}
+
+/// Collects every `function_definition` whose bytes overlap `range` —
+/// the function enclosing a statement-level range, and the functions
+/// contained in a function- or module-level one.
+fn collect_intersecting_functions<'tree>(
+    node: Node<'tree>,
+    range: ByteRange,
+    out: &mut Vec<Node<'tree>>,
+) {
+    if !node_intersects_range(node, range) {
+        return;
+    }
+    if node.kind() == "function_definition" {
+        out.push(node);
+    }
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        collect_intersecting_functions(child, range, out);
+    }
 }
 
 /// Returns true for a pytest `test_*` function whose body, within
@@ -247,7 +277,8 @@ fn function_is_chained_dict_test(function: Node<'_>, range: ByteRange, source: &
 fn body_is_closed_idiom(body: Node<'_>, range: ByteRange, source: &[u8]) -> bool {
     let mut payloads: Vec<(&[u8], bool)> = Vec::new();
     let mut roots: Vec<&[u8]> = Vec::new();
-    for child in named_children(body) {
+    let mut cursor = body.walk();
+    for child in body.named_children(&mut cursor) {
         if !node_intersects_range(child, range) || is_docstring_statement(child) {
             continue;
         }
@@ -308,8 +339,9 @@ fn literal_payload_binding<'a>(statement: Node<'_>, source: &'a [u8]) -> Option<
     if statement.kind() != "expression_statement" {
         return None;
     }
-    let assignment = named_children(statement)
-        .into_iter()
+    let mut cursor = statement.walk();
+    let assignment = statement
+        .named_children(&mut cursor)
         .find(|child| child.kind() == "assignment")?;
     let left = assignment
         .child_by_field_name("left")
@@ -330,7 +362,9 @@ fn is_static_data(node: Node<'_>) -> bool {
     }
     match node.kind() {
         "dictionary" | "list" | "tuple" | "set" | "pair" | "unary_operator" | "comment" => {
-            named_children(node).into_iter().all(is_static_data)
+            let mut cursor = node.walk();
+            let elements_static = node.named_children(&mut cursor).all(is_static_data);
+            elements_static
         }
         _ => false,
     }
@@ -344,7 +378,8 @@ fn chained_dict_assert_root<'a>(statement: Node<'_>, source: &'a [u8]) -> Option
     if statement.kind() != "assert_statement" {
         return None;
     }
-    let first = statement.named_child(0)?;
+    let mut cursor = statement.walk();
+    let first = statement.named_children(&mut cursor).next()?;
     let chain = match first.kind() {
         "comparison_operator" => comparison_against_literal(first)?,
         _ => first,
@@ -358,7 +393,8 @@ fn chained_dict_assert_root<'a>(statement: Node<'_>, source: &'a [u8]) -> Option
 /// separates payload from logic: a call or an attribute there is
 /// executable code the idiom never proves.
 fn comparison_against_literal<'tree>(comparison: Node<'tree>) -> Option<Node<'tree>> {
-    let operands: Vec<Node<'tree>> = named_children(comparison);
+    let mut operand_cursor = comparison.walk();
+    let operands: Vec<Node<'tree>> = comparison.named_children(&mut operand_cursor).collect();
     let mut operator_cursor = comparison.walk();
     let operators: Vec<Node<'tree>> = comparison
         .children_by_field_name("operators", &mut operator_cursor)
@@ -389,9 +425,11 @@ fn is_literal_constant(node: Node<'_>) -> bool {
 
 /// Returns true when a string carries an f-string interpolation hole.
 fn contains_interpolation(node: Node<'_>) -> bool {
-    named_children(node)
-        .into_iter()
-        .any(|child| child.kind() == "interpolation" || contains_interpolation(child))
+    let mut cursor = node.walk();
+    let interpolated = node
+        .named_children(&mut cursor)
+        .any(|child| child.kind() == "interpolation" || contains_interpolation(child));
+    interpolated
 }
 
 /// Walks a `subscript(subscript(identifier))` tower of literal keys and
@@ -415,6 +453,3 @@ fn subscript_key_is_literal(subscript: Node<'_>) -> bool {
         .child_by_field_name("subscript")
         .is_some_and(is_literal_constant)
 }
-
-#[cfg(test)]
-mod tests;

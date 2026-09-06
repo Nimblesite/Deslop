@@ -11,7 +11,7 @@
 //! 2. **`tools/call` results are capped at 200 KB.** The dispatcher
 //!    walks any oversize payload, drops clusters from the tail of
 //!    the inner array, and stamps the response with `truncated:
-//!    true` plus a pointer to the paginated `duplicates` tool.
+//!    true` plus a pointer to the paginated `report-get` tool.
 //!
 //! Both layers are exercised here against the live LSP→MCP IPC
 //! chain — the same wire contract Codex sees in production.
@@ -23,7 +23,7 @@ use std::{fs, path::Path};
 use anyhow::{anyhow, ensure, Result};
 use serde_json::{json, Value};
 
-use crate::common;
+mod common;
 use common::{
     copied_fixture, initialized_mcp, lsp_workspace_with_socket, spawn_lsp_and_wait_for_socket,
     structured_content,
@@ -38,10 +38,6 @@ const TOOLS_LIST_MAX_BYTES: usize = 16 * 1024;
 /// Per-tool description budget. Enforced against the slimmed
 /// descriptions in `crates/deslop-mcp/src/tools/mod.rs`.
 const TOOL_DESCRIPTION_MAX_CHARS: usize = 200;
-
-/// The exact tool surface of the normative cutover ([MCP-TOOLS]):
-/// seven core analysis tools plus the merge-plan refactor tool.
-const EXPECTED_TOOL_COUNT: usize = 8;
 
 /// `tools/list` ships every description ≤200 chars and the full
 /// payload ≤16 KB ([MCP-RESULT-SIZE-CAP]).
@@ -76,8 +72,8 @@ fn assert_every_description_within_budget(response: &Value) -> Result<()> {
         .and_then(Value::as_array)
         .ok_or_else(|| anyhow!("tools/list must return result.tools array"))?;
     ensure!(
-        tools.len() == EXPECTED_TOOL_COUNT,
-        "issue #136 + [MCP-TOOLS]: the server ships exactly {EXPECTED_TOOL_COUNT} tools; tools/list returned {}",
+        tools.len() == 13,
+        "issue #136: deslop ships exactly 13 tools today; tools/list returned {}",
         tools.len()
     );
     for tool in tools {
@@ -109,10 +105,9 @@ fn check_one_description(tool: &Value) -> Result<()> {
     Ok(())
 }
 
-/// `find-similar`'s slimmed description still satisfies the
-/// prevention-first contract: it leads with the prevention call to
-/// action, names the mass-ranked product, and routes pair evidence to
-/// `compare-pair` ([MCP-TOOLS-FIND-SIMILAR]).
+/// `find-similar`'s slimmed description still satisfies the issue
+/// #113 prevention-first contract (`starts_with`, `PREVENT`,
+/// `reuse`, `avoid introducing new clones`).
 #[test]
 fn find_similar_description_still_leads_with_prevention() -> Result<()> {
     let (workspace, _lsp_guard, _socket) = lsp_workspace_with_socket()?;
@@ -121,16 +116,20 @@ fn find_similar_description_still_leads_with_prevention() -> Result<()> {
     let response = mcp.request("tools/list", &json!({}))?;
     let description = find_description(&response, "find-similar")?;
     ensure!(
-        description.starts_with("Call before writing code to prevent duplication"),
+        description.starts_with("Call BEFORE writing new code"),
         "issue #136: slim find-similar description must still lead with prevention: {description}"
     );
     ensure!(
-        description.contains("mass-ranked clusters"),
-        "issue #136: slim find-similar description must still name the mass-ranked product: {description}"
+        description.contains("PREVENT"),
+        "issue #136: slim find-similar description must still name PREVENT: {description}"
     );
     ensure!(
-        description.contains("compare-pair"),
-        "issue #136: slim find-similar description must route pair evidence to compare-pair: {description}"
+        description.contains("reuse"),
+        "issue #136: slim find-similar description must still point to reuse: {description}"
+    );
+    ensure!(
+        description.contains("avoid introducing new clones"),
+        "issue #136: slim find-similar description must keep the duplication-risk clause: {description}"
     );
     Ok(())
 }
@@ -148,26 +147,26 @@ fn find_description(response: &Value, tool_name: &str) -> Result<String> {
         .ok_or_else(|| anyhow!("tool {tool_name} missing description in tools/list"))
 }
 
-/// `duplicates` on a fabricated wide workspace MUST stay under
+/// `top-offenders` on a fabricated wide workspace MUST stay under
 /// the 200 KB cap. Inflates the fixture with enough clusters that
 /// a naive serialiser would breach the cap, then asserts the wire
 /// frame is bounded and carries the truncation marker if it tripped.
 #[test]
-fn duplicates_result_capped_at_two_hundred_kilobytes() -> Result<()> {
+fn top_offenders_result_capped_at_two_hundred_kilobytes() -> Result<()> {
     let workspace = copied_fixture()?;
     inflate_workspace_with_clones(workspace.path())?;
     let _lsp_guard = spawn_lsp_and_wait_for_socket(workspace.path())?;
     let mut mcp = initialized_mcp(workspace.path())?;
     let _rescan = mcp.request(
         "tools/call",
-        &json!({"name": "rescan", "arguments": {"offset": 0, "limit": 100, "max_occurrences": 5000}}),
+        &json!({"name": "rescan", "arguments": {"n": 100, "max_occurrences": 5000}}),
     )?;
 
     let response = mcp.request(
         "tools/call",
         &json!({
-            "name": "duplicates",
-            "arguments": {"offset": 0, "limit": 100, "max_occurrences": 5000}
+            "name": "top-offenders",
+            "arguments": {"n": 100, "max_occurrences": 5000}
         }),
     )?;
     let serialised = serde_json::to_vec(&response)?;
@@ -175,9 +174,9 @@ fn duplicates_result_capped_at_two_hundred_kilobytes() -> Result<()> {
     let cap = 200 * 1024;
     ensure!(
         size <= cap + 4096,
-        "issue #136: duplicates wire frame must stay within ~200 KB cap; got {size} bytes"
+        "issue #136: top-offenders wire frame must stay within ~200 KB cap; got {size} bytes"
     );
-    let structured = structured_content(&response, "duplicates")?;
+    let structured = structured_content(&response, "top-offenders")?;
     let truncated = structured
         .get("truncated")
         .and_then(Value::as_bool)
@@ -191,8 +190,7 @@ fn duplicates_result_capped_at_two_hundred_kilobytes() -> Result<()> {
 /// Asserts the truncated payload carries the documented marker
 /// fields (issue #136 contract — agents reading `truncated: true`
 /// must see a human-readable reason plus a pointer to the paginated
-/// tool, which is `duplicates` under the normative cutover
-/// [MCP-TOOLS]; pointing at a deleted tool strands the agent).
+/// tool).
 fn assert_truncation_marker(structured: &Value) -> Result<()> {
     let reason = structured
         .get("truncated_reason")
@@ -207,12 +205,8 @@ fn assert_truncation_marker(structured: &Value) -> Result<()> {
         .and_then(Value::as_str)
         .unwrap_or("");
     ensure!(
-        next_action.contains("duplicates"),
-        "next_action must point to the paginated duplicates tool: {next_action}"
-    );
-    ensure!(
-        !next_action.contains("report-get"),
-        "next_action must not point at the deleted report-get tool: {next_action}"
+        next_action.contains("report-get"),
+        "next_action must point to the paginated report-get tool: {next_action}"
     );
     let at_bytes = structured
         .get("truncated_at_bytes")
@@ -227,11 +221,11 @@ fn assert_truncation_marker(structured: &Value) -> Result<()> {
 
 /// Issue #286: `metrics.per_file` carries one row per analysed file. On
 /// a workspace with long paths that block alone outweighs the entire
-/// 200 KB tool-result budget, so every `duplicates` page overflowed
-/// before a single cluster was returned. It must be opt-in, and asking
-/// for it must never let the payload escape the cap: draining the
-/// cluster array used to be reported as a successful shrink, so an
-/// oversized result went out stamped `truncated: true`.
+/// 200 KB tool-result budget, so every `report-query` overflowed before
+/// a single cluster was returned. It must be opt-in, and asking for it
+/// must never let the payload escape the cap: draining the cluster array
+/// used to be reported as a successful shrink, so an oversized result
+/// went out stamped `truncated: true`.
 #[test]
 fn issue_286_report_query_stays_within_the_wire_cap() -> Result<()> {
     let workspace = copied_fixture()?;
@@ -241,9 +235,9 @@ fn issue_286_report_query_stays_within_the_wire_cap() -> Result<()> {
 
     let lean = mcp.request(
         "tools/call",
-        &json!({"name": "duplicates", "arguments": {"offset": 0, "limit": 0}}),
+        &json!({"name": "report-query", "arguments": {"offset": 0, "limit": 0}}),
     )?;
-    let structured = structured_content(&lean, "duplicates")?;
+    let structured = structured_content(&lean, "report-query")?;
     let per_file = structured
         .pointer("/metrics/per_file")
         .and_then(Value::as_array)
@@ -263,11 +257,11 @@ fn issue_286_report_query_stays_within_the_wire_cap() -> Result<()> {
     // report that shrink as a success and ship the oversized page.
     let fat = mcp.request(
         "tools/call",
-        &json!({"name": "duplicates", "arguments": {"offset": 0, "limit": 0, "include_per_file": true}}),
+        &json!({"name": "report-query", "arguments": {"offset": 0, "limit": 0, "include_per_file": true}}),
     )?;
     let payload = fat
         .pointer("/result/structuredContent")
-        .ok_or_else(|| anyhow!("duplicates returned no structuredContent: {fat}"))?;
+        .ok_or_else(|| anyhow!("report-query returned no structuredContent: {fat}"))?;
     let size = serde_json::to_vec(payload)?.len();
     ensure!(
         size <= 200 * 1024,

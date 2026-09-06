@@ -6,8 +6,6 @@
 
 use tree_sitter::Node;
 
-use crate::ast::named_children;
-
 use super::{
     node_intersects_range, parse_for, raw_snippet_texts_differ, trimmed_snippet_range, Snippet,
 };
@@ -50,8 +48,9 @@ fn covers_only_property_signatures(snippet: &Snippet<'_>) -> bool {
     let Some(body) = resolve_data_body(node) else {
         return false;
     };
+    let mut cursor = body.walk();
     let mut covered = 0_usize;
-    for member in named_children(body) {
+    for member in body.named_children(&mut cursor) {
         if !node_intersects_range(member, range) {
             continue;
         }
@@ -72,7 +71,8 @@ fn resolve_data_body(node: Node<'_>) -> Option<Node<'_>> {
     match node.kind() {
         "interface_body" | "object_type" => Some(node),
         "interface_declaration" | "type_alias_declaration" | "export_statement" => {
-            for child in named_children(node) {
+            let mut cursor = node.walk();
+            for child in node.named_children(&mut cursor) {
                 if let Some(body) = resolve_data_body(child) {
                     return Some(body);
                 }

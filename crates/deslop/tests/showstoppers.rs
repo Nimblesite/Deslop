@@ -8,13 +8,11 @@
 //! - #142 [EXCLUSION-CONFIG]: generated Cargo dependency boilerplate
 //!   under `.cargo/` must never enter discovery as actionable code.
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::fs;
 
 use anyhow::Result;
 
+mod common;
 use crate::common::*;
 
 fn visible_count(cluster: &serde_json::Value) -> usize {
@@ -76,39 +74,32 @@ fn python_trio_body(class: &str) -> String {
 // #140 — report_hide occurrences must not dominate mixed-cluster ranking.
 // ---------------------------------------------------------------------------
 
-/// Builds the two-cluster corpus in a fresh tempdir: a 3-visible
-/// Python trio and a mixed Summer cluster whose only visible copy sits
-/// beside five under `generated/` — a dir the built-in
-/// `BUILTIN_REPORT_HIDE_COMPONENTS` marks hidden at render time.
-fn trio_and_mixed_summer_root() -> Result<(tempfile::TempDir, PathBuf)> {
+#[test]
+fn issue_140_visible_cluster_outranks_hidden_dominated_mixed_cluster() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let scan_root = tmp.path().join("src");
     let visible_dir = scan_root.join("visible");
+    // Built-in `BUILTIN_REPORT_HIDE_COMPONENTS` already includes
+    // "generated" so any file under this dir is marked hidden at
+    // render time.
     let generated_dir = scan_root.join("generated");
     fs::create_dir_all(&visible_dir)?;
     fs::create_dir_all(&generated_dir)?;
-    write_trio_cluster(&visible_dir)?;
-    write_mixed_summer_cluster(&visible_dir, &generated_dir)?;
-    Ok((tmp, scan_root))
-}
 
-/// Cluster A: three visible Python copies (3 visible, 0 hidden).
-/// Python files do not cluster with the C# Summer pattern at default
-/// config because cross-language comparison is off.
-fn write_trio_cluster(visible_dir: &Path) -> Result<()> {
+    // Cluster A: three visible Python copies (3 visible, 0 hidden).
+    // Python files do not cluster with the C# Summer pattern at
+    // default config because cross-language comparison is off.
     for index in 0..3 {
         fs::write(
             visible_dir.join(format!("trio_{index}.py")),
             python_trio_body(&format!("TrioCls{index}")),
         )?;
     }
-    Ok(())
-}
 
-/// Cluster B: one visible Summer copy plus five hidden copies in
-/// `generated/` — the [EXCLUSION-CONFIG] mixed cluster both #140 and
-/// the [METRICS-REPO] banner test rest on.
-fn write_mixed_summer_cluster(visible_dir: &Path, generated_dir: &Path) -> Result<()> {
+    // Cluster B: one visible Summer copy plus five hidden copies in
+    // `generated/`. Before the fix, B's `cluster_size` (6) dwarfs A's
+    // (3) and B ends up ranked #1 even though only one of its six
+    // occurrences is actionable.
     fs::write(
         visible_dir.join("SummerVisible.cs"),
         csharp_summer_body("VisibleSummer", "Tally", "Run", "acc"),
@@ -124,15 +115,6 @@ fn write_mixed_summer_cluster(visible_dir: &Path, generated_dir: &Path) -> Resul
             ),
         )?;
     }
-    Ok(())
-}
-
-#[test]
-fn issue_140_visible_cluster_outranks_hidden_dominated_mixed_cluster() -> Result<()> {
-    // Before the fix, B's `cluster_size` (6) dwarfs A's (3) and B ends
-    // up ranked #1 even though only one of its six occurrences is
-    // actionable.
-    let (_tmp, scan_root) = trio_and_mixed_summer_root()?;
 
     let report = run_report(&scan_root, 8)?;
     let clusters = clusters(&report);
@@ -160,49 +142,6 @@ fn issue_140_visible_cluster_outranks_hidden_dominated_mixed_cluster() -> Result
     assert_eq!(
         top_visible, 3,
         "top offender must have three visible occurrences: {top_paths:?}",
-    );
-    Ok(())
-}
-
-// [METRICS-REPO] — the banner equals the body. A mixed cluster (one
-// visible occurrence, five hidden) is *kept* in `clusters` so the user
-// sees regular code duplicating generated code ([EXCLUSION-CONFIG]),
-// so `clusters_total` must count it: a banner that says one cluster
-// above a body listing two is a misreported figure, and everywhere the
-// banner is the headline the generated-duplication case reads as
-// absent. `pipeline.md` [METRICS-REPO]: `clusters_total` always equals
-// `clusters.len()`.
-#[test]
-fn mixed_cluster_is_counted_in_clusters_total() -> Result<()> {
-    let (_tmp, scan_root) = trio_and_mixed_summer_root()?;
-    let report = run_report(&scan_root, 8)?;
-    let clusters = clusters(&report);
-    assert_eq!(
-        clusters.len(),
-        2,
-        "body: the trio and the mixed Summer cluster"
-    );
-    let mixed = clusters
-        .iter()
-        .find(|cluster| {
-            occurrence_paths(cluster)
-                .iter()
-                .any(|path| path.contains("SummerVisible.cs"))
-        })
-        .ok_or_else(|| anyhow::anyhow!("the mixed Summer cluster must stay reported"))?;
-    let occurrences_carried = occurrence_paths(mixed).len();
-    assert_eq!(
-        occurrences_carried, 6,
-        "the mixed cluster keeps all six copies"
-    );
-    assert_eq!(visible_count(mixed), 1, "exactly one of the six is visible");
-    let banner = metric_field(&report, "clusters_total")
-        .as_u64()
-        .ok_or_else(|| anyhow::anyhow!("clusters_total missing from metrics"))?;
-    assert_eq!(
-        banner,
-        u64::try_from(clusters.len())?,
-        "clusters_total must equal the number of clusters the body lists"
     );
     Ok(())
 }

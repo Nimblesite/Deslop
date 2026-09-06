@@ -1,6 +1,6 @@
-//! `tools/list` language enum tracks the live engine ([MCP-TOOL-DUPLICATES], gh #255).
+//! `tools/list` language enum tracks the live engine ([MCP-TOOL-REPORT-QUERY], gh #255).
 //!
-//! The `find-similar` prevention gate and the `duplicates` filter
+//! The `find-similar` prevention gate and the `report-query` filter
 //! advertise a closed `language` enum. Before #255 that enum was baked
 //! from the MCP binary's compile-time parser registry while the runtime
 //! validator delegated to the *live* engine over IPC — two sources of
@@ -27,16 +27,10 @@ fn language_enum_of(tools: &[Value], tool_name: &str) -> Result<Vec<String>> {
         .iter()
         .find(|tool| tool.get("name").and_then(Value::as_str) == Some(tool_name))
         .ok_or_else(|| anyhow!("tools/list must expose {tool_name}"))?;
-    // `find-similar` takes one `language`; the `duplicates` filter block
-    // takes a `languages` array ([MCP-TOOL-FILTERS]). Both advertise the
-    // same closed enum.
-    let values = [
-        "/inputSchema/properties/language/enum",
-        "/inputSchema/properties/languages/items/enum",
-    ]
-    .iter()
-    .find_map(|pointer| tool.pointer(pointer).and_then(Value::as_array))
-    .ok_or_else(|| anyhow!("{tool_name} must advertise a closed language enum: {tool}"))?;
+    let values = tool
+        .pointer("/inputSchema/properties/language/enum")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("{tool_name} must advertise a closed language enum: {tool}"))?;
     Ok(values
         .iter()
         .filter_map(|value| value.as_str().map(str::to_owned))
@@ -45,7 +39,7 @@ fn language_enum_of(tools: &[Value], tool_name: &str) -> Result<Vec<String>> {
 
 #[test]
 fn issue_255_tools_list_language_enum_tracks_live_engine() -> Result<()> {
-    // Tests [MCP-TOOL-DUPLICATES], gh #255. `zig` is deliberately not
+    // Tests [MCP-TOOL-REPORT-QUERY], gh #255. `zig` is deliberately not
     // in the compile-time parser registry: if the enum were still baked
     // from `language_ids()` it could never contain it, so this asserts
     // the advertised enum is the passed-in live set.
@@ -55,7 +49,7 @@ fn issue_255_tools_list_language_enum_tracks_live_engine() -> Result<()> {
         .get("tools")
         .and_then(Value::as_array)
         .ok_or_else(|| anyhow!("tools/list payload must expose a tools array"))?;
-    for tool_name in ["find-similar", "duplicates"] {
+    for tool_name in ["find-similar", "report-query"] {
         let advertised = language_enum_of(tools, tool_name)?;
         assert_eq!(
             advertised, languages,

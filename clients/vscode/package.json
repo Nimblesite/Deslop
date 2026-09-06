@@ -1,7 +1,7 @@
 {
   "name": "deslop-live",
   "displayName": "Deslop.live",
-  "description": "Live duplicate-code analysis inside VS Code \u2014 the reference client for the Deslop LSP server. Inline warnings as you type, worst-offender view, and a live channel your AI agent can consult before it copy-pastes.",
+  "description": "Live duplicate-code analysis inside VS Code — the reference client for the Deslop LSP server. Inline warnings as you type, worst-offender view, and a live channel your AI agent can consult before it copy-pastes.",
   "version": "0.0.0-dev",
   "publisher": "nimblesite",
   "license": "MIT",
@@ -12,7 +12,7 @@
     "directory": "clients/vscode"
   },
   "engines": {
-    "vscode": "^1.134.0"
+    "vscode": "^1.101.0"
   },
   "categories": [
     "Linters",
@@ -81,8 +81,12 @@
         "title": "Deslop: Jump to Next Occurrence in Cluster"
       },
       {
-        "command": "deslop.comparePair",
-        "title": "Deslop: Compare Selected Occurrences"
+        "command": "deslop.compareWithCanonical",
+        "title": "Compare With Canonical"
+      },
+      {
+        "command": "deslop.compareOccurrenceWithCanonical",
+        "title": "Compare With Canonical"
       },
       {
         "command": "deslop.pickEmbeddingModel",
@@ -125,10 +129,6 @@
         "title": "Copy Context For AI"
       },
       {
-        "command": "deslop.copyClusterContextById",
-        "title": "Copy Context For AI"
-      },
-      {
         "command": "deslop.copyHumanLocation",
         "title": "Copy Human Location"
       },
@@ -168,9 +168,9 @@
         "icon": "$(folder)"
       },
       {
-        "command": "deslop.topOffenders.showBySeverity",
-        "title": "Deslop: Group Top Offenders by Severity",
-        "icon": "$(list-ordered)"
+        "command": "deslop.topOffenders.showByType",
+        "title": "Deslop: Group Top Offenders by Type",
+        "icon": "$(group-by-ref-type)"
       },
       {
         "command": "deslop.topOffenders.chooseFilter",
@@ -230,7 +230,7 @@
     "menus": {
       "commandPalette": [
         {
-          "command": "deslop.comparePair",
+          "command": "deslop.compareOccurrenceWithCanonical",
           "when": "false"
         }
       ],
@@ -246,13 +246,13 @@
           "group": "navigation@1"
         },
         {
-          "command": "deslop.topOffenders.showBySeverity",
+          "command": "deslop.topOffenders.showByType",
           "when": "view == deslop.topOffenders && deslop.topOffendersGroupBy == 'folder'",
           "group": "navigation@1"
         },
         {
           "command": "deslop.topOffenders.showByCluster",
-          "when": "view == deslop.topOffenders && deslop.topOffendersGroupBy == 'severity'",
+          "when": "view == deslop.topOffenders && deslop.topOffendersGroupBy == 'type'",
           "group": "navigation@1"
         },
         {
@@ -323,9 +323,19 @@
           "group": "navigation@2"
         },
         {
+          "command": "deslop.compareOccurrenceWithCanonical",
+          "when": "viewItem == deslop.occurrence",
+          "group": "navigation@1"
+        },
+        {
           "command": "deslop.openAllOccurrences",
           "when": "viewItem == deslop.clusterComparable",
           "group": "navigation@3"
+        },
+        {
+          "command": "deslop.compareWithCanonical",
+          "when": "viewItem == deslop.clusterComparable",
+          "group": "navigation@4"
         },
         {
           "command": "deslop.openClusterDetails",
@@ -459,26 +469,29 @@
             "cluster",
             "file",
             "folder",
-            "severity"
+            "type"
           ],
           "default": "cluster",
           "scope": "window",
-          "description": "Top Offenders grouping. 'cluster' shows worst clusters as roots; 'file' groups by file then by severity band; 'folder' is a folder tree; 'severity' groups flat by mass severity band. Workspace settings override the user-level default. See [VSIX-TOP-OFFENDERS-GROUPING] in docs/specs/vsix.md."
+          "description": "Top Offenders grouping. 'cluster' shows worst clusters as roots; 'file' groups by file then by clone type; 'folder' is a folder tree; 'type' groups flat by duplicate type (Identical, Nearly identical, ...). Workspace settings override the user-level default. See [VSIX-TOP-OFFENDERS-GROUPING] in docs/specs/vsix.md."
         },
-        "deslop.topOffenders.filterSeverities": {
+        "deslop.topOffenders.filterBuckets": {
           "type": "array",
           "items": {
-            "type": "string",
-            "enum": [
-              "worst",
-              "top10",
-              "mid",
-              "faint"
-            ]
+            "type": "string"
           },
           "default": [],
           "scope": "window",
-          "description": "Show only clusters in these mass severity bands (the engine's rank percentile: 'worst', 'top10', 'mid', 'faint'). Empty shows all; unknown values are ignored. See [FACET-TOP-OFFENDERS-FILTER] in docs/specs/facets.md."
+          "description": "Show only clusters in these clone buckets (wire labels, e.g. 'identical'). Empty shows all; unknown values are ignored. See [FACET-TOP-OFFENDERS-FILTER] in docs/specs/facets.md."
+        },
+        "deslop.topOffenders.filterCategories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "window",
+          "description": "Show only clusters in these clone categories (wire labels, e.g. 'data'). Empty shows all; unknown values are ignored. See [FACET-TOP-OFFENDERS-FILTER] in docs/specs/facets.md."
         },
         "deslop.topOffenders.sortBy": {
           "type": "string",
@@ -489,6 +502,12 @@
           "default": "impact",
           "scope": "window",
           "description": "Top Offenders sort order in file and folder modes. 'impact' is worst-first; 'path' is alphabetical by file/folder path. See [VSIX-TOP-OFFENDERS-SORT] in docs/specs/vsix.md."
+        },
+        "deslop.topOffenders.splitByLanguage": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "description": "Split the Top Offenders tree into per-language groups, composed on top of the grouping mode. See [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] in docs/specs/vsix.md."
         },
         "deslop.configPath": {
           "type": "string",
@@ -549,20 +568,15 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "compile": "tsc -p ./",
-    "pretest": "npm run compile && npm run build && npm run stage-fixtures",
-    "stage-fixtures": "rm -rf out/test/fixtures && cp -R src/test/fixtures out/test/fixtures",
+    "pretest": "npm run compile && npm run build && rm -rf out/test/fixtures && cp -R src/test/fixtures out/test/fixtures",
     "test": "vscode-test",
-    "pretest:ollama": "npm run compile && npm run build && npm run stage-fixtures",
+    "pretest:ollama": "npm run compile && npm run build && rm -rf out/test/fixtures && cp -R src/test/fixtures out/test/fixtures",
     "test:ollama": "vscode-test --config .vscode-test-ollama.mjs",
-    "precoverage:collect": "npm run compile && npm run build -- --coverage && npm run stage-fixtures",
-    "coverage": "npm run coverage:collect && npm run coverage:webview:check",
-    "coverage:collect": "vscode-test",
-    "coverage:extension": "node ./scripts/extension-coverage.mjs",
-    "coverage:extension:check": "node ./scripts/check-coverage.mjs --extension",
+    "precoverage": "npm run compile && npm run build -- --coverage && rm -rf out/test/fixtures && cp -R src/test/fixtures out/test/fixtures",
+    "coverage": "vscode-test --coverage && node ./scripts/check-coverage.mjs",
     "test:playwright": "playwright test scripts/playwright-webview-smoke.spec.ts",
     "test:playwright:html": "playwright test scripts/playwright-html-report.spec.ts",
     "coverage:webview": "node ./scripts/webview-coverage.mjs",
-    "coverage:webview:check": "node ./scripts/check-coverage.mjs --webview",
     "test:scripts": "node --test scripts/*.test.mjs",
     "verify:package": "node ./scripts/verify-vsix-package.mjs",
     "package": "node ./scripts/package-vsix.mjs"
@@ -573,26 +587,23 @@
     "vscode-languageclient": "^10.1.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.62.1",
+    "@playwright/test": "^1.62.0",
     "@types/mocha": "^10.0.9",
-    "@types/node": "^26.2.0",
-    "@types/vscode": "~1.134.0",
-    "@typescript-eslint/eslint-plugin": "^8.67.0",
-    "@typescript-eslint/parser": "^8.67.0",
+    "@types/node": "^26.1.1",
+    "@types/vscode": "^1.101.0",
+    "@typescript-eslint/eslint-plugin": "^8.65.0",
+    "@typescript-eslint/parser": "^8.65.0",
     "@vscode/test-cli": "^0.0.15",
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^3.9.2",
     "c8": "^12.0.0",
-    "esbuild": "^0.28.2",
-    "eslint": "^10.9.0",
+    "esbuild": "^0.28.1",
+    "eslint": "^10.8.0",
     "glob": "^13.0.6",
     "istanbul-lib-coverage": "^3.2.2",
-    "istanbul-lib-instrument": "^6.0.3",
-    "istanbul-lib-report": "^3.0.1",
-    "istanbul-reports": "^3.2.0",
-    "mocha": "^11.8.0",
+    "mocha": "^11.7.6",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.67.0",
+    "typescript-eslint": "^8.65.0",
     "v8-to-istanbul": "^9.3.0"
   }
 }

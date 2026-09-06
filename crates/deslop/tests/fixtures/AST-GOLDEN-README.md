@@ -38,12 +38,6 @@ exactly:
 - every node nests inside its nearest shallower ancestor
 - every range is non-empty and within the source
 - no `comment` node survives normalisation
-- every operator leaf is named by the token it stands for: its kind is `__op__` followed by
-  exactly the bytes it spans ([PIPELINE-NORMALIZE-AST-OPERATOR]). A dump full of a shared
-  `__op__` placeholder is byte-for-byte stable and completely wrong — it records a tree in
-  which `alpha + beta` and `alpha - beta` are the same subtree, and regenerating would promote
-  that to "expected" exactly as it once promoted the dropped Go comments. The name is read back
-  out of the fixture, so this invariant is proved against the source and not against the tool.
 
 This was verified by reverting the fix, regenerating all eleven goldens from the broken build,
 and confirming the byte-for-byte check passed while all eleven tests still failed on the contract.

@@ -1,9 +1,9 @@
-export function* iterate(begin, ceiling, delta) {
-  let cursor = begin;
-  while (cursor < ceiling) {
-    yield cursor;
-    yield cursor * 2;
-    cursor = cursor + delta;
+export function* iterate(start, limit, delta) {
+  let current = start;
+  while (current < limit) {
+    yield current;
+    yield current * 2;
+    current = current + delta;
   }
-  return cursor;
+  return current;
 }

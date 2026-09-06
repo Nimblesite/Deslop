@@ -5,6 +5,8 @@
 //! unrelated request / response payloads. Extracting them into a shared
 //! factory would erase the per-test contract.
 
+mod common;
+
 use crate::common::*;
 
 #[test]

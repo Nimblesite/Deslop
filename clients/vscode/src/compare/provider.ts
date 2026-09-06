@@ -1,13 +1,14 @@
-// Virtual-document source for the "Compare selected occurrences" diff editor.
+// Virtual-document source for the "Compare occurrences" diff editor.
 // Each side of `vscode.diff` is a `deslop-compare:` URI that names one
 // occurrence (path + byte range + side). The provider reads the file and
 // returns exactly the clone bytes — never the whole file — so same-file
-// pairs show the two distinct regions instead of the file vs. itself.
+// clusters show the two distinct regions instead of the file vs. itself.
 
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as vscode from "vscode";
 
+import { ReportOccurrence } from "../types/report";
 import { resolveWorkspacePath } from "../pathUtils";
 
 export const COMPARE_SCHEME = "deslop-compare";
@@ -19,20 +20,21 @@ export interface CompareCoordinates {
   readonly startByte: number;
   readonly endByte: number;
   readonly side: CompareSide;
-  readonly pairLabel: string;
+  readonly clusterId: string;
 }
 
 export function registerCompareProvider(context: vscode.ExtensionContext): void {
   context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider(COMPARE_SCHEME, new CompareContentProvider()));
 }
 
-// Builds a distinct URI per (pair, side). All coordinates live in the
+// Builds a distinct URI per (cluster, side). All coordinates live in the
 // URI query string so the provider can decode without shared in-process
 // state — the extension bundle and the tsc-built test copy each load
 // their own module instance, so a shared Map would never work.
 export function buildCompareUri(
-  occurrence: CompareEndpointRef,
+  occurrence: ReportOccurrence,
   side: CompareSide,
+  clusterId: string,
 ): vscode.Uri {
   const filename = path.basename(occurrence.path) || "occurrence";
   const query = new URLSearchParams({
@@ -40,21 +42,11 @@ export function buildCompareUri(
     start: String(occurrence.start_byte),
     end: String(occurrence.end_byte),
     side,
-    pair: COMPARE_PAIR_LABEL,
+    cluster: clusterId,
   }).toString();
   // `Uri.parse` preserves the already-encoded query; `Uri.from({ query })`
   // re-encodes it and double-escapes the percent-signs.
-  return vscode.Uri.parse(`${COMPARE_SCHEME}:/${COMPARE_PAIR_LABEL}/${side}/${filename}?${query}`);
-}
-
-// [VSIX-PAIR-COMPARE] The diff is between two user-selected endpoints; the
-// label names the pair, not a cluster.
-const COMPARE_PAIR_LABEL = "selected-pair";
-
-export interface CompareEndpointRef {
-  readonly path: string;
-  readonly start_byte: number;
-  readonly end_byte: number;
+  return vscode.Uri.parse(`${COMPARE_SCHEME}:/${clusterId}/${side}/${filename}?${query}`);
 }
 
 export function parseCompareUri(uri: vscode.Uri): CompareCoordinates {
@@ -66,8 +58,8 @@ export function parseCompareUri(uri: vscode.Uri): CompareCoordinates {
   const startByte = Number(params.get("start") ?? "0");
   const endByte = Number(params.get("end") ?? "0");
   const side = params.get("side") === "b" ? "b" : "a";
-  const pairLabel = params.get("pair") ?? "";
-  return { sourcePath, startByte, endByte, side, pairLabel };
+  const clusterId = params.get("cluster") ?? "";
+  return { sourcePath, startByte, endByte, side, clusterId };
 }
 
 export class CompareContentProvider implements vscode.TextDocumentContentProvider {
@@ -103,7 +95,7 @@ function compareUnavailableText(coords: CompareCoordinates, err: unknown): strin
   return [
     "Deslop could not load this compare occurrence.",
     "",
-    `Pair: ${coords.pairLabel || "unknown"}`,
+    `Cluster: ${coords.clusterId || "unknown"}`,
     `Side: ${coords.side.toUpperCase()}`,
     `Path: ${coords.sourcePath || "unknown"}`,
     "",

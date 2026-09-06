@@ -2,7 +2,7 @@
 //! live LSP admits into a workspace. Drives the real `deslop-lsp` binary
 //! over stdio; no pipeline internals are called.
 
-use crate::common;
+mod common;
 
 use std::{collections::BTreeSet, fs, path::Path};
 

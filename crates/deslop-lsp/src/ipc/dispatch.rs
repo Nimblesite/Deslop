@@ -10,21 +10,6 @@ use deslop_core::live::{LiveApi, LiveService};
 use serde_json::{json, Value};
 use tokio::runtime::Handle;
 
-/// JSON-RPC error-object field carrying the numeric code.
-const RPC_CODE_KEY: &str = "code";
-/// JSON-RPC error-object field carrying the human-readable message.
-const RPC_MESSAGE_KEY: &str = "message";
-/// JSON-RPC `Method not found` error code.
-const METHOD_NOT_FOUND_CODE: i32 = -32_601;
-/// JSON-RPC `Invalid params` error code.
-const INVALID_PARAMS_CODE: i32 = -32_602;
-/// JSON-RPC `Internal error` error code.
-const INTERNAL_ERROR_CODE: i32 = -32_603;
-/// Request parameter naming the file a report is scoped to.
-const PATH_PARAM: &str = "path";
-/// Request parameter naming the cluster id a request is scoped to.
-const ID_PARAM: &str = "id";
-
 /// Routes a JSON-RPC method to the appropriate [`LiveService`] call.
 pub(super) fn dispatch(
     method: &str,
@@ -37,14 +22,13 @@ pub(super) fn dispatch(
         "report/forFile" => dispatch_report_for_file(params, service, handle),
         "report/forRange" => dispatch_report_for_range(params, service, handle),
         "cluster/byId" => dispatch_cluster_by_id(params, service, handle),
-        "pair/compare" => dispatch_pair_compare(params, service, handle),
         "merge/plan" => dispatch_merge_plan(params, service, handle),
         "session/config" => dispatch_session_config(service, handle),
         "duplicates/findSimilar" => dispatch_find_similar(params, service, handle),
         "embedding/listModels" => dispatch_list_models(service, handle),
         "embedding/setModel" => dispatch_set_model(params, service, handle),
         crate::commands::REFRESH_REPORT => dispatch_refresh_report(service, handle),
-        _ => Err(rpc_error(METHOD_NOT_FOUND_CODE, "method not found")),
+        _ => Err(json!({"code": -32601, "message": "method not found"})),
     }
 }
 
@@ -60,7 +44,7 @@ fn dispatch_report_for_file(
     service: &Arc<LiveService>,
     handle: &Handle,
 ) -> Result<Value, Value> {
-    let path = required_str_param(params, PATH_PARAM)?;
+    let path = required_str_param(params, "path")?;
     let file_report = handle.block_on(service.report_for_file(Path::new(path)));
     serde_json::to_value(&file_report).map_err(|err| rpc_serialise_error(&err))
 }
@@ -71,13 +55,13 @@ fn dispatch_report_for_range(
     service: &Arc<LiveService>,
     handle: &Handle,
 ) -> Result<Value, Value> {
-    let path = required_str_param(params, PATH_PARAM)?;
+    let path = required_str_param(params, "path")?;
     let start_byte = required_u64_param(params, "start_byte")?;
     let end_byte = required_u64_param(params, "end_byte")?;
     let start = usize::try_from(start_byte)
-        .map_err(|_| rpc_error(INVALID_PARAMS_CODE, "start_byte overflow"))?;
+        .map_err(|_| json!({"code": -32602, "message": "start_byte overflow"}))?;
     let end = usize::try_from(end_byte)
-        .map_err(|_| rpc_error(INVALID_PARAMS_CODE, "end_byte overflow"))?;
+        .map_err(|_| json!({"code": -32602, "message": "end_byte overflow"}))?;
     let clusters = handle.block_on(service.report_for_range(Path::new(path), start, end));
     serde_json::to_value(&clusters).map_err(|err| rpc_serialise_error(&err))
 }
@@ -88,25 +72,11 @@ fn dispatch_cluster_by_id(
     service: &Arc<LiveService>,
     handle: &Handle,
 ) -> Result<Value, Value> {
-    let id = required_str_param(params, ID_PARAM)?;
+    let id = required_str_param(params, "id")?;
     let cluster = handle
         .block_on(service.cluster_by_id(id))
-        .map_err(|error| rpc_error(INTERNAL_ERROR_CODE, error.to_string()))?;
+        .map_err(|err| json!({"code": -32603, "message": err.to_string()}))?;
     serde_json::to_value(&cluster).map_err(|err| rpc_serialise_error(&err))
-}
-
-/// Delegates `pair/compare` to [`LiveApi::pair_compare`].
-fn dispatch_pair_compare(
-    params: &Value,
-    service: &Arc<LiveService>,
-    handle: &Handle,
-) -> Result<Value, Value> {
-    let request: deslop_core::report::PairComparisonParams = serde_json::from_value(params.clone())
-        .map_err(|error| rpc_error(INVALID_PARAMS_CODE, format!("invalid params: {error}")))?;
-    let comparison = handle
-        .block_on(service.pair_compare(&request))
-        .map_err(|error| rpc_error(INTERNAL_ERROR_CODE, error.to_string()))?;
-    serde_json::to_value(&comparison).map_err(|error| rpc_serialise_error(&error))
 }
 
 /// Delegates `merge/plan` to [`LiveApi::merge_plan`]
@@ -116,10 +86,10 @@ fn dispatch_merge_plan(
     service: &Arc<LiveService>,
     handle: &Handle,
 ) -> Result<Value, Value> {
-    let id = required_str_param(params, ID_PARAM)?;
+    let id = required_str_param(params, "id")?;
     let plan = handle
         .block_on(service.merge_plan(id))
-        .map_err(|error| rpc_error(INTERNAL_ERROR_CODE, error.to_string()))?;
+        .map_err(|err| json!({"code": -32603, "message": err.to_string()}))?;
     serde_json::to_value(&plan).map_err(|err| rpc_serialise_error(&err))
 }
 
@@ -136,10 +106,10 @@ fn dispatch_find_similar(
     handle: &Handle,
 ) -> Result<Value, Value> {
     let request: deslop_core::live::FindSimilarRequest = serde_json::from_value(params.clone())
-        .map_err(|error| rpc_error(INVALID_PARAMS_CODE, format!("invalid params: {error}")))?;
+        .map_err(|e| json!({"code": -32602, "message": format!("invalid params: {e}")}))?;
     let result = handle
         .block_on(service.find_similar(&request))
-        .map_err(|error| rpc_error(INTERNAL_ERROR_CODE, error.to_string()))?;
+        .map_err(|e| json!({"code": -32603, "message": e.to_string()}))?;
     serde_json::to_value(&result).map_err(|err| rpc_serialise_error(&err))
 }
 
@@ -164,7 +134,7 @@ fn dispatch_set_model(
     let endpoint = params.get("endpoint").and_then(Value::as_str);
     let provenance = handle
         .block_on(service.embedding_set_model(provider_id, model_id, endpoint))
-        .map_err(|error| rpc_error(INTERNAL_ERROR_CODE, error.to_string()))?;
+        .map_err(|error| json!({"code": -32603, "message": error.to_string()}))?;
     serde_json::to_value(&provenance).map_err(|err| rpc_serialise_error(&err))
 }
 
@@ -179,30 +149,25 @@ fn dispatch_refresh_report(service: &Arc<LiveService>, handle: &Handle) -> Resul
             let previous_report = guard.report();
             let delta = guard
                 .refresh_full()
-                .map_err(|error| rpc_error(INTERNAL_ERROR_CODE, error.to_string()))?;
+                .map_err(|error| json!({"code": -32603, "message": error.to_string()}))?;
             (previous_generation, previous_report, delta)
         };
         service
             .remember_snapshot(previous_generation, previous_report)
             .await;
-        Ok(crate::commands::refresh_report_reply(
-            delta.to_generation,
-            &deslop_core::live::ChangeSummary::from_delta(&delta),
-        ))
+        Ok(json!({
+            "command": crate::commands::REFRESH_REPORT,
+            "generation": delta.to_generation,
+            "clustersAdded": delta.clusters_added.len(),
+            "clustersRemoved": delta.clusters_removed.len(),
+            "clustersUpdated": delta.clusters_updated.len(),
+        }))
     })
 }
 
 /// Builds the JSON-RPC `-32602` (invalid params) error for a missing field.
 fn missing_param_error(key: &str) -> Value {
-    rpc_error(INVALID_PARAMS_CODE, format!("missing {key}"))
-}
-
-/// Builds a JSON-RPC error envelope from its named protocol fields.
-fn rpc_error(code: i32, message: impl Into<String>) -> Value {
-    json!({
-        (RPC_CODE_KEY): code,
-        (RPC_MESSAGE_KEY): message.into(),
-    })
+    json!({"code": -32602, "message": format!("missing {key}")})
 }
 
 /// Reads a required string parameter `key`, or the standard `-32602` error.
@@ -223,5 +188,5 @@ fn required_u64_param(params: &Value, key: &str) -> Result<u64, Value> {
 
 /// Maps a serialisation failure to a JSON-RPC internal-error envelope.
 fn rpc_serialise_error(err: &serde_json::Error) -> Value {
-    rpc_error(INTERNAL_ERROR_CODE, err.to_string())
+    json!({"code": -32603, "message": err.to_string()})
 }

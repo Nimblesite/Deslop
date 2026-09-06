@@ -5,7 +5,6 @@
 // webview render the gate through this single formatter so the two
 // panels stay byte-identical ([UI] "do not duplicate the rendering").
 
-import { formatPercent } from "../types/format";
 import type { ThresholdSummary } from "../types/report";
 
 /** Panel-ready verdict for the configured duplication gate. */
@@ -31,7 +30,7 @@ export function thresholdStatus(threshold: ThresholdSummary): ThresholdStatus {
   if (threshold.source === "none") {
     return { configured: false, breached: false, label: "" };
   }
-  const gate = `${formatPercent(threshold.percent)} gate`;
+  const gate = `${threshold.percent.toFixed(1)}% gate`;
   return {
     configured: true,
     breached: threshold.breached,

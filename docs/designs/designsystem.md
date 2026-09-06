@@ -37,10 +37,8 @@ The system uses a dual-font strategy to balance UI clarity with technical author
  
 ### Typographic Hierarchy
 *   **Display (Large/Medium):** Use for "Impact Stats" (e.g., "4.2GB Saved"). These should be tightly tracked and bold to convey authority.
-*   **Primary Navigation:** Use JetBrains Mono at `0.9375rem` (`type-nav`). This matches the default body size and must not shrink at responsive breakpoints.
-*   **Secondary Navigation:** Use JetBrains Mono at `0.875rem` (`type-label-md`) for sidebars, breadcrumbs, pagination, language controls, footer links, and compact action links.
-*   **Label (Small):** Use JetBrains Mono at `0.75rem` (`type-label-sm`) for group headings, eyebrows, metadata, and status tags. Do not use micro type below this size for navigation.
-*   **Body:** Inter at `0.9375rem` (`type-body-md`) is the default UI workhorse. Compact supporting copy may use `0.875rem`; long-form prose may use `1.0625rem`. Keep line heights tight (1.4) in dense UI and relaxed (1.6–1.75) for reading.
+*   **Label (Medium/Small):** Use JetBrains Mono for these. Even non-code data—like version numbers or status tags—should use Mono to lean into the "Academic-Cool" aesthetic.
+*   **Body:** Inter at `0.875rem` (`body-md`) is our workhorse. Keep line heights tight (1.4) to maintain the high-density professional look.
  
 ---
  

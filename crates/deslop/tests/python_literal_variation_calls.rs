@@ -1,103 +1,48 @@
 //! E2E pins for [CLONE-NOISE-LITERAL-VARIATION-CALLS] on the Python
-//! fixtures from GH #70, #71 and #79: a family of test functions whose
-//! only variation is the string-literal call arguments is scaffolding,
-//! not duplicate logic. These lock the family (three-plus member) arm of
-//! the filter so the pair-visibility bound cannot regress it.
-//!
-//! gh #79 is the same family stated from the other end — "these ARE the
-//! deduplicated form": every occurrence is a one-line invocation of an
-//! already-extracted helper, varying only in its literal arguments, so
-//! there is nothing left to extract. #71 is the REST-endpoint spelling
-//! of it, where the varying literal is an f-string route template.
-//!
-//! Every family member here ends in a call-free `assert` on the value
-//! its varying call bound, so both pins are also the E2E pins for
-//! [CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT]: without the
-//! lone-assertion admission the covered-statement precondition rejects
-//! every member and `hidden` falls to zero. The companion negative pin
-//! is `rename_needs_an_anchor`, which keeps two-or-more call-free
-//! statements blocking the filter.
-//!
-//! Both fixtures stage a false-negative control — a byte-identical
-//! `settle_ledger` pair unrelated to the family — and both assertions go
-//! through `negative_pin`. Before that control existed these suites
-//! asserted `cluster_count == 0` and nothing else, which a detector that
-//! had stopped producing candidates would have satisfied perfectly.
-//!
-//! The control is not a spot check either. Its bucket, every one of its
-//! signals, its rank, its occurrence count and the four metric figures
-//! it accounts for are all fixed by the fixture bytes, so all of them
-//! are asserted as determined values ([RANK-SCORE], [METRICS-REPO]).
+//! fixtures from GH #70 and #71: a family of test functions whose only
+//! variation is the string-literal call arguments is scaffolding, not
+//! duplicate logic. These lock the family (three-plus member) arm of the
+//! filter so the pair-visibility bound cannot regress it.
 
 use anyhow::Result;
 
-use crate::common::{
-    negative_pin::{assert_suppressed_family, SuppressedFamily},
-    *,
-};
+mod common;
+use crate::common::*;
 
-/// The false-negative control staged in every fixture here.
-const CONTROL: [&str; 2] = ["control_clone_a.py", "control_clone_b.py"];
-
-/// Duplicated lines the control clone accounts for: eight lines, twice.
-const CONTROL_LOC: u64 = 16;
-
-/// Both fixtures hold the family in one file beside the control pair.
-const FILES_ANALYSED: u64 = 3;
-
-/// The gh #70/#79 fixture and the one file its family lives in.
-const WRITE_FIXTURE: &str = "python-issue-70-test-data-variation";
-const WRITE_FAMILY: [&str; 1] = ["test_write_file_calls.py"];
-const WRITE_LABEL: &str = "gh #70/#79 literal-variation call family";
-/// Min-nodes 8 (like the Dart #70 pin): the family members are whole
-/// call statements, while 4-node one-line dict fragments below that
-/// threshold are a separate data-shape question this fixture does not
-/// pin.
-const WRITE_MIN_NODES: u32 = 8;
-// Fixture and family for the endpoint-shape suppression pin.
-const ENDPOINT_FIXTURE: &str = "python-issue-71-rest-endpoint-shape";
-const ENDPOINT_FAMILY: [&str; 1] = ["test_endpoints.py"];
-const ENDPOINT_LABEL: &str = "gh #71 REST endpoint-shape family";
-const ENDPOINT_MIN_NODES: u32 = 4;
-// Both pins require an exact suppressed family and a surviving byte-identical control.
-fn assert_family_is_scaffolding(
-    fixture_dir: &str,
-    min_nodes: u32,
-    label: &str,
-    family: &[&str],
-) -> Result<()> {
-    let report = run_report(&fixture(fixture_dir), min_nodes)?;
-    assert_suppressed_family(
-        &report,
-        label,
-        &SuppressedFamily {
-            family_files: family,
-            control_files: &CONTROL,
-            control_loc: CONTROL_LOC,
-            files_analysed: FILES_ANALYSED,
-        },
-    )
-}
-
-// GH #70 / #79 regression: four `test_*_write` functions call the same
-// helper with differing path/content/id literals — varying test data at
-// the call site of an already-extracted helper, not extractable
-// duplication.
+// GH #70 regression: four `test_*_write` functions call the same helper
+// with differing path/content/id literals — varying test data, not
+// extractable duplication. Pinned at min-nodes 8 (like the Dart #70
+// pin): the family members are whole call statements, while 4-node
+// one-line dict fragments below that threshold are a separate
+// data-shape question this fixture does not pin.
 #[test]
-fn write_file_call_family_is_suppressed_while_a_real_clone_survives() -> Result<()> {
-    assert_family_is_scaffolding(WRITE_FIXTURE, WRITE_MIN_NODES, WRITE_LABEL, &WRITE_FAMILY)
+fn write_file_call_family_is_suppressed_not_reported() -> Result<()> {
+    let report = run_report(&fixture("python-issue-70-test-data-variation"), 8)?;
+    assert_eq!(
+        cluster_count(&report),
+        0,
+        "a literal-variation call family must not surface as duplication: {report:#}"
+    );
+    assert!(
+        clusters_hidden(&report) >= 1,
+        "the family must be actively hidden, not merely absent: {report:#}"
+    );
+    Ok(())
 }
 
 // GH #71 regression: four `test_delete_*` endpoint tests differ only in
-// their f-string path template and fixture argument. Different resources
-// tested independently — `assert_delete_204(client, url, api_key)` would
-// obscure what each test is for, so there is no extraction to offer.
+// their f-string path template and fixture argument.
 #[test]
-fn rest_endpoint_family_is_suppressed_while_a_real_clone_survives() -> Result<()> {
-    assert_family_is_scaffolding(
-        ENDPOINT_FIXTURE,
-        ENDPOINT_MIN_NODES,
-        ENDPOINT_LABEL,
-        &ENDPOINT_FAMILY,
-    )
+fn rest_endpoint_family_with_fstring_paths_is_suppressed() -> Result<()> {
+    let report = run_report(&fixture("python-issue-71-rest-endpoint-shape"), 4)?;
+    assert_eq!(
+        cluster_count(&report),
+        0,
+        "endpoint-shape scaffolding must not surface as duplication: {report:#}"
+    );
+    assert!(
+        clusters_hidden(&report) >= 1,
+        "the endpoint family must be actively hidden, not merely absent: {report:#}"
+    );
+    Ok(())
 }

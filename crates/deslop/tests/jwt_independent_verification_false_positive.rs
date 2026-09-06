@@ -9,6 +9,7 @@ use std::{collections::BTreeSet, fs, path::Path};
 use anyhow::Result;
 use serde_json::Value;
 
+mod common;
 use crate::common::*;
 
 fn run_report(scan_root: &Path) -> Result<Value> {

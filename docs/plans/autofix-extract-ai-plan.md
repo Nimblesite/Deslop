@@ -4,7 +4,7 @@
 
 ## Scope
 
-**This is the fallback after `[AUTOFIX-MERGE]`.** Components whose concrete rewrite pairs are leaf-gap Type-2 or constrained Type-3 relations are now merged **mechanically** (no AI) by the shipped `[AUTOFIX-MERGE]` path ([autofix-extract.md](../specs/autofix-extract.md)) — anti-unification derives parameter names mechanically. The AI path remains only for the residue `[AUTOFIX-MERGE-GATE]` routes to `AiOrHuman`: components whose required endpoint pairs show structural or control-flow drift, semantic equivalence, or cases where a generalising parameter **name** materially aids readability. No pair classification is read from the component.
+**This is the fallback after `[AUTOFIX-MERGE]`.** Leaf-gap Type-2 / constrained Type-3 clusters are now merged **mechanically** (no AI) by the shipped `[AUTOFIX-MERGE]` path ([autofix-extract.md](../specs/autofix-extract.md)) — anti-unification derives parameter names mechanically. The AI path remains only for the residue `[AUTOFIX-MERGE-GATE]` routes to `AiOrHuman`: clusters with structural / control-flow drift (gaps not confined to leaf positions), Type-4 semantic clones, or cases where a generalising parameter **name** materially aids readability. Renamed-identifier Type-2 is no longer a reason to invoke AI.
 
 Two MCP tools — `extract-method-plan` and `extract-method-apply` — handle that residue by combining a mechanical AST-derived scaffold with an AI-filled name slot. The AI picks a method name and one canonical name per parameter slot; Deslop synthesises the final `WorkspaceEdit` deterministically.
 
@@ -13,7 +13,7 @@ Non-goals: Type-2 via LSP `codeAction` (synchronous; AI round-trip is not), AI-g
 ## Hard dependencies
 
 1. **Type-1 path — shipped.** `[AUTOFIX-EXTRACT]` / `[AUTOFIX-MERGE]` / `[AUTOFIX-CONSOLIDATE]` are implemented ([autofix-extract.md](../specs/autofix-extract.md)). The slot-substitution layer extends the same emitter rather than forking it.
-2. **Issue [#42](https://github.com/Nimblesite/Deslop/issues/42) — shipped** (PR #63). The Type-1 / Type-2 split is the `[CLONE-BUCKETS-IDENTICAL]` byte-equivalence routing for each explicit source/target pair (no cluster `kind_detail` field); an explicit pair comparison may classify a renamed relation as `NearlyIdentical`, but the refactor gate reads the endpoint-keyed admission proof required by [AUTOFIX-EXTRACT-AI-PRECONDITIONS].
+2. **Issue [#42](https://github.com/Nimblesite/Deslop/issues/42) — shipped** (PR #63). The Type-1 / Type-2 split is the `[CLONE-BUCKETS-IDENTICAL]` byte-equivalence routing (no `kind_detail` field); the AI path detects renamed Type-2 as `NearlyIdentical` with `structural ≥ 0.99 ∧ token_jaccard ≥ 0.99` and non-byte-equivalent slices ([AUTOFIX-EXTRACT-AI-PRECONDITIONS]).
 3. `LanguageParser` slot-alignment method — takes N parse subtrees, returns `Option<SlotMapping>`. Same single extension point as parsing and Type-1 free-vars.
 
 ## File layout
@@ -44,7 +44,7 @@ MCP wiring:
 
 **Phase 5 — Rust + Python.** Slot alignment + scaffold + apply for each language. New goldens.
 
-**Phase 6 — Type-3 admission.** Extend eligibility to components whose required source/target pairs are admitted Type-3 relations and whose slots align. E2E proves a component with a required pair whose free-variable arity differs is correctly **rejected** (no scaffold returned), while a component whose required endpoint pairs and slot arity agree succeeds.
+**Phase 6 — Type-3 admission.** Extend eligibility from Type-2 to slot-alignable Type-3. E2E proves Type-3 clusters where free-var arity differs across occurrences are correctly **rejected** (no scaffold returned), and Type-3 clusters where arity agrees succeed.
 
 ## Implementation notes
 
@@ -58,7 +58,7 @@ MCP wiring:
 
 1. `make ci` — green.
 2. `make test` — all phases' E2E tests in scope; coverage threshold maintained.
-3. Manual end-to-end with a real MCP client (Claude Code): connect to `deslop-mcp`, call `extract-method-plan` against a known component whose required endpoint relations are Type-2 pairs, pick names, call `extract-method-apply`, apply the returned edit in the editor, confirm the file matches a golden.
+3. Manual end-to-end with a real MCP client (Claude Code): connect to `deslop-mcp`, call `extract-method-plan` against a known Type-2 cluster, pick names, call `extract-method-apply`, apply the returned edit in the editor, confirm the file matches a golden.
 
 ---
 

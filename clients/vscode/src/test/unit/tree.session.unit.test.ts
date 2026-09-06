@@ -5,9 +5,6 @@ import { SessionProvider, StatusTicker } from "../../tree/providers";
 import { ReportStore } from "../../reportStore";
 import { cluster, labelText, report } from "./tree.helpers";
 
-const STRING_TYPE_NAME = "string";
-const EMBEDDING_MODEL_LABEL = "Embedding model";
-
 suite("SessionProvider", () => {
   test("renders four session rows when a report is loaded", () => {
     const store = new ReportStore();
@@ -24,9 +21,9 @@ suite("SessionProvider", () => {
     const provider = new SessionProvider(store, new StatusTicker(), () => undefined);
     const nodes = provider.getChildren();
     const labels = nodes.map(labelText);
-    assert.deepEqual(labels, [EMBEDDING_MODEL_LABEL, "Cache", "Files analysed", "State"]);
+    assert.deepEqual(labels, ["Embedding model", "Cache", "Files analysed", "State"]);
     assert.equal(nodes.length, 4);
-    assert.ok(labels.includes(EMBEDDING_MODEL_LABEL));
+    assert.ok(labels.includes("Embedding model"));
     assert.ok(labels.includes("Files analysed"));
     assert.ok(labels.includes("State"));
     assert.ok(!labels.some((label) => /schema/i.test(label)));
@@ -44,7 +41,7 @@ suite("SessionProvider", () => {
     store.setSnapshot(report([]), 0);
     const provider = new SessionProvider(store, new StatusTicker(), () => ({}) as never);
     const nodes = provider.getChildren();
-    const state = nodes.find((n) => typeof n.label === STRING_TYPE_NAME && n.label === "State");
+    const state = nodes.find((n) => typeof n.label === "string" && n.label === "State");
     assert.ok(state);
   });
 
@@ -58,13 +55,12 @@ suite("SessionProvider", () => {
       model_id: "nomic-embed-text",
       done: 0,
       total: 23797,
-      percent: 0,
       message: undefined,
     });
     const provider = new SessionProvider(store, new StatusTicker(), () => ({}) as never);
     const nodes = provider.getChildren();
     const progress = nodes.find(
-      (n) => typeof n.label === STRING_TYPE_NAME && n.label === "Embedding",
+      (n) => typeof n.label === "string" && n.label === "Embedding",
     );
     assert.ok(progress, "Embedding progress row must be present");
     assert.match(
@@ -82,7 +78,7 @@ suite("SessionProvider", () => {
     const provider = new SessionProvider(store, new StatusTicker(), () => ({}) as never);
     const nodes = provider.getChildren();
     const embeddingRow = nodes.find(
-      (n) => typeof n.label === STRING_TYPE_NAME && n.label === EMBEDDING_MODEL_LABEL,
+      (n) => typeof n.label === "string" && n.label === "Embedding model",
     );
     assert.ok(embeddingRow, "Embedding model row must be rendered");
     assert.match(
@@ -101,7 +97,7 @@ suite("SessionProvider", () => {
     const provider = new SessionProvider(store, new StatusTicker(), () => ({}) as never);
     const nodes = provider.getChildren();
     const embeddingRow = nodes.find(
-      (n) => typeof n.label === STRING_TYPE_NAME && n.label === EMBEDDING_MODEL_LABEL,
+      (n) => typeof n.label === "string" && n.label === "Embedding model",
     );
     assert.ok(embeddingRow, "Embedding model row must be rendered");
     assert.match(
@@ -118,7 +114,7 @@ suite("SessionProvider", () => {
     const provider = new SessionProvider(store, new StatusTicker(), () => undefined);
     const nodes = provider.getChildren();
     const errorNode = nodes.find(
-      (n) => typeof n.contextValue === STRING_TYPE_NAME && n.contextValue === "deslop.status.error",
+      (n) => typeof n.contextValue === "string" && n.contextValue === "deslop.status.error",
     );
     assert.ok(errorNode, `expected an error StatusNode, got ${JSON.stringify(nodes.map(labelText))}`);
     assert.match(labelText(errorNode), /Stopped: binary missing/);
@@ -132,8 +128,8 @@ suite("SessionProvider", () => {
     const provider = new SessionProvider(store, new StatusTicker(), () => undefined);
     const nodes = provider.getChildren();
     assert.equal(nodes.length, 4, "session rows must remain visible during re-analysis");
-    const labels = nodes.map((n) => (typeof n.label === STRING_TYPE_NAME ? n.label : ""));
-    assert.ok(labels.includes(EMBEDDING_MODEL_LABEL), "Embedding model row must stay visible");
+    const labels = nodes.map((n) => (typeof n.label === "string" ? n.label : ""));
+    assert.ok(labels.includes("Embedding model"), "Embedding model row must stay visible");
     assert.ok(labels.includes("State"), "State row must stay visible");
   });
 });

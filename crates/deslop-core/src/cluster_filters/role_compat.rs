@@ -1,23 +1,24 @@
-//! Role-compatibility gate for embedding-dominant candidate pairs.
+//! Role-compatibility gate for embedding-dominant `same_behavior`
+//! clusters.
 //!
 //! Issue [CLONE-NOISE-EMBEDDING-ROLE-MISMATCH]: the embedding
 //! pass can pair two snippets that share a topic vocabulary but live in
 //! structurally incompatible constructs — e.g. a reusable transport
 //! helper *class* and a constructor-storage *test method*. Such a pair
-//! reaches `structural=0.00`, `embedding_cos>=0.80`, and would otherwise
-//! enter closure. There is no coherent duplicate across a class
-//! definition and a function/method: their roles differ.
+//! reaches `structural=0.00`, `embedding_cos>=0.80`, and surfaces as
+//! "Same behavior, different code". There is no safe extraction across
+//! a class definition and a function/method: their roles differ.
 //!
 //! This filter engages **only** for embedding-dominant matches (the
-//! caller restricts it to embedding-dominant candidates). It rejects
-//! one pair when its endpoints have different top-level construct roles.
-//! Two genuinely behaviour-equivalent functions (same role) keep
-//! clustering.
+//! caller restricts it to the `same_behavior` bucket). It suppresses a
+//! cluster when its members do not all share one top-level construct
+//! role — all classes, or all functions/methods. Two genuinely
+//! behaviour-equivalent functions (same role) that the embedding
+//! correctly pairs keep clustering.
 
 use tree_sitter::Node;
 
 use super::{enclosing_kind, function_kinds, parse_for, trimmed_snippet_range, Snippet};
-use crate::ast::named_children;
 
 /// Top-level construct role a cluster member resolves to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,10 +32,10 @@ enum MemberRole {
     Function,
 }
 
-/// Returns true when an embedding-dominant candidate pair has
+/// Returns true when this embedding-dominant cluster pairs members of
 /// incompatible top-level roles (a class/type definition with a
-/// function/method). The caller restricts this to candidates that need
-/// embedding support, so deterministic Type-1/2/3 pairs are untouched.
+/// function/method). The caller restricts this to `same_behavior`
+/// clusters so deterministic Type-1/2/3 buckets are untouched.
 ///
 /// Returns false (does not suppress) when any member's role cannot be
 /// resolved — an unknown role is never grounds to hide duplication.
@@ -77,9 +78,11 @@ fn role_of(node: Node<'_>, language: &str) -> Option<MemberRole> {
 
 /// Resolves the role inside a Python decorated definition wrapper.
 fn decorated_definition_role(node: Node<'_>, language: &str) -> Option<MemberRole> {
-    named_children(node)
-        .into_iter()
-        .find_map(|child| role_of(child, language))
+    let mut cursor = node.walk();
+    let role = node
+        .named_children(&mut cursor)
+        .find_map(|child| role_of(child, language));
+    role
 }
 
 /// All node kinds that count as a top-level construct for role

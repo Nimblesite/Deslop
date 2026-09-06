@@ -5,8 +5,6 @@ import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import { activateExtension, sleep } from "./helpers";
 
-const POST_COMMAND_SETTLE_MS = 200;
-
 // [VSIX-COMMANDS]
 suite("commands", () => {
   suiteSetup(async () => {
@@ -17,16 +15,16 @@ suite("commands", () => {
 
   test("openReport + openReport again reveals the existing panel", async () => {
     await vscode.commands.executeCommand("deslop.openReport");
-    await sleep(POST_COMMAND_SETTLE_MS);
+    await sleep(200);
     await vscode.commands.executeCommand("deslop.openReport");
-    await sleep(POST_COMMAND_SETTLE_MS);
+    await sleep(200);
   });
 
   test("openWorstCluster twice reveals the cluster panel", async () => {
     await vscode.commands.executeCommand("deslop.openWorstCluster");
-    await sleep(POST_COMMAND_SETTLE_MS);
+    await sleep(200);
     await vscode.commands.executeCommand("deslop.openWorstCluster");
-    await sleep(POST_COMMAND_SETTLE_MS);
+    await sleep(200);
   });
 
   test("openCluster with a bad id does not throw", async () => {
@@ -42,7 +40,7 @@ suite("commands", () => {
       start_byte: 0,
       end_byte: 10,
     });
-    await sleep(POST_COMMAND_SETTLE_MS);
+    await sleep(200);
     const active = vscode.window.activeTextEditor;
     assert.ok(active, "an editor should be open");
   });
@@ -51,10 +49,8 @@ suite("commands", () => {
     await vscode.commands.executeCommand("deslop.jumpToNextOccurrence");
   });
 
-  test("comparePair without two explicit endpoints is a no-op", async () => {
-    // [VSIX-PAIR-COMPARE] The command has no single-argument form; a bad or
-    // missing endpoint pair must not throw or open a diff.
-    await vscode.commands.executeCommand("deslop.comparePair", "nonexistent", undefined);
+  test("compareWithCanonical with a bad id is a no-op", async () => {
+    await vscode.commands.executeCommand("deslop.compareWithCanonical", "nonexistent");
   });
 
   test("toggleShowAllLenses flips the workspace setting", async () => {
@@ -95,6 +91,6 @@ suite("commands", () => {
     // The command shows a modal; we don't need to dismiss it — when the
     // extension-host test session ends VS Code tears all windows down.
     vscode.commands.executeCommand("deslop.revealActiveBinary");
-    await sleep(POST_COMMAND_SETTLE_MS);
+    await sleep(200);
   });
 });

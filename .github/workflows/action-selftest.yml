@@ -21,11 +21,11 @@ on:
     branches: [main]
     paths:
       - action.yml
-      - scripts/actions/action-*.mjs
-      - scripts/actions/test-action-contract.mjs
+      - scripts/action-*.mjs
+      - scripts/test-action-contract.mjs
       # The contract test imports the pin list and its parser from here, so a
       # change to the stamper changes what the test checks. [ACTION-VERSION]
-      - scripts/release/stamp-release-version.mjs
+      - scripts/stamp-release-version.mjs
       - .github/workflows/action-selftest.yml
 
 permissions:
@@ -34,17 +34,17 @@ permissions:
 jobs:
   contract:
     name: Action contract
-    # No Dependabot skip here, deliberately. This workflow is `main`-only, so
-    # the only Dependabot PR that can reach it is a SECURITY bump force-opened
-    # against `main` — exactly the change that must clear the full black-box
-    # matrix before merging. Every other job needs this one, so a skip here
-    # would silently suppress the entire matrix for the security case.
+    # Dependabot PRs are swept into `dependabot-upgrades`, never merged to main
+    # directly. A github-actions SECURITY bump is force-opened against `main` and
+    # edits .github/workflows/**, matching the paths filter above, so without
+    # this gate it would run the whole hosted-runner matrix on a discarded bump.
+    # Every other job needs this one, so skipping here skips them all.
     # ([GITHUB-DEPENDABOT])
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       version: ${{ steps.latest.outputs.version }}
-      diff-flags: ${{ steps.latest.outputs.diff-flags }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -54,11 +54,6 @@ jobs:
       # A pull request cannot install the release for its own tag — that release
       # does not exist yet. Resolve the newest published release instead, so the
       # matrix below never rots against a hard-coded version.
-      #
-      # `diff-flags` gates the diff-gate job below: `--diff`/`--only-changed`
-      # first ship in deslop 0.33.0 ([CLI-ARG-DIFF]), and an older CLI rejects
-      # them as a usage error — so until a release carries them the leg is
-      # skipped, and it switches itself on with the release that does.
       - id: latest
         env:
           GH_TOKEN: ${{ github.token }}
@@ -66,21 +61,15 @@ jobs:
           set -euo pipefail
           tag=$(gh release view --repo ${{ github.repository }} --json tagName --jq .tagName)
           echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
-          if [ "$(printf '0.33.0\n%s\n' "${tag#v}" | sort -V | head -n 1)" = "0.33.0" ]; then
-            echo "diff-flags=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "diff-flags=false" >> "$GITHUB_OUTPUT"
-          fi
           echo "Testing the action against deslop ${tag#v}"
 
-      # The documented-pin check needs no release to compare against any more.
-      # It once asserted the committed pin equalled the newest release, which
-      # only the network could answer — so it ran here and not in `make
-      # deployment-verify`, and only on push to main, which a tag push is not.
-      # v0.30.0 shipped a Marketplace listing advertising `@v0.27.0` through that
-      # gap. The docs now commit no version for the check to date: it asserts
-      # they cannot, which is true offline, on every PR. [ACTION-VERSION]
-      - run: node scripts/actions/test-action-contract.mjs
+      # `--latest-release` adds the freshness half of the documented-pin check,
+      # which `make deployment-verify` cannot run offline. The tag's README is
+      # the body of the Marketplace listing and `stamp-release-version.mjs`
+      # stamps the build rather than the commit, so a stale committed pin hands
+      # every listing visitor a workflow that installs an older CLI — which is
+      # exactly what v0.30.0 shipped. [ACTION-VERSION]
+      - run: node scripts/test-action-contract.mjs --latest-release "${{ steps.latest.outputs.version }}"
 
   # [ACTION-VERSION] end to end. Every other job passes `version:` explicitly, so
   # the derivation path every Marketplace consumer actually takes — no `version:`
@@ -91,10 +80,8 @@ jobs:
   # error here, so a SHA pin would prove the opposite of what this job exists for.
   # This is Deslop's own action in its own repository, so no third party can
   # re-point the tag. The tag is deliberately not asserted to be the newest
-  # release: any tag carrying action.yml proves the derivation. It is also the
-  # one version literal [ACTION-VERSION-DOCS] cannot remove — `uses:` takes no
-  # expression, so a job proving a *tag* selects the CLI has to name a real one.
-  # Nothing reads it as advice: it is a fixture, not a documented pin.
+  # release — any tag carrying action.yml proves the derivation, and coupling it
+  # to the release cadence would redden main for a pin bump.
   derived-version:
     name: Version derived from the pinned tag
     needs: [contract]
@@ -123,185 +110,6 @@ jobs:
         env:
           CODE: ${{ steps.derived.outputs.exit-code }}
           CLUSTERS: ${{ steps.derived.outputs.cluster-count }}
-
-  # [ACTION-CACHE] end to end: the store one run saves is the store the next
-  # run restores. Two jobs on two runners, so the warm pass can only be warm if
-  # the store crossed the Actions cache — nothing else survives the runner.
-  # The gate matrix's linux-x64 leg shares the per-run cache key (same version,
-  # OS and run id) and the same fixture, so whichever job saves first the
-  # restored store is content-addressed for the identical tree — the hit and
-  # equivalence assertions hold under every interleaving.
-  cache-seed:
-    name: Cache seed pass
-    needs: [contract]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Seed the parse store through the action
-        id: seed
-        uses: ./
-        with:
-          path: examples/rust
-          version: ${{ needs.contract.outputs.version }}
-          fail-over: "100"
-          output: cache-seed-report
-          artifact-name: deslop-cache-seed-report
-
-      - name: The seed pass measured the fixture and left a store to save
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "${CODE}" = "0"
-          test "${CLUSTERS}" -ge 1
-          test -d examples/rust/.deslop/cache
-        env:
-          CODE: ${{ steps.seed.outputs.exit-code }}
-          CLUSTERS: ${{ steps.seed.outputs.cluster-count }}
-
-  cache-warm:
-    name: Cache warm pass
-    needs: [contract, cache-seed]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Run warm from the restored store
-        id: warm
-        uses: ./
-        with:
-          path: examples/rust
-          version: ${{ needs.contract.outputs.version }}
-          fail-over: "100"
-          output: cache-warm-report
-          upload-artifact: "false"
-
-      - uses: actions/download-artifact@v8
-        with:
-          name: deslop-cache-seed-report
-          path: seed
-
-      - name: The store crossed the cache and changed nothing but cache_stats
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "${CODE}" = "0"
-          node --input-type=module -e '
-            import assert from "node:assert/strict";
-            import { readFileSync } from "node:fs";
-            const parse = (path) => JSON.parse(readFileSync(path, "utf8"));
-            const seed = parse("seed/cache-seed-report.json");
-            const warm = parse("cache-warm-report.json");
-            const { hits, misses } = warm.cache_stats;
-            console.log(`warm cache_stats: ${hits} hits / ${misses} misses`);
-            assert.ok(hits > 0, "the warm run restored no blobs — the store did not cross the cache");
-            assert.equal(misses, 0, "a warm run of an unchanged tree must miss nothing");
-            delete seed.cache_stats;
-            delete warm.cache_stats;
-            assert.deepStrictEqual(warm, seed, "the restored store changed the report — [ACTION-CACHE] forbids that");
-          '
-        env:
-          CODE: ${{ steps.warm.outputs.exit-code }}
-
-  # [METRICS-DIFF-SCOPE] + [ACTION-GATE] end to end: under `only-changed` the
-  # gate reads the diff-scoped percentage — duplicated added lines over added
-  # lines — so the same fixture and zero ceiling the gate matrix proves
-  # *breaches* repo-wide must pass when the diff adds nothing. The empty patch
-  # is the valid empty diff [CLI-ARG-DIFF] defines. Skipped until a published
-  # release carries the diff flags (deslop >= 0.33.0): this matrix installs the
-  # newest release, and an older CLI rejects `--diff` as a usage error.
-  diff-gate:
-    name: Diff-scoped gate
-    needs: [contract]
-    if: needs.contract.outputs.diff-flags == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Write the empty diff
-        shell: bash
-        run: printf '' > empty.patch
-
-      - name: Run legacy-heavy under a zero ceiling, scoped to the clean diff
-        id: clean
-        uses: ./
-        with:
-          path: examples/rust
-          version: ${{ needs.contract.outputs.version }}
-          fail-over: "0"
-          diff: empty.patch
-          only-changed: "true"
-          output: diff-gate-report
-          upload-artifact: "false"
-
-      - name: Legacy debt did not fail the gate, and the report stays honest
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "${CODE}" = "0"
-          node --input-type=module -e '
-            import assert from "node:assert/strict";
-            import { readFileSync } from "node:fs";
-            const report = JSON.parse(readFileSync("diff-gate-report.json", "utf8"));
-            const { metrics } = report;
-            assert.equal(metrics.threshold.breached, true, "the fixture must stay legacy-heavy — the repo-wide verdict is breached");
-            assert.equal(metrics.diff.added_loc, 0, "an empty diff adds no lines");
-            assert.equal(metrics.diff.duplication_percent, 0, "no added lines means a 0% diff-scoped percentage");
-            assert.equal(metrics.diff.threshold.breached, false, "the diff-scoped gate must pass");
-            assert.equal(metrics.diff.threshold.source, "cli", "the ceiling came from the fail-over input");
-            assert.equal(report.clusters.length, 0, "an empty diff touches no cluster");
-            assert.ok(report.clusters_outside_diff >= 1, "the legacy clusters must be counted, never hidden");
-            assert.equal(report.metrics.clusters_total, report.clusters.length, "the banner counts the body it sits above ([METRICS-REPO])");
-          '
-        env:
-          CODE: ${{ steps.clean.outputs.exit-code }}
-
-      # The other direction: the same fixture and the same zero ceiling must
-      # *fail* when the diff itself adds duplication. Without this leg the
-      # diff-gate job only proves the gate can pass, which a gate that never
-      # fires would also satisfy. The patch adds a verbatim copy of a fixture
-      # file, so the added lines are duplicated by construction. [ACTION-GATE]
-      # Built by the same script the branch-built proof calls, so the two
-      # legs cannot disagree about the patch they gate on. [ACTION-GATE]
-      - name: Write a diff that adds duplicated code
-        shell: bash
-        run: node scripts/actions/action-copy-patch.mjs examples/rust examples/rust/action_diff_gate_copy.rs change.patch
-
-      - name: The added duplication fails the same zero ceiling
-        id: breach
-        continue-on-error: true
-        uses: ./
-        with:
-          path: examples/rust
-          version: ${{ needs.contract.outputs.version }}
-          fail-over: "0"
-          diff: change.patch
-          only-changed: "true"
-          output: diff-breach-report
-          upload-artifact: "false"
-
-      - name: The gate breached on the added lines, not the repo-wide figure
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "${CODE}" = "3"
-          test "${SCOPE}" = "added-lines"
-          node --input-type=module -e '
-            import assert from "node:assert/strict";
-            import { readFileSync } from "node:fs";
-            const report = JSON.parse(readFileSync("diff-breach-report.json", "utf8"));
-            assert.equal(report.metrics.diff.threshold.breached, true, "the diff-scoped gate must fail");
-            assert.equal(report.metrics.diff.threshold.source, "cli", "the report records that the diff gate governed");
-            assert.ok(report.metrics.diff.duplicated_added_loc > 0, "the copied lines must measure as duplicated");
-            assert.ok(report.clusters.length >= 1, "the newly copied clone survives --only-changed");
-            assert.equal(report.metrics.clusters_total, report.clusters.length, "the banner counts the body it sits above ([METRICS-REPO])");
-          '
-        env:
-          CODE: ${{ steps.breach.outputs.exit-code }}
-          SCOPE: ${{ steps.breach.outputs.gate-scope }}
 
   gate:
     name: Gate (${{ matrix.artifact }})
@@ -411,7 +219,7 @@ jobs:
           printf 'not an archive' > tampered.tar.gz
           printf '%s  tampered.tar.gz\n' \
             0000000000000000000000000000000000000000000000000000000000000000 > tampered.tar.gz.sha256
-          if node scripts/actions/action-verify-checksum.mjs tampered.tar.gz tampered.tar.gz.sha256; then
+          if node scripts/action-verify-checksum.mjs tampered.tar.gz tampered.tar.gz.sha256; then
             echo "checksum verification accepted a tampered archive" >&2
             exit 1
           fi

@@ -11,16 +11,7 @@ publish = false
 [dependencies]
 anyhow.workspace = true
 assert_cmd.workspace = true
-clap.workspace = true
-deslop-core = { path = "../deslop-core" }
-serde.workspace = true
 serde_json.workspace = true
-toml.workspace = true
-tree-sitter.workspace = true
-
-[[bin]]
-name = "corpus-score"
-path = "src/bin/corpus-score.rs"
 
 [lints]
 workspace = true

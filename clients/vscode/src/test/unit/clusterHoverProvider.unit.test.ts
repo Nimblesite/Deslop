@@ -10,19 +10,25 @@ import { ClusterHoverProvider } from "../../decorations/clusterHoverProvider";
 import { ReportStore } from "../../reportStore";
 import { Report, ReportCluster } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
-import { occurrence, wireCluster } from "../cluster.helpers";
 
 function reportWith(clusters: ReportCluster[]): Report {
   return reportWithClusters(clusters);
 }
 
 function clusterAt(path: string, startByte: number, endByte: number): ReportCluster {
-  return wireCluster({
+  return {
     id: `${path}:${startByte}:${endByte}`,
-    mass: 9,
-        canonical_node_count: 3,
-        occurrences: [occurrence(path, startByte, endByte)],
-  });
+    weight: 9,
+    size: 2,
+    canonical_node_count: 3,
+    bucket: "same_behavior",
+    signals: { structural: 0.1, token_jaccard: 0.2, embedding_cos: 0.9, fused: 0.95 },
+    occurrences: [{ path, start_byte: startByte, end_byte: endByte, hidden: false }],
+    occurrences_total: 0,
+    occurrences_truncated: false,
+    summary: "summary",
+    interpretation: "interp",
+  };
 }
 
 async function openDoc(content: string): Promise<vscode.TextDocument> {

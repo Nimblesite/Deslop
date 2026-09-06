@@ -13,7 +13,7 @@ use std::{fs, time::Duration};
 use anyhow::{anyhow, ensure, Context, Result};
 use serde_json::{json, Value};
 
-use crate::common;
+mod common;
 use common::{
     cluster_ids, copied_fixture, initialized_mcp, lsp_workspace_with_socket,
     spawn_lsp_and_wait_for_socket, structured_content, wait_for_path, McpHandle, SOCKET_TIMEOUT,
@@ -109,9 +109,9 @@ fn t2_issue_137_report_hide_visible_via_mcp_after_lsp_reanalysis() -> Result<()>
 
     let response = mcp.request(
         "tools/call",
-        &json!({"name": "duplicates", "arguments": {"n": 5}}),
+        &json!({"name": "top-offenders", "arguments": {"n": 5}}),
     )?;
-    let structured = structured_content(&response, "duplicates")?;
+    let structured = structured_content(&response, "top-offenders")?;
     let total_clusters = structured
         .get("total_clusters")
         .and_then(Value::as_u64)
@@ -172,9 +172,9 @@ fn call_report_get(mcp: &mut McpHandle) -> Result<Value> {
     let response = mcp.request(
         "tools/call",
         &json!({
-            "name": "duplicates",
+            "name": "report-get",
             "arguments": {"offset": 0, "limit": 64},
         }),
     )?;
-    structured_content(&response, "duplicates")
+    structured_content(&response, "report-get")
 }

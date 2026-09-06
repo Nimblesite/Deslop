@@ -1,9 +1,9 @@
-use super::support::*;
+use crate::support::*;
 
 // Two Rust files that are renamed (Type-2) clones of one function: the
 // copy renames the function and its parameter but keeps the body's
 // locals, so most collapsed-leaf content still agrees and the pair
-// routes to `nearly_identical` under [FUSED-CONTENT-GATE]. A fully
+// routes to `nearly_identical` under [FUSION-CONTENT-GATE]. A fully
 // renamed copy carries no content evidence and honestly routes to
 // `structural_only` instead. Shared with `bucket_groups` as its
 // nearly-identical seed pair.
@@ -128,19 +128,16 @@ fn html_report_splits_into_language_sections_via_flag() -> Result<()> {
 // the CLI flag.
 #[test]
 fn html_report_splits_into_language_sections_via_config() -> Result<()> {
-    let (tmp, scan_root, out) = seeded_scan("src", |root| {
-        write_polyglot_clones(root)?;
-        fs::write(
-            root.join(".deslop.toml"),
-            "[report]\nsplit_by_language = true\n",
-        )?;
-        Ok(())
-    })?;
-    run_scan(
-        &scan_root,
-        &tmp.path().join("report"),
-        &[MIN_NODES_FLAG, MIN_NODES_VALUE],
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    write_polyglot_clones(&scan_root)?;
+    fs::write(
+        scan_root.join(".deslop.toml"),
+        "[report]\nsplit_by_language = true\n",
     )?;
+    let out = outputs_under(tmp.path());
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     let html = fs::read_to_string(&out.html)?;
     assert!(
         html.contains("<h2>Rust — ") && html.contains("<h2>Dart — "),

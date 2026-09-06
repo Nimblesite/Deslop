@@ -10,10 +10,7 @@
 
 mod ast_access;
 mod change;
-mod diff;
-mod pair_compare;
 mod render;
-mod store;
 
 use std::{
     collections::HashMap,
@@ -22,13 +19,11 @@ use std::{
 };
 
 use crate::{
-    ast::ByteRange,
     boilerplate::BoilerplateRange,
     config::{is_config_path, watched_config_paths, ExclusionConfig},
-    discover::{
-        discover_files, is_ignore_rule_path, DiscoveredFile, DiscoveryResult, IgnoreMatcher,
-    },
+    discover::{discover_files, is_ignore_rule_path, DiscoveryResult, IgnoreMatcher},
     error::CoreError,
+    fpcache::CachedFile,
     lang::LanguageParser,
     report::{CacheStats, Report},
     report_metrics::AnalysedLines,
@@ -37,11 +32,10 @@ use crate::{
 
 use super::{
     config::{EmbeddingSettings, PipelineConfig},
-    corpus::{build_extension_map, default_parsers, fingerprint_corpus, FingerprintCorpus},
+    corpus::{build_extension_map, default_parsers, fingerprint_corpus},
 };
 
 use change::CorpusEffect;
-use store::CorpusStore;
 
 /// A long-running analysis context owned by the daemon ([LIVE-LIFECYCLE]).
 ///
@@ -55,9 +49,7 @@ pub struct PipelineSession {
     pub(super) root: PathBuf,
     /// Subtree-size floor used throughout the session.
     pub(super) min_nodes: u32,
-    /// Whether the invocation requested the on-disk fingerprint cache.
-    /// Gated per pass by the config escape hatch through
-    /// [`Self::effective_incremental`] ([CONFIG-INCREMENTAL-OPTOUT]).
+    /// Whether to consult the on-disk fingerprint cache.
     pub(super) incremental: bool,
     /// Optional override pointing at a `.deslop.toml` outside the
     /// workspace root. `None` = discover inside `root`.
@@ -82,15 +74,10 @@ pub struct PipelineSession {
     /// keep their [`FileId`] slot (nothing ever gets unregistered) so
     /// old diagnostics retain stable handles.
     pub(super) registry: FileRegistry,
-    /// Canonical flat corpus storage: every fingerprint, signature,
-    /// and normalised tree, in workspace-relative-path order with one
-    /// span per live file. Entry presence is the single source of
-    /// truth for "which files currently contribute fingerprints." A
-    /// render pass borrows it as-is; only a live change copies —
-    /// splicing exactly one file's records
-    /// ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]). Private: session
-    /// submodules reach it as descendants; nothing outside does.
-    store: CorpusStore,
+    /// Per-`FileId` cached tree + fingerprints. Keys here are the
+    /// single source of truth for "which files are currently part of
+    /// the corpus."
+    pub(super) per_file: HashMap<FileId, CachedFile>,
     /// Per-`FileId` source bytes so the embedding pass can read the
     /// exact snippet covered by a fingerprint without re-reading
     /// from disk.
@@ -112,9 +99,6 @@ pub struct PipelineSession {
     pub(super) boilerplate_ranges: Vec<BoilerplateRange>,
     /// Files analysed in the most recent generation.
     pub(super) files_analysed: usize,
-    /// Verified diff scope when the session was initialised with a
-    /// diff ([CLI-ARG-DIFF]). Every render tags against it.
-    pub(super) diff_scope: Option<crate::diff_scope::DiffScope>,
 }
 
 impl PipelineSession {
@@ -136,27 +120,6 @@ impl PipelineSession {
         config_path: Option<PathBuf>,
         embedding: EmbeddingSettings<'_>,
     ) -> Result<(Self, Report), CoreError> {
-        Self::initialise_with_diff(root, min_nodes, incremental, config_path, embedding, None)
-    }
-
-    /// [`Self::initialise`] with an optional parsed unified diff
-    /// ([CLI-ARG-DIFF]): the diff is byte-verified against the freshly
-    /// analysed corpus and, when clean, tags the initial report and
-    /// every later render ([OUTPUT-SCHEMA-DIFF-TAGS]).
-    ///
-    /// # Errors
-    ///
-    /// Everything [`Self::initialise`] produces, plus
-    /// [`CoreError::DiffStale`] when the diff does not match the
-    /// scanned tree.
-    pub fn initialise_with_diff(
-        root: PathBuf,
-        min_nodes: u32,
-        incremental: bool,
-        config_path: Option<PathBuf>,
-        embedding: EmbeddingSettings<'_>,
-        diff: Option<&crate::diff_scope::ParsedDiff>,
-    ) -> Result<(Self, Report), CoreError> {
         let parsers = default_parsers();
         let extension_to_language = build_extension_map(&parsers);
         // [#141 MCP-SAFETY] Canonicalise the root so the registry,
@@ -176,17 +139,6 @@ impl PipelineSession {
             "pipeline session initialising",
         );
         let exclusion = Arc::new(load_exclusion(&root, config_path.as_deref())?);
-        // [CONFIG-INCREMENTAL-OPTOUT] The config file is the outermost
-        // escape hatch: `[analysis] incremental = false` disables
-        // persisted processing for every surface that reaches this
-        // point — CLI batch, rerun, LSP, MCP — whatever the invocation
-        // requested.
-        let effective_incremental = incremental && exclusion.incremental_enabled();
-        if incremental && !effective_incremental {
-            tracing::info!(
-                "persisted processing disabled by config (`[analysis] incremental = false`)",
-            );
-        }
         let ignore_matcher = IgnoreMatcher::build(&root);
         let discovery = discover_files(&root, &extension_to_language, &exclusion);
         log_discovery_summary(&discovery, &root);
@@ -195,10 +147,9 @@ impl PipelineSession {
             min_nodes,
             config_path: config_path.clone(),
             embedding,
-            incremental: effective_incremental,
+            incremental,
         };
-        let mut corpus = fingerprint_corpus(&discovery.files, &parsers, &config)?;
-        let store = build_store(&mut corpus, &discovery.files, &root);
+        let corpus = fingerprint_corpus(&discovery.files, &parsers, &config)?;
         let mut live_paths: HashMap<FileId, PathBuf> = HashMap::new();
         let mut file_languages: HashMap<FileId, &'static str> = HashMap::new();
         for discovered in &discovery.files {
@@ -216,7 +167,7 @@ impl PipelineSession {
             exclusion,
             ignore_matcher,
             registry: discovery.registry,
-            store,
+            per_file: corpus.per_file,
             sources: corpus.sources,
             live_paths,
             file_languages,
@@ -224,11 +175,7 @@ impl PipelineSession {
             analysed_lines: corpus.analysed_lines,
             boilerplate_ranges: corpus.boilerplate_ranges,
             files_analysed,
-            diff_scope: None,
         };
-        if let Some(parsed) = diff {
-            session.attach_diff(parsed)?;
-        }
         let report = session.render(&config, corpus.cache_stats)?;
         Ok((session, report))
     }
@@ -306,22 +253,8 @@ impl PipelineSession {
     }
 
     /// Updates whether future change passes consult the fingerprint cache.
-    /// The config escape hatch still gates the effective value
-    /// ([CONFIG-INCREMENTAL-OPTOUT]).
     pub fn set_incremental(&mut self, enabled: bool) {
         self.incremental = enabled;
-    }
-
-    /// The requested store mode gated by the live config's escape hatch
-    /// ([CONFIG-INCREMENTAL-OPTOUT]) — re-evaluated per pass, so a
-    /// `.deslop.toml` edit opting out takes effect on the very next
-    /// change pass without a restart. This is the value passes actually
-    /// run with, and therefore the value every status surface must
-    /// report — surfacing the raw request instead leaves the config
-    /// surface claiming a store the passes never consult.
-    #[must_use]
-    pub fn effective_incremental(&self) -> bool {
-        self.incremental && self.exclusion.incremental_enabled()
     }
 
     /// Returns the total fingerprint count across every live file.
@@ -329,35 +262,10 @@ impl PipelineSession {
     /// before re-running the pass.
     #[must_use]
     pub fn fingerprint_count(&self) -> usize {
-        self.store.fingerprint_count()
-    }
-
-    /// Resolves subtree digests to the live occurrences that carry
-    /// them — the workspace path and byte range of every fingerprint
-    /// whose normalised-subtree hash is in `hashes`
-    /// ([PIPELINE-FINGERPRINT-MERKLE]).
-    ///
-    /// The join `find_similar` runs for snippet input: a snippet has no
-    /// workspace identity, so it can only be located by content. The
-    /// public cluster id is *not* content alone ([PIPELINE-DETERMINISM],
-    /// gh #430 — it mixes the members' paths so same-shape findings in
-    /// different files never share one), so a caller that matched
-    /// `encode_short_id(hash) == cluster.id` returned empty for every
-    /// snippet the moment ids stopped being bare member digests. The
-    /// occurrence ranges this returns are joined against the report
-    /// through [`Report`] range lookups, which is the same join the
-    /// open-range variant of `find_similar` uses.
-    #[must_use]
-    pub fn subtree_occurrences(&self, hashes: &[[u8; 32]]) -> Vec<(PathBuf, ByteRange)> {
-        self.store
-            .fingerprints()
-            .iter()
-            .filter(|found| hashes.contains(&found.hash))
-            .filter_map(|found| {
-                self.path_for(found.file_id)
-                    .map(|path| (path.to_path_buf(), found.byte_range))
-            })
-            .collect()
+        self.per_file
+            .values()
+            .map(|cached| cached.fingerprints.len())
+            .sum()
     }
 
     /// Returns the path associated with `file_id`, if the session has
@@ -442,45 +350,6 @@ impl PipelineSession {
         self.ignore_matcher = IgnoreMatcher::build(&self.root);
         Ok(())
     }
-}
-
-/// Takes the corpus loop's flat record vectors as the store — they
-/// were built directly in canonical ascending `(path, file id)` order
-/// ([PIPELINE-DETERMINISM], [PERF-FLUTTER-TODO-MEMORY]), so the store
-/// is a move, not a rebuild.
-fn build_store(
-    corpus: &mut FingerprintCorpus,
-    files: &[DiscoveredFile],
-    root: &Path,
-) -> CorpusStore {
-    // Entries in the corpus loop's processed order (ascending
-    // `(path, file id)`); `processed` is a subsequence of the same
-    // ordering over the discovery list, so one zip walks both.
-    let mut ordered: Vec<&DiscoveredFile> = files.iter().collect();
-    ordered.sort_by(|left, right| {
-        left.path
-            .cmp(&right.path)
-            .then(left.file_id.cmp(&right.file_id))
-    });
-    let mut processed = std::mem::take(&mut corpus.per_file).into_iter().peekable();
-    let mut entries = Vec::with_capacity(ordered.len());
-    for discovered in ordered {
-        let Some((file_id, count)) = processed.next_if(|&(id, _)| id == discovered.file_id) else {
-            // Not processed (no parser, or skipped as too deep) —
-            // no records, no entry.
-            continue;
-        };
-        entries.push(store::StoreEntry {
-            file_id,
-            path_key: store::relative_path_key(&discovered.path, root),
-            fingerprint_count: count,
-        });
-    }
-    CorpusStore::from_flat_parts(
-        entries,
-        std::mem::take(&mut corpus.fingerprints),
-        std::mem::take(&mut corpus.signatures),
-    )
 }
 
 /// True when a change to `path` re-scopes the corpus rather than

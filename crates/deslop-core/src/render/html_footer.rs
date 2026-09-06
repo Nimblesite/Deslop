@@ -2,19 +2,20 @@
 //!
 //! Per [OUTPUT-HUMAN-HTML] the body of the report stays scannable —
 //! the verbose run metadata (tool version, embedding
-//! provenance and schema documentation lives inside one collapsed `<details>` tucked at
+//! provenance, per-cluster signal numbers, action-hints playbook,
+//! schema doc) lives inside a single collapsed `<details>` tucked at
 //! the bottom of the page. Humans can ignore it; agents and
 //! `--from-report` consumers can still read everything they need.
 
 use std::fmt::Write as _;
 
-use crate::report::Report;
+use crate::report::{Report, ReportSignals};
 
 /// Writes the collapsed footer holding all the run metadata.
 pub fn write_run_details(out: &mut String, report: &Report, escape: fn(&str) -> String) {
     let _ = write!(
         out,
-        "<details class=\"run-details\"><summary>Run details and schema reference</summary>\
+        "<details class=\"run-details\"><summary>Run details, signals, and schema reference</summary>\
          <dl>\
          <dt>Tool</dt><dd>{tool}</dd>\
          <dt>Files analysed</dt><dd>{files}</dd>\
@@ -28,9 +29,60 @@ pub fn write_run_details(out: &mut String, report: &Report, escape: fn(&str) -> 
         hidden = report.clusters_hidden,
         embeddings = escape(&format_provenance(report)),
     );
+    write_signals(out, report, escape);
+    write_action_hints(out, report, escape);
     write_boilerplate_hints(out, report, escape);
     write_schema(out, report, escape);
     let _ = write!(out, "</details>");
+}
+
+/// Per-cluster signal table. Only included when there's at least one
+/// cluster.
+fn write_signals(out: &mut String, report: &Report, escape: fn(&str) -> String) {
+    if report.clusters.is_empty() {
+        return;
+    }
+    let _ = write!(
+        out,
+        "<h3>Per-group signals</h3><pre>{header}",
+        header = escape("group  structural  token_jaccard  embedding_cos  fused\n"),
+    );
+    for cluster in &report.clusters {
+        let _ = writeln!(
+            out,
+            "{}",
+            escape(&format_signal_row(&cluster.id, cluster.signals)),
+        );
+    }
+    let _ = write!(out, "</pre>");
+}
+
+/// Formats one signal row for the run-details table.
+fn format_signal_row(id: &str, signals: ReportSignals) -> String {
+    format!(
+        "{id:<6}  {s:>10.2}  {j:>13.2}  {e:>13.2}  {f:>5.2}",
+        s = signals.structural,
+        j = signals.token_jaccard,
+        e = signals.embedding_cos,
+        f = signals.fused,
+    )
+}
+
+/// Agent-oriented action-hints playbook.
+fn write_action_hints(out: &mut String, report: &Report, escape: fn(&str) -> String) {
+    if report.action_hints.is_empty() {
+        return;
+    }
+    let _ = write!(out, "<h3>Action hints</h3><ul>");
+    for hint in &report.action_hints {
+        let _ = write!(
+            out,
+            "<li><code>{pattern}</code> — {rec}</li>",
+            pattern = escape(&hint.pattern),
+            rec = escape(&hint.recommendation),
+        );
+    }
+    let _ = write!(out, "</ul>");
 }
 
 /// Low-noise import/prologue hygiene hints.
@@ -73,13 +125,11 @@ fn format_provenance(report: &Report) -> String {
         || "embeddings: off".to_owned(),
         |provenance| {
             format!(
-                "embeddings: {provider}/{model}@{version} ({dims}-d, embedded {succeeded}/{attempted} \
-                 subtrees via {indexed} index points, failures {failed})",
+                "embeddings: {provider}/{model}@{version} ({dims}-d, indexed {indexed}/{attempted}, failures {failed})",
                 provider = provenance.provider_id,
                 model = provenance.model_id,
                 version = provenance.model_version,
                 dims = provenance.dimensions,
-                succeeded = provenance.succeeded_subtrees,
                 indexed = provenance.indexed_subtrees,
                 failed = provenance.failed_subtrees,
                 attempted = provenance.attempted_subtrees,

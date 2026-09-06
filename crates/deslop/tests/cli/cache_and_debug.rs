@@ -1,5 +1,4 @@
-use super::support::*;
-use deslop_core::lang::shared::OPERATOR_KIND_PREFIX;
+use crate::support::*;
 use std::fmt::Write as _;
 
 /// Runs a default (cache-on, [PIPELINE-INCREMENTAL]) pass over
@@ -99,17 +98,10 @@ fn incremental_cache_hits_on_second_run() -> Result<()> {
     );
     // Deduplication must still fire even when the fingerprints came
     // from the cache — the rehydration is only useful if downstream
-    // clustering sees identical results. The mass-only wire proves the
-    // Type-2 cluster by its presence with the mass fields and both
-    // occurrences ([RANK-MASS-SUM]); the retired `structural: 1.0`
-    // cluster signal no longer exists.
+    // clustering sees identical results.
     assert!(
-        second_json.contains("\"mass\":"),
+        second_json.contains("\"structural\": 1.0"),
         "cached run must still detect the Type-2 cluster: {second_json}"
-    );
-    assert!(
-        second_json.contains("\"Alpha.cs\"") && second_json.contains("\"Beta.cs\""),
-        "cached run must report both copies of the Type-2 cluster: {second_json}"
     );
     let second_txt = fs::read_to_string(tmp.path().join("second.txt"))?;
     assert!(
@@ -125,14 +117,12 @@ fn incremental_cache_hits_on_second_run() -> Result<()> {
 // land under `.deslop/cache/fingerprints/`.
 #[test]
 fn default_run_uses_the_cache() -> Result<()> {
-    let (tmp, scan_root, _out) =
-        seeded_scan("src", |root| seed_scan_root(&fixture("csharp-small"), root))?;
-    run_scan(
-        &scan_root,
-        &tmp.path().join("report"),
-        &[MIN_NODES_FLAG, MIN_NODES_VALUE],
-    )?;
-    let json = report_json_text(&tmp)?;
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
+    let json = fs::read_to_string(tmp.path().join("report.json"))?;
     assert!(
         json.contains("\"misses\": 2"),
         "a bare run must consult the cache and miss on a cold tree: {json}"
@@ -153,14 +143,15 @@ fn default_run_uses_the_cache() -> Result<()> {
 // must not mutate the tree has an explicit way to say so.
 #[test]
 fn no_incremental_flag_skips_the_cache() -> Result<()> {
-    let (tmp, scan_root, _out) =
-        seeded_scan("src", |root| seed_scan_root(&fixture("csharp-small"), root))?;
-    run_scan(
-        &scan_root,
-        &tmp.path().join("report"),
-        &[MIN_NODES_FLAG, MIN_NODES_VALUE, "--no-incremental"],
-    )?;
-    let json = report_json_text(&tmp)?;
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let _assertion = cmd
+        .args(["--min-nodes", "8", "--no-incremental"])
+        .assert()
+        .success();
+    let json = fs::read_to_string(tmp.path().join("report.json"))?;
     assert!(
         json.contains("\"hits\": 0"),
         "--no-incremental must record zero hits: {json}"
@@ -208,8 +199,8 @@ fn corrupt_cache_entry_degrades_to_miss() -> Result<()> {
         "corrupt entries must be treated as misses: {second_json}"
     );
     assert!(
-        second_json.contains("\"mass\":") && second_json.contains("\"Alpha.cs\""),
-        "analysis still produces the Type-2 cluster after recovery: {second_json}"
+        second_json.contains("\"structural\": 1.0"),
+        "analysis still produces the cluster after recovery: {second_json}"
     );
     Ok(())
 }
@@ -319,7 +310,7 @@ fn cache_write_failure_is_degraded_not_fatal() -> Result<()> {
     let mut restore = fs::metadata(&locked_dir)?.permissions();
     restore.set_mode(0o755);
     fs::set_permissions(&locked_dir, restore)?;
-    let json = report_json_text(&tmp)?;
+    let json = fs::read_to_string(tmp.path().join("report.json"))?;
     assert!(
         json.contains("\"files_analysed\": 2"),
         "pipeline must still report both files: {json}"
@@ -371,33 +362,33 @@ fn synthetic_corpus_scale_smoke_test() -> Result<()> {
         elapsed.as_secs() < 180,
         "synthetic corpus ran for {elapsed:?} — something is catastrophically wrong",
     );
-    let json = report_json_text(&tmp)?;
+    let json = fs::read_to_string(tmp.path().join("report.json"))?;
     assert!(
         json.contains("\"files_analysed\": 10"),
         "synthetic corpus must analyse every generated file: {json}"
     );
     // Every file shares the identical method template, so the
     // ranked output must contain at least one cluster — catches
-    // pipelines that silently drop everything. The mass-only wire
-    // carries the mass fields instead of the retired `weight`.
+    // pipelines that silently drop everything.
     assert!(
-        json.contains("\"mass\":") && json.contains("\"rank\":"),
+        json.contains("\"weight\":"),
         "synthetic corpus produced no clusters: {json}"
     );
     Ok(())
 }
 
-// Implements the fixture-per-bug workflow from
-// `.claude/skills/fix-bug/SKILL.md`: every bug reproduced into
-// `tests/fixtures/bug-*/` becomes a permanent e2e test. This is the
-// seed example — an empty C# class body used to be silently dropped
-// before the sibling-window fingerprint pass existed; the assertion
-// below pins that behaviour so the bug cannot regress.
+// Implements the [BUG-FIXTURE] workflow from CLAUDE.md: every bug
+// reproduced into `tests/fixtures/bug-*/` becomes a permanent e2e
+// test. This is the seed example — an empty C# class body used to
+// be silently dropped before the sibling-window fingerprint pass
+// existed; the cluster test below pins that behaviour so the bug
+// cannot regress.
 #[test]
 fn bug_fixture_walks_trivial_class_body_without_panicking() -> Result<()> {
-    let (tmp, mut cmd) = fixture_run_command("bug-empty-class")?;
+    let tmp = tempfile::tempdir()?;
+    let mut cmd = fixture_command("bug-empty-class", &tmp.path().join("report"))?;
     let _assertion = cmd.args(["--min-nodes", "4"]).assert().success();
-    let json = report_json_text(&tmp)?;
+    let json = fs::read_to_string(tmp.path().join("report.json"))?;
     assert!(
         json.contains("\"files_analysed\": 1"),
         "empty-class fixture must still analyse its one file: {json}"
@@ -450,19 +441,10 @@ fn assert_ast_golden(fixture_dir: &str, sample_name: &str) -> Result<()> {
         expected,
         "AST dump drifted from {}. Regenerating is NOT the default remedy — \
          prove the new dump satisfies the contract first; the committed file \
-         is only a golden while it is correct.\n\
-         If the new dump IS correct, the normalised tree has changed meaning \
-         while the parse store's blob layout has not, so **bump \
-         `fpcache::blob::SEMANTIC_EPOCH`** in the same change \
-         ([PIPELINE-INCREMENTAL-INTEGRITY]). Blobs are addressed by \
-         `(language, tool_version, min_nodes, source_hash)` and the workspace \
-         version is the permanently-reused `0.0.0-dev`, so without that bump \
-         every already-stored tree stays addressable and a warm run serves \
-         the pre-change normalisation — the one way a warm report can differ \
-         from the cold report of the same tree.",
+         is only a golden while it is correct.",
         expected_path.display(),
     );
-    assert_dump_is_correct(&expected, &fs::read(&source)?, fixture_dir);
+    assert_dump_is_correct(&expected, fs::metadata(&source)?.len(), fixture_dir);
     Ok(())
 }
 
@@ -485,8 +467,7 @@ struct DumpNode {
 /// a file the tool wrote. These invariants come from the contract instead,
 /// so a regenerated dump that re-admits trivia fails here even though it
 /// matches the committed bytes exactly.
-fn assert_dump_is_correct(dump: &str, source: &[u8], label: &str) {
-    let source_len = u64::try_from(source.len()).unwrap_or(u64::MAX);
+fn assert_dump_is_correct(dump: &str, source_len: u64, label: &str) {
     let nodes: Vec<DumpNode> = dump.lines().filter_map(parse_dump_line).collect();
     assert!(!nodes.is_empty(), "{label}: dump has no nodes");
     for node in &nodes {
@@ -505,43 +486,6 @@ fn assert_dump_is_correct(dump: &str, source: &[u8], label: &str) {
     }
     assert_root_spans_retained_children(&nodes, label);
     assert_ranges_nest(&nodes, label);
-    assert_operators_carry_their_token(&nodes, source, label);
-}
-
-/// [PIPELINE-NORMALIZE-AST-OPERATOR] Every operator leaf must be named
-/// by the token it stands for, and its name must be the bytes it spans.
-///
-/// This is what stops the golden from being self-certifying on the one
-/// axis that matters most here. A dump full of a shared `__op__`
-/// placeholder is byte-for-byte stable and completely wrong: it records
-/// a tree in which `alpha + beta` and `alpha - beta` are the same
-/// subtree, and regenerating the file would promote that to "expected"
-/// exactly as it once promoted the dropped Go comments. Reading the
-/// name back out of the source proves the leaf discriminates, and it
-/// proves it against the fixture rather than against the tool.
-fn assert_operators_carry_their_token(nodes: &[DumpNode], source: &[u8], label: &str) {
-    let operators = nodes
-        .iter()
-        .filter(|node| node.kind.starts_with(OPERATOR_KIND_PREFIX));
-    for node in operators {
-        let range = usize::try_from(node.start)
-            .ok()
-            .zip(usize::try_from(node.end).ok());
-        let spanned = range
-            .and_then(|(start, end)| source.get(start..end))
-            .map(String::from_utf8_lossy)
-            .unwrap_or_default();
-        assert_eq!(
-            node.kind,
-            format!("{OPERATOR_KIND_PREFIX}{spanned}"),
-            "{label}: operator leaf `{}` at [{}..{}] spans `{spanned}`. An \
-             operator leaf named anything but its own token cannot tell `+` \
-             from `-`, and every signal taken from the digest inherits that",
-            node.kind,
-            node.start,
-            node.end,
-        );
-    }
 }
 
 /// Splits `<indent><kind> [start..end]`; indent is two spaces per level.

@@ -6,16 +6,12 @@
 //! occurrence slices because the report-level byte-equivalence upgrade
 //! can prove equivalence of contained C# methods rather than of the
 //! raw slices ([CLONE-BUCKETS-IDENTICAL]).
-//!
-//! Rule 1 also has a content half ([`content_refusal`]): a shape match
-//! is not evidence of duplication, so a cluster whose measured content
-//! evidence does not vouch for it never reaches any of these actions
-//! ([FUSED-CONTENT-GATE], gh #344).
 
 use tree_sitter::Node;
 
 use crate::{
-    ast::{named_children, ByteRange},
+    ast::ByteRange,
+    buckets::{classify, ClusterKind},
     cluster_filters::enclosing_kind,
     refactor::tables::ScopeKinds,
     report::ReportCluster,
@@ -48,6 +44,18 @@ impl OccurrenceScope<'_> {
     }
 }
 
+/// Exact-structural buckets a verbatim extract may come from. The
+/// bucket is only a pre-filter — the authoritative Type-1 gate is the
+/// byte-equivalence proof on the effective spans
+/// ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 1), because the nested-cluster
+/// collapse keeps the outer Type-2 view of the renamed-methods case
+/// ([PIPELINE-CLUSTER-EXACT]).
+const EXACT_BUCKETS: [ClusterKind; 3] = [
+    ClusterKind::Identical,
+    ClusterKind::NearlyIdentical,
+    ClusterKind::StructuralOnly,
+];
+
 /// Applies rules 2–3 of [AUTOFIX-EXTRACT-PRECONDITIONS] to the cluster
 /// record plus the bucket pre-filter: an exact-structural bucket, at
 /// least two visible occurrences, all occurrences in one file, no wire
@@ -57,7 +65,7 @@ impl OccurrenceScope<'_> {
 /// spans ([`slices_equivalent`]).
 #[must_use]
 pub fn eligible_ranges(cluster: &ReportCluster) -> Option<Vec<ByteRange>> {
-    let visible = visible_occurrences(cluster)?;
+    let visible = visible_exact_occurrences(cluster)?;
     let (first, rest) = visible.split_first()?;
     if rest.is_empty() || rest.iter().any(|occurrence| occurrence.path != first.path) {
         return None;
@@ -81,14 +89,18 @@ pub fn eligible_ranges(cluster: &ReportCluster) -> Option<Vec<ByteRange>> {
 /// silently offering nothing.
 #[must_use]
 pub fn consolidation_candidate(cluster: &ReportCluster) -> bool {
-    visible_occurrences(cluster).is_some()
+    visible_exact_occurrences(cluster).is_some()
         && crate::report::distinct_visible_path_count(cluster) >= 2
 }
 
-/// The visible occurrences of an untruncated cluster. Exact-copy proof
-/// is performed over the source ranges before any edit is offered.
-fn visible_occurrences(cluster: &ReportCluster) -> Option<Vec<&crate::report::ReportOccurrence>> {
-    if cluster.occurrences_truncated {
+/// The visible occurrences of an exact-structural, untruncated cluster
+/// — the pre-screen [`eligible_ranges`] and [`consolidation_candidate`]
+/// share. `None` when the bucket or wire truncation disqualifies the
+/// cluster outright.
+fn visible_exact_occurrences(
+    cluster: &ReportCluster,
+) -> Option<Vec<&crate::report::ReportOccurrence>> {
+    if !EXACT_BUCKETS.contains(&classify(cluster)) || cluster.occurrences_truncated {
         return None;
     }
     Some(
@@ -364,4 +376,11 @@ pub(crate) fn node_text(node: Node<'_>, source: &[u8]) -> Option<String> {
 pub(crate) fn field_text(node: Node<'_>, field: &str, source: &[u8]) -> Option<String> {
     node.child_by_field_name(field)
         .and_then(|child| node_text(child, source))
+}
+
+/// Named children of `node` in source order — shared by the merge
+/// engine's raw-tree scans.
+pub(crate) fn named_children(node: Node<'_>) -> Vec<Node<'_>> {
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor).collect()
 }

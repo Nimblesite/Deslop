@@ -5,6 +5,6 @@ import pytest
 
 @pytest.mark.parametrize("case", build_cases("invoice"))
 def test_invoice_case_shape(case):
-    payload = {"case": {"total": 900, "state": "sent", "currency": "USD", "region": "eu"}}
-    assert payload["case"]["total"] == 900
-    assert payload["case"]["state"] == "sent"
+    ledger = {"entry": {"amount": 900, "phase": "sent"}}
+    assert ledger["entry"]["amount"] == 900
+    assert ledger["entry"]["phase"] == "sent"

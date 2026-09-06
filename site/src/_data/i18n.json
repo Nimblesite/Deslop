@@ -3,20 +3,12 @@
     "blog": {
       "back": "← Back to Blog",
       "title": "Blog",
-      "indexTitle": "Duplicate-code engineering",
       "subtitle": "Notes on duplicate detection, AI-era codebases, and the decisions behind Deslop.",
-      "eyebrow": "Field notes",
+      "eyebrow": "The Manuscript · Field Notes",
       "readMore": "Read Article",
+      "tags": "Tags",
+      "categories": "Categories",
       "empty": "No blog posts yet."
-    },
-    "a11y": {
-      "skipToContent": "Skip to main content",
-      "liveServer": "Live analysis server",
-      "toggleTheme": "Toggle dark mode",
-      "toggleMenu": "Toggle menu"
-    },
-    "social": {
-      "defaultImageAlt": "Deslop duplicate-code analysis for editors and coding agents"
     },
     "nav": {
       "docs": "Docs",
@@ -29,16 +21,10 @@
     "docs": {
       "title": "Documentation",
       "gettingStarted": "Getting Started",
+      "brand": "The Manuscript",
+      "versionTag": "Live duplicate-code analysis · preview",
       "communitySupport": "Community support",
       "previous": "Previous"
-    },
-    "docsNav": {
-      "start": "Start here",
-      "guides": "Guides",
-      "reference": "Reference",
-      "trust": "Internals & transparency",
-      "interactiveGraph": "Issue graph",
-      "issuePlanner": "Issue planner"
     },
     "footer": {
       "product": "Product",
@@ -66,11 +52,6 @@
       "install": "Install",
       "review": "Rate & review"
     },
-    "testimonials": {
-      "eyebrow": "Field report",
-      "title": "Findings that ship.",
-      "loc": "LOC"
-    },
     "community": {
       "eyebrow": "Community",
       "title": "Built in the open.",
@@ -79,15 +60,18 @@
     },
     "releases": {
       "title": "Releases",
+      "eyebrow": "Release Index",
       "subtitle": "Latest Deslop GitHub releases, VSIX artifacts, CLI archives, and checksums.",
       "latestGithub": "Latest on GitHub",
       "allGithub": "All GitHub releases",
       "latestStable": "Latest stable",
       "prerelease": "Prerelease",
+      "cardSummary": "VSIX packages, CLI archives, checksums, and generated release notes are hosted on GitHub.",
       "assetCount": "Artifacts",
       "assets": "Assets",
       "moreAssets": "more",
       "viewRelease": "View release",
+      "generated": "This page is generated from GitHub Releases during the website build.",
       "empty": "Release metadata was unavailable during this build. GitHub remains the source of truth."
     }
   },
@@ -95,20 +79,12 @@
     "blog": {
       "back": "← 返回博客",
       "title": "博客",
-      "indexTitle": "重复代码工程札记",
-      "subtitle": "关于重复检测、AI 时代的代码库，以及 Deslop 背后设计取舍的技术札记。",
-      "eyebrow": "技术札记",
+      "subtitle": "关于重复检测、AI 时代代码库，以及 Deslop 背后设计决策的现场札记。",
+      "eyebrow": "手稿 · 现场札记",
       "readMore": "阅读全文",
+      "tags": "标签",
+      "categories": "分类",
       "empty": "暂无博客文章。"
-    },
-    "a11y": {
-      "skipToContent": "跳到主要内容",
-      "liveServer": "实时分析服务器",
-      "toggleTheme": "切换深浅色主题",
-      "toggleMenu": "切换菜单"
-    },
-    "social": {
-      "defaultImageAlt": "面向编辑器与编码智能体的 Deslop 重复代码分析"
     },
     "nav": {
       "docs": "文档",
@@ -121,16 +97,10 @@
     "docs": {
       "title": "文档",
       "gettingStarted": "快速开始",
+      "brand": "手稿",
+      "versionTag": "实时重复代码分析 · 预览",
       "communitySupport": "社区支持",
       "previous": "上一页"
-    },
-    "docsNav": {
-      "start": "入门",
-      "guides": "使用指南",
-      "reference": "参考",
-      "trust": "原理与透明度",
-      "interactiveGraph": "交互式图谱",
-      "issuePlanner": "问题规划器"
     },
     "footer": {
       "product": "产品",
@@ -146,41 +116,39 @@
       "releases": "发布",
       "githubReleases": "GitHub 发布",
       "vscodeMarketplace": "VS Code Marketplace",
-      "openVsx": "Open VSX 扩展库",
+      "openVsx": "Open VSX 注册表",
       "discord": "Discord",
       "rss": "RSS",
       "githubAction": "GitHub Action"
     },
     "editors": {
       "eyebrow": "安装",
-      "title": "在你的编辑器中安装 Deslop。",
+      "title": "在你的编辑器中获取 Deslop。",
       "lede": "从 Visual Studio Marketplace 或 Open VSX 安装同一个扩展。",
       "install": "安装",
-      "review": "评分与评论"
-    },
-    "testimonials": {
-      "eyebrow": "实地反馈",
-      "title": "可以直接合并的发现。",
-      "loc": "行"
+      "review": "评分并评价"
     },
     "community": {
       "eyebrow": "社区",
-      "title": "公开开发。",
-      "lede": "欢迎在 Discord 提问、报告缺陷或提出功能建议。",
+      "title": "公开构建。",
+      "lede": "欢迎在 Discord 提问、报告 bug 或提出功能请求。",
       "cta": "加入 Discord"
     },
     "releases": {
       "title": "发布",
-      "subtitle": "最新的 Deslop GitHub 发布版、VSIX 工件、CLI 归档与校验和。",
+      "eyebrow": "发布索引",
+      "subtitle": "最新 Deslop GitHub release、VSIX 工件、CLI 归档与校验和。",
       "latestGithub": "GitHub 最新发布",
       "allGithub": "全部 GitHub 发布",
       "latestStable": "最新稳定版",
       "prerelease": "预发布",
-      "assetCount": "发布文件",
-      "assets": "发布文件",
+      "cardSummary": "VSIX 包、CLI 归档、校验和以及自动生成的发布说明都托管在 GitHub。",
+      "assetCount": "工件",
+      "assets": "工件",
       "moreAssets": "更多",
       "viewRelease": "查看发布",
-      "empty": "本次构建无法获取发布元数据。GitHub 仍是发布信息的权威来源。"
+      "generated": "本页在网站构建期间从 GitHub Releases 生成。",
+      "empty": "本次构建无法获取发布元数据。GitHub 仍是发布信息的事实来源。"
     }
   }
 }

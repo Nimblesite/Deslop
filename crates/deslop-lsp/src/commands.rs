@@ -15,9 +15,6 @@ use tower_lsp::{
 
 use crate::{backend::LspBackend, notifications::ReportChangedLspNotification};
 
-/// JSON-RPC field naming the command in an `executeCommand` request.
-const COMMAND_FIELD: &str = "command";
-
 /// Forces a full report refresh.
 pub const REFRESH_REPORT: &str = "deslop.lsp.refreshReport";
 /// Opens the current report virtual document.
@@ -98,30 +95,13 @@ async fn refresh_report(backend: &LspBackend) -> LspResult<Option<Value>> {
         .remember_snapshot(previous_generation, previous_report)
         .await;
     notify_if_changed(backend, &delta).await;
-    Ok(Some(refresh_report_reply(
-        delta.to_generation,
-        &ChangeSummary::from_delta(&delta),
-    )))
-}
-
-/// Builds the compact `deslop.lsp.refreshReport` reply shared by the
-/// `workspace/executeCommand` path and the MCP-facing IPC path
-/// ([LSP-IPC]). Every [`ChangeSummary`] field is required on the wire:
-/// the MCP `rescan` tool parses all seven counts, so a reply that omits
-/// the literal-finding deltas or `worstMass` fails IPC transport
-/// instead of refreshing the client's view.
-pub(crate) fn refresh_report_reply(generation: u64, summary: &ChangeSummary) -> Value {
-    json!({
-        (COMMAND_FIELD): REFRESH_REPORT,
-        "generation": generation,
-        "clustersAdded": summary.clusters_added,
-        "clustersRemoved": summary.clusters_removed,
-        "clustersUpdated": summary.clusters_updated,
-        "literalFindingsAdded": summary.literal_findings_added,
-        "literalFindingsRemoved": summary.literal_findings_removed,
-        "literalFindingsUpdated": summary.literal_findings_updated,
-        "worstMass": summary.worst_mass,
-    })
+    Ok(Some(json!({
+        "command": REFRESH_REPORT,
+        "generation": delta.to_generation,
+        "clustersAdded": delta.clusters_added.len(),
+        "clustersRemoved": delta.clusters_removed.len(),
+        "clustersUpdated": delta.clusters_updated.len(),
+    })))
 }
 
 /// Renders the live report as a single self-contained HTML document and
@@ -191,7 +171,7 @@ async fn show_uri(backend: &LspBackend, command: &str, uri: &str) -> LspResult<O
         })
         .await?;
     Ok(Some(
-        json!({ (COMMAND_FIELD): command, "uri": uri, "shown": shown }),
+        json!({ "command": command, "uri": uri, "shown": shown }),
     ))
 }
 
@@ -199,7 +179,7 @@ async fn show_uri(backend: &LspBackend, command: &str, uri: &str) -> LspResult<O
 async fn pick_embedding_model(backend: &LspBackend) -> LspResult<Option<Value>> {
     let models = backend.service().embedding_list_models().await;
     Ok(Some(
-        json!({ (COMMAND_FIELD): PICK_EMBEDDING_MODEL, "models": models }),
+        json!({ "command": PICK_EMBEDDING_MODEL, "models": models }),
     ))
 }
 
@@ -211,7 +191,7 @@ async fn toggle_incremental(backend: &LspBackend) -> LspResult<Option<Value>> {
         guard.toggle_incremental()
     };
     Ok(Some(json!({
-        (COMMAND_FIELD): TOGGLE_INCREMENTAL,
+        "command": TOGGLE_INCREMENTAL,
         "incremental": config.incremental,
     })))
 }

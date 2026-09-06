@@ -6,7 +6,6 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Deslop analysis engine — AST fingerprinting, clustering, ranking, live incremental re-analysis. The shared core behind the LSP, MCP, and CLI surfaces."
-autotests = false
 
 [features]
 default = []
@@ -15,10 +14,6 @@ live = ["dep:notify", "dep:tokio", "dep:futures", "dep:async-trait", "dep:getran
 # crates. Never enable in production binaries — the deterministic
 # BLAKE3 shim is not a product provider.
 test-support = []
-# Exposes deterministic hot-path measurement only to the checked-in benchmark.
-benchmark = []
-# Keeps hot-loop frames separate for symbolized sampling; not used for timing.
-profile-internals = ["benchmark"]
 
 [dependencies]
 thiserror.workspace = true
@@ -54,26 +49,9 @@ nix = { version = "0.31", default-features = false, features = ["signal"] }
 
 [dev-dependencies]
 anyhow.workspace = true
-# Self-dependency so this crate's own integration tests see the
-# `test-support` gated modules (`report_fixtures`, `embedding::test_support`)
-# the same way the other crates' dev-dependencies do. Cargo resolves it to
-# this very crate; it adds no build unit.
-deslop-core = { path = ".", features = ["test-support"] }
 deslop-test-support = { path = "../deslop-test-support" }
 tokio = { workspace = true }
 tempfile.workspace = true
 
 [lints]
 workspace = true
-
-[[test]]
-name = "suite"
-path = "tests/suite.rs"
-
-# Both benches import the `benchmark`-gated measurement modules, so they only
-# build when that feature is on. Without this, `--all-targets` builds them
-# unconditionally and fails E0432.
-[[bench]]
-name = "shared_subtree_alignment"
-harness = false
-required-features = ["benchmark"]

@@ -2,8 +2,6 @@ import { type Page } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 
-import type { Report } from "../src/types/report";
-
 // `test`/`expect` come from the coverage fixture so this same suite records the
 // webview V8 coverage when WEBVIEW_COVERAGE=1 (no separate rendering harness).
 import { expect, test } from "./webview-coverage-fixture";
@@ -18,8 +16,6 @@ interface ViewportCase {
 
 interface PostedMessage {
   readonly kind?: string;
-  readonly left?: { readonly path?: string; readonly start_byte?: number; readonly end_byte?: number };
-  readonly right?: { readonly path?: string; readonly start_byte?: number; readonly end_byte?: number };
 }
 
 declare global {
@@ -32,18 +28,6 @@ declare global {
 const repoRoot = findRepoRoot(process.cwd());
 const webviewDir = path.join(repoRoot, "clients", "vscode", "media", "webview");
 const screenshotDir = path.join(repoRoot, "target", "playwright-webview");
-const PAIR_EVIDENCE_HEADING = "PAIR EVIDENCE";
-const PAIR_CONJOINED_SEPARATOR = "↔";
-const PAIR_EVIDENCE_UNAVAILABLE = "PAIR EVIDENCE UNAVAILABLE";
-const CONTENT_EVIDENCE_HEADING = "CONTENT EVIDENCE";
-const CONTENT_EVIDENCE_VERDICT = "Its content evidence is 0.05 shared content";
-const CONTENT_EVIDENCE_LABELS = ["AGREEMENT", "RENAME", "LITERAL"] as const;
-const DUPLICATE_CODE_TITLE = "Duplicate code";
-const LEGACY_CLUSTER_TITLES = ["Same behavior, different code", "Nearly identical code", "Identical code"] as const;
-const MASS_LABEL = "mass";
-const WEIGHT_LABEL = "weight";
-const SELECT_FOR_COMPARISON = "Select for comparison";
-const COMPARE_SELECTED = "Compare selected occurrences";
 
 const viewports: readonly ViewportCase[] = [
   { name: "desktop", width: 1280, height: 900 },
@@ -59,17 +43,14 @@ test.describe("VSIX webview bundles", () => {
 
       await expect(page.getByText("DESLOP").first()).toBeVisible();
       await expect(page.getByRole("heading", { name: /18\.4%/ })).toBeVisible();
-      await expect(page.getByText(DUPLICATE_CODE_TITLE).first()).toBeVisible();
-      for (const title of LEGACY_CLUSTER_TITLES) {
-        await expect(page.getByText(title, { exact: true })).toHaveCount(0);
-      }
+      await expect(page.getByText("Same behavior, different code")).toBeVisible();
 
       await clearPostedMessages(page);
       await page.getByRole("button", { name: "Refresh" }).click();
       await expectPosted(page, "refresh");
 
       await clearPostedMessages(page);
-      await page.getByText(DUPLICATE_CODE_TITLE).first().click();
+      await page.getByText("Same behavior, different code").click();
       await expectPosted(page, "open/cluster");
 
       await expectHealthyRender(page, errors, `report-${viewport.name}`);
@@ -82,45 +63,22 @@ test.describe("VSIX webview bundles", () => {
       await postHostMessage(page, { kind: "select/cluster", id: sampleReport.clusters[0].id });
 
       await expect(page.getByText("CLUSTER").first()).toBeVisible();
-      await expect(page.getByRole("heading", { name: DUPLICATE_CODE_TITLE })).toBeVisible();
-      await expect(page.getByText(MASS_LABEL, { exact: true })).toBeVisible();
-      await expect(page.getByText(WEIGHT_LABEL, { exact: true })).toHaveCount(0);
-      for (const title of LEGACY_CLUSTER_TITLES) {
-        await expect(page.getByText(title, { exact: true })).toHaveCount(0);
-      }
-      // [FUSED-PAIR-SIGNALS] The admission signals are pair measurements and
-      // never touch the cluster. The cluster card renders no pair-evidence
-      // panel, no pair source, and no content metrics.
-      await expect(page.getByText(CONTENT_EVIDENCE_HEADING, { exact: true })).toHaveCount(0);
-      for (const label of CONTENT_EVIDENCE_LABELS) {
-        await expect(page.getByText(label, { exact: true })).toHaveCount(0);
-      }
-      await expect(page.getByText(CONTENT_EVIDENCE_VERDICT, { exact: false })).toHaveCount(0);
-      await expect(page.getByText(PAIR_EVIDENCE_HEADING, { exact: false })).toHaveCount(0);
-      await expect(page.getByText(PAIR_EVIDENCE_UNAVAILABLE, { exact: false })).toHaveCount(0);
-      // The occurrence list shows single editor locations (cluster membership
-      // facts); only a pair-evidence line joins two of them with the arrow.
-      await expect(page.getByText(PAIR_CONJOINED_SEPARATOR, { exact: false })).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "Same behavior, different code" })).toBeVisible();
+      await expect(page.getByText("SIGNALS")).toBeVisible();
+      await expect(page.getByText("src/dart/alpha.dart:12:3")).toBeVisible();
 
       await page.keyboard.press("n");
-      await expect(page.getByRole("heading", { name: DUPLICATE_CODE_TITLE })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Nearly identical code" })).toBeVisible();
       await page.keyboard.press("p");
-      await expect(page.getByRole("heading", { name: DUPLICATE_CODE_TITLE })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Same behavior, different code" })).toBeVisible();
 
       await clearPostedMessages(page);
       await page.locator("button", { hasText: "Open" }).first().click();
       await expectPosted(page, "open/occurrence");
 
       await clearPostedMessages(page);
-      const compareSelected = page.getByRole("button", { name: COMPARE_SELECTED });
-      await expect(compareSelected).toBeDisabled();
-      const selectors = page.getByRole("button", { name: SELECT_FOR_COMPARISON });
-      await selectors.nth(0).click();
-      await expect(compareSelected).toBeDisabled();
-      await selectors.nth(1).click();
-      await expect(compareSelected).toBeEnabled();
-      await compareSelected.click();
-      await expectPostedPair(page, sampleReport.clusters[0].occurrences[0], sampleReport.clusters[0].occurrences[1]);
+      await page.locator("button", { hasText: "Compare" }).nth(1).click();
+      await expectPosted(page, "compare/canonical");
 
       await expectHealthyRender(page, errors, `cluster-${viewport.name}`);
     });
@@ -150,23 +108,9 @@ test.describe("VSIX webview bundles", () => {
     await postHostMessage(page, { kind: "report/snapshot", report: sampleReport });
     await postHostMessage(page, { kind: "select/cluster", id: sampleReport.clusters[0].id });
 
-    await expect(page.getByRole("heading", { name: DUPLICATE_CODE_TITLE })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Same behavior, different code" })).toBeVisible();
     await expect(page.getByText("CLUSTER").first()).toBeVisible();
     await expect(page.getByText("No cluster selected.")).toHaveCount(0);
-    expect(errors, errors.join("\n")).toEqual([]);
-  });
-
-  test("a cluster renders no pair scores with or without a signal source", async ({ page }) => {
-    const errors = await loadView(page, "cluster", viewports[0]);
-
-    await postHostMessage(page, { kind: "report/snapshot", report: reportWithoutSignalSource });
-    await postHostMessage(page, { kind: "select/cluster", id: sampleReport.clusters[0].id });
-
-    // [FUSED-PAIR-SIGNALS] No cluster surface renders pair evidence; an
-    // absent source changes nothing on the card.
-    await expect(page.getByText(PAIR_EVIDENCE_UNAVAILABLE, { exact: false })).toHaveCount(0);
-    await expect(page.getByText(PAIR_EVIDENCE_HEADING, { exact: false })).toHaveCount(0);
-    await expect(page.getByText("0.91", { exact: true })).toHaveCount(0);
     expect(errors, errors.join("\n")).toEqual([]);
   });
 });
@@ -208,22 +152,6 @@ async function expectPosted(page: Page, kind: string): Promise<void> {
       return await page.evaluate(() => window.__deslopPosts?.map((message) => message.kind) ?? []);
     })
     .toContain(kind);
-}
-
-async function expectPostedPair(
-  page: Page,
-  left: { readonly path: string; readonly start_byte: number; readonly end_byte: number },
-  right: { readonly path: string; readonly start_byte: number; readonly end_byte: number },
-): Promise<void> {
-  await expect
-    .poll(async () => {
-      return await page.evaluate(() => window.__deslopPosts?.find((message) => message.kind === "compare/pair"));
-    })
-    .toEqual({
-      kind: "compare/pair",
-      left: { path: left.path, start_byte: left.start_byte, end_byte: left.end_byte },
-      right: { path: right.path, start_byte: right.start_byte, end_byte: right.end_byte },
-    });
 }
 
 async function expectHealthyRender(
@@ -335,13 +263,6 @@ const sampleReport = {
       { path: "src/dart/parser_beta.dart", analysed_loc: 180, duplicated_loc: 38, duplication_percent: 21.1 },
       { path: "src/models/models.g.dart", analysed_loc: 220, duplicated_loc: 16, duplication_percent: 7.3 },
     ],
-    // Engine-computed folder rows ([METRICS-REPO]) — the webview renders
-    // these verbatim and performs no arithmetic of its own.
-    folders: [
-      { path: "src/dart", analysed_loc: 300, duplicated_loc: 80, duplication_percent: 26.7 },
-      { path: "src", analysed_loc: 520, duplicated_loc: 96, duplication_percent: 18.5 },
-      { path: "src/models", analysed_loc: 220, duplicated_loc: 16, duplication_percent: 7.3 },
-    ],
   },
   schema_doc: "playwright smoke schema",
   action_hints: [],
@@ -352,20 +273,21 @@ const sampleReport = {
     model_version: "smoke",
     dimensions: 768,
     attempted_subtrees: 12,
-    succeeded_subtrees: 12,
     indexed_subtrees: 12,
     failed_subtrees: 0,
   },
   clusters: [
     {
       id: "abcdef1234567890",
-      rank: 1,
-      rank_band: "worst",
-      mass: 42.75,
+      weight: 42.75,
+      size: 2,
       canonical_node_count: 18,
+      signals: { structural: 0.22, token_jaccard: 0.34, embedding_cos: 0.91, fused: 0.88 },
+      bucket: "same_behavior",
       occurrences_total: 2,
-      occurrence_count: 2,
       occurrences_truncated: false,
+      summary: "Two Dart classes compute the same geometry values through different implementations.",
+      interpretation: "Same behavior, different code.",
       occurrences: [
         occurrence("src/dart/alpha.dart", 120, 248, 12, 3),
         occurrence("src/dart/beta.dart", 420, 558, 31, 5),
@@ -373,13 +295,15 @@ const sampleReport = {
     },
     {
       id: "bcdefa2345678901",
-      rank: 2,
-      rank_band: "mid",
-      mass: 26.5,
+      weight: 26.5,
+      size: 3,
       canonical_node_count: 14,
+      signals: { structural: 0.99, token_jaccard: 0.96, embedding_cos: 0.7, fused: 0.86 },
+      bucket: "nearly_identical",
       occurrences_total: 3,
-      occurrence_count: 3,
       occurrences_truncated: false,
+      summary: "Parser branches differ only by token names.",
+      interpretation: "Review the locations; small differences may matter.",
       occurrences: [
         occurrence("src/dart/parser_alpha.dart", 210, 330, 44, 7),
         occurrence("src/dart/parser_beta.dart", 610, 742, 88, 9),
@@ -388,25 +312,21 @@ const sampleReport = {
     },
     {
       id: "cdefab3456789012",
-      rank: 3,
-      rank_band: "faint",
-      mass: 11.2,
+      weight: 11.2,
+      size: 2,
       canonical_node_count: 9,
+      signals: { structural: 1, token_jaccard: 1, embedding_cos: 0.82, fused: 0.97 },
+      bucket: "identical",
       occurrences_total: 2,
-      occurrence_count: 2,
       occurrences_truncated: false,
+      summary: "Generated model serialization helpers match exactly.",
+      interpretation: "Safe to extract; every copy is the same.",
       occurrences: [
         occurrence("src/models/models.g.dart", 80, 160, 15, 1),
         occurrence("src/models/serializers.g.dart", 180, 260, 27, 1, true),
       ],
     },
   ],
-} satisfies Report;
-
-const reportWithoutSignalSource: Report = {
-  ...sampleReport,
-  clusters: sampleReport.clusters.map((cluster, index) =>
-    index === 0 ? cluster : cluster),
 };
 
 function occurrence(

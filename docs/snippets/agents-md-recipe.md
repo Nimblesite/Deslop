@@ -50,14 +50,15 @@ larger than a few lines, you MUST call the `find-similar` MCP tool with the
 proposed code (or its byte range, if it already exists in a draft buffer) and
 inspect the response.
 
-- If the response shows a cluster whose bucket is
-  **`identical` or `nearly_identical`**, do NOT write the new copy.
+- If the response shows a cluster with **`signals.fused ≥ 0.85`** *or* the
+  bucket is `identical` / `nearly_identical`, do NOT write the new copy.
   A `structural_only` match means only the code shape lines up (no token
   or semantic evidence) — read the match before deciding; it is often
   sibling boilerplate rather than a reusable implementation.
   Reuse the canonical occurrence the tool returns. Extract a helper if needed.
-- If the response is empty, proceed with authoring.
-- If the bucket is `loosely_similar` or `same_behavior`, read the canonical
+- If the response is empty or the closest match is structurally distant
+  (`signals.fused < 0.6`), proceed with authoring.
+- If the response is borderline (`0.6 ≤ fused < 0.85`), read the canonical
   occurrence and decide whether the new code is genuinely different. Bias
   toward reuse.
 

@@ -3,55 +3,40 @@
 //!
 //! The parsers use separate tree-sitter grammars but share the same
 //! normalisation function. These black-box CLI tests pin that contract:
-//! renamed Type-2 clones are admitted and reported as byte-distinct
-//! renames (never as verbatim copies), and Type-3 near misses still
-//! surface through shared subtrees — with the *enclosing* view selected,
-//! never the Merkle-equal fragment the gh #408 recall hole would publish
-//! in its place. On the mass-only wire the byte-level fact is the honest
-//! proof of both: a reported rename must slice to differing bytes
-//! ([PIPELINE-CLUSTER-CLOSURE]).
+//! renamed Type-2 clones reach identical structural and token signals and,
+//! because their preserved literal anchors prove the identifier mapping
+//! ([FUSION-CONTENT-GATE]), route to the act-now `nearly_identical`
+//! bucket; Type-3 near misses still surface through shared subtrees.
 
 use std::{collections::BTreeSet, path::Path};
 
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::signals::{
-    assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
-};
+mod common;
 use crate::common::*;
 
 #[test]
-fn javascript_type2_rename_clone_is_reported_byte_distinct() -> Result<()> {
+fn javascript_type2_clone_has_structural_and_token_jaccard_of_one() -> Result<()> {
     // `summarizeOrders` → `collectInvoices` is a maximal rename with all
-    // four numeric anchors (`0`, `100`, `0.9`, `0`) preserved in position.
+    // four numeric anchors (`0`, `100`, `0.9`, `0`) preserved in position,
+    // so the content gate proves the bijective mapping and promotes the
+    // pair out of the old #134 `structural_only` demotion.
     assert_type2_clone("javascript-small", 10, "alpha.js", "beta.js")
 }
 
 #[test]
-fn typescript_type2_rename_clone_is_reported_byte_distinct() -> Result<()> {
+fn typescript_type2_clone_has_structural_and_token_jaccard_of_one() -> Result<()> {
     assert_type2_clone("typescript-small", 12, "alpha.ts", "beta.ts")
 }
 
 #[test]
-fn tsx_type2_rename_clone_is_reported_byte_distinct() -> Result<()> {
+fn tsx_type2_clone_has_structural_and_token_jaccard_of_one() -> Result<()> {
     assert_type2_clone("tsx-small", 10, "Card.tsx", "Tile.tsx")
 }
 
 #[test]
 fn javascript_near_miss_produces_cross_file_structural_cluster() -> Result<()> {
-    // GH #427, closed. JavaScript used to publish the nested
-    // `let running = 0; for (…)` run rather than the enclosing function
-    // pair TypeScript reports off the same source shape, and that
-    // fragment view was Merkle-equal — so one language called the same
-    // code an exact clone and the other a near miss. The fragment won
-    // because the same-file overlap collapse ranked an overlapping run
-    // by cross-file edge strength, and a window scores higher exactly to
-    // the extent that it drops what the two copies disagree on
-    // ([PIPELINE-CLUSTER-EXACT-SCOPE]). Both languages now select the
-    // enclosing view, which is what #427 asked for. The byte-level pin
-    // below keeps it honest: a byte-identical fragment selected in place
-    // of the enclosing near-miss would slice to identical bytes and fail.
     assert_type3_clone("javascript-type3", 8, "delta.js", "epsilon.js")
 }
 
@@ -60,63 +45,37 @@ fn typescript_near_miss_produces_cross_file_structural_cluster() -> Result<()> {
     assert_type3_clone("typescript-type3", 8, "delta.ts", "epsilon.ts")
 }
 
-/// Asserts that a renamed Type-2 fixture's cluster spanning both files
-/// is admitted, byte-distinct (a rename, not a copy), and free of any
-/// pair-only surface.
+/// Asserts that a renamed Type-2 fixture's top-ranked cluster has perfect
+/// structural identity, routes to the act-now `nearly_identical` bucket,
+/// and renders an exact token Jaccard — the content gate corrects the
+/// placeholder-dominated token fallback once the preserved anchors prove
+/// the rename ([FUSION-CONTENT-GATE]).
 fn assert_type2_clone(fixture_name: &str, min_nodes: u32, left: &str, right: &str) -> Result<()> {
-    let scan_root = fixture(fixture_name);
-    let report = run_report(&scan_root, min_nodes)?;
+    let report = run_report(&fixture(fixture_name), min_nodes)?;
     let top = top_cluster(&report, fixture_name)?;
-    assert_admitted_rename_cluster(&scan_root, top, fixture_name, left, right, &report)?;
+    assert!(is_exact_one(signal(top, "structural")));
+    assert_eq!(
+        cluster_bucket(top),
+        "nearly_identical",
+        "{fixture_name} top cluster bucket mismatch: {report:#}"
+    );
+    assert!(is_exact_one(signal(top, "token_jaccard")));
+    assert!(spans_both(top, left, right));
     Ok(())
 }
 
-/// Asserts that a Type-3 near miss surfaces as a cross-file cluster whose
-/// occurrences span both files and slice to differing bytes — the
-/// enclosing view, not the byte-identical fragment gh #408 would publish.
+/// Asserts that a Type-3 near miss surfaces a token-supported
+/// `nearly_identical` cross-file cluster with full structural and token
+/// signals over the shared subtree.
 fn assert_type3_clone(fixture_name: &str, min_nodes: u32, left: &str, right: &str) -> Result<()> {
-    let scan_root = fixture(fixture_name);
-    let report = run_report(&scan_root, min_nodes)?;
-    let cluster = clusters(&report)
-        .iter()
-        .find(|cluster| spans_both(cluster, left, right))
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "{fixture_name} must report a clone spanning {left} and {right}: {report:#}"
-            )
-        })?;
-    assert_admitted_rename_cluster(&scan_root, cluster, fixture_name, left, right, &report)?;
-    Ok(())
-}
-
-/// The wire contract every renamed/near-miss clone must satisfy
-/// ([PIPELINE-CLUSTER-CLOSURE]): admitted and mass-honest, no pair-only
-/// surface on the cluster, and — the byte-level truth the deleted
-/// `structural`/`token_jaccard` axes used to proxy — the occurrences
-/// slice to *differing* source bytes. A Merkle-equal fragment selected in
-/// place of the enclosing view would slice to identical bytes and fail
-/// here, which is exactly the gh #408/#427 recall hole.
-fn assert_admitted_rename_cluster(
-    scan_root: &Path,
-    cluster: &Value,
-    fixture_name: &str,
-    left: &str,
-    right: &str,
-    report: &Value,
-) -> Result<()> {
-    assert_structural_only_contract(cluster, fixture_name);
-    assert_no_pair_surface_on_cluster(cluster, fixture_name);
-    assert!(
-        !has_verbatim_pair(scan_root, cluster)?,
-        "{fixture_name}: {left} and {right} are a rename / near-miss and must \
-         slice to differing bytes — a verbatim (byte-identical) reading means \
-         the fragment view was selected in place of the enclosing pair, the \
-         gh #408 recall hole: {report:#}"
-    );
-    assert!(
-        spans_both(cluster, left, right),
-        "{fixture_name}: the clone must span {left} and {right}: {report:#}"
-    );
+    let report = run_report(&fixture(fixture_name), min_nodes)?;
+    let Some(cluster) = clusters(&report).iter().find(|cluster| {
+        spans_both(cluster, left, right) && cluster_bucket(cluster) == "nearly_identical"
+    }) else {
+        anyhow::bail!("{fixture_name} must report a nearly_identical clone spanning {left} and {right}: {report:#}");
+    };
+    assert!(is_exact_one(signal(cluster, "structural")));
+    assert!(is_exact_one(signal(cluster, "token_jaccard")));
     Ok(())
 }
 
@@ -125,6 +84,11 @@ fn top_cluster<'a>(report: &'a Value, fixture_name: &str) -> Result<&'a Value> {
     clusters(report)
         .first()
         .ok_or_else(|| anyhow::anyhow!("{fixture_name} must produce at least one cluster"))
+}
+
+/// Returns true when a floating-point signal is exactly one.
+fn is_exact_one(value: f64) -> bool {
+    (value - 1.0).abs() <= f64::EPSILON
 }
 
 /// Returns true when `cluster` contains occurrences in both files.

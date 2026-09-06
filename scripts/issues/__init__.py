@@ -1,1 +1,0 @@
-"""GitHub issue-report generation."""

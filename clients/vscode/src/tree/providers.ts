@@ -8,12 +8,14 @@ import { effect } from "@preact/signals-core";
 import type { LanguageClient } from "vscode-languageclient/node";
 
 import { ReportStore, LifecyclePhase } from "../reportStore";
+import { indexedSeverity } from "../severity";
 import {
   applyFacetFilter,
+  bucketLabels,
+  categoryLabels,
   FacetFilter,
   ReportCluster,
   RepoMetrics,
-  severityLabel,
 } from "../types/report";
 import { readTopOffendersFilter } from "../commands/topOffendersView";
 import {
@@ -22,6 +24,7 @@ import {
   FolderMetricNode,
   FolderNode,
   GroupNode,
+  LanguageGroupNode,
   MetricsHeadlineNode,
   Node,
   OccurrenceNode,
@@ -31,7 +34,8 @@ import {
 import {
   buildClusterMode,
   buildFileMode,
-  buildSeverityMode,
+  buildRankIndex,
+  buildTypeMode,
   getFileNodeChildren,
   getGroupNodeChildren,
   GroupBy,
@@ -40,6 +44,7 @@ import {
 } from "./grouping";
 import { buildFolderMode } from "./folder";
 import { buildMetricRows } from "./metrics";
+import { groupByLanguage, normalizeSplitByLanguage } from "./language";
 import { normalizeSortBy, SortBy } from "./sort";
 import { thresholdStatus } from "./threshold";
 
@@ -47,24 +52,22 @@ import { thresholdStatus } from "./threshold";
 // (commands/register.ts, commands/treeMenus.ts, tests, e2e suites)
 // keep working without import-path churn.
 export {
+  BucketGroupNode,
   ClusterNode,
   FileMetricNode,
   FileNode,
   FolderMetricNode,
   FolderNode,
   GroupNode,
+  LanguageGroupNode,
   MetricsHeadlineNode,
   OccurrenceNode,
   SessionFieldNode,
-  SeverityGroupNode,
   StatusNode,
 } from "./nodes";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const SPINNER_INTERVAL_MS = 120;
-const FAILED_LIFECYCLE_KIND = "failed";
-const INFORMATION_STATUS_KIND = "info";
-const DESLOP_CONFIGURATION_NAMESPACE = "deslop";
 
 // [VSIX reactivity] The busy/error status row for any non-"ready"
 // lifecycle. `hasReport` picks the scan-kind label: the initial cold
@@ -80,7 +83,7 @@ function scanStatus(
   frame: number,
 ): StatusNode | null {
   if (lifecycle.kind === "ready") return null;
-  if (lifecycle.kind === FAILED_LIFECYCLE_KIND) {
+  if (lifecycle.kind === "failed") {
     return new StatusNode(
       `Stopped: ${lifecycle.message}`,
       "error",
@@ -217,23 +220,32 @@ abstract class LifecycleAwareProvider implements vscode.TreeDataProvider<Node>, 
 // (cluster | file | folder | type, default cluster).
 function readGroupBy(): GroupBy {
   return normalizeGroupBy(
-    vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE).get<string>("topOffenders.groupBy", "cluster"),
+    vscode.workspace.getConfiguration("deslop").get<string>("topOffenders.groupBy", "cluster"),
   );
 }
 
 // [VSIX-TOP-OFFENDERS-SORT] Reads `deslop.topOffenders.sortBy`.
 function readSortBy(): SortBy {
   return normalizeSortBy(
-    vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE).get<string>("topOffenders.sortBy", "impact"),
+    vscode.workspace.getConfiguration("deslop").get<string>("topOffenders.sortBy", "impact"),
+  );
+}
+
+// [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] Reads `deslop.topOffenders.splitByLanguage`.
+function readSplitByLanguage(): boolean {
+  return normalizeSplitByLanguage(
+    vscode.workspace
+      .getConfiguration("deslop")
+      .get<boolean>("topOffenders.splitByLanguage", false),
   );
 }
 
 export class TopOffendersProvider extends LifecycleAwareProvider {
   getChildren(node?: Node): Node[] {
-    if (node instanceof FolderNode) return node.children;
+    if (node instanceof FolderNode || node instanceof LanguageGroupNode) return node.children;
     if (node instanceof FileNode) return getFileNodeChildren(node);
-    // One machinery for both group axes: file-mode severity sections and
-    // severity-mode roots.
+    // One machinery for both group axes: file-mode bucket sections and
+    // type-mode category roots ([FACET-GROUP-BY-TYPE]).
     if (node instanceof GroupNode) return getGroupNodeChildren(node);
     if (node instanceof ClusterNode) {
       // [VSIX-TOP-OFFENDERS-SORT] Order occurrences by the active axis while
@@ -248,14 +260,14 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
     // gates the scan-kind label (cold vs incremental).
     const { visibleReport, report, lifecycle } = this.store.current;
     const indicator = scanStatus(lifecycle, !!report, this.ticker.currentFrame);
-    if (lifecycle.kind === FAILED_LIFECYCLE_KIND) return indicator ? [indicator] : [];
+    if (lifecycle.kind === "failed") return indicator ? [indicator] : [];
     if (!visibleReport || visibleReport.clusters.length === 0) {
       // Never declare the codebase clean until the server confirms a
       // completed scan ("ready"); while scanning, show progress instead.
       if (indicator) return [indicator];
       // [VSIX-PRINCIPLES] Silence when clean: a single calm empty-state row
       // when there is no duplication (principle 2).
-      return [new StatusNode("No duplication detected", INFORMATION_STATUS_KIND)];
+      return [new StatusNode("No duplication detected", "info")];
     }
     const roots = buildRoots(visibleReport.clusters);
     // [req: incremental indicator] Keep clusters visible during a
@@ -278,17 +290,29 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
 // before the facet slice, so a filtered view shows stable rank gaps
 // ([FACET-TOP-OFFENDERS-FILTER] extends [VSIX-TOP-OFFENDERS-RANK-GLOBAL]).
 function buildRoots(clusters: ReportCluster[]): Node[] {
+  const rankIndex = buildRankIndex(clusters);
+  const severities = indexedSeverity(clusters);
   const groupBy = readGroupBy();
   const sortBy = readSortBy();
   const filter = readTopOffendersFilter();
   const visible = applyFacetFilter(clusters, filter);
   const build = (subset: ReportCluster[]): Node[] => {
-    if (groupBy === "file") return buildFileMode(subset, sortBy);
-    if (groupBy === "folder") return buildFolderMode(subset, sortBy);
-    if (groupBy === "severity") return buildSeverityMode(subset, sortBy);
-    return buildClusterMode(subset, sortBy);
+    if (groupBy === "file") return buildFileMode(subset, severities, rankIndex, sortBy);
+    if (groupBy === "folder") return buildFolderMode(subset, severities, rankIndex, sortBy);
+    if (groupBy === "type") return buildTypeMode(subset, severities, rankIndex, sortBy);
+    return buildClusterMode(subset, severities, rankIndex, sortBy);
   };
-  return [...filterStatusRow(filter), ...build(visible)];
+  const roots = readSplitByLanguage()
+    ? groupByLanguage(visible).map(({ language, clusters: members }) =>
+        new LanguageGroupNode(
+          language,
+          build(members),
+          members.reduce((max, cluster) => Math.max(max, cluster.weight), 0),
+          members.length,
+        ),
+      )
+    : build(visible);
+  return [...filterStatusRow(filter), ...roots];
 }
 
 // [FACET-TOP-OFFENDERS-FILTER-EMPTY] A non-collapsible status row leads
@@ -296,7 +320,10 @@ function buildRoots(clusters: ReportCluster[]): Node[] {
 // bound — a filtered-empty tree must never be mistakable for the
 // "No duplication detected" clean state.
 function filterStatusRow(filter: FacetFilter): Node[] {
-  const parts = filter.severities.map((severity) => severityLabel(severity));
+  const parts = [
+    ...filter.buckets.map((bucket) => bucketLabels(bucket).plainTitle),
+    ...filter.categories.map((category) => categoryLabels(category).groupTitle),
+  ];
   if (parts.length === 0) return [];
   const row = new StatusNode(
     `Filtered: ${parts.join(" · ")} — Clear filter`,
@@ -318,16 +345,16 @@ export class MetricsProvider extends LifecycleAwareProvider {
     if (node) return [];
     const { visibleReport, report, lifecycle } = this.store.current;
     const indicator = scanStatus(lifecycle, !!report, this.ticker.currentFrame);
-    if (lifecycle.kind === FAILED_LIFECYCLE_KIND) return indicator ? [indicator] : [];
+    if (lifecycle.kind === "failed") return indicator ? [indicator] : [];
     if (!visibleReport) {
-      return indicator ? [indicator] : [new StatusNode("No session yet", INFORMATION_STATUS_KIND)];
+      return indicator ? [indicator] : [new StatusNode("No session yet", "info")];
     }
     const metrics = visibleReport.metrics;
     if (metrics.duplicated_loc === 0) {
       // Same completion gate as Top Offenders: only the server's idle
       // state may render the terminal "clean" verdict ([VSIX reactivity]).
       if (indicator) return [indicator];
-      return [new StatusNode("No duplication detected", INFORMATION_STATUS_KIND)];
+      return [new StatusNode("No duplication detected", "info")];
     }
     return [metricsHeadline(metrics), ...buildMetricRows(metrics)];
   }
@@ -364,11 +391,11 @@ export class SessionProvider extends LifecycleAwareProvider {
     // Show spinner only before first report arrives, or on error. Once
     // session data exists it stays visible during re-analysis (stale >
     // blank); the Top Offenders panel carries the in-flight badge.
-    if (lifecycle.kind === FAILED_LIFECYCLE_KIND || !report) {
+    if (lifecycle.kind === "failed" || !report) {
       const status = scanStatus(lifecycle, !!report, this.ticker.currentFrame);
       if (status) return [status];
     }
-    if (!report) return [new StatusNode("No session yet", INFORMATION_STATUS_KIND)];
+    if (!report) return [new StatusNode("No session yet", "info")];
     const activeModel =
       report.embedding_provenance?.model_id ?? "Select model to enable AI matches";
     const model = pendingEmbeddingModel
@@ -391,22 +418,18 @@ export class SessionProvider extends LifecycleAwareProvider {
   }
 }
 
-// The percentage is the engine's ([METRICS-REPO]) — the same `percent`
-// function every report figure goes through, carried on the progress
-// payload. This row only truncates it to whole percent for the width it
-// has; dividing `done` by `total` here would be a second percentage
-// engine.
 function formatProgress(progress: {
   phase: string;
   done: number;
   total: number;
-  percent: number;
   model_id: string;
   message: string | undefined;
 }): string {
   const done = progress.done.toLocaleString();
   const total = progress.total.toLocaleString();
-  const percent = Math.floor(progress.percent);
+  const percent = progress.total > 0
+    ? Math.floor((progress.done / progress.total) * 100)
+    : 0;
   const phase = progress.phase.replace(/_/g, " ");
   const detail = progress.message ? ` · ${progress.message}` : "";
   return `${phase} · ${progress.model_id} · ${done} / ${total} (${percent}%)${detail}`;

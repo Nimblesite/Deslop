@@ -16,7 +16,7 @@ use std::{
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::scan_dir::temp_scan_dir;
+mod common;
 use crate::common::*;
 
 fn report_path(tmp: &Path) -> PathBuf {
@@ -43,7 +43,9 @@ fn any_cluster_spans(report: &Value, left: &str, right: &str) -> bool {
 
 #[test]
 fn dart_const_constructor_registry_is_hidden() -> Result<()> {
-    let (tmp, src) = temp_scan_dir("src")?;
+    let tmp = tempfile::tempdir()?;
+    let src = tmp.path().join("src");
+    fs::create_dir(&src)?;
 
     // An icon-table-style const registry: every entry is a static const
     // initialised by a constructor call with named arguments, differing

@@ -7,17 +7,16 @@
 import * as fs from "node:fs";
 import * as vscode from "vscode";
 
-const UTF8_ENCODING = "utf8";
-
 import { occurrenceDisplayLocation } from "../locations";
-import { formatScorePrecise } from "../types/format";
 import { languageForPath } from "../types/languages";
 import { ReportStore } from "../reportStore";
 import {
   ReportCluster,
   ReportOccurrence,
+  bucketLabels,
   clusterSlug,
   occurrenceCount,
+  resolveBucket,
 } from "../types/report";
 import { ClusterNode, OccurrenceNode } from "../tree/providers";
 import { resolveOccurrenceUri } from "./register";
@@ -136,7 +135,8 @@ async function openOccurrenceNonPreview(
 
 /// Builds the clipboard text for [`copyClusterLocations`].
 export function clusterLocationsText(cluster: ReportCluster): string {
-  const header = `cluster ${cluster.id} · mass ${formatScorePrecise(cluster.mass)} · ${occurrenceCount(cluster)} occurrences`;
+  const bucket = bucketLabels(resolveBucket(cluster)).plainTitle;
+  const header = `cluster ${cluster.id} · ${bucket} · ${occurrenceCount(cluster)} occurrences`;
   const rows = cluster.occurrences.map(humanLocation);
   return [header, ...rows].join("\n");
 }
@@ -146,13 +146,18 @@ export function aiPayloadForCluster(
   cluster: ReportCluster,
   rank: number,
 ): string {
+  const bucket = resolveBucket(cluster);
+  const labels = bucketLabels(bucket);
   const header = [
     `slug: ${clusterSlug(cluster)}`,
     `cluster_id: ${cluster.id}`,
     `rank: ${rank}`,
-    `mass: ${cluster.mass}`,
+    `bucket: ${bucket} (${labels.taxonomyLabel})`,
+    `weight: ${cluster.weight.toFixed(4)}`,
+    `size: ${cluster.size}`,
     `canonical_node_count: ${cluster.canonical_node_count}`,
     `occurrences: ${occurrenceCount(cluster)}`,
+    signalsLine(cluster),
   ];
   const rows = cluster.occurrences.map(
     (o) => `- ${o.path} | ${humanLocation(o)} | ${o.start_byte}..${o.end_byte}`,
@@ -204,17 +209,26 @@ function humanLocation(occurrence: ReportOccurrence): string {
   return occurrenceDisplayLocation(occurrence)?.label ?? occurrence.path;
 }
 
+function signalsLine(cluster: ReportCluster): string {
+  const s = cluster.signals;
+  return `signals: structural=${s.structural.toFixed(4)} token=${s.token_jaccard.toFixed(4)} embed=${s.embedding_cos.toFixed(4)} fused=${s.fused.toFixed(4)}`;
+}
+
 function parentClusterLines(
   parent: ReportCluster,
   store: ReportStore,
 ): string[] {
+  const bucket = resolveBucket(parent);
+  const labels = bucketLabels(bucket);
   const all = store.current.report?.clusters ?? [];
   const rankIndex = all.findIndex((c) => c.id === parent.id);
   return [
     `cluster_id: ${parent.id}`,
     `rank: ${rankIndex >= 0 ? rankIndex + 1 : "?"}`,
-    `mass: ${formatScorePrecise(parent.mass)}`,
-    `canonical_nodes: ${parent.canonical_node_count}`,
+    `bucket: ${bucket} (${labels.taxonomyLabel})`,
+    `weight: ${parent.weight.toFixed(4)}`,
+    `size: ${parent.size}`,
+    signalsLine(parent),
     `sibling_occurrences: ${Math.max(parent.occurrences.length - 1, 0)}`,
   ];
 }
@@ -247,12 +261,12 @@ function dedupeOccurrences(
 function readOccurrenceBytes(occurrence: ReportOccurrence): string {
   try {
     const uri = resolveOccurrenceUri(occurrence.path);
-    const content = fs.readFileSync(uri.fsPath, UTF8_ENCODING);
-    const buffer = Buffer.from(content, UTF8_ENCODING);
+    const content = fs.readFileSync(uri.fsPath, "utf8");
+    const buffer = Buffer.from(content, "utf8");
     const clamp = (n: number): number => Math.max(0, Math.min(n, buffer.length));
     return buffer
       .slice(clamp(occurrence.start_byte), clamp(occurrence.end_byte))
-      .toString(UTF8_ENCODING);
+      .toString("utf8");
   } catch {
     return "";
   }

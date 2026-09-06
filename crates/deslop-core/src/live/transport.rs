@@ -46,19 +46,6 @@ pub fn port_file_path(root: &Path) -> PathBuf {
     crate::paths::cache_dir(root).join(IPC_PORT_FILE_NAME)
 }
 
-/// Absolute path of the discovery artefact this platform's IPC server
-/// publishes — the socket itself on Unix, the endpoint record on
-/// Windows. A caller waiting for the server to come up watches this
-/// rather than picking one of the two, so it cannot end up waiting for
-/// an artefact this platform never writes.
-#[must_use]
-pub fn endpoint_path(root: &Path) -> PathBuf {
-    match IpcMode::platform_default() {
-        IpcMode::Unix => socket_path(root),
-        IpcMode::Tcp => port_file_path(root),
-    }
-}
-
 /// Which transport the IPC server binds ([LIVE-IPC-TCP]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IpcMode {
@@ -216,20 +203,21 @@ fn write_port_file(root: &Path, port: u16, token: &str) -> std::io::Result<()> {
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
     let path = port_file_path(root);
     std::fs::write(&path, payload)?;
-    // Owner-only permissions are a Unix concept. Windows ACLs on the
-    // workspace already scope the record to the user, so there is nothing
-    // to tighten — and no stub that only ever succeeds, which is a function
-    // whose `Result` tells the caller nothing.
-    #[cfg(unix)]
-    restrict_to_owner(&path)?;
-    Ok(())
+    restrict_to_owner(&path)
 }
 
-/// Tightens the discovery record to owner-only.
+/// Tightens the discovery record to owner-only where Unix permissions
+/// exist; Windows workspace ACLs already scope the file to the user.
 #[cfg(unix)]
 fn restrict_to_owner(path: &Path) -> std::io::Result<()> {
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+}
+
+/// Windows ACLs on the workspace already scope the record to the user.
+#[cfg(not(unix))]
+fn restrict_to_owner(_path: &Path) -> std::io::Result<()> {
+    Ok(())
 }
 
 /// Per-session hex token derived from OS entropy. The token only

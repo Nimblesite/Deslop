@@ -54,7 +54,7 @@ use super::{
     first_identifier_bytes, named_non_comment_children, outermost_kind,
     subtree_mentions_identifier, ForwardingGrammar,
 };
-use crate::{ast::named_children, cluster_filters::node_contains_kind};
+use crate::cluster_filters::node_contains_kind;
 
 /// True when every call the body makes is transport: at least one
 /// delegates to collaborator state, and each of the others exists only
@@ -115,10 +115,11 @@ fn derives_from_delegation(
 
 /// The argument expressions of a call, comments removed.
 fn call_arguments<'tree>(call: Node<'tree>, grammar: &ForwardingGrammar) -> Vec<Node<'tree>> {
-    named_children(call)
-        .into_iter()
-        .find(|child| child.kind() == grammar.arguments)
-        .map_or_else(Vec::new, named_non_comment_children)
+    let mut cursor = call.walk();
+    let arguments = call
+        .named_children(&mut cursor)
+        .find(|child| child.kind() == grammar.arguments);
+    arguments.map_or_else(Vec::new, named_non_comment_children)
 }
 
 /// Names that hold data a delegation already produced: a local binding
@@ -175,7 +176,8 @@ fn collect_field_declarations<'tree>(
     grammar: &ForwardingGrammar,
     out: &mut Vec<Node<'tree>>,
 ) {
-    for sibling in named_children(container) {
+    let mut cursor = container.walk();
+    for sibling in container.named_children(&mut cursor) {
         if !node_contains_kind(sibling, grammar.body) {
             collect_kinds(sibling, grammar.field_names, out);
         }
@@ -187,7 +189,8 @@ fn collect_kinds<'tree>(node: Node<'tree>, kinds: &[&str], out: &mut Vec<Node<'t
     if kinds.contains(&node.kind()) {
         out.push(node);
     }
-    for child in named_children(node) {
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
         collect_kinds(child, kinds, out);
     }
 }
@@ -202,9 +205,11 @@ fn subtree_delegates(
     if is_delegating_call(node, grammar, source, collaborators) {
         return true;
     }
-    named_children(node)
-        .into_iter()
-        .any(|child| subtree_delegates(child, grammar, source, collaborators))
+    let mut cursor = node.walk();
+    let delegates = node
+        .named_children(&mut cursor)
+        .any(|child| subtree_delegates(child, grammar, source, collaborators));
+    delegates
 }
 
 /// One call delegates when its receiver resolves to a collaborator. A
@@ -233,14 +238,18 @@ fn member_access_receiver<'tree>(
     call: Node<'tree>,
     grammar: &ForwardingGrammar,
 ) -> Option<Node<'tree>> {
-    let first = call.named_child(0)?;
+    let mut cursor = call.walk();
+    let first = call.named_children(&mut cursor).next()?;
+    let mut inner = first.walk();
     let unwrapped = if first.kind() == "instantiation_expression" {
-        first.named_child(0)?
+        first.named_children(&mut inner).next()?
     } else {
         first
     };
     let callee = Some(unwrapped).filter(|callee| grammar.member_access.contains(&callee.kind()))?;
-    match named_children(callee).as_slice() {
+    let mut callee_cursor = callee.walk();
+    let children: Vec<Node<'tree>> = callee.named_children(&mut callee_cursor).collect();
+    match children.as_slice() {
         [receiver, _member] if receiver.kind() == grammar.identifier => Some(*receiver),
         _ => None,
     }

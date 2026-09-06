@@ -24,7 +24,6 @@ mod cluster_filters;
 pub mod config;
 pub mod content;
 pub mod delta;
-pub mod diff_scope;
 pub mod discover;
 pub mod embedding;
 pub mod error;
@@ -34,8 +33,6 @@ pub mod lang;
 #[cfg(feature = "live")]
 pub mod live;
 pub mod lsh;
-pub mod observe;
-pub mod overlap;
 pub mod pair;
 pub mod paths;
 pub mod pipeline;
@@ -44,30 +41,27 @@ pub mod refactor;
 pub mod render;
 pub mod report;
 pub mod report_boilerplate;
-#[cfg(any(test, feature = "test-support"))]
-pub mod report_fixtures;
+pub mod report_hints;
 pub mod report_location;
 pub mod report_metrics;
 mod report_render;
 mod report_weight;
-mod shard;
 pub mod sibling;
 pub mod state;
 pub mod tokens;
 pub mod version_contract;
 /// Wire-format models generated from `docs/models/live-ipc.td` by
-/// `scripts/typediagram/generate.mjs`. Always compiled (no feature gate)
+/// `scripts/typediagram-gen.mjs`. Always compiled (no feature gate)
 /// because the always-on `embedding::ollama` module re-exports
 /// `OllamaModelInfo` from here.
 pub mod wire_generated;
 
+pub use buckets::{bucket_labels, classify, classify_signals, BucketLabels, ClusterKind};
 pub use clone_category::CloneCategory;
-pub use cluster_filters::ParseCache;
 pub use config::{
     BoilerplateImportsMode, ClonePolicy, ExclusionConfig, RankingPolicy, DEFAULT_CONFIG_FILENAME,
 };
 pub use delta::ReportDelta;
-pub use diff_scope::{apply_only_changed, parse_unified_diff, DiffScope, ParsedDiff};
 pub use embedding::{
     list_ollama_models, EmbeddingMode, EmbeddingProvider, EmbeddingSpec, NoopProvider,
     OllamaModelInfo, OllamaProvider, ParseModeError, ProviderError, ProviderRegistry,

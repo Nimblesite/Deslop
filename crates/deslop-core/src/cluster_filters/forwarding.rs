@@ -62,8 +62,6 @@
 
 use tree_sitter::Node;
 
-use crate::ast::named_children;
-
 mod delegation;
 
 /// Per-language grammar facts the forwarding walk needs. The
@@ -212,9 +210,11 @@ fn outermost_kind<'tree>(node: Node<'tree>, kind: &str) -> Option<Node<'tree>> {
     if node.kind() == kind {
         return Some(node);
     }
-    named_children(node)
-        .into_iter()
-        .find_map(|child| outermost_kind(child, kind))
+    let mut cursor = node.walk();
+    let found = node
+        .named_children(&mut cursor)
+        .find_map(|child| outermost_kind(child, kind));
+    found
 }
 
 /// A body forwards as either a single braced block of forwarding
@@ -283,9 +283,11 @@ fn subtree_mentions_identifier(
     {
         return true;
     }
-    named_children(node)
-        .into_iter()
-        .any(|child| subtree_mentions_identifier(child, grammar, source, name))
+    let mut cursor = node.walk();
+    let mentions = node
+        .named_children(&mut cursor)
+        .any(|child| subtree_mentions_identifier(child, grammar, source, name));
+    mentions
 }
 
 /// True when every named node in the subtree is on the declarative
@@ -294,15 +296,19 @@ fn subtree_is_declarative(node: Node<'_>, grammar: &ForwardingGrammar) -> bool {
     if !grammar.declarative.contains(&node.kind()) {
         return false;
     }
-    named_children(node)
-        .into_iter()
-        .all(|child| subtree_is_declarative(child, grammar))
+    let mut cursor = node.walk();
+    let declarative = node
+        .named_children(&mut cursor)
+        .all(|child| subtree_is_declarative(child, grammar));
+    declarative
 }
 
 /// Named children with comments removed — comments never carry logic.
 fn named_non_comment_children(node: Node<'_>) -> Vec<Node<'_>> {
-    named_children(node)
-        .into_iter()
+    let mut cursor = node.walk();
+    let children = node
+        .named_children(&mut cursor)
         .filter(|child| child.kind() != "comment")
-        .collect()
+        .collect();
+    children
 }

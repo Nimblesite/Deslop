@@ -1,7 +1,24 @@
 {
   "_agent_pmo": "b636503",
-  "_doc": "Single source of truth for coverage thresholds. See REPO-STANDARDS-SPEC [COVERAGE-THRESHOLDS-JSON] and docs/specs/SPEC.md. Ratchet only \u2014 never lower. Each Rust crate, the extension host, and the webview have their own line-coverage floor; every test target `make ci` runs must measure against its entry here ([TEST-SELECTION]: `make test` filters no test by name; only the feature-gated corpus suite is out). The extension host is instrumented at build time rather than through V8: the desktop host writes no V8 profile for extension code (gh #440), so `scripts/extension-coverage.mjs` compiles the counters into the modules and dumps them from inside the host.",
+  "_doc": "Single source of truth for coverage thresholds. See REPO-STANDARDS-SPEC [COVERAGE-THRESHOLDS-JSON] and docs/specs/SPEC.md. Ratchet only — never lower. Each Rust crate and the VSIX extension have their own line-coverage floor; every non-Ollama test target (`make ci`) must measure against its entry here.",
   "default_threshold": 95,
+  "projects": {
+    "crates/deslop-core": {
+      "threshold": 95
+    },
+    "crates/deslop": {
+      "threshold": 94
+    },
+    "crates/deslop-lsp": {
+      "threshold": 95
+    },
+    "crates/deslop-mcp": {
+      "threshold": 93
+    },
+    "clients/vscode": {
+      "threshold": 95
+    }
+  },
   "rust": {
     "default_threshold": 95,
     "ignore_filename_regex": "crates/deslop-core/src/(embedding/ollama|live/(api|clock|errors|embedding_refresh|notifications|scheduler|session|session_helpers|transport|watcher|wire)|pipeline/config)\\.rs|crates/deslop-lsp/src/(backend|custom_methods|file_watch|ipc(/(mod|dispatch))?|main|server)\\.rs|crates/deslop-mcp/src/(backend/(ipc|state)|main|safety|tools/(handlers|mod))\\.rs",
@@ -13,7 +30,10 @@
     }
   },
   "vsix": {
+    "default_threshold": 95,
     "webview_threshold": 95,
-    "extension_threshold": 88
+    "exclude": [
+      "src/logging.ts"
+    ]
   }
 }

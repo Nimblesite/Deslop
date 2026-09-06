@@ -135,16 +135,16 @@ async fn push_report_changed(client: &Client, notification: ReportChangedNotific
 
 /// Human-readable one-liner announcing an analysis pass on the LSP client
 /// console, e.g. `Deslop analysis pass 7: 0 added, 1 removed, 0 updated
-/// (worst mass 1234)`.
+/// (worst weight 1234)`.
 fn analysis_pass_log(notification: &ReportChangedNotification) -> String {
     let summary = &notification.summary;
     format!(
-        "Deslop analysis pass {}: {} added, {} removed, {} updated (worst mass {})",
+        "Deslop analysis pass {}: {} added, {} removed, {} updated (worst weight {:.0})",
         notification.generation,
         summary.clusters_added,
         summary.clusters_removed,
         summary.clusters_updated,
-        summary.worst_mass,
+        summary.worst_weight,
     )
 }
 

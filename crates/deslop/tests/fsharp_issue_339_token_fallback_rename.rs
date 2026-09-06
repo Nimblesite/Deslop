@@ -1,6 +1,6 @@
 //! End-to-end regression coverage for #339: the token layer must be
 //! rename-invariant for sibling-window fingerprints
-//! ([FUSED-SIGNALS-THREE-LAYER], [DECISION-TYPE3-TWO-PASS]).
+//! ([FUSION-SIGNALS-THREE-LAYER], [DECISION-TYPE3-TWO-PASS]).
 //!
 //! A fingerprint whose byte range is a synthetic sibling window (an F#
 //! module body, a JS statement run) resolved its token stream through
@@ -19,12 +19,8 @@
 
 use serde_json::Value;
 
-use std::path::Path;
-
-use crate::common::signals::{
-    assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
-};
-use crate::common::{corpora::*, *};
+mod common;
+use crate::common::*;
 
 /// The genuine clone with its module renamed one character LONGER, so
 /// every subsequent byte offset shifts — the #339 trigger.
@@ -33,26 +29,31 @@ fn renamed_clone() -> String {
 }
 
 /// Asserts the renamed pair keeps full structural and token identity
-/// and routes to the act-now bucket. The byte proof reads the same
-/// scanned root the report was computed from — never a separate
-/// checked-in fixture, which would prove nothing about this scan.
-fn assert_rename_invariant(scan_root: &Path, report: &Value) -> Result<()> {
+/// and routes to the act-now bucket.
+fn assert_rename_invariant(report: &Value) -> Result<()> {
     let clone = expect_cluster_spanning(report, &["parse_a.fs", "parse_b.fs"])?;
-    // [PIPELINE-CLUSTER-CLOSURE] The axes and act-now bucket are pair-scoped
-    // now. The acceptance on the wire: the renamed pair is admitted,
-    // mass-honest, clean-surfaced and byte-distinct — the offset shift and
-    // renames change the bytes, and a verbatim reading would be a
-    // fabrication.
-    assert_structural_only_contract(clone, "fsharp #339 token fallback");
-    assert_no_pair_surface_on_cluster(clone, "fsharp #339 token fallback");
     assert!(
-        !has_verbatim_pair(scan_root, clone)?,
-        "the renamed pair must slice to differing bytes: {report:#}"
+        approx(signal(clone, "structural"), 1.0),
+        "renamed clone must keep structural identity: {report:#}"
+    );
+    assert!(
+        approx(signal(clone, "token_jaccard"), 1.0),
+        "issue #339: the token layer is rename-invariant by construction — a \
+         byte-offset shift must not zero it: {report:#}"
+    );
+    assert_eq!(
+        cluster_bucket(clone),
+        "nearly_identical",
+        "a renamed copy whose content agrees must stay act-now: {report:#}"
+    );
+    assert!(
+        signal(clone, "fused") >= 0.85,
+        "content-supported rename must keep act-now confidence: {report:#}"
     );
     Ok(())
 }
 
-// [FUSED-SIGNALS-THREE-LAYER] / #339: a module rename that grows the
+// [FUSION-SIGNALS-THREE-LAYER] / #339: a module rename that grows the
 // name by one character shifts every byte offset after it. The token
 // signal must not change — only the fallback-signature artifact did.
 #[test]
@@ -61,6 +62,6 @@ fn issue_339_offset_shifting_rename_keeps_token_signal_and_act_now_bucket() -> R
         ("parse_a.fs".to_owned(), FSHARP_GENUINE_CLONE.to_owned()),
         ("parse_b.fs".to_owned(), renamed_clone()),
     ];
-    let (_workspace, root, report) = report_for_with_root(&files, 20)?;
-    assert_rename_invariant(&root, &report)
+    let report = report_for(&files, 20)?;
+    assert_rename_invariant(&report)
 }

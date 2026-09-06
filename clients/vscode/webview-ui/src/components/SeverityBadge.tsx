@@ -37,11 +37,11 @@ export function SeverityBadge({
 function severityTitle(severity: Severity): string {
   switch (severity) {
     case "worst":
-      return "Worst severity: this cluster is at the very top of the current report by duplicated mass.";
+      return "Worst severity: this cluster is at the very top of the current report by duplication impact.";
     case "top10":
-      return "High severity: this cluster is in the top tenth of the current report by duplicated mass.";
+      return "High severity: this cluster is in the top tenth of the current report by duplication impact.";
     case "mid":
-      return "Medium severity: this cluster is in the upper half of the current report by duplicated mass.";
+      return "Medium severity: this cluster is in the upper half of the current report by duplication impact.";
     case "faint":
       return "Low severity: this cluster is below the upper half of the current report but still matched Deslop's clone threshold.";
   }

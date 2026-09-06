@@ -11,16 +11,15 @@ use crate::{
         EmbeddingSpec, ProviderError,
     },
     error::CoreError,
-    fingerprint::Fingerprint,
     report::EmbeddingProvenance,
-    state::FileId,
 };
 
 use super::{
     config::PipelineConfig,
+    corpus::FingerprintCorpus,
     embedding_batch::{
-        pairs_from_successful_embeddings, provenance_from, snippet_for, EmbeddingBatch,
-        PendingEmbedding,
+        pairs_from_successful_embeddings, provenance_from, snippet_for, vectors_by_fingerprint,
+        EmbeddingBatch, PendingEmbedding,
     },
     embedding_observability::{token_count, EmbeddingObserver},
 };
@@ -31,19 +30,15 @@ use super::{
 pub struct EmbeddingOutcome {
     /// ANN-nearest-neighbour pairs produced by the embedding pass.
     pub pairs: Vec<EmbeddingPair>,
+    /// Every successfully embedded vector, keyed by fingerprint index.
+    ///
+    /// Cluster materialisation measures `embedding_cos` between the
+    /// occurrences it actually renders, which needs the vectors — the
+    /// ANN pair list alone only covers the neighbours the index
+    /// surfaced. Empty when the pass was skipped or failed gracefully.
+    pub vectors: HashMap<usize, Vec<f32>>,
     /// Provenance to record in the rendered report.
     pub provenance: Option<EmbeddingProvenance>,
-}
-
-/// Borrowed view of the corpus consumed by the embedding pass: the
-/// flat fingerprint slice plus the per-file source bytes behind it.
-/// Borrowed straight from the session's canonical storage so the pass
-/// copies no corpus state ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]).
-pub struct CorpusView<'a> {
-    /// Every live fingerprint, flat, in corpus order.
-    pub fingerprints: &'a [Fingerprint],
-    /// Source bytes keyed by the file id each fingerprint references.
-    pub sources: &'a HashMap<FileId, Vec<u8>>,
 }
 
 /// Runs the embedding pass honouring `config.embedding.mode`:
@@ -61,7 +56,7 @@ pub struct CorpusView<'a> {
 /// return an empty outcome.
 pub fn run_embedding_pass(
     config: &PipelineConfig<'_>,
-    corpus: &CorpusView<'_>,
+    corpus: &FingerprintCorpus,
 ) -> Result<EmbeddingOutcome, CoreError> {
     if matches!(config.embedding.mode, EmbeddingMode::Off) {
         return Ok(EmbeddingOutcome::default());
@@ -81,7 +76,7 @@ pub fn run_embedding_pass(
 /// and produces an empty outcome defensively.
 fn embed_corpus(
     config: &PipelineConfig<'_>,
-    corpus: &CorpusView<'_>,
+    corpus: &FingerprintCorpus,
 ) -> Result<EmbeddingOutcome, CoreError> {
     let Some(provider) = config.embedding.provider else {
         return Ok(EmbeddingOutcome::default());
@@ -109,11 +104,17 @@ fn embed_corpus(
         config.embedding.progress,
         &mut observer,
     );
-    let pairs = pairs_from_successful_embeddings(corpus.fingerprints, &batch.vectors);
+    let pairs = pairs_from_successful_embeddings(&corpus.fingerprints, &batch.vectors);
     observer.log_final(pairs.len(), batch.vectors.len(), batch.failures);
-    let provenance = provenance_from(spec, &batch);
+    let provenance = provenance_from(
+        spec,
+        attempted_subtrees(corpus.fingerprints.len(), &batch),
+        batch.vectors.len(),
+        batch.failures,
+    );
     Ok(EmbeddingOutcome {
         pairs,
+        vectors: vectors_by_fingerprint(batch.vectors),
         provenance: Some(provenance),
     })
 }
@@ -132,7 +133,7 @@ fn open_cache(scan_root: &Path, spec: &EmbeddingSpec) -> Result<EmbeddingCache, 
 fn compute_embeddings(
     provider: &dyn EmbeddingProvider,
     cache: &EmbeddingCache,
-    corpus: &CorpusView<'_>,
+    corpus: &FingerprintCorpus,
     dimensions: usize,
     batch_yield: Option<Duration>,
     progress: Option<&dyn Fn(usize)>,
@@ -175,14 +176,14 @@ fn compute_embeddings(
 /// declared for itself ([`EmbeddingProvider::max_input_chars`]) —
 /// never a constant of this pass's own.
 ///
-/// The group is what the provider request and the ANN index point are
-/// both deduplicated to; its *members* never are, which is why the vector
-/// travels with the whole owner list. Byte-identical clones share one
-/// snippet by definition, so collapsing a group to its first member
-/// deletes the embedding evidence for exactly the pairs this tool exists
-/// to find, rendering `embedding_cos = 0.0` — measured-and-absent.
+/// Only the provider *request* is deduplicated by content hash; the
+/// resulting vector is recorded for **every** fingerprint in the group.
+/// Byte-identical clones share one snippet by definition, so collapsing a
+/// group to its first member deletes the embedding evidence for exactly
+/// the pairs this tool exists to find, rendering `embedding_cos = 0.0` —
+/// a measured-and-absent claim the pass never measured.
 fn lookup_phase(
-    corpus: &CorpusView<'_>,
+    corpus: &FingerprintCorpus,
     cache: &EmbeddingCache,
     batch: &mut EmbeddingBatch,
     observer: &mut EmbeddingObserver,
@@ -208,11 +209,11 @@ struct SnippetGroup {
 
 /// Groups corpus fingerprints by snippet content hash, preserving
 /// first-seen corpus order so downstream dispatch is deterministic.
-fn group_snippets_by_content(corpus: &CorpusView<'_>) -> Vec<SnippetGroup> {
+fn group_snippets_by_content(corpus: &FingerprintCorpus) -> Vec<SnippetGroup> {
     let mut positions: HashMap<String, usize> = HashMap::new();
     let mut groups: Vec<SnippetGroup> = Vec::new();
     for (index, fingerprint) in corpus.fingerprints.iter().enumerate() {
-        let snippet = snippet_for(fingerprint, corpus.sources);
+        let snippet = snippet_for(fingerprint, &corpus.sources);
         let snippet_hash = content_hash(&snippet);
         if let Some(&position) = positions.get(&snippet_hash) {
             extend_group(&mut groups, position, index);
@@ -287,6 +288,14 @@ struct PendingDispatch<'a> {
     progress: Option<&'a dyn Fn(usize)>,
     /// Pass-level structured observer.
     observer: &'a mut EmbeddingObserver,
+}
+
+/// Returns the provenance denominator for this embedding pass.
+fn attempted_subtrees(total_fingerprints: usize, batch: &EmbeddingBatch) -> usize {
+    if batch.failures == 0 {
+        return total_fingerprints;
+    }
+    batch.vectors.len().saturating_add(batch.failures)
 }
 
 /// Counts an oversized snippet group as skipped before provider dispatch.

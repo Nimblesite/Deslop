@@ -3,19 +3,27 @@
 // the extension host under out/**. #254 (a value erased by `import type`) shipped
 // straight through that blind spot. This closes it: build the bundle with inline
 // sourcemaps, run the Playwright smoke suite with V8 coverage on, map the
-// executed ranges back to webview-ui/src, and write a summary for the final CI
-// coverage-calculation stage to enforce from coverage-thresholds.json.
+// executed ranges back to webview-ui/src, and enforce the floor from the
+// repo-root coverage-thresholds.json (.vsix.webview_threshold). Same ratchet +
+// 1% rounding slack as check-coverage.mjs and the Rust _coverage_check.
 
 import { readFileSync, readdirSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve, relative, sep } from "node:path";
 import v8toIstanbul from "v8-to-istanbul";
 import libCoverage from "istanbul-lib-coverage";
-import { runTool, vsixRoot } from "./coverage-paths.mjs";
+import { enforceLineThreshold, loadThresholds, runTool, vsixRoot } from "./coverage-paths.mjs";
 
 const webviewSrc = resolve(vsixRoot, "webview-ui", "src");
 const rawDir = resolve(vsixRoot, "coverage", "webview", "raw");
 const outDir = resolve(vsixRoot, "coverage", "webview");
+
+const thresholds = loadThresholds();
+const target = Number(thresholds.vsix?.webview_threshold);
+if (!Number.isFinite(target)) {
+  console.error("coverage-thresholds.json is missing .vsix.webview_threshold");
+  process.exit(1);
+}
 
 // Build the instrumentable (unminified, inline-sourcemap) bundle, drive the
 // smoke suite with V8 coverage on, and map the executed ranges back to source.
@@ -74,8 +82,7 @@ try {
   runTool("npm", ["--prefix", "webview-ui", "run", "build"]);
 }
 
-// Summarise per file + total and write coverage-summary.json. The final CI
-// coverage job enforces the floor after every coverage collector has finished.
+// Summarise per file + total, write coverage-summary.json, enforce the floor.
 const totalSummary = libCoverage.createCoverageSummary();
 const perFile = [];
 for (const file of map.files()) {
@@ -99,3 +106,4 @@ if (perFile.length === 0 || !Number.isFinite(pct)) {
   process.exit(1);
 }
 console.log("");
+process.exit(enforceLineThreshold(pct, target, "Webview"));

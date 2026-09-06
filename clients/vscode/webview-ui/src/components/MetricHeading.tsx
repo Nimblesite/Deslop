@@ -1,4 +1,3 @@
-import { formatPercent } from "../../../src/types/format";
 import { COLOR, FONT } from "../theme";
 
 interface MetricHeadingProps {
@@ -17,7 +16,7 @@ export function MetricHeading({ value, label }: MetricHeadingProps) {
         letterSpacing: "-0.03em",
       }}
     >
-      {formatPercent(value)}
+      {value.toFixed(1)}%
       <span
         style={{
           fontSize: "1rem",

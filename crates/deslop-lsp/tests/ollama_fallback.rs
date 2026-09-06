@@ -11,7 +11,7 @@
 //! unreachable provider must degrade gracefully — a clean JSON-RPC reply and
 //! a live process — never a crash that loops the editor's restart logic.
 
-use crate::common;
+mod common;
 
 use std::{
     thread,
@@ -71,9 +71,8 @@ fn lsp_survives_when_configured_ollama_endpoint_is_unreachable() -> Result<()> {
 
     // Keep stdin alive until the test finishes so the kept-open handle is
     // what ends the liveness window, not an EOF-triggered clean shutdown.
-    // Closing it here is also what lets the server write its coverage
-    // profile — a signalled child writes none.
-    let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
+    drop(stdin);
+    let _ = child.kill();
     Ok(())
 }
 
@@ -117,6 +116,6 @@ fn lsp_survives_when_required_ollama_endpoint_is_unreachable() -> Result<()> {
         "LSP must keep serving after an unreachable embeddingSetModel: {config}"
     );
 
-    let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
+    let _ = child.kill();
     Ok(())
 }

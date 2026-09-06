@@ -18,8 +18,6 @@ function occurrence(sourcePath: string, startByte: number, endByte: number): Rep
     path: sourcePath,
     start_byte: startByte,
     end_byte: endByte,
-    start_line: 1,
-    end_line: 2,
     hidden: false,
   };
 }
@@ -38,7 +36,7 @@ function directCompareUri(params: Record<string, string>): vscode.Uri {
 suite("compare provider", () => {
   test("buildCompareUri round-trips coordinates through parseCompareUri", () => {
     const sourcePath = "/tmp/deslop source/example.cs";
-    const uri = buildCompareUri(occurrence(sourcePath, 6, 16), "b");
+    const uri = buildCompareUri(occurrence(sourcePath, 6, 16), "b", "cluster-42");
     const parsed = parseCompareUri(uri);
 
     assert.equal(uri.scheme, COMPARE_SCHEME);
@@ -46,7 +44,7 @@ suite("compare provider", () => {
     assert.equal(parsed.startByte, 6);
     assert.equal(parsed.endByte, 16);
     assert.equal(parsed.side, "b");
-    assert.equal(parsed.pairLabel, "selected-pair");
+    assert.equal(parsed.clusterId, "cluster-42");
   });
 
   test("parseCompareUri rejects other schemes and defaults missing query params", () => {
@@ -58,7 +56,7 @@ suite("compare provider", () => {
       startByte: 0,
       endByte: 0,
       side: "a",
-      pairLabel: "",
+      clusterId: "",
     });
   });
 
@@ -66,7 +64,7 @@ suite("compare provider", () => {
     const file = await tempSource("alpha beta gamma");
     const provider = new CompareContentProvider();
     const text = await provider.provideTextDocumentContent(
-      buildCompareUri(occurrence(file, 6, 10), "a"),
+      buildCompareUri(occurrence(file, 6, 10), "a", "cluster-1"),
     );
 
     assert.equal(text, "beta");
@@ -78,10 +76,10 @@ suite("compare provider", () => {
     const provider = new CompareContentProvider();
 
     const oversized = await provider.provideTextDocumentContent(
-      buildCompareUri(occurrence(file, -10, 1000), "a"),
+      buildCompareUri(occurrence(file, -10, 1000), "a", "cluster-1"),
     );
     const inverted = await provider.provideTextDocumentContent(
-      buildCompareUri(occurrence(file, 4, 2), "a"),
+      buildCompareUri(occurrence(file, 4, 2), "a", "cluster-1"),
     );
     const nanStart = await provider.provideTextDocumentContent(
       directCompareUri({
@@ -89,7 +87,7 @@ suite("compare provider", () => {
         start: "NaN",
         end: "3",
         side: "b",
-        pair: "selected-pair",
+        cluster: "cluster-2",
       }),
     );
 
@@ -102,11 +100,11 @@ suite("compare provider", () => {
     const provider = new CompareContentProvider();
     const missing = path.join(os.tmpdir(), "deslop-missing-source.cs");
     const text = await provider.provideTextDocumentContent(
-      buildCompareUri(occurrence(missing, 0, 4), "b"),
+      buildCompareUri(occurrence(missing, 0, 4), "b", "lost-cluster"),
     );
 
     assert.match(text, /Deslop could not load this compare occurrence/);
-    assert.match(text, /Pair: selected-pair/);
+    assert.match(text, /Cluster: lost-cluster/);
     assert.match(text, /Side: B/);
     assert.match(text, /Path:/);
     assert.match(text, /Details:/);

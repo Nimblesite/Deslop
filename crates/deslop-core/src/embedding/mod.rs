@@ -1,9 +1,9 @@
-//! Embedding pass ([TECH-EMBED-NEURAL] / [FUSED-EMBED-PROVIDER]).
+//! Embedding pass ([TECH-EMBED-NEURAL] / [FUSION-EMBED-PROVIDER]).
 //!
 //! Pluggable `EmbeddingProvider` trait, a disk cache keyed by
 //! `(content_hash, provider_id, model_id, model_version)`, and an HNSW
 //! top-k pair generator that produces the `embedding_cos` signal
-//! consumed by [FUSED-STRATEGY-BOUNDED-MAX].
+//! consumed by [FUSION-STRATEGY-BOUNDED-MAX].
 //!
 //! The module is deliberately small: the trait is the extension point
 //! per [PIPELINE-LANG-TRAIT]-style "single surface" design, and every
@@ -25,7 +25,7 @@ pub mod registry;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
 
-pub use cache::{bytes_hash, content_hash, EmbeddingCache};
+pub use cache::{content_hash, EmbeddingCache};
 pub use mode::{EmbeddingMode, ParseModeError};
 pub use noop::{NoopProvider, NOOP_PROVIDER_ID};
 pub use ollama::{

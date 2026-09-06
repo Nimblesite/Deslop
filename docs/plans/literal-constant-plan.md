@@ -16,7 +16,15 @@ Specs (read first, in this order): [literals.md](../specs/literals.md)
 `[FACET-TESTING]`), [mcp.md](../specs/mcp.md),
 [decisions.md §DECISION-LITERALS / §DECISION-MCP-SURFACE](../specs/decisions.md#decision-literals).
 
-Two tracks; land A0 first either way. Literal finding kinds remain on `LiteralFinding` and never widen a clone-cluster enum or cluster filter. B1 may land independently because `compare-pair` and cluster pagination do not depend on literal detection; B2/B3 depend on both tracks only where they render a separate literal-finding section. Wire changes always start in `docs/models/live-ipc.td` plus regeneration — never hand-edited generated code.
+Two tracks; land A0 first either way. **Sequencing rule:** B1 depends on A1 steps 3 and 5 for
+`CloneCategory::all()` (the method does not exist yet), the `constant_name` / `literal_value` wire
+fields behind `name_contains` / `value_contains`, and the literal-family fixtures behind the
+categories-filter tests. If B1 must land before A1: ship the filter block without
+`name_contains`/`value_contains`, add `CloneCategory::all()` over the existing two variants in B1,
+and defer the `magic_literal` filter test to A1 (the enums are registry-derived at schema-build
+time, so they widen automatically when A1 lands). B2/B3 depend on both tracks. Every phase = one
+PR, green `make ci`, coarse E2E proof per the spec's testing section, no co-author stamps. Wire
+changes always start in `docs/models/live-ipc.td` + regen — never hand-edited generated code.
 
 ## Track A — the literal/constant finding family
 
@@ -37,7 +45,7 @@ source of truth for "what is a literal" ([LITERAL-DETECT] point 1).
 4. E2E: per-language fixture asserting each literal kind normalises to `__literal__` and
    fingerprints stably across an edit to a raw/verbatim string. // [PIPELINE-NORMALIZE-AST]
 
-### A1 — Detection, finding kinds, mass, config, and census (L)
+### A1 — Detection, categories, ranking, config, census (L)
 
 The core of [literals.md]. Suggested file layout (all new files < 500 lines):
 
@@ -50,9 +58,11 @@ The core of [literals.md]. Suggested file layout (all new files < 500 lines):
   raw-text equality on any parse failure; no `unwrap`.
 - `crates/deslop-core/src/literals/join.rs` — the four group-bys + `shadowed_constant` join +
   [LITERAL-NOISE] gates + [LITERAL-CANONICAL] pick + `max_findings` cap.
-- `crates/deslop-core/src/literals/render.rs` — the one human-copy helper derived from `LiteralFinding`.
+- `crates/deslop-core/src/literals/copy.rs` — the one summary/interpretation helper.
 - `crates/deslop-core/src/config_literals.rs` — `[literals]` + `[workspace]` loading + validation
-  ([LITERAL-CONFIG]); state overrides go in `crates/deslop-core/src/state.rs` (the only global-state file). No literal ranking keys or pair-classification overrides exist.
+  ([LITERAL-CONFIG]); `[ranking]` keys join the existing ranking-policy code; state overrides go in
+  `crates/deslop-core/src/state.rs` (the only global-state file) following the
+  `set_structural_only_override` first-write-wins pattern.
 
 Steps:
 
@@ -63,11 +73,21 @@ Steps:
    config-independent — `enabled = false` skips the join, never the capture.
 2. Cache: extend the per-file cached entry with the two site vectors (byte ranges only) +
    encode/decode; decode failure = cache miss, never an error. Round-trip E2E proves it.
-3. Add `LiteralFindingKind` with the five wire labels from [CLONE-CATEGORY-REGISTRY]. It belongs only to `LiteralFinding`; clone clusters, pair classifications, cluster facets, and cluster severity never consume it.
-4. Join hook: call `build_literal_findings` beside clone materialisation and return a separate mass-ranked `literal_findings` collection. [RANK-LITERAL-FAMILY] owns its unmodified mass; [METRICS-REPO] excludes it from clone line metrics and `clusters_total`.
-5. Wire: `live-ipc.td` adds `LiteralFinding`, `LiteralOccurrence`, `LiteralFindingKind`, and `CanonicalTarget`; regenerate Rust and TypeScript. Do not add literal fields to `ReportCluster` or `ReportOccurrence`.
-6. Flags: LSP `--literals-enabled` plus the CLI `--no-literals` mirror and VS Code setting per [LITERAL-CONFIG]. Delete literal ranking flags, multipliers, and boosts.
-7. REPORTING-CONTEXT.md documents the separate literal-finding record, canonical target, mass, and count fields. It does not tell consumers to read literal kind from a cluster.
+3. `CloneCategory`: five new variants + wire labels + chips + action sentences per
+   [CLONE-CATEGORY-REGISTRY]; add `CloneCategory::all()`; every schema/facet enum derives from it.
+4. Join hook: call `build_literal_clusters` at the render stage beside existing cluster
+   materialisation; output enters the same ranked stream. [RANK-LITERAL-FAMILY] weight formula +
+   the three policy knobs; [METRICS-REPO] exclusion.
+5. Wire: `live-ipc.td` — `ReportCluster.{constant_name, literal_value, canonical_target}`,
+   `ReportOccurrence.{constant_value, container, unused_confidence}` (the last lands inert until
+   A2), `CanonicalTarget`; regen Rust + TS; mirror `Category`/`CATEGORIES`/`categoryLabels` in
+   `clients/vscode/src/types/report.ts`.
+6. Flags: LSP `--literals-enabled`, `--ranking-magic-literals`, `--ranking-constant-findings`
+   (+ CLI mirrors incl. `--no-literals`); VS Code settings per [LITERAL-CONFIG]; reject-list and
+   startup-parse tests like the structural-only flags.
+7. REPORTING-CONTEXT.md (ships inside the binary): document the five categories, the
+   signals-are-zero rule, `canonical_target`, and the `categories` filter guidance — same PR as the
+   code so the shipped schema_doc never lies.
 8. **Census** ([LITERAL-CENSUS]): run over this repo + the fixture corpus, tune, record numbers in
    [DECISION-LITERALS], bake the census E2E. Gate `enabled = true` on the exit criterion.
 9. E2E suites 1–4 + 6 + 7 of [LITERAL-TESTING]. Existing #61/#62/#64/#66/#112/#169 fixtures stay
@@ -80,18 +100,28 @@ literal-only-variation demotion — note in those issues, don't close), #133 (co
 ### A2 — Unused-public-constant marker (M)
 
 [LITERAL-UNUSED-MARKER] + [RANK-UNUSED-PUBLIC]. Identifier + string-word indexes on the cached file
-entry (mergeable counts, incremental per file change); suppression cascade exactly as specced — publishability via manifest checks (`publish = false`, `publish_to: none`, `IsPackable`, workspace membership), public-surface heuristics, string-token kill rule; confidence 60/75/90; and `[workspace] monorepo = "auto"` detection. The marker is occurrence metadata on a dedicated literal finding and never boosts, discounts, or reorders mass. E2E suite 5 of [LITERAL-TESTING] asserts the badge string "0 references found in this repo" verbatim. Never a deletion code-action.
+entry (mergeable counts, incremental per file change); suppression cascade exactly as specced —
+publishability via manifest checks (`publish = false`, `publish_to: none`, `IsPackable`,
+workspace membership), public-surface heuristics, string-token kill rule; confidence 60/75/90;
+`[workspace] monorepo = "auto"` detection; boost knob + validation `[1.0, 10.0]`;
+`--ranking-unused-public` + `deslop.ranking.unusedPublic`. E2E suite 5 of [LITERAL-TESTING] —
+the badge string "0 references found in this repo" asserted verbatim. Never a deletion code-action.
 
-## Track B — literal-finding surfaces and the seven-tool core MCP analysis surface
+## Track B — facets + the six-tool MCP surface
 
-### B1 — core MCP analysis consolidation 12 → 7 (L)
+### B1 — MCP consolidation 12 → 6 (L)
 
 [MCP-TOOLS], [MCP-TOOL-FILTERS], [MCP-TOOL-DUPLICATES], [MCP-TOOL-SESSION],
 [DECISION-MCP-SURFACE]. Mechanics (tool names are plain strings in the registry + dispatch table —
 no codegen):
 
-1. Wire: in `live-ipc.td`, replace the four page/report payload models with one `DuplicatesPage`; slim `RescanPayload` to `generation` plus the page; keep `ClusterSummary` limited to identity, canonical extent, occurrence count, language/path projection, mass, and rank; add an endpoint-keyed `compare-pair` request/response; and keep literal findings in their own payload rather than adding a cluster category.
-2. Schemas: one shared cluster filter builder for language, path, canonical extent, and mass severity; one matching implementation shared by every cluster consumer. Pair classification and literal finding kind are not cluster filters.
+1. Wire: in `live-ipc.td`, replace the four page/report payload models with one `DuplicatesPage`;
+   slim `RescanPayload` to `generation` + `summary` + the page; `ClusterSummary` gains `category`;
+   the filter echo gains `buckets`/`categories`/`languages`/`name_contains`/`value_contains`.
+   Fix the mcp.md-prose-vs-model drift (summary fields are exactly the [MCP-TOOL-DUPLICATES] list).
+2. Schemas: one shared filter-block builder + shape-block builder; **all three enums derived from
+   the registries** (`ClusterKind::all()`, `CloneCategory::all()`, language registry). One
+   `matches_filters` implementation shared by every consumer.
 3. `ClusterSummary.language` derives from the **core parser registry's** extension map — delete the
    hand-maintained path→language copies in the MCP page builder and the HTML renderer in favour of
    one core helper (fixes Dart `language: "unknown"`; unblocks #164; verify-and-close #170/#198).
@@ -100,7 +130,7 @@ no codegen):
    update the payload-cap `next_action` strings to name `duplicates`.
 5. Tests: migrate every suite in `crates/deslop-mcp/tests/` to the new spellings via this
    capability map — **never delete a test; every behavioural assertion is preserved**; assertions
-   on the tool surface itself (`tools/list` count/names/schemas) are updated to the seven-tool
+   on the tool surface itself (`tools/list` count/names/schemas) are updated to the six-tool
    registry and strengthened to assert the retired names are absent. Add the new
    filter/sort/scope cases from [MCP-TESTING].
 
@@ -117,7 +147,7 @@ no codegen):
 6. Docs blast radius — the explicit checklist (grep for each retired tool name when done; en + zh
    site mirrors both):
    - `docs/specs/live.md` — the [MCP-IPC-DISCOVERY] consumer column maps IPC methods to retired
-     tool names; remap to the seven-tool spellings. Also fix the stale state-file-architecture text:
+     tool names; remap to the six-tool spellings. Also fix the stale state-file-architecture text:
      the line-3 "deslop-mcp reads that state file" claim, the McpProc "state-file reader +
      in-memory cache" diagram node, and the [LIVE-WATCHER] sentence saying the MCP watches
      `live-report.json` — all contradict [MCP-IPC-CLIENT]/[MCP-NOTIFICATIONS] (no file reads, no
@@ -132,18 +162,30 @@ no codegen):
      tools; `site/src/index.njk` / `zh` if they list tools.
    - `find-similar` keeps its name everywhere — it is brand surface.
 
-### B2 — VSIX cluster and literal-finding filters (M)
+### B2 — VSIX facets (M)
 
-[FACET-TOP-OFFENDERS-FILTER], [FACET-TOP-OFFENDERS-FILTER-EMPTY], [FACET-GROUP-BY-TYPE], and [FACET-REPORT-WEBVIEW]: cluster views filter only by language, path, and mass severity and group only by cluster, file, folder, or language. Delete `filterBuckets`, `filterCategories`, `groupBy: "type"`, bucket/category selectors, category chips, and per-bucket severity. Dedicated literal-finding views may filter by literal finding kind without projecting that kind onto a clone cluster. Coarse E2E per [FACET-TESTING] proves the two record families remain separate.
+[FACET-TOP-OFFENDERS-FILTER], [FACET-TOP-OFFENDERS-FILTER-EMPTY],
+[FACET-GROUP-BY-TYPE], [FACET-REPORT-WEBVIEW]:
+`filterBuckets`/`filterCategories` settings + `chooseFilter` QuickPick + context key + status row;
+`groupBy: "type"` reusing the bucket-group node machinery; webview bucket/category selects +
+registry-derived language options (Dart) + shared severity helper; category chips/icons through the
+one label helper; Copy Context For AI payloads include the literal-family fields. Coarse E2E per
+[FACET-TESTING]; toolbar `navigation@N` pin assertions updated in-PR (Choose Filter lands at
+`navigation@4`, shifting Expand/Collapse/Refresh to `@5`–`@7`). In the same PR, make severity.md's
+bucket enumerations match `ClusterKind::all()` (five buckets — vsix.md's settings rows already
+list `structuralOnly`; severity.md still says four). Delivers the unbuilt asks of #195 (file a
+successor issue or reopen — maintainer's call recorded in the PR body; the category-not-bucket
+`type` grouping divergence is recorded in [FACET-GROUP-BY-TYPE]); advances #162.
 
 ### B3 — HTML + CLI facets (S)
 
-[FACET-HTML] and [FACET-CLI] render clone clusters neutrally from membership and mass, while a separate literal-finding section may show literal kind and drift values. No `cat-*` class, pair classification, or literal kind appears on a clone cluster. E2E uses rendered-output assertions per [FACET-TESTING].
+[FACET-HTML] CSS-only inputs + `cat-*` classes + breakdown clause + per-occurrence drift values;
+[FACET-CLI] literal-family breakdown line. E2E: rendered-output assertions per [FACET-TESTING].
 
 ## Follow-ups (specced as future work, not scheduled)
 
 Python `typing.Final` / C# enum members / Dart enum constants as constants ([LITERAL-DETECT-SITES]
-scope line); approx-float-constant check
+scope line); category-keyed severity override (ties into #177); approx-float-constant check
 (clippy `approx_constant` model); literal-index-powered demotion for #70/#79; promote the
 [AUTOFIX-CATALOG] "consolidate duplicate constant/literal" row to planned, consuming
 `canonical_target` as the merge target; standalone (non-duplicated) unused-constant findings.
@@ -151,10 +193,10 @@ scope line); approx-float-constant check
 ## TODO
 
 - [ ] A0 literal-kind consolidation + normalizer audit
-- [ ] A1 detection + dedicated finding kinds + mass + config + census + E2E (gate: [LITERAL-CENSUS])
-- [ ] A2 unused-public-constant marker with no mass change
-- [ ] B1 core MCP analysis 12→7 consolidation + shared cluster filter block + explicit pair tool + test migration + docs blast radius; preserve separately specified refactor tools
-- [ ] B2 VSIX cluster filters plus a separate literal-finding view — #195 successor
-- [ ] B3 Neutral clone HTML/CLI plus separate literal-finding sections
+- [ ] A1 detection + categories + ranking + config + census + E2E (gate: [LITERAL-CENSUS])
+- [ ] A2 unused-public-constant marker + boost
+- [ ] B1 MCP 12→6 consolidation + shared filter block + test migration + docs blast radius
+- [ ] B2 VSIX facets (filter, type grouping, webview) — #195 successor
+- [ ] B3 HTML/CLI facets
 - [ ] Close/advance issue pass: verify-close #170/#198; note prerequisite on #70/#79/#133; #164
       unblocked by B1 step 3; record #195 disposition

@@ -14,10 +14,8 @@ const RECOMMENDED: Record<string, string> = {
   unixcoder: "Alternative; strong on cross-language.",
   codet5p: "Large model, strong on semantic matches.",
 };
-const OFF_SETTING_VALUE = "off";
-const OFF_PROVIDER_ID = OFF_SETTING_VALUE;
-const OFF_MODEL_ID = OFF_SETTING_VALUE;
-const NON_SELECTABLE_ENTRY_KIND = "none";
+const OFF_PROVIDER_ID = "off";
+const OFF_MODEL_ID = "off";
 
 interface Entry extends vscode.QuickPickItem {
   entryKind: "model" | "off" | "pull" | "refresh" | "none";
@@ -49,14 +47,14 @@ export async function pickEmbeddingModel(
   });
   quickPick.onDidAccept(async () => {
     const picked = quickPick.selectedItems[0] ?? quickPick.activeItems[0];
-    if (!picked || picked.entryKind === NON_SELECTABLE_ENTRY_KIND) return;
+    if (!picked || picked.entryKind === "none") return;
     quickPick.hide();
     try {
       if (picked.entryKind === "pull") {
         await vscode.env.openExternal(vscode.Uri.parse("https://ollama.com/library"));
       } else if (picked.entryKind === "refresh") {
         await pickEmbeddingModel(store, clientOf);
-      } else if (picked.entryKind === OFF_SETTING_VALUE) {
+      } else if (picked.entryKind === "off") {
         await turnEmbeddingsOff(client, store);
       } else if (picked.entryKind === "model" && picked.model) {
         await setModelFromPicker(client, store, picked.model);
@@ -89,7 +87,7 @@ export function buildItems(
   const items: Entry[] = [];
 
   items.push({
-    entryKind: OFF_SETTING_VALUE,
+    entryKind: "off",
     label: active
       ? "$(circle-slash) Turn embeddings off"
       : "$(circle-slash) Embeddings off",
@@ -98,7 +96,7 @@ export function buildItems(
   });
 
   items.push({
-    entryKind: NON_SELECTABLE_ENTRY_KIND,
+    entryKind: "none",
     label: "Local embeddings run after selection",
     description: "May be slow; progress stays in Session.",
     detail: "Deslop does not start the live embedding pass until you choose a model.",
@@ -108,14 +106,14 @@ export function buildItems(
 
   if (ollama.length === 0) {
     items.push({
-      entryKind: NON_SELECTABLE_ENTRY_KIND,
+      entryKind: "none",
       label: "Ollama not detected",
       description: "Install from ollama.com to use local embedding models.",
       detail: "Embedding analysis can stay off until a local model is available.",
     });
   } else {
     items.push({
-      entryKind: NON_SELECTABLE_ENTRY_KIND,
+      entryKind: "none",
       label: "Ollama models",
       kind: vscode.QuickPickItemKind.Separator,
     });
@@ -219,7 +217,7 @@ async function persistModelConfig(model: EmbeddingModelInfo): Promise<void> {
 
 async function persistOffConfig(): Promise<void> {
   const cfg = vscode.workspace.getConfiguration("deslop");
-  await cfg.update("embedding.mode", OFF_SETTING_VALUE, vscode.ConfigurationTarget.Workspace);
+  await cfg.update("embedding.mode", "off", vscode.ConfigurationTarget.Workspace);
 }
 
 export function isActive(

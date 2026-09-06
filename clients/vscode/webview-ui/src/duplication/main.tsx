@@ -1,9 +1,7 @@
 // [VSIX-METRICS-REPORT] Duplication report webview. Renders the headline
-// duplication score plus a per-folder / per-file breakdown. Every figure
-// is read verbatim off the wire (`metrics.folders` / `metrics.per_file`,
-// computed by the engine's single `percent` function per [METRICS-REPO]);
-// `buildFolderRollup` only nests the rows, so this table, the sidebar
-// Duplication panel, and the CLI can never disagree.
+// duplication score plus a per-folder / per-file breakdown, reusing the
+// extension-host `buildFolderRollup` so the table matches the sidebar
+// Duplication panel exactly.
 
 import { render } from "preact";
 
@@ -12,9 +10,6 @@ import { COLOR, FONT, GLOBAL_CSS } from "../theme";
 import { MetricHeading } from "../components/MetricHeading";
 import { buildFolderRollup, type RollupChild } from "../../../src/tree/rollup";
 import { thresholdStatus } from "../../../src/tree/threshold";
-import { formatPercent } from "../../../src/types/format";
-
-const MONOSPACE_CLASS = "mono";
 
 function percentColor(percent: number): string {
   if (percent >= 30) return "#e5534b";
@@ -59,11 +54,11 @@ function Row({ child, depth }: { child: RollupChild; depth: number }) {
           {isFolder ? "📁 " : ""}
           {name}
         </span>
-        <span class={MONOSPACE_CLASS} style={{ fontSize: "11px", color: COLOR.onSurfaceMuted }}>
+        <span class="mono" style={{ fontSize: "11px", color: COLOR.onSurfaceMuted }}>
           {detail}
         </span>
         <span
-          class={MONOSPACE_CLASS}
+          class="mono"
           style={{
             fontSize: "13px",
             fontWeight: 600,
@@ -72,7 +67,7 @@ function Row({ child, depth }: { child: RollupChild; depth: number }) {
             minWidth: "62px",
           }}
         >
-          {formatPercent(child.percent)}
+          {child.percent.toFixed(1)}%
         </span>
       </li>
       {isFolder
@@ -94,7 +89,7 @@ function DuplicationApp() {
     );
   }
   const metrics = snapshot.metrics;
-  const rows = buildFolderRollup(metrics);
+  const rows = buildFolderRollup(metrics.per_file, (file) => file.path);
   const status = thresholdStatus(metrics.threshold);
   const gate = status.configured ? ` · ${status.label}` : "";
   return (
@@ -104,7 +99,7 @@ function DuplicationApp() {
           DESLOP · DUPLICATION · {snapshot.tool_version}
         </div>
         <MetricHeading value={metrics.duplication_percent} label="duplicated" />
-        <div class={MONOSPACE_CLASS} style={{ fontSize: "12px", color: COLOR.onSurfaceMuted }}>
+        <div class="mono" style={{ fontSize: "12px", color: COLOR.onSurfaceMuted }}>
           {metrics.duplicated_loc}/{metrics.analysed_loc} LOC · {metrics.clusters_total} clusters ·{" "}
           {metrics.duplicated_files} files{gate}
         </div>

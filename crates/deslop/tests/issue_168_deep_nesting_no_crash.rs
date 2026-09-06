@@ -15,7 +15,7 @@ use std::{
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::scan_dir::temp_scan_dir;
+mod common;
 use crate::common::*;
 
 fn report_path(tmp: &Path) -> PathBuf {
@@ -26,7 +26,9 @@ fn report_path(tmp: &Path) -> PathBuf {
 
 #[test]
 fn deeply_nested_dart_file_is_skipped_not_crashed() -> Result<()> {
-    let (tmp, src) = temp_scan_dir("src")?;
+    let tmp = tempfile::tempdir()?;
+    let src = tmp.path().join("src");
+    fs::create_dir(&src)?;
 
     // Pathological: a 5000-deep nested collection literal. Before the fix
     // this overflowed the stack and aborted the process with SIGABRT.

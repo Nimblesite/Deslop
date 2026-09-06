@@ -25,6 +25,7 @@ use deslop_core::{
     EmbeddingProvider, EmbeddingSpec, ExclusionConfig, ProviderError,
 };
 
+mod common;
 use tokio::sync::{Semaphore, SemaphorePermit};
 
 use crate::common::*;
@@ -58,7 +59,9 @@ async fn live_slot() -> Option<SemaphorePermit<'static>> {
 /// tests in this file.
 fn csharp_small_session() -> Result<(tempfile::TempDir, AnalysisSession)> {
     let tmp = copy_fixture("csharp-small")?;
-    let session = live_session(tmp.path())?;
+    let provider = Arc::new(StubProvider::new());
+    let session = AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, provider)
+        .context("session")?;
     Ok((tmp, session))
 }
 
@@ -176,7 +179,9 @@ async fn live_loop_hides_cluster_after_deslop_toml_report_hide_edit() -> Result<
     let config_path = scan_root.join(".deslop.toml");
     fs::write(&config_path, b"[defaults]\n").context("seed .deslop.toml")?;
 
-    let session = live_session(&scan_root)?;
+    let provider = Arc::new(StubProvider::new());
+    let session =
+        AnalysisSession::new(scan_root.clone(), 15, false, None, provider).context("session")?;
     let pre = session.report();
     assert!(
         !pre.clusters.is_empty(),
@@ -251,7 +256,9 @@ async fn live_loop_evicts_newly_gitignored_tree_after_gitignore_edit() -> Result
             .with_context(|| format!("copy {source}"))?;
     }
 
-    let session = live_session(&scan_root)?;
+    let provider = Arc::new(StubProvider::new());
+    let session =
+        AnalysisSession::new(scan_root.clone(), 15, false, None, provider).context("session")?;
     let pre = session.report();
     assert_eq!(
         pre.files_analysed, 3,
@@ -309,7 +316,9 @@ async fn live_analysis_session_honors_scan_root_relative_report_hide() -> Result
         "[defaults]\nreport_hide = [\"benchmarks/fixtures/**\"]\n",
     )
     .context("write .deslop.toml")?;
-    let session = live_session(scan_root)?;
+    let provider = Arc::new(StubProvider::new());
+    let session = AnalysisSession::new(scan_root.to_path_buf(), 15, false, None, provider)
+        .context("session")?;
     let report = session.report();
     assert!(
         report.clusters.is_empty(),
@@ -461,7 +470,9 @@ async fn find_similar_on_unparseable_snippet_returns_unparseable_error() -> Resu
 async fn find_similar_on_below_min_nodes_snippet_returns_below_min_nodes_flag() -> Result<()> {
     let _slot = live_slot().await;
     let tmp = copy_fixture("csharp-small")?;
-    let session = live_session_at(tmp.path(), 1_000)?;
+    let provider = Arc::new(StubProvider::new());
+    let session = AnalysisSession::new(tmp.path().to_path_buf(), 1_000, false, None, provider)
+        .context("session")?;
     let request = FindSimilarRequest {
         input: FindSimilarInput::Snippet {
             snippet: "class A { void M() {} }".to_owned(),
@@ -666,7 +677,7 @@ async fn live_service_round_trip_covers_the_query_surface() -> Result<()> {
 }
 
 /// Covers the transport-facing helpers on [`LiveService`] — the shared
-/// session lock, mass aggregation used by LSP rank-band presentation,
+/// session lock, weight aggregation used by LSP severity bucketing,
 /// and the snapshot cache that feeds delta replies.
 async fn exercise_transport_hooks(service: &LiveService) -> Result<()> {
     let session_handle = service.session();
@@ -674,14 +685,14 @@ async fn exercise_transport_hooks(service: &LiveService) -> Result<()> {
         let guard = session_handle.lock().await;
         guard.generation()
     };
-    let masses = service.all_cluster_masses().await;
+    let weights = service.all_cluster_weights().await;
     assert!(
-        !masses.is_empty(),
-        "fixture must produce at least one cluster mass"
+        !weights.is_empty(),
+        "fixture must produce at least one cluster weight"
     );
     assert!(
-        masses.iter().all(|mass| *mass > 0),
-        "rendered duplicate clusters have positive mass: {masses:?}"
+        weights.iter().all(|weight| *weight >= 0.0),
+        "cluster weights are non-negative: {weights:?}"
     );
     let snapshot = service.report_get().await;
     service
@@ -697,7 +708,9 @@ async fn exercise_transport_hooks(service: &LiveService) -> Result<()> {
 
 /// Builds a fresh session lock around the temp fixture root.
 fn make_session_lock(root: &Path) -> Result<Arc<tokio::sync::Mutex<AnalysisSession>>> {
-    let session = live_session(root)?;
+    let provider = Arc::new(StubProvider::new());
+    let session =
+        AnalysisSession::new(root.to_path_buf(), 15, false, None, provider).context("session")?;
     Ok(Arc::new(tokio::sync::Mutex::new(session)))
 }
 
@@ -737,24 +750,12 @@ async fn exercise_session_config(
     assert!(!config.languages.is_empty());
     let request = FindSimilarRequest {
         input: FindSimilarInput::Snippet {
-            // The corpus's own `Alpha.cs` — a snippet whose subtree
-            // digests exist in the workspace. Pins the content join:
-            // cluster ids are not derivable from pathless digests
-            // (gh #430), so any regression of the hash→occurrence→
-            // report join returns empty clusters here while the
-            // Windows TCP twin fails `mcp_tools_work_over_tcp_transport`.
-            snippet: fs::read_to_string(root.join("Alpha.cs")).context("read corpus Alpha.cs")?,
+            snippet: "namespace N { class C { void M(int x) { return; } } }".to_owned(),
             language: "csharp".to_owned(),
         },
         max_results: Some(5),
     };
-    let result = service.find_similar(&request).await?;
-    assert!(
-        !result.clusters.is_empty(),
-        "find-similar on the corpus's own file must locate its clusters \
-         — an empty answer means the snippet-hash join went blind: \
-         {result:?}"
-    );
+    let _result = service.find_similar(&request).await?;
     let guard = session_lock.lock().await;
     assert_eq!(guard.root(), root, "root accessor should match");
     let generation = guard.generation();

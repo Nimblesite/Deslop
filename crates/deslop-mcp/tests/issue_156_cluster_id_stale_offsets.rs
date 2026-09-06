@@ -16,7 +16,7 @@
 use anyhow::{anyhow, ensure, Context, Result};
 use serde_json::{json, Value};
 
-use crate::common;
+mod common;
 use common::{call_tool, lsp_workspace_with_socket, rescan_call, wait_for_state_then_init_mcp};
 
 /// Issue #156: after rescanning, the cluster payload returned by
@@ -31,7 +31,7 @@ fn issue_156_cluster_by_id_returns_post_edit_offsets() -> Result<()> {
     // Force a refresh first so the baseline is deterministic.
     let baseline = rescan_call(&mut mcp, &[])?;
     let baseline_clusters = baseline
-        .pointer("/page/clusters")
+        .get("clusters")
         .and_then(Value::as_array)
         .ok_or_else(|| anyhow!("baseline rescan missing clusters: {baseline}"))?;
     ensure!(

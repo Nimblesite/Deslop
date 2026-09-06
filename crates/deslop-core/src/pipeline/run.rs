@@ -53,7 +53,15 @@ pub fn run(config: &PipelineConfig<'_>) -> Result<Report, CoreError> {
 ///   [`crate::lang::LanguageParser::parse_and_normalize`].
 pub fn debug_ast_dump(path: &Path) -> Result<String, CoreError> {
     let parsers = default_parsers();
-    let Some(parser) = crate::lang::parser_for_path(&parsers, path) else {
+    let extension = path
+        .extension()
+        .and_then(std::ffi::OsStr::to_str)
+        .map(str::to_lowercase)
+        .unwrap_or_default();
+    let Some(parser) = parsers
+        .iter()
+        .find(|parser| parser.file_extensions().iter().any(|e| *e == extension))
+    else {
         return Err(CoreError::UnsupportedExtension {
             path: path.to_path_buf(),
         });

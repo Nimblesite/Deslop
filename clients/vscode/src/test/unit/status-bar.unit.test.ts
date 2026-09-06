@@ -6,13 +6,14 @@ import * as assert from "node:assert/strict";
 import { StatusBar, sameFile, shortPath } from "../../commands/statusBar";
 import { ReportStore } from "../../reportStore";
 import { Report } from "../../types/report";
-import { emptyReport, repoMetrics } from "./report.helpers";
-import { occurrence, wireCluster } from "../cluster.helpers";
+import { repoMetrics } from "./report.helpers";
 
 function report(): Report {
-  return emptyReport({
+  return {
     tool_version: "v",
+    min_nodes: 30,
     files_analysed: 5,
+    clusters_hidden: 0,
     cache_stats: { hits: 1, misses: 2 },
     metrics: repoMetrics({
       analysed_loc: 200,
@@ -21,15 +22,28 @@ function report(): Report {
       clusters_total: 2,
       duplicated_files: 1,
     }),
+    schema_doc: "",
+    action_hints: [],
+    boilerplate_hints: [],
+    embedding_provenance: undefined,
     clusters: [
-      wireCluster({
+      {
         id: "a",
-        mass: 10,
-        canonical_node_count: 3,
-                occurrences: [occurrence("/tmp/A/Alpha.cs", 0, 10)],
-      }),
+        weight: 10,
+        size: 3,
+        canonical_node_count: 4,
+        bucket: "identical",
+        signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
+        occurrences: [
+          { path: "/tmp/A/Alpha.cs", start_byte: 0, end_byte: 10, hidden: false },
+        ],
+        occurrences_total: 0,
+        occurrences_truncated: false,
+        summary: "",
+        interpretation: "",
+      },
     ],
-  });
+  };
 }
 
 suite("statusBar", () => {

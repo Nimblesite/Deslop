@@ -7,6 +7,8 @@
 //! canonical, would-empty file, non-definition occurrences, non-Rust
 //! languages) must refuse with a reason.
 
+mod common;
+
 use std::{
     collections::HashMap,
     fs,
@@ -15,10 +17,8 @@ use std::{
 
 use anyhow::{anyhow, ensure, Context, Result};
 use deslop_core::{
-    lang::{csharp::CSharpParser, rust_lang::RustParser, LanguageParser},
-    refactor::consolidate::{
-        compute_consolidation_plan, ConsolidatePlan, ConsolidationOutcome, PlannedFileEdit,
-    },
+    lang::{csharp::CSharpParser, rust_lang::RustParser},
+    refactor::consolidate::{compute_consolidation_plan, ConsolidationOutcome},
     report::{Report, ReportCluster},
 };
 
@@ -28,21 +28,9 @@ use crate::common::{
     fixture,
 };
 
-/// File bytes keyed by the occurrence path, as the engine consumes them.
-type Sources = HashMap<PathBuf, Vec<u8>>;
-
-/// The duplicated definition every `helper`-shaped scenario shares.
-const HELPER: &str = "pub fn helper(x: usize) -> usize {\n    x + 1\n}";
-
-/// The free-reference definition the binding-drift gates share.
-const RUN_SCALE: &str = "pub fn run(value: usize) -> usize {\n    scale(value)\n}";
-
-/// The sibling file names a synthetic scenario defaults to.
-const SIBLINGS: (&str, &str) = ("a.rs", "b.rs");
-
 /// Reads every occurrence path of a cluster into the sources map the
 /// consolidation engine consumes.
-fn sources_for(root: &Path, cluster: &ReportCluster) -> Result<Sources> {
+fn sources_for(root: &Path, cluster: &ReportCluster) -> Result<HashMap<PathBuf, Vec<u8>>> {
     let mut sources = HashMap::new();
     for occurrence in &cluster.occurrences {
         let bytes = fs::read(root.join(&occurrence.path))
@@ -72,145 +60,69 @@ fn cross_file_cluster(report: &Report) -> Result<ReportCluster> {
         .context("a cross-file cluster must surface")
 }
 
-/// Builds a synthetic cluster over in-memory files sharing `needle`.
-fn synthetic_cluster(files: &[(&str, &str)], needle: &str) -> Result<(ReportCluster, Sources)> {
-    let mut occurrences = Vec::new();
-    let mut sources = HashMap::new();
-    for (name, content) in files {
-        let start = content.find(needle).context("definition present")?;
-        let end = start.saturating_add(needle.len());
-        occurrences.push(report_occurrence(name, (start, end), false));
-        let _inserted = sources.insert(PathBuf::from(name), content.as_bytes().to_vec());
+/// [AUTOFIX-CONSOLIDATE]: the duplicated `pub fn` consolidates to one
+/// canonical copy, the duplicate file imports it, and the rewritten
+/// crate compiles (`rustc --emit=metadata`).
+#[test]
+fn rust_cross_file_definition_consolidates_and_compiles() -> Result<()> {
+    let root = fixture("rust-consolidate");
+    let report = analyse(&root)?;
+    let cluster = cross_file_cluster(&report)?;
+    let sources = sources_for(&root, &cluster)?;
+    let outcome = compute_consolidation_plan(&cluster, &sources, &RustParser::new())
+        .map_err(|error| anyhow!("consolidation failed: {error}"))?;
+    let ConsolidationOutcome::Mechanical(plan) = outcome else {
+        return Err(anyhow!(
+            "the fixture must consolidate mechanically: {outcome:?}"
+        ));
+    };
+
+    ensure!(
+        plan.symbols == ["normalise_labels"],
+        "symbol recorded, got {:?}",
+        plan.symbols
+    );
+    ensure!(
+        plan.edits.len() == 2,
+        "one deletion plus one import insertion expected, got {}",
+        plan.edits.len()
+    );
+    let import = plan
+        .edits
+        .iter()
+        .find(|edit| !edit.new_text.is_empty())
+        .context("import insertion present")?;
+    let canonical_module = plan
+        .canonical_path
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .context("canonical module stem")?;
+    ensure!(
+        import.new_text == format!("use crate::{canonical_module}::normalise_labels;\n\n"),
+        "Schäfer-preserving import, got {:?}",
+        import.new_text
+    );
+
+    let staging = tempfile::tempdir()?;
+    for name in ["lib.rs", "pricing_a.rs", "pricing_b.rs"] {
+        let _copied = fs::copy(root.join(name), staging.path().join(name))?;
     }
-    Ok((synthetic_report_cluster(occurrences, "identical"), sources))
-}
-
-/// Cluster and sources for two sibling files sharing `needle`.
-fn pair_cluster(
-    files: (&str, &str),
-    names: (&str, &str),
-    needle: &str,
-) -> Result<(ReportCluster, Sources)> {
-    synthetic_cluster(&[(names.0, files.0), (names.1, files.1)], needle)
-}
-
-/// The engine's verdict for an already-built cluster.
-fn outcome_for(
-    cluster: &ReportCluster,
-    sources: &Sources,
-    parser: &dyn LanguageParser,
-) -> Result<ConsolidationOutcome> {
-    compute_consolidation_plan(cluster, sources, parser)
-        .map_err(|error| anyhow!("consolidation failed: {error}"))
-}
-
-/// The plan for a cluster the scenario expects to consolidate.
-fn plan_for(
-    scenario: &str,
-    cluster: &ReportCluster,
-    sources: &Sources,
-    parser: &dyn LanguageParser,
-) -> Result<ConsolidatePlan> {
-    match outcome_for(cluster, sources, parser)? {
-        ConsolidationOutcome::Mechanical(plan) => Ok(plan),
-        refused @ ConsolidationOutcome::Refused(_) => {
-            Err(anyhow!("{scenario} must consolidate: {refused:?}"))
-        }
-    }
-}
-
-/// The reason for a cluster the scenario expects to refuse.
-fn reason_for(
-    scenario: &str,
-    cluster: &ReportCluster,
-    sources: &Sources,
-    parser: &dyn LanguageParser,
-) -> Result<String> {
-    match outcome_for(cluster, sources, parser)? {
-        ConsolidationOutcome::Refused(reason) => Ok(reason),
-        planned @ ConsolidationOutcome::Mechanical(_) => {
-            Err(anyhow!("{scenario} must refuse: {planned:?}"))
-        }
-    }
-}
-
-/// The refusal reason for two sibling Rust files sharing `needle`.
-fn pair_reason(file_a: &str, file_b: &str, names: (&str, &str), needle: &str) -> Result<String> {
-    let (cluster, sources) = pair_cluster((file_a, file_b), names, needle)?;
-    reason_for("the scenario", &cluster, &sources, &RustParser::new())
-}
-
-/// The plan for two sibling Rust files sharing `needle`.
-fn pair_plan(
-    scenario: &str,
-    files: (&str, &str),
-    names: (&str, &str),
-    needle: &str,
-) -> Result<ConsolidatePlan> {
-    let (cluster, sources) = pair_cluster(files, names, needle)?;
-    plan_for(scenario, &cluster, &sources, &RustParser::new())
-}
-
-/// `prefix` (possibly empty) followed by the shared definition.
-fn prefixed(prefix: &str, definition: &str) -> String {
-    format!("{prefix}{definition}\n")
-}
-
-/// [`prefixed`] plus a trailing item, so the duplicate keeps content
-/// of its own once the definition moves out.
-fn with_trailer(prefix: &str, definition: &str, trailer: &str) -> String {
-    format!("{}\n{trailer}", prefixed(prefix, definition))
-}
-
-/// A `keep_*` fn that stops a duplicate file from becoming empty.
-fn keeper(name: &str, value: usize) -> String {
-    format!("pub fn keep_{name}() -> usize {{\n    {value}\n}}\n")
-}
-
-/// A unit struct with one inherent method returning `body`.
-fn inherent_impl(type_name: &str, method: &str, receiver: &str, body: usize) -> String {
-    format!(
-        "pub struct {type_name};\n\nimpl {type_name} {{\n    pub fn {method}({receiver}) -> u32 {{\n        {body}\n    }}\n}}\n\n"
-    )
-}
-
-/// A file defining `definition`, then a caller that invokes `helper`.
-fn helper_caller(definition: &str, caller: &str, argument: usize) -> String {
-    format!("{definition}\n\npub fn {caller}() -> usize {{ helper({argument}) }}\n")
-}
-
-/// The stock sibling pair: both files define `definition` and call it.
-fn helper_pair(definition: &str) -> (String, String) {
-    (
-        helper_caller(definition, "a", 1),
-        helper_caller(definition, "b", 2),
-    )
-}
-
-/// `source` with `edits` applied in the order given.
-fn apply_edits(source: &str, edits: &[PlannedFileEdit]) -> String {
-    edits.iter().fold(source.to_owned(), |mut buffer, edit| {
-        buffer.replace_range(edit.start_byte..edit.end_byte, &edit.new_text);
-        buffer
-    })
-}
-
-/// [`apply_edits`], proving each edit targets `expected` and is in bounds.
-fn apply_checked_edits(source: &str, edits: &[PlannedFileEdit], expected: &Path) -> Result<String> {
-    for edit in edits {
+    let duplicate_path = plan
+        .edits
+        .first()
+        .map(|edit| edit.path.clone())
+        .context("edited path present")?;
+    let mut buffer = fs::read_to_string(root.join(&duplicate_path))?;
+    for edit in &plan.edits {
         ensure!(
-            edit.path == expected,
-            "edits target the one duplicate file {}, got {}",
-            expected.display(),
-            edit.path.display()
+            edit.path == duplicate_path,
+            "v1 edits target one duplicate file"
         );
-        ensure!(edit.end_byte <= source.len(), "edit in bounds");
+        ensure!(edit.end_byte <= buffer.len(), "edit in bounds");
+        buffer.replace_range(edit.start_byte..edit.end_byte, &edit.new_text);
     }
-    Ok(apply_edits(source, edits))
-}
+    fs::write(staging.path().join(&duplicate_path), &buffer)?;
 
-/// Proves the staged crate compiles ([AUTOFIX-CONSOLIDATE-GATE] backstop).
-fn ensure_compiles(staging: &Path) -> Result<()> {
     let output = std::process::Command::new("rustc")
         .args([
             "--edition",
@@ -220,7 +132,7 @@ fn ensure_compiles(staging: &Path) -> Result<()> {
             "--emit=metadata",
             "lib.rs",
         ])
-        .current_dir(staging)
+        .current_dir(staging.path())
         .output()
         .context("rustc available")?;
     ensure!(
@@ -228,119 +140,39 @@ fn ensure_compiles(staging: &Path) -> Result<()> {
         "the consolidated crate must compile ([AUTOFIX-CONSOLIDATE-GATE] backstop):\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    Ok(())
-}
-
-/// The fixture plan's import edit names the canonical module.
-fn compile_two_module_crate(file_a: &str, file_b: &str) -> Result<()> {
-    let staging = tempfile::tempdir()?;
-    fs::write(
-        staging.path().join("lib.rs"),
-        "mod mod_a;\nmod mod_b;\npub use mod_a::total_a;\npub use mod_b::total_b;\n",
-    )?;
-    fs::write(staging.path().join("mod_a.rs"), file_a)?;
-    fs::write(staging.path().join("mod_b.rs"), file_b)?;
-    ensure_compiles(staging.path())
-}
-
-/// [AUTOFIX-CONSOLIDATE]: the duplicated `pub fn` consolidates to one
-/// canonical copy, the duplicate file imports it, and the rewritten
-/// crate compiles (`rustc --emit=metadata`).
-///
-/// The reported view is the byte-identical `normalise_labels`
-/// definition itself: the whole-file near-miss that wraps it in both
-/// modules is a container echo the rescue refuses
-/// ([FUSED-SHARED-SUBTREE-ECHO]), so the report names the copy, not
-/// the file around it. A cross-file identical definition consolidates
-/// mechanically ([AUTOFIX-CONSOLIDATE-SURFACE]); the compile backstop
-/// is pinned on the synthetic crate by
-/// [`definition_run_spanning_two_functions_consolidates`]. The
-/// near-miss is still owed its
-/// refusal: a cluster over the whole files, whose `describe_*`
-/// definition runs disagree, must refuse rather than rewrite
-/// ([AUTOFIX-CONSOLIDATE-GATE] v1.1) — pinned here on the same corpus.
-#[test]
-fn rust_cross_file_definition_consolidates_and_compiles() -> Result<()> {
-    let root = fixture("rust-consolidate");
-    let report = analyse(&root)?;
-    let cluster = cross_file_cluster(&report)?;
-    let sources = sources_for(&root, &cluster)?;
-    let slices = cluster
-        .occurrences
-        .iter()
-        .map(|occurrence| {
-            sources
-                .get(&occurrence.path)
-                .and_then(|bytes| bytes.get(occurrence.start_byte..occurrence.end_byte))
-                .ok_or_else(|| {
-                    anyhow!("occurrence out of bounds for {}", occurrence.path.display())
-                })
-        })
-        .collect::<Result<Vec<_>>>()?;
     ensure!(
-        slices
-            .iter()
-            .all(|slice| slice.starts_with(b"pub fn normalise_labels")),
-        "the reported occurrences are the authored normalise_labels definition"
-    );
-    ensure!(
-        slices
-            .windows(2)
-            .all(|pair| matches!(pair, [first, second] if first == second)),
-        "both reported occurrences are byte-identical"
-    );
-    let plan = plan_for(
-        "the identical definition",
-        &cluster,
-        &sources,
-        &RustParser::new(),
-    )?;
-    let file_a = std::str::from_utf8(
-        sources
-            .get(Path::new("pricing_a.rs"))
-            .context("pricing_a.rs")?,
-    )?;
-    let file_b = std::str::from_utf8(
-        sources
-            .get(Path::new("pricing_b.rs"))
-            .context("pricing_b.rs")?,
-    )?;
-    let mut edits = plan.edits.clone();
-    edits.sort_unstable_by_key(|edit| std::cmp::Reverse(edit.start_byte));
-    let buffer = apply_checked_edits(file_b, &edits, Path::new("pricing_b.rs"))?;
-    ensure!(
-        !buffer.contains("pub fn normalise_labels"),
-        "duplicate no longer defines the consolidated `normalise_labels`:\n{buffer}"
-    );
-    let (near_miss, near_miss_sources) = whole_file_cluster(file_a, file_b);
-    let reason = reason_for(
-        "the whole-file near-miss",
-        &near_miss,
-        &near_miss_sources,
-        &RustParser::new(),
-    )?;
-    ensure!(
-        reason.contains("definition run"),
-        "the refusal names the definition-run mismatch, got {reason}"
+        buffer.starts_with("use crate::") && !buffer.contains("pub fn normalise_labels"),
+        "duplicate file imports the canonical symbol and no longer defines it:\n{buffer}"
     );
     Ok(())
 }
 
-/// A cluster over the entire text of two files that share a prefix but
-/// diverge later — the near-miss view the container-echo rule keeps out
-/// of the report.
-fn whole_file_cluster(file_a: &str, file_b: &str) -> (ReportCluster, Sources) {
+/// Builds a synthetic cross-file cluster over two in-memory files.
+fn synthetic_cluster(
+    files: &[(&str, &str)],
+    needle: &str,
+) -> Result<(ReportCluster, HashMap<PathBuf, Vec<u8>>)> {
+    let mut occurrences = Vec::new();
     let mut sources = HashMap::new();
-    let occurrences = vec![
-        report_occurrence("pricing_a.rs", (0, file_a.len()), false),
-        report_occurrence("pricing_b.rs", (0, file_b.len()), false),
-    ];
-    let _inserted = sources.insert(PathBuf::from("pricing_a.rs"), file_a.as_bytes().to_vec());
-    let _inserted = sources.insert(PathBuf::from("pricing_b.rs"), file_b.as_bytes().to_vec());
-    (
-        synthetic_report_cluster(occurrences, "nearly_identical"),
-        sources,
-    )
+    for (name, content) in files {
+        let start = content.find(needle).context("definition present")?;
+        let end = start.saturating_add(needle.len());
+        occurrences.push(report_occurrence(name, (start, end), false));
+        let _inserted = sources.insert(PathBuf::from(name), content.as_bytes().to_vec());
+    }
+    let cluster = synthetic_report_cluster(occurrences, "identical");
+    Ok((cluster, sources))
+}
+
+/// The refusal reason for a synthetic scenario.
+fn refusal_reason(files: &[(&str, &str)], needle: &str) -> Result<String> {
+    let (cluster, sources) = synthetic_cluster(files, needle)?;
+    let outcome = compute_consolidation_plan(&cluster, &sources, &RustParser::new())
+        .map_err(|error| anyhow!("consolidation failed: {error}"))?;
+    match outcome {
+        ConsolidationOutcome::Refused(reason) => Ok(reason),
+        ConsolidationOutcome::Mechanical(_) => Err(anyhow!("scenario must refuse")),
+    }
 }
 
 /// A private canonical definition refuses — the duplicates' modules
@@ -348,8 +180,9 @@ fn whole_file_cluster(file_a: &str, file_b: &str) -> (ReportCluster, Sources) {
 #[test]
 fn private_canonical_refuses() -> Result<()> {
     let definition = "fn helper(x: usize) -> usize {\n    x + 1\n}";
-    let (file_a, file_b) = helper_pair(definition);
-    let reason = pair_reason(&file_a, &file_b, SIBLINGS, definition)?;
+    let file_a = format!("{definition}\n\npub fn a() -> usize {{ helper(1) }}\n");
+    let file_b = format!("{definition}\n\npub fn b() -> usize {{ helper(2) }}\n");
+    let reason = refusal_reason(&[("a.rs", &file_a), ("b.rs", &file_b)], definition)?;
     ensure!(reason.contains("private"), "visibility gate, got {reason}");
     Ok(())
 }
@@ -359,9 +192,10 @@ fn private_canonical_refuses() -> Result<()> {
 /// ([AUTOFIX-CONSOLIDATE-EDIT] v1 gate).
 #[test]
 fn would_empty_duplicate_refuses() -> Result<()> {
-    let file_a = helper_caller(HELPER, "a", 1);
-    let file_b = format!("{HELPER}\n");
-    let reason = pair_reason(&file_a, &file_b, SIBLINGS, HELPER)?;
+    let definition = "pub fn helper(x: usize) -> usize {\n    x + 1\n}";
+    let file_a = format!("{definition}\n\npub fn a() -> usize {{ helper(1) }}\n");
+    let file_b = format!("{definition}\n");
+    let reason = refusal_reason(&[("a.rs", &file_a), ("b.rs", &file_b)], definition)?;
     ensure!(reason.contains("empty"), "empty-file gate, got {reason}");
     Ok(())
 }
@@ -372,7 +206,7 @@ fn non_definition_occurrence_refuses() -> Result<()> {
     let needle = "x + 1";
     let file_a = format!("pub fn a(x: usize) -> usize {{ {needle} }}\n");
     let file_b = format!("pub fn b(x: usize) -> usize {{ {needle} }}\n");
-    let reason = pair_reason(&file_a, &file_b, SIBLINGS, needle)?;
+    let reason = refusal_reason(&[("a.rs", &file_a), ("b.rs", &file_b)], needle)?;
     ensure!(
         reason.contains("whole top-level"),
         "definition-shape gate, got {reason}"
@@ -383,9 +217,18 @@ fn non_definition_occurrence_refuses() -> Result<()> {
 /// Non-Rust languages refuse with the v1 scope reason.
 #[test]
 fn non_rust_language_refuses() -> Result<()> {
-    let files = ("class A { void M() { } }", "class B { void M() { } }");
-    let (cluster, sources) = pair_cluster(files, ("A.cs", "B.cs"), "class")?;
-    let reason = reason_for("non-Rust in v1", &cluster, &sources, &CSharpParser::new())?;
+    let (cluster, sources) = synthetic_cluster(
+        &[
+            ("A.cs", "class A { void M() { } }"),
+            ("B.cs", "class B { void M() { } }"),
+        ],
+        "class",
+    )?;
+    let outcome = compute_consolidation_plan(&cluster, &sources, &CSharpParser::new())
+        .map_err(|error| anyhow!("consolidation failed: {error}"))?;
+    let ConsolidationOutcome::Refused(reason) = outcome else {
+        return Err(anyhow!("non-Rust must refuse in v1"));
+    };
     ensure!(reason.contains("csharp"), "language gate, got {reason}");
     Ok(())
 }
@@ -394,10 +237,18 @@ fn non_rust_language_refuses() -> Result<()> {
 /// deletion edit — no import is inserted.
 #[test]
 fn duplicate_without_references_gets_no_import() -> Result<()> {
-    let file_a = helper_caller(HELPER, "a", 1);
-    let file_b = format!("{HELPER}\n\npub fn b() -> usize {{ 2 }}\n");
-    let files = (file_a.as_str(), file_b.as_str());
-    let plan = pair_plan("reference-free duplicate", files, SIBLINGS, HELPER)?;
+    let definition = "pub fn helper(x: usize) -> usize {\n    x + 1\n}";
+    let file_a = format!("{definition}\n\npub fn a() -> usize {{ helper(1) }}\n");
+    let file_b = format!("{definition}\n\npub fn b() -> usize {{ 2 }}\n");
+    let (cluster, sources) =
+        synthetic_cluster(&[("a.rs", &file_a), ("b.rs", &file_b)], definition)?;
+    let outcome = compute_consolidation_plan(&cluster, &sources, &RustParser::new())
+        .map_err(|error| anyhow!("consolidation failed: {error}"))?;
+    let ConsolidationOutcome::Mechanical(plan) = outcome else {
+        return Err(anyhow!(
+            "reference-free duplicate must consolidate: {outcome:?}"
+        ));
+    };
     ensure!(
         plan.edits.len() == 1 && plan.edits.iter().all(|edit| edit.new_text.is_empty()),
         "only the deletion edit is planned, got {:?}",
@@ -409,9 +260,13 @@ fn duplicate_without_references_gets_no_import() -> Result<()> {
 /// Duplicates in a different directory refuse (v1 sibling-module gate).
 #[test]
 fn different_directory_duplicate_refuses() -> Result<()> {
-    let (file_a, file_b) = helper_pair(HELPER);
-    let names = ("src/a.rs", "other/b.rs");
-    let reason = pair_reason(&file_a, &file_b, names, HELPER)?;
+    let definition = "pub fn helper(x: usize) -> usize {\n    x + 1\n}";
+    let file_a = format!("{definition}\n\npub fn a() -> usize {{ helper(1) }}\n");
+    let file_b = format!("{definition}\n\npub fn b() -> usize {{ helper(2) }}\n");
+    let reason = refusal_reason(
+        &[("src/a.rs", &file_a), ("other/b.rs", &file_b)],
+        definition,
+    )?;
     ensure!(reason.contains("directory"), "sibling gate, got {reason}");
     Ok(())
 }
@@ -419,14 +274,18 @@ fn different_directory_duplicate_refuses() -> Result<()> {
 /// Single-file clusters refuse the consolidation shape gate.
 #[test]
 fn single_file_cluster_refuses_consolidation() -> Result<()> {
-    let file_a = helper_caller(HELPER, "a", 1);
-    let (mut cluster, sources) = synthetic_cluster(&[("a.rs", &file_a)], HELPER)?;
+    let definition = "pub fn helper(x: usize) -> usize {\n    x + 1\n}";
+    let file_a = format!("{definition}\n\npub fn a() -> usize {{ helper(1) }}\n");
+    let (mut cluster, sources) = synthetic_cluster(&[("a.rs", &file_a)], definition)?;
     cluster.occurrences = vec![
         cluster.occurrences.first().cloned().context("occurrence")?,
         cluster.occurrences.first().cloned().context("occurrence")?,
     ];
-    let parser = RustParser::new();
-    let reason = reason_for("a single-file cluster", &cluster, &sources, &parser)?;
+    let outcome = compute_consolidation_plan(&cluster, &sources, &RustParser::new())
+        .map_err(|error| anyhow!("consolidation failed: {error}"))?;
+    let ConsolidationOutcome::Refused(reason) = outcome else {
+        return Err(anyhow!("single-file cluster must refuse"));
+    };
     ensure!(reason.contains("two files"), "shape gate, got {reason}");
     Ok(())
 }
@@ -439,10 +298,9 @@ fn single_file_cluster_refuses_consolidation() -> Result<()> {
 #[test]
 fn module_local_reference_drift_refuses() -> Result<()> {
     let run = "pub fn run(initial: usize) -> usize {\n    next(initial)\n}";
-    let next =
-        |step: usize| format!("pub fn next(state: usize) -> usize {{\n    state + {step}\n}}\n\n");
-    let (file_a, file_b) = (prefixed(&next(1), run), prefixed(&next(2), run));
-    let reason = pair_reason(&file_a, &file_b, SIBLINGS, run)?;
+    let file_a = format!("pub fn next(state: usize) -> usize {{\n    state + 1\n}}\n\n{run}\n");
+    let file_b = format!("pub fn next(state: usize) -> usize {{\n    state + 2\n}}\n\n{run}\n");
+    let reason = refusal_reason(&[("a.rs", &file_a), ("b.rs", &file_b)], run)?;
     ensure!(
         reason.contains("next"),
         "binding-drift gate must name the drifting symbol, got {reason}"
@@ -458,20 +316,54 @@ fn definition_run_spanning_two_functions_consolidates() -> Result<()> {
     let shared = "pub fn scale(value: usize) -> usize {\n    value * 2\n}\n\npub fn offset(value: usize) -> usize {\n    value + 7\n}";
     let file_a = format!("{shared}\n\npub fn total_a() -> usize {{\n    scale(offset(1))\n}}\n");
     let file_b = format!("{shared}\n\npub fn total_b() -> usize {{\n    scale(offset(2))\n}}\n");
-    let names = ("mod_a.rs", "mod_b.rs");
-    let files = (file_a.as_str(), file_b.as_str());
-    let plan = pair_plan("a run of whole definitions", files, names, shared)?;
+    let (cluster, sources) =
+        synthetic_cluster(&[("mod_a.rs", &file_a), ("mod_b.rs", &file_b)], shared)?;
+    let outcome = compute_consolidation_plan(&cluster, &sources, &RustParser::new())
+        .map_err(|error| anyhow!("consolidation failed: {error}"))?;
+    let ConsolidationOutcome::Mechanical(plan) = outcome else {
+        return Err(anyhow!(
+            "a run of whole definitions must consolidate: {outcome:?}"
+        ));
+    };
+    let staging = tempfile::tempdir()?;
+    fs::write(
+        staging.path().join("lib.rs"),
+        "mod mod_a;\nmod mod_b;\npub use mod_a::total_a;\npub use mod_b::total_b;\n",
+    )?;
+    fs::write(staging.path().join("mod_a.rs"), &file_a)?;
+    let mut buffer = file_b.clone();
     let mut edits = plan.edits.clone();
     edits.sort_unstable_by_key(|edit| std::cmp::Reverse(edit.start_byte));
-    let buffer = apply_checked_edits(&file_b, &edits, Path::new(names.1))?;
-    compile_two_module_crate(&file_a, &buffer)?;
+    for edit in &edits {
+        ensure!(
+            edit.path == Path::new("mod_b.rs"),
+            "edits target the duplicate file, got {}",
+            edit.path.display()
+        );
+        ensure!(edit.end_byte <= buffer.len(), "edit in bounds");
+        buffer.replace_range(edit.start_byte..edit.end_byte, &edit.new_text);
+    }
+    fs::write(staging.path().join("mod_b.rs"), &buffer)?;
+    let output = std::process::Command::new("rustc")
+        .args([
+            "--edition",
+            "2021",
+            "--crate-type",
+            "lib",
+            "--emit=metadata",
+            "lib.rs",
+        ])
+        .current_dir(staging.path())
+        .output()
+        .context("rustc available")?;
     ensure!(
-        !buffer.contains("pub fn scale"),
-        "duplicate no longer defines the consolidated `scale`:\n{buffer}"
+        output.status.success(),
+        "the consolidated crate must compile ([AUTOFIX-CONSOLIDATE-GATE] backstop):\n{}",
+        String::from_utf8_lossy(&output.stderr)
     );
     ensure!(
-        !buffer.contains("pub fn offset"),
-        "duplicate no longer defines the consolidated `offset`:\n{buffer}"
+        !buffer.contains("pub fn scale") && !buffer.contains("pub fn offset"),
+        "duplicate no longer defines the consolidated run:\n{buffer}"
     );
     Ok(())
 }
@@ -481,9 +373,12 @@ fn definition_run_spanning_two_functions_consolidates() -> Result<()> {
 /// duplicate files — otherwise the moved reference re-binds.
 #[test]
 fn use_declaration_drift_refuses() -> Result<()> {
-    let file_a = with_trailer("use crate::mathx::scale;\n\n", RUN_SCALE, &keeper("a", 7));
-    let file_b = with_trailer("use crate::mathy::scale;\n\n", RUN_SCALE, &keeper("b", 9));
-    let reason = pair_reason(&file_a, &file_b, SIBLINGS, RUN_SCALE)?;
+    let run = "pub fn run(value: usize) -> usize {\n    scale(value)\n}";
+    let file_a =
+        format!("use crate::mathx::scale;\n\n{run}\n\npub fn keep_a() -> usize {{\n    7\n}}\n");
+    let file_b =
+        format!("use crate::mathy::scale;\n\n{run}\n\npub fn keep_b() -> usize {{\n    9\n}}\n");
+    let reason = refusal_reason(&[("a.rs", &file_a), ("b.rs", &file_b)], run)?;
     ensure!(
         reason.contains("use") && reason.contains("scale"),
         "use-binding drift names the symbol, got {reason}"
@@ -496,10 +391,11 @@ fn use_declaration_drift_refuses() -> Result<()> {
 /// differ per module.
 #[test]
 fn partially_defined_reference_refuses() -> Result<()> {
-    let local = "fn scale(value: usize) -> usize {\n    value * 2\n}\n\n";
-    let file_a = prefixed(local, RUN_SCALE);
-    let file_b = with_trailer("use crate::mathz::scale;\n\n", RUN_SCALE, &keeper("b", 3));
-    let reason = pair_reason(&file_a, &file_b, SIBLINGS, RUN_SCALE)?;
+    let run = "pub fn run(value: usize) -> usize {\n    scale(value)\n}";
+    let file_a = format!("fn scale(value: usize) -> usize {{\n    value * 2\n}}\n\n{run}\n");
+    let file_b =
+        format!("use crate::mathz::scale;\n\n{run}\n\npub fn keep_b() -> usize {{\n    3\n}}\n");
+    let reason = refusal_reason(&[("a.rs", &file_a), ("b.rs", &file_b)], run)?;
     ensure!(
         reason.contains("scale") && reason.contains("exactly once"),
         "partially defined reference names the symbol, got {reason}"
@@ -511,8 +407,10 @@ fn partially_defined_reference_refuses() -> Result<()> {
 /// — the import rewrite could not name it.
 #[test]
 fn invalid_canonical_module_name_refuses() -> Result<()> {
-    let (file_a, file_b) = helper_pair(HELPER);
-    let reason = pair_reason(&file_a, &file_b, ("9a.rs", "b.rs"), HELPER)?;
+    let definition = "pub fn helper(x: usize) -> usize {\n    x + 1\n}";
+    let file_a = format!("{definition}\n\npub fn a() -> usize {{ helper(1) }}\n");
+    let file_b = format!("{definition}\n\npub fn b() -> usize {{ helper(2) }}\n");
+    let reason = refusal_reason(&[("9a.rs", &file_a), ("b.rs", &file_b)], definition)?;
     ensure!(
         reason.contains("module name"),
         "module-stem gate, got {reason}"
@@ -524,9 +422,12 @@ fn invalid_canonical_module_name_refuses() -> Result<()> {
 /// — the gate cannot see through wildcards.
 #[test]
 fn glob_import_reference_refuses() -> Result<()> {
-    let file_a = with_trailer("use crate::mathx::*;\n\n", RUN_SCALE, &keeper("a", 7));
-    let file_b = with_trailer("use crate::mathy::*;\n\n", RUN_SCALE, &keeper("b", 9));
-    let reason = pair_reason(&file_a, &file_b, SIBLINGS, RUN_SCALE)?;
+    let run = "pub fn run(value: usize) -> usize {\n    scale(value)\n}";
+    let file_a =
+        format!("use crate::mathx::*;\n\n{run}\n\npub fn keep_a() -> usize {{\n    7\n}}\n");
+    let file_b =
+        format!("use crate::mathy::*;\n\n{run}\n\npub fn keep_b() -> usize {{\n    9\n}}\n");
+    let reason = refusal_reason(&[("a.rs", &file_a), ("b.rs", &file_b)], run)?;
     ensure!(
         reason.contains("scale"),
         "glob-bound reference refuses naming the symbol, got {reason}"
@@ -539,10 +440,13 @@ fn glob_import_reference_refuses() -> Result<()> {
 #[test]
 fn impl_associated_fn_drift_refuses() -> Result<()> {
     let run = "pub fn run() -> u32 {\n    Light::next()\n}";
-    let drive = "pub fn drive() -> u32 {\n    run()\n}\n";
-    let file_a = prefixed(&inherent_impl("Light", "next", "", 1), run);
-    let file_b = with_trailer(&inherent_impl("Light", "next", "", 2), run, drive);
-    let reason = pair_reason(&file_a, &file_b, SIBLINGS, run)?;
+    let file_a = format!(
+        "pub struct Light;\n\nimpl Light {{\n    pub fn next() -> u32 {{\n        1\n    }}\n}}\n\n{run}\n"
+    );
+    let file_b = format!(
+        "pub struct Light;\n\nimpl Light {{\n    pub fn next() -> u32 {{\n        2\n    }}\n}}\n\n{run}\n\npub fn drive() -> u32 {{\n    run()\n}}\n"
+    );
+    let reason = refusal_reason(&[("a.rs", &file_a), ("b.rs", &file_b)], run)?;
     ensure!(
         reason.contains("next"),
         "impl-defined reference refuses, got {reason}"
@@ -556,10 +460,13 @@ fn impl_associated_fn_drift_refuses() -> Result<()> {
 #[test]
 fn method_call_on_local_impl_refuses() -> Result<()> {
     let run = "pub fn run(gauge: Gauge) -> u32 {\n    gauge.scale()\n}";
-    let drive = "pub fn drive() -> u32 {\n    run(Gauge)\n}\n";
-    let file_a = prefixed(&inherent_impl("Gauge", "scale", "self", 1), run);
-    let file_b = with_trailer(&inherent_impl("Gauge", "scale", "self", 2), run, drive);
-    let reason = pair_reason(&file_a, &file_b, SIBLINGS, run)?;
+    let file_a = format!(
+        "pub struct Gauge;\n\nimpl Gauge {{\n    pub fn scale(self) -> u32 {{\n        1\n    }}\n}}\n\n{run}\n"
+    );
+    let file_b = format!(
+        "pub struct Gauge;\n\nimpl Gauge {{\n    pub fn scale(self) -> u32 {{\n        2\n    }}\n}}\n\n{run}\n\npub fn drive() -> u32 {{\n    run(Gauge)\n}}\n"
+    );
+    let reason = refusal_reason(&[("a.rs", &file_a), ("b.rs", &file_b)], run)?;
     ensure!(
         reason.contains("scale"),
         "method resolution drift refuses, got {reason}"
@@ -571,12 +478,13 @@ fn method_call_on_local_impl_refuses() -> Result<()> {
 /// helper whose own references drift refuses, naming the leaf.
 #[test]
 fn transitive_helper_drift_refuses() -> Result<()> {
+    let run = "pub fn run(value: usize) -> usize {\n    scale(value)\n}";
     let scale = "pub fn scale(value: usize) -> usize {\n    base() + value\n}";
-    let with_base = |base: usize| format!("{scale}\n\nfn base() -> usize {{\n    {base}\n}}\n\n");
-    let file_a = prefixed(&with_base(1), RUN_SCALE);
-    let drive = "pub fn drive() -> usize {\n    run(4)\n}\n";
-    let file_b = with_trailer(&with_base(2), RUN_SCALE, drive);
-    let reason = pair_reason(&file_a, &file_b, SIBLINGS, RUN_SCALE)?;
+    let file_a = format!("{scale}\n\nfn base() -> usize {{\n    1\n}}\n\n{run}\n");
+    let file_b = format!(
+        "{scale}\n\nfn base() -> usize {{\n    2\n}}\n\n{run}\n\npub fn drive() -> usize {{\n    run(4)\n}}\n"
+    );
+    let reason = refusal_reason(&[("a.rs", &file_a), ("b.rs", &file_b)], run)?;
     ensure!(
         reason.contains("base"),
         "transitive drift refuses naming the leaf, got {reason}"
@@ -590,9 +498,9 @@ fn transitive_helper_drift_refuses() -> Result<()> {
 #[test]
 fn unprovable_reference_refuses() -> Result<()> {
     let run = "pub fn run(value: usize) -> usize {\n    helpers::scale(value)\n}";
-    let file_a = with_trailer("", run, &keeper("a", 7));
-    let file_b = with_trailer("", run, &keeper("b", 9));
-    let reason = pair_reason(&file_a, &file_b, SIBLINGS, run)?;
+    let file_a = format!("{run}\n\npub fn keep_a() -> usize {{\n    7\n}}\n");
+    let file_b = format!("{run}\n\npub fn keep_b() -> usize {{\n    9\n}}\n");
+    let reason = refusal_reason(&[("a.rs", &file_a), ("b.rs", &file_b)], run)?;
     ensure!(
         reason.contains("helpers"),
         "unprovable reference refuses, got {reason}"
@@ -605,14 +513,19 @@ fn unprovable_reference_refuses() -> Result<()> {
 /// parity, #279 review).
 #[test]
 fn hidden_occurrence_does_not_count_toward_cross_file() -> Result<()> {
-    let (file_a, file_b) = helper_pair(HELPER);
-    let files = (file_a.as_str(), file_b.as_str());
-    let (mut cluster, sources) = pair_cluster(files, SIBLINGS, HELPER)?;
+    let definition = "pub fn helper(x: usize) -> usize {\n    x + 1\n}";
+    let file_a = format!("{definition}\n\npub fn a() -> usize {{ helper(1) }}\n");
+    let file_b = format!("{definition}\n\npub fn b() -> usize {{ helper(2) }}\n");
+    let (mut cluster, sources) =
+        synthetic_cluster(&[("a.rs", &file_a), ("b.rs", &file_b)], definition)?;
     if let Some(second) = cluster.occurrences.get_mut(1) {
         second.hidden = true;
     }
-    let parser = RustParser::new();
-    let reason = reason_for("a hidden second file", &cluster, &sources, &parser)?;
+    let outcome = compute_consolidation_plan(&cluster, &sources, &RustParser::new())
+        .map_err(|error| anyhow!("consolidation failed: {error}"))?;
+    let ConsolidationOutcome::Refused(reason) = outcome else {
+        return Err(anyhow!("hidden second file must not consolidate"));
+    };
     ensure!(reason.contains("two files"), "shape gate, got {reason}");
     Ok(())
 }
@@ -621,11 +534,23 @@ fn hidden_occurrence_does_not_count_toward_cross_file() -> Result<()> {
 /// byte 0 would make them invalid (#279 review).
 #[test]
 fn import_lands_after_inner_doc_comments() -> Result<()> {
-    let file_a = helper_caller(HELPER, "a", 1);
-    let file_b = format!("//! Ledger sibling.\n\n{}", helper_caller(HELPER, "b", 2));
-    let files = (file_a.as_str(), file_b.as_str());
-    let plan = pair_plan("a doc-headed duplicate", files, SIBLINGS, HELPER)?;
-    let buffer = apply_edits(&file_b, &plan.edits);
+    let definition = "pub fn helper(x: usize) -> usize {\n    x + 1\n}";
+    let file_a = format!("{definition}\n\npub fn a() -> usize {{ helper(1) }}\n");
+    let file_b =
+        format!("//! Ledger sibling.\n\n{definition}\n\npub fn b() -> usize {{ helper(2) }}\n");
+    let (cluster, sources) =
+        synthetic_cluster(&[("a.rs", &file_a), ("b.rs", &file_b)], definition)?;
+    let outcome = compute_consolidation_plan(&cluster, &sources, &RustParser::new())
+        .map_err(|error| anyhow!("consolidation failed: {error}"))?;
+    let ConsolidationOutcome::Mechanical(plan) = outcome else {
+        return Err(anyhow!(
+            "doc-headed duplicate must consolidate: {outcome:?}"
+        ));
+    };
+    let mut buffer = file_b.clone();
+    for edit in &plan.edits {
+        buffer.replace_range(edit.start_byte..edit.end_byte, &edit.new_text);
+    }
     ensure!(
         buffer.starts_with("//! Ledger sibling.\n\nuse crate::a::helper;"),
         "import lands after the inner doc comment:\n{buffer}"
@@ -638,9 +563,10 @@ fn import_lands_after_inner_doc_comments() -> Result<()> {
 /// (#279 review).
 #[test]
 fn attribute_only_on_duplicate_refuses() -> Result<()> {
-    let file_a = helper_caller(HELPER, "a", 1);
-    let file_b = format!("#[inline]\n{}", helper_caller(HELPER, "b", 2));
-    let reason = pair_reason(&file_a, &file_b, SIBLINGS, HELPER)?;
+    let definition = "pub fn helper(x: usize) -> usize {\n    x + 1\n}";
+    let file_a = format!("{definition}\n\npub fn a() -> usize {{ helper(1) }}\n");
+    let file_b = format!("#[inline]\n{definition}\n\npub fn b() -> usize {{ helper(2) }}\n");
+    let reason = refusal_reason(&[("a.rs", &file_a), ("b.rs", &file_b)], definition)?;
     ensure!(
         reason.contains("byte-equivalent"),
         "attribute asymmetry refuses, got {reason}"
@@ -652,18 +578,24 @@ fn attribute_only_on_duplicate_refuses() -> Result<()> {
 /// the definition — the duplicate keeps neither (#279 review).
 #[test]
 fn shared_attribute_and_docs_move_with_definition() -> Result<()> {
-    let decorated = format!("/// Doubles and offsets.\n#[inline]\n{HELPER}");
-    let (file_a, file_b) = helper_pair(&decorated);
-    let files = (file_a.as_str(), file_b.as_str());
-    let plan = pair_plan("a decorated duplicate", files, SIBLINGS, HELPER)?;
-    let buffer = apply_edits(&file_b, &plan.edits);
+    let decorated =
+        "/// Doubles and offsets.\n#[inline]\npub fn helper(x: usize) -> usize {\n    x + 1\n}";
+    let file_a = format!("{decorated}\n\npub fn a() -> usize {{ helper(1) }}\n");
+    let file_b = format!("{decorated}\n\npub fn b() -> usize {{ helper(2) }}\n");
+    let needle = "pub fn helper(x: usize) -> usize {\n    x + 1\n}";
+    let (cluster, sources) = synthetic_cluster(&[("a.rs", &file_a), ("b.rs", &file_b)], needle)?;
+    let outcome = compute_consolidation_plan(&cluster, &sources, &RustParser::new())
+        .map_err(|error| anyhow!("consolidation failed: {error}"))?;
+    let ConsolidationOutcome::Mechanical(plan) = outcome else {
+        return Err(anyhow!("decorated duplicate must consolidate: {outcome:?}"));
+    };
+    let mut buffer = file_b.clone();
+    for edit in &plan.edits {
+        buffer.replace_range(edit.start_byte..edit.end_byte, &edit.new_text);
+    }
     ensure!(
-        !buffer.contains("#[inline]"),
-        "the attribute is deleted with the definition:\n{buffer}"
-    );
-    ensure!(
-        !buffer.contains("/// Doubles"),
-        "the doc comment is deleted with the definition:\n{buffer}"
+        !buffer.contains("#[inline]") && !buffer.contains("/// Doubles"),
+        "attribute and doc comment are deleted with the definition:\n{buffer}"
     );
     ensure!(
         buffer.starts_with("use crate::a::helper;"),
@@ -676,10 +608,12 @@ fn shared_attribute_and_docs_move_with_definition() -> Result<()> {
 /// would be ambiguous.
 #[test]
 fn double_definition_duplicate_refuses() -> Result<()> {
-    let file_a = helper_caller(HELPER, "a", 1);
-    let second = "pub fn helper(x: usize) -> usize { x }\n\n";
-    let file_b = format!("{HELPER}\n\n{second}pub fn b() -> usize {{ helper(2) }}\n");
-    let reason = pair_reason(&file_a, &file_b, SIBLINGS, HELPER)?;
+    let definition = "pub fn helper(x: usize) -> usize {\n    x + 1\n}";
+    let file_a = format!("{definition}\n\npub fn a() -> usize {{ helper(1) }}\n");
+    let file_b = format!(
+        "{definition}\n\npub fn helper(x: usize) -> usize {{ x }}\n\npub fn b() -> usize {{ helper(2) }}\n"
+    );
+    let reason = refusal_reason(&[("a.rs", &file_a), ("b.rs", &file_b)], definition)?;
     ensure!(
         reason.contains("more than once"),
         "ambiguity gate, got {reason}"

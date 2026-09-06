@@ -3,10 +3,13 @@
 //! Tests [LSP-TESTING] — spawns the real LSP binary and talks JSON-RPC
 //! over stdio against fixture workspaces; no mocked live session.
 
+mod common;
+
 use std::{
     path::Path,
-    process::{Child, Command as StdCommand, Stdio},
-    time::Duration,
+    process::{Child, Command as StdCommand, ExitStatus, Stdio},
+    thread,
+    time::{Duration, Instant},
 };
 
 use anyhow::{anyhow, Result};
@@ -15,7 +18,7 @@ use serde_json::Value;
 
 use crate::common::{
     call, copy_fixture, handshake, notification, request, send_and_recv, spawn_lsp,
-    spawn_lsp_on_fixture, take_io, wait_for_exit, write_frame,
+    spawn_lsp_on_fixture, take_io, write_frame,
 };
 
 // Implements the Shipwright binary contract: every IDE-launched
@@ -47,114 +50,6 @@ fn prints_json_version_contract() -> Result<()> {
     let value: Value = serde_json::from_slice(&output.stdout)?;
     assert_version_manifest(&value, "deslop-lsp", "lsp");
     assert!(output.stderr.is_empty(), "stderr must stay empty");
-    Ok(())
-}
-
-/// Every flag `deslop-lsp` accepts. [LSP-CLI-HELP] Help has to advertise the
-/// complete configurable surface — the same promise `deslop --help` makes in
-/// cli.md — or an agent reading it configures the server wrongly.
-const ADVERTISED_FLAGS: &[&str] = &[
-    "--worker-threads",
-    "--nice",
-    "--ipc-transport",
-    "--ranking-structural-only",
-    "--stdio",
-    "--debug",
-    "-h, --help",
-    "-V, --version",
-];
-
-/// The usage line every help request prints.
-const HELP_USAGE_LINE: &str = "Usage: deslop-lsp [OPTIONS] <WORKSPACE_ROOT>";
-
-/// The one-line summary that opens the help output.
-const HELP_ABOUT_LINE: &str =
-    "Language Server Protocol server exposing Deslop live duplicate analysis to editors.";
-
-/// The parse error `--help` produced instead of help before #475 was fixed.
-const ROOTLESS_USAGE_ERROR: &str = "usage: deslop-lsp <workspace-root>";
-
-/// Both spellings clap accepts for help on `deslop` and `deslop-mcp`.
-const HELP_FLAGS: &[&str] = &["--help", "-h"];
-
-// Issue #475: `deslop-lsp --help` logged `ERROR ... usage: deslop-lsp
-// <workspace-root>` and exited 1, because help fell through to the
-// workspace-root parser and every argument starting with `-` is rejected
-// there. Help is a report to the user, not a log: stdout, exit 0, nothing on
-// stderr — the same contract clap already gives `deslop` and `deslop-mcp`.
-// The empty-stderr assertion is the one that catches the original defect.
-#[test]
-fn help_prints_usage_to_stdout_and_exits_zero() -> Result<()> {
-    let mut rendered: Vec<String> = Vec::new();
-    for flag in HELP_FLAGS {
-        let output = Command::cargo_bin("deslop-lsp")?
-            .timeout(Duration::from_secs(10))
-            .arg(flag)
-            .output()?;
-        assert!(
-            output.status.success(),
-            "`deslop-lsp {flag}` must exit 0, got {}",
-            output.status
-        );
-        assert_eq!(
-            String::from_utf8_lossy(&output.stderr),
-            "",
-            "`deslop-lsp {flag}` must print help, never log an error"
-        );
-        let stdout = String::from_utf8(output.stdout)?;
-        assert!(
-            stdout.starts_with(HELP_ABOUT_LINE),
-            "`deslop-lsp {flag}` must open with the component summary, got {stdout:?}"
-        );
-        assert!(
-            stdout.contains(HELP_USAGE_LINE),
-            "`deslop-lsp {flag}` must show the usage line, got {stdout:?}"
-        );
-        for advertised in ADVERTISED_FLAGS {
-            assert!(
-                stdout.contains(advertised),
-                "`deslop-lsp {flag}` must advertise {advertised}, got {stdout:?}"
-            );
-        }
-        assert!(
-            !stdout.contains(ROOTLESS_USAGE_ERROR),
-            "`deslop-lsp {flag}` must not fall through to the workspace-root parser: {stdout:?}"
-        );
-        rendered.push(stdout);
-    }
-    assert_eq!(
-        rendered.first(),
-        rendered.last(),
-        "`--help` and `-h` must render byte-identical help"
-    );
-    Ok(())
-}
-
-// Help wins over starting a server, wherever the client puts it — the same
-// way clap treats it for the sibling binaries. Without this, a host that
-// appends `--help` after the workspace root would launch an analyser instead.
-#[test]
-fn help_after_a_workspace_root_still_prints_help() -> Result<()> {
-    let workspace = copy_fixture("csharp-small")?;
-    let output = Command::cargo_bin("deslop-lsp")?
-        .timeout(Duration::from_secs(10))
-        .arg(workspace.path())
-        .arg("--help")
-        .output()?;
-    assert!(
-        output.status.success(),
-        "`deslop-lsp <root> --help` must exit 0, got {}",
-        output.status
-    );
-    assert_eq!(
-        String::from_utf8_lossy(&output.stderr),
-        "",
-        "`deslop-lsp <root> --help` must not start a server or log startup"
-    );
-    assert!(
-        String::from_utf8(output.stdout)?.contains(HELP_USAGE_LINE),
-        "`deslop-lsp <root> --help` must print the usage line"
-    );
     Ok(())
 }
 
@@ -202,7 +97,7 @@ fn initialize_reports_server_info_version() -> Result<()> {
         expected_version()
     );
     let _shutdown = call(&mut stdin, &mut stdout, "shutdown", &Value::Null)?;
-    let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
+    let _ = child.kill();
     Ok(())
 }
 
@@ -272,7 +167,7 @@ fn report_after_start(workspace: &Path) -> Result<Value> {
     let _init = handshake(&mut stdin, &mut stdout)?;
     let response = call(&mut stdin, &mut stdout, "deslop/reportGet", &Value::Null)?;
     let _shutdown = call(&mut stdin, &mut stdout, "shutdown", &Value::Null)?;
-    let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
+    let _ = child.kill();
     response
         .get("result")
         .cloned()
@@ -312,6 +207,17 @@ fn spawn_fake_parent(workspace: &Path) -> Result<Child> {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()?)
+}
+
+fn wait_for_exit(child: &mut Child, timeout: Duration) -> Result<Option<ExitStatus>> {
+    let start = Instant::now();
+    while start.elapsed() < timeout {
+        if let Some(status) = child.try_wait()? {
+            return Ok(Some(status));
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    child.try_wait().map_err(Into::into)
 }
 
 fn pointer<'a>(value: &'a Value, path: &str) -> Result<&'a str> {

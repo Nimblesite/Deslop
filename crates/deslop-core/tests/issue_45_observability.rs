@@ -8,6 +8,7 @@ use deslop_core::{
     EmbeddingMode,
 };
 
+mod common;
 use crate::common::*;
 
 #[test]
@@ -37,16 +38,19 @@ fn issue_45_pipeline_emits_stage_observability_events() -> Result<()> {
     assert_eq!(cluster.target, "deslop_core::cluster");
     assert_has_fields(
         &cluster,
-        &["total", "dropped_below_min_members", "largest_mass"],
+        &["total", "dropped_below_min_members", "largest_weight"],
     );
 
-    // The bucket distribution event is retired with the bucket surface:
-    // the mass-only report emits its own visibility telemetry instead.
-    let report = captured.event("mass-ranked report built")?;
-    assert_eq!(report.target, "deslop_core::report");
+    let bucket = captured.event("bucket distribution")?;
+    assert_eq!(bucket.target, "deslop_core::report");
     assert_has_fields(
-        &report,
-        &["visible_clusters", "clusters_hidden", "highest_mass"],
+        &bucket,
+        &[
+            "identical",
+            "nearly_identical",
+            "loosely_similar",
+            "same_behavior",
+        ],
     );
     Ok(())
 }

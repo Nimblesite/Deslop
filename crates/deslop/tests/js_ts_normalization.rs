@@ -9,9 +9,7 @@
 
 use anyhow::Result;
 
-use crate::common::signals::{
-    assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
-};
+mod common;
 use crate::common::*;
 
 #[test]
@@ -26,34 +24,25 @@ fn javascript_clone_is_invariant_to_quotes_comments_literals_and_renames() -> Re
         "normalisation-equivalent JS pair must collapse to a single clone: {report:#}"
     );
     let clone = expect_cluster_spanning(&report, &["double_quoted.js", "single_quoted.js"])?;
-    // [PIPELINE-CLUSTER-CLOSURE] The structural_only bucket and the shape
-    // axis are gone; the wire facts that hold the acceptance: the
-    // normalisation-equivalent pair is admitted, mass-honest,
-    // clean-surfaced and byte-distinct (quote style differs — a verbatim
-    // reading would be a fabrication).
-    assert_structural_only_contract(clone, "js normalization");
-    assert_no_pair_surface_on_cluster(clone, "js normalization");
-    assert!(
-        !has_verbatim_pair(&fixture("js-normalization-invariance"), clone)?,
-        "the double/single-quoted pair differs in bytes: {clone:#}"
-    );
+    assert_eq!(cluster_bucket(clone), "structural_only");
+    assert!(approx(signal(clone, "structural"), 1.0));
     Ok(())
 }
 
 #[test]
 fn typescript_token_layer_is_invariant_to_quotes_comments_literals_and_renames() -> Result<()> {
+    let report = run_report(&fixture("ts-comment-literal-invariance"), 12)?;
     // Both pairs are rename-invariant at the token level; the difference is
     // that here the interface + async/arrow program node is distinctive
     // enough that the token-LSH pass independently surfaces the pair, so the
     // recorded token signal is carried and the clone is `nearly_identical`
     // (versus the JS pair above, which the token pass never pairs, leaving it
     // `structural_only`).
-    assert_bucketed_clone(
-        "ts-comment-literal-invariance",
-        12,
-        &["orders.ts", "shipments.ts"],
-        false,
-    )
+    let clone = expect_cluster_spanning(&report, &["orders.ts", "shipments.ts"])?;
+    assert_eq!(cluster_bucket(clone), "nearly_identical");
+    assert!(approx(signal(clone, "structural"), 1.0));
+    assert!(approx(signal(clone, "token_jaccard"), 1.0));
+    Ok(())
 }
 
 #[test]
@@ -66,11 +55,8 @@ fn javascript_structural_change_defeats_the_collapse() -> Result<()> {
     // overlap is a default-hidden `structural_only` shape match), proving the
     // collapse is not over-eager.
     let clone = expect_cluster_spanning(&report, &["baseline.js", "twin.js"])?;
-    assert!(
-        !has_verbatim_pair(&fixture("js-structural-control"), clone)?,
-        "the normalisation-equivalent pair is byte-distinct (quote/comment \
-         differences): {clone:#}"
-    );
+    assert_eq!(cluster_bucket(clone), "nearly_identical");
+    assert!(approx(signal(clone, "token_jaccard"), 1.0));
     assert!(
         clusters(&report)
             .iter()

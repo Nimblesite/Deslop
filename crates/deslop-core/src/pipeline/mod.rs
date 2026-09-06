@@ -6,7 +6,7 @@
 //! point ([`run`]). Exclusion policy ([EXCLUSION-CONFIG]) is applied
 //! here: `exclude` filters discovery, `report_hide` flows into the
 //! renderer so hidden-only clusters are omitted. Embedding policy
-//! ([FUSED-EMBED-PROVIDER]) is applied here too: `EmbeddingSettings`
+//! ([FUSION-EMBED-PROVIDER]) is applied here too: `EmbeddingSettings`
 //! picks a provider/mode and the pass folds `embedding_cos` into
 //! candidate pairs before fusion.
 

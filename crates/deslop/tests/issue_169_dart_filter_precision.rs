@@ -20,7 +20,7 @@ use std::{
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::scan_dir::temp_scan_dir;
+mod common;
 use crate::common::*;
 
 fn report_path(tmp: &Path) -> PathBuf {
@@ -42,7 +42,9 @@ fn run(src: &Path, out_dir: &Path, min_nodes: &str) -> Result<Value> {
 
 #[test]
 fn dart_duplicated_closure_field_logic_stays_visible() -> Result<()> {
-    let (tmp, src) = temp_scan_dir("src")?;
+    let tmp = tempfile::tempdir()?;
+    let src = tmp.path().join("src");
+    fs::create_dir(&src)?;
 
     // Several fields holding the *same* closure body — real copy-pasted
     // logic that a developer could extract into a shared function. The
@@ -69,7 +71,9 @@ fn dart_duplicated_closure_field_logic_stays_visible() -> Result<()> {
 
 #[test]
 fn dart_verbatim_field_block_copy_stays_visible() -> Result<()> {
-    let (tmp, src) = temp_scan_dir("src")?;
+    let tmp = tempfile::tempdir()?;
+    let src = tmp.path().join("src");
+    fs::create_dir(&src)?;
 
     // A byte-identical run of const declarations copied between two files —
     // a real copy-paste, not a registry of distinct entries. Distinct

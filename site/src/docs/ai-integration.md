@@ -1,12 +1,12 @@
 ---
 layout: layouts/docs.njk
 title: AI Agents — MCP setup for Claude Code, Cursor, and Copilot
-description: Connect the Deslop MCP server to Claude Code, Cursor, Continue, Copilot, or Codex so agents can call find-similar before writing duplicate code.
+description: Tell your coding agent when similar code already exists, before it writes another copy. Wire deslop-mcp into Claude Code, Cursor, Continue, or Codex, and use find-similar to prevent the duplicate.
+keywords: deslop, mcp server, claude code, cursor, copilot, continue, codex, find-similar, duplicate code, coding agent
 eleventyNavigation:
   key: AI Agents
   order: 3
 icon: smart_toy
-docsGroup: guides
 ---
 
 # AI Agents
@@ -38,7 +38,7 @@ Only `find-similar` belongs in the authoring inner loop. Everything else is a re
 | `session-config` | Inspect the running server's effective config. |
 | `schema-doc` | Authoritative JSON schema for every response. Call **once** per session, not per response. |
 
-Every response is computed against the **live** workspace state. The editor server holds the live report in memory and refreshes it on every change (debounced, with a hard cap); the MCP server reads that live state over the local IPC endpoint on the next tool call. macOS and Linux use `.deslop/cache/deslop.sock`; Windows uses a token-gated TCP loopback endpoint discovered through `.deslop/cache/deslop.port`. There is no batch step.
+Every response is computed against the **live** workspace state. The editor server holds the live report in memory and refreshes it on every change (debounced, with a hard cap); the MCP server reads that live state over the local IPC endpoint on the next tool call. macOS and Linux use `.deslop/cache/deslop.sock`; Windows uses a token-gated TCP loopback endpoint discovered through `.deslop/cache/deslop.port`. There is no batch step. There is no stale cache.
 
 ## Wire `deslop-mcp` into your client — point at the VSIX-bundled binary
 
@@ -104,9 +104,10 @@ claude mcp add deslop -s user -- deslop-mcp --root .
 
 The same `"command": "deslop-mcp"` form works in Codex (`~/.codex/config.toml`), Cursor, and Continue. It is the right value for a checked-in `.mcp.json` or shared team config — every machine resolves it through `$PATH`.
 
-Two things to know:
+Three things to know:
 
 - **There is no `deslop mcp` subcommand.** The `deslop` CLI runs one-shot and CI audits only; MCP is served by the **separate `deslop-mcp` binary**.
+- **`deslop-mcp` not found on `$PATH`?** It was added to the brew/scoop packages in v0.13.0. On an older install, run `brew upgrade deslop` (or `scoop update deslop`) — the current release ships `deslop-mcp` and `deslop-lsp` on `$PATH`.
 - **Building from source does not put anything on `$PATH`.** Only `brew` / `scoop` do. Those package managers version the binary lock-step with the release; a `cargo build` does not.
 
 ## The agent loop
@@ -120,9 +121,41 @@ The headline workflow is reactive, not batch:
 
 When MCP is not available — CI, a cold-cache audit, or an agent with no MCP client — the loop degrades to the `deslop` CLI, which runs the identical pipeline and emits the identical JSON. The incremental cache is on by default, so a re-run after an edit only re-parses the files that changed. The step-by-step fallback is on [For AI](/docs/for-ai/#if-the-mcp-server-is-unavailable-use-the-cli).
 
+## Configure it
+
+An agent configuring Deslop for a repository needs three things, all documented in the [Configuration reference](/docs/configuration/):
+
+- **[`exclude` vs `report_hide`](/docs/configuration/#exclude-vs-report_hide--the-core-idea)** — `exclude` drops a file before analysis; `report_hide` analyses it but keeps it out of the headline, so "hand-written code duplicates generated code" still surfaces.
+- **[Built-in rules](/docs/configuration/#built-in-rules-always-on)** — `node_modules`, `target`, `dist`, generated-code suffixes, and generated-banner detection are already covered. Do not re-add them.
+- **[`[threshold]`](/docs/configuration/#threshold--the-ci-gate)** — the opt-in CI gate. Commit the ceiling so local runs, CI, and agents all share one number.
+
+To gate a build on duplication, use the [GitHub Action](/docs/github-action/) — it wraps the same exit-code contract.
+
+## What the agent reads back
+
+`deslop-report.json` is canonical; `.txt` and `.html` are renderers over it. Every report carries an embedded `schema_doc`, so a model can parse the payload without a separate reference. The field-by-field guide — what `bucket`, `signals.fused`, and `occurrences[].hidden` mean and how to act on each — is on [For AI](/docs/for-ai/#read-the-json).
+
+## One engine, three surfaces
+
+The `deslop-core` crate owns the entire pipeline. Three shells consume it:
+
+- **MCP server (`deslop-mcp`)** — the agent surface. `find-similar` plus the focused set of read-only and config tools above. The server delegates every read to the running editor server over the local IPC endpoint, so every response is computed against the live in-memory corpus, not a stale on-disk cache. When the editor server isn't running, the MCP returns an actionable error; CI and one-shot audits use the `deslop` CLI instead.
+- **LSP server (`deslop-lsp`)** — the editor surface. Diagnostics, hover, code lens, `textDocument/definition`, virtual `deslop://` documents, and custom `deslop/*` methods (`reportGet`, `reportDelta`, `reportForFile`, `reportForRange`, `clusterById`, `duplicatesFindSimilar`, `embeddingListModels`, `embeddingSetModel`, `sessionConfig`, `reportSchemaDoc`, `virtualDocument`, `cpuReport`). Fires `deslop/reportChanged`, `deslop/analysisState`, and `deslop/embeddingProgress` notifications. Owns the file watcher, the debouncer, and the analysis scheduler.
+- **CLI (`deslop`)** — the cold-cache fallback for CI gates and one-shot audits.
+
+All three reuse the same cache layout (`.deslop/cache/fingerprints/`, `.deslop/cache/embeddings/`) and the same JSON schema. Agents wired to the CLI today get the live channel by adding `deslop-mcp` to their MCP config — no schema change, no parser rewrite.
+
+### Push notifications
+
+The editor server fires `deslop/reportChanged` over the LSP wire and `resources/updated` + `deslop/reportChanged` over the MCP wire as soon as a watcher pass completes. Editor surfaces, agent caches, and webviews all observe the new report as soon as the pass commits. Stale UI is a correctness bug per the [LIVE-IS-REACTIVE](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/principles.md#principles-live-is-reactive) invariant.
+
+## JetBrains plugin (in development)
+
+The JetBrains plugin in `clients/jetbrains/` registers an IntelliJ Platform `lsp.serverSupportProvider` and starts `deslop-lsp` for C#, Rust, Python, Dart, JavaScript, TypeScript, PHP, F#, and Go files. Rider is the first product target; IntelliJ IDEA, PyCharm, WebStorm, RustRover, and CLion follow on the same platform LSP API. The plugin is Gradle-built, has real-binary tests against the released `deslop-lsp`, and ships with the same binary-resolution rules as the VS Code extension. Zed and Neovim plugins are on the roadmap — both LSP-capable, both wire-compatible with `deslop-lsp` today.
+
 ## What Deslop deliberately does not do
 
-- It does not rewrite your code. Deslop finds, ranks, compares, and prevents duplication; extraction is your call.
+- It does not rewrite your code. Deslop finds, ranks, compares, and prevents duplication; extraction is your call. Automated cleanup is a direction, not a shipped capability.
 - It does not fail CI unless you set a threshold yourself.
 - It does not assume "near-miss = bug." Some duplication is intentional (test fixtures, bootstrapping). Deslop reports; you decide.
 - It does not talk to the network unless you explicitly pick a remote embedding model.

@@ -15,9 +15,10 @@ import {
   clearTopOffendersFilter,
   setTopOffendersGroupBy,
   setTopOffendersSortBy,
+  toggleTopOffendersSplitByLanguage,
 } from "./topOffendersView";
 import { Report, ReportCluster, ReportOccurrence } from "../types/report";
-import { buildCompareUri, CompareEndpointRef } from "../compare/provider";
+import { buildCompareUri } from "../compare/provider";
 import { ClusterNode, OccurrenceNode } from "../tree/providers";
 import {
   aiPayloadForCluster,
@@ -35,24 +36,6 @@ type ClientFactory = () => LanguageClient | undefined;
 
 const LSP_REFRESH_REPORT_COMMAND = "deslop.lsp.refreshReport";
 const LSP_RENDER_HTML_REPORT_COMMAND = "deslop.lsp.renderHtmlReport";
-const UTF8_ENCODING = "utf8";
-const WORKSPACE_EXECUTE_COMMAND_METHOD = "workspace/executeCommand";
-const LSP_CLIENT_NOT_READY_MESSAGE = "Deslop: LSP client is not ready.";
-const SHOW_ALL_LENSES_SETTING = "showAllLenses";
-const MARKDOWN_LANGUAGE = "markdown";
-const UNKNOWN_VALUE = "unknown";
-
-function isString(value: unknown): value is string {
-  return typeof value === "string";
-}
-
-function isNumber(value: unknown): value is number {
-  return typeof value === "number";
-}
-
-function isObject(value: unknown): value is object {
-  return typeof value === "object" && value !== null;
-}
 
 interface CommandDeps {
   readonly context: vscode.ExtensionContext;
@@ -66,10 +49,7 @@ interface CommandBinding {
 }
 
 // [VSIX-COMMANDS] Single source of truth for every command-palette entry.
-// [VSIX-COMMANDS] Single source of truth for every command-palette entry.
-// Exported read-only so tests can pin the palette contract without
-// colliding with the real extension's registrations in a shared host.
-export const COMMAND_BINDINGS: readonly CommandBinding[] = [
+const COMMAND_BINDINGS: readonly CommandBinding[] = [
   { id: "deslop.openReport", run: ({ context, store }) => openReportPanel(context, store) },
   { id: "deslop.openWorstCluster", run: ({ context, store }) => openWorstCluster(context, store) },
   { id: "deslop.openCluster", run: ({ context, store }, id) => openClusterPanel(context, store, id as string) },
@@ -82,14 +62,15 @@ export const COMMAND_BINDINGS: readonly CommandBinding[] = [
   // [VSIX-CODE-LENS] The lens "Jump" action cycles occurrences without
   // routing through textDocument/definition ([LSP-NON-INTERFERENCE]).
   { id: "deslop.jumpToNextOccurrence", run: ({ store }, clusterId, occurrenceIndex) => jumpToNextOccurrence(store, clusterId, occurrenceIndex) },
-  { id: "deslop.comparePair", run: (_deps, left, right) => comparePairEndpoints(left, right) },
+  { id: "deslop.compareWithCanonical", run: ({ store }, target) => compareWithCanonicalTarget(store, target) },
+  { id: "deslop.compareOccurrenceWithCanonical", run: ({ store }, target) => compareWithCanonicalTarget(store, target) },
   { id: "deslop.openAllOccurrences", run: (_deps, node) => openAllOccurrences(node as ClusterNode) },
   { id: "deslop.openCanonicalFile", run: (_deps, node) => openCanonicalOccurrence(node as ClusterNode) },
   { id: "deslop.openClusterDetails", run: ({ context, store }, node) => openClusterDetails(context, store, node as ClusterNode | OccurrenceNode) },
   { id: "deslop.topOffenders.showByCluster", run: () => setTopOffendersGroupBy("cluster") },
   { id: "deslop.topOffenders.showByFile", run: () => setTopOffendersGroupBy("file") },
   { id: "deslop.topOffenders.showByFolder", run: () => setTopOffendersGroupBy("folder") },
-  { id: "deslop.topOffenders.showBySeverity", run: () => setTopOffendersGroupBy("severity") },
+  { id: "deslop.topOffenders.showByType", run: () => setTopOffendersGroupBy("type") },
   { id: "deslop.topOffenders.chooseFilter", run: ({ store }) => chooseTopOffendersFilter(store) },
   // Same handler as chooseFilter; separate id so the toolbar can swap in
   // the active-filter icon via the deslop.topOffendersFiltered context key.
@@ -97,6 +78,7 @@ export const COMMAND_BINDINGS: readonly CommandBinding[] = [
   { id: "deslop.topOffenders.clearFilter", run: () => clearTopOffendersFilter() },
   { id: "deslop.topOffenders.sortByImpact", run: () => setTopOffendersSortBy("impact") },
   { id: "deslop.topOffenders.sortByPath", run: () => setTopOffendersSortBy("path") },
+  { id: "deslop.topOffenders.toggleSplitByLanguage", run: () => toggleTopOffendersSplitByLanguage() },
   { id: "deslop.openDuplicationReport", run: ({ context, store }) => openDuplicationReportPanel(context, store) },
   { id: "deslop.openHtmlReport", run: ({ clientOf }) => openHtmlReport(clientOf) },
   { id: "deslop.copyContextForAI", run: ({ store }, node) => copyContextForAI(node as ClusterNode | OccurrenceNode, store) },
@@ -123,7 +105,7 @@ export function registerCommands(
 }
 
 export function refreshReport(clientOf: ClientFactory): Thenable<unknown> | undefined {
-  return clientOf()?.sendRequest(WORKSPACE_EXECUTE_COMMAND_METHOD, {
+  return clientOf()?.sendRequest("workspace/executeCommand", {
     command: LSP_REFRESH_REPORT_COMMAND,
     arguments: [],
   });
@@ -138,18 +120,18 @@ export function refreshReport(clientOf: ClientFactory): Thenable<unknown> | unde
 export async function openHtmlReport(clientOf: ClientFactory): Promise<void> {
   const client = clientOf();
   if (!client) {
-    void vscode.window.showInformationMessage(LSP_CLIENT_NOT_READY_MESSAGE);
+    void vscode.window.showInformationMessage("Deslop: LSP client is not ready.");
     return;
   }
   const html = await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: "Deslop: rendering HTML report…" },
     () =>
-      client.sendRequest<string>(WORKSPACE_EXECUTE_COMMAND_METHOD, {
+      client.sendRequest<string>("workspace/executeCommand", {
         command: LSP_RENDER_HTML_REPORT_COMMAND,
         arguments: [],
       }),
   );
-  if (!isString(html) || html.length === 0) {
+  if (typeof html !== "string" || html.length === 0) {
     void vscode.window.showInformationMessage("Deslop: no HTML report available yet.");
     return;
   }
@@ -158,8 +140,8 @@ export async function openHtmlReport(clientOf: ClientFactory): Promise<void> {
 
 export async function toggleShowAllLenses(): Promise<void> {
   const cfg = vscode.workspace.getConfiguration("deslop");
-  const next = !cfg.get<boolean>(SHOW_ALL_LENSES_SETTING, false);
-  await cfg.update(SHOW_ALL_LENSES_SETTING, next, vscode.ConfigurationTarget.Workspace);
+  const next = !cfg.get<boolean>("showAllLenses", false);
+  await cfg.update("showAllLenses", next, vscode.ConfigurationTarget.Workspace);
 }
 
 export async function openOccurrenceTarget(target: unknown): Promise<void> {
@@ -169,7 +151,7 @@ export async function openOccurrenceTarget(target: unknown): Promise<void> {
 }
 
 export async function copyClusterContextById(store: ReportStore, id: unknown): Promise<void> {
-  const clusterId = isString(id) ? id : String(id);
+  const clusterId = typeof id === "string" ? id : String(id);
   const cluster = store.current.report?.clusters.find((c) => c.id === clusterId);
   if (!cluster) return;
   const rank = (store.current.report?.clusters.indexOf(cluster) ?? -1) + 1;
@@ -231,19 +213,19 @@ function occurrenceFromCommandTarget(target: unknown): ReportOccurrence | undefi
 }
 
 function isOccurrenceNode(target: unknown): target is OccurrenceNode {
-  if (!isObject(target) || !("occurrence" in target)) {
+  if (typeof target !== "object" || target === null || !("occurrence" in target)) {
     return false;
   }
   return isReportOccurrence(target.occurrence);
 }
 
 function isReportOccurrence(target: unknown): target is ReportOccurrence {
-  if (!isObject(target)) return false;
+  if (typeof target !== "object" || target === null) return false;
   const occurrence = target as Partial<ReportOccurrence>;
   return (
-    isString(occurrence.path) &&
-    isNumber(occurrence.start_byte) &&
-    isNumber(occurrence.end_byte)
+    typeof occurrence.path === "string" &&
+    typeof occurrence.start_byte === "number" &&
+    typeof occurrence.end_byte === "number"
   );
 }
 
@@ -282,8 +264,8 @@ function occurrenceAfterCommandIndex(
   occurrenceIndex: unknown,
 ): ReportOccurrence | undefined {
   if (
-    !isString(clusterId) ||
-    !isNumber(occurrenceIndex) ||
+    typeof clusterId !== "string" ||
+    typeof occurrenceIndex !== "number" ||
     !Number.isInteger(occurrenceIndex) ||
     occurrenceIndex < 0
   ) {
@@ -294,28 +276,52 @@ function occurrenceAfterCommandIndex(
   return cluster.occurrences[(occurrenceIndex + 1) % cluster.occurrences.length];
 }
 
-// [VSIX-PAIR-COMPARE] Compare exists only between two occurrences the user
-// selected explicitly. There is no canonical fallback: a missing, malformed,
-// or identical endpoint pair is a no-op, never an implicit comparison.
-const COMPARE_DIFF_TITLE = "Compare selected occurrences";
-
-export async function comparePairEndpoints(left: unknown, right: unknown): Promise<void> {
-  const leftEndpoint = compareEndpoint(left);
-  const rightEndpoint = compareEndpoint(right);
-  if (!leftEndpoint || !rightEndpoint || sameEndpoint(leftEndpoint, rightEndpoint)) return;
-  await openCompareDiff(leftEndpoint, rightEndpoint);
+export async function compareWithCanonicalTarget(
+  store: ReportStore,
+  target: unknown,
+): Promise<void> {
+  if (isOccurrenceNode(target)) {
+    const selection = selectedOccurrenceCompare(store, target.occurrence);
+    if (!selection) return;
+    await openCompareDiff(selection.cluster.id, selection.canonical, selection.selected);
+    return;
+  }
+  const clusterId = clusterIdFromCompareTarget(store, target);
+  if (!clusterId) return;
+  await compareWithCanonical(store, clusterId);
 }
 
-function compareEndpoint(value: unknown): CompareEndpointRef | undefined {
-  if (!isObject(value)) return undefined;
-  const candidate = value as Partial<CompareEndpointRef>;
-  if (typeof candidate.path !== "string" || candidate.path.length === 0) return undefined;
-  if (typeof candidate.start_byte !== "number" || !Number.isInteger(candidate.start_byte)) return undefined;
-  if (typeof candidate.end_byte !== "number" || !Number.isInteger(candidate.end_byte)) return undefined;
-  return { path: candidate.path, start_byte: candidate.start_byte, end_byte: candidate.end_byte };
+interface OccurrenceCompareSelection {
+  readonly cluster: ReportCluster;
+  readonly canonical: ReportOccurrence;
+  readonly selected: ReportOccurrence;
 }
 
-function sameEndpoint(left: CompareEndpointRef, right: CompareEndpointRef): boolean {
+function selectedOccurrenceCompare(
+  store: ReportStore,
+  occurrence: ReportOccurrence,
+): OccurrenceCompareSelection | undefined {
+  const cluster = parentClusterForOccurrence(store, occurrence);
+  const canonical = cluster?.occurrences[0];
+  const selected = cluster?.occurrences.find((candidate) =>
+    sameOccurrence(candidate, occurrence),
+  );
+  if (!cluster || !canonical || !selected || sameOccurrence(canonical, selected)) {
+    return undefined;
+  }
+  return { cluster, canonical, selected };
+}
+
+function parentClusterForOccurrence(
+  store: ReportStore,
+  occurrence: ReportOccurrence,
+): ReportCluster | undefined {
+  return store.current.report?.clusters.find((cluster) =>
+    cluster.occurrences.some((candidate) => sameOccurrence(candidate, occurrence)),
+  );
+}
+
+function sameOccurrence(left: ReportOccurrence, right: ReportOccurrence): boolean {
   return (
     left.path === right.path &&
     left.start_byte === right.start_byte &&
@@ -323,12 +329,59 @@ function sameEndpoint(left: CompareEndpointRef, right: CompareEndpointRef): bool
   );
 }
 
-async function openCompareDiff(a: CompareEndpointRef, b: CompareEndpointRef): Promise<void> {
+function clusterIdFromCompareTarget(
+  store: ReportStore,
+  target: unknown,
+): string | undefined {
+  if (typeof target === "string") return target;
+  if (isCompareTreeTarget(target)) return clusterIdForTreeNode(target, store);
+  return undefined;
+}
+
+function isCompareTreeTarget(
+  target: unknown,
+): target is ClusterNode | OccurrenceNode {
+  return isOccurrenceNode(target) || isClusterNode(target);
+}
+
+function isClusterNode(target: unknown): target is ClusterNode {
+  if (typeof target !== "object" || target === null || !("cluster" in target)) {
+    return false;
+  }
+  const cluster = (target as Partial<ClusterNode>).cluster as
+    | Partial<ReportCluster>
+    | undefined;
+  return typeof cluster?.id === "string" && Array.isArray(cluster.occurrences);
+}
+
+export async function compareWithCanonical(
+  store: ReportStore,
+  clusterId: string,
+): Promise<void> {
+  const cluster = compareCluster(store, clusterId);
+  if (!cluster || cluster.occurrences.length < 2) return;
+  const [a, b] = cluster.occurrences;
+  if (!a || !b) return;
+  await openCompareDiff(cluster.id, a, b);
+}
+
+function compareCluster(
+  store: ReportStore,
+  clusterId: string,
+): ReportCluster | undefined {
+  return store.current.report?.clusters.find((c) => c.id === clusterId);
+}
+
+async function openCompareDiff(
+  clusterId: string,
+  a: ReportOccurrence,
+  b: ReportOccurrence,
+): Promise<void> {
   await vscode.commands.executeCommand(
     "vscode.diff",
-    buildCompareUri(a, "a"),
-    buildCompareUri(b, "b"),
-    COMPARE_DIFF_TITLE,
+    buildCompareUri(a, "a", clusterId),
+    buildCompareUri(b, "b", clusterId),
+    `Compare (cluster ${clusterId})`,
   );
 }
 
@@ -347,7 +400,7 @@ export async function openSchemaDoc(
   const content =
     firstNonEmpty(packaged, remote, fallback) ?? "Schema doc unavailable.";
   const doc = await vscode.workspace.openTextDocument({
-    language: MARKDOWN_LANGUAGE,
+    language: "markdown",
     content,
   });
   await vscode.window.showTextDocument(doc, { preview: true });
@@ -359,7 +412,7 @@ async function fetchSchemaDocViaRpc(clientOf?: ClientFactory): Promise<string | 
   if (!client) return undefined;
   try {
     const text = await client.sendRequest<string>("deslop/reportSchemaDoc");
-    return isString(text) && text.length > 0 ? text : undefined;
+    return typeof text === "string" && text.length > 0 ? text : undefined;
   } catch {
     return undefined;
   }
@@ -371,7 +424,7 @@ async function readPackagedSchemaDoc(
   try {
     const uri = vscode.Uri.joinPath(ctx.extensionUri, "dist", "schema_doc.md");
     const bytes = await vscode.workspace.fs.readFile(uri);
-    const text = Buffer.from(bytes).toString(UTF8_ENCODING);
+    const text = Buffer.from(bytes).toString("utf8");
     return text.length > 0 ? text : undefined;
   } catch {
     return undefined;
@@ -379,7 +432,7 @@ async function readPackagedSchemaDoc(
 }
 
 function firstNonEmpty(...values: (string | undefined)[]): string | undefined {
-  return values.find((value) => isString(value) && value.length > 0);
+  return values.find((v) => typeof v === "string" && v.length > 0);
 }
 
 interface CpuPhaseRecord {
@@ -404,12 +457,12 @@ interface CpuReport {
 export async function openCpuReport(clientOf: ClientFactory): Promise<void> {
   const client = clientOf();
   if (!client) {
-    void vscode.window.showInformationMessage(LSP_CLIENT_NOT_READY_MESSAGE);
+    void vscode.window.showInformationMessage("Deslop: LSP client is not ready.");
     return;
   }
   const report = await client.sendRequest<CpuReport>("deslop/cpuReport");
   const doc = await vscode.workspace.openTextDocument({
-    language: MARKDOWN_LANGUAGE,
+    language: "markdown",
     content: renderCpuReport(report),
   });
   await vscode.window.showTextDocument(doc, { preview: true });
@@ -424,7 +477,7 @@ export function renderCpuReport(report: CpuReport): string {
   const lines = [
     "# Deslop CPU Report",
     "",
-    `- Current phase: ${report.current_phase ?? UNKNOWN_VALUE}`,
+    `- Current phase: ${report.current_phase ?? "unknown"}`,
     `- Pending watcher events: ${inFlight.pending_watcher_events ?? 0}`,
     `- Pending embedding requests: ${inFlight.pending_embed_requests ?? 0}`,
     `- In-progress parse batch: ${inFlight.in_progress_parse_batch ?? 0}`,
@@ -441,7 +494,7 @@ export function renderCpuReport(report: CpuReport): string {
     "|---|---:|---:|---:|---|",
     ...phases.map((phase) => {
       const files = (phase.files_touched ?? []).join(", ");
-      return `| ${phase.phase ?? UNKNOWN_VALUE} | ${phase.started_at_ms ?? 0} | ${phase.duration_ms ?? 0} | ${phase.cpu_ms ?? 0} | ${files || "-"} |`;
+      return `| ${phase.phase ?? "unknown"} | ${phase.started_at_ms ?? 0} | ${phase.duration_ms ?? 0} | ${phase.cpu_ms ?? 0} | ${files || "-"} |`;
     }),
   ];
   return lines.join("\n");
@@ -462,14 +515,14 @@ export function findClusterContaining(
 }
 
 export function byteToPosition(doc: vscode.TextDocument, byte: number): vscode.Position {
-  const buffer = Buffer.from(doc.getText(), UTF8_ENCODING);
-  const slice = buffer.slice(0, Math.min(byte, buffer.length)).toString(UTF8_ENCODING);
+  const buffer = Buffer.from(doc.getText(), "utf8");
+  const slice = buffer.slice(0, Math.min(byte, buffer.length)).toString("utf8");
   return doc.positionAt(slice.length);
 }
 
 export function utf8ByteOffset(doc: vscode.TextDocument, position: vscode.Position): number {
   return Buffer.byteLength(
     doc.getText(new vscode.Range(new vscode.Position(0, 0), position)),
-    UTF8_ENCODING,
+    "utf8",
   );
 }

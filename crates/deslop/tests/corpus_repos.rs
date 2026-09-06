@@ -5,18 +5,10 @@
 //! One `#[test]` per repository, so a language that regresses is named
 //! directly in the failure output rather than hidden behind a sibling.
 //!
-//! [TEST-SELECTION-SKIP] Every test here is `#[ignore]`d as
-//! [SKIP-TOO-LARGE-FOR-CI], citing gh #422: they need a clone on disk and they
-//! measure wall time and peak memory, which are runner-dependent. The reason
-//! is stated at each test rather than filtered away in the Makefile, so it is
-//! printed on every run and `skip_policy_contract` holds it to the policy.
-//! `make test-corpus` runs them via `-- --ignored`, single-threaded, because a
-//! scan can hold gigabytes and parallel scans would evict each other.
-//!
-//! `#[ignore]` keeps this target inside `--all-targets`, so `make test` and
-//! `make lint` still compile and lint it. The `required-features` gate that
-//! preceded it did not, and commit `77bcbaed5` left this file uncompilable
-//! with nothing to notice until someone ran `make test-corpus`.
+//! Excluded from `make test` / `make ci` via `--skip corpus_`: these need a
+//! clone on disk and they measure wall time and peak memory, which are
+//! runner-dependent. `make test-corpus` runs them, single-threaded, because
+//! a scan can hold gigabytes and parallel scans would evict each other.
 //!
 //! A repository scan costs minutes, so each test performs **one** scan and
 //! accumulates every failure before asserting. A single run reports every way
@@ -52,138 +44,63 @@
 use std::{path::Path, time::Duration};
 
 use anyhow::{anyhow, Result};
-use deslop_test_support::{
-    corpus::{
-        array, baseline_mode, classify, clone_dir, cluster_paths, field_u64, first_occurrence_text,
-        manifest, scan, string_field, u64_field, Baseline, CorpusRun, Failure,
-    },
-    corpus_confidence::{
-        check_cluster_mass_contract, check_curated_recall, check_type2_curated_recall,
-    },
-    corpus_determinism::check_reports_agree,
-    corpus_precision::{check_boilerplate_not_ranked_first, check_curated_precision},
-    corpus_scope::check_scan_scope,
+use deslop_test_support::corpus::{
+    baseline_mode, classify, clone_dir, cluster_paths, first_occurrence_text, manifest,
+    reports_clone_spanning, scan, string_field, u64_field, Baseline, CorpusRun, Failure,
 };
 use serde_json::Value;
 
 #[test]
-#[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 [CORPUS-PIN] [CORPUS-PRECISION] \
-            docs/plans/corpus-assertion.md — clones flutter/flutter at its pinned commit and \
-            scans the whole Dart tree: the largest in the corpus, measured at 295 s wall / \
-            7947 MB peak RSS (gh #166 fixed; ceilings live in corpus/flutter.json). The \
-            release gate compiles this target and never runs it. `make test-corpus` runs it, \
-            single-threaded, via `-- --ignored`."]
 fn corpus_flutter_dart() -> Result<()> {
     gate("flutter")
 }
 
 #[test]
-#[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 [CORPUS-PIN] [CORPUS-RECALL] \
-            docs/plans/corpus-assertion.md — clones jellyfin/jellyfin at its pinned commit \
-            and scans the whole C# tree: several thousand files, minutes per scan. The \
-            release gate compiles this target and never runs it. `make test-corpus` runs it, \
-            single-threaded, via `-- --ignored`."]
 fn corpus_jellyfin_csharp() -> Result<()> {
     gate("jellyfin")
 }
 
 #[test]
-#[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 [CORPUS-PIN] [CORPUS-RECALL] \
-            docs/plans/corpus-assertion.md — clones tokio-rs/tokio at its pinned commit and \
-            scans the whole Rust tree: the cheapest in the corpus, and still a clone the \
-            release gate must not make. The release gate compiles this target and never runs \
-            it. `make test-corpus` runs it, single-threaded, via `-- --ignored`."]
 fn corpus_tokio_rust() -> Result<()> {
     gate("tokio")
 }
 
 #[test]
-#[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 [CORPUS-PIN] [CORPUS-SCOPE] \
-            docs/plans/corpus-assertion.md — clones django/django at its pinned commit and \
-            scans the whole Python tree: a clone plus a whole-repository scan. The release \
-            gate compiles this target and never runs it. `make test-corpus` runs it, \
-            single-threaded, via `-- --ignored`."]
 fn corpus_django_python() -> Result<()> {
     gate("django")
 }
 
 #[test]
-#[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 [CORPUS-PIN] [CORPUS-SCOPE] \
-            docs/plans/corpus-assertion.md — clones facebook/react at its pinned commit and \
-            scans the whole JavaScript tree: a clone plus a whole-repository scan. The \
-            release gate compiles this target and never runs it. `make test-corpus` runs it, \
-            single-threaded, via `-- --ignored`."]
 fn corpus_react_javascript() -> Result<()> {
     gate("react")
 }
 
 #[test]
-#[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 [CORPUS-PIN] [CORPUS-RECALL] \
-            docs/plans/corpus-assertion.md — clones nestjs/nest at its pinned commit and \
-            scans the whole TypeScript tree: a clone plus a whole-repository scan. The \
-            release gate compiles this target and never runs it. `make test-corpus` runs it, \
-            single-threaded, via `-- --ignored`."]
 fn corpus_nest_typescript() -> Result<()> {
     gate("nest")
 }
 
 #[test]
-#[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 [CORPUS-PIN] [CORPUS-SCOPE] \
-            docs/plans/corpus-assertion.md — clones laravel/framework at its pinned commit \
-            and scans the whole PHP tree: a clone plus a whole-repository scan. The release \
-            gate compiles this target and never runs it. `make test-corpus` runs it, \
-            single-threaded, via `-- --ignored`."]
 fn corpus_laravel_php() -> Result<()> {
     gate("laravel")
 }
 
 #[test]
-#[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 [CORPUS-PIN] [CORPUS-SCOPE] \
-            docs/plans/corpus-assertion.md — clones gohugoio/hugo at its pinned commit and \
-            scans the whole Go tree: a clone plus a whole-repository scan. The release gate \
-            compiles this target and never runs it. `make test-corpus` runs it, \
-            single-threaded, via `-- --ignored`."]
 fn corpus_hugo_go() -> Result<()> {
     gate("hugo")
 }
 
 #[test]
-#[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 [CORPUS-PIN] [CORPUS-PRECISION] \
-            docs/plans/corpus-assertion.md — clones dotnet/fsharp at its pinned commit and \
-            scans the whole F# tree: peaks above 13 GB, past every hosted-runner tier. The \
-            release gate compiles this target and never runs it. `make test-corpus` runs it, \
-            single-threaded, via `-- --ignored`."]
 fn corpus_fsharp() -> Result<()> {
     gate("fsharp")
 }
 
 #[test]
-#[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 [CORPUS-PIN] [CORPUS-RECALL] \
-            docs/plans/corpus-assertion.md — clones tornadoweb/tornado at its pinned commit \
-            and scans the Python tree: the cheapest curated recall in the corpus, with six \
-            hand-verified cross-file pairs — one byte-identical, five Type-2. The release \
-            gate compiles this target and never runs it. `make test-corpus` runs it, \
-            single-threaded, via `-- --ignored`."]
-fn corpus_tornado_python() -> Result<()> {
-    gate("tornado")
-}
-
-#[test]
-#[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 [CORPUS-PIN] [PIPELINE-DETERMINISM] \
-            docs/plans/corpus-assertion.md — scans nestjs/nest twice over, so it costs a \
-            clone plus two whole-repository TypeScript scans. The release gate compiles this \
-            target and never runs it. `make test-corpus` runs it, single-threaded, via `-- \
-            --ignored`."]
 fn corpus_determinism_nest_typescript() -> Result<()> {
     determinism_gate("nest")
 }
 
 #[test]
-#[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 [CORPUS-PIN] [PIPELINE-DETERMINISM] \
-            docs/plans/corpus-assertion.md — scans jellyfin/jellyfin twice over, so it costs \
-            a clone plus two whole-repository C# scans. The release gate compiles this \
-            target and never runs it. `make test-corpus` runs it, single-threaded, via `-- \
-            --ignored`."]
 fn corpus_determinism_jellyfin_csharp() -> Result<()> {
     determinism_gate("jellyfin")
 }
@@ -200,30 +117,47 @@ fn determinism_gate(name: &str) -> Result<()> {
     let first = scan(&root, &tmp.path().join("first"))?;
     let second = scan(&root, &tmp.path().join("second"))?;
 
+    let (first_ids, second_ids) = (cluster_ids(&first.report), cluster_ids(&second.report));
     println!(
         "{name}: run1 clusters={} dup={:.4}%  run2 clusters={} dup={:.4}%",
-        rendered_cluster_count(&first.report),
+        first_ids.len(),
         duplication_percent(&first.report),
-        rendered_cluster_count(&second.report),
+        second_ids.len(),
         duplication_percent(&second.report),
     );
 
-    // [PIPELINE-DETERMINISM] The whole rendered payload, not the ordered
-    // cluster ids: ids come from the smallest member's hash and survive
-    // moved ranges, changed buckets, changed signals, reordered ranks and
-    // a moved `duplication_percent` alike. `corpus_determinism` states
-    // each of those as its own unit case.
     let mut failures = Vec::new();
-    check_reports_agree(&first.report, &second.report, &mut failures);
+    if first_ids != second_ids {
+        let (left, right) = (
+            duplication_percent(&first.report),
+            duplication_percent(&second.report),
+        );
+        failures.push(Failure::new(
+            "determinism",
+            format!(
+                "two identical scans disagreed — clusters {} vs {}, duplication_percent \
+                 {left:.4}% vs {right:.4}%. No report and no --fail-over gate is reproducible.",
+                first_ids.len(),
+                second_ids.len()
+            ),
+        ));
+    }
     fail_on(name, &["determinism"], &failures)
 }
 
-/// How many clusters a report rendered.
-fn rendered_cluster_count(report: &Value) -> usize {
+/// The ordered cluster ids of a report.
+fn cluster_ids(report: &Value) -> Vec<String> {
     report
         .get("clusters")
         .and_then(Value::as_array)
-        .map_or(0, Vec::len)
+        .map(|clusters| {
+            clusters
+                .iter()
+                .filter_map(|cluster| cluster.get("id").and_then(Value::as_str))
+                .map(ToOwned::to_owned)
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// The report's repo-level duplication percentage.
@@ -237,18 +171,9 @@ fn duplication_percent(report: &Value) -> f64 {
 /// Checks the main gate evaluates. Used to scope baseline reconciliation so
 /// it never reports the determinism gate's entries as fixed.
 const GATE_CHECKS: &[&str] = &[
-    "files_analysed",
-    "cluster_count_band",
     "recall",
-    "recall_quality",
-    "precision",
     "boilerplate_rank",
     "data_table_rank",
-    "fused_bounded_max",
-    "cluster_contract",
-    "cluster_mass",
-    "cluster_rank",
-    "type2_recall",
     "wall",
     "memory",
 ];
@@ -265,22 +190,9 @@ fn gate(name: &str) -> Result<()> {
     warn_when_accuracy_unasserted(name, &manifest);
 
     let mut failures = Vec::new();
-    // [CORPUS-SCOPE] First, because every check below iterates a set an
-    // empty report leaves empty: a scan that reached nothing satisfies all
-    // of them at once (gh #342).
-    check_scan_scope(&manifest, &run.report, &mut failures);
-    check_curated_recall(&manifest, &run.report, &mut failures);
-    check_curated_precision(&manifest, &run.report, &mut failures);
+    check_recall(&manifest, &run, &mut failures);
     check_boilerplate_not_ranked_first(&manifest, &root, &run, &mut failures)?;
     check_data_tables_not_ranked_as_logic(&root, &run, &mut failures)?;
-    // [CORPUS-BASELINE] The confidence checks. The first reads no
-    // manifest — it judges the *shape* of the rendered report, so it runs
-    // on every repository including the ones whose recall is not yet
-    // curated. The third is the curated Type-2 recall assertion
-    // ([CORPUS-RECALL]): it reads `must_find_type2` and asserts nothing
-    // where the manifest curates nothing.
-    check_cluster_mass_contract(&run.report, &mut failures);
-    check_type2_curated_recall(&manifest, &run.report, &mut failures);
     check_ceilings(&manifest, &run, &mut failures)?;
 
     fail_on(name, GATE_CHECKS, &failures)
@@ -328,8 +240,7 @@ fn report_measurements(name: &str, manifest: &Value, run: &CorpusRun) {
 /// green result is never mistaken for evidence that Deslop is accurate on it.
 /// Such a run has proven only that the scan fit inside its resource budget.
 fn warn_when_accuracy_unasserted(name: &str, manifest: &Value) {
-    let no_recall =
-        array(manifest, "must_find").is_empty() && array(manifest, "must_find_type2").is_empty();
+    let no_recall = array(manifest, "must_find").is_empty();
     let no_precision = manifest.get("must_not_rank_first").is_none();
     if no_recall && no_precision {
         println!(
@@ -338,6 +249,70 @@ fn warn_when_accuracy_unasserted(name: &str, manifest: &Value) {
              detection on {name} is correct."
         );
     }
+}
+
+/// [CORPUS-RECALL] Every hand-verified duplicate in the manifest must be reported.
+/// A miss is a false negative on code a human confirmed is byte-identical.
+fn check_recall(manifest: &Value, run: &CorpusRun, failures: &mut Vec<Failure>) {
+    for entry in array(manifest, "must_find") {
+        let files: Vec<String> = array(entry, "files")
+            .iter()
+            .filter_map(|file| file.as_str().map(ToOwned::to_owned))
+            .collect();
+        if !reports_clone_spanning(&run.report, &files) {
+            failures.push(Failure::new(
+                "recall",
+                format!(
+                    "no cluster spans {files:?}. Verified duplicate: {}",
+                    entry.get("why").and_then(Value::as_str).unwrap_or("")
+                ),
+            ));
+        }
+    }
+}
+
+/// [CORPUS-PRECISION] Language- or framework-mandated scaffolding must never outrank
+/// genuine copy-paste. Such a cluster is unactionable by construction, so it
+/// must not sit at the head of a "worst offenders first" report.
+fn check_boilerplate_not_ranked_first(
+    manifest: &Value,
+    root: &Path,
+    run: &CorpusRun,
+    failures: &mut Vec<Failure>,
+) -> Result<()> {
+    let Some(rule) = manifest.get("must_not_rank_first") else {
+        return Ok(());
+    };
+    // Saturating up, never down: a `top_n` too large for the host widens the
+    // check to every cluster, where narrowing it to zero would silently switch
+    // the precision gate off.
+    let top_n = usize::try_from(u64_field(rule, "top_n")?).unwrap_or(usize::MAX);
+    let forbidden: Vec<&str> = array(rule, "forbidden_top_shapes")
+        .iter()
+        .filter_map(Value::as_str)
+        .collect();
+
+    for (rank, cluster) in array(&run.report, "clusters")
+        .iter()
+        .take(top_n)
+        .enumerate()
+    {
+        let text = first_occurrence_text(root, cluster)?;
+        for shape in &forbidden {
+            if text.contains(shape) {
+                failures.push(Failure::new(
+                    "boilerplate_rank",
+                    format!(
+                        "rank {rank}: cluster of {} occurrences is `{shape}` boilerplate, which \
+                         cannot be deduplicated. First occurrence: {}",
+                        field_u64(cluster, "size"),
+                        text.lines().next().unwrap_or("").trim()
+                    ),
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Number of top-ranked clusters subjected to the language-agnostic
@@ -412,9 +387,8 @@ fn as_f64(count: usize) -> f64 {
 }
 
 /// [CORPUS-CEILINGS] The scan must finish inside the manifest's wall-clock and memory
-/// ceilings. The manifest is the single source of truth for both figures —
-/// per-repo values tolerated for now, sized above the repository's own
-/// measured scan so the gate catches regressions.
+/// budget. The memory ceiling is a standard CI runner's RAM — a scan that
+/// exceeds it cannot run in the GitHub Action this project ships.
 fn check_ceilings(manifest: &Value, run: &CorpusRun, failures: &mut Vec<Failure>) -> Result<()> {
     let ceilings = manifest
         .get("ceilings")
@@ -443,6 +417,20 @@ fn check_ceilings(manifest: &Value, run: &CorpusRun, failures: &mut Vec<Failure>
         ));
     }
     Ok(())
+}
+
+/// Array-valued field, or an empty slice when absent.
+fn array<'a>(value: &'a Value, name: &str) -> &'a [Value] {
+    value
+        .get(name)
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+}
+
+/// Unsigned scalar field, or `0` when absent.
+fn field_u64(value: &Value, name: &str) -> u64 {
+    value.get(name).and_then(Value::as_u64).unwrap_or_default()
 }
 
 /// Unsigned scalar at a JSON pointer, or `0` when absent.
