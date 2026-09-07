@@ -8,6 +8,10 @@ Crate: `crates/deslop-lsp`. Transport: JSON-RPC over stdio. Framework: `tower-ls
 
 Stdio JSON-RPC 2.0 per the LSP base protocol. No TCP, no named pipes, no WebSockets. The editor spawns the binary; the binary speaks LSP on stdin/stdout; `tracing` goes to stderr (picked up as the "server log" in the client). One process per workspace root.
 
+### [LSP-CLI-HELP] Command-line help
+
+`deslop-lsp --help` lists every accepted flag with its purpose and exits successfully without starting a language server. `crates/deslop-lsp/src/help.rs` owns the help text and `app.rs` dispatches it; `crates/deslop-lsp/tests/cli.rs` runs the binary and asserts its advertised flags.
+
 ### [LSP-LIFECYCLE] How the server ends
 
 The base protocol gives an editor three ways to end a session, and Deslop honours all three.

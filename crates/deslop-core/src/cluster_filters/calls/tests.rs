@@ -4,13 +4,14 @@
 //! convicted when its variation is plain payload, published when the
 //! variation is authored interpolation (gh #467) or byte-identical.
 
-use super::super::{is_noise_pattern, NoiseFilter, ParseCache};
-use crate::ast::ByteRange;
-use crate::fingerprint::Fingerprint;
-use crate::state::{FileId, FileRegistry};
+use std::{collections::HashMap, path::PathBuf};
 
-use std::collections::HashMap;
-use std::path::PathBuf;
+use super::super::{is_noise_pattern, NoiseFilter, ParseCache};
+use crate::{
+    ast::ByteRange,
+    fingerprint::Fingerprint,
+    state::{FileId, FileRegistry},
+};
 
 /// One member's source: an invariant call over a varying plain string.
 const PLAIN_A: &str = "def member_a():\n    greet(\"alice\")\n";

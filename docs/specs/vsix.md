@@ -28,7 +28,7 @@ A compact floating widget (VS Code `InlayHint` + `Webview`-backed overlay, rende
 - **Band glyph and kind colour** — the glyph (`●●`, `●`, `◐`, `○`) is the cluster's mass rank band per [severity.md §SEVERITY-BAND](severity.md#severity-band); the colour of the whole bubble is the cluster's clone kind per [taxonomy.md §CLONE-KIND-COLOR](taxonomy.md#clone-kind-color). The bubble remains coloured when diagnostics are off; only the dirty projection ([VSIX-STATE-DIRTY]) and silence-when-clean remove it.
 - **Verdict** — the cluster's clone kind title ([CLONE-KIND-LABELS]): `Identical code`, `Nearly identical code`, `Same behavior, different code`, `Same shape, different content`, or `Loosely similar code`. It is the engine's fold over the cluster ([CLONE-KIND-FOLD]), never one pair's evidence.
 - **Count + location** — `× 4 • UserService.cs:230`. The canonical occurrence of the cluster, linkified to jump on click.
-- **Action chevron** — click expands the bubble into a webview-backed card with cluster membership, mass, and all occurrences. The card carries no compare button: a bubble can only name one occurrence, and pair evidence requires two explicit endpoints. The two-endpoint **Compare selected occurrences** flow lives in the cluster panel ([VSIX-WEBVIEW-ACTIONS-CONTEXT]), and only that explicit pair request may render structural, Jaccard, embedding, and content evidence.
+- **Action chevron** — click expands the bubble into a webview-backed card with cluster membership, mass, and all occurrences. The card carries no compare button. The cluster panel offers one-click **Compare with canonical** on each non-canonical occurrence ([webview-runtime.md §VSIX-PAIR-COMPARE](webview-runtime.md#vsix-pair-compare)); the native diff shows the two source ranges.
 
 **How it's rendered.**
 VS Code doesn't give us a true floating tooltip over a specific range, so the bubble uses the layering documented in the VS Code extension cookbook:
@@ -235,7 +235,7 @@ The LSP's code lens ([LSP-CODE-LENS]) is the content source. The VSIX styles it 
 Each lens has three actions in its command array:
 
 - **"Jump"** — runs `deslop.jumpToNextOccurrence`, cycling through remaining occurrences. It never routes through `textDocument/definition`, so it cannot interfere with the editor's Go To Definition ([LSP-NON-INTERFERENCE]).
-- **"Compare"** — the cluster panel's explicit two-endpoint flow: select one occurrence as the left side and a second as the right side, then **Compare selected occurrences** opens a pair view diffing exactly those two ranges ([VSIX-WEBVIEW-ACTIONS-CONTEXT]).
+- **"Compare"** — the cluster panel's one-click canonical comparison opens a native diff of the canonical range and the clicked occurrence ([webview-runtime.md §VSIX-PAIR-COMPARE](webview-runtime.md#vsix-pair-compare)).
 - **"Open cluster"** — opens the webview ([webview-runtime.md §VSIX-WEBVIEW](webview-runtime.md#vsix-webview)) pinned to this cluster.
 
 The lens is coloured by the cluster's clone kind ([taxonomy.md §CLONE-KIND-COLOR](taxonomy.md#clone-kind-color)), independent of whether diagnostics are enabled. It is hidden only for clusters below the configured mass-percentile floor ([LSP-SEVERITY-PERCENTILE]); users widen it via `deslop.showAllLenses`.
@@ -266,11 +266,11 @@ When a user types into a file that participates in a cluster, two things must ha
 The store therefore exposes **two views of the same report**:
 
 - **Canonical report.** The exact snapshot the LSP last published. Only `deslop/reportChanged` (full snapshot or applied delta) writes it. Editor-side dirty tracking **never** mutates the canonical report. Every command that takes a cluster id, occurrence id, or file path resolves through the canonical report. Lookup by id never returns `undefined` for a cluster the LSP still considers live.
-- **Visible projection.** A `computed()` derived from the canonical report and the per-file dirty set. For each file with unsaved edits, occurrences in that file are filtered out of the projection. Clusters whose visible occurrence count drops below two are elided from the projection (a one-copy "top offender" is a contradiction — see [#117]). Tree providers, decorations, hovers, code lenses, the live bubble, the status bar, the activity-bar badge, and the session panel **only ever read the visible projection**. Webviews receive the visible projection through `postMessage`.
+- **Visible projection.** A `computed()` derived from the canonical report and the per-file dirty set. For each file with unsaved edits, occurrences in that file are filtered out of the projection. Clusters whose visible occurrence count drops below two are elided from the projection (a one-copy "top offender" is a contradiction — see [#117]). Engine figures such as `canonical_node_count` and mass remain unchanged. Tree providers, decorations, hovers, code lenses, the live bubble, the status bar, the activity-bar badge, and the session panel render the visible projection. Report and duplication webviews receive that projection; the anchored detail restores its selected cluster's original membership ([VSIX-PAIR-COMPARE]). Tree canonical markers resolve identity against the full report, never the first surviving peer. `report-store-dirty.unit.test.ts` and `compare-canonical.unit.test.ts` pin the figures and canonical identity.
 
 `onDidChangeTextDocument` updates the dirty set, never the canonical report. On `didSaveTextDocument` (or external file watcher fire) the file leaves the dirty set; the LSP re-analyses and emits a fresh `deslop/reportChanged` which then updates the canonical report. The visible projection recomputes through the signal graph in the same microtask as either change.
 
-This makes the two requirements compose: the visible projection drops the cluster from the tree the moment the user types (no stale "1 copies"), while the canonical report keeps the cluster id resolvable so `compareWithCanonical` can still diff the canonical (saved) bytes against itself or another peer. When the user saves, the LSP confirms the new shape and both views converge.
+This makes the two requirements compose: the visible projection drops the cluster from the tree the moment the user types (no stale "1 copies"), while the canonical report keeps the cluster id resolvable so `compareWithCanonical` can still diff the canonical (saved) bytes against the selected peer. When the user saves, the LSP confirms the new shape and both views converge.
 
 Tests must respect this contract too: any e2e test that injects a synthetic edit into a fixture file is responsible for restoring it before the suite ends, otherwise the dirty set leaks across suites and downstream tests see an unexpectedly empty visible projection.
 
@@ -379,7 +379,7 @@ Every interaction has a command palette entry:
 - `Deslop: Open Report`
 - `Deslop: Open Worst Cluster`
 - `Deslop: Jump to Next Occurrence in Cluster`
-- `Deslop: Compare With Canonical Occurrence`
+- `Compare With Canonical`
 - `Deslop: Pick Embedding Model`
 - `Deslop: Refresh Report (force full re-analysis)`
 - `Deslop: Toggle Show All Code Lenses`

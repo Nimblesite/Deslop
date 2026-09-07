@@ -72,6 +72,11 @@ The hot loop — **Developer → VSIX → LSP → `live` module → `update_file
 ## [SPEC-TOPIC-FILES] Topic files
 
 - [principles.md](principles.md) — `[PRINCIPLES-*]` audience-for-AI-agents, long-running-daemon constraints.
+- [languages.md](languages.md) — `[LANG-CAND-*]` and `[PARSE-*-NORMALIZE]` supported grammar selection, normalization, and fixture contracts.
+- [rendering.md](rendering.md) — `[CLI-TEXT]` and `[LOCATION-LINE-COLUMN]` text report facts and human occurrence locations.
+- [signatures.md](signatures.md) — `[PIPELINE-SIGNATURE-FOLD]` and `[PIPELINE-SIGNATURE-FALLBACK]` token composition and fingerprint-scoped fallback.
+- [testing.md](testing.md) — `[TEST-ONE-BINARY]` integration-suite registration and linkage.
+- [noise-dart.md](noise-dart.md) — `[CLONE-NOISE-DART-WIDGET-SCAFFOLD]` Flutter declaration scaffolding and the boundary protecting copied bodies.
 - [taxonomy.md](taxonomy.md) — `[CLONE-BUCKETS]` explicit-pair classifications, pair-only labelling, evidence routing, the `[CLONE-BUCKETS-IDENTICAL]` byte-equivalence proof, and academic `[CLONE-TYPE-TAXONOMY]` reference.
 - [noise.md](noise.md) — `[CLONE-NOISE-*]` false-positive suppression filters: shape-identical-but-not-extractable patterns (language scaffolding, framework mirrors, schema/data tables, test idioms) hidden after clustering and before ranking, each with a verbatim escape hatch.
 - [landscape.md](landscape.md) — `[TECH-*]` survey of token / AST / hashing / neural / LLM techniques (2009 → 2026).

@@ -112,7 +112,7 @@ fn check_one_description(tool: &Value) -> Result<()> {
 /// `find-similar`'s slimmed description still satisfies the
 /// prevention-first contract: it leads with the prevention call to
 /// action, names the mass-ranked product, and routes pair evidence to
-/// `compare-pair` ([MCP-TOOLS-FIND-SIMILAR]).
+/// `compare-pair` ([MCP-TOOL-FINDSIMILAR]).
 #[test]
 fn find_similar_description_still_leads_with_prevention() -> Result<()> {
     let (workspace, _lsp_guard, _socket) = lsp_workspace_with_socket()?;

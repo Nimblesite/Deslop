@@ -21,7 +21,7 @@ use super::{
 pub const MERGE_OFFER_TITLE: &str = "Merge duplicates into one parameterised helper";
 
 /// Title of the lazily resolved consolidation offer
-/// ([AUTOFIX-CONSOLIDATE-CODE-ACTION]).
+/// ([AUTOFIX-CONSOLIDATE-SURFACE]).
 pub const CONSOLIDATE_OFFER_TITLE: &str =
     "Consolidate identical duplicates into one canonical definition";
 

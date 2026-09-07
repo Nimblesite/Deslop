@@ -246,8 +246,8 @@ suite("cluster webview occurrence locations", () => {
       "Canonical occurrence",
       "Hidden means this path matched report_hide configuration",
       "Open this occurrence in VS Code",
-      "Select two occurrences to enable compare",
-      "Compare opens a diff between the two occurrences you selected",
+      "Compare is disabled on the canonical occurrence",
+      "Compare opens a diff between this occurrence and the canonical occurrence in one click",
       "Previous cluster",
       "Next cluster",
       "Detailed keyboard help",
@@ -255,9 +255,9 @@ suite("cluster webview occurrence locations", () => {
     ]) {
       assert.match(corpus, new RegExp(escapeRegExp(phrase)), `missing hover copy: ${phrase}`);
     }
-    // The retired implicit-compare and weight/bucket copy must stay gone.
+    // The removed two-step selection and weight/bucket copy must stay gone.
     for (const gone of [
-      "Compare is disabled on the canonical occurrence",
+      "Select two occurrences to enable compare",
       "Weight is this cluster's duplicated mass",
     ]) {
       assert.doesNotMatch(corpus, new RegExp(escapeRegExp(gone)), `retired copy resurfaced: ${gone}`);

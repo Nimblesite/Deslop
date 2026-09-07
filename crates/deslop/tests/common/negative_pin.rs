@@ -1,5 +1,5 @@
 //! The shared contract every noise-family pin is judged by
-//! ([CLONE-NOISE], [RANK-STRUCTURAL-ONLY], [RANK-SCORE], [METRICS-REPO]).
+//! ([CLONE-NOISE], [RANK-STRUCTURAL-ONLY], [RANK-MASS-SUM], [METRICS-REPO]).
 //!
 //! A suppression test that asserts only "the family produced no
 //! cluster" is an instrument that cannot go red for the reason that
@@ -183,7 +183,7 @@ fn assert_control_occurrences_are_shown(control: &Value, label: &str) {
     );
 }
 
-/// Ranking order ([RANK-SCORE], `docs/specs/noise.md`
+/// Ranking order ([RANK-MASS-SUM], `docs/specs/noise.md`
 /// §CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE, which requires the control
 /// "stays visible **and ranked first**"). A saturated byte-identical
 /// copy outranks anything else these fixtures stage, so it heads the

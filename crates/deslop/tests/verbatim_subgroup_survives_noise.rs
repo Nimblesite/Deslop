@@ -348,7 +348,7 @@ fn the_copied_cells_publish_beside_the_cross_file_control() -> Result<()> {
         clusters(&report).first().map(cluster_id),
         Some(cluster_id(control)),
         "{CONTROL_LABEL}: the control is sixteen lines of copied logic and \
-         the cells are two — the control ranks first ([RANK-SCORE]): \
+         the cells are two — the control ranks first ([RANK-MASS-SUM]): \
          {published:#?}",
         published = published(&report),
     );

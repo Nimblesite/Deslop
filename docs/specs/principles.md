@@ -1,5 +1,9 @@
 # Principles
 
+### [PRINCIPLES-LOGGING] Structured logs explain operations
+
+Use `tracing` with structured fields for significant operation entry, exit, and failures. Log counts, hashes, and bounded aggregate timings; never log source contents, user-data paths, or secrets. Logs and rendered reports are separate outputs. The CLI's default file sink, console opt-in, and level selection follow [UX-LOG-CONSOLE], [UX-LOG-LEVEL], and [UX-LOG-RUST-LOG]; `crates/deslop/tests/cli/logging.rs` verifies those routes against real scans. Pipeline aggregate events follow [PIPELINE-OBSERVABILITY-STAGES].
+
 ### [PRINCIPLES-LIVE-IS-REACTIVE] Live = Reactive — non-negotiable
 
 Every Deslop surface except the CLI applies each new report in the same microtask that publishes the change.

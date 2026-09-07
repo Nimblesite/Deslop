@@ -1,5 +1,5 @@
 // Unit tests for the report-schema pure helpers. The cluster wire model
-// carries cluster facts and mass only ([REPORTING-CONTEXT],
+// carries cluster facts and mass only ([REPORT-CONTEXT-CLUSTER],
 // [RANK-MASS-SUM]): no clone-kind classification, no pair signals, no
 // interpretation, no language. Every assertion here mirrors one clause
 // of that contract.
@@ -121,7 +121,7 @@ suite("report schema helpers", () => {
     );
   });
 
-  // [REPORTING-CONTEXT] A cluster surface renders cluster facts and mass
+  // [REPORT-CONTEXT-CLUSTER] A cluster surface renders cluster facts and mass
   // only. The cluster type must not be able to spell a bucket, pair
   // signals, an interpretation, or a language — the fields the old
   // surfaces re-derived or quoted.
@@ -197,7 +197,7 @@ suite("report schema helpers", () => {
   });
 
   // There is one occurrence-counting formula and it lives in Rust; the
-  // client carries the engine's count verbatim ([RANK-SCORE]).
+  // client carries the engine's count verbatim ([RANK-MASS-SUM]).
   test("occurrenceCount carries the engine's count verbatim", () => {
     assert.equal(occurrenceCount(clusterWith()), PAIR_OCCURRENCE_COUNT);
     assert.equal(

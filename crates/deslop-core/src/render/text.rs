@@ -1,4 +1,4 @@
-//! Terse ASCII text renderer.
+//! Terse ASCII text renderer ([CLI-TEXT]).
 //!
 //! AI-readable pretty-print over the canonical JSON report. No colour,
 //! no Unicode box-drawing, line-oriented — consumable by any LLM (not

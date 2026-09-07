@@ -96,7 +96,7 @@ fn pair_passes_content_gate<L: BuildHasher>(
 /// decision that route produced.
 enum GateVerdict {
     /// Refused: the endpoints play different roles under embedding
-    /// support ([CLONE-NOISE-EMBEDDING-ROLE]).
+    /// support ([CLONE-NOISE-EMBEDDING-ROLE-MISMATCH]).
     RoleMismatch,
     /// Refused: a token-only pair that merely wraps an exact
     /// whole-function clone ([FUSED-SHARED-SUBTREE-ECHO]).

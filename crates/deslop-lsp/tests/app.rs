@@ -294,7 +294,7 @@ fn ipc_transport_flag_parses_defaults_and_rejects() -> Result<()> {
     Ok(())
 }
 
-/// [RANK-STRUCTURAL-ONLY] / [VSIX-SETTINGS-RANKING]:
+/// [RANK-STRUCTURAL-ONLY] / [RANK-STRUCTURAL-ONLY]:
 /// `--ranking-structural-only` parses every policy, defaults to
 /// deferring to `.deslop.toml`, rejects unknown values, and reaches
 /// the process-wide override when startup dispatch runs.

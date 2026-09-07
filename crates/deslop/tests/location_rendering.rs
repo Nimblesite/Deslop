@@ -1,4 +1,4 @@
-//! End-to-end coverage for occurrence location rendering.
+//! End-to-end coverage for occurrence locations ([LOCATION-LINE-COLUMN]).
 
 use std::{
     fs,

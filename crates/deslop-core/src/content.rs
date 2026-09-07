@@ -2,6 +2,7 @@
 
 use std::{collections::HashMap, hash::BuildHasher};
 
+mod call_targets;
 mod frontier;
 mod rename;
 
@@ -22,6 +23,8 @@ pub enum ContentContradiction {
     None,
     /// A behaviour-bearing operator changed.
     OperatorSubstitution,
+    /// An external member-call selector changed ([FUSED-CONTENT-GATE-CALL-TARGET]).
+    CallTargetSubstitution,
 }
 
 /// Raw-content evidence measured on exactly two endpoints.
@@ -126,10 +129,10 @@ fn pair_evidence<S: BuildHasher>(
     let Some((left, right)) = pair else {
         return ContentEvidence::unmeasured();
     };
-    if operator_contradiction(left, right) {
+    if let Some(contradiction) = pair_contradiction(left, right) {
         return ContentEvidence {
             measured: true,
-            contradiction: ContentContradiction::OperatorSubstitution,
+            contradiction,
             ..ContentEvidence::unmeasured()
         };
     }
@@ -186,7 +189,7 @@ fn pair_agreement(left: Option<&MemberContent>, right: Option<&MemberContent>) -
     let (Some(left), Some(right)) = (left, right) else {
         return 0.0;
     };
-    if operator_contradiction(left, right) {
+    if pair_contradiction(left, right).is_some() {
         return 0.0;
     }
     if left.keys.is_empty() && right.keys.is_empty() {
@@ -196,6 +199,17 @@ fn pair_agreement(left: Option<&MemberContent>, right: Option<&MemberContent>) -
         return key_set_jaccard(&left.keys, &right.keys);
     }
     positional_agreement(&left.keys, &right.keys)
+}
+
+/// Semantic contradictions share one verdict across pair admission and explicit comparison.
+fn pair_contradiction(left: &MemberContent, right: &MemberContent) -> Option<ContentContradiction> {
+    if operator_contradiction(left, right) {
+        Some(ContentContradiction::OperatorSubstitution)
+    } else if call_targets::contradicts(left, right) {
+        Some(ContentContradiction::CallTargetSubstitution)
+    } else {
+        None
+    }
 }
 
 /// Returns a share, treating an empty evidence population as consistent.

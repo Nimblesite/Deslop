@@ -119,12 +119,13 @@ $S$ and $J$ are computed on the *normalised* tree — identifiers and literals c
 - $F$ — the keys both occurrences share that are *non-authored* (grammar scaffolding, not something a person typed); these are removed so they can't pad the score.
 - **scored positions** — the positions that either disagree or carry authored content.
 - **operator contradiction** — a position where both occurrences have a behaviour-bearing operator and they disagree ($+$ vs $-$). This is a hard contradiction: the surrounding matches cannot outvote the operation that changed.
+- **call-target contradiction** — external method calls replace one operation with another under [FUSED-CONTENT-GATE-CALL-TARGET]. This is a change of operation, not a receiver-variable rename.
 - $A(a,b)$ — **agreement**: the fraction of authored positions whose raw bytes match, in $[0,1]$.
 
 $$
 A(a,b) =
 \begin{cases}
-0 & \text{operator contradiction} \\[4pt]
+0 & \text{operator or call-target contradiction} \\[4pt]
 \dfrac{|\{\,i : k_{a,i} = k_{b,i}\,\}|}{|\text{scored positions}|} & \text{positions align one-to-one} \\[10pt]
 \dfrac{|K_a \cap K_b| - |F|}{|K_a \cup K_b| - |F|} & \text{otherwise}
 \end{cases}
@@ -148,7 +149,7 @@ q = \frac{\text{anchors}}{\text{anchors} + h}
 \qquad
 R =
 \begin{cases}
-0 & \text{operator contradiction} \\
+0 & \text{operator or call-target contradiction} \\
 \min(\text{consistency},\, \text{coverage}) \times q & \text{otherwise}
 \end{cases}
 $$
@@ -160,6 +161,16 @@ $$
 $$
 C(p) = \max\bigl(A(p),\, R(p)\bigr)
 $$
+
+### [FUSED-CONTENT-GATE-CALL-TARGET] A different external method is a different operation
+
+For two occurrences with the same normalized shape, a changed member-call selector is a content contradiction when the matched region does not declare that method. `page.click()` and `page.fill()` call different operations; repeated uses of `page` do not prove that `click` was renamed to `fill`. Renaming the receiver variable remains permitted. Data-property names and direct function or constructor names are not member-call selectors. A method declaration included in the matched region can establish a local method rename.
+
+When the shapes differ, compare the multisets of external selectors using the same replacement rule as operators. A surplus on both sides means one operation was replaced by another and is a contradiction. Equal multisets, reordering, or a surplus on only one side are not contradictions: Type-3 copies may insert or delete calls. This distinction applies before a token-similarity edge can connect otherwise unrelated groups.
+
+The comparison reads only selector positions inside both reported ranges. An enclosing test name or callback outside those ranges supplies no evidence. A contradiction sets agreement and rename support to zero and cannot be rescued by the consistent-rename shortcut. Scanning and explicit pair comparison use this same calculation.
+
+**For AI.** Implemented by `content/call_targets.rs`, the frontier roles in `content/frontier.rs`, and the shared pair measurement in `content.rs`. End-to-end assertions belong to `crates/deslop/tests/js_literal_variation_calls.rs`; the existing callback-body and `type2_rename_literal_drift` assertions preserve valid copies while the method-target case rejects unrelated API calls.
 
 ## The gates
 

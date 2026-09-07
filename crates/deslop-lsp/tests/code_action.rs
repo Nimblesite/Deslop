@@ -325,7 +325,7 @@ fn merge_fixture_offers_and_resolves_rewrite_action() -> Result<()> {
     Ok(())
 }
 
-/// [AUTOFIX-CONSOLIDATE-CODE-ACTION] The cross-file Rust fixture holds
+/// [AUTOFIX-CONSOLIDATE-SURFACE] The cross-file Rust fixture holds
 /// one byte-identical `normalise_labels` in two sibling modules whose
 /// other definitions differ. The cluster is the function itself, not
 /// the module around it ([FUSED-SHARED-SUBTREE-ECHO]), so the

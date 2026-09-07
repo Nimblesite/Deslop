@@ -148,7 +148,7 @@ fn assert_cross_file_copy_is_published(report: &Value) -> Result<()> {
     Ok(())
 }
 
-/// A byte-proven copy heads the report ([RANK-SCORE]) and is
+/// A byte-proven copy heads the report ([RANK-MASS-SUM]) and is
 /// byte-proven from the source.
 fn assert_copy_is_saturated(report: &Value, copy: &Value) -> Result<()> {
     assert!(

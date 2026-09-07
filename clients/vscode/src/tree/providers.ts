@@ -235,10 +235,12 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
     // kind-mode roots.
     if (node instanceof GroupNode) return getGroupNodeChildren(node);
     if (node instanceof ClusterNode) {
-      // [VSIX-TOP-OFFENDERS-SORT] Order occurrences by the active axis while
-      // keeping each one's original index so the canonical badge stays put.
+      // [VSIX-PAIR-COMPARE] Dirty projection and path sorting never promote
+      // a surviving peer into the original canonical occurrence.
+      const [canonical] = this.store.current.report?.clusters
+        .find((cluster) => cluster.id === node.cluster.id)?.occurrences ?? [];
       return orderedOccurrences(node.cluster, readSortBy()).map(({ occurrence, index }) =>
-        new OccurrenceNode(occurrence, node.cluster, node.rank, index),
+        new OccurrenceNode(occurrence, node.cluster, node.rank, index, canonical ?? null),
       );
     }
     if (node) return [];

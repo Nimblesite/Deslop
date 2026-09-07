@@ -241,7 +241,7 @@ impl McpHandle {
     ///
     /// The explicit textual root is required by the wrong-root regression:
     /// `.` must resolve against the process working directory before the
-    /// server binds its live LSP session ([MCP-ROOT-CANONICAL]).
+    /// server binds its live LSP session ([MCP-IPC-DISCOVERY]).
     pub fn spawn_with_root_argument(working_directory: &Path, root_argument: &str) -> Result<Self> {
         let bin = env!("CARGO_BIN_EXE_deslop-mcp");
         let mut command = Command::new(bin);

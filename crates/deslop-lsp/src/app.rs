@@ -44,7 +44,7 @@ pub struct LspStartup {
     /// Optional [RANK-STRUCTURAL-ONLY] policy override from
     /// `--ranking-structural-only`, fed by the
     /// `deslop.ranking.structuralOnly` editor setting
-    /// ([VSIX-SETTINGS-RANKING]). `None` defers to `.deslop.toml`.
+    /// ([RANK-STRUCTURAL-ONLY]). `None` defers to `.deslop.toml`.
     pub ranking_structural_only: Option<ClonePolicy>,
 }
 
@@ -259,7 +259,7 @@ fn parse_ipc_mode(args: &[String]) -> Result<IpcMode> {
 }
 
 /// Reads the optional `--ranking-structural-only` value
-/// ([RANK-STRUCTURAL-ONLY], [VSIX-SETTINGS-RANKING]). `None` defers to
+/// ([RANK-STRUCTURAL-ONLY], [RANK-STRUCTURAL-ONLY]). `None` defers to
 /// `.deslop.toml`.
 fn parse_ranking_structural_only(args: &[String]) -> Result<Option<ClonePolicy>> {
     for (index, arg) in args.iter().enumerate() {

@@ -41,6 +41,8 @@ const LSP_CLIENT_NOT_READY_MESSAGE = "Deslop: LSP client is not ready.";
 const SHOW_ALL_LENSES_SETTING = "showAllLenses";
 const MARKDOWN_LANGUAGE = "markdown";
 const UNKNOWN_VALUE = "unknown";
+const CANONICAL_OCCURRENCE_INDEX = 0;
+const FIRST_PEER_INDEX = 1;
 
 function isString(value: unknown): value is string {
   return typeof value === "string";
@@ -66,7 +68,6 @@ interface CommandBinding {
 }
 
 // [VSIX-COMMANDS] Single source of truth for every command-palette entry.
-// [VSIX-COMMANDS] Single source of truth for every command-palette entry.
 // Exported read-only so tests can pin the palette contract without
 // colliding with the real extension's registrations in a shared host.
 export const COMMAND_BINDINGS: readonly CommandBinding[] = [
@@ -83,6 +84,8 @@ export const COMMAND_BINDINGS: readonly CommandBinding[] = [
   // routing through textDocument/definition ([LSP-NON-INTERFERENCE]).
   { id: "deslop.jumpToNextOccurrence", run: ({ store }, clusterId, occurrenceIndex) => jumpToNextOccurrence(store, clusterId, occurrenceIndex) },
   { id: "deslop.comparePair", run: (_deps, left, right) => comparePairEndpoints(left, right) },
+  { id: "deslop.compareWithCanonical", run: ({ store }, target, occurrence) => compareWithCanonicalTarget(store, target, occurrence) },
+  { id: "deslop.compareOccurrenceWithCanonical", run: ({ store }, target) => compareWithCanonicalTarget(store, target) },
   { id: "deslop.openAllOccurrences", run: (_deps, node) => openAllOccurrences(node as ClusterNode) },
   { id: "deslop.openCanonicalFile", run: (_deps, node) => openCanonicalOccurrence(node as ClusterNode) },
   { id: "deslop.openClusterDetails", run: ({ context, store }, node) => openClusterDetails(context, store, node as ClusterNode | OccurrenceNode) },
@@ -294,9 +297,24 @@ function occurrenceAfterCommandIndex(
   return cluster.occurrences[(occurrenceIndex + 1) % cluster.occurrences.length];
 }
 
-// [VSIX-PAIR-COMPARE] Compare exists only between two occurrences the user
-// selected explicitly. There is no canonical fallback: a missing, malformed,
-// or identical endpoint pair is a no-op, never an implicit comparison.
+// [VSIX-PAIR-COMPARE] A row compares its exact range with the current canonical.
+export async function compareWithCanonicalTarget(
+  store: ReportStore, target: unknown, occurrence?: unknown,
+): Promise<void> {
+  const selected = occurrenceFromCommandTarget(occurrence ?? target);
+  if (occurrence !== undefined && !selected) return;
+  const clusterId = isString(target) ? target : target instanceof ClusterNode ? target.cluster.id : undefined;
+  const cluster = store.current.report?.clusters.find((candidate) => clusterId
+    ? candidate.id === clusterId
+    : selected && candidate.occurrences.some((peer) => sameEndpoint(peer, selected)));
+  const canonical = cluster?.occurrences[CANONICAL_OCCURRENCE_INDEX];
+  const peer = selected ?? cluster?.occurrences[FIRST_PEER_INDEX];
+  if (!cluster || !canonical || !peer) return;
+  if (!cluster.occurrences.some((candidate) => sameEndpoint(candidate, peer))) return;
+  await comparePairEndpoints(canonical, peer);
+}
+
+// [VSIX-PAIR-COMPARE] Both comparison routes share the occurrence-range diff.
 const COMPARE_DIFF_TITLE = "Compare selected occurrences";
 
 export async function comparePairEndpoints(left: unknown, right: unknown): Promise<void> {

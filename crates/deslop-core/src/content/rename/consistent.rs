@@ -6,12 +6,11 @@ use std::{
     hash::BuildHasher,
 };
 
-use crate::state::FileId;
-
 use super::{
     super::frontier::{frontiers_aligned, leaf_bytes, population, MemberContent, Population},
     literal_echoes, literal_positions, rename_mapping,
 };
+use crate::state::FileId;
 
 /// Whether the pair is one code written twice under a consistent
 /// renaming: the frontiers align, no substituted identifier position

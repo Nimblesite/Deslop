@@ -12,7 +12,7 @@ const LIGHT_CLUSTER_MASS: u64 = 1;
 const HEAVY_CLUSTER_MASS: u64 = 100;
 const FIXTURE_END_BYTE: usize = 5;
 
-// [LSP-SEVERITY-BAND] Every mass rank band, the severity it must publish,
+// [LSP-SEVERITY-BUCKET] Every mass rank band, the severity it must publish,
 // and the rationale that mapping pins. Severity is a function of the
 // mass-derived rank band, never of pair measurements.
 const RANK_BAND_SEVERITIES: [(&str, DiagnosticSeverity, &str); 4] = [
@@ -134,7 +134,7 @@ fn assert_single_canonical_link(diagnostic: &Diagnostic, context: &str) -> Resul
     Ok(())
 }
 
-// [LSP-SEVERITY-BAND] Rank band → severity mapping.
+// [LSP-SEVERITY-BUCKET] Rank band → severity mapping.
 #[test]
 fn severity_for_maps_rank_band_to_lsp_level() {
     for (band, expected_severity, rationale) in RANK_BAND_SEVERITIES {
@@ -339,7 +339,7 @@ fn diagnostic_never_renders_pair_scores() {
     );
 }
 
-// [LSP-SEVERITY-BAND] Worst band → Error; canonical link present.
+// [LSP-SEVERITY-BUCKET] Worst band → Error; canonical link present.
 #[test]
 fn build_for_file_emits_error_for_worst_band_cluster_with_canonical_link() -> Result<()> {
     let workspace = TempDir::new()?;
@@ -377,7 +377,7 @@ fn build_for_file_emits_error_for_worst_band_cluster_with_canonical_link() -> Re
     assert_eq!(
         diagnostic.severity,
         Some(DiagnosticSeverity::ERROR),
-        "worst rank band → Error per [LSP-SEVERITY-BAND]"
+        "worst rank band → Error per [LSP-SEVERITY-BUCKET]"
     );
     assert!(
         diagnostic.code.is_none(),
@@ -392,7 +392,7 @@ fn build_for_file_emits_error_for_worst_band_cluster_with_canonical_link() -> Re
     Ok(())
 }
 
-// [LSP-SEVERITY-BAND] All rank bands publish diagnostics — none are suppressed by default.
+// [LSP-SEVERITY-BUCKET] All rank bands publish diagnostics — none are suppressed by default.
 #[test]
 fn build_for_file_publishes_all_rank_bands_with_correct_severity() -> Result<()> {
     let workspace = TempDir::new()?;

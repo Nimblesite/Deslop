@@ -18,8 +18,8 @@ interface ViewportCase {
 
 interface PostedMessage {
   readonly kind?: string;
-  readonly left?: { readonly path?: string; readonly start_byte?: number; readonly end_byte?: number };
-  readonly right?: { readonly path?: string; readonly start_byte?: number; readonly end_byte?: number };
+  readonly clusterId?: string;
+  readonly occurrence?: { readonly path?: string; readonly start_byte?: number; readonly end_byte?: number };
 }
 
 declare global {
@@ -46,8 +46,14 @@ const STRUCTURAL_ONLY_TITLE = "Same shape, different content";
 const RETIRED_NEUTRAL_TITLE = "Duplicate code";
 const MASS_LABEL = "mass";
 const WEIGHT_LABEL = "weight";
-const SELECT_FOR_COMPARISON = "Select for comparison";
-const COMPARE_SELECTED = "Compare selected occurrences";
+const CANONICAL_COMPARE_LABEL = "Compare is disabled on the canonical occurrence because it would compare the same range with itself.";
+const PEER_COMPARE_LABEL = "Compare this occurrence with the canonical occurrence in VS Code's diff editor.";
+const CANONICAL_COMPARE_MESSAGE = "compare/canonical";
+const NEXT_CLUSTER_LABEL = "Next cluster";
+const FIRST_CLUSTER_INDEX = 0;
+const SECOND_CLUSTER_INDEX = 1;
+const FIRST_PEER_INDEX = 1;
+const SECOND_PEER_INDEX = 2;
 
 const viewports: readonly ViewportCase[] = [
   { name: "desktop", width: 1280, height: 900 },
@@ -114,15 +120,17 @@ test.describe("VSIX webview bundles", () => {
       await expectPosted(page, "open/occurrence");
 
       await clearPostedMessages(page);
-      const compareSelected = page.getByRole("button", { name: COMPARE_SELECTED });
-      await expect(compareSelected).toBeDisabled();
-      const selectors = page.getByRole("button", { name: SELECT_FOR_COMPARISON });
-      await selectors.nth(0).click();
-      await expect(compareSelected).toBeDisabled();
-      await selectors.nth(1).click();
-      await expect(compareSelected).toBeEnabled();
-      await compareSelected.click();
-      await expectPostedPair(page, sampleReport.clusters[0].occurrences[0], sampleReport.clusters[0].occurrences[1]);
+      // [VSIX-PAIR-COMPARE] A peer opens the canonical diff in one click.
+      await expect(page.getByRole("button", { name: CANONICAL_COMPARE_LABEL })).toBeDisabled();
+      const comparePeer = page.getByRole("button", { name: PEER_COMPARE_LABEL });
+      await expect(comparePeer).toBeEnabled();
+      await comparePeer.click();
+      await expectPostedCanonical(page, FIRST_CLUSTER_INDEX, FIRST_PEER_INDEX);
+      await page.getByRole("button", { name: NEXT_CLUSTER_LABEL, exact: true }).click();
+      await clearPostedMessages(page);
+      await page.getByRole("button", { name: PEER_COMPARE_LABEL }).nth(FIRST_PEER_INDEX).click();
+      await expectPostedCanonical(page, SECOND_CLUSTER_INDEX, SECOND_PEER_INDEX);
+      await expect(page.getByRole("button", { name: CANONICAL_COMPARE_LABEL })).toBeDisabled();
 
       await expectHealthyRender(page, errors, `cluster-${viewport.name}`);
     });
@@ -212,19 +220,16 @@ async function expectPosted(page: Page, kind: string): Promise<void> {
     .toContain(kind);
 }
 
-async function expectPostedPair(
-  page: Page,
-  left: { readonly path: string; readonly start_byte: number; readonly end_byte: number },
-  right: { readonly path: string; readonly start_byte: number; readonly end_byte: number },
-): Promise<void> {
+async function expectPostedCanonical(page: Page, clusterIndex: number, occurrenceIndex: number): Promise<void> {
+  const cluster = sampleReport.clusters[clusterIndex];
   await expect
     .poll(async () => {
-      return await page.evaluate(() => window.__deslopPosts?.find((message) => message.kind === "compare/pair"));
+      return await page.evaluate((kind) => window.__deslopPosts?.find((message) => message.kind === kind), CANONICAL_COMPARE_MESSAGE);
     })
     .toEqual({
-      kind: "compare/pair",
-      left: { path: left.path, start_byte: left.start_byte, end_byte: left.end_byte },
-      right: { path: right.path, start_byte: right.start_byte, end_byte: right.end_byte },
+      kind: CANONICAL_COMPARE_MESSAGE,
+      clusterId: cluster.id,
+      occurrence: cluster.occurrences[occurrenceIndex],
     });
 }
 

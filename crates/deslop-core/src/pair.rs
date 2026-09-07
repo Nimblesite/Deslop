@@ -114,33 +114,11 @@ pub const SHARED_SUBTREE_MIN_NODE_COUNT: usize = 30;
 /// The floor sits between them; reuse of `CONTENT_SUPPORT_FLOOR` (0.70)
 /// gated the anchor-free route and drove it to zero clusters.
 pub const RESCUE_MIN_CONTENT_AGREEMENT: f64 = 0.10;
-/// Cosine at or above which a measured `embedding_cos` counts as the
-/// embedding pass *vouching for* a cluster rather than merely having
-/// measured it ([FUSED-PAIR-SIGNALS]).
-///
-/// A cosine belongs to the pair, not to the pass that surfaced it
-/// ([REPAIR-COSINE-MERGE], gh #351), so once embeddings are on every
-/// rendered cluster carries one — including clusters the model considers
-/// unrelated. The question a consumer must ask is therefore never *is
-/// there a cosine* but *is the cosine positive evidence*, and this is
-/// the only line that answers it: it is both the operating point at
-/// which the ANN pass admits a pair as a candidate at all
-/// ([TECH-EMBED-NEURAL]; the `candidates.embedding_min_cosine` lever in
-/// `embedding/pairs.rs`) and the line at which
-/// [CLONE-BUCKETS-ROUTING] row 2 lets semantic evidence carry a bucket
-/// on its own.
-///
-/// Asking the other question instead is how a bucket came to follow the
-/// discovery route. `report_render::route_shape_identical` tested the
-/// [FUSED-CONTENT-GATE] escape against
-/// `buckets::STRUCTURAL_ONLY_MAX_SUPPORT` — the ceiling *below* which a
-/// signal counts as **absent** — so a cosine of 0.05 read as semantic
-/// backing strong enough to overrule the measured content evidence. The
-/// embeddings-off run has no cosine and is gated; the embeddings-on run
-/// has a near-zero one and is not. `csharp-type3` rendered the identical
-/// two occurrences as `structural_only` at cosine 0.00 and
-/// `nearly_identical` at 0.61. Pinned by
-/// `deslop::embedding_route_invariance` (gh #356).
+/// Minimum cosine that supplies independent semantic support for a pair
+/// ([FUSED-PAIR-SIGNALS], [CLONE-BUCKETS-ROUTING]). Merely measuring a
+/// cosine does not certify content support. The discovery route cannot
+/// change the pair's evidence, and no cosine is stamped onto a cluster.
+/// Pinned by `deslop::embedding_route_invariance`.
 pub const EMBEDDING_SUPPORT_FLOOR: f64 = 0.80;
 
 /// Per-pair score breakdown in `[0, 1]`. Candidate admission stores exact

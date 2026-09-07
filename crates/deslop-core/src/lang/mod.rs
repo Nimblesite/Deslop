@@ -1,4 +1,4 @@
-//! Language parser plugins.
+//! Language parser plugins; Kotlin remains unregistered ([LANG-CAND-KOTLIN]).
 //!
 //! Implements [PIPELINE-LANG-TRAIT]. Each language implementation provides a
 //! tree-sitter grammar, a file-extension filter, and per-language

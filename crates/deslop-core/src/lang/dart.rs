@@ -1,6 +1,6 @@
 //! Dart language plugin.
 //!
-//! Implements [PIPELINE-LANG-TRAIT] for Dart using the
+//! Implements [PIPELINE-LANG-TRAIT] and [LANG-CAND-DART] using the
 //! `tree-sitter-dart` grammar (nielsenko fork, Dart 3.x: records,
 //! patterns, class modifiers, extension types, null-aware elements).
 //! Normalisation follows the same Type-2-invariance principle as the

@@ -208,7 +208,7 @@ pub(crate) fn has_verbatim_pair(scan_root: &Path, cluster: &Value) -> Result<boo
 }
 
 /// Asserts the full **proven-rename** contract ([FUSED-CONTENT-GATE],
-/// [TECH-PMATCH-BAKER], `[REPAIR-RENAME-ANCHOR-MASS]`) — the mirror of
+/// [TECH-PMATCH-BAKER], `[FUSED-CONTENT-GATE]`) — the mirror of
 /// [`assert_structural_only_contract`], and the reason both live here.
 ///
 /// The two contracts described the same signal triple: a maximal Type-2

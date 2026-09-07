@@ -8,7 +8,7 @@
 //! [FUSED-CONTENT-GATE]: a rename whose identifier mapping is
 //! corroborated — Baker anchor mass, preserved literals plus explained
 //! identifier positions ([TECH-PMATCH-BAKER],
-//! `[REPAIR-RENAME-ANCHOR-MASS]`) — is promoted to the act-now
+//! `[FUSED-CONTENT-GATE]`) — is promoted to the act-now
 //! `nearly_identical` bucket, while a family whose collapsed leaves
 //! genuinely disagree carries no such proof and stays conservatively
 //! `structural_only` (#134, the `js-classes` delegating-method family in

@@ -31,6 +31,7 @@ export { displayPath, representativePath } from "./paths";
 
 const TREE_ITEM_ROLE = "treeitem";
 const FILE_NODE_KIND = "file";
+const CANONICAL_OCCURRENCE_INDEX = 0;
 
 export type Node =
   | ClusterNode
@@ -126,12 +127,13 @@ export class OccurrenceNode extends vscode.TreeItem {
     parentCluster?: ReportCluster,
     parentRank?: number,
     occurrenceIndex?: number,
+    canonicalOccurrence: ReportOccurrence | null = parentCluster?.occurrences[CANONICAL_OCCURRENCE_INDEX] ?? null,
   ) {
     const location = occurrenceDisplayLocation(occurrence);
     super(location?.label ?? occurrence.path, vscode.TreeItemCollapsibleState.None);
     if (location) this.description = location.description;
     this.contextValue =
-      parentCluster !== undefined && occurrenceIndex === 0
+      parentCluster !== undefined && occurrence === canonicalOccurrence
         ? "deslop.occurrenceCanonical"
         : "deslop.occurrence";
     if (parentCluster !== undefined && occurrenceIndex !== undefined) {

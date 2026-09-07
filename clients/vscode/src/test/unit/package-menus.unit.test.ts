@@ -14,10 +14,8 @@ function navigationOrder(group?: string): number {
   return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
 }
 
-// [VSIX-PAIR-COMPARE] The retired implicit-compare commands. A single tree
-// row or hover can never name both endpoints of a pair, so these must stay
-// gone from every contribution surface.
-const IMPLICIT_COMPARE_COMMANDS = [
+// [VSIX-PAIR-COMPARE] Tree rows expose the canonical comparison directly.
+const CANONICAL_COMPARE_COMMANDS = [
   "deslop.compareWithCanonical",
   "deslop.compareOccurrenceWithCanonical",
 ] as const;
@@ -39,7 +37,7 @@ suite("package menu contributions", () => {
     );
   });
 
-  test("occurrence context menu exposes no implicit compare, keeps open actions", () => {
+  test("occurrence context menu compares the selected occurrence with its canonical", () => {
     const pkg = extensionPackage();
     const contextItems = pkg.contributes.menus["view/item/context"];
     assert.ok(contextItems, "view/item/context menu must be contributed");
@@ -47,29 +45,16 @@ suite("package menu contributions", () => {
       (item) => item.when === "viewItem == deslop.occurrence",
     );
 
-    // [VSIX-PAIR-COMPARE] A tree row can only name one occurrence, so no
-    // menu on an occurrence row may start a comparison — pair evidence
-    // needs two endpoints the user picks in the cluster webview.
-    for (const outlawed of IMPLICIT_COMPARE_COMMANDS) {
-      assert.ok(
-        !occurrenceItems.some((item) => item.command === outlawed),
-        `${outlawed} must not appear on occurrence rows — implicit pair compare is retired`,
-      );
-    }
+    assert.ok(occurrenceItems.some((item) => item.command === CANONICAL_COMPARE_COMMANDS[1]));
+    assert.ok(!occurrenceItems.some((item) => item.command === CANONICAL_COMPARE_COMMANDS[0]));
     assert.ok(!occurrenceItems.some((item) => item.command === "deslop.openOccurrence"));
   });
 
-  test("compare exists only as explicit two-endpoint comparePair (#14)", () => {
+  test("canonical comparison is contributed alongside the explicit pair command", () => {
     const pkg = extensionPackage();
 
-    // The retired implicit-compare commands must be gone from every
-    // contribution surface: commands, palette, and view/item/context.
-    const serialized = JSON.stringify(pkg);
-    for (const outlawed of IMPLICIT_COMPARE_COMMANDS) {
-      assert.ok(
-        !serialized.includes(outlawed),
-        `${outlawed} must not appear anywhere in package.json`,
-      );
+    for (const command of CANONICAL_COMPARE_COMMANDS) {
+      assert.equal(commandTitle(pkg, command), "Compare With Canonical");
     }
 
     assert.equal(
@@ -79,13 +64,17 @@ suite("package menu contributions", () => {
     const palette = pkg.contributes.menus.commandPalette ?? [];
     assert.ok(
       palette.some((item) => item.command === COMPARE_PAIR_COMMAND && item.when === "false"),
-      "comparePair is reachable only through the webview's two-slot selection, not the palette",
+      "the explicit pair command requires endpoints and stays out of the palette",
     );
     const contextItems = pkg.contributes.menus["view/item/context"];
     assert.ok(
       !contextItems?.some((item) => item.command === COMPARE_PAIR_COMMAND),
-      "comparePair must not hang off tree rows — the two endpoints are picked in the webview",
+      "tree rows use the canonical comparison command",
     );
+    assert.ok(contextItems?.some((item) =>
+      item.command === CANONICAL_COMPARE_COMMANDS[0] && item.when === "viewItem == deslop.clusterComparable"));
+    assert.ok(!contextItems?.some((item) =>
+      CANONICAL_COMPARE_COMMANDS.some((command) => command === item.command) && item.when === "viewItem == deslop.occurrenceCanonical"));
   });
 
   test("Expand All and Collapse All are adjacent Top Offenders title actions", () => {

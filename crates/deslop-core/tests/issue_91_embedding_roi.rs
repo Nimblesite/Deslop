@@ -64,7 +64,7 @@ fn issue_91_embedding_only_pair_survives_when_lsh_misses_match() -> Result<()> {
     let cluster = clusters.first().context("one cluster expected")?;
     assert_eq!(cluster.members, vec![0, 1]);
 
-    // [FUSED-RANK-MASS] Pair evidence admitted the component above; the
+    // [RANK-MASS-SUM] Pair evidence admitted the component above; the
     // materialised cluster owns only membership and duplicated mass.
     let rendered = build_ranked_fused_clusters(&ClusterBuildInputs {
         fingerprints: &fingerprints,

@@ -11,7 +11,7 @@
 //! apply.
 //!
 //! Left in, those files are parsed, fingerprinted, ranked — and because
-//! ranking is worst-offenders-first ([RANK-SCORE]), third-party
+//! ranking is worst-offenders-first ([RANK-MASS-SUM]), third-party
 //! duplication the user cannot act on outranks every first-party finding.
 //! On a real vendored repository that is the difference between a usable
 //! report and an unusable one, which is why this sits alongside the #142

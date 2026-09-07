@@ -1,4 +1,4 @@
-//! Canonical mass-only report assembly.
+//! Canonical mass-only report assembly ([REPORT-CONTEXT-CLUSTER]).
 
 use std::{collections::HashMap, hash::BuildHasher, path::Path, time::Instant};
 

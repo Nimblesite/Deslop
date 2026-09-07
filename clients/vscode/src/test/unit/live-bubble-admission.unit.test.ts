@@ -3,7 +3,7 @@
 //
 // There is no second admission path. The old suite staged clusters on
 // either side of a UI-restated clone-kind cutoff; that classification is
-// gone from the wire and from this client ([REPORTING-CONTEXT]). These
+// gone from the wire and from this client ([REPORT-CONTEXT-CLUSTER]). These
 // tests pin what the user must see: a reported cluster always renders —
 // however low its mass — the bubble carries cluster facts (mass severity,
 // count, canonical) and never pair evidence ([FUSED-PAIR-SIGNALS]).

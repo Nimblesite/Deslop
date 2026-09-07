@@ -1,3 +1,5 @@
+//! Real CLI log routing and levels ([PRINCIPLES-LOGGING]).
+
 use super::support::*;
 use crate::common::NEARLY_IDENTICAL_TITLE;
 

@@ -1,7 +1,7 @@
 // Unit: LiveBubble.render — drive inline + ghost paths + dismissal + no-op.
 // Every render assertion goes through the shared decoration capture so the
 // suite pins the text the user actually sees. Admission is the engine's
-// report: a reported cluster renders, whatever its mass ([REPORTING-CONTEXT]).
+// report: a reported cluster renders, whatever its mass ([REPORT-CONTEXT-CLUSTER]).
 
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";

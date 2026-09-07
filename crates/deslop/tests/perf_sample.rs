@@ -1,4 +1,4 @@
-//! [PERF-SAMPLE] Bounded-duration scan sample for Windows-specific
+//! [PIPELINE-OBSERVABILITY-STAGES] Bounded-duration scan sample for Windows-specific
 //! performance work.
 //!
 //! Spawns the release `deslop` binary against a real corpus checkout for a

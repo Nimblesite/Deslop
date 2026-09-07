@@ -17,15 +17,20 @@
 use std::{
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
-    sync::{atomic::AtomicU64, atomic::Ordering, Arc, Mutex},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, Mutex,
+    },
 };
 
-use deslop_core::live::{transport::IpcStream, wire::ReportChangedNotification};
-
 use deslop_core::{
-    live::wire::{
-        ChangeSummary, EmbeddingModelInfo as WireEmbeddingModelInfo,
-        FindSimilarInput as WireFindSimilarInput, FindSimilarRequest, SessionConfig,
+    live::{
+        transport::IpcStream,
+        wire::{
+            ChangeSummary, EmbeddingModelInfo as WireEmbeddingModelInfo,
+            FindSimilarInput as WireFindSimilarInput, FindSimilarRequest, FindSimilarResult,
+            ReportChangedNotification, SessionConfig,
+        },
     },
     report::ReportCluster,
     wire_generated::{PairComparison, PairComparisonParams},
@@ -34,12 +39,11 @@ use deslop_core::{
 use serde_json::{json, Value};
 use tracing::debug;
 
-use crate::{notify::push_report_changed, NotificationSender};
-
 use super::{
     ipc::ipc_call, wire, BackendError, FindSimilarInput, FindSimilarOutput, McpBackend,
     RescanProgress, SessionBackendConfig, SessionConfigSnapshot,
 };
+use crate::{notify::push_report_changed, NotificationSender};
 
 /// IPC methods whose replies pass through the wire guard
 /// ([MCP-IPC-WIRE-MISMATCH]): the whole report.
@@ -271,18 +275,11 @@ impl McpBackend for LiveBackend {
         let params = serde_json::to_value(&request)
             .map_err(|err| BackendError::StateFileCorrupt(format!("ipc serialise: {err}")))?;
         let result = ipc_call(&self.root, FIND_SIMILAR, &params)?;
-        let clusters: Vec<ReportCluster> = wire::decode(
-            FIND_SIMILAR,
-            &self.ipc_socket,
-            result.get("clusters").cloned().unwrap_or(json!([])),
-        )?;
-        let below_min_nodes = result
-            .get("below_min_nodes")
-            .and_then(serde_json::Value::as_bool)
-            .unwrap_or(false);
+        // [MCP-IPC-WIRE-MISMATCH] Decode the complete generated reply before reading any field.
+        let reply: FindSimilarResult = wire::decode(FIND_SIMILAR, &self.ipc_socket, result)?;
         Ok(FindSimilarOutput {
-            clusters,
-            below_min_nodes,
+            clusters: reply.clusters,
+            below_min_nodes: reply.below_min_nodes,
         })
     }
 

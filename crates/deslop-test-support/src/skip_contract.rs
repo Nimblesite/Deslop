@@ -49,7 +49,7 @@ pub const RUN_INSTRUCTION: &str = "--ignored";
 /// some specification declares, and the body of every plan document.
 #[derive(Debug, Clone, Default)]
 pub struct PolicyContext {
-    /// Every `[SPEC-ID]` declared anywhere under `docs/specs`.
+    /// Every `spec identifier` declared anywhere under `docs/specs`.
     pub declared_spec_ids: BTreeSet<String>,
     /// Plan document bodies, keyed by workspace-relative path.
     pub plans: BTreeMap<String, String>,
@@ -211,7 +211,7 @@ fn spec_id_breaches(reason: &str, context: &PolicyContext) -> Vec<Breach> {
         .collect()
 }
 
-/// Every `[BRACKETED-ID]` in `text`, in order. Split on the delimiters rather
+/// Every `bracketed identifier` in `text`, in order. Split on the delimiters rather
 /// than pattern-matched, and filtered to the shape a spec id has: upper-case,
 /// digits, and hyphens.
 #[must_use]

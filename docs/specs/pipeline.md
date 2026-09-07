@@ -52,9 +52,7 @@ The synthetic `__file__` root is hashed like any node, because its children's ha
 
 Implemented in `fingerprint.rs` (`is_viewless_root`). Pinned by `python_inherited_contract_boundary`, `js_ts_extensions`, `verbatim_subgroup_survives_noise` and `js_ts_false_positive_filters` (the whole-module view), `issue_343_sum_clamp_saturation` (the only-child rule), the Go scope contract every Go suite calls (`crates/deslop/tests/common/go_scope.rs`) with `cluster_extent_alignment` (the mandated prologue), and the per-language unit tests in `fingerprint/tests.rs`.
 
-### [PIPELINE-SIGNATURE-MEMO] MinHash construction is memoised by token-stream digest
-
-`MinHash` over the k-grams is a pure function of the token stream alone, so the memo — keyed by a length-prefixed blake3 digest of the stream — is exact by construction: a repeated stream gets the byte-identical signature of its first construction, and one corpus build pays for each distinct stream once. The memo spans a whole batch corpus build (cross-file, where the repetition lives) and one file on an incremental change pass. Fallback signatures never enter it: they are deliberately scoped to the fingerprint's byte range (#86) so unrelated empty streams cannot cluster through shared emptiness. Hit/miss counts are surfaced on the `fingerprint corpus built` record ([PIPELINE-OBSERVABILITY-STAGES]); the miss count is the distinct-stream population; retention is capped at `SIGNATURE_MEMO_MAX_ENTRIES`, so the memo's residency stays a bounded share of the memory budget on any corpus, post-cap streams being constructed fresh with identical output. Pinned by `a_repeated_token_stream_costs_one_minhash_construction` and `too_short_streams_never_touch_the_memo`.
+Token signatures use the bottom-up fold [PIPELINE-SIGNATURE-FOLD] and fingerprint-scoped fallback [PIPELINE-SIGNATURE-FALLBACK], specified in [signatures.md](signatures.md).
 
 ### [PIPELINE-CLUSTER-EXACT] Exact subtree clustering
 Group `NormalizedNode` fingerprints by `hash` to propose exact candidate pairs. This covers Type-1 and normalized Type-2 deterministically in O(n). A hash bucket is not a cluster: each concrete pair must still pass [FUSED-STRATEGY-BOUNDED-MAX]. Candidate pairs are language-scoped by default per [CONFIG-CROSS-LANGUAGE]; the exact same hash may still be compared across languages when `.deslop.toml` opts into cross-language comparison.
@@ -290,14 +288,11 @@ A detection-time finding kind may drive an explicit exclusion before ranking. It
 
 ### [RANK-STRUCTURAL-ONLY] Pair evidence never changes mass
 
-`StructuralOnly` is a pair classification for a candidate whose normalized AST shape is strong but required content support is absent. It explains why that pair is rejected; it is not a cluster score and cannot be an edge in a closure. The retired `structural_only_weight`, `data_clone_weight`, and `demote` ranking modes are forbidden because they make weight mean something other than mass.
+`StructuralOnly` is a pair classification for a candidate whose normalized AST shape is strong but required content support is absent. It explains why that pair is rejected; it is not a cluster score and cannot be an edge in a closure. The retired `structural_only_weight`, `data_clone_weight`, and `demote` modes must never affect mass or ranking. Existing configuration keys and the LSP's `--ranking-structural-only` argument still parse for compatibility; `demote`, `ignore`, and `keep` cannot change the mass-only report. `crates/deslop/tests/rank_structural_only_policy.rs::retired_structural_only_knobs_do_not_change_the_ranking` asserts invariant membership, mass, and order; `crates/deslop-lsp/tests/app.rs::ranking_structural_only_flag_parses_applies_and_rejects` pins argument parsing and the recorded override. This compatibility parser does not reinstate a public editor ranking setting.
 
 ### [RANK-STRUCTURAL-ONLY-FORWARDING] Proving a declaration is family noise
 
-The single-file hide in [RANK-STRUCTURAL-ONLY] needs a proof that a member is
-scaffolding. Two window shapes qualify, and both are AST facts about what the
-fingerprint window *covers* — never a count of cluster members and never a count
-of statements:
+The single-file hide in [RANK-STRUCTURAL-ONLY] needs a proof that a member is scaffolding. Two window shapes qualify, and both are AST facts about what the fingerprint window *covers* — never a count of cluster members and never a count of statements:
 
 1. **Plural siblings.** The window intersects two or more named members of one
    declaration container (`class_body`, `declaration_list`, …). Container members
@@ -330,19 +325,9 @@ of statements:
    parameter, or a bare sibling reference in argument position is the class
    computing on its own inputs.
 
-Shape 2 is what the real #197 surface is. Its `resetX` wrappers are one statement
-each, so every window covers one declaration and shape 1 can never reach them.
-They also show why a **call count** cannot stand in for the transport test: every
-one of them makes two calls — `_getTask(http.deleteMethod(route))` wraps the
-client call in a sibling helper, and `IndexSettings.fromMap(response.data!)`
-decodes what came back. Both consume only the client's response, so both are
-transport, and requiring a single call per body would convict the family this
-filter exists for.
+Shape 2 is what the real #197 surface is. Its `resetX` wrappers are one statement each, so every window covers one declaration and shape 1 can never reach them. They also show why a **call count** cannot stand in for the transport test: every one of them makes two calls — `_getTask(http.deleteMethod(route))` wraps the client call in a sibling helper, and `IndexSettings.fromMap(response.data!)` decodes what came back. Both consume only the client's response, so both are transport, and requiring a single call per body would convict the family this filter exists for.
 
-Branches, loops, arithmetic, comparisons, mutation and every node kind outside the
-allowlist — including a parse `ERROR` — disprove forwarding. The predicate
-therefore fails open: a body the walk does not fully understand keeps its cluster
-visible. That direction is mandatory for a filter that deletes output.
+Branches, loops, arithmetic, comparisons, mutation and every node kind outside the allowlist — including a parse `ERROR` — disprove forwarding. The predicate therefore fails open: a body the walk does not fully understand keeps its cluster visible. That direction is mandatory for a filter that deletes output.
 
 **A statement count may not stand in for this.** "One or two statements means
 scaffolding" convicts a short body carrying a loop and an accumulator, and acquits
@@ -353,8 +338,7 @@ branches.
 
 One further guard bounds the hide: **no two proven wrappers may share a body**. Two sibling wrappers forwarding to the same route are a copy-paste bug — one of those calls is dead or misaimed — and one shared body disqualifies the suppression for the whole family. The comparison is on bodies, not on pair evidence or reported cluster scores. Pair content evidence has already been consumed by admission and is unavailable to this post-closure filter.
 
-Languages without a wired grammar table return false for shape 2, so their
-single-declaration windows are never hidden.
+Languages without a wired grammar table return false for shape 2, so their single-declaration windows are never hidden.
 
 ### [RANK-LITERAL-FAMILY] Literal families use the same mass formula
 

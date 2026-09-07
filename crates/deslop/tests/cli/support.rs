@@ -247,7 +247,7 @@ pub(crate) fn object_field<'a>(
 
 /// Looks up a named field on `value`; returns `Value::Null` when the
 /// field is absent so callers get a deterministic `!=` instead of a
-/// panic ([TESTS-NO-INDEXING]).
+/// panic (checked field access).
 pub(crate) fn field<'a>(value: &'a serde_json::Value, name: &str) -> &'a serde_json::Value {
     value.get(name).unwrap_or(&serde_json::Value::Null)
 }

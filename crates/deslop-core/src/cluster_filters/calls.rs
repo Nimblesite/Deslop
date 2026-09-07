@@ -2,17 +2,19 @@
 //! literal-variation cluster filter
 //! ([CLONE-NOISE-LITERAL-VARIATION-CALLS]).
 
-use tree_sitter::Node;
-
 use std::sync::Arc;
+
+use callee::{call_shape_from_node, CalleePart};
+use tree_sitter::Node;
 
 use super::{enclosing_kind, node_search::KindSearch, parse_for, ParseCache, Snippet};
 use crate::ast::{named_children, ByteRange};
 
-use args::collect_argument_shapes;
-
 /// Per-argument shape extraction for the filter.
 mod args;
+
+/// Canonical callee headers and nested receiver-call argument shapes.
+mod callee;
 
 /// Assertion admission for the covered-statement rule.
 mod asserts;
@@ -73,10 +75,10 @@ fn is_literal_variation_call_set(calls: Option<Vec<Arc<CallShape>>>) -> bool {
 /// Distilled view of a call expression used to compare cluster members.
 #[derive(Clone)]
 pub(crate) struct CallShape {
-    /// Concrete callee string. Captured from raw source so identifier
-    /// text the normalised AST collapses is preserved.
-    callee: Vec<u8>,
-    /// Number of arguments to the call.
+    /// AST callee shape preserving called names and member selectors,
+    /// with receiver names and nested string payloads normalised.
+    callee: Vec<CalleePart>,
+    /// Number of argument slots, including nested callee invocations.
     arity: usize,
     /// Keyword each argument is passed under, positionally, `None` for
     /// positional arguments. Part of the header: two calls naming
@@ -136,23 +138,6 @@ fn call_shape(snippet: &Snippet<'_>) -> Option<CallShape> {
         call_kinds(snippet.language),
     )?;
     call_shape_from_node(call, snippet.source, snippet.language)
-}
-
-/// Extracts a [`CallShape`] from a concrete call node.
-fn call_shape_from_node(call: Node<'_>, source: &[u8], language: &str) -> Option<CallShape> {
-    let callee_node = call.child_by_field_name("function")?;
-    let callee = source
-        .get(callee_node.start_byte()..callee_node.end_byte())?
-        .to_vec();
-    let (arguments, keywords) = collect_argument_shapes(call, source, language);
-    Some(CallShape {
-        arity: arguments.len(),
-        callee,
-        keywords,
-        arguments,
-        result_binding: dataflow::assigned_binding(call, source),
-        consumed_identifiers: dataflow::consumed_identifiers(call, source, call_kinds(language)),
-    })
 }
 
 /// Computes the fused literal-variation sequence cell for one snippet:
@@ -314,8 +299,8 @@ fn call_shapes_in_range(snippet: &Snippet<'_>) -> Option<Vec<CallShape>> {
 /// `[expect, expect(...).toContain]`, and since the receiver carries no
 /// literal it could never vary — so the "every position must vary" rule
 /// refused a family that varies in the only place it has (gh #284). The
-/// receiver's bytes are already inside [`CallShape::callee`], so the
-/// information is not lost, only counted once. Arguments are still
+/// receiver's call names and payloads already belong to the enclosing
+/// [`CallShape`], so the information is counted once. Arguments are still
 /// walked: a call passed *as* an argument is genuinely a separate call.
 fn collect_call_shapes(node: Node<'_>, walk: &Walk<'_>, out: &mut Vec<CallShape>) {
     if node.end_byte() < walk.range.start || node.start_byte() > walk.range.end {

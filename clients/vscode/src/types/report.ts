@@ -97,7 +97,7 @@ export type {
   ReportBoilerplateOccurrence as BoilerplateHintOccurrence,
 } from "./wire-generated";
 
-// Severity bucketing per [LSP-SEVERITY-BAND]. The band classifies the
+// Severity bucketing per [LSP-SEVERITY-BUCKET]. The band classifies the
 // cluster's rank percentile, which is a calculation, so it is computed
 // once in `report_weight::rank_band` and carried on the wire.
 export type Severity = "worst" | "top10" | "mid" | "faint";

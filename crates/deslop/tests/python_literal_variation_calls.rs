@@ -27,7 +27,7 @@
 //! The control is not a spot check either. Its bucket, every one of its
 //! signals, its rank, its occurrence count and the four metric figures
 //! it accounts for are all fixed by the fixture bytes, so all of them
-//! are asserted as determined values ([RANK-SCORE], [METRICS-REPO]).
+//! are asserted as determined values ([RANK-MASS-SUM], [METRICS-REPO]).
 
 use anyhow::Result;
 

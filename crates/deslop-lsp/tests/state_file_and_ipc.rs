@@ -334,7 +334,7 @@ fn ipc_socket_handles_list_models_request() -> Result<()> {
 ///
 /// The assertions are deliberately on the post-refresh state, never on the
 /// refresh pass's own delta. The filesystem watcher ingests the external
-/// `Beta.cs` write concurrently ([DESLOP-LIVE]); whichever pass runs first
+/// `Beta.cs` write concurrently ([LIVE-SCHEDULER]); whichever pass runs first
 /// legitimately carries the removal, so `clustersRemoved` on the refresh
 /// response is schedule-dependent — asserting it `>= 1` failed on loaded CI
 /// runners whenever the watcher won the race (delta 0/0/0 at generation 3).

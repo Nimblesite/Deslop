@@ -82,7 +82,7 @@ fn duplicate_subtree_embeddings_are_collapsed_before_ann() -> Result<()> {
     Ok(())
 }
 
-/// [REPAIR-COSINE-MERGE] Collapsing eight byte-identical occurrences onto
+/// [FUSED-PAIR-SIGNALS] Collapsing eight byte-identical occurrences onto
 /// one ANN point must cost the report nothing. The vector belongs to
 /// every owner, not just the one that reached the index first: an
 /// expansion that kept only the first would leave no rendered occurrence

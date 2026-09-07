@@ -262,9 +262,18 @@ export async function handleMessage(_store: ReportStore, message: unknown): Prom
       if (occurrence) await vscode.commands.executeCommand("deslop.openOccurrence", occurrence);
       return;
     }
+    case "compare/canonical": {
+      // [VSIX-PAIR-COMPARE] Preserve the clicked row and resolve its current canonical.
+      const id = m["clusterId"];
+      const occurrence = compareEndpointFromPayload(m["occurrence"]);
+      if (typeof id === "string" && occurrence) {
+        await vscode.commands.executeCommand("deslop.compareWithCanonical", id, occurrence);
+      }
+      return;
+    }
     case "compare/pair": {
       // [VSIX-PAIR-COMPARE] Both endpoints arrive explicitly from the
-      // webview's two-slot selection; the host never invents an endpoint.
+      // caller; the host never substitutes an endpoint in this route.
       const left = compareEndpointFromPayload(m["left"]);
       const right = compareEndpointFromPayload(m["right"]);
       if (left && right) {

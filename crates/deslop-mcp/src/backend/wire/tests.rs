@@ -6,7 +6,9 @@
 use std::path::PathBuf;
 
 use anyhow::{ensure, Result};
-use deslop_core::{report::ReportCluster, report_fixtures::fixture_report, Report};
+use deslop_core::{
+    live::wire::FindSimilarResult, report::ReportCluster, report_fixtures::fixture_report, Report,
+};
 use serde_json::{json, Value};
 
 use super::decode;
@@ -24,6 +26,13 @@ const TOOL_VERSION_FIELD: &str = "tool_version";
 const REPORT_GET: &str = "report/get";
 /// A per-range page method, whose reply carries no version stamp.
 const REPORT_FOR_RANGE: &str = "report/forRange";
+/// The complete generated response used by snippet and range queries.
+const FIND_SIMILAR: &str = "duplicates/findSimilar";
+/// Required fields in a generated find-similar reply, including an empty query's metadata.
+const FIND_SIMILAR_FIELDS: &[&str] = &["clusters", "below_min_nodes", "total_occurrences"];
+/// A valid empty query carries zero occurrences and an explicit size-floor verdict.
+const EMPTY_OCCURRENCES: usize = 0;
+const BELOW_MIN_NODES: bool = false;
 /// The endpoint the message must name.
 const ENDPOINT: &str = "/workspace/.deslop/cache/deslop.sock";
 /// The remedy the message must name.
@@ -122,5 +131,39 @@ fn a_report_from_this_version_decodes() -> Result<()> {
         "a current report decodes with its own version stamp: {}",
         report.tool_version
     );
+    Ok(())
+}
+
+/// [MCP-IPC-WIRE-MISMATCH] Remove one required field from an otherwise valid generated reply.
+fn incomplete_find_similar_reply(field: &str) -> Result<Value> {
+    let mut reply = serde_json::to_value(FindSimilarResult {
+        clusters: Vec::new(),
+        below_min_nodes: BELOW_MIN_NODES,
+        total_occurrences: EMPTY_OCCURRENCES,
+    })?;
+    let removed = reply
+        .as_object_mut()
+        .and_then(|fields| fields.remove(field));
+    ensure!(
+        removed.is_some(),
+        "the required field must exist before removal: {field}"
+    );
+    Ok(reply)
+}
+
+#[test]
+fn an_incomplete_find_similar_reply_is_refused_without_empty_matches() -> Result<()> {
+    for field in FIND_SIMILAR_FIELDS {
+        let reply = incomplete_find_similar_reply(field)?;
+        let message = decode::<FindSimilarResult>(FIND_SIMILAR, &endpoint(), reply)
+            .err()
+            .map(|error| error.to_string())
+            .unwrap_or_default();
+        ensure_names_the_condition(&message, FIND_SIMILAR, UNSTAMPED)?;
+        ensure!(
+            message.contains(field),
+            "names the missing field: {message}"
+        );
+    }
     Ok(())
 }
