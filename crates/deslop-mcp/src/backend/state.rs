@@ -37,9 +37,19 @@ use tracing::debug;
 use crate::{notify::push_report_changed, NotificationSender};
 
 use super::{
-    ipc::ipc_call, BackendError, FindSimilarInput, FindSimilarOutput, McpBackend, RescanProgress,
-    SessionBackendConfig, SessionConfigSnapshot,
+    ipc::ipc_call, wire, BackendError, FindSimilarInput, FindSimilarOutput, McpBackend,
+    RescanProgress, SessionBackendConfig, SessionConfigSnapshot,
 };
+
+/// IPC methods whose replies pass through the wire guard
+/// ([MCP-IPC-WIRE-MISMATCH]).
+const REPORT_GET: &str = "report/get";
+/// The session configuration snapshot.
+const SESSION_CONFIG: &str = "session/config";
+/// The clusters touching one file.
+const REPORT_FOR_FILE: &str = "report/forFile";
+/// The clusters touching one byte range.
+const REPORT_FOR_RANGE: &str = "report/forRange";
 
 /// `McpBackend` implementation that delegates every read to the LSP
 /// over the published IPC transport. No on-disk cache, no file
@@ -86,19 +96,18 @@ impl LiveBackend {
 
     /// Issues an IPC `report/get` and decodes the result into `Report`.
     fn fetch_report(&self) -> Result<Arc<Report>, BackendError> {
-        let result = ipc_call(&self.root, "report/get", &json!({}))?;
-        let report: Report = serde_json::from_value(result)
-            .map_err(|err| BackendError::StateFileCorrupt(format!("ipc report parse: {err}")))?;
-        Ok(Arc::new(report))
+        let result = ipc_call(&self.root, REPORT_GET, &json!({}))?;
+        Ok(Arc::new(wire::decode(
+            REPORT_GET,
+            &self.ipc_socket,
+            result,
+        )?))
     }
 
     /// Issues `session/config` and decodes the response.
     fn fetch_session_config(&self) -> Result<SessionConfig, BackendError> {
-        let result = ipc_call(&self.root, "session/config", &json!({}))?;
-        let config: SessionConfig = serde_json::from_value(result).map_err(|err| {
-            BackendError::StateFileCorrupt(format!("ipc session_config parse: {err}"))
-        })?;
-        Ok(config)
+        let result = ipc_call(&self.root, SESSION_CONFIG, &json!({}))?;
+        wire::decode(SESSION_CONFIG, &self.ipc_socket, result)
     }
 }
 
@@ -195,9 +204,9 @@ impl McpBackend for LiveBackend {
 
     fn report_for_file(&self, path: &Path) -> Result<Vec<ReportCluster>, BackendError> {
         let resolved = crate::safety::resolve_within_root(&self.root, path)?;
-        let result = ipc_call(&self.root, "report/forFile", &json!({ "path": resolved }))?;
-        let file_report: deslop_core::live::wire::FileReport = serde_json::from_value(result)
-            .map_err(|err| BackendError::StateFileCorrupt(format!("ipc forFile parse: {err}")))?;
+        let result = ipc_call(&self.root, REPORT_FOR_FILE, &json!({ "path": resolved }))?;
+        let file_report: deslop_core::live::wire::FileReport =
+            wire::decode(REPORT_FOR_FILE, &self.ipc_socket, result)?;
         Ok(file_report.clusters)
     }
 
@@ -210,16 +219,14 @@ impl McpBackend for LiveBackend {
         let resolved = crate::safety::resolve_within_root(&self.root, path)?;
         let result = ipc_call(
             &self.root,
-            "report/forRange",
+            REPORT_FOR_RANGE,
             &json!({
                 "path": resolved,
                 "start_byte": start_byte,
                 "end_byte": end_byte,
             }),
         )?;
-        let clusters: Vec<ReportCluster> = serde_json::from_value(result)
-            .map_err(|err| BackendError::StateFileCorrupt(format!("ipc forRange parse: {err}")))?;
-        Ok(clusters)
+        wire::decode(REPORT_FOR_RANGE, &self.ipc_socket, result)
     }
 
     fn find_similar(

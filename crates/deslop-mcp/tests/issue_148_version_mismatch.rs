@@ -9,18 +9,14 @@
 
 #![cfg(unix)]
 
-use std::{
-    fs,
-    io::{BufRead, BufReader, Write},
-    os::unix::net::{UnixListener, UnixStream},
-    thread,
-};
+use std::sync::Arc;
 
 use anyhow::{ensure, Result};
-use serde_json::{json, Value};
+use serde_json::json;
 use tempfile::TempDir;
 
 use crate::common;
+use common::stub_lsp::{bind_stub_lsp, method_not_found};
 use common::{error_and_message, initialized_mcp, request_duplicates_summary};
 
 /// Clusters requested per page; the error path never reads them.
@@ -29,9 +25,7 @@ const PAGE_LIMIT: u64 = 5;
 #[test]
 fn issue_148_top_offenders_reports_version_mismatch_when_lsp_rejects_report_get() -> Result<()> {
     let workspace = TempDir::new()?;
-    fs::create_dir_all(workspace.path().join(".deslop/cache"))?;
-    let socket = workspace.path().join(".deslop/cache/deslop.sock");
-    spawn_stale_lsp(&socket)?;
+    bind_stub_lsp(workspace.path(), Arc::new(method_not_found))?;
 
     let mut mcp = initialized_mcp(workspace.path())?;
     let response = request_duplicates_summary(&mut mcp, PAGE_LIMIT)?;
@@ -59,9 +53,7 @@ fn issue_148_top_offenders_reports_version_mismatch_when_lsp_rejects_report_get(
 #[test]
 fn issue_148_session_config_reports_version_mismatch_when_lsp_rejects_method() -> Result<()> {
     let workspace = TempDir::new()?;
-    fs::create_dir_all(workspace.path().join(".deslop/cache"))?;
-    let socket = workspace.path().join(".deslop/cache/deslop.sock");
-    spawn_stale_lsp(&socket)?;
+    bind_stub_lsp(workspace.path(), Arc::new(method_not_found))?;
 
     let mut mcp = initialized_mcp(workspace.path())?;
     let response = mcp.request("tools/call", &json!({ "name": "session", "arguments": {} }))?;
@@ -80,59 +72,4 @@ fn issue_148_session_config_reports_version_mismatch_when_lsp_rejects_method() -
         "error must point at the VSIX reinstall: {message}"
     );
     Ok(())
-}
-
-/// Binds a Unix socket at `path` and spawns a detached accept loop that
-/// answers every JSON-RPC request with `-32601 method not found`. The
-/// `report/subscribe` ack is honoured so the MCP's subscribe handshake
-/// does not block.
-fn spawn_stale_lsp(path: &std::path::Path) -> Result<()> {
-    let listener = UnixListener::bind(path)?;
-    let _thread = thread::spawn(move || {
-        for incoming in listener.incoming() {
-            let Ok(stream) = incoming else { continue };
-            let _conn = thread::spawn(move || serve_one_connection(stream));
-        }
-    });
-    Ok(())
-}
-
-fn serve_one_connection(stream: UnixStream) {
-    let Ok(writer) = stream.try_clone() else {
-        return;
-    };
-    let mut reader = BufReader::new(stream);
-    let mut line = String::new();
-    if reader.read_line(&mut line).is_err() {
-        return;
-    }
-    let request: Value = match serde_json::from_str(line.trim()) {
-        Ok(value) => value,
-        Err(_) => return,
-    };
-    let id = request.get("id").cloned().unwrap_or(Value::Null);
-    let method = request
-        .get("method")
-        .and_then(Value::as_str)
-        .unwrap_or_default();
-    let frame = if method == "report/subscribe" {
-        json!({
-            "jsonrpc": "2.0",
-            "id": id,
-            "result": { "subscribed": true, "generation": 0 }
-        })
-    } else {
-        json!({
-            "jsonrpc": "2.0",
-            "id": id,
-            "error": { "code": -32_601, "message": "method not found" }
-        })
-    };
-    let _written = write_frame(&writer, &frame);
-}
-
-fn write_frame(mut stream: &UnixStream, value: &Value) -> std::io::Result<()> {
-    let mut payload = serde_json::to_vec(value).unwrap_or_default();
-    payload.push(b'\n');
-    stream.write_all(&payload)
 }

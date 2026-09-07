@@ -16,6 +16,9 @@
 pub mod language_label;
 /// Newline-delimited JSON-RPC over a child's stdio.
 pub mod rpc;
+/// A scripted stand-in for an LSP from another Deslop build.
+#[cfg(unix)]
+pub mod stub_lsp;
 
 use std::{
     fs,
