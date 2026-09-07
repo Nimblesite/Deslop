@@ -2,9 +2,9 @@
 // TypeScript's parser instead of brittle source regex checks.
 
 import * as assert from "node:assert/strict";
-import * as fs from "node:fs";
-import * as path from "node:path";
 import * as ts from "typescript";
+
+import { descendants, hasDescendant, parseWebviewSource } from "./webview-source.helpers";
 
 const DOC_TEXT_LINK_COMPONENT = "DocTextLink";
 const CLUSTER_ID_TOPIC_CONSTANT = "CLUSTER_ID_TOPIC";
@@ -12,29 +12,16 @@ const CLUSTER_ID_TOPIC_VALUE = "cluster-id";
 const OCCURRENCE_IDENTIFIER = "occurrence";
 const SHORT_OCCURRENCE_IDENTIFIER = "o";
 
-function clusterWebviewSourcePath(): string {
-  return path.resolve(__dirname, "../../../webview-ui/src/cluster/main.tsx");
-}
-
-function occurrenceListSourcePath(): string {
-  return path.resolve(__dirname, "../../../webview-ui/src/cluster/OccurrenceList.tsx");
-}
-
-function helpBubbleSourcePath(): string {
-  return path.resolve(__dirname, "../../../webview-ui/src/components/HelpBubble.tsx");
-}
-
-function parseSource(sourcePath: string): ts.SourceFile {
-  const source = fs.readFileSync(sourcePath, "utf8");
-  return ts.createSourceFile(sourcePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-}
+const CLUSTER_WEBVIEW_SOURCE = "cluster/main.tsx";
+const OCCURRENCE_LIST_SOURCE = "cluster/OccurrenceList.tsx";
+const HELP_BUBBLE_SOURCE = "components/HelpBubble.tsx";
 
 function parseClusterWebview(): ts.SourceFile {
-  return parseSource(clusterWebviewSourcePath());
+  return parseWebviewSource(CLUSTER_WEBVIEW_SOURCE);
 }
 
 function parseOccurrenceList(): ts.SourceFile {
-  return parseSource(occurrenceListSourcePath());
+  return parseWebviewSource(OCCURRENCE_LIST_SOURCE);
 }
 
 function parseClusterRenderer(): ts.SourceFile[] {
@@ -44,26 +31,7 @@ function parseClusterRenderer(): ts.SourceFile[] {
 }
 
 function parseHelpBubble(): ts.SourceFile {
-  return parseSource(helpBubbleSourcePath());
-}
-
-function hasDescendant(node: ts.Node, predicate: (node: ts.Node) => boolean): boolean {
-  if (predicate(node)) return true;
-  let found = false;
-  node.forEachChild((child) => {
-    if (!found) found = hasDescendant(child, predicate);
-  });
-  return found;
-}
-
-function descendants(root: ts.Node, predicate: (node: ts.Node) => boolean): ts.Node[] {
-  const matches: ts.Node[] = [];
-  function visit(node: ts.Node): void {
-    if (predicate(node)) matches.push(node);
-    node.forEachChild(visit);
-  }
-  visit(root);
-  return matches;
+  return parseWebviewSource(HELP_BUBBLE_SOURCE);
 }
 
 function hasOccurrenceByteAccess(node: ts.Node, propertyName: string): boolean {

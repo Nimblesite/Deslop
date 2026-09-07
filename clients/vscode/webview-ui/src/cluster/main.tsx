@@ -25,7 +25,7 @@ import {
   clusterSlug,
   occurrenceCount,
 } from "../../../src/types/report";
-import { formatScore } from "../../../src/types/format";
+import { formatMass } from "../../../src/types/format";
 import type { ReportCluster, ReportOccurrence } from "../../../src/types/report";
 import { OccurrenceList } from "./OccurrenceList";
 
@@ -182,11 +182,11 @@ function ClusterApp() {
               fontFamily: FONT.ui,
               fontSize: "15px",
             }}
-            title={`Mass ${formatScore(cluster.mass)} across ${occurrenceCount(cluster)} occurrences in this report.`}
+            title={`Mass ${formatMass(cluster.mass)} across ${occurrenceCount(cluster)} occurrences in this report.`}
           >
             <HelpedText topic={NEUTRAL_TITLE_TOPIC}>
               This cluster repeats code across the report with mass{" "}
-              {formatScore(cluster.mass)}.
+              {formatMass(cluster.mass)}.
             </HelpedText>
           </p>
         </div>
@@ -212,7 +212,7 @@ function ClusterApp() {
             }}
             title={clusterStatsTitle(cluster)}
           >
-            <StatItem topic={MASS_TOPIC} label={MASS_TOPIC} value={formatScore(cluster.mass)} />
+            <StatItem topic={MASS_TOPIC} label={MASS_TOPIC} value={formatMass(cluster.mass)} />
             <StatItem topic="canonical" label={NODES_TOPIC} value={String(cluster.canonical_node_count)} />
             <StatItem topic="occurrence-count" label={OCCURRENCES_TOPIC} value={`× ${occurrenceCount(cluster)}`} />
           </div>
@@ -378,7 +378,7 @@ function rankTitle(rank: number, total: number, severity: string): string {
 }
 
 function clusterStatsTitle(cluster: ReportCluster): string {
-  return `Mass is this cluster's duplicated mass, the worst-first ranking metric. Nodes is the number of cloned AST members in the canonical occurrence. Occurrences is the number of editor locations in this cluster: mass ${formatScore(cluster.mass)}, nodes ${cluster.canonical_node_count}, occurrences ${occurrenceCount(cluster)}.`;
+  return `Mass is this cluster's duplicated mass, the worst-first ranking metric. Nodes is the number of cloned AST members in the canonical occurrence. Occurrences is the number of editor locations in this cluster: mass ${formatMass(cluster.mass)}, nodes ${cluster.canonical_node_count}, occurrences ${occurrenceCount(cluster)}.`;
 }
 
 function canonicalTitle(occurrence: ReportOccurrence): string {

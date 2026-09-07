@@ -52,6 +52,10 @@ const FIRST_FIXTURE_PATH = "/f1";
 const CLUSTER_ROOT_REQUIRED = "cluster root must exist";
 const CANONICAL_OCCURRENCE_CONTEXT = "deslop.occurrenceCanonical";
 const HEAVY_CLUSTER_ID = "heavy";
+/** A mass whose two-decimal rendering (`527.00`) differs from its count. */
+const WHOLE_NUMBER_MASS = 527;
+const TWO_DECIMAL_MASS = "527.00";
+const FOLDER_GROUPING_MODE = "folder";
 const HEAVY_FILE_PATH = "/repo/z.cs";
 const LIGHT_CLUSTER_ID = "light";
 const LIGHT_FILE_PATH = "/repo/a.cs";
@@ -94,6 +98,20 @@ function withOccurrences(
     occurrence_count: occurrences.length,
     occurrences,
   };
+}
+
+/** The first root row the provider exposes under a grouping mode. */
+async function firstRootIn(
+  provider: TopOffendersProvider,
+  mode: "file" | "folder",
+): Promise<vscode.TreeItem> {
+  const roots: vscode.TreeItem[] = [];
+  await withGroupBy(mode, () => {
+    roots.push(...provider.getChildren());
+  });
+  const [root] = roots;
+  assert.ok(root, `${mode} mode must expose a root row`);
+  return root;
 }
 
 suite("TopOffendersProvider", () => {
@@ -972,6 +990,26 @@ suite("TopOffendersProvider", () => {
   // [VSIX-TOP-OFFENDERS-FOLDER-MODE] Folder mode nests files under a
   // path-compressed folder tree; file leaves expand like file-mode roots
   // and global rank is preserved.
+  test("mass prints as a whole number on cluster, file and folder rows", async () => {
+    // [RANK-MASS-SUM] Mass is a count, so every tree surface prints it with
+    // no decimal point — the string the CLI text report prints — never at
+    // the two-decimal precision reserved for measured pair signals.
+    const store = new ReportStore();
+    store.setSnapshot(report([cluster(HEAVY_CLUSTER_ID, WHOLE_NUMBER_MASS, ALPHA_FILE_PATH)]), 0);
+    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const [clusterRow] = provider.getChildren();
+    assert.ok(clusterRow, CLUSTER_ROOT_REQUIRED);
+    const fileRow = await firstRootIn(provider, FILE_GROUPING_MODE);
+    const folderRow = await firstRootIn(provider, FOLDER_GROUPING_MODE);
+    const rendered = [tooltipText(clusterRow), String(fileRow.description), String(folderRow.description)];
+    assert.ok(rendered[0]?.includes(`mass: \`${WHOLE_NUMBER_MASS}\``), `cluster tooltip: ${rendered[0] ?? ""}`);
+    assert.equal(rendered[1], `worst mass ${WHOLE_NUMBER_MASS}`, "file row description");
+    assert.equal(rendered[2], `worst mass ${WHOLE_NUMBER_MASS} · 1 file`, "folder row description");
+    for (const text of rendered) {
+      assert.equal(text.includes(TWO_DECIMAL_MASS), false, `a count must never print as ${TWO_DECIMAL_MASS}: ${text}`);
+    }
+  });
+
   test("folder mode builds a folder tree, impact-sorted, with global ranks", async () => {
     const store = new ReportStore();
     store.setSnapshot(

@@ -9,7 +9,7 @@ import * as vscode from "vscode";
 import { clusterSlug } from "../clusterHover";
 import { occurrenceDisplayLocation } from "../locations";
 import { resolveWorkspacePath } from "../pathUtils";
-import { formatPercent, formatScore } from "../types/format";
+import { formatMass, formatPercent } from "../types/format";
 import { SEVERITY_DOT } from "../severity";
 import {
   FileMetric,
@@ -109,7 +109,7 @@ export class ClusterNode extends vscode.TreeItem {
     this.tooltip = new vscode.MarkdownString(
       `**Duplicate code**\n\n` +
         `file: \`${filePath}\`\n\n` +
-        `rank #${rank} · mass: \`${formatScore(cluster.mass)}\` · nodes: \`${cluster.canonical_node_count}\` · copies: \`${occurrenceCount(cluster)}\`\n\n` +
+        `rank #${rank} · mass: \`${formatMass(cluster.mass)}\` · nodes: \`${cluster.canonical_node_count}\` · copies: \`${occurrenceCount(cluster)}\`\n\n` +
         `cluster id: \`${cluster.id}\``,
     );
     this.command = {
@@ -163,12 +163,12 @@ export class FileNode extends vscode.TreeItem {
     const clusterCount = clusters.length;
     const noun = clusterCount === 1 ? "cluster" : "clusters";
     super(`${label} · ${clusterCount} ${noun}`, vscode.TreeItemCollapsibleState.Collapsed);
-    this.description = `worst mass ${formatScore(worstMass)}`;
+    this.description = `worst mass ${formatMass(worstMass)}`;
     this.contextValue = "deslop.fileGroup";
     this.iconPath = new vscode.ThemeIcon(FILE_NODE_KIND);
     this.tooltip = new vscode.MarkdownString(
       `\`${filePath}\`\n\n` +
-        `${clusterCount} duplicate ${noun} · worst mass \`${formatScore(worstMass)}\``,
+        `${clusterCount} duplicate ${noun} · worst mass \`${formatMass(worstMass)}\``,
     );
     this.accessibilityInformation = {
       label: `${label}, ${clusterCount} duplicate ${noun}`,
@@ -235,12 +235,12 @@ export class FolderNode extends vscode.TreeItem {
   ) {
     super(label, vscode.TreeItemCollapsibleState.Collapsed);
     const noun = fileCount === 1 ? FILE_NODE_KIND : "files";
-    this.description = `worst mass ${formatScore(worstMass)} · ${fileCount} ${noun}`;
+    this.description = `worst mass ${formatMass(worstMass)} · ${fileCount} ${noun}`;
     this.contextValue = "deslop.folderGroup";
     this.iconPath = vscode.ThemeIcon.Folder;
     this.tooltip = new vscode.MarkdownString(
       `\`${folderPath}\`\n\n` +
-        `${fileCount} ${noun} with duplication · worst mass \`${formatScore(worstMass)}\``,
+        `${fileCount} ${noun} with duplication · worst mass \`${formatMass(worstMass)}\``,
     );
     this.accessibilityInformation = {
       label: `${label}, ${fileCount} duplicated ${noun}`,

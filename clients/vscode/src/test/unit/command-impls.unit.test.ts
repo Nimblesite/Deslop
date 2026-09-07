@@ -532,7 +532,11 @@ suite("tree menu renderers", () => {
     const lines = text.split("\n");
     assert.equal(lines.length, THREE_LINE_COUNT, "header + 2 occurrences");
     assert.match(lines[0] ?? "", /^cluster c-x/);
-    assert.match(lines[0] ?? "", /mass/);
+    // [RANK-MASS-SUM] The header prints mass as the whole number it is.
+    assert.ok(
+      lines[0]?.includes(` · mass ${DEFAULT_CLUSTER_WEIGHT} · `),
+      `the header must print mass ${DEFAULT_CLUSTER_WEIGHT} with no decimal point, got: ${lines[0] ?? ""}`,
+    );
     assert.match(lines[0] ?? "", /2 occurrences/);
     assert.match(lines[1] ?? "", /A\.cs:1:1$/);
     assert.match(lines[THIRD_LINE_INDEX] ?? "", /B\.cs:1:1$/);
@@ -553,7 +557,12 @@ suite("tree menu renderers", () => {
     const text = aiPayloadForCluster(c, 7);
     assert.match(text, /cluster_id: c-ai/);
     assert.match(text, /rank: 7/);
-    assert.match(text, /mass: /);
+    // [RANK-MASS-SUM] The AI payload prints the same whole-number mass a
+    // human row prints, so the two surfaces can never disagree on a count.
+    assert.ok(
+      text.split("\n").includes(`mass: ${DEFAULT_CLUSTER_WEIGHT}`),
+      `the payload must carry the line "mass: ${DEFAULT_CLUSTER_WEIGHT}", got:\n${text}`,
+    );
     assert.doesNotMatch(text, /bucket:/, "no clone-kind line may reach the AI payload");
     // [FUSED-PAIR-SIGNALS] No cluster surface — including copy-for-AI —
     // renders pair evidence: no structural, jaccard, or embedding score,

@@ -10,7 +10,7 @@ import * as vscode from "vscode";
 const UTF8_ENCODING = "utf8";
 
 import { occurrenceDisplayLocation } from "../locations";
-import { formatScorePrecise } from "../types/format";
+import { formatMass } from "../types/format";
 import { languageForPath } from "../types/languages";
 import { ReportStore } from "../reportStore";
 import {
@@ -136,7 +136,7 @@ async function openOccurrenceNonPreview(
 
 /// Builds the clipboard text for [`copyClusterLocations`].
 export function clusterLocationsText(cluster: ReportCluster): string {
-  const header = `cluster ${cluster.id} · mass ${formatScorePrecise(cluster.mass)} · ${occurrenceCount(cluster)} occurrences`;
+  const header = `cluster ${cluster.id} · mass ${formatMass(cluster.mass)} · ${occurrenceCount(cluster)} occurrences`;
   const rows = cluster.occurrences.map(humanLocation);
   return [header, ...rows].join("\n");
 }
@@ -150,7 +150,7 @@ export function aiPayloadForCluster(
     `slug: ${clusterSlug(cluster)}`,
     `cluster_id: ${cluster.id}`,
     `rank: ${rank}`,
-    `mass: ${cluster.mass}`,
+    `mass: ${formatMass(cluster.mass)}`,
     `canonical_node_count: ${cluster.canonical_node_count}`,
     `occurrences: ${occurrenceCount(cluster)}`,
   ];
@@ -213,7 +213,7 @@ function parentClusterLines(
   return [
     `cluster_id: ${parent.id}`,
     `rank: ${rankIndex >= 0 ? rankIndex + 1 : "?"}`,
-    `mass: ${formatScorePrecise(parent.mass)}`,
+    `mass: ${formatMass(parent.mass)}`,
     `canonical_nodes: ${parent.canonical_node_count}`,
     `sibling_occurrences: ${Math.max(parent.occurrences.length - 1, 0)}`,
   ];
