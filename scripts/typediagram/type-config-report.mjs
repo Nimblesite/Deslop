@@ -60,6 +60,17 @@ export const REPORT_TYPE_CONFIG = {
     derives: ["Debug", "Clone", "PartialEq", "Eq", "Serialize", "Deserialize"],
     fieldDocs: { left: "First exact endpoint.", right: "Second exact endpoint." },
   },
+  PairTextIdentity: {
+    docs: "How far one pair's two raw source ranges are the same text ([FUSED-PAIR-SIGNALS]).",
+    derives: ["Debug", "Clone", "Copy", "PartialEq", "Eq", "Serialize", "Deserialize"],
+    serdeAttrs: ['rename_all = "snake_case"'],
+    variantDocs: {
+      ByteIdentical: "The two ranges are the same bytes.",
+      IndentationOnly:
+        "The two ranges are the same lines once each line's leading whitespace is removed, so a diff of them shows indentation and nothing else. Line endings and a missing final line break are not compared.",
+      Different: "The two ranges differ beyond indentation.",
+    },
+  },
   PairClassification: {
     docs: "Presentation classification of one exact pair; never a cluster field.",
     derives: ["Debug", "Clone", "Copy", "PartialEq", "Eq", "Serialize", "Deserialize"],
@@ -94,6 +105,7 @@ export const REPORT_TYPE_CONFIG = {
       agreement: "Raw authored-content agreement for this pair.",
       rename_consistency: "Consistent-renaming support for this pair.",
       literal_fraction: "Literal share measured on this pair.",
+      text_identity: "How far the two raw ranges are the same text: byte-identical, indentation-only, or different.",
       fused_score: "Bounded max of structural, token, and embedding evidence for this pair.",
       content_required: "Whether the pair's route requires the content guard.",
       content_ok: "Whether every applicable pair-content guard passed.",

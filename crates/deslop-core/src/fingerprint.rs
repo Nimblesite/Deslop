@@ -163,9 +163,8 @@ struct Frame<'tree> {
     node_count: usize,
     /// Whether this node or an ancestor is boilerplate.
     boilerplate: bool,
-    /// The synthetic root, when [PIPELINE-FINGERPRINT-MERKLE-ROOT] denies
-    /// it a view of its own. Never inherited: its children are views.
-    viewless_root: bool,
+    /// A node denied its own view while its hash still contributes to its parent.
+    viewless: bool,
 }
 
 /// What the walk does next with the frame on top of the stack.
@@ -193,7 +192,7 @@ impl<'tree> Frame<'tree> {
             boilerplate: inherited
                 || is_boilerplate(language, node)
                 || is_literal_data_subtree(node),
-            viewless_root: is_viewless_root(language, node),
+            viewless: is_viewless_root(language, node) || is_type_reference(language, node),
         }
     }
 
@@ -213,7 +212,7 @@ impl<'tree> Frame<'tree> {
         hashes: &mut Vec<[u8; 32]>,
     ) -> ([u8; 32], usize) {
         let hash = digest_node(self.node, hashes.get(self.hash_base..).unwrap_or(&[]));
-        if self.node_count >= min_nodes && !self.boilerplate && !self.viewless_root {
+        if self.node_count >= min_nodes && !self.boilerplate && !self.viewless {
             out.push(Fingerprint {
                 hash,
                 file_id: self.node.file_id,
@@ -302,6 +301,24 @@ pub(crate) fn subtree_hash<'tree>(
 fn is_viewless_root(language: Option<&str>, node: &NormalizedNode) -> bool {
     node.kind == FILE_KIND
         && (re_describes_only_child(node) || opens_with_mandated_prologue(language, node))
+}
+
+/// [PIPELINE-FINGERPRINT-MERKLE-TYPE-REFERENCE] A Rust type reference has no
+/// copied implementation of its own. Keep its full hash and count in the
+/// enclosing declaration or expression, without reporting the annotation alone.
+fn is_type_reference(language: Option<&str>, node: &NormalizedNode) -> bool {
+    language == Some("rust")
+        && matches!(
+            node.kind,
+            "generic_type"
+                | "type_arguments"
+                | "reference_type"
+                | "pointer_type"
+                | "array_type"
+                | "tuple_type"
+                | "function_type"
+                | "scoped_type_identifier"
+        )
 }
 
 /// True when a single child covers the root's whole extent, so the root

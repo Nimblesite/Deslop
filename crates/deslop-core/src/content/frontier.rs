@@ -20,7 +20,7 @@ use crate::{
     fingerprint::Fingerprint,
     lang::shared::{is_operator_kind, LITERAL_KIND},
     state::FileId,
-    tokens::collapsed_leaves,
+    tokens::{collapsed_leaves, CollapsedLeaf},
 };
 
 /// Which evidence population a collapsed frontier leaf belongs to.
@@ -108,8 +108,8 @@ pub(super) struct MemberContent {
     pub(super) keys: Vec<LeafKey>,
     /// The source byte range each key was hashed from, 1:1 with `keys`.
     pub(super) ranges: Vec<ByteRange>,
-    /// Whether each aligned leaf is a method selector declared outside the matched region.
-    pub(super) external_calls: Vec<bool>,
+    /// External method selectors, with the receiver-property positions that qualify their identities.
+    pub(super) external_calls: Vec<Option<super::call_targets::CallTarget>>,
 }
 
 /// The key slice of a resolved member, `None` when unresolvable.
@@ -297,15 +297,7 @@ pub(super) fn member_content<S: BuildHasher, L: BuildHasher>(
     let leaves = collapsed_leaves(root, member, language)?;
     let keys = leaves
         .iter()
-        .map(|leaf| {
-            source
-                .get(leaf.range.start..leaf.range.end)
-                .map(|bytes| LeafKey {
-                    population: Population::of(leaf.kind),
-                    key: truncated_hash(bytes),
-                    literal_group: leaf.literal_group,
-                })
-        })
+        .map(|leaf| leaf_key(leaf, source))
         .collect::<Option<Vec<LeafKey>>>()?;
     let ranges: Vec<ByteRange> = leaves.iter().map(|leaf| leaf.range).collect();
     let external_calls =
@@ -317,6 +309,17 @@ pub(super) fn member_content<S: BuildHasher, L: BuildHasher>(
         ranges,
         external_calls,
     })
+}
+
+/// Resolves one collapsed leaf to its canonical content key.
+fn leaf_key(leaf: &CollapsedLeaf, source: &[u8]) -> Option<LeafKey> {
+    source
+        .get(leaf.range.start..leaf.range.end)
+        .map(|bytes| LeafKey {
+            population: Population::of(leaf.kind),
+            key: truncated_hash(bytes),
+            literal_group: leaf.literal_group,
+        })
 }
 
 /// First eight little-endian bytes of the blake3 hash of `bytes`.

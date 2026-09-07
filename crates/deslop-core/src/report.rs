@@ -21,7 +21,7 @@ use hidden::{log_hidden_cluster, materialise_with_visibility, NOISE_TOTALS_RUN_S
 
 pub use crate::wire_generated::{
     CacheStats, EmbeddingProvenance, PairClassification, PairComparison, PairComparisonParams,
-    PairEndpoint, PairEvidence, Report, ReportCluster, ReportOccurrence,
+    PairEndpoint, PairEvidence, PairTextIdentity, Report, ReportCluster, ReportOccurrence,
 };
 
 /// The render-stage parse cache, re-exported where [`ReportInputs`]

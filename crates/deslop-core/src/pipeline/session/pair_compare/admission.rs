@@ -7,7 +7,7 @@ use crate::{
         LSH_ONLY_MIN_NODE_COUNT, MAX_ENDPOINT_NODE_RATIO, RESCUE_MIN_CONTENT_AGREEMENT,
         SHARED_SUBTREE_MIN_JACCARD, SHARED_SUBTREE_MIN_NODE_COUNT, SHARED_SUBTREE_MIN_OVERLAP,
     },
-    report::PairClassification,
+    report::{PairClassification, PairTextIdentity},
 };
 
 use super::{Measurements, ResolvedPair};
@@ -54,7 +54,7 @@ impl AdmissionFacts {
 
     /// Classifies this pair only; rejected shape-only pairs remain explicit.
     pub(super) fn classification(&self, measured: Measurements) -> Option<PairClassification> {
-        if measured.byte_identical {
+        if measured.text == PairTextIdentity::ByteIdentical {
             return Some(PairClassification::Identical);
         }
         if self.content_required && !self.content_ok {

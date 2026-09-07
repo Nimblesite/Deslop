@@ -27,7 +27,7 @@ const PANEL_HELP: Record<HelpTopic, string> = {
   mass: "This cluster's duplicated mass — the worst-first ranking metric.",
   "occurrence-count": "Number of editor locations in this cluster.",
   canonical: "First occurrence of the cluster — the anchor used by Compare with canonical.",
-  occurrences: "The concrete locations where this cluster appears.",
+  occurrences: "The concrete locations where this cluster appears. Tap one row, then another, to compare those two in VS Code's diff editor.",
   "occurrence-location": "File, line, and column that Open will navigate to.",
   "hidden-occurrence": "This occurrence matched report_hide configuration.",
   "open-action": "Open selects the clone range in the editor.",

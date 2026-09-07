@@ -49,6 +49,14 @@ const WEIGHT_LABEL = "weight";
 const CANONICAL_COMPARE_LABEL = "Compare is disabled on the canonical occurrence because it would compare the same range with itself.";
 const PEER_COMPARE_LABEL = "Compare this occurrence with the canonical occurrence in VS Code's diff editor.";
 const CANONICAL_COMPARE_MESSAGE = "compare/canonical";
+// [VSIX-PAIR-COMPARE] Two row taps compare exactly those two occurrences;
+// the retired per-row and gated buttons never render.
+const PAIR_COMPARE_MESSAGE = "compare/pair";
+const OCCURRENCE_ROW = "article";
+const PICKED_ATTRIBUTE = "data-picked";
+const ROW_TAP_POSITION = { x: 4, y: 4 };
+const RETIRED_SELECT_LABEL = "Select for comparison";
+const RETIRED_COMPARE_SELECTED_LABEL = "Compare selected occurrences";
 const NEXT_CLUSTER_LABEL = "Next cluster";
 const FIRST_CLUSTER_INDEX = 0;
 const SECOND_CLUSTER_INDEX = 1;
@@ -131,6 +139,26 @@ test.describe("VSIX webview bundles", () => {
       await page.getByRole("button", { name: PEER_COMPARE_LABEL }).nth(FIRST_PEER_INDEX).click();
       await expectPostedCanonical(page, SECOND_CLUSTER_INDEX, SECOND_PEER_INDEX);
       await expect(page.getByRole("button", { name: CANONICAL_COMPARE_LABEL })).toBeDisabled();
+
+      // [VSIX-PAIR-COMPARE] Tapping one row picks it, tapping a second row
+      // hands both endpoints to the host, and the pick is released.
+      await clearPostedMessages(page);
+      const rows = page.locator(OCCURRENCE_ROW);
+      await rows.nth(FIRST_PEER_INDEX).click({ position: ROW_TAP_POSITION });
+      await expect(rows.nth(FIRST_PEER_INDEX)).toHaveAttribute(PICKED_ATTRIBUTE, "true");
+      await expect(rows.nth(SECOND_PEER_INDEX)).toHaveAttribute(PICKED_ATTRIBUTE, "false");
+      await rows.nth(SECOND_PEER_INDEX).click({ position: ROW_TAP_POSITION });
+      await expectPostedPair(page, SECOND_CLUSTER_INDEX, FIRST_PEER_INDEX, SECOND_PEER_INDEX);
+      await expect(rows.nth(FIRST_PEER_INDEX)).toHaveAttribute(PICKED_ATTRIBUTE, "false");
+      // Tapping the picked row again lets it go without posting anything.
+      await clearPostedMessages(page);
+      await rows.nth(FIRST_CLUSTER_INDEX).click({ position: ROW_TAP_POSITION });
+      await expect(rows.nth(FIRST_CLUSTER_INDEX)).toHaveAttribute(PICKED_ATTRIBUTE, "true");
+      await rows.nth(FIRST_CLUSTER_INDEX).click({ position: ROW_TAP_POSITION });
+      await expect(rows.nth(FIRST_CLUSTER_INDEX)).toHaveAttribute(PICKED_ATTRIBUTE, "false");
+      await expectNothingPosted(page);
+      await expect(page.getByRole("button", { name: RETIRED_SELECT_LABEL })).toHaveCount(0);
+      await expect(page.getByText(RETIRED_COMPARE_SELECTED_LABEL, { exact: true })).toHaveCount(0);
 
       await expectHealthyRender(page, errors, `cluster-${viewport.name}`);
     });
@@ -231,6 +259,32 @@ async function expectPostedCanonical(page: Page, clusterIndex: number, occurrenc
       clusterId: cluster.id,
       occurrence: cluster.occurrences[occurrenceIndex],
     });
+}
+
+async function expectPostedPair(
+  page: Page,
+  clusterIndex: number,
+  leftIndex: number,
+  rightIndex: number,
+): Promise<void> {
+  const cluster = sampleReport.clusters[clusterIndex];
+  await expect
+    .poll(async () => {
+      return await page.evaluate((kind) => window.__deslopPosts?.find((message) => message.kind === kind), PAIR_COMPARE_MESSAGE);
+    })
+    .toEqual({
+      kind: PAIR_COMPARE_MESSAGE,
+      left: cluster.occurrences[leftIndex],
+      right: cluster.occurrences[rightIndex],
+    });
+}
+
+async function expectNothingPosted(page: Page): Promise<void> {
+  await expect
+    .poll(async () => {
+      return await page.evaluate(() => window.__deslopPosts?.length ?? 0);
+    })
+    .toBe(0);
 }
 
 async function expectHealthyRender(

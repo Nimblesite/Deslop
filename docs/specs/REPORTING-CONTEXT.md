@@ -44,6 +44,7 @@ Pair evidence exists only for two explicitly identified occurrences. A pair resp
 | `agreement` | Raw content agreement for this pair. |
 | `rename_consistency` | Consistent-renaming support for this pair. |
 | `literal_fraction` | Literal share measured for this pair. |
+| `text_identity` | How far the two raw ranges are the same text: `byte_identical`, `indentation_only` (the same lines once each line's leading whitespace is removed, so a diff of them shows indentation and nothing else), or `different`. |
 | `admitted` | Whether this exact pair passed the admission contract. |
 | `classification` | Optional presentation classification of this exact pair. |
 

@@ -235,7 +235,7 @@ The LSP's code lens ([LSP-CODE-LENS]) is the content source. The VSIX styles it 
 Each lens has three actions in its command array:
 
 - **"Jump"** — runs `deslop.jumpToNextOccurrence`, cycling through remaining occurrences. It never routes through `textDocument/definition`, so it cannot interfere with the editor's Go To Definition ([LSP-NON-INTERFERENCE]).
-- **"Compare"** — the cluster panel's one-click canonical comparison opens a native diff of the canonical range and the clicked occurrence ([webview-runtime.md §VSIX-PAIR-COMPARE](webview-runtime.md#vsix-pair-compare)).
+- **"Compare"** — the cluster panel's one-click canonical comparison opens a native diff of the canonical range and the clicked occurrence; tapping two rows compares those two. The diff title carries the engine's verdict on the pair, including whether it differs only by indentation ([webview-runtime.md §VSIX-PAIR-COMPARE](webview-runtime.md#vsix-pair-compare)).
 - **"Open cluster"** — opens the webview ([webview-runtime.md §VSIX-WEBVIEW](webview-runtime.md#vsix-webview)) pinned to this cluster.
 
 The lens is coloured by the cluster's clone kind ([taxonomy.md §CLONE-KIND-COLOR](taxonomy.md#clone-kind-color)), independent of whether diagnostics are enabled. It is hidden only for clusters below the configured mass-percentile floor ([LSP-SEVERITY-PERCENTILE]); users widen it via `deslop.showAllLenses`.

@@ -1,6 +1,6 @@
 import { HelpAction } from "../components/HelpAction";
 import { HelpBubble, HelpedText } from "../components/HelpBubble";
-import { post } from "../store";
+import { isPicked, post, tapOccurrenceRow } from "../store";
 import { COLOR, FONT } from "../theme";
 import type { ReportCluster, ReportOccurrence } from "../../../src/types/report";
 
@@ -23,6 +23,13 @@ const OPEN_OCCURRENCE_MESSAGE = "open/occurrence";
 // [VSIX-PAIR-COMPARE] One click compares this exact occurrence with its canonical.
 const COMPARE_CANONICAL_MESSAGE = "compare/canonical";
 const CANONICAL_OCCURRENCE_INDEX = 0;
+// [VSIX-PAIR-COMPARE] Rows are the selection: tap one, then another, to
+// compare the two. No row carries a select button.
+const ROW_TAP_HINT = "Tap this row to pick it, then tap a second row to compare the two.";
+const PICKED_ROW_HINT =
+  "Picked for comparison. Tap another row to compare it with this one, or tap this row again to unpick it.";
+const ROW_INTERACTIVE_SELECTOR = "button, a";
+const POINTER_CURSOR = "pointer";
 
 interface OccurrenceListProps {
   cluster: ReportCluster;
@@ -42,7 +49,9 @@ export function OccurrenceList({ cluster, focusedIndex, accent }: OccurrenceList
       {cluster.occurrences.map((occurrence, index) => (
         <article
           key={`${occurrence.path}-${occurrence.start_byte}`}
-          title={occurrenceTitle(occurrence, index)}
+          title={occurrenceTitle(occurrence, index, isPicked(occurrence))}
+          data-picked={isPicked(occurrence)}
+          onClick={(event) => tapRow(event, cluster, occurrence)}
           style={{
             background: index % 2 === 0 ? COLOR.surfaceContainerLow : COLOR.surface,
             padding: "14px 20px",
@@ -50,7 +59,8 @@ export function OccurrenceList({ cluster, focusedIndex, accent }: OccurrenceList
             gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
             gap: "16px",
             alignItems: CENTER_ALIGNMENT,
-            outline: index === focusedIndex ? `1px solid ${accent}` : "none",
+            cursor: POINTER_CURSOR,
+            outline: rowOutline(isPicked(occurrence), index === focusedIndex, accent),
           }}
         >
           <OccurrenceLocation occurrence={occurrence} />
@@ -147,6 +157,18 @@ function openOccurrence(occurrence: ReportOccurrence): void {
   post({ kind: OPEN_OCCURRENCE_MESSAGE, occurrence });
 }
 
+// A tap on the row's own buttons and links belongs to them; only the row
+// body picks.
+function tapRow(event: MouseEvent, cluster: ReportCluster, occurrence: ReportOccurrence): void {
+  if (event.target instanceof Element && event.target.closest(ROW_INTERACTIVE_SELECTOR)) return;
+  tapOccurrenceRow(cluster, occurrence);
+}
+
+function rowOutline(picked: boolean, focused: boolean, accent: string): string {
+  if (picked) return `2px solid ${accent}`;
+  return focused ? `1px solid ${accent}` : "none";
+}
+
 function compareWithCanonical(clusterId: string, occurrence: ReportOccurrence, index: number): void {
   if (index !== CANONICAL_OCCURRENCE_INDEX) {
     post({ kind: COMPARE_CANONICAL_MESSAGE, clusterId, occurrence });
@@ -159,12 +181,13 @@ function compareTitle(index: number): string {
     : "Compare this occurrence with the canonical occurrence in VS Code's diff editor.";
 }
 
-function occurrenceTitle(occurrence: ReportOccurrence, index: number): string {
+function occurrenceTitle(occurrence: ReportOccurrence, index: number, picked: boolean): string {
   const role = index === 0 ? "Canonical occurrence" : `Occurrence ${index + 1}`;
   const hidden = occurrence.hidden
     ? " This occurrence is hidden by report_hide configuration but shown because the cluster also contains visible code."
     : "";
-  return `${role}: ${occurrence.displayLocation?.label ?? occurrence.path}. ${occurrence.displayLocation?.description ?? "Line and column are unavailable until the file can be read."}${hidden}`;
+  const tap = picked ? PICKED_ROW_HINT : ROW_TAP_HINT;
+  return `${role}: ${occurrence.displayLocation?.label ?? occurrence.path}. ${occurrence.displayLocation?.description ?? "Line and column are unavailable until the file can be read."}${hidden} ${tap}`;
 }
 
 function locationTitle(occurrence: ReportOccurrence): string {

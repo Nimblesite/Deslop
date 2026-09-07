@@ -14,7 +14,7 @@ use crate::{
     lsh::{estimate_jaccard, SignatureLookup},
     overlap::OverlapMeasurer,
     pair::PairScore,
-    report::{PairComparison, PairComparisonParams, PairEndpoint, PairEvidence},
+    report::{PairComparison, PairComparisonParams, PairEndpoint, PairEvidence, PairTextIdentity},
     state::FileId,
 };
 
@@ -109,6 +109,7 @@ impl PipelineSession {
         embedding_cos: f64,
     ) -> Measurements {
         let merkle_equal = pair.left.fingerprint.hash == pair.right.fingerprint.hash;
+        let text = pair.text_identity(&self.sources);
         let structural = axes
             .overlap
             .overlap(pair.left.fingerprint, pair.right.fingerprint);
@@ -131,7 +132,7 @@ impl PipelineSession {
             rename_consistency: content.rename_consistency,
             literal_fraction: content.literal_fraction,
             merkle_equal,
-            byte_identical: pair.byte_identical(&self.sources),
+            text,
         }
     }
 
@@ -212,6 +213,7 @@ impl PipelineSession {
             agreement: measured.agreement,
             rename_consistency: measured.rename_consistency,
             literal_fraction: measured.literal_fraction,
+            text_identity: measured.text,
             fused_score: measured.score.bounded_fused(),
             content_required: facts.content_required,
             content_ok: facts.content_ok,
@@ -284,14 +286,35 @@ impl ResolvedPair<'_> {
         self.left.fingerprint.file_id != self.right.fingerprint.file_id
     }
 
-    /// Whether the two raw endpoint snippets are byte-identical.
-    fn byte_identical(
+    /// How far the two raw endpoint snippets are the same text, read once
+    /// from the same bytes so the byte answer and the indentation answer
+    /// cannot disagree ([FUSED-PAIR-SIGNALS]).
+    fn text_identity(
         &self,
         sources: &std::collections::HashMap<crate::state::FileId, Vec<u8>>,
-    ) -> bool {
+    ) -> PairTextIdentity {
         let snippets = self.snippets(sources);
-        snippets.first() == snippets.get(1)
+        let [left, right] = snippets.as_slice() else {
+            return PairTextIdentity::Different;
+        };
+        if left == right {
+            return PairTextIdentity::ByteIdentical;
+        }
+        if same_lines_ignoring_indentation(left, right) {
+            return PairTextIdentity::IndentationOnly;
+        }
+        PairTextIdentity::Different
     }
+}
+
+/// Whether two snippets hold the same lines once each line's leading
+/// whitespace is dropped. Line endings are consumed with the line and a
+/// missing final line break adds no line, so neither counts as a
+/// difference.
+fn same_lines_ignoring_indentation(left: &str, right: &str) -> bool {
+    left.lines()
+        .map(str::trim_start)
+        .eq(right.lines().map(str::trim_start))
 }
 
 /// Pair axes and raw-content populations before admission gates.
@@ -307,8 +330,8 @@ struct Measurements {
     literal_fraction: f64,
     /// Exact Merkle identity.
     merkle_equal: bool,
-    /// Exact raw source-slice identity.
-    byte_identical: bool,
+    /// How far the two raw source ranges are the same text.
+    text: PairTextIdentity,
 }
 
 /// Validates two provider vectors and measures their canonical cosine.

@@ -226,6 +226,7 @@ type PairEvidence {
   agreement: Float
   rename_consistency: Float
   literal_fraction: Float
+  text_identity: PairTextIdentity
   fused_score: Float
   content_required: Bool
   content_ok: Bool
@@ -240,6 +241,14 @@ union PairClassification {
   StructuralOnly
   LooselySimilar
   SameBehavior
+}
+
+# [FUSED-PAIR-SIGNALS] How far one pair's two raw source ranges are the
+# same text, read once from the same bytes the byte-identity verdict reads.
+union PairTextIdentity {
+  ByteIdentical
+  IndentationOnly
+  Different
 }
 
 # [CLONE-KIND-FOLD] The kind of a whole cluster: the weakest pair

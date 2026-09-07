@@ -1,8 +1,11 @@
 //! [FUSED-CONTENT-GATE-CALL-TARGET] Member-call selectors name behavior, not local variables.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
-use super::frontier::{frontiers_aligned, identities_substitute, MemberContent};
+use super::{
+    frontier::{frontiers_aligned, identities_substitute, population, MemberContent, Population},
+    rename::corroborated_substitution,
+};
 use crate::{
     ast::{ByteRange, NormalizedNode},
     lang::shared::IDENTIFIER_KIND,
@@ -22,20 +25,37 @@ const CALLABLE_DECLARATIONS: &[&str] = &[
     "method_or_prop_defn",
 ];
 
+/// An external selector and the selected collaborator through which it is called.
+pub(super) struct CallTarget {
+    /// Frontier position of a receiver property, excluding plain receiver variables.
+    collaborator: Option<usize>,
+}
+
 /// Marks frontier leaves that select methods declared outside the matched region.
 pub(super) fn external_targets(
     root: &NormalizedNode,
     range: ByteRange,
     source: &[u8],
     leaves: &[ByteRange],
-) -> Vec<bool> {
+) -> Vec<Option<CallTarget>> {
     let nodes = covered_nodes(root, range);
     let declarations = declared_names(&nodes, source);
     let targets = external_selector_ranges(&nodes, &declarations, source);
     leaves
         .iter()
-        .map(|leaf| targets.contains(&(leaf.start, leaf.end)))
+        .map(|leaf| {
+            targets
+                .get(&(leaf.start, leaf.end))
+                .map(|receiver| target_for_receiver(*receiver, leaves))
+        })
         .collect()
+}
+
+/// Locates a receiver property in the same collapsed frontier as its selector.
+fn target_for_receiver(receiver: Option<ByteRange>, leaves: &[ByteRange]) -> CallTarget {
+    CallTarget {
+        collaborator: receiver.and_then(|range| leaves.iter().position(|leaf| *leaf == range)),
+    }
 }
 
 /// Selector spans whose names are not declared in the matched region.
@@ -43,17 +63,26 @@ fn external_selector_ranges(
     nodes: &[&NormalizedNode],
     declarations: &BTreeSet<&[u8]>,
     source: &[u8],
-) -> BTreeSet<(usize, usize)> {
+) -> BTreeMap<(usize, usize), Option<ByteRange>> {
     nodes
         .iter()
-        .filter_map(|node| call_selector(node))
-        .filter(|selector| {
-            source
-                .get(selector.byte_range.start..selector.byte_range.end)
-                .is_some_and(|name| !declarations.contains(name))
-        })
-        .map(|selector| (selector.byte_range.start, selector.byte_range.end))
+        .filter_map(|node| external_call_target(node, declarations, source))
         .collect()
+}
+
+/// A copied collaborator property can rename the operation selected through it.
+fn external_call_target(
+    call: &NormalizedNode,
+    declarations: &BTreeSet<&[u8]>,
+    source: &[u8],
+) -> Option<((usize, usize), Option<ByteRange>)> {
+    let selector = call_selector(call)?.byte_range;
+    let name = source.get(selector.start..selector.end)?;
+    if declarations.contains(name) {
+        return None;
+    }
+    let receiver = collaborator_property(call).map(|node| node.byte_range);
+    Some(((selector.start, selector.end), receiver))
 }
 
 /// External selectors obey the same positional/substitution rule as behavior-bearing operators.
@@ -61,13 +90,40 @@ pub(super) fn contradicts(left: &MemberContent, right: &MemberContent) -> bool {
     if !frontiers_aligned(left, right) {
         return identities_substitute(external_identities(left), external_identities(right));
     }
+    let identifiers = population(&left.keys, &right.keys, Population::Identifier);
     left.keys
         .iter()
         .zip(&right.keys)
         .zip(left.external_calls.iter().zip(&right.external_calls))
-        .any(|((left, right), (left_external, right_external))| {
-            *left_external && *right_external && left.key != right.key
+        .any(|((left_key, right_key), (left_target, right_target))| {
+            left_key.key != right_key.key
+                && left_target
+                    .as_ref()
+                    .zip(right_target.as_ref())
+                    .is_some_and(|targets| {
+                        !collaborators_rename(left, right, targets, &identifiers)
+                    })
         })
+}
+
+/// Matching receiver-property positions must demonstrate a repeated bijective substitution.
+fn collaborators_rename(
+    left: &MemberContent,
+    right: &MemberContent,
+    targets: (&CallTarget, &CallTarget),
+    identifiers: &[(u64, u64)],
+) -> bool {
+    let Some((left_index, right_index)) = targets.0.collaborator.zip(targets.1.collaborator) else {
+        return false;
+    };
+    left_index == right_index
+        && left
+            .keys
+            .get(left_index)
+            .zip(right.keys.get(right_index))
+            .is_some_and(|(left, right)| {
+                corroborated_substitution(identifiers, (left.key, right.key))
+            })
 }
 
 /// The fixed call-target identities, excluding receivers and authored callable declarations.
@@ -76,7 +132,7 @@ fn external_identities(member: &MemberContent) -> impl Iterator<Item = u64> + '_
         .keys
         .iter()
         .zip(&member.external_calls)
-        .filter(|(_, external)| **external)
+        .filter(|(_, external)| external.is_some())
         .map(|(key, _)| key.key)
 }
 
@@ -108,6 +164,13 @@ fn call_selector(call: &NormalizedNode) -> Option<&NormalizedNode> {
         "cascade_call_expression" => call.children.iter().find_map(member_selector),
         _ => None,
     }
+}
+
+/// A receiver property is a collaborator; a plain variable is only its local handle.
+fn collaborator_property(call: &NormalizedNode) -> Option<&NormalizedNode> {
+    let callee = call.children.first()?;
+    let _selector = member_selector(callee)?;
+    member_selector(callee.children.first()?)
 }
 
 /// The member-access productions preserved by the supported normalizers.

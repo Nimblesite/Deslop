@@ -10,6 +10,7 @@ import {
   type FacetFilter,
   type Report,
   type ReportCluster,
+  type ReportOccurrence,
   type Severity,
   clusterBand,
 } from "../../src/types/report";
@@ -58,6 +59,40 @@ export const selectedCluster = computed<ReportCluster | null>(() => {
   return clusters.value.find((c) => c.id === id) ?? null;
 });
 
+// [VSIX-PAIR-COMPARE] The occurrence row one tap picked, waiting for a second
+// tap to name the other endpoint. Cleared when the selected cluster changes.
+export const pickedOccurrence = signal<ReportOccurrence | null>(null);
+const COMPARE_PAIR_MESSAGE = "compare/pair";
+
+function sameOccurrence(left: ReportOccurrence, right: ReportOccurrence): boolean {
+  return left.path === right.path && left.start_byte === right.start_byte && left.end_byte === right.end_byte;
+}
+
+/** Whether this row is the one a tap picked. */
+export function isPicked(occurrence: ReportOccurrence): boolean {
+  const picked = pickedOccurrence.value;
+  return picked !== null && sameOccurrence(picked, occurrence);
+}
+
+// [VSIX-PAIR-COMPARE] One tap picks a row. A second tap on another row of the
+// same cluster posts both endpoints, first tap on the left, and clears the
+// pick; tapping the picked row again unpicks it. A pick that is no longer a
+// member of the cluster is replaced, never compared.
+export function tapOccurrenceRow(cluster: ReportCluster, occurrence: ReportOccurrence): void {
+  const picked = pickedOccurrence.value;
+  const pickedIsMember = picked !== null && cluster.occurrences.some((member) => sameOccurrence(member, picked));
+  if (picked === null || !pickedIsMember) {
+    pickedOccurrence.value = occurrence;
+    return;
+  }
+  if (sameOccurrence(picked, occurrence)) {
+    pickedOccurrence.value = null;
+    return;
+  }
+  post({ kind: COMPARE_PAIR_MESSAGE, left: picked, right: occurrence });
+  pickedOccurrence.value = null;
+}
+
 export const filteredClusters = computed<ReportCluster[]>(() => {
   const { severity, kind, pathGlob } = filters.value;
   const byId = severityByClusterId.value;
@@ -100,6 +135,7 @@ export function applyHostMessage(message: HostMessage): void {
         break;
       case "select/cluster":
         selectedClusterId.value = message.id;
+        pickedOccurrence.value = null;
         break;
       case "filter/set":
         filters.value = message.filters;

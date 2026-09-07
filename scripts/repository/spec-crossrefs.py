@@ -217,17 +217,36 @@ def validation_section(path: Path | None) -> tuple[str, bool]:
     records = json.loads(path.read_text())
     if not isinstance(records, list) or not records:
         raise ValueError("Validation manifest must contain command results")
-    lines = ["", "## Validation", "", f"Command outcomes read from `{path}`.", ""]
-    failed = False
-    for record in records:
-        command, exit_code = record["command"], record["exit_code"]
-        if not isinstance(command, str) or type(exit_code) is not int:
-            raise ValueError("Each result needs a command string and integer exit_code")
-        failed = failed or exit_code != 0
-        lines.extend((f"Exit code: **{exit_code}**", "", "```sh", command, "```", ""))
-        if record.get("log"):
-            lines.extend((f"[Captured output](../{record['log']})", ""))
-    return "\n".join(lines), failed
+    rows = [validation_row(record) for record in records]
+    lines = ["", "## Validation", "", f"Command outcomes read from `{path}`.", "",
+             "Historical attempts are retained and link to the latest recorded result for the same check. Only latest failures and pending checks remain unresolved. Pending rows have not completed. These records do not establish that `make ci` passed.", "",
+             "| Result / exit code | Working directory | Command | Captured result |",
+             "| --- | --- | --- | --- |", *(row for row, _failed in rows), ""]
+    return "\n".join(lines), any(failed for _row, failed in rows)
+
+
+def table_text(value: str) -> str:
+    """Keep literal commands and log text inside a markdown table cell."""
+    return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("|", "&#124;").replace("`", "&#96;").replace("\n", " ")
+
+
+def validation_row(record) -> tuple[str, bool]:
+    """Render completed or explicitly pending checks without inventing an outcome."""
+    command, exit_code = record["command"], record["exit_code"]
+    pending = record.get("status") == "pending" and exit_code is None
+    if not isinstance(command, str) or not (pending or type(exit_code) is int):
+        raise ValueError("Each result needs a command and integer exit_code, or explicit pending status")
+    historical = record.get("status") == "historical" and bool(record.get("superseded_by"))
+    result = "pending" if pending else f"{'historical' if historical else 'latest'} / {exit_code}"
+    directory = table_text(record.get("cwd", "."))
+    log = record.get("log")
+    evidence = f"[Output](../{log})" if log else "Awaiting recorded output"
+    if log:
+        summaries = [line.strip() for line in Path(log).read_text().splitlines() if line.startswith("test result:")]
+        evidence += " " + table_text("; ".join(summaries))
+    if historical:
+        evidence += f"; superseded by [latest result](../{record['superseded_by']})"
+    return f"| {result} | {directory} | <code>{table_text(command)}</code> | {evidence} |", pending or (not historical and exit_code != 0)
 
 
 def scan_snapshot(path: Path) -> dict:

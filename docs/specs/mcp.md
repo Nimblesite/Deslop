@@ -226,7 +226,7 @@ Edge cases:
 
 Input is `PairComparisonParams { left, right }`; each endpoint is `{ path, start_byte, end_byte }`, and the endpoints must be distinct occurrences within the pinned workspace. A cluster id is invalid input because the server never chooses comparison endpoints from a component.
 
-Output is `PairComparison { left, right, evidence }`. The response echoes both endpoints and returns only that relation's structural similarity, token Jaccard, embedding cosine, content agreement, rename consistency, literal fraction, fused admission score, content-gate applicability and result, final admission result, optional pair classification, and engine-authored explanation. It contains no cluster mass. No value is cached or copied onto a cluster.
+Output is `PairComparison { left, right, evidence }`. The response echoes both endpoints and returns only that relation's structural similarity, token Jaccard, embedding cosine, content agreement, rename consistency, literal fraction, how far the two raw ranges are the same text (`text_identity`: byte-identical, indentation-only, or different), fused admission score, content-gate applicability and result, final admission result, optional pair classification, and engine-authored explanation. It contains no cluster mass. No value is cached or copied onto a cluster.
 
 The server recomputes or retrieves the endpoint-keyed pair record through `pair/compare`. Reversing endpoint order preserves the symmetric measurements and admission result while the echoed endpoint order follows the request. Replacing either endpoint asks a different question and cannot reuse evidence from the first pair.
 

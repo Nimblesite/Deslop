@@ -3,8 +3,9 @@
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as vscode from "vscode";
+import type { LanguageClient } from "vscode-languageclient/node";
 
-import { compareWithCanonicalTarget } from "../../commands/register";
+import { compareWithCanonicalTarget } from "../../commands/compare";
 import { parseCompareUri } from "../../compare/provider";
 import { ReportStore } from "../../reportStore";
 import { ClusterNode, OccurrenceNode, StatusTicker, TopOffendersProvider } from "../../tree/providers";
@@ -27,6 +28,7 @@ const ONE_DIFF = 1;
 const NO_DIFFS = 0;
 const DIRTY_SOURCE_PATH = "dirty-canonical.ts";
 const CANONICAL_CONTEXT = "deslop.occurrenceCanonical";
+const NO_CLIENT = (): LanguageClient | undefined => undefined;
 const PEER_CONTEXT = "deslop.occurrence";
 const SOURCE_PARTS = ["const canonical = 1;\n", "const firstPeer = 2;\n", "const selectedPeer = 3;\n"];
 
@@ -128,14 +130,14 @@ suite("canonical comparison", () => {
       const selected = cluster.occurrences[THIRD_OCCURRENCE_INDEX];
       const firstPeer = cluster.occurrences[FIRST_PEER_INDEX];
       assert.ok(selected && firstPeer);
-      await compareWithCanonicalTarget(store, new OccurrenceNode(selected));
+      await compareWithCanonicalTarget(store, NO_CLIENT, new OccurrenceNode(selected));
       await assertComparedRange(selected, THIRD_OCCURRENCE_INDEX);
       await closeEditors();
-      await compareWithCanonicalTarget(store, new ClusterNode(cluster));
+      await compareWithCanonicalTarget(store, NO_CLIENT, new ClusterNode(cluster));
       await assertComparedRange(firstPeer, FIRST_PEER_INDEX);
       await closeEditors();
       store.markFileDirty(file);
-      await compareWithCanonicalTarget(store, cluster.id, selected);
+      await compareWithCanonicalTarget(store, NO_CLIENT, cluster.id, selected);
       await assertComparedRange(selected, THIRD_OCCURRENCE_INDEX);
     });
   });
@@ -150,7 +152,7 @@ suite("canonical comparison", () => {
         [cluster.id, { ...canonical, path: UNKNOWN_CLUSTER_ID }],
       ];
       for (const [target, selected] of requests) {
-        await compareWithCanonicalTarget(store, target, selected);
+        await compareWithCanonicalTarget(store, NO_CLIENT, target, selected);
         assert.equal(diffTabs().length, NO_DIFFS, "a rejected target must leave the editor unchanged");
       }
     });

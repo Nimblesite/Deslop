@@ -15,6 +15,12 @@ const SHORT_OCCURRENCE_IDENTIFIER = "o";
 const CLUSTER_WEBVIEW_SOURCE = "cluster/main.tsx";
 const OCCURRENCE_LIST_SOURCE = "cluster/OccurrenceList.tsx";
 const HELP_BUBBLE_SOURCE = "components/HelpBubble.tsx";
+const STORE_SOURCE = "store.ts";
+const OCCURRENCE_ROW_TAG = "article";
+const TAP_HANDLER_NAME = "tapOccurrenceRow";
+const PICKED_SIGNAL_NAME = "pickedOccurrence";
+const COMPARE_PAIR_MESSAGE = "compare/pair";
+const POST_FUNCTION_NAME = "post";
 
 function parseClusterWebview(): ts.SourceFile {
   return parseWebviewSource(CLUSTER_WEBVIEW_SOURCE);
@@ -248,6 +254,11 @@ suite("cluster webview occurrence locations", () => {
       "Open this occurrence in VS Code",
       "Compare is disabled on the canonical occurrence",
       "Compare opens a diff between this occurrence and the canonical occurrence in one click",
+      // [VSIX-PAIR-COMPARE] Rows are the selection: each row and the list
+      // header explain the two-row tap in their hover copy.
+      "Tap this row to pick it, then tap a second row to compare the two",
+      "Picked for comparison. Tap another row to compare it with this one",
+      "Tap one row, then another, to compare those two",
       "Previous cluster",
       "Next cluster",
       "Detailed keyboard help",
@@ -255,13 +266,43 @@ suite("cluster webview occurrence locations", () => {
     ]) {
       assert.match(corpus, new RegExp(escapeRegExp(phrase)), `missing hover copy: ${phrase}`);
     }
-    // The removed two-step selection and weight/bucket copy must stay gone.
+    // The removed two-step selection and weight/bucket copy must stay gone:
+    // no per-row "Select for comparison" button and no gated compare button.
     for (const gone of [
       "Select two occurrences to enable compare",
+      "Select for comparison",
+      "Compare selected occurrences",
       "Weight is this cluster's duplicated mass",
     ]) {
       assert.doesNotMatch(corpus, new RegExp(escapeRegExp(gone)), `retired copy resurfaced: ${gone}`);
     }
+  });
+
+  test("tapping an occurrence row picks it and a second row hands both endpoints to the host", () => {
+    // [VSIX-PAIR-COMPARE] The rows are the selection control. The tap state
+    // machine lives in the store, and its second tap posts compare/pair.
+    const rows = descendants(
+      parseOccurrenceList(),
+      (n) => ts.isJsxOpeningElement(n) && jsxTagName(n) === OCCURRENCE_ROW_TAG,
+    ) as ts.JsxOpeningElement[];
+    assert.equal(rows.length, 1, "one row element renders every occurrence");
+    const row = rows[0];
+    assert.ok(row && jsxAttribute(row, "onClick"), "the row itself answers a tap");
+    assert.ok(row && jsxAttribute(row, "title"), "the row explains the tap in its hover copy");
+    const store = parseWebviewSource(STORE_SOURCE, ts.ScriptKind.TS);
+    const tapHandlers = descendants(
+      store,
+      (n) => ts.isFunctionDeclaration(n) && n.name?.text === TAP_HANDLER_NAME,
+    );
+    assert.equal(tapHandlers.length, 1, "the store owns the tap state machine");
+    const handler = tapHandlers[0];
+    assert.ok(handler && hasDescendant(handler, (n) => ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === POST_FUNCTION_NAME), "the second tap posts to the host");
+    assert.ok(hasDescendant(store, (n) => ts.isStringLiteral(n) && n.text === COMPARE_PAIR_MESSAGE), "the store names the compare/pair message");
+    const pickSignals = descendants(
+      store,
+      (n) => ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.name.text === PICKED_SIGNAL_NAME,
+    );
+    assert.equal(pickSignals.length, 1, "the picked row is one store signal, not component state");
   });
 
   test("cluster webview links visible explanations to website docs", () => {
@@ -402,3 +443,4 @@ suite("cluster webview occurrence locations", () => {
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+

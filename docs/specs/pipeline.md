@@ -43,6 +43,9 @@ Configuration:
 ### [PIPELINE-FINGERPRINT-MERKLE] Structural fingerprint (Merkle)
 Bottom-up Merkle hash over `NormalizedNode`. Each node's hash combines its own `kind` string with the ordered hashes of its children using `blake3`. Each node stores `(hash, subtree_node_count, byte_range, file_id)`. Nodes whose subtree size is below `--min-nodes` are excluded from clustering per [DECISION-MIN-NODES].
 
+#### [PIPELINE-FINGERPRINT-MERKLE-TYPE-REFERENCE] Type references belong to their enclosing code
+Rust type annotations alone are not copied implementations. Generic types, type arguments, references, pointers, arrays, tuples, function types and scoped type identifiers retain their complete hashes and node counts in the enclosing declaration or expression, but do not produce standalone fingerprint candidates. This keeps `Vec<&str>` from becoming a duplicate across otherwise unrelated functions while preserving the evidence of a copied function that uses it. Implemented by `fingerprint.rs::is_type_reference`; pinned by `crates/deslop/tests/rust_issue_147_iter_collect_idiom.rs`, including its positive control asserting a real clone's files, occurrences, extent, kind, rank and canonical node count.
+
 #### [PIPELINE-FINGERPRINT-MERKLE-ROOT] When the file root is a view
 
 The synthetic `__file__` root is hashed like any node, because its children's hashes fold into it, and by default it is also a candidate view: a module copied whole — import line and all — is one duplication at the extent of the file, and the same-file collapse of [PIPELINE-CLUSTER-EXACT-SCOPE] publishes it there rather than as the declaration below the import. Two cases deny the root a view of its own; its children are fingerprinted either way.

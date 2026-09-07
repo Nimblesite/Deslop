@@ -463,6 +463,16 @@ fn pair_counts(pairs: impl Iterator<Item = (u64, u64)>) -> BTreeMap<(u64, u64), 
     counts
 }
 
+/// [FUSED-CONTENT-GATE-CALL-TARGET] A receiver property must follow a repeated, unambiguous rename.
+pub(super) fn corroborated_substitution(identifiers: &[(u64, u64)], keys: (u64, u64)) -> bool {
+    let substitutions = substituted_pairs(identifiers);
+    let bijection = ModalBijection::over(&substitutions);
+    keys.0 != keys.1
+        && substitutions.iter().all(|pair| bijection.explains(pair))
+        && substitutions.iter().filter(|pair| **pair == keys).count()
+            >= RENAME_CORROBORATION_MIN_OCCURRENCES
+}
+
 /// Modal partner per key: the partner seen most often. Counting and
 /// folding run over [`BTreeMap`]s in ascending order and replacement
 /// requires a strictly greater count, so ties resolve to the smallest

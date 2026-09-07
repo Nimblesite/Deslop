@@ -94,6 +94,14 @@ Open moves VS Code to the occurrence and selects the clone range.
 
 Click **Compare** on any non-canonical occurrence to open VS Code's diff editor in one click. The canonical occurrence appears on the left and the occurrence you clicked appears on the right — exactly the clone bytes, even when both live in the same file. Compare is disabled on the canonical row because that would compare a range with itself. The occurrence's context menu offers **Compare With Canonical** too.
 
+To compare any other two occurrences, tap one row and then another: the first tap picks a row, the second opens the diff with the first on the left. Tap the picked row again to unpick it.
+
+The diff's title names both occurrences and the engine's verdict on exactly that pair: **Identical bytes**, **Differs only by indentation** when indentation is the whole difference, or the pair's clone kind. That line is the fastest check that a finding is real: two copies that differ only by indentation are the same code.
+
+To compare any two occurrences, tap one row and then another. The first tap picks the row; the second opens the diff with the first-tapped range on the left. Tap the picked row again to let it go.
+
+The diff's title names both files and states what the engine found for exactly those two ranges: **Identical bytes**, **Differs only by indentation** when the only difference is how the lines are indented, or the pair's clone kind. That title is the quickest way to confirm a reported copy is real.
+
 ## Cluster Navigation
 
 Previous cluster and Next cluster move through the same worst-first list as the Top Offenders view. They update the selected cluster locally inside the webview.

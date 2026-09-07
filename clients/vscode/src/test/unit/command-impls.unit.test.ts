@@ -14,13 +14,13 @@ import {
   openWorstCluster,
   openOccurrence,
   jumpToNextOccurrence,
-  comparePairEndpoints,
   openSchemaDoc,
   openCpuReport,
   renderCpuReport,
   resolveOccurrenceUri,
   openOccurrenceTarget,
 } from "../../commands/register";
+import { comparePairEndpoints } from "../../commands/compare";
 import { reportWithClusters } from "./report.helpers";
 import {
   aiPayloadForCluster,
@@ -45,6 +45,9 @@ import { kindTaxonomy, kindTitle, Report, ReportCluster, ReportOccurrence } from
 import { FIXTURE_KIND, occurrence, wireCluster } from "../cluster.helpers";
 
 const UTF8_ENCODING = "utf8";
+// [VSIX-PAIR-COMPARE] Without a language client the diff still opens; the
+// title then carries the two names and no engine verdict.
+const NO_CLIENT = (): LanguageClient | undefined => undefined;
 const TEST_SOURCE_PATH = "src/foo.cs";
 const SECOND_TEST_SOURCE_PATH = "src/bar.cs";
 const ELECTED_PAIR_LINE_PREFIX = "elected_pair:";
@@ -56,6 +59,7 @@ const TEST_TWENTY = 20;
 const DEFAULT_CLUSTER_WEIGHT = TEST_TEN;
 const DEFAULT_OCCURRENCE_END_BYTE = 50;
 const CYCLE_OCCURRENCE_END_BYTE = 16;
+const NO_ENGINE_DIFF_TITLE = `${FILE_A_NAME} vs ${FILE_B_NAME}`;
 const CYCLE_CLUSTER_ID = "c-cycle";
 const REFRESH_REPORT_COMMAND = "deslop.refreshReport";
 const OPEN_CLUSTER_COMMAND = "deslop.openCluster";
@@ -103,6 +107,12 @@ async function findDiffTab(): Promise<vscode.TabInputTextDiff> {
     });
   }
   throw new Error("no diff tab opened after comparePairEndpoints");
+}
+
+function diffTabLabel(): string | undefined {
+  return vscode.window.tabGroups.all
+    .flatMap((group) => group.tabs)
+    .find((tab) => tab.input instanceof vscode.TabInputTextDiff)?.label;
 }
 
 async function closeAllDiffs(): Promise<void> {
@@ -322,7 +332,7 @@ suite("register command implementations", () => {
     await closeAllDiffs();
     // [VSIX-PAIR-COMPARE] Both endpoints are explicit; the host never
     // invents a canonical side.
-    await comparePairEndpoints(
+    await comparePairEndpoints(NO_CLIENT, 
       { path: fileA, start_byte: 0, end_byte: CYCLE_OCCURRENCE_END_BYTE },
       { path: fileB, start_byte: 0, end_byte: CYCLE_OCCURRENCE_END_BYTE },
     );
@@ -338,6 +348,9 @@ suite("register command implementations", () => {
     const right = await vscode.workspace.openTextDocument(diff.modified);
     assert.equal(left.getText(), "public class A {");
     assert.equal(right.getText(), "public class B {");
+    // [VSIX-PAIR-COMPARE] With no engine to ask, the title names the two
+    // endpoints and claims nothing about them.
+    assert.equal(diffTabLabel(), NO_ENGINE_DIFF_TITLE);
 
     await closeAllDiffs();
     fs.rmSync(dir, { recursive: true, force: true });
@@ -359,7 +372,7 @@ suite("register command implementations", () => {
     const thirdLineEnd = source.indexOf("\n", thirdLineStart);
 
     await closeAllDiffs();
-    await comparePairEndpoints(
+    await comparePairEndpoints(NO_CLIENT, 
       { path: file, start_byte: 0, end_byte: firstLineEnd },
       { path: file, start_byte: thirdLineStart, end_byte: thirdLineEnd },
     );
@@ -395,11 +408,11 @@ suite("register command implementations", () => {
     // [VSIX-PAIR-COMPARE] There is no canonical fallback: a missing,
     // malformed, or identical endpoint pair must never open a diff.
     await closeAllDiffs();
-    await comparePairEndpoints(undefined, undefined);
-    await comparePairEndpoints({ path: "a.ts", start_byte: 0, end_byte: 1 }, undefined);
-    await comparePairEndpoints(undefined, { path: "a.ts", start_byte: 0, end_byte: 1 });
-    await comparePairEndpoints({ path: "a.ts", start_byte: 0, end_byte: 1 }, "not-an-object");
-    await comparePairEndpoints(
+    await comparePairEndpoints(NO_CLIENT, undefined, undefined);
+    await comparePairEndpoints(NO_CLIENT, { path: "a.ts", start_byte: 0, end_byte: 1 }, undefined);
+    await comparePairEndpoints(NO_CLIENT, undefined, { path: "a.ts", start_byte: 0, end_byte: 1 });
+    await comparePairEndpoints(NO_CLIENT, { path: "a.ts", start_byte: 0, end_byte: 1 }, "not-an-object");
+    await comparePairEndpoints(NO_CLIENT, 
       { path: "a.ts", start_byte: 0, end_byte: 1 },
       { path: "a.ts", start_byte: 0, end_byte: 1 },
     );
@@ -1022,10 +1035,10 @@ suite("command target resolution", () => {
 
   test("comparePairEndpoints is a no-op when either endpoint is malformed", async () => {
     const good = { path: TEST_SOURCE_PATH, start_byte: 0, end_byte: TEST_TEN };
-    await comparePairEndpoints(good, { path: "", start_byte: 0, end_byte: 1 });
-    await comparePairEndpoints(good, { path: TEST_SOURCE_PATH, start_byte: 1.5, end_byte: 2 });
-    await comparePairEndpoints(good, { path: TEST_SOURCE_PATH, start_byte: "0", end_byte: 2 });
-    await comparePairEndpoints(good, null);
+    await comparePairEndpoints(NO_CLIENT, good, { path: "", start_byte: 0, end_byte: 1 });
+    await comparePairEndpoints(NO_CLIENT, good, { path: TEST_SOURCE_PATH, start_byte: 1.5, end_byte: 2 });
+    await comparePairEndpoints(NO_CLIENT, good, { path: TEST_SOURCE_PATH, start_byte: "0", end_byte: 2 });
+    await comparePairEndpoints(NO_CLIENT, good, null);
   });
 
   test("openSchemaDoc consults the RPC fallback and survives a failing client", async () => {
