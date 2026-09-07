@@ -216,16 +216,34 @@ fn diagnostic_data_stores_cluster_id_and_mass_for_machine_readers() -> Result<()
         data.get("rank_band").and_then(serde_json::Value::as_str),
         Some("worst")
     );
+    // [CLONE-KIND-LABELS] The diagnostic data carries the folded kind so
+    // the extension colours the squiggle by kind without re-deriving it.
+    assert_eq!(
+        data.get("kind").and_then(serde_json::Value::as_str),
+        Some(FIXTURE_KIND_WIRE)
+    );
     Ok(())
 }
 
+/// [CLONE-KIND-LABELS] The fixture kind's wire spelling and title, spelled
+/// out so a registry drift shows up here as words, not as a pass.
+const FIXTURE_KIND_WIRE: &str = "nearly_identical";
+const FIXTURE_KIND_TITLE: &str = "Nearly identical code";
+
 #[test]
-fn diagnostic_message_shows_count_and_mass() {
+fn fixture_kind_labels_are_the_registry_labels() {
+    let fixture = deslop_core::report_fixtures::FIXTURE_KIND;
+    assert_eq!(fixture.wire_label(), FIXTURE_KIND_WIRE);
+    assert_eq!(fixture.labels().title, FIXTURE_KIND_TITLE);
+}
+
+#[test]
+fn diagnostic_message_shows_kind_count_and_mass() {
     let message = diagnostic_message(&two_file_cluster());
     assert!(message.contains(" — "), "joined with em dash: {message}");
     assert!(
-        message.starts_with("Duplicate code × 2"),
-        "neutral title and instance count first: {message}"
+        message.starts_with(&format!("{FIXTURE_KIND_TITLE} × 2")),
+        "kind title and instance count first: {message}"
     );
     assert!(
         message.contains(&format!("mass {HEAVY_CLUSTER_MASS}")),
@@ -239,15 +257,15 @@ fn diagnostic_message_shows_count_and_mass() {
 
 // [FUSED-PAIR-SIGNALS] The admission signals are pair measurements and
 // never touch the cluster. An LSP diagnostic on one occurrence must not
-// render them: the message quotes the neutral count and the duplicated
-// mass, and nothing else.
+// render them: the message quotes the folded kind, the count and the
+// duplicated mass, and nothing else.
 #[test]
 fn diagnostic_message_renders_no_pair_evidence() {
     let cluster = two_file_cluster();
     let message = diagnostic_message(&cluster);
     assert!(
-        message.contains("Duplicate code × 2"),
-        "the neutral label and count survive: {message}"
+        message.contains(&format!("{FIXTURE_KIND_TITLE} × 2")),
+        "the kind title and count survive: {message}"
     );
     assert!(
         !message.contains("fused"),
@@ -310,7 +328,7 @@ fn diagnostic_never_renders_pair_scores() {
         vec![occurrence(A_FILE, 0, 1)],
     );
     let message = diagnostic_message(&cluster);
-    assert!(message.contains("Duplicate code × 1"));
+    assert!(message.contains(&format!("{FIXTURE_KIND_TITLE} × 1")));
     assert!(
         !message.contains("structural"),
         "unsourced structural score leaked: {message}"
@@ -350,7 +368,9 @@ fn build_for_file_emits_error_for_worst_band_cluster_with_canonical_link() -> Re
         diagnostic.message
     );
     assert!(
-        diagnostic.message.starts_with("Duplicate code × 2 — "),
+        diagnostic
+            .message
+            .starts_with(&format!("{FIXTURE_KIND_TITLE} × 2 — ")),
         "the neutral title and count are still first: {}",
         diagnostic.message
     );

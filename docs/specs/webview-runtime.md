@@ -25,7 +25,7 @@ The extension host owns data shaping ([VSIX-PRINCIPLES](vsix.md#vsix-principles)
 | `report/delta` | `report` | Same writer as snapshot — replaces `report`, bumps `lastUpdatedAt`. (The host always sends a whole report; the webview never reassembles a delta.) |
 | `analysis/state` | `state` | Sets `analysisState` (`idle` / `analysing` / …). Lifecycle ticks alone do not re-push the report ([vsix.md §VSIX-PERF](vsix.md#vsix-perf)). |
 | `select/cluster` | `id` (`string \| null`) | Sets `selectedClusterId`. The cluster panel pushes this after each feed so the opened cluster stays resolved across id churn. |
-| `filter/set` | `filters` | Sets the `filters` signal (language / severity / pathGlob) used by the report webview. |
+| `filter/set` | `filters` | Sets the `filters` signal (severity / kind / pathGlob) used by the report webview. |
 
 **Webview → host messages.** The webview posts intents the host turns into real VS Code commands (`handleMessage` in `panels.ts`); an unknown `kind` is a no-op, never a throw:
 
@@ -45,7 +45,7 @@ The host pushes the **visible projection** for the report and duplication webvie
 
 Command `deslop.openCluster` opens a webview tab. The tab renders a single cluster with:
 
-- Header: cluster id, rank, mass, occurrence count, mass severity badge, and jump-to-next-cluster / jump-to-prev-cluster arrows.
+- Header: the clone kind title ([CLONE-KIND-LABELS]), cluster id, rank, mass, occurrence count, a badge coloured by the kind and glyphed by the mass band ([CLONE-KIND-COLOR]), and jump-to-next-cluster / jump-to-prev-cluster arrows.
 - Cluster membership and mass only. The panel carries no pair evidence, pair classification, interpretation derived from pair evidence, or source-pair selection.
 - One collapsible panel per occurrence, each containing:
   - File path plus human position (`line:column`), clickable to open the file at that exact editor position.
@@ -76,7 +76,7 @@ Every cluster surface (Top Offenders tree, hover bubble, cluster webview, report
 
 ## [VSIX-REPORT-WEBVIEW] Full report webview
 
-Command `deslop.openReport` opens a second webview with the full ranked list — essentially a live-refreshing version of the HTML renderer from [OUTPUT-SCHEMA-JSON](pipeline.md#output-schema-json), but wired to the daemon's notification stream so it stays current as the user types. Filters: by language, by severity, by file-path glob. Sort is fixed (worst-first) because the whole product premise is worst-first.
+Command `deslop.openReport` opens a second webview with the full ranked list — essentially a live-refreshing version of the HTML renderer from [OUTPUT-SCHEMA-JSON](pipeline.md#output-schema-json), but wired to the daemon's notification stream so it stays current as the user types. Filters: by mass severity band, by clone kind, by file-path glob. Sort is fixed (worst-first) because the whole product premise is worst-first.
 
 ## [VSIX-METRICS-REPORT] Duplication report webview
 

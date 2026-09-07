@@ -16,7 +16,7 @@ export const REPORT_TYPE_CONFIG = {
     },
   },
   ReportCluster: {
-    docs: "One closure component carrying membership, canonical extent, duplicated mass, and mass-derived order only.",
+    docs: "One closure component: its membership, canonical extent, duplicated mass, mass-derived order, and the clone kind folded from its pairs ([CLONE-KIND-FOLD]).",
     derives: ["Debug", "Clone", "PartialEq", "Serialize", "Deserialize"],
     fieldOverrides: {
       rank: "usize",
@@ -34,6 +34,7 @@ export const REPORT_TYPE_CONFIG = {
       id: "Stable cluster id.",
       rank: "One-based position in mass-descending, id-ascending order.",
       rank_band: "Engine-stamped mass rank band.",
+      kind: "The weakest pair classification between the canonical occurrence and any other member ([CLONE-KIND-FOLD]).",
       mass: "Canonical node count times additional visible occurrences ([RANK-MASS-SUM]).",
       canonical_node_count: "Normalised AST node count of the canonical extent.",
       occurrences: "Exact component members; transport layers may cap the carried list.",
@@ -69,6 +70,18 @@ export const REPORT_TYPE_CONFIG = {
       StructuralOnly: "Shape-only pair rejected by its required content guard.",
       LooselySimilar: "Admitted looser Type-3 relation.",
       SameBehavior: "Embedding-supported semantic relation.",
+    },
+  },
+  ClusterKind: {
+    docs: "The clone kind of one whole cluster: the weakest pair classification between its canonical occurrence and any other member, as pair/compare reports each pair ([CLONE-KIND-FOLD]).",
+    derives: ["Debug", "Clone", "Copy", "PartialEq", "Eq", "Hash", "Serialize", "Deserialize"],
+    serdeAttrs: ['rename_all = "snake_case"'],
+    variantDocs: {
+      Identical: "Every member is byte-identical to the canonical occurrence (Type-1).",
+      NearlyIdentical: "Every member is an admitted near-copy of the canonical occurrence; at least one differs (Type-2/3).",
+      StructuralOnly: "At least one member shares only normalised shape with the canonical occurrence and fails the content guard.",
+      LooselySimilar: "At least one member is loosely related to the canonical occurrence: a looser admitted relation, or one welded only through other members.",
+      SameBehavior: "At least one member matches the canonical occurrence on embedding evidence alone (Type-4).",
     },
   },
   PairEvidence: {
@@ -188,13 +201,14 @@ export const REPORT_TYPE_CONFIG = {
     fieldDocs: { path: "Workspace-relative path.", start_byte: "Inclusive byte offset.", end_byte: "Exclusive byte offset.", start_line: "One-based first line.", end_line: "One-based final line." },
   },
   ClusterSummary: {
-    docs: "Slim mass-only projection of one clone cluster.",
+    docs: "Slim projection of one clone cluster: identity, rank, kind, and mass.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
     fieldOverrides: { rank: "usize", mass: "u64", size_nodes: "usize", occurrence_count: "usize" },
     fieldDocs: {
       id: "Stable cluster id.",
       rank: "Engine-stamped global mass rank.",
       rank_band: "Engine-stamped mass rank band.",
+      kind: "The cluster's clone kind ([CLONE-KIND-FOLD]).",
       mass: "Duplicated mass.",
       size_nodes: "Canonical normalised AST node count.",
       occurrence_count: "Authoritative visible occurrence count.",

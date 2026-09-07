@@ -29,6 +29,7 @@ use deslop_core::{
     cluster::{build_ranked_fused_clusters, Cluster, ClusterBuildInputs},
     fingerprint::Fingerprint,
     pair::FusedCluster,
+    report_fixtures::{UniformKind, FIXTURE_KIND},
     state::{FileId, FileRegistry},
 };
 
@@ -149,6 +150,7 @@ fn ranked(views: &[WeightedView]) -> Vec<Cluster> {
         trees: &[],
         file_languages: &std::collections::HashMap::new(),
         file_paths: &std::collections::HashMap::new(),
+        kinds: &UniformKind(FIXTURE_KIND),
     })
 }
 

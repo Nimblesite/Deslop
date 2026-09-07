@@ -31,6 +31,7 @@ use super::{
         embedding_pass::{run_embedding_pass, CorpusView},
         signatures::build_cross_language_signatures,
     },
+    pair_compare::ClusterKindMeasurer,
     store::relative_path_key,
     PipelineSession,
 };
@@ -89,7 +90,13 @@ impl PipelineSession {
         };
         let (fused_clusters, shape_families) =
             self.partition_and_split(fingerprints, pairs, &trees, &parse_cache, &mut ledger);
-        let clusters = self.ranked_clusters(fingerprints, &fused_clusters, &trees, &mut ledger);
+        let clusters = self.ranked_clusters(
+            fingerprints,
+            &fused_clusters,
+            &trees,
+            &embedding_outcome.pairs,
+            &mut ledger,
+        );
         tracing::info!(
             ranked_clusters = clusters.len(),
             fingerprints = fingerprints.len(),
@@ -352,13 +359,15 @@ impl PipelineSession {
         Ok(trees)
     }
 
-    /// Builds the ranked clusters from the fused ones and records the
-    /// `ranked_build` stage row.
+    /// Builds the ranked clusters from the fused ones — each stamped
+    /// with the clone kind folded from its pairs ([CLONE-KIND-FOLD]) —
+    /// and records the `ranked_build` stage row.
     fn ranked_clusters(
         &self,
         fingerprints: &[crate::fingerprint::Fingerprint],
         fused_clusters: &[crate::pair::FusedCluster],
         trees: &[crate::ast::NormalizedNode],
+        embedding_pairs: &[crate::embedding::pairs::EmbeddingPair],
         ledger: &mut StageLedger,
     ) -> Vec<crate::cluster::Cluster> {
         // [PIPELINE-DETERMINISM] (gh #430) Workspace-relative path per
@@ -376,12 +385,14 @@ impl PipelineSession {
             .collect();
         let started = Instant::now();
         let ranked_input = fused_clusters.len();
+        let kinds = ClusterKindMeasurer::new(self, fingerprints, trees, embedding_pairs);
         let clusters = build_ranked_fused_clusters(&ClusterBuildInputs {
             fingerprints,
             fused_clusters,
             trees,
             file_languages: &self.file_languages,
             file_paths: &file_paths,
+            kinds: &kinds,
         });
         ledger.record("ranked_build", ranked_input, clusters.len(), started);
         clusters

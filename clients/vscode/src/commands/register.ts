@@ -89,7 +89,7 @@ export const COMMAND_BINDINGS: readonly CommandBinding[] = [
   { id: "deslop.topOffenders.showByCluster", run: () => setTopOffendersGroupBy("cluster") },
   { id: "deslop.topOffenders.showByFile", run: () => setTopOffendersGroupBy("file") },
   { id: "deslop.topOffenders.showByFolder", run: () => setTopOffendersGroupBy("folder") },
-  { id: "deslop.topOffenders.showBySeverity", run: () => setTopOffendersGroupBy("severity") },
+  { id: "deslop.topOffenders.showByKind", run: () => setTopOffendersGroupBy("kind") },
   { id: "deslop.topOffenders.chooseFilter", run: ({ store }) => chooseTopOffendersFilter(store) },
   // Same handler as chooseFilter; separate id so the toolbar can swap in
   // the active-filter icon via the deslop.topOffendersFiltered context key.

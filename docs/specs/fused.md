@@ -55,7 +55,7 @@ This way, a Type-1 pair scores 1.0 on exact structure, a Type-2 pair normally sc
 
 **`fused` never refers to the whole cluster. It exists at the level of the pair only.** A cluster-wide fused is impossible by construction: averaging one across the member pairs is the mean that mispriced proven copies, and summing ratios in `[0,1]` is meaningless.
 
-`fused` is the pair's bounded shape/semantic admission score `max(S,J,E)` ([FUSED-STRATEGY-BOUNDED-MAX]). The independent content support `max(A,R)` participates in the same pair's applicable admission gate without being averaged into `fused`. A cluster contains no `fused`, `S`, `J`, `E`, `A`, `R`, content support, evidence verdict, or pair-source field. Pair evidence is available only for an explicit comparison of those two occurrences. A cluster carries duplicated mass and mass-derived rank only.
+`fused` is the pair's bounded shape/semantic admission score `max(S,J,E)` ([FUSED-STRATEGY-BOUNDED-MAX]). The independent content support `max(A,R)` participates in the same pair's applicable admission gate without being averaged into `fused`. A cluster contains no `fused`, `S`, `J`, `E`, `A`, `R`, content support, evidence verdict, or pair-source field. Pair evidence values are available only for an explicit comparison of those two occurrences. A cluster carries duplicated mass, mass-derived rank, and the clone kind folded from its canonical pairs ([CLONE-KIND-FOLD]) — a fold of classifications, never of values.
 
 #### [FUSED-THRESHOLD] The pair admission bar
 
@@ -122,7 +122,7 @@ Baker's p-match is a pair predicate. Deslop stores and evaluates evidence on the
 
 For a pair `p`, `structural` is its measured shared-subtree overlap ([FUSED-SHARED-SUBTREE]), `token_jaccard` is the MinHash Jaccard estimate between its two signatures, and `embedding_cos` is the cosine of its two vectors under [FUSED-EMBED-PROVIDER]. Missing input is `0.0` on that pair's axis. The same pair owns `agreement`, `rename_consistency`, and literal fraction under [FUSED-CONTENT-GATE].
 
-An explicit pair comparison identifies both endpoints and may render that pair's `S`, `J`, `E`, `A`, `R`, literal fraction, and admission explanation in one compact secondary row. Cluster JSON, text, HTML, LSP, MCP, editor, and AI-context surfaces render none of those values. A cluster contains its occurrence membership and duplicated mass; closure does not inherit evidence from any edge.
+An explicit pair comparison identifies both endpoints and may render that pair's `S`, `J`, `E`, `A`, `R`, literal fraction, and admission explanation in one compact secondary row. Cluster JSON, text, HTML, LSP, MCP, editor, and AI-context surfaces render none of those values. A cluster contains its occurrence membership, duplicated mass, and clone kind; closure does not inherit evidence from any edge, and the kind is folded after ranking from the classification of each member's pair with the canonical occurrence ([CLONE-KIND-FOLD]).
 
 ### [FUSED-CONTENT-GATE] Content agreement gates pair admission
 

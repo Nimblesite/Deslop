@@ -7,12 +7,16 @@
 import * as vscode from "vscode";
 
 import { clusterSlug } from "../clusterHover";
+import { KIND_ICON, KIND_THEME_COLOR, SEVERITY_DOT } from "../design";
 import { occurrenceDisplayLocation } from "../locations";
 import { resolveWorkspacePath } from "../pathUtils";
 import { formatMass, formatPercent } from "../types/format";
-import { SEVERITY_DOT } from "../severity";
 import {
+  ClusterKind,
+  clusterBand,
   FileMetric,
+  kindTaxonomy,
+  kindTitle,
   occurrenceCount,
   ReportCluster,
   ReportOccurrence,
@@ -33,25 +37,18 @@ export type Node =
   | OccurrenceNode
   | FileNode
   | FolderNode
-  | SeverityGroupNode
+  | KindGroupNode
   | MetricsHeadlineNode
   | FolderMetricNode
   | FileMetricNode
   | SessionFieldNode
   | StatusNode;
 
-// [SEVERITY-COLOR] Colour follows mass severity — the engine's rank band,
-// never a clone-kind classification.
-export const SEVERITY_STYLE: Record<Severity, { icon: string; color: string }> = {
-  worst: { icon: "circle-filled", color: "charts.red" },
-  top10: { icon: "circle-large-filled", color: "charts.orange" },
-  mid: { icon: "circle-outline", color: "charts.blue" },
-  faint: { icon: "circle-outline", color: "charts.grey" },
-};
-
-export function severityIcon(severity: Severity): vscode.ThemeIcon {
-  const style = SEVERITY_STYLE[severity];
-  return new vscode.ThemeIcon(style.icon, new vscode.ThemeColor(style.color));
+// [CLONE-KIND-COLOR] The row icon is the cluster's clone kind: one codicon
+// and one contributed theme colour per kind, from the single paint table
+// in design.ts. Rank never chooses a colour.
+export function kindIcon(kind: ClusterKind): vscode.ThemeIcon {
+  return new vscode.ThemeIcon(KIND_ICON[kind], new vscode.ThemeColor(KIND_THEME_COLOR[kind]));
 }
 
 // [VSIX-TOP-OFFENDERS-CLUSTER-ID] The bold label leads with the cluster's
@@ -62,14 +59,15 @@ export function severityIcon(severity: Severity): vscode.ThemeIcon {
 // File mode passes `file: undefined` so the redundant `· <file>`
 // suffix is dropped under a parent FileNode; cluster mode passes the
 // display path. Tooltip is built separately and stays mode-invariant.
-// The cluster row carries no clone-kind label: clusters are membership,
-// canonical extent, mass, and rank ([REPORTING-CONTEXT]).
+// The title is the cluster's clone kind ([CLONE-KIND-LABELS]); the dot is
+// the mass rank band's glyph density ([SEVERITY-BAND]).
 export function clusterRowLabel(args: {
   slug: string;
   severity: Severity;
+  kind: ClusterKind;
   file?: string;
 }): string {
-  const head = `${args.slug} ${SEVERITY_DOT[args.severity]} Duplicate code`;
+  const head = `${args.slug} ${SEVERITY_DOT[args.severity]} ${kindTitle(args.kind)}`;
   return args.file ? `${head} · ${args.file}` : head;
 }
 
@@ -85,29 +83,31 @@ export class ClusterNode extends vscode.TreeItem {
 
   constructor(
     readonly cluster: ReportCluster,
-    severity: Severity,
     options: ClusterNodeOptions = {},
   ) {
     const filePath = representativePath(cluster);
     const fileLabel = displayPath(filePath);
     const showFile = options.showFile ?? true;
     const slug = clusterSlug(cluster);
-    const labelArgs = showFile ? { slug, severity, file: fileLabel } : { slug, severity };
+    const severity = clusterBand(cluster);
+    const kind = cluster.kind;
+    const title = kindTitle(kind);
+    const labelArgs = showFile ? { slug, severity, kind, file: fileLabel } : { slug, severity, kind };
     super(clusterRowLabel(labelArgs), vscode.TreeItemCollapsibleState.Collapsed);
     const rank = cluster.rank;
     this.rank = rank;
     this.description = `rank #${rank} · ${occurrenceCount(cluster)} copies`;
     this.contextValue =
       occurrenceCount(cluster) > 1 ? "deslop.clusterComparable" : "deslop.clusterSingle";
-    this.iconPath = severityIcon(severity);
+    this.iconPath = kindIcon(kind);
     this.accessibilityInformation = {
-      label: `Duplicate code in ${fileLabel}, cluster ${cluster.id}, rank ${rank}`,
+      label: `${title} in ${fileLabel}, cluster ${cluster.id}, rank ${rank}`,
       role: TREE_ITEM_ROLE,
     };
     // Tooltip is the AI-scrapable hover surface and stays mode-invariant
     // — always carries the full file path. [VSIX-TOP-OFFENDERS-FILE-MODE]
     this.tooltip = new vscode.MarkdownString(
-      `**Duplicate code**\n\n` +
+      `**${title}** (${kindTaxonomy(kind)})\n\n` +
         `file: \`${filePath}\`\n\n` +
         `rank #${rank} · mass: \`${formatMass(cluster.mass)}\` · nodes: \`${cluster.canonical_node_count}\` · copies: \`${occurrenceCount(cluster)}\`\n\n` +
         `cluster id: \`${cluster.id}\``,
@@ -138,7 +138,7 @@ export class OccurrenceNode extends vscode.TreeItem {
       const total = occurrenceCount(parentCluster);
       const rankText = parentRank !== undefined ? `rank #${parentRank} · ` : "";
       this.tooltip = new vscode.MarkdownString(
-        `**${rankText}Duplicate code** · occurrence ${occurrenceIndex + 1} of ${total}`,
+        `**${rankText}${kindTitle(parentCluster.kind)}** · occurrence ${occurrenceIndex + 1} of ${total}`,
       );
     }
     this.command = {
@@ -177,8 +177,8 @@ export class FileNode extends vscode.TreeItem {
   }
 }
 
-// Shared group-row machinery for the severity grouping axis: file-mode
-// severity sections and severity roots render through this one base.
+// Shared group-row machinery for the kind grouping axis: file-mode kind
+// sections and kind roots render through this one base.
 // Display-only: clusters carry the navigation command; the group row
 // carries the shared label and live count.
 export abstract class GroupNode extends vscode.TreeItem {
@@ -201,24 +201,19 @@ export abstract class GroupNode extends vscode.TreeItem {
   }
 }
 
-// [VSIX-TOP-OFFENDERS-FILE-MODE] Severity section under a FileNode, and
-// severity root in severity grouping mode — one node for both axes,
-// labelled by the mass rank band.
+// [VSIX-TOP-OFFENDERS-FILE-MODE] Kind section under a FileNode, and kind
+// root in kind grouping mode ([FACET-GROUP-BY-KIND]) — one node for both
+// axes, titled and coloured by the clone kind.
 // `showFileInChildren` is true only for root mode, where no file
 // ancestor implies the file.
-export class SeverityGroupNode extends GroupNode {
+export class KindGroupNode extends GroupNode {
   constructor(
-    readonly severity: Severity,
+    readonly kind: ClusterKind,
     clusters: ReportCluster[],
     showFileInChildren = false,
   ) {
-    super(
-      `Severity ${severity}`,
-      clusters,
-      "deslop.severityGroup",
-      showFileInChildren,
-      severityIcon(severity),
-    );
+    super(kindTitle(kind), clusters, "deslop.kindGroup", showFileInChildren, kindIcon(kind));
+    this.tooltip = new vscode.MarkdownString(`**${kindTitle(kind)}** — ${kindTaxonomy(kind)}`);
   }
 }
 

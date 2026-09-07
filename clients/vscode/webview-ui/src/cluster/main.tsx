@@ -11,9 +11,9 @@ import {
   severityByClusterId,
   wireMessagePump,
 } from "../store";
-import { COLOR, FONT, GLOBAL_CSS, SEVERITY_COLOR } from "../theme";
+import { COLOR, FONT, GLOBAL_CSS, KIND_COLOR } from "../theme";
 import { HelpAction } from "../components/HelpAction";
-import { SeverityBadge } from "../components/SeverityBadge";
+import { ClusterBadge } from "../components/ClusterBadge";
 import {
   DocTextLink,
   HelpBubble,
@@ -23,6 +23,8 @@ import {
 } from "../components/HelpBubble";
 import {
   clusterSlug,
+  kindTaxonomy,
+  kindTitle,
   occurrenceCount,
 } from "../../../src/types/report";
 import { formatMass } from "../../../src/types/format";
@@ -49,7 +51,7 @@ const FAINT_SEVERITY = "faint";
 const KEYDOWN_EVENT = "keydown";
 const LABEL_CLASS = "label";
 const WITH_HELP_CLASS = "with-help";
-const NEUTRAL_TITLE_TOPIC = "duplicate-code";
+const KIND_TOPIC = "clone-kind";
 const CLUSTER_ID_TOPIC = "cluster-id";
 const CLUSTER_NAVIGATION_TOPIC = "cluster-navigation";
 const CANONICAL_TOPIC = "canonical";
@@ -169,10 +171,10 @@ function ClusterApp() {
               fontWeight: BOLD_FONT_WEIGHT,
               letterSpacing: "-0.02em",
             }}
-            title="Duplicate code"
+            title={kindHeadingTitle(cluster)}
           >
-            <HelpedText topic={NEUTRAL_TITLE_TOPIC} title="Duplicate code">
-              <DocTextLink topic={NEUTRAL_TITLE_TOPIC}>Duplicate code</DocTextLink>
+            <HelpedText topic={KIND_TOPIC} title={kindHeadingTitle(cluster)}>
+              <DocTextLink topic={KIND_TOPIC}>{kindTitle(cluster.kind)}</DocTextLink>
             </HelpedText>
           </h1>
           <p
@@ -184,15 +186,16 @@ function ClusterApp() {
             }}
             title={`Mass ${formatMass(cluster.mass)} across ${occurrenceCount(cluster)} occurrences in this report.`}
           >
-            <HelpedText topic={NEUTRAL_TITLE_TOPIC}>
-              This cluster repeats code across the report with mass{" "}
+            <HelpedText topic={KIND_TOPIC}>
+              {kindTaxonomy(cluster.kind)} · this cluster repeats code across the report with mass{" "}
               {formatMass(cluster.mass)}.
             </HelpedText>
           </p>
         </div>
         <div style={{ textAlign: "right", minWidth: 0, overflowWrap: ANYWHERE_WRAP }}>
           <span class={WITH_HELP_CLASS} style={{ justifyContent: END_ALIGNMENT }}>
-            <SeverityBadge
+            <ClusterBadge
+              kind={cluster.kind}
               severity={severity}
               label={`${slug}`}
               title={rankTitle(rank, list.length, severity)}
@@ -237,7 +240,7 @@ function ClusterApp() {
       <OccurrenceList
         cluster={cluster}
         focusedIndex={focusedIndex}
-        accent={SEVERITY_COLOR[severity]}
+        accent={KIND_COLOR[cluster.kind]}
       />
 
       <div style={{ marginTop: "auto", paddingTop: LARGE_SPACING }}>
@@ -268,7 +271,7 @@ function ClusterApp() {
             </button>
           </HelpAction>
         </footer>
-        <HotkeyHelp accent={SEVERITY_COLOR[severity]} />
+        <HotkeyHelp accent={KIND_COLOR[cluster.kind]} />
       </div>
     </main>
   );
@@ -371,6 +374,10 @@ function isEditableTarget(target: EventTarget | null): boolean {
 
 function clusterIdTitle(id: string, rank: number, total: number): string {
   return `Cluster ${id}. Ranked ${rank || UNKNOWN_RANK} of ${total} by Deslop's worst-first duplicated mass.`;
+}
+
+function kindHeadingTitle(cluster: ReportCluster): string {
+  return `${kindTitle(cluster.kind)}: ${kindTaxonomy(cluster.kind)}. The weakest relation between this cluster's first occurrence and any other member, as an explicit pair comparison would report it.`;
 }
 
 function rankTitle(rank: number, total: number, severity: string): string {

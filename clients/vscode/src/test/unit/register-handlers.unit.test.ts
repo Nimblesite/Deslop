@@ -247,7 +247,7 @@ suite("register command handlers", () => {
   test("openClusterDetails opens the cluster panel for a resolvable node", () => {
     const store = storeWith([cluster("details-target")]);
     const tabsBefore = vscode.window.tabGroups.all.flatMap((g) => g.tabs).length;
-    openClusterDetails(fakeCtx(), store, new ClusterNode(cluster("details-target"), "mid"));
+    openClusterDetails(fakeCtx(), store, new ClusterNode(cluster("details-target")));
     const tabsAfter = vscode.window.tabGroups.all.flatMap((g) => g.tabs).length;
     assert.ok(tabsAfter >= tabsBefore, "a resolvable node opens (or reveals) the cluster panel");
   });

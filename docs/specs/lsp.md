@@ -90,8 +90,8 @@ Each published diagnostic carries:
 
 - `range` — derived from `(start_byte, end_byte)` of the occurrence on this file, using the open buffer's line-index.
 - `severity` — per [LSP-SEVERITY].
-- `data` — `{ "cluster_id": <16-char cluster id> }`. The stable cluster id lets an agent call `deslop/clusterById` without parsing the message ([LSP-AGENT-FRIENDLY]); cluster diagnostics carry no pair taxonomy or evidence.
-- `message` — `"Duplicate code × <count> — mass <mass>"`. The message states only cluster membership and mass. Pair scores and explanations appear only after an explicit comparison identifies both endpoints ([FUSED-PAIR-SIGNALS]).
+- `data` — `{ "cluster_id": <16-char cluster id>, "kind": <clone kind>, "mass", "rank", "rank_band" }`. The stable cluster id lets an agent call `deslop/clusterById` without parsing the message ([LSP-AGENT-FRIENDLY]); the kind is the engine's fold ([CLONE-KIND-FOLD]); cluster diagnostics carry no pair evidence.
+- `message` — `"<kind title> × <count> — mass <mass>"`, e.g. `Identical code × 3 — mass 144` ([CLONE-KIND-LABELS]). The message states the cluster's kind, membership, and mass. Pair scores and explanations appear only after an explicit comparison identifies both endpoints ([FUSED-PAIR-SIGNALS]).
 - `source` — `"deslop"`.
 - `tags` — never `Unnecessary` or `Deprecated`; duplication isn't dead code.
 - `relatedInformation` — one entry per *other* occurrence of the cluster, with its `Location` and "occurrence N of M" label. This is what makes the Problems panel jumpable across occurrences.

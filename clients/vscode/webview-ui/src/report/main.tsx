@@ -13,12 +13,15 @@ import {
 import { COLOR, FONT, GLOBAL_CSS } from "../theme";
 import { FilterSelect } from "../components/FilterSelect";
 import { MetricHeading } from "../components/MetricHeading";
-import { SeverityBadge } from "../components/SeverityBadge";
+import { ClusterBadge } from "../components/ClusterBadge";
 import {
+  CLUSTER_KINDS,
   clusterSlug,
+  kindTitle,
   occurrenceCount,
   SEVERITIES,
   severityLabel,
+  type ClusterKind,
   type Severity,
 } from "../../../src/types/report";
 
@@ -30,15 +33,21 @@ const RIGHT_ALIGNMENT = "right";
 const MONOSPACE_CLASS = "mono";
 
 // [FACET-REPORT-WEBVIEW] Every option list derives from the shared
-// registries (the #170/#198 anti-drift rule): severities from SEVERITIES.
-// `null` = no filter on that axis. Language/bucket/category axes are
-// retired with the vocabulary that carried them
-// ([SEVERITY-CONFIG], [REPORTING-CONTEXT]).
+// registries (the #170/#198 anti-drift rule): severities from SEVERITIES,
+// clone kinds from CLUSTER_KINDS. `null` = no filter on that axis.
 const SEVERITY_OPTIONS = [
   { label: "All severities", value: null as Severity | null },
   ...SEVERITIES.map((severity) => ({
     label: severityLabel(severity),
     value: severity as Severity | null,
+  })),
+];
+
+const KIND_OPTIONS = [
+  { label: "All clone kinds", value: null as ClusterKind | null },
+  ...CLUSTER_KINDS.map((kind) => ({
+    label: kindTitle(kind),
+    value: kind as ClusterKind | null,
   })),
 ];
 
@@ -106,6 +115,11 @@ function ReportApp() {
           value={filters.value.severity}
           onChange={(severity) => (filters.value = { ...filters.value, severity })}
         />
+        <FilterSelect
+          options={KIND_OPTIONS}
+          value={filters.value.kind}
+          onChange={(kind) => (filters.value = { ...filters.value, kind })}
+        />
         <input
           type="text"
           placeholder="path glob (e.g. src/)"
@@ -149,7 +163,7 @@ function ReportApp() {
                   i % 2 === 0 ? COLOR.surfaceContainerLow : COLOR.surface)
               }
             >
-              <SeverityBadge severity={severity} label={`${slug}`} />
+              <ClusterBadge kind={cluster.kind} severity={severity} label={`${slug}`} />
               <div style={{ minWidth: 0 }}>
                 <div
                   style={{
@@ -163,7 +177,7 @@ function ReportApp() {
                   }}
                 >
                   <span style={{ fontWeight: 600, overflowWrap: "anywhere" }}>
-                    Duplicate code
+                    {kindTitle(cluster.kind)}
                   </span>
                 </div>
                 <div

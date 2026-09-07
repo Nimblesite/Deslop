@@ -11,8 +11,8 @@ import {
   deferredProbeClient,
   editAt,
   resolveProbe,
+  FIXTURE_KIND_TITLE,
 } from "./bubble.helpers";
-import { SHORT_VERDICT } from "../../bubble/renderParts";
 import { BudgetScheduler } from "../../bubble/live";
 
 /** Captures scheduled budget deadlines so tests fire them on demand. */
@@ -68,7 +68,7 @@ suite("LiveBubble probe budget deadline", () => {
       await resolveProbe(requests[0], probeA);
       const rendered = capture.visible();
       assert.ok(rendered !== undefined, "the in-budget probe must render its bubble");
-      assert.match(rendered ?? "", new RegExp(SHORT_VERDICT), "the bubble carries the short duplication verdict");
+      assert.match(rendered ?? "", new RegExp(FIXTURE_KIND_TITLE), "the bubble carries the clone kind verdict");
 
       const probeB = bubble.probe(capture.editor, editAt(6, "bbbb"));
       deadlines[1]?.expire();
@@ -93,7 +93,7 @@ suite("LiveBubble probe budget deadline", () => {
       await resolveProbe(requests[0], probe);
       assert.match(
         capture.visible() ?? "",
-        new RegExp(SHORT_VERDICT),
+        new RegExp(FIXTURE_KIND_TITLE),
         "an in-budget response renders normally",
       );
       assert.equal(

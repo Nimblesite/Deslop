@@ -194,6 +194,7 @@ type ReportCluster {
   id: String
   rank: Int
   rank_band: String
+  kind: ClusterKind
   mass: Int
   canonical_node_count: Int
   occurrences: List<ReportOccurrence>
@@ -204,8 +205,9 @@ type ReportCluster {
   is_newly_introduced: Option<Bool>
 }
 
-# [FUSED-PAIR-SIGNALS] Pair evidence exists only for the two exact endpoints
-# named by an explicit comparison. It is never copied to ReportCluster.
+# [FUSED-PAIR-SIGNALS] Pair evidence values exist only for the two exact
+# endpoints named by an explicit comparison. They are never copied to
+# ReportCluster, which carries only the folded ClusterKind ([CLONE-KIND-FOLD]).
 type PairEndpoint {
   path: String
   start_byte: Int
@@ -233,6 +235,18 @@ type PairEvidence {
 }
 
 union PairClassification {
+  Identical
+  NearlyIdentical
+  StructuralOnly
+  LooselySimilar
+  SameBehavior
+}
+
+# [CLONE-KIND-FOLD] The kind of a whole cluster: the weakest pair
+# classification between its canonical (first) occurrence and any other
+# occurrence, exactly as pair/compare would report each pair. Same five
+# names as PairClassification, folded rather than copied.
+union ClusterKind {
   Identical
   NearlyIdentical
   StructuralOnly
@@ -453,6 +467,7 @@ type ClusterSummary {
   id: String
   rank: Int
   rank_band: String
+  kind: ClusterKind
   mass: Int
   size_nodes: Int
   occurrence_count: Int

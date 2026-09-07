@@ -3,7 +3,7 @@
 // on the most-recently-touched range; admission is `bubbleAdmits`: a
 // reported cluster renders — the engine's verdict, reached with content
 // evidence and byte proof this client never sees. Surfaces:
-//   primary: after-text decoration (severity dot + short verdict + count + canonical)
+//   primary: after-text decoration (band dot + clone kind + count + canonical)
 // Ghost-line mode renders a whole-line after-text decoration instead.
 // Pair admission signals never render here ([FUSED-PAIR-SIGNALS]).
 
@@ -11,9 +11,8 @@ import * as vscode from "vscode";
 import { effect } from "@preact/signals-core";
 import type { LanguageClient } from "vscode-languageclient/node";
 
-import { COLOR, DESLOP_SEVERITY_COLOR } from "../design";
+import { COLOR, KIND_COLOR } from "../design";
 import { ReportStore } from "../reportStore";
-import { clusterSeverity } from "../severity";
 import { ReportCluster, clusterBand } from "../types/report";
 import { bubbleHover, ghostText, inlineText } from "./renderParts";
 
@@ -318,10 +317,9 @@ export class LiveBubble implements vscode.Disposable {
           renderOptions: {
             after: {
               contentText: inlineText(best, severity),
-              // [SEVERITY-COLOR] Colour is the severity channel; the dot inside
-              // `inlineText` is the same channel. The bubble carries the
-              // cluster's mass severity, never a clone-kind classification.
-              color: DESLOP_SEVERITY_COLOR[clusterSeverity(best)],
+              // [CLONE-KIND-COLOR] Colour is the clone kind; the dot inside
+              // `inlineText` is the mass rank band's glyph density.
+              color: KIND_COLOR[best.kind],
               fontStyle: "normal",
               fontWeight: "600",
             },

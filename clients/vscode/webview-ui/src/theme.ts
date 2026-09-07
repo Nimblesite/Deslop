@@ -1,44 +1,12 @@
-// Mirror of clients/vscode/src/design.ts — the webview cannot import Node
-// code, so we duplicate the token values and keep both sides updated together.
-// If you change one, change both; a lint rule enforces parity in CI.
+// The webview reads the extension's design tokens straight from
+// `clients/vscode/src/design.ts` — one table for every surface, so the
+// badge, the tree icon and the editor underline can never disagree on a
+// kind's colour ([CLONE-KIND-COLOR]). Only the global stylesheet the
+// webview documents share lives here.
 
-export const COLOR = {
-  surface: "#131313",
-  surfaceContainerLowest: "#0e0e0e",
-  surfaceContainerLow: "#1a1a1a",
-  surfaceContainer: "#1f1f1f",
-  surfaceContainerHigh: "#2a2a2a",
-  surfaceContainerHighest: "#353534",
-  primary: "#ffb4aa",
-  primaryContainer: "#b3261e",
-  onPrimaryContainer: "#ffdad4",
-  secondaryContainer: "#474746",
-  tertiary: "#00619e",
-  tertiaryContainer: "#003c6b",
-  errorContainer: "#93000a",
-  onSurface: "#ece0dd",
-  onSurfaceMuted: "#a9a2a0",
-  ghostBorder: "rgba(90, 64, 61, 0.2)",
-} as const;
+import { COLOR, FONT } from "../../src/design";
 
-export const SEVERITY_COLOR = {
-  worst: COLOR.primaryContainer,
-  top10: COLOR.primary,
-  mid: COLOR.tertiary,
-  faint: COLOR.onSurfaceMuted,
-} as const;
-
-export const SEVERITY_DOT = {
-  worst: "●●",
-  top10: "●",
-  mid: "◐",
-  faint: "○",
-} as const;
-
-export const FONT = {
-  ui: "Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif",
-  mono: "'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace",
-} as const;
+export { COLOR, FONT, KIND_COLOR, SEVERITY_DOT } from "../../src/design";
 
 export const GLOBAL_CSS = `
   :root { color-scheme: dark; }

@@ -41,8 +41,8 @@ import { ReportStore } from "../../reportStore";
 import { seededStore } from "./report-store.helpers";
 import { activateExtension } from "../suite/helpers";
 import { ClusterNode, OccurrenceNode } from "../../tree/providers";
-import { Report, ReportCluster, ReportOccurrence } from "../../types/report";
-import { occurrence, wireCluster } from "../cluster.helpers";
+import { kindTaxonomy, kindTitle, Report, ReportCluster, ReportOccurrence } from "../../types/report";
+import { FIXTURE_KIND, occurrence, wireCluster } from "../cluster.helpers";
 
 const UTF8_ENCODING = "utf8";
 const TEST_SOURCE_PATH = "src/foo.cs";
@@ -508,7 +508,7 @@ function fixtureOccurrence(overrides: Partial<ReportOccurrence> = {}): ReportOcc
 }
 
 function clusterNodeFor(c: ReportCluster): ClusterNode {
-  return new ClusterNode(c, "mid");
+  return new ClusterNode(c);
 }
 
 function occurrenceNodeFor(o: ReportOccurrence): OccurrenceNode {
@@ -542,8 +542,10 @@ suite("tree menu renderers", () => {
     assert.match(lines[THIRD_LINE_INDEX] ?? "", /B\.cs:1:1$/);
     assert.ok(!text.includes("start_byte"));
     assert.ok(!text.includes(".."), "human copy must not include byte ranges");
-    assert.doesNotMatch(text, /Identical code|nearly identical|same behavior|structural_only/i,
-      "no clone-kind label may reach the copy surface");
+    assert.ok(
+      lines[0]?.includes(` · ${kindTitle(FIXTURE_KIND)} · `),
+      `the header names the clone kind, got: ${lines[0] ?? ""}`,
+    );
 
     fs.rmSync(dir, { recursive: true, force: true });
   });
@@ -563,7 +565,13 @@ suite("tree menu renderers", () => {
       text.split("\n").includes(`mass: ${DEFAULT_CLUSTER_WEIGHT}`),
       `the payload must carry the line "mass: ${DEFAULT_CLUSTER_WEIGHT}", got:\n${text}`,
     );
-    assert.doesNotMatch(text, /bucket:/, "no clone-kind line may reach the AI payload");
+    // [CLONE-KIND-LABELS] The payload names the kind by its wire spelling,
+    // its title and its taxonomy, so an agent reads what a human reads.
+    assert.ok(
+      text.split("\n").includes(`kind: ${FIXTURE_KIND} (${kindTitle(FIXTURE_KIND)} — ${kindTaxonomy(FIXTURE_KIND)})`),
+      `the payload must carry the kind line, got:\n${text}`,
+    );
+    assert.doesNotMatch(text, /bucket:/, "the retired bucket line never returns");
     // [FUSED-PAIR-SIGNALS] No cluster surface — including copy-for-AI —
     // renders pair evidence: no structural, jaccard, or embedding score,
     // in any wire format the payload ever used.
@@ -828,8 +836,9 @@ suite("tree menu handlers", () => {
     assert.match(clipboard, /occurrence_path: src\/foo\.cs/);
     assert.match(clipboard, /cluster_id: c-occ-ctx/);
     // [VSIX-PAIR-COMPARE] The AI payload carries the engine's cluster
-    // facts — rank, mass, node count — and no similarity bucket.
+    // facts — rank, kind, mass, node count — and no pair evidence.
     assert.match(clipboard, /rank: 1/);
+    assert.match(clipboard, new RegExp(`kind: ${FIXTURE_KIND} `));
     assert.match(clipboard, /mass: /);
     assert.match(clipboard, /canonical_nodes: /);
     assert.doesNotMatch(clipboard, /bucket:/);

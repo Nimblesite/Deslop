@@ -3,6 +3,7 @@
 
 import * as vscode from "vscode";
 import {
+  ClusterKind,
   FileMetric,
   RepoMetrics,
   Report,
@@ -10,7 +11,7 @@ import {
   Severity,
 } from "../../types/report";
 import { emptyReport, metrics as zeroMetrics } from "./report-store.helpers";
-import { occurrence, stampRanks, wireCluster } from "../cluster.helpers";
+import { FIXTURE_KIND, occurrence, stampRanks, wireCluster } from "../cluster.helpers";
 
 export function cluster(
   id: string,
@@ -20,11 +21,13 @@ export function cluster(
   endByte = 20,
   rankBand: Severity = "mid",
   rank = 1,
+  kind: ClusterKind = FIXTURE_KIND,
 ): ReportCluster {
   return wireCluster({
     id,
     rank,
     rank_band: rankBand,
+    kind,
     mass,
     occurrences: [
       occurrence(occurrencePath, startByte, endByte),
@@ -123,7 +126,7 @@ export async function withSetting<T>(
 }
 
 export function withGroupBy(
-  value: "cluster" | "file" | "folder" | "severity",
+  value: "cluster" | "file" | "folder" | "kind",
   body: () => Promise<void> | void,
 ): Promise<void> {
   return withSetting("topOffenders.groupBy", value, body);

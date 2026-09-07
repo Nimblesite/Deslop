@@ -1,4 +1,4 @@
-//! Markdown rendering for one mass-only cluster.
+//! Markdown rendering for one cluster: kind, mass, and occurrences.
 
 use std::fmt::Write as _;
 
@@ -19,9 +19,15 @@ where
     out
 }
 
-/// Writes neutral cluster facts.
+/// Writes the cluster facts: its kind, mass, occurrences and extent.
 fn write_header(out: &mut String, cluster: &ReportCluster) {
     let _ = writeln!(out, "# Deslop cluster `{}`\n", cluster.id);
+    let _ = writeln!(
+        out,
+        "- kind: {} (`{}`)",
+        cluster.kind.labels().title,
+        cluster.kind.wire_label()
+    );
     let _ = writeln!(out, "- mass: `{}`", cluster.mass);
     let _ = writeln!(out, "- occurrences: `{}`", cluster.occurrence_count);
     let _ = writeln!(
@@ -88,9 +94,10 @@ mod tests {
     const OCCURRENCE_COUNT: usize = 2;
 
     #[test]
-    fn cluster_header_contains_mass_and_no_pair_evidence() {
+    fn cluster_header_contains_kind_and_mass_and_no_pair_evidence() {
         let out = render_cluster_markdown(&cluster(), |_| None);
         assert!(out.contains("Deslop cluster `c-md`"));
+        assert!(out.contains("- kind: Identical code (`identical`)"));
         assert!(out.contains("mass: `10`"));
         assert!(out.contains("occurrences: `2`"));
         assert!(out.contains("canonical nodes: `10`"));
@@ -139,6 +146,7 @@ mod tests {
             id: CLUSTER_ID.to_owned(),
             rank: 1,
             rank_band: "worst".to_owned(),
+            kind: crate::buckets::ClusterKind::Identical,
             mass: MASS,
             canonical_node_count: CANONICAL_NODES,
             occurrences: vec![occurrence(LEFT_PATH), occurrence(RIGHT_PATH)],

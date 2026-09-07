@@ -17,6 +17,7 @@ use std::{
 
 use crate::{
     ast::{ByteRange, NormalizedNode},
+    buckets::ClusterKind,
     fingerprint::Fingerprint,
     pair::{FusedCluster, SHARED_SUBTREE_MIN_NODE_COUNT},
     state::FileId,
@@ -42,10 +43,28 @@ pub struct Cluster {
     pub members: Vec<Fingerprint>,
     /// Duplicated mass from [RANK-MASS-SUM]. Higher = more code to fix.
     pub mass: u64,
+    /// The clone kind: the weakest pair classification between the
+    /// canonical member and any other ([CLONE-KIND-FOLD]).
+    pub kind: ClusterKind,
     /// The shape family this cluster was admitted out of, for the
     /// report's family-level noise verdict
     /// ([CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY]).
     pub shape_family: Option<usize>,
+}
+
+/// Names the clone kind of one reportable cluster from its members'
+/// flat-corpus indices, canonical member first ([CLONE-KIND-FOLD]). The
+/// session implements it over the same pair measurement `pair/compare`
+/// answers with; the build stays ignorant of how a kind is measured.
+pub trait ClusterKindJudge: Sync {
+    /// The weakest relation between `members[0]` and every other member.
+    fn kind(&self, members: &[usize]) -> ClusterKind;
+}
+
+impl std::fmt::Debug for dyn ClusterKindJudge + '_ {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("ClusterKindJudge")
+    }
 }
 
 /// Minimum number of logical locations required for a reportable
@@ -80,6 +99,8 @@ pub struct ClusterBuildInputs<'a, L: BuildHasher> {
     /// `FileId → workspace-relative path` — the second input of the
     /// cluster id digest ([PIPELINE-DETERMINISM]).
     pub file_paths: &'a HashMap<FileId, PathBuf>,
+    /// Names each reportable cluster's clone kind ([CLONE-KIND-FOLD]).
+    pub kinds: &'a dyn ClusterKindJudge,
 }
 
 /// Builds ranked clusters from a fused-cluster list produced by
@@ -152,8 +173,10 @@ fn build_fused_cluster<L: BuildHasher + Sync>(
         .iter()
         .filter_map(|index| fingerprints.get(*index).cloned())
         .collect();
+    let kind = inputs.kinds.kind(&occurrence_indices);
     Some(materialize_cluster(
         members,
+        kind,
         inputs.file_paths,
         fused.shape_family,
     ))
@@ -162,6 +185,7 @@ fn build_fused_cluster<L: BuildHasher + Sync>(
 /// Builds the final reportable cluster from already-filtered members.
 fn materialize_cluster(
     members: Vec<Fingerprint>,
+    kind: ClusterKind,
     file_paths: &HashMap<FileId, PathBuf>,
     shape_family: Option<usize>,
 ) -> Cluster {
@@ -173,6 +197,7 @@ fn materialize_cluster(
         id: encode_short_id(id_source),
         members,
         mass,
+        kind,
         shape_family,
     }
 }

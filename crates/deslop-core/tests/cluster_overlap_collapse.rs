@@ -18,6 +18,7 @@ use deslop_core::{
     cluster::{build_ranked_fused_clusters, Cluster, ClusterBuildInputs},
     fingerprint::Fingerprint,
     pair::{FusedCluster, FusedEdge},
+    report_fixtures::{UniformKind, FIXTURE_KIND},
     state::{FileId, FileRegistry},
 };
 
@@ -54,6 +55,7 @@ fn ranked_with_edges(members: &[Fingerprint], edges: Vec<FusedEdge>) -> Vec<Clus
         trees: &[],
         file_languages: &std::collections::HashMap::new(),
         file_paths: &std::collections::HashMap::new(),
+        kinds: &UniformKind(FIXTURE_KIND),
     })
 }
 

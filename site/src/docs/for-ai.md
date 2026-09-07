@@ -23,7 +23,7 @@ Before you author any new code unit — function, method, class, helper, fixture
 | mid | Likely a real duplicate. Read both occurrences and the mass before deciding. |
 | faint | A weak tail finding. Bias toward reading, not acting. |
 
-Every cluster is titled neutrally (`Duplicate code`): the engine carries no similarity bucket or cluster-level signal scores, so there is no shortcut — the occurrences are the evidence. To see what differs between two locations, request an explicit pair comparison with both endpoints; pair evidence never attaches to a cluster.
+Every cluster carries a `kind` — `identical`, `nearly_identical`, `same_behavior`, `structural_only`, or `loosely_similar` — the weakest relation between its first occurrence and any other member, measured exactly as an explicit pair comparison would. `identical` means every copy is byte-for-byte the first; anything else means at least one copy differs, so read the occurrences. The engine carries no cluster-level signal scores. To see what differs between two locations, request an explicit pair comparison with both endpoints; pair evidence values never attach to a cluster.
 
 `find-similar` is the **authoring** tool. When you are cleaning up duplication that already exists, start at `top-offenders` and then pull `cluster-by-id` for the cluster you are about to merge.
 

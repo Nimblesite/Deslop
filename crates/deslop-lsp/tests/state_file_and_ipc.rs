@@ -718,6 +718,7 @@ fn cached_report() -> serde_json::Value {
             "id": "cached-gh73",
             "rank": 1,
             "rank_band": "worst",
+            "kind": "identical",
             "mass": 12,
             "canonical_node_count": 6,
             "occurrences": [

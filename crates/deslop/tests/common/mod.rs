@@ -206,6 +206,22 @@ pub(crate) fn field<'a>(value: &'a Value, name: &str) -> &'a Value {
     value.get(name).unwrap_or(&Value::Null)
 }
 
+/// [CLONE-KIND-LABELS] The wire spelling of the cluster kind every member
+/// of which is byte-identical to the canonical occurrence.
+pub(crate) const IDENTICAL_KIND: &str = "identical";
+/// [CLONE-KIND-LABELS] The title every surface renders for that kind.
+pub(crate) const IDENTICAL_TITLE: &str = "Identical code";
+/// [CLONE-KIND-LABELS] The wire spelling of the renamed / near-copy kind.
+pub(crate) const NEARLY_IDENTICAL_KIND: &str = "nearly_identical";
+/// [CLONE-KIND-LABELS] The title every surface renders for that kind.
+pub(crate) const NEARLY_IDENTICAL_TITLE: &str = "Nearly identical code";
+
+/// [CLONE-KIND-FOLD] The kind the engine folded for `cluster`, or `""`
+/// when the report omits it so the assertion trips with the JSON printed.
+pub(crate) fn cluster_kind(cluster: &Value) -> &str {
+    field(cluster, "kind").as_str().unwrap_or_default()
+}
+
 /// Length of a named array-valued field, or `0` when missing / non-array (so
 /// the assertion trips with the full JSON printed rather than panicking).
 pub(crate) fn array_len(value: &Value, name: &str) -> usize {
@@ -525,7 +541,7 @@ pub(crate) fn visible_cluster_lines(report: &Value) -> Vec<String> {
             format!(
                 "{} [{}] {}",
                 field(cluster, "id").as_str().unwrap_or("?"),
-                field(cluster, "bucket").as_str().unwrap_or("?"),
+                cluster_kind(cluster),
                 spans.join(", ")
             )
         })

@@ -38,7 +38,7 @@ suite("top offenders view-axis toggles", () => {
   });
 
   test("setTopOffendersGroupBy persists each of the four grouping modes", async () => {
-    for (const mode of ["cluster", "file", "folder", "severity"] as const) {
+    for (const mode of ["cluster", "file", "folder", "kind"] as const) {
       await setTopOffendersGroupBy(mode);
       assert.equal(
         cfg().get<string>("topOffenders.groupBy"),

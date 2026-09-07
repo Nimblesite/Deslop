@@ -1,10 +1,13 @@
 //! Explicit endpoint-to-endpoint evidence measurement ([FUSED-PAIR-SIGNALS]).
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 use crate::{
     ast::NormalizedNode,
-    content::measure_pair_content,
+    content::{measure_pair_content_indexed, tree_index_of},
     embedding::{cosine_similarity, EmbeddingProvider},
     error::CoreError,
     fingerprint::Fingerprint,
@@ -12,12 +15,15 @@ use crate::{
     overlap::OverlapMeasurer,
     pair::PairScore,
     report::{PairComparison, PairComparisonParams, PairEndpoint, PairEvidence},
+    state::FileId,
 };
 
 use super::PipelineSession;
 
 mod admission;
 use admission::AdmissionFacts;
+mod cluster_kind;
+pub(crate) use cluster_kind::ClusterKindMeasurer;
 
 impl PipelineSession {
     /// Recomputes evidence for exactly the two requested occurrences.
@@ -86,30 +92,36 @@ impl PipelineSession {
         provider: Option<&dyn EmbeddingProvider>,
     ) -> Result<PairEvidence, CoreError> {
         let trees = self.trees_for_pair(pair)?;
-        let measurements = self.measure_axes(pair, &trees, provider)?;
+        let mut axes = PairAxes::new(&trees);
+        let embedding_cos = self.embedding_cos(pair, provider)?;
+        let measurements = self.measure_axes(pair, &mut axes, embedding_cos);
         Ok(self.build_evidence(pair, measurements))
     }
 
-    /// Measures structural, token, embedding, and raw-content evidence.
+    /// Measures structural, token, and raw-content evidence beside the
+    /// caller-supplied embedding cosine. The explicit comparison asks a
+    /// provider for the cosine; the cluster fold reads the one the
+    /// embedding pass already measured ([CLONE-KIND-FOLD]).
     fn measure_axes(
         &self,
         pair: &ResolvedPair<'_>,
-        trees: &[NormalizedNode],
-        provider: Option<&dyn EmbeddingProvider>,
-    ) -> Result<Measurements, CoreError> {
+        axes: &mut PairAxes<'_>,
+        embedding_cos: f64,
+    ) -> Measurements {
         let merkle_equal = pair.left.fingerprint.hash == pair.right.fingerprint.hash;
-        let structural =
-            OverlapMeasurer::new(trees).overlap(pair.left.fingerprint, pair.right.fingerprint);
+        let structural = axes
+            .overlap
+            .overlap(pair.left.fingerprint, pair.right.fingerprint);
         let token_jaccard = self.token_jaccard(pair, merkle_equal);
-        let embedding_cos = self.embedding_cos(pair, provider)?;
-        let content = measure_pair_content(
+        let content = measure_pair_content_indexed(
             pair.left.fingerprint,
             pair.right.fingerprint,
-            trees,
+            &axes.trees,
             &self.sources,
             &self.file_languages,
+            false,
         );
-        Ok(Measurements {
+        Measurements {
             score: PairScore {
                 structural,
                 token_jaccard,
@@ -120,7 +132,7 @@ impl PipelineSession {
             literal_fraction: content.literal_fraction,
             merkle_equal,
             byte_identical: pair.byte_identical(&self.sources),
-        })
+        }
     }
 
     /// Estimates token Jaccard, applying the pair-local Merkle correction.
@@ -206,6 +218,27 @@ impl PipelineSession {
             admitted: facts.admitted,
             classification,
             explanation: facts.explanation(classification),
+        }
+    }
+}
+
+/// The corpus-backed measurers one pair measurement reads: the memoising
+/// structural overlap measurer and the per-file tree index the content
+/// axes walk. Built once per explicit comparison over its two trees, and
+/// once per render over the whole population for the cluster fold.
+struct PairAxes<'corpus> {
+    /// Structural overlap, memoised per structural pair.
+    overlap: OverlapMeasurer<'corpus>,
+    /// `FileId → normalised root` for the content axes.
+    trees: HashMap<FileId, &'corpus NormalizedNode>,
+}
+
+impl<'corpus> PairAxes<'corpus> {
+    /// Indexes `trees` for every measurement that follows.
+    fn new(trees: &'corpus [NormalizedNode]) -> Self {
+        Self {
+            overlap: OverlapMeasurer::new(trees),
+            trees: tree_index_of(trees),
         }
     }
 }

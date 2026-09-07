@@ -2,9 +2,9 @@
 
 ### [SEVERITY-MODEL] Severity is a projection of mass rank
 
-Cluster severity communicates duplicated impact. It is derived only from the engine-stamped mass rank band. Structural, Jaccard, embedding, content, rename, literal, and pair classification values are forbidden inputs because they belong to concrete pairs.
+Cluster severity communicates duplicated impact. It is derived only from the engine-stamped mass rank band. Structural, Jaccard, embedding, content, rename, and literal values are forbidden inputs because they belong to concrete pairs, and the clone kind ([CLONE-KIND-FOLD]) is a separate channel that never changes severity.
 
-Severity is presentation metadata, not a second weight. It never changes cluster mass, rank, membership, or repository metrics.
+Severity is presentation metadata, not a second weight. It never changes cluster mass, rank, membership, kind, or repository metrics.
 
 ### [SEVERITY-DESLOP-MAP] One fixed mass-band map
 
@@ -27,9 +27,11 @@ When diagnostics are enabled, the LSP projects [SEVERITY-DESLOP-MAP] into the ed
 
 An optional mass-percentile floor may suppress diagnostics below a configured impact threshold. The floor consumes the engine-stamped mass percentile only and cannot inspect pair evidence.
 
-### [SEVERITY-COLOR] Colour follows mass severity
+### [SEVERITY-COLOR] The glyph follows mass severity; colour follows the clone kind
 
-Visual surfaces map `error`, `warning`, `information`, and `hint` to the host editor's corresponding theme colours. A cluster's colour cannot imply that it is identical, near-identical, structural-only, semantic, or content-proven.
+Severity has one visual channel on cluster surfaces: glyph density (`●●`, `●`, `◐`, `○`) for `worst`, `top10`, `mid`, and `faint`. Colour belongs to the other channel, the clone kind ([CLONE-KIND-COLOR]): crimson means byte-identical code, never "biggest finding". The two channels are never mixed, so a rank-1 cluster that only shares shape is muted and a faint byte-identical cluster is crimson.
+
+Diagnostics keep the host editor's own severity colours for `Error`, `Warning`, `Information`, and `Hint` ([SEVERITY-DIAGNOSTICS]); those are the Problems panel's, not Deslop's paint.
 
 ### [SEVERITY-BAND] The engine computes the band once
 
@@ -57,4 +59,4 @@ The floor is finite and in `[0, 100]`. The retired per-bucket severity maps are 
 
 ### [SEVERITY-TESTING] Acceptance
 
-Tests assert that equal-mass ordering uses cluster id, rank bands never brighten down the report, every cluster surface uses the engine-stamped band, diagnostics-off publishes nothing, and no pair evidence or pair classification changes severity.
+Tests assert that equal-mass ordering uses cluster id, rank bands never brighten down the report, every cluster surface uses the engine-stamped band for its glyph, diagnostics-off publishes nothing, no pair evidence changes severity, and the band never chooses a colour ([CLONE-KIND-TESTING]).

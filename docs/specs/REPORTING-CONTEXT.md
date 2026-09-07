@@ -2,7 +2,7 @@
 
 ## [REPORT-CONTEXT-SCOPE] What the report says
 
-Deslop detects duplicated code with normalized AST fingerprints, token MinHash/LSH, and optional embeddings. The report lists closure components worst-first by duplicated mass. It does not assign a similarity score, evidence verdict, or pair classification to a component.
+Deslop detects duplicated code with normalized AST fingerprints, token MinHash/LSH, and optional embeddings. The report lists closure components worst-first by duplicated mass. It assigns no similarity score or evidence values to a component; each component carries a clone kind, the weakest pair classification between its canonical occurrence and any other member ([CLONE-KIND-FOLD]).
 
 ## [REPORT-CONTEXT-PIPELINE] How a finding forms
 
@@ -12,12 +12,13 @@ Cross-language comparison is off by default. `.deslop.toml` may enable `[analysi
 
 ## [REPORT-CONTEXT-CLUSTER] How to read a cluster
 
-A cluster record contains identity, occurrence membership, canonical extent, duplicated mass, and rank. Its essential fields are:
+A cluster record contains identity, occurrence membership, canonical extent, duplicated mass, rank, and clone kind. Its essential fields are:
 
 | Field | Meaning |
 |---|---|
 | `id` | Stable 16-character cluster identity. |
 | `rank` | One-based position in the engine's mass-descending order. |
+| `kind` | The clone kind: `identical` (every member byte-identical to the canonical), `nearly_identical`, `same_behavior`, `structural_only`, or `loosely_similar` — the weakest pair classification against the canonical occurrence ([CLONE-KIND-FOLD]). |
 | `mass` | Duplicated mass exactly. |
 | `canonical_node_count` | Normalized AST nodes in the canonical extent. |
 | `occurrence_count` | Number of visible occurrences. |
@@ -68,4 +69,4 @@ Generated-code exclusions and `report_hide` rules affect visibility, not pair ev
 
 ## [REPORT-CONTEXT-METADATA] Canonical rendering contract
 
-The text and HTML reports are renderers over the canonical engine model. Cluster surfaces render identity, membership, mass, and rank only. Pair surfaces render the exact two endpoints and their engine-computed evidence. Consumers do not recompute percentages, mass, admission, or evidence.
+The text and HTML reports are renderers over the canonical engine model. Cluster surfaces render identity, kind, membership, mass, and rank; the kind is titled from one registry ([CLONE-KIND-LABELS]). Pair surfaces render the exact two endpoints and their engine-computed evidence. Consumers do not recompute percentages, mass, admission, or evidence.

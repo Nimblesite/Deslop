@@ -24,6 +24,7 @@ use deslop_core::{
         candidate_pairs, cluster_by_transitive_closure, FusedCluster, LSH_ONLY_MIN_JACCARD,
         LSH_ONLY_MIN_NODE_COUNT,
     },
+    report_fixtures::{UniformKind, FIXTURE_KIND},
     state::{FileId, FileRegistry},
 };
 
@@ -137,6 +138,7 @@ fn assert_materialised_clusters_are_mass_only(
         trees: &[],
         file_languages: &HashMap::new(),
         file_paths: &HashMap::new(),
+        kinds: &UniformKind(FIXTURE_KIND),
     });
     assert_eq!(
         rendered.len(),

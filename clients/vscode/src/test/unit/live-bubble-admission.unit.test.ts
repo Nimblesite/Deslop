@@ -17,11 +17,10 @@ import {
   bubbleFixture,
   setBubbleMode,
   span,
+  FIXTURE_KIND_TITLE,
 } from "./bubble.helpers";
 import { reportWithClusters } from "./report.helpers";
 
-// The spec'd short verdict, rendered by every bubble surface.
-const DUPLICATION_TITLE = "DUPLICATION";
 
 // Asserts the surface is showing `title` and nothing from the pair
 // vocabulary (bars, per-axis values, verdicts).
@@ -53,21 +52,21 @@ suite("LiveBubble admission", () => {
     try {
       // 1. The user's cursor lands on the near miss.
       bubble.render(capture.editor, span(0), [near]);
-      const visible = assertShowing(capture, DUPLICATION_TITLE, "at cursor land");
+      const visible = assertShowing(capture, FIXTURE_KIND_TITLE, "at cursor land");
       assert.match(visible, /×\s*3/, "bubble renders the occurrence count");
       assert.match(visible, /A\.cs/, "bubble names the canonical file");
       assert.ok(capture.visibleHover() !== undefined, "inline bubble carries a hover card");
 
       // 2. The user moves the cursor within the same cluster.
       bubble.render(capture.editor, span(6), [near]);
-      const moved = assertShowing(capture, DUPLICATION_TITLE, "after cursor move");
+      const moved = assertShowing(capture, FIXTURE_KIND_TITLE, "after cursor move");
       assert.match(moved, /×\s*3/, "the count survives a cursor move");
       assert.ok(capture.visibleHover() !== undefined, "the hover survives a cursor move");
 
       // 3. The user switches to ghost mode.
       await setBubbleMode("ghost");
       bubble.render(capture.editor, span(12), [near]);
-      const ghost = assertShowing(capture, DUPLICATION_TITLE, "in ghost mode");
+      const ghost = assertShowing(capture, FIXTURE_KIND_TITLE, "in ghost mode");
       assert.match(ghost, /└─/, "ghost mode renders the tree-branch prefix");
       assert.equal(
         ghost.includes("pair"),
@@ -102,7 +101,7 @@ suite("LiveBubble admission", () => {
 
     try {
       bubble.render(capture.editor, span(0), [faint]);
-      const visible = assertShowing(capture, DUPLICATION_TITLE, "faint cluster");
+      const visible = assertShowing(capture, FIXTURE_KIND_TITLE, "faint cluster");
       assert.match(visible, /×\s*2/, "count renders for the faint cluster");
       assert.doesNotMatch(
         visible,

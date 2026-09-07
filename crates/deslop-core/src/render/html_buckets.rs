@@ -1,4 +1,4 @@
-//! Neutral HTML grouping and diff-only facets.
+//! HTML grouping by clone kind, and the diff facets.
 
 use std::{collections::HashMap, fmt::Write as _, hash::Hash};
 
@@ -33,22 +33,30 @@ where
         .collect()
 }
 
-/// Writes one neutral duplicate-code group in mass order.
+/// Writes one collapsible expander per clone kind present, in the order
+/// the kinds first appear down the worst-first list, each card in mass
+/// order ([FACET-HTML], [CLONE-KIND-LABELS]).
 pub(super) fn write_bucket_groups<'c>(
     out: &mut String,
     clusters: impl IntoIterator<Item = &'c ReportCluster>,
     snippets: &mut SnippetLoader<'_>,
 ) {
-    let clusters: Vec<&ReportCluster> = clusters.into_iter().collect();
-    let _ = write!(
-        out,
-        "<details class=\"clone-group\" open><summary>Duplicate code — {} group(s)</summary>",
-        clusters.len()
-    );
-    for cluster in clusters {
-        write_cluster_card(out, cluster, snippets);
+    for (kind, clusters) in group_by_first_seen(clusters, |cluster| cluster.kind) {
+        let labels = kind.labels();
+        let _ = write!(
+            out,
+            "<details class=\"clone-group clone-group--{suffix}\" open>\
+             <summary title=\"{taxonomy}\">{title} — {count} group(s)</summary>",
+            suffix = labels.css_suffix,
+            taxonomy = labels.taxonomy,
+            title = labels.title,
+            count = clusters.len(),
+        );
+        for cluster in clusters {
+            write_cluster_card(out, cluster, snippets);
+        }
+        out.push_str("</details>");
     }
-    out.push_str("</details>");
 }
 
 /// One CSS-only diff facet.

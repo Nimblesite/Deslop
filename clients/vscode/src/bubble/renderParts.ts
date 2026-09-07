@@ -17,13 +17,9 @@ import { shortPath } from "../pathUtils";
 import {
   ReportCluster,
   Severity,
+  kindTitle,
   occurrenceCount,
 } from "../types/report";
-
-// The inline bubble and ghost-line decorations are pure-visual
-// surfaces (rendered only in the editor, never scraped by agents); the
-// short verdict is the spec'd `DUPLICATION` label ([VSIX-LIVE-BUBBLE]).
-export const SHORT_VERDICT = "DUPLICATION";
 
 export interface BubbleRenderParts {
   inline: string;
@@ -37,7 +33,9 @@ export function renderBubbleParts(
 ): BubbleRenderParts {
   const canonical = cluster.occurrences[0];
   const count = occurrenceCount(cluster);
-  const title = SHORT_VERDICT;
+  // [VSIX-LIVE-BUBBLE] The verdict is the cluster's clone kind
+  // ([CLONE-KIND-LABELS]); the dot is the mass rank band's glyph.
+  const title = kindTitle(cluster.kind);
   const slug = clusterSlug(cluster);
   const location = canonical ? ` · ${shortPath(canonical.path)}` : "";
   return {

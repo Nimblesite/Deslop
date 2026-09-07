@@ -390,9 +390,10 @@ Top level:
 `ReportCluster`:
 
 - `id`, `mass`, `canonical_node_count`, `rank`, `rank_band` — cluster identity, canonical extent, duplicated mass, and mass-derived order metadata.
+- `kind` — the clone kind folded from the cluster's pairs ([CLONE-KIND-FOLD]): `identical`, `nearly_identical`, `same_behavior`, `structural_only`, or `loosely_similar`. Never an input to mass or order.
 - `occurrences: Vec<ReportOccurrence>` — each with `path`, `start_byte`, `end_byte`, and `hidden: bool` (true when the occurrence matched a `report_hide` pattern per [EXCLUSION-CONFIG]).
 
-`ReportCluster` carries identity, canonical extent, occurrence membership, mass, and rank. Pair evidence is returned only by an explicit comparison of two occurrences.
+`ReportCluster` carries identity, canonical extent, occurrence membership, mass, rank, and the folded clone kind. Pair evidence values are returned only by an explicit comparison of two occurrences.
 
 Default output paths, the format suppressors, and `--from-report` re-rendering are invocation behaviour, owned by [cli.md §OUTPUT-FORMAT-DERIVED](cli.md).
 
@@ -453,7 +454,7 @@ The default HTML renderer embeds, for each occurrence, the source bytes covered 
 
 #### [OUTPUT-HUMAN-HTML-LANGUAGE-SECTIONS] Per-language sections
 
-`[report] split_by_language` in `.deslop.toml` (default `false`, with a `--split-by-language` CLI mirror) divides the report body into one `<section>` per language instead of the single `Duplicate groups` section. Cluster cards remain in engine mass order and are never grouped by pair classification. With the flag off, output is byte-identical to the single-section form. With it on, `write_clusters` groups clusters by the stable first occurrence's `language_for_path(...)`, emits one heading per language with its group count, preserves engine rank within each section, and orders sections by the lowest engine rank they contain.
+`[report] split_by_language` in `.deslop.toml` (default `false`, with a `--split-by-language` CLI mirror) divides the report body into one `<section>` per language instead of the single `Duplicate groups` section. Within each section, cards sit in one expander per clone kind present ([FACET-HTML]) and keep engine mass order inside each expander. With the flag off, output is byte-identical to the single-section form. With it on, `write_clusters` groups clusters by the stable first occurrence's `language_for_path(...)`, emits one heading per language with its group count, preserves engine rank within each section, and orders sections by the lowest engine rank they contain.
 
 ### [METRICS-REPO] Repo-wide duplication metrics
 

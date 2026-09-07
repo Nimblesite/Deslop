@@ -6,6 +6,7 @@ import { signal, computed, batch } from "@preact/signals";
 import {
   applyFacetFilter,
   type AnalysisState,
+  type ClusterKind,
   type FacetFilter,
   type Report,
   type ReportCluster,
@@ -13,17 +14,18 @@ import {
   clusterBand,
 } from "../../src/types/report";
 
-// [SEVERITY-CONFIG] Filters are the mass severity band and a path glob
-// only. The language, bucket, and category axes are retired: the wire
-// carries no similarity classification or parser stamp on the cluster,
-// and a webview must never re-derive an axis the engine stopped sending.
+// [FACET-REPORT-WEBVIEW] Filters are the mass severity band, the clone
+// kind the engine stamped on the cluster ([CLONE-KIND-FOLD]), and a path
+// glob. Every axis is read off the wire; the webview re-derives nothing.
 export type Filters = {
   severity: Severity | null;
+  kind: ClusterKind | null;
   pathGlob: string;
 };
 
 export const EMPTY_FILTERS: Filters = {
   severity: null,
+  kind: null,
   pathGlob: "",
 };
 
@@ -91,13 +93,14 @@ export const selectedCluster = computed<ReportCluster | null>(() => {
 });
 
 export const filteredClusters = computed<ReportCluster[]>(() => {
-  const { severity, pathGlob } = filters.value;
+  const { severity, kind, pathGlob } = filters.value;
   const byId = severityByClusterId.value;
   const glob = pathGlob.trim().toLowerCase();
   // Base slice: the workspace facet filter, shared with the tree and
   // status bar; the webview's own selects refine it below.
   return applyFacetFilter(clusters.value, facetFilter.value).filter((cluster) => {
     if (severity && byId.get(cluster.id) !== severity) return false;
+    if (kind && cluster.kind !== kind) return false;
     if (glob && !cluster.occurrences.some((o) => o.path.toLowerCase().includes(glob))) {
       return false;
     }

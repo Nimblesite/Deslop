@@ -102,6 +102,7 @@
       "id": "f44d1ebae4c45e3a",
       "rank": 1,
       "rank_band": "worst",
+      "kind": "identical",
       "mass": 57,
       "canonical_node_count": 57,
       "occurrences": [
@@ -130,6 +131,7 @@
       "id": "ffa9824eae18b341",
       "rank": 2,
       "rank_band": "mid",
+      "kind": "identical",
       "mass": 57,
       "canonical_node_count": 57,
       "occurrences": [
@@ -158,6 +160,7 @@
       "id": "7c61b26360939eaa",
       "rank": 3,
       "rank_band": "mid",
+      "kind": "identical",
       "mass": 55,
       "canonical_node_count": 55,
       "occurrences": [
@@ -186,6 +189,7 @@
       "id": "927b05fad1c1cc0f",
       "rank": 4,
       "rank_band": "faint",
+      "kind": "identical",
       "mass": 51,
       "canonical_node_count": 51,
       "occurrences": [
@@ -214,6 +218,7 @@
       "id": "dc672f7f39f21ba4",
       "rank": 5,
       "rank_band": "faint",
+      "kind": "identical",
       "mass": 51,
       "canonical_node_count": 51,
       "occurrences": [
@@ -242,6 +247,7 @@
       "id": "b63105455a75704b",
       "rank": 6,
       "rank_band": "faint",
+      "kind": "identical",
       "mass": 40,
       "canonical_node_count": 40,
       "occurrences": [

@@ -25,15 +25,15 @@ After every coalesced buffer edit ([LIVE-WATCHER] debounce = 250 ms), the VSIX i
 **What it looks like.**
 A compact floating widget (VS Code `InlayHint` + `Webview`-backed overlay, rendered by a single `DecorationType` whose `after.contentText` is an HTML-safe Unicode glyph, with a hover-triggered richer webview for detail). Anatomy, from left to right:
 
-- **Severity dot** — colour mapped from the cluster's mass-derived rank band per [severity.md §SEVERITY-BAND](severity.md#severity-band). Pair evidence and pair classification cannot colour a cluster. The bubble remains coloured when diagnostics are off; only the dirty projection ([VSIX-STATE-DIRTY]) and silence-when-clean remove it.
-- **Short verdict** — `DUPLICATION`. A cluster-level verdict cannot be inferred from one pair's admission evidence.
+- **Band glyph and kind colour** — the glyph (`●●`, `●`, `◐`, `○`) is the cluster's mass rank band per [severity.md §SEVERITY-BAND](severity.md#severity-band); the colour of the whole bubble is the cluster's clone kind per [taxonomy.md §CLONE-KIND-COLOR](taxonomy.md#clone-kind-color). The bubble remains coloured when diagnostics are off; only the dirty projection ([VSIX-STATE-DIRTY]) and silence-when-clean remove it.
+- **Verdict** — the cluster's clone kind title ([CLONE-KIND-LABELS]): `Identical code`, `Nearly identical code`, `Same behavior, different code`, `Same shape, different content`, or `Loosely similar code`. It is the engine's fold over the cluster ([CLONE-KIND-FOLD]), never one pair's evidence.
 - **Count + location** — `× 4 • UserService.cs:230`. The canonical occurrence of the cluster, linkified to jump on click.
 - **Action chevron** — click expands the bubble into a webview-backed card with cluster membership, mass, and all occurrences. The card carries no compare button: a bubble can only name one occurrence, and pair evidence requires two explicit endpoints. The two-endpoint **Compare selected occurrences** flow lives in the cluster panel ([VSIX-WEBVIEW-ACTIONS-CONTEXT]), and only that explicit pair request may render structural, Jaccard, embedding, and content evidence.
 
 **How it's rendered.**
 VS Code doesn't give us a true floating tooltip over a specific range, so the bubble uses the layering documented in the VS Code extension cookbook:
 
-- Primary: a `TextEditorDecorationType` with `after.contentText` attached to the end of the duplicated range's last line, carrying the severity dot, `DUPLICATION`, occurrence count, and mass. This is the always-visible indicator.
+- Primary: a `TextEditorDecorationType` with `after.contentText` attached to the end of the duplicated range's last line, carrying the band glyph, the cluster slug, the kind title, and the occurrence count, painted in the kind colour. This is the always-visible indicator.
 - Secondary: hover opens the LSP hover ([LSP-HOVER]) for cluster membership and mass.
 
 No native floating bubble is possible in current VS Code APIs without a custom webview overlay, and a webview overlay would steal focus. The decoration plus hover is the closest legal approximation and never steals the caret.
@@ -118,7 +118,7 @@ A dedicated activity bar icon (a stylised "dd" mark, the same one used in the Ma
 
 - **Top Offenders** tree — see [VSIX-TOP-OFFENDERS-GROUPING] for the cluster / file / folder grouping modes, [VSIX-TOP-OFFENDERS-SORT] for the impact-vs-path sort axis, and [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] for the optional per-language split. In every mode, cluster rows show:
   - **Cluster slug** as the leading element of the bold label ([VSIX-TOP-OFFENDERS-CLUSTER-ID]) — the first 7 hex chars of `cluster.id`, identical to the slug used by the LSP hover bubble. The slug is stable across runs.
-  - Mass-severity dot ([LSP-SEVERITY]) and the neutral title `Duplicate code`.
+  - Mass-band glyph ([SEVERITY-BAND]) and the clone kind title ([CLONE-KIND-LABELS]), with the kind's icon and colour ([CLONE-KIND-COLOR]).
   - Grey description tail: `rank #N · N copies · mass M`. The literal word **rank** appears on every surface that shows `#N` so neither humans nor AI agents confuse volatile rank for stable identity ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]).
   - Full 16-hex `cluster.id` is preserved in the tooltip (`cluster id: \`...\``) and in every command argument; only the visible label is shortened.
   - Children: one node per occurrence, shown as `path:line:column` for humans. Clicking opens the file at that occurrence's file, line, and column. Raw byte ranges remain available to AI/report consumers but are not rendered in the normal tree label.
@@ -127,17 +127,17 @@ A dedicated activity bar icon (a stylised "dd" mark, the same one used in the Ma
 
 Tree refresh is driven by `deslop/reportChanged`; the webview uses the same notification to bump its own state.
 
-#### [VSIX-TOP-OFFENDERS-GROUPING] Cluster / File / Folder / Language grouping modes
+#### [VSIX-TOP-OFFENDERS-GROUPING] Cluster / File / Folder / Kind grouping modes
 
 The Top Offenders tree exposes four grouping modes that change the tree shape and what counts as a root. Two orthogonal axes compose on top of every mode: the sort order ([VSIX-TOP-OFFENDERS-SORT]) and the per-language split ([VSIX-TOP-OFFENDERS-LANGUAGE-GROUP]).
 
-The mode is persisted via the `deslop.topOffenders.groupBy` setting (`"cluster"` | `"file"` | `"folder"` | `"language"`, default `"cluster"`). VS Code's standard user→workspace precedence applies. Unknown or missing values fall back to `"cluster"`. The language, path, and mass-severity filter axes live in [facets.md §FACET-TOP-OFFENDERS-FILTER](facets.md#facet-top-offenders-filter).
+The mode is persisted via the `deslop.topOffenders.groupBy` setting (`"cluster"` | `"file"` | `"folder"` | `"kind"`, default `"cluster"`). Kind mode is specified in [facets.md §FACET-GROUP-BY-KIND](facets.md#facet-group-by-kind). VS Code's standard user→workspace precedence applies. Unknown or missing values fall back to `"cluster"`. The language, path, and mass-severity filter axes live in [facets.md §FACET-TOP-OFFENDERS-FILTER](facets.md#facet-top-offenders-filter).
 
 A view-title toggle in the Top Offenders header cycles modes. The toggle writes to the workspace configuration target so the choice persists per-repo. Cold-start respects the persisted value — there is no flash-of-default render. The toolbar also carries collapse / expand / refresh actions ([VSIX-TOP-OFFENDERS-TOOLBAR]) because folder mode can nest deeply.
 
 #### [VSIX-TOP-OFFENDERS-CLUSTER-MODE] Cluster mode (default)
 
-Root rows are clusters in the report's worst-first order. No file-keyed reordering. Each root expands directly to its occurrence leaves. The row label is `<slug> <severity-dot> Duplicate code · <file>`; no pair classification is projected into a title. The slug is the cluster's stable 7-hex prefix ([VSIX-TOP-OFFENDERS-CLUSTER-ID]); the grey description is `rank #N · N copies · mass M`.
+Root rows are clusters in the report's worst-first order. No file-keyed reordering. Each root expands directly to its occurrence leaves. The row label is `<slug> <band-glyph> <kind title> · <file>`; the title is the engine's folded kind ([CLONE-KIND-LABELS]), never one pair's classification. The slug is the cluster's stable 7-hex prefix ([VSIX-TOP-OFFENDERS-CLUSTER-ID]); the grey description is `rank #N · N copies · mass M`.
 
 #### [VSIX-TOP-OFFENDERS-FILE-MODE] File mode
 
@@ -163,7 +163,7 @@ The volatile rank (`#N`) is never the leading element of the label. Rendering ra
 
 Rules:
 
-1. The bold label must start with `<slug> <severity-dot> Duplicate code` or append `· <file>` in cluster mode. No pair classification or `#N` prefix appears in the label.
+1. The bold label must start with `<slug> <band-glyph> <kind title>` or append `· <file>` in cluster mode. No pair evidence or `#N` prefix appears in the label.
 2. The grey description must carry `rank #N · N copies · mass M`. The literal word `rank` appears before `#N`.
 3. Every other surface that mentions `#N` — tooltip, accessibility label, copy-for-AI payload, occurrence-tooltip parent reference — must use the literal word **rank**. AI consumers parse for the word; bare `#N` is forbidden.
 4. The full 16-hex `cluster.id` is preserved in the tooltip, cluster commands, and AI copy payloads. Pair comparison uses two occurrence identities rather than a cluster id as a substitute for pair selection.
@@ -176,9 +176,9 @@ The tree reads the field; it never numbers rows from their array position. Numbe
 
 Rank lives in the grey description, not the bold label. The bold label leads with the stable cluster slug ([VSIX-TOP-OFFENDERS-CLUSTER-ID]).
 
-#### [VSIX-TOP-OFFENDERS-CATEGORY-COLORS] Top Offenders mass metadata
+#### [VSIX-TOP-OFFENDERS-CATEGORY-COLORS] Top Offenders kind colours
 
-Top Offenders rows expose stable theme-aware colour from the engine-stamped mass rank band. The visible label remains neutral, while the description and accessibility label state rank, occurrence count, and mass. Colour never implies pair similarity or classification.
+Top Offenders rows expose stable theme-aware colour and an icon from the cluster's clone kind ([CLONE-KIND-COLOR]), through the contributed `deslop.kind.*` theme colours whose defaults equal the one paint table. The visible label carries the kind title; the description and accessibility label state rank, occurrence count, and mass. The rank band shows only as glyph density; it never chooses the colour.
 
 #### [VSIX-TOP-OFFENDERS-SORT] Sort axis (impact vs path)
 
@@ -212,7 +212,7 @@ Expand All and Collapse All are **provider-driven** (`TopOffendersProvider.setBu
 
 #### [VSIX-SEVERITY-CONTROL] Diagnostics toggle + severity configuration
 
-**Status: ⏳ Planned (#177).** The shipped extension renders mass-severity colours on every cluster surface but does not yet expose the diagnostics toggle or mass-percentile floor control.
+**Status: ⏳ Planned (#177).** The shipped extension renders kind colours and band glyphs on every cluster surface but does not yet expose the diagnostics toggle or mass-percentile floor control.
 
 Diagnostics are off by default ([severity.md §SEVERITY-DIAGNOSTICS-GATE](severity.md#severity-diagnostics-gate)). A `navigation@0` button bound to `deslop.diagnostics.toggle` flips `deslop.diagnostics.enabled`; the extension forwards the change to the LSP, which republishes diagnostics without re-analysis. A companion control edits the mass-percentile floor. There is no pair-classification or bucket severity control.
 
@@ -230,7 +230,7 @@ Activating the headline opens the duplication report webview — moved to [webvi
 
 ### [VSIX-CODE-LENS] Code lens
 
-The LSP's code lens ([LSP-CODE-LENS]) is the content source. The VSIX styles it with the same severity colour ramp so inline clone markers match the tree view.
+The LSP's code lens ([LSP-CODE-LENS]) is the content source. The VSIX styles it with the same kind colour table so inline clone markers match the tree view.
 
 Each lens has three actions in its command array:
 
@@ -238,11 +238,11 @@ Each lens has three actions in its command array:
 - **"Compare"** — the cluster panel's explicit two-endpoint flow: select one occurrence as the left side and a second as the right side, then **Compare selected occurrences** opens a pair view diffing exactly those two ranges ([VSIX-WEBVIEW-ACTIONS-CONTEXT]).
 - **"Open cluster"** — opens the webview ([webview-runtime.md §VSIX-WEBVIEW](webview-runtime.md#vsix-webview)) pinned to this cluster.
 
-The lens is coloured by the mass-severity map ([severity.md §SEVERITY-COLOR](severity.md#severity-color)), independent of whether diagnostics are enabled. It is hidden only for clusters below the configured mass-percentile floor ([LSP-SEVERITY-PERCENTILE]); users widen it via `deslop.showAllLenses`.
+The lens is coloured by the cluster's clone kind ([taxonomy.md §CLONE-KIND-COLOR](taxonomy.md#clone-kind-color)), independent of whether diagnostics are enabled. It is hidden only for clusters below the configured mass-percentile floor ([LSP-SEVERITY-PERCENTILE]); users widen it via `deslop.showAllLenses`.
 
 ### [VSIX-DECORATIONS] Editor decorations
 
-Occurrences in the active editor get a subtle gutter decoration (a thin coloured bar, severity-mapped) and a 1-pixel underline on the clone range. Hover over the underline reveals the full cluster detail via the LSP hover provider.
+Occurrences in the active editor get a subtle gutter decoration (a thin bar in the cluster's kind colour) and a 1-pixel underline on the clone range in the same colour ([CLONE-KIND-COLOR]). Hover over the underline reveals the full cluster detail via the LSP hover provider.
 
 No background highlighting, no border boxes, no emoji markers in the gutter. The decoration is visible at a glance but doesn't fight with any existing theme.
 

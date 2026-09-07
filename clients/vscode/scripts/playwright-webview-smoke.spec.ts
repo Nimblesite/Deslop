@@ -38,8 +38,12 @@ const PAIR_EVIDENCE_UNAVAILABLE = "PAIR EVIDENCE UNAVAILABLE";
 const CONTENT_EVIDENCE_HEADING = "CONTENT EVIDENCE";
 const CONTENT_EVIDENCE_VERDICT = "Its content evidence is 0.05 shared content";
 const CONTENT_EVIDENCE_LABELS = ["AGREEMENT", "RENAME", "LITERAL"] as const;
-const DUPLICATE_CODE_TITLE = "Duplicate code";
-const LEGACY_CLUSTER_TITLES = ["Same behavior, different code", "Nearly identical code", "Identical code"] as const;
+// [CLONE-KIND-LABELS] The sample report carries one cluster per kind the
+// smoke drives, so each surface is checked to title clusters by their kind.
+const IDENTICAL_TITLE = "Identical code";
+const NEARLY_IDENTICAL_TITLE = "Nearly identical code";
+const STRUCTURAL_ONLY_TITLE = "Same shape, different content";
+const RETIRED_NEUTRAL_TITLE = "Duplicate code";
 const MASS_LABEL = "mass";
 const WEIGHT_LABEL = "weight";
 const SELECT_FOR_COMPARISON = "Select for comparison";
@@ -59,17 +63,17 @@ test.describe("VSIX webview bundles", () => {
 
       await expect(page.getByText("DESLOP").first()).toBeVisible();
       await expect(page.getByRole("heading", { name: /18\.4%/ })).toBeVisible();
-      await expect(page.getByText(DUPLICATE_CODE_TITLE).first()).toBeVisible();
-      for (const title of LEGACY_CLUSTER_TITLES) {
-        await expect(page.getByText(title, { exact: true })).toHaveCount(0);
-      }
+      await expect(page.getByText(IDENTICAL_TITLE, { exact: true })).toBeVisible();
+      await expect(page.getByText(NEARLY_IDENTICAL_TITLE, { exact: true })).toBeVisible();
+      await expect(page.getByText(STRUCTURAL_ONLY_TITLE, { exact: true })).toBeVisible();
+      await expect(page.getByText(RETIRED_NEUTRAL_TITLE, { exact: true })).toHaveCount(0);
 
       await clearPostedMessages(page);
       await page.getByRole("button", { name: "Refresh" }).click();
       await expectPosted(page, "refresh");
 
       await clearPostedMessages(page);
-      await page.getByText(DUPLICATE_CODE_TITLE).first().click();
+      await page.getByText(IDENTICAL_TITLE, { exact: true }).first().click();
       await expectPosted(page, "open/cluster");
 
       await expectHealthyRender(page, errors, `report-${viewport.name}`);
@@ -82,12 +86,10 @@ test.describe("VSIX webview bundles", () => {
       await postHostMessage(page, { kind: "select/cluster", id: sampleReport.clusters[0].id });
 
       await expect(page.getByText("CLUSTER").first()).toBeVisible();
-      await expect(page.getByRole("heading", { name: DUPLICATE_CODE_TITLE })).toBeVisible();
+      await expect(page.getByRole("heading", { name: IDENTICAL_TITLE })).toBeVisible();
       await expect(page.getByText(MASS_LABEL, { exact: true })).toBeVisible();
       await expect(page.getByText(WEIGHT_LABEL, { exact: true })).toHaveCount(0);
-      for (const title of LEGACY_CLUSTER_TITLES) {
-        await expect(page.getByText(title, { exact: true })).toHaveCount(0);
-      }
+      await expect(page.getByText(RETIRED_NEUTRAL_TITLE, { exact: true })).toHaveCount(0);
       // [FUSED-PAIR-SIGNALS] The admission signals are pair measurements and
       // never touch the cluster. The cluster card renders no pair-evidence
       // panel, no pair source, and no content metrics.
@@ -103,9 +105,9 @@ test.describe("VSIX webview bundles", () => {
       await expect(page.getByText(PAIR_CONJOINED_SEPARATOR, { exact: false })).toHaveCount(0);
 
       await page.keyboard.press("n");
-      await expect(page.getByRole("heading", { name: DUPLICATE_CODE_TITLE })).toBeVisible();
+      await expect(page.getByRole("heading", { name: NEARLY_IDENTICAL_TITLE })).toBeVisible();
       await page.keyboard.press("p");
-      await expect(page.getByRole("heading", { name: DUPLICATE_CODE_TITLE })).toBeVisible();
+      await expect(page.getByRole("heading", { name: IDENTICAL_TITLE })).toBeVisible();
 
       await clearPostedMessages(page);
       await page.locator("button", { hasText: "Open" }).first().click();
@@ -150,7 +152,7 @@ test.describe("VSIX webview bundles", () => {
     await postHostMessage(page, { kind: "report/snapshot", report: sampleReport });
     await postHostMessage(page, { kind: "select/cluster", id: sampleReport.clusters[0].id });
 
-    await expect(page.getByRole("heading", { name: DUPLICATE_CODE_TITLE })).toBeVisible();
+    await expect(page.getByRole("heading", { name: IDENTICAL_TITLE })).toBeVisible();
     await expect(page.getByText("CLUSTER").first()).toBeVisible();
     await expect(page.getByText("No cluster selected.")).toHaveCount(0);
     expect(errors, errors.join("\n")).toEqual([]);
@@ -361,6 +363,7 @@ const sampleReport = {
       id: "abcdef1234567890",
       rank: 1,
       rank_band: "worst",
+      kind: "identical",
       mass: 43,
       canonical_node_count: 18,
       occurrences_total: 2,
@@ -375,6 +378,7 @@ const sampleReport = {
       id: "bcdefa2345678901",
       rank: 2,
       rank_band: "mid",
+      kind: "nearly_identical",
       mass: 27,
       canonical_node_count: 14,
       occurrences_total: 3,
@@ -390,6 +394,7 @@ const sampleReport = {
       id: "cdefab3456789012",
       rank: 3,
       rank_band: "faint",
+      kind: "structural_only",
       mass: 11,
       canonical_node_count: 9,
       occurrences_total: 2,

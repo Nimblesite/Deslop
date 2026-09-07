@@ -27,7 +27,7 @@ function clusterWithRanges(
 }
 
 function clusterNodeFor(c: ReportCluster): ClusterNode {
-  return new ClusterNode(c, "mid");
+  return new ClusterNode(c);
 }
 
 suite("canonical file command", () => {

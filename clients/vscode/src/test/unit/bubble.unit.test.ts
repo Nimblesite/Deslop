@@ -10,8 +10,10 @@ import {
 } from "../../bubble/live";
 import * as liveBubble from "../../bubble/live";
 import { clusterHoverMarkdown } from "../../clusterHover";
-import { ReportCluster } from "../../types/report";
-import { occurrence, wireCluster } from "../cluster.helpers";
+import { kindTitle, ReportCluster } from "../../types/report";
+import { FIXTURE_KIND, occurrence, wireCluster } from "../cluster.helpers";
+
+const IDENTICAL_KIND = "identical";
 
 function cluster(): ReportCluster {
   return wireCluster({
@@ -107,22 +109,25 @@ suite("bubble rendering helpers", () => {
     assert.doesNotMatch(text, /command:deslop\.comparePair/);
   });
 
-  // Audience: HUMAN. Issue #30. The plain human bucket label
+  // Audience: HUMAN. Issue #30. The plain human clone-kind title
   // ("Identical code", "Nearly identical code", …) must be bold in
-  // the first line — never the hybridTitle taxonomy variant.
-  test("bubbleHover title is the plain human verdict (#30)", () => {
+  // the first line — never the taxonomy jargon ([CLONE-KIND-LABELS]).
+  test("bubbleHover title is the plain human clone kind (#30)", () => {
     const c = cluster();
     const text = bubbleHover(c).value;
     const firstLine = text.split("\n")[0] ?? "";
     assert.match(
       firstLine,
-      /\*\*[0-9a-f]+ Duplicate code\*\*/,
-      `human title must contain the plain verdict; got first line: ${firstLine}`,
+      new RegExp(`\\*\\*[0-9a-f]+ ${kindTitle(FIXTURE_KIND)}\\*\\*`),
+      `human title must carry the cluster's kind title; got first line: ${firstLine}`,
     );
-    assert.doesNotMatch(
-      firstLine,
-      /Identical code|Nearly identical|Same shape|Same behavior/,
-      `human title must not expose a clone-kind label: ${firstLine}`,
+    assert.doesNotMatch(firstLine, /Type-/, `no taxonomy jargon in the title: ${firstLine}`);
+    const identical = { ...c, kind: IDENTICAL_KIND } as const;
+    const identicalFirstLine = bubbleHover(identical).value.split("\n")[0] ?? "";
+    assert.match(
+      identicalFirstLine,
+      new RegExp(`\\*\\*[0-9a-f]+ ${kindTitle(IDENTICAL_KIND)}\\*\\*`),
+      `a byte-identical cluster is titled as such: ${identicalFirstLine}`,
     );
   });
 

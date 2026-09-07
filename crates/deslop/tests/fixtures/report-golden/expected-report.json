@@ -60,6 +60,7 @@
       "id": "2dd2cdd63ce33c26",
       "rank": 1,
       "rank_band": "worst",
+      "kind": "identical",
       "mass": 144,
       "canonical_node_count": 72,
       "occurrences": [
@@ -96,6 +97,7 @@
       "id": "3fb2a8328b849757",
       "rank": 2,
       "rank_band": "faint",
+      "kind": "identical",
       "mass": 44,
       "canonical_node_count": 44,
       "occurrences": [

@@ -10,6 +10,7 @@ use deslop_core::{
     fingerprint::Fingerprint,
     lsh::{Signature, SignatureIndex, SIGNATURE_LEN},
     pair::{candidate_pairs, cluster_by_transitive_closure, FUSED_THRESHOLD, LSH_ONLY_MIN_JACCARD},
+    report_fixtures::{UniformKind, FIXTURE_KIND},
     state::{FileId, FileRegistry},
 };
 
@@ -71,6 +72,7 @@ fn issue_91_embedding_only_pair_survives_when_lsh_misses_match() -> Result<()> {
         trees: &[],
         file_languages: &HashMap::new(),
         file_paths: &HashMap::new(),
+        kinds: &UniformKind(FIXTURE_KIND),
     });
     assert_eq!(
         rendered.len(),

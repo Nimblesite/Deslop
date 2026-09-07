@@ -7,13 +7,9 @@
 // inside rendered text must pass through the one whole-number formatter.
 
 import * as assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "node:path";
 import * as ts from "typescript";
 
-import { loadDeploymentManifest, resolveBinary } from "../../binary";
+import { scanFixtureWithBundledCli } from "../cli.helpers";
 import { formatMass, formatScore } from "../../types/format";
 import { formatSignal } from "../../types/signals";
 import {
@@ -45,17 +41,7 @@ const HOST_MASS_RENDER_SOURCES = [
  * the stat row, and the stat-row hover copy. */
 const WEBVIEW_MASS_RENDER_SOURCE = "cluster/main.tsx";
 
-/** The bundle is resolved through the manifest by its LSP; the CLI is
- * staged beside it by `_vsix-stage-bundled-binaries`, never resolved on its
- * own, because the manifest lists the CLI as a PATH / package-manager
- * install rather than a bundled component. */
-const LSP_KIND = "lsp";
-const CLI_BINARY_NAME = "deslop";
-const CLI_FIXTURE_ENV = "DESLOP_TEST_FIXTURE";
-const CLI_OUTPUT_PREFIX = "report";
 const CLI_TEXT_MASS_KEY = "mass=";
-const TEMP_DIR_PREFIX = "deslop-mass-";
-const UTF8 = "utf8";
 
 suite("mass rendering", () => {
   test("mass prints as a whole number, never at the two-decimal signal precision", () => {
@@ -127,30 +113,4 @@ function assertRenderedMassUsesFormatMass(root: ts.SourceFile): void {
       `${root.fileName}: a rendered mass must pass through ${MASS_FORMATTER}: ${read.parent.getText()}`,
     );
   }
-}
-
-interface ScannedFixture {
-  clusters: { id: string; mass: number }[];
-  text: string;
-}
-
-/** The CLI staged beside the bundled LSP, on any platform's suffix. */
-function stagedCliPath(): string {
-  const root = extensionPath(".");
-  const lsp = resolveBinary(root, LSP_KIND, loadDeploymentManifest(root));
-  const cli = path.join(path.dirname(lsp.path), `${CLI_BINARY_NAME}${path.extname(lsp.path)}`);
-  assert.ok(fs.existsSync(cli), `the CLI must be staged beside the bundled LSP: ${cli}`);
-  return cli;
-}
-
-/** Scans the test fixture with the staged CLI and returns its JSON
- * clusters beside its text report. */
-function scanFixtureWithBundledCli(): ScannedFixture {
-  const fixture = process.env[CLI_FIXTURE_ENV] ?? "";
-  assert.ok(fixture, `${CLI_FIXTURE_ENV} must name the staged fixture`);
-  const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), TEMP_DIR_PREFIX));
-  const prefix = path.join(outputDir, CLI_OUTPUT_PREFIX);
-  execFileSync(stagedCliPath(), [fixture, "--embeddings", "off", "--no-incremental", "--nohtml", "--output", prefix]);
-  const report = JSON.parse(fs.readFileSync(`${prefix}.json`, UTF8)) as ScannedFixture;
-  return { clusters: report.clusters, text: fs.readFileSync(`${prefix}.txt`, UTF8) };
 }

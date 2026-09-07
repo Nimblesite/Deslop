@@ -39,13 +39,13 @@ function templateText(node: ts.TemplateLiteral): string {
   return parts.join("");
 }
 
-function severityBadgeLabelTemplates(root: ts.Node): string[] {
+function clusterBadgeLabelTemplates(root: ts.Node): string[] {
   const out: string[] = [];
   function visit(node: ts.Node): void {
     if (
       (ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node)) &&
       ts.isIdentifier(node.tagName) &&
-      node.tagName.text === "SeverityBadge"
+      node.tagName.text === "ClusterBadge"
     ) {
       for (const attr of node.attributes.properties) {
         if (
@@ -93,32 +93,32 @@ suite("report webview occurrence counts", () => {
     );
   });
 
-  test("severity badge label leads with the stable slug, not the volatile #N rank (#146)", () => {
+  test("cluster badge label leads with the stable slug, not the volatile #N rank (#146)", () => {
     // [VSIX-TOP-OFFENDERS-CLUSTER-ID] applies to every cluster-row surface, not
     // just the activity-bar tree. The volatile rank/index is never the row's
     // identity — humans and AI agents scraping the report panel must see the
     // same stable 7-hex slug everywhere ([VSIX-CLUSTER-ID-CONSISTENCY]).
     const root = parseReportWebview();
-    const badgeLabels = severityBadgeLabelTemplates(root);
+    const badgeLabels = clusterBadgeLabelTemplates(root);
     assert.ok(
       badgeLabels.length > 0,
-      "report panel must render a SeverityBadge per cluster row",
+      "report panel must render a ClusterBadge per cluster row",
     );
     for (const label of badgeLabels) {
       assert.doesNotMatch(
         label,
         /^#\$\{/,
-        `severity badge must not lead with the volatile #N rank, got: ${label}`,
+        `cluster badge must not lead with the volatile #N rank, got: ${label}`,
       );
       assert.doesNotMatch(
         label,
         /^#\d/,
-        `severity badge must not lead with a literal #N, got: ${label}`,
+        `cluster badge must not lead with a literal #N, got: ${label}`,
       );
       assert.match(
         label,
         /\bslug\b/i,
-        `severity badge must reference the cluster slug, got: ${label}`,
+        `cluster badge must reference the cluster slug, got: ${label}`,
       );
     }
   });

@@ -170,9 +170,9 @@ suite("package menu contributions", () => {
     );
   });
 
-  // [FACET-GROUP-BY-SEVERITY] The grouping toggle cycles all four modes:
-  // cluster → file → folder → severity → cluster.
-  test("grouping cycle includes the severity mode", () => {
+  // [FACET-GROUP-BY-KIND] The grouping toggle cycles all four modes:
+  // cluster → file → folder → kind → cluster.
+  test("grouping cycle includes the clone-kind mode", () => {
     const pkg = extensionPackage();
     const titleItems = (pkg.contributes.menus["view/title"] ?? []).filter(
       (item) =>
@@ -182,11 +182,11 @@ suite("package menu contributions", () => {
       titleItems.find((item) => item.command === command)?.when ?? "";
     assert.ok(whenOf("deslop.topOffenders.showByFile").includes("== 'cluster'"));
     assert.ok(whenOf("deslop.topOffenders.showByFolder").includes("== 'file'"));
-    assert.ok(whenOf("deslop.topOffenders.showBySeverity").includes("== 'folder'"));
-    assert.ok(whenOf("deslop.topOffenders.showByCluster").includes("== 'severity'"));
+    assert.ok(whenOf("deslop.topOffenders.showByKind").includes("== 'folder'"));
+    assert.ok(whenOf("deslop.topOffenders.showByCluster").includes("== 'kind'"));
     assert.equal(
-      commandTitle(pkg, "deslop.topOffenders.showBySeverity"),
-      "Deslop: Group Top Offenders by Severity",
+      commandTitle(pkg, "deslop.topOffenders.showByKind"),
+      "Deslop: Group Top Offenders by Clone Kind",
     );
     // The clone-type axis is retired: no type-mode toggle may exist.
     assert.equal(

@@ -124,7 +124,7 @@ Output (`DuplicatesPage` — the one page wire type, whatever the scope or detai
 ```
 
 `ClusterSummary` (slim — no `occurrences[]`):
-`{ id, mass, size_nodes, occurrence_count, language, first_occurrence: { path, start_byte, end_byte, start_line, end_line } }`.
+`{ id, rank, rank_band, kind, mass, size_nodes, occurrence_count, language, first_occurrence: { path, start_byte, end_byte, start_line, end_line } }`. `kind` is the engine's folded clone kind ([CLONE-KIND-FOLD]).
 Line numbers accompany byte offsets because humans reason in lines. The summary's `language` derives
 from the canonical occurrence path via the **core parser registry's** extension map — the single
 source shared with the HTML renderer, so every registered language (Dart included, #164) reports

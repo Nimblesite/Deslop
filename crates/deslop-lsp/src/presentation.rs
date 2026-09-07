@@ -3,11 +3,16 @@
 use deslop_core::report::{occurrence_count, ReportCluster};
 use serde_json::{json, Value};
 
-/// Formats a neutral mass-only diagnostic message.
+/// Formats the diagnostic message: the cluster's clone kind
+/// ([CLONE-KIND-LABELS]), its occurrence count, and its mass.
 #[must_use]
 pub fn diagnostic_message(cluster: &ReportCluster) -> String {
     let count = occurrence_count(cluster);
-    format!("Duplicate code × {count} — mass {}", cluster.mass)
+    format!(
+        "{title} × {count} — mass {mass}",
+        title = cluster.kind.labels().title,
+        mass = cluster.mass
+    )
 }
 
 /// Stores machine-facing cluster identity outside visible diagnostic text.
@@ -18,6 +23,7 @@ pub fn diagnostic_message(cluster: &ReportCluster) -> String {
 pub fn diagnostic_data(cluster: &ReportCluster) -> Value {
     json!({
         "cluster_id": cluster.id.as_str(),
+        "kind": cluster.kind.wire_label(),
         "mass": cluster.mass,
         "rank": cluster.rank,
         "rank_band": cluster.rank_band.as_str(),

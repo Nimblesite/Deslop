@@ -1,23 +1,19 @@
 // Shared hover card renderer — [VSIX-HOVER-SHARED].
 // Two layouts controlled by `showVerdict`:
 //   Full (bubble, no adjacent diagnostic):
-//     **{slug} Duplicate code** × count  /  Canonical: `path`  /  links + Dismiss
+//     **{slug} Identical code** × count  /  Canonical: `path`  /  links + Dismiss
 //   Compact (squiggle hover, alongside diagnostic):
 //     **{slug}** × count  /  Canonical: `path`  /  links + Copy for AI
 //   The compact form omits the verdict — the diagnostic already shows it.
+// The verdict is the cluster's clone kind ([CLONE-KIND-LABELS]).
 // Slug is the first 7 hex chars of cluster.id — stable across runs.
 // Rank must never take the id slot: Deslop#149, Deslop#349.
 
 import * as vscode from "vscode";
 
-import { clusterSlug, occurrenceCount, ReportCluster } from "./types/report";
+import { clusterSlug, kindTitle, occurrenceCount, ReportCluster } from "./types/report";
 
 export { clusterSlug };
-
-// [REPORTING-CONTEXT] There is no clone-kind classification to quote on
-// a cluster surface; the verdict is the spec'd short label.
-/** The only title a cluster surface may carry. */
-export const DUPLICATION_VERDICT = "Duplicate code";
 
 export interface ClusterHoverOptions {
   readonly showDismiss?: boolean;
@@ -37,7 +33,9 @@ export function clusterHoverMarkdown(
   const showVerdict = options.showVerdict ?? true;
 
   md.appendMarkdown(
-    showVerdict ? `**${slug} ${DUPLICATION_VERDICT}** × ${count}\n\n` : `**${slug}** × ${count}\n\n`,
+    showVerdict
+      ? `**${slug} ${kindTitle(cluster.kind)}** × ${count}\n\n`
+      : `**${slug}** × ${count}\n\n`,
   );
 
   const canonical = cluster.occurrences[0];

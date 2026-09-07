@@ -42,6 +42,7 @@
       "id": "a5b1c68838489f44",
       "rank": 1,
       "rank_band": "worst",
+      "kind": "identical",
       "canonical_node_count": 89,
       "occurrences": [
         {

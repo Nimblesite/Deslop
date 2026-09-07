@@ -152,13 +152,13 @@ function templateText(expr: ts.TemplateExpression): string {
   return parts.join("");
 }
 
-function severityBadgeLabelTemplates(root: ts.Node): string[] {
+function clusterBadgeLabelTemplates(root: ts.Node): string[] {
   const out: string[] = [];
   function visit(node: ts.Node): void {
     if (
       (ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node)) &&
       ts.isIdentifier(node.tagName) &&
-      node.tagName.text === "SeverityBadge"
+      node.tagName.text === "ClusterBadge"
     ) {
       for (const attr of node.attributes.properties) {
         if (
@@ -272,7 +272,7 @@ suite("cluster webview occurrence locations", () => {
     const corpus = clusterRendererCorpus();
     for (const phrase of [
       "cluster-id",
-      "duplicate-code",
+      "clone-kind",
       "ai-match",
       "rank",
       "mass",
@@ -331,7 +331,7 @@ suite("cluster webview occurrence locations", () => {
     assert.ok(linkedTopics.length > 0, "cluster id must link to its docs section");
   });
 
-  test("severity badge label leads with the stable slug, not the volatile #N rank (#146)", () => {
+  test("cluster badge label leads with the stable slug, not the volatile #N rank (#146)", () => {
     // [VSIX-TOP-OFFENDERS-CLUSTER-ID] applies to every cluster-row surface,
     // including the cluster detail webview. Rank is volatile (re-numbered on
     // every snapshot); the slug is stable. Both humans and AI agents reading
@@ -339,26 +339,26 @@ suite("cluster webview occurrence locations", () => {
     // ([VSIX-CLUSTER-ID-CONSISTENCY]) so cross-message references survive
     // re-analysis.
     const root = parseClusterWebview();
-    const badgeLabels = severityBadgeLabelTemplates(root);
+    const badgeLabels = clusterBadgeLabelTemplates(root);
     assert.ok(
       badgeLabels.length > 0,
-      "cluster panel must render a SeverityBadge in the header",
+      "cluster panel must render a ClusterBadge in the header",
     );
     for (const label of badgeLabels) {
       assert.doesNotMatch(
         label,
         /^#\$\{rank/,
-        `severity badge must not lead with the volatile #\${rank}, got: ${label}`,
+        `cluster badge must not lead with the volatile #\${rank}, got: ${label}`,
       );
       assert.doesNotMatch(
         label,
         /^#\d/,
-        `severity badge must not lead with a literal #N, got: ${label}`,
+        `cluster badge must not lead with a literal #N, got: ${label}`,
       );
       assert.match(
         label,
         /\bslug\b/i,
-        `severity badge must reference the cluster slug, got: ${label}`,
+        `cluster badge must reference the cluster slug, got: ${label}`,
       );
     }
   });

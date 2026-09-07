@@ -6,7 +6,7 @@ import { log, logWarn } from "./logging";
 import { occurrenceDisplayLocation } from "./locations";
 import { ReportStore } from "./reportStore";
 import { formatMass } from "./types/format";
-import { occurrenceCount, Report, ReportCluster, ReportOccurrence } from "./types/report";
+import { kindTitle, occurrenceCount, Report, ReportCluster, ReportOccurrence } from "./types/report";
 
 export const CLUSTER_DOCUMENT_SCHEME = "deslop";
 
@@ -71,6 +71,7 @@ function renderClusterDocument(cluster: ReportCluster): string {
   return [
     `# Deslop cluster ${cluster.id}`,
     "",
+    `Kind: ${kindTitle(cluster.kind)}`,
     `Occurrences: ${occurrenceCount(cluster)}`,
     `Mass: ${formatMass(cluster.mass)}`,
     "",

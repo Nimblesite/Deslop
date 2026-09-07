@@ -9,7 +9,7 @@
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import type { ExtensionApi } from "../../extension";
-import { clusterBand, type Report, type ReportCluster } from "../../types/report";
+import type { Report, ReportCluster } from "../../types/report";
 import { ClusterNode, OccurrenceNode } from "../../tree/nodes";
 import { activateExtension, sleep } from "./helpers";
 
@@ -18,11 +18,11 @@ const GROUP_BY_SETTING = "topOffenders.groupBy";
 const SORT_BY_SETTING = "topOffenders.sortBy";
 const FILTER_SEVERITIES_SETTING = "topOffenders.filterSeverities";
 
-const GROUP_BY_AXES: Array<"cluster" | "file" | "folder" | "severity"> = [
+const GROUP_BY_AXES: Array<"cluster" | "file" | "folder" | "kind"> = [
   "cluster",
   "file",
   "folder",
-  "severity",
+  "kind",
 ];
 
 function readConfig<T>(key: string): T | undefined {
@@ -125,7 +125,7 @@ suite("top offenders panel and node commands", () => {
 
   test("cluster-node commands open the cluster's files and locations", async () => {
     const wire = await requireCluster();
-    const clusterNode = new ClusterNode(wire, clusterBand(wire), { showFile: true });
+    const clusterNode = new ClusterNode(wire, { showFile: true });
 
     await vscode.commands.executeCommand("deslop.openClusterDetails", clusterNode);
     await vscode.commands.executeCommand("deslop.openAllOccurrences", clusterNode);
@@ -141,7 +141,7 @@ suite("top offenders panel and node commands", () => {
 
   test("the copy family writes the cluster facts to the clipboard", async () => {
     const wire = await requireCluster();
-    const clusterNode = new ClusterNode(wire, clusterBand(wire), { showFile: true });
+    const clusterNode = new ClusterNode(wire, { showFile: true });
     const first = wire.occurrences[0];
     assert.ok(first, "the cluster must carry a first occurrence");
     const occurrenceNode = new OccurrenceNode(first, wire, wire.rank, 0);
