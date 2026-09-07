@@ -71,7 +71,6 @@ pub fn bind_stub_lsp(workspace: &Path, respond: Responder) -> Result<()> {
 }
 
 /// Answers the single request one MCP connection carries.
-
 fn serve_one_connection(stream: UnixStream, respond: &Responder) {
     let Ok(writer) = stream.try_clone() else {
         return;
@@ -90,12 +89,11 @@ fn serve_one_connection(stream: UnixStream, respond: &Responder) {
         .get("method")
         .and_then(Value::as_str)
         .unwrap_or_default();
-    let _written = write_frame(&writer, &frame_for(id, method, respond));
+    let _written = write_frame(&writer, &frame_for(&id, method, respond));
 }
 
 /// The reply frame for one request: the subscribe ack, or the scripted reply.
-
-fn frame_for(id: Value, method: &str, respond: &Responder) -> Value {
+fn frame_for(id: &Value, method: &str, respond: &Responder) -> Value {
     if method == SUBSCRIBE_METHOD {
         return json!({ "jsonrpc": "2.0", "id": id, "result": { "subscribed": true, "generation": 0 } });
     }
@@ -110,7 +108,6 @@ fn frame_for(id: Value, method: &str, respond: &Responder) -> Value {
 }
 
 /// Writes one newline-delimited JSON-RPC frame.
-
 fn write_frame(mut stream: &UnixStream, value: &Value) -> std::io::Result<()> {
     let mut payload = serde_json::to_vec(value).unwrap_or_default();
     payload.push(b'\n');

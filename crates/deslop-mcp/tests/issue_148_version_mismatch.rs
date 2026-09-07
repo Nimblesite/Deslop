@@ -12,27 +12,35 @@
 use std::sync::Arc;
 
 use anyhow::{ensure, Result};
-use serde_json::json;
+use serde_json::{json, Value};
 use tempfile::TempDir;
 
 use crate::common;
 use common::stub_lsp::{bind_stub_lsp, method_not_found};
-use common::{error_and_message, initialized_mcp, request_duplicates_summary};
+use common::{error_and_message, initialized_mcp};
 
 /// Clusters requested per page; the error path never reads them.
 const PAGE_LIMIT: u64 = 5;
 
-#[test]
-fn issue_148_top_offenders_reports_version_mismatch_when_lsp_rejects_report_get() -> Result<()> {
+/// Calls `tool` against an LSP that knows no method and returns the
+/// error message the MCP renders for it.
+fn rejection_message_for(tool: &str, arguments: &Value) -> Result<String> {
     let workspace = TempDir::new()?;
     bind_stub_lsp(workspace.path(), Arc::new(method_not_found))?;
-
     let mut mcp = initialized_mcp(workspace.path())?;
-    let response = request_duplicates_summary(&mut mcp, PAGE_LIMIT)?;
-
+    let response = mcp.request(
+        "tools/call",
+        &json!({ "name": tool, "arguments": arguments }),
+    )?;
     let (_error, message) = error_and_message(&response)?;
+    Ok(message)
+}
+
+/// The hint, element by element: the rejected method, the JSON-RPC code
+/// users can grep their LSP logs for, and the VSIX reinstall as the fix.
+fn ensure_version_mismatch_hint(message: &str, method: &str) -> Result<()> {
     ensure!(
-        message.contains("report/get"),
+        message.contains(method),
         "error must name the rejected method so users can match logs: {message}"
     );
     ensure!(
@@ -51,25 +59,16 @@ fn issue_148_top_offenders_reports_version_mismatch_when_lsp_rejects_report_get(
 }
 
 #[test]
+fn issue_148_top_offenders_reports_version_mismatch_when_lsp_rejects_report_get() -> Result<()> {
+    let message = rejection_message_for(
+        "duplicates",
+        &json!({ "offset": 0, "limit": PAGE_LIMIT, "detail": "summary" }),
+    )?;
+    ensure_version_mismatch_hint(&message, "report/get")
+}
+
+#[test]
 fn issue_148_session_config_reports_version_mismatch_when_lsp_rejects_method() -> Result<()> {
-    let workspace = TempDir::new()?;
-    bind_stub_lsp(workspace.path(), Arc::new(method_not_found))?;
-
-    let mut mcp = initialized_mcp(workspace.path())?;
-    let response = mcp.request("tools/call", &json!({ "name": "session", "arguments": {} }))?;
-
-    let (_error, message) = error_and_message(&response)?;
-    ensure!(
-        message.contains("session/config"),
-        "error must name the rejected method: {message}"
-    );
-    ensure!(
-        message.contains("-32601"),
-        "error must echo the JSON-RPC code: {message}"
-    );
-    ensure!(
-        message.contains("VSIX"),
-        "error must point at the VSIX reinstall: {message}"
-    );
-    Ok(())
+    let message = rejection_message_for("session", &json!({}))?;
+    ensure_version_mismatch_hint(&message, "session/config")
 }

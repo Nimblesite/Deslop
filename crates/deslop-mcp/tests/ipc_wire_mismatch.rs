@@ -1,13 +1,13 @@
 //! [MCP-IPC-WIRE-MISMATCH] A report the MCP cannot read is refused by
-//! name. The stub LSP serves the report a release before `weight`
-//! became `mass` would serve, and every tool that reads it answers with
-//! the one named condition — both versions, the endpoint, the remedy —
-//! never with a raw field error, and never with an empty page an agent
-//! could read as "no duplicates" (gh #523).
+//! name. The stub LSP serves what another Deslop release serves — a
+//! report carrying `weight` where this wire carries `mass` — and every
+//! tool that reads it answers with the one named condition: both
+//! versions, the endpoint, the remedy. Never a raw field error, never an
+//! empty page an agent could read as "no duplicates" (gh #523).
 
 #![cfg(unix)]
 
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use anyhow::{ensure, Result};
 use serde_json::{json, Value};
@@ -15,47 +15,85 @@ use tempfile::TempDir;
 
 use crate::common;
 use common::stub_lsp::{bind_stub_lsp, method_not_found, Reply};
-use common::{
-    error_and_message, expected_socket_fragment, initialized_mcp, request_duplicates_summary,
-};
+use common::{error_and_message, expected_socket_fragment, initialized_mcp};
 
-/// A report written by the wire before `weight` became `mass`, stamped
-/// by the release that wrote it.
-const LEGACY_REPORT: &str = include_str!("fixtures/legacy-weight-report.json");
-/// The producer version the legacy fixture is stamped with.
-const LEGACY_TOOL_VERSION: &str = "0.31.0";
-/// The one cluster the legacy fixture carries.
-const LEGACY_CLUSTER_ID: &str = "a5b1c68838489f44";
+/// A report another Deslop release wrote: stamped with that release's
+/// version, carrying `weight` where this wire carries `mass`. It is the
+/// input the guard must refuse — nothing in the product decodes it.
+const FOREIGN_RELEASE_REPORT: &str = include_str!("fixtures/report-from-another-release.json");
+/// The version the foreign report is stamped with.
+const FOREIGN_RELEASE_VERSION: &str = "0.31.0";
+/// The one cluster the foreign report carries.
+const FOREIGN_RELEASE_CLUSTER_ID: &str = "a5b1c68838489f44";
 /// This test binary shares the workspace version with `deslop-mcp`.
 const MCP_VERSION: &str = env!("CARGO_PKG_VERSION");
-/// The whole-report IPC method every read tool issues.
+/// The whole-report IPC method `duplicates` issues.
 const REPORT_GET: &str = "report/get";
-/// The drill-in tool, which reads the same report.
-const CLUSTER_BY_ID_TOOL: &str = "cluster-by-id";
+/// The one-cluster IPC method `cluster-by-id` issues.
+const CLUSTER_BY_ID: &str = "cluster/byId";
+/// What the guard names as the engine version of a reply with no stamp.
+const UNSTAMPED_ENGINE: &str = "unknown (reply carries no tool_version)";
+/// The field this wire expects where the foreign cluster carries `weight`.
+const RENAMED_FIELD: &str = "missing field `mass`";
 /// The remedy the message must name.
 const REMEDY: &str = "reinstall the Deslop VSIX";
-/// The message the guard replaced.
-const OPAQUE_PARSE_PREFIX: &str = "ipc report parse";
+/// The message the guard replaced, on every site: `ipc <thing> parse:`.
+const OPAQUE_PARSE_PREFIX: &str = " parse:";
 /// The prefix of every raw serde field error.
 const FIELD_ERROR: &str = "missing field";
 /// Clusters requested per page; the error path never reads them.
 const PAGE_LIMIT: u64 = 5;
 
-/// An LSP from the release that wrote the legacy fixture: it serves that
-/// report and knows nothing else.
-fn legacy_release_lsp(method: &str) -> Reply {
+/// An LSP from the release that wrote the foreign report: it serves that
+/// report, and its one cluster by id, and knows nothing else.
+fn foreign_release_lsp(method: &str, report: &Value) -> Reply {
     if method == REPORT_GET {
-        return Reply::Result(
-            serde_json::from_str(LEGACY_REPORT).expect("the legacy fixture is JSON"),
-        );
+        return Reply::Result(report.clone());
+    }
+    if method == CLUSTER_BY_ID {
+        return Reply::Result(report.pointer("/clusters/0").cloned().unwrap_or_default());
     }
     method_not_found(method)
 }
 
+/// Binds a stub serving the foreign report under `workspace`.
+fn bind_foreign_release_lsp(workspace: &Path) -> Result<()> {
+    let report: Value = serde_json::from_str(FOREIGN_RELEASE_REPORT)?;
+    bind_stub_lsp(
+        workspace,
+        Arc::new(move |method| foreign_release_lsp(method, &report)),
+    )
+}
+
+/// Calls `tool` with `arguments` against the foreign-release stub and
+/// returns the refusal message beside the endpoint it must name. The
+/// response must be an error frame, never a page: an empty page reads as
+/// "no duplicates", the silent failure the guard exists to prevent.
+fn refusal_for(tool: &str, arguments: &Value) -> Result<(String, String)> {
+    let workspace = TempDir::new()?;
+    bind_foreign_release_lsp(workspace.path())?;
+    let mut mcp = initialized_mcp(workspace.path())?;
+    let response = mcp.request(
+        "tools/call",
+        &json!({ "name": tool, "arguments": arguments }),
+    )?;
+    ensure!(
+        response.pointer("/result").is_none(),
+        "a mismatched reply must not produce a result page: {response}"
+    );
+    let (_error, message) = error_and_message(&response)?;
+    Ok((message, expected_socket_fragment(workspace.path())?))
+}
+
 /// The named condition, element by element.
-fn ensure_named_mismatch(message: &str, socket: &str) -> Result<()> {
+fn ensure_named_mismatch(
+    message: &str,
+    socket: &str,
+    method: &str,
+    engine_version: &str,
+) -> Result<()> {
     let mcp = format!("deslop-mcp {MCP_VERSION}");
-    let engine = format!("deslop-lsp {LEGACY_TOOL_VERSION}");
+    let engine = format!("deslop-lsp {engine_version}");
     ensure!(
         message.contains(&mcp),
         "must name this binary's version: {message}"
@@ -70,12 +108,8 @@ fn ensure_named_mismatch(message: &str, socket: &str) -> Result<()> {
     );
     ensure!(message.contains(REMEDY), "must name the remedy: {message}");
     ensure!(
-        message.contains(REPORT_GET),
+        message.contains(method),
         "must name the IPC method: {message}"
-    );
-    ensure!(
-        !message.contains(FIELD_ERROR),
-        "refused before decoding, so no raw field error: {message}"
     );
     ensure!(
         !message.contains(OPAQUE_PARSE_PREFIX),
@@ -84,43 +118,31 @@ fn ensure_named_mismatch(message: &str, socket: &str) -> Result<()> {
     Ok(())
 }
 
-/// The response must be an error frame, never a page: an empty page
-/// reads as "no duplicates", which is the silent failure the guard exists
-/// to prevent.
-fn ensure_no_page(response: &Value) -> Result<()> {
+#[test]
+fn duplicates_over_a_report_from_another_release_names_both_versions_and_the_remedy() -> Result<()>
+{
+    let (message, socket) = refusal_for(
+        "duplicates",
+        &json!({ "offset": 0, "limit": PAGE_LIMIT, "detail": "summary" }),
+    )?;
+    ensure_named_mismatch(&message, &socket, REPORT_GET, FOREIGN_RELEASE_VERSION)?;
     ensure!(
-        response.pointer("/result").is_none(),
-        "a mismatched reply must not produce a result page: {response}"
+        !message.contains(FIELD_ERROR),
+        "a stamped foreign report is refused before decoding, so no raw field error: {message}"
     );
     Ok(())
 }
 
 #[test]
-fn duplicates_over_a_report_from_another_release_names_both_versions_and_the_remedy() -> Result<()>
-{
-    let workspace = TempDir::new()?;
-    bind_stub_lsp(workspace.path(), Arc::new(legacy_release_lsp))?;
-    let mut mcp = initialized_mcp(workspace.path())?;
-
-    let response = request_duplicates_summary(&mut mcp, PAGE_LIMIT)?;
-
-    ensure_no_page(&response)?;
-    let (_error, message) = error_and_message(&response)?;
-    ensure_named_mismatch(&message, &expected_socket_fragment(workspace.path())?)
-}
-
-#[test]
 fn cluster_by_id_over_a_report_from_another_release_names_the_same_condition() -> Result<()> {
-    let workspace = TempDir::new()?;
-    bind_stub_lsp(workspace.path(), Arc::new(legacy_release_lsp))?;
-    let mut mcp = initialized_mcp(workspace.path())?;
-
-    let response = mcp.request(
-        "tools/call",
-        &json!({ "name": CLUSTER_BY_ID_TOOL, "arguments": { "id": LEGACY_CLUSTER_ID } }),
+    let (message, socket) = refusal_for(
+        "cluster-by-id",
+        &json!({ "id": FOREIGN_RELEASE_CLUSTER_ID }),
     )?;
-
-    ensure_no_page(&response)?;
-    let (_error, message) = error_and_message(&response)?;
-    ensure_named_mismatch(&message, &expected_socket_fragment(workspace.path())?)
+    ensure_named_mismatch(&message, &socket, CLUSTER_BY_ID, UNSTAMPED_ENGINE)?;
+    ensure!(
+        message.contains(RENAMED_FIELD),
+        "an unstamped cluster page names the field the wire moved: {message}"
+    );
+    Ok(())
 }
