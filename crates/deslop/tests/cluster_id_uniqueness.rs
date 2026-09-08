@@ -75,3 +75,64 @@ fn no_two_published_clusters_share_one_id() -> Result<()> {
     );
     Ok(())
 }
+
+/// Two copied helpers and two other copied helpers, all of one normalised
+/// shape, in one file: `checkHeader`/`checkHeaderAgain` are one copy and
+/// `checkStamp`/`checkStampAgain` another, and the two copies differ in
+/// their selector and in the assertion they make.
+const SAME_FILE_FAMILIES_FIXTURE: &str = "js-cluster-id-same-file-families";
+
+/// `min-nodes` that admits each helper body as one occurrence.
+const SAME_FILE_FAMILIES_MIN_NODES: u32 = 8;
+
+/// The one file every occurrence of the fixture lives in.
+const SAME_FILE: &str = "checks.js";
+
+/// The two copies the fixture holds, by the lines of their two occurrences.
+const SAME_FILE_COPIES: [[(u64, u64); 2]; 2] = [[(1, 4), (6, 9)], [(11, 14), (16, 19)]];
+
+// [PIPELINE-DETERMINISM] The path mix that separates same-shape findings
+// across files cannot separate two of them inside one file: the digest
+// is the smallest member's shape plus the sorted member paths, and two
+// copies of one shape in one file feed it the same shape and the same
+// path. `main` stamps the two `ledger` copies of this fixture — and the
+// two single-line families inside them — with one id apiece. Tracked as
+// gh #531.
+#[test]
+fn two_same_shape_copies_in_one_file_get_two_ids() -> Result<()> {
+    let report = run_report(
+        &fixture(SAME_FILE_FAMILIES_FIXTURE),
+        SAME_FILE_FAMILIES_MIN_NODES,
+    )?;
+    let by_id = ids_to_files(&report);
+    for copy in SAME_FILE_COPIES {
+        assert!(
+            clusters(&report)
+                .iter()
+                .any(|cluster| covers_exactly(cluster, &copy)),
+            "each copy is its own finding at its own extent: {copy:?} in {SAME_FILE}: {report:#}"
+        );
+    }
+    let collisions: Vec<(&String, &Vec<Vec<String>>)> = by_id
+        .iter()
+        .filter(|(_, claimants)| claimants.len() > 1)
+        .collect();
+    assert!(
+        collisions.is_empty(),
+        "two copies of one shape in one file are two findings, and `cluster-by-id` \
+         must reach both ([PIPELINE-DETERMINISM]); these ids name more than one: \
+         {collisions:#?}\nfull report: {report:#}"
+    );
+    Ok(())
+}
+
+/// Whether `cluster` publishes exactly the two line spans of `copy`, both
+/// in [`SAME_FILE`].
+fn covers_exactly(cluster: &serde_json::Value, copy: &[(u64, u64); 2]) -> bool {
+    let mut spans = cluster_line_spans(cluster);
+    spans.sort_unstable();
+    spans == copy.to_vec()
+        && occurrence_files(cluster)
+            .iter()
+            .all(|path| path.ends_with(SAME_FILE))
+}

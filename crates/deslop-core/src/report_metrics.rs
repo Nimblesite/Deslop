@@ -419,8 +419,11 @@ pub(crate) fn percent(num: u64, denom: u64) -> f64 {
     if denom32 == 0 {
         return 0.0;
     }
-    let ratio = f64::from(num32) / f64::from(denom32);
-    let pct = ratio * 100.0_f64;
+    // `100 * num` is exact in f64 for any u32, so the figure is rounded
+    // exactly once, at the division — the same arithmetic the spec's
+    // `duplicated / analysed × 100` names and a reader re-deriving the
+    // percentage from the report's own counts performs ([METRICS-REPO]).
+    let pct = (f64::from(num32) * 100.0_f64) / f64::from(denom32);
     pct.clamp(0.0, 100.0)
 }
 

@@ -83,7 +83,7 @@
         "path": "ledger_beta.go",
         "analysed_loc": 19,
         "duplicated_loc": 11,
-        "duplication_percent": 57.89473684210527
+        "duplication_percent": 57.89473684210526
       },
       {
         "path": "ledger_beta.py",

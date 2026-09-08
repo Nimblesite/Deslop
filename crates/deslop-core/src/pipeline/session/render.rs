@@ -140,9 +140,9 @@ impl PipelineSession {
         // [FUSED-SHARED-SUBTREE] (gh #408): measure the structural
         // overlap the anchor axis discards before survival drops the
         // enclosing Type-3 pair and leaves only its fragment views. The
-        // per-edge content gate ([FUSED-CONTENT-GATE], gh #458) runs
-        // inside the pass: a rescue-admitted pair must carry its own
-        // content, not just a Merkle-identical signature.
+        // content gate runs inside the pass, over each pair's aligned
+        // core ([FUSED-SHARED-SUBTREE-CORE]): a rescue-admitted pair must
+        // be a copy in the code it shares, not merely share a shape.
         let rescue_input = pairs.len();
         let stage_started = Instant::now();
         apply_shared_subtree_rescue(

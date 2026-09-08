@@ -7,7 +7,8 @@ use std::{
 
 use crate::{
     ast::NormalizedNode,
-    content::{measure_pair_content_indexed, tree_index_of},
+    buckets::CONTENT_SUPPORT_FLOOR,
+    content::{measure_aligned_core, measure_pair_content_indexed, tree_index_of, PairScope},
     embedding::{cosine_similarity, EmbeddingProvider},
     error::CoreError,
     fingerprint::Fingerprint,
@@ -131,9 +132,33 @@ impl PipelineSession {
             agreement: content.agreement,
             rename_consistency: content.rename_consistency,
             literal_fraction: content.literal_fraction,
+            core_is_copy: self.core_is_copy(pair, axes),
             merkle_equal,
             text,
         }
+    }
+
+    /// [FUSED-SHARED-SUBTREE-CORE] Whether the code the endpoints share
+    /// is a copy by the content gate's own measure — the rescue's
+    /// content term, read here exactly as the pipeline reads it.
+    fn core_is_copy(&self, pair: &ResolvedPair<'_>, axes: &mut PairAxes<'_>) -> bool {
+        let core = axes
+            .overlap
+            .aligned_core(pair.left.fingerprint, pair.right.fingerprint);
+        let scope = PairScope {
+            same_file: !pair.cross_file(),
+            interior: false,
+            core: true,
+        };
+        measure_aligned_core(
+            (pair.left.fingerprint, pair.right.fingerprint),
+            &core,
+            &axes.trees,
+            &self.sources,
+            &self.file_languages,
+            scope,
+        )
+        .clears(CONTENT_SUPPORT_FLOOR)
     }
 
     /// Estimates token Jaccard, applying the pair-local Merkle correction.
@@ -328,6 +353,9 @@ struct Measurements {
     rename_consistency: f64,
     /// Literal share.
     literal_fraction: f64,
+    /// [FUSED-SHARED-SUBTREE-CORE] Whether the pair's aligned core clears
+    /// the content gate — the rescue's content term.
+    core_is_copy: bool,
     /// Exact Merkle identity.
     merkle_equal: bool,
     /// How far the two raw source ranges are the same text.

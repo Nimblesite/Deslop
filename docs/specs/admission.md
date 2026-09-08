@@ -210,7 +210,7 @@ $$
 - $S_{\text{resc}}$ — the rescue's structural floor (`admission.shared_subtree_min_overlap`, default 0.75).
 - $J_{\text{resc}}$ — the rescue's Jaccard floor (`admission.shared_subtree_min_jaccard`, default 0.65).
 - $n_{\text{resc}}$ — the rescue's minimum endpoint node count (`admission.shared_subtree_min_node_count`, default 30).
-- $A_{\text{resc}}$ — the rescue's raw-content agreement floor (`rescue.content_agreement_floor`, default 0.10).
+- $C_{\text{core}}(p)$ — whether the pair's aligned core clears the content gate at `content_gate.support_floor` ([FUSED-SHARED-SUBTREE-CORE](fused.md#fused-shared-subtree-core)).
 
 $$
 \mathrm{rescue}(p) \iff
@@ -219,7 +219,7 @@ $$
 \land S(p) \ge S_{\text{resc}}
 \land J(p) \ge J_{\text{resc}}
 \land \min(n_l, n_r) \ge n_{\text{resc}}
-\land A(p) \ge A_{\text{resc}}
+\land C_{\text{core}}(p)
 $$
 
 **The content gate.** When the shape evidence saturates, the pair must additionally prove its raw content agrees, because saturated shape says nothing an echo couldn't say.

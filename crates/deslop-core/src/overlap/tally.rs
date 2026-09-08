@@ -58,14 +58,15 @@ pub(super) struct RescueTally {
     /// every pair the route looked at: conflating the two reports a
     /// rescue population that never existed.
     pub(super) rescued: u64,
-    /// Measured pairs whose overlap cleared the floor but whose own
-    /// content agreement did not ([FUSED-CONTENT-GATE], gh #458): the
-    /// rescue looked, then refused. Distinct from `rescued` because a
-    /// Merkle-identical signature can clear the overlap floor while the
-    /// endpoints' collapsed leaves share nothing (the
-    /// `verbatim-plus-stranger` stranger measures 0.0436) — admitting
-    /// those would launder a false duplicate into a proven family's
-    /// act-now cluster.
+    /// Measured pairs whose overlap cleared the floor but whose aligned
+    /// core did not clear the content gate
+    /// ([FUSED-SHARED-SUBTREE-CORE]): the rescue looked, then refused.
+    /// Distinct from `rescued` because shape can clear the overlap floor
+    /// while the code the endpoints share is not a copy — the
+    /// `verbatim-plus-stranger` stranger shares nothing but shape, and
+    /// two browser-test lines on other selectors share an idiom —
+    /// and admitting those welds a false occurrence onto a proven
+    /// family.
     pub(super) content_gate_rejected: u64,
     /// Measured pairs whose overlap cleared the floor but whose shared
     /// mass, beyond an exact whole-function clone both endpoints

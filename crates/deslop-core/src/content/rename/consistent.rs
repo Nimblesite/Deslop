@@ -10,7 +10,7 @@ use super::{
     super::frontier::{frontiers_aligned, leaf_bytes, population, MemberContent, Population},
     literal_echoes, literal_positions, rename_mapping,
 };
-use crate::state::FileId;
+use crate::{content::PairScope, state::FileId};
 
 /// Whether the pair is one code written twice under a consistent
 /// renaming: the frontiers align, no substituted identifier position
@@ -25,10 +25,17 @@ use crate::state::FileId;
 /// a family that renames more than it keeps is a different vocabulary
 /// over one shape — the scaffolding the gate exists to refuse, where
 /// nothing outside the substitution vouches.
+///
+/// The aligned core of a rescued pair is excused from that last clause
+/// and no other ([FUSED-SHARED-SUBTREE-CORE], [`PairScope::core`]):
+/// the rescue's ordered-overlap and token floors already vouch for its
+/// vocabulary, and a near-miss method that renames every local keeps
+/// nothing by this count.
 pub(in crate::content) fn pair_rename_is_consistent<S: BuildHasher>(
     canonical: &MemberContent,
     member: &MemberContent,
     sources: &HashMap<FileId, Vec<u8>, S>,
+    scope: PairScope,
 ) -> bool {
     if !frontiers_aligned(canonical, member) {
         return false;
@@ -47,7 +54,7 @@ pub(in crate::content) fn pair_rename_is_consistent<S: BuildHasher>(
     );
     mapping.constrained == mapping.explained
         && mapping.corroborated > 0
-        && mapping.identity >= mapping.renamed
+        && (scope.core || mapping.identity >= mapping.renamed)
 }
 
 /// Corroboration per substituted identifier pair: literal echoes of the

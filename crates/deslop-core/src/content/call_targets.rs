@@ -31,6 +31,31 @@ pub(super) struct CallTarget {
     collaborator: Option<usize>,
 }
 
+impl CallTarget {
+    /// The same target inside a frontier that begins `offset` positions
+    /// later — how a span's targets join a concatenated core
+    /// ([FUSED-SHARED-SUBTREE-CORE]).
+    pub(super) fn shifted(&self, offset: usize) -> Self {
+        Self {
+            collaborator: self
+                .collaborator
+                .map(|position| position.saturating_add(offset)),
+        }
+    }
+
+    /// The same target inside the stretch of `len` positions starting
+    /// at `first`; a collaborator outside the stretch no longer
+    /// qualifies the selector ([FUSED-SHARED-SUBTREE-CORE]).
+    pub(super) fn within(&self, first: usize, len: usize) -> Self {
+        Self {
+            collaborator: self
+                .collaborator
+                .filter(|position| *position >= first && position.saturating_sub(first) < len)
+                .map(|position| position.saturating_sub(first)),
+        }
+    }
+}
+
 /// Marks frontier leaves that select methods declared outside the matched region.
 pub(super) fn external_targets(
     root: &NormalizedNode,

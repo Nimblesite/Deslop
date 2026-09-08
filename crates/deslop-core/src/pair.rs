@@ -106,14 +106,6 @@ pub const SHARED_SUBTREE_MIN_JACCARD: f64 = 0.65;
 /// grammar scaffolding alone cannot reach it (the smallest genuine
 /// fixture method, `python-type3`'s `aggregate`, is 31 nodes).
 pub const SHARED_SUBTREE_MIN_NODE_COUNT: usize = 30;
-/// Raw-content agreement a shared-subtree rescue pair must corroborate
-/// ([FUSED-SHARED-SUBTREE]). Corroboration that the endpoints share some
-/// raw content — not the routing support floor: the canonical renamed
-/// near-miss (`csharp-type3`) measures 0.19 because the extra statement
-/// destroys leaf alignment, while the gh #458 stranger measures 0.0436.
-/// The floor sits between them; reuse of `CONTENT_SUPPORT_FLOOR` (0.70)
-/// gated the anchor-free route and drove it to zero clusters.
-pub const RESCUE_MIN_CONTENT_AGREEMENT: f64 = 0.10;
 /// Minimum cosine that supplies independent semantic support for a pair
 /// ([FUSED-PAIR-SIGNALS], [CLONE-BUCKETS-ROUTING]). Merely measuring a
 /// cosine does not certify content support. The discovery route cannot

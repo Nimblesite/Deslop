@@ -25,6 +25,11 @@
 //! shared mass it guarantees is `2m − min(n₁, n₂)` — which is nothing at
 //! all when the match is small relative to the endpoints, exactly as the
 //! alignment would report.
+//!
+//! This walk bounds *mass* and nothing else. Which subtree it pairs with
+//! which is immaterial to a bound and is never read as content: the
+//! content gate's pairing is [`super::core`], which preserves order and
+//! nesting the way an alignment does ([FUSED-SHARED-SUBTREE-CORE]).
 
 use std::collections::HashMap;
 

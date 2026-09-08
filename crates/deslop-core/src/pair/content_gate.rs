@@ -119,9 +119,7 @@ impl GateVerdict {
         match self {
             Self::RoleMismatch | Self::ContainerEcho => false,
             Self::NotRequired => true,
-            Self::Measured { evidence, floor } => {
-                evidence.measured && (evidence.consistent_rename || evidence.support() >= *floor)
-            }
+            Self::Measured { evidence, floor } => evidence.clears(*floor),
         }
     }
 

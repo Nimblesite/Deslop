@@ -123,25 +123,51 @@ def opens_mid_line(occurrence: dict, fixture_root: Path) -> bool:
     return bool(source[line_start : occurrence["start_byte"]].strip())
 
 
-def fixture_rows(binary: Path, label: str, output_dir: Path) -> list[dict]:
-    """Scan the statement-run fixture at every floor with one engine."""
+def shape_rows(binary: Path, label: str, output_dir: Path, scan_root: Path, floors) -> list[dict]:
+    """Scan one tree at every floor with one engine and measure its cluster shape."""
     rows = []
-    fixture_root = REPO_ROOT / FIXTURE
-    for floor in NODE_FLOORS:
-        prefix = output_dir / f"{label}-{floor}"
+    for floor in floors:
+        prefix = output_dir / f"{label}-{scan_root.name}-{floor}"
         subprocess.run(
             [
-                str(binary), str(fixture_root), "--embeddings", "off", "--no-incremental",
+                str(binary), str(scan_root), "--embeddings", "off", "--no-incremental",
                 "--min-nodes", str(floor), "--output", str(prefix), "--nohtml",
             ],
             cwd=REPO_ROOT, capture_output=True, check=True, timeout=TIMEOUT_SECONDS,
         )
-        measured = cluster_shape(prefix.with_suffix(".json"), fixture_root)
+        measured = cluster_shape(prefix.with_suffix(".json"), scan_root)
         rows.append({"engine": label, "min_nodes": floor, **measured})
     return rows
 
 
-def render(checks: list[Check], shape_rows: list[dict], site_line: str) -> str:
+def fixture_rows(binary: Path, label: str, output_dir: Path) -> list[dict]:
+    """Scan the statement-run fixture at every floor with one engine."""
+    return shape_rows(binary, label, output_dir, REPO_ROOT / FIXTURE, NODE_FLOORS)
+
+
+# The floor the reported scan ran at — the CLI default.
+DEFAULT_NODE_FLOOR = 30
+
+
+def site_rows(binary: Path, label: str, output_dir: Path) -> list[dict]:
+    """Scan the reported repository at the default floor with one engine."""
+    return shape_rows(binary, label, output_dir, REPO_ROOT / SITE_TESTS, (DEFAULT_NODE_FLOOR,))
+
+
+def shape_table(rows: list[dict]) -> list[str]:
+    """One cluster-shape table, a row per engine and floor."""
+    header = [
+        "| engine | --min-nodes | duplication % | clusters | mixed-span clusters | cross-file clusters | mid-line occurrences |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    return header + [
+        f"| {row['engine']} | {row['min_nodes']} | {row['percent']:.4f} | {row['clusters']} | "
+        f"{row['mixed_span_clusters']} | {row['cross_file_clusters']} | {row['mid_line_occurrences']} |"
+        for row in rows
+    ]
+
+
+def render(checks: list[Check], shape_rows: list[dict], site_line: str, site_shape: list[dict]) -> str:
     """Render the verification document from captured results only."""
     failing = [check for check in checks if not check.passed]
     lines = [
@@ -169,15 +195,21 @@ def render(checks: list[Check], shape_rows: list[dict], site_line: str) -> str:
         "A duplication of one region repeated covers the same rows in every occurrence, "
         "so a mixed span count above zero is the defect gh #520 reports.",
         "",
-        "| engine | --min-nodes | duplication % | clusters | mixed-span clusters | cross-file clusters | mid-line occurrences |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
+    lines += shape_table(shape_rows)
     lines += [
-        f"| {row['engine']} | {row['min_nodes']} | {row['percent']:.4f} | {row['clusters']} | "
-        f"{row['mixed_span_clusters']} | {row['cross_file_clusters']} | {row['mid_line_occurrences']} |"
-        for row in shape_rows
+        "",
+        "## gh #520 — the reported scan",
+        "",
+        f"`{SITE_TESTS}` at default settings: `{site_line}`",
+        "",
+        "The same tree measured on both engines. A mixed-span cluster here is not by itself a defect — "
+        "two copies can differ by one inserted line — so the columns are the shape, and the text report "
+        "above is the figure.",
+        "",
     ]
-    lines += ["", "## gh #520 — the reported scan", "", f"`{SITE_TESTS}` at default settings: `{site_line}`", ""]
+    lines += shape_table(site_shape)
+    lines += [""]
     if failing:
         lines += ["## Failing checks", "", *(f"- {check.issue}: `{check.command}` exited {check.exit_code}" for check in failing), ""]
     return "\n".join(lines)
@@ -195,6 +227,11 @@ def checks_to_run(skip: set[str]) -> list[Check]:
               "cargo test -p deslop --test suite unrelated_statement_runs", group="rust"),
         Check("#520", "Cluster occurrences describe one authored view",
               "cargo test -p deslop --test suite cluster_extent", group="rust"),
+        Check("#520", "Root cause: a rescued pair is judged on its aligned core, and near-miss recall holds",
+              "cargo test -p deslop --test suite -- type3_enclosing_method lsh_only_nearmiss_recall "
+              "operator_drift_is_not_duplication rank_mass cross_cluster_enclosure", group="rust"),
+        Check("#520", "Root cause: a member inside a test body is judged by the call it is",
+              "cargo test -p deslop-core --lib -- cluster_filters::calls::tests overlap::tests", group="rust"),
         Check("#521/#522/#524/#525", "Extension host: one paint table, tap-to-compare, whole-number mass",
               "npm test", cwd="clients/vscode", group="vsix"),
         Check("#523", "A reply from another build is refused by name, not by serde",
@@ -231,11 +268,14 @@ def main() -> int:
     )
     site_line = scan_figure(site_prefix.with_suffix(".txt"))
 
-    shape_rows = fixture_rows(REPO_ROOT / CLI, "branch", output_dir)
+    fixture_shape = fixture_rows(REPO_ROOT / CLI, "branch", output_dir)
+    site_shape = site_rows(REPO_ROOT / CLI, "branch", output_dir)
     if arguments.main_binary:
-        shape_rows = fixture_rows(Path(arguments.main_binary), "main", output_dir) + shape_rows
+        main_binary = Path(arguments.main_binary)
+        fixture_shape = fixture_rows(main_binary, "main", output_dir) + fixture_shape
+        site_shape = site_rows(main_binary, "main", output_dir) + site_shape
 
-    document = render(checks, shape_rows, site_line)
+    document = render(checks, fixture_shape, site_line, site_shape)
     destination = REPO_ROOT / arguments.output
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(document)

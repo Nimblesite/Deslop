@@ -4,8 +4,8 @@ use crate::{
     buckets::{content_support, CONTENT_PROMOTE_FLOOR, CONTENT_SUPPORT_FLOOR},
     pair::{
         CROSS_LANGUAGE_MIN_JACCARD, EMBEDDING_SUPPORT_FLOOR, FUSED_THRESHOLD, LSH_ONLY_MIN_JACCARD,
-        LSH_ONLY_MIN_NODE_COUNT, MAX_ENDPOINT_NODE_RATIO, RESCUE_MIN_CONTENT_AGREEMENT,
-        SHARED_SUBTREE_MIN_JACCARD, SHARED_SUBTREE_MIN_NODE_COUNT, SHARED_SUBTREE_MIN_OVERLAP,
+        LSH_ONLY_MIN_NODE_COUNT, MAX_ENDPOINT_NODE_RATIO, SHARED_SUBTREE_MIN_JACCARD,
+        SHARED_SUBTREE_MIN_NODE_COUNT, SHARED_SUBTREE_MIN_OVERLAP,
     },
     report::{PairClassification, PairTextIdentity},
 };
@@ -188,14 +188,16 @@ fn pair_content_support(measured: Measurements) -> f64 {
     content_support(measured.agreement, measured.rename_consistency)
 }
 
-/// Whether the below-threshold cross-file rescue admits this pair.
+/// Whether the below-threshold cross-file rescue admits this pair: the
+/// structural, token and size floors, and an aligned core the content
+/// gate accepts ([FUSED-SHARED-SUBTREE-CORE]).
 fn rescue_applies(pair: &ResolvedPair<'_>, measured: Measurements, threshold: f64) -> bool {
     pair.cross_file()
         && measured.score.bounded_fused() < threshold
         && measured.score.structural >= SHARED_SUBTREE_MIN_OVERLAP
         && measured.score.token_jaccard >= SHARED_SUBTREE_MIN_JACCARD
         && smaller_node_count(pair) >= SHARED_SUBTREE_MIN_NODE_COUNT
-        && measured.agreement >= RESCUE_MIN_CONTENT_AGREEMENT
+        && measured.core_is_copy
 }
 
 /// Size coherence for pairs without an exact Merkle anchor.

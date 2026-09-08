@@ -200,3 +200,80 @@ fn assert_nothing_is_published(report: &Value, floor: u32) {
         "--min-nodes {floor}: no file carries duplication: {report:#}"
     );
 }
+
+/// A scenario copied whole with one URL changed, beside a scenario that
+/// shares only the `locator().boundingBox()` idiom with it.
+const SCENARIO_TAIL_FIXTURE: &str = "js-cluster-extent-scenario-tail";
+
+/// Two test bodies that are one copy of each other, differing in the page
+/// they open.
+const LAYOUT: &str = "layout.spec.js";
+/// One test body sharing an idiom, and no authored logic, with them.
+const PUBLICATION: &str = "publication.spec.js";
+
+/// The copied scenario as authored: both whole test bodies, and nothing
+/// narrower ([PIPELINE-CLUSTER-EXACT-SCOPE]).
+const COPIED_SCENARIO_SPANS: [(u64, u64); 2] = [(3, 9), (11, 17)];
+
+/// One scenario copied once is one duplication.
+const ONE_CLUSTER: usize = 1;
+
+/// Only the file holding the copy carries duplication.
+const ONE_DUPLICATED_FILE: u64 = 1;
+
+/// gh #520, the shape that survived its headline fix: a proven copy plus a
+/// shape-compatible stranger ([CLONE-NOISE-VERBATIM-SUBGROUP]). Two
+/// `locator().boundingBox()` lines on other selectors are literal-variation
+/// scaffolding ([CLONE-NOISE-LITERAL-VARIATION-CALLS]), not a third occurrence
+/// of the copy — and the stranger arrived one statement wider than the members
+/// it was welded to, priced at a node count its own span was never measured
+/// for. It rode the shared-subtree rescue on a whole-endpoint content floor
+/// while the two lines it actually shares had been refused at the gate; a
+/// rescued pair is judged on that shared core ([FUSED-SHARED-SUBTREE-CORE]).
+#[test]
+fn a_scenario_tail_is_never_welded_onto_a_copied_scenario() -> Result<()> {
+    let root = fixture(SCENARIO_TAIL_FIXTURE);
+    for floor in NODE_FLOORS {
+        let report = run_report(&root, floor)?;
+        assert_no_cluster_mixes_row_counts(&report, floor);
+        assert_no_occurrence_opens_mid_line(&root, &report, floor)?;
+        assert_node_count_fits_every_member(&report, floor);
+        assert_only_the_copied_scenario_is_published(&report, floor);
+    }
+    Ok(())
+}
+
+/// The copy is the whole finding, and the only one: one cluster, in the one
+/// file that holds it.
+fn assert_only_the_copied_scenario_is_published(report: &Value, floor: u32) {
+    assert_eq!(
+        cluster_count(report),
+        ONE_CLUSTER,
+        "--min-nodes {floor}: one scenario copied once is one duplication: {report:#}"
+    );
+    for cluster in clusters(report) {
+        assert_copy_is_the_whole_finding(cluster, floor);
+    }
+    assert_eq!(
+        metric_field(report, "duplicated_files").as_u64(),
+        Some(ONE_DUPLICATED_FILE),
+        "--min-nodes {floor}: only {LAYOUT} carries duplication: {report:#}"
+    );
+}
+
+/// Both test bodies of the copied file at their authored extent, and no
+/// occurrence from the file that merely shares their idiom.
+fn assert_copy_is_the_whole_finding(cluster: &Value, floor: u32) {
+    let files = cluster_file_set(cluster);
+    assert!(
+        !files.iter().any(|path| path.ends_with(PUBLICATION)),
+        "--min-nodes {floor}: {PUBLICATION} shares an idiom, not authored logic, with \
+         {LAYOUT}; welding its tail on as a third occurrence is gh #520: {cluster:#}"
+    );
+    let mut spans = cluster_line_spans(cluster);
+    spans.sort_unstable();
+    assert_eq!(
+        spans, COPIED_SCENARIO_SPANS,
+        "--min-nodes {floor}: the copy is both whole test bodies of {LAYOUT}: {cluster:#}"
+    );
+}
