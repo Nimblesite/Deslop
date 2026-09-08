@@ -33,6 +33,8 @@ mod cache_retention;
 mod cli;
 #[path = "cluster_extent_alignment.rs"]
 mod cluster_extent_alignment;
+#[path = "cluster_extent_statement_runs.rs"]
+mod cluster_extent_statement_runs;
 #[path = "cluster_id_uniqueness.rs"]
 mod cluster_id_uniqueness;
 #[path = "config_include_dependencies.rs"]
@@ -269,6 +271,8 @@ mod sibling_ranking;
 mod signature_reuse;
 #[path = "skip_policy_contract.rs"]
 mod skip_policy_contract;
+#[path = "spec_id_traceability.rs"]
+mod spec_id_traceability;
 #[path = "ts_issue_283_object_literal_tables.rs"]
 mod ts_issue_283_object_literal_tables;
 #[path = "ts_issue_284_produce_then_assert.rs"]

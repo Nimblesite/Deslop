@@ -13,17 +13,18 @@ claim that a matching citation proves the implementation or assertion correct.
 
 import argparse
 import json
-from collections import defaultdict
-from dataclasses import dataclass
+import sys
 from pathlib import Path
 
-import tree_sitter
-import tree_sitter_rust
-import tree_sitter_typescript
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-SOURCE_ROOTS = ("crates", "clients/vscode/src")
-COMMENT_TYPES = frozenset(("line_comment", "block_comment", "comment"))
-STRING_TYPES = frozenset(("string_literal", "string"))
+from spec_ids import (  # noqa: E402
+    Citation,
+    doc_definitions,
+    identifiers,
+    source_citations,
+)
+
 EXAMPLES = frozenset(("BRACKETED-ID", "SPEC-ID", "SKIP-BREAKING-CI"))
 TEST_BUILD_RULES = frozenset(("TEST-ONE-BINARY",))
 TEST_SUMMARY_STATUSES = frozenset(("passed", "passing", "failed", "failing", "pending", "skipped"))
@@ -51,30 +52,6 @@ CANONICAL = {
 }
 
 
-@dataclass(frozen=True, order=True)
-class Citation:
-    """A comment or literal selected by its parsed node, with a stable location."""
-
-    path: str
-    line: int
-    is_test: bool = False
-
-    def link(self) -> str:
-        """Render a repository-relative markdown link."""
-        return f"[{self.path}:{self.line}](../{self.path}#L{self.line})"
-
-
-def identifiers(text: str) -> set[str]:
-    """Read bracket-delimited slugs without treating code as text patterns."""
-    result = set()
-    for fragment in text.split("[")[1:]:
-        candidate, closing, _rest = fragment.partition("]")
-        parts = candidate.split("-")
-        if closing and len(parts) > 1 and all(part and part.isalnum() and part.upper() == part for part in parts):
-            result.add(candidate)
-    return result
-
-
 def requested_ids(path: Path) -> list[str]:
     """Read identifier cells from the attribution report's markdown table."""
     result = set()
@@ -85,80 +62,6 @@ def requested_ids(path: Path) -> list[str]:
     if not result:
         raise ValueError(f"No attributed identifiers found in {path}")
     return sorted(result)
-
-
-def doc_definitions() -> dict[str, list[Citation]]:
-    """Index requirement headings and bold requirement bullets, not mentions."""
-    result = defaultdict(list)
-    for path in sorted(Path("docs").rglob("*.md")):
-        fenced = False
-        for line, text in enumerate(path.read_text().splitlines(), start=1):
-            if text.lstrip().startswith("```"):
-                fenced = not fenced
-            if fenced or not text.startswith(("#", "- **[")):
-                continue
-            prefix, opening, suffix = text.partition("[")
-            if opening and not prefix.strip("# *-"):
-                for identifier in identifiers("[" + suffix.partition("]")[0] + "]"):
-                    result[identifier].append(Citation(str(path), line))
-    return result
-
-
-def parser_set() -> dict[str, tree_sitter.Parser]:
-    """Keep parsers and their languages alive for every traversal."""
-    languages = {
-        ".rs": tree_sitter.Language(tree_sitter_rust.language()),
-        ".ts": tree_sitter.Language(tree_sitter_typescript.language_typescript()),
-        ".tsx": tree_sitter.Language(tree_sitter_typescript.language_tsx()),
-    }
-    return {suffix: tree_sitter.Parser(language) for suffix, language in languages.items()}
-
-
-def test_context(path: Path, node: tree_sitter.Node) -> bool:
-    """Include integration suites and inline Rust test modules."""
-    if set(path.parts) & {"tests", "test", "fixtures", "__tests__"} or test_name(path.stem):
-        return True
-    parent = node.parent
-    while parent is not None:
-        if parent.type == "mod_item":
-            name = parent.child_by_field_name("name")
-            if name and test_name(name.text.decode()):
-                return True
-        parent = parent.parent
-    return False
-
-
-def test_name(name: str) -> bool:
-    """Recognize test names without misclassifying names such as latest_report."""
-    return name in {"test", "tests"} or name.startswith("test_") or name.endswith(("_tests", "_test", ".test"))
-
-
-def parsed_citations(path: Path, parser: tree_sitter.Parser):
-    """Yield comment/literal references only; never search raw source."""
-    data = path.read_bytes()
-    tree = parser.parse(data)
-    pending = [tree.root_node]
-    while pending:
-        node = pending.pop()
-        if node.type in COMMENT_TYPES | STRING_TYPES:
-            citation = Citation(str(path), node.start_point.row + 1, test_context(path, node))
-            for identifier in identifiers(node.text.decode()):
-                yield identifier, node.type in COMMENT_TYPES, citation
-        else:
-            pending.extend(reversed(node.children))
-
-
-def source_citations():
-    """Collect current citations independently of git's tracked-file list."""
-    comments, literals = defaultdict(set), defaultdict(set)
-    parsers = parser_set()
-    for root in SOURCE_ROOTS:
-        for path in sorted(Path(root).rglob("*")):
-            if path.suffix not in parsers:
-                continue
-            for identifier, is_comment, citation in parsed_citations(path, parsers[path.suffix]):
-                (comments if is_comment else literals)[identifier].add(citation)
-    return comments, literals
 
 
 def problems(identifier, canonical, definitions, comments):

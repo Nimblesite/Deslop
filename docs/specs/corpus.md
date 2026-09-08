@@ -158,6 +158,14 @@ The rest of the rules:
 
 Asserted by `scripts/repository/verdict-merge.test.mjs`, which drives the script against throwaway judging folders that agree and that do not.
 
+### [CORPUS-SCORE-RENDER] The scorecard formats figures and never derives one
+
+`SCORE.md` is written by the run that took the measurements ([CORPUS-SCORE]), and the module that writes it is allowed to format and nothing else. Every number it prints was computed upstream, so the markdown a human reads and the `score.json` beside it cannot disagree — there is no second implementation of the arithmetic to drift.
+
+Tables read **side by side**: the corpus standing is one measure per row with a column per engine, and each per-repository table is one repository with a column per engine. A reader compares two builds by moving along a row, never by holding two documents open. Missing figures render as an explicit absence rather than a zero, because "not measured" and "measured as none" are different claims about a run.
+
+Implemented in `crates/deslop-test-support/src/corpus_score/render.rs` (document shape) and `render/cells.rs` (cell formatting), pinned by `corpus_score/tests/render.rs`.
+
 ### [CORPUS-SCORE] The accuracy score
 
 The register says which pairs are real. The score says how the engine is doing against them, in one number per repository and one for the corpus.

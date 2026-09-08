@@ -28,6 +28,12 @@ When a filter is active, the first root row states the active filter and offers 
 
 Top Offenders supports cluster, file, folder, and kind grouping. Kind mode shows one flat group per clone kind present, strongest kind first (`Identical code` down to `Loosely similar code`), each titled and coloured by its kind ([CLONE-KIND-LABELS], [CLONE-KIND-COLOR]) and carrying its live cluster count; absent kinds render no group. File mode nests the same kind groups under each file, ordered by each group's worst cluster. The kind is the engine's fold ([CLONE-KIND-FOLD]); the client projects no pair classification of its own. Every cluster row keeps the engine-stamped global rank and mass.
 
+### [FACET-GROUP-BY-TYPE] Every clone category has a plain group title
+
+Grouping and facet surfaces title a category with the chip its category already carries, so one concept is spelled one way everywhere. The logic category carries no chip — it is the ordinary case, not a special one — and titles as `Code clones` rather than rendering an empty heading or leaking an enum name into the UI.
+
+The title is a property of the category, resolved once by `CloneCategory::group_title`, so the tree, the webview facet list and the HTML report cannot title the same category three ways. This is orthogonal to [FACET-GROUP-BY-KIND]: kind is how strongly two occurrences match, category is what sort of code they are.
+
 ### [FACET-REPORT-WEBVIEW] Full-report webview filters
 
 The full-report webview exposes mass-severity, clone-kind, and path filters, each option list derived from the shared registries. Sort is fixed to engine rank. The webview performs no calculation and receives no pair evidence until the user opens an explicit two-occurrence comparison.

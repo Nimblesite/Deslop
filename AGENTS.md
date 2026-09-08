@@ -73,7 +73,7 @@ REPLACE BROKEN CODE; DON'T WRITE NEW CODE WITH A DUPLICATE PATH
 - **No linter suppressions.** `#[allow(clippy::...)]` is prohibited — fix the code.
 - **All global state in `crates/deslop-core/src/state.rs`.** Same rule for TypeScript and every other language.
 - **Bug fixes follow the [fix-bug skill](.claude/skills/fix-bug/SKILL.md).**
-- **Spec IDs are hierarchical and non-numeric** — `[GROUP-TOPIC]` / `[GROUP-TOPIC-DETAIL]`, e.g. `[PARSE-CSHARP-NORMALIZE]`, `[RANK-SCORE]`. Same-group sections sit adjacent; no sequential numbers. Code and tests carry the ID in a comment so `grep [PARSE-` finds spec → code → tests.
+- **Spec IDs are hierarchical and non-numeric** — `[GROUP-TOPIC]` / `[GROUP-TOPIC-DETAIL]`, e.g. `[PARSE-CSHARP-NORMALIZE]`, `[RANK-MASS-SUM]`. Same-group sections sit adjacent; no sequential numbers. Code and tests carry the ID in a comment so `grep [PARSE-` finds spec → code → tests.
 - **Dependency versions stay in sync** across `Cargo.toml`, `.github/workflows/ci.yml`, and `.devcontainer/`.
 - **Auto-memory is off.** Durable rules go through reviewed changes to this file.
 - **IPC wire models are generated from [typeDiagram](https://typediagram.dev/docs/language-reference.html)** — never hand-written. Generated code is git-ignored, never committed.

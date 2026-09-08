@@ -8,6 +8,14 @@ Crate: `crates/deslop-lsp`. Transport: JSON-RPC over stdio. Framework: `tower-ls
 
 Stdio JSON-RPC 2.0 per the LSP base protocol. No TCP, no named pipes, no WebSockets. The editor spawns the binary; the binary speaks LSP on stdin/stdout; `tracing` goes to stderr (picked up as the "server log" in the client). One process per workspace root.
 
+### [LSP-IPC] A second endpoint, for tools that are not the editor
+
+The editor owns stdio, so anything else that wants the live report needs its own door. The LSP binds one: a per-workspace endpoint under `.deslop/cache/`, carrying the same line-delimited JSON-RPC the editor speaks, which `deslop-mcp` connects to so an agent reads the session the developer is actually looking at rather than starting a second analysis ([MCP-IPC-DISCOVERY]).
+
+The endpoint is **an accessor, never a second engine**. It answers from the live session's current report and mutates nothing but the refresh it is explicitly asked for; the analysis, the watcher and the schedule stay the editor session's. It is bound at startup and removed on exit, so a stale artefact never advertises a server that has gone. Its transport is per platform — a Unix domain socket where those exist, TCP loopback with a per-session secret on Windows ([LIVE-IPC-SOCKET], [LIVE-IPC-TCP]) — and a reply it serves carries the producing version, so a client from another build is refused by name rather than left to misparse it ([MCP-IPC-WIRE-MISMATCH]).
+
+Implemented in `deslop-lsp/src/ipc/`, bound through `deslop-core`'s shared transport; pinned by `crates/deslop-lsp/tests/state_file_and_ipc.rs`.
+
 ### [LSP-CLI-HELP] Command-line help
 
 `deslop-lsp --help` lists every accepted flag with its purpose and exits successfully without starting a language server. `crates/deslop-lsp/src/help.rs` owns the help text and `app.rs` dispatches it; `crates/deslop-lsp/tests/cli.rs` runs the binary and asserts its advertised flags.

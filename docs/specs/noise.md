@@ -52,6 +52,12 @@ The restated #434 pins carry both directions: each fixture's real cross-file con
 
 The regression pins cover both file geometries: every qualifying family stays visible, while the raw-differing member of a convicted component is absent. `verbatim_subgroup_survives_noise.rs` proves the same separation for copied collection cells.
 
+### [CLONE-NOISE-SCAFFOLDING] A shape repeated across three or more files is the project's scaffolding
+
+A shape that recurs in three or more files is how the project is built, not something someone copied. Test-class skeletons, registration blocks, handler stubs and configuration shells all reach that spread by construction: each new file is written to the same template because the framework requires it, and reporting the template as a duplicate asks the author to delete the thing that makes the files work.
+
+The spread is the whole signal, so the rule is deliberately narrow. It reaches only a component whose members are spread across **three or more files**; a two-file spread is a copy until something else proves otherwise, which is why the constant-table shape of gh #362 needed its own rule rather than a widening of this one ([CLONE-NOISE-CONSTANT-TABLE]) — widening the spread rule would have let it eat genuine two-file clones. A single-file family is likewise out of scope and belongs to [RANK-STRUCTURAL-ONLY].
+
 ## [CLONE-NOISE-LANGUAGE-AGNOSTIC] Language-agnostic filters
 
 ### [CLONE-NOISE-SIGNATURE-ONLY] Signature-only matches

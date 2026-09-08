@@ -361,6 +361,21 @@ Failure modes:
 
 The picker is the flagship customisation of the VSIX. It's the single UI knob that meaningfully changes analysis quality; every other setting is `min-nodes` and exclusion patterns.
 
+### [VSIX-HOVER-SHARED] One hover card, two layouts
+
+The clone card a developer hovers is rendered by one function, wherever it appears, so the bubble and the squiggle can never describe the same cluster differently. Two layouts share that renderer, and the only thing that varies between them is whether the card states the verdict:
+
+- **Full** — the bubble, with no diagnostic beside it: the cluster slug and its clone kind in bold, the occurrence count, the canonical path, the action links and Dismiss.
+- **Compact** — the squiggle hover, alongside a diagnostic that already carries the verdict: the same card with the verdict dropped, ending in Copy for AI.
+
+The verdict is the cluster's clone kind ([CLONE-KIND-LABELS]) and nothing else. The card leads with the **slug** — the first seven hex characters of the cluster id, stable across runs — resolved through the same `clusterSlug()` helper the tree uses, so one cluster is never shown under two short forms. **Rank may never take the slug's place** in the leading position: rank changes on every snapshot, and both humans and agents read the leading element as the row's identity (Deslop#149, Deslop#349).
+
+### [VSIX-HOVER-PROVIDER] One card per hover, the highest-ranked cluster under the cursor
+
+Occurrences overlap, so a cursor can sit inside several clusters at once. The provider answers with exactly one card: the highest-ranked cluster whose occurrence byte range contains the cursor, in the file being hovered. Clusters arrive already sorted worst-first, so the first match is the answer and no ranking is recomputed in the client.
+
+One card is a deliberate limit, not a truncation to be lifted. A hover that stacks every overlapping cluster buries the finding that matters under the shapes that merely enclose it, and the user has the tree and the cluster panel for the full set. The card itself is [VSIX-HOVER-SHARED]'s compact layout, because the diagnostic beside it already states the verdict.
+
 ### [VSIX-STATUS-BAR] Status bar
 
 Right-aligned status bar item reading `dedup · 2040 · #1=TradeService.cs:230 · embed=nomic-embed-code`. Sections:
