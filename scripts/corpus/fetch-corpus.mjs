@@ -26,10 +26,17 @@ const force = process.argv.includes("--force");
 // the ~600 MB the full corpus costs.
 const selected = new Set(process.argv.slice(2).filter((arg) => !arg.startsWith("--")));
 
-// `corpus/` also holds the known-failures baseline, which is not a repository.
-// Excluded by name rather than by shape, so a genuinely malformed manifest
-// still fails loudly instead of being silently skipped.
-const NON_MANIFEST = new Set(["known-failures.json"]);
+/// [CORPUS-PIN] `corpus/` holds settings files as well as manifests, and one
+/// list says which are which. Read from that list rather than repeated here:
+/// a second copy goes stale the first time a settings file is added, and the
+/// fetch then dies on it before a single accuracy check runs.
+///
+/// Excluded by name rather than by shape, so a genuinely malformed manifest
+/// still fails loudly instead of being silently skipped.
+const NOT_A_REPOSITORY = "not-a-repository.json";
+const NON_MANIFEST = new Set(
+  JSON.parse(readFileSync(join(manifestDir, NOT_A_REPOSITORY), "utf8")).files,
+);
 
 /// [CORPUS-PIN] The only pin a manifest may carry: a full git object name.
 const COMMIT_ID_LENGTH = 40;

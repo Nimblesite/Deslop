@@ -1,0 +1,9 @@
+{
+  "why": "[CORPUS-PIN] Not every file under corpus/ and corpus/register/ describes a repository to clone. These four hold settings instead: the baseline of checks already known to fail, the score-gate thresholds, the queue of repositories waiting on a first judging pass, and this list itself. Everything else names one upstream repository and must carry a url and a full commit pin. This is the only place the distinction is written down: scripts/corpus/fetch-corpus.mjs and crates/deslop-test-support/src/corpus.rs both read it, because the same rule written down twice goes stale in one of them and the fetch then dies on a file it should have skipped, before a single accuracy check has run. The list names itself for the same reason: a reader that treated it as a manifest would die on the very file that exists to prevent that.",
+  "files": [
+    "judging-queue.json",
+    "known-failures.json",
+    "not-a-repository.json",
+    "score-thresholds.json"
+  ]
+}

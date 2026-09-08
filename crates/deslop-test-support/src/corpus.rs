@@ -27,11 +27,49 @@ use serde_json::Value;
 /// fails the test) to baseline mode (only *new* failures fail).
 pub const BASELINE_ENV: &str = "DESLOP_CORPUS_BASELINE";
 
-/// [CORPUS-PIN] Files under `corpus/` and `corpus/register/` that describe no
-/// single upstream repository, so no manifest, pin or clone contract applies to
-/// them: the known-failure registry, the score-gate thresholds, and the list of
-/// repositories still waiting on a first judging pass.
-pub const NOT_A_REPOSITORY: [&str; 3] = ["known-failures", "score-thresholds", "judging-queue"];
+/// [CORPUS-PIN] The one list naming the files under `corpus/` and
+/// `corpus/register/` that describe no single upstream repository, so no
+/// manifest, pin or clone contract applies to them.
+///
+/// Data, not code. `scripts/corpus/fetch-corpus.mjs` reads the same file, and
+/// the fetch runs before anything is compiled, so a copy of the list held here
+/// could only ever be a second one — and a second copy is what went stale.
+const NOT_A_REPOSITORY: &str = include_str!("../../../corpus/not-a-repository.json");
+
+/// The key under which that list holds the file names.
+const NOT_A_REPOSITORY_KEY: &str = "files";
+
+/// The extension every corpus manifest carries.
+const MANIFEST_EXTENSION: &str = "json";
+
+/// [CORPUS-PIN] Whether `path` is a corpus manifest: a `.json` file naming one
+/// upstream repository, rather than one of the settings files the list above
+/// names.
+///
+/// Answered by name rather than by shape, so a manifest missing a field is an
+/// error where it is read, never a file quietly treated as settings.
+///
+/// # Errors
+///
+/// When `corpus/not-a-repository.json` is not valid JSON holding a `files`
+/// array. Every caller reads a directory of manifests, so a list that cannot be
+/// read must stop the caller rather than let it decide alone.
+pub fn describes_a_repository(path: &Path) -> Result<bool> {
+    let list: Value = serde_json::from_str(NOT_A_REPOSITORY)
+        .context("corpus/not-a-repository.json must be valid JSON")?;
+    let settings = list
+        .get(NOT_A_REPOSITORY_KEY)
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("corpus/not-a-repository.json has no `{NOT_A_REPOSITORY_KEY}`"))?;
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    Ok(path
+        .extension()
+        .is_some_and(|extension| extension == MANIFEST_EXTENSION)
+        && !settings.iter().any(|listed| listed.as_str() == Some(name)))
+}
 
 /// [CORPUS-PIN] How much of a manifest's commit id names its clone directory.
 /// The pin itself is always the full object name; this is only how it reads on

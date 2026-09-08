@@ -225,6 +225,8 @@ _ci-contract-tests: _vsix-node-modules
 	@node --test scripts/repository/dup-gate-source.test.mjs
 	@echo "==> Accuracy-gate wiring gate ([CORPUS-SCORE])..."
 	@node --test scripts/repository/score-gate-source.test.mjs
+	@echo "==> Corpus fetch gate ([CORPUS-PIN])..."
+	@node --test scripts/repository/corpus-fetch.test.mjs
 	@echo "==> Blinded judging folder gate ([CORPUS-REGISTER-WORKSPACE])..."
 	@node --test scripts/repository/judging-workspace.test.mjs
 	@echo "==> Verdict merge gate ([CORPUS-REGISTER-MERGE])..."

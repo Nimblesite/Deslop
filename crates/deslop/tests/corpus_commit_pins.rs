@@ -15,7 +15,7 @@ use std::fs;
 
 use anyhow::{Context, Result};
 use deslop_test_support::{
-    corpus::{repo_root, NOT_A_REPOSITORY},
+    corpus::{describes_a_repository, repo_root},
     read_json,
 };
 use serde_json::Value;
@@ -58,9 +58,7 @@ fn manifests() -> Result<Vec<(String, String, Value)>> {
                 .and_then(|stem| stem.to_str())
                 .unwrap_or_default()
                 .to_owned();
-            if path.extension().is_some_and(|ext| ext == "json")
-                && !NOT_A_REPOSITORY.contains(&stem.as_str())
-            {
+            if describes_a_repository(&path)? {
                 found.push((directory.to_owned(), stem, read_json(&path)?));
             }
         }
