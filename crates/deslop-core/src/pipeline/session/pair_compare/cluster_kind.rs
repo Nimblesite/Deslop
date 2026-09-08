@@ -1,11 +1,12 @@
-//! [CLONE-KIND-FOLD] The clone kind of a whole cluster, folded from the
-//! same pair measurement `pair/compare` answers with.
+//! [CLONE-KIND-FOLD] The clone kind of a whole cluster, folded through the
+//! shared pair measurement using the scan's recorded embedding evidence.
 //!
 //! A cluster is the transitive closure of admitted pairs, so no single
 //! measurement describes it. Its kind is the weakest pair classification
-//! between the canonical (first) occurrence and every other member: what
-//! an explicit comparison of that member against the canonical would
-//! report. A cluster whose every member is byte-identical to the
+//! between the canonical (first) occurrence and every other member. The
+//! fold supplies the scan's observed cosine, or zero; an explicit comparison
+//! may re-embed the endpoints and obtain different evidence.
+//! A cluster whose every member is byte-identical to the
 //! canonical is `Identical`; one member that only shares shape makes the
 //! whole cluster `StructuralOnly`; one member the direct comparison does
 //! not admit at all — welded in only through other members — makes it
@@ -81,8 +82,8 @@ impl<'corpus> ClusterKindMeasurer<'corpus> {
         fingerprint.map(|fingerprint| ResolvedEndpoint { index, fingerprint })
     }
 
-    /// The kind one `(canonical, member)` pair folds into: exactly the
-    /// classification `pair/compare` reports for the two endpoints.
+    /// Classifies one `(canonical, member)` pair with the shared pair
+    /// algebra and the embedding cosine recorded during the scan.
     fn pair_kind(
         &self,
         canonical: ResolvedEndpoint<'corpus>,

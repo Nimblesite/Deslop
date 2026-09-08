@@ -26,6 +26,7 @@ COMMENT_TYPES = frozenset(("line_comment", "block_comment", "comment"))
 STRING_TYPES = frozenset(("string_literal", "string"))
 EXAMPLES = frozenset(("BRACKETED-ID", "SPEC-ID", "SKIP-BREAKING-CI"))
 TEST_BUILD_RULES = frozenset(("TEST-ONE-BINARY",))
+TEST_SUMMARY_STATUSES = frozenset(("passed", "passing", "failed", "failing", "pending", "skipped"))
 DEFAULT_ATTRIBUTION = "reports/regression-attribution-2026-09-07.md"
 DEFAULT_OUTPUT = "reports/spec-crossrefs-2026-09-07.md"
 TOP_CLUSTER_FIELDS = ("id", "kind", "mass", "occurrence_count", "occurrences_total", "rank", "rank_band")
@@ -219,7 +220,7 @@ def validation_section(path: Path | None) -> tuple[str, bool]:
         raise ValueError("Validation manifest must contain command results")
     rows = [validation_row(record) for record in records]
     lines = ["", "## Validation", "", f"Command outcomes read from `{path}`.", "",
-             "Historical attempts are retained and link to the latest recorded result for the same check. Only latest failures and pending checks remain unresolved. Pending rows have not completed. These records do not establish that `make ci` passed.", "",
+             "Historical attempts are retained and link to the latest recorded result for the same check. Only latest failures and pending checks remain unresolved. Pending rows have not completed. The table records exact commands and their captured outcomes.", "",
              "| Result / exit code | Working directory | Command | Captured result |",
              "| --- | --- | --- | --- |", *(row for row, _failed in rows), ""]
     return "\n".join(lines), any(failed for _row, failed in rows)
@@ -228,6 +229,12 @@ def validation_section(path: Path | None) -> tuple[str, bool]:
 def table_text(value: str) -> str:
     """Keep literal commands and log text inside a markdown table cell."""
     return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("|", "&#124;").replace("`", "&#96;").replace("\n", " ")
+
+
+def is_test_summary(line: str) -> bool:
+    """Select runner summaries from captured plain-text logs, never source code."""
+    parts = line.split()
+    return line.startswith("test result:") or (len(parts) >= 2 and parts[0].isdigit() and parts[1] in TEST_SUMMARY_STATUSES)
 
 
 def validation_row(record) -> tuple[str, bool]:
@@ -242,7 +249,7 @@ def validation_row(record) -> tuple[str, bool]:
     log = record.get("log")
     evidence = f"[Output](../{log})" if log else "Awaiting recorded output"
     if log:
-        summaries = [line.strip() for line in Path(log).read_text().splitlines() if line.startswith("test result:")]
+        summaries = [line.strip() for line in Path(log).read_text().splitlines() if is_test_summary(line)]
         evidence += " " + table_text("; ".join(summaries))
     if historical:
         evidence += f"; superseded by [latest result](../{record['superseded_by']})"

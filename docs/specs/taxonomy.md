@@ -10,7 +10,7 @@ A cluster is many pairs, so no single pair's label describes it. Every cluster i
 
 ### [CLONE-KIND-FOLD] The kind is the weakest relation to the canonical occurrence
 
-The engine stamps every reported cluster with one `kind`, computed after ranking and before rendering. For each occurrence other than the first, the engine measures the pair `(canonical, occurrence)` exactly as an explicit `pair/compare` would — the same structural, token, embedding, and content axes, the same admission algebra, the same classification — and reads that pair's classification. The cluster's kind is the weakest of those readings:
+The engine stamps every reported cluster with one `kind`, computed after ranking and before rendering. For each occurrence other than the first, the engine measures the pair `(canonical, occurrence)` using the shared structural, token and content calculations, admission algebra and classification. Its embedding input is the cosine already observed during that scan. The cluster's kind is the weakest of those readings:
 
 | Reading for some member | Kind the cluster can be at most |
 |---|---|
@@ -20,7 +20,7 @@ The engine stamps every reported cluster with one `kind`, computed after ranking
 | At least one member shares only normalised shape and fails the content guard | `StructuralOnly` |
 | At least one member is a looser admitted relation, or is not admitted against the canonical at all (welded in only through other members) | `LooselySimilar` |
 
-Strength order, strongest first: `Identical`, `NearlyIdentical`, `SameBehavior`, `StructuralOnly`, `LooselySimilar`. The fold never averages, never sums, and reads no cluster quantity. Mass, rank, and rank band never read the kind ([RANK-MASS-SUM]). The embedding axis of each folded pair is the cosine the embedding pass measured for that pair, or zero when the pass never measured it — the same evidence admission saw, never a fresh embedding.
+Strength order, strongest first: `Identical`, `NearlyIdentical`, `SameBehavior`, `StructuralOnly`, `LooselySimilar`. The fold never averages, never sums, and reads no cluster quantity. Mass, rank, and rank band never read the kind ([RANK-MASS-SUM]). The embedding axis of each folded pair is the cosine the embedding pass measured for that pair, or zero when the pass never measured it; the fold does not request a fresh embedding. An explicit `pair/compare` request measures its endpoints through the supplied embedding provider and can therefore have embedding evidence absent from the scan's recorded pairs. The two routes share the calculation, but their embedding inputs and resulting classifications need not be identical.
 
 A whole-file or whole-class occurrence that differs from the canonical only in a wrapper's name is not byte-identical, and the cluster is `NearlyIdentical`. Identity is a fact about the compared slices, not about the method inside them ([CLONE-BUCKETS-IDENTICAL]).
 

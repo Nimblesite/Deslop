@@ -253,8 +253,9 @@ union PairTextIdentity {
 
 # [CLONE-KIND-FOLD] The kind of a whole cluster: the weakest pair
 # classification between its canonical (first) occurrence and any other
-# occurrence, exactly as pair/compare would report each pair. Same five
-# names as PairClassification, folded rather than copied.
+# occurrence, using shared pair classification with the scan's recorded
+# embedding evidence. Explicit pair/compare requests may re-embed endpoints.
+# Same five names as PairClassification, folded rather than copied.
 union ClusterKind {
   Identical
   NearlyIdentical
