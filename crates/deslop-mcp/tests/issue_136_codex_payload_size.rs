@@ -24,10 +24,7 @@ use anyhow::{anyhow, ensure, Result};
 use serde_json::{json, Value};
 
 use crate::common;
-use common::{
-    copied_fixture, initialized_mcp, lsp_workspace_with_socket, spawn_lsp_and_wait_for_socket,
-    structured_content,
-};
+use common::{call_tool, copied_fixture, initialized_mcp, lsp_workspace_with_socket, spawn_lsp_and_wait_for_socket, str_field, structured_content};
 
 /// Sanity guard for the full `tools/list` payload. Picked an order
 /// of magnitude under what most JSON-RPC clients tolerate so a
@@ -93,10 +90,7 @@ fn check_one_description(tool: &Value) -> Result<()> {
         .get("name")
         .and_then(Value::as_str)
         .unwrap_or("<unnamed>");
-    let description = tool
-        .get("description")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("tool {name} missing description"))?;
+    let description = str_field(tool, "description")?;
     ensure!(
         !description.is_empty(),
         "tool {name} must have a non-empty description"
@@ -239,11 +233,7 @@ fn issue_286_report_query_stays_within_the_wire_cap() -> Result<()> {
     let _lsp_guard = spawn_lsp_and_wait_for_socket(workspace.path())?;
     let mut mcp = initialized_mcp(workspace.path())?;
 
-    let lean = mcp.request(
-        "tools/call",
-        &json!({"name": "duplicates", "arguments": {"offset": 0, "limit": 0}}),
-    )?;
-    let structured = structured_content(&lean, "duplicates")?;
+    let structured = call_tool(&mut mcp, "duplicates", &json!({"offset": 0, "limit": 0}))?;
     let per_file = structured
         .pointer("/metrics/per_file")
         .and_then(Value::as_array)

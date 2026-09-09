@@ -17,7 +17,7 @@ use anyhow::{anyhow, ensure, Context, Result};
 use serde_json::{json, Value};
 
 use crate::common;
-use common::{call_tool, lsp_workspace_with_socket, rescan_call, wait_for_state_then_init_mcp};
+use common::{array_field, call_tool, lsp_workspace_with_socket, rescan_call, wait_for_state_then_init_mcp};
 
 /// Issue #156: after rescanning, the cluster payload returned by
 /// `cluster-by-id` must contain occurrence byte ranges that map onto
@@ -79,10 +79,7 @@ fn issue_156_cluster_by_id_returns_post_edit_offsets() -> Result<()> {
     // calls. Either re-resolve offsets at read time or invalidate
     // stale clusters; either fix keeps the agent from being misled.
     let cluster = call_tool(&mut mcp, "cluster-by-id", &json!({ "id": target_id }))?;
-    let occurrences = cluster
-        .get("occurrences")
-        .and_then(Value::as_array)
-        .ok_or_else(|| anyhow!("cluster-by-id payload missing occurrences: {cluster}"))?;
+    let occurrences = array_field(&cluster, "occurrences")?;
     ensure!(
         !occurrences.is_empty(),
         "cluster {target_id} returned zero occurrences: {cluster}",

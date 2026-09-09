@@ -14,20 +14,11 @@ use crate::common::*;
 
 #[test]
 fn typescript_signature_only_match_with_divergent_bodies_is_suppressed() -> Result<()> {
-    let report = run_report(&fixture("ts-signature-only-noise"), 6)?;
     // Both functions share the typed signature `(_: Context, _: Options):
     // Outcome` — which normalises identically — but their bodies are
     // unrelated. Without #154 this fuses to a top-ranked false positive;
     // with it, the signature-only family is detected and hidden.
-    assert_eq!(
-        field(&report, "files_analysed").as_u64(),
-        Some(2),
-        "both signature-only files must be analysed: {report:#}"
-    );
-    assert!(
-        clusters(&report).is_empty(),
-        "an unrelated-body signature match must not surface as a clone: {report:#}"
-    );
+    let report = assert_no_clone_reported("ts-signature-only-noise", 6, 2)?;
     assert!(
         clusters_hidden(&report) >= 1,
         "the signature-only family must be detected and hidden, proving #154 fired: {report:#}"

@@ -34,6 +34,7 @@ use crate::common::{
     },
     *,
 };
+use crate::common::scan_dir::temp_scan_dir;
 
 /// Distinct Flutter widgets: same mandatory declaration shape, different
 /// names and different `build` bodies — the #331 false-positive family.
@@ -187,8 +188,7 @@ fn issue_331_distinct_widget_declarations_must_not_saturate_fused_confidence() -
 // clone keeps surfacing (recall guard).
 #[test]
 fn issue_331_template_stamped_widget_scaffolds_do_not_surface() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let root = tmp.path().join("src");
+    let (_tmp, root) = temp_scan_dir("src")?;
     std::fs::create_dir_all(&root)?;
     let bodies = [
         "Text(\"alpha\")",

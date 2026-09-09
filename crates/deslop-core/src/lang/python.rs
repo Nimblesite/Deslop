@@ -15,7 +15,7 @@ use crate::{
     ast::NormalizedNode,
     error::CoreError,
     lang::{
-        shared::{build_normalised_root, intern_kind, parse_source, IDENTIFIER_KIND, LITERAL_KIND},
+        shared::{build_normalised_root, normalise_kind_with, parse_source},
         LanguageParser,
     },
     refactor::{
@@ -251,17 +251,32 @@ fn indented_body(
 /// the identifier / literal / trivia families emitted by
 /// `tree-sitter-python` 0.25.x.
 fn normalise_kind(raw: &str) -> Option<&'static str> {
-    match raw {
-        "comment" => None,
-        "identifier" | "type" => Some(IDENTIFIER_KIND),
+    normalise_kind_with(raw, is_comment_kind, is_identifier_kind, is_literal_kind)
+}
+
+/// Python trivia.
+fn is_comment_kind(raw: &str) -> bool {
+    matches!(raw, "comment")
+}
+
+/// Python identifier leaves, collapsed for Type-2 renamed-clone
+/// detection.
+fn is_identifier_kind(raw: &str) -> bool {
+    matches!(raw, "identifier" | "type")
+}
+
+/// Python literal leaves, collapsed so constant edits do not perturb
+/// fingerprints.
+fn is_literal_kind(raw: &str) -> bool {
+    matches!(
+        raw,
         "string"
-        | "concatenated_string"
-        | "integer"
-        | "float"
-        | "true"
-        | "false"
-        | "none"
-        | "ellipsis" => Some(LITERAL_KIND),
-        other => Some(intern_kind(other)),
-    }
+            | "concatenated_string"
+            | "integer"
+            | "float"
+            | "true"
+            | "false"
+            | "none"
+            | "ellipsis"
+    )
 }

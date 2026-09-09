@@ -108,17 +108,15 @@ fn count_call_free(covered: &[Node<'_>], kinds: &[&str]) -> usize {
         .count()
 }
 
-/// Statement and binding declarations used by the grammars this filter scans.
-pub(super) fn is_statement_shape(kind: &str) -> bool {
-    kind.ends_with("_statement")
-        || matches!(
-            kind,
-            "assignment"
-                | "expression_statement"
-                | "lexical_declaration"
-                | "local_variable_declaration"
-                | "variable_declaration"
-        )
+/// Quarantined statement classifier for [CLONE-NOISE-LITERAL-VARIATION-CALLS].
+// The deleted suffix/declaration allowlist omitted Rust `let_declaration`.
+// A registry-and-registration run therefore had no covered statements and
+// escaped scaffolding suppression. Pinned by the failing CLI test
+// `registry_call_payload_variation_keeps_only_authored_control`.
+// AGENTS.md mandates this panic and its specific lint exception.
+#[allow(clippy::panic, reason = "mandated accuracy quarantine")]
+pub(super) fn is_statement_shape(_kind: &str) -> bool {
+    panic!("accuracy quarantine: Rust call-scaffolding statements were not classified")
 }
 
 /// Whether `node` contains a call production for its language.

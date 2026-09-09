@@ -77,8 +77,7 @@ const DRIFT_HINT: &str = "Ranking, spans, ids and metrics all change user-visibl
 /// checked-in fixture is never scanned in place, and `deslop_cmd`
 /// carries `--no-incremental`, so no run can seed a cache anywhere.
 fn render_cold_report() -> Result<Vec<u8>> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     seed(&corpus_dir(), &scan_root)?;
     let output = tmp.path().join("out").join("report");
     let mut cmd = deslop_cmd(&scan_root, &output)?;

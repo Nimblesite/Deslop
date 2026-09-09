@@ -3,6 +3,8 @@
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
+
+import { recordingClient } from "./client.helpers";
 import {
   surfaceStartupFailure,
   currentExtensionVersion,
@@ -185,13 +187,7 @@ suite("extension internals", () => {
     await cfg.update(EMBEDDING_MODE_SETTING, "auto", vscode.ConfigurationTarget.Global);
     await cfg.update(EMBEDDING_PROVIDER_SETTING, OLLAMA_PROVIDER_ID, vscode.ConfigurationTarget.Global);
     await cfg.update(EMBEDDING_MODEL_SETTING, DEFAULT_EMBEDDING_MODEL, vscode.ConfigurationTarget.Global);
-    const calls: Array<{ method: string; params: unknown }> = [];
-    const client = {
-      sendRequest: (method: string, params: unknown) => {
-        calls.push({ method, params });
-        return Promise.resolve(null);
-      },
-    } as unknown as LanguageClient;
+    const { calls, client } = recordingClient(() => null);
     const store = new ReportStore();
     await syncEmbeddingSettingsToLsp(store, () => client);
     assert.deepEqual(calls, [

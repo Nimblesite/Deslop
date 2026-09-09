@@ -12,7 +12,8 @@ pub(crate) use crate::common::scan_dir::temp_scan_dir;
 /// `common` copy is the only one, and `cli` reads it through this
 /// re-export so `use super::support::*;` still resolves them.
 pub(crate) use crate::common::{
-    field, fixture, load_json as read_json_report, metric_field, seed as seed_scan_root, with_ext,
+    field, fixture, load_json as read_json_report, metric_field, seed as seed_scan_root,
+    seeded_fixture_root, with_ext,
 };
 
 /// Shared CLI flag selecting the minimum AST node count.
@@ -67,6 +68,35 @@ pub(crate) fn fixture_run(name: &str) -> Result<(TempDir, RunOutputs, Command)> 
     let outputs = outputs_under(tmp.path());
     let command = fixture_command(name, &tmp.path().join(REPORT_OUTPUT_STEM))?;
     Ok((tmp, outputs, command))
+}
+
+/// The three renderings one CLI run writes ([OUTPUT-SCHEMA-JSON],
+/// [CLI-TEXT], [OUTPUT-HUMAN-HTML]), read into memory before the temp
+/// workspace drops.
+pub(crate) struct RenderedReports {
+    /// The canonical JSON report, as written.
+    pub(crate) json: String,
+    /// The terse ASCII rendering.
+    pub(crate) txt: String,
+    /// The human HTML rendering.
+    pub(crate) html: String,
+}
+
+/// Runs the CLI over fixture `name` with `args` and returns all three
+/// renderings, asserting the process succeeded.
+pub(crate) fn fixture_run_reports(name: &str, args: &[&str]) -> Result<RenderedReports> {
+    let (_tmp, out, mut cmd) = fixture_run(name)?;
+    let _assertion = cmd.args(args).assert().success();
+    Ok(RenderedReports {
+        json: std::fs::read_to_string(&out.json)?,
+        txt: std::fs::read_to_string(&out.txt)?,
+        html: std::fs::read_to_string(&out.html)?,
+    })
+}
+
+/// The JSON rendering alone, for suites that assert on nothing else.
+pub(crate) fn fixture_run_json_text(name: &str, args: &[&str]) -> Result<String> {
+    Ok(fixture_run_reports(name, args)?.json)
 }
 
 /// Opens a fixture-driven CLI scenario that asserts only on the process

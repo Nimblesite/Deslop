@@ -29,7 +29,7 @@ use crate::{
     ast::NormalizedNode,
     error::CoreError,
     lang::{
-        shared::{build_normalised_root, intern_kind, parse_source, IDENTIFIER_KIND, LITERAL_KIND},
+        shared::{build_normalised_root, normalise_kind_with, parse_source},
         LanguageParser,
     },
     state::FileId,
@@ -77,27 +77,44 @@ impl LanguageParser for GoParser {
 /// identifier / literal / trivia families emitted by `tree-sitter-go`
 /// 0.25.x ([LANG-CAND-GO]).
 fn normalise_kind(raw: &str) -> Option<&'static str> {
-    match raw {
-        // Drop trivia — [PIPELINE-NORMALIZE-AST]
-        "comment" => None,
-        // Identifier leaves — collapse for Type-2 renamed-clone detection
-        "identifier" | "field_identifier" | "type_identifier" | "package_identifier"
-        | "blank_identifier" | "label_name" => Some(IDENTIFIER_KIND),
-        // Literals — collapse so constant edits do not perturb fingerprints
+    normalise_kind_with(raw, is_comment_kind, is_identifier_kind, is_literal_kind)
+}
+
+/// Go trivia.
+fn is_comment_kind(raw: &str) -> bool {
+    matches!(raw, "comment")
+}
+
+/// Go identifier leaves, collapsed for Type-2 renamed-clone detection.
+fn is_identifier_kind(raw: &str) -> bool {
+    matches!(
+        raw,
+        "identifier"
+            | "field_identifier"
+            | "type_identifier"
+            | "package_identifier"
+            | "blank_identifier"
+            | "label_name"
+    )
+}
+
+/// Go literal leaves, collapsed so constant edits do not perturb
+/// fingerprints.
+fn is_literal_kind(raw: &str) -> bool {
+    matches!(
+        raw,
         "int_literal"
-        | "float_literal"
-        | "imaginary_literal"
-        | "rune_literal"
-        | "interpreted_string_literal"
-        | "interpreted_string_literal_content"
-        | "raw_string_literal"
-        | "raw_string_literal_content"
-        | "escape_sequence"
-        | "true"
-        | "false"
-        | "nil"
-        | "iota" => Some(LITERAL_KIND),
-        // All structural kinds pass through unchanged
-        other => Some(intern_kind(other)),
-    }
+            | "float_literal"
+            | "imaginary_literal"
+            | "rune_literal"
+            | "interpreted_string_literal"
+            | "interpreted_string_literal_content"
+            | "raw_string_literal"
+            | "raw_string_literal_content"
+            | "escape_sequence"
+            | "true"
+            | "false"
+            | "nil"
+            | "iota"
+    )
 }

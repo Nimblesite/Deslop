@@ -36,8 +36,7 @@ fn delta_path(dir: &Path) -> PathBuf {
 /// fixture — the mutable Alpha/Beta clone pair the scenarios below edit.
 /// The [`tempfile::TempDir`] comes back so the caller keeps the tree alive.
 fn seeded_root() -> Result<(tempfile::TempDir, PathBuf)> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     seed(&fixture("csharp-small"), &scan_root)?;
     Ok((tmp, scan_root))
 }

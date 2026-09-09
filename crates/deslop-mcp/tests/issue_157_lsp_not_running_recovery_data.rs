@@ -14,9 +14,7 @@ use serde_json::Value;
 use tempfile::TempDir;
 
 use crate::common;
-use common::{
-    error_and_message, expected_socket_fragment, initialized_mcp, request_duplicates_summary,
-};
+use common::{error_and_message, expected_socket_fragment, initialized_mcp, request_duplicates_summary, u64_field};
 
 /// Clusters requested per page; the error path never reads them.
 const PAGE_LIMIT: u64 = 5;
@@ -49,10 +47,7 @@ fn issue_157_lsp_not_running_carries_structured_recovery_data() -> Result<()> {
         data.get("reason").and_then(Value::as_str) == Some("lsp_not_running"),
         "data.reason must be the stable machine-readable id: {data}"
     );
-    let retry = data
-        .get("retry_after_ms")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| anyhow!("data.retry_after_ms must be a positive integer: {data}"))?;
+    let retry = u64_field(data, "retry_after_ms")?;
     ensure!(retry > 0, "retry_after_ms must be positive: {data}");
     ensure!(
         data.get("socket_path")

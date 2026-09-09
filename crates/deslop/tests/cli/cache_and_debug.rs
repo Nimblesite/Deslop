@@ -70,9 +70,7 @@ fn report_hide_drops_cluster_when_all_members_hidden() -> Result<()> {
 // file as a hit and still surface the duplicated cluster.
 #[test]
 fn incremental_cache_hits_on_second_run() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
+    let (tmp, scan_root) = seeded_fixture_root("csharp-small")?;
     let first_json = run_incremental_pass(&scan_root, &tmp.path().join("first"))?;
     assert!(
         first_json.contains("\"hits\": 0"),
@@ -184,9 +182,7 @@ fn no_incremental_flag_skips_the_cache() -> Result<()> {
 // as a hard error. The pipeline still produces a correct report.
 #[test]
 fn corrupt_cache_entry_degrades_to_miss() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
+    let (tmp, scan_root) = seeded_fixture_root("csharp-small")?;
     let _first_json = run_incremental_pass(&scan_root, &tmp.path().join("first"))?;
     let fingerprints_root = scan_root.join(".deslop/cache").join("fingerprints");
     for language_dir in fs::read_dir(&fingerprints_root)? {
@@ -237,9 +233,7 @@ fn help_text_documents_incremental_flag() -> Result<()> {
 // snapshot of a tree that no longer exists on disk.
 #[test]
 fn offline_edit_invalidates_only_the_changed_file() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
+    let (tmp, scan_root) = seeded_fixture_root("csharp-small")?;
     let _cold = run_incremental_pass(&scan_root, &tmp.path().join("cold"))?;
     let warm = run_incremental_pass(&scan_root, &tmp.path().join("warm"))?;
     assert!(
@@ -297,9 +291,7 @@ fn cluster_count(json: &str) -> Result<usize> {
 fn cache_write_failure_is_degraded_not_fatal() -> Result<()> {
     use std::os::unix::fs::PermissionsExt as _;
 
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    fs::create_dir_all(&scan_root)?;
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     for entry in fs::read_dir(fixture("csharp-small"))? {
         let entry = entry?;
         let _bytes = fs::copy(entry.path(), scan_root.join(entry.file_name()))?;

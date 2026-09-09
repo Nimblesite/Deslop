@@ -19,10 +19,7 @@ use anyhow::{anyhow, ensure, Result};
 use serde_json::{json, Value};
 
 use crate::common;
-use common::{
-    copied_fixture, initialized_mcp, lsp_workspace_with_socket, spawn_lsp_and_wait_for_socket,
-    structured_content, wait_for_state_then_init_mcp, McpHandle,
-};
+use common::{array_field, copied_fixture, initialized_mcp, lsp_workspace_with_socket, spawn_lsp_and_wait_for_socket, structured_content, u64_field, wait_for_state_then_init_mcp, McpHandle};
 
 const TOOLS_CALL_METHOD: &str = "tools/call";
 const NAME_FIELD: &str = "name";
@@ -54,10 +51,7 @@ fn find_similar_via_mcp_delegates_to_running_lsp() -> Result<()> {
     )?;
 
     let structured = structured_content(&response, "find-similar")?;
-    let clusters = structured
-        .get("clusters")
-        .and_then(Value::as_array)
-        .ok_or_else(|| anyhow!("clusters must be an array: {response}"))?;
+    let clusters = array_field(&structured, "clusters")?;
     ensure!(
         !clusters.is_empty(),
         "find-similar must return live LSP clusters: {response}"
@@ -85,10 +79,7 @@ fn list_embedding_models_via_mcp_delegates_to_running_lsp() -> Result<()> {
         &json!({ (NAME_FIELD): SESSION_TOOL, (ARGUMENTS_FIELD): { (ACTION_FIELD): "list-embedding-models" } }),
     )?;
     let structured = structured_content(&response, SESSION_TOOL)?;
-    let models = structured
-        .get("models")
-        .and_then(Value::as_array)
-        .ok_or_else(|| anyhow!("models must be an array: {response}"))?;
+    let models = array_field(&structured, "models")?;
     let has_stub = models
         .iter()
         .any(|model| model.get("provider_id") == Some(&json!("stub")));
@@ -309,10 +300,7 @@ fn assert_rescan_generation_matches_visible_state(
     mcp: &mut McpHandle,
     after: &Value,
 ) -> Result<()> {
-    let rescan_generation = after
-        .get("generation")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| anyhow!("rescan must expose a numeric generation: {after}"))?;
+    let rescan_generation = u64_field(after, "generation")?;
     let report = mcp.request(
         TOOLS_CALL_METHOD,
         &json!({ (NAME_FIELD): REPORT_GET_TOOL, (ARGUMENTS_FIELD): { "offset": 0, "limit": 0 } }),

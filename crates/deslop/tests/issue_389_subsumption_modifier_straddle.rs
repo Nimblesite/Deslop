@@ -35,6 +35,7 @@ use serde_json::Value;
 
 use crate::common::signals::assert_no_pair_surface_on_cluster;
 use crate::common::{multilang::*, *};
+use crate::common::scan_dir::temp_scan_dir;
 
 /// The floor gh #389 reproduces at. The 13-node signature window only
 /// exists below `MULTILANG_MIN_NODES`, so a suite that never scans this
@@ -45,8 +46,7 @@ const MIN_NODES: u32 = 8;
 /// checked-in fixture is never scanned in place — a store-backed run
 /// writes `.deslop/cache` into its scan root ([OUTPUT-DIR]).
 fn render() -> Result<Value> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
+    let (_tmp, scan_root) = temp_scan_dir("src")?;
     seed_multilang(&scan_root)?;
     run_report(&scan_root, MIN_NODES)
 }

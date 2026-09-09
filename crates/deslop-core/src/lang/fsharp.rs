@@ -39,7 +39,7 @@ use crate::{
     ast::NormalizedNode,
     error::CoreError,
     lang::{
-        shared::{build_normalised_root, intern_kind, parse_source, IDENTIFIER_KIND, LITERAL_KIND},
+        shared::{build_normalised_root, normalise_kind_with, parse_source},
         LanguageParser,
     },
     state::FileId,
@@ -87,24 +87,33 @@ impl LanguageParser for FSharpParser {
 /// identifier / literal / trivia families emitted by `tree-sitter-fsharp`
 /// 0.3.x ([PARSE-FSHARP-NORMALIZE]).
 fn normalise_kind(raw: &str) -> Option<&'static str> {
-    match raw {
-        // Drop trivia — [PIPELINE-NORMALIZE-AST]
-        "line_comment" | "block_comment" | "xml_doc" => None,
-        // Identifier leaves — collapse for Type-2 renamed-clone detection
-        "identifier" | "op_identifier" => Some(IDENTIFIER_KIND),
-        // Literals — collapse so constant edits do not perturb fingerprints
-        "int"
-        | "xint"
-        | "float"
-        | "char"
-        | "bool"
-        | "unit"
-        | "string"
-        | "format_string"
-        | "triple_quoted_string"
-        | "format_triple_quoted_string"
-        | "verbatim_string" => Some(LITERAL_KIND),
-        // All structural kinds pass through unchanged
-        other => Some(intern_kind(other)),
-    }
+    normalise_kind_with(raw, is_comment_kind, is_identifier_kind, is_literal_kind)
+}
+
+/// F# trivia.
+fn is_comment_kind(raw: &str) -> bool {
+    matches!(raw, "line_comment" | "block_comment" | "xml_doc")
+}
+
+/// F# identifier leaves, collapsed for Type-2 renamed-clone detection.
+fn is_identifier_kind(raw: &str) -> bool {
+    matches!(raw, "identifier" | "op_identifier")
+}
+
+/// F# literal leaves, collapsed so constant edits do not perturb
+/// fingerprints.
+fn is_literal_kind(raw: &str) -> bool {
+    matches!(
+        raw,
+        "int" | "xint"
+            | "float"
+            | "char"
+            | "bool"
+            | "unit"
+            | "string"
+            | "format_string"
+            | "triple_quoted_string"
+            | "format_triple_quoted_string"
+            | "verbatim_string"
+    )
 }

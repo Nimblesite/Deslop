@@ -20,9 +20,46 @@ use deslop_core::{
 use serde_json::Value;
 
 use super::{
-    cluster_file_set, cluster_id, clusters, field, occurrence_is_hidden, occurrence_texts,
-    occurrences, Result,
+    cluster_covers_files, cluster_file_set, cluster_id, clusters, field, occurrence_is_hidden,
+    occurrence_texts, occurrences, row_for_path, Result,
 };
+
+/// The top-ranked visible cluster, or an actionable test error.
+pub(crate) fn top_visible_cluster<'a>(report: &'a Value, fixture_name: &str) -> Result<&'a Value> {
+    clusters(report)
+        .first()
+        .ok_or_else(|| anyhow!("{fixture_name} must produce at least one cluster"))
+}
+
+/// The wire contract every renamed/near-miss clone must satisfy
+/// ([PIPELINE-CLUSTER-CLOSURE]): admitted and mass-honest, no pair-only
+/// surface on the cluster, and — the byte-level truth the deleted
+/// `structural`/`token_jaccard` axes used to proxy — the occurrences
+/// slice to *differing* source bytes. A Merkle-equal fragment selected in
+/// place of the enclosing view would slice to identical bytes and fail
+/// here, which is exactly the gh #408/#427 recall hole.
+pub(crate) fn assert_admitted_rename_cluster(
+    scan_root: &Path,
+    cluster: &Value,
+    fixture_name: &str,
+    files: &[&str],
+    report: &Value,
+) -> Result<()> {
+    assert_structural_only_contract(cluster, fixture_name);
+    assert_no_pair_surface_on_cluster(cluster, fixture_name);
+    assert!(
+        !has_verbatim_pair(scan_root, cluster)?,
+        "{fixture_name}: {files:?} are a rename / near-miss and must slice to \
+         differing bytes — a verbatim (byte-identical) reading means the \
+         fragment view was selected in place of the enclosing pair, the \
+         gh #408 recall hole: {report:#}"
+    );
+    assert!(
+        cluster_covers_files(cluster, files),
+        "{fixture_name}: the clone must span {files:?}: {report:#}"
+    );
+    Ok(())
+}
 
 /// Recomputes pair evidence for two explicitly supplied report occurrences.
 pub(crate) fn compare_pair(
@@ -68,13 +105,7 @@ pub(crate) fn compare_endpoints(
 
 /// Returns the occurrence for the caller's explicit file choice.
 pub(crate) fn occurrence_for_file<'a>(cluster: &'a Value, file: &str) -> Result<&'a Value> {
-    occurrences(cluster)
-        .iter()
-        .find(|occurrence| {
-            field(occurrence, "path")
-                .as_str()
-                .is_some_and(|path| path.ends_with(file))
-        })
+    row_for_path(occurrences(cluster), file)
         .ok_or_else(|| anyhow!("cluster has no occurrence for {file}: {cluster:#}"))
 }
 

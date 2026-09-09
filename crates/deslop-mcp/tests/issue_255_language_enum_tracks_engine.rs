@@ -20,6 +20,8 @@ use serde_json::Value;
 
 use deslop_mcp::tools::tools_list_payload;
 
+use crate::common::array_field;
+
 /// Extracts the `language` enum advertised for `tool_name` in a
 /// `tools/list` payload.
 fn language_enum_of(tools: &[Value], tool_name: &str) -> Result<Vec<String>> {
@@ -51,10 +53,7 @@ fn issue_255_tools_list_language_enum_tracks_live_engine() -> Result<()> {
     // the advertised enum is the passed-in live set.
     let languages = vec!["rust".to_owned(), "zig".to_owned()];
     let payload = tools_list_payload(&languages);
-    let tools = payload
-        .get("tools")
-        .and_then(Value::as_array)
-        .ok_or_else(|| anyhow!("tools/list payload must expose a tools array"))?;
+    let tools = array_field(&payload, "tools")?;
     for tool_name in ["find-similar", "duplicates"] {
         let advertised = language_enum_of(tools, tool_name)?;
         assert_eq!(

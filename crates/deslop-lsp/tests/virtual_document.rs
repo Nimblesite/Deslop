@@ -21,12 +21,7 @@ fn virtual_document_schema_returns_non_empty_markdown() -> Result<()> {
         spawn_lsp_on_fixture("csharp-small")?;
     let _init = handshake(&mut stdin, &mut stdout)?;
 
-    let response = call(
-        &mut stdin,
-        &mut stdout,
-        VIRTUAL_DOCUMENT,
-        &json!({ "uri": "deslop://schema" }),
-    )?;
+    let response = virtual_document(&mut stdin, &mut stdout, "deslop://schema")?;
     let body = result_string(&response)?;
     assert!(!body.is_empty(), "schema markdown must not be empty");
     assert!(
@@ -46,12 +41,7 @@ fn virtual_document_report_returns_canonical_text() -> Result<()> {
     let _init = handshake(&mut stdin, &mut stdout)?;
     open_fixture_files(&mut stdin, workspace.path())?;
 
-    let response = call(
-        &mut stdin,
-        &mut stdout,
-        VIRTUAL_DOCUMENT,
-        &json!({ "uri": "deslop://report" }),
-    )?;
+    let response = virtual_document(&mut stdin, &mut stdout, "deslop://report")?;
     let body = result_string(&response)?;
     assert!(!body.is_empty(), "report text must not be empty");
     assert!(
@@ -86,12 +76,7 @@ fn virtual_document_cluster_returns_cluster_markdown() -> Result<()> {
     let cluster_id = wait_for_first_cluster(&mut stdin, &mut stdout)?;
 
     let uri = format!("deslop://cluster/{cluster_id}");
-    let response = call(
-        &mut stdin,
-        &mut stdout,
-        VIRTUAL_DOCUMENT,
-        &json!({ "uri": uri }),
-    )?;
+    let response = virtual_document(&mut stdin, &mut stdout, &uri)?;
     let body = result_string(&response)?;
     assert!(
         body.contains(&cluster_id),
@@ -111,12 +96,7 @@ fn virtual_document_rejects_malformed_uri_with_invalid_params() -> Result<()> {
         spawn_lsp_on_fixture("csharp-small")?;
     let _init = handshake(&mut stdin, &mut stdout)?;
 
-    let response = call(
-        &mut stdin,
-        &mut stdout,
-        VIRTUAL_DOCUMENT,
-        &json!({ "uri": "http://not-a-deslop-uri" }),
-    )?;
+    let response = virtual_document(&mut stdin, &mut stdout, "http://not-a-deslop-uri")?;
     let error_code = response
         .get("error")
         .and_then(|err| err.get("code"))
@@ -136,18 +116,24 @@ fn virtual_document_rejects_unknown_cluster_id() -> Result<()> {
         spawn_lsp_on_fixture("csharp-small")?;
     let _init = handshake(&mut stdin, &mut stdout)?;
 
-    let response = call(
-        &mut stdin,
-        &mut stdout,
-        VIRTUAL_DOCUMENT,
-        &json!({ "uri": "deslop://cluster/does-not-exist" }),
-    )?;
+    let response = virtual_document(&mut stdin, &mut stdout, "deslop://cluster/does-not-exist")?;
     assert!(
         response.get("error").is_some(),
         "unknown cluster id must surface an error, not a fallback string: {response}"
     );
     let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
     Ok(())
+}
+
+/// Sends `deslop/virtualDocument` for `uri` and returns the raw
+/// JSON-RPC frame, error envelopes included — the callers assert on
+/// both the rendered markdown and the structured error.
+fn virtual_document(
+    stdin: &mut std::process::ChildStdin,
+    stdout: &mut std::io::BufReader<std::process::ChildStdout>,
+    uri: &str,
+) -> Result<Value> {
+    call(stdin, stdout, VIRTUAL_DOCUMENT, &json!({ "uri": uri }))
 }
 
 /// Extracts the `result` string from a JSON-RPC response, surfacing the

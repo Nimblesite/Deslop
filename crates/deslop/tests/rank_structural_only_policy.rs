@@ -29,6 +29,7 @@ use crate::common::signals::{
     assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
 };
 use crate::common::*;
+use crate::common::scan_dir::temp_scan_dir;
 
 /// Generates one shape-identical API method. The method name, endpoint
 /// literal, and every local identifier differ per call (normalisation
@@ -114,8 +115,7 @@ fn run_report(src: &Path, tmp: &Path) -> Result<Value> {
 
 /// Builds the fixture (plus optional `.deslop.toml` body) and reports.
 fn report_for_config(config: Option<&str>) -> Result<Value> {
-    let tmp = tempfile::tempdir()?;
-    let src = tmp.path().join("src");
+    let (tmp, src) = temp_scan_dir("src")?;
     write_fixture(&src)?;
     if let Some(body) = config {
         fs::write(src.join(".deslop.toml"), body)?;
@@ -290,8 +290,7 @@ fn rankable(report: &Value) -> Vec<(u64, &str, u64)> {
 /// even though they no longer feed ranking.
 #[test]
 fn invalid_structural_only_weight_is_rejected_with_a_clear_error() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let src = tmp.path().join("src");
+    let (_tmp, src) = temp_scan_dir("src")?;
     write_fixture(&src)?;
     for (body, fragment) in [
         (

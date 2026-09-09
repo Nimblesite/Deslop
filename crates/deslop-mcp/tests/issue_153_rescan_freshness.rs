@@ -16,7 +16,7 @@ use anyhow::{anyhow, ensure, Context, Result};
 use serde_json::Value;
 
 use crate::common;
-use common::{lsp_workspace_with_socket, rescan_call, wait_for_state_then_init_mcp};
+use common::{lsp_workspace_with_socket, rescan_call, u64_field, wait_for_state_then_init_mcp};
 
 /// One unique C# file body that shares no normalised subtrees with
 /// the rest of the corpus, so writing it eliminates any cluster the
@@ -58,10 +58,7 @@ fn issue_153_single_rescan_reflects_post_edit_state() -> Result<()> {
 
     let rescan = rescan_call(&mut mcp, &paths)?;
     let after_clusters = clusters_array(&rescan)?;
-    let after_generation = rescan
-        .get("generation")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| anyhow!("rescan response missing generation field: {rescan}"))?;
+    let after_generation = u64_field(&rescan, "generation")?;
     ensure!(
         after_generation > 0,
         "rescan generation must advance past zero: {rescan}",

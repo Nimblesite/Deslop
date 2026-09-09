@@ -120,17 +120,16 @@ fn accepts_path_argument_without_panicking() -> Result<()> {
 // and HTML side by side. All three must carry the current report fields.
 #[test]
 fn default_run_emits_all_three_formats() -> Result<()> {
-    let (_tmp, out, mut cmd) = fixture_run("csharp-small")?;
-    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
-    let json = fs::read_to_string(&out.json)?;
+    let reports = fixture_run_reports("csharp-small", &["--min-nodes", "8"])?;
+    let json = &reports.json;
     assert!(json.contains("\"schema_doc\""), "schema_doc missing");
     assert!(json.contains("\"clusters\":"), "clusters missing");
     assert!(json.contains("\"mass\":"), "mass field missing");
     assert!(json.contains("\"metrics\":"), "metrics missing");
     assert!(json.contains("\"hidden\":"), "hidden flag missing");
-    let txt = fs::read_to_string(&out.txt)?;
+    let txt = &reports.txt;
     assert!(txt.contains("deslop"), "text header missing: {txt}");
-    let html = fs::read_to_string(&out.html)?;
+    let html = &reports.html;
     assert!(html.contains("<!doctype html>"), "html doctype missing");
     assert!(html.contains("Deslop report"), "html human intro missing");
     assert!(
@@ -164,9 +163,7 @@ fn default_run_emits_all_three_formats() -> Result<()> {
 // contract is unchanged.
 #[test]
 fn cli_json_report_omits_inline_schema_doc() -> Result<()> {
-    let (_tmp, out, mut cmd) = fixture_run("csharp-small")?;
-    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
-    let json = fs::read_to_string(&out.json)?;
+    let json = fixture_run_json_text("csharp-small", &["--min-nodes", "8"])?;
     let value: Value = serde_json::from_str(&json)?;
     let schema_doc = value
         .get("schema_doc")
@@ -193,9 +190,7 @@ fn cli_json_report_omits_inline_schema_doc() -> Result<()> {
 // `<details>` summary so a 300-line clone does not stretch the page.
 #[test]
 fn long_clone_html_caps_inline_preview_and_folds_rest() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    fs::create_dir_all(&scan_root)?;
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     let body = build_long_clone_body(60);
     fs::write(
         scan_root.join("Alpha.cs"),

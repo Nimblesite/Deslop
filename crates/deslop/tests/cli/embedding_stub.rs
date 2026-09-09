@@ -48,14 +48,13 @@ fn assert_cli_rejects(args: &[&str], expected: &str) -> Result<()> {
 
 #[test]
 fn default_run_records_embeddings_off_provenance() -> Result<()> {
-    let (_tmp, out, mut cmd) = fixture_run("csharp-small")?;
-    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
-    let json = fs::read_to_string(&out.json)?;
+    let reports = fixture_run_reports("csharp-small", &["--min-nodes", "8"])?;
+    let json = &reports.json;
     assert!(
         json.contains("\"embedding_provenance\": null"),
         "default run must record embeddings=off: {json}"
     );
-    let txt = fs::read_to_string(&out.txt)?;
+    let txt = &reports.txt;
     assert!(txt.contains("embeddings: off"), "text provenance missing");
     Ok(())
 }
@@ -87,19 +86,17 @@ fn embeddings_required_hard_fails_when_provider_unreachable() -> Result<()> {
 // still produce a report with `embedding_provenance: null`.
 #[test]
 fn embeddings_auto_falls_back_when_provider_unreachable() -> Result<()> {
-    let (_tmp, out, mut cmd) = fixture_run("csharp-small")?;
-    let _assertion = cmd
-        .args([
+    let json = fixture_run_json_text(
+        "csharp-small",
+        &[
             "--min-nodes",
             "8",
             "--embeddings",
             "auto",
             "--embedding-endpoint",
             "http://127.0.0.1:1",
-        ])
-        .assert()
-        .success();
-    let json = fs::read_to_string(&out.json)?;
+        ],
+    )?;
     assert!(
         json.contains("\"embedding_provenance\": null"),
         "auto must fall back to off when provider is down: {json}"
@@ -122,10 +119,8 @@ fn embeddings_flag_rejects_unknown_values() -> Result<()> {
 #[test]
 fn mock_ollama_records_provenance_and_runs_embedding_pass() -> Result<()> {
     let server = MockOllama::spawn()?;
-    let tmp = tempfile::tempdir()?;
+    let (tmp, scan_root) = seeded_fixture_root("csharp-type3")?;
     let out = outputs_under(tmp.path());
-    let scan_root = tmp.path().join("src");
-    seed_scan_root(&fixture("csharp-type3"), &scan_root)?;
     run_ollama_pass(
         &scan_root,
         &tmp.path().join("report"),
@@ -161,9 +156,7 @@ fn mock_ollama_records_provenance_and_runs_embedding_pass() -> Result<()> {
 #[test]
 fn mock_ollama_populates_embedding_cache() -> Result<()> {
     let server = MockOllama::spawn()?;
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
+    let (tmp, scan_root) = seeded_fixture_root("csharp-small")?;
     run_ollama_pass(
         &scan_root,
         &tmp.path().join("first"),
@@ -195,10 +188,8 @@ fn mock_ollama_populates_embedding_cache() -> Result<()> {
 #[test]
 fn mock_ollama_under_auto_mode_runs_embedding_pass() -> Result<()> {
     let server = MockOllama::spawn()?;
-    let tmp = tempfile::tempdir()?;
+    let (tmp, scan_root) = seeded_fixture_root("csharp-small")?;
     let out = outputs_under(tmp.path());
-    let scan_root = tmp.path().join("src");
-    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
     run_ollama_pass(
         &scan_root,
         &tmp.path().join("report"),

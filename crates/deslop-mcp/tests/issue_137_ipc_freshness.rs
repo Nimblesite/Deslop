@@ -10,14 +10,11 @@
 
 use std::{fs, time::Duration};
 
-use anyhow::{anyhow, ensure, Context, Result};
+use anyhow::{ensure, Context, Result};
 use serde_json::{json, Value};
 
 use crate::common;
-use common::{
-    cluster_ids, copied_fixture, initialized_mcp, lsp_workspace_with_socket,
-    spawn_lsp_and_wait_for_socket, structured_content, wait_for_path, McpHandle, SOCKET_TIMEOUT,
-};
+use common::{call_tool, cluster_ids, copied_fixture, initialized_mcp, lsp_workspace_with_socket, spawn_lsp_and_wait_for_socket, structured_content, u64_field, wait_for_path, McpHandle, SOCKET_TIMEOUT};
 
 /// [MCP-IPC-CLIENT] T1 — read freshness without on-disk staleness.
 ///
@@ -46,18 +43,11 @@ fn t1_report_get_reflects_lsp_state_immediately_after_rescan() -> Result<()> {
         b"namespace Beta { public class Differ { public int Run(int x) { return x + 1; } } }\n",
     )
     .context("mutate Beta.cs")?;
-    let rescan = mcp.request(
-        "tools/call",
-        &json!({"name": "rescan", "arguments": {"n": 5}}),
-    )?;
-    let rescan_structured = structured_content(&rescan, "rescan")?;
-    let rescan_generation = rescan_structured
-        .get("generation")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| anyhow!("rescan generation missing: {rescan}"))?;
+    let rescan_structured = call_tool(&mut mcp, "rescan", &json!({"n": 5}))?;
+    let rescan_generation = u64_field(&rescan_structured, "generation")?;
     ensure!(
         rescan_generation > 0,
-        "rescan must advance generation past zero: {rescan}",
+        "rescan must advance generation past zero: {rescan_structured}",
     );
 
     // Immediate follow-up read must see the new state.
@@ -107,18 +97,11 @@ fn t2_issue_137_report_hide_visible_via_mcp_after_lsp_reanalysis() -> Result<()>
         &json!({"name": "rescan", "arguments": {"n": 5}}),
     )?;
 
-    let response = mcp.request(
-        "tools/call",
-        &json!({"name": "duplicates", "arguments": {"n": 5}}),
-    )?;
-    let structured = structured_content(&response, "duplicates")?;
-    let total_clusters = structured
-        .get("total_clusters")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| anyhow!("total_clusters missing: {response}"))?;
+    let structured = call_tool(&mut mcp, "duplicates", &json!({"n": 5}))?;
+    let total_clusters = u64_field(&structured, "total_clusters")?;
     ensure!(
         total_clusters == 0,
-        "issue #137: MCP top-offenders must honour scan-root-relative report_hide via the LSP IPC read; got {total_clusters} cluster(s) where the LSP has hidden them all: {response}",
+        "issue #137: MCP top-offenders must honour scan-root-relative report_hide via the LSP IPC read; got {total_clusters} cluster(s) where the LSP has hidden them all: {structured}",
     );
     Ok(())
 }

@@ -28,7 +28,7 @@ use crate::{
             emit_merge_helper, plain_call, BraceStyle, HelperDialect, HelperPlacement,
             InsertionPoint,
         },
-        shared::{build_normalised_root, intern_kind, parse_source, IDENTIFIER_KIND, LITERAL_KIND},
+        shared::{build_normalised_root, normalise_kind_with, parse_source},
         LanguageParser,
     },
     refactor::{
@@ -265,12 +265,23 @@ fn merge_signature_text(helper_name: &str, parameters: &str) -> String {
 /// returned `&'static str` comes from a fixed placeholder set or is
 /// interned on first sight so downstream hashing is cheap and stable.
 fn normalise_kind(raw: &str) -> Option<&'static str> {
-    match raw {
-        "comment" | "block_comment" | "documentation_block_comment" => None,
-        "identifier" | "identifier_dollar_escaped" | "type_identifier" => Some(IDENTIFIER_KIND),
-        raw if is_literal_kind(raw) => Some(LITERAL_KIND),
-        other => Some(intern_kind(other)),
-    }
+    normalise_kind_with(raw, is_comment_kind, is_identifier_kind, is_literal_kind)
+}
+
+/// Dart trivia.
+fn is_comment_kind(raw: &str) -> bool {
+    matches!(
+        raw,
+        "comment" | "block_comment" | "documentation_block_comment"
+    )
+}
+
+/// Dart identifier leaves, collapsed for Type-2 renamed-clone detection.
+fn is_identifier_kind(raw: &str) -> bool {
+    matches!(
+        raw,
+        "identifier" | "identifier_dollar_escaped" | "type_identifier"
+    )
 }
 
 /// Returns true when `raw` is a Dart literal node collapsed by

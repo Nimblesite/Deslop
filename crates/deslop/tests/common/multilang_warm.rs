@@ -25,6 +25,7 @@ use super::{
     },
     seed, Result,
 };
+use super::scan_dir::temp_scan_dir;
 
 /// A warm scan root: the fixture seeded into `<tmp>/src` and scanned
 /// once with the store on, so every file has a persisted blob. Returns
@@ -45,8 +46,7 @@ impl WarmCorpus {
     /// so a scenario can never start from a store that was quietly
     /// empty, and "the edit caused this miss" is provable.
     pub(crate) fn warm() -> Result<Self> {
-        let tmp = tempfile::tempdir()?;
-        let scan_root = tmp.path().join("src");
+        let (tmp, scan_root) = temp_scan_dir("src")?;
         seed_multilang(&scan_root)?;
 
         let cycle = cold_then_warm(&scan_root, tmp.path(), MIN, MULTILANG_FILE_COUNT)?;

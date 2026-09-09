@@ -19,6 +19,7 @@ use crate::common::{
     signals::has_verbatim_pair,
 };
 use crate::mock_ollama::MockOllama;
+use crate::common::scan_dir::temp_scan_dir;
 
 /// Clone files each corpus writes.
 const CLONE_FILES: usize = 8;
@@ -133,9 +134,7 @@ fn every_owner_of_a_collapsed_ann_point_keeps_its_measured_cosine() -> Result<()
 #[test]
 fn within_file_duplication_survives_the_collapsed_index() -> Result<()> {
     let server = MockOllama::spawn()?;
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    fs::create_dir_all(&scan_root)?;
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     fs::write(scan_root.join("Repeat.cs"), repeated_statement_source())?;
     let report = run_mock_embedding_report(
         &scan_root,
@@ -234,8 +233,7 @@ fn clone_file_names() -> Vec<String> {
 /// Scans a fresh clone corpus through the deterministic mock embedder.
 fn run_clone_corpus(namespace: Namespace) -> Result<CloneRun> {
     let server = MockOllama::spawn()?;
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     write_duplicate_fixture(&scan_root, namespace)?;
     let report = run_mock_embedding_report(
         &scan_root,

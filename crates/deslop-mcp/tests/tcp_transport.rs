@@ -20,10 +20,7 @@ use anyhow::{anyhow, ensure, Context, Result};
 use serde_json::{json, Value};
 
 mod common;
-use common::{
-    copied_fixture, initialized_mcp, request_duplicates_summary, spawn_lsp_with_args,
-    structured_content, wait_for_path, ChildKillOnDrop, SOCKET_TIMEOUT,
-};
+use common::{array_field, call_tool, copied_fixture, initialized_mcp, request_duplicates_summary, spawn_lsp_with_args, str_field, structured_content, u64_field, wait_for_path, ChildKillOnDrop, SOCKET_TIMEOUT};
 
 /// Clusters requested per page: a small page is enough to prove the
 /// transport carries a live report.
@@ -35,16 +32,10 @@ fn read_discovery_record(workspace: &std::path::Path) -> Result<(u16, String)> {
     let record: Value =
         serde_json::from_slice(&fs::read(&port_file).context("read discovery record")?)
             .context("parse discovery record")?;
-    let port = record
-        .get("port")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| anyhow!("discovery record missing port: {record}"))?;
+    let port = u64_field(&record, "port")?;
     let port = u16::try_from(port).context("port out of range")?;
     ensure!(port > 0, "discovery record must carry a bound port");
-    let token = record
-        .get("token")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("discovery record missing token: {record}"))?;
+    let token = str_field(&record, "token")?;
     ensure!(
         token.len() == 64,
         "token must be a 64-char hex secret, got {} chars",
@@ -89,12 +80,7 @@ fn mcp_tools_work_over_tcp_transport() -> Result<()> {
 
     let response = request_duplicates_summary(&mut mcp, PAGE_LIMIT)?;
     let offenders = structured_content(&response, "duplicates")?;
-    let total_clusters = offenders
-        .get("total_clusters")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| {
-            anyhow!("top-offenders over TCP must return the live report shape: {response}")
-        })?;
+    let total_clusters = u64_field(&offenders, "total_clusters")?;
     // Not merely "the field is present": the fixture is four C# files
     // built to duplicate each other, so a live report with nothing in it
     // is a false negative that the shape check alone waves through — and
@@ -106,22 +92,12 @@ fn mcp_tools_work_over_tcp_transport() -> Result<()> {
          an empty live report: {offenders}"
     );
 
-    let response = mcp.request(
-        "tools/call",
-        &json!({
-            "name": "find-similar",
-            "arguments": {
+    let similar = call_tool(&mut mcp, "find-similar", &json!({
                 "snippet": include_str!("fixtures/csharp-mcp/Alpha.cs"),
                 "language": "csharp",
                 "top_n": 5
-            }
-        }),
-    )?;
-    let similar = structured_content(&response, "find-similar")?;
-    let clusters = similar
-        .get("clusters")
-        .and_then(Value::as_array)
-        .ok_or_else(|| anyhow!("clusters must be an array: {response}"))?;
+            }))?;
+    let clusters = array_field(&similar, "clusters")?;
     ensure!(
         !clusters.is_empty(),
         "find-similar over TCP must return live LSP clusters. The live \

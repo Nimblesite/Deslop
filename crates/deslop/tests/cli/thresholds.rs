@@ -88,8 +88,7 @@ fn assert_threshold(json: &Value, source: &str, breached: bool) {
 /// Creates a `tempdir` with a `src` scan root seeded with the canonical
 /// clone pair, returning both so the `tempdir` guard stays alive.
 fn clone_pair_scan_root() -> Result<(tempfile::TempDir, PathBuf)> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     let _ = write_clone_pair(&scan_root)?;
     Ok((tmp, scan_root))
 }
@@ -97,9 +96,7 @@ fn clone_pair_scan_root() -> Result<(tempfile::TempDir, PathBuf)> {
 /// Creates a `tempdir` with an empty `src` scan root, returning both so
 /// the `tempdir` guard stays alive.
 fn empty_scan_root() -> Result<(tempfile::TempDir, PathBuf)> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    fs::create_dir_all(&scan_root)?;
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     Ok((tmp, scan_root))
 }
 

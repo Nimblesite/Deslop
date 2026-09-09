@@ -384,6 +384,32 @@ pub fn rescan_call(mcp: &mut McpHandle, paths: &[String]) -> Result<Value> {
     structured_content(&response, "rescan")
 }
 
+/// Reads `field` off `value` as an unsigned integer. The error names
+/// the payload that lacked it, so a missing field is diagnosable
+/// without the caller re-formatting the response.
+pub fn u64_field(value: &Value, field: &str) -> Result<u64> {
+    value
+        .get(field)
+        .and_then(Value::as_u64)
+        .ok_or_else(|| anyhow!("{field} missing or not a number in {value}"))
+}
+
+/// Reads `field` off `value` as a string.
+pub fn str_field<'a>(value: &'a Value, field: &str) -> Result<&'a str> {
+    value
+        .get(field)
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("{field} missing or not a string in {value}"))
+}
+
+/// Reads `field` off `value` as an array.
+pub fn array_field<'a>(value: &'a Value, field: &str) -> Result<&'a Vec<Value>> {
+    value
+        .get(field)
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("{field} missing or not an array in {value}"))
+}
+
 /// Resolves a JSON pointer in `value`, erroring when the path is absent.
 pub fn value_get(value: &Value, pointer: &str) -> Result<Value> {
     value

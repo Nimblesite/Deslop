@@ -11,6 +11,7 @@ use std::fs;
 use serde_json::Value;
 
 use super::{cluster_file_set, clusters, field, run_report, Result};
+use super::scan_dir::temp_scan_dir;
 
 /// A genuine copy-pasted F# function — byte-identical across two files.
 /// Shared recall-guard source for the #331/#336 shape-only fixtures.
@@ -76,9 +77,7 @@ pub(crate) fn genuine_pair(first: &str, second: &str, source: &str) -> [(String,
 /// the rendered report at `min_nodes`. Config rides along as an ordinary
 /// `.deslop.toml` entry in `files` when a test needs a policy override.
 pub(crate) fn report_for(files: &[(String, String)], min_nodes: u32) -> Result<Value> {
-    let tmp = tempfile::tempdir()?;
-    let root = tmp.path().join("src");
-    fs::create_dir_all(&root)?;
+    let (_tmp, root) = temp_scan_dir("src")?;
     for (file_name, source) in files {
         fs::write(root.join(file_name), source)?;
     }
@@ -90,9 +89,7 @@ pub(crate) fn report_for_with_root(
     files: &[(String, String)],
     min_nodes: u32,
 ) -> Result<(tempfile::TempDir, std::path::PathBuf, Value)> {
-    let tmp = tempfile::tempdir()?;
-    let root = tmp.path().join("src");
-    fs::create_dir_all(&root)?;
+    let (tmp, root) = temp_scan_dir("src")?;
     for (file_name, source) in files {
         fs::write(root.join(file_name), source)?;
     }

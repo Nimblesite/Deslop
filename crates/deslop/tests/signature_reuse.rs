@@ -32,8 +32,7 @@ use crate::common::{incremental::*, seeded::*, store::*, *};
 // renders the cold report unchanged.
 #[test]
 fn warm_run_reuses_persisted_signatures_instead_of_rebuilding() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     seed_corpus(&scan_root)?;
 
     // The whole cold-fills / warm-serves / warm-owes-cold contract, over
@@ -87,8 +86,7 @@ fn assert_two_disabled_passes(
 
 #[test]
 fn no_incremental_runs_always_build_every_signature() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     seed_corpus(&scan_root)?;
 
     let (first, first_events) = assert_two_disabled_passes(
@@ -119,8 +117,7 @@ fn no_incremental_runs_always_build_every_signature() -> Result<()> {
 // and the store directory must never be created on disk.
 #[test]
 fn config_file_opt_out_disables_persisted_processing() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     seed_corpus(&scan_root)?;
     fs::write(
         scan_root.join(".deslop.toml"),
@@ -161,8 +158,7 @@ fn config_file_opt_out_disables_persisted_processing() -> Result<()> {
 // the warm pass rendered.
 #[test]
 fn config_opt_out_ignores_an_already_warm_store() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     seed_corpus(&scan_root)?;
 
     let cycle = cold_then_warm(&scan_root, tmp.path(), SEEDED_MIN_NODES, SEEDED_FILE_COUNT)?;

@@ -87,6 +87,7 @@ pub(crate) mod seeded;
 /// `use crate::common::scan_dir::*;`, for the same reason as
 /// `signals`.
 pub(crate) mod scan_dir;
+pub(crate) use scan_dir::temp_scan_dir;
 
 /// Reading the on-disk parse store and a run's tracing log. Imported
 /// explicitly with `use crate::common::store::*;`, for the same reason
@@ -103,6 +104,9 @@ pub(crate) mod corpora;
 /// pinning the price the cross-file arbitration accepts. Imported
 /// explicitly with `use crate::common::verbatim_subgroup::*;`, for the
 /// same reason as `signals`.
+/// One [CLONE-NOISE-POLYMORPHIC-SIGNATURE] scan proving a contract
+/// pair stays hidden while a rename clone beside it still surfaces.
+pub(crate) mod contract_boundary;
 pub(crate) mod verbatim_subgroup;
 
 use std::{
@@ -200,6 +204,23 @@ pub(crate) fn run_report(scan_root: &Path, min_nodes: u32) -> Result<Value> {
     )
 }
 
+/// Runs `deslop` over the named fixture at `min_nodes`, leaving the
+/// embedding pass at its default so the signature suites drive all three
+/// layers ([FUSED-SIGNALS-THREE-LAYER]).
+pub(crate) fn run_fixture_report(fixture_name: &str, min_nodes: u32) -> Result<Value> {
+    let min_nodes = min_nodes.to_string();
+    run_report_args(&fixture(fixture_name), &["--min-nodes", min_nodes.as_str()])
+}
+
+/// A writable copy of `fixture_name` at `<tmp>/src`, returned with the
+/// temp dir that owns it so the caller controls its lifetime. The shape
+/// every suite needs before it can mutate a scan root.
+pub(crate) fn seeded_fixture_root(fixture_name: &str) -> Result<(tempfile::TempDir, PathBuf)> {
+    let (tmp, scan_root) = temp_scan_dir("src")?;
+    seed(&fixture(fixture_name), &scan_root)?;
+    Ok((tmp, scan_root))
+}
+
 /// Parses the JSON document at `path` into a [`Value`].
 pub(crate) fn load_json(path: &Path) -> Result<Value> {
     Ok(serde_json::from_str(&fs::read_to_string(path)?)?)
@@ -209,6 +230,48 @@ pub(crate) fn load_json(path: &Path) -> Result<Value> {
 /// callers get a deterministic `!=` instead of a panic.
 pub(crate) fn field<'a>(value: &'a Value, name: &str) -> &'a Value {
     value.get(name).unwrap_or(&Value::Null)
+}
+
+/// The first row in `rows` whose reported `path` ends with `suffix`.
+/// Suffix matching, so a suite names the bare file wherever the fixture
+/// nests it.
+pub(crate) fn row_for_path<'a>(rows: &'a [Value], suffix: &str) -> Option<&'a Value> {
+    rows.iter().find(|row| {
+        field(row, "path")
+            .as_str()
+            .is_some_and(|path| path.ends_with(suffix))
+    })
+}
+
+/// The `duplicated_loc` the per-file metrics report for `file`, or zero
+/// when the file has no duplication row at all.
+pub(crate) fn duplicated_loc_for(report: &Value, file: &str) -> u64 {
+    row_for_path(per_file_metrics(report), file).map_or(0, |row| {
+        field(row, "duplicated_loc").as_u64().unwrap_or_default()
+    })
+}
+
+/// The negative-control contract: `fixture_name` must analyse exactly
+/// `files` sources and report no clone at all. The file count guards
+/// against a vacuous pass — "no clusters" from a silently-broken parser
+/// that produced zero fingerprints proves nothing. Returns the report so
+/// a caller can pin what was suppressed on top.
+pub(crate) fn assert_no_clone_reported(
+    fixture_name: &str,
+    min_nodes: u32,
+    files: u64,
+) -> Result<Value> {
+    let report = run_report(&fixture(fixture_name), min_nodes)?;
+    assert_eq!(
+        field(&report, "files_analysed").as_u64(),
+        Some(files),
+        "{fixture_name}: all {files} file(s) must be analysed: {report:#}"
+    );
+    assert!(
+        clusters(&report).is_empty(),
+        "{fixture_name}: unrelated code must not be reported as a clone: {report:#}"
+    );
+    Ok(report)
 }
 
 /// [CLONE-KIND-LABELS] The wire spelling of the cluster kind every member
@@ -327,15 +390,21 @@ pub(crate) fn cluster_file_set(cluster: &Value) -> BTreeSet<String> {
     occurrence_files(cluster).into_iter().collect()
 }
 
+/// True when `cluster` has an occurrence in every one of `files`, matched
+/// by bare file name. The one place a suite asks "is this the cross-file
+/// clone I mean?".
+pub(crate) fn cluster_covers_files(cluster: &Value, files: &[&str]) -> bool {
+    let present = cluster_file_set(cluster);
+    files.iter().all(|name| present.contains(*name))
+}
+
 /// The first cluster whose occurrences cover every name in `files`, or
 /// `None`. Lets a test target the specific cross-file clone it cares about
 /// regardless of report ordering or unrelated clusters.
 pub(crate) fn cluster_spanning<'a>(report: &'a Value, files: &[&str]) -> Option<&'a Value> {
-    clusters(report).iter().find(|cluster| {
-        files
-            .iter()
-            .all(|name| cluster_file_set(cluster).contains(*name))
-    })
+    clusters(report)
+        .iter()
+        .find(|cluster| cluster_covers_files(cluster, files))
 }
 
 /// True when any occurrence of `cluster` sits in a file whose reported

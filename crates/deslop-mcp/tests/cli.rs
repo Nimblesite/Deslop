@@ -24,11 +24,7 @@ use serde_json::{json, Value};
 use tempfile::TempDir;
 
 use crate::common;
-use common::{
-    copied_fixture, fixture_root,
-    rpc::{StdioRpc, MCP_PROTOCOL_VERSION},
-    spawn_lsp_and_wait_for_socket, value_array, value_get, ChildKillOnDrop,
-};
+use common::{copied_fixture, fixture_root, rpc::{StdioRpc, MCP_PROTOCOL_VERSION}, spawn_lsp_and_wait_for_socket, str_field, value_array, value_get, ChildKillOnDrop};
 
 const REPORT_GET_TOOL: &str = "report-get";
 const DUPLICATES_TOOL: &str = "duplicates";
@@ -938,10 +934,7 @@ fn issue_113_find_similar_description_leads_with_prevention() -> Result<()> {
     let tool = find_similar_tools
         .first()
         .ok_or_else(|| anyhow!("find-similar tool must be present"))?;
-    let description = tool
-        .get("description")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("find-similar tool must include a description"))?;
+    let description = str_field(tool, "description")?;
     assert!(
         description.starts_with("Call before writing code to prevent duplication"),
         "issue #113: find-similar description must lead with prevention guidance: {description}"

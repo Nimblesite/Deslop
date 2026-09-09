@@ -79,8 +79,7 @@ fn assert_logic_clone_leads_and_table_is_absent(report: &Value, scan_root: &Path
 
 #[test]
 fn default_mode_ranks_logic_clone_first_and_publishes_no_data_table() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let src = tmp.path().join("src");
+    let (tmp, src) = temp_scan_dir("src")?;
     let scan_root = src.clone();
     write_dart_data_table_fixture(&src)?;
 
@@ -95,8 +94,7 @@ fn default_mode_ranks_logic_clone_first_and_publishes_no_data_table() -> Result<
 
 #[test]
 fn ignore_mode_drops_data_table_keeps_logic_clone() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let src = tmp.path().join("src");
+    let (tmp, src) = temp_scan_dir("src")?;
     let scan_root = src.clone();
     write_dart_data_table_fixture(&src)?;
     write_ranking_config(&src, "[visibility]\ndata_clones = \"ignore\"\n")?;
@@ -110,8 +108,7 @@ fn ignore_mode_drops_data_table_keeps_logic_clone() -> Result<()> {
 
 #[test]
 fn keep_mode_keeps_logic_clone_first_and_publishes_no_data_table() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let src = tmp.path().join("src");
+    let (tmp, src) = temp_scan_dir("src")?;
     let scan_root = src.clone();
     write_dart_data_table_fixture(&src)?;
     write_ranking_config(&src, "[visibility]\ndata_clones = \"keep\"\n")?;
@@ -126,9 +123,7 @@ fn keep_mode_keeps_logic_clone_first_and_publishes_no_data_table() -> Result<()>
 
 #[test]
 fn invalid_data_clone_weight_is_rejected_with_a_clear_error() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let src = tmp.path().join("src");
-    fs::create_dir_all(&src)?;
+    let (tmp, src) = temp_scan_dir("src")?;
     fs::write(src.join("a.dart"), "class A { int x = 1; }\n")?;
 
     // [RANK-CATEGORY] config validation: an out-of-range multiplier fails the
@@ -160,8 +155,7 @@ fn invalid_data_clone_weight_is_rejected_with_a_clear_error() -> Result<()> {
 
 #[test]
 fn verbatim_copied_table_still_surfaces_as_duplication() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let src = tmp.path().join("src");
+    let (tmp, src) = temp_scan_dir("src")?;
     let scan_root = src.clone();
     fs::create_dir_all(&src)?;
 

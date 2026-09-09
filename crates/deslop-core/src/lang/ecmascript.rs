@@ -13,7 +13,7 @@ use crate::{
     ast::NormalizedNode,
     error::CoreError,
     lang::shared::{
-        build_normalised_root, intern_kind, parse_source, IDENTIFIER_KIND, LITERAL_KIND,
+        build_normalised_root, normalise_kind_with, parse_source,
     },
     state::FileId,
 };
@@ -36,12 +36,7 @@ pub(crate) fn parse_and_normalise(
 /// literal nodes collapse to `__literal__`; every other named node stays
 /// structural via interning.
 pub(crate) fn normalise_kind(raw: &str) -> Option<&'static str> {
-    match raw {
-        raw if is_comment_kind(raw) => None,
-        raw if is_identifier_kind(raw) => Some(IDENTIFIER_KIND),
-        raw if is_literal_kind(raw) => Some(LITERAL_KIND),
-        other => Some(intern_kind(other)),
-    }
+    normalise_kind_with(raw, is_comment_kind, is_identifier_kind, is_literal_kind)
 }
 
 /// Returns true for trivia nodes emitted by the JS / TS grammars.

@@ -18,7 +18,7 @@ use crate::{
             emit_merge_helper, plain_call, BraceStyle, HelperDialect, HelperPlacement,
             InsertionPoint,
         },
-        shared::{build_normalised_root, intern_kind, parse_source, IDENTIFIER_KIND, LITERAL_KIND},
+        shared::{build_normalised_root, normalise_kind_with, parse_source},
         LanguageParser,
     },
     refactor::{
@@ -351,18 +351,39 @@ fn function_text(request: &EmitRequest<'_, '_>, indent: &str, method_name: &str)
 /// 0.24.x. Every other named kind passes through interned so the hash
 /// stays stable across runs.
 fn normalise_kind(raw: &str) -> Option<&'static str> {
-    match raw {
-        "line_comment" | "block_comment" => None,
+    normalise_kind_with(raw, is_comment_kind, is_identifier_kind, is_literal_kind)
+}
+
+/// Rust trivia.
+fn is_comment_kind(raw: &str) -> bool {
+    matches!(raw, "line_comment" | "block_comment")
+}
+
+/// Rust identifier leaves, collapsed for Type-2 renamed-clone detection.
+fn is_identifier_kind(raw: &str) -> bool {
+    matches!(
+        raw,
         "identifier"
-        | "type_identifier"
-        | "field_identifier"
-        | "shorthand_field_identifier"
-        | "primitive_type"
-        | "scoped_identifier"
-        | "scoped_type_identifier"
-        | "metavariable" => Some(IDENTIFIER_KIND),
-        "string_literal" | "raw_string_literal" | "char_literal" | "integer_literal"
-        | "float_literal" | "boolean_literal" => Some(LITERAL_KIND),
-        other => Some(intern_kind(other)),
-    }
+            | "type_identifier"
+            | "field_identifier"
+            | "shorthand_field_identifier"
+            | "primitive_type"
+            | "scoped_identifier"
+            | "scoped_type_identifier"
+            | "metavariable"
+    )
+}
+
+/// Rust literal leaves, collapsed so constant edits do not perturb
+/// fingerprints.
+fn is_literal_kind(raw: &str) -> bool {
+    matches!(
+        raw,
+        "string_literal"
+            | "raw_string_literal"
+            | "char_literal"
+            | "integer_literal"
+            | "float_literal"
+            | "boolean_literal"
+    )
 }

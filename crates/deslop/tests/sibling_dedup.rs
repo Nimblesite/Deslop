@@ -27,6 +27,7 @@ use std::{collections::BTreeMap, fs, path::Path, path::PathBuf};
 
 use anyhow::Result;
 use assert_cmd::Command;
+use crate::common::scan_dir::temp_scan_dir;
 
 /// Writes two C# files that each contain three near-identical `for`
 /// loops nested inside a single method. The sibling pass emits window
@@ -160,8 +161,7 @@ fn run_and_load_report(tmp: &Path, scan_root: &Path) -> Result<serde_json::Value
 fn prepared_report(
     write_fixture: fn(&Path) -> Result<()>,
 ) -> Result<(tempfile::TempDir, PathBuf, serde_json::Value)> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     write_fixture(&scan_root)?;
     let report = run_and_load_report(tmp.path(), &scan_root)?;
     Ok((tmp, scan_root, report))

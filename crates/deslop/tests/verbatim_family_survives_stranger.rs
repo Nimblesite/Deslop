@@ -7,7 +7,6 @@ use crate::common::{
     signals::{
         assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
     },
-    verbatim_subgroup::duplicated_loc_for,
     *,
 };
 

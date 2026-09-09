@@ -290,9 +290,7 @@ fn exclude_pattern_is_scan_root_relative() -> Result<()> {
 // prove the outputs follow the scan root rather than the CWD.
 #[test]
 fn default_output_written_to_deslop_dir_under_scan_root() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
+    let (tmp, scan_root) = seeded_fixture_root("csharp-small")?;
     let cwd = tmp.path().join("elsewhere");
     fs::create_dir_all(&cwd)?;
     let mut cmd = Command::cargo_bin("deslop")?;
