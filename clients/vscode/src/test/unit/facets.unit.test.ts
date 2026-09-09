@@ -1,16 +1,17 @@
 // Unit: the facet model ([FACET-MODEL] / [FACET-TOP-OFFENDERS-FILTER] /
-// [FACET-GROUP-BY-SEVERITY]). Covers the shared filter slice every
-// listing surface funnels through, the sanitizer's typo fallback, and the
-// severity-grouping mode's flat band roots (#258, re-stated on severity).
+// [FACET-GROUP-BY-KIND]). Covers the shared filter slice every listing
+// surface funnels through, the sanitizer's typo fallback, and the
+// kind-grouping mode's flat roots (#258, re-stated on the clone kind).
 
 import * as assert from "node:assert/strict";
 
 import {
   applyFacetFilter,
+  kindTitle,
   sanitizeFacetFilter,
 } from "../../types/report";
-import { buildSeverityMode, getGroupNodeChildren } from "../../tree/grouping";
-import { ClusterNode, SeverityGroupNode } from "../../tree/nodes";
+import { buildKindMode, getGroupNodeChildren } from "../../tree/grouping";
+import { ClusterNode, KindGroupNode } from "../../tree/nodes";
 import { StatusTicker, TopOffendersProvider } from "../../tree/providers";
 import { ReportStore } from "../../reportStore";
 import { cluster, labelText, report, withSetting } from "./tree.helpers";
@@ -32,13 +33,19 @@ const ALL = stampRanks(
 const RANK_ONE_ID = "cluster01";
 const RANK_TWO_ID = "cluster02";
 
-// A small report for the grouping-mode suite, with the same engine
-// stamping: bands come out worst / mid / mid / faint for ranks 1–4.
-const GROUPED = stampRanks([
-  cluster("aaaaaaa1", 9, "a.cs", 0, 20, WORST_SEVERITY, 1),
-  cluster("bbbbbbb2", 7, "b.cs", 0, 20, MID_SEVERITY, 2),
-  cluster("ccccccc3", 5, "c.dart", 0, 20, MID_SEVERITY, 3),
-  cluster("ddddddd4", 3, "d.rs", 0, 20, FAINT_SEVERITY, 4),
+const IDENTICAL_KIND = "identical";
+const NEARLY_IDENTICAL_KIND = "nearly_identical";
+const LOOSELY_SIMILAR_KIND = "loosely_similar";
+
+// A small report for the grouping-mode suite: the engine's stamping bands
+// ranks 1–4 worst / mid / mid / faint, and the clone kinds are spread so
+// the heaviest cluster is NOT the strongest kind — grouping by kind must
+// not follow rank.
+const KIND_GROUPED = stampRanks([
+  cluster("aaaaaaa1", 9, "a.cs", 0, 20, WORST_SEVERITY, 1, NEARLY_IDENTICAL_KIND),
+  cluster("bbbbbbb2", 7, "b.cs", 0, 20, MID_SEVERITY, 2, IDENTICAL_KIND),
+  cluster("ccccccc3", 5, "c.dart", 0, 20, MID_SEVERITY, 3, LOOSELY_SIMILAR_KIND),
+  cluster("ddddddd4", 3, "d.rs", 0, 20, FAINT_SEVERITY, 4, IDENTICAL_KIND),
 ]);
 
 suite("facet filter slice ([FACET-TOP-OFFENDERS-FILTER])", () => {
@@ -69,59 +76,59 @@ suite("facet filter slice ([FACET-TOP-OFFENDERS-FILTER])", () => {
   });
 });
 
-suite("severity grouping mode ([FACET-GROUP-BY-SEVERITY])", () => {
-  // #258: severity mode groups by BAND — every worst cluster surfaces
-  // together in one flat group, with no file/folder sub-grouping in
-  // between ([FACET-GROUP-BY-SEVERITY]).
-  test("roots are one flat group per band present, so all worst clusters sit together", () => {
-    const roots = buildSeverityMode(GROUPED, "impact");
-    assert.equal(roots.length, 3, "worst + mid + faint groups; absent bands omitted");
-    const [worstGroup, midGroup, faintGroup] = roots as [
-      SeverityGroupNode,
-      SeverityGroupNode,
-      SeverityGroupNode,
-    ];
-    assert.ok(worstGroup instanceof SeverityGroupNode);
-    assert.equal(worstGroup.severity, WORST_SEVERITY);
-    assert.equal(midGroup.severity, MID_SEVERITY);
-    assert.equal(faintGroup.severity, FAINT_SEVERITY);
-    const worstChildren = getGroupNodeChildren(worstGroup) as ClusterNode[];
-    assert.deepEqual(
-      worstChildren.map((node) => node.cluster.id),
-      ["aaaaaaa1"],
-      "the worst group is flat and holds every worst-band cluster",
+suite("clone-kind grouping mode ([FACET-GROUP-BY-KIND])", () => {
+  // Kind mode groups by the engine's clone kind — every identical cluster
+  // surfaces together in one flat group, strongest kind first, with no
+  // file/folder sub-grouping in between ([FACET-GROUP-BY-KIND]).
+  test("roots are one flat group per kind present, strongest first, so all identical clusters sit together", () => {
+    const roots = buildKindMode(KIND_GROUPED, "impact");
+    assert.equal(roots.length, 3, "identical + nearly identical + loosely similar groups; absent kinds omitted");
+    const [identicalGroup, nearGroup, looseGroup] = roots as [KindGroupNode, KindGroupNode, KindGroupNode];
+    assert.ok(identicalGroup instanceof KindGroupNode);
+    assert.equal(identicalGroup.kind, IDENTICAL_KIND);
+    assert.equal(nearGroup.kind, NEARLY_IDENTICAL_KIND);
+    assert.equal(looseGroup.kind, LOOSELY_SIMILAR_KIND);
+    assert.ok(
+      labelText(identicalGroup).startsWith(kindTitle(IDENTICAL_KIND)),
+      `the group is titled by its kind: ${labelText(identicalGroup)}`,
     );
-    const faintChildren = getGroupNodeChildren(faintGroup) as ClusterNode[];
+    const identicalChildren = getGroupNodeChildren(identicalGroup) as ClusterNode[];
     assert.deepEqual(
-      faintChildren.map((node) => node.cluster.id),
-      ["ccccccc3", "ddddddd4"],
-      "both faint clusters share the faint group, flat",
+      identicalChildren.map((node) => node.cluster.id),
+      ["bbbbbbb2", "ddddddd4"],
+      "the identical group is flat and holds every identical cluster, worst-first",
+    );
+    const looseChildren = getGroupNodeChildren(looseGroup) as ClusterNode[];
+    assert.deepEqual(
+      looseChildren.map((node) => node.cluster.id),
+      ["ccccccc3"],
+      "the loosely similar cluster sits alone in its group",
     );
     assert.ok(
-      worstChildren.every((node) => node instanceof ClusterNode),
+      identicalChildren.every((node) => node instanceof ClusterNode),
       "children are cluster rows directly — no intermediate file/folder layer",
     );
   });
 
   test("children keep the GLOBAL rank (gaps allowed) and show their file", () => {
-    const roots = buildSeverityMode(GROUPED, "impact");
-    const faintChildren = getGroupNodeChildren(roots[2] as SeverityGroupNode);
-    assert.equal(faintChildren.length, 2);
-    const child = faintChildren[0] as ClusterNode;
+    const roots = buildKindMode(KIND_GROUPED, "impact");
+    const identicalChildren = getGroupNodeChildren(roots[0] as KindGroupNode);
+    assert.equal(identicalChildren.length, 2);
+    const child = identicalChildren[1] as ClusterNode;
     assert.ok(child instanceof ClusterNode);
-    assert.equal(child.rank, 3, "rank #3 from the global worst-first list, not renumbered to a group-local #1");
+    assert.equal(child.rank, 4, "rank #4 from the global worst-first list, not renumbered to a group-local #2");
     assert.ok(
-      labelText(child).includes("c.dart"),
-      `severity-group children are roots without a file ancestor, so the file must show: ${labelText(child)}`,
+      labelText(child).includes("d.rs"),
+      `kind-group children are roots without a file ancestor, so the file must show: ${labelText(child)}`,
     );
   });
 
-  test("absent bands never render empty groups", () => {
-    const soleWorst = GROUPED[0];
-    assert.ok(soleWorst, "fixture: the stamped report carries a worst-band cluster");
-    const roots = buildSeverityMode([soleWorst], "impact");
+  test("absent kinds never render empty groups", () => {
+    const soleNear = KIND_GROUPED[0];
+    assert.ok(soleNear, "fixture: the stamped report carries a nearly identical cluster");
+    const roots = buildKindMode([soleNear], "impact");
     assert.equal(roots.length, 1);
-    assert.equal((roots[0] as SeverityGroupNode).severity, WORST_SEVERITY);
+    assert.equal((roots[0] as KindGroupNode).kind, NEARLY_IDENTICAL_KIND);
   });
 });
 

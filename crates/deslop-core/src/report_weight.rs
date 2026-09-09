@@ -68,6 +68,7 @@ mod tests {
             id: id.to_owned(),
             rank: 0,
             rank_band: String::new(),
+            kind: crate::buckets::ClusterKind::Identical,
             mass,
             canonical_node_count: 1,
             occurrences: Vec::new(),

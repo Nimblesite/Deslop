@@ -16,6 +16,9 @@
 pub mod language_label;
 /// Newline-delimited JSON-RPC over a child's stdio.
 pub mod rpc;
+/// A scripted stand-in for an LSP from another Deslop build.
+#[cfg(unix)]
+pub mod stub_lsp;
 
 use std::{
     fs,
@@ -238,7 +241,7 @@ impl McpHandle {
     ///
     /// The explicit textual root is required by the wrong-root regression:
     /// `.` must resolve against the process working directory before the
-    /// server binds its live LSP session ([MCP-ROOT-CANONICAL]).
+    /// server binds its live LSP session ([MCP-IPC-DISCOVERY]).
     pub fn spawn_with_root_argument(working_directory: &Path, root_argument: &str) -> Result<Self> {
         let bin = env!("CARGO_BIN_EXE_deslop-mcp");
         let mut command = Command::new(bin);

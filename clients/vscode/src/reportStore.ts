@@ -362,11 +362,10 @@ function projectVisible(canonical: Report | null, dirty: ReadonlySet<string>): R
     // that live in an unsaved buffer, so the counts it carries are counts
     // of that view. Derived once here and written to every count field
     // together, so no surface can show the engine's total beside the
-    // projection's shorter list ([VSIX-REACTIVITY-DIRTY]).
+    // projection's shorter list ([VSIX-STATE-DIRTY]).
     const projectedCount = Math.max(kept.length, cluster.occurrence_count - removed);
     clusters.push({
       ...cluster,
-      canonical_node_count: projectedCount,
       occurrences: kept,
       occurrence_count: projectedCount,
       occurrences_total: projectedCount,

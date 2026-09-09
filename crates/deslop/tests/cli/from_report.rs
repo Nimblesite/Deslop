@@ -1,4 +1,5 @@
 use super::support::*;
+use crate::common::IDENTICAL_TITLE;
 
 /// Writes `report_body` to `<tmp>/<file_name>`, runs the CLI in
 /// `--from-report` replay mode over it (adding `--no-color` when
@@ -115,9 +116,9 @@ fn from_report_rejects_retired_bucket_wire() -> Result<()> {
 
 #[test]
 fn from_report_preserves_mass_and_band_in_html() -> Result<()> {
-    // The replayed HTML is a cluster surface: it renders the neutral
-    // verdict, the cluster's mass, and never a similarity classification
-    // ([FACET-HTML], [VSIX-PAIR-COMPARE]).
+    // The replayed HTML is a cluster surface: it renders the cluster's
+    // folded kind title and its mass, and never pair evidence
+    // ([FACET-HTML], [CLONE-KIND-LABELS], [VSIX-PAIR-COMPARE]).
     let tmp = tempfile::tempdir()?;
     let report = "{\n\
                   \"tool_version\": \"synthetic\",\n\
@@ -133,6 +134,7 @@ fn from_report_preserves_mass_and_band_in_html() -> Result<()> {
                     \"id\": \"reported-dup\",\n\
                     \"rank\": 1,\n\
                     \"rank_band\": \"worst\",\n\
+                    \"kind\": \"identical\",\n\
                     \"mass\": 89,\n\
                     \"canonical_node_count\": 12,\n\
                     \"occurrences\": [\n\
@@ -153,20 +155,14 @@ fn from_report_preserves_mass_and_band_in_html() -> Result<()> {
     replay_report(tmp.path(), "semantic.json", report, false)?;
     let html = fs::read_to_string(&out.html)?;
     assert!(
-        html.contains("Duplicate code"),
-        "the neutral verdict renders"
+        html.contains(&format!(">{IDENTICAL_TITLE}</h3>")),
+        "the replayed cluster's kind title renders: {html}"
     );
     assert!(
         html.contains("mass 89"),
         "the cluster's mass renders: {html}"
     );
-    for retired in [
-        "Same behavior",
-        "AI match",
-        "bucket:",
-        "kind-identical",
-        "facet-identical",
-    ] {
+    for retired in ["Same behavior", "AI match", "bucket:", "facet-identical"] {
         assert!(
             !html.contains(retired),
             "replayed HTML must not carry the retired classification {retired}"

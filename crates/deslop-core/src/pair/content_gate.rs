@@ -96,7 +96,7 @@ fn pair_passes_content_gate<L: BuildHasher>(
 /// decision that route produced.
 enum GateVerdict {
     /// Refused: the endpoints play different roles under embedding
-    /// support ([CLONE-NOISE-EMBEDDING-ROLE]).
+    /// support ([CLONE-NOISE-EMBEDDING-ROLE-MISMATCH]).
     RoleMismatch,
     /// Refused: a token-only pair that merely wraps an exact
     /// whole-function clone ([FUSED-SHARED-SUBTREE-ECHO]).
@@ -119,9 +119,7 @@ impl GateVerdict {
         match self {
             Self::RoleMismatch | Self::ContainerEcho => false,
             Self::NotRequired => true,
-            Self::Measured { evidence, floor } => {
-                evidence.measured && (evidence.consistent_rename || evidence.support() >= *floor)
-            }
+            Self::Measured { evidence, floor } => evidence.clears(*floor),
         }
     }
 

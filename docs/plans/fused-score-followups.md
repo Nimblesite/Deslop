@@ -21,7 +21,7 @@ This plan replaces the shipped cluster-evidence design in one cutover so code, t
 - [ ] Replace report weighting wholesale with [RANK-MASS-SUM]. Delete every multiplier, boost, confidence factor, spanned-byte factor, and evidence tie-break. Equal mass sorts by cluster id.
 - [ ] Replace text, Markdown, HTML, JSON, LSP, MCP cluster responses, AI context, site examples, and CLI summaries so cluster output contains membership and mass only. Delete neutralized helpers rather than leaving no-op shims.
 - [ ] Replace VSIX cluster surfaces wholesale: bubble, hover, code lens, Top Offenders, cluster webview, report webview, tooltips, accessibility labels, copy-for-AI, history, and fixtures contain neutral cluster identity, membership, and mass only.
-- [ ] Implement explicit VSIX pair selection and `compare-pair`. The response names both endpoints and returns only that pair's evidence. Render the three admission axes compactly and the content fields as a subtle secondary line; closing the pair view removes them from the surface.
+- [x] Restore one-click canonical comparison ([VSIX-PAIR-COMPARE]) while preserving the explicit `deslop.comparePair` endpoint command. Both routes show the exact source ranges in the native diff; engine pair measurements remain separate from cluster surfaces ([VSIX-PAIR-EVIDENCE]).
 - [ ] Delete cluster bucket/category facets and per-bucket severity configuration. Cluster severity derives only from the engine-stamped mass rank band. Cluster filters use language, path, and mass severity.
 - [ ] Separate literal-family findings from clone closure components so literal kind cannot masquerade as pair classification or cluster evidence. Kept literal findings use unmodified mass.
 - [ ] Delete evidence-weighted repository metrics, weight tables, weighted gate flags, weighted wire fields, configuration, renderers, and tests. The one repository duplication percentage remains unweighted line density.
@@ -33,17 +33,23 @@ This plan replaces the shipped cluster-evidence design in one cutover so code, t
 - [ ] Closure tests assert the admitted edge set and exact connected components. Convicted-noise tests assert qualifying byte-identical families survive and outsiders drop; unconvicted components remain byte-for-byte unchanged.
 - [ ] Ranking tests assert mass exactly, id-only tie-breaking, and invariance under every pair-evidence value, classification, language, path, and visibility configuration that does not change visible membership.
 - [ ] LSP and MCP tests assert cluster payloads and messages contain membership plus mass only, while explicit pair responses identify both endpoints and contain pair evidence only.
-- [ ] VSIX unit and Playwright tests assert cluster pages never render `PAIR EVIDENCE`, content agreement, rename consistency, literal fraction, structural, Jaccard, embedding, or pair labels. After an explicit two-occurrence Compare action, the separate compact pair view renders the exact endpoint labels and exact evidence values.
+- [x] VSIX unit and Playwright assertions pin [VSIX-PAIR-COMPARE]: the canonical row is disabled, one peer click posts that exact occurrence, and the native diff shows canonical bytes alongside the selected peer even for a third occurrence in the same file. Cluster pages continue to exclude pair measurements ([VSIX-PAIR-EVIDENCE]).
 - [ ] Generated-model tests assert removed cluster fields do not exist in Rust or TypeScript and that hand-written mirror types cannot drift from the generated contract.
 - [ ] Regression fixtures assert exact clusters, occurrences, paths, ranges, mass, and order across every affected language; no assertion is weakened to a cluster count.
 
 ## Whole-system proof
 
 - [ ] Run formatting, lint, generated-model verification, Rust build, Rust tests with coverage, TypeScript typecheck, VSIX unit tests, Playwright webview smoke, packaging verification, and the full repository CI target with zero failures.
-- [ ] Build and install the current VSIX artifact without killing VS Code. From the real extension UI, verify a cluster opens with membership and mass only, select two distinct occurrences, open Compare, verify compact pair evidence appears only there, edit a watched file, and verify the tree, bubble, cluster view, pair view, diagnostics, and mass refresh coherently.
+- [ ] Build and install the current VSIX artifact without killing VS Code. From the real extension UI, verify a cluster opens with membership and mass only, click Compare on a non-canonical occurrence, verify its exact range beside the canonical range ([VSIX-PAIR-COMPARE]), edit a watched file, and verify the tree, bubble, cluster view, diagnostics, and mass refresh coherently.
 - [ ] Re-run repository-wide searches for every removed cluster field, old command, old label, compatibility shim, multiplier, and weighted-metric surface. Only historical issue prose outside executable/spec contracts may remain.
 - [ ] Run [spec-check](../../.agents/skills/spec-check/SKILL.md) and [ci-prep](../../.agents/skills/ci-prep/SKILL.md). Submit through [submit-pr](../../.agents/skills/submit-pr/SKILL.md) only after all gates pass.
 
 ## Completion
 
 The plan is complete only when the source specs, generated schema, Rust model, pair admission, closure and suppression behavior, mass ranking, every renderer, every client, every assertion, and the installed VSIX UI all enforce the same boundary with no old path left in the repository.
+
+## The accessor-pair pins (gh #532)
+
+Two pins in `crates/deslop/tests/content_gate_signal_honesty.rs` — `a_cluster_whose_evidence_did_not_corroborate_is_not_told_it_agreed` and `a_gated_cluster_still_reports_the_evidence_that_corroborated_it` — assert that the gh #460 accessor pair of the `content-gate-unsaturated` fixture is reported. The fixture describes that pair as unrelated, and the aligned core of a rescued pair ([FUSED-SHARED-SUBTREE-CORE]) refuses it: the core pairs `return value` against `collect_identifiers(left, source, out)` and finds an inconsistent rename. Both pins are `#[ignore]`d under [SKIP-UNFINISHED] citing #532, their assertions untouched.
+
+What closes #532: rewrite the two pins to the corrected contract — the fixture publishes exactly one cluster, the byte-identical control at rank 1, and nothing spanning the two accessor files, while every published cluster still carries no pair-only surface — then remove both skips and their rows from `CURATED_SKIPS`. Until then the pair is held CLEARLY OUT in `corpus/register/deslop.json`, so the score gate fails the moment any change reports it again.

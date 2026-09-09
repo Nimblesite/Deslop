@@ -17,15 +17,20 @@
 use std::{
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
-    sync::{atomic::AtomicU64, atomic::Ordering, Arc, Mutex},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, Mutex,
+    },
 };
 
-use deslop_core::live::{transport::IpcStream, wire::ReportChangedNotification};
-
 use deslop_core::{
-    live::wire::{
-        ChangeSummary, EmbeddingModelInfo as WireEmbeddingModelInfo,
-        FindSimilarInput as WireFindSimilarInput, FindSimilarRequest, SessionConfig,
+    live::{
+        transport::IpcStream,
+        wire::{
+            ChangeSummary, EmbeddingModelInfo as WireEmbeddingModelInfo,
+            FindSimilarInput as WireFindSimilarInput, FindSimilarRequest, FindSimilarResult,
+            ReportChangedNotification, SessionConfig,
+        },
     },
     report::ReportCluster,
     wire_generated::{PairComparison, PairComparisonParams},
@@ -34,12 +39,33 @@ use deslop_core::{
 use serde_json::{json, Value};
 use tracing::debug;
 
+use super::{
+    ipc::ipc_call, wire, BackendError, FindSimilarInput, FindSimilarOutput, McpBackend,
+    RescanProgress, SessionBackendConfig, SessionConfigSnapshot,
+};
 use crate::{notify::push_report_changed, NotificationSender};
 
-use super::{
-    ipc::ipc_call, BackendError, FindSimilarInput, FindSimilarOutput, McpBackend, RescanProgress,
-    SessionBackendConfig, SessionConfigSnapshot,
-};
+/// IPC methods whose replies pass through the wire guard
+/// ([MCP-IPC-WIRE-MISMATCH]): the whole report.
+const REPORT_GET: &str = "report/get";
+/// The session configuration snapshot.
+const SESSION_CONFIG: &str = "session/config";
+/// The clusters touching one file.
+const REPORT_FOR_FILE: &str = "report/forFile";
+/// The clusters touching one byte range.
+const REPORT_FOR_RANGE: &str = "report/forRange";
+/// The clusters similar to a range or snippet.
+const FIND_SIMILAR: &str = "duplicates/findSimilar";
+/// One cluster by id.
+const CLUSTER_BY_ID: &str = "cluster/byId";
+/// The evidence for one explicit pair.
+const PAIR_COMPARE: &str = "pair/compare";
+/// The merge plan for one cluster.
+const MERGE_PLAN: &str = "merge/plan";
+/// The embedding models the provider offers.
+const EMBEDDING_LIST_MODELS: &str = "embedding/listModels";
+/// The provenance after switching embedding model.
+const EMBEDDING_SET_MODEL: &str = "embedding/setModel";
 
 /// `McpBackend` implementation that delegates every read to the LSP
 /// over the published IPC transport. No on-disk cache, no file
@@ -86,19 +112,18 @@ impl LiveBackend {
 
     /// Issues an IPC `report/get` and decodes the result into `Report`.
     fn fetch_report(&self) -> Result<Arc<Report>, BackendError> {
-        let result = ipc_call(&self.root, "report/get", &json!({}))?;
-        let report: Report = serde_json::from_value(result)
-            .map_err(|err| BackendError::StateFileCorrupt(format!("ipc report parse: {err}")))?;
-        Ok(Arc::new(report))
+        let result = ipc_call(&self.root, REPORT_GET, &json!({}))?;
+        Ok(Arc::new(wire::decode(
+            REPORT_GET,
+            &self.ipc_socket,
+            result,
+        )?))
     }
 
     /// Issues `session/config` and decodes the response.
     fn fetch_session_config(&self) -> Result<SessionConfig, BackendError> {
-        let result = ipc_call(&self.root, "session/config", &json!({}))?;
-        let config: SessionConfig = serde_json::from_value(result).map_err(|err| {
-            BackendError::StateFileCorrupt(format!("ipc session_config parse: {err}"))
-        })?;
-        Ok(config)
+        let result = ipc_call(&self.root, SESSION_CONFIG, &json!({}))?;
+        wire::decode(SESSION_CONFIG, &self.ipc_socket, result)
     }
 }
 
@@ -195,9 +220,9 @@ impl McpBackend for LiveBackend {
 
     fn report_for_file(&self, path: &Path) -> Result<Vec<ReportCluster>, BackendError> {
         let resolved = crate::safety::resolve_within_root(&self.root, path)?;
-        let result = ipc_call(&self.root, "report/forFile", &json!({ "path": resolved }))?;
-        let file_report: deslop_core::live::wire::FileReport = serde_json::from_value(result)
-            .map_err(|err| BackendError::StateFileCorrupt(format!("ipc forFile parse: {err}")))?;
+        let result = ipc_call(&self.root, REPORT_FOR_FILE, &json!({ "path": resolved }))?;
+        let file_report: deslop_core::live::wire::FileReport =
+            wire::decode(REPORT_FOR_FILE, &self.ipc_socket, result)?;
         Ok(file_report.clusters)
     }
 
@@ -210,16 +235,14 @@ impl McpBackend for LiveBackend {
         let resolved = crate::safety::resolve_within_root(&self.root, path)?;
         let result = ipc_call(
             &self.root,
-            "report/forRange",
+            REPORT_FOR_RANGE,
             &json!({
                 "path": resolved,
                 "start_byte": start_byte,
                 "end_byte": end_byte,
             }),
         )?;
-        let clusters: Vec<ReportCluster> = serde_json::from_value(result)
-            .map_err(|err| BackendError::StateFileCorrupt(format!("ipc forRange parse: {err}")))?;
-        Ok(clusters)
+        wire::decode(REPORT_FOR_RANGE, &self.ipc_socket, result)
     }
 
     fn find_similar(
@@ -251,51 +274,35 @@ impl McpBackend for LiveBackend {
         };
         let params = serde_json::to_value(&request)
             .map_err(|err| BackendError::StateFileCorrupt(format!("ipc serialise: {err}")))?;
-        let result = ipc_call(&self.root, "duplicates/findSimilar", &params)?;
-        let clusters: Vec<ReportCluster> = serde_json::from_value(
-            result.get("clusters").cloned().unwrap_or(json!([])),
-        )
-        .map_err(|err| BackendError::StateFileCorrupt(format!("ipc clusters parse: {err}")))?;
-        let below_min_nodes = result
-            .get("below_min_nodes")
-            .and_then(serde_json::Value::as_bool)
-            .unwrap_or(false);
+        let result = ipc_call(&self.root, FIND_SIMILAR, &params)?;
+        // [MCP-IPC-WIRE-MISMATCH] Decode the complete generated reply before reading any field.
+        let reply: FindSimilarResult = wire::decode(FIND_SIMILAR, &self.ipc_socket, result)?;
         Ok(FindSimilarOutput {
-            clusters,
-            below_min_nodes,
+            clusters: reply.clusters,
+            below_min_nodes: reply.below_min_nodes,
         })
     }
 
     fn cluster_by_id(&self, id: &str) -> Result<ReportCluster, BackendError> {
-        let result = cluster_scoped_ipc(&self.root, "cluster/byId", id)?;
-        let cluster: ReportCluster = serde_json::from_value(result)
-            .map_err(|err| BackendError::StateFileCorrupt(format!("ipc cluster parse: {err}")))?;
-        Ok(cluster)
+        let result = cluster_scoped_ipc(&self.root, CLUSTER_BY_ID, id)?;
+        wire::decode(CLUSTER_BY_ID, &self.ipc_socket, result)
     }
 
     fn compare_pair(&self, params: &PairComparisonParams) -> Result<PairComparison, BackendError> {
         let params = serde_json::to_value(params)
             .map_err(|error| BackendError::StateFileCorrupt(format!("ipc serialise: {error}")))?;
-        let result = ipc_call(&self.root, "pair/compare", &params)?;
-        serde_json::from_value(result).map_err(|error| {
-            BackendError::StateFileCorrupt(format!("ipc pair comparison parse: {error}"))
-        })
+        let result = ipc_call(&self.root, PAIR_COMPARE, &params)?;
+        wire::decode(PAIR_COMPARE, &self.ipc_socket, result)
     }
 
     fn merge_plan(&self, id: &str) -> Result<deslop_core::wire_generated::MergePlan, BackendError> {
-        let result = cluster_scoped_ipc(&self.root, "merge/plan", id)?;
-        let plan: deslop_core::wire_generated::MergePlan =
-            serde_json::from_value(result).map_err(|err| {
-                BackendError::StateFileCorrupt(format!("ipc merge-plan parse: {err}"))
-            })?;
-        Ok(plan)
+        let result = cluster_scoped_ipc(&self.root, MERGE_PLAN, id)?;
+        wire::decode(MERGE_PLAN, &self.ipc_socket, result)
     }
 
     fn list_embedding_models(&self) -> Result<Vec<WireEmbeddingModelInfo>, BackendError> {
-        let result = ipc_call(&self.root, "embedding/listModels", &json!({}))?;
-        let models = serde_json::from_value::<Vec<WireEmbeddingModelInfo>>(result)
-            .map_err(|err| BackendError::StateFileCorrupt(format!("ipc models parse: {err}")))?;
-        Ok(models)
+        let result = ipc_call(&self.root, EMBEDDING_LIST_MODELS, &json!({}))?;
+        wire::decode(EMBEDDING_LIST_MODELS, &self.ipc_socket, result)
     }
 
     fn set_embedding_model(
@@ -309,7 +316,8 @@ impl McpBackend for LiveBackend {
             "model_id": model_id,
             "endpoint": endpoint,
         });
-        spec_from_set_model_reply(ipc_call(&self.root, "embedding/setModel", &params)?)
+        let result = ipc_call(&self.root, EMBEDDING_SET_MODEL, &params)?;
+        spec_from_set_model_reply(&self.ipc_socket, result)
     }
 
     fn session_config(&self) -> Result<SessionConfigSnapshot, BackendError> {
@@ -379,10 +387,13 @@ impl McpBackend for LiveBackend {
 /// swapping providers. The MCP schema cannot request that, so receiving
 /// it means the two binaries disagree about the wire contract — the
 /// same class of drift `StateFileCorrupt` reports elsewhere.
-fn spec_from_set_model_reply(result: Value) -> Result<EmbeddingSpec, BackendError> {
-    let provenance = serde_json::from_value::<Option<EmbeddingProvenance>>(result)
-        .map_err(|err| BackendError::StateFileCorrupt(format!("ipc set-model parse: {err}")))?
-        .ok_or_else(|| {
+fn spec_from_set_model_reply(
+    endpoint: &Path,
+    result: Value,
+) -> Result<EmbeddingSpec, BackendError> {
+    let provenance =
+        wire::decode::<Option<EmbeddingProvenance>>(EMBEDDING_SET_MODEL, endpoint, result)?
+            .ok_or_else(|| {
             BackendError::StateFileCorrupt(
                 "ipc set-model returned no provenance: the LSP switched embeddings off instead of swapping providers".to_owned(),
             )

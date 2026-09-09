@@ -12,21 +12,26 @@
 use std::{
     collections::{BTreeMap, HashMap},
     hash::BuildHasher,
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 
 use crate::{
     ast::{ByteRange, NormalizedNode},
+    buckets::ClusterKind,
     fingerprint::Fingerprint,
     pair::{FusedCluster, SHARED_SUBTREE_MIN_NODE_COUNT},
     state::FileId,
 };
 
+/// Public cluster ids ([PIPELINE-DETERMINISM]).
+mod identity;
 /// The authored declaration an occurrence sits inside
 /// ([PIPELINE-CLUSTER-EXACT-SCOPE]).
 pub(crate) mod scope;
 /// Cross-cluster subsumption ([PIPELINE-CLUSTER-SUBSUME]).
 mod subsume;
+pub use identity::encode_short_id;
+use identity::{name_clusters, Unnamed};
 use scope::DeclarationScopes;
 use subsume::collapse_cross_cluster_overlap;
 
@@ -34,18 +39,37 @@ use subsume::collapse_cross_cluster_overlap;
 /// (structural) clone cluster.
 #[derive(Debug, Clone)]
 pub struct Cluster {
-    /// Hex-encoded first 8 bytes of the cluster hash — stable identifier for
-    /// reports. Collisions would be astronomical and would still be the same
-    /// cluster.
+    /// Names this finding and no other ([PIPELINE-DETERMINISM]): the
+    /// first 8 bytes, hex-encoded, of the digest [`identity`] derives
+    /// from the members' shape, their paths, and the cluster's position
+    /// rank among the clusters sharing both.
     pub id: String,
     /// Members of the cluster, in discovery order.
     pub members: Vec<Fingerprint>,
     /// Duplicated mass from [RANK-MASS-SUM]. Higher = more code to fix.
     pub mass: u64,
+    /// The clone kind: the weakest pair classification between the
+    /// canonical member and any other ([CLONE-KIND-FOLD]).
+    pub kind: ClusterKind,
     /// The shape family this cluster was admitted out of, for the
     /// report's family-level noise verdict
     /// ([CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY]).
     pub shape_family: Option<usize>,
+}
+
+/// Names the clone kind of one reportable cluster from its members'
+/// flat-corpus indices, canonical member first ([CLONE-KIND-FOLD]). The
+/// session implements it over the same pair measurement `pair/compare`
+/// answers with; the build stays ignorant of how a kind is measured.
+pub trait ClusterKindJudge: Sync {
+    /// The weakest relation between `members[0]` and every other member.
+    fn kind(&self, members: &[usize]) -> ClusterKind;
+}
+
+impl std::fmt::Debug for dyn ClusterKindJudge + '_ {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("ClusterKindJudge")
+    }
 }
 
 /// Minimum number of logical locations required for a reportable
@@ -58,10 +82,11 @@ const MIN_REPORTABLE_MEMBERS: usize = 2;
 /// [`Cluster`] so the ranking and rendering stages do not have to know
 /// how the cluster was discovered.
 ///
-/// Cluster ids hash the smallest member's digest together with every
-/// member's workspace-relative path ([PIPELINE-DETERMINISM]),
-/// so identical fused clusters across runs always report the same id
-/// while same-shape findings in different workspaces remain distinct.
+/// Cluster ids are derived in [`identity`] from the smallest member's
+/// digest, every member's workspace-relative path, and the cluster's
+/// position rank among the clusters sharing both
+/// ([PIPELINE-DETERMINISM]), so identical fused clusters across runs
+/// always report the same id while no two findings in one run share one.
 /// Inputs accepted by [`build_ranked_fused_clusters`]. Grouped for the
 /// same reason [`crate::report::ReportInputs`] exists: the list
 /// outgrew the 7-argument function budget, and every field here is
@@ -80,6 +105,8 @@ pub struct ClusterBuildInputs<'a, L: BuildHasher> {
     /// `FileId → workspace-relative path` — the second input of the
     /// cluster id digest ([PIPELINE-DETERMINISM]).
     pub file_paths: &'a HashMap<FileId, PathBuf>,
+    /// Names each reportable cluster's clone kind ([CLONE-KIND-FOLD]).
+    pub kinds: &'a dyn ClusterKindJudge,
 }
 
 /// Builds ranked clusters from a fused-cluster list produced by
@@ -110,16 +137,20 @@ pub fn build_ranked_fused_clusters<L: BuildHasher + Sync>(
     collapsed
 }
 
-/// Materialises every fused cluster that remains reportable.
+/// Materialises every fused cluster that remains reportable, then names
+/// them together: an id ranks a cluster among the others sharing its
+/// shape and paths, which only the whole set can say
+/// ([PIPELINE-DETERMINISM]).
 fn reportable_clusters<L: BuildHasher + Sync>(
     inputs: &ClusterBuildInputs<'_, L>,
     scopes: &DeclarationScopes<'_, impl BuildHasher + Sync>,
 ) -> Vec<Cluster> {
-    inputs
+    let drafts: Vec<Unnamed> = inputs
         .fused_clusters
         .iter()
         .filter_map(|fused| build_fused_cluster(inputs, fused, scopes))
-        .collect()
+        .collect();
+    name_clusters(drafts, inputs.file_paths)
 }
 
 /// Emits the structured GH#45 ranked-cluster distribution summary.
@@ -142,7 +173,7 @@ fn build_fused_cluster<L: BuildHasher + Sync>(
     inputs: &ClusterBuildInputs<'_, L>,
     fused: &FusedCluster,
     scopes: &DeclarationScopes<'_, impl BuildHasher>,
-) -> Option<Cluster> {
+) -> Option<Unnamed> {
     let fingerprints = inputs.fingerprints;
     let occurrence_indices = collapse_overlapping_per_file(fused, fingerprints, scopes);
     if occurrence_indices.len() < MIN_REPORTABLE_MEMBERS {
@@ -152,26 +183,23 @@ fn build_fused_cluster<L: BuildHasher + Sync>(
         .iter()
         .filter_map(|index| fingerprints.get(*index).cloned())
         .collect();
-    Some(materialize_cluster(
-        members,
-        inputs.file_paths,
-        fused.shape_family,
-    ))
+    let kind = inputs.kinds.kind(&occurrence_indices);
+    Some(materialize_cluster(members, kind, fused.shape_family))
 }
 
-/// Builds the final reportable cluster from already-filtered members.
+/// Builds the reportable cluster from already-filtered members, still
+/// unnamed: its id waits on the whole set ([`reportable_clusters`]).
 fn materialize_cluster(
     members: Vec<Fingerprint>,
-    file_paths: &HashMap<FileId, PathBuf>,
+    kind: ClusterKind,
     shape_family: Option<usize>,
-) -> Cluster {
+) -> Unnamed {
     let size = members.len();
     let smallest_nodes = smallest_node_count(&members);
     let mass = duplicate_mass(smallest_nodes, size);
-    let id_source = cluster_id_source(&members, file_paths);
-    Cluster {
-        id: encode_short_id(id_source),
+    Unnamed {
         members,
+        kind,
         mass,
         shape_family,
     }
@@ -184,43 +212,6 @@ fn smallest_node_count(members: &[Fingerprint]) -> usize {
         .map(|member| member.node_count)
         .min()
         .unwrap_or(0)
-}
-
-/// Selects the deterministic hash source for the public cluster id
-/// ([PIPELINE-DETERMINISM]).
-///
-/// The smallest member's digest alone names every cluster that shares a
-/// normalised subtree: the #107 fixture stamps three unrelated
-/// same-shape findings — one per file — with one id, so `cluster-by-id`
-/// resolves to whichever is found first and the ranking tie-break stops
-/// being a total order. Hashing that digest together with every
-/// member's workspace-relative path keeps the id content-derived —
-/// identical clusters across runs still agree, because both inputs are
-/// functions of workspace state, never of registration history — while
-/// distinguishing findings that merely share a shape. `file_paths` must
-/// cover every member's file; an uncovered file degrades that member's
-/// contribution to empty and reintroduces the shape-only collision the
-/// id exists to prevent.
-fn cluster_id_source(members: &[Fingerprint], file_paths: &HashMap<FileId, PathBuf>) -> [u8; 32] {
-    let Some(smallest) = members.iter().min_by_key(|member| member.hash) else {
-        return [0_u8; 32];
-    };
-    let mut paths: Vec<&Path> = members
-        .iter()
-        .map(|member| {
-            file_paths
-                .get(&member.file_id)
-                .map_or(Path::new(""), |path| path.as_path())
-        })
-        .collect();
-    paths.sort_unstable();
-    let mut hasher = blake3::Hasher::new();
-    let _ = hasher.update(&smallest.hash);
-    for path in paths {
-        let _ = hasher.update(path.as_os_str().as_encoded_bytes());
-        let _ = hasher.update(&[0]);
-    }
-    *hasher.finalize().as_bytes()
 }
 
 /// Collapses overlapping sibling-window occurrences that live in the
@@ -511,41 +502,6 @@ pub(crate) fn duplicate_mass(canonical_node_count: usize, visible_occurrences: u
     let nodes = u64::try_from(canonical_node_count).unwrap_or(u64::MAX);
     let copies = u64::try_from(visible_occurrences.saturating_sub(1)).unwrap_or(u64::MAX);
     nodes.saturating_mul(copies)
-}
-
-/// Shortens a full 32-byte hash to an 8-byte hex stable id for reporting.
-#[must_use]
-pub fn encode_short_id(hash: [u8; 32]) -> String {
-    let mut out = String::with_capacity(16);
-    for byte in hash.iter().take(8) {
-        let high = (*byte >> 4) & 0x0F;
-        let low = *byte & 0x0F;
-        out.push(hex_nibble(high));
-        out.push(hex_nibble(low));
-    }
-    out
-}
-
-/// Maps a 0..=15 nibble to its lowercase hex character.
-const fn hex_nibble(nibble: u8) -> char {
-    match nibble {
-        0 => '0',
-        1 => '1',
-        2 => '2',
-        3 => '3',
-        4 => '4',
-        5 => '5',
-        6 => '6',
-        7 => '7',
-        8 => '8',
-        9 => '9',
-        10 => 'a',
-        11 => 'b',
-        12 => 'c',
-        13 => 'd',
-        14 => 'e',
-        _ => 'f',
-    }
 }
 
 /// Node floor at which an enclosed family has the standing of copied

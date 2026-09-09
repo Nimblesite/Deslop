@@ -31,7 +31,7 @@ import {
 import {
   buildClusterMode,
   buildFileMode,
-  buildSeverityMode,
+  buildKindMode,
   getFileNodeChildren,
   getGroupNodeChildren,
   GroupBy,
@@ -56,7 +56,6 @@ export {
   MetricsHeadlineNode,
   OccurrenceNode,
   SessionFieldNode,
-  SeverityGroupNode,
   StatusNode,
 } from "./nodes";
 
@@ -232,14 +231,16 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
   getChildren(node?: Node): Node[] {
     if (node instanceof FolderNode) return node.children;
     if (node instanceof FileNode) return getFileNodeChildren(node);
-    // One machinery for both group axes: file-mode severity sections and
-    // severity-mode roots.
+    // One machinery for both group axes: file-mode kind sections and
+    // kind-mode roots.
     if (node instanceof GroupNode) return getGroupNodeChildren(node);
     if (node instanceof ClusterNode) {
-      // [VSIX-TOP-OFFENDERS-SORT] Order occurrences by the active axis while
-      // keeping each one's original index so the canonical badge stays put.
+      // [VSIX-PAIR-COMPARE] Dirty projection and path sorting never promote
+      // a surviving peer into the original canonical occurrence.
+      const [canonical] = this.store.current.report?.clusters
+        .find((cluster) => cluster.id === node.cluster.id)?.occurrences ?? [];
       return orderedOccurrences(node.cluster, readSortBy()).map(({ occurrence, index }) =>
-        new OccurrenceNode(occurrence, node.cluster, node.rank, index),
+        new OccurrenceNode(occurrence, node.cluster, node.rank, index, canonical ?? null),
       );
     }
     if (node) return [];
@@ -285,7 +286,7 @@ function buildRoots(clusters: ReportCluster[]): Node[] {
   const build = (subset: ReportCluster[]): Node[] => {
     if (groupBy === "file") return buildFileMode(subset, sortBy);
     if (groupBy === "folder") return buildFolderMode(subset, sortBy);
-    if (groupBy === "severity") return buildSeverityMode(subset, sortBy);
+    if (groupBy === "kind") return buildKindMode(subset, sortBy);
     return buildClusterMode(subset, sortBy);
   };
   return [...filterStatusRow(filter), ...build(visible)];

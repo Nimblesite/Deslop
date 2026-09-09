@@ -226,13 +226,13 @@ const UNTAGGED_TEXT: &str = "deslop test -- 6 file(s), 3 cluster(s), 0 hidden
 repo: 20.0% duplicated (40 / 200 LOC, 3 clusters across 4 files)
 threshold: 10.00% (breached)
 embeddings: off
-#1 [aaaa1111] mass=12 occurrences=2 canonical_nodes=12
+#1 [aaaa1111] mass=12 occurrences=2 canonical_nodes=12 kind=nearly_identical
   - src/caller.rs:8:17
   - src/helper.rs:30:39
-#1 [bbbb2222] mass=12 occurrences=2 canonical_nodes=12
+#1 [bbbb2222] mass=12 occurrences=2 canonical_nodes=12 kind=nearly_identical
   - src/fresh_a.rs:8:17
   - src/fresh_b.rs:30:39
-#1 [cccc3333] mass=12 occurrences=2 canonical_nodes=12
+#1 [cccc3333] mass=12 occurrences=2 canonical_nodes=12 kind=nearly_identical
   - src/legacy_a.rs:8:17
   - src/legacy_b.rs:30:39
 ";
@@ -242,13 +242,13 @@ repo: 20.0% duplicated (40 / 200 LOC, 3 clusters across 4 files)
 threshold: 10.00% (breached)
 diff: 63.2% of added lines duplicated (24 / 38 added LOC)
 embeddings: off
-#1 [aaaa1111] mass=12 occurrences=2 canonical_nodes=12
+#1 [aaaa1111] mass=12 occurrences=2 canonical_nodes=12 kind=nearly_identical
   - src/caller.rs:8:17 [in diff]
   - src/helper.rs:30:39 [existing]
-#1 [bbbb2222] mass=12 occurrences=2 canonical_nodes=12
+#1 [bbbb2222] mass=12 occurrences=2 canonical_nodes=12 kind=nearly_identical
   - src/fresh_a.rs:8:17 [in diff]
   - src/fresh_b.rs:30:39 [in diff]
-#1 [cccc3333] mass=12 occurrences=2 canonical_nodes=12
+#1 [cccc3333] mass=12 occurrences=2 canonical_nodes=12 kind=nearly_identical
   - src/legacy_a.rs:8:17 [existing]
   - src/legacy_b.rs:30:39 [existing]
 ";
@@ -260,10 +260,10 @@ diff: 63.2% of added lines duplicated (24 / 38 added LOC)
 diff threshold: 0.00% (breached)
 delta: 2 cluster(s) intersect the diff — 1 newly introduced, 1 cross-file with untouched code; 1 untouched cluster(s) omitted
 embeddings: off
-#1 [aaaa1111] mass=12 occurrences=2 canonical_nodes=12
+#1 [aaaa1111] mass=12 occurrences=2 canonical_nodes=12 kind=nearly_identical
   - src/caller.rs:8:17 [in diff]
   - src/helper.rs:30:39 [existing]
-#1 [bbbb2222] mass=12 occurrences=2 canonical_nodes=12
+#1 [bbbb2222] mass=12 occurrences=2 canonical_nodes=12 kind=nearly_identical
   - src/fresh_a.rs:8:17 [in diff]
   - src/fresh_b.rs:30:39 [in diff]
 ";
@@ -305,9 +305,9 @@ fn untagged_report_renders_the_exact_pre_diff_bytes() {
         &[
             (UNTAGGED_BANNER, 1, "banner ends at the repo verdict"),
             (
-                "class=\"cluster-card\"",
+                "class=\"cluster-card cluster-card--nearly-identical\"",
                 3,
-                "all three cards carry the plain class list",
+                "all three cards carry the kind class and nothing else ([CLONE-KIND-LABELS])",
             ),
             (
                 "<span class=\"diff-badge\">",
@@ -332,14 +332,14 @@ fn diff_tagged_html_marks_banner_cards_badges_and_facets() {
         &[
             (DIFF_BANNER, 1, "banner carries the added-lines figure"),
             (
-                "class=\"cluster-card in-diff\"",
+                "class=\"cluster-card cluster-card--nearly-identical in-diff\"",
                 2,
                 "the mixed and fresh cards are marked in-diff",
             ),
             (
-                "class=\"cluster-card\"",
+                "class=\"cluster-card cluster-card--nearly-identical\"",
                 1,
-                "the legacy card keeps the plain class list",
+                "the legacy card carries its kind class and no diff mark",
             ),
             (
                 "<span class=\"diff-badge\">[in diff]</span>",

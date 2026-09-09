@@ -139,6 +139,12 @@ After the **initial** full pipeline pass and after every **cold-pass install** (
 
 **Use:** the file is an **LSP-private startup cache**, not an IPC channel. On the next LSP startup, [LIVE-CACHE-SEED] (`AnalysisSession::try_seeded_from_cache`) loads it so the editor sees clusters within milliseconds while the cold full pass runs in the background.
 
+### [LIVE-CACHE-SEED] A session answers from the last run's report while the real pass runs
+
+A cold pass over a large workspace takes seconds, and an editor that shows nothing for those seconds looks broken. So a starting session seeds itself from `{root}/.deslop/cache/live-report.json` — the report the previous session left behind — and answers queries from it immediately, while the real pass runs in the background and replaces it.
+
+The seed is a **cache, never a result**. It is offered only at startup, it is never written back by the session that read it, and the first completed pass overwrites every cluster it supplied. A seed that cannot be read at all is not an error: the session simply starts empty and waits for its own pass. `AnalysisSession::try_seeded_from_cache` implements it; [LIVE-CACHE-SEED-KEY] states the compatibility a seed must satisfy before it may be served, and [LIVE-CLUSTER-OFFSET-FRESHNESS] states what a seeded cluster may claim about how current it is.
+
 ### [LIVE-CACHE-SEED-KEY] A seed must have been produced by this run's settings
 
 A cache seed is served to the editor **as an answer**, and an answer computed under different settings is a wrong answer, not a slightly old one. The seed was accepted on one condition — that the bytes deserialise as a `Report`. Nothing else was compared: not the tool version that produced it, not the `min_nodes` it was clustered at, not the configuration that scoped it, not the embedding provider that scored it. A report analysed at `--min-nodes 4` with embeddings on was therefore served verbatim to a session running at `--min-nodes 40` with embeddings off, and [LIVE-CLUSTER-OFFSET-FRESHNESS] then stamped current mtimes over those clusters, so the answer read as **fresh** rather than as a placeholder: byte offsets from a different analysis, pointing into files the editor has since changed, under a duplication figure the user is no longer asking for.

@@ -7,6 +7,7 @@ use deslop_core::{
     cluster::{build_ranked_fused_clusters, ClusterBuildInputs},
     fingerprint::Fingerprint,
     pair::FusedCluster,
+    report_fixtures::{UniformKind, FIXTURE_KIND},
     state::{FileId, FileRegistry},
 };
 
@@ -44,6 +45,7 @@ fn rank_mass_orders_by_extent_times_additional_occurrences() -> Result<(), &'sta
         trees: &[],
         file_languages: &HashMap::new(),
         file_paths: &HashMap::new(),
+        kinds: &UniformKind(FIXTURE_KIND),
     });
     assert_eq!(clusters.len(), 2);
     let larger = clusters.first().ok_or("larger cluster must rank first")?;

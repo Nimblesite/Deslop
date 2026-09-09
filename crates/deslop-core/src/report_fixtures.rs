@@ -13,9 +13,26 @@
 //! `test-support` feature they already carry in their dev-dependencies.
 
 use crate::{
+    buckets::ClusterKind,
+    cluster::ClusterKindJudge,
     report::{CacheStats, Report, ReportCluster, ReportOccurrence},
     report_metrics::RepoMetrics,
 };
+
+/// The clone kind every fixture cluster carries unless a suite pins
+/// another: the ordinary admitted near-copy ([CLONE-KIND-FOLD]).
+pub const FIXTURE_KIND: ClusterKind = ClusterKind::NearlyIdentical;
+
+/// A judge that names every cluster the same kind, for suites that drive
+/// the cluster build without a session to measure pairs in.
+#[derive(Debug, Clone, Copy)]
+pub struct UniformKind(pub ClusterKind);
+
+impl ClusterKindJudge for UniformKind {
+    fn kind(&self, _members: &[usize]) -> ClusterKind {
+        self.0
+    }
+}
 
 /// One visible occurrence over `[start, end)` of `path`, with no line
 /// information — suites that assert on lines set them explicitly.
@@ -32,7 +49,7 @@ pub fn fixture_occurrence(path: &str, start: usize, end: usize) -> ReportOccurre
     }
 }
 
-/// A complete mass-only rendered cluster over `occurrences`.
+/// A complete rendered cluster over `occurrences`, of [`FIXTURE_KIND`].
 #[must_use]
 pub fn fixture_cluster(id: &str, occurrences: Vec<ReportOccurrence>) -> ReportCluster {
     let occurrence_count = occurrences
@@ -44,6 +61,7 @@ pub fn fixture_cluster(id: &str, occurrences: Vec<ReportOccurrence>) -> ReportCl
         id: id.to_owned(),
         rank: 1,
         rank_band: "worst".to_owned(),
+        kind: FIXTURE_KIND,
         mass: fixture_mass(canonical_node_count, occurrence_count),
         canonical_node_count,
         occurrences_total: occurrences.len(),

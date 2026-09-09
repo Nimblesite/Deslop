@@ -10,15 +10,17 @@
 //! quality, so they live here rather than beside the judgements in
 //! [`super`].
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::hash::BuildHasher;
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
+    hash::BuildHasher,
+};
 
 use crate::{
     ast::{ByteRange, NormalizedNode},
     fingerprint::Fingerprint,
     lang::shared::{is_operator_kind, LITERAL_KIND},
     state::FileId,
-    tokens::collapsed_leaves,
+    tokens::{collapsed_leaves, CollapsedLeaf},
 };
 
 /// Which evidence population a collapsed frontier leaf belongs to.
@@ -106,6 +108,8 @@ pub(super) struct MemberContent {
     pub(super) keys: Vec<LeafKey>,
     /// The source byte range each key was hashed from, 1:1 with `keys`.
     pub(super) ranges: Vec<ByteRange>,
+    /// External method selectors, with the receiver-property positions that qualify their identities.
+    pub(super) external_calls: Vec<Option<super::call_targets::CallTarget>>,
 }
 
 /// The key slice of a resolved member, `None` when unresolvable.
@@ -211,8 +215,22 @@ fn operators_disagree(left: &[LeafKey], right: &[LeafKey]) -> bool {
 /// `credit[2..10]`/`debit[2..11]`, whose extra trailing `-` hid the
 /// `+`/`-` substitution from the equal-cardinality rule.
 fn operators_substitute(left: &[LeafKey], right: &[LeafKey]) -> bool {
-    let left = operator_counts(left);
-    let right = operator_counts(right);
+    let operators = |keys: &[LeafKey]| {
+        keys.iter()
+            .filter(|key| key.population == Population::Operator)
+            .map(|key| key.key)
+            .collect::<Vec<_>>()
+    };
+    identities_substitute(operators(left).into_iter(), operators(right).into_iter())
+}
+
+/// Two-sided identity replacement; order and one-sided additions/removals remain eligible.
+pub(super) fn identities_substitute(
+    left: impl Iterator<Item = u64>,
+    right: impl Iterator<Item = u64>,
+) -> bool {
+    let left = identity_counts(left);
+    let right = identity_counts(right);
     let one_sided = |ours: &BTreeMap<u64, usize>, theirs: &BTreeMap<u64, usize>| {
         ours.iter()
             .any(|(key, count)| theirs.get(key).map_or(true, |have| have < count))
@@ -220,14 +238,12 @@ fn operators_substitute(left: &[LeafKey], right: &[LeafKey]) -> bool {
     one_sided(&left, &right) && one_sided(&right, &left)
 }
 
-/// Raw operator identities carried by one content frontier, counted.
-fn operator_counts(keys: &[LeafKey]) -> BTreeMap<u64, usize> {
-    let mut counts = BTreeMap::new();
+/// Raw fixed-symbol identities in one content frontier, counted once per authored occurrence.
+fn identity_counts(keys: impl Iterator<Item = u64>) -> BTreeMap<u64, usize> {
+    let mut counts: BTreeMap<u64, usize> = BTreeMap::new();
     for key in keys {
-        if key.population == Population::Operator {
-            let slot = counts.entry(key.key).or_insert(0_usize);
-            *slot = slot.saturating_add(1);
-        }
+        let slot = counts.entry(key).or_default();
+        *slot = slot.saturating_add(1);
     }
     counts
 }
@@ -281,23 +297,29 @@ pub(super) fn member_content<S: BuildHasher, L: BuildHasher>(
     let leaves = collapsed_leaves(root, member, language)?;
     let keys = leaves
         .iter()
-        .map(|leaf| {
-            source
-                .get(leaf.range.start..leaf.range.end)
-                .map(|bytes| LeafKey {
-                    population: Population::of(leaf.kind),
-                    key: truncated_hash(bytes),
-                    literal_group: leaf.literal_group,
-                })
-        })
+        .map(|leaf| leaf_key(leaf, source))
         .collect::<Option<Vec<LeafKey>>>()?;
-    let ranges = leaves.iter().map(|leaf| leaf.range).collect();
+    let ranges: Vec<ByteRange> = leaves.iter().map(|leaf| leaf.range).collect();
+    let external_calls =
+        super::call_targets::external_targets(root, member.byte_range, source, &ranges);
     Some(MemberContent {
         file: member.file_id,
         shape: member.hash,
         keys,
         ranges,
+        external_calls,
     })
+}
+
+/// Resolves one collapsed leaf to its canonical content key.
+fn leaf_key(leaf: &CollapsedLeaf, source: &[u8]) -> Option<LeafKey> {
+    source
+        .get(leaf.range.start..leaf.range.end)
+        .map(|bytes| LeafKey {
+            population: Population::of(leaf.kind),
+            key: truncated_hash(bytes),
+            literal_group: leaf.literal_group,
+        })
 }
 
 /// First eight little-endian bytes of the blake3 hash of `bytes`.

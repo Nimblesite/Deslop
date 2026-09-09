@@ -41,6 +41,9 @@ mod alignment;
 /// Deterministic exact-alignment benchmark workloads.
 #[cfg(feature = "benchmark")]
 pub mod benchmark;
+/// The aligned core two endpoints share ([FUSED-SHARED-SUBTREE-CORE]).
+mod core;
+pub(crate) use core::judge_core;
 /// Large-tree greedy coverage fallback ([FUSED-SHARED-SUBTREE]).
 mod credit;
 /// Rescue application over the candidate set ([FUSED-SHARED-SUBTREE]).
@@ -155,6 +158,9 @@ pub struct OverlapMeasurer<'corpus> {
     /// Per-endpoint resolved state. `None` records an unresolvable
     /// range so it is not re-walked per pair.
     endpoints: HashMap<EndpointKey, Option<Arc<EndpointView>>>,
+    /// Per-endpoint subtrees for the core pairing
+    /// ([FUSED-SHARED-SUBTREE-CORE]), retained like `endpoints`.
+    cores: HashMap<EndpointKey, Option<Arc<core::Resolved<'corpus>>>>,
     /// Exact measured overlap per structural pair.
     exact_results: HashMap<PairKey, f64>,
     /// Below-floor upper bounds per structural pair, usable only by the
@@ -209,6 +215,7 @@ impl<'corpus> OverlapMeasurer<'corpus> {
         Self {
             tree_index: trees.iter().map(|tree| (tree.file_id, tree)).collect(),
             endpoints: HashMap::new(),
+            cores: HashMap::new(),
             exact_results: HashMap::new(),
             bound_results: HashMap::new(),
             stats: MeasureStats::default(),

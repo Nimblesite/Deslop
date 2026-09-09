@@ -168,8 +168,8 @@
         "icon": "$(folder)"
       },
       {
-        "command": "deslop.topOffenders.showBySeverity",
-        "title": "Deslop: Group Top Offenders by Severity",
+        "command": "deslop.topOffenders.showByKind",
+        "title": "Deslop: Group Top Offenders by Clone Kind",
         "icon": "$(list-ordered)"
       },
       {
@@ -225,12 +225,24 @@
         "command": "deslop.openHtmlReport",
         "title": "Deslop: Open HTML Report",
         "icon": "$(globe)"
+      },
+      {
+        "command": "deslop.compareWithCanonical",
+        "title": "Compare With Canonical"
+      },
+      {
+        "command": "deslop.compareOccurrenceWithCanonical",
+        "title": "Compare With Canonical"
       }
     ],
     "menus": {
       "commandPalette": [
         {
           "command": "deslop.comparePair",
+          "when": "false"
+        },
+        {
+          "command": "deslop.compareOccurrenceWithCanonical",
           "when": "false"
         }
       ],
@@ -246,13 +258,13 @@
           "group": "navigation@1"
         },
         {
-          "command": "deslop.topOffenders.showBySeverity",
+          "command": "deslop.topOffenders.showByKind",
           "when": "view == deslop.topOffenders && deslop.topOffendersGroupBy == 'folder'",
           "group": "navigation@1"
         },
         {
           "command": "deslop.topOffenders.showByCluster",
-          "when": "view == deslop.topOffenders && deslop.topOffendersGroupBy == 'severity'",
+          "when": "view == deslop.topOffenders && deslop.topOffendersGroupBy == 'kind'",
           "group": "navigation@1"
         },
         {
@@ -361,6 +373,16 @@
           "command": "deslop.copySourceSnippet",
           "when": "viewItem =~ /deslop\\.occurrence/",
           "group": "1_copy@3"
+        },
+        {
+          "command": "deslop.compareOccurrenceWithCanonical",
+          "when": "viewItem == deslop.occurrence",
+          "group": "navigation@1"
+        },
+        {
+          "command": "deslop.compareWithCanonical",
+          "when": "viewItem == deslop.clusterComparable",
+          "group": "navigation@4"
         }
       ]
     },
@@ -389,6 +411,58 @@
         }
       ]
     },
+    "colors": [
+      {
+        "id": "deslop.kind.identical",
+        "description": "Identical code \u2014 every copy is byte-identical to the canonical occurrence (Type-1). [CLONE-KIND-COLOR]",
+        "defaults": {
+          "dark": "#b3261e",
+          "light": "#b3261e",
+          "highContrast": "#b3261e",
+          "highContrastLight": "#b3261e"
+        }
+      },
+      {
+        "id": "deslop.kind.nearlyIdentical",
+        "description": "Nearly identical code \u2014 admitted near-copies of the canonical occurrence (Type-2/3). [CLONE-KIND-COLOR]",
+        "defaults": {
+          "dark": "#e8912d",
+          "light": "#e8912d",
+          "highContrast": "#e8912d",
+          "highContrastLight": "#e8912d"
+        }
+      },
+      {
+        "id": "deslop.kind.sameBehavior",
+        "description": "Same behavior, different code \u2014 matched on embedding evidence (Type-4). [CLONE-KIND-COLOR]",
+        "defaults": {
+          "dark": "#a98cff",
+          "light": "#a98cff",
+          "highContrast": "#a98cff",
+          "highContrastLight": "#a98cff"
+        }
+      },
+      {
+        "id": "deslop.kind.structuralOnly",
+        "description": "Same shape, different content \u2014 normalised shape agrees, content does not. [CLONE-KIND-COLOR]",
+        "defaults": {
+          "dark": "#a9a2a0",
+          "light": "#a9a2a0",
+          "highContrast": "#a9a2a0",
+          "highContrastLight": "#a9a2a0"
+        }
+      },
+      {
+        "id": "deslop.kind.looselySimilar",
+        "description": "Loosely similar code \u2014 a looser relation, or copies welded only through other members. [CLONE-KIND-COLOR]",
+        "defaults": {
+          "dark": "#00619e",
+          "light": "#00619e",
+          "highContrast": "#00619e",
+          "highContrastLight": "#00619e"
+        }
+      }
+    ],
     "configuration": {
       "title": "Deslop",
       "properties": {
@@ -459,11 +533,11 @@
             "cluster",
             "file",
             "folder",
-            "severity"
+            "kind"
           ],
           "default": "cluster",
           "scope": "window",
-          "description": "Top Offenders grouping. 'cluster' shows worst clusters as roots; 'file' groups by file then by severity band; 'folder' is a folder tree; 'severity' groups flat by mass severity band. Workspace settings override the user-level default. See [VSIX-TOP-OFFENDERS-GROUPING] in docs/specs/vsix.md."
+          "description": "Top Offenders grouping. 'cluster' shows worst clusters as roots; 'file' groups by file then by clone kind; 'folder' is a folder tree; 'kind' groups flat by clone kind (identical, nearly identical, same behavior, same shape, loosely similar). Workspace settings override the user-level default. See [VSIX-TOP-OFFENDERS-GROUPING] in docs/specs/vsix.md."
         },
         "deslop.topOffenders.filterSeverities": {
           "type": "array",

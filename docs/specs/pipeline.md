@@ -43,6 +43,9 @@ Configuration:
 ### [PIPELINE-FINGERPRINT-MERKLE] Structural fingerprint (Merkle)
 Bottom-up Merkle hash over `NormalizedNode`. Each node's hash combines its own `kind` string with the ordered hashes of its children using `blake3`. Each node stores `(hash, subtree_node_count, byte_range, file_id)`. Nodes whose subtree size is below `--min-nodes` are excluded from clustering per [DECISION-MIN-NODES].
 
+#### [PIPELINE-FINGERPRINT-MERKLE-TYPE-REFERENCE] Type references belong to their enclosing code
+Rust type annotations alone are not copied implementations. Generic types, type arguments, references, pointers, arrays, tuples, function types and scoped type identifiers retain their complete hashes and node counts in the enclosing declaration or expression, but do not produce standalone fingerprint candidates. This keeps `Vec<&str>` from becoming a duplicate across otherwise unrelated functions while preserving the evidence of a copied function that uses it. Implemented by `fingerprint.rs::is_type_reference`; pinned by `crates/deslop/tests/rust_issue_147_iter_collect_idiom.rs`, including its positive control asserting a real clone's files, occurrences, extent, kind, rank and canonical node count.
+
 #### [PIPELINE-FINGERPRINT-MERKLE-ROOT] When the file root is a view
 
 The synthetic `__file__` root is hashed like any node, because its children's hashes fold into it, and by default it is also a candidate view: a module copied whole — import line and all — is one duplication at the extent of the file, and the same-file collapse of [PIPELINE-CLUSTER-EXACT-SCOPE] publishes it there rather than as the declaration below the import. Two cases deny the root a view of its own; its children are fingerprinted either way.
@@ -52,9 +55,7 @@ The synthetic `__file__` root is hashed like any node, because its children's ha
 
 Implemented in `fingerprint.rs` (`is_viewless_root`). Pinned by `python_inherited_contract_boundary`, `js_ts_extensions`, `verbatim_subgroup_survives_noise` and `js_ts_false_positive_filters` (the whole-module view), `issue_343_sum_clamp_saturation` (the only-child rule), the Go scope contract every Go suite calls (`crates/deslop/tests/common/go_scope.rs`) with `cluster_extent_alignment` (the mandated prologue), and the per-language unit tests in `fingerprint/tests.rs`.
 
-### [PIPELINE-SIGNATURE-MEMO] MinHash construction is memoised by token-stream digest
-
-`MinHash` over the k-grams is a pure function of the token stream alone, so the memo — keyed by a length-prefixed blake3 digest of the stream — is exact by construction: a repeated stream gets the byte-identical signature of its first construction, and one corpus build pays for each distinct stream once. The memo spans a whole batch corpus build (cross-file, where the repetition lives) and one file on an incremental change pass. Fallback signatures never enter it: they are deliberately scoped to the fingerprint's byte range (#86) so unrelated empty streams cannot cluster through shared emptiness. Hit/miss counts are surfaced on the `fingerprint corpus built` record ([PIPELINE-OBSERVABILITY-STAGES]); the miss count is the distinct-stream population; retention is capped at `SIGNATURE_MEMO_MAX_ENTRIES`, so the memo's residency stays a bounded share of the memory budget on any corpus, post-cap streams being constructed fresh with identical output. Pinned by `a_repeated_token_stream_costs_one_minhash_construction` and `too_short_streams_never_touch_the_memo`.
+Token signatures use the bottom-up fold [PIPELINE-SIGNATURE-FOLD] and fingerprint-scoped fallback [PIPELINE-SIGNATURE-FALLBACK], specified in [signatures.md](signatures.md).
 
 ### [PIPELINE-CLUSTER-EXACT] Exact subtree clustering
 Group `NormalizedNode` fingerprints by `hash` to propose exact candidate pairs. This covers Type-1 and normalized Type-2 deterministically in O(n). A hash bucket is not a cluster: each concrete pair must still pass [FUSED-STRATEGY-BOUNDED-MAX]. Candidate pairs are language-scoped by default per [CONFIG-CROSS-LANGUAGE]; the exact same hash may still be compared across languages when `.deslop.toml` opts into cross-language comparison.
@@ -163,6 +164,8 @@ Pinned by `each_file_set_is_judged_on_its_own` and `disjoint_file_sets_are_never
 Two runs of the pipeline over an unchanged corpus produce bit-identical deterministic output: identical MinHash signatures (blake3 XOF, fixed k-gram ordering), identical pair evidence (`token_jaccard` compared bit-for-bit), identical admitted pairs, closure components, cluster ids, mass, and ranking. Determinism is what makes persisted processing ([PIPELINE-INCREMENTAL]) sound and cluster ids stable across sessions. The embedding/ANN layer is the only approximate stage and is bounded separately ([FUSED-EMBED-PROVIDER]); a missed ANN neighbour only loses recall, never changes an already admitted pair.
 
 Determinism holds over corpus *state*, not edit history: identical paths and bytes produce an identical report whatever sequence of edits got there. Every pipeline ordering is therefore keyed by workspace-relative path (with the registration id only as a tie-breaker), never by `FileId` alone — ids are append-only, so removing and restoring a byte-identical file would otherwise reorder the corpus, move the LSH star centre, and change rendered ranges and metrics for identical source. Rendered occurrence order follows the same path-ordered corpus. Pinned by the LSP `history_determinism` suite, which cycles a config exclusion over live files and asserts the restored report is field-for-field identical.
+
+A cluster id names exactly one finding. It is derived from the smallest member's digest and the members' workspace-relative paths, and — for every cluster after the first sharing both — from its position rank among them: two copies of one shape inside one file feed the digest the same shape and the same path, and rank is what still tells them apart. The first cluster of a source is named by the source alone, so a finding keeps its id when another copy of its shape appears after it, and an edit above a finding does not rename it. Implemented in `cluster/identity.rs`; pinned by `cluster_id_uniqueness::no_two_published_clusters_share_one_id` and `two_same_shape_copies_in_one_file_get_two_ids`.
 
 ### [PIPELINE-OBSERVABILITY-STAGES] Long stages emit bounded aggregate records, never per-item events
 
@@ -280,7 +283,7 @@ The sort ends by stamping the ranking onto the report: `rank` (one-based, worst 
 
 ### [RANK-MASS-SUM] Rank by duplicated mass only
 
-Duplicated mass is canonical nodes × additional visible occurrences. This formula is a Deslop product definition, not a result borrowed from the literature. Juergens et al. (ICSE 2009) establishes the fault risk of inconsistent clone changes, and Islam, Mondal, and Roy (SANER 2019) establishes that even micro-clones can be bug-prone; neither paper proposes this ranking equation. SonarQube's duplicated-line density is likewise a separate repository metric, not evidence for AST-node mass. Pair evidence already did its job at admission: an admitted edge either contributes to the closure or it does not. Once the cluster exists, only its extent and repeated membership determine mass. At equal mass, cluster id makes the order total and reproducible.
+Duplicated mass is canonical nodes × additional visible occurrences. This formula is a Deslop product definition, not a result borrowed from the literature. Juergens et al. (ICSE 2009) establishes the fault risk of inconsistent clone changes, and Islam, Mondal, and Roy (SANER 2019) establishes that even micro-clones can be bug-prone; neither paper proposes this ranking equation. SonarQube's duplicated-line density is likewise a separate repository metric, not evidence for AST-node mass. Pair evidence already did its job at admission: an admitted edge either contributes to the closure or it does not. Once the cluster exists, only its extent and repeated membership determine mass. At equal mass, cluster id makes the order total and reproducible. Mass is a whole number, and every surface prints it as one — the CLI text report writes `mass=527` and the extension writes `mass 527` — never `527.00`: a decimal point would claim a precision a count cannot have, and the extension and the CLI must print the identical string for the same cluster.
 
 **For AI.** `mass = canonical_node_count × max(visible_members − 1, 0)`. `weight` has no independent definition: where the legacy word appears in an external explanation it means this exact mass. Sort by mass descending, then cluster id ascending. No other term is legal.
 
@@ -290,14 +293,11 @@ A detection-time finding kind may drive an explicit exclusion before ranking. It
 
 ### [RANK-STRUCTURAL-ONLY] Pair evidence never changes mass
 
-`StructuralOnly` is a pair classification for a candidate whose normalized AST shape is strong but required content support is absent. It explains why that pair is rejected; it is not a cluster score and cannot be an edge in a closure. The retired `structural_only_weight`, `data_clone_weight`, and `demote` ranking modes are forbidden because they make weight mean something other than mass.
+`StructuralOnly` is a pair classification for a candidate whose normalized AST shape is strong but required content support is absent. It explains why that pair is rejected; it is not a cluster score and cannot be an edge in a closure. The retired `structural_only_weight`, `data_clone_weight`, and `demote` modes must never affect mass or ranking. Existing configuration keys and the LSP's `--ranking-structural-only` argument still parse for compatibility; `demote`, `ignore`, and `keep` cannot change the mass-only report. `crates/deslop/tests/rank_structural_only_policy.rs::retired_structural_only_knobs_do_not_change_the_ranking` asserts invariant membership, mass, and order; `crates/deslop-lsp/tests/app.rs::ranking_structural_only_flag_parses_applies_and_rejects` pins argument parsing and the recorded override. This compatibility parser does not reinstate a public editor ranking setting.
 
 ### [RANK-STRUCTURAL-ONLY-FORWARDING] Proving a declaration is family noise
 
-The single-file hide in [RANK-STRUCTURAL-ONLY] needs a proof that a member is
-scaffolding. Two window shapes qualify, and both are AST facts about what the
-fingerprint window *covers* — never a count of cluster members and never a count
-of statements:
+The single-file hide in [RANK-STRUCTURAL-ONLY] needs a proof that a member is scaffolding. Two window shapes qualify, and both are AST facts about what the fingerprint window *covers* — never a count of cluster members and never a count of statements:
 
 1. **Plural siblings.** The window intersects two or more named members of one
    declaration container (`class_body`, `declaration_list`, …). Container members
@@ -330,19 +330,9 @@ of statements:
    parameter, or a bare sibling reference in argument position is the class
    computing on its own inputs.
 
-Shape 2 is what the real #197 surface is. Its `resetX` wrappers are one statement
-each, so every window covers one declaration and shape 1 can never reach them.
-They also show why a **call count** cannot stand in for the transport test: every
-one of them makes two calls — `_getTask(http.deleteMethod(route))` wraps the
-client call in a sibling helper, and `IndexSettings.fromMap(response.data!)`
-decodes what came back. Both consume only the client's response, so both are
-transport, and requiring a single call per body would convict the family this
-filter exists for.
+Shape 2 is what the real #197 surface is. Its `resetX` wrappers are one statement each, so every window covers one declaration and shape 1 can never reach them. They also show why a **call count** cannot stand in for the transport test: every one of them makes two calls — `_getTask(http.deleteMethod(route))` wraps the client call in a sibling helper, and `IndexSettings.fromMap(response.data!)` decodes what came back. Both consume only the client's response, so both are transport, and requiring a single call per body would convict the family this filter exists for.
 
-Branches, loops, arithmetic, comparisons, mutation and every node kind outside the
-allowlist — including a parse `ERROR` — disprove forwarding. The predicate
-therefore fails open: a body the walk does not fully understand keeps its cluster
-visible. That direction is mandatory for a filter that deletes output.
+Branches, loops, arithmetic, comparisons, mutation and every node kind outside the allowlist — including a parse `ERROR` — disprove forwarding. The predicate therefore fails open: a body the walk does not fully understand keeps its cluster visible. That direction is mandatory for a filter that deletes output.
 
 **A statement count may not stand in for this.** "One or two statements means
 scaffolding" convicts a short body carrying a loop and an accumulator, and acquits
@@ -353,8 +343,7 @@ branches.
 
 One further guard bounds the hide: **no two proven wrappers may share a body**. Two sibling wrappers forwarding to the same route are a copy-paste bug — one of those calls is dead or misaimed — and one shared body disqualifies the suppression for the whole family. The comparison is on bodies, not on pair evidence or reported cluster scores. Pair content evidence has already been consumed by admission and is unavailable to this post-closure filter.
 
-Languages without a wired grammar table return false for shape 2, so their
-single-declaration windows are never hidden.
+Languages without a wired grammar table return false for shape 2, so their single-declaration windows are never hidden.
 
 ### [RANK-LITERAL-FAMILY] Literal families use the same mass formula
 
@@ -390,9 +379,10 @@ Top level:
 `ReportCluster`:
 
 - `id`, `mass`, `canonical_node_count`, `rank`, `rank_band` — cluster identity, canonical extent, duplicated mass, and mass-derived order metadata.
+- `kind` — the clone kind folded from the cluster's pairs ([CLONE-KIND-FOLD]): `identical`, `nearly_identical`, `same_behavior`, `structural_only`, or `loosely_similar`. Never an input to mass or order.
 - `occurrences: Vec<ReportOccurrence>` — each with `path`, `start_byte`, `end_byte`, and `hidden: bool` (true when the occurrence matched a `report_hide` pattern per [EXCLUSION-CONFIG]).
 
-`ReportCluster` carries identity, canonical extent, occurrence membership, mass, and rank. Pair evidence is returned only by an explicit comparison of two occurrences.
+`ReportCluster` carries identity, canonical extent, occurrence membership, mass, rank, and the folded clone kind. Pair evidence values are returned only by an explicit comparison of two occurrences.
 
 Default output paths, the format suppressors, and `--from-report` re-rendering are invocation behaviour, owned by [cli.md §OUTPUT-FORMAT-DERIVED](cli.md).
 
@@ -453,7 +443,7 @@ The default HTML renderer embeds, for each occurrence, the source bytes covered 
 
 #### [OUTPUT-HUMAN-HTML-LANGUAGE-SECTIONS] Per-language sections
 
-`[report] split_by_language` in `.deslop.toml` (default `false`, with a `--split-by-language` CLI mirror) divides the report body into one `<section>` per language instead of the single `Duplicate groups` section. Cluster cards remain in engine mass order and are never grouped by pair classification. With the flag off, output is byte-identical to the single-section form. With it on, `write_clusters` groups clusters by the stable first occurrence's `language_for_path(...)`, emits one heading per language with its group count, preserves engine rank within each section, and orders sections by the lowest engine rank they contain.
+`[report] split_by_language` in `.deslop.toml` (default `false`, with a `--split-by-language` CLI mirror) divides the report body into one `<section>` per language instead of the single `Duplicate groups` section. Within each section, cards sit in one expander per clone kind present ([FACET-HTML]) and keep engine mass order inside each expander. With the flag off, output is byte-identical to the single-section form. With it on, `write_clusters` groups clusters by the stable first occurrence's `language_for_path(...)`, emits one heading per language with its group count, preserves engine rank within each section, and orders sections by the lowest engine rank they contain.
 
 ### [METRICS-REPO] Repo-wide duplication metrics
 

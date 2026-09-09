@@ -82,12 +82,27 @@ fn method_region(window: &str) -> Result<String> {
 }
 
 /// Asserts the cluster reports exactly the fixture's two copies, once
-/// each, spanning `expected_files`.
-fn assert_two_copy_cluster(cluster: &Value, expected_files: &[&str; 2], label: &str) {
+/// each, spanning `expected_files`, and folds to `expected_kind`
+/// ([CLONE-KIND-FOLD]). Both C# windows span the namespace and class
+/// wrappers, whose identifiers differ, so the reported slices are never
+/// byte-equal and both fixtures fold to the near-copy kind: identity is
+/// a fact about the compared slices, not the method inside them
+/// ([CLONE-BUCKETS-IDENTICAL]).
+fn assert_two_copy_cluster(
+    cluster: &Value,
+    expected_files: &[&str; 2],
+    expected_kind: &str,
+    label: &str,
+) {
     let mut files = occurrence_files(cluster);
     files.sort();
     files.dedup();
     assert_eq!(files, expected_files, "{label} cluster file set");
+    assert_eq!(
+        cluster_kind(cluster),
+        expected_kind,
+        "{label} fixture folds to the {expected_kind} kind: {cluster:#}"
+    );
     assert_eq!(
         cluster
             .pointer("/occurrence_count")
@@ -180,6 +195,7 @@ fn type1_copies_slice_to_identical_bytes_while_type2_renames_do_not() -> Result<
             anyhow!("csharp-small must produce at least one cluster: {type2_report}")
         })?,
         &TYPE2_FILES,
+        NEARLY_IDENTICAL_KIND,
         "Type-2",
     );
     assert_two_copy_cluster(
@@ -187,6 +203,7 @@ fn type1_copies_slice_to_identical_bytes_while_type2_renames_do_not() -> Result<
             anyhow!("csharp-type1 must produce at least one cluster: {type1_report}")
         })?,
         &TYPE1_FILES,
+        NEARLY_IDENTICAL_KIND,
         "Type-1",
     );
 

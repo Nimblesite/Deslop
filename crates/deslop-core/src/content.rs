@@ -2,9 +2,12 @@
 
 use std::{collections::HashMap, hash::BuildHasher};
 
+mod call_targets;
+mod core_frontier;
 mod frontier;
 mod rename;
 
+use core_frontier::joined_content;
 use frontier::{
     frontiers_aligned, key_set_jaccard, member_content, member_count, operator_contradiction,
     positional_agreement, MemberContent, Population,
@@ -22,6 +25,8 @@ pub enum ContentContradiction {
     None,
     /// A behaviour-bearing operator changed.
     OperatorSubstitution,
+    /// An external member-call selector changed ([FUSED-CONTENT-GATE-CALL-TARGET]).
+    CallTargetSubstitution,
 }
 
 /// Raw-content evidence measured on exactly two endpoints.
@@ -50,6 +55,16 @@ impl ContentEvidence {
     #[must_use]
     pub fn support(self) -> f64 {
         crate::buckets::content_support(self.agreement, self.rename_consistency)
+    }
+
+    /// Whether the evidence admits the pair at `floor`
+    /// ([FUSED-CONTENT-GATE]): it was measured, and either the pair is a
+    /// contradiction-free rename ([FUSED-CONTENT-GATE-RENAME]) or its
+    /// pooled support clears the floor. One verdict, read by the
+    /// pre-closure gate and by the rescue's core measurement alike.
+    #[must_use]
+    pub fn clears(self, floor: f64) -> bool {
+        self.measured && (self.consistent_rename || self.support() >= floor)
     }
 
     /// Returns explicit evidence for an unresolved pair.
@@ -99,10 +114,65 @@ pub(crate) fn measure_pair_content_indexed<S: BuildHasher, L: BuildHasher>(
     let scope = PairScope {
         same_file: left.file_id == right.file_id,
         interior,
+        core: false,
     };
     let left = member_content(left, tree_index, sources, languages);
     let right = member_content(right, tree_index, sources, languages);
     pair_evidence(left.as_ref().zip(right.as_ref()), sources, scope)
+}
+
+/// [FUSED-SHARED-SUBTREE-CORE] Measures both content axes over the code
+/// two endpoints share: `core` is their Merkle-equal subtrees paired in
+/// order ([`crate::overlap::OverlapMeasurer::aligned_core`]), so the
+/// joined frontiers align position for position and every measure the
+/// gate applies to a shape-equal pair applies here unchanged. An empty
+/// or unresolvable core is unmeasured, and an unmeasured pair is never
+/// admitted.
+///
+/// A contradiction is read over the whole endpoints first: the core
+/// holds only what the two share, and a changed operator or call target
+/// is exactly what they do not ([FUSED-CONTENT-GATE],
+/// [FUSED-CONTENT-GATE-CALL-TARGET]).
+pub(crate) fn measure_aligned_core<S: BuildHasher, L: BuildHasher>(
+    endpoints: (&Fingerprint, &Fingerprint),
+    core: &[(Fingerprint, Fingerprint)],
+    tree_index: &HashMap<FileId, &NormalizedNode>,
+    sources: &HashMap<FileId, Vec<u8>, S>,
+    languages: &HashMap<FileId, &'static str, L>,
+    scope: PairScope,
+) -> ContentEvidence {
+    let Some((whole_left, whole_right)) = whole_contents(endpoints, tree_index, sources, languages)
+    else {
+        return ContentEvidence::unmeasured();
+    };
+    if let Some(contradiction) = pair_contradiction(&whole_left, &whole_right) {
+        return ContentEvidence {
+            measured: true,
+            contradiction,
+            ..ContentEvidence::unmeasured()
+        };
+    }
+    let joined = joined_content(core, (&whole_left, &whole_right));
+    pair_evidence(
+        joined.as_ref().map(|(left, right)| (left, right)),
+        sources,
+        scope,
+    )
+}
+
+/// Both endpoints' whole frontiers, or `None` when either does not resolve.
+fn whole_contents<S: BuildHasher, L: BuildHasher>(
+    endpoints: (&Fingerprint, &Fingerprint),
+    tree_index: &HashMap<FileId, &NormalizedNode>,
+    sources: &HashMap<FileId, Vec<u8>, S>,
+    languages: &HashMap<FileId, &'static str, L>,
+) -> Option<(MemberContent, MemberContent)> {
+    member_content(endpoints.0, tree_index, sources, languages).zip(member_content(
+        endpoints.1,
+        tree_index,
+        sources,
+        languages,
+    ))
 }
 
 /// Where the two endpoints sit, for the rename axis's scope rules
@@ -115,6 +185,13 @@ pub(crate) struct PairScope {
     /// Both endpoints are windows strictly inside an authored function,
     /// so a rename over a literal-free window cannot vouch for itself.
     pub(crate) interior: bool,
+    /// The frontiers are the aligned core of a rescued pair
+    /// ([FUSED-SHARED-SUBTREE-CORE]): the ordered-overlap and token
+    /// floors the rescue demanded already vouch for the pair's
+    /// vocabulary, so the rename test does not ask the core to keep as
+    /// many names as it renames — a near-miss method that renames every
+    /// local keeps nothing by that count.
+    pub(crate) core: bool,
 }
 
 /// Builds pair evidence from two resolved content frontiers.
@@ -126,10 +203,10 @@ fn pair_evidence<S: BuildHasher>(
     let Some((left, right)) = pair else {
         return ContentEvidence::unmeasured();
     };
-    if operator_contradiction(left, right) {
+    if let Some(contradiction) = pair_contradiction(left, right) {
         return ContentEvidence {
             measured: true,
-            contradiction: ContentContradiction::OperatorSubstitution,
+            contradiction,
             ..ContentEvidence::unmeasured()
         };
     }
@@ -141,7 +218,7 @@ fn pair_evidence<S: BuildHasher>(
             sources,
             scope,
         ),
-        consistent_rename: rename::pair_rename_is_consistent(left, right, sources),
+        consistent_rename: rename::pair_rename_is_consistent(left, right, sources, scope),
         literal_fraction: pair_literal_fraction(left, right),
         measured: true,
         contradiction: ContentContradiction::None,
@@ -168,25 +245,12 @@ fn pair_literal_fraction(left: &MemberContent, right: &MemberContent) -> f64 {
     member_count(literals) / member_count(vocabulary)
 }
 
-/// Measures pair agreement using an already-built tree index.
-pub(crate) fn pair_content_agreement<S: BuildHasher, L: BuildHasher>(
-    left: &Fingerprint,
-    right: &Fingerprint,
-    tree_index: &HashMap<FileId, &NormalizedNode>,
-    sources: &HashMap<FileId, Vec<u8>, S>,
-    languages: &HashMap<FileId, &'static str, L>,
-) -> f64 {
-    let left = member_content(left, tree_index, sources, languages);
-    let right = member_content(right, tree_index, sources, languages);
-    pair_agreement(left.as_ref(), right.as_ref())
-}
-
 /// Fraction of aligned authored positions whose raw bytes match.
 fn pair_agreement(left: Option<&MemberContent>, right: Option<&MemberContent>) -> f64 {
     let (Some(left), Some(right)) = (left, right) else {
         return 0.0;
     };
-    if operator_contradiction(left, right) {
+    if pair_contradiction(left, right).is_some() {
         return 0.0;
     }
     if left.keys.is_empty() && right.keys.is_empty() {
@@ -196,6 +260,17 @@ fn pair_agreement(left: Option<&MemberContent>, right: Option<&MemberContent>) -
         return key_set_jaccard(&left.keys, &right.keys);
     }
     positional_agreement(&left.keys, &right.keys)
+}
+
+/// Semantic contradictions share one verdict across pair admission and explicit comparison.
+fn pair_contradiction(left: &MemberContent, right: &MemberContent) -> Option<ContentContradiction> {
+    if operator_contradiction(left, right) {
+        Some(ContentContradiction::OperatorSubstitution)
+    } else if call_targets::contradicts(left, right) {
+        Some(ContentContradiction::CallTargetSubstitution)
+    } else {
+        None
+    }
 }
 
 /// Returns a share, treating an empty evidence population as consistent.

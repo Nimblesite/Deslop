@@ -1,4 +1,4 @@
-//! Scope of the cross-language admission exception ([REPORTING-CONTEXT]
+//! Scope of the cross-language admission exception ([CONFIG-CROSS-LANGUAGE]
 //! thresholds, RA-09).
 //!
 //! The 0.10 floor exists so a lower-overlap port can surface at all, but

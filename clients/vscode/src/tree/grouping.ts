@@ -6,36 +6,35 @@
 // which reuses `groupByFile` / `fileNodeWithChildren` from here.
 //
 // Every figure these builders show belongs to the engine. The global
-// rank and the severity band are stamped on the cluster
-// ([VSIX-TOP-OFFENDERS-RANK-GLOBAL], [SEVERITY-BAND]) instead of being
-// re-derived from array position, and a group's headline mass is read
+// rank, the severity band and the clone kind are stamped on the cluster
+// ([VSIX-TOP-OFFENDERS-RANK-GLOBAL], [SEVERITY-BAND], [CLONE-KIND-FOLD])
+// instead of being re-derived here, and a group's headline mass is read
 // off its worst member rather than recomputed as a maximum. What is left
 // here is ordering and nesting — presentation mechanics over engine
 // values.
 
 import {
+  CLUSTER_KINDS,
+  ClusterKind,
   ReportCluster,
   ReportOccurrence,
-  SEVERITIES,
-  Severity,
-  clusterBand,
 } from "../types/report";
 import {
   ClusterNode,
   FileNode,
   GroupNode,
+  KindGroupNode,
   Node,
-  SeverityGroupNode,
 } from "./nodes";
 import { displayPath, representativePath } from "./paths";
 import { compareWeightedPath, SortBy } from "./sort";
 
-export type GroupBy = "cluster" | "file" | "folder" | "severity";
+export type GroupBy = "cluster" | "file" | "folder" | "kind";
 
 /** Normalizes a persisted groupBy value. Unknown / missing values fall
  * back to `"cluster"` — never panic ([VSIX-TOP-OFFENDERS-GROUPING]). */
 export function normalizeGroupBy(raw: string | undefined): GroupBy {
-  return raw === "file" || raw === "folder" || raw === "severity" ? raw : "cluster";
+  return raw === "file" || raw === "folder" || raw === "kind" ? raw : "cluster";
 }
 
 /** A file and the clusters within it, plus the two impact keys its row
@@ -74,7 +73,7 @@ function byRank(left: ReportCluster, right: ReportCluster): number {
   return left.rank - right.rank;
 }
 
-// Shared display ordering for cluster mode and severity mode: impact
+// Shared display ordering for cluster mode and kind mode: impact
 // keeps the report's worst-first order; path re-orders by representative
 // file path with the engine's rank as the tie-break
 // ([VSIX-TOP-OFFENDERS-SORT]).
@@ -95,9 +94,7 @@ function ordered(clusters: ReportCluster[], sortBy: SortBy): ReportCluster[] {
 // ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]). Sorting is presentation-only — it
 // never re-fetches or re-analyses ([VSIX-VIEW-STATE-UI-ONLY]).
 export function buildClusterMode(clusters: ReportCluster[], sortBy: SortBy): Node[] {
-  return ordered(clusters, sortBy).map(
-    (cluster) => new ClusterNode(cluster, clusterBand(cluster), { showFile: true }),
-  );
+  return ordered(clusters, sortBy).map((cluster) => new ClusterNode(cluster, { showFile: true }));
 }
 
 // [VSIX-TOP-OFFENDERS-SORT] Orders a cluster's occurrences for display
@@ -138,7 +135,7 @@ export function groupByFile(clusters: ReportCluster[]): FileAgg[] {
 
 // [VSIX-TOP-OFFENDERS-FILE-MODE] Roots are files. The sort axis orders
 // them: impact = worst-cluster mass desc (total desc, path); path =
-// relative path localeCompare. Each file expands to SeverityGroupNodes.
+// relative path localeCompare. Each file expands to KindGroupNodes.
 export function buildFileMode(clusters: ReportCluster[], sortBy: SortBy): Node[] {
   const files = groupByFile(clusters);
   const compare = compareWeightedPath(sortBy);
@@ -152,7 +149,7 @@ export function buildFileMode(clusters: ReportCluster[], sortBy: SortBy): Node[]
 }
 
 /** Builds a FileNode for a {@link FileAgg} and stashes its clusters so
- * the provider can lazily build the severity groups. Shared by file mode
+ * the provider can lazily build the kind groups. Shared by file mode
  * and folder mode. */
 export function fileNodeWithChildren(file: FileAgg): FileNode {
   const node = new FileNode(file.path, file.clusters, file.worst.mass);
@@ -165,32 +162,29 @@ export function fileNodeWithChildren(file: FileAgg): FileNode {
 // provider's getChildren impl trivial.
 const fileNodeClusters = new WeakMap<FileNode, ReportCluster[]>();
 
-// Children of a FileNode: one SeverityGroupNode per severity band
-// present, ordered by each band's worst cluster, with the clusters
-// inside each group in the engine's worst-first order.
+// Children of a FileNode: one KindGroupNode per clone kind present,
+// ordered by each kind's worst cluster, with the clusters inside each
+// group in the engine's worst-first order.
 export function getFileNodeChildren(file: FileNode): Node[] {
   const clusters = fileNodeClusters.get(file);
   if (!clusters) return [];
-  const bySeverity = new Map<Severity, ReportCluster[]>();
+  const byKind = new Map<ClusterKind, ReportCluster[]>();
   for (const cluster of clusters) {
-    const severity = clusterBand(cluster);
-    const list = bySeverity.get(severity);
+    const list = byKind.get(cluster.kind);
     if (list) list.push(cluster);
-    else bySeverity.set(severity, [cluster]);
+    else byKind.set(cluster.kind, [cluster]);
   }
-  const groups = Array.from(bySeverity.entries()).flatMap(([severity, list]) => {
+  const groups = Array.from(byKind.entries()).flatMap(([kind, list]) => {
     const ordering = list.slice().sort(byRank);
     const worst = worstCluster(ordering);
-    return worst ? [{ severity, list: ordering, worst }] : [];
+    return worst ? [{ kind, list: ordering, worst }] : [];
   });
   groups.sort((left, right) => right.worst.mass - left.worst.mass);
-  return groups.map(({ severity, list }) =>
-    registerGroup(new SeverityGroupNode(severity, list), list),
-  );
+  return groups.map(({ kind, list }) => registerGroup(new KindGroupNode(kind, list), list));
 }
 
 // Per-GroupNode side table — one machinery for BOTH group axes
-// (file-mode severity sections and severity-mode roots).
+// (file-mode kind sections and kind-mode roots).
 // Lists are stored in final display order; the creation sites own the
 // ordering.
 const groupClusters = new WeakMap<GroupNode, ReportCluster[]>();
@@ -207,24 +201,22 @@ export function getGroupNodeChildren(group: GroupNode): Node[] {
   const clusters = groupClusters.get(group);
   if (!clusters) return [];
   return clusters.map(
-    (cluster) =>
-      new ClusterNode(cluster, clusterBand(cluster), { showFile: group.showFileInChildren }),
+    (cluster) => new ClusterNode(cluster, { showFile: group.showFileInChildren }),
   );
 }
 
-// Roots are one flat group per severity band present, in registry order,
-// empty groups omitted — every cluster of a band surfaces together with
-// no file/folder layer in between. Under the impact axis clusters stay
-// worst-first inside each group; the path axis orders them by
-// representative path, exactly like cluster mode. Rank #N stays global.
-export function buildSeverityMode(clusters: ReportCluster[], sortBy: SortBy): Node[] {
+// [FACET-GROUP-BY-KIND] Roots are one flat group per clone kind present,
+// strongest kind first, empty groups omitted — every identical cluster
+// surfaces together with no file/folder layer in between. Under the
+// impact axis clusters stay worst-first inside each group; the path axis
+// orders them by representative path, exactly like cluster mode. Rank #N
+// stays global.
+export function buildKindMode(clusters: ReportCluster[], sortBy: SortBy): Node[] {
   const display = ordered(clusters, sortBy);
-  return SEVERITIES.map((severity) => ({
-    severity,
-    list: display.filter((cluster) => clusterBand(cluster) === severity),
+  return CLUSTER_KINDS.map((kind) => ({
+    kind,
+    list: display.filter((cluster) => cluster.kind === kind),
   }))
     .filter(({ list }) => list.length > 0)
-    .map(({ severity, list }) =>
-      registerGroup(new SeverityGroupNode(severity, list, true), list),
-    );
+    .map(({ kind, list }) => registerGroup(new KindGroupNode(kind, list, true), list));
 }

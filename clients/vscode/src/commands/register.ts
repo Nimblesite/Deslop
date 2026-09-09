@@ -3,7 +3,6 @@
 
 import * as path from "node:path";
 import * as vscode from "vscode";
-import type { LanguageClient } from "vscode-languageclient/node";
 
 import { ReportStore } from "../reportStore";
 import { sameFile } from "../pathUtils";
@@ -17,8 +16,9 @@ import {
   setTopOffendersSortBy,
 } from "./topOffendersView";
 import { Report, ReportCluster, ReportOccurrence } from "../types/report";
-import { buildCompareUri, CompareEndpointRef } from "../compare/provider";
 import { ClusterNode, OccurrenceNode } from "../tree/providers";
+import { comparePairEndpoints, compareWithCanonicalTarget } from "./compare";
+import { ClientFactory, isNumber, isString, occurrenceFromCommandTarget } from "./deps";
 import {
   aiPayloadForCluster,
   canonicalOccurrenceForCluster,
@@ -31,8 +31,6 @@ import {
   revealOccurrenceInExplorer,
 } from "./treeMenus";
 
-type ClientFactory = () => LanguageClient | undefined;
-
 const LSP_REFRESH_REPORT_COMMAND = "deslop.lsp.refreshReport";
 const LSP_RENDER_HTML_REPORT_COMMAND = "deslop.lsp.renderHtmlReport";
 const UTF8_ENCODING = "utf8";
@@ -41,18 +39,6 @@ const LSP_CLIENT_NOT_READY_MESSAGE = "Deslop: LSP client is not ready.";
 const SHOW_ALL_LENSES_SETTING = "showAllLenses";
 const MARKDOWN_LANGUAGE = "markdown";
 const UNKNOWN_VALUE = "unknown";
-
-function isString(value: unknown): value is string {
-  return typeof value === "string";
-}
-
-function isNumber(value: unknown): value is number {
-  return typeof value === "number";
-}
-
-function isObject(value: unknown): value is object {
-  return typeof value === "object" && value !== null;
-}
 
 interface CommandDeps {
   readonly context: vscode.ExtensionContext;
@@ -65,7 +51,6 @@ interface CommandBinding {
   readonly run: (deps: CommandDeps, ...args: unknown[]) => unknown;
 }
 
-// [VSIX-COMMANDS] Single source of truth for every command-palette entry.
 // [VSIX-COMMANDS] Single source of truth for every command-palette entry.
 // Exported read-only so tests can pin the palette contract without
 // colliding with the real extension's registrations in a shared host.
@@ -82,14 +67,16 @@ export const COMMAND_BINDINGS: readonly CommandBinding[] = [
   // [VSIX-CODE-LENS] The lens "Jump" action cycles occurrences without
   // routing through textDocument/definition ([LSP-NON-INTERFERENCE]).
   { id: "deslop.jumpToNextOccurrence", run: ({ store }, clusterId, occurrenceIndex) => jumpToNextOccurrence(store, clusterId, occurrenceIndex) },
-  { id: "deslop.comparePair", run: (_deps, left, right) => comparePairEndpoints(left, right) },
+  { id: "deslop.comparePair", run: ({ clientOf }, left, right) => comparePairEndpoints(clientOf, left, right) },
+  { id: "deslop.compareWithCanonical", run: ({ store, clientOf }, target, occurrence) => compareWithCanonicalTarget(store, clientOf, target, occurrence) },
+  { id: "deslop.compareOccurrenceWithCanonical", run: ({ store, clientOf }, target) => compareWithCanonicalTarget(store, clientOf, target) },
   { id: "deslop.openAllOccurrences", run: (_deps, node) => openAllOccurrences(node as ClusterNode) },
   { id: "deslop.openCanonicalFile", run: (_deps, node) => openCanonicalOccurrence(node as ClusterNode) },
   { id: "deslop.openClusterDetails", run: ({ context, store }, node) => openClusterDetails(context, store, node as ClusterNode | OccurrenceNode) },
   { id: "deslop.topOffenders.showByCluster", run: () => setTopOffendersGroupBy("cluster") },
   { id: "deslop.topOffenders.showByFile", run: () => setTopOffendersGroupBy("file") },
   { id: "deslop.topOffenders.showByFolder", run: () => setTopOffendersGroupBy("folder") },
-  { id: "deslop.topOffenders.showBySeverity", run: () => setTopOffendersGroupBy("severity") },
+  { id: "deslop.topOffenders.showByKind", run: () => setTopOffendersGroupBy("kind") },
   { id: "deslop.topOffenders.chooseFilter", run: ({ store }) => chooseTopOffendersFilter(store) },
   // Same handler as chooseFilter; separate id so the toolbar can swap in
   // the active-filter icon via the deslop.topOffendersFiltered context key.
@@ -225,28 +212,6 @@ export async function openOccurrence(occurrence: ReportOccurrence): Promise<void
   editor.selection = new vscode.Selection(start, end);
 }
 
-function occurrenceFromCommandTarget(target: unknown): ReportOccurrence | undefined {
-  if (isOccurrenceNode(target)) return target.occurrence;
-  return isReportOccurrence(target) ? target : undefined;
-}
-
-function isOccurrenceNode(target: unknown): target is OccurrenceNode {
-  if (!isObject(target) || !("occurrence" in target)) {
-    return false;
-  }
-  return isReportOccurrence(target.occurrence);
-}
-
-function isReportOccurrence(target: unknown): target is ReportOccurrence {
-  if (!isObject(target)) return false;
-  const occurrence = target as Partial<ReportOccurrence>;
-  return (
-    isString(occurrence.path) &&
-    isNumber(occurrence.start_byte) &&
-    isNumber(occurrence.end_byte)
-  );
-}
-
 export async function jumpToNextOccurrence(
   store: ReportStore,
   clusterId?: unknown,
@@ -292,44 +257,6 @@ function occurrenceAfterCommandIndex(
   const cluster = report.clusters.find((candidate) => candidate.id === clusterId);
   if (!cluster?.occurrences.length) return undefined;
   return cluster.occurrences[(occurrenceIndex + 1) % cluster.occurrences.length];
-}
-
-// [VSIX-PAIR-COMPARE] Compare exists only between two occurrences the user
-// selected explicitly. There is no canonical fallback: a missing, malformed,
-// or identical endpoint pair is a no-op, never an implicit comparison.
-const COMPARE_DIFF_TITLE = "Compare selected occurrences";
-
-export async function comparePairEndpoints(left: unknown, right: unknown): Promise<void> {
-  const leftEndpoint = compareEndpoint(left);
-  const rightEndpoint = compareEndpoint(right);
-  if (!leftEndpoint || !rightEndpoint || sameEndpoint(leftEndpoint, rightEndpoint)) return;
-  await openCompareDiff(leftEndpoint, rightEndpoint);
-}
-
-function compareEndpoint(value: unknown): CompareEndpointRef | undefined {
-  if (!isObject(value)) return undefined;
-  const candidate = value as Partial<CompareEndpointRef>;
-  if (typeof candidate.path !== "string" || candidate.path.length === 0) return undefined;
-  if (typeof candidate.start_byte !== "number" || !Number.isInteger(candidate.start_byte)) return undefined;
-  if (typeof candidate.end_byte !== "number" || !Number.isInteger(candidate.end_byte)) return undefined;
-  return { path: candidate.path, start_byte: candidate.start_byte, end_byte: candidate.end_byte };
-}
-
-function sameEndpoint(left: CompareEndpointRef, right: CompareEndpointRef): boolean {
-  return (
-    left.path === right.path &&
-    left.start_byte === right.start_byte &&
-    left.end_byte === right.end_byte
-  );
-}
-
-async function openCompareDiff(a: CompareEndpointRef, b: CompareEndpointRef): Promise<void> {
-  await vscode.commands.executeCommand(
-    "vscode.diff",
-    buildCompareUri(a, "a"),
-    buildCompareUri(b, "b"),
-    COMPARE_DIFF_TITLE,
-  );
 }
 
 export async function openSchemaDoc(

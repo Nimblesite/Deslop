@@ -15,16 +15,18 @@
 //! then corroborates that substitution the way a repeated identifier
 //! occurrence would.
 
-use std::{collections::BTreeMap, collections::HashMap, hash::BuildHasher};
+use std::{
+    collections::{BTreeMap, HashMap},
+    hash::BuildHasher,
+};
 
-use crate::{buckets::CONTENT_SUPPORT_FLOOR, content::PairScope, state::FileId};
+use literal_echo::{affirming_literal_count, literal_echoes, LiteralEchoes};
 
 use super::{
     frontier::{frontiers_aligned, member_count, population, MemberContent, Population},
     vacuous_share,
 };
-
-use literal_echo::{affirming_literal_count, literal_echoes, LiteralEchoes};
+use crate::{buckets::CONTENT_SUPPORT_FLOOR, content::PairScope, state::FileId};
 
 /// Literal echoes of a rename, and the byte transform that proves one.
 mod literal_echo;
@@ -401,13 +403,13 @@ fn anchor_weight(anchors: usize) -> f64 {
 /// is discharged by mass, which is the same quantity. So the
 /// certification is granted only where the mass term **already vouches
 /// for the pair on its own**, at [`CONTENT_SUPPORT_FLOOR`]: certifying
-/// never promotes a cluster the mass discount would have demoted, it
+/// never strengthens a pair the anchor discount would have refused, it
 /// only stops charging a proven rename for evidence it is not missing.
 /// Below that bar — and for every pair carrying a single contradiction
 /// — the smooth discount applies unchanged, so an anchor-poor
 /// forwarding scaffold (its subject name twice plus one collaborator,
 /// mass 3, weight 3/7) stays exactly where
-/// `[REPAIR-RENAME-ANCHOR-MASS]` left it.
+/// `[FUSED-CONTENT-GATE]` left it.
 ///
 /// The result is monotone: completing a rename can only raise
 /// `consistency` and add anchors, so certification can only switch on
@@ -459,6 +461,16 @@ fn pair_counts(pairs: impl Iterator<Item = (u64, u64)>) -> BTreeMap<(u64, u64), 
         *slot = slot.saturating_add(1);
     }
     counts
+}
+
+/// [FUSED-CONTENT-GATE-CALL-TARGET] A receiver property must follow a repeated, unambiguous rename.
+pub(super) fn corroborated_substitution(identifiers: &[(u64, u64)], keys: (u64, u64)) -> bool {
+    let substitutions = substituted_pairs(identifiers);
+    let bijection = ModalBijection::over(&substitutions);
+    keys.0 != keys.1
+        && substitutions.iter().all(|pair| bijection.explains(pair))
+        && substitutions.iter().filter(|pair| **pair == keys).count()
+            >= RENAME_CORROBORATION_MIN_OCCURRENCES
 }
 
 /// Modal partner per key: the partner seen most often. Counting and

@@ -6,7 +6,7 @@ This document indexes Deslop's research and design specs. The primary product is
 
 The spec is split into topic files for readability and the 500-line file budget. Hierarchical `[GROUP-TOPIC-DETAIL]` IDs (e.g. `[PIPELINE-RANK-WORST-FIRST]`) are stable across the split — `grep -r '\[PIPELINE-' docs/` still finds every reference.
 
-**Pair evidence and cluster mass are separate.** [taxonomy.md §CLONE-BUCKETS](taxonomy.md#clone-buckets) classifies one explicit pair. No pair label or score appears on a cluster. Cluster surfaces render occurrence membership and [RANK-MASS-SUM] only.
+**Pair evidence and cluster mass are separate.** [taxonomy.md §CLONE-BUCKETS](taxonomy.md#clone-buckets) classifies one explicit pair; no pair score appears on a cluster. Every cluster carries a clone kind — the weakest pair classification against its canonical occurrence ([taxonomy.md §CLONE-KIND-FOLD](taxonomy.md#clone-kind-fold)) — and cluster surfaces render membership, [RANK-MASS-SUM], and that kind, titled and coloured from one registry.
 
 **Architecture at a glance.** Every binary is a **thin shell over one shared library** (`deslop-core`). Live analysis is a feature-gated `live` module inside that crate, owned exclusively by `deslop-lsp`. `deslop-mcp` runs no analysis — it delegates reads and compute calls to the running LSP over the local IPC endpoint. A language is added once, in the core, and every shell inherits it. See [live.md §[LIVE-PACKAGING]](live.md) for the full flow chart.
 
@@ -72,6 +72,11 @@ The hot loop — **Developer → VSIX → LSP → `live` module → `update_file
 ## [SPEC-TOPIC-FILES] Topic files
 
 - [principles.md](principles.md) — `[PRINCIPLES-*]` audience-for-AI-agents, long-running-daemon constraints.
+- [languages.md](languages.md) — `[LANG-CAND-*]` and `[PARSE-*-NORMALIZE]` supported grammar selection, normalization, and fixture contracts.
+- [rendering.md](rendering.md) — `[CLI-TEXT]` and `[LOCATION-LINE-COLUMN]` text report facts and human occurrence locations.
+- [signatures.md](signatures.md) — `[PIPELINE-SIGNATURE-FOLD]` and `[PIPELINE-SIGNATURE-FALLBACK]` token composition and fingerprint-scoped fallback.
+- [testing.md](testing.md) — `[TEST-ONE-BINARY]` integration-suite registration and linkage.
+- [noise-dart.md](noise-dart.md) — `[CLONE-NOISE-DART-WIDGET-SCAFFOLD]` Flutter declaration scaffolding and the boundary protecting copied bodies.
 - [taxonomy.md](taxonomy.md) — `[CLONE-BUCKETS]` explicit-pair classifications, pair-only labelling, evidence routing, the `[CLONE-BUCKETS-IDENTICAL]` byte-equivalence proof, and academic `[CLONE-TYPE-TAXONOMY]` reference.
 - [noise.md](noise.md) — `[CLONE-NOISE-*]` false-positive suppression filters: shape-identical-but-not-extractable patterns (language scaffolding, framework mirrors, schema/data tables, test idioms) hidden after clustering and before ranking, each with a verbatim escape hatch.
 - [landscape.md](landscape.md) — `[TECH-*]` survey of token / AST / hashing / neural / LLM techniques (2009 → 2026).
@@ -125,7 +130,7 @@ The hot loop — **Developer → VSIX → LSP → `live` module → `update_file
 | LSP server with diagnostics, hover, code lens, custom `deslop/*` methods ([LSP-*]) | ✅ | `crates/deslop-lsp/src/` |
 | MCP server with seven core analysis tools: `find-similar`, `duplicates`, `compare-pair`, `cluster-by-id`, `rescan`, `session`, and `schema-doc` ([MCP-*]) | ⏳ wholesale cutover in [`plans/literal-constant-plan.md`](../plans/literal-constant-plan.md) | `crates/deslop-mcp/src/` |
 | State-file + IPC architecture | ✅ warm-start `live-report.json`, Unix socket, token-gated TCP | `crates/deslop-lsp/tests/state_file_and_ipc.rs`, `crates/deslop-mcp/tests/lsp_integration.rs`, `crates/deslop-mcp/tests/tcp_transport.rs` |
-| Explicit pair classifications ([CLONE-BUCKETS]) | ✅ pair-only `Identical` / `NearlyIdentical` / `StructuralOnly` / `LooselySimilar` / `SameBehavior`; forbidden on clusters | `crates/deslop-core/src/buckets.rs` |
+| Explicit pair classifications ([CLONE-BUCKETS]) and the folded cluster kind ([CLONE-KIND-FOLD]) | ✅ `Identical` / `NearlyIdentical` / `StructuralOnly` / `LooselySimilar` / `SameBehavior` on pairs; the weakest against the canonical occurrence stamped on every cluster | `crates/deslop-core/src/buckets.rs`, `crates/deslop-core/src/pipeline/session/pair_compare/cluster_kind.rs` |
 | Deployment Toolkit manifest ([DEPLOY-*]) | ✅ | `shipwright.json`, `scripts/deployment/verify-*` |
 | VS Code extension ([VSIX-*]) | ✅ v0.1, signal-driven reactivity | `clients/vscode/` (preact-signals wired through `ReportStore`) |
 | JetBrains plugin ([JETBRAINS-*]) | ⏳ scaffold + LSP support; native UX in [`plans/jetbrains-ux-plan.md`](../plans/jetbrains-ux-plan.md) | `clients/jetbrains/` |

@@ -5,7 +5,7 @@ const DOCS_BASE = "https://deslop.live/docs/vscode-cluster-panel/";
 /** Every helped element of the cluster panel. */
 export type HelpTopic =
   | "cluster-id"
-  | "duplicate-code"
+  | "clone-kind"
   | "ai-match"
   | "rank"
   | "mass"
@@ -21,17 +21,17 @@ export type HelpTopic =
 
 const PANEL_HELP: Record<HelpTopic, string> = {
   "cluster-id": "Stable identifier for this duplicate-code cluster.",
-  "duplicate-code": "Every cluster carries the same neutral title. Severity comes from the cluster's mass rank band, never a similarity bucket label.",
+  "clone-kind": "The cluster's clone kind: the weakest relation between its first occurrence and any other member, as an explicit pair comparison would report it. Colour follows the kind; the glyph follows the mass rank band.",
   "ai-match": "The embedding pass found a semantic match, not only a syntactic one.",
   rank: "Worst-first position of this cluster in the current report.",
   mass: "This cluster's duplicated mass — the worst-first ranking metric.",
   "occurrence-count": "Number of editor locations in this cluster.",
-  canonical: "First occurrence of the cluster — its canonical extent. Compare never uses it implicitly; pair comparison is explicit two-endpoint selection only.",
-  occurrences: "The concrete locations where this cluster appears.",
+  canonical: "First occurrence of the cluster — the anchor used by Compare with canonical.",
+  occurrences: "The concrete locations where this cluster appears. Tap one row, then another, to compare those two in VS Code's diff editor.",
   "occurrence-location": "File, line, and column that Open will navigate to.",
   "hidden-occurrence": "This occurrence matched report_hide configuration.",
   "open-action": "Open selects the clone range in the editor.",
-  "compare-action": "Compare opens a diff between the two occurrences you selected.",
+  "compare-action": "Compare opens a diff between this occurrence and the canonical occurrence in one click.",
   "cluster-navigation": "Move between clusters without leaving this panel.",
   "keyboard-shortcuts": "Keyboard actions available while focus is in the panel.",
 };

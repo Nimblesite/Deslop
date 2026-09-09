@@ -1,23 +1,29 @@
 //! Explicit endpoint-to-endpoint evidence measurement ([FUSED-PAIR-SIGNALS]).
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 use crate::{
     ast::NormalizedNode,
-    content::measure_pair_content,
+    content::{measure_aligned_core, measure_pair_content_indexed, tree_index_of, PairScope},
     embedding::{cosine_similarity, EmbeddingProvider},
     error::CoreError,
     fingerprint::Fingerprint,
     lsh::{estimate_jaccard, SignatureLookup},
-    overlap::OverlapMeasurer,
+    overlap::{judge_core, OverlapMeasurer},
     pair::PairScore,
-    report::{PairComparison, PairComparisonParams, PairEndpoint, PairEvidence},
+    report::{PairComparison, PairComparisonParams, PairEndpoint, PairEvidence, PairTextIdentity},
+    state::FileId,
 };
 
 use super::PipelineSession;
 
 mod admission;
 use admission::AdmissionFacts;
+mod cluster_kind;
+pub(crate) use cluster_kind::ClusterKindMeasurer;
 
 impl PipelineSession {
     /// Recomputes evidence for exactly the two requested occurrences.
@@ -86,30 +92,37 @@ impl PipelineSession {
         provider: Option<&dyn EmbeddingProvider>,
     ) -> Result<PairEvidence, CoreError> {
         let trees = self.trees_for_pair(pair)?;
-        let measurements = self.measure_axes(pair, &trees, provider)?;
+        let mut axes = PairAxes::new(&trees);
+        let embedding_cos = self.embedding_cos(pair, provider)?;
+        let measurements = self.measure_axes(pair, &mut axes, embedding_cos);
         Ok(self.build_evidence(pair, measurements))
     }
 
-    /// Measures structural, token, embedding, and raw-content evidence.
+    /// Measures structural, token, and raw-content evidence beside the
+    /// caller-supplied embedding cosine. The explicit comparison asks a
+    /// provider for the cosine; the cluster fold reads the one the
+    /// embedding pass already measured ([CLONE-KIND-FOLD]).
     fn measure_axes(
         &self,
         pair: &ResolvedPair<'_>,
-        trees: &[NormalizedNode],
-        provider: Option<&dyn EmbeddingProvider>,
-    ) -> Result<Measurements, CoreError> {
+        axes: &mut PairAxes<'_>,
+        embedding_cos: f64,
+    ) -> Measurements {
         let merkle_equal = pair.left.fingerprint.hash == pair.right.fingerprint.hash;
-        let structural =
-            OverlapMeasurer::new(trees).overlap(pair.left.fingerprint, pair.right.fingerprint);
+        let text = pair.text_identity(&self.sources);
+        let structural = axes
+            .overlap
+            .overlap(pair.left.fingerprint, pair.right.fingerprint);
         let token_jaccard = self.token_jaccard(pair, merkle_equal);
-        let embedding_cos = self.embedding_cos(pair, provider)?;
-        let content = measure_pair_content(
+        let content = measure_pair_content_indexed(
             pair.left.fingerprint,
             pair.right.fingerprint,
-            trees,
+            &axes.trees,
             &self.sources,
             &self.file_languages,
+            false,
         );
-        Ok(Measurements {
+        Measurements {
             score: PairScore {
                 structural,
                 token_jaccard,
@@ -118,9 +131,36 @@ impl PipelineSession {
             agreement: content.agreement,
             rename_consistency: content.rename_consistency,
             literal_fraction: content.literal_fraction,
+            core_is_copy: self.core_is_copy(pair, axes),
             merkle_equal,
-            byte_identical: pair.byte_identical(&self.sources),
+            text,
+        }
+    }
+
+    /// [FUSED-SHARED-SUBTREE-CORE] Whether the code the endpoints share
+    /// is a copy by the content gate's own measure — the rescue's
+    /// content term, read here exactly as the pipeline reads it.
+    fn core_is_copy(&self, pair: &ResolvedPair<'_>, axes: &mut PairAxes<'_>) -> bool {
+        let core = axes
+            .overlap
+            .aligned_core(pair.left.fingerprint, pair.right.fingerprint);
+        let scope = PairScope {
+            same_file: !pair.cross_file(),
+            interior: false,
+            core: true,
+        };
+        let floor = usize::try_from(self.min_nodes).unwrap_or(usize::MAX);
+        judge_core(&core, floor, || {
+            measure_aligned_core(
+                (pair.left.fingerprint, pair.right.fingerprint),
+                &core,
+                &axes.trees,
+                &self.sources,
+                &self.file_languages,
+                scope,
+            )
         })
+        .copy
     }
 
     /// Estimates token Jaccard, applying the pair-local Merkle correction.
@@ -200,12 +240,34 @@ impl PipelineSession {
             agreement: measured.agreement,
             rename_consistency: measured.rename_consistency,
             literal_fraction: measured.literal_fraction,
+            text_identity: measured.text,
             fused_score: measured.score.bounded_fused(),
             content_required: facts.content_required,
             content_ok: facts.content_ok,
             admitted: facts.admitted,
             classification,
             explanation: facts.explanation(classification),
+        }
+    }
+}
+
+/// The corpus-backed measurers one pair measurement reads: the memoising
+/// structural overlap measurer and the per-file tree index the content
+/// axes walk. Built once per explicit comparison over its two trees, and
+/// once per render over the whole population for the cluster fold.
+struct PairAxes<'corpus> {
+    /// Structural overlap, memoised per structural pair.
+    overlap: OverlapMeasurer<'corpus>,
+    /// `FileId → normalised root` for the content axes.
+    trees: HashMap<FileId, &'corpus NormalizedNode>,
+}
+
+impl<'corpus> PairAxes<'corpus> {
+    /// Indexes `trees` for every measurement that follows.
+    fn new(trees: &'corpus [NormalizedNode]) -> Self {
+        Self {
+            overlap: OverlapMeasurer::new(trees),
+            trees: tree_index_of(trees),
         }
     }
 }
@@ -251,14 +313,35 @@ impl ResolvedPair<'_> {
         self.left.fingerprint.file_id != self.right.fingerprint.file_id
     }
 
-    /// Whether the two raw endpoint snippets are byte-identical.
-    fn byte_identical(
+    /// How far the two raw endpoint snippets are the same text, read once
+    /// from the same bytes so the byte answer and the indentation answer
+    /// cannot disagree ([FUSED-PAIR-SIGNALS]).
+    fn text_identity(
         &self,
         sources: &std::collections::HashMap<crate::state::FileId, Vec<u8>>,
-    ) -> bool {
+    ) -> PairTextIdentity {
         let snippets = self.snippets(sources);
-        snippets.first() == snippets.get(1)
+        let [left, right] = snippets.as_slice() else {
+            return PairTextIdentity::Different;
+        };
+        if left == right {
+            return PairTextIdentity::ByteIdentical;
+        }
+        if same_lines_ignoring_indentation(left, right) {
+            return PairTextIdentity::IndentationOnly;
+        }
+        PairTextIdentity::Different
     }
+}
+
+/// Whether two snippets hold the same lines once each line's leading
+/// whitespace is dropped. Line endings are consumed with the line and a
+/// missing final line break adds no line, so neither counts as a
+/// difference.
+fn same_lines_ignoring_indentation(left: &str, right: &str) -> bool {
+    left.lines()
+        .map(str::trim_start)
+        .eq(right.lines().map(str::trim_start))
 }
 
 /// Pair axes and raw-content populations before admission gates.
@@ -272,10 +355,13 @@ struct Measurements {
     rename_consistency: f64,
     /// Literal share.
     literal_fraction: f64,
+    /// [FUSED-SHARED-SUBTREE-CORE] Whether the pair's aligned core clears
+    /// the content gate — the rescue's content term.
+    core_is_copy: bool,
     /// Exact Merkle identity.
     merkle_equal: bool,
-    /// Exact raw source-slice identity.
-    byte_identical: bool,
+    /// How far the two raw source ranges are the same text.
+    text: PairTextIdentity,
 }
 
 /// Validates two provider vectors and measures their canonical cosine.

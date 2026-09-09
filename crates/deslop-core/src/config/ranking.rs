@@ -35,7 +35,7 @@ impl std::str::FromStr for ClonePolicy {
     type Err = String;
 
     /// Parses the CLI/editor-settings spelling of a policy
-    /// ([VSIX-SETTINGS-RANKING]): `demote`, `ignore`, or `keep`.
+    /// ([RANK-STRUCTURAL-ONLY]): `demote`, `ignore`, or `keep`.
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value {
             "demote" => Ok(Self::Demote),
@@ -132,7 +132,7 @@ impl RankingPolicy {
 
     /// Applies the process-wide [RANK-STRUCTURAL-ONLY] override from
     /// [`crate::state`], when one was recorded at startup. The
-    /// editor-settings channel ([VSIX-SETTINGS-RANKING]) wins over
+    /// editor-settings channel ([RANK-STRUCTURAL-ONLY]) wins over
     /// `.deslop.toml`.
     #[must_use]
     pub(super) fn with_global_override(mut self) -> Self {

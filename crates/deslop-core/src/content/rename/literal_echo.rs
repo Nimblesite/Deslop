@@ -12,12 +12,16 @@
 //! then corroborates that substitution the way a repeated identifier
 //! occurrence would.
 
-use std::{collections::BTreeMap, collections::HashMap, hash::BuildHasher};
+use std::{
+    collections::{BTreeMap, HashMap},
+    hash::BuildHasher,
+};
 
+use super::{
+    super::frontier::{leaf_bytes, population, MemberContent, Population},
+    substituted_pairs, LiteralPosition, ModalBijection,
+};
 use crate::state::FileId;
-
-use super::super::frontier::{leaf_bytes, population, MemberContent, Population};
-use super::{substituted_pairs, LiteralPosition, ModalBijection};
 
 /// Literal echoes of the bijection's identifier substitutions (#409), as a
 /// per-substitution count: an aligned literal position whose bytes

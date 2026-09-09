@@ -54,7 +54,7 @@ impl FileRegistry {
 /// from the surface's own channel — `deslop-lsp
 /// --ranking-structural-only`, fed by the
 /// `deslop.ranking.structuralOnly` editor setting
-/// ([VSIX-SETTINGS-RANKING]). Consulted by every subsequent config
+/// ([RANK-STRUCTURAL-ONLY]). Consulted by every subsequent config
 /// load so the editor channel wins over `.deslop.toml`.
 static STRUCTURAL_ONLY_OVERRIDE: OnceLock<ClonePolicy> = OnceLock::new();
 

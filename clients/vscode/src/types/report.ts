@@ -4,6 +4,7 @@
 // an intersection so the wire shape stays the source of truth.
 
 import type {
+  ClusterKind,
   Report as WireReport,
   ReportCluster as WireReportCluster,
   ReportOccurrence as WireReportOccurrence,
@@ -11,6 +12,7 @@ import type {
 
 export type {
   CacheStats,
+  ClusterKind,
   EmbeddingProvenance,
 } from "./wire-generated";
 
@@ -95,7 +97,7 @@ export type {
   ReportBoilerplateOccurrence as BoilerplateHintOccurrence,
 } from "./wire-generated";
 
-// Severity bucketing per [LSP-SEVERITY-BAND]. The band classifies the
+// Severity bucketing per [LSP-SEVERITY-BUCKET]. The band classifies the
 // cluster's rank percentile, which is a calculation, so it is computed
 // once in `report_weight::rank_band` and carried on the wire.
 export type Severity = "worst" | "top10" | "mid" | "faint";
@@ -129,10 +131,49 @@ export function clusterMass(cluster: ReportCluster): number {
   return cluster.mass;
 }
 
-// [FACET-TOP-OFFENDERS-FILTER] Facets filter on the mass severity band
-// only. Clone-kind axes (bucket, category) are retired: the report
-// carries no similarity classification, and the persisted per-bucket
-// filter settings are invalid configuration ([SEVERITY-CONFIG]).
+// [CLONE-KIND-LABELS] The clone kind is the engine's fold of the pair
+// classifications inside the cluster ([CLONE-KIND-FOLD]); it rides the
+// wire on every cluster and every surface titles the cluster by it. The
+// words mirror `deslop_core::buckets::ClusterKind::labels` — the CLI
+// parity test in `kind.unit.test.ts` holds the two registries together.
+
+/** Every clone kind, strongest first — the order `ClusterKind::all()`
+ * lists them in, and the order filter surfaces enumerate them. */
+export const CLUSTER_KINDS: readonly ClusterKind[] = [
+  "identical",
+  "nearly_identical",
+  "same_behavior",
+  "structural_only",
+  "loosely_similar",
+] as const;
+
+interface KindLabels {
+  /** The title a cluster surface shows. Never carries advice. */
+  title: string;
+  /** The clone-taxonomy name, for tooltips and agent context. */
+  taxonomy: string;
+}
+
+const KIND_LABELS: Record<ClusterKind, KindLabels> = {
+  identical: { title: "Identical code", taxonomy: "Type-1 exact clone" },
+  nearly_identical: { title: "Nearly identical code", taxonomy: "Type-2/3 near-copy" },
+  same_behavior: { title: "Same behavior, different code", taxonomy: "Type-4 semantic clone" },
+  structural_only: { title: "Same shape, different content", taxonomy: "structural-only match" },
+  loosely_similar: { title: "Loosely similar code", taxonomy: "weak Type-3 relation" },
+};
+
+/** The title every cluster surface shows for a kind ([CLONE-KIND-LABELS]). */
+export function kindTitle(kind: ClusterKind): string {
+  return KIND_LABELS[kind].title;
+}
+
+/** The clone-taxonomy name of a kind ([CLONE-TYPE-TAXONOMY]). */
+export function kindTaxonomy(kind: ClusterKind): string {
+  return KIND_LABELS[kind].taxonomy;
+}
+
+// [FACET-TOP-OFFENDERS-FILTER] The tree facet filters on the mass
+// severity band; the report webview adds the clone kind ([FACET-MODEL]).
 
 /** A sanitized facet filter: only registry-known severity bands
  * survive. */

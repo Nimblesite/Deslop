@@ -13,8 +13,8 @@ import {
   deferredProbeClient,
   editAt,
   resolveProbe,
+  FIXTURE_KIND_TITLE,
 } from "./bubble.helpers";
-import { SHORT_VERDICT } from "../../bubble/renderParts";
 import { reportWithClusters } from "./report.helpers";
 
 suite("LiveBubble stale-probe races", () => {
@@ -36,7 +36,7 @@ suite("LiveBubble stale-probe races", () => {
       await resolveProbe(requests[1], probeB, false);
       const rendered = capture.visible();
       assert.ok(rendered !== undefined, "probe B must render its bubble");
-      assert.match(rendered ?? "", new RegExp(SHORT_VERDICT), "B carries the short duplication verdict");
+      assert.match(rendered ?? "", new RegExp(FIXTURE_KIND_TITLE), "B carries the clone kind verdict");
       assert.match(rendered ?? "", /×\s*5/, "B carries the authoritative occurrence count");
       assert.match(rendered ?? "", /A\.cs/, "B names the canonical file");
 
@@ -93,7 +93,7 @@ suite("LiveBubble stale-probe races", () => {
       ]);
       assert.match(
         capture.visible() ?? "",
-        new RegExp(SHORT_VERDICT),
+        new RegExp(FIXTURE_KIND_TITLE),
         "a fresh probe against the new snapshot must still render its bubble",
       );
       assert.match(capture.visible() ?? "", /×\s*2/, "with the new cluster's occurrence count");

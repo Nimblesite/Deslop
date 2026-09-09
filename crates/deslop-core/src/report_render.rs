@@ -99,7 +99,7 @@ impl LineIndex {
     }
 }
 
-/// Converts one internal component to a mass-only report component.
+/// Converts one internal component to its report component: membership, mass, and the folded clone kind.
 pub(crate) fn cluster_to_report<S: BuildHasher>(
     cluster: &Cluster,
     registry: &FileRegistry,
@@ -137,6 +137,7 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
         id: cluster.id.clone(),
         rank: 0,
         rank_band: String::new(),
+        kind: cluster.kind,
         mass: duplicate_mass(canonical_node_count, occurrence_count),
         canonical_node_count,
         occurrences,

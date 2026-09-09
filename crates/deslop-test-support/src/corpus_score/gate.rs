@@ -1,4 +1,4 @@
-//! [CORPUS-SCORE-GATE] The thresholds a scored run is held to, and the totals
+//! [CORPUS-SCORE] The thresholds a scored run is held to, and the totals
 //! across every scored repository.
 //!
 //! Thresholds are configuration, never constants buried in code: the defaults

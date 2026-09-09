@@ -31,6 +31,7 @@ use super::{
         embedding_pass::{run_embedding_pass, CorpusView},
         signatures::build_cross_language_signatures,
     },
+    pair_compare::ClusterKindMeasurer,
     store::relative_path_key,
     PipelineSession,
 };
@@ -89,7 +90,13 @@ impl PipelineSession {
         };
         let (fused_clusters, shape_families) =
             self.partition_and_split(fingerprints, pairs, &trees, &parse_cache, &mut ledger);
-        let clusters = self.ranked_clusters(fingerprints, &fused_clusters, &trees, &mut ledger);
+        let clusters = self.ranked_clusters(
+            fingerprints,
+            &fused_clusters,
+            &trees,
+            &embedding_outcome.pairs,
+            &mut ledger,
+        );
         tracing::info!(
             ranked_clusters = clusters.len(),
             fingerprints = fingerprints.len(),
@@ -133,9 +140,9 @@ impl PipelineSession {
         // [FUSED-SHARED-SUBTREE] (gh #408): measure the structural
         // overlap the anchor axis discards before survival drops the
         // enclosing Type-3 pair and leaves only its fragment views. The
-        // per-edge content gate ([FUSED-CONTENT-GATE], gh #458) runs
-        // inside the pass: a rescue-admitted pair must carry its own
-        // content, not just a Merkle-identical signature.
+        // content gate runs inside the pass, over each pair's aligned
+        // core ([FUSED-SHARED-SUBTREE-CORE]): a rescue-admitted pair must
+        // be a copy in the code it shares, not merely share a shape.
         let rescue_input = pairs.len();
         let stage_started = Instant::now();
         apply_shared_subtree_rescue(
@@ -144,6 +151,7 @@ impl PipelineSession {
             trees,
             &self.sources,
             &self.file_languages,
+            usize::try_from(self.min_nodes).unwrap_or(usize::MAX),
         );
         ledger.record(
             "shared_subtree_rescue",
@@ -352,13 +360,15 @@ impl PipelineSession {
         Ok(trees)
     }
 
-    /// Builds the ranked clusters from the fused ones and records the
-    /// `ranked_build` stage row.
+    /// Builds the ranked clusters from the fused ones — each stamped
+    /// with the clone kind folded from its pairs ([CLONE-KIND-FOLD]) —
+    /// and records the `ranked_build` stage row.
     fn ranked_clusters(
         &self,
         fingerprints: &[crate::fingerprint::Fingerprint],
         fused_clusters: &[crate::pair::FusedCluster],
         trees: &[crate::ast::NormalizedNode],
+        embedding_pairs: &[crate::embedding::pairs::EmbeddingPair],
         ledger: &mut StageLedger,
     ) -> Vec<crate::cluster::Cluster> {
         // [PIPELINE-DETERMINISM] (gh #430) Workspace-relative path per
@@ -376,12 +386,14 @@ impl PipelineSession {
             .collect();
         let started = Instant::now();
         let ranked_input = fused_clusters.len();
+        let kinds = ClusterKindMeasurer::new(self, fingerprints, trees, embedding_pairs);
         let clusters = build_ranked_fused_clusters(&ClusterBuildInputs {
             fingerprints,
             fused_clusters,
             trees,
             file_languages: &self.file_languages,
             file_paths: &file_paths,
+            kinds: &kinds,
         });
         ledger.record("ranked_build", ranked_input, clusters.len(), started);
         clusters

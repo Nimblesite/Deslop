@@ -7,11 +7,13 @@ import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 import { BudgetScheduler, LiveBubble } from "../../bubble/live";
 import { ReportStore } from "../../reportStore";
-import { Report, ReportCluster } from "../../types/report";
-import { DUPLICATION_VERDICT } from "../../clusterHover";
-import { SHORT_VERDICT } from "../../bubble/renderParts";
+import { kindTitle, Report, ReportCluster } from "../../types/report";
 import { repoMetrics, reportWithClusters } from "./report.helpers";
-import { occurrence, wireCluster } from "../cluster.helpers";
+import { FIXTURE_KIND, occurrence, wireCluster } from "../cluster.helpers";
+
+/** The verdict every bubble surface renders for a fixture cluster: the
+ * title of its clone kind ([CLONE-KIND-LABELS], [VSIX-LIVE-BUBBLE]). */
+export const FIXTURE_KIND_TITLE = kindTitle(FIXTURE_KIND);
 
 export interface ClusterFixtureOptions {
   /** The engine's global worst-first rank, when the suite stages more
@@ -298,19 +300,19 @@ export function renderFullConfidenceBubble(
   bubble.render(capture.editor, span(startChar), [
     probeCluster(clusterId, DEFAULT_BUBBLE_CLUSTER_MASS),
   ]);
-  // [VSIX-LIVE-BUBBLE] The inline surface renders the short verdict; the
-  // hover card carries the full neutral title. Both must be present.
+  // [VSIX-LIVE-BUBBLE] The inline surface and the hover card both carry
+  // the cluster's clone kind as the verdict.
   const visible = assertBubbleShows(
     capture,
-    SHORT_VERDICT,
+    FIXTURE_KIND_TITLE,
     `expected ${clusterId} at character ${startChar}`,
   );
   const hover = capture.visibleHover();
   assert.ok(hover !== undefined, "a rendered bubble must attach its hover card");
   assert.match(
     hover?.value ?? "",
-    new RegExp(DUPLICATION_VERDICT),
-    "the hover card must carry the full Duplicate code title",
+    new RegExp(FIXTURE_KIND_TITLE),
+    "the hover card must carry the clone kind title",
   );
   return visible;
 }

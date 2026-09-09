@@ -1,7 +1,7 @@
 //! Regression coverage for GH #93: the embedding pass must recall
 //! clusters the LSH pass missed.
 //!
-//! This suite used to assert the inverse of [REPAIR-COSINE-MERGE] (#351)
+//! This suite used to assert the inverse of [FUSED-PAIR-SIGNALS] (#351)
 //! — that a pair LSH already found is denied its ANN cosine, to preserve
 //! "unique-recall accounting". No consumer of that accounting ever
 //! existed, and the denial made discovery route decide evidence: the same
@@ -24,6 +24,7 @@ use deslop_core::{
         candidate_pairs, cluster_by_transitive_closure, FusedCluster, LSH_ONLY_MIN_JACCARD,
         LSH_ONLY_MIN_NODE_COUNT,
     },
+    report_fixtures::{UniformKind, FIXTURE_KIND},
     state::{FileId, FileRegistry},
 };
 
@@ -65,7 +66,7 @@ fn issue_93_embedding_pass_recalls_lsh_missed_clusters_and_credits_every_cosine(
         lsh_visible.score.token_jaccard >= LSH_ONLY_MIN_JACCARD,
         "fixture must prove this pair was already visible to LSH"
     );
-    // [REPAIR-COSINE-MERGE] #351: a measured cosine is evidence about the
+    // [FUSED-PAIR-SIGNALS] #351: a measured cosine is evidence about the
     // pair; the pass that reached it first is telemetry. This pair was
     // surfaced by LSH *and* measured by the ANN pass, so the LSH hit must
     // not erase the cosine.
@@ -125,7 +126,7 @@ fn issue_93_embedding_pass_recalls_lsh_missed_clusters_and_credits_every_cosine(
     assert_materialised_clusters_are_mass_only(&fingerprints, &clusters)
 }
 
-/// [FUSED-RANK-MASS] Pair evidence stays on the candidate pairs; a
+/// [RANK-MASS-SUM] Pair evidence stays on the candidate pairs; a
 /// materialised component contains membership and duplicated mass only.
 fn assert_materialised_clusters_are_mass_only(
     fingerprints: &[Fingerprint],
@@ -137,6 +138,7 @@ fn assert_materialised_clusters_are_mass_only(
         trees: &[],
         file_languages: &HashMap::new(),
         file_paths: &HashMap::new(),
+        kinds: &UniformKind(FIXTURE_KIND),
     });
     assert_eq!(
         rendered.len(),

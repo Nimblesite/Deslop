@@ -26,9 +26,9 @@ The cluster panel is the detailed view behind a Deslop duplicate-code finding. I
 
 Three surfaces are visible, and all of them read the same live report:
 
-- **The sidebar (left)** stacks three views. **Top Offenders** is the worst-first ranked list of every clone cluster in the workspace — each row shows the cluster id, a neutral **Duplicate code** title, and a severity dot derived from the cluster's mass rank — and expands to its occurrences; cluster `#1` is the single highest-impact offender, always one click away. **Duplication** drills the tree workspace → folder → file with a duplication percentage on every node — the same repo-wide number a [CI gate](/docs/configuration/#exit-codes) fails on. **Session** shows the running server: the embedding-model picker (the semantic *same behavior, different code* pass, off until you choose a model), the cache size, the file count, and the live analysis State.
-- **The editor (centre)** is where the LSP draws the finding inline. The duplicated span is underlined as you type, and a message names the **canonical** occurrence and the copy count — *"Duplicate code × 3"* — with **View cluster** and **Copy for AI** actions (the AI-ready context block, available on every Deslop surface).
-- **The Compare diff (right)** is VS Code's native side-by-side editor, opened by **Compare selected occurrences**: you pick the two occurrences yourself in the cluster panel — one for the left side, one for the right — and the diff shows exactly those two ranges so you can confirm the duplication before extracting a shared helper.
+- **The sidebar (left)** stacks three views. **Top Offenders** is the worst-first ranked list of every clone cluster in the workspace — each row shows the cluster id, the cluster's **clone kind** (*Identical code*, *Nearly identical code*, *Same behavior, different code*, *Same shape, different content*, or *Loosely similar code*) with a colour and icon of its own, and a glyph for the cluster's mass rank — and expands to its occurrences; cluster `#1` is the single highest-impact offender, always one click away. **Duplication** drills the tree workspace → folder → file with a duplication percentage on every node — the same repo-wide number a [CI gate](/docs/configuration/#exit-codes) fails on. **Session** shows the running server: the embedding-model picker (the semantic *same behavior, different code* pass, off until you choose a model), the cache size, the file count, and the live analysis State.
+- **The editor (centre)** is where the LSP draws the finding inline. The duplicated span is underlined in the cluster's kind colour as you type, and a message names the kind, the **canonical** occurrence and the copy count — *"Identical code × 3"* — with **View cluster** and **Copy for AI** actions (the AI-ready context block, available on every Deslop surface).
+- **The Compare diff (right)** is VS Code's native side-by-side editor, opened by **Compare** on an occurrence row. It shows the canonical occurrence on the left and the clicked occurrence on the right so you can inspect exactly those two ranges before extracting a shared helper.
 
 Everything here is reactive. Edit the code and the tree, the percentages, the inline warning, and the diff all refresh as you type. The same live report backs the MCP tools (`find-similar`, `top-offenders`, `cluster-by-id`), so the agent driving your editor sees the duplicate *before* it writes the copy. The rest of this page is a field guide to each label, score, and action in that view.
 
@@ -38,9 +38,13 @@ The cluster id is the stable handle for this duplicate-code group. It is derived
 
 Use the id when you need to reference the finding in an issue, an agent prompt, or the MCP `cluster-by-id` flow.
 
+## Clone Kind
+
+The heading is the cluster's clone kind: the weakest relation between the cluster's first occurrence and any other member, exactly as comparing that member against the first would report it. **Identical code** means every copy is byte-for-byte the first one. **Nearly identical code** means every copy is an admitted near-copy and at least one differs. **Same behavior, different code** means at least one copy matched on the embedding pass alone. **Same shape, different content** means at least one copy shares only its normalised shape. **Loosely similar code** means at least one copy is a looser relation, or joined the cluster only through other members. Colour follows the kind everywhere: crimson is identical, amber nearly identical, violet same behavior, muted same shape, blue loosely similar.
+
 ## Severity
 
-Every cluster carries the same neutral **Duplicate code** title. What differs is the severity dot, derived from the cluster's mass rank band in the current report: the worst clusters read as errors, the faint tail as hints. Severity is a prioritisation signal, not a verdict — read the occurrences before you merge or extract anything.
+The badge's glyph is the cluster's mass rank band in the current report: `●●` for the worst, `●` for the top tenth, `◐` for the upper half, `○` for the faint tail. Severity is a prioritisation signal, not a verdict, and it never chooses the colour — read the occurrences before you merge or extract anything.
 
 ## Rank
 
@@ -62,7 +66,7 @@ Occurrence count is the authoritative number of editor locations after overlappi
 
 ## Canonical
 
-The canonical occurrence is the first occurrence of the cluster — a stable anchor for navigation and a stable id input. It is never compared implicitly: a diff exists only between two occurrences you select yourself.
+The canonical occurrence is the first occurrence of the cluster — a stable anchor for navigation and a stable id input. Compare uses it as the left side of the diff and places the occurrence you clicked on the right.
 
 Canonical does not mean "best" or "source of truth."
 
@@ -88,7 +92,15 @@ Open moves VS Code to the occurrence and selects the clone range.
 
 ## Compare Action
 
-Compare needs two endpoints, and you choose both. Click **Select for comparison** on one occurrence row, then on a second; the **Compare selected occurrences** button arms and opens VS Code's diff editor with the left selection on the left and the right selection on the right — exactly the clone bytes, even when both live in the same file. Until two distinct occurrences are selected, the button stays disabled. Nothing is ever compared against an implicit default.
+Click **Compare** on any non-canonical occurrence to open VS Code's diff editor in one click. The canonical occurrence appears on the left and the occurrence you clicked appears on the right — exactly the clone bytes, even when both live in the same file. Compare is disabled on the canonical row because that would compare a range with itself. The occurrence's context menu offers **Compare With Canonical** too.
+
+To compare any other two occurrences, tap one row and then another: the first tap picks a row, the second opens the diff with the first on the left. Tap the picked row again to unpick it.
+
+The diff's title names both occurrences and the engine's verdict on exactly that pair: **Identical bytes**, **Differs only by indentation** when indentation is the whole difference, or the pair's clone kind. That line is the fastest check that a finding is real: two copies that differ only by indentation are the same code.
+
+To compare any two occurrences, tap one row and then another. The first tap picks the row; the second opens the diff with the first-tapped range on the left. Tap the picked row again to let it go.
+
+The diff's title names both files and states what the engine found for exactly those two ranges: **Identical bytes**, **Differs only by indentation** when the only difference is how the lines are indented, or the pair's clone kind. That title is the quickest way to confirm a reported copy is real.
 
 ## Cluster Navigation
 

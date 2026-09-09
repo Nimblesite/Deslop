@@ -275,6 +275,12 @@ fn assert_engine_derived_fields(golden: &Value) {
              ([FUSED-SCOPE]): {cluster}"
         );
         assert_no_pair_surface_on_cluster(cluster, "report-golden");
+        assert_eq!(
+            cluster_kind(cluster),
+            IDENTICAL_KIND,
+            "a pure Type-1 corpus folds every cluster to the identical kind \
+             ([CLONE-KIND-FOLD]): {cluster}"
+        );
     }
     // Two clusters: the worse of them tops the percentile, the other
     // closes it ([SEVERITY-BAND]).

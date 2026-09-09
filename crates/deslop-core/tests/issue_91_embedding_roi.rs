@@ -10,6 +10,7 @@ use deslop_core::{
     fingerprint::Fingerprint,
     lsh::{Signature, SignatureIndex, SIGNATURE_LEN},
     pair::{candidate_pairs, cluster_by_transitive_closure, FUSED_THRESHOLD, LSH_ONLY_MIN_JACCARD},
+    report_fixtures::{UniformKind, FIXTURE_KIND},
     state::{FileId, FileRegistry},
 };
 
@@ -63,7 +64,7 @@ fn issue_91_embedding_only_pair_survives_when_lsh_misses_match() -> Result<()> {
     let cluster = clusters.first().context("one cluster expected")?;
     assert_eq!(cluster.members, vec![0, 1]);
 
-    // [FUSED-RANK-MASS] Pair evidence admitted the component above; the
+    // [RANK-MASS-SUM] Pair evidence admitted the component above; the
     // materialised cluster owns only membership and duplicated mass.
     let rendered = build_ranked_fused_clusters(&ClusterBuildInputs {
         fingerprints: &fingerprints,
@@ -71,6 +72,7 @@ fn issue_91_embedding_only_pair_survives_when_lsh_misses_match() -> Result<()> {
         trees: &[],
         file_languages: &HashMap::new(),
         file_paths: &HashMap::new(),
+        kinds: &UniformKind(FIXTURE_KIND),
     });
     assert_eq!(
         rendered.len(),

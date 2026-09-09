@@ -124,7 +124,7 @@ Output (`DuplicatesPage` — the one page wire type, whatever the scope or detai
 ```
 
 `ClusterSummary` (slim — no `occurrences[]`):
-`{ id, mass, size_nodes, occurrence_count, language, first_occurrence: { path, start_byte, end_byte, start_line, end_line } }`.
+`{ id, rank, rank_band, kind, mass, size_nodes, occurrence_count, language, first_occurrence: { path, start_byte, end_byte, start_line, end_line } }`. `kind` is the engine's folded clone kind ([CLONE-KIND-FOLD]).
 Line numbers accompany byte offsets because humans reason in lines. The summary's `language` derives
 from the canonical occurrence path via the **core parser registry's** extension map — the single
 source shared with the HTML renderer, so every registered language (Dart included, #164) reports
@@ -226,7 +226,7 @@ Edge cases:
 
 Input is `PairComparisonParams { left, right }`; each endpoint is `{ path, start_byte, end_byte }`, and the endpoints must be distinct occurrences within the pinned workspace. A cluster id is invalid input because the server never chooses comparison endpoints from a component.
 
-Output is `PairComparison { left, right, evidence }`. The response echoes both endpoints and returns only that relation's structural similarity, token Jaccard, embedding cosine, content agreement, rename consistency, literal fraction, fused admission score, content-gate applicability and result, final admission result, optional pair classification, and engine-authored explanation. It contains no cluster mass. No value is cached or copied onto a cluster.
+Output is `PairComparison { left, right, evidence }`. The response echoes both endpoints and returns only that relation's structural similarity, token Jaccard, embedding cosine, content agreement, rename consistency, literal fraction, how far the two raw ranges are the same text (`text_identity`: byte-identical, indentation-only, or different), fused admission score, content-gate applicability and result, final admission result, optional pair classification, and engine-authored explanation. It contains no cluster mass. No value is cached or copied onto a cluster.
 
 The server recomputes or retrieves the endpoint-keyed pair record through `pair/compare`. Reversing endpoint order preserves the symmetric measurements and admission result while the echoed endpoint order follows the request. Replacing either endpoint asks a different question and cannot reuse evidence from the first pair.
 
@@ -254,6 +254,14 @@ Content refreshes on every `resources/read` — always whatever the LSP's in-mem
 ### [MCP-IPC-CLIENT] IPC client (single source of truth)
 
 Every read tool issues exactly one JSON-RPC request over the LSP's IPC endpoint. The MCP holds **no on-disk cache** and **no in-memory `Report` cache** — caching layers are exactly what create the staleness window the IPC architecture exists to eliminate. Per-call cost is one local IPC round-trip (Unix socket, or TCP loopback per [LIVE-IPC-TCP]; sub-millisecond either way), bounded entirely by the LSP's `LiveService` lock contention. If the socket is missing or the LSP exits mid-call, every read returns `LspNotRunning`; the MCP does **not** fall back to a second pipeline. CI / one-shot audits are the `deslop` CLI's job, not the MCP's.
+
+### [MCP-IPC-WIRE-MISMATCH] A reply from another build is refused by name
+
+The MCP and the LSP are two binaries, and they can come from two builds: an extension bundle installed last week beside an engine built today. Every reply the MCP decodes is a document the LSP produced, and a whole report stamps its producer's version in `tool_version`. Before decoding, the MCP compares that stamp with its own version; a different version is refused without decoding anything. A reply that does not decode at the same version — a field the wire renamed, a development build carrying the same version string as another development build — is refused the same way. Either refusal names both versions, the IPC endpoint, what was found, and the remedy: reinstall the VSIX so both binaries ship from one bundle, then re-run the analysis. No raw field error reaches a caller, and no tool answers a mismatched reply with an empty page an agent could read as "no duplicates".
+
+**For AI.** `crates/deslop-mcp/src/backend/wire.rs::decode` guards every IPC decode — `report/get`, `report/forFile`, `report/forRange`, `session/config`, `duplicates/findSimilar`, `cluster/byId`, `pair/compare`, `merge/plan`, `embedding/listModels`, `embedding/setModel` — and returns `BackendError::WireMismatch`. Message shape: `deslop-mcp <mcp> cannot read the "<method>" reply from deslop-lsp <engine> at "<socket>": <detail>. The two binaries are from different Deslop builds — reinstall the Deslop VSIX so deslop-mcp and deslop-lsp ship from one bundle, then re-run the analysis.` `<engine>` is the reply's `tool_version`, or `unknown (reply carries no tool_version)` for a page that is not a whole report. Pinned by `backend/wire/tests.rs` (a foreign version is refused before decoding; a same-version drift names the field the wire moved; an unstamped reply says so; a report from this version decodes) and by `tests/ipc_wire_mismatch.rs`, where a stub LSP serves what another release serves — a report carrying `weight` where this wire carries `mass`: `duplicates` is refused on the stamp before decoding, `cluster-by-id`, whose page carries no stamp, is refused on the moved field, and neither returns a page.
+
+`duplicates/findSimilar` decodes the complete generated `FindSimilarResult` through this same guard. Its `clusters`, `below_min_nodes`, and `total_occurrences` fields are required. Missing fields produce the named wire mismatch; they never default to an empty match list. The wire decoder's unit tests cover each missing field.
 
 ### [MCP-NOTIFICATIONS] Notifications (server → client)
 
@@ -298,3 +306,4 @@ A small tool list is itself prompt engineering: every extra tool is a descriptio
 - `find-similar` keystone cases remain: snippet match, unparseable input, below-min-nodes, and limit handling.
 - `compare-pair` requires two concrete endpoints and returns only that pair's `S`, `J`, `E`, `A`, `R`, literal fraction, admission result, and classification.
 - `resources/read deslop://report` returns valid canonical JSON; a follow-up file-change triggers `notifications/resources/updated`.
+- A report served by another Deslop build is refused with the [MCP-IPC-WIRE-MISMATCH] message from `duplicates` and `cluster-by-id` alike, with no result page.

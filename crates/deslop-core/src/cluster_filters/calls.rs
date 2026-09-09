@@ -2,20 +2,26 @@
 //! literal-variation cluster filter
 //! ([CLONE-NOISE-LITERAL-VARIATION-CALLS]).
 
-use tree_sitter::Node;
-
 use std::sync::Arc;
+
+use callee::{call_shape_from_node, CalleePart};
+use tree_sitter::Node;
 
 use super::{enclosing_kind, node_search::KindSearch, parse_for, ParseCache, Snippet};
 use crate::ast::{named_children, ByteRange};
 
-use args::collect_argument_shapes;
-
 /// Per-argument shape extraction for the filter.
 mod args;
 
+/// Canonical callee headers and nested receiver-call argument shapes.
+mod callee;
+
 /// Assertion admission for the covered-statement rule.
 mod asserts;
+
+/// The covered-statement precondition and the statement shapes it reads.
+mod statements;
+use statements::{covered_statements_admissible, is_statement_shape};
 
 /// Bound-result flow for invariant adapter calls in scenario scaffolding.
 mod dataflow;
@@ -73,10 +79,10 @@ fn is_literal_variation_call_set(calls: Option<Vec<Arc<CallShape>>>) -> bool {
 /// Distilled view of a call expression used to compare cluster members.
 #[derive(Clone)]
 pub(crate) struct CallShape {
-    /// Concrete callee string. Captured from raw source so identifier
-    /// text the normalised AST collapses is preserved.
-    callee: Vec<u8>,
-    /// Number of arguments to the call.
+    /// AST callee shape preserving called names and member selectors,
+    /// with receiver names and nested string payloads normalised.
+    callee: Vec<CalleePart>,
+    /// Number of argument slots, including nested callee invocations.
     arity: usize,
     /// Keyword each argument is passed under, positionally, `None` for
     /// positional arguments. Part of the header: two calls naming
@@ -126,33 +132,42 @@ enum ArgShape {
     Other,
 }
 
-/// Extracts the [`CallShape`] for the call expression covering
-/// `snippet.range`. Returns `None` when no call is present.
+/// Extracts the [`CallShape`] for the call `snippet` is
+/// ([CLONE-NOISE-LITERAL-VARIATION-CALLS-MEMBER-CALL]). Returns `None`
+/// when no call is present.
 fn call_shape(snippet: &Snippet<'_>) -> Option<CallShape> {
     let tree = parse_for(snippet)?;
-    let call = enclosing_kind(
-        tree.root_node(),
-        snippet.range,
-        call_kinds(snippet.language),
-    )?;
-    call_shape_from_node(call, snippet.source, snippet.language)
+    let kinds = call_kinds(snippet.language);
+    let enclosing = enclosing_kind(tree.root_node(), snippet.range, kinds)
+        .and_then(|call| call_shape_from_node(call, snippet.source, snippet.language));
+    if let Some(shape) = enclosing.as_ref().filter(|shape| !shape.carries_body()) {
+        return Some(shape.clone());
+    }
+    // Either no call encloses the member — an awaited check in a plain
+    // function body — or the enclosing call only carries the member
+    // inside a body, a test case around that check, and a body is never
+    // judged by the name beside it. A member that is an expression around
+    // one call is judged by that call; a member holding a complete
+    // statement is a run, which is the sequence rule's question, and a
+    // run is never judged by the one call it happens to contain
+    // ([CLONE-NOISE-LITERAL-VARIATION-CALLS-MEMBER-CALL]).
+    held_call(tree.root_node(), snippet, kinds)
+        .and_then(|call| call_shape_from_node(call, snippet.source, snippet.language))
+        .or(enclosing)
 }
 
-/// Extracts a [`CallShape`] from a concrete call node.
-fn call_shape_from_node(call: Node<'_>, source: &[u8], language: &str) -> Option<CallShape> {
-    let callee_node = call.child_by_field_name("function")?;
-    let callee = source
-        .get(callee_node.start_byte()..callee_node.end_byte())?
-        .to_vec();
-    let (arguments, keywords) = collect_argument_shapes(call, source, language);
-    Some(CallShape {
-        arity: arguments.len(),
-        callee,
-        keywords,
-        arguments,
-        result_binding: dataflow::assigned_binding(call, source),
-        consumed_identifiers: dataflow::consumed_identifiers(call, source, call_kinds(language)),
-    })
+/// The one outermost call `snippet` holds, when `snippet` is an
+/// expression — it holds no complete statement — and holds exactly one.
+fn held_call<'tree>(
+    root: Node<'tree>,
+    snippet: &Snippet<'_>,
+    kinds: &[&str],
+) -> Option<Node<'tree>> {
+    let statements = KindSearch::enclosed(snippet.range, is_statement_shape).nodes(root);
+    if !statements.is_empty() {
+        return None;
+    }
+    KindSearch::enclosed(snippet.range, |kind| kinds.contains(&kind)).sole_node(root)
 }
 
 /// Computes the fused literal-variation sequence cell for one snippet:
@@ -166,127 +181,6 @@ fn call_sequence(snippet: &Snippet<'_>) -> super::snippets::CallSequence {
         statements_admissible: admissible,
         shapes,
     }
-}
-
-/// Whether the statements covered by `snippet` are admissible to the
-/// sequence rule: every complete covered statement contains a call,
-/// except that one lone call-free statement is admitted when it is an
-/// assertion on a value the covered calls bound — the trailing
-/// acceptance check of the test idiom this filter hides (gh #70, #71).
-///
-/// Anything else call-free blocks the filter. A varying call is not the
-/// whole matched region when an adjacent authored statement carries
-/// additional work: ignoring such a statement let one REST call hide
-/// the endpoint-bearing accessor window while its call-free data
-/// handling remained inside the range (`rename_needs_an_anchor`). And a
-/// *block* of call-free assertions is shared verification logic the
-/// members genuinely duplicate, not payload, so only the lone one is
-/// idiom ([CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT]).
-fn covered_statements_admissible(snippet: &Snippet<'_>) -> bool {
-    let Some(tree) = parse_for(snippet) else {
-        return false;
-    };
-    let statements =
-        KindSearch::enclosed(snippet.range, is_statement_shape).nodes(tree.root_node());
-    let kinds = call_kinds(snippet.language);
-    let (with_call, without_call): (Vec<&Node<'_>>, Vec<&Node<'_>>) = statements
-        .iter()
-        .partition(|node| subtree_contains_call(**node, kinds));
-    !statements.is_empty() && call_free_admissible(&without_call, &with_call, &statements, snippet)
-}
-
-/// Which call-free statements the covered set may carry: none, the lone
-/// assertion on a call-bound value, or that assertion preceded by the
-/// literal tautology it reads
-/// ([CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT-TAUTOLOGY]).
-/// Three or more never qualify.
-fn call_free_admissible(
-    without_call: &[&Node<'_>],
-    with_call: &[&Node<'_>],
-    covered: &[Node<'_>],
-    snippet: &Snippet<'_>,
-) -> bool {
-    match without_call {
-        [] => true,
-        [lone] => asserts::is_assert_on_call_bound_value(**lone, with_call, snippet),
-        [tautology, assertion] => {
-            asserts::is_literal_tautology_pair([tautology, assertion], with_call, covered, snippet)
-        }
-        // A whole scenario *run*: the widest-window selection
-        // ([PIPELINE-RANK-WORST-FIRST]) may sweep several scenario cells
-        // into one member, and each cell carries its own trailing
-        // acceptance assert. Every call-free statement must be an
-        // assertion on a value bound by the covered call that precedes
-        // it, and the preceding calls must differ — one call with a run
-        // of shared asserts is shared verification logic the members
-        // genuinely duplicate, not the per-cell acceptance of the test
-        // idiom ([CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT]).
-        _ => scenario_run_acceptance(covered, with_call, snippet),
-    }
-}
-
-/// True when every call-free statement is an assertion on a value bound
-/// by the covered call immediately preceding it, and those preceding
-/// calls are not all the same call.
-fn scenario_run_acceptance(
-    covered: &[Node<'_>],
-    with_call: &[&Node<'_>],
-    snippet: &Snippet<'_>,
-) -> bool {
-    let kinds = call_kinds(snippet.language);
-    let mut preceding_calls: Vec<usize> = Vec::new();
-    let mut last_call_start = None;
-    for statement in covered {
-        if subtree_contains_call(*statement, kinds) {
-            last_call_start = Some(statement.start_byte());
-            continue;
-        }
-        if !asserts::is_assert_on_call_bound_value(*statement, with_call, snippet) {
-            return false;
-        }
-        if let Some(start) = last_call_start {
-            preceding_calls.push(start);
-        }
-    }
-    // Every assert must sit behind a covered call, and the calls must
-    // differ: per-cell acceptance, never a shared verification block.
-    preceding_calls.len() == count_call_free(covered, kinds)
-        && preceding_calls
-            .iter()
-            .collect::<std::collections::BTreeSet<_>>()
-            .len()
-            >= 2
-}
-
-/// The number of covered statements carrying no call production.
-fn count_call_free(covered: &[Node<'_>], kinds: &[&str]) -> usize {
-    covered
-        .iter()
-        .filter(|statement| !subtree_contains_call(**statement, kinds))
-        .count()
-}
-
-/// Statement and binding declarations used by the grammars this filter scans.
-fn is_statement_shape(kind: &str) -> bool {
-    kind.ends_with("_statement")
-        || matches!(
-            kind,
-            "assignment"
-                | "expression_statement"
-                | "lexical_declaration"
-                | "local_variable_declaration"
-                | "variable_declaration"
-        )
-}
-
-/// Whether `node` contains a call production for its language.
-fn subtree_contains_call(node: Node<'_>, kinds: &[&str]) -> bool {
-    if kinds.contains(&node.kind()) {
-        return true;
-    }
-    named_children(node)
-        .into_iter()
-        .any(|child| subtree_contains_call(child, kinds))
 }
 
 /// Returns every call fully contained in `snippet.range`, preserving
@@ -314,8 +208,8 @@ fn call_shapes_in_range(snippet: &Snippet<'_>) -> Option<Vec<CallShape>> {
 /// `[expect, expect(...).toContain]`, and since the receiver carries no
 /// literal it could never vary — so the "every position must vary" rule
 /// refused a family that varies in the only place it has (gh #284). The
-/// receiver's bytes are already inside [`CallShape::callee`], so the
-/// information is not lost, only counted once. Arguments are still
+/// receiver's call names and payloads already belong to the enclosing
+/// [`CallShape`], so the information is counted once. Arguments are still
 /// walked: a call passed *as* an argument is genuinely a separate call.
 fn collect_call_shapes(node: Node<'_>, walk: &Walk<'_>, out: &mut Vec<CallShape>) {
     if node.end_byte() < walk.range.start || node.start_byte() > walk.range.end {

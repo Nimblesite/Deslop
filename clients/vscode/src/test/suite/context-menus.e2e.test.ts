@@ -34,7 +34,7 @@ function cluster(
 }
 
 function clusterNode(c: ReportCluster): ClusterNode {
-  return new ClusterNode(c, "mid");
+  return new ClusterNode(c);
 }
 
 function occurrenceNode(o: ReportOccurrence): OccurrenceNode {

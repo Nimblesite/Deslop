@@ -199,19 +199,20 @@ fn write_top_clusters_header(theme: &Theme, report: &Report, technical: bool) {
     );
     if technical {
         eprintln!(
-            "  {dim}columns: rank, id, mass, occurrences, canonical AST nodes, files{reset}",
+            "  {dim}columns: rank, kind, id, mass, occurrences, canonical AST nodes, files{reset}",
             dim = theme.dim,
             reset = theme.reset,
         );
     }
 }
 
-/// Renders one neutral mass-only cluster row.
+/// Renders one cluster row, titled by its clone kind ([CLONE-KIND-LABELS]).
 fn render_cluster(theme: &Theme, cluster: &ReportCluster, technical: bool) {
     let files = summarise_files(&cluster.occurrences);
+    let title = cluster.kind.labels().title;
     if technical {
         eprintln!(
-            "  {bold}#{rank:<2}{reset} Duplicate code [{dim}{id}{reset}] · mass {mass} · {occurrences} occurrences · {nodes} AST nodes · {cyan}{files}{reset}",
+            "  {bold}#{rank:<2}{reset} {title} [{dim}{id}{reset}] · mass {mass} · {occurrences} occurrences · {nodes} AST nodes · {cyan}{files}{reset}",
             bold = theme.bold,
             reset = theme.reset,
             dim = theme.dim,
@@ -224,7 +225,7 @@ fn render_cluster(theme: &Theme, cluster: &ReportCluster, technical: bool) {
         );
     } else {
         eprintln!(
-            "  {bold}#{rank:<2}{reset} Duplicate code — mass {mass}, {occurrences} occurrences in {cyan}{files}{reset}",
+            "  {bold}#{rank:<2}{reset} {title} — mass {mass}, {occurrences} occurrences in {cyan}{files}{reset}",
             bold = theme.bold,
             reset = theme.reset,
             cyan = theme.cyan,

@@ -1,4 +1,4 @@
-//! Terse ASCII text renderer.
+//! Terse ASCII text renderer ([CLI-TEXT]).
 //!
 //! AI-readable pretty-print over the canonical JSON report. No colour,
 //! no Unicode box-drawing, line-oriented — consumable by any LLM (not
@@ -183,16 +183,18 @@ fn write_boilerplate_hints(out: &mut String, report: &Report) {
     }
 }
 
-/// Writes a neutral mass-only cluster block.
+/// Writes one cluster block: rank, id, mass, membership, extent, and
+/// the folded clone kind ([CLONE-KIND-FOLD]).
 fn write_cluster(out: &mut String, cluster: &ReportCluster) {
     let _ = writeln!(
         out,
-        "#{rank} [{id}] mass={mass} occurrences={occurrences} canonical_nodes={nodes}",
+        "#{rank} [{id}] mass={mass} occurrences={occurrences} canonical_nodes={nodes} kind={kind}",
         rank = cluster.rank,
         id = cluster.id,
         mass = cluster.mass,
         occurrences = cluster.occurrence_count,
         nodes = cluster.canonical_node_count,
+        kind = cluster.kind.wire_label(),
     );
     write_cluster_occurrences(out, cluster);
 }

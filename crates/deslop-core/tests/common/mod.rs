@@ -475,6 +475,7 @@ impl ReportFixture {
             mass: u64::try_from(node_count)
                 .unwrap_or(u64::MAX)
                 .saturating_mul(u64::try_from(spans.len().saturating_sub(1)).unwrap_or(u64::MAX)),
+            kind: deslop_core::report_fixtures::FIXTURE_KIND,
             shape_family: None,
         }
     }

@@ -8,16 +8,23 @@
 // wrong answer the accuracy contract forbids. One builder means one
 // place where a new wire field has to be answered for.
 //
-// The defaults describe a single mid-band cluster; suites override
-// whatever they are pinning. Pair signals are NOT fixture data: they
-// belong to explicit pair records ([FACET-MODEL]) and never ride on a
+// The defaults describe a single mid-band near-copy cluster; suites
+// override whatever they are pinning. Pair signals are NOT fixture data:
+// they belong to explicit pair records ([FACET-MODEL]); the clone kind is
+// the engine's fold of them ([CLONE-KIND-FOLD]) and does ride on the
 // cluster.
 
 import type {
+  ClusterKind,
   ReportCluster,
   ReportOccurrence,
   Severity,
 } from "../types/report";
+
+/** The clone kind every fixture cluster carries unless a suite pins
+ * another — the ordinary admitted near-copy, mirroring
+ * `deslop_core::report_fixtures::FIXTURE_KIND`. */
+export const FIXTURE_KIND: ClusterKind = "nearly_identical";
 
 /** Everything a suite may pin on a fixture cluster. */
 export interface ClusterFixture {
@@ -25,6 +32,7 @@ export interface ClusterFixture {
   occurrences: ReportOccurrence[];
   rank?: number;
   rank_band?: Severity;
+  kind?: ClusterKind;
   mass?: number;
   canonical_node_count?: number;
   occurrences_total?: number;
@@ -49,6 +57,7 @@ export function wireCluster(fixture: ClusterFixture): ReportCluster {
     id: fixture.id,
     rank: fixture.rank ?? 1,
     rank_band: fixture.rank_band ?? "mid",
+    kind: fixture.kind ?? FIXTURE_KIND,
     mass: fixture.mass ?? 1,
     canonical_node_count: fixture.canonical_node_count ?? 4,
     occurrences,

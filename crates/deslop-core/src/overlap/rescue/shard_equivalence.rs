@@ -21,6 +21,12 @@ use crate::{
     state::{FileId, FileRegistry},
 };
 
+/// The scan floor both paths judge every aligned core against: one
+/// node, so no core is refused for its size and the equivalence covers
+/// the content judgement as well as the overlap
+/// ([FUSED-SHARED-SUBTREE-CORE]).
+const CORE_FLOOR: usize = 1;
+
 /// One serial shard over `chunk`: the reference a single worker
 /// computes, assembled from the very `measure_chunk` the workers
 /// run so the reference can never drift from the live path.
@@ -33,7 +39,7 @@ fn run_shard<S: std::hash::BuildHasher, L: std::hash::BuildHasher>(
 ) -> (RescueTally, crate::overlap::MeasureStats) {
     let mut measurer = crate::overlap::OverlapMeasurer::new(trees);
     let mut tally = RescueTally::new();
-    let context = RescueContext::new(chunk, fingerprints, trees, sources, languages);
+    let context = RescueContext::new(chunk, fingerprints, trees, sources, languages, CORE_FLOOR);
     measure_chunk(chunk, fingerprints, &context, &mut measurer, &mut tally);
     let stats = measurer.stats();
     (tally, stats)
@@ -124,7 +130,14 @@ fn sharded_rescue_matches_serial_outcomes() -> Result<(), String> {
 
     // The threaded entry point — whichever core count routes it.
     let mut sharded = fixture();
-    apply_shared_subtree_rescue(&mut sharded, &fingerprints, &trees, &sources, &languages);
+    apply_shared_subtree_rescue(
+        &mut sharded,
+        &fingerprints,
+        &trees,
+        &sources,
+        &languages,
+        CORE_FLOOR,
+    );
 
     // The serial reference: one measurer, one tally, every pair.
     let mut serial = fixture();

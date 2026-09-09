@@ -6,10 +6,8 @@
 
 use tree_sitter::Node;
 
+use super::{super::constant_table::is_literal_value, ArgShape};
 use crate::ast::named_children;
-
-use super::super::constant_table::is_literal_value;
-use super::ArgShape;
 
 /// Walks the named children of the call's `arguments`/`argument_list`
 /// node and produces one [`ArgShape`] per argument.
@@ -34,7 +32,7 @@ pub(super) fn collect_argument_shapes(
 }
 
 /// Classifies one argument node into [`ArgShape`].
-fn arg_shape(node: Node<'_>, source: &[u8], language: &str) -> ArgShape {
+pub(super) fn arg_shape(node: Node<'_>, source: &[u8], language: &str) -> ArgShape {
     let inner = unwrap_argument(node);
     if let Some(bytes) = string_literal_bytes(inner, source) {
         return ArgShape::StringLiteral(bytes, is_interpolated(inner));

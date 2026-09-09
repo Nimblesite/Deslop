@@ -14,13 +14,13 @@ import {
   openWorstCluster,
   openOccurrence,
   jumpToNextOccurrence,
-  comparePairEndpoints,
   openSchemaDoc,
   openCpuReport,
   renderCpuReport,
   resolveOccurrenceUri,
   openOccurrenceTarget,
 } from "../../commands/register";
+import { comparePairEndpoints } from "../../commands/compare";
 import { reportWithClusters } from "./report.helpers";
 import {
   aiPayloadForCluster,
@@ -41,10 +41,13 @@ import { ReportStore } from "../../reportStore";
 import { seededStore } from "./report-store.helpers";
 import { activateExtension } from "../suite/helpers";
 import { ClusterNode, OccurrenceNode } from "../../tree/providers";
-import { Report, ReportCluster, ReportOccurrence } from "../../types/report";
-import { occurrence, wireCluster } from "../cluster.helpers";
+import { kindTaxonomy, kindTitle, Report, ReportCluster, ReportOccurrence } from "../../types/report";
+import { FIXTURE_KIND, occurrence, wireCluster } from "../cluster.helpers";
 
 const UTF8_ENCODING = "utf8";
+// [VSIX-PAIR-COMPARE] Without a language client the diff still opens; the
+// title then carries the two names and no engine verdict.
+const NO_CLIENT = (): LanguageClient | undefined => undefined;
 const TEST_SOURCE_PATH = "src/foo.cs";
 const SECOND_TEST_SOURCE_PATH = "src/bar.cs";
 const ELECTED_PAIR_LINE_PREFIX = "elected_pair:";
@@ -56,6 +59,7 @@ const TEST_TWENTY = 20;
 const DEFAULT_CLUSTER_WEIGHT = TEST_TEN;
 const DEFAULT_OCCURRENCE_END_BYTE = 50;
 const CYCLE_OCCURRENCE_END_BYTE = 16;
+const NO_ENGINE_DIFF_TITLE = `${FILE_A_NAME} vs ${FILE_B_NAME}`;
 const CYCLE_CLUSTER_ID = "c-cycle";
 const REFRESH_REPORT_COMMAND = "deslop.refreshReport";
 const OPEN_CLUSTER_COMMAND = "deslop.openCluster";
@@ -103,6 +107,12 @@ async function findDiffTab(): Promise<vscode.TabInputTextDiff> {
     });
   }
   throw new Error("no diff tab opened after comparePairEndpoints");
+}
+
+function diffTabLabel(): string | undefined {
+  return vscode.window.tabGroups.all
+    .flatMap((group) => group.tabs)
+    .find((tab) => tab.input instanceof vscode.TabInputTextDiff)?.label;
 }
 
 async function closeAllDiffs(): Promise<void> {
@@ -322,7 +332,7 @@ suite("register command implementations", () => {
     await closeAllDiffs();
     // [VSIX-PAIR-COMPARE] Both endpoints are explicit; the host never
     // invents a canonical side.
-    await comparePairEndpoints(
+    await comparePairEndpoints(NO_CLIENT, 
       { path: fileA, start_byte: 0, end_byte: CYCLE_OCCURRENCE_END_BYTE },
       { path: fileB, start_byte: 0, end_byte: CYCLE_OCCURRENCE_END_BYTE },
     );
@@ -338,6 +348,9 @@ suite("register command implementations", () => {
     const right = await vscode.workspace.openTextDocument(diff.modified);
     assert.equal(left.getText(), "public class A {");
     assert.equal(right.getText(), "public class B {");
+    // [VSIX-PAIR-COMPARE] With no engine to ask, the title names the two
+    // endpoints and claims nothing about them.
+    assert.equal(diffTabLabel(), NO_ENGINE_DIFF_TITLE);
 
     await closeAllDiffs();
     fs.rmSync(dir, { recursive: true, force: true });
@@ -359,7 +372,7 @@ suite("register command implementations", () => {
     const thirdLineEnd = source.indexOf("\n", thirdLineStart);
 
     await closeAllDiffs();
-    await comparePairEndpoints(
+    await comparePairEndpoints(NO_CLIENT, 
       { path: file, start_byte: 0, end_byte: firstLineEnd },
       { path: file, start_byte: thirdLineStart, end_byte: thirdLineEnd },
     );
@@ -395,11 +408,11 @@ suite("register command implementations", () => {
     // [VSIX-PAIR-COMPARE] There is no canonical fallback: a missing,
     // malformed, or identical endpoint pair must never open a diff.
     await closeAllDiffs();
-    await comparePairEndpoints(undefined, undefined);
-    await comparePairEndpoints({ path: "a.ts", start_byte: 0, end_byte: 1 }, undefined);
-    await comparePairEndpoints(undefined, { path: "a.ts", start_byte: 0, end_byte: 1 });
-    await comparePairEndpoints({ path: "a.ts", start_byte: 0, end_byte: 1 }, "not-an-object");
-    await comparePairEndpoints(
+    await comparePairEndpoints(NO_CLIENT, undefined, undefined);
+    await comparePairEndpoints(NO_CLIENT, { path: "a.ts", start_byte: 0, end_byte: 1 }, undefined);
+    await comparePairEndpoints(NO_CLIENT, undefined, { path: "a.ts", start_byte: 0, end_byte: 1 });
+    await comparePairEndpoints(NO_CLIENT, { path: "a.ts", start_byte: 0, end_byte: 1 }, "not-an-object");
+    await comparePairEndpoints(NO_CLIENT, 
       { path: "a.ts", start_byte: 0, end_byte: 1 },
       { path: "a.ts", start_byte: 0, end_byte: 1 },
     );
@@ -508,7 +521,7 @@ function fixtureOccurrence(overrides: Partial<ReportOccurrence> = {}): ReportOcc
 }
 
 function clusterNodeFor(c: ReportCluster): ClusterNode {
-  return new ClusterNode(c, "mid");
+  return new ClusterNode(c);
 }
 
 function occurrenceNodeFor(o: ReportOccurrence): OccurrenceNode {
@@ -532,14 +545,20 @@ suite("tree menu renderers", () => {
     const lines = text.split("\n");
     assert.equal(lines.length, THREE_LINE_COUNT, "header + 2 occurrences");
     assert.match(lines[0] ?? "", /^cluster c-x/);
-    assert.match(lines[0] ?? "", /mass/);
+    // [RANK-MASS-SUM] The header prints mass as the whole number it is.
+    assert.ok(
+      lines[0]?.includes(` · mass ${DEFAULT_CLUSTER_WEIGHT} · `),
+      `the header must print mass ${DEFAULT_CLUSTER_WEIGHT} with no decimal point, got: ${lines[0] ?? ""}`,
+    );
     assert.match(lines[0] ?? "", /2 occurrences/);
     assert.match(lines[1] ?? "", /A\.cs:1:1$/);
     assert.match(lines[THIRD_LINE_INDEX] ?? "", /B\.cs:1:1$/);
     assert.ok(!text.includes("start_byte"));
     assert.ok(!text.includes(".."), "human copy must not include byte ranges");
-    assert.doesNotMatch(text, /Identical code|nearly identical|same behavior|structural_only/i,
-      "no clone-kind label may reach the copy surface");
+    assert.ok(
+      lines[0]?.includes(` · ${kindTitle(FIXTURE_KIND)} · `),
+      `the header names the clone kind, got: ${lines[0] ?? ""}`,
+    );
 
     fs.rmSync(dir, { recursive: true, force: true });
   });
@@ -553,8 +572,19 @@ suite("tree menu renderers", () => {
     const text = aiPayloadForCluster(c, 7);
     assert.match(text, /cluster_id: c-ai/);
     assert.match(text, /rank: 7/);
-    assert.match(text, /mass: /);
-    assert.doesNotMatch(text, /bucket:/, "no clone-kind line may reach the AI payload");
+    // [RANK-MASS-SUM] The AI payload prints the same whole-number mass a
+    // human row prints, so the two surfaces can never disagree on a count.
+    assert.ok(
+      text.split("\n").includes(`mass: ${DEFAULT_CLUSTER_WEIGHT}`),
+      `the payload must carry the line "mass: ${DEFAULT_CLUSTER_WEIGHT}", got:\n${text}`,
+    );
+    // [CLONE-KIND-LABELS] The payload names the kind by its wire spelling,
+    // its title and its taxonomy, so an agent reads what a human reads.
+    assert.ok(
+      text.split("\n").includes(`kind: ${FIXTURE_KIND} (${kindTitle(FIXTURE_KIND)} — ${kindTaxonomy(FIXTURE_KIND)})`),
+      `the payload must carry the kind line, got:\n${text}`,
+    );
+    assert.doesNotMatch(text, /bucket:/, "the retired bucket line never returns");
     // [FUSED-PAIR-SIGNALS] No cluster surface — including copy-for-AI —
     // renders pair evidence: no structural, jaccard, or embedding score,
     // in any wire format the payload ever used.
@@ -819,8 +849,9 @@ suite("tree menu handlers", () => {
     assert.match(clipboard, /occurrence_path: src\/foo\.cs/);
     assert.match(clipboard, /cluster_id: c-occ-ctx/);
     // [VSIX-PAIR-COMPARE] The AI payload carries the engine's cluster
-    // facts — rank, mass, node count — and no similarity bucket.
+    // facts — rank, kind, mass, node count — and no pair evidence.
     assert.match(clipboard, /rank: 1/);
+    assert.match(clipboard, new RegExp(`kind: ${FIXTURE_KIND} `));
     assert.match(clipboard, /mass: /);
     assert.match(clipboard, /canonical_nodes: /);
     assert.doesNotMatch(clipboard, /bucket:/);
@@ -1004,10 +1035,10 @@ suite("command target resolution", () => {
 
   test("comparePairEndpoints is a no-op when either endpoint is malformed", async () => {
     const good = { path: TEST_SOURCE_PATH, start_byte: 0, end_byte: TEST_TEN };
-    await comparePairEndpoints(good, { path: "", start_byte: 0, end_byte: 1 });
-    await comparePairEndpoints(good, { path: TEST_SOURCE_PATH, start_byte: 1.5, end_byte: 2 });
-    await comparePairEndpoints(good, { path: TEST_SOURCE_PATH, start_byte: "0", end_byte: 2 });
-    await comparePairEndpoints(good, null);
+    await comparePairEndpoints(NO_CLIENT, good, { path: "", start_byte: 0, end_byte: 1 });
+    await comparePairEndpoints(NO_CLIENT, good, { path: TEST_SOURCE_PATH, start_byte: 1.5, end_byte: 2 });
+    await comparePairEndpoints(NO_CLIENT, good, { path: TEST_SOURCE_PATH, start_byte: "0", end_byte: 2 });
+    await comparePairEndpoints(NO_CLIENT, good, null);
   });
 
   test("openSchemaDoc consults the RPC fallback and survives a failing client", async () => {

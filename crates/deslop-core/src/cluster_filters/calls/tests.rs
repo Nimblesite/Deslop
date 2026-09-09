@@ -4,13 +4,14 @@
 //! convicted when its variation is plain payload, published when the
 //! variation is authored interpolation (gh #467) or byte-identical.
 
-use super::super::{is_noise_pattern, NoiseFilter, ParseCache};
-use crate::ast::ByteRange;
-use crate::fingerprint::Fingerprint;
-use crate::state::{FileId, FileRegistry};
+use std::{collections::HashMap, path::PathBuf};
 
-use std::collections::HashMap;
-use std::path::PathBuf;
+use super::super::{is_noise_pattern, NoiseFilter, ParseCache};
+use crate::{
+    ast::ByteRange,
+    fingerprint::Fingerprint,
+    state::{FileId, FileRegistry},
+};
 
 /// One member's source: an invariant call over a varying plain string.
 const PLAIN_A: &str = "def member_a():\n    greet(\"alice\")\n";
@@ -249,7 +250,114 @@ fn dart_group_wrappers_carry_bodies_so_their_names_are_not_payload() {
     );
 }
 
+/// One browser check inside a test body: the member is the awaited
+/// `locator().boundingBox()` expression, not the test case around it.
+const AWAITED_LOCATOR_A: &str = "test(\"the header sits above the sidebar\", async ({ page }) => {\n  const headerBox = await page.locator(\".site-header\").boundingBox();\n  expect(headerBox.y).toBe(0);\n});\n";
+/// A second check on another selector, awaited the same way.
+const AWAITED_LOCATOR_B: &str = "test(\"the stamp sits above the filters\", async ({ page }) => {\n  const stampBox = await page.locator(\".atlas-publication\").boundingBox();\n  expect(stampBox.y).toBe(0);\n});\n";
+/// The needle opening each awaited expression.
+const AWAITED_NEEDLE: &str = "await page";
+/// The text closing each awaited expression.
+const AWAITED_CLOSE: &str = ".boundingBox()";
+
+/// The same awaited check inside a plain helper, with no call around it
+/// at all.
+const AWAITED_IN_HELPER_A: &str = "export async function checkHeader(page) {\n  const headerBox = await page.locator(\".site-header\").boundingBox();\n  expect(headerBox.y).toBe(0);\n}\n";
+/// A second helper on another selector, awaited the same way.
+const AWAITED_IN_HELPER_B: &str = "export async function checkStamp(page) {\n  const stampBox = await page.locator(\".atlas-publication\").boundingBox();\n  expect(stampBox.y).toBe(0);\n}\n";
+
+/// A typed decorator's overload block: a type variable bound by one call,
+/// then overload signatures that carry no call at all.
+const OVERLOADS_COMMAND: &str = "CmdType = t.TypeVar(\"CmdType\", bound=Command)\n\n@t.overload\ndef command(name: _AnyCallable) -> Command: ...\n\n@t.overload\ndef command(name: str | None, cls: type[CmdType], **attrs: t.Any) -> t.Callable[[_AnyCallable], CmdType]: ...\n";
+/// The same block for the group decorator — the systematic rename
+/// `command -> group`, `CmdType -> GrpType`, and nothing else.
+const OVERLOADS_GROUP: &str = "GrpType = t.TypeVar(\"GrpType\", bound=Group)\n\n@t.overload\ndef group(name: _AnyCallable) -> Group: ...\n\n@t.overload\ndef group(name: str | None, cls: type[GrpType], **attrs: t.Any) -> t.Callable[[_AnyCallable], GrpType]: ...\n";
+/// The needle opening each overload block.
+const OVERLOADS_NEEDLE: &str = "t.TypeVar(";
+
+/// A run of statements that happens to contain exactly one call is not
+/// an expression around that call: the `click` overload blocks are one
+/// code renamed throughout, and judging them by the one `TypeVar` call
+/// they contain — whose string is the type variable's own name — hid
+/// the copy. A member holding a complete statement keeps the sequence
+/// rule, which refuses to convict a run of call-free definitions
+/// ([CLONE-NOISE-LITERAL-VARIATION-CALLS-MEMBER-CALL],
+/// [CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT]).
+#[test]
+fn a_statement_run_is_never_judged_by_the_one_call_it_contains() {
+    let verdict = Corpus::new()
+        .member(OVERLOADS_COMMAND, OVERLOADS_NEEDLE)
+        .member(OVERLOADS_GROUP, OVERLOADS_NEEDLE)
+        .verdict();
+    assert_eq!(
+        verdict, None,
+        "the members are runs of overload definitions renamed throughout, not one call \
+         varying its literal: {verdict:?}"
+    );
+}
+
+/// A member that is the `await` of one call and has no enclosing call
+/// at all — the check sits in a plain function body — is judged by the
+/// one call it holds exactly as one inside a test body is
+/// ([CLONE-NOISE-LITERAL-VARIATION-CALLS-MEMBER-CALL]).
+#[test]
+fn an_awaited_call_with_no_enclosing_call_is_judged_by_its_own_call() {
+    let verdict = Corpus::new()
+        .expression_member(AWAITED_IN_HELPER_A, AWAITED_NEEDLE, AWAITED_CLOSE)
+        .expression_member(AWAITED_IN_HELPER_B, AWAITED_NEEDLE, AWAITED_CLOSE)
+        .language("typescript")
+        .verdict();
+    assert_eq!(
+        verdict,
+        Some(NoiseFilter::LiteralCalls),
+        "no call encloses the awaited expression, so nothing but the call it holds can \
+         judge it, and that call varies only its selector: {verdict:?}"
+    );
+}
+
+/// A member that is the `await` of one call sits inside a test body, so
+/// the smallest call enclosing it carries that body and may not judge
+/// it; the member is judged by the one call it holds, whose selector
+/// varies ([CLONE-NOISE-LITERAL-VARIATION-CALLS-MEMBER-CALL]).
+#[test]
+fn an_awaited_call_inside_a_test_body_is_judged_by_its_own_call() {
+    let verdict = Corpus::new()
+        .expression_member(AWAITED_LOCATOR_A, AWAITED_NEEDLE, AWAITED_CLOSE)
+        .expression_member(AWAITED_LOCATOR_B, AWAITED_NEEDLE, AWAITED_CLOSE)
+        .language("typescript")
+        .verdict();
+    assert_eq!(
+        verdict,
+        Some(NoiseFilter::LiteralCalls),
+        "the awaited call is `page.locator(SELECTOR).boundingBox()` in both members and \
+         only the selector differs; the test case around it is not the member: {verdict:?}"
+    );
+}
+
 impl Corpus {
+    /// Registers `source` and offers the expression running from `needle`
+    /// through the end of `close` as one member — a member that is not a
+    /// whole statement and not a whole call.
+    fn expression_member(mut self, source: &'static str, needle: &str, close: &str) -> Self {
+        assert!(
+            source.contains(needle) && source.contains(close),
+            "fixture needle {needle:?} and close {close:?} must exist in the member source"
+        );
+        let start = source.find(needle).unwrap_or_default();
+        let end = source
+            .find(close)
+            .map_or(source.len(), |at| at.saturating_add(close.len()));
+        let file_id = self.registry.register(PathBuf::from("src.py"));
+        self.sources.push((file_id, source));
+        self.members.push(Fingerprint {
+            hash: [0_u8; 32],
+            file_id,
+            byte_range: ByteRange { start, end },
+            node_count: 12,
+        });
+        self
+    }
+
     /// Registers `source` and offers exactly the call that starts at
     /// `needle` and ends at the source's last closing parenthesis as one
     /// member, so the filter judges the call itself.

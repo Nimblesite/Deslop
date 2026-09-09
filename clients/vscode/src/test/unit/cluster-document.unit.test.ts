@@ -5,12 +5,20 @@ import { clusterDocumentContent } from "../../clusterDocument";
 import type { Report, ReportCluster } from "../../types/report";
 import type { ClusterFixture } from "../cluster.helpers";
 import { emptyReport, repoMetrics } from "./report.helpers";
-import { occurrence, wireCluster } from "../cluster.helpers";
+import { FIXTURE_KIND, occurrence, wireCluster } from "../cluster.helpers";
+import { kindTitle } from "../../types/report";
+
+/** A mass whose two-decimal rendering (`527.00`) differs from its count. */
+const WHOLE_NUMBER_MASS = 527;
+const WHOLE_NUMBER_MASS_LINE = "Mass: 527";
+/** The document names the cluster's clone kind by its title ([CLONE-KIND-LABELS]). */
+const KIND_LINE = `Kind: ${kindTitle(FIXTURE_KIND)}`;
+const TWO_DECIMAL_MASS = "527.00";
 
 function cluster(overrides: Partial<ClusterFixture> = {}): ReportCluster {
   return wireCluster({
     id: "cluster-for-test",
-    mass: 12.345,
+    mass: WHOLE_NUMBER_MASS,
     canonical_node_count: 12,
     occurrences: [
       {
@@ -51,10 +59,23 @@ suite("cluster document", () => {
     );
 
     assert.ok(body.includes("# Deslop cluster cluster-for-test"));
+    assert.ok(
+      body.split("\n").includes(KIND_LINE),
+      `the document must carry the line "${KIND_LINE}":\n${body}`,
+    );
     assert.ok(body.includes("Occurrences: 4"));
-    // [SEVERITY-BAND] The document names the cluster's mass — the engine's
-    // ranking metric — with the shared formatter ([PRINCIPLES-ONE-CALCULATION]).
-    assert.ok(body.includes("Mass: 12.35"));
+    // [RANK-MASS-SUM] The document names the cluster's mass — the engine's
+    // ranking metric — as the whole number it is, through the shared
+    // formatter ([PRINCIPLES-ONE-CALCULATION]), never at score precision.
+    assert.ok(
+      body.split("\n").includes(WHOLE_NUMBER_MASS_LINE),
+      `the document must carry the line "${WHOLE_NUMBER_MASS_LINE}":\n${body}`,
+    );
+    assert.equal(
+      body.includes(TWO_DECIMAL_MASS),
+      false,
+      "a count must never be printed with the two-decimal signal precision",
+    );
     assert.ok(body.includes("1. /repo/Alpha.cs:2:6"));
     assert.ok(body.includes("2. /repo/Beta.cs hidden"));
   });

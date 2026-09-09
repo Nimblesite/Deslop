@@ -398,13 +398,17 @@ pub(super) fn write_cluster_card(
     snippets: &mut SnippetLoader<'_>,
 ) {
     let occurrences = &cluster.occurrences;
+    let labels = cluster.kind.labels();
     let _ = write!(
         out,
-        "<article class=\"cluster-card{diff_class}\">\
+        "<article class=\"cluster-card cluster-card--{kind}{diff_class}\">\
          <header class=\"cluster-card__head\">\
-         <h3 class=\"cluster-card__title\">Duplicate code</h3>\
+         <h3 class=\"cluster-card__title\" title=\"{taxonomy}\">{title}</h3>\
          <span class=\"cluster-card__cost\">{cost}</span>\
          </header>",
+        kind = labels.css_suffix,
+        taxonomy = escape(labels.taxonomy),
+        title = escape(labels.title),
         diff_class = diff_card_class(cluster),
         cost = escape(&cost_chip(cluster)),
     );

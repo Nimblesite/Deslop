@@ -17,6 +17,8 @@
 //! `UserWorker.synchronise` are a copy-paste with every local, parameter
 //! and collaborator renamed, and nothing forces them to agree — that
 //! clone must surface with its real files, ranges, bucket and signals.
+//! [FUSED-CONTENT-GATE-CALL-TARGET] permits its method renames because
+//! the copied receiver properties demonstrate a repeated bijective rename.
 //! An empty report satisfies the absence half and fails the presence
 //! half, so a detector that went blind cannot pass this test.
 

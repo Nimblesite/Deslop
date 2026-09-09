@@ -1,4 +1,5 @@
-// Unit: ClusterHoverProvider.provideHover — [VSIX-HOVER-PROVIDER].
+// Unit: ClusterHoverProvider.provideHover — [VSIX-HOVER-PROVIDER],
+// rendering the one shared card of [VSIX-HOVER-SHARED].
 // Picks the highest-ranked cluster whose occurrence byte range contains the
 // cursor and renders the shared hover card; returns null when nothing in the
 // visible projection covers the position. Runs under vscode-test so a real

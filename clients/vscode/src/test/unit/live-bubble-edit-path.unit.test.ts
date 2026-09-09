@@ -12,8 +12,8 @@ import {
   openLiveDocument,
   probeCluster as cluster,
   renderFullConfidenceBubble,
+  FIXTURE_KIND_TITLE,
 } from "./bubble.helpers";
-import { SHORT_VERDICT } from "../../bubble/renderParts";
 import { reportWithClusters } from "./report.helpers";
 
 suite("LiveBubble onEdit path", () => {
@@ -84,8 +84,8 @@ suite("LiveBubble onEdit path", () => {
       const visible = renderFullConfidenceBubble(capture, bubble, 6, "c-after");
       assert.match(
         visible,
-        new RegExp(SHORT_VERDICT),
-        "the recovered bubble keeps its short verdict",
+        new RegExp(FIXTURE_KIND_TITLE),
+        "the recovered bubble keeps its clone kind verdict",
       );
     } finally {
       bubble.dispose();

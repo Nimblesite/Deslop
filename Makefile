@@ -218,6 +218,8 @@ _ci-contract-tests: _vsix-node-modules
 	@node --test scripts/deployment/zip.test.mjs
 	@echo "==> PATH-scrub gate ([DEPLOY-EXTERNAL-MCP-CONSUMER])..."
 	@node --test scripts/repository/scrub-path-binaries.test.mjs
+	@echo "==> Profile-aware VSIX install gate ([DEPLOY-VSIX-INSTALL-PROFILES])..."
+	@node --test scripts/repository/install-vsix-profiles.test.mjs
 	@echo "==> Process-scrub + host-shell gate ([DEPLOY-EXTENSION-BUNDLED-TESTS])..."
 	@node --test scripts/repository/kill-deslop-processes.test.mjs
 	@node --test scripts/repository/posix-shell.test.mjs
@@ -727,6 +729,8 @@ _vsix-clean:
 #   freshly packaged clients/vscode/deslop-live.vsix. Stale Marketplace folders
 #   must be removed first; VS Code otherwise keeps loading the higher released
 #   version even after `code --install-extension --force` reports success.
+#   That delete takes the extension away from every profile at once, so the
+#   install has to name each profile that had it ([DEPLOY-VSIX-INSTALL-PROFILES]).
 #   Skips with a warning if `code` isn't on PATH.
 _vsix-install-code:
 	@if command -v code >/dev/null 2>&1; then \
@@ -739,8 +743,8 @@ _vsix-install-code:
 	      find "$$_extensions" -maxdepth 1 -type d -name 'nimblesite.deslop-live*' -print -exec rm -rf {} +; \
 	    fi; \
 	  done; \
-	  echo "==> Installing $$_vsix into the VS Code CLI..."; \
-	  code --install-extension "$$_vsix" --force; \
+	  echo "==> Installing $$_vsix into every VS Code profile that had Deslop.live..."; \
+	  node scripts/repository/install-vsix-profiles.mjs "$$_vsix"; \
 	else \
 	  echo "WARN: 'code' CLI not on PATH — skipping install. VSIX is at clients/vscode/deslop-live-<target>.vsix"; \
 	fi

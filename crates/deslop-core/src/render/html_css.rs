@@ -33,6 +33,7 @@ pub const SITE_CSS: &str = concat!(
 /// Report-only CSS additions. Tiny on purpose — anything reusable
 /// belongs in the website CSS upstream.
 pub const REPORT_CSS: &str = "\
+:root{--kind-identical:#b3261e;--kind-nearly-identical:#e8912d;--kind-same-behavior:#a98cff;--kind-structural-only:#a9a2a0;--kind-loosely-similar:#00619e;--kind-color:var(--kind-loosely-similar);}\
 .report-shell{max-width:80rem;margin-inline:auto;padding:var(--space-12) var(--space-6);}\
 .report-shell h1{font-size:clamp(2rem,4vw,3rem);font-weight:800;margin-bottom:var(--space-3);letter-spacing:-0.04em;}\
 .report-shell .lede{color:var(--on-surface-variant);max-width:48rem;margin-bottom:var(--space-4);}\
@@ -42,7 +43,13 @@ pub const REPORT_CSS: &str = "\
 .metrics-banner--neutral{border-left-color:var(--secondary-container);color:var(--on-surface-variant);}\
 .report-shell h2{font-size:1.5rem;font-weight:700;margin:var(--space-12) 0 var(--space-6);letter-spacing:-0.02em;}\
 .report-shell .empty{color:var(--on-surface-variant);font-style:italic;}\
-.cluster-card{background:var(--surface-container-low);padding:var(--space-6);margin-bottom:var(--space-6);border-radius:var(--radius-sm);border-left:4px solid var(--primary-container);}\
+.cluster-card{background:var(--surface-container-low);padding:var(--space-6);margin-bottom:var(--space-6);border-radius:var(--radius-sm);border-left:4px solid var(--kind-color);}\
+.cluster-card--identical,.clone-group--identical{--kind-color:var(--kind-identical);}\
+.cluster-card--nearly-identical,.clone-group--nearly-identical{--kind-color:var(--kind-nearly-identical);}\
+.cluster-card--same-behavior,.clone-group--same-behavior{--kind-color:var(--kind-same-behavior);}\
+.cluster-card--structural-only,.clone-group--structural-only{--kind-color:var(--kind-structural-only);}\
+.cluster-card--loosely-similar,.clone-group--loosely-similar{--kind-color:var(--kind-loosely-similar);}\
+.cluster-card__title::before{content:\"\\25CF\";color:var(--kind-color);margin-right:var(--space-2);}\
 .cluster-card__ai-badge{font-family:var(--font-mono);font-size:0.6875rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;background:var(--secondary-container);color:var(--on-secondary-container);padding:0.125rem var(--space-2);border-radius:var(--radius-sm);white-space:nowrap;align-self:center;}\
 .cluster-card__head{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--space-4);margin-bottom:var(--space-3);flex-wrap:wrap;}\
 .cluster-card__title{font-family:var(--font-head);font-size:1.125rem;font-weight:700;color:var(--on-surface);letter-spacing:-0.01em;margin:0;}\
@@ -73,6 +80,7 @@ pub const REPORT_CSS: &str = "\
 .facet-chip{cursor:pointer;font-family:var(--font-mono);font-size:0.75rem;padding:0.25rem var(--space-3);border-radius:var(--radius-sm);background:var(--surface-container-low);color:var(--secondary-fixed-dim);user-select:none;}\
 .clone-group{margin-bottom:var(--space-6);}\
 .clone-group>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:var(--space-3);padding:var(--space-3) 0;font-family:var(--font-head);font-size:1.25rem;font-weight:700;color:var(--on-surface);}\
+.clone-group>summary::before{content:\"\\25CF\";color:var(--kind-color);}\
 .clone-group>summary::-webkit-details-marker{display:none;}\
 .clone-group>summary::after{content:\"\\25B8\";font-size:0.875rem;color:var(--secondary-fixed-dim);}\
 .clone-group[open]>summary::after{content:\"\\25BE\";}\

@@ -74,7 +74,7 @@ fn javascript_optional_chaining_clone_is_detected() -> Result<()> {
     // accessed property name (`network`, `timeout`, `retries`, `max`,
     // `meta`, `name`, `trim`) — only the bound locals are renamed. Pooled
     // content agreement therefore vouches for the pair; no literal-count
-    // threshold is involved ([REPAIR-RENAME-ANCHOR-MASS] deleted the
+    // threshold is involved ([FUSED-CONTENT-GATE] deleted the
     // anchor floor).
     assert_bucketed_clone(
         "js-optional-chaining",

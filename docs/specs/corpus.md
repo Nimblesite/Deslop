@@ -85,6 +85,8 @@ Registers live in `corpus/register/<name>.json`, pinned to the commit they were 
 
 An empty `clearly_out` list must carry `clearly_out_status` prose saying so, for the reason `must_find_status` exists: emptiness is not evidence that precision is good.
 
+**One register is not blinded.** `corpus/register/deslop.json` is Deslop scanned by itself, pinned at a `main` commit. A judge of this repository cannot avoid reading the engine, so its entries are filed by the maintainer from tracked issues — a false-positive issue becomes a CLEARLY OUT entry, a byte-identical pair the self-scan reports becomes a CLEARLY IN entry — each with the diff run at the pinned commit recorded under `verified`, and the register says so under `provenance`. It is scored like every other register, in the CI slice, so the engine is held to the pairs those issues settled. Nothing enters it without an issue number.
+
 The protocol lives in two skills, deliberately split so neither role can drift into the other: `.agents/skills/clone-register-prepare` builds the workspace and files what comes back, and `.agents/skills/judge-clone-pairs` is the judging protocol, which never names this project and is installed at the root of the handed-over folder as a skill the judge can run by name, linked from each repository directory as `JUDGING.md`, so a judge never reaches back here to read it. The A/B key and the pinned checkouts are written beside that folder and never inside it.
 
 ### [CORPUS-REGISTER-COVERAGE] How far the register is meant to go
@@ -157,6 +159,14 @@ The rest of the rules:
 `docs/reports/verdict-merge.md` holds what was left out. Every string in it is a column header, a label derived from the verdicts themselves, or a value read out of a judging folder — the only sentences are the judges' own, quoted. Rows are sorted by kind, repository and candidate, so two runs over the same verdicts produce the same document.
 
 Asserted by `scripts/repository/verdict-merge.test.mjs`, which drives the script against throwaway judging folders that agree and that do not.
+
+### [CORPUS-SCORE-RENDER] The scorecard formats figures and never derives one
+
+`SCORE.md` is written by the run that took the measurements ([CORPUS-SCORE]), and the module that writes it is allowed to format and nothing else. Every number it prints was computed upstream, so the markdown a human reads and the `score.json` beside it cannot disagree — there is no second implementation of the arithmetic to drift.
+
+Tables read **side by side**: the corpus standing is one measure per row with a column per engine, and each per-repository table is one repository with a column per engine. A reader compares two builds by moving along a row, never by holding two documents open. Missing figures render as an explicit absence rather than a zero, because "not measured" and "measured as none" are different claims about a run.
+
+Implemented in `crates/deslop-test-support/src/corpus_score/render.rs` (document shape) and `render/cells.rs` (cell formatting), pinned by `corpus_score/tests/render.rs`.
 
 ### [CORPUS-SCORE] The accuracy score
 

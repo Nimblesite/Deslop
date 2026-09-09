@@ -6,64 +6,33 @@ import { signal, computed, batch } from "@preact/signals";
 import {
   applyFacetFilter,
   type AnalysisState,
+  type ClusterKind,
   type FacetFilter,
   type Report,
   type ReportCluster,
+  type ReportOccurrence,
   type Severity,
   clusterBand,
 } from "../../src/types/report";
 
-// [SEVERITY-CONFIG] Filters are the mass severity band and a path glob
-// only. The language, bucket, and category axes are retired: the wire
-// carries no similarity classification or parser stamp on the cluster,
-// and a webview must never re-derive an axis the engine stopped sending.
+// [FACET-REPORT-WEBVIEW] Filters are the mass severity band, the clone
+// kind the engine stamped on the cluster ([CLONE-KIND-FOLD]), and a path
+// glob. Every axis is read off the wire; the webview re-derives nothing.
 export type Filters = {
   severity: Severity | null;
+  kind: ClusterKind | null;
   pathGlob: string;
 };
 
 export const EMPTY_FILTERS: Filters = {
   severity: null,
+  kind: null,
   pathGlob: "",
 };
 
 export const report = signal<Report | null>(null);
 export const selectedClusterId = signal<string | null>(null);
 
-// [VSIX-PAIR-COMPARE] Explicit two-endpoint pair selection. Pair evidence is
-// pair-only: the user picks both endpoints themselves and nothing on a
-// cluster surface compares an occurrence against an implicit canonical.
-export interface CompareEndpoint {
-  readonly path: string;
-  readonly start_byte: number;
-  readonly end_byte: number;
-}
-
-export const compareLeft = signal<CompareEndpoint | null>(null);
-export const compareRight = signal<CompareEndpoint | null>(null);
-
-export function sameEndpoint(a: CompareEndpoint, b: CompareEndpoint): boolean {
-  return a.path === b.path && a.start_byte === b.start_byte && a.end_byte === b.end_byte;
-}
-
-/** Fills the first empty slot; the second pick arms compare, a repeat pick of
- * the same occurrence is a no-op, and a third pick replaces the right slot. */
-export function pickCompareEndpoint(endpoint: CompareEndpoint): void {
-  batch(() => {
-    if (!compareLeft.value) {
-      compareLeft.value = endpoint;
-    } else if (!sameEndpoint(compareLeft.value, endpoint)) {
-      compareRight.value = endpoint;
-    }
-  });
-}
-
-export function clearCompareEndpoints(): void {
-  batch(() => {
-    compareLeft.value = null;
-    compareRight.value = null;
-  });
-}
 export const analysisState = signal<AnalysisState>({ state: "idle" });
 export const filters = signal<Filters>(EMPTY_FILTERS);
 // [FACET-TOP-OFFENDERS-FILTER] Workspace facet filter pushed by the
@@ -90,14 +59,49 @@ export const selectedCluster = computed<ReportCluster | null>(() => {
   return clusters.value.find((c) => c.id === id) ?? null;
 });
 
+// [VSIX-PAIR-COMPARE] The occurrence row one tap picked, waiting for a second
+// tap to name the other endpoint. Cleared when the selected cluster changes.
+export const pickedOccurrence = signal<ReportOccurrence | null>(null);
+const COMPARE_PAIR_MESSAGE = "compare/pair";
+
+function sameOccurrence(left: ReportOccurrence, right: ReportOccurrence): boolean {
+  return left.path === right.path && left.start_byte === right.start_byte && left.end_byte === right.end_byte;
+}
+
+/** Whether this row is the one a tap picked. */
+export function isPicked(occurrence: ReportOccurrence): boolean {
+  const picked = pickedOccurrence.value;
+  return picked !== null && sameOccurrence(picked, occurrence);
+}
+
+// [VSIX-PAIR-COMPARE] One tap picks a row. A second tap on another row of the
+// same cluster posts both endpoints, first tap on the left, and clears the
+// pick; tapping the picked row again unpicks it. A pick that is no longer a
+// member of the cluster is replaced, never compared.
+export function tapOccurrenceRow(cluster: ReportCluster, occurrence: ReportOccurrence): void {
+  const picked = pickedOccurrence.value;
+  const pickedIsMember = picked !== null && cluster.occurrences.some((member) => sameOccurrence(member, picked));
+  if (picked === null || !pickedIsMember) {
+    pickedOccurrence.value = occurrence;
+    return;
+  }
+  if (sameOccurrence(picked, occurrence)) {
+    pickedOccurrence.value = null;
+    return;
+  }
+  post({ kind: COMPARE_PAIR_MESSAGE, left: picked, right: occurrence });
+  pickedOccurrence.value = null;
+}
+
 export const filteredClusters = computed<ReportCluster[]>(() => {
-  const { severity, pathGlob } = filters.value;
+  const { severity, kind, pathGlob } = filters.value;
   const byId = severityByClusterId.value;
   const glob = pathGlob.trim().toLowerCase();
   // Base slice: the workspace facet filter, shared with the tree and
   // status bar; the webview's own selects refine it below.
   return applyFacetFilter(clusters.value, facetFilter.value).filter((cluster) => {
     if (severity && byId.get(cluster.id) !== severity) return false;
+    if (kind && cluster.kind !== kind) return false;
     if (glob && !cluster.occurrences.some((o) => o.path.toLowerCase().includes(glob))) {
       return false;
     }
@@ -125,14 +129,13 @@ export function applyHostMessage(message: HostMessage): void {
       case "report/delta":
         report.value = message.report;
         lastUpdatedAt.value = Date.now();
-        clearCompareEndpoints();
         break;
       case "analysis/state":
         analysisState.value = message.state;
         break;
       case "select/cluster":
         selectedClusterId.value = message.id;
-        clearCompareEndpoints();
+        pickedOccurrence.value = null;
         break;
       case "filter/set":
         filters.value = message.filters;

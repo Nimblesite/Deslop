@@ -22,7 +22,7 @@ export interface ClusterAnchor {
 
 /** Snapshot plus selection a cluster detail panel must receive (#173). */
 export interface ClusterPanelFeed {
-  /** Report to push — the visible projection, with the selected cluster guaranteed present. */
+  /** Visible projection with the selected cluster's original canonical membership. */
   readonly report: Report;
   /** Current id of the selected cluster, or null when it no longer exists. */
   readonly selectedId: string | null;
@@ -78,9 +78,12 @@ export function clusterPanelFeed(
 ): ClusterPanelFeed {
   const resolved = resolveAnchoredCluster(canonical, anchor);
   if (!resolved) return { report: visible, selectedId: null };
-  if (visible.clusters.some((cluster) => cluster.id === resolved.id)) {
+  if (visible.clusters.some((cluster) => cluster === resolved)) {
     return { report: visible, selectedId: resolved.id };
   }
-  const clusters = [resolved, ...visible.clusters].sort((left, right) => right.mass - left.mass);
+  // [VSIX-PAIR-COMPARE] A dirty canonical must never promote its first clean
+  // peer. The anchored detail keeps the engine's original membership and rank.
+  const others = visible.clusters.filter((cluster) => cluster.id !== resolved.id);
+  const clusters = [resolved, ...others].sort((left, right) => left.rank - right.rank);
   return { report: { ...visible, clusters }, selectedId: resolved.id };
 }

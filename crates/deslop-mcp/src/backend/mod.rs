@@ -24,6 +24,7 @@ use crate::safety::PathResolutionError;
 
 mod ipc;
 mod state;
+mod wire;
 
 pub use state::LiveBackend;
 
@@ -71,6 +72,26 @@ pub enum BackendError {
     /// previous releases that exposed it as `state file corrupt`.
     #[error("ipc transport failure: {0}")]
     StateFileCorrupt(String),
+    /// The LSP's reply is not the wire this binary was built against:
+    /// its `tool_version` is another release's, or the document did not
+    /// decode ([MCP-IPC-WIRE-MISMATCH]). Names both versions, the
+    /// endpoint, what was found and the remedy, so an agent can act on
+    /// it instead of guessing at a raw field error.
+    #[error(
+        "deslop-mcp {mcp_version} cannot read the {method:?} reply from deslop-lsp {engine_version} at {endpoint:?}: {detail}. The two binaries are from different Deslop builds — reinstall the Deslop VSIX so deslop-mcp and deslop-lsp ship from one bundle, then re-run the analysis."
+    )]
+    WireMismatch {
+        /// The IPC method whose reply was refused.
+        method: String,
+        /// This binary's version.
+        mcp_version: String,
+        /// The version stamped on the reply, or a note that it carried none.
+        engine_version: String,
+        /// The IPC endpoint the reply came from.
+        endpoint: PathBuf,
+        /// What was found: the foreign version, or the decode failure.
+        detail: String,
+    },
 }
 
 /// Read-only view over the server-facing capabilities of the backend.

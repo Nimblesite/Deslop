@@ -1,4 +1,4 @@
-//! The blast-radius pins for `[REPAIR-COSINE-MERGE]` /
+//! The blast-radius pins for `[FUSED-PAIR-SIGNALS]` /
 //! [FUSED-PAIR-SIGNALS]: restoring a pair's measured cosine must not
 //! cost a finding.
 //!

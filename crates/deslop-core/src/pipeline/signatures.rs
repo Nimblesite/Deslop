@@ -373,7 +373,7 @@ fn signature_for_tokens(tokens: &[&'static str], fingerprint: &Fingerprint) -> S
     minhash_signature(&kgrams(tokens, KGRAM_WIDTH))
 }
 
-/// Fingerprint-scoped signature used when no k-grams are available. This
+/// [PIPELINE-SIGNATURE-FALLBACK] Fingerprint-scoped signature when no k-grams exist. This
 /// avoids treating unrelated empty token sets as perfect LSH matches.
 /// Uses blake3 XOF to derive all 128 slot values from a single hash call.
 /// The byte offsets are widened to `u64` before hashing so the input is

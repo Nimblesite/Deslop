@@ -1,4 +1,7 @@
+//! Real CLI log routing and levels ([PRINCIPLES-LOGGING]).
+
 use super::support::*;
+use crate::common::NEARLY_IDENTICAL_TITLE;
 
 const RUST_LOG_ENV: &str = "RUST_LOG";
 const LOG_TO_CONSOLE_FLAG: &str = "--log-to-console";
@@ -318,16 +321,16 @@ fn technical_mode_surfaces_embedding_provenance_line() -> Result<()> {
 }
 
 // Implements [UX-TECHNICAL-BREAKDOWN]: `--technical` prints the
-// researcher breakdown row with the mass-only column legend. Plain
-// mode uses friendly wording; this test guards the technical branch's
-// wire facts — cluster id, mass, occurrence count, canonical node
-// count and files — the fields the mass-only wire carries
-// ([RANK-MASS-SUM], [SEVERITY-BAND]). Taxonomy bucket labels were
-// retired with the cluster signals they named; pair-only values
-// (structural/Jaccard/embedding/content) appear only under an
-// explicit endpoint comparison.
+// researcher breakdown row with the column legend. Plain mode uses
+// friendly wording; this test guards the technical branch's wire facts
+// — the folded clone kind, cluster id, mass, occurrence count,
+// canonical node count and files ([CLONE-KIND-LABELS],
+// [RANK-MASS-SUM], [SEVERITY-BAND]). Pair-only values
+// (structural/Jaccard/embedding/content) appear only under an explicit
+// endpoint comparison. The renamed C# pair folds to the near-copy
+// kind, so its row must name it.
 #[test]
-fn technical_mode_uses_type_taxonomy_in_breakdown_row() -> Result<()> {
+fn technical_mode_names_the_clone_kind_in_the_breakdown_row() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let mut cmd = csharp_small_command(&tmp)?;
     let assertion = cmd
@@ -341,14 +344,14 @@ fn technical_mode_uses_type_taxonomy_in_breakdown_row() -> Result<()> {
         .success();
     let stderr = stderr_text(&assertion)?;
     assert!(
-        stderr.contains("columns: rank, id, mass, occurrences, canonical AST nodes, files"),
-        "--technical must print the mass-only column legend: {stderr}"
+        stderr.contains("columns: rank, kind, id, mass, occurrences, canonical AST nodes, files"),
+        "--technical must print the column legend naming the kind column: {stderr}"
     );
     assert!(
-        stderr.contains("#1  Duplicate code [")
+        stderr.contains(&format!("#1  {NEARLY_IDENTICAL_TITLE} ["))
             && stderr.contains("· mass 58 · 2 occurrences · 58 AST nodes"),
-        "--technical must print the mass-ranked cluster row with id, mass, occurrences, \
-         nodes and files: {stderr}"
+        "--technical must print the mass-ranked cluster row with kind, id, mass, \
+         occurrences, nodes and files: {stderr}"
     );
     assert!(
         stderr.contains("Alpha.cs, Beta.cs"),

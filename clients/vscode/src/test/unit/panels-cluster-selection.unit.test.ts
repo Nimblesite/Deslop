@@ -17,6 +17,10 @@ import { wireCluster } from "../cluster.helpers";
 
 const PRIMARY_CLUSTER_ID = "aaaaaaaa";
 const TEST_THIRTY = 30;
+const FIRST_OCCURRENCE_INDEX = 0;
+const THREE_OCCURRENCES = 3;
+const CANONICAL_NODE_COUNT = 42;
+const CLEAN_PEER_COUNT = 2;
 
 interface PostedMessage {
   kind?: string;
@@ -193,6 +197,26 @@ suite("cluster detail panel selection (#173)", () => {
         "opened cluster must be re-injected into the snapshot from canonical truth",
       );
     });
+  });
+
+  test("a surviving projection preserves the opened cluster's original canonical and figures", () => {
+    // [VSIX-PAIR-COMPARE] A clean peer is never silently promoted to canonical.
+    const canonical = groupOccurrences[FIRST_OCCURRENCE_INDEX];
+    assert.ok(canonical);
+    const occurrences = [...groupOccurrences, ...otherOccurrences].slice(FIRST_OCCURRENCE_INDEX, THREE_OCCURRENCES);
+    const original = { ...clusterOf(PRIMARY_CLUSTER_ID, TEST_THIRTY, occurrences), canonical_node_count: CANONICAL_NODE_COUNT };
+    const report = reportOf([original]);
+    const store = new ReportStore();
+    store.setSnapshot(report, FIRST_OCCURRENCE_INDEX);
+    store.markFileDirty(canonical.path);
+    const visible = store.current.visibleReport;
+    assert.ok(visible);
+    assert.equal(visible.clusters[FIRST_OCCURRENCE_INDEX]?.occurrences.length, CLEAN_PEER_COUNT);
+    const feed = clusterPanelFeed(report, visible, anchorForClusterId(report, original.id));
+    assert.equal(feed.selectedId, original.id);
+    assert.deepEqual(feed.report.clusters[FIRST_OCCURRENCE_INDEX], report.clusters[FIRST_OCCURRENCE_INDEX]);
+    assert.equal(feed.report.clusters[FIRST_OCCURRENCE_INDEX]?.occurrences[FIRST_OCCURRENCE_INDEX], canonical);
+    assert.equal(feed.report.clusters[FIRST_OCCURRENCE_INDEX]?.canonical_node_count, CANONICAL_NODE_COUNT);
   });
 
   test("clears the selection and surfaces the dead id when the cluster leaves the report entirely", () => {

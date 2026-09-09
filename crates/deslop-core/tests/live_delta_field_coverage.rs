@@ -44,6 +44,13 @@ const IDENTITY_POINTER: &str = "/id";
 /// mutation produces is predictable rather than merely different.
 const STRING_MUTATION_SUFFIX: &str = "-changed";
 
+/// [CLONE-KIND-LABELS] Leaves drawn from a closed vocabulary, paired
+/// with another member of it. A suffixed string is not a member, so the
+/// wire would refuse the mutation and the leaf would die unasserted
+/// instead of being proven covered. The fixture kind is the near-copy
+/// kind, so the byte-identical kind is the differing member.
+const CLOSED_VOCABULARY_LEAVES: [(&str, &str); 1] = [("/kind", "identical")];
+
 /// The rendered cluster every mutation starts from. Its optional wire
 /// fields are answered rather than omitted, so `intersects_diff`,
 /// `is_newly_introduced` and each occurrence's `in_diff` are leaves the
@@ -135,12 +142,33 @@ fn leaf_mutations(document: &Value) -> Vec<(String, Value)> {
 }
 
 /// `document` with the leaf at `pointer` replaced by a different value
-/// of the same type.
+/// of the same type — another member for a closed-vocabulary leaf, a
+/// same-typed mutation for every other leaf.
 fn replace_at(document: &Value, pointer: &str) -> Option<Value> {
     let mut next = document.clone();
     let slot = next.pointer_mut(pointer)?;
-    *slot = mutate_leaf(slot)?;
+    *slot = match closed_vocabulary_alternative(pointer, slot) {
+        Some(other_member) => other_member,
+        None => mutate_leaf(slot)?,
+    };
     Some(next)
+}
+
+/// The other vocabulary member for a closed-vocabulary leaf, or `None`
+/// for a free leaf. The member must differ from the baseline, or the
+/// walk would judge an unchanged cluster and call the leaf covered.
+fn closed_vocabulary_alternative(pointer: &str, current: &Value) -> Option<Value> {
+    CLOSED_VOCABULARY_LEAVES
+        .iter()
+        .find(|(leaf, _)| *leaf == pointer)
+        .map(|(_, other_member)| {
+            assert_ne!(
+                current.as_str(),
+                Some(*other_member),
+                "{pointer}: the alternative member must differ from the baseline"
+            );
+            Value::String((*other_member).to_owned())
+        })
 }
 
 /// The cluster's wire form, as an object.
@@ -163,9 +191,9 @@ fn changing_any_single_field_of_a_cluster_reports_it_updated() {
     let mutations = leaf_mutations(&document);
     assert!(
         mutations.len() >= 20,
-        "the walk must reach the whole rendered surface — top-level fields, \
-         the eight signal axes and both occurrences. {count} leaves is too \
-         few to be reading the real cluster: {document:#}",
+        "the walk must reach the whole rendered surface — every top-level \
+         field and both occurrences. {count} leaves is too few to be \
+         reading the real cluster: {document:#}",
         count = mutations.len(),
     );
     for (pointer, mutated) in mutations {

@@ -29,7 +29,7 @@ async function updateWorkspace(key: string, value: unknown): Promise<void> {
 }
 
 export async function setTopOffendersGroupBy(
-  value: "cluster" | "file" | "folder" | "severity",
+  value: "cluster" | "file" | "folder" | "kind",
 ): Promise<void> {
   await updateWorkspace("topOffenders.groupBy", value);
 }

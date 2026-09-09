@@ -2,9 +2,9 @@
 // TypeScript's parser instead of brittle source regex checks.
 
 import * as assert from "node:assert/strict";
-import * as fs from "node:fs";
-import * as path from "node:path";
 import * as ts from "typescript";
+
+import { descendants, hasDescendant, parseWebviewSource } from "./webview-source.helpers";
 
 const DOC_TEXT_LINK_COMPONENT = "DocTextLink";
 const CLUSTER_ID_TOPIC_CONSTANT = "CLUSTER_ID_TOPIC";
@@ -12,29 +12,22 @@ const CLUSTER_ID_TOPIC_VALUE = "cluster-id";
 const OCCURRENCE_IDENTIFIER = "occurrence";
 const SHORT_OCCURRENCE_IDENTIFIER = "o";
 
-function clusterWebviewSourcePath(): string {
-  return path.resolve(__dirname, "../../../webview-ui/src/cluster/main.tsx");
-}
-
-function occurrenceListSourcePath(): string {
-  return path.resolve(__dirname, "../../../webview-ui/src/cluster/OccurrenceList.tsx");
-}
-
-function helpBubbleSourcePath(): string {
-  return path.resolve(__dirname, "../../../webview-ui/src/components/HelpBubble.tsx");
-}
-
-function parseSource(sourcePath: string): ts.SourceFile {
-  const source = fs.readFileSync(sourcePath, "utf8");
-  return ts.createSourceFile(sourcePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-}
+const CLUSTER_WEBVIEW_SOURCE = "cluster/main.tsx";
+const OCCURRENCE_LIST_SOURCE = "cluster/OccurrenceList.tsx";
+const HELP_BUBBLE_SOURCE = "components/HelpBubble.tsx";
+const STORE_SOURCE = "store.ts";
+const OCCURRENCE_ROW_TAG = "article";
+const TAP_HANDLER_NAME = "tapOccurrenceRow";
+const PICKED_SIGNAL_NAME = "pickedOccurrence";
+const COMPARE_PAIR_MESSAGE = "compare/pair";
+const POST_FUNCTION_NAME = "post";
 
 function parseClusterWebview(): ts.SourceFile {
-  return parseSource(clusterWebviewSourcePath());
+  return parseWebviewSource(CLUSTER_WEBVIEW_SOURCE);
 }
 
 function parseOccurrenceList(): ts.SourceFile {
-  return parseSource(occurrenceListSourcePath());
+  return parseWebviewSource(OCCURRENCE_LIST_SOURCE);
 }
 
 function parseClusterRenderer(): ts.SourceFile[] {
@@ -44,26 +37,7 @@ function parseClusterRenderer(): ts.SourceFile[] {
 }
 
 function parseHelpBubble(): ts.SourceFile {
-  return parseSource(helpBubbleSourcePath());
-}
-
-function hasDescendant(node: ts.Node, predicate: (node: ts.Node) => boolean): boolean {
-  if (predicate(node)) return true;
-  let found = false;
-  node.forEachChild((child) => {
-    if (!found) found = hasDescendant(child, predicate);
-  });
-  return found;
-}
-
-function descendants(root: ts.Node, predicate: (node: ts.Node) => boolean): ts.Node[] {
-  const matches: ts.Node[] = [];
-  function visit(node: ts.Node): void {
-    if (predicate(node)) matches.push(node);
-    node.forEachChild(visit);
-  }
-  visit(root);
-  return matches;
+  return parseWebviewSource(HELP_BUBBLE_SOURCE);
 }
 
 function hasOccurrenceByteAccess(node: ts.Node, propertyName: string): boolean {
@@ -184,13 +158,13 @@ function templateText(expr: ts.TemplateExpression): string {
   return parts.join("");
 }
 
-function severityBadgeLabelTemplates(root: ts.Node): string[] {
+function clusterBadgeLabelTemplates(root: ts.Node): string[] {
   const out: string[] = [];
   function visit(node: ts.Node): void {
     if (
       (ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node)) &&
       ts.isIdentifier(node.tagName) &&
-      node.tagName.text === "SeverityBadge"
+      node.tagName.text === "ClusterBadge"
     ) {
       for (const attr of node.attributes.properties) {
         if (
@@ -278,8 +252,13 @@ suite("cluster webview occurrence locations", () => {
       "Canonical occurrence",
       "Hidden means this path matched report_hide configuration",
       "Open this occurrence in VS Code",
-      "Select two occurrences to enable compare",
-      "Compare opens a diff between the two occurrences you selected",
+      "Compare is disabled on the canonical occurrence",
+      "Compare opens a diff between this occurrence and the canonical occurrence in one click",
+      // [VSIX-PAIR-COMPARE] Rows are the selection: each row and the list
+      // header explain the two-row tap in their hover copy.
+      "Tap this row to pick it, then tap a second row to compare the two",
+      "Picked for comparison. Tap another row to compare it with this one",
+      "Tap one row, then another, to compare those two",
       "Previous cluster",
       "Next cluster",
       "Detailed keyboard help",
@@ -287,13 +266,43 @@ suite("cluster webview occurrence locations", () => {
     ]) {
       assert.match(corpus, new RegExp(escapeRegExp(phrase)), `missing hover copy: ${phrase}`);
     }
-    // The retired implicit-compare and weight/bucket copy must stay gone.
+    // The removed two-step selection and weight/bucket copy must stay gone:
+    // no per-row "Select for comparison" button and no gated compare button.
     for (const gone of [
-      "Compare is disabled on the canonical occurrence",
+      "Select two occurrences to enable compare",
+      "Select for comparison",
+      "Compare selected occurrences",
       "Weight is this cluster's duplicated mass",
     ]) {
       assert.doesNotMatch(corpus, new RegExp(escapeRegExp(gone)), `retired copy resurfaced: ${gone}`);
     }
+  });
+
+  test("tapping an occurrence row picks it and a second row hands both endpoints to the host", () => {
+    // [VSIX-PAIR-COMPARE] The rows are the selection control. The tap state
+    // machine lives in the store, and its second tap posts compare/pair.
+    const rows = descendants(
+      parseOccurrenceList(),
+      (n) => ts.isJsxOpeningElement(n) && jsxTagName(n) === OCCURRENCE_ROW_TAG,
+    ) as ts.JsxOpeningElement[];
+    assert.equal(rows.length, 1, "one row element renders every occurrence");
+    const row = rows[0];
+    assert.ok(row && jsxAttribute(row, "onClick"), "the row itself answers a tap");
+    assert.ok(row && jsxAttribute(row, "title"), "the row explains the tap in its hover copy");
+    const store = parseWebviewSource(STORE_SOURCE, ts.ScriptKind.TS);
+    const tapHandlers = descendants(
+      store,
+      (n) => ts.isFunctionDeclaration(n) && n.name?.text === TAP_HANDLER_NAME,
+    );
+    assert.equal(tapHandlers.length, 1, "the store owns the tap state machine");
+    const handler = tapHandlers[0];
+    assert.ok(handler && hasDescendant(handler, (n) => ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === POST_FUNCTION_NAME), "the second tap posts to the host");
+    assert.ok(hasDescendant(store, (n) => ts.isStringLiteral(n) && n.text === COMPARE_PAIR_MESSAGE), "the store names the compare/pair message");
+    const pickSignals = descendants(
+      store,
+      (n) => ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.name.text === PICKED_SIGNAL_NAME,
+    );
+    assert.equal(pickSignals.length, 1, "the picked row is one store signal, not component state");
   });
 
   test("cluster webview links visible explanations to website docs", () => {
@@ -304,7 +313,7 @@ suite("cluster webview occurrence locations", () => {
     const corpus = clusterRendererCorpus();
     for (const phrase of [
       "cluster-id",
-      "duplicate-code",
+      "clone-kind",
       "ai-match",
       "rank",
       "mass",
@@ -363,7 +372,7 @@ suite("cluster webview occurrence locations", () => {
     assert.ok(linkedTopics.length > 0, "cluster id must link to its docs section");
   });
 
-  test("severity badge label leads with the stable slug, not the volatile #N rank (#146)", () => {
+  test("cluster badge label leads with the stable slug, not the volatile #N rank (#146)", () => {
     // [VSIX-TOP-OFFENDERS-CLUSTER-ID] applies to every cluster-row surface,
     // including the cluster detail webview. Rank is volatile (re-numbered on
     // every snapshot); the slug is stable. Both humans and AI agents reading
@@ -371,26 +380,26 @@ suite("cluster webview occurrence locations", () => {
     // ([VSIX-CLUSTER-ID-CONSISTENCY]) so cross-message references survive
     // re-analysis.
     const root = parseClusterWebview();
-    const badgeLabels = severityBadgeLabelTemplates(root);
+    const badgeLabels = clusterBadgeLabelTemplates(root);
     assert.ok(
       badgeLabels.length > 0,
-      "cluster panel must render a SeverityBadge in the header",
+      "cluster panel must render a ClusterBadge in the header",
     );
     for (const label of badgeLabels) {
       assert.doesNotMatch(
         label,
         /^#\$\{rank/,
-        `severity badge must not lead with the volatile #\${rank}, got: ${label}`,
+        `cluster badge must not lead with the volatile #\${rank}, got: ${label}`,
       );
       assert.doesNotMatch(
         label,
         /^#\d/,
-        `severity badge must not lead with a literal #N, got: ${label}`,
+        `cluster badge must not lead with a literal #N, got: ${label}`,
       );
       assert.match(
         label,
         /\bslug\b/i,
-        `severity badge must reference the cluster slug, got: ${label}`,
+        `cluster badge must reference the cluster slug, got: ${label}`,
       );
     }
   });
@@ -434,3 +443,4 @@ suite("cluster webview occurrence locations", () => {
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+

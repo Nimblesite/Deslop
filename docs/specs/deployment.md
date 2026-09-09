@@ -140,6 +140,16 @@ directory. They must fail on a missing manifest, missing binary, extra binary,
 non-executable binary where executability is meaningful, or wrong-version
 binary.
 
+### [DEPLOY-VSIX-INSTALL-PROFILES] Installing the VSIX repairs every profile that had it
+
+VS Code unpacks an extension once, into a single directory under `~/.vscode/extensions`, and every profile that has that extension points at the same directory. A local install removes those directories first, so a higher Marketplace version cannot keep winning after `code --install-extension --force` reports success — and that command then registers the replacement in the default profile alone.
+
+The install must therefore name every profile that already had Deslop.live, and no profile that did not: repairing an install is not permission to add one where the developer never asked for it. Profile names come from VS Code's own `userDataProfiles` record, read as JSON.
+
+The install fails when any profile is left naming a directory that is not on disk. Reporting success while a profile shows "Unable to read file '.../package.json'" and has no working extension is the failure this rule exists to prevent.
+
+Code: `scripts/repository/install-vsix-profiles.mjs`, invoked by `_vsix-install-code`. Assertions: `scripts/repository/install-vsix-profiles.test.mjs`.
+
 ### [DEPLOY-EXTERNAL-MCP-CONSUMER] External MCP clients consume the VSIX-bundled binary
 
 Every MCP client that runs outside the VS Code host process — Claude Code (CLI),

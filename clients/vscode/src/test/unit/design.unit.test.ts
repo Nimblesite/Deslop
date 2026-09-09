@@ -1,10 +1,12 @@
-// Unit tests for design tokens — smoke-test that every export is well-formed.
+// Unit tests for design tokens — smoke-test that every export is well-formed,
+// and pin the one paint table every cluster surface reads ([CLONE-KIND-COLOR]).
 
 import * as assert from "node:assert/strict";
 import {
   COLOR,
-  DESLOP_SEVERITY_COLOR,
-  SEVERITY_COLOR,
+  KIND_COLOR,
+  KIND_ICON,
+  KIND_THEME_COLOR,
   SEVERITY_DOT,
   FONT,
   RADIUS,
@@ -12,7 +14,9 @@ import {
   TYPE,
   SHADOW,
 } from "../../design";
-import { DESLOP_SEVERITIES, type DeslopSeverity } from "../../severity";
+import { CLUSTER_KINDS } from "../../types/report";
+
+const HEX_COLOR = /^#[0-9a-fA-F]{3,8}$/;
 
 suite("design tokens", () => {
   test("every color is a hex or rgba string", () => {
@@ -21,30 +25,37 @@ suite("design tokens", () => {
     }
   });
 
-  test("SEVERITY_COLOR covers every bucket", () => {
-    assert.ok(SEVERITY_COLOR.worst);
-    assert.ok(SEVERITY_COLOR.top10);
-    assert.ok(SEVERITY_COLOR.mid);
-    assert.ok(SEVERITY_COLOR.faint);
-  });
-
-  test("DESLOP_SEVERITY_COLOR covers every level and is a distinct token each", () => {
-    // [SEVERITY-COLOR] The paint map. Every level must exist and no two may
-    // share a token, or two buckets become indistinguishable on screen.
-    const tokens = DESLOP_SEVERITIES.map((level: DeslopSeverity) => DESLOP_SEVERITY_COLOR[level]);
-    for (const [index, level] of DESLOP_SEVERITIES.entries()) {
-      assert.ok(tokens[index], `${level} has no colour token`);
-      assert.match(String(tokens[index]), /^#[0-9a-fA-F]{3,8}$/, `${level} is not a hex token`);
+  test("KIND_COLOR paints every clone kind with a distinct hex token", () => {
+    // [CLONE-KIND-COLOR] The paint map. Every kind must exist and no two
+    // may share a token, or two kinds become indistinguishable on screen.
+    const tokens = CLUSTER_KINDS.map((kind) => KIND_COLOR[kind]);
+    for (const [index, kind] of CLUSTER_KINDS.entries()) {
+      assert.ok(tokens[index], `${kind} has no colour token`);
+      assert.match(String(tokens[index]), HEX_COLOR, `${kind} is not a hex token`);
     }
-    assert.equal(new Set(tokens).size, DESLOP_SEVERITIES.length, "levels must not share a token");
+    assert.equal(new Set(tokens).size, CLUSTER_KINDS.length, "kinds must not share a token");
     assert.equal(
-      DESLOP_SEVERITY_COLOR.error,
+      KIND_COLOR.identical,
       COLOR.primaryContainer,
-      "crimson is reserved for the worst mass rank band",
+      "crimson is reserved for byte-identical code — the only kind whose evidence is character-by-character proof",
+    );
+    assert.equal(
+      KIND_COLOR.structural_only,
+      COLOR.onSurfaceMuted,
+      "a cluster that only shares shape is muted, however high it ranks",
     );
   });
 
-  test("SEVERITY_DOT covers every bucket", () => {
+  test("KIND_ICON and KIND_THEME_COLOR cover every kind, distinctly", () => {
+    for (const kind of CLUSTER_KINDS) {
+      assert.ok(KIND_ICON[kind], `${kind} has no icon`);
+      assert.match(KIND_THEME_COLOR[kind], /^deslop\.kind\./, `${kind} must paint from a contributed deslop.kind.* colour`);
+    }
+    assert.equal(new Set(Object.values(KIND_ICON)).size, CLUSTER_KINDS.length, "icons must be distinct");
+    assert.equal(new Set(Object.values(KIND_THEME_COLOR)).size, CLUSTER_KINDS.length, "theme ids must be distinct");
+  });
+
+  test("SEVERITY_DOT covers every rank band", () => {
     assert.ok(SEVERITY_DOT.worst);
     assert.ok(SEVERITY_DOT.top10);
     assert.ok(SEVERITY_DOT.mid);

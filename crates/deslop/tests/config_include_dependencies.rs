@@ -11,7 +11,7 @@
 //! checkouts of the same repository (#222) — none of that is a library the
 //! code depends on, so no setting opts back into it.
 //!
-//! Default stays `false`: ranking is worst-offenders-first ([RANK-SCORE]),
+//! Default stays `false`: ranking is worst-offenders-first ([RANK-MASS-SUM]),
 //! so dependency duplication the user cannot act on would otherwise
 //! outrank every first-party finding.
 //!

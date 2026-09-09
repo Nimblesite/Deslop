@@ -60,7 +60,7 @@ pub(super) struct PairBuilder<'corpus, S: BuildHasher> {
     /// The gated, retained pairs ([PERF-FLUTTER-TODO-MEMORY]).
     pub(super) kept: Vec<CandidatePair>,
     /// Merged evidence for every evidence-bearing key
-    /// ([REPAIR-COSINE-MERGE], gh #351): the structural axis from the
+    /// ([FUSED-PAIR-SIGNALS], gh #351): the structural axis from the
     /// Merkle pass and the strongest cosine from the embedding pass,
     /// per axis — whichever pass reached the pair first is telemetry.
     /// The LSH bulk carries no evidence and arrives after both passes,
@@ -215,7 +215,7 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
 
     /// Merges the embedding ANN pairs, recording each measured cosine
     /// into the pair whether or not an earlier pass surfaced it
-    /// ([REPAIR-COSINE-MERGE], gh #351): a cosine is evidence about the
+    /// ([FUSED-PAIR-SIGNALS], gh #351): a cosine is evidence about the
     /// pair, and the pass that reached it first is telemetry. The
     /// insertion-time gate sees the cosine — an embedding-discovered
     /// pair is admitted on its own evidence, not on a stub.

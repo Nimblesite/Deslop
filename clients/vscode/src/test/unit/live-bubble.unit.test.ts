@@ -1,7 +1,7 @@
 // Unit: LiveBubble.render — drive inline + ghost paths + dismissal + no-op.
 // Every render assertion goes through the shared decoration capture so the
 // suite pins the text the user actually sees. Admission is the engine's
-// report: a reported cluster renders, whatever its mass ([REPORTING-CONTEXT]).
+// report: a reported cluster renders, whatever its mass ([REPORT-CONTEXT-CLUSTER]).
 
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
@@ -17,8 +17,8 @@ import {
   retractCluster,
   setBubbleMode as setMode,
   span,
+  FIXTURE_KIND_TITLE,
 } from "./bubble.helpers";
-import { SHORT_VERDICT } from "../../bubble/renderParts";
 import { reportWithClusters } from "./report.helpers";
 
 const DISMISSIBLE_CLUSTER_ID = "c-dismiss";
@@ -271,7 +271,7 @@ suite("LiveBubble render", () => {
       // Dismissal is per-cluster, not a global mute: the reported survivor
       // still renders its full inline title and hover card.
       const visible = renderFullConfidenceBubble(capture, bubble, 12, PRIMARY_BUBBLE_CLUSTER_ID);
-      assert.match(visible, new RegExp(SHORT_VERDICT), "and the survivor keeps its rendered title");
+      assert.match(visible, new RegExp(FIXTURE_KIND_TITLE), "and the survivor keeps its rendered title");
       assert.match(visible, /×\s*5/, "and the survivor keeps its report count");
     } finally {
       bubble.dispose();

@@ -36,7 +36,7 @@
 //! produce it could still see a copy it has no doubt about — otherwise a
 //! detector that had stopped producing candidates would fail this test
 //! with the same message as the defect. Control ranked first, pair
-//! second, both published, both counted ([RANK-SCORE], [METRICS-REPO]).
+//! second, both published, both counted ([RANK-MASS-SUM], [METRICS-REPO]).
 
 use std::{collections::BTreeSet, path::Path};
 
@@ -105,7 +105,7 @@ const CONTROL_SIZE: u64 = 2;
 /// Where each copy sits: two six-line functions, back to back.
 const PAIR_SPANS: [(u64, u64); 2] = [(8, 13), (16, 21)];
 
-/// Rank order ([RANK-SCORE]). The byte-identical control saturates, so it
+/// Rank order ([RANK-MASS-SUM]). The byte-identical control saturates, so it
 /// heads the report; the pair follows it. A finding a reader has to
 /// scroll past demoted noise to reach is a finding they never read.
 const CONTROL_RANK: usize = 0;

@@ -189,12 +189,13 @@ fn cluster_language(cluster: &ReportCluster) -> &'static str {
         .map_or("unknown", |occurrence| language_for_path(&occurrence.path))
 }
 
-/// Builds a compact mass-only cluster row.
+/// Builds a compact cluster row: identity, rank, kind, and mass.
 fn cluster_summary(cluster: &ReportCluster) -> ClusterSummary {
     ClusterSummary {
         id: cluster.id.clone(),
         rank: cluster.rank,
         rank_band: cluster.rank_band.clone(),
+        kind: cluster.kind,
         mass: cluster.mass,
         size_nodes: cluster.canonical_node_count,
         occurrence_count: cluster.occurrence_count,

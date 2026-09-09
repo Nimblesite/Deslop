@@ -16,6 +16,9 @@ use anyhow::Result;
 
 use crate::common::*;
 
+#[path = "js_literal_variation_calls/member_targets.rs"]
+mod member_targets;
+
 /// The fixture and its two suite files.
 const FIXTURE: &str = "js-test-bodies-under-describe";
 const FETCH_SUITE: &str = "fetch.test.js";

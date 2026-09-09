@@ -1,8 +1,7 @@
 import { HelpAction } from "../components/HelpAction";
 import { HelpBubble, HelpedText } from "../components/HelpBubble";
-import { clearCompareEndpoints, compareLeft, compareRight, pickCompareEndpoint, post, sameEndpoint } from "../store";
+import { isPicked, post, tapOccurrenceRow } from "../store";
 import { COLOR, FONT } from "../theme";
-import type { CompareEndpoint } from "../store";
 import type { ReportCluster, ReportOccurrence } from "../../../src/types/report";
 
 const TWELVE_PIXEL_SIZE = "12px";
@@ -21,15 +20,16 @@ const WITH_HELP_CLASS = "with-help";
 const OCCURRENCES_TOPIC = "occurrences";
 const OCCURRENCE_LOCATION_TOPIC = "occurrence-location";
 const OPEN_OCCURRENCE_MESSAGE = "open/occurrence";
-// [VSIX-PAIR-COMPARE] Pair evidence renders only after the user selects two
-// explicit endpoints; nothing here compares against an implicit canonical.
-const COMPARE_PAIR_MESSAGE = "compare/pair";
-const SELECT_FOR_COMPARISON = "Select for comparison";
-const COMPARE_SELECTED = "Compare selected occurrences";
-
-export function endpointOf(occurrence: ReportOccurrence): CompareEndpoint {
-  return { path: occurrence.path, start_byte: occurrence.start_byte, end_byte: occurrence.end_byte };
-}
+// [VSIX-PAIR-COMPARE] One click compares this exact occurrence with its canonical.
+const COMPARE_CANONICAL_MESSAGE = "compare/canonical";
+const CANONICAL_OCCURRENCE_INDEX = 0;
+// [VSIX-PAIR-COMPARE] Rows are the selection: tap one, then another, to
+// compare the two. No row carries a select button.
+const ROW_TAP_HINT = "Tap this row to pick it, then tap a second row to compare the two.";
+const PICKED_ROW_HINT =
+  "Picked for comparison. Tap another row to compare it with this one, or tap this row again to unpick it.";
+const ROW_INTERACTIVE_SELECTOR = "button, a";
+const POINTER_CURSOR = "pointer";
 
 interface OccurrenceListProps {
   cluster: ReportCluster;
@@ -45,12 +45,13 @@ export function OccurrenceList({ cluster, focusedIndex, accent }: OccurrenceList
         style={{ color: COLOR.onSurfaceMuted, marginBottom: TWELVE_PIXEL_SIZE, fontFamily: FONT.mono, display: FLEX_DISPLAY, alignItems: CENTER_ALIGNMENT, gap: SMALL_SPACING }}
       >
         <HelpedText topic={OCCURRENCES_TOPIC}>OCCURRENCES</HelpedText>
-        <CompareSelectedButton />
       </div>
       {cluster.occurrences.map((occurrence, index) => (
         <article
           key={`${occurrence.path}-${occurrence.start_byte}`}
-          title={occurrenceTitle(occurrence, index)}
+          title={occurrenceTitle(occurrence, index, isPicked(occurrence))}
+          data-picked={isPicked(occurrence)}
+          onClick={(event) => tapRow(event, cluster, occurrence)}
           style={{
             background: index % 2 === 0 ? COLOR.surfaceContainerLow : COLOR.surface,
             padding: "14px 20px",
@@ -58,11 +59,12 @@ export function OccurrenceList({ cluster, focusedIndex, accent }: OccurrenceList
             gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
             gap: "16px",
             alignItems: CENTER_ALIGNMENT,
-            outline: index === focusedIndex ? `1px solid ${accent}` : "none",
+            cursor: POINTER_CURSOR,
+            outline: rowOutline(isPicked(occurrence), index === focusedIndex, accent),
           }}
         >
           <OccurrenceLocation occurrence={occurrence} />
-          <OccurrenceActions cluster={cluster} occurrence={occurrence} />
+          <OccurrenceActions cluster={cluster} occurrence={occurrence} index={index} />
         </article>
       ))}
     </section>
@@ -113,9 +115,11 @@ function OccurrenceLocation({ occurrence }: { occurrence: ReportOccurrence }) {
 function OccurrenceActions({
   cluster,
   occurrence,
+  index,
 }: {
   cluster: ReportCluster;
   occurrence: ReportOccurrence;
+  index: number;
 }) {
   return (
     <div
@@ -137,12 +141,12 @@ function OccurrenceActions({
       </HelpAction>
       <HelpAction topic="compare-action">
         <button
-          aria-pressed={isSelected(cluster, occurrence)}
-          onClick={() => pickCompareEndpoint(endpointOf(occurrence))}
-          title={selectTitle(cluster, occurrence)}
-          aria-label={SELECT_FOR_COMPARISON}
+          disabled={index === CANONICAL_OCCURRENCE_INDEX}
+          onClick={() => compareWithCanonical(cluster.id, occurrence, index)}
+          title={compareTitle(index)}
+          aria-label={compareTitle(index)}
         >
-          {SELECT_FOR_COMPARISON}
+          Compare
         </button>
       </HelpAction>
     </div>
@@ -153,61 +157,37 @@ function openOccurrence(occurrence: ReportOccurrence): void {
   post({ kind: OPEN_OCCURRENCE_MESSAGE, occurrence });
 }
 
-function CompareSelectedButton() {
-  const left = compareLeft.value;
-  const right = compareRight.value;
-  const ready = Boolean(left && right);
-  return (
-    <button
-      disabled={!ready}
-      aria-label={COMPARE_SELECTED}
-      style={!ready ? { opacity: 0.3 } : { color: "inherit" }}
-      onClick={() => {
-        if (left && right) {
-          post({ kind: COMPARE_PAIR_MESSAGE, left, right });
-          clearCompareEndpoints();
-        }
-      }}
-      title={
-        ready
-          ? "Open a diff of the two selected occurrences in VS Code's diff editor using Deslop's occurrence-range virtual documents."
-          : "Select two occurrences to enable compare. Pair evidence exists only for the pair you choose."
-      }
-    >
-      {COMPARE_SELECTED}
-    </button>
-  );
+// A tap on the row's own buttons and links belongs to them; only the row
+// body picks.
+function tapRow(event: MouseEvent, cluster: ReportCluster, occurrence: ReportOccurrence): void {
+  if (event.target instanceof Element && event.target.closest(ROW_INTERACTIVE_SELECTOR)) return;
+  tapOccurrenceRow(cluster, occurrence);
 }
 
-function isSelected(cluster: ReportCluster, occurrence: ReportOccurrence): boolean {
-  const endpoint = endpointOf(occurrence);
-  const left = compareLeft.value;
-  const right = compareRight.value;
-  return (
-    cluster.occurrences.some((candidate) => sameEndpoint(endpointOf(candidate), endpoint)) &&
-    Boolean((left && sameEndpoint(left, endpoint)) || (right && sameEndpoint(right, endpoint)))
-  );
+function rowOutline(picked: boolean, focused: boolean, accent: string): string {
+  if (picked) return `2px solid ${accent}`;
+  return focused ? `1px solid ${accent}` : "none";
 }
 
-function selectTitle(cluster: ReportCluster, occurrence: ReportOccurrence): string {
-  const endpoint = endpointOf(occurrence);
-  const left = compareLeft.value;
-  const right = compareRight.value;
-  if (left && sameEndpoint(left, endpoint)) return "Selected as the left side of the pair compare.";
-  if (right && sameEndpoint(right, endpoint)) return "Selected as the right side of the pair compare.";
-  return left && right
-    ? "Replace the right side of the pair compare with this occurrence."
-    : left
-      ? `Select this occurrence as the right side of the pair compare within ${cluster.id}.`
-      : `Select this occurrence as the left side of the pair compare within ${cluster.id}.`;
+function compareWithCanonical(clusterId: string, occurrence: ReportOccurrence, index: number): void {
+  if (index !== CANONICAL_OCCURRENCE_INDEX) {
+    post({ kind: COMPARE_CANONICAL_MESSAGE, clusterId, occurrence });
+  }
 }
 
-function occurrenceTitle(occurrence: ReportOccurrence, index: number): string {
+function compareTitle(index: number): string {
+  return index === CANONICAL_OCCURRENCE_INDEX
+    ? "Compare is disabled on the canonical occurrence because it would compare the same range with itself."
+    : "Compare this occurrence with the canonical occurrence in VS Code's diff editor.";
+}
+
+function occurrenceTitle(occurrence: ReportOccurrence, index: number, picked: boolean): string {
   const role = index === 0 ? "Canonical occurrence" : `Occurrence ${index + 1}`;
   const hidden = occurrence.hidden
     ? " This occurrence is hidden by report_hide configuration but shown because the cluster also contains visible code."
     : "";
-  return `${role}: ${occurrence.displayLocation?.label ?? occurrence.path}. ${occurrence.displayLocation?.description ?? "Line and column are unavailable until the file can be read."}${hidden}`;
+  const tap = picked ? PICKED_ROW_HINT : ROW_TAP_HINT;
+  return `${role}: ${occurrence.displayLocation?.label ?? occurrence.path}. ${occurrence.displayLocation?.description ?? "Line and column are unavailable until the file can be read."}${hidden} ${tap}`;
 }
 
 function locationTitle(occurrence: ReportOccurrence): string {

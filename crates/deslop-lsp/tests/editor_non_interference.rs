@@ -165,9 +165,9 @@ fn canonical_navigation_survives_via_additive_clone_diagnostics() -> Result<()> 
          survives without overloading F12: {response}"
     );
 
-    // [FUSED-PAIR-SIGNALS] The diagnostic is a cluster surface: it quotes
-    // the neutral `Duplicate code × count — mass` contract and renders no
-    // pair evidence.
+    // [FUSED-PAIR-SIGNALS] [CLONE-KIND-LABELS] The diagnostic is a cluster
+    // surface: it quotes the `<kind title> × count — mass` contract and
+    // renders no pair evidence.
     let deslop_item = items
         .iter()
         .find(|item| item.get("source").and_then(Value::as_str) == Some("deslop"))

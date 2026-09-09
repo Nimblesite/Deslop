@@ -8,8 +8,8 @@
 // trailing debounce, and each editor's byte→UTF-16 buffer is built once per
 // redraw instead of once per occurrence.
 //
-// [SEVERITY-COLOR] The underline and ruler stripe are pure colour — there is no
-// glyph on an underline — so they carry the bucket channel and nothing else. A
+// [CLONE-KIND-COLOR] The underline and ruler stripe are pure colour — there is
+// no glyph on an underline — so they carry the clone kind and nothing else. A
 // decoration therefore needs no ranking at all: an occurrence is coloured by
 // what kind of duplicate it is, which is the same answer wherever it sorts.
 
@@ -18,10 +18,12 @@ import { effect } from "@preact/signals-core";
 
 import { clusterHoverMarkdown } from "../clusterHover";
 import { ReportStore } from "../reportStore";
-import { clusterSeverity, DESLOP_SEVERITIES, DeslopSeverity, DESLOP_SEVERITY_COLOR } from "../severity";
+import { KIND_COLOR } from "../design";
 import { sameFile } from "../pathUtils";
 import { debounce, Debounced, ScheduleFn } from "../util/debounce";
 import {
+  CLUSTER_KINDS,
+  ClusterKind,
   Report,
   ReportCluster,
   ReportOccurrence,
@@ -32,12 +34,12 @@ const REDRAW_DEBOUNCE_MS = 60;
 const UTF8_ENCODING = "utf8";
 
 export class DecorationManager implements vscode.Disposable {
-  private readonly byKind: Map<DeslopSeverity, vscode.TextEditorDecorationType>;
+  private readonly byKind: Map<ClusterKind, vscode.TextEditorDecorationType>;
   private readonly disposables: vscode.Disposable[] = [];
   private readonly scheduleRedraw: Debounced;
 
   constructor(private readonly store: ReportStore, schedule?: ScheduleFn) {
-    this.byKind = new Map(DESLOP_SEVERITIES.map((kind) => [kind, createDecoration(kind)]));
+    this.byKind = new Map(CLUSTER_KINDS.map((kind) => [kind, createDecoration(kind)]));
     this.scheduleRedraw = debounce(() => this.flush(), REDRAW_DEBOUNCE_MS, schedule);
     this.disposables.push(
       // Repaint when the report changes (a file-change-driven analysis update — an
@@ -72,17 +74,16 @@ export class DecorationManager implements vscode.Disposable {
   // only when this editor actually owns an occurrence.
   private redraw(editor: vscode.TextEditor, report: Report): void {
     const activePath = editor.document.uri.fsPath;
-    const buckets = new Map<DeslopSeverity, vscode.DecorationOptions[]>(
-      DESLOP_SEVERITIES.map((kind) => [kind, []]),
+    const buckets = new Map<ClusterKind, vscode.DecorationOptions[]>(
+      CLUSTER_KINDS.map((kind) => [kind, []]),
     );
     let buffer: Buffer | undefined;
     for (const cluster of report.clusters) {
-      const severity = clusterSeverity(cluster);
       for (const occurrence of cluster.occurrences) {
         if (!sameFile(occurrence.path, activePath)) continue;
         buffer ??= Buffer.from(editor.document.getText(), UTF8_ENCODING);
         const range = rangeFromBuffer(editor.document, buffer, occurrence);
-        if (range) buckets.get(severity)?.push({ range });
+        if (range) buckets.get(cluster.kind)?.push({ range });
       }
     }
     for (const [kind, decoration] of this.byKind) {
@@ -95,8 +96,8 @@ export class DecorationManager implements vscode.Disposable {
   }
 }
 
-function createDecoration(severity: DeslopSeverity): vscode.TextEditorDecorationType {
-  const color = DESLOP_SEVERITY_COLOR[severity];
+function createDecoration(kind: ClusterKind): vscode.TextEditorDecorationType {
+  const color = KIND_COLOR[kind];
   return vscode.window.createTextEditorDecorationType({
     textDecoration: `underline ${color}`,
     overviewRulerColor: color,

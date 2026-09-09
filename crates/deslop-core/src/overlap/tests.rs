@@ -21,11 +21,11 @@ use crate::{
 };
 
 /// A parsed fixture: its normalised tree and the whole-file fingerprint.
-struct Parsed {
+pub(super) struct Parsed {
     /// Normalised root.
-    tree: NormalizedNode,
+    pub(super) tree: NormalizedNode,
     /// Fingerprint spanning the tree's own byte range.
-    whole: Fingerprint,
+    pub(super) whole: Fingerprint,
 }
 
 /// Parses `source` as Rust and fingerprints its root.
@@ -61,7 +61,10 @@ fn root_hash(tree: &NormalizedNode) -> [u8; 32] {
 }
 
 /// Parses `left_source` and `right_source` as two Rust files.
-fn parse_pair(left_source: &str, right_source: &str) -> Result<(Parsed, Parsed), String> {
+pub(super) fn parse_pair(
+    left_source: &str,
+    right_source: &str,
+) -> Result<(Parsed, Parsed), String> {
     let mut registry = FileRegistry::new();
     let left_id = registry.register(PathBuf::from("left.rs"));
     let right_id = registry.register(PathBuf::from("right.rs"));
@@ -95,7 +98,7 @@ fn overlap_of(left_source: &str, right_source: &str) -> Result<f64, String> {
 /// The #408 shape: a method, and the same method with one extra
 /// statement inserted into its loop. Every identifier is renamed too,
 /// so nothing but the shape can match.
-const ACCUMULATE: &str = "\
+pub(super) const ACCUMULATE: &str = "\
 fn accumulate(bound: u32) -> u32 {
     if bound == 0 {
         return 0;
@@ -109,7 +112,7 @@ fn accumulate(bound: u32) -> u32 {
 ";
 
 /// `ACCUMULATE` with one inserted statement and a full rename.
-const AGGREGATE_WITH_INSERTION: &str = "\
+pub(super) const AGGREGATE_WITH_INSERTION: &str = "\
 fn aggregate(limit: u32) -> u32 {
     if limit == 0 {
         return 0;

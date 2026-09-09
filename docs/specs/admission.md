@@ -119,12 +119,13 @@ $S$ and $J$ are computed on the *normalised* tree — identifiers and literals c
 - $F$ — the keys both occurrences share that are *non-authored* (grammar scaffolding, not something a person typed); these are removed so they can't pad the score.
 - **scored positions** — the positions that either disagree or carry authored content.
 - **operator contradiction** — a position where both occurrences have a behaviour-bearing operator and they disagree ($+$ vs $-$). This is a hard contradiction: the surrounding matches cannot outvote the operation that changed.
+- **call-target contradiction** — external method calls replace one operation with another under [FUSED-CONTENT-GATE-CALL-TARGET]. This is a change of operation, not a receiver-variable rename.
 - $A(a,b)$ — **agreement**: the fraction of authored positions whose raw bytes match, in $[0,1]$.
 
 $$
 A(a,b) =
 \begin{cases}
-0 & \text{operator contradiction} \\[4pt]
+0 & \text{operator or call-target contradiction} \\[4pt]
 \dfrac{|\{\,i : k_{a,i} = k_{b,i}\,\}|}{|\text{scored positions}|} & \text{positions align one-to-one} \\[10pt]
 \dfrac{|K_a \cap K_b| - |F|}{|K_a \cup K_b| - |F|} & \text{otherwise}
 \end{cases}
@@ -148,7 +149,7 @@ q = \frac{\text{anchors}}{\text{anchors} + h}
 \qquad
 R =
 \begin{cases}
-0 & \text{operator contradiction} \\
+0 & \text{operator or call-target contradiction} \\
 \min(\text{consistency},\, \text{coverage}) \times q & \text{otherwise}
 \end{cases}
 $$
@@ -160,6 +161,18 @@ $$
 $$
 C(p) = \max\bigl(A(p),\, R(p)\bigr)
 $$
+
+### [FUSED-CONTENT-GATE-CALL-TARGET] A different external method is a different operation
+
+For two occurrences with the same normalized shape, a changed member-call selector is a content contradiction when the matched region does not declare that method. `page.click()` and `page.fill()` call different operations; repeated uses of `page` do not prove that `click` was renamed to `fill`. Renaming the receiver variable remains permitted. Data-property names and direct function or constructor names are not member-call selectors. A method declaration included in the matched region can establish a local method rename.
+
+A copied collaborator can also establish a method rename: `self.order_repo.fetch(...)` can become `self.user_store.load(...)` when the aligned receiver-property positions themselves demonstrate a repeated, consistent rename. The identifier substitutions must agree with one reversible mapping, and the receiver-property substitution must meet the same corroboration requirement as ordinary rename evidence. Merely changing a receiver variable or only the method name supplies no such evidence. The existing `python_inherited_contract_boundary` test requires this complete copied method to publish while suppressing implementations whose abstract base forces their shared signature.
+
+When the shapes differ, compare the multisets of external selectors using the same replacement rule as operators. A surplus on both sides means one operation was replaced by another and is a contradiction. Equal multisets, reordering, or a surplus on only one side are not contradictions: Type-3 copies may insert or delete calls. This distinction applies before a token-similarity edge can connect otherwise unrelated groups.
+
+The comparison reads only selector positions inside both reported ranges. An enclosing test name or callback outside those ranges supplies no evidence. A contradiction sets agreement and rename support to zero and cannot be rescued by the consistent-rename shortcut. Scanning and explicit pair comparison use this same calculation.
+
+**For AI.** Implemented by `content/call_targets.rs`, the frontier roles in `content/frontier.rs`, and the shared pair measurement in `content.rs`. End-to-end assertions belong to `crates/deslop/tests/js_literal_variation_calls.rs`; the existing callback-body and `type2_rename_literal_drift` assertions preserve valid copies while the method-target case rejects unrelated API calls.
 
 ## The gates
 
@@ -197,7 +210,7 @@ $$
 - $S_{\text{resc}}$ — the rescue's structural floor (`admission.shared_subtree_min_overlap`, default 0.75).
 - $J_{\text{resc}}$ — the rescue's Jaccard floor (`admission.shared_subtree_min_jaccard`, default 0.65).
 - $n_{\text{resc}}$ — the rescue's minimum endpoint node count (`admission.shared_subtree_min_node_count`, default 30).
-- $A_{\text{resc}}$ — the rescue's raw-content agreement floor (`rescue.content_agreement_floor`, default 0.10).
+- $C_{\text{core}}(p)$ — whether the pair's aligned core clears the content gate at `content_gate.support_floor` ([FUSED-SHARED-SUBTREE-CORE](fused.md#fused-shared-subtree-core)).
 
 $$
 \mathrm{rescue}(p) \iff
@@ -206,7 +219,7 @@ $$
 \land S(p) \ge S_{\text{resc}}
 \land J(p) \ge J_{\text{resc}}
 \land \min(n_l, n_r) \ge n_{\text{resc}}
-\land A(p) \ge A_{\text{resc}}
+\land C_{\text{core}}(p)
 $$
 
 **The content gate.** When the shape evidence saturates, the pair must additionally prove its raw content agrees, because saturated shape says nothing an echo couldn't say.

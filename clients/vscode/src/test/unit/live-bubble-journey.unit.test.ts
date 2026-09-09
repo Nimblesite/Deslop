@@ -13,10 +13,10 @@ import {
   bubbleFixture,
   setBubbleMode,
   span,
+  FIXTURE_KIND_TITLE,
 } from "./bubble.helpers";
 import { repoMetrics, reportWithClusters } from "./report.helpers";
 
-const DUPLICATION_TITLE = "DUPLICATION";
 
 function provenClone(id: string, mass: number) {
   return bubbleCluster(id, mass, { occurrenceTotal: 4 });
@@ -33,7 +33,7 @@ suite("LiveBubble journeys", () => {
     try {
       // 1. Cursor on the proven clone: it is offered, in full.
       bubble.render(capture.editor, span(0), [proven]);
-      const first = assertBubbleShows(capture, DUPLICATION_TITLE, "step 1");
+      const first = assertBubbleShows(capture, FIXTURE_KIND_TITLE, "step 1");
       assert.match(first, /×\s*4/, "step 1: renders the proven clone's occurrence count");
       assert.match(first, /A\.cs/, "step 1: names the canonical file");
       assert.ok(capture.visibleHover() !== undefined, "step 1: carries a hover card");
@@ -42,7 +42,7 @@ suite("LiveBubble journeys", () => {
       const promoted = bubbleCluster("c-2", 900, { occurrenceTotal: 9 });
       store.setSnapshot(reportWithClusters([promoted, proven]), 1);
       bubble.render(capture.editor, span(12), [promoted]);
-      const afterPromote = assertBubbleShows(capture, DUPLICATION_TITLE, "step 2");
+      const afterPromote = assertBubbleShows(capture, FIXTURE_KIND_TITLE, "step 2");
       assert.match(afterPromote, /×\s*9/, "step 2: the rescan's count reaches the bubble");
 
       // 3. A rescan that drops the cluster withdraws the offer.
@@ -55,7 +55,7 @@ suite("LiveBubble journeys", () => {
 
       // 4. The proven clone is still offered — the churn did not lose it.
       bubble.render(capture.editor, span(24), [proven]);
-      const last = assertBubbleShows(capture, DUPLICATION_TITLE, "step 4");
+      const last = assertBubbleShows(capture, FIXTURE_KIND_TITLE, "step 4");
       assert.match(last, /×\s*4/, "step 4: the untouched clone keeps its count");
       assert.ok(capture.visibleHover() !== undefined, "step 4: and its hover card");
     } finally {
@@ -72,7 +72,7 @@ suite("LiveBubble journeys", () => {
     try {
       // 1. Inline: title, count, hover, no ghost furniture.
       bubble.render(capture.editor, span(0), [proven]);
-      const inline = assertBubbleShows(capture, DUPLICATION_TITLE, "inline");
+      const inline = assertBubbleShows(capture, FIXTURE_KIND_TITLE, "inline");
       assert.doesNotMatch(inline, /└─/, "inline: no ghost prefix");
       assert.match(inline, /×\s*4/, "inline: carries the count");
       assert.ok(capture.visibleHover() !== undefined, "inline: carries a hover card");
@@ -80,7 +80,7 @@ suite("LiveBubble journeys", () => {
       // 2. Ghost: same verdict, different furniture, no hover.
       await setBubbleMode("ghost");
       bubble.render(capture.editor, span(6), [proven]);
-      const ghost = assertBubbleShows(capture, DUPLICATION_TITLE, "ghost");
+      const ghost = assertBubbleShows(capture, FIXTURE_KIND_TITLE, "ghost");
       assert.match(ghost, /└─/, "ghost: renders the tree-branch prefix");
       // [FUSED-PAIR-SIGNALS] Admission signals are pair measurements; a cluster
       // surface never renders the three-bar signal strip.
@@ -91,7 +91,7 @@ suite("LiveBubble journeys", () => {
       // 3. Back to inline: the verdict is unchanged across the round trip.
       await setBubbleMode("inline");
       bubble.render(capture.editor, span(12), [proven]);
-      const back = assertBubbleShows(capture, DUPLICATION_TITLE, "back to inline");
+      const back = assertBubbleShows(capture, FIXTURE_KIND_TITLE, "back to inline");
       assert.doesNotMatch(back, /└─/, "back to inline: ghost furniture is gone");
       assert.match(back, /×\s*4/, "back to inline: the count survived the round trip");
       assert.ok(capture.visibleHover() !== undefined, "back to inline: hover restored");
@@ -102,7 +102,7 @@ suite("LiveBubble journeys", () => {
 
       // 5. Plain dismiss is not sticky — the next probe paints it again.
       bubble.render(capture.editor, span(18), [proven]);
-      assertBubbleShows(capture, DUPLICATION_TITLE, "after a plain dismiss");
+      assertBubbleShows(capture, FIXTURE_KIND_TITLE, "after a plain dismiss");
     } finally {
       await setBubbleMode("inline");
       bubble.dispose();
@@ -120,9 +120,9 @@ suite("LiveBubble journeys", () => {
     try {
       // 1. Both clusters are offerable to begin with.
       bubble.render(capture.editor, span(0), [first]);
-      assertBubbleShows(capture, DUPLICATION_TITLE, "step 1");
+      assertBubbleShows(capture, FIXTURE_KIND_TITLE, "step 1");
       bubble.render(capture.editor, span(6), [second]);
-      const secondText = assertBubbleShows(capture, DUPLICATION_TITLE, "step 1b");
+      const secondText = assertBubbleShows(capture, FIXTURE_KIND_TITLE, "step 1b");
       assert.match(secondText, /×\s*2/, "step 1b: the second cluster brings its own count");
 
       // 2. Dismissing the first hides only the first.
@@ -130,7 +130,7 @@ suite("LiveBubble journeys", () => {
       bubble.render(capture.editor, span(12), [first]);
       assert.equal(capture.visible(), undefined, "step 2: the dismissed cluster stays hidden");
       bubble.render(capture.editor, span(18), [second]);
-      assertBubbleShows(capture, DUPLICATION_TITLE, "step 2b");
+      assertBubbleShows(capture, FIXTURE_KIND_TITLE, "step 2b");
 
       // 3. A fresh snapshot must not resurrect a dismissed cluster.
       store.setSnapshot(reportWithClusters([first, second]), 2);
@@ -141,7 +141,7 @@ suite("LiveBubble journeys", () => {
         "step 3: dismissal must outlive a rescan",
       );
       bubble.render(capture.editor, span(30), [second]);
-      assertBubbleShows(capture, DUPLICATION_TITLE, "step 3b");
+      assertBubbleShows(capture, FIXTURE_KIND_TITLE, "step 3b");
 
       // 4. A delta removing the surviving cluster clears the surface.
       store.applyDelta({

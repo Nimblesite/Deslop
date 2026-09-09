@@ -133,6 +133,12 @@ fn assert_every_cluster_is_reported_exactly(golden: &Value) -> Result<()> {
             case.nodes
         );
         assert_no_pair_surface_on_cluster(clone, language);
+        assert_eq!(
+            cluster_kind(clone),
+            IDENTICAL_KIND,
+            "{language}: the authored pair is byte-identical, so the folded \
+             kind is identical ([CLONE-KIND-FOLD]): {clone:#}"
+        );
         assert_occurrence_shape(clone, language);
         assert_exact_spans(clone, case)?;
     }
