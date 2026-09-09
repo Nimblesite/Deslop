@@ -9,8 +9,8 @@ use std::fmt::Write as _;
 
 use crate::{
     report::{Report, ReportCluster},
+    report_facts::{repo_cluster_count, threshold_verdict, DiffDelta},
     report_location::diff_badge,
-    report_metrics::ThresholdSource,
 };
 
 /// Renders `report` as terse ASCII text suitable for piping to an agent.
@@ -35,30 +35,17 @@ pub fn render_text(report: &Report) -> String {
 /// keep local runs terse.
 fn write_metrics(out: &mut String, report: &Report) {
     let metrics = &report.metrics;
-    // The repo line is repo-scoped: under `--only-changed`,
-    // `clusters_total` follows the filtered body ([METRICS-REPO]), so
-    // the repo-wide count is body + omitted ([METRICS-DIFF-SCOPE]).
-    let repo_clusters = metrics
-        .clusters_total
-        .saturating_add(report.clusters_outside_diff.unwrap_or(0));
     let _ = writeln!(
         out,
         "repo: {percent:.1}% duplicated ({dup} / {total} LOC, {clusters} clusters across {files} files)",
         percent = metrics.duplication_percent,
         dup = metrics.duplicated_loc,
         total = metrics.analysed_loc,
-        clusters = repo_clusters,
+        clusters = repo_cluster_count(report),
         files = metrics.duplicated_files,
     );
-    let verdict = match metrics.threshold.source {
-        ThresholdSource::None => return,
-        ThresholdSource::Cli | ThresholdSource::Config => {
-            if metrics.threshold.breached {
-                "breached"
-            } else {
-                "ok"
-            }
-        }
+    let Some(verdict) = threshold_verdict(&metrics.threshold) else {
+        return;
     };
     let _ = writeln!(
         out,
@@ -83,12 +70,7 @@ fn write_diff_metrics(out: &mut String, report: &Report) {
         dup = diff.duplicated_added_loc,
         added = diff.added_loc,
     );
-    if !matches!(diff.threshold.source, ThresholdSource::None) {
-        let verdict = if diff.threshold.breached {
-            "breached"
-        } else {
-            "ok"
-        };
+    if let Some(verdict) = threshold_verdict(&diff.threshold) {
         let _ = writeln!(
             out,
             "diff threshold: {pct:.2}% ({verdict})",
@@ -104,19 +86,16 @@ fn write_diff_metrics(out: &mut String, report: &Report) {
 /// untouched code (#364's requested classification), with the omitted
 /// count beside them so all four figures reconcile.
 fn write_diff_delta(out: &mut String, report: &Report) {
-    let Some(outside) = report.clusters_outside_diff else {
+    let Some(delta) = DiffDelta::of(report) else {
         return;
     };
-    let newly = report
-        .clusters
-        .iter()
-        .filter(|cluster| cluster.is_newly_introduced == Some(true))
-        .count();
-    let cross_file = report.clusters.len().saturating_sub(newly);
     let _ = writeln!(
         out,
         "delta: {touched} cluster(s) intersect the diff — {newly} newly introduced, {cross_file} cross-file with untouched code; {outside} untouched cluster(s) omitted",
-        touched = report.clusters.len(),
+        touched = delta.touched(),
+        newly = delta.newly,
+        cross_file = delta.cross_file,
+        outside = delta.outside,
     );
 }
 

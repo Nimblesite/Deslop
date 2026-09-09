@@ -27,6 +27,7 @@ use crate::{
         html_footer::write_run_details,
     },
     report::{Report, ReportCluster, ReportOccurrence},
+    report_facts::{repo_cluster_count, threshold_verdict, DiffDelta},
     report_location::{diff_badge, format_occurrence},
     report_metrics::ThresholdSource,
 };
@@ -194,33 +195,20 @@ fn governing_threshold(report: &Report) -> &crate::report_metrics::ThresholdSumm
 /// rest of the intro.
 fn metrics_banner_text(report: &Report) -> String {
     let metrics = &report.metrics;
-    // Repo-scoped figure: under `--only-changed`, `clusters_total`
-    // follows the filtered body ([METRICS-REPO]), so the repo-wide
-    // count is body + omitted ([METRICS-DIFF-SCOPE]).
-    let repo_clusters = metrics
-        .clusters_total
-        .saturating_add(report.clusters_outside_diff.unwrap_or(0));
     let head = format!(
         "repo: {pct:.1}% duplicated ({dup} / {total} LOC, {clusters} clusters across {files} files)",
         pct = metrics.duplication_percent,
         dup = metrics.duplicated_loc,
         total = metrics.analysed_loc,
-        clusters = repo_clusters,
+        clusters = repo_cluster_count(report),
         files = metrics.duplicated_files,
     );
-    let mut sentence = match metrics.threshold.source {
-        ThresholdSource::None => head,
-        ThresholdSource::Cli | ThresholdSource::Config => {
-            let verdict = if metrics.threshold.breached {
-                "breached"
-            } else {
-                "ok"
-            };
-            format!(
-                "{head} · threshold {pct:.2}% ({verdict})",
-                pct = metrics.threshold.percent
-            )
-        }
+    let mut sentence = match threshold_verdict(&metrics.threshold) {
+        None => head,
+        Some(verdict) => format!(
+            "{head} · threshold {pct:.2}% ({verdict})",
+            pct = metrics.threshold.percent
+        ),
     };
     sentence.push_str(&diff_banner_text(report));
     sentence
@@ -240,12 +228,7 @@ fn diff_banner_text(report: &Report) -> String {
         dup = diff.duplicated_added_loc,
         added = diff.added_loc,
     );
-    if !matches!(diff.threshold.source, ThresholdSource::None) {
-        let verdict = if diff.threshold.breached {
-            "breached"
-        } else {
-            "ok"
-        };
+    if let Some(verdict) = threshold_verdict(&diff.threshold) {
         let _ = write!(
             tail,
             " · diff threshold {pct:.2}% ({verdict})",
@@ -260,17 +243,14 @@ fn diff_banner_text(report: &Report) -> String {
 /// with untouched code (#364's requested classification), and the
 /// omitted count. Empty unless the filter ran.
 fn diff_delta_segment(report: &Report) -> String {
-    let Some(outside) = report.clusters_outside_diff else {
+    let Some(delta) = DiffDelta::of(report) else {
         return String::new();
     };
-    let newly = report
-        .clusters
-        .iter()
-        .filter(|cluster| cluster.is_newly_introduced == Some(true))
-        .count();
-    let cross_file = report.clusters.len().saturating_sub(newly);
     format!(
         " · {newly} newly introduced group(s), {cross_file} cross-file with untouched code, {outside} untouched group(s) omitted",
+        newly = delta.newly,
+        cross_file = delta.cross_file,
+        outside = delta.outside,
     )
 }
 

@@ -44,6 +44,7 @@ pub mod refactor;
 pub mod render;
 pub mod report;
 pub mod report_boilerplate;
+pub mod report_facts;
 #[cfg(any(test, feature = "test-support"))]
 pub mod report_fixtures;
 pub mod report_location;
