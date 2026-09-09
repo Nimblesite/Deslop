@@ -43,6 +43,7 @@ mod alignment;
 pub mod benchmark;
 /// The aligned core two endpoints share ([FUSED-SHARED-SUBTREE-CORE]).
 mod core;
+pub(crate) use core::judge_core;
 /// Large-tree greedy coverage fallback ([FUSED-SHARED-SUBTREE]).
 mod credit;
 /// Rescue application over the candidate set ([FUSED-SHARED-SUBTREE]).

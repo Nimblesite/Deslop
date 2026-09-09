@@ -7,13 +7,12 @@ use std::{
 
 use crate::{
     ast::NormalizedNode,
-    buckets::CONTENT_SUPPORT_FLOOR,
     content::{measure_aligned_core, measure_pair_content_indexed, tree_index_of, PairScope},
     embedding::{cosine_similarity, EmbeddingProvider},
     error::CoreError,
     fingerprint::Fingerprint,
     lsh::{estimate_jaccard, SignatureLookup},
-    overlap::OverlapMeasurer,
+    overlap::{judge_core, OverlapMeasurer},
     pair::PairScore,
     report::{PairComparison, PairComparisonParams, PairEndpoint, PairEvidence, PairTextIdentity},
     state::FileId,
@@ -150,15 +149,18 @@ impl PipelineSession {
             interior: false,
             core: true,
         };
-        measure_aligned_core(
-            (pair.left.fingerprint, pair.right.fingerprint),
-            &core,
-            &axes.trees,
-            &self.sources,
-            &self.file_languages,
-            scope,
-        )
-        .clears(CONTENT_SUPPORT_FLOOR)
+        let floor = usize::try_from(self.min_nodes).unwrap_or(usize::MAX);
+        judge_core(&core, floor, || {
+            measure_aligned_core(
+                (pair.left.fingerprint, pair.right.fingerprint),
+                &core,
+                &axes.trees,
+                &self.sources,
+                &self.file_languages,
+                scope,
+            )
+        })
+        .copy
     }
 
     /// Estimates token Jaccard, applying the pair-local Merkle correction.

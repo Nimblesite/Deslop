@@ -47,3 +47,9 @@ This plan replaces the shipped cluster-evidence design in one cutover so code, t
 ## Completion
 
 The plan is complete only when the source specs, generated schema, Rust model, pair admission, closure and suppression behavior, mass ranking, every renderer, every client, every assertion, and the installed VSIX UI all enforce the same boundary with no old path left in the repository.
+
+## The accessor-pair pins (gh #532)
+
+Two pins in `crates/deslop/tests/content_gate_signal_honesty.rs` — `a_cluster_whose_evidence_did_not_corroborate_is_not_told_it_agreed` and `a_gated_cluster_still_reports_the_evidence_that_corroborated_it` — assert that the gh #460 accessor pair of the `content-gate-unsaturated` fixture is reported. The fixture describes that pair as unrelated, and the aligned core of a rescued pair ([FUSED-SHARED-SUBTREE-CORE]) refuses it: the core pairs `return value` against `collect_identifiers(left, source, out)` and finds an inconsistent rename. Both pins are `#[ignore]`d under [SKIP-UNFINISHED] citing #532, their assertions untouched.
+
+What closes #532: rewrite the two pins to the corrected contract — the fixture publishes exactly one cluster, the byte-identical control at rank 1, and nothing spanning the two accessor files, while every published cluster still carries no pair-only surface — then remove both skips and their rows from `CURATED_SKIPS`. Until then the pair is held CLEARLY OUT in `corpus/register/deslop.json`, so the score gate fails the moment any change reports it again.

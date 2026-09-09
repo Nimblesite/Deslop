@@ -29,6 +29,8 @@ use std::{collections::HashMap, sync::Arc};
 use super::{endpoint_key, OverlapMeasurer, ENDPOINT_VIEW_MEMO_MAX};
 use crate::{
     ast::NormalizedNode,
+    buckets::CONTENT_SUPPORT_FLOOR,
+    content::ContentEvidence,
     fingerprint::{collect_fingerprints, Fingerprint},
     state::FileId,
     tokens::resolve_range_nodes,
@@ -37,6 +39,59 @@ use crate::{
 /// Core pairing unit tests ([FUSED-SHARED-SUBTREE-CORE]).
 #[cfg(test)]
 mod tests;
+
+/// [FUSED-SHARED-SUBTREE-CORE] The verdict on one aligned core.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct CoreVerdict {
+    /// Nodes the core's paired spans carry, each pair at its smaller side.
+    pub(crate) nodes: usize,
+    /// The gate's measurement over the core; unmeasured when the core
+    /// is below the node floor, because nothing that small is measured.
+    pub(crate) evidence: ContentEvidence,
+    /// Whether the code the two endpoints share is a copy.
+    pub(crate) copy: bool,
+}
+
+/// [FUSED-SHARED-SUBTREE-CORE] Judges an aligned core — the one reading
+/// the rescue and an explicit comparison share.
+///
+/// A rescued pair is a Type-1 or Type-2 clone with an edit, and the core
+/// is that clone, so the core must first be a clone the scan would
+/// report on its own: at least `floor` nodes, the scan's `min_nodes` —
+/// the size below which it reports no subtree at all. At the default
+/// floor the two Playwright lines every browser test starts with, plus
+/// one identifier, are twenty nodes measuring exactly the content floor;
+/// they are not a clone the scan reports, and no pair is admitted on
+/// them. A core that clears the node floor is measured with the gate's
+/// own axes (`measure`) and is a copy when that measurement clears
+/// [`CONTENT_SUPPORT_FLOOR`] or is a contradiction-free rename.
+pub(crate) fn judge_core(
+    core: &[(Fingerprint, Fingerprint)],
+    floor: usize,
+    measure: impl FnOnce() -> ContentEvidence,
+) -> CoreVerdict {
+    let nodes = core_node_count(core);
+    if nodes < floor {
+        return CoreVerdict {
+            nodes,
+            evidence: ContentEvidence::unmeasured(),
+            copy: false,
+        };
+    }
+    let evidence = measure();
+    CoreVerdict {
+        nodes,
+        evidence,
+        copy: evidence.clears(CONTENT_SUPPORT_FLOOR),
+    }
+}
+
+/// The core's node mass: each paired span at its smaller side, summed.
+fn core_node_count(core: &[(Fingerprint, Fingerprint)]) -> usize {
+    core.iter()
+        .map(|(span, partner)| span.node_count.min(partner.node_count))
+        .sum()
+}
 
 /// Every subtree is emitted, leaves included: the core pairs down to
 /// single frontier positions.

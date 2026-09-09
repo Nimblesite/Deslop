@@ -25,7 +25,6 @@ use std::{collections::HashMap, hash::BuildHasher, num::NonZeroUsize};
 
 use crate::{
     ast::NormalizedNode,
-    buckets::CONTENT_SUPPORT_FLOOR,
     cluster::scope::DeclarationScopes,
     content::{measure_aligned_core, PairScope},
     fingerprint::{ranges_overlap, Fingerprint},
@@ -36,7 +35,11 @@ use crate::{
     state::FileId,
 };
 
-use super::{tally::RescueTally, OverlapMeasurer};
+use super::{
+    core::{judge_core, CoreVerdict},
+    tally::RescueTally,
+    OverlapMeasurer,
+};
 
 /// Everything a rescue measurement reads besides the pair itself,
 /// resolved once per pass and shared read-only by every shard.
@@ -56,16 +59,22 @@ pub(super) struct RescueContext<'a, S, L: BuildHasher> {
     /// Authored declarations per file, for the same-file scope rule
     /// ([FUSED-SHARED-SUBTREE-SAME-FILE]).
     scopes: DeclarationScopes<'a, L>,
+    /// The scan's `min_nodes`: the size below which it reports no
+    /// subtree, and so the least an aligned core may carry
+    /// ([FUSED-SHARED-SUBTREE-CORE]).
+    core_floor: usize,
 }
 
 impl<'a, S: BuildHasher, L: BuildHasher> RescueContext<'a, S, L> {
-    /// Resolves the pass-wide inputs for `pairs`.
+    /// Resolves the pass-wide inputs for `pairs`, judging every aligned
+    /// core against `core_floor` nodes.
     pub(super) fn new(
         pairs: &[CandidatePair],
         fingerprints: &[Fingerprint],
         trees: &'a [NormalizedNode],
         sources: &'a HashMap<FileId, Vec<u8>, S>,
         languages: &'a HashMap<FileId, &'static str, L>,
+        core_floor: usize,
     ) -> Self {
         let scopes = DeclarationScopes::new(trees, languages);
         let anchors = ExactClones::whole_functions_across_files(pairs, fingerprints, &scopes);
@@ -77,6 +86,7 @@ impl<'a, S: BuildHasher, L: BuildHasher> RescueContext<'a, S, L> {
             anchors,
             interiors: ExactClones::within_one_file(pairs, fingerprints),
             scopes,
+            core_floor,
         }
     }
 
@@ -152,18 +162,21 @@ const RESCUE_CHUNK_PAIRS: usize = 512;
 ///
 /// `sources` and `languages` let the pass judge each pair whose overlap
 /// cleared the floor on its aligned core ([FUSED-SHARED-SUBTREE-CORE]):
-/// shape alone must not admit a pair whose shared code is not a copy.
+/// shape alone must not admit a pair whose shared code is not a copy,
+/// and `min_nodes` — the scan's own floor — is the least that core may
+/// carry.
 pub fn apply_shared_subtree_rescue<S: BuildHasher + Sync, L: BuildHasher + Sync>(
     pairs: &mut [CandidatePair],
     fingerprints: &[Fingerprint],
     trees: &[NormalizedNode],
     sources: &HashMap<FileId, Vec<u8>, S>,
     languages: &HashMap<FileId, &'static str, L>,
+    min_nodes: usize,
 ) {
     // Content agreement needs every member's tree and the echo rule
     // needs every exact function pair, both resolved once for the whole
     // pass; each measurement then reads through this context.
-    let context = RescueContext::new(pairs, fingerprints, trees, sources, languages);
+    let context = RescueContext::new(pairs, fingerprints, trees, sources, languages, min_nodes);
     let workers = crate::shard::worker_count(pairs.len(), MIN_SHARD_WORK);
     if workers <= 1 {
         let mut measurer = OverlapMeasurer::new(trees);
@@ -287,14 +300,13 @@ fn record_rescue_verdict<S: BuildHasher, L: BuildHasher>(
 }
 
 /// [FUSED-SHARED-SUBTREE-CORE] Whether the code the two endpoints share
-/// is a copy by the content gate's own measure: the Merkle-equal
-/// subtrees the alignment pairs, judged at [`CONTENT_SUPPORT_FLOOR`] or
-/// admitted as a contradiction-free rename. A Type-3 near-miss is a
-/// Type-1 or Type-2 clone with an edit, and the core is that clone; if
-/// the core is not a copy the wider view cannot be one, so no pair can
-/// be admitted by widening a pair the gate refused. A pair with no
-/// shared code to judge is refused — nothing measured vouches for
-/// nothing.
+/// is a copy: the Merkle-equal subtrees the alignment pairs, judged by
+/// [`judge_core`] — a clone the scan would report on its own, measured
+/// with the content gate's own axes. A Type-3 near-miss is a Type-1 or
+/// Type-2 clone with an edit, and the core is that clone; if the core is
+/// not a copy the wider view cannot be one, so no pair can be admitted
+/// by widening a pair the gate refused. A pair with no shared code to
+/// judge is refused — nothing measured vouches for nothing.
 fn core_is_a_copy<S: BuildHasher, L: BuildHasher>(
     left: &Fingerprint,
     right: &Fingerprint,
@@ -308,17 +320,18 @@ fn core_is_a_copy<S: BuildHasher, L: BuildHasher>(
             && context.scopes.enclosing(right).is_some(),
         core: true,
     };
-    let evidence = measure_aligned_core(
-        (left, right),
-        &core,
-        &context.tree_index,
-        context.sources,
-        context.languages,
-        scope,
-    );
-    let copy = evidence.clears(CONTENT_SUPPORT_FLOOR);
-    log_core_verdict(left, right, &core, evidence, copy);
-    copy
+    let verdict = judge_core(&core, context.core_floor, || {
+        measure_aligned_core(
+            (left, right),
+            &core,
+            &context.tree_index,
+            context.sources,
+            context.languages,
+            scope,
+        )
+    });
+    log_core_verdict(left, right, &core, verdict);
+    verdict.copy
 }
 
 /// Records one core verdict so a surprising rescue or refusal is
@@ -328,12 +341,12 @@ fn log_core_verdict(
     left: &Fingerprint,
     right: &Fingerprint,
     core: &[(Fingerprint, Fingerprint)],
-    evidence: crate::content::ContentEvidence,
-    copy: bool,
+    verdict: CoreVerdict,
 ) {
     if !tracing::enabled!(tracing::Level::TRACE) {
         return;
     }
+    let evidence = verdict.evidence;
     let spans: Vec<String> = core
         .iter()
         .map(|(span, partner)| {
@@ -354,12 +367,13 @@ fn log_core_verdict(
         right_start = right.byte_range.start,
         right_end = right.byte_range.end,
         spans = spans.join(","),
+        core_nodes = verdict.nodes,
         measured = evidence.measured,
         contradiction = ?evidence.contradiction,
         agreement = evidence.agreement,
         rename = evidence.rename_consistency,
         consistent_rename = evidence.consistent_rename,
-        copy,
+        copy = verdict.copy,
         "rescue core verdict",
     );
 }

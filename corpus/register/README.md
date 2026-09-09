@@ -41,7 +41,7 @@ judge next.
 | go | cobra | a large go repo; `hugo` is pinned already |
 | javascript | axios | a large js repo; `react` is pinned already |
 | csharp | Polly | a small csharp repo to sit under Polly |
-| rust | ripgrep | a second rust repo of a different size |
+| rust | ripgrep, deslop | a second rust repo of a different size; `deslop` is the self-register, filed from tracked issues rather than a blinded pass (see its `provenance`) |
 | typescript | zod | a second typescript repo of a different size |
 | dart | bloc | a second dart repo of a different size |
 | php | guzzle | a second php repo of a different size |

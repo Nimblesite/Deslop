@@ -29,7 +29,7 @@ set -euo pipefail
 # repeated here: a register is judged at one commit, and a slice pinned anywhere
 # else — a tag above all, which upstream can re-cut — would score the engine
 # against source the judge never read. The scorer refuses that outright.
-DEFAULT_SLICE=(click cobra axios)
+DEFAULT_SLICE=(click cobra axios deslop)
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 WORK_DIR="${SCORE_GATE_WORK_DIR:-$REPO_ROOT/.corpus/score-gate}"

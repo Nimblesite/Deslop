@@ -205,21 +205,34 @@ fn assert_nothing_is_published(report: &Value, floor: u32) {
 /// shares only the `locator().boundingBox()` idiom with it.
 const SCENARIO_TAIL_FIXTURE: &str = "js-cluster-extent-scenario-tail";
 
-/// Two test bodies that are one copy of each other, differing in the page
-/// they open.
-const LAYOUT: &str = "layout.spec.js";
-/// One test body sharing an idiom, and no authored logic, with them.
-const PUBLICATION: &str = "publication.spec.js";
-
-/// The copied scenario as authored: both whole test bodies, and nothing
-/// narrower ([PIPELINE-CLUSTER-EXACT-SCOPE]).
-const COPIED_SCENARIO_SPANS: [(u64, u64); 2] = [(3, 9), (11, 17)];
-
 /// One scenario copied once is one duplication.
 const ONE_CLUSTER: usize = 1;
 
 /// Only the file holding the copy carries duplication.
 const ONE_DUPLICATED_FILE: u64 = 1;
+
+/// One file's copy, expected to publish whole and alone while the file
+/// beside it shares an idiom with the copy and no authored logic.
+struct CopiedRun {
+    /// The file holding both occurrences of the copy.
+    copied: &'static str,
+    /// The file that must never join the copy's cluster.
+    stranger: &'static str,
+    /// The copy as authored, both occurrences, and nothing narrower
+    /// ([PIPELINE-CLUSTER-EXACT-SCOPE]).
+    spans: [(u64, u64); 2],
+    /// What welding the stranger on would be.
+    weld: &'static str,
+}
+
+/// Two test bodies that are one copy of each other, differing in the page
+/// they open, beside one test body sharing an idiom with them.
+const COPIED_SCENARIO: CopiedRun = CopiedRun {
+    copied: "layout.spec.js",
+    stranger: "publication.spec.js",
+    spans: [(3, 9), (11, 17)],
+    weld: "welding its tail on as a third occurrence is gh #520",
+};
 
 /// gh #520, the shape that survived its headline fix: a proven copy plus a
 /// shape-compatible stranger ([CLONE-NOISE-VERBATIM-SUBGROUP]). Two
@@ -238,42 +251,88 @@ fn a_scenario_tail_is_never_welded_onto_a_copied_scenario() -> Result<()> {
         assert_no_cluster_mixes_row_counts(&report, floor);
         assert_no_occurrence_opens_mid_line(&root, &report, floor)?;
         assert_node_count_fits_every_member(&report, floor);
-        assert_only_the_copied_scenario_is_published(&report, floor);
+        assert_only_the_copy_is_published(&report, floor, &COPIED_SCENARIO);
     }
+    Ok(())
+}
+
+/// Two tests opening with one copied three-statement preamble, beside a
+/// test that shares the two Playwright lines every test starts with — a
+/// viewport and a `goto` — and nothing else.
+const SHARED_PREAMBLE_FIXTURE: &str = "js-cluster-extent-shared-preamble";
+
+/// The copied preamble is three statements of 31 nodes and the stranger's
+/// own run is 33, so this floor admits both as windows; the floor above
+/// admits neither.
+const PREAMBLE_FLOOR: u32 = 30;
+/// A floor no window of the fixture reaches.
+const ABOVE_PREAMBLE_FLOOR: u32 = 45;
+
+/// The copied preamble, both occurrences, beside the docs test that shares
+/// its first two lines.
+const COPIED_PREAMBLE: CopiedRun = CopiedRun {
+    copied: "publication.spec.js",
+    stranger: "docs.spec.js",
+    spans: [(10, 12), (19, 21)],
+    weld: "rescuing it onto the copy over the two lines every test starts with is gh #520",
+};
+
+// gh #520's last survivor on `site/tests`: three tests open with the same
+// two Playwright lines, and two of them go on to copy a third statement.
+// The third test shares that preamble and nothing else, yet it rode the
+// shared-subtree rescue onto the copy: its aligned core was the two
+// preamble lines and one identifier — twenty nodes, measuring exactly the
+// content floor. What two endpoints share must itself be a clone the scan
+// would report, so a core below the node floor every rescued endpoint
+// clears admits nothing ([FUSED-SHARED-SUBTREE-CORE]).
+#[test]
+fn a_shared_preamble_never_rescues_a_stranger_onto_a_copied_run() -> Result<()> {
+    let root = fixture(SHARED_PREAMBLE_FIXTURE);
+    let report = run_report(&root, PREAMBLE_FLOOR)?;
+    assert_no_cluster_mixes_row_counts(&report, PREAMBLE_FLOOR);
+    assert_no_occurrence_opens_mid_line(&root, &report, PREAMBLE_FLOOR)?;
+    assert_node_count_fits_every_member(&report, PREAMBLE_FLOOR);
+    assert_only_the_copy_is_published(&report, PREAMBLE_FLOOR, &COPIED_PREAMBLE);
+    let above = run_report(&root, ABOVE_PREAMBLE_FLOOR)?;
+    assert_nothing_is_published(&above, ABOVE_PREAMBLE_FLOOR);
     Ok(())
 }
 
 /// The copy is the whole finding, and the only one: one cluster, in the one
 /// file that holds it.
-fn assert_only_the_copied_scenario_is_published(report: &Value, floor: u32) {
+fn assert_only_the_copy_is_published(report: &Value, floor: u32, run: &CopiedRun) {
     assert_eq!(
         cluster_count(report),
         ONE_CLUSTER,
-        "--min-nodes {floor}: one scenario copied once is one duplication: {report:#}"
+        "--min-nodes {floor}: one run copied once is one duplication: {report:#}"
     );
     for cluster in clusters(report) {
-        assert_copy_is_the_whole_finding(cluster, floor);
+        assert_copy_is_the_whole_finding(cluster, floor, run);
     }
     assert_eq!(
         metric_field(report, "duplicated_files").as_u64(),
         Some(ONE_DUPLICATED_FILE),
-        "--min-nodes {floor}: only {LAYOUT} carries duplication: {report:#}"
+        "--min-nodes {floor}: only {} carries duplication: {report:#}",
+        run.copied
     );
 }
 
-/// Both test bodies of the copied file at their authored extent, and no
+/// Both occurrences of the copied file at their authored extent, and no
 /// occurrence from the file that merely shares their idiom.
-fn assert_copy_is_the_whole_finding(cluster: &Value, floor: u32) {
+fn assert_copy_is_the_whole_finding(cluster: &Value, floor: u32, run: &CopiedRun) {
     let files = cluster_file_set(cluster);
     assert!(
-        !files.iter().any(|path| path.ends_with(PUBLICATION)),
-        "--min-nodes {floor}: {PUBLICATION} shares an idiom, not authored logic, with \
-         {LAYOUT}; welding its tail on as a third occurrence is gh #520: {cluster:#}"
+        !files.iter().any(|path| path.ends_with(run.stranger)),
+        "--min-nodes {floor}: {} shares an idiom, not authored logic, with {}; {}: {cluster:#}",
+        run.stranger,
+        run.copied,
+        run.weld
     );
     let mut spans = cluster_line_spans(cluster);
     spans.sort_unstable();
     assert_eq!(
-        spans, COPIED_SCENARIO_SPANS,
-        "--min-nodes {floor}: the copy is both whole test bodies of {LAYOUT}: {cluster:#}"
+        spans, run.spans,
+        "--min-nodes {floor}: the copy is both occurrences in {}, whole: {cluster:#}",
+        run.copied
     );
 }

@@ -85,6 +85,8 @@ Registers live in `corpus/register/<name>.json`, pinned to the commit they were 
 
 An empty `clearly_out` list must carry `clearly_out_status` prose saying so, for the reason `must_find_status` exists: emptiness is not evidence that precision is good.
 
+**One register is not blinded.** `corpus/register/deslop.json` is Deslop scanned by itself, pinned at a `main` commit. A judge of this repository cannot avoid reading the engine, so its entries are filed by the maintainer from tracked issues — a false-positive issue becomes a CLEARLY OUT entry, a byte-identical pair the self-scan reports becomes a CLEARLY IN entry — each with the diff run at the pinned commit recorded under `verified`, and the register says so under `provenance`. It is scored like every other register, in the CI slice, so the engine is held to the pairs those issues settled. Nothing enters it without an issue number.
+
 The protocol lives in two skills, deliberately split so neither role can drift into the other: `.agents/skills/clone-register-prepare` builds the workspace and files what comes back, and `.agents/skills/judge-clone-pairs` is the judging protocol, which never names this project and is installed at the root of the handed-over folder as a skill the judge can run by name, linked from each repository directory as `JUDGING.md`, so a judge never reaches back here to read it. The A/B key and the pinned checkouts are written beside that folder and never inside it.
 
 ### [CORPUS-REGISTER-COVERAGE] How far the register is meant to go

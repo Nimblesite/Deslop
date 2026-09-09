@@ -151,6 +151,7 @@ impl PipelineSession {
             trees,
             &self.sources,
             &self.file_languages,
+            usize::try_from(self.min_nodes).unwrap_or(usize::MAX),
         );
         ledger.record(
             "shared_subtree_rescue",
