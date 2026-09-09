@@ -6,10 +6,10 @@ import * as assert from "node:assert/strict";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { resolveWorkspaceRoot } from "../../extension";
-import { MetricsProvider, StatusTicker } from "../../tree/providers";
+import { MetricsProvider } from "../../tree/providers";
 import { FileMetricNode, FolderMetricNode, MetricsHeadlineNode } from "../../tree/nodes";
 import { ReportStore } from "../../reportStore";
-import { fileMetric, labelText, report } from "./tree.helpers";
+import { fileMetric, labelText, metricsPanel, treeStore } from "./tree.helpers";
 
 const STANDARD_ANALYSED_LOC = 100;
 const PRIMARY_DUPLICATION_VALUE = 60;
@@ -41,16 +41,13 @@ function panelForOneFile(
   percent: number,
   folders: ReturnType<typeof fileMetric>[],
 ): MetricsProvider {
-  const store = new ReportStore();
-  store.setSnapshot(
-    report([], {
+  return metricsPanel(
+    treeStore([], {
       duplicated_loc: duplicatedLoc,
       per_file: [fileMetric(metricPath, analysedLoc, duplicatedLoc, percent)],
       folders,
     }),
-    0,
   );
-  return new MetricsProvider(store, new StatusTicker());
 }
 
 /** Reads the URI a file row hands to `vscode.open` when it is clicked. */
@@ -68,20 +65,18 @@ function fixtureRoot(): string {
 
 suite("MetricsProvider", () => {
   test("shows a spinner before the first report arrives", () => {
-    const store = new ReportStore();
-    const provider = new MetricsProvider(store, new StatusTicker());
+    const provider = metricsPanel(new ReportStore());
     const [first] = provider.getChildren();
     assert.ok(first, "a placeholder row renders before any report");
     assert.equal(first.contextValue, "deslop.status.busy");
   });
 
   test("renders 'No duplication detected' when the codebase is clean and the scan has completed", () => {
-    const store = new ReportStore();
-    store.setSnapshot(report([], { duplicated_loc: 0, duplication_percent: 0 }), 0);
+    const store = treeStore([], { duplicated_loc: 0, duplication_percent: 0 });
     // The terminal "clean" verdict is gated on a completed scan: an empty
     // report alone no longer settles the lifecycle ([VSIX reactivity]).
     store.setLifecycle({ kind: "ready" });
-    const provider = new MetricsProvider(store, new StatusTicker());
+    const provider = metricsPanel(store);
     const nodes = provider.getChildren();
     assert.equal(nodes.length, 1);
     const [only] = nodes;
@@ -90,9 +85,8 @@ suite("MetricsProvider", () => {
   });
 
   test("headline shows the duplication score and opens the report", () => {
-    const store = new ReportStore();
-    store.setSnapshot(
-      report([], {
+    const provider = metricsPanel(
+      treeStore([], {
         duplication_percent: HEADLINE_DUPLICATION_PERCENT,
         duplicated_loc: HEADLINE_DUPLICATED_LOC,
         analysed_loc: 12400,
@@ -121,9 +115,7 @@ suite("MetricsProvider", () => {
           ),
         ],
       }),
-      0,
     );
-    const provider = new MetricsProvider(store, new StatusTicker());
     const [headline] = provider.getChildren();
     assert.ok(headline instanceof MetricsHeadlineNode, "first row is the headline");
     assert.match(labelText(headline), /18\.4%/);
@@ -133,9 +125,8 @@ suite("MetricsProvider", () => {
   });
 
   test("headline flags a breached threshold", () => {
-    const store = new ReportStore();
-    store.setSnapshot(
-      report([], {
+    const provider = metricsPanel(
+      treeStore([], {
         duplication_percent: HEADLINE_DUPLICATION_PERCENT,
         duplicated_loc: HEADLINE_DUPLICATED_LOC,
         threshold: {
@@ -166,17 +157,14 @@ suite("MetricsProvider", () => {
           ),
         ],
       }),
-      0,
     );
-    const provider = new MetricsProvider(store, new StatusTicker());
     const [headline] = provider.getChildren();
     assert.match(String(headline?.description ?? ""), /over 10\.0% gate/);
   });
 
   test("headline shows the configured gate when within budget", () => {
-    const store = new ReportStore();
-    store.setSnapshot(
-      report([], {
+    const provider = metricsPanel(
+      treeStore([], {
         duplication_percent: EIGHT_DUPLICATION_VALUE,
         duplicated_loc: 800,
         threshold: {
@@ -190,17 +178,14 @@ suite("MetricsProvider", () => {
           fileMetric(SOURCE_ROOT_FOLDER, STANDARD_ANALYSED_LOC, EIGHT_DUPLICATION_VALUE, EIGHT_DUPLICATION_VALUE),
         ],
       }),
-      0,
     );
-    const provider = new MetricsProvider(store, new StatusTicker());
     const [headline] = provider.getChildren();
     assert.match(String(headline?.description ?? ""), /within 20\.0% gate/);
   });
 
   test("rolls per_file into a folder tree, worst-first, expanding to files", () => {
-    const store = new ReportStore();
-    store.setSnapshot(
-      report([], {
+    const provider = metricsPanel(
+      treeStore([], {
         duplicated_loc: ROLLUP_DUPLICATED_LOC,
         per_file: [
           fileMetric(
@@ -238,9 +223,7 @@ suite("MetricsProvider", () => {
           ),
         ],
       }),
-      0,
     );
-    const provider = new MetricsProvider(store, new StatusTicker());
     const [, src] = provider.getChildren();
     assert.ok(src instanceof FolderMetricNode, "second row is a folder rollup");
     assert.equal(labelText(src), SOURCE_ROOT_FOLDER);
@@ -255,9 +238,8 @@ suite("MetricsProvider", () => {
   });
 
   test("folder percentage uses the full denominator; clean files are hidden", () => {
-    const store = new ReportStore();
-    store.setSnapshot(
-      report([], {
+    const provider = metricsPanel(
+      treeStore([], {
         duplicated_loc: PRIMARY_DUPLICATION_VALUE,
         per_file: [
           fileMetric(
@@ -283,9 +265,7 @@ suite("MetricsProvider", () => {
           ),
         ],
       }),
-      0,
     );
-    const provider = new MetricsProvider(store, new StatusTicker());
     const [, folder] = provider.getChildren();
     assert.ok(folder instanceof FolderMetricNode);
     // 60 duplicated / 200 analysed (clean file counted in the denominator).
@@ -414,7 +394,7 @@ suite("MetricsProvider", () => {
   test("surfaces a failed lifecycle as an error status row", () => {
     const store = new ReportStore();
     store.setLifecycle({ kind: "failed", message: "oh no" });
-    const provider = new MetricsProvider(store, new StatusTicker());
+    const provider = metricsPanel(store);
     const errorNode = provider
       .getChildren()
       .find((node) => node.contextValue === "deslop.status.error");

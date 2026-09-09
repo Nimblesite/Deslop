@@ -12,7 +12,19 @@ use std::path::PathBuf;
 use anyhow::Result;
 use tempfile::TempDir;
 
-use crate::common::deslop_cmd;
+use crate::common::{deslop_cmd, with_ext};
+
+/// The output stem every suite passes to `--output`, so the report the
+/// run writes is found by the same name it was asked for.
+pub const REPORT_STEM: &str = "report";
+
+/// The `<tmp>/report.json` a run rooted at `tmp` writes. Seven per-issue
+/// suites carried byte-identical copies of this three-line path build
+/// ([CI-DESLOP] ledger); the path is a fact about [OUTPUT-DIR], not a
+/// per-suite decision, so it is spelled once.
+pub fn report_path(tmp: &Path) -> PathBuf {
+    with_ext(&tmp.join(REPORT_STEM), "json")
+}
 
 /// Creates the temp workspace with an empty `<dir_name>` scan root
 /// inside it and returns both. Dropping the [`TempDir`] deletes the

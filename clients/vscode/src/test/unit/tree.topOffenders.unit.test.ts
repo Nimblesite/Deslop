@@ -9,11 +9,13 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import { tempFile } from "../unit/temp-file.helpers";
 import * as vscode from "vscode";
+// StatusTicker is still constructed by hand in the two tests that must
+// dispose it; every other site takes the shared `topOffenders` panel.
 import {
   FileNode,
   FolderNode,
-  TopOffendersProvider,
   StatusTicker,
+  TopOffendersProvider,
 } from "../../tree/providers";
 import { openOccurrence } from "../../commands/register";
 import { ReportStore } from "../../reportStore";
@@ -24,7 +26,9 @@ import {
   labelText,
   metrics,
   report,
+  storeWith,
   tooltipText,
+  topOffenders,
   withGroupBy,
   withSetting,
 } from "./tree.helpers";
@@ -121,7 +125,7 @@ async function firstRootIn(
 suite("TopOffendersProvider", () => {
   test("renders an Analysing… placeholder before the first report arrives", () => {
     const store = new ReportStore();
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const provider = topOffenders(store);
     const nodes = provider.getChildren();
     assert.equal(nodes.length, 1);
   });
@@ -133,7 +137,7 @@ suite("TopOffendersProvider", () => {
     const store = new ReportStore();
     store.setLifecycle({ kind: ANALYSING_PHASE });
     store.setSnapshot(report([]), 0);
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const provider = topOffenders(store);
     const [only] = provider.getChildren();
     assert.ok(only, "a progress row must render while scanning");
     assert.equal(only.contextValue, "deslop.status.busy", "mid-scan empty state shows a busy row");
@@ -145,10 +149,9 @@ suite("TopOffendersProvider", () => {
   });
 
   test("declares 'No duplication detected' only once the server reports idle (ready) with no clusters", () => {
-    const store = new ReportStore();
-    store.setSnapshot(report([]), 0);
+    const store = storeWith(report([]));
     store.setLifecycle({ kind: "ready" });
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const provider = topOffenders(store);
     const [only] = provider.getChildren();
     assert.ok(only);
     assert.equal(only.contextValue, "deslop.status.info");
@@ -159,13 +162,9 @@ suite("TopOffendersProvider", () => {
   // existing clusters on screen (stale > blank) and leads with a busy
   // badge so the user can see an update is in flight.
   test("leads with an 'Analysing changes…' badge during incremental re-analysis", () => {
-    const store = new ReportStore();
-    store.setSnapshot(
-      report([cluster(FIRST_CLUSTER_ID, HIGHEST_CLUSTER_MASS, REPO_A_PATH), cluster(SECOND_CLUSTER_ID, HIGH_CLUSTER_MASS, REPO_B_PATH)]),
-      0,
-    );
+    const store = storeWith(report([cluster(FIRST_CLUSTER_ID, HIGHEST_CLUSTER_MASS, REPO_A_PATH), cluster(SECOND_CLUSTER_ID, HIGH_CLUSTER_MASS, REPO_B_PATH)]));
     store.setLifecycle({ kind: ANALYSING_PHASE });
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const provider = topOffenders(store);
     const nodes = provider.getChildren();
     const [first] = nodes;
     assert.ok(first, "a badge row leads the list during re-analysis");
@@ -186,17 +185,15 @@ suite("TopOffendersProvider", () => {
     // [VSIX-TOP-OFFENDERS-CLUSTER-MODE] No file-keyed reordering.
     // [VSIX-TOP-OFFENDERS-RANK-GLOBAL] rank #N lives in the grey description;
     // [VSIX-TOP-OFFENDERS-CLUSTER-ID] the stable short id leads the bold label.
-    const store = new ReportStore();
-    store.setSnapshot(
+    const store = storeWith(
       report([
         cluster("1111aaaabbbbcccc", HIGHEST_CLUSTER_MASS, BETA_FILE_PATH),
         cluster("2222aaaabbbbcccc", HIGH_CLUSTER_MASS, ALPHA_FILE_PATH),
         cluster("3333aaaabbbbcccc", MEDIUM_CLUSTER_MASS, ALPHA_FILE_PATH),
         cluster("4444aaaabbbbcccc", 40, "/repo/src/c/Gamma.cs"),
       ]),
-      0,
     );
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const provider = topOffenders(store);
 
     const nodes = provider.getChildren();
     const labels = nodes.map(labelText);
@@ -248,7 +245,7 @@ suite("TopOffendersProvider", () => {
       ]),
       0,
     );
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const provider = topOffenders(store);
     const [first, second] = provider.getChildren();
     assert.ok(first, "first cluster row must render");
     assert.ok(second, "second cluster row must render");
@@ -329,7 +326,7 @@ suite("TopOffendersProvider", () => {
       report([cluster(clusterId, 48_936.95, "/repo/src/ICD10/CliE2ETests.cs")]),
       0,
     );
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const provider = topOffenders(store);
     const [node] = provider.getChildren();
     assert.ok(node, "cluster row must render");
     assert.notEqual(
@@ -346,17 +343,15 @@ suite("TopOffendersProvider", () => {
 
   test("file mode roots are FileNodes sorted by max cluster weight desc", async () => {
     // [VSIX-TOP-OFFENDERS-FILE-MODE]
-    const store = new ReportStore();
-    store.setSnapshot(
+    const store = storeWith(
       report([
         cluster("rank-1-beta", HIGHEST_CLUSTER_MASS, BETA_FILE_PATH),
         cluster("rank-2-alpha", HIGH_CLUSTER_MASS, ALPHA_FILE_PATH),
         cluster("rank-3-alpha", MEDIUM_CLUSTER_MASS, ALPHA_FILE_PATH),
         cluster("rank-4-gamma", 40, "/repo/src/c/Gamma.cs"),
       ]),
-      0,
     );
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const provider = topOffenders(store);
 
     await withGroupBy(FILE_GROUPING_MODE, () => {
       const nodes = provider.getChildren();
@@ -378,17 +373,15 @@ suite("TopOffendersProvider", () => {
     // [VSIX-TOP-OFFENDERS-FILE-MODE] Both files share max weight 50; the
     // file with the higher sum (50+50 = 100) wins over the one with sum 50.
     // The third file ties on max + sum and is ordered by localeCompare.
-    const store = new ReportStore();
-    store.setSnapshot(
+    const store = storeWith(
       report([
         cluster("a-only", TIED_CLUSTER_MASS, "/repo/AlphaOnly.cs"),
         cluster("b-1", TIED_CLUSTER_MASS, "/repo/BetaPair.cs"),
         cluster("b-2", TIED_CLUSTER_MASS, "/repo/BetaPair.cs"),
         cluster("c-only", TIED_CLUSTER_MASS, "/repo/CharlieOnly.cs"),
       ]),
-      0,
     );
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const provider = topOffenders(store);
 
     await withGroupBy(FILE_GROUPING_MODE, () => {
       const labels = provider.getChildren().map(labelText);
@@ -401,16 +394,14 @@ suite("TopOffendersProvider", () => {
   test("the same cluster keeps the same global rank across cluster mode and file mode", async () => {
     // [VSIX-TOP-OFFENDERS-RANK-GLOBAL] Cross-mode comparability. Rank lives
     // in the grey description so the bold label is free for the stable id.
-    const store = new ReportStore();
-    store.setSnapshot(
+    const store = storeWith(
       report([
         cluster("worst", HIGHEST_CLUSTER_MASS, REPO_A_PATH),
         cluster("middle", HIGH_CLUSTER_MASS, REPO_B_PATH),
         cluster("least", MEDIUM_CLUSTER_MASS, REPO_A_PATH),
       ]),
-      0,
     );
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const provider = topOffenders(store);
 
     const thirdRow = provider.getChildren()[2] as vscode.TreeItem;
     assert.match(
@@ -443,9 +434,8 @@ suite("TopOffendersProvider", () => {
 
   test("an unknown topOffenders.groupBy value falls back to cluster mode", async () => {
     // [VSIX-TOP-OFFENDERS-GROUPING] Defensive read; never panics.
-    const store = new ReportStore();
-    store.setSnapshot(report([cluster("c", HIGHEST_CLUSTER_MASS, MIXED_FILE_PATH)]), 0);
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const store = storeWith(report([cluster("c", HIGHEST_CLUSTER_MASS, MIXED_FILE_PATH)]));
+    const provider = topOffenders(store);
 
     const cfg = vscode.workspace.getConfiguration("deslop");
     const previous = cfg.get<string>("topOffenders.groupBy", "cluster");
@@ -476,16 +466,14 @@ suite("TopOffendersProvider", () => {
 
   test("file mode children are clone-kind groups; only kinds present appear", async () => {
     // [VSIX-TOP-OFFENDERS-FILE-MODE] / [FACET-GROUP-BY-KIND]
-    const store = new ReportStore();
-    store.setSnapshot(
+    const store = storeWith(
       report([
         cluster(FIRST_CLUSTER_ID, HIGHEST_CLUSTER_MASS, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, "worst", 1, STRUCTURAL_ONLY_KIND),
         cluster(SECOND_CLUSTER_ID, HIGH_CLUSTER_MASS, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, "top10", 2, IDENTICAL_KIND),
         cluster("c3", MEDIUM_CLUSTER_MASS, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, "worst", 3, IDENTICAL_KIND),
       ]),
-      0,
     );
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const provider = topOffenders(store);
 
     await withGroupBy(FILE_GROUPING_MODE, () => {
       const [fileRoot] = provider.getChildren();
@@ -515,15 +503,13 @@ suite("TopOffendersProvider", () => {
 
   test("file mode clusters under a bucket are sorted by weight desc and drop the file suffix", async () => {
     // [VSIX-TOP-OFFENDERS-FILE-MODE]
-    const store = new ReportStore();
-    store.setSnapshot(
+    const store = storeWith(
       report([
         cluster("hi", HIGHEST_CLUSTER_MASS, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, "worst"),
         cluster("lo", MEDIUM_CLUSTER_MASS, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, "worst"),
       ]),
-      0,
     );
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const provider = topOffenders(store);
 
     await withGroupBy(FILE_GROUPING_MODE, () => {
       const [fileRoot] = provider.getChildren();
@@ -546,12 +532,8 @@ suite("TopOffendersProvider", () => {
 
   test("tooltip preserves the full file path in both grouping modes", async () => {
     // [VSIX-TOP-OFFENDERS-FILE-MODE] Tooltip is mode-invariant.
-    const store = new ReportStore();
-    store.setSnapshot(
-      report([cluster("only", HIGHEST_CLUSTER_MASS, "/repo/src/Mixed.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, "worst")]),
-      0,
-    );
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const store = storeWith(report([cluster("only", HIGHEST_CLUSTER_MASS, "/repo/src/Mixed.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, "worst")]));
+    const provider = topOffenders(store);
 
     const [clusterMode] = provider.getChildren();
     assert.ok(clusterMode);
@@ -573,7 +555,7 @@ suite("TopOffendersProvider", () => {
     const store = new ReportStore();
     const c = cluster("only", 100, "/repo/src/Mixed.cs", 7, 14, "worst");
     store.setSnapshot(report([c]), 0);
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const provider = topOffenders(store);
 
     const [clusterRoot] = provider.getChildren();
     assert.ok(clusterRoot);
@@ -606,9 +588,8 @@ suite("TopOffendersProvider", () => {
   test("setting flip refreshes the tree", () => {
     // [VSIX-TOP-OFFENDERS-GROUPING] The provider exposes a refresh()
     // hook the activation bridge calls when the setting changes.
-    const store = new ReportStore();
-    store.setSnapshot(report([cluster("c", HIGHEST_CLUSTER_MASS, MIXED_FILE_PATH)]), 0);
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const store = storeWith(report([cluster("c", HIGHEST_CLUSTER_MASS, MIXED_FILE_PATH)]));
+    const provider = topOffenders(store);
     let fires = 0;
     const sub = provider.onDidChangeTreeData(() => {
       fires += 1;
@@ -624,15 +605,13 @@ suite("TopOffendersProvider", () => {
   test("renders the clone kind as title, icon and colour on Top Offenders rows", () => {
     // [CLONE-KIND-COLOR] The clone kind drives the icon and its colour; the
     // title names it. Rank chooses neither.
-    const store = new ReportStore();
-    store.setSnapshot(
+    const store = storeWith(
       report([
         cluster("exact", HIGHEST_CLUSTER_MASS, "/repo/src/a/Exact.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, "worst", 1, IDENTICAL_KIND),
         cluster("near", 90, "/repo/src/b/Near.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, "top10", 2),
       ]),
-      0,
     );
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const provider = topOffenders(store);
 
     const [exact, near] = provider.getChildren();
     assert.ok(exact, "identical row must render");
@@ -660,15 +639,13 @@ suite("TopOffendersProvider", () => {
     // [CLONE-KIND-COLOR] The predicted failure of colouring by rank: a
     // family that only shares shape ranks first by mass, and a genuinely
     // identical cluster sits below it. Colour must follow the evidence.
-    const store = new ReportStore();
-    store.setSnapshot(
+    const store = storeWith(
       report([
         cluster("shape-giant", HIGHEST_CLUSTER_MASS, "/repo/src/Shape.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, "worst", 1, STRUCTURAL_ONLY_KIND),
         cluster("proven", LOW_CLUSTER_WEIGHT, "/repo/src/Proven.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, "faint", 2, IDENTICAL_KIND),
       ]),
-      0,
     );
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const provider = topOffenders(store);
     const [shapeGiant, proven] = provider.getChildren();
     assert.ok(shapeGiant && proven, "both rows must render");
     assert.equal(
@@ -706,16 +683,15 @@ suite("TopOffendersProvider", () => {
     const store = new ReportStore();
     const c = cluster("a", LOW_CLUSTER_WEIGHT, "/f1");
     store.setSnapshot(report([c]), 0);
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const provider = topOffenders(store);
     const roots = provider.getChildren();
     const kids = provider.getChildren(roots[0]);
     assert.equal(kids.length, c.occurrences.length);
   });
 
   test("occurrence node tooltip shows parent cluster rank, kind, and position (#47)", () => {
-    const store = new ReportStore();
-    store.setSnapshot(report([cluster("a", LOW_CLUSTER_WEIGHT, FIRST_FIXTURE_PATH)]), 0);
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const store = storeWith(report([cluster("a", LOW_CLUSTER_WEIGHT, FIRST_FIXTURE_PATH)]));
+    const provider = topOffenders(store);
     const [root] = provider.getChildren();
     assert.ok(root, CLUSTER_ROOT_REQUIRED);
     const [first, second] = provider.getChildren(root);
@@ -738,7 +714,7 @@ suite("TopOffendersProvider", () => {
       report([cluster("multi", LOW_CLUSTER_WEIGHT, FIRST_FIXTURE_PATH), singleOccurrence]),
       0,
     );
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const provider = topOffenders(store);
     const [multi, single] = provider.getChildren();
     assert.ok(multi, "multi-occurrence cluster root must exist");
     assert.ok(single, "single-occurrence cluster root must exist");
@@ -762,9 +738,8 @@ suite("TopOffendersProvider", () => {
     fs.writeFileSync(occurrencePath, source, "utf8");
 
     try {
-      const store = new ReportStore();
-      store.setSnapshot(report([cluster("issue-8", LOW_CLUSTER_WEIGHT, occurrencePath, startByte, endByte)]), 0);
-      const provider = new TopOffendersProvider(store, new StatusTicker());
+      const store = storeWith(report([cluster("issue-8", LOW_CLUSTER_WEIGHT, occurrencePath, startByte, endByte)]));
+      const provider = topOffenders(store);
       const [root] = provider.getChildren();
       assert.ok(root, CLUSTER_ROOT_REQUIRED);
 
@@ -815,9 +790,8 @@ suite("TopOffendersProvider", () => {
   });
 
   test("getTreeItem returns the node verbatim", () => {
-    const store = new ReportStore();
-    store.setSnapshot(report([cluster("a", LOW_CLUSTER_WEIGHT, FIRST_FIXTURE_PATH)]), 0);
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const store = storeWith(report([cluster("a", LOW_CLUSTER_WEIGHT, FIRST_FIXTURE_PATH)]));
+    const provider = topOffenders(store);
     const [root] = provider.getChildren();
     assert.ok(root, "root node must exist");
     assert.strictEqual(provider.getTreeItem(root), root);
@@ -869,8 +843,7 @@ suite("TopOffendersProvider", () => {
   });
 
   test("does not surface removed-cluster progress or historical counts (#128)", () => {
-    const store = new ReportStore();
-    store.setSnapshot(
+    const store = storeWith(
       report([
         cluster("fixed", HIGHEST_CLUSTER_MASS, "/repo/Fixed.cs"),
         cluster("next", 95, "/repo/Next.cs"),
@@ -878,7 +851,7 @@ suite("TopOffendersProvider", () => {
       ]),
       1,
     );
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const provider = topOffenders(store);
 
     store.applyDelta({
       from_generation: 1,
@@ -935,8 +908,10 @@ suite("TopOffendersProvider", () => {
         reportOccurrence("/repo/OtherB.cs", 150, 160),
       ],
     );
-    const store = new ReportStore();
-    store.setSnapshot(report([dirtyOnly, mixedSingleton, mixedPeers, clean]), 9);
+    const store = storeWith(
+      report([dirtyOnly, mixedSingleton, mixedPeers, clean]),
+      9,
+    );
     const ticker = new StatusTicker();
     const provider = new TopOffendersProvider(store, ticker);
     let treeRefreshes = 0;
@@ -982,7 +957,7 @@ suite("TopOffendersProvider", () => {
   test("surfaces a failed lifecycle as an error status row", () => {
     const store = new ReportStore();
     store.setLifecycle({ kind: "failed", message: "crash" });
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const provider = topOffenders(store);
     const nodes = provider.getChildren();
     const errorNode = nodes.find(
       (n) => typeof n.contextValue === "string" && n.contextValue === "deslop.status.error",
@@ -992,16 +967,14 @@ suite("TopOffendersProvider", () => {
   });
 
   test("retains existing clusters during re-analysis — stale > blank ([VSIX-REACTIVITY-TREE])", () => {
-    const store = new ReportStore();
-    store.setSnapshot(
+    const store = storeWith(
       report([
         cluster(FIRST_CLUSTER_ID, HIGHEST_CLUSTER_MASS, REPO_A_PATH),
         cluster(SECOND_CLUSTER_ID, HIGH_CLUSTER_MASS, REPO_B_PATH),
       ]),
-      0,
     );
     store.setLifecycle({ kind: ANALYSING_PHASE });
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const provider = topOffenders(store);
     const nodes = provider.getChildren();
     assert.ok(nodes.length >= MIN_VISIBLE_NODE_COUNT, "cluster rows must remain visible during re-analysis");
     const labels = nodes.map(labelText);
@@ -1016,9 +989,8 @@ suite("TopOffendersProvider", () => {
     // [RANK-MASS-SUM] Mass is a count, so every tree surface prints it with
     // no decimal point — the string the CLI text report prints — never at
     // the two-decimal precision reserved for measured pair signals.
-    const store = new ReportStore();
-    store.setSnapshot(report([cluster(HEAVY_CLUSTER_ID, WHOLE_NUMBER_MASS, ALPHA_FILE_PATH)]), 0);
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const store = storeWith(report([cluster(HEAVY_CLUSTER_ID, WHOLE_NUMBER_MASS, ALPHA_FILE_PATH)]));
+    const provider = topOffenders(store);
     const [clusterRow] = provider.getChildren();
     assert.ok(clusterRow, CLUSTER_ROOT_REQUIRED);
     const fileRow = await firstRootIn(provider, FILE_GROUPING_MODE);
@@ -1033,16 +1005,14 @@ suite("TopOffendersProvider", () => {
   });
 
   test("folder mode builds a folder tree, impact-sorted, with global ranks", async () => {
-    const store = new ReportStore();
-    store.setSnapshot(
+    const store = storeWith(
       report([
         cluster("worst", HIGHEST_CLUSTER_MASS, ALPHA_FILE_PATH),
         cluster("mid", HIGH_CLUSTER_MASS, BETA_FILE_PATH),
         cluster("least", MEDIUM_CLUSTER_MASS, "/repo/src/a/Gamma.cs"),
       ]),
-      0,
     );
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const provider = topOffenders(store);
     await withGroupBy("folder", () => {
       const roots = provider.getChildren();
       assert.equal(roots.length, 1, "single-child chain compresses to one root");
@@ -1070,12 +1040,8 @@ suite("TopOffendersProvider", () => {
   // [VSIX-TOP-OFFENDERS-SORT] The sort axis reorders file/folder roots:
   // impact is worst-first, path is alphabetical.
   test("file mode sort axis: impact is worst-first, path is alphabetical", async () => {
-    const store = new ReportStore();
-    store.setSnapshot(
-      report([cluster(HEAVY_CLUSTER_ID, HIGHEST_CLUSTER_MASS, HEAVY_FILE_PATH), cluster(LIGHT_CLUSTER_ID, TIED_CLUSTER_MASS, LIGHT_FILE_PATH)]),
-      0,
-    );
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const store = storeWith(report([cluster(HEAVY_CLUSTER_ID, HIGHEST_CLUSTER_MASS, HEAVY_FILE_PATH), cluster(LIGHT_CLUSTER_ID, TIED_CLUSTER_MASS, LIGHT_FILE_PATH)]));
+    const provider = topOffenders(store);
     await withGroupBy(FILE_GROUPING_MODE, async () => {
       const [impactFirst] = provider.getChildren();
       assert.ok(impactFirst);
@@ -1093,12 +1059,8 @@ suite("TopOffendersProvider", () => {
   // impact keeps worst-first, path is alphabetical — while the global rank #N
   // stays pinned to the report's worst-first order.
   test("cluster mode sort axis reorders clusters: impact worst-first, path alphabetical (rank unchanged)", async () => {
-    const store = new ReportStore();
-    store.setSnapshot(
-      report([cluster(HEAVY_CLUSTER_ID, HIGHEST_CLUSTER_MASS, HEAVY_FILE_PATH), cluster(LIGHT_CLUSTER_ID, TIED_CLUSTER_MASS, LIGHT_FILE_PATH)]),
-      0,
-    );
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const store = storeWith(report([cluster(HEAVY_CLUSTER_ID, HIGHEST_CLUSTER_MASS, HEAVY_FILE_PATH), cluster(LIGHT_CLUSTER_ID, TIED_CLUSTER_MASS, LIGHT_FILE_PATH)]));
+    const provider = topOffenders(store);
 
     const impact = provider.getChildren();
     assert.match(labelText(impact[0] as vscode.TreeItem), /z\.cs/, "impact: heaviest cluster first");
@@ -1125,9 +1087,8 @@ suite("TopOffendersProvider", () => {
       reportOccurrence("/repo/zzz.cs", 0, 9),
       reportOccurrence("/repo/aaa.cs", 0, 9),
     ]);
-    const store = new ReportStore();
-    store.setSnapshot(report([multi]), 0);
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const store = storeWith(report([multi]));
+    const provider = topOffenders(store);
     const [root] = provider.getChildren();
     assert.ok(root, CLUSTER_ROOT_REQUIRED);
 
@@ -1159,12 +1120,11 @@ suite("TopOffendersProvider", () => {
   // [VSIX-TOP-OFFENDERS-TOOLBAR] Expand All / Collapse All rewrite the collapsible
   // state the provider returns and release on the next data change.
   test("Expand All / Collapse All set the collapsible state the provider returns; released on data change", () => {
-    const store = new ReportStore();
-    store.setSnapshot(
+    const store = storeWith(
       report([cluster("a", HIGHEST_CLUSTER_MASS, REPO_A_PATH), cluster("b", HIGH_CLUSTER_MASS, REPO_B_PATH)]),
       1,
     );
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const provider = topOffenders(store);
     let fires = 0;
     const sub = provider.onDidChangeTreeData(() => {
       fires += 1;
@@ -1210,12 +1170,11 @@ suite("TopOffendersProvider", () => {
   // [VSIX-VIEW-STATE-UI-ONLY] Sorting is a pure presentation transform: it reorders
   // the rows already in the store and never re-fetches — the generation is untouched.
   test("sorting is UI-only: flipping the axis reorders existing rows without bumping the generation", async () => {
-    const store = new ReportStore();
-    store.setSnapshot(
+    const store = storeWith(
       report([cluster(HEAVY_CLUSTER_ID, HIGHEST_CLUSTER_MASS, HEAVY_FILE_PATH), cluster(LIGHT_CLUSTER_ID, TIED_CLUSTER_MASS, LIGHT_FILE_PATH)]),
       7,
     );
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const provider = topOffenders(store);
     const impactOrder = provider.getChildren().map(labelText);
 
     await withSetting(SORT_BY_SETTING, PATH_SORT_MODE, () => {

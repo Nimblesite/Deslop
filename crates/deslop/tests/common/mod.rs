@@ -117,6 +117,11 @@ pub(crate) use anyhow::Result;
 use assert_cmd::Command;
 use serde_json::Value;
 
+/// Appends `.<ext>` to a path's file name. The suite's single spelling of
+/// "the sibling output the run wrote"; four suites carried their own
+/// three-line delegate to it ([CI-DESLOP] ledger).
+pub(crate) use deslop_test_support::with_ext;
+
 /// Absolute path to the named directory under `tests/fixtures`, falling
 /// back to the `deslop-mcp` crate's fixture tree.
 ///
@@ -331,6 +336,38 @@ pub(crate) fn cluster_spanning<'a>(report: &'a Value, files: &[&str]) -> Option<
             .iter()
             .all(|name| cluster_file_set(cluster).contains(*name))
     })
+}
+
+/// True when any occurrence of `cluster` sits in a file whose reported
+/// path ends with `file_name`. Suffix matching, so a suite naming the
+/// bare file matches it wherever the fixture nests it.
+pub(crate) fn cluster_touches(cluster: &Value, file_name: &str) -> bool {
+    occurrence_paths(cluster)
+        .iter()
+        .any(|path| path.ends_with(file_name))
+}
+
+/// True when any *visible* cluster in the report touches `file_name` —
+/// the question every "this file must (not) be reported" pin asks.
+pub(crate) fn report_touches(report: &Value, file_name: &str) -> bool {
+    clusters(report)
+        .iter()
+        .any(|cluster| cluster_touches(cluster, file_name))
+}
+
+/// True when one cluster's occurrences cover both files — the shape a
+/// cross-file clone has, and the shape a suppressed family must not.
+pub(crate) fn cluster_spans(cluster: &Value, left: &str, right: &str) -> bool {
+    cluster_touches(cluster, left) && cluster_touches(cluster, right)
+}
+
+/// True when any visible cluster spans both files. Hidden clusters are
+/// dropped before serialisation, so every cluster considered here is one
+/// a human is actually shown.
+pub(crate) fn report_spans(report: &Value, left: &str, right: &str) -> bool {
+    clusters(report)
+        .iter()
+        .any(|cluster| cluster_spans(cluster, left, right))
 }
 
 /// Like [`cluster_spanning`] but fails the test with the full report when

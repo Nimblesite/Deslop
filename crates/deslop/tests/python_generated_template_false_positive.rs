@@ -10,16 +10,9 @@ use serde_json::Value;
 
 use crate::common::*;
 
-fn run_report(scan_root: &Path) -> Result<Value> {
-    let tmp = tempfile::tempdir()?;
-    let output = tmp.path().join("report");
-    let _assertion = deslop_cmd(scan_root, &output)?
-        .args(["--min-nodes", "1", "--embeddings", "off"])
-        .assert()
-        .success();
-    let body = fs::read_to_string(output.with_extension("json"))?;
-    Ok(serde_json::from_str(&body)?)
-}
+/// The lowest possible node floor: the template families must stay
+/// suppressed even when nothing is filtered out by size.
+const GENERATED_TEMPLATE_MIN_NODES: u32 = 1;
 
 fn generated_template_clusters(report: &Value, scan_root: &Path) -> Result<Vec<String>> {
     let mut offenders = Vec::new();
@@ -65,7 +58,7 @@ fn generated_header_template_does_not_surface_as_duplicate_logic() -> Result<()>
         "generated fixture must carry the hand-edit warning"
     );
 
-    let report = run_report(&scan_root)?;
+    let report = run_report(&scan_root, GENERATED_TEMPLATE_MIN_NODES)?;
     let offenders = generated_template_clusters(&report, &scan_root)?;
     assert!(
         offenders.is_empty(),

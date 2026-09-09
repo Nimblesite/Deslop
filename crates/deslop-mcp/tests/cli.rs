@@ -517,6 +517,39 @@ fn init_and_tool_response(tool: &str, arguments: &Value) -> Result<(McpChild, Va
     Ok((child, response))
 }
 
+/// Asserts `response` carries the JSON-RPC invalid-params error code. The
+/// wire code is negative; [`INVALID_PARAMS_CODE_MAGNITUDE`] holds its
+/// magnitude, so the expected value is negated here once for every caller.
+fn assert_invalid_params(response: &Value) -> Result<()> {
+    assert_eq!(
+        value_get(response, ERROR_CODE_POINTER)?.as_i64(),
+        Some(-INVALID_PARAMS_CODE_MAGNITUDE),
+        "expected an invalid-params error envelope: {response}"
+    );
+    Ok(())
+}
+
+/// Asserts the MCP tool `tool` rejects `arguments` with invalid-params.
+/// Spawns one child, calls the tool, checks the envelope, and shuts the
+/// child down — the whole shape every argument-validation test repeats.
+fn assert_tool_rejects_invalid_params(tool: &str, arguments: &Value) -> Result<()> {
+    let (child, response) = init_and_tool_response(tool, arguments)?;
+    assert_invalid_params(&response)?;
+    let _ = child.finish();
+    Ok(())
+}
+
+/// Asserts the raw JSON-RPC `method` rejects `params` with invalid-params.
+/// The sibling of [`assert_tool_rejects_invalid_params`] for the methods
+/// that are not `tools/call`.
+fn assert_method_rejects_invalid_params(method: &str, params: &Value) -> Result<()> {
+    let mut child = spawn_and_init()?;
+    let response = child.request(method, params)?;
+    assert_invalid_params(&response)?;
+    let _ = child.finish();
+    Ok(())
+}
+
 #[test]
 fn initialize_returns_server_info_and_capabilities() -> Result<()> {
     let mut child = McpChild::spawn(fixture_root(), &[])?;
@@ -1655,16 +1688,10 @@ fn duplicates_scope_path_returns_only_matching_clusters() -> Result<()> {
 
 #[test]
 fn duplicates_scope_range_rejects_inverted_range() -> Result<()> {
-    let (child, response) = init_and_tool_response(
+    assert_tool_rejects_invalid_params(
         DUPLICATES_TOOL,
         &json!({ (PATH_FIELD): ALPHA_FILE_NAME, (START_BYTE_FIELD): BROAD_RESULT_LIMIT, (END_BYTE_FIELD): 1 }),
-    )?;
-    assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-INVALID_PARAMS_CODE_MAGNITUDE)
-    );
-    let _ = child.finish();
-    Ok(())
+    )
 }
 
 #[test]
@@ -1711,13 +1738,7 @@ fn find_similar_snippet_unsupported_language_yields_error() -> Result<()> {
 
 #[test]
 fn find_similar_requires_exactly_one_input_variant() -> Result<()> {
-    let (child, response) = init_and_tool_response(FIND_SIMILAR_TOOL, &json!({}))?;
-    assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-INVALID_PARAMS_CODE_MAGNITUDE)
-    );
-    let _ = child.finish();
-    Ok(())
+    assert_tool_rejects_invalid_params(FIND_SIMILAR_TOOL, &json!({}))
 }
 
 #[test]
@@ -1778,14 +1799,7 @@ fn cluster_by_id_round_trips() -> Result<()> {
 
 #[test]
 fn cluster_by_id_unknown_returns_error() -> Result<()> {
-    let (child, response) =
-        init_and_tool_response(CLUSTER_BY_ID_TOOL, &json!({ (ID_FIELD): "not-a-real-id" }))?;
-    assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-INVALID_PARAMS_CODE_MAGNITUDE)
-    );
-    let _ = child.finish();
-    Ok(())
+    assert_tool_rejects_invalid_params(CLUSTER_BY_ID_TOOL, &json!({ (ID_FIELD): "not-a-real-id" }))
 }
 
 #[test]
@@ -2004,17 +2018,10 @@ fn resources_read_schema_returns_markdown_body() -> Result<()> {
 
 #[test]
 fn resources_read_unknown_uri_errors() -> Result<()> {
-    let mut child = spawn_and_init()?;
-    let response = child.request(
+    assert_method_rejects_invalid_params(
         RESOURCES_READ_METHOD,
         &json!({ (URI_FIELD): "deslop://invalid" }),
-    )?;
-    assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-INVALID_PARAMS_CODE_MAGNITUDE)
-    );
-    let _ = child.finish();
-    Ok(())
+    )
 }
 
 #[test]
@@ -2248,14 +2255,7 @@ fn find_similar_snippet_with_empty_source_returns_empty_result() -> Result<()> {
 
 #[test]
 fn tools_call_missing_name_returns_invalid_params() -> Result<()> {
-    let mut child = spawn_and_init()?;
-    let response = child.request(TOOLS_CALL_METHOD, &json!({ (ARGUMENTS_FIELD): {} }))?;
-    assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-INVALID_PARAMS_CODE_MAGNITUDE)
-    );
-    let _ = child.finish();
-    Ok(())
+    assert_method_rejects_invalid_params(TOOLS_CALL_METHOD, &json!({ (ARGUMENTS_FIELD): {} }))
 }
 
 #[test]
@@ -2271,14 +2271,7 @@ fn tools_call_unknown_tool_returns_method_not_found_error() -> Result<()> {
 
 #[test]
 fn resources_read_missing_uri_returns_invalid_params() -> Result<()> {
-    let mut child = spawn_and_init()?;
-    let response = child.request(RESOURCES_READ_METHOD, &json!({}))?;
-    assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-INVALID_PARAMS_CODE_MAGNITUDE)
-    );
-    let _ = child.finish();
-    Ok(())
+    assert_method_rejects_invalid_params(RESOURCES_READ_METHOD, &json!({}))
 }
 
 #[test]
@@ -2346,76 +2339,46 @@ fn relative_path_insideworkspace_is_accepted() -> Result<()> {
 #[test]
 fn tool_missing_required_string_arg_returns_invalid_params() -> Result<()> {
     // compare-pair needs both endpoints — omit them.
-    let (child, response) = init_and_tool_response(COMPARE_PAIR_TOOL, &json!({}))?;
-    assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-INVALID_PARAMS_CODE_MAGNITUDE)
-    );
-    let _ = child.finish();
-    Ok(())
+    assert_tool_rejects_invalid_params(COMPARE_PAIR_TOOL, &json!({}))
 }
 
 #[test]
 fn tool_missing_required_integer_arg_returns_invalid_params() -> Result<()> {
     // compare-pair needs left AND right — provide only one.
-    let (child, response) = init_and_tool_response(
+    assert_tool_rejects_invalid_params(
         COMPARE_PAIR_TOOL,
         &json!({ (LEFT_ENDPOINT_FIELD): { (PATH_FIELD): ALPHA_FILE_NAME } }),
-    )?;
-    assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-INVALID_PARAMS_CODE_MAGNITUDE)
-    );
-    let _ = child.finish();
-    Ok(())
+    )
 }
 
 #[test]
 fn set_embedding_model_missing_model_id_returns_invalid_params() -> Result<()> {
-    let (child, response) = init_and_tool_response(
+    assert_tool_rejects_invalid_params(
         SESSION_TOOL,
         &json!({
             (ACTION_FIELD): SET_EMBEDDING_MODEL_ACTION,
             (PROVIDER_ID_FIELD): OLLAMA_PROVIDER,
             (USER_INITIATED_FIELD): true
         }),
-    )?;
-    assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-INVALID_PARAMS_CODE_MAGNITUDE)
-    );
-    let _ = child.finish();
-    Ok(())
+    )
 }
 
 #[test]
 fn set_embedding_model_without_user_initiation_returns_invalid_params() -> Result<()> {
     // Tests [MCP-EMBEDDING-CONSENT]
-    let (child, response) = init_and_tool_response(
+    assert_tool_rejects_invalid_params(
         SESSION_TOOL,
         &json!({
             (ACTION_FIELD): SET_EMBEDDING_MODEL_ACTION,
             (PROVIDER_ID_FIELD): OLLAMA_PROVIDER,
             (MODEL_ID_FIELD): DEFAULT_EMBEDDING_MODEL
         }),
-    )?;
-    assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-INVALID_PARAMS_CODE_MAGNITUDE)
-    );
-    let _ = child.finish();
-    Ok(())
+    )
 }
 
 #[test]
 fn cluster_by_id_missing_id_returns_invalid_params() -> Result<()> {
-    let (child, response) = init_and_tool_response(CLUSTER_BY_ID_TOOL, &json!({}))?;
-    assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-INVALID_PARAMS_CODE_MAGNITUDE)
-    );
-    let _ = child.finish();
-    Ok(())
+    assert_tool_rejects_invalid_params(CLUSTER_BY_ID_TOOL, &json!({}))
 }
 
 #[test]

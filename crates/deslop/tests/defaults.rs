@@ -9,6 +9,8 @@ use anyhow::{anyhow, Result};
 use assert_cmd::Command;
 use serde_json::Value;
 
+use crate::common::with_ext;
+
 #[test]
 fn default_run_hides_generated_only_clusters_from_metrics() -> Result<()> {
     let (tmp, root) = repo_fixture()?;
@@ -272,9 +274,6 @@ fn occurrence_path_contains(cluster: &Value, needle: &str) -> bool {
     })
 }
 
-fn with_ext(base: &Path, ext: &str) -> PathBuf {
-    deslop_test_support::with_ext(base, ext)
-}
 
 const GENERATED_ALPHA: &str = r"
 namespace Contracts.Generated;

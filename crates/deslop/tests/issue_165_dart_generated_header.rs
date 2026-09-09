@@ -7,34 +7,13 @@
 //! stock Flutter analysis. A file carrying this banner must be hidden from
 //! the ranked report.
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::fs;
 
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::scan_dir::temp_scan_dir;
+use crate::common::scan_dir::{report_path, temp_scan_dir};
 use crate::common::*;
-
-fn report_path(tmp: &Path) -> PathBuf {
-    let mut path = tmp.join("report");
-    let _replaced = path.set_extension("json");
-    path
-}
-
-fn cluster_spans(cluster: &Value, left: &str, right: &str) -> bool {
-    let paths: Vec<&str> = cluster
-        .get("occurrences")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
-        .iter()
-        .filter_map(|occ| occ.get("path").and_then(Value::as_str))
-        .collect();
-    paths.iter().any(|path| path.ends_with(left)) && paths.iter().any(|path| path.ends_with(right))
-}
 
 #[test]
 fn dart_automatically_generated_banner_is_hidden() -> Result<()> {

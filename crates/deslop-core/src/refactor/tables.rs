@@ -27,6 +27,22 @@ pub struct BindingKind {
     pub late_fields: &'static [&'static str],
 }
 
+impl BindingKind {
+    /// Declares binding order for [AUTOFIX-EXTRACT-FREE-VARS].
+    #[must_use]
+    pub(crate) const fn new(
+        node_kind: &'static str,
+        name_field: Option<&'static str>,
+        late_fields: &'static [&'static str],
+    ) -> Self {
+        Self {
+            node_kind,
+            name_field,
+            late_fields,
+        }
+    }
+}
+
 /// Scope-frame node pattern for the free-variable walk. Frames open at
 /// nested function-like constructs so their parameters and locals do
 /// not leak into the enclosing block's free-variable list.
@@ -45,6 +61,24 @@ pub struct FrameKind {
     /// but bind first (`[x for x in xs]` binds `x` before the body
     /// reads it).
     pub bind_first_kinds: &'static [&'static str],
+}
+
+impl FrameKind {
+    /// Declares a nested binding frame for [AUTOFIX-EXTRACT-FREE-VARS].
+    #[must_use]
+    pub(crate) const fn new(
+        node_kind: &'static str,
+        bind_inside_field: Option<&'static str>,
+        bind_outside_field: Option<&'static str>,
+        bind_first_kinds: &'static [&'static str],
+    ) -> Self {
+        Self {
+            node_kind,
+            bind_inside_field,
+            bind_outside_field,
+            bind_first_kinds,
+        }
+    }
 }
 
 /// Identifier-reference recognition table for the free-variable walk
@@ -167,6 +201,24 @@ pub struct WriteKind {
     pub destructuring_kinds: &'static [&'static str],
 }
 
+impl WriteKind {
+    /// Declares a write pattern for [AUTOFIX-MERGE-SAFETY].
+    #[must_use]
+    pub(crate) const fn new(
+        node_kind: &'static str,
+        target_field: Option<&'static str>,
+        marker_tokens: &'static [&'static str],
+        destructuring_kinds: &'static [&'static str],
+    ) -> Self {
+        Self {
+            node_kind,
+            target_field,
+            marker_tokens,
+            destructuring_kinds,
+        }
+    }
+}
+
 /// One boundary-crossing statement pattern for [AUTOFIX-MERGE-SAFETY]
 /// check B: a node of `node_kind` inside a merge candidate refuses the
 /// merge unless one of `allowed_containers` encloses it *within* the
@@ -179,6 +231,20 @@ pub struct BoundaryKind {
     /// Enclosing kinds that neutralise the transfer when fully inside
     /// the span. Empty means the kind always crosses the boundary.
     pub allowed_containers: &'static [&'static str],
+}
+
+impl BoundaryKind {
+    /// Declares a control-transfer boundary for [AUTOFIX-MERGE-SAFETY].
+    #[must_use]
+    pub(crate) const fn new(
+        node_kind: &'static str,
+        allowed_containers: &'static [&'static str],
+    ) -> Self {
+        Self {
+            node_kind,
+            allowed_containers,
+        }
+    }
 }
 
 /// Per-language tables for the mechanical merge ([AUTOFIX-MERGE]).

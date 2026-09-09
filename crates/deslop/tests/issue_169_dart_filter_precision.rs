@@ -11,23 +11,13 @@
 //!     real copy-paste, unlike a registry of distinct entries — it must
 //!     survive, matching the Python #104 design (`raw_snippet_texts_differ`).
 
-use std::{
-    fmt::Write as _,
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{fmt::Write as _, fs, path::Path};
 
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::scan_dir::temp_scan_dir;
+use crate::common::scan_dir::{report_path, temp_scan_dir};
 use crate::common::*;
-
-fn report_path(tmp: &Path) -> PathBuf {
-    let mut path = tmp.join("report");
-    let _replaced = path.set_extension("json");
-    path
-}
 
 fn run(src: &Path, out_dir: &Path, min_nodes: &str) -> Result<Value> {
     let mut cmd = deslop_cmd(src, &out_dir.join("report"))?;

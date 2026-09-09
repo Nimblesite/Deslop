@@ -805,19 +805,20 @@ async fn exercise_error_paths(service: &LiveService, _first_id: &str) {
     ));
 }
 
-/// Verifies the embedding model swap surface.
-async fn exercise_embedding_swap(service: &LiveService) -> Result<()> {
-    // Production listing returns no models when Ollama is unreachable.
-    // CI never has Ollama running, so the list must be empty (no stub
-    // fallback in production).
-    let models = service.embedding_list_models().await;
-    assert!(
-        models.is_empty(),
-        "production embedding listing must be empty when Ollama unreachable: {models:?}"
-    );
-    // Install a progress reporter to verify Starting/Complete events
-    // fire around the swap. The shared Vec records every event the
-    // session emits through the reporter.
+/// Installs a recording progress reporter on `service`'s session.
+///
+/// Returns the shared event log beside a notifier that fires the moment
+/// an [`deslop_core::live::EmbeddingPhase::Complete`] event arrives, so a
+/// caller can await completion and then assert on the phase sequence.
+/// Every embedding-swap test watches the swap the same way: the reporter
+/// records each event the session emits, and the notifier releases the
+/// timeout once the refresh finishes.
+async fn record_embedding_progress(
+    service: &LiveService,
+) -> (
+    Arc<StdMutex<Vec<deslop_core::live::EmbeddingProgress>>>,
+    Arc<tokio::sync::Notify>,
+) {
     let events: Arc<StdMutex<Vec<deslop_core::live::EmbeddingProgress>>> =
         Arc::new(StdMutex::new(Vec::new()));
     let events_clone = Arc::clone(&events);
@@ -836,6 +837,20 @@ async fn exercise_embedding_swap(service: &LiveService) -> Result<()> {
         let mut guard = session_lock.lock().await;
         guard.set_embedding_progress_reporter(Some(reporter));
     }
+    (events, completed)
+}
+
+/// Verifies the embedding model swap surface.
+async fn exercise_embedding_swap(service: &LiveService) -> Result<()> {
+    // Production listing returns no models when Ollama is unreachable.
+    // CI never has Ollama running, so the list must be empty (no stub
+    // fallback in production).
+    let models = service.embedding_list_models().await;
+    assert!(
+        models.is_empty(),
+        "production embedding listing must be empty when Ollama unreachable: {models:?}"
+    );
+    let (events, completed) = record_embedding_progress(service).await;
     // Swap mechanism is exercised via the test-only `embedding_set_provider`
     // hook (production callers use the registry-backed `embedding_set_model`).
     let stub_provider: Arc<dyn EmbeddingProvider> = Arc::new(StubProvider::new());
@@ -918,24 +933,7 @@ async fn embedding_refresh_keeps_latest_report_readable_while_provider_is_blocke
         initial.embedding_provenance.is_none(),
         "fresh live report should be structural/token only"
     );
-    let events: Arc<StdMutex<Vec<deslop_core::live::EmbeddingProgress>>> =
-        Arc::new(StdMutex::new(Vec::new()));
-    let events_clone = Arc::clone(&events);
-    let completed = Arc::new(tokio::sync::Notify::new());
-    let completed_clone = Arc::clone(&completed);
-    let reporter: deslop_core::live::EmbeddingProgressReporter = Arc::new(move |event| {
-        if event.phase == deslop_core::live::EmbeddingPhase::Complete {
-            completed_clone.notify_one();
-        }
-        if let Ok(mut lock) = events_clone.lock() {
-            lock.push(event);
-        }
-    });
-    {
-        let session = service.session();
-        let mut guard = session.lock().await;
-        guard.set_embedding_progress_reporter(Some(reporter));
-    }
+    let (events, completed) = record_embedding_progress(&service).await;
     let (provider, started, release) = BlockingProvider::new();
     let queued = service.embedding_set_provider(provider).await?;
     assert!(
@@ -1236,24 +1234,7 @@ async fn embedding_running_progress_reaches_total_with_duplicate_snippets() -> R
     }
     let session_lock = make_session_lock(tmp.path())?;
     let service = LiveService::new(session_lock);
-    let events: Arc<StdMutex<Vec<deslop_core::live::EmbeddingProgress>>> =
-        Arc::new(StdMutex::new(Vec::new()));
-    let events_clone = Arc::clone(&events);
-    let completed = Arc::new(tokio::sync::Notify::new());
-    let completed_clone = Arc::clone(&completed);
-    let reporter: deslop_core::live::EmbeddingProgressReporter = Arc::new(move |event| {
-        if event.phase == deslop_core::live::EmbeddingPhase::Complete {
-            completed_clone.notify_one();
-        }
-        if let Ok(mut lock) = events_clone.lock() {
-            lock.push(event);
-        }
-    });
-    {
-        let session = service.session();
-        let mut guard = session.lock().await;
-        guard.set_embedding_progress_reporter(Some(reporter));
-    }
+    let (events, completed) = record_embedding_progress(&service).await;
     // [REMOVE-STUB] The stub is no longer registered as a production
     // provider, so swap it in directly via the test-only set-provider
     // hook instead of going through `embedding_set_model`.

@@ -7,23 +7,14 @@
 //! must never surface in the report.
 //! Spec: [CLONE-NOISE-RUST-MATCH-DISPATCH].
 
-use std::fs;
-
 use anyhow::Result;
 use serde_json::Value;
 
 use crate::common::*;
 
-fn run_report(fixture_name: &str) -> Result<Value> {
-    let tmp = tempfile::tempdir()?;
-    let output = tmp.path().join("report");
-    let _assertion = deslop_cmd(&fixture(fixture_name), &output)?
-        .args(["--min-nodes", "3", "--embeddings", "off"])
-        .assert()
-        .success();
-    let body = fs::read_to_string(output.with_extension("json"))?;
-    Ok(serde_json::from_str(&body)?)
-}
+/// The node floor match-dispatch arms are judged at — low enough that
+/// the arms would cluster if they were not filtered.
+const MATCH_DISPATCH_MIN_NODES: u32 = 3;
 
 fn cluster_occurrence_paths(cluster: &Value) -> std::collections::BTreeSet<String> {
     occurrences(cluster)
@@ -39,7 +30,7 @@ fn cluster_occurrence_paths(cluster: &Value) -> std::collections::BTreeSet<Strin
 
 #[test]
 fn rust_match_dispatch_arms_do_not_cluster_as_duplicates() -> Result<()> {
-    let report = run_report("rust-issue-176-match-dispatch")?;
+    let report = run_report(&fixture("rust-issue-176-match-dispatch"), MATCH_DISPATCH_MIN_NODES)?;
     let count = cluster_count(&report);
     assert_eq!(
         count, 0,
@@ -51,7 +42,7 @@ fn rust_match_dispatch_arms_do_not_cluster_as_duplicates() -> Result<()> {
 
 #[test]
 fn rust_verbatim_copied_match_arms_still_cluster() -> Result<()> {
-    let report = run_report("rust-issue-176-verbatim-copy")?;
+    let report = run_report(&fixture("rust-issue-176-verbatim-copy"), MATCH_DISPATCH_MIN_NODES)?;
     let cross_file = clusters(&report)
         .iter()
         .any(|cluster| cluster_occurrence_paths(cluster).len() >= 2);

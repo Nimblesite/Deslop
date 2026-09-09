@@ -60,16 +60,21 @@ export function cluster(
 }
 
 /**
- * A store already carrying one snapshot. Suites opened with the same
- * `new ReportStore()` + `setSnapshot(emptyReport({ clusters }), gen)`
- * pair; Deslop scored the copies against this repo's own corpus. Suites
- * that must observe the seeding `onDidChange` still wire the listener
- * themselves before calling `setSnapshot`.
+ * A store already carrying `snapshot`. The `new ReportStore()` +
+ * `setSnapshot(..)` pair was the single largest scaffolding cluster in
+ * the TypeScript corpus — Deslop scored the copies against this repo's
+ * own report. Suites that must observe the seeding `onDidChange` still
+ * wire the listener themselves before calling `setSnapshot`.
  */
-export function seededStore(clusters: ReportCluster[], generation = 1): ReportStore {
+export function storeWith(snapshot: Report, generation = 0): ReportStore {
   const store = new ReportStore();
-  store.setSnapshot(emptyReport({ clusters }), generation);
+  store.setSnapshot(snapshot, generation);
   return store;
+}
+
+/** `storeWith` over a report whose only interesting content is `clusters`. */
+export function seededStore(clusters: ReportCluster[], generation = 1): ReportStore {
+  return storeWith(emptyReport({ clusters }), generation);
 }
 
 /**

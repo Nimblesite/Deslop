@@ -16,10 +16,7 @@
 //! Black-box E2E: drive the CLI against fixture repos and assert against the
 //! rendered JSON reports only.
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{fs, path::Path};
 
 use anyhow::Result;
 use deslop_test_support::write_dart_data_table_fixture;
@@ -27,24 +24,6 @@ use serde_json::Value;
 
 use crate::common::signals::{assert_no_pair_surface_on_cluster, has_verbatim_pair};
 use crate::common::*;
-
-fn report_path(tmp: &Path, stem: &str) -> PathBuf {
-    let mut path = tmp.join(stem);
-    let _replaced = path.set_extension("json");
-    path
-}
-
-fn cluster_touches(cluster: &Value, file_name: &str) -> bool {
-    occurrence_paths(cluster)
-        .iter()
-        .any(|path| path.ends_with(file_name))
-}
-
-fn touches(report: &Value, file_name: &str) -> bool {
-    clusters(report)
-        .iter()
-        .any(|cluster| cluster_touches(cluster, file_name))
-}
 
 /// Runs the CLI against `src`, writing JSON to `<tmp>/<stem>.json`, and
 /// returns the parsed JSON report.
@@ -54,7 +33,7 @@ fn run_cli(src: &Path, tmp: &Path, stem: &str, min_nodes: &str) -> Result<Value>
         .args(["--min-nodes", min_nodes, "--embeddings", "off", "--nohtml"])
         .assert()
         .success();
-    let body = fs::read_to_string(report_path(tmp, stem))?;
+    let body = fs::read_to_string(with_ext(&tmp.join(stem), "json"))?;
     Ok(serde_json::from_str(&body)?)
 }
 
@@ -90,7 +69,7 @@ fn assert_logic_clone_leads_and_table_is_absent(report: &Value, scan_root: &Path
     );
     assert_no_pair_surface_on_cluster(logic, "issue #190 logic clone");
     assert!(
-        !touches(report, "highlight_data.dart"),
+        !report_touches(report, "highlight_data.dart"),
         "the data-table family must publish no cluster — the content gate \
          rejects its shape-only rows below the promote floor \
          ([FUSED-CONTENT-GATE]): {report:#}"
@@ -205,8 +184,7 @@ fn verbatim_copied_table_still_surfaces_as_duplication() -> Result<()> {
     let cluster = clusters(&report)
         .iter()
         .find(|cluster| {
-            cluster_touches(cluster, "config_one.dart")
-                && cluster_touches(cluster, "config_two.dart")
+            cluster_spans(cluster, "config_one.dart", "config_two.dart")
         })
         .ok_or_else(|| {
             anyhow::anyhow!(

@@ -2,6 +2,7 @@
 // Non-`.test.ts` so the Mocha glob does not load this as a suite.
 
 import * as vscode from "vscode";
+import type { LanguageClient } from "vscode-languageclient/node";
 import {
   ClusterKind,
   FileMetric,
@@ -10,8 +11,48 @@ import {
   ReportCluster,
   Severity,
 } from "../../types/report";
-import { emptyReport, metrics as zeroMetrics } from "./report-store.helpers";
+import { ReportStore } from "../../reportStore";
+import {
+  MetricsProvider,
+  SessionProvider,
+  StatusTicker,
+  TopOffendersProvider,
+} from "../../tree/providers";
+import { emptyReport, metrics as zeroMetrics, storeWith } from "./report-store.helpers";
 import { FIXTURE_KIND, occurrence, stampRanks, wireCluster } from "../cluster.helpers";
+
+/** Re-exported so a tree suite reaches for one helper module, not two. */
+export { storeWith };
+
+/** A store seeded with the tree suites' `report(..)` shape at generation 0
+ * — the seeding line every tree suite opened with. */
+export function treeStore(
+  clusters: ReportCluster[] = [],
+  metricsOverride: Partial<RepoMetrics> = {},
+): ReportStore {
+  return storeWith(report(clusters, metricsOverride));
+}
+
+/** The Top Offenders panel over `store`. The panel constructors take a
+ * fresh `StatusTicker` in every suite; building it here keeps the ticker
+ * out of 35 call sites. */
+export function topOffenders(store: ReportStore): TopOffendersProvider {
+  return new TopOffendersProvider(store, new StatusTicker());
+}
+
+/** The Duplication panel over `store`. */
+export function metricsPanel(store: ReportStore): MetricsProvider {
+  return new MetricsProvider(store, new StatusTicker());
+}
+
+/** The Session panel over `store`, resolving its LSP client through
+ * `clientOf` exactly as the extension does. */
+export function sessionPanel(
+  store: ReportStore,
+  clientOf: () => LanguageClient | undefined,
+): SessionProvider {
+  return new SessionProvider(store, new StatusTicker(), clientOf);
+}
 
 export function cluster(
   id: string,

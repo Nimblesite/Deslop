@@ -26,13 +26,11 @@ const VERDICT_OK: &str = "ok";
 pub fn threshold_verdict(threshold: &ThresholdSummary) -> Option<&'static str> {
     match threshold.source {
         ThresholdSource::None => None,
-        ThresholdSource::Cli | ThresholdSource::Config => {
-            Some(if threshold.breached {
-                VERDICT_BREACHED
-            } else {
-                VERDICT_OK
-            })
-        }
+        ThresholdSource::Cli | ThresholdSource::Config => Some(if threshold.breached {
+            VERDICT_BREACHED
+        } else {
+            VERDICT_OK
+        }),
     }
 }
 
