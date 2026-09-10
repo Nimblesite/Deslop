@@ -177,9 +177,7 @@ fn verbatim_copied_table_still_surfaces_as_duplication() -> Result<()> {
     let report = run_cli(&src, tmp.path(), "verbatim", "20")?;
     let cluster = clusters(&report)
         .iter()
-        .find(|cluster| {
-            cluster_spans(cluster, "config_one.dart", "config_two.dart")
-        })
+        .find(|cluster| cluster_spans(cluster, "config_one.dart", "config_two.dart"))
         .ok_or_else(|| {
             anyhow::anyhow!(
                 "the cross-file verbatim copy must cluster across both files: {report:#}"

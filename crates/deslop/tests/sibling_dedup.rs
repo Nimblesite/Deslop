@@ -25,9 +25,9 @@
 
 use std::{collections::BTreeMap, fs, path::Path, path::PathBuf};
 
+use crate::common::scan_dir::temp_scan_dir;
 use anyhow::Result;
 use assert_cmd::Command;
-use crate::common::scan_dir::temp_scan_dir;
 
 /// Writes two C# files that each contain three near-identical `for`
 /// loops nested inside a single method. The sibling pass emits window

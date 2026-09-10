@@ -104,7 +104,7 @@ fn append_terminal(node: Node<'_>, source: &[u8], parts: &mut Vec<CalleePart>) {
         node.kind(),
         "identifier" | "property_identifier" | "field_identifier" | "type_identifier"
     );
-    if !identifier || retained_name(node) {
+    if !identifier || is_called_name(node) {
         if let Some(text) = source.get(node.start_byte()..node.end_byte()) {
             parts.push(CalleePart::Text(text.to_vec()));
         }
@@ -112,12 +112,15 @@ fn append_terminal(node: Node<'_>, source: &[u8], parts: &mut Vec<CalleePart>) {
 }
 
 /// A direct function name or member selector identifies the called code.
-fn retained_name(node: Node<'_>) -> bool {
+/// Shared with [`super::dataflow`], which needs the same distinction from
+/// the other side: what the header keeps is what dataflow must not read
+/// as a consumed value.
+pub(super) fn is_called_name(node: Node<'_>) -> bool {
     let Some(parent) = node.parent() else {
         return true;
     };
     if matches!(parent.kind(), "generic_name" | "generic_function") {
-        return retained_name(parent);
+        return is_called_name(parent);
     }
     ["function", "property", "field", "attribute", "name"]
         .iter()

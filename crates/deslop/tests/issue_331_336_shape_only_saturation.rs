@@ -27,6 +27,7 @@
 
 use serde_json::Value;
 
+use crate::common::scan_dir::temp_scan_dir;
 use crate::common::{
     corpora::*,
     signals::{
@@ -34,7 +35,6 @@ use crate::common::{
     },
     *,
 };
-use crate::common::scan_dir::temp_scan_dir;
 
 /// Distinct Flutter widgets: same mandatory declaration shape, different
 /// names and different `build` bodies — the #331 false-positive family.

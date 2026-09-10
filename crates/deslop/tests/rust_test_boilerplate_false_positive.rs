@@ -115,8 +115,9 @@ fn registry_call_payload_variation_keeps_only_authored_control() -> Result<()> {
         &crate::common::fixture(CALL_SCAFFOLD_FIXTURE),
         CALL_SCAFFOLD_MIN_NODES,
     )?;
-    let clusters = report["clusters"]
-        .as_array()
+    let clusters = report
+        .get("clusters")
+        .and_then(Value::as_array)
         .context("rendered cluster array")?;
     let [control_first_file, _] = CONTROL_FILES;
     let control = clusters

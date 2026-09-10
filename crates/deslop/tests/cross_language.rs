@@ -79,4 +79,3 @@ fn occurrence_extensions(cluster: &Value) -> Result<BTreeSet<String>> {
 fn extension(path: &str) -> Option<&str> {
     Path::new(path).extension()?.to_str()
 }
-

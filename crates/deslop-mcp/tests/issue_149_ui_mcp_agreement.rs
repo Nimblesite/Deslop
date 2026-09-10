@@ -17,7 +17,10 @@ use anyhow::{anyhow, ensure, Context, Result};
 use serde_json::{json, Value};
 
 use crate::common;
-use common::{array_field, call_tool, initialized_mcp, lsp_workspace_with_socket, str_field, structured_content, McpHandle};
+use common::{
+    array_field, call_tool, initialized_mcp, lsp_workspace_with_socket, str_field,
+    structured_content, McpHandle,
+};
 
 /// Lower bound for the slug shared with `clusterSlug()` in the VSIX
 /// (`clients/vscode/src/types/report.ts`). Hard-coded here so a drift
@@ -114,10 +117,14 @@ fn lsp_report_cluster_ids(socket: &Path) -> Result<Vec<String>> {
 /// `n` matches the canonical list length so the response can never
 /// claim a cluster the LSP did not also surface.
 fn mcp_top_offenders_ids(mcp: &mut McpHandle, n: usize) -> Result<Vec<String>> {
-    let payload = call_tool(mcp, "duplicates", &json!({
-                "n": n.max(1),
-                "max_occurrences": 100_000_usize,
-            }))?;
+    let payload = call_tool(
+        mcp,
+        "duplicates",
+        &json!({
+            "n": n.max(1),
+            "max_occurrences": 100_000_usize,
+        }),
+    )?;
     let clusters = array_field(&payload, "clusters")?;
     Ok(clusters
         .iter()

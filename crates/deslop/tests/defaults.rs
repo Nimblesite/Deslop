@@ -274,7 +274,6 @@ fn occurrence_path_contains(cluster: &Value, needle: &str) -> bool {
     })
 }
 
-
 const GENERATED_ALPHA: &str = r"
 namespace Contracts.Generated;
 

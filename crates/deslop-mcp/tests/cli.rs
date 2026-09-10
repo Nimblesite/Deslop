@@ -24,7 +24,12 @@ use serde_json::{json, Value};
 use tempfile::TempDir;
 
 use crate::common;
-use common::{assert_production_embedding_models, copied_fixture, fixture_root, rpc::{StdioRpc, MCP_PROTOCOL_VERSION}, spawn_lsp_and_wait_for_socket, str_field, value_array, value_get, ChildKillOnDrop, NAME_FIELD, PROVIDER_ID_FIELD, STUB_PROVIDER};
+use common::{
+    assert_production_embedding_models, copied_fixture, fixture_root,
+    rpc::{StdioRpc, MCP_PROTOCOL_VERSION},
+    spawn_lsp_and_wait_for_socket, str_field, value_array, value_get, ChildKillOnDrop, NAME_FIELD,
+    PROVIDER_ID_FIELD, STUB_PROVIDER,
+};
 
 const REPORT_GET_TOOL: &str = "report-get";
 const DUPLICATES_TOOL: &str = "duplicates";
@@ -89,8 +94,7 @@ const RETIRED_CLUSTER_SUMMARY_KEYS: [&str; 5] =
 /// Why a retired key is a defect wherever it appears.
 const RETIRED_KEY_REASON: &str = "mass-only wire must not carry a per-cluster label";
 /// Why a deep-dive key is a defect on a summary row.
-const DEEP_DIVE_KEY_REASON: &str =
-    "ClusterSummary must leave this to the cluster-by-id deep dive";
+const DEEP_DIVE_KEY_REASON: &str = "ClusterSummary must leave this to the cluster-by-id deep dive";
 /// Keys a `detail=summary` row drops because they live behind the
 /// `cluster-by-id` deep dive rather than on every page row.
 const SUMMARY_DEEP_DIVE_KEYS: [&str; 2] = ["members", OCCURRENCES_FIELD];

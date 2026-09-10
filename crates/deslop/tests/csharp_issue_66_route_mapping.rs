@@ -13,7 +13,10 @@ const ROUTE_MAPPING_MIN_NODES: u32 = 30;
 
 #[test]
 fn issue_66_route_mappings_with_value_differences_are_not_identical() -> Result<()> {
-    let report = run_report(&fixture("csharp-issue-66-route-mapping"), ROUTE_MAPPING_MIN_NODES)?;
+    let report = run_report(
+        &fixture("csharp-issue-66-route-mapping"),
+        ROUTE_MAPPING_MIN_NODES,
+    )?;
     let clusters = report
         .get("clusters")
         .and_then(Value::as_array)

@@ -17,7 +17,9 @@ use anyhow::{anyhow, ensure, Context, Result};
 use serde_json::{json, Value};
 
 use crate::common;
-use common::{array_field, call_tool, lsp_workspace_with_socket, rescan_call, wait_for_state_then_init_mcp};
+use common::{
+    array_field, call_tool, lsp_workspace_with_socket, rescan_call, wait_for_state_then_init_mcp,
+};
 
 /// Issue #156: after rescanning, the cluster payload returned by
 /// `cluster-by-id` must contain occurrence byte ranges that map onto

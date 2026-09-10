@@ -27,7 +27,10 @@ use anyhow::{ensure, Context, Result};
 use serde_json::{json, Value};
 
 use crate::common;
-use common::{call_tool, cluster_ids, copied_fixture, initialized_mcp, lsp_workspace_with_socket, spawn_lsp_and_wait_for_socket, structured_content, u64_field, wait_for_path, SOCKET_TIMEOUT};
+use common::{
+    call_tool, cluster_ids, copied_fixture, initialized_mcp, lsp_workspace_with_socket,
+    spawn_lsp_and_wait_for_socket, structured_content, u64_field, wait_for_path, SOCKET_TIMEOUT,
+};
 
 /// [MCP-IPC-CLIENT] Repurposes `issue_90_report_get_reloads_state_file_between_plain_calls`.
 ///

@@ -152,9 +152,7 @@ async fn watch_root(
 
 /// The first `report_changed` the loop broadcasts after `trigger`.
 async fn next_report_change(
-    report_rx: &mut tokio::sync::broadcast::Receiver<
-        deslop_core::live::ReportChangedNotification,
-    >,
+    report_rx: &mut tokio::sync::broadcast::Receiver<deslop_core::live::ReportChangedNotification>,
     trigger: &str,
 ) -> Result<deslop_core::live::ReportChangedNotification> {
     tokio::time::timeout(REPORT_CHANGE_TIMEOUT, report_rx.recv())

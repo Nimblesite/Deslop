@@ -6,10 +6,10 @@
 
 use std::{fs, path::Path, path::PathBuf};
 
+use crate::common::scan_dir::temp_scan_dir;
 use anyhow::Result;
 use assert_cmd::Command;
 use serde_json::Value;
-use crate::common::scan_dir::temp_scan_dir;
 
 /// Same-file overlap collapse must not leave singleton report rows.
 #[test]

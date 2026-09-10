@@ -40,6 +40,9 @@ pub(super) fn arg_shape(node: Node<'_>, source: &[u8], language: &str) -> ArgSha
     if let Some(bytes) = literal_collection_bytes(inner, source, language) {
         return ArgShape::StringLiteral(bytes, false);
     }
+    if let Some(bytes) = literal_wrapper_bytes(inner, source, language) {
+        return ArgShape::StringLiteral(bytes, subtree_is_interpolated(inner));
+    }
     if carries_statements(inner) {
         return ArgShape::Body;
     }
@@ -99,6 +102,50 @@ fn literal_collection_bytes(node: Node<'_>, source: &[u8], language: &str) -> Op
     source
         .get(node.start_byte()..node.end_byte())
         .map(<[u8]>::to_vec)
+}
+
+/// Raw bytes of an argument that is a **call wrapping literal payload** —
+/// `PathBuf::from("stored.rs")`, `String::from("x")`, `Uri.parse("…")`.
+/// The callee builds a value the language has no literal syntax for, and
+/// the authored data is the string inside it; the wrapper is spelling,
+/// not logic. Reading it as an opaque `Other` left a registry run with
+/// no varying position at all — every registration looked invariant
+/// while the only thing that differed sat one node deeper — so the
+/// scaffolding rule could never explain the run that precedes it.
+///
+/// Guarded exactly like [`literal_collection_bytes`]: every argument of
+/// the wrapper must itself be a literal value, and at least one must
+/// carry a string. `Money::new(0.1)` against `Money::new(0.2)` therefore
+/// stays `Other`, because a bare number is how a real clone spells the
+/// one parameter it should have been given.
+fn literal_wrapper_bytes(node: Node<'_>, source: &[u8], language: &str) -> Option<Vec<u8>> {
+    if !super::call_kinds(language).contains(&node.kind()) {
+        return None;
+    }
+    let arguments = node
+        .child_by_field_name("arguments")
+        .or_else(|| node.child_by_field_name("argument_list"))?;
+    let payload = named_children(arguments);
+    let literal = payload
+        .iter()
+        .all(|argument| is_literal_value(language, unwrap_argument(*argument)));
+    if payload.is_empty() || !literal || !payload.iter().copied().any(carries_string_leaf) {
+        return None;
+    }
+    source
+        .get(node.start_byte()..node.end_byte())
+        .map(<[u8]>::to_vec)
+}
+
+/// Whether an interpolation appears anywhere under `node`. A wrapped
+/// literal keeps gh #467's rule: authored interpolation inside the
+/// wrapper is still code choosing data, exactly as it is when the string
+/// is passed bare.
+fn subtree_is_interpolated(node: Node<'_>) -> bool {
+    if matches!(node.kind(), "interpolation" | "template_substitution") {
+        return true;
+    }
+    named_children(node).into_iter().any(subtree_is_interpolated)
 }
 
 /// True when the subtree holds at least one string-literal leaf.

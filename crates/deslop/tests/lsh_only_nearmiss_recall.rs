@@ -22,6 +22,7 @@
 use std::fs;
 use std::path::Path;
 
+use crate::common::scan_dir::temp_scan_dir;
 use crate::common::{
     cluster_size, expect_cluster_spanning, field,
     incremental::{
@@ -32,7 +33,6 @@ use crate::common::{
     verdict::loc_as_f64,
     Result,
 };
-use crate::common::scan_dir::temp_scan_dir;
 
 /// Subtree floor at which only the two function roots (and whole-body
 /// windows straddling the reorder) fingerprint — probed so exactly one

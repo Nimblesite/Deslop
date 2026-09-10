@@ -105,7 +105,8 @@ fn is_identifier_kind(raw: &str) -> bool {
 fn is_literal_kind(raw: &str) -> bool {
     matches!(
         raw,
-        "int" | "xint"
+        "int"
+            | "xint"
             | "float"
             | "char"
             | "bool"

@@ -37,6 +37,17 @@ const RECEIVER_FLOW_B: &str = "test(\"points a required empty record at the shar
 /// The needle locating the adapter call.
 const ADAPTER_NEEDLE: &str = "generateRust(";
 
+/// A Rust registry-and-registration run: the invariant constructor binds
+/// `registry`, and each varying registration consumes it as a plain method
+/// receiver rather than as an argument.
+const RUST_REGISTRY_A: &str = "fn stored_files() {\n    let mut registry = FileRegistry::new();\n    let stored_file_id = registry.register(PathBuf::from(\"stored.rs\"));\n    let requested_file_id = registry.register(PathBuf::from(\"requested.rs\"));\n}\n";
+/// The registry counterpart: same shape, different path payloads.
+const RUST_REGISTRY_B: &str = "fn compared_files() {\n    let mut registry = FileRegistry::new();\n    let left = registry.register(PathBuf::from(\"left.py\"));\n    let right = registry.register(PathBuf::from(\"right.py\"));\n}\n";
+/// The needle locating the first registration call.
+const REGISTRY_NEEDLE: &str = "registry.register(";
+/// The harness language for the registry pins.
+const RUST_LANGUAGE: &str = "rust";
+
 /// The needle locating the call statement inside a member source.
 const CALL_NEEDLE: &str = "greet(";
 /// The needle locating the interpolation call.
@@ -131,6 +142,31 @@ fn adapter_consumed_through_the_receiver_is_still_scaffolding() {
          varying `expect(generated).toContain(…)` consumes as its receiver; \
          a value flowing into the callee is still flowing into the call, so \
          the scenario pair is literal-variation scaffolding: {verdict:?}"
+    );
+}
+
+/// The Rust counterpart of the receiver-flow pin. `FileRegistry::new()`
+/// is invariant, carries no literal, and binds `registry` through a
+/// `let` — a declaration shape Rust spells `let_declaration` rather than
+/// with the `variable_declarator` the other grammars use. Each varying
+/// `registry.register(PathBuf::from("…"))` then consumes that binding as
+/// a bare method receiver, with no invocation of its own in the callee.
+/// Miss either fact and the run reads as an unexplained invariant call,
+/// so a registry setup that only varies its path payloads publishes as
+/// duplicate implementation.
+#[test]
+fn rust_registry_receiver_flow_is_scaffolding() {
+    let verdict = Corpus::new()
+        .member(RUST_REGISTRY_A, REGISTRY_NEEDLE)
+        .member(RUST_REGISTRY_B, REGISTRY_NEEDLE)
+        .language(RUST_LANGUAGE)
+        .verdict();
+    assert_eq!(
+        verdict,
+        Some(NoiseFilter::LiteralCalls),
+        "the invariant `FileRegistry::new()` binds `registry` through a Rust \
+         `let`, and every varying registration consumes that binding as its \
+         method receiver; the run is call scaffolding, not a clone: {verdict:?}"
     );
 }
 

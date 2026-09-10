@@ -12,9 +12,7 @@ use tree_sitter::Language;
 use crate::{
     ast::NormalizedNode,
     error::CoreError,
-    lang::shared::{
-        build_normalised_root, normalise_kind_with, parse_source,
-    },
+    lang::shared::{build_normalised_root, normalise_kind_with, parse_source},
     state::FileId,
 };
 

@@ -108,15 +108,23 @@ fn count_call_free(covered: &[Node<'_>], kinds: &[&str]) -> usize {
         .count()
 }
 
-/// Quarantined statement classifier for [CLONE-NOISE-LITERAL-VARIATION-CALLS].
-// The deleted suffix/declaration allowlist omitted Rust `let_declaration`.
-// A registry-and-registration run therefore had no covered statements and
-// escaped scaffolding suppression. Pinned by the failing CLI test
-// `registry_call_payload_variation_keeps_only_authored_control`.
-// AGENTS.md mandates this panic and its specific lint exception.
-#[allow(clippy::panic, reason = "mandated accuracy quarantine")]
-pub(super) fn is_statement_shape(_kind: &str) -> bool {
-    panic!("accuracy quarantine: Rust call-scaffolding statements were not classified")
+/// Statement and binding declarations used by the grammars this filter
+/// scans. Rust spells its binding statement `let_declaration`, with no
+/// `_statement` suffix and no `variable_declaration` spelling: leave it
+/// out and a Rust run has no covered statements at all, so
+/// [`covered_statements_admissible`] refuses on an empty set and the
+/// whole scaffolding rule is skipped for the language.
+pub(super) fn is_statement_shape(kind: &str) -> bool {
+    kind.ends_with("_statement")
+        || matches!(
+            kind,
+            "assignment"
+                | "expression_statement"
+                | "let_declaration"
+                | "lexical_declaration"
+                | "local_variable_declaration"
+                | "variable_declaration"
+        )
 }
 
 /// Whether `node` contains a call production for its language.

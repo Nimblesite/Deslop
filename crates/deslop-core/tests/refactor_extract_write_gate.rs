@@ -326,7 +326,12 @@ fn python_nonlocal_write_span_refused() -> Result<()> {
         ],
     );
     let needle = "nonlocal count\n        count += 1";
-    assert_refused(&text, needle, "gate.py", "a span declaring `nonlocal count`")
+    assert_refused(
+        &text,
+        needle,
+        "gate.py",
+        "a span declaring `nonlocal count`",
+    )
 }
 
 /// Python: `global` survives relocation — a module-scope helper in the

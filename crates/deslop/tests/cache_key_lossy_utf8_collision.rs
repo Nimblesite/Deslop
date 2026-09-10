@@ -31,8 +31,8 @@ use std::{fs, path::Path};
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::{incremental::*, *};
 use crate::common::scan_dir::temp_scan_dir;
+use crate::common::{incremental::*, *};
 
 /// The clone body shared by both files. Seven lines, identical in each,
 /// so a cluster spanning the pair is guaranteed regardless of the

@@ -20,7 +20,11 @@ use anyhow::{anyhow, ensure, Context, Result};
 use serde_json::{json, Value};
 
 mod common;
-use common::{array_field, call_tool, copied_fixture, initialized_mcp, request_duplicates_summary, spawn_lsp_with_args, str_field, structured_content, u64_field, wait_for_path, ChildKillOnDrop, SOCKET_TIMEOUT};
+use common::{
+    array_field, call_tool, copied_fixture, initialized_mcp, request_duplicates_summary,
+    spawn_lsp_with_args, str_field, structured_content, u64_field, wait_for_path, ChildKillOnDrop,
+    SOCKET_TIMEOUT,
+};
 
 /// Clusters requested per page: a small page is enough to prove the
 /// transport carries a live report.
@@ -92,11 +96,15 @@ fn mcp_tools_work_over_tcp_transport() -> Result<()> {
          an empty live report: {offenders}"
     );
 
-    let similar = call_tool(&mut mcp, "find-similar", &json!({
-                "snippet": include_str!("fixtures/csharp-mcp/Alpha.cs"),
-                "language": "csharp",
-                "top_n": 5
-            }))?;
+    let similar = call_tool(
+        &mut mcp,
+        "find-similar",
+        &json!({
+            "snippet": include_str!("fixtures/csharp-mcp/Alpha.cs"),
+            "language": "csharp",
+            "top_n": 5
+        }),
+    )?;
     let clusters = array_field(&similar, "clusters")?;
     ensure!(
         !clusters.is_empty(),

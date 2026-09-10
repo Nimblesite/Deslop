@@ -12,7 +12,10 @@ use anyhow::{anyhow, ensure, Result};
 use serde_json::{json, Value};
 
 use crate::common;
-use common::{call_tool, copied_fixture, spawn_lsp_and_wait_for_socket, structured_content, wait_for_state_then_init_mcp, McpHandle};
+use common::{
+    call_tool, copied_fixture, spawn_lsp_and_wait_for_socket, structured_content,
+    wait_for_state_then_init_mcp, McpHandle,
+};
 
 /// Issue #135: `rescan`, `session`, and `duplicates` must all
 /// report the same `generation` for the same report state.
@@ -32,10 +35,14 @@ fn issue_135_rescan_generation_matches_report_get_and_session_config() -> Result
         b"namespace Solo { class Only { public int Go() => 1; } }\n",
     )?;
 
-    let rescan_structured = call_tool(&mut mcp, "rescan", &json!({
-                "paths": [beta.to_string_lossy().into_owned()],
-                "n": 1
-            }))?;
+    let rescan_structured = call_tool(
+        &mut mcp,
+        "rescan",
+        &json!({
+            "paths": [beta.to_string_lossy().into_owned()],
+            "n": 1
+        }),
+    )?;
     let rescan_generation = read_generation(&rescan_structured, "rescan", &rescan_structured)?;
 
     let session = mcp.request("tools/call", &json!({ "name": "session", "arguments": {} }))?;

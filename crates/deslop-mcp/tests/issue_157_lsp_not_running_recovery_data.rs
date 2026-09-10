@@ -14,7 +14,10 @@ use serde_json::Value;
 use tempfile::TempDir;
 
 use crate::common;
-use common::{error_and_message, expected_socket_fragment, initialized_mcp, request_duplicates_summary, u64_field};
+use common::{
+    error_and_message, expected_socket_fragment, initialized_mcp, request_duplicates_summary,
+    u64_field,
+};
 
 /// Clusters requested per page; the error path never reads them.
 const PAGE_LIMIT: u64 = 5;

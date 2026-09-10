@@ -14,7 +14,10 @@ const MOD_DECLARATION_MIN_NODES: u32 = 3;
 
 #[test]
 fn rust_mod_and_use_declarations_do_not_cluster_as_duplicates() -> Result<()> {
-    let report = run_report(&fixture("rust-issue-150-mod-declarations"), MOD_DECLARATION_MIN_NODES)?;
+    let report = run_report(
+        &fixture("rust-issue-150-mod-declarations"),
+        MOD_DECLARATION_MIN_NODES,
+    )?;
     let count = cluster_count(&report);
     assert_eq!(
         count, 0,
