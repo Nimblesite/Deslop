@@ -27,16 +27,12 @@ lang: zh
 | 工具 | 何时调用 |
 | --- | --- |
 | `find-similar` | **在**编写新代码**之前**——是否已存在等价实现？这就是预防工具。 |
-| `top-offenders` | 工作区中最严重的簇，最严重者优先。从这里开始清理。 |
+| `duplicates` | 按严重程度排序的簇，最严重者优先。可限定到某个文件、字节范围或语言。从这里开始清理。 |
 | `cluster-by-id` | 你即将合并的某个簇的完整成员列表与信号。 |
-| `report-for-file` | 单文件的簇切片。 |
-| `report-for-range` | 单选区的簇切片。 |
-| `report-get` | 整个工作区的报告。 |
-| `report-query` | 对报告的过滤查询。 |
+| `compare-pair` | 为什么这两处具体的出现被判定为彼此的重复。 |
+| `merge-plan` | 动手编辑之前，为某个簇生成只读的机械合并方案。 |
 | `rescan` | 在大规模外部变更后强制刷新。 |
-| `list-embedding-models` | 提供方公布的模型。 |
-| `set-embedding-model` | 在运行时切换「行为相同、代码不同」[Type-4] 语义模型。 |
-| `session-config` | 检查运行中服务器的生效配置。 |
+| `session` | 会话元数据；列出提供方公布的语义模型，或切换到你选定的模型。 |
 | `schema-doc` | 每个响应的权威 JSON schema。每个会话调用**一次**，而非每次响应都调用。 |
 
 每一个响应都针对**实时**工作区状态计算。编辑器服务器在内存中持有实时报告，并在每次变更时刷新（防抖，并设有硬上限）；MCP 服务器则在下一次工具调用时通过本地 IPC 端点读取该实时状态。macOS 与 Linux 使用 `.deslop/cache/deslop.sock`；Windows 使用通过 `.deslop/cache/deslop.port` 发现、由令牌保护的 TCP 回环端点。没有批处理步骤。
@@ -117,7 +113,7 @@ claude mcp add deslop -s user -- deslop-mcp --root .
 1. 智能体提出一个改动。在它写出新代码之前，它通过 MCP 对候选片段调用 `find-similar`。
 2. 如果 `find-similar` 返回一个高于所配置相似度下限的簇，智能体就复用规范实现，或重写该调用点。
 3. 当智能体编辑文件时，文件监视器会触发，分析随之刷新。下一次工具调用时，MCP 服务器会提供新状态。
-4. 智能体重新查询 `top-offenders` 或 `report-for-file`，确认该簇已消失。无需重新运行、无需标志、无需批处理 CLI 调用。
+4. 智能体重新查询 `duplicates`，确认该簇已消失。无需重新运行、无需标志、无需批处理 CLI 调用。
 
 当 MCP 不可用时 —— CI、冷缓存审计，或没有 MCP 客户端的智能体 —— 循环会降级到 `deslop` CLI，它运行完全相同的流水线，产出完全相同的 JSON。增量缓存默认开启，因此编辑后的重新运行只会重新解析发生变化的文件。逐步的回退方案见[面向 AI](/zh/docs/for-ai/#cli-fallback)。
 

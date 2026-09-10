@@ -303,13 +303,7 @@ of top-level string keys. The differing-key-set requirement keeps a genuinely
 copy-pasted identical fixture visible.
 
 ### [CLONE-NOISE-PY-PYTEST-FIXTURE] pytest fixture boilerplate
-pytest fixtures that build ORM rows repeat the same session setup idiom (add /
-commit / refresh / return) by design — the fixture is already the test
-abstraction, so surfacing those bodies as refactor targets is noise. A cluster is
-suppressed when it spans at least two files and every member's enclosing Python
-function is decorated with `@fixture` or any dotted fixture decorator
-(`@pytest.fixture`, `@pytest_asyncio.fixture`). The shared shape is fixed by the
-fixture protocol, not by the program under analysis.
+pytest fixtures that build ORM rows repeat the same session setup idiom (add / commit / refresh / return) by design — the fixture is already the test abstraction, so surfacing those bodies as refactor targets is noise. A cluster is suppressed when it spans at least two files and every member's enclosing Python function is decorated with `@fixture` or any dotted fixture decorator (`@pytest.fixture`, `@pytest_asyncio.fixture`). This includes decorator calls such as `@fixture()` and `@pytest.fixture(scope="class")`, including multiline arguments. Module-level functions and methods inside classes follow the same rule. Only the function's own decorator name or callee qualifies; a fixture name inside another decorator's arguments, or a decorator on the containing class, does not decorate the function. The shared shape is fixed by the fixture protocol, not by the program under analysis.
 
 ### [CLONE-NOISE-PY-PARAMETRIC-INVARIANT-TESTS] Parametric invariant tests
 Parametric invariant tests — a family of `test_register_<variant>()` functions

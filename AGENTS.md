@@ -108,7 +108,7 @@ REPLACE BROKEN CODE; DON'T WRITE NEW CODE WITH A DUPLICATE PATH
 **Use the Deslop MCP if it is available; fall back to the `deslop` CLI if it is not.**
 
 - **Prevent:** before writing any code unit past a few lines, `find-similar`. On a strong match, reuse the canonical occurrence — do not write the near-copy.
-- **Clean up:** `top-offenders` → `cluster-by-id` for existing duplicates; `report-for-file` / `report-for-range` for a specific target.
+- **Clean up:** `duplicates` → `cluster-by-id` for existing duplicates; scope `duplicates` with `path` (plus `start_byte`/`end_byte`) for a specific target.
 - **A wrong, stale, or missing result from either surface is an accuracy defect** — `gh issue create` with the cluster id or triggering snippet. Never work around a defect, widen a threshold, or hide a cluster. (`gh` is the sole exception to the no-git rule.)
 
 ## Architecture

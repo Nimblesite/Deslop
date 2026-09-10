@@ -26,7 +26,7 @@ lang: zh
 | `loosely_similar` | 提示。倾向于阅读，而非行动。 |
 | `same_behavior` | 同一行为的两份实现（需要嵌入模型）。先协调，再考虑新增第三份。 |
 
-`find-similar` 是**编写阶段**的工具。当你要清理*已经存在*的重复时，从 `top-offenders` 开始，再用 `cluster-by-id` 拉取你准备合并的那个簇。
+`find-similar` 是**编写阶段**的工具。当你要清理*已经存在*的重复时，从 `duplicates` 开始，再用 `cluster-by-id` 拉取你准备合并的那个簇。
 
 可直接粘贴到项目 `AGENTS.md` / `CLAUDE.md` 的规则块，见[智能体配方](https://github.com/Nimblesite/Deslop/blob/main/docs/snippets/agents-md-recipe.md)。
 

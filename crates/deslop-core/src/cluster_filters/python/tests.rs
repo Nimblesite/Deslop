@@ -86,10 +86,9 @@ fn module_level_pytest_fixture_is_recognised() {
 
 /// The same fixture, grouped into a test class. Indentation is not a
 /// semantic difference: this is the same pytest fixture and must be
-/// recognised by the same scan. The decorator scan walks the source
-/// lines above the `def`, and a nested `def` carries its own
-/// indentation on the line immediately above it — whitespace the scan
-/// must step over rather than read as the end of the decorator block.
+/// recognised from its own decorator nodes. The former source-line scan
+/// mistook the indentation before a nested `def` for the end of its
+/// decorator block.
 #[test]
 fn class_nested_pytest_fixture_is_recognised() {
     assert_eq!(

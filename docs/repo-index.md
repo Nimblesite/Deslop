@@ -11,11 +11,17 @@ Reference material for agents. Read it when you need to locate something — it 
 | `crates/deslop-lsp` | Streams live clone warnings to any LSP-capable editor. |
 | `crates/deslop-mcp` | Lets agents query the running analysis mid-generation, before a paste happens. |
 | `clients/vscode` | VSIX; bundles the LSP + MCP binaries. |
+| `crates/deslop-test-support` | Shared test harness: process reap, fixtures, and the pinned-corpus accuracy gates. |
 | `site/` | Eleventy static site. Zero duplicate CSS, hard budget 1.8k LOC. |
+| `examples/` | Hand-written fixtures, one folder per clone bucket. Deliberately duplicated — never deduplicate them. |
+| `corpus/` | Pinned real-world repos (sha + runtime ceilings) the accuracy gate scans. |
+| `scripts/` | Measurement, release, issue-atlas, and typediagram generation. |
+| `reports/` | Measurement reports, each emitted by the script that took the measurement. |
+| `Book/` | *The Deslop Book* manuscript. |
 | `docs/specs/SPEC.md` | Full research + design spec. |
 | `docs/plans/` | Remaining work, one file per work stream. The open fused-confidence backlog — admission, content gating, bucket routing, confidence-aware ranking — lives in [fused-score-followups.md](plans/fused-score-followups.md); embedding recall, the corpus gate and the weighted metric are separate files it points to. |
 | `docs/snippets/agents-md-recipe.md` | Paste-ready Rule-zero recipe for other repos. |
-| `.claude/skills/` | ci-prep, code-dedup, fix-bug, submit-pr. |
+| `.claude/skills/` | Agent workflows: ci-prep, clone-register-prepare, code-dedup, fix-bug, judge-clone-pairs, log-issue, spec-check, submit-pr, triage, upgrade-packages, website-audit. |
 | `coverage-thresholds.json` | Single source of truth for coverage. |
 | `Cargo.toml` | Workspace + strict lints. |
 | `.github/workflows/ci.yml` · `.devcontainer/` | CI and dev container; dependency versions mirror `Cargo.toml`. |

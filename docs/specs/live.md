@@ -186,7 +186,7 @@ Where Unix domain sockets do not exist (Windows) — or when `deslop-lsp` is sta
 
 ### [LIVE-WATCHER] File watcher
 
-**The watcher runs only in `deslop-lsp`.** `deslop-mcp` watches only `.deslop/cache/live-report.json` (a single file) for change notifications — it never watches the workspace.
+**The watcher runs only in `deslop-lsp`.** `deslop-mcp` watches nothing at all — it learns about changes from its `report/subscribe` connection ([MCP-NOTIFICATIONS]).
 
 Use the `notify` crate (cross-platform, zero C deps). Watch the workspace root recursively, filtered by `LanguageParser::file_extensions()`. Debounce: **250 ms** of quiet after the last event, capped at **2 s** total accumulation so a formatter burst doesn't starve the scheduler.
 
