@@ -163,9 +163,6 @@ fn retired_data_clone_knobs_do_not_change_the_report() -> Result<()> {
     Ok(())
 }
 
-/// The stable, order-insensitive fingerprint of a report's ranking:
-/// `(rank, id, mass)` per cluster.
-
 // [CLONE-NOISE-LITERAL-TABLE] verbatim escape hatch (#190): a
 // byte-for-byte copied table is genuine duplication and is byte-proven
 // like any copy — never misread as a shape-only family.

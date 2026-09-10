@@ -1,11 +1,16 @@
-//! E2E regression for [CLONE-NOISE-POLYMORPHIC-SIGNATURE] — the
-//! inherited-method half of gh #69.
+//! [CLONE-NOISE-POLYMORPHIC-CONTRACT] — the boundary of
+//! [CLONE-NOISE-POLYMORPHIC-SIGNATURE] suppression.
 //!
 //! `LedgerSink` declares the abstract `record_entry` both sinks
 //! override, so the contract is what forces their signature and
 //! statement shape to agree; buckets against blobs, `serialise` against
 //! `encode` are the entire behavioural difference. Nothing about an S3
 //! sink can be refactored into a GCS sink.
+//! `CommonWorker` declares only `__init__` and `stamp`; it does not force
+//! `InvoiceWorker.synchronise` and `UserWorker.synchronise` to agree.
+//! Their copied bodies must survive the filter despite renamed collaborators.
+//! [FUSED-CONTENT-GATE-CALL-TARGET] permits the repeated bijective rename
+//! demonstrated by the copied receiver properties.
 //!
 //! Both directions live in ONE scan so a fix for either can never trade
 //! away the other: the contract pair must stay hidden while a copied
@@ -19,11 +24,16 @@ use crate::common::Result;
 /// The fixture holding the contract pair and the copied pair.
 const FIXTURE: &str = "python-inherited-contract-boundary";
 
-/// Node floor for the scan, low enough to admit both subjects.
-const MIN_NODES: u32 = 8;
+/// Exercise the original floor and the lower floor introduced by consolidation.
+const MIN_NODE_FLOORS: [u32; 2] = [8, 12];
+
+/// The abstract contract forces these signatures to agree.
+const CONTRACT_REASON: &str = "`LedgerSink` declares the abstract `record_entry` both sinks \
+    override, so the contract forces their signature and statement shape to agree; \
+    buckets against blobs, `serialise` against `encode` are the behavioural difference.";
 
 /// Every `.py` file in the fixture.
-const FILES_ANALYSED: u64 = 5;
+const FILES_ANALYSED: u64 = 6;
 
 /// The contract implementation that writes to S3 buckets.
 const S3_SINK: &str = "s3_sink.py";
@@ -45,18 +55,18 @@ const CLONE_LAST_LINE: u64 = 14;
 
 #[test]
 fn an_inherited_method_no_base_declares_is_not_a_contract_implementation() -> Result<()> {
-    ContractBoundaryCase {
-        fixture: FIXTURE,
-        min_nodes: MIN_NODES,
-        files_analysed: FILES_ANALYSED,
-        contract_pair: [S3_SINK, GCS_SINK],
-        contract_reason: "`LedgerSink` declares the abstract `record_entry` both sinks \
-             override, so the contract is what forces their signature and \
-             statement shape to agree; buckets against blobs, `serialise` \
-             against `encode` are the entire behavioural difference.",
-        clone_pair: [INVOICE_WORKER, USER_WORKER],
-        clone_lines: (CLONE_FIRST_LINE, CLONE_LAST_LINE),
-        clone_subject: "the copied `synchronise`",
+    for min_nodes in MIN_NODE_FLOORS {
+        ContractBoundaryCase {
+            fixture: FIXTURE,
+            min_nodes,
+            files_analysed: FILES_ANALYSED,
+            contract_pair: [S3_SINK, GCS_SINK],
+            contract_reason: CONTRACT_REASON,
+            clone_pair: [INVOICE_WORKER, USER_WORKER],
+            clone_lines: (CLONE_FIRST_LINE, CLONE_LAST_LINE),
+            clone_subject: "the copied `synchronise`",
+        }
+        .assert()?;
     }
-    .assert()
+    Ok(())
 }

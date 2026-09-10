@@ -9,9 +9,9 @@
 //! act on: a false positive.
 //!
 //! These drive [`super::python_function_has_fixture_decorator`] directly
-//! rather than the whole filter bank, because the bank's earlier
-//! literal-calls stage is under an accuracy quarantine and panics before
-//! any Python filter is reached.
+//! rather than the whole filter bank, so a failure names the decorator
+//! scan itself instead of whichever earlier stage the bank happens to
+//! reject a case on.
 
 use tree_sitter::{Node, Parser};
 

@@ -27,6 +27,7 @@ const FIXTURE_TEN = 10;
 const FIXTURE_FORTY = 40;
 const PAIR_OCCURRENCE_COUNT = 2;
 const SEVERITY_COUNT = 4;
+const UNKNOWN_RANK_BAND = "catastrophic";
 const WIRE_CLUSTER_FIELDS = [
   "id",
   "rank",
@@ -176,6 +177,8 @@ suite("report schema helpers", () => {
     assert.equal(clusterBand(clusterWith({ rank_band: "faint" })), "faint");
     const legacy = clusterWith({ rank_band: "" as Severity });
     assert.equal(clusterBand(legacy), "faint", "a legacy empty band reads as faint");
+    const unknown = clusterWith({ rank_band: UNKNOWN_RANK_BAND as Severity });
+    assert.equal(clusterBand(unknown), "faint", "an unknown band reads as faint");
   });
 
   // [SEVERITY-BAND] Every severity level in rank order, with a human

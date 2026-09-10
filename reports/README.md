@@ -2,9 +2,11 @@
 
 **This file is an index, not a measurement.** It carries forward only the findings from ten earlier reports that are still true against the working tree, each labelled with the report and the generator that produced it. Every number here was produced mechanically by the tool named beside it; nothing in this file was computed by hand. The ten source reports were deleted — their evidence directories under `target/` are gone, so their links were dead and their figures were no longer reproducible. Anything worth re-measuring must be re-run, not read out of here.
 
-Verified against the tree on 2026-09-09 at `bd920260` (branch `fix/regression-rollbacks`).
+Historical findings below were carried forward at `bd920260`. The current registry comparison was measured at `e88e56a7` on `2026-09-10T09:49:09+00:00`; see [baseline attribution](registry-baseline-attribution.md). The full PR review is still in progress.
 
-**Correction (2026-09-10).** An earlier revision of this file listed the `calls` accuracy quarantine under §2 as discharged. That was wrong: the quarantine moved into the new `calls/` submodule rather than being lifted, and it is live. It is now item 0 above.
+**Current measurements.** [Registry baseline attribution](registry-baseline-attribution.md) records 2 clusters on the baseline and 1 on the current build, with the current control's full contract satisfied. The registry false positive predates `f92300e5`. [Regression verification](regression-verification.md) contains the current command results for #520–#526. These replace the stale quarantine status below; they do not declare the pending PR review complete.
+
+**PR review in progress:** [current validation](pr-validation.md) records the failing and passing node-identity checks, the actual baseline comparison, and the unresolved skipped-test contracts. A prior passing CI run does not certify changes made afterwards.
 
 ---
 
@@ -12,8 +14,8 @@ Verified against the tree on 2026-09-09 at `bd920260` (branch `fix/regression-ro
 
 | # | Item | State | Evidence |
 |---|---|---|---|
-| 0 | **The `calls` accuracy quarantine is LIVE, and 103 `deslop-core` tests fail on it.** `is_statement_shape` is a mandated `panic!` at `cluster_filters/calls/statements.rs:119` — the deleted allowlist omitted Rust `let_declaration`, so a registry-and-registration run had no covered statements and escaped scaffolding suppression. Correct per AGENTS.md and **must not be worked around**; the exit is to restore the classifier and turn the pin green. | Red, by mandate | 23 lib + 80 suite failures, one panic site; pinned by `registry_call_payload_variation_keeps_only_authored_control` |
-| 1 | **gh #520–#526 are fixed but still open.** All six verification checks exit 0. AGENTS.md forbids agents closing issues — a human closes these. | Ready to close | `scripts/repository/regression-verification.py`, 6 checks / 0 failing |
+| 0 | **The calls quarantine is discharged in the measured current build.** The registry false positive is present in the requested baseline; the existing repair is preserved, not counted as a new post-baseline regression fix. | Verified by CLI | [Baseline/current binaries, input hashes, report fields, and control assertions](registry-baseline-attribution.md) |
+| 1 | **The #520–#526 verification commands pass.** Issues remain open under repository policy. | Verification passed; PR review pending | [Mechanically generated command results](regression-verification.md) |
 | 2 | **gh #369 — CRITICAL, 4 tests ignored.** Embedding-only false positives survive on MockOllama's length-residue cosine alone (structural 0, token_jaccard 0). The stated fix has an O(N²·D) cost. | Open, blocking | `grep -rn SKIP-UNFINISHED crates/` → 4 × GH #369 |
 | 3 | **gh #356 — embeddings-on mutates buckets.** `ts-mixed-band` publishes a four-file clone with embeddings off and nothing with them on; ANN bridges mutate structural components before measurement (`session/render.rs`). `csharp-type3` follows the discovery route, not the code. Must stay red, not baselined. | Open | ignored-test reasons, commit-f92300e5 review |
 | 4 | **`Vec<Signature>` still holds 1 KiB per fingerprint** (~3.5 M fingerprints on the Flutter clone ⇒ ~3.5 GB). Sharing via `Arc` from the existing signature memo is the value-preserving fix and is not done. | Not started | `crates/deslop-core/src/pipeline/session/store.rs:64`, `fpcache.rs:65` |

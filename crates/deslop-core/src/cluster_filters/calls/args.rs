@@ -145,7 +145,9 @@ fn subtree_is_interpolated(node: Node<'_>) -> bool {
     if matches!(node.kind(), "interpolation" | "template_substitution") {
         return true;
     }
-    named_children(node).into_iter().any(subtree_is_interpolated)
+    named_children(node)
+        .into_iter()
+        .any(subtree_is_interpolated)
 }
 
 /// True when the subtree holds at least one string-literal leaf.
