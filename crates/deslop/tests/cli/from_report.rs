@@ -154,14 +154,12 @@ fn from_report_preserves_mass_and_band_in_html() -> Result<()> {
     let out = outputs_under(tmp.path());
     replay_report(tmp.path(), "semantic.json", report, false)?;
     let html = fs::read_to_string(&out.html)?;
-    assert!(
-        html.contains(&format!(">{IDENTICAL_TITLE}</h3>")),
-        "the replayed cluster's kind title renders: {html}"
+    assert_contains(
+        &html,
+        &format!(">{IDENTICAL_TITLE}</h3>"),
+        "the replayed cluster's kind title renders",
     );
-    assert!(
-        html.contains("mass 89"),
-        "the cluster's mass renders: {html}"
-    );
+    assert_contains(&html, "mass 89", "the cluster's mass renders");
     for retired in ["Same behavior", "AI match", "bucket:", "facet-identical"] {
         assert!(
             !html.contains(retired),

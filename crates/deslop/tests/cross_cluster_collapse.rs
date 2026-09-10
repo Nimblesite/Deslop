@@ -10,12 +10,7 @@
 //! Spec: [PIPELINE-CLUSTER-EXACT] commits to one canonical cluster
 //! per duplicated region.
 
-use std::{
-    collections::BTreeSet,
-    fs,
-    ops::RangeInclusive,
-    path::Path,
-};
+use std::{collections::BTreeSet, fs, ops::RangeInclusive, path::Path};
 
 use anyhow::Result;
 
@@ -357,9 +352,10 @@ fn widest_same_declaration_view_is_the_published_finding() -> Result<()> {
         "the premium method grew an archive branch, so the two methods stay byte-distinct"
     );
     for text in &texts {
-        assert!(
-            text.contains(SHARED_PREFIX_RUN),
-            "each method carries the byte-identical run the near-miss is built on: {text}"
+        assert_contains(
+            text,
+            SHARED_PREFIX_RUN,
+            "each method carries the byte-identical run the near-miss is built on",
         );
     }
     let lines: Vec<(u64, u64)> = occurrences(clone)

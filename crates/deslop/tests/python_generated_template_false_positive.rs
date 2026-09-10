@@ -49,13 +49,15 @@ fn generated_header_template_does_not_surface_as_duplicate_logic() -> Result<()>
     let generated = scan_root.join("src/agent_backend/api/schemas_generated.py");
     assert!(generator.is_file(), "generator fixture must exist");
     assert!(generated.is_file(), "generated output fixture must exist");
-    assert!(
-        fs::read_to_string(&generator)?.contains("PY_HEADER"),
-        "generator fixture must contain the template literal"
+    assert_contains(
+        &fs::read_to_string(&generator)?,
+        "PY_HEADER",
+        "generator fixture must contain the template literal",
     );
-    assert!(
-        fs::read_to_string(&generated)?.contains("DO NOT HAND-EDIT"),
-        "generated fixture must carry the hand-edit warning"
+    assert_contains(
+        &fs::read_to_string(&generated)?,
+        "DO NOT HAND-EDIT",
+        "generated fixture must carry the hand-edit warning",
     );
 
     let report = run_report(&scan_root, GENERATED_TEMPLATE_MIN_NODES)?;

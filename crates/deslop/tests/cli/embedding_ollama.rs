@@ -384,14 +384,16 @@ fn ollama_embedding_cache_persists_across_runs() -> Result<()> {
 fn ollama_provenance_surfaces_in_text_and_html() -> Result<()> {
     let (_tmp, out) = ollama_run("csharp-small", "8", "required")?;
     let text = fs::read_to_string(&out.txt)?;
-    assert!(
-        text.contains("embeddings: ollama/nomic-embed-text@"),
-        "text renderer must carry the Ollama provenance line: {text}"
+    assert_contains(
+        &text,
+        "embeddings: ollama/nomic-embed-text@",
+        "text renderer must carry the Ollama provenance line",
     );
     let html = fs::read_to_string(&out.html)?;
-    assert!(
-        html.contains("embeddings: ollama/nomic-embed-text@"),
-        "html renderer must carry the Ollama provenance line: {html}"
+    assert_contains(
+        &html,
+        "embeddings: ollama/nomic-embed-text@",
+        "html renderer must carry the Ollama provenance line",
     );
     Ok(())
 }

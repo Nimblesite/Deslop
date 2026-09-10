@@ -908,10 +908,7 @@ suite("TopOffendersProvider", () => {
         reportOccurrence("/repo/OtherB.cs", 150, 160),
       ],
     );
-    const store = storeWith(
-      report([dirtyOnly, mixedSingleton, mixedPeers, clean]),
-      9,
-    );
+    const store = storeWith(report([dirtyOnly, mixedSingleton, mixedPeers, clean]), 9);
     const ticker = new StatusTicker();
     const provider = new TopOffendersProvider(store, ticker);
     let treeRefreshes = 0;

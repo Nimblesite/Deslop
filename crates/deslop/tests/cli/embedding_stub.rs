@@ -50,12 +50,13 @@ fn assert_cli_rejects(args: &[&str], expected: &str) -> Result<()> {
 fn default_run_records_embeddings_off_provenance() -> Result<()> {
     let reports = fixture_run_reports("csharp-small", &["--min-nodes", "8"])?;
     let json = &reports.json;
-    assert!(
-        json.contains("\"embedding_provenance\": null"),
-        "default run must record embeddings=off: {json}"
+    assert_contains(
+        json,
+        "\"embedding_provenance\": null",
+        "default run must record embeddings=off",
     );
     let txt = &reports.txt;
-    assert!(txt.contains("embeddings: off"), "text provenance missing");
+    assert_contains(txt, "embeddings: off", "text provenance missing");
     Ok(())
 }
 
@@ -97,9 +98,10 @@ fn embeddings_auto_falls_back_when_provider_unreachable() -> Result<()> {
             "http://127.0.0.1:1",
         ],
     )?;
-    assert!(
-        json.contains("\"embedding_provenance\": null"),
-        "auto must fall back to off when provider is down: {json}"
+    assert_contains(
+        &json,
+        "\"embedding_provenance\": null",
+        "auto must fall back to off when provider is down",
     );
     Ok(())
 }
@@ -128,23 +130,27 @@ fn mock_ollama_records_provenance_and_runs_embedding_pass() -> Result<()> {
         server.endpoint(),
     )?;
     let json = fs::read_to_string(&out.json)?;
-    assert!(
-        json.contains("\"provider_id\": \"ollama\""),
-        "provenance provider_id missing: {json}"
+    assert_contains(
+        &json,
+        "\"provider_id\": \"ollama\"",
+        "provenance provider_id missing",
     );
-    assert!(
-        json.contains("\"model_id\": \"nomic-embed-text\""),
-        "provenance model_id missing"
+    assert_contains(
+        &json,
+        "\"model_id\": \"nomic-embed-text\"",
+        "provenance model_id missing",
     );
     let txt = fs::read_to_string(&out.txt)?;
-    assert!(
-        txt.contains("embeddings: ollama/nomic-embed-text@"),
-        "text provenance missing: {txt}"
+    assert_contains(
+        &txt,
+        "embeddings: ollama/nomic-embed-text@",
+        "text provenance missing",
     );
     let html = fs::read_to_string(&out.html)?;
-    assert!(
-        html.contains("embeddings: ollama/nomic-embed-text@"),
-        "html provenance missing"
+    assert_contains(
+        &html,
+        "embeddings: ollama/nomic-embed-text@",
+        "html provenance missing",
     );
     Ok(())
 }
@@ -197,9 +203,10 @@ fn mock_ollama_under_auto_mode_runs_embedding_pass() -> Result<()> {
         server.endpoint(),
     )?;
     let json = fs::read_to_string(&out.json)?;
-    assert!(
-        json.contains("\"provider_id\": \"ollama\""),
-        "auto mode with reachable provider must record provenance: {json}"
+    assert_contains(
+        &json,
+        "\"provider_id\": \"ollama\"",
+        "auto mode with reachable provider must record provenance",
     );
     Ok(())
 }

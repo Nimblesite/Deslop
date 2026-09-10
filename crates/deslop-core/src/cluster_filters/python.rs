@@ -28,6 +28,12 @@ use crate::{
     state::FileId,
 };
 
+#[cfg(test)]
+mod tests;
+
+/// The final identifier of every supported pytest fixture decorator.
+const FIXTURE_DECORATOR_NAME: &[u8] = b"fixture";
+
 /// Detects [CLONE-NOISE-PY-PYTEST-FIXTURE]: pytest fixture functions
 /// that create ORM rows all repeat the same session setup shape. The
 /// fixture is already the test abstraction, so surfacing those bodies as
@@ -68,37 +74,32 @@ fn enclosing_python_function(root: Node<'_>, range: ByteRange) -> Option<Node<'_
     })
 }
 
-/// Checks the decorator block immediately above a Python function.
+/// [CLONE-NOISE-PY-PYTEST-FIXTURE] — inspect this function's own decorator
+/// nodes so class indentation and multiline arguments do not hide fixtures.
 fn python_function_has_fixture_decorator(function: Node<'_>, source: &[u8]) -> bool {
-    let Some(prefix) = source
-        .get(..function.start_byte())
-        .and_then(|bytes| std::str::from_utf8(bytes).ok())
-    else {
-        return false;
-    };
-    for line in prefix.lines().rev() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() || !trimmed.starts_with('@') {
-            return false;
-        }
-        if decorator_line_has_fixture_callee(trimmed) {
-            return true;
-        }
-    }
-    false
+    function
+        .parent()
+        .filter(|parent| parent.kind() == "decorated_definition")
+        .is_some_and(|parent| {
+            named_children(parent)
+                .into_iter()
+                .filter(|child| child.kind() == "decorator")
+                .filter_map(|decorator| named_children(decorator).into_iter().next())
+                .any(|expression| is_fixture_decorator_expression(expression, source))
+        })
 }
 
-/// Returns true for `@fixture(...)` and dotted variants ending in
-/// `.fixture(...)`.
-fn decorator_line_has_fixture_callee(line: &str) -> bool {
-    let Some(decorator) = line.strip_prefix('@') else {
-        return false;
+/// Match only a bare or dotted fixture callee, never its argument contents.
+fn is_fixture_decorator_expression(expression: Node<'_>, source: &[u8]) -> bool {
+    let callee = if expression.kind() == "call" {
+        expression.child_by_field_name("function")
+    } else {
+        Some(expression)
     };
-    let callee = decorator
-        .split(|ch: char| ch == '(' || ch.is_whitespace())
-        .next()
-        .unwrap_or_default();
-    callee.rsplit('.').next() == Some("fixture")
+    callee
+        .filter(|callee| super::python_dict_assert::is_dotted_name(*callee))
+        .map(|callee| callee.child_by_field_name("attribute").unwrap_or(callee))
+        .is_some_and(|name| source.get(name.byte_range()) == Some(FIXTURE_DECORATOR_NAME))
 }
 
 /// Detects [CLONE-NOISE-PY-ASSERT-ONLY]: blocks consisting only of

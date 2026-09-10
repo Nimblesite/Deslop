@@ -8,20 +8,24 @@
 //! the agent-facing observability surface — one log line, one
 //! audience-neutral record.
 
+#[cfg(all(feature = "profiling", unix))]
+use std::process::{Command, Stdio};
 use std::{
-    process::{Child, ChildStdin, ChildStdout, Command, Stdio},
-    sync::atomic::{AtomicI64, Ordering},
+    io::BufReader,
+    process::{Child, ChildStdin, ChildStdout},
     thread,
     time::Duration,
 };
 
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
-use std::io::BufReader;
 
-use crate::common::*;
-
-static NEXT_ID: AtomicI64 = AtomicI64::new(90_000);
+#[cfg(all(feature = "profiling", unix))]
+use crate::common::session::shutdown;
+use crate::common::{
+    session::{spawn_logging_lsp, take_stdin_stdout},
+    *,
+};
 
 /// Audience: HUMAN. Issue #29. Calling `deslop/reportGet` must
 /// leave a structured log line on stderr containing `elapsed_ms`
@@ -30,7 +34,7 @@ static NEXT_ID: AtomicI64 = AtomicI64::new(90_000);
 #[test]
 fn report_get_handler_logs_elapsed_ms() -> Result<()> {
     let workspace = tempfile::tempdir()?;
-    let mut child = spawn_logging_lsp(workspace.path())?;
+    let mut child = spawn_logging_lsp(workspace.path(), &[])?;
     let (stdin, _reader) = boot_and_report_get(&mut child)?;
 
     thread::sleep(Duration::from_millis(400));
@@ -55,7 +59,7 @@ fn report_get_handler_logs_elapsed_ms() -> Result<()> {
 #[test]
 fn cpu_report_returns_structured_snapshot_after_report_get() -> Result<()> {
     let workspace = tempfile::tempdir()?;
-    let mut child = spawn_logging_lsp(workspace.path())?;
+    let mut child = spawn_logging_lsp(workspace.path(), &[])?;
     let (mut stdin, mut reader) = boot_and_report_get(&mut child)?;
     let response = call(&mut stdin, &mut reader, "deslop/cpuReport", &json!({}))?;
     let result = response
@@ -219,75 +223,6 @@ fn profile_dir_writes_non_empty_firefox_profile_on_shutdown() -> Result<()> {
         "profile JSON should identify deslop-lsp: {profile_json}"
     );
     Ok(())
-}
-
-fn request(method: &str, params: &Value) -> Result<(i64, String)> {
-    let id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
-    let payload = json!({"jsonrpc":"2.0","id":id,"method":method,"params":params});
-    Ok((id, serde_json::to_string(&payload)?))
-}
-
-#[cfg(all(feature = "profiling", unix))]
-fn request_without_params(method: &str) -> Result<(i64, String)> {
-    let id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
-    let payload = json!({"jsonrpc":"2.0","id":id,"method":method});
-    Ok((id, serde_json::to_string(&payload)?))
-}
-
-fn handshake(stdin: &mut ChildStdin, reader: &mut BufReader<ChildStdout>) -> Result<Value> {
-    let (id, payload) = request(
-        "initialize",
-        &json!({"processId": null, "rootUri": null, "capabilities": {}}),
-    )?;
-    let response = send_and_recv(stdin, reader, id, &payload)?;
-    write_frame(stdin, &notification("initialized", &json!({}))?)?;
-    Ok(response)
-}
-
-#[cfg(all(feature = "profiling", unix))]
-fn shutdown(stdin: &mut ChildStdin, reader: &mut BufReader<ChildStdout>) -> Result<Value> {
-    let (id, payload) = request_without_params("shutdown")?;
-    let response = send_and_recv(stdin, reader, id, &payload)?;
-    write_frame(stdin, &notification("exit", &json!({}))?)?;
-    Ok(response)
-}
-
-fn call(
-    stdin: &mut ChildStdin,
-    reader: &mut BufReader<ChildStdout>,
-    method: &str,
-    params: &Value,
-) -> Result<Value> {
-    let (id, payload) = request(method, params)?;
-    send_and_recv(stdin, reader, id, &payload)
-}
-
-/// Spawns `deslop-lsp` against `workspace` with INFO logging and no
-/// colour, the shared startup for the observability tests. Stderr stays
-/// piped so a later `wait_with_output` can scrape the structured log.
-fn spawn_logging_lsp(workspace: &std::path::Path) -> Result<Child> {
-    Ok(Command::new(assert_cmd::cargo::cargo_bin("deslop-lsp"))
-        .arg(workspace)
-        .env("RUST_LOG", "info")
-        .env("NO_COLOR", "1")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?)
-}
-
-/// Takes the child's stdin and a buffered stdout, leaving stderr on the
-/// child so the test can drain it through `wait_with_output`.
-fn take_stdin_stdout(child: &mut Child) -> Result<(ChildStdin, BufReader<ChildStdout>)> {
-    let stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| anyhow!("child stdin missing"))?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| anyhow!("child stdout missing"))?;
-    Ok((stdin, BufReader::new(stdout)))
 }
 
 /// Boots the LSP conversation every scenario shares: takes the child's

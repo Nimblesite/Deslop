@@ -14,6 +14,7 @@ import { anchorForClusterId, clusterPanelFeed, resolveAnchoredCluster } from "..
 import { Report, ReportCluster, ReportOccurrence } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
 import { wireCluster } from "../cluster.helpers";
+import { storeWith } from "./report-store.helpers";
 
 const PRIMARY_CLUSTER_ID = "aaaaaaaa";
 const TEST_THIRTY = 30;
@@ -175,8 +176,7 @@ suite("cluster detail panel selection (#173)", () => {
   });
 
   test("keeps the opened cluster visible when an unsaved edit would elide it from the projection", () => {
-    const store = new ReportStore();
-    store.setSnapshot(reportOf([clusterOf("dddddddd", TEST_THIRTY, groupOccurrences)]), 1);
+    const store = storeWith(reportOf([clusterOf("dddddddd", TEST_THIRTY, groupOccurrences)]), 1);
 
     withClusterPanel(store, "dddddddd", (fake) => {
       // Editing Alpha.cs drops the cluster below two visible occurrences, so the
@@ -206,8 +206,7 @@ suite("cluster detail panel selection (#173)", () => {
     const occurrences = [...groupOccurrences, ...otherOccurrences].slice(FIRST_OCCURRENCE_INDEX, THREE_OCCURRENCES);
     const original = { ...clusterOf(PRIMARY_CLUSTER_ID, TEST_THIRTY, occurrences), canonical_node_count: CANONICAL_NODE_COUNT };
     const report = reportOf([original]);
-    const store = new ReportStore();
-    store.setSnapshot(report, FIRST_OCCURRENCE_INDEX);
+    const store = storeWith(report, FIRST_OCCURRENCE_INDEX);
     store.markFileDirty(canonical.path);
     const visible = store.current.visibleReport;
     assert.ok(visible);
@@ -220,8 +219,7 @@ suite("cluster detail panel selection (#173)", () => {
   });
 
   test("clears the selection and surfaces the dead id when the cluster leaves the report entirely", () => {
-    const store = new ReportStore();
-    store.setSnapshot(reportOf([clusterOf("eeeeeeee", TEST_THIRTY, groupOccurrences)]), 1);
+    const store = storeWith(reportOf([clusterOf("eeeeeeee", TEST_THIRTY, groupOccurrences)]), 1);
 
     withClusterPanel(store, "eeeeeeee", (fake) => {
       // The duplication is resolved — the cluster is gone from the next report.
@@ -239,8 +237,7 @@ suite("cluster detail panel selection (#173)", () => {
   });
 
   test("does not re-push the feed on embedding-progress, lifecycle, or pending-model ticks (VSIX-PERF)", () => {
-    const store = new ReportStore();
-    store.setSnapshot(reportOf([clusterOf("ffffffff", TEST_THIRTY, groupOccurrences)]), 1);
+    const store = storeWith(reportOf([clusterOf("ffffffff", TEST_THIRTY, groupOccurrences)]), 1);
 
     withClusterPanel(store, "ffffffff", (fake) => {
       const afterReady = fake.messages.length;

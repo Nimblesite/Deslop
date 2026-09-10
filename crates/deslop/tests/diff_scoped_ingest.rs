@@ -10,16 +10,17 @@
 
 use std::fs;
 
-use crate::common::{diff_scope::*, field, fixture, load_json, Result};
+use crate::common::{assert_contains, diff_scope::*, field, fixture, load_json, Result};
 
 // [CLI-ARG-DIFF] verification: a diff that does not byte-match the
 // scanned tree is refused as a usage error naming file and line.
 #[test]
 fn stale_diff_is_refused_with_file_and_line() -> Result<()> {
     let (_output, stderr, _tmp) = run_code(&["--diff", "patches/stale.patch"], 2)?;
-    assert!(
-        stderr.contains("caller.rs"),
-        "refusal must name the mismatching file: {stderr}"
+    assert_contains(
+        &stderr,
+        "caller.rs",
+        "refusal must name the mismatching file",
     );
     assert!(
         stderr.contains('6'),
@@ -33,10 +34,7 @@ fn stale_diff_is_refused_with_file_and_line() -> Result<()> {
 #[test]
 fn malformed_or_missing_diff_is_a_usage_error() -> Result<()> {
     let (_output, stderr, _tmp) = run_code(&["--diff", "patches/malformed.patch"], 2)?;
-    assert!(
-        stderr.contains("diff"),
-        "malformed refusal must say what failed: {stderr}"
-    );
+    assert_contains(&stderr, "diff", "malformed refusal must say what failed");
     let _missing = run_code(&["--diff", "patches/does-not-exist.patch"], 2)?;
     Ok(())
 }

@@ -18,7 +18,10 @@ use anyhow::Context as _;
 use serde_json::Value;
 
 use crate::common::signals::has_verbatim_pair;
-use crate::common::{clusters, diff_scope::*, field, fixture, load_json, occurrences, Result};
+use crate::common::{
+    assert_contains, assert_not_contains, clusters, diff_scope::*, field, fixture, load_json,
+    occurrences, Result,
+};
 
 // [OUTPUT-SCHEMA-DIFF-TAGS] Without --diff, no diff field may appear —
 // per-run optionality means field absence, not `null` noise.
@@ -199,28 +202,28 @@ fn only_changed_filters_untouched_clusters_and_renders_the_delta() -> Result<()>
         surviving.is_subset(&id_set(&full)),
         "filtered ids must be a subset of the full run's ids"
     );
-    assert!(
-        stderr
-            .contains("1 group(s) newly introduced by this diff, 1 cross-file with untouched code"),
-        "stderr summary must lead with the four-figure delta: {stderr}"
+    assert_contains(
+        &stderr,
+        "1 group(s) newly introduced by this diff, 1 cross-file with untouched code",
+        "stderr summary must lead with the four-figure delta",
     );
 
     let text = fs::read_to_string(output.with_extension("txt"))?;
-    assert!(
-        text.contains(
-            "delta: 2 cluster(s) intersect the diff — 1 newly introduced, \
-             1 cross-file with untouched code; 1 untouched cluster(s) omitted"
-        ),
-        "text report must carry the four-figure delta summary: {text}"
+    assert_contains(
+        &text,
+        "delta: 2 cluster(s) intersect the diff — 1 newly introduced, \
+             1 cross-file with untouched code; 1 untouched cluster(s) omitted",
+        "text report must carry the four-figure delta summary",
     );
     assert!(
         text.contains("[in diff]") && text.contains("[existing]"),
         "text report must badge occurrences: {text}"
     );
     let html = fs::read_to_string(output.with_extension("html"))?;
-    assert!(
-        html.contains("in-diff"),
-        "html cards must carry the in-diff class: missing from html output"
+    assert_contains(
+        &html,
+        "in-diff",
+        "html cards must carry the in-diff class: missing from html output",
     );
     assert!(
         html.contains("[in diff]") && html.contains("[existing]"),
@@ -267,24 +270,28 @@ fn only_changed_gate_reads_the_diff_percentage() -> Result<()> {
     );
     // [METRICS-DIFF-SCOPE]: a filtered-empty run must not claim the
     // codebase is clean while naming the legacy debt it omitted.
-    assert!(
-        clean_stderr.contains("no diff-affected duplication — 3 untouched group(s) omitted"),
-        "the clean-diff summary names the diff scope, not the codebase: {clean_stderr}"
+    assert_contains(
+        &clean_stderr,
+        "no diff-affected duplication — 3 untouched group(s) omitted",
+        "the clean-diff summary names the diff scope, not the codebase",
     );
-    assert!(
-        !clean_stderr.contains("your codebase is clean"),
-        "a filtered-empty run must not claim the codebase is clean: {clean_stderr}"
+    assert_not_contains(
+        &clean_stderr,
+        "your codebase is clean",
+        "a filtered-empty run must not claim the codebase is clean",
     );
     // The governing clean diff gate renders ok even though the repo
     // gate is breached — page and exit code agree.
     let clean_html = fs::read_to_string(output.with_extension("html"))?;
-    assert!(
-        clean_html.contains("metrics-banner metrics-banner--ok"),
-        "the HTML banner follows the governing (clean) diff gate"
+    assert_contains(
+        &clean_html,
+        "metrics-banner metrics-banner--ok",
+        "the HTML banner follows the governing (clean) diff gate",
     );
-    assert!(
-        clean_html.contains("diff threshold 0.00% (ok)"),
-        "the HTML banner names the governing diff verdict"
+    assert_contains(
+        &clean_html,
+        "diff threshold 0.00% (ok)",
+        "the HTML banner names the governing diff verdict",
     );
 
     // A diff that introduces duplication trips the same gate.
@@ -305,13 +312,15 @@ fn only_changed_gate_reads_the_diff_percentage() -> Result<()> {
     assert_eq!(field(verdict, "percent"), 0.0);
     // The page must agree with exit 3: the governing diff gate breached.
     let breached_html = fs::read_to_string(output2.with_extension("html"))?;
-    assert!(
-        breached_html.contains("metrics-banner metrics-banner--breached"),
-        "the HTML banner follows the governing (breached) diff gate"
+    assert_contains(
+        &breached_html,
+        "metrics-banner metrics-banner--breached",
+        "the HTML banner follows the governing (breached) diff gate",
     );
-    assert!(
-        breached_html.contains("diff threshold 0.00% (breached)"),
-        "the HTML banner names the governing diff verdict"
+    assert_contains(
+        &breached_html,
+        "diff threshold 0.00% (breached)",
+        "the HTML banner names the governing diff verdict",
     );
 
     // Without --only-changed the repo-wide gate governs, diff or not.

@@ -221,6 +221,33 @@ pub(crate) fn seeded_fixture_root(fixture_name: &str) -> Result<(tempfile::TempD
     Ok((tmp, scan_root))
 }
 
+/// Asserts `haystack` contains `needle`, failing with `context` plus the
+/// needle and the whole haystack.
+///
+/// Every suite that reads a rendered report,
+/// stderr stream or log body asks the same question — "is this marker
+/// present?" — and every one of them used to hand-roll the same
+/// `assert!(x.contains(y), "…: {x}")` shape with its own decision about
+/// whether to print the haystack at all. The check and its diagnostic
+/// live here once, so a failure always names the marker AND shows the
+/// text that was searched.
+pub(crate) fn assert_contains(haystack: &str, needle: &str, context: &str) {
+    assert!(
+        haystack.contains(needle),
+        "{context}\n  expected to contain: {needle:?}\n  actual output:\n{haystack}"
+    );
+}
+
+/// The negative half of [`assert_contains`]: `haystack` must NOT contain
+/// `needle`. Same diagnostic, so a suppression that silently stopped
+/// suppressing names the marker it let through.
+pub(crate) fn assert_not_contains(haystack: &str, needle: &str, context: &str) {
+    assert!(
+        !haystack.contains(needle),
+        "{context}\n  must not contain: {needle:?}\n  actual output:\n{haystack}"
+    );
+}
+
 /// Parses the JSON document at `path` into a [`Value`].
 pub(crate) fn load_json(path: &Path) -> Result<Value> {
     Ok(serde_json::from_str(&fs::read_to_string(path)?)?)
@@ -479,6 +506,91 @@ pub(crate) fn assert_bucketed_clone(
          {report:#}"
     );
     Ok(())
+}
+
+/// Every visible cluster as `id mass=N [files]`, in report order — the
+/// whole published surface as one comparable list. Two suites pinning
+/// that an operator change (or a rename with no anchor) publishes
+/// nothing carried byte-identical copies of this rendering.
+pub(crate) fn published_with_mass(report: &Value) -> Vec<String> {
+    clusters(report)
+        .iter()
+        .map(|cluster| {
+            format!(
+                "{id} mass={mass} {files:?}",
+                id = cluster_id(cluster),
+                mass = field(cluster, "mass").as_u64().unwrap_or(0),
+                files = occurrence_files(cluster),
+            )
+        })
+        .collect()
+}
+
+/// Every visible cluster as `(rank, id, mass)`, sorted — the ranking a
+/// report commits to ([RANK-MASS-SUM]), in a form two suites compare
+/// against an expected order.
+pub(crate) fn rankable(report: &Value) -> Vec<(u64, &str, u64)> {
+    let mut rows: Vec<(u64, &str, u64)> = clusters(report)
+        .iter()
+        .map(|cluster| {
+            (
+                field(cluster, "rank").as_u64().unwrap_or(0),
+                cluster_id(cluster),
+                field(cluster, "mass").as_u64().unwrap_or(0),
+            )
+        })
+        .collect();
+    rows.sort_unstable();
+    rows
+}
+
+/// The occurrence texts of every cluster that quotes `needle`, so a suite
+/// can assert on what the report actually published for a marker rather
+/// than on cluster identity.
+///
+/// # Errors
+///
+/// Returns an error when an occurrence's source slice cannot be read.
+pub(crate) fn clusters_touching(
+    report: &Value,
+    scan_root: &Path,
+    needle: &str,
+) -> Result<Vec<Vec<String>>> {
+    let mut hits = Vec::new();
+    for cluster in clusters(report) {
+        let texts = occurrence_texts(scan_root, cluster)?;
+        if texts.iter().any(|text| text.contains(needle)) {
+            hits.push(texts);
+        }
+    }
+    Ok(hits)
+}
+
+/// The first visible cluster whose occurrences reach every path in
+/// `sides`, or an error carrying `missing` — the shape both rename pins
+/// look for, where absence is the false negative they exist to catch.
+///
+/// # Errors
+///
+/// Returns an error spelled `missing` when no visible cluster spans them.
+pub(crate) fn cluster_spanning_sides<'a>(
+    report: &'a Value,
+    sides: &[&str],
+    missing: &str,
+) -> Result<&'a Value> {
+    clusters(report)
+        .iter()
+        .find(|cluster| {
+            sides.iter().all(|side| {
+                occurrences(cluster).iter().any(|occurrence| {
+                    field(occurrence, "path")
+                        .as_str()
+                        .unwrap_or_default()
+                        .ends_with(side)
+                })
+            })
+        })
+        .ok_or_else(|| anyhow!("{missing}"))
 }
 
 /// The report's `clusters_hidden` count (suppressed-cluster telemetry), or

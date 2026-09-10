@@ -70,9 +70,10 @@ fn only_changed_without_diff_is_a_usage_error() -> Result<()> {
         .output()?;
     assert_eq!(output.status.code(), Some(2), "clap rejections exit 2");
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("--diff"),
-        "rejection must point at the missing --diff: {stderr}"
+    assert_contains(
+        &stderr,
+        "--diff",
+        "rejection must point at the missing --diff",
     );
     Ok(())
 }
@@ -122,35 +123,28 @@ fn accepts_path_argument_without_panicking() -> Result<()> {
 fn default_run_emits_all_three_formats() -> Result<()> {
     let reports = fixture_run_reports("csharp-small", &["--min-nodes", "8"])?;
     let json = &reports.json;
-    assert!(json.contains("\"schema_doc\""), "schema_doc missing");
-    assert!(json.contains("\"clusters\":"), "clusters missing");
-    assert!(json.contains("\"mass\":"), "mass field missing");
-    assert!(json.contains("\"metrics\":"), "metrics missing");
-    assert!(json.contains("\"hidden\":"), "hidden flag missing");
+    assert_contains(json, "\"schema_doc\"", "schema_doc missing");
+    assert_contains(json, "\"clusters\":", "clusters missing");
+    assert_contains(json, "\"mass\":", "mass field missing");
+    assert_contains(json, "\"metrics\":", "metrics missing");
+    assert_contains(json, "\"hidden\":", "hidden flag missing");
     let txt = &reports.txt;
-    assert!(txt.contains("deslop"), "text header missing: {txt}");
+    assert_contains(txt, "deslop", "text header missing");
     let html = &reports.html;
-    assert!(html.contains("<!doctype html>"), "html doctype missing");
-    assert!(html.contains("Deslop report"), "html human intro missing");
-    assert!(
-        html.contains("Duplicate groups"),
-        "html cluster section heading missing"
+    assert_contains(html, "<!doctype html>", "html doctype missing");
+    assert_contains(html, "Deslop report", "html human intro missing");
+    assert_contains(
+        html,
+        "Duplicate groups",
+        "html cluster section heading missing",
     );
-    assert!(
-        html.contains("class=\"cluster-card"),
-        "html cluster card missing"
-    );
-    assert!(
-        html.contains("class=\"snippet\""),
-        "html snippet body missing"
-    );
-    assert!(
-        html.contains("class=\"ln\""),
-        "html line-number gutter missing"
-    );
-    assert!(
-        html.contains("--surface-container-low"),
-        "html design-system tokens missing"
+    assert_contains(html, "class=\"cluster-card", "html cluster card missing");
+    assert_contains(html, "class=\"snippet\"", "html snippet body missing");
+    assert_contains(html, "class=\"ln\"", "html line-number gutter missing");
+    assert_contains(
+        html,
+        "--surface-container-low",
+        "html design-system tokens missing",
     );
     Ok(())
 }
@@ -178,9 +172,10 @@ fn cli_json_report_omits_inline_schema_doc() -> Result<()> {
          {} chars",
         schema_doc.len()
     );
-    assert!(
-        !json.contains("Deslop Report Context"),
-        "the schema_doc markdown must not appear inline in the CLI report body"
+    assert_not_contains(
+        &json,
+        "Deslop Report Context",
+        "the schema_doc markdown must not appear inline in the CLI report body",
     );
     Ok(())
 }
@@ -204,9 +199,10 @@ fn long_clone_html_caps_inline_preview_and_folds_rest() -> Result<()> {
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     let html = fs::read_to_string(&out.html)?;
-    assert!(
-        html.contains("class=\"snippet\""),
-        "expected at least one inline snippet block"
+    assert_contains(
+        &html,
+        "class=\"snippet\"",
+        "expected at least one inline snippet block",
     );
     assert!(
         html.contains("more line(s)"),

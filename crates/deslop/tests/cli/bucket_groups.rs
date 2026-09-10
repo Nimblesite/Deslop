@@ -100,24 +100,21 @@ fn html_report_groups_clusters_by_kind_into_coloured_expanders() -> Result<()> {
 
     // Grouping: one collapsible, kind-coloured expander per kind present,
     // expanded by default so the top offender stays one glance away.
-    assert!(
-        html.contains(&kind_expander(
-            "identical",
-            "Type-1 exact clone",
-            IDENTICAL_TITLE,
-            1
-        )),
-        "the exact pair renders inside the identical expander with its live count: {html}"
+    assert_contains(
+        &html,
+        &kind_expander("identical", "Type-1 exact clone", IDENTICAL_TITLE, 1),
+        "the exact pair renders inside the identical expander with its live count",
     );
-    assert!(
-        html.contains(&kind_expander(
+    assert_contains(
+        &html,
+        &kind_expander(
             "nearly-identical",
             "Type-2/3 near-copy",
             NEARLY_IDENTICAL_TITLE,
-            1
-        )),
+            1,
+        ),
         "the renamed pair renders inside the nearly-identical expander with its live \
-         count: {html}"
+         count",
     );
     assert_eq!(
         html.matches("<details class=\"clone-group").count(),
@@ -141,9 +138,10 @@ fn html_report_groups_clusters_by_kind_into_coloured_expanders() -> Result<()> {
             && html.contains("cluster-card cluster-card--nearly-identical"),
         "each card is keyed to its kind so the colour rule can find it: {html}"
     );
-    assert!(
-        html.contains("mass "),
-        "each card names the cluster's mass — the ranking metric"
+    assert_contains(
+        &html,
+        "mass ",
+        "each card names the cluster's mass — the ranking metric",
     );
 
     // Retired axes: no bucket facet controls, category classes, or
@@ -163,9 +161,10 @@ fn html_report_groups_clusters_by_kind_into_coloured_expanders() -> Result<()> {
     }
 
     // CSS-only contract stays intact: the report must remain script-free.
-    assert!(
-        !html.contains("<script"),
-        "the report must stay script-free ([OUTPUT-HUMAN-HTML])"
+    assert_not_contains(
+        &html,
+        "<script",
+        "the report must stay script-free ([OUTPUT-HUMAN-HTML])",
     );
     Ok(())
 }
@@ -185,9 +184,10 @@ fn html_report_summary_breaks_down_by_mass_severity_and_cards_carry_the_kind() -
     let assertion = cmd.args([MIN_NODES_FLAG, "30"]).assert().success();
     // [FACET-CLI]: the stderr summary carries the mass-severity breakdown.
     let stderr = String::from_utf8_lossy(&assertion.get_output().stderr).into_owned();
-    assert!(
-        stderr.contains("mass severity:"),
-        "stderr summary must carry the mass-severity breakdown line, got:\n{stderr}"
+    assert_contains(
+        &stderr,
+        "mass severity:",
+        "stderr summary must carry the mass-severity breakdown line, got",
     );
     for retired in ["data table", "code clones", "category"] {
         assert!(
@@ -220,9 +220,10 @@ fn html_report_summary_breaks_down_by_mass_severity_and_cards_carry_the_kind() -
         "the class-level window differs by its class name, so the pair folds to \
          nearly identical ([CLONE-KIND-FOLD]): {surviving:#}"
     );
-    assert!(
-        stderr.contains("1 × worst"),
-        "the breakdown names the surviving band, got:\n{stderr}"
+    assert_contains(
+        &stderr,
+        "1 × worst",
+        "the breakdown names the surviving band, got",
     );
 
     for retired in [
@@ -239,10 +240,11 @@ fn html_report_summary_breaks_down_by_mass_severity_and_cards_carry_the_kind() -
         );
     }
     // Every card renders its kind title and a mass figure.
-    assert!(
-        html.contains(&card_title("Type-2/3 near-copy", NEARLY_IDENTICAL_TITLE)),
-        "the card carries the nearly-identical kind title: {html}"
+    assert_contains(
+        &html,
+        &card_title("Type-2/3 near-copy", NEARLY_IDENTICAL_TITLE),
+        "the card carries the nearly-identical kind title",
     );
-    assert!(html.contains("mass "), "mass figures render on every card");
+    assert_contains(&html, "mass ", "mass figures render on every card");
     Ok(())
 }

@@ -255,18 +255,20 @@ fn html_renderer_colour_codes_threshold_state() -> Result<()> {
         .assert()
         .code(THRESHOLD_BREACH_EXIT_CODE);
     let html_breached = fs::read_to_string(&breached.out.html)?;
-    assert!(
-        html_breached.contains("metrics-banner--breached"),
-        "breached HTML must carry the breached class"
+    assert_contains(
+        &html_breached,
+        "metrics-banner--breached",
+        "breached HTML must carry the breached class",
     );
 
     // Neutral variant (no threshold).
     let mut neutral = clone_pair_run()?;
     let _assertion2 = neutral.cmd.args(UNGATED_ARGS).assert().success();
     let html_neutral = fs::read_to_string(&neutral.out.html)?;
-    assert!(
-        html_neutral.contains("metrics-banner--neutral"),
-        "no-threshold HTML must carry the neutral class"
+    assert_contains(
+        &html_neutral,
+        "metrics-banner--neutral",
+        "no-threshold HTML must carry the neutral class",
     );
     Ok(())
 }

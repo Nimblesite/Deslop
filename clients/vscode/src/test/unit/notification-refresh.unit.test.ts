@@ -4,85 +4,90 @@
 // 500-line file rule; assertions unchanged.
 
 import * as assert from "node:assert/strict";
-import type { LanguageClient } from "vscode-languageclient/node";
 import { refreshAfterChange, wireNotifications } from "../../notifications";
 import { ReportStore } from "../../reportStore";
-import { cluster, report } from "./tree.helpers";
+import type { ChangeSummary, ReportChangedNotification } from "../../types/report";
+import { cluster, report, storeWith } from "./tree.helpers";
 import { emptyReport, repoMetrics } from "./report.helpers";
+import { notifyingClient } from "./client.helpers";
 
 const REPORT_DELTA_METHOD = "deslop/reportDelta";
+const REPORT_CHANGED_METHOD = "deslop/reportChanged";
+const REPORT_GET_METHOD = "deslop/reportGet";
 const LIVE_GENERATION = 3;
+
+/** The literal-finding counters every delta and summary in this suite carries. */
+const NO_LITERAL_FINDING_CHANGES = {
+  literal_findings_added: 0,
+  literal_findings_removed: 0,
+  literal_findings_updated: 0,
+};
+
+/** A `deslop/reportDelta` reply in the shape the server sends, with every
+ * field a test does not pin held at its empty value. */
+function wireDelta(overrides: Record<string, unknown>): Record<string, unknown> {
+  return {
+    clusters_added: [],
+    clusters_removed: [],
+    clusters_updated: [],
+    ...NO_LITERAL_FINDING_CHANGES,
+    cache_stats: { hits: 0, misses: 0 },
+    tool_version: "v",
+    ...overrides,
+  };
+}
+
+/** The `deslop/reportChanged` payload for `generation`, typed against the wire
+ * contract. The summary counters default to "nothing changed"; a test pins
+ * only what it is asserting. */
+function changedPayload(
+  generation: number,
+  summary: Partial<ChangeSummary> = {},
+): ReportChangedNotification {
+  return {
+    generation,
+    summary: {
+      clusters_added: 0,
+      clusters_removed: 0,
+      clusters_updated: 0,
+      ...NO_LITERAL_FINDING_CHANGES,
+      worst_mass: 0,
+      ...summary,
+    },
+  };
+}
 
 suite("reportChanged refresh wiring", () => {
   test("wireNotifications reportChanged applies a delta", async () => {
-    let changedCb: ((p: unknown) => void) | undefined;
-    const requests: string[] = [];
-    const client = {
-      onNotification: (name: string, cb: (p: unknown) => void) => {
-        if (name === "deslop/reportChanged") changedCb = cb;
-      },
-      sendRequest: (name: string) => {
-        requests.push(name);
-        if (name === REPORT_DELTA_METHOD) {
-          return Promise.resolve({
-            from_generation: 0,
-            to_generation: 1,
-            clusters_added: [],
-            clusters_removed: [],
-            clusters_updated: [],
-    literal_findings_added: 0,
-    literal_findings_removed: 0,
-    literal_findings_updated: 0,
-            metrics: repoMetrics(),
-            cache_stats: { hits: 0, misses: 0 },
-            tool_version: "v",
-          });
-        }
-        return Promise.resolve({});
-      },
-    } as unknown as LanguageClient;
-    const store = new ReportStore();
-    store.setSnapshot(
+    const { calls, client, notify } = notifyingClient((name) =>
+      name === REPORT_DELTA_METHOD
+        ? wireDelta({ from_generation: 0, to_generation: 1, metrics: repoMetrics() })
+        : {},
+    );
+    const store = storeWith(
       emptyReport({
         tool_version: "v0",
         metrics: repoMetrics(),
       }),
-      0,
     );
     const schedule = wireNotifications(client, store);
-    changedCb?.({ generation: 1, summary: { clusters_added: 0, clusters_removed: 0, clusters_updated: 0,
-    literal_findings_added: 0,
-    literal_findings_removed: 0,
-    literal_findings_updated: 0, worst_mass: 0 } });
+    notify(REPORT_CHANGED_METHOD, changedPayload(1));
     await schedule.settled();
-    assert.ok(requests.includes(REPORT_DELTA_METHOD));
+    assert.ok(calls.some((call) => call.method === REPORT_DELTA_METHOD));
     assert.equal(store.current.generation, 1, "the queued delta must be applied by settled()");
   });
 
   test("wireNotifications reportChanged falls back to reportGet when delta is null", async () => {
-    let changedCb: ((p: unknown) => void) | undefined;
-    const requests: string[] = [];
-    const client = {
-      onNotification: (name: string, cb: (p: unknown) => void) => {
-        if (name === "deslop/reportChanged") changedCb = cb;
-      },
-      sendRequest: (name: string) => {
-        requests.push(name);
-        if (name === REPORT_DELTA_METHOD) return Promise.resolve(null);
-        return Promise.resolve(emptyReport({
-          tool_version: "x",
-          metrics: repoMetrics(),
-        }));
-      },
-    } as unknown as LanguageClient;
+    const { calls, client, notify } = notifyingClient((name) =>
+      name === REPORT_DELTA_METHOD
+        ? null
+        : emptyReport({ tool_version: "x", metrics: repoMetrics() }),
+    );
     const store = new ReportStore();
     const schedule = wireNotifications(client, store);
-    changedCb?.({ generation: 5, summary: { clusters_added: 0, clusters_removed: 0, clusters_updated: 0,
-    literal_findings_added: 0,
-    literal_findings_removed: 0,
-    literal_findings_updated: 0, worst_mass: 0 } });
+    notify(REPORT_CHANGED_METHOD, changedPayload(5));
     await schedule.settled();
-    assert.ok(requests.includes("deslop/reportGet"));
+    assert.ok(calls.some((call) => call.method === REPORT_GET_METHOD));
     assert.equal(store.current.generation, 5, "the fallback snapshot must be stored by settled()");
   });
 
@@ -92,30 +97,19 @@ suite("reportChanged refresh wiring", () => {
   // half of the generation ABA). The queue serialises them: a refresh does
   // not even dispatch until every earlier one has fully applied.
   test("reportChanged refreshes are serialised so a slow early snapshot cannot clobber a later one", async () => {
-    let changedCb: ((p: unknown) => void) | undefined;
     const pendingGets: Array<(snapshot: unknown) => void> = [];
-    const client = {
-      onNotification: (name: string, cb: (p: unknown) => void) => {
-        if (name === "deslop/reportChanged") changedCb = cb;
-      },
-      sendRequest: (name: string) => {
-        if (name === REPORT_DELTA_METHOD) return Promise.resolve(null);
-        return new Promise((resolve) => {
-          pendingGets.push(resolve);
-        });
-      },
-    } as unknown as LanguageClient;
+    const { client, notify: notifyChanged } = notifyingClient((name) =>
+      name === REPORT_DELTA_METHOD
+        ? null
+        : new Promise((resolve) => {
+            pendingGets.push(resolve);
+          }),
+    );
     const store = new ReportStore();
     const schedule = wireNotifications(client, store);
 
     const notify = (generation: number) =>
-      changedCb?.({
-        generation,
-        summary: { clusters_added: 0, clusters_removed: 0, clusters_updated: 0,
-    literal_findings_added: 0,
-    literal_findings_removed: 0,
-    literal_findings_updated: 0, worst_mass: 0 },
-      });
+      notifyChanged(REPORT_CHANGED_METHOD, changedPayload(generation));
     const drainUntil = async (condition: () => boolean) => {
       for (let i = 0; i < 50 && !condition(); i++) await Promise.resolve();
     };
@@ -160,57 +154,32 @@ suite("reportChanged refresh wiring", () => {
     const fresh = cluster("fresh", 80, "/repo/Fresh.cs");
     const liveReport = report([fresh, keep]);
 
-    const deltaSinceParams: Array<number | undefined> = [];
-    const client = {
-      sendRequest: (name: string, params?: { since_generation?: number }) => {
-        if (name === REPORT_DELTA_METHOD) {
-          deltaSinceParams.push(params?.since_generation);
-          // The server answers `since -> current(3)`. With the correct baseline
-          // (1) it can retract "phantom"; the buggy no-since default (current-1
-          // = 2) returns a delta that cannot, because phantom left in gen 2.
-          const since = params?.since_generation ?? 2;
-          if (since === 1) {
-            return Promise.resolve({
-              from_generation: 1,
-              to_generation: LIVE_GENERATION,
-              clusters_added: [fresh],
-              clusters_removed: ["phantom"],
-              clusters_updated: [],
-    literal_findings_added: 0,
-    literal_findings_removed: 0,
-    literal_findings_updated: 0,
-              cache_stats: { hits: 0, misses: 0 },
-              tool_version: "v",
-            });
-          }
-          return Promise.resolve({
-            from_generation: since,
-            to_generation: LIVE_GENERATION,
-            clusters_added: [fresh],
-            clusters_removed: [],
-            clusters_updated: [],
-    literal_findings_added: 0,
-    literal_findings_removed: 0,
-    literal_findings_updated: 0,
-            cache_stats: { hits: 0, misses: 0 },
-            tool_version: "v",
-          });
-        }
+    // `calls` keeps every since_generation the client asked for, so the
+    // baseline the refresh chose is observable.
+    const { client } = notifyingClient((name, params) => {
+      if (name !== REPORT_DELTA_METHOD) {
         // deslop/reportGet always serves canonical live truth.
-        return Promise.resolve(liveReport);
-      },
-    } as unknown as LanguageClient;
-
-    const store = new ReportStore();
-    store.setSnapshot(report([cluster("phantom", 100, "/repo/Phantom.cs"), keep]), 1);
-
-    await refreshAfterChange(client, store, {
-      generation: LIVE_GENERATION,
-      summary: { clusters_added: 1, clusters_removed: 1, clusters_updated: 0,
-    literal_findings_added: 0,
-    literal_findings_removed: 0,
-    literal_findings_updated: 0, worst_mass: 80 },
+        return liveReport;
+      }
+      // The server answers `since -> current(3)`. With the correct baseline
+      // (1) it can retract "phantom"; the buggy no-since default (current-1
+      // = 2) returns a delta that cannot, because phantom left in gen 2.
+      const since = (params as { since_generation?: number } | undefined)?.since_generation ?? 2;
+      return wireDelta({
+        from_generation: since === 1 ? 1 : since,
+        to_generation: LIVE_GENERATION,
+        clusters_added: [fresh],
+        clusters_removed: since === 1 ? ["phantom"] : [],
+      });
     });
+
+    const store = storeWith(report([cluster("phantom", 100, "/repo/Phantom.cs"), keep]), 1);
+
+    await refreshAfterChange(
+      client,
+      store,
+      changedPayload(LIVE_GENERATION, { clusters_added: 1, clusters_removed: 1, worst_mass: 80 }),
+    );
 
     assert.deepEqual(
       store.current.report?.clusters.map((c) => c.id),

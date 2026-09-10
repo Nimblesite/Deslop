@@ -2,7 +2,6 @@
 // through full activation.
 
 import * as assert from "node:assert/strict";
-import type { LanguageClient } from "vscode-languageclient/node";
 import * as vscode from "vscode";
 import {
   buildServerArgs,
@@ -15,6 +14,8 @@ import { wireNotifications } from "../../notifications";
 import { LifecyclePhase, ReportStore } from "../../reportStore";
 import { AnalysisState, Report } from "../../types/report";
 import { emptyReport, repoMetrics } from "./report.helpers";
+import { notifyingClient, rejectingClient, throwingClient } from "./client.helpers";
+import { storeWith } from "./report-store.helpers";
 
 const OLLAMA_PROVIDER_ID = "ollama";
 const DEFAULT_EMBEDDING_MODEL = "nomic-embed-text";
@@ -107,13 +108,8 @@ suite("extension coverage branches", () => {
   });
 
   test("wireNotifications maps idle and errored analysis states into lifecycle", () => {
-    let stateCb: ((state: AnalysisState) => void) | undefined;
-    const client = {
-      onNotification: (name: string, cb: (state: AnalysisState) => void) => {
-        if (name === "deslop/analysisState") stateCb = cb;
-      },
-      sendRequest: () => Promise.resolve(null),
-    } as unknown as LanguageClient;
+    const { client, notify } = notifyingClient();
+    const notifyState = (state: AnalysisState): void => notify("deslop/analysisState", state);
     const store = new ReportStore();
 
     wireNotifications(client, store);
@@ -123,15 +119,15 @@ suite("extension coverage branches", () => {
     // left `state.state` undefined and silently disabled all of this.
     // Each transition is captured into its own const so the assertions
     // don't collapse the shared discriminant to `never`.
-    stateCb?.({ state: "running", started_at_ms: 1 });
+    notifyState({ state: "running", started_at_ms: 1 });
     const running: LifecyclePhase = store.current.lifecycle;
     assert.equal(running.kind, "analysing");
 
-    stateCb?.({ state: "idle" });
+    notifyState({ state: "idle" });
     const idle: LifecyclePhase = store.current.lifecycle;
     assert.equal(idle.kind, "ready");
 
-    stateCb?.({ state: "errored", message: "Analysis failed: bad fixture" });
+    notifyState({ state: "errored", message: "Analysis failed: bad fixture" });
     const failed: LifecyclePhase = store.current.lifecycle;
     assert.equal(failed.kind, FAILED_LIFECYCLE_KIND);
     assert.ok(
@@ -145,28 +141,19 @@ suite("extension coverage branches", () => {
     await syncEmbeddingSettingsToLsp(new ReportStore(), () => undefined);
 
     await setEmbeddingConfig({ mode: "off", provider: OLLAMA_PROVIDER_ID, model: DEFAULT_EMBEDDING_MODEL });
-    const client = {
-      sendRequest: () => {
-        throw new Error("must not be called");
-      },
-    } as unknown as LanguageClient;
+    const client = throwingClient("must not be called");
     await syncEmbeddingSettingsToLsp(new ReportStore(), () => client);
   });
 
   test("syncEmbeddingSettingsToLsp skips pending and already-active models", async () => {
     await setEmbeddingConfig({ mode: AUTO_EMBEDDING_MODE, provider: OLLAMA_PROVIDER_ID, model: DEFAULT_EMBEDDING_MODEL });
-    const client = {
-      sendRequest: () => {
-        throw new Error("must not be called");
-      },
-    } as unknown as LanguageClient;
+    const client = throwingClient("must not be called");
 
     const pending = new ReportStore();
     pending.setPendingEmbeddingModel(DEFAULT_EMBEDDING_MODEL);
     await syncEmbeddingSettingsToLsp(pending, () => client);
 
-    const active = new ReportStore();
-    active.setSnapshot(
+    const active = storeWith(
       reportWithEmbedding({
         provider_id: OLLAMA_PROVIDER_ID,
         model_id: DEFAULT_EMBEDDING_MODEL,
@@ -177,7 +164,6 @@ suite("extension coverage branches", () => {
         indexed_subtrees: 0,
         failed_subtrees: 0,
       }),
-      0,
     );
     await syncEmbeddingSettingsToLsp(active, () => client);
   });
@@ -190,9 +176,7 @@ suite("extension coverage branches", () => {
       endpoint: "http://127.0.0.1:11434",
     });
     const store = new ReportStore();
-    const client = {
-      sendRequest: () => Promise.reject(new Error("backend unavailable")),
-    } as unknown as LanguageClient;
+    const client = rejectingClient("backend unavailable");
 
     await assert.rejects(
       () => syncEmbeddingSettingsToLsp(store, () => client),

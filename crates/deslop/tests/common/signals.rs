@@ -288,7 +288,7 @@ pub(crate) fn assert_near_miss_rename_contract(
 /// numbers first; the negative pin closes the mislabelling path the
 /// routing table used to be able to fabricate.
 fn assert_admission_and_clean_surface(cluster: &Value, label: &str) {
-    assert_rename_verdict(cluster, label);
+    assert_structural_only_contract(cluster, label);
     assert_no_pair_surface_on_cluster(cluster, label);
 }
 
@@ -318,33 +318,6 @@ pub(crate) fn assert_no_pair_surface_on_cluster(cluster: &Value, label: &str) {
              routing table could fabricate a value through it again: {cluster:#}"
         );
     }
-}
-
-/// Verdict half of the rename contracts. On the mass-only wire the
-/// cluster carries no bucket and no evidence verdict, so the honest
-/// assertion is the admission + visibility + mass contract
-/// ([PIPELINE-CLUSTER-CLOSURE], [RANK-MASS-SUM]) plus the byte-level
-/// not-a-copy checks in [`assert_rename_is_not_a_copy`]. The old
-/// `nearly_identical` verdict and content-gate routing were cluster-
-/// surface facts; what a rendered cluster can still prove about a
-/// fixture is that it was admitted with a consistent, visible
-/// membership.
-fn assert_rename_verdict(cluster: &Value, label: &str) {
-    let dump = signal_dump(cluster);
-    let canonical_nodes = field(cluster, "canonical_node_count").as_u64().unwrap_or(0);
-    let occurrence_count = field(cluster, "occurrence_count").as_u64().unwrap_or(0);
-    let mass = field(cluster, "mass").as_u64().unwrap_or(0);
-    assert!(
-        canonical_nodes > 0 && occurrence_count >= 2,
-        "{label}: an admitted cluster must carry canonical_node_count and \
-         occurrence_count — {dump}"
-    );
-    assert_eq!(
-        mass,
-        canonical_nodes.saturating_mul(occurrence_count.saturating_sub(1)),
-        "{label}: mass must be canonical_node_count × (occurrence_count − 1) \
-         — {dump}"
-    );
 }
 
 /// Occurrence half: every occurrence must differ in raw bytes, or the

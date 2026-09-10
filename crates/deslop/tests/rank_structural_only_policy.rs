@@ -25,11 +25,11 @@ use anyhow::Result;
 use assert_cmd::Command;
 use serde_json::Value;
 
+use crate::common::scan_dir::temp_scan_dir;
 use crate::common::signals::{
     assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
 };
 use crate::common::*;
-use crate::common::scan_dir::temp_scan_dir;
 
 /// Generates one shape-identical API method. The method name, endpoint
 /// literal, and every local identifier differ per call (normalisation
@@ -265,24 +265,6 @@ fn retired_structural_only_knobs_do_not_change_the_ranking() -> Result<()> {
         "the mass-only ranking must be non-empty"
     );
     Ok(())
-}
-
-/// The stable, order-insensitive fingerprint of a report's ranking:
-/// `(rank, id, mass)` per cluster, so a retired knob cannot reorder or
-/// re-mass without the assertion seeing it.
-fn rankable(report: &Value) -> Vec<(u64, &str, u64)> {
-    let mut rows: Vec<(u64, &str, u64)> = clusters(report)
-        .iter()
-        .map(|cluster| {
-            (
-                field(cluster, "rank").as_u64().unwrap_or(0),
-                cluster_id(cluster),
-                field(cluster, "mass").as_u64().unwrap_or(0),
-            )
-        })
-        .collect();
-    rows.sort_unstable();
-    rows
 }
 
 /// An out-of-range `structural_only_weight` still fails the load with a

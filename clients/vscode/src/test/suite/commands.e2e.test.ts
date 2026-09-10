@@ -3,7 +3,7 @@
 
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
-import { activateExtension, sleep } from "./helpers";
+import { activateExtension, fixtureRoot, sleep } from "./helpers";
 
 const POST_COMMAND_SETTLE_MS = 200;
 
@@ -35,10 +35,8 @@ suite("commands", () => {
   });
 
   test("openOccurrence opens the referenced file", async () => {
-    const fixture = process.env["DESLOP_TEST_FIXTURE"];
-    assert.ok(fixture, "fixture path must be set");
     await vscode.commands.executeCommand("deslop.openOccurrence", {
-      path: `${fixture}/Alpha.cs`,
+      path: `${fixtureRoot()}/Alpha.cs`,
       start_byte: 0,
       end_byte: 10,
     });

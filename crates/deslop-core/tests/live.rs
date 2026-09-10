@@ -102,6 +102,110 @@ async fn start_live_loop(
     Ok((session_lock, watcher, scheduler, report_rx))
 }
 
+/// How long a live edit may take to reach a `report_changed`
+/// broadcast before the loop counts as stalled.
+const REPORT_CHANGE_TIMEOUT: Duration = Duration::from_secs(15);
+/// The beat `FSEvents` (macOS) and inotify (Linux) need to attach before
+/// the first edit after `LiveWatcher::start` is reported.
+const WATCHER_ATTACH_BEAT: Duration = Duration::from_secs(1);
+/// Live edits named in timeout and generation diagnostics.
+const DESLOP_TOML_EDIT: &str = ".deslop.toml edit";
+const GITIGNORE_EDIT: &str = ".gitignore edit";
+/// Every phase a completed embedding pass reports.
+const FULL_EMBEDDING_PASS_PHASES: [deslop_core::live::EmbeddingPhase; 4] = [
+    deslop_core::live::EmbeddingPhase::Queued,
+    deslop_core::live::EmbeddingPhase::Starting,
+    deslop_core::live::EmbeddingPhase::Running,
+    deslop_core::live::EmbeddingPhase::Complete,
+];
+/// The phases a pass reports before its provider returns — all a
+/// blocked provider can be observed to reach.
+const STARTED_EMBEDDING_PASS_PHASES: [deslop_core::live::EmbeddingPhase; 2] = [
+    deslop_core::live::EmbeddingPhase::Queued,
+    deslop_core::live::EmbeddingPhase::Running,
+];
+
+/// A temp directory and its canonicalised root. macOS reports watcher
+/// events under `/private/var/...` where the raw temp path says
+/// `/var/...`, so only the canonical form shares a prefix with them.
+/// The directory is returned so the caller keeps the tree alive.
+fn canonical_temp_root() -> Result<(tempfile::TempDir, PathBuf)> {
+    let tmp = tempfile::tempdir().context("tempdir")?;
+    let root = tmp.path().canonicalize().context("canonicalise root")?;
+    Ok((tmp, root))
+}
+
+/// Starts the real watcher over `root` for `extensions` with nothing
+/// excluded, then waits out [`WATCHER_ATTACH_BEAT`] so the first edit
+/// after this call is observed.
+async fn watch_root(
+    root: &Path,
+    extensions: &[&str],
+) -> Result<(LiveWatcher, tokio::sync::mpsc::Receiver<PathBuf>)> {
+    let owned_extensions = extensions.iter().map(|ext| (*ext).to_owned()).collect();
+    let exclusion = live_exclusion(Arc::new(ExclusionConfig::empty()));
+    let started = LiveWatcher::start(root, owned_extensions, exclusion, Vec::new())
+        .map_err(|err| anyhow!("watcher start: {err}"))?;
+    tokio::time::sleep(WATCHER_ATTACH_BEAT).await;
+    Ok(started)
+}
+
+/// The first `report_changed` the loop broadcasts after `trigger`.
+async fn next_report_change(
+    report_rx: &mut tokio::sync::broadcast::Receiver<
+        deslop_core::live::ReportChangedNotification,
+    >,
+    trigger: &str,
+) -> Result<deslop_core::live::ReportChangedNotification> {
+    tokio::time::timeout(REPORT_CHANGE_TIMEOUT, report_rx.recv())
+        .await
+        .with_context(|| format!("timed out waiting for report_changed after {trigger}"))?
+        .context("report_changed channel closed")
+}
+
+/// Asserts `trigger` moved the report past the generation it had before.
+fn assert_generation_advanced(
+    notification: &deslop_core::live::ReportChangedNotification,
+    before: u64,
+    trigger: &str,
+) {
+    assert!(
+        notification.generation > before,
+        "a {trigger} must bump the generation; pre={before}, post={}",
+        notification.generation,
+    );
+}
+
+/// The report the live loop is holding behind `session_lock`.
+async fn report_under_lock(
+    session_lock: &Arc<tokio::sync::Mutex<AnalysisSession>>,
+) -> Arc<deslop_core::Report> {
+    let guard = session_lock.lock().await;
+    guard.report()
+}
+
+/// The phases the shared progress reporter recorded, in order.
+fn recorded_phases(
+    events: &StdMutex<Vec<deslop_core::live::EmbeddingProgress>>,
+) -> Result<Vec<deslop_core::live::EmbeddingPhase>> {
+    let recorded = events.lock().map_err(|_| anyhow!("reporter mutex"))?;
+    Ok(recorded.iter().map(|event| event.phase).collect())
+}
+
+/// Asserts the progress reporter observed every phase in `expected`.
+fn assert_phases_seen(
+    phases: &[deslop_core::live::EmbeddingPhase],
+    expected: &[deslop_core::live::EmbeddingPhase],
+    reason: &str,
+) {
+    for phase in expected {
+        assert!(
+            phases.contains(phase),
+            "{reason} {phase:?}, saw only {phases:?}"
+        );
+    }
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn live_session_first_report_matches_batch_run() -> Result<()> {
     let _slot = live_slot().await;
@@ -169,9 +273,7 @@ async fn analysis_session_new_surfaces_error_for_unreadable_config_path() -> Res
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn live_loop_hides_cluster_after_deslop_toml_report_hide_edit() -> Result<()> {
     let _slot = live_slot().await;
-    let tmp = tempfile::tempdir().context("tempdir")?;
-    // Canonicalise so notify-reported paths and our paths share a prefix.
-    let scan_root = tmp.path().canonicalize().context("canonicalise root")?;
+    let (_tmp, scan_root) = canonical_temp_root()?;
     seed_hidden_fixture_pair(&scan_root)?;
     let config_path = scan_root.join(".deslop.toml");
     fs::write(&config_path, b"[defaults]\n").context("seed .deslop.toml")?;
@@ -198,20 +300,9 @@ async fn live_loop_hides_cluster_after_deslop_toml_report_hide_edit() -> Result<
     )
     .context("rewrite .deslop.toml")?;
 
-    let notification = tokio::time::timeout(Duration::from_secs(15), report_rx.recv())
-        .await
-        .context("timed out waiting for report_changed after .deslop.toml edit")?
-        .context("report_changed channel closed")?;
-    assert!(
-        notification.generation > pre_generation,
-        ".deslop.toml edit must bump the generation; pre={pre_generation}, post={}",
-        notification.generation,
-    );
-
-    let post = {
-        let guard = session_lock.lock().await;
-        guard.report()
-    };
+    let notification = next_report_change(&mut report_rx, DESLOP_TOML_EDIT).await?;
+    assert_generation_advanced(&notification, pre_generation, DESLOP_TOML_EDIT);
+    let post = report_under_lock(&session_lock).await;
     assert!(
         post.clusters.is_empty(),
         "live `report_hide` edit must hide the cluster from the visible report; \
@@ -234,9 +325,7 @@ async fn live_loop_hides_cluster_after_deslop_toml_report_hide_edit() -> Result<
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn live_loop_evicts_newly_gitignored_tree_after_gitignore_edit() -> Result<()> {
     let _slot = live_slot().await;
-    let tmp = tempfile::tempdir().context("tempdir")?;
-    // Canonicalise so notify-reported paths and our paths share a prefix.
-    let scan_root = tmp.path().canonicalize().context("canonicalise root")?;
+    let (_tmp, scan_root) = canonical_temp_root()?;
     // `ignore` honours .gitignore rules only inside a repository; the marker
     // directory is enough — no git invocation.
     fs::create_dir_all(scan_root.join(".git")).context("mkdir .git")?;
@@ -264,20 +353,9 @@ async fn live_loop_evicts_newly_gitignored_tree_after_gitignore_edit() -> Result
 
     fs::write(scan_root.join(".gitignore"), "/vendored/\n").context("write .gitignore")?;
 
-    let notification = tokio::time::timeout(Duration::from_secs(15), report_rx.recv())
-        .await
-        .context("timed out waiting for report_changed after .gitignore edit")?
-        .context("report_changed channel closed")?;
-    assert!(
-        notification.generation > pre_generation,
-        "a .gitignore edit must bump the generation; pre={pre_generation}, post={}",
-        notification.generation,
-    );
-
-    let post = {
-        let guard = session_lock.lock().await;
-        guard.report()
-    };
+    let notification = next_report_change(&mut report_rx, GITIGNORE_EDIT).await?;
+    assert_generation_advanced(&notification, pre_generation, GITIGNORE_EDIT);
+    let post = report_under_lock(&session_lock).await;
     assert_eq!(
         post.files_analysed, 2,
         "the live loop must evict the newly-gitignored tree; files_analysed={}",
@@ -528,14 +606,7 @@ async fn watcher_emits_event_for_every_modification_of_the_same_path() -> Result
     let target = root.join("Sample.cs");
     fs::write(&target, b"class A {}\n").context("seed file")?;
 
-    let extensions = vec!["cs".to_owned()];
-    let exclusion = live_exclusion(Arc::new(ExclusionConfig::empty()));
-    let (_watcher_keep_alive, mut rx) =
-        LiveWatcher::start(&root, extensions, exclusion, Vec::new())
-            .map_err(|err| anyhow!("watcher start: {err}"))?;
-    // FSEvents (macOS) and inotify (Linux) both need a beat to attach
-    // before the first event is reported.
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    let (_watcher_keep_alive, mut rx) = watch_root(&root, &["cs"]).await?;
 
     fs::write(&target, b"class A { int x; }\n").context("first edit")?;
     let first = wait_for_event(&mut rx, &target, Duration::from_secs(10)).await?;
@@ -573,21 +644,12 @@ async fn watcher_emits_event_for_every_modification_of_the_same_path() -> Result
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn watcher_forwards_directory_removal_without_a_source_extension() -> Result<()> {
     let _slot = live_slot().await;
-    let tmp = tempfile::tempdir().context("tempdir")?;
-    // macOS FSEvents reports under the canonicalised root; match the
-    // existing watcher tests so event paths share a prefix.
-    let root = tmp.path().canonicalize().context("canonicalise root")?;
+    let (_tmp, root) = canonical_temp_root()?;
     let nested = root.join("nested");
     fs::create_dir_all(&nested).context("mkdir nested")?;
     fs::write(nested.join("Sample.cs"), b"class A {}\n").context("seed file")?;
 
-    let extensions = vec!["cs".to_owned()];
-    let exclusion = live_exclusion(Arc::new(ExclusionConfig::empty()));
-    let (_watcher_keep_alive, mut rx) =
-        LiveWatcher::start(&root, extensions, exclusion, Vec::new())
-            .map_err(|err| anyhow!("watcher start: {err}"))?;
-    // FSEvents (macOS) and inotify (Linux) need a beat to attach.
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    let (_watcher_keep_alive, mut rx) = watch_root(&root, &["cs"]).await?;
 
     fs::remove_dir_all(&nested).context("rm -rf nested")?;
     let event = wait_for_event(&mut rx, &nested, Duration::from_secs(10)).await?;
@@ -875,26 +937,8 @@ async fn exercise_embedding_swap(service: &LiveService) -> Result<()> {
         let mut guard = session_lock.lock().await;
         guard.set_embedding_progress_reporter(None);
     }
-    let phases: Vec<deslop_core::live::EmbeddingPhase> = {
-        let recorded = events.lock().map_err(|_| anyhow!("reporter mutex"))?;
-        recorded.iter().map(|event| event.phase).collect()
-    };
-    assert!(
-        phases.contains(&deslop_core::live::EmbeddingPhase::Queued),
-        "reporter must see Queued phase: {phases:?}"
-    );
-    assert!(
-        phases.contains(&deslop_core::live::EmbeddingPhase::Starting),
-        "reporter must see Starting phase: {phases:?}"
-    );
-    assert!(
-        phases.contains(&deslop_core::live::EmbeddingPhase::Running),
-        "reporter must see Running phase: {phases:?}"
-    );
-    assert!(
-        phases.contains(&deslop_core::live::EmbeddingPhase::Complete),
-        "reporter must see Complete phase: {phases:?}"
-    );
+    let phases = recorded_phases(&events)?;
+    assert_phases_seen(&phases, &FULL_EMBEDDING_PASS_PHASES, "reporter must see");
     let unknown = service.embedding_set_model("nope", "no", None).await;
     assert!(matches!(
         unknown,
@@ -962,17 +1006,11 @@ async fn embedding_refresh_keeps_latest_report_readable_while_provider_is_blocke
             .map(|p| p.provider_id.as_str()),
         Some("blocking-test")
     );
-    let phases: Vec<deslop_core::live::EmbeddingPhase> = {
-        let recorded = events.lock().map_err(|_| anyhow!("reporter mutex"))?;
-        recorded.iter().map(|event| event.phase).collect()
-    };
-    assert!(
-        phases.contains(&deslop_core::live::EmbeddingPhase::Queued),
-        "queued progress must be emitted before the pass runs: {phases:?}"
-    );
-    assert!(
-        phases.contains(&deslop_core::live::EmbeddingPhase::Running),
-        "running progress must be emitted while provider work is active: {phases:?}"
+    let phases = recorded_phases(&events)?;
+    assert_phases_seen(
+        &phases,
+        &STARTED_EMBEDDING_PASS_PHASES,
+        "progress must be emitted while the blocked provider works —",
     );
     Ok(())
 }

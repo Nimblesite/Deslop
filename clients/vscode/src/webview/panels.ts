@@ -11,7 +11,7 @@ import { reportWithDisplayLocations } from "../locations";
 import { logWarn } from "../logging";
 import { ReportStore } from "../reportStore";
 import { anchorForClusterId, ClusterAnchor, clusterPanelFeed } from "../clusterSelection";
-import { Report, ReportOccurrence } from "../types/report";
+import { PairEndpoint, Report, ReportOccurrence } from "../types/report";
 
 type PanelKind = "cluster" | "report" | "duplication";
 
@@ -20,12 +20,10 @@ const REPORT_PANEL_KIND: PanelKind = "report";
 const DUPLICATION_PANEL_KIND: PanelKind = "duplication";
 
 // [VSIX-PAIR-COMPARE] The wire endpoint identity: path plus byte range. A
-// payload without all three well-typed fields is not an endpoint.
-export interface PairEndpointPayload {
-  readonly path: string;
-  readonly start_byte: number;
-  readonly end_byte: number;
-}
+// payload without all three well-typed fields is not an endpoint. The shape
+// is the generated wire type — a second hand-written copy here could drift
+// from what the engine actually sends.
+export type PairEndpointPayload = PairEndpoint;
 
 export function compareEndpointFromPayload(value: unknown): PairEndpointPayload | undefined {
   if (typeof value !== "object" || value === null) return undefined;

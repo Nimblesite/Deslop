@@ -5,7 +5,7 @@ import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 
-import { recordingClient } from "./client.helpers";
+import { recordingClient, rejectingClient } from "./client.helpers";
 import {
   buildItems,
   pickEmbeddingModel,
@@ -206,9 +206,7 @@ suite("embeddingPicker helpers", () => {
   });
 
   test("setModel short-circuits when the request throws (covers error branch)", async () => {
-    const client = {
-      sendRequest: () => Promise.reject(new Error("boom")),
-    } as unknown as LanguageClient;
+    const client = rejectingClient("boom");
     await setModel(client, model(OLLAMA_PROVIDER_ID, NOMIC_MODEL_ID));
   });
 
@@ -439,17 +437,13 @@ suite("embeddingPicker helpers", () => {
   });
 
   test("setModel handles non-Error rejections", async () => {
-    const client = {
-      sendRequest: () => Promise.reject(new Error(STRING_FAILURE_MESSAGE)),
-    } as unknown as LanguageClient;
+    const client = rejectingClient(STRING_FAILURE_MESSAGE);
     await setModel(client, model(OLLAMA_PROVIDER_ID, BROKEN_MODEL_ID));
   });
 
   test("setModelFromPicker clears pending state after a rejected request", async () => {
     const store = newStore();
-    const client = {
-      sendRequest: () => Promise.reject(new Error(STRING_FAILURE_MESSAGE)),
-    } as unknown as LanguageClient;
+    const client = rejectingClient(STRING_FAILURE_MESSAGE);
 
     await setModelFromPicker(client, store, model(OLLAMA_PROVIDER_ID, BROKEN_MODEL_ID));
     assert.equal(store.current.pendingEmbeddingModel, null);
@@ -519,9 +513,7 @@ suite("turn embeddings off", () => {
 
   test("turnEmbeddingsOff reverts the pending marker when the LSP rejects", async () => {
     const store = newStore();
-    const client = {
-      sendRequest: () => Promise.reject(new Error("backend unavailable")),
-    } as unknown as LanguageClient;
+    const client = rejectingClient("backend unavailable");
 
     await turnEmbeddingsOff(client, store);
     assert.equal(

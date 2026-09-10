@@ -5,7 +5,8 @@ use tree_sitter::Node;
 use crate::ast::named_children;
 
 use super::{
-    enclosing_kind, node_intersects_range, parse_for, raw_snippet_texts_differ, ParseCache, Snippet,
+    node_intersects_range, node_search::covered_children_satisfy, parse_for,
+    raw_snippet_texts_differ, ParseCache, Snippet,
 };
 
 /// Superclass markers of Flutter's mandated widget-declaration scaffold
@@ -109,24 +110,9 @@ pub(super) fn is_dart_class_field_declaration_cluster(
 /// getter, and setter members carry a `function_body`, so a snippet that
 /// covers any of them falls through and keeps clustering.
 fn covers_only_field_declarations(snippet: &Snippet<'_>, cache: &ParseCache) -> bool {
-    let Some(tree) = parse_for(snippet) else {
-        return false;
-    };
-    let root = tree.root_node();
-    let Some(body) = enclosing_kind(root, snippet.range, &["class_body"]) else {
-        return false;
-    };
-    let mut covered = 0_usize;
-    for member in named_children(body) {
-        if !node_intersects_range(member, snippet.range) {
-            continue;
-        }
-        if !is_field_member(member, snippet.file_id, cache) {
-            return false;
-        }
-        covered = covered.saturating_add(1);
-    }
-    covered >= 1
+    covered_children_satisfy(snippet, &["class_body"], |member| {
+        is_field_member(member, snippet.file_id, cache)
+    })
 }
 
 /// Returns true when a Dart `class_member` declares pure data: it carries a

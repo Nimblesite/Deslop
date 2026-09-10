@@ -15,8 +15,6 @@
 //! unrelated constant tables are hidden, and the verbatim copy stays
 //! visible across both files.
 
-use std::path::Path;
-
 use anyhow::Result;
 use serde_json::Value;
 
@@ -33,16 +31,6 @@ fn fixture_report(fixture_name: &str) -> Result<(std::path::PathBuf, Value)> {
 }
 
 /// Collects every visible cluster whose occurrences contain `needle`.
-fn clusters_touching(report: &Value, scan_root: &Path, needle: &str) -> Result<Vec<Vec<String>>> {
-    let mut hits = Vec::new();
-    for cluster in clusters(report) {
-        let texts = occurrence_texts(scan_root, cluster)?;
-        if texts.iter().any(|text| text.contains(needle)) {
-            hits.push(texts);
-        }
-    }
-    Ok(hits)
-}
 
 // GH #133 acceptance: a module of SQL query string constants and a module
 // of registry/config value constants must NOT cluster as duplicate logic

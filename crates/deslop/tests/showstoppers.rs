@@ -285,9 +285,10 @@ fn issue_142_cargo_cache_paths_are_built_in_excluded() -> Result<()> {
     // No rendered occurrence may point inside the cargo cache.
     for cluster in clusters(&report) {
         for path in occurrence_paths(cluster) {
-            assert!(
-                !path.contains(".cargo/"),
-                "cargo-cache path leaked into a rendered cluster: {path}",
+            assert_not_contains(
+                &path,
+                ".cargo/",
+                "cargo-cache path leaked into a rendered cluster",
             );
         }
     }

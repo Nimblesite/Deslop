@@ -254,13 +254,7 @@ export async function openLiveDocument(content: string): Promise<{
 // test opens with this — the five-line preamble it replaces was the
 // repo's third-worst duplication cluster.
 export async function bubbleFixture(
-  options: {
-    snapshot?: Report | null;
-    generation?: number;
-    mode?: "inline" | "ghost";
-    client?: LanguageClient;
-    budget?: BudgetScheduler;
-  } = {},
+  options: BubbleFixtureOptions = {},
 ): Promise<BubbleFixture> {
   const store = new ReportStore();
   const snapshot =
@@ -276,6 +270,32 @@ export async function bubbleFixture(
 
 // Asserts a bubble is on screen carrying `title`, and returns its text so
 // the caller can keep asserting against the same rendered string.
+/** Everything `bubbleFixture` accepts, named so `withBubble` can forward it. */
+export interface BubbleFixtureOptions {
+  snapshot?: Report | null;
+  generation?: number;
+  mode?: "inline" | "ghost";
+  client?: LanguageClient;
+  budget?: BudgetScheduler;
+}
+
+/** Opens a bubble fixture, hands it to `body`, and always disposes the bubble
+ * and restores inline mode afterwards — the try/finally every live-bubble test
+ * repeated. Cleanup runs even when an assertion fails, so a ghost-mode test can
+ * no longer leak its mode into the next one. */
+export async function withBubble(
+  options: BubbleFixtureOptions,
+  body: (fixture: BubbleFixture) => Promise<void> | void,
+): Promise<void> {
+  const fixture = await bubbleFixture(options);
+  try {
+    await body(fixture);
+  } finally {
+    await setBubbleMode("inline");
+    fixture.bubble.dispose();
+  }
+}
+
 export function assertBubbleShows(
   capture: BubbleCapture,
   title: string,
@@ -289,6 +309,37 @@ export function assertBubbleShows(
     `${context}: expected the ${title} title`,
   );
   return visible ?? "";
+}
+
+/**
+ * One step of a live editing journey: paints `clusters` at `startChar`
+ * and returns the text on screen, failing `context` when the surface
+ * stays empty ([VSIX-LIVE-BUBBLE]).
+ */
+export function renderStep(
+  capture: BubbleCapture,
+  bubble: LiveBubble,
+  startChar: number,
+  clusters: ReportCluster[],
+  context: string,
+): string {
+  bubble.render(capture.editor, span(startChar), clusters);
+  return assertBubbleShows(capture, FIXTURE_KIND_TITLE, context);
+}
+
+/**
+ * The same step for a cluster the surface must not offer: paints, then
+ * asserts nothing reached the screen.
+ */
+export function renderStepOffersNothing(
+  capture: BubbleCapture,
+  bubble: LiveBubble,
+  startChar: number,
+  clusters: ReportCluster[],
+  context: string,
+): void {
+  bubble.render(capture.editor, span(startChar), clusters);
+  assert.equal(capture.visible(), undefined, context);
 }
 
 export function renderFullConfidenceBubble(

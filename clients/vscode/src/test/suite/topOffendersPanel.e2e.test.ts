@@ -9,9 +9,9 @@
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import type { ExtensionApi } from "../../extension";
-import type { Report, ReportCluster } from "../../types/report";
+import type { ReportCluster } from "../../types/report";
 import { ClusterNode, OccurrenceNode } from "../../tree/nodes";
-import { activateExtension, sleep } from "./helpers";
+import { sleep, waitForCluster, waitForReport } from "./helpers";
 
 const DESLOP_CONFIGURATION_NAMESPACE = "deslop";
 const GROUP_BY_SETTING = "topOffenders.groupBy";
@@ -31,29 +31,10 @@ function readConfig<T>(key: string): T | undefined {
     .get<T>(key);
 }
 
-async function waitForReport(): Promise<ExtensionApi> {
-  const api = await activateExtension();
-  for (let i = 0; i < 20; i++) {
-    await sleep(250);
-    const cmds = await vscode.commands.getCommands(true);
-    if (cmds.includes("deslop.openCluster")) return api;
-  }
-  throw new Error("extension did not activate in time");
-}
-
-async function waitForMultiOccurrenceCluster(
+function waitForMultiOccurrenceCluster(
   client: NonNullable<ExtensionApi["client"]>,
 ): Promise<ReportCluster> {
-  let last: Report | undefined;
-  for (let i = 0; i < 40; i += 1) {
-    last = await client.sendRequest<Report>("deslop/reportGet");
-    const cluster = last.clusters.find((candidate) => candidate.occurrences.length >= 2);
-    if (cluster) return cluster;
-    await sleep(250);
-  }
-  throw new Error(
-    `no multi-occurrence cluster in LSP report; last count ${last?.clusters.length ?? 0}`,
-  );
+  return waitForCluster(client, () => true, "no multi-occurrence cluster in LSP report");
 }
 
 async function waitForTab(predicate: (tab: vscode.Tab) => boolean): Promise<vscode.Tab> {

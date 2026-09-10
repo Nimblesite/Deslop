@@ -12,8 +12,8 @@ pub(crate) use crate::common::scan_dir::temp_scan_dir;
 /// `common` copy is the only one, and `cli` reads it through this
 /// re-export so `use super::support::*;` still resolves them.
 pub(crate) use crate::common::{
-    field, fixture, load_json as read_json_report, metric_field, seed as seed_scan_root,
-    seeded_fixture_root, with_ext,
+    assert_contains, assert_not_contains, field, fixture, load_json as read_json_report,
+    metric_field, seed as seed_scan_root, seeded_fixture_root, with_ext,
 };
 
 /// Shared CLI flag selecting the minimum AST node count.

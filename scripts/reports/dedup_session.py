@@ -47,7 +47,7 @@ def row(label, before, after, fmt="{:,}"):
 
 def main():
     parser = argparse.ArgumentParser()
-    for flag in ("before", "after", "baseline", "final", "out"):
+    for flag in ("before", "after", "baseline", "final", "out", "suite"):
         parser.add_argument(f"--{flag}", required=True)
     args = parser.parse_args()
 
@@ -56,6 +56,7 @@ def main():
     base_ok, final_ok = test_names(args.baseline, True), test_names(args.final, True)
 
     regressed = sorted(base_ok - final_ok)
+    added_failing = sorted((final_all - base_all) - final_ok)
     lines = [
         "# Deduplication session — measured result",
         "",
@@ -77,7 +78,7 @@ def main():
             "{:.4f}",
         ),
         "",
-        "## Test differential (`cargo test -p deslop --test suite`)",
+        f"## Test differential (`{args.suite}`)",
         "",
         "| Measure | Baseline | After | Change |",
         "| --- | ---: | ---: | ---: |",
@@ -88,6 +89,12 @@ def main():
         "",
     ]
     lines += [f"- `{name}`" for name in regressed] or ["_None._"]
+    lines += [
+        "",
+        f"Tests added since baseline that do not pass: **{len(added_failing)}**",
+        "",
+    ]
+    lines += [f"- `{name}`" for name in added_failing] or ["_None._"]
     lines += [
         "",
         "## Coverage of this verification",

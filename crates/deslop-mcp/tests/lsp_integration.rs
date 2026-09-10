@@ -19,10 +19,9 @@ use anyhow::{anyhow, ensure, Result};
 use serde_json::{json, Value};
 
 use crate::common;
-use common::{array_field, copied_fixture, initialized_mcp, lsp_workspace_with_socket, spawn_lsp_and_wait_for_socket, structured_content, u64_field, wait_for_state_then_init_mcp, McpHandle};
+use common::{array_field, assert_production_embedding_models, copied_fixture, initialized_mcp, lsp_workspace_with_socket, spawn_lsp_and_wait_for_socket, structured_content, u64_field, wait_for_state_then_init_mcp, McpHandle, MODELS_FIELD, NAME_FIELD};
 
 const TOOLS_CALL_METHOD: &str = "tools/call";
-const NAME_FIELD: &str = "name";
 const ARGUMENTS_FIELD: &str = "arguments";
 const RESCAN_TOOL: &str = "rescan";
 const REPORT_GET_TOOL: &str = "duplicates";
@@ -79,28 +78,7 @@ fn list_embedding_models_via_mcp_delegates_to_running_lsp() -> Result<()> {
         &json!({ (NAME_FIELD): SESSION_TOOL, (ARGUMENTS_FIELD): { (ACTION_FIELD): "list-embedding-models" } }),
     )?;
     let structured = structured_content(&response, SESSION_TOOL)?;
-    let models = array_field(&structured, "models")?;
-    let has_stub = models
-        .iter()
-        .any(|model| model.get("provider_id") == Some(&json!("stub")));
-    ensure!(
-        !has_stub,
-        "list-embedding-models must never include the stub provider in production: {response}"
-    );
-    for model in models {
-        for legacy_key in [
-            NAME_FIELD,
-            "bare_id",
-            "digest",
-            "size_bytes",
-            "is_embedding_model",
-        ] {
-            ensure!(
-                model.get(legacy_key).is_none(),
-                "issue #87: generated model row must not expose legacy key {legacy_key}: {model}"
-            );
-        }
-    }
+    assert_production_embedding_models(array_field(&structured, MODELS_FIELD)?)?;
     Ok(())
 }
 

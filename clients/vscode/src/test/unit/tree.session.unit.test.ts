@@ -4,7 +4,7 @@ import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 import { ReportStore } from "../../reportStore";
-import { cluster, labelText, report, sessionPanel, treeStore } from "./tree.helpers";
+import { cluster, labelText, report, sessionPanel, storeWith, treeStore } from "./tree.helpers";
 
 const STRING_TYPE_NAME = "string";
 const EMBEDDING_MODEL_LABEL = "Embedding model";
@@ -88,8 +88,7 @@ suite("SessionProvider", () => {
     // [LIVE-EMBEDDING-CONSENT]
     const snapshot = report([]);
     snapshot.embedding_provenance = undefined;
-    const store = new ReportStore();
-    store.setSnapshot(snapshot, 0);
+    const store = storeWith(snapshot);
     const nodes = sessionPanel(store, RUNNING_CLIENT).getChildren();
     const embeddingRow = rowNamed(nodes, EMBEDDING_MODEL_LABEL);
     assert.ok(embeddingRow, "Embedding model row must be rendered");

@@ -17,7 +17,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde_json::Value;
 
 use crate::common::deslop_cmd;
@@ -117,17 +117,18 @@ fn registry_call_payload_variation_keeps_only_authored_control() -> Result<()> {
     )?;
     let clusters = report["clusters"]
         .as_array()
-        .expect("rendered cluster array");
+        .context("rendered cluster array")?;
+    let [control_first_file, _] = CONTROL_FILES;
     let control = clusters
         .iter()
-        .find(|cluster| cluster_paths(cluster).contains(&CONTROL_FILES[0].to_owned()))
-        .expect("the independently authored positive control must be reported");
-    assert_authored_control(control);
+        .find(|cluster| cluster_paths(cluster).contains(&control_first_file.to_owned()))
+        .context("the independently authored positive control must be reported")?;
+    assert_authored_control(control)?;
     assert_only_authored_control(clusters);
     Ok(())
 }
 
-fn assert_authored_control(control: &Value) {
+fn assert_authored_control(control: &Value) -> Result<()> {
     assert_eq!(control["rank"].as_u64(), Some(CONTROL_RANK));
     assert_eq!(control["kind"].as_str(), Some(CONTROL_KIND));
     assert_eq!(
@@ -140,18 +141,19 @@ fn assert_authored_control(control: &Value) {
     );
     assert_eq!(control["mass"].as_u64(), Some(CONTROL_NODE_COUNT));
     assert_eq!(cluster_paths(control), CONTROL_FILES);
-    assert_control_occurrences(control);
+    assert_control_occurrences(control)
 }
 
-fn assert_control_occurrences(control: &Value) {
+fn assert_control_occurrences(control: &Value) -> Result<()> {
     for occurrence in control["occurrences"]
         .as_array()
-        .expect("control occurrences")
+        .context("control occurrences")?
     {
         assert_eq!(occurrence["hidden"].as_bool(), Some(false));
         assert_eq!(occurrence["start_line"].as_u64(), Some(CONTROL_FIRST_LINE));
         assert_eq!(occurrence["end_line"].as_u64(), Some(CONTROL_LAST_LINE));
     }
+    Ok(())
 }
 
 fn assert_only_authored_control(clusters: &[Value]) {

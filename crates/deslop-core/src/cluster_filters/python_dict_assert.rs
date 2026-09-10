@@ -186,7 +186,7 @@ fn decorator_expression_is_static(expression: Node<'_>) -> bool {
 }
 
 /// `a.b.c` — identifiers joined by attribute access, nothing else.
-fn is_dotted_name(node: Node<'_>) -> bool {
+pub(super) fn is_dotted_name(node: Node<'_>) -> bool {
     match node.kind() {
         "identifier" => true,
         "attribute" => named_children(node).into_iter().all(is_dotted_name),

@@ -14,6 +14,7 @@ use std::{
 
 use serde_json::Value;
 
+use super::scan_dir::temp_scan_dir;
 use super::{
     incremental::{
         assert_pass, assert_reports_equal, cold_then_warm, run_report_with_store, run_store_on,
@@ -25,7 +26,6 @@ use super::{
     },
     seed, Result,
 };
-use super::scan_dir::temp_scan_dir;
 
 /// A warm scan root: the fixture seeded into `<tmp>/src` and scanned
 /// once with the store on, so every file has a persisted blob. Returns

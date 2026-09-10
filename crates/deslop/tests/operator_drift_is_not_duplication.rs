@@ -118,22 +118,6 @@ fn render() -> Result<Value> {
     run_report(&fixture("operator-drift"), MIN_NODES)
 }
 
-/// Every visible cluster as `id mass files`.
-fn published(report: &Value) -> Vec<String> {
-    clusters(report)
-        .iter()
-        .map(|cluster| {
-            format!(
-                "{id} mass={mass} {files:?}",
-                id = cluster_id(cluster),
-                mass = field(cluster, "mass").as_u64().unwrap_or(0),
-                files = occurrence_files(cluster),
-            )
-        })
-        .collect()
-}
-
-/// Whether one occurrence covers `line` in the named fixture file.
 fn occurrence_covers(occurrence: &Value, file: &str, line: u64) -> bool {
     let path_matches = field(occurrence, "path")
         .as_str()
@@ -178,7 +162,7 @@ fn an_operator_only_difference_never_claims_duplication() -> Result<()> {
         Some(FIXTURE_FILE_COUNT),
         "every operator pair must reach the pipeline before its absence from \
          the report can mean anything: {published:#?}",
-        published = published(&report),
+        published = published_with_mass(&report),
     );
     let control = expect_cluster_spanning(&report, &CONTROL)?;
     assert!(
@@ -186,7 +170,7 @@ fn an_operator_only_difference_never_claims_duplication() -> Result<()> {
         "the byte-identical control must still be published as duplication in \
          this very run — without it, every assertion below is satisfied just \
          as well by a detector that produced no candidates: {published:#?}",
-        published = published(&report),
+        published = published_with_mass(&report),
     );
     assert_structural_only_contract(control, "operator-drift control");
     for family in FAMILIES {
@@ -203,7 +187,7 @@ fn an_operator_only_difference_never_claims_duplication() -> Result<()> {
             left = family.left,
             right = family.right,
             line = family.changed_line,
-            published = published(&report),
+            published = published_with_mass(&report),
         );
     }
     Ok(())

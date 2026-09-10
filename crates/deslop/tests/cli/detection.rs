@@ -385,10 +385,11 @@ fn assert_enclosing_near_miss(
     let mut carrying = 0_usize;
     for occurrence in occurrences {
         let text = require_occurrence_text(scan_root, occurrence)?;
-        assert!(
-            text.contains("func "),
+        assert_contains(
+            &text,
+            "func ",
             "the near-miss view must span the whole enclosing declaration, not a \
-             fragment of it (gh #408); got:\n{text}",
+             fragment of it (gh #408); got",
         );
         if text.contains(divergent_statement) {
             carrying = carrying.saturating_add(1);

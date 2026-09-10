@@ -70,65 +70,6 @@ fn render_unsaturated() -> Result<Value> {
     run_report(&fixture("content-gate-unsaturated"), MIN_NODES)
 }
 
-/// Asserts a cluster carries none of the pair-only or presentation
-/// fields the mass-only wire forbids — the surface the old
-/// `content_gated_signals` rewriting published through
-/// ([PIPELINE-CLUSTER-CLOSURE]). A cluster that grows a `signals`
-/// block, a bucket, an evidence verdict, or a weight is the fabrication
-/// path reopening.
-fn assert_no_pair_surface_on_cluster(cluster: &Value, label: &str) {
-    for field in [
-        "signals",
-        "signal_source",
-        "content",
-        "evidence_verdict",
-        "bucket",
-        "category",
-        "classification",
-        "weight",
-        "size",
-        "summary",
-        "interpretation",
-        "language",
-    ] {
-        assert!(
-            cluster.get(field).is_none(),
-            "{label}: the mass-only wire forbids {field} on a cluster — a gate \
-             could fabricate a value through it again: {cluster:#}"
-        );
-    }
-}
-
-/// Asserts the wire-visible admission contract for a reported pair:
-/// it exists on the report, every occurrence is visible, and its mass
-/// is the wire formula `canonical_node_count × (occurrence_count − 1)`
-/// ([RANK-MASS-SUM]). The positive, human-readable half of every
-/// guarantee this suite makes; the negative half is
-/// [`assert_no_pair_surface_on_cluster`].
-fn assert_reported_cluster(cluster: &Value, label: &str) {
-    let canonical_nodes = field(cluster, "canonical_node_count").as_u64().unwrap_or(0);
-    let occurrence_count = field(cluster, "occurrence_count").as_u64().unwrap_or(0);
-    let mass = field(cluster, "mass").as_u64().unwrap_or(0);
-    assert!(
-        canonical_nodes > 0 && occurrence_count >= 2,
-        "{label}: a reported cluster must carry canonical_node_count and \
-         occurrence_count — {dump}",
-        dump = signal_dump(cluster)
-    );
-    assert_eq!(
-        mass,
-        canonical_nodes.saturating_mul(occurrence_count.saturating_sub(1)),
-        "{label}: mass must be canonical_node_count × (occurrence_count − 1) — {dump}",
-        dump = signal_dump(cluster)
-    );
-    assert!(
-        !occurrences(cluster).iter().any(occurrence_is_hidden),
-        "{label}: a reported pair may not hide an occurrence behind report_hide \
-         — {dump}",
-        dump = signal_dump(cluster)
-    );
-}
-
 /// Compares the exact pair named by the fixture contract.
 fn explicit_pair(
     scan_root: &std::path::Path,
@@ -166,7 +107,7 @@ fn the_content_gate_publishes_no_token_jaccard_it_did_not_measure() -> Result<()
         .ok_or_else(|| {
             anyhow::anyhow!("expected the ledger pair admitted on the report: {report:#}")
         })?;
-    assert_reported_cluster(ledger, "ledger closure");
+    assert_structural_only_contract(ledger, "ledger closure");
     assert_no_pair_surface_on_cluster(ledger, "ledger pair");
     let comparison = explicit_pair(
         &scan_root,
@@ -216,7 +157,7 @@ fn a_digest_equal_pair_keeps_its_saturated_signals() -> Result<()> {
     let scan_root = fixture("content-gate-unsaturated");
     let report = run_report(&scan_root, MIN_NODES)?;
     let control = expect_cluster_spanning(&report, &SATURATED_CONTROL_PAIR)?;
-    assert_reported_cluster(control, "byte-identical control");
+    assert_structural_only_contract(control, "byte-identical control");
     assert_no_pair_surface_on_cluster(control, "byte-identical control");
     assert_eq!(
         field(control, "rank").as_u64().unwrap_or(0),
@@ -269,7 +210,7 @@ fn a_cluster_whose_evidence_did_not_corroborate_is_not_told_it_agreed() -> Resul
     let scan_root = fixture("content-gate-unsaturated");
     let report = run_report(&scan_root, MIN_NODES)?;
     let accessor = expect_cluster_spanning(&report, &ACCESSOR_PAIR)?;
-    assert_reported_cluster(accessor, "accessor pair");
+    assert_structural_only_contract(accessor, "accessor pair");
     assert_no_pair_surface_on_cluster(accessor, "accessor pair");
     let control_rank = field(
         expect_cluster_spanning(&report, &SATURATED_CONTROL_PAIR)?,
@@ -318,8 +259,8 @@ fn a_gated_cluster_still_reports_the_evidence_that_corroborated_it() -> Result<(
     let report = render_unsaturated()?;
     let control = expect_cluster_spanning(&report, &SATURATED_CONTROL_PAIR)?;
     let accessor = expect_cluster_spanning(&report, &ACCESSOR_PAIR)?;
-    assert_reported_cluster(control, "byte-identical control");
-    assert_reported_cluster(accessor, "accessor pair");
+    assert_structural_only_contract(control, "byte-identical control");
+    assert_structural_only_contract(accessor, "accessor pair");
     assert_no_pair_surface_on_cluster(control, "byte-identical control");
     assert_no_pair_surface_on_cluster(accessor, "accessor pair");
     assert_ne!(

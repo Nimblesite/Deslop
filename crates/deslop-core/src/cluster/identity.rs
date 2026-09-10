@@ -11,9 +11,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{buckets::ClusterKind, fingerprint::Fingerprint, state::FileId};
-
 use super::Cluster;
+use crate::{buckets::ClusterKind, fingerprint::Fingerprint, state::FileId};
 
 /// A reportable cluster before it is named.
 #[derive(Debug)]
@@ -170,34 +169,12 @@ fn cluster_id(source: &Source<'_>, ordinal: u64) -> String {
 /// Shortens a full 32-byte hash to an 8-byte hex stable id for reporting.
 #[must_use]
 pub fn encode_short_id(hash: [u8; 32]) -> String {
-    let mut out = String::with_capacity(16);
-    for byte in hash.iter().take(8) {
-        let high = (*byte >> 4) & 0x0F;
-        let low = *byte & 0x0F;
-        out.push(hex_nibble(high));
-        out.push(hex_nibble(low));
-    }
-    out
+    blake3::Hash::from(hash)
+        .to_hex()
+        .chars()
+        .take(SHORT_ID_HEX_LENGTH)
+        .collect()
 }
 
-/// Maps a 0..=15 nibble to its lowercase hex character.
-const fn hex_nibble(nibble: u8) -> char {
-    match nibble {
-        0 => '0',
-        1 => '1',
-        2 => '2',
-        3 => '3',
-        4 => '4',
-        5 => '5',
-        6 => '6',
-        7 => '7',
-        8 => '8',
-        9 => '9',
-        10 => 'a',
-        11 => 'b',
-        12 => 'c',
-        13 => 'd',
-        14 => 'e',
-        _ => 'f',
-    }
-}
+/// Eight digest bytes represented by two hexadecimal digits each.
+const SHORT_ID_HEX_LENGTH: usize = 16;

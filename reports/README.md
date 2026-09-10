@@ -4,12 +4,15 @@
 
 Verified against the tree on 2026-09-09 at `bd920260` (branch `fix/regression-rollbacks`).
 
+**Correction (2026-09-10).** An earlier revision of this file listed the `calls` accuracy quarantine under §2 as discharged. That was wrong: the quarantine moved into the new `calls/` submodule rather than being lifted, and it is live. It is now item 0 above.
+
 ---
 
 ## 1. Act now
 
 | # | Item | State | Evidence |
 |---|---|---|---|
+| 0 | **The `calls` accuracy quarantine is LIVE, and 103 `deslop-core` tests fail on it.** `is_statement_shape` is a mandated `panic!` at `cluster_filters/calls/statements.rs:119` — the deleted allowlist omitted Rust `let_declaration`, so a registry-and-registration run had no covered statements and escaped scaffolding suppression. Correct per AGENTS.md and **must not be worked around**; the exit is to restore the classifier and turn the pin green. | Red, by mandate | 23 lib + 80 suite failures, one panic site; pinned by `registry_call_payload_variation_keeps_only_authored_control` |
 | 1 | **gh #520–#526 are fixed but still open.** All six verification checks exit 0. AGENTS.md forbids agents closing issues — a human closes these. | Ready to close | `scripts/repository/regression-verification.py`, 6 checks / 0 failing |
 | 2 | **gh #369 — CRITICAL, 4 tests ignored.** Embedding-only false positives survive on MockOllama's length-residue cosine alone (structural 0, token_jaccard 0). The stated fix has an O(N²·D) cost. | Open, blocking | `grep -rn SKIP-UNFINISHED crates/` → 4 × GH #369 |
 | 3 | **gh #356 — embeddings-on mutates buckets.** `ts-mixed-band` publishes a four-file clone with embeddings off and nothing with them on; ANN bridges mutate structural components before measurement (`session/render.rs`). `csharp-type3` follows the discovery route, not the code. Must stay red, not baselined. | Open | ignored-test reasons, commit-f92300e5 review |
@@ -22,7 +25,6 @@ Verified against the tree on 2026-09-09 at `bd920260` (branch `fix/regression-ro
 ## 2. Resolved — do not re-open
 
 - **gh #526's 36 orphaned spec identifiers are all resolved.** `scripts/repository/spec-crossrefs.py` re-run over 40 requested identifiers reports **unresolved references: 0**; every one now links to a definition. The issue text is stale. (The identifiers were mostly renamed, not deleted — e.g. `[FUSED-RANK-MASS]` → `[RANK-MASS-SUM]`, `[VSIX-SETTINGS-RANKING]` → `[RANK-STRUCTURAL-ONLY]`, `[DESLOP-LIVE]` → `[LIVE-SCHEDULER]`.)
-- **The `cluster_filters/calls.rs` accuracy quarantine is discharged.** The mandated `panic!` is gone from the tree; `calls.rs` was rewritten with a `calls/` submodule, and the pinning assertion survives unweakened at `crates/deslop-core/src/cluster_filters/calls/tests.rs:224` (`test_bodies_are_judged_by_their_statements_not_their_names`). Contract: `[CLONE-NOISE-LITERAL-VARIATION-CALLS]`.
 - **The Flutter performance gate passes.** `corpus/flutter.json` ceilings are now re-derived from a completed measured scan — **295 s wall / 7,947 MB peak RSS** against ceilings of 700 s / 9,000 MB — and Flutter carries no entry in `known-failures.json`. Three reports asserting the corpus could not finish are obsolete. Note the RSS headroom is thin (~12%); items 4 and 5 above are what protects it.
 
 ## 3. Ground truth worth keeping — Tornado, 35 hand-verified pairs

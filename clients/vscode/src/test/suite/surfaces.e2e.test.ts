@@ -4,18 +4,13 @@
 
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
-import { activateExtension, sleep } from "./helpers";
+import { activateExtension, deleteRange, editThenRestore, openFixture, sleep } from "./helpers";
 
 const SURFACE_SETTLE_MS = 500;
-
-async function openFixture(name: string): Promise<vscode.TextEditor> {
-  const fixture = process.env["DESLOP_TEST_FIXTURE"];
-  assert.ok(fixture, "fixture path must be set");
-  const doc = await vscode.workspace.openTextDocument(
-    vscode.Uri.file(`${fixture}/${name}`),
-  );
-  return await vscode.window.showTextDocument(doc);
-}
+const GHOST_MODE_SETTLE_MS = 1500;
+const ALPHA_FIXTURE = "Alpha.cs";
+const BETA_FIXTURE = "Beta.cs";
+const BUBBLE_MODE_SETTING = "liveBubble.mode";
 
 suite("surfaces", () => {
   suiteSetup(async () => {
@@ -33,36 +28,28 @@ suite("surfaces", () => {
   });
 
   test("opening a fixture editor drives the decoration redraw pipeline", async () => {
-    await openFixture("Alpha.cs");
+    await openFixture(ALPHA_FIXTURE);
     await sleep(SURFACE_SETTLE_MS);
   });
 
   test("editing a fixture triggers the decoration redraw pipeline", async () => {
-    const editor = await openFixture("Alpha.cs");
-    await editor.edit((b) => b.insert(new vscode.Position(0, 0), "// edit\n"));
-    await sleep(SURFACE_SETTLE_MS);
-    await editor.edit((b) =>
-      b.delete(new vscode.Range(new vscode.Position(0, 0), new vscode.Position(1, 0))),
-    );
+    const editor = await openFixture(ALPHA_FIXTURE);
+    await editThenRestore(editor, 0, "// edit\n", SURFACE_SETTLE_MS);
     await sleep(SURFACE_SETTLE_MS);
   });
 
   test("bubble ghost mode renders after an edit", async () => {
     const cfg = vscode.workspace.getConfiguration("deslop");
-    await cfg.update("liveBubble.mode", "ghost", vscode.ConfigurationTarget.Workspace);
-    const editor = await openFixture("Beta.cs");
-    await editor.edit((b) => b.insert(new vscode.Position(1, 0), "    var x = 1;\n"));
-    await sleep(1500);
-    await editor.edit((b) =>
-      b.delete(new vscode.Range(new vscode.Position(1, 0), new vscode.Position(2, 0))),
-    );
-    await cfg.update("liveBubble.mode", "inline", vscode.ConfigurationTarget.Workspace);
+    await cfg.update(BUBBLE_MODE_SETTING, "ghost", vscode.ConfigurationTarget.Workspace);
+    const editor = await openFixture(BETA_FIXTURE);
+    await editThenRestore(editor, 1, "    var x = 1;\n", GHOST_MODE_SETTLE_MS);
+    await cfg.update(BUBBLE_MODE_SETTING, "inline", vscode.ConfigurationTarget.Workspace);
   });
 
   test("bubble disabled setting short-circuits onEdit", async () => {
     const cfg = vscode.workspace.getConfiguration("deslop");
     await cfg.update("liveBubble.enabled", false, vscode.ConfigurationTarget.Workspace);
-    const editor = await openFixture("Alpha.cs");
+    const editor = await openFixture(ALPHA_FIXTURE);
     await editor.edit((b) => b.insert(new vscode.Position(0, 0), " "));
     await sleep(SURFACE_SETTLE_MS);
     // [VSIX-STATE-DIRTY] (#130): undo the synthetic edit before the suite exits
@@ -70,9 +57,7 @@ suite("surfaces", () => {
     // this, the visible projection elides any cluster whose only Alpha.cs peer
     // gets filtered out, and comparePair's canonical-report lookup is
     // the contract that defends us — but tests must not rely on that alone.
-    await editor.edit((b) =>
-      b.delete(new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 1))),
-    );
+    await deleteRange(editor, 0, 0, 0, 1);
     assert.equal(
       editor.document.getText().startsWith(" "),
       false,
@@ -86,7 +71,7 @@ suite("surfaces", () => {
   });
 
   test("closing the active editor clears the bubble", async () => {
-    await openFixture("Alpha.cs");
+    await openFixture(ALPHA_FIXTURE);
     await sleep(300);
     await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
     await sleep(300);

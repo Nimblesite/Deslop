@@ -35,29 +35,12 @@ const SIDES: [&str; 2] = ["invoice.ts", "charge.ts"];
 
 /// The one cluster spanning both sides of the rename.
 fn rename_cluster(report: &Value) -> Result<&Value> {
-    clusters(report)
-        .iter()
-        .find(|cluster| {
-            SIDES.iter().all(|side| {
-                occurrences(cluster)
-                    .iter()
-                    .any(|occurrence| occurrence_path(occurrence).ends_with(side))
-            })
-        })
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "no rendered cluster spans both sides of the rename; \
-                 a Type-2 clone that reaches no visible cluster is a false negative"
-            )
-        })
-}
-
-/// An occurrence's reported path.
-fn occurrence_path(occurrence: &Value) -> &str {
-    occurrence
-        .get("path")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
+    cluster_spanning_sides(
+        report,
+        &SIDES,
+        "no rendered cluster spans both sides of the rename; a Type-2 clone \
+         that reaches no visible cluster is a false negative",
+    )
 }
 
 #[test]

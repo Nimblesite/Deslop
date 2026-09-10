@@ -10,15 +10,13 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
 
-import { activateExtension, waitFor } from "./helpers";
+import { activateExtension, deleteRange, fixtureRoot, waitFor } from "./helpers";
 
 suite("live tree refresh", () => {
   let fixtureDir: string;
 
   suiteSetup(async () => {
-    const fixture = process.env["DESLOP_TEST_FIXTURE"];
-    assert.ok(fixture, "fixture path must be set");
-    fixtureDir = fixture;
+    fixtureDir = fixtureRoot();
     const api = await activateExtension();
     const store = api.reportStore;
     assert.ok(store, "reportStore must be exposed on ExtensionApi");
@@ -84,9 +82,7 @@ suite("live tree refresh", () => {
     );
 
     // Restore to keep other tests deterministic.
-    await editor.edit((b) =>
-      b.delete(new vscode.Range(new vscode.Position(0, 0), new vscode.Position(1, 0))),
-    );
+    await deleteRange(editor, 0, 0, 1, 0);
     await doc.save();
   });
 

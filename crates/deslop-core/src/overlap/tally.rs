@@ -140,18 +140,18 @@ impl RescueTally {
     /// this tally's own — shard tallies share the pass start, so the
     /// merged elapsed time is the pass's ([PERF-FLUTTER-TODO-RESCUE]).
     pub(super) fn absorb(&mut self, other: &RescueTally) {
-        self.scanned = self.scanned.saturating_add(other.scanned);
-        self.eligible = self.eligible.saturating_add(other.eligible);
-        self.cross_file = self.cross_file.saturating_add(other.cross_file);
-        self.same_file = self.same_file.saturating_add(other.same_file);
-        self.measured = self.measured.saturating_add(other.measured);
-        self.rescued = self.rescued.saturating_add(other.rescued);
-        self.content_gate_rejected = self
-            .content_gate_rejected
-            .saturating_add(other.content_gate_rejected);
-        self.container_echo_rejected = self
-            .container_echo_rejected
-            .saturating_add(other.container_echo_rejected);
+        crate::counters::absorb_counters!(
+            self,
+            other,
+            scanned,
+            eligible,
+            cross_file,
+            same_file,
+            measured,
+            rescued,
+            content_gate_rejected,
+            container_echo_rejected,
+        );
     }
 
     /// Emits the pass's totals. Always emitted, including when the stage

@@ -82,17 +82,20 @@ fn render_polyglot_html(tmp: &Path, extra: &[&str]) -> Result<String> {
 fn html_report_is_one_ranked_list_by_default() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let html = render_polyglot_html(tmp.path(), &[])?;
-    assert!(
-        html.contains("<h2>Duplicate groups</h2>"),
-        "default report keeps the single ranked list"
+    assert_contains(
+        &html,
+        "<h2>Duplicate groups</h2>",
+        "default report keeps the single ranked list",
     );
-    assert!(
-        !html.contains("group(s)</h2>"),
-        "no per-language section headings appear without the flag"
+    assert_not_contains(
+        &html,
+        "group(s)</h2>",
+        "no per-language section headings appear without the flag",
     );
-    assert!(
-        !html.contains("By language:"),
-        "no per-language intro breakdown without the flag"
+    assert_not_contains(
+        &html,
+        "By language:",
+        "no per-language intro breakdown without the flag",
     );
     Ok(())
 }
@@ -104,21 +107,17 @@ fn html_report_is_one_ranked_list_by_default() -> Result<()> {
 fn html_report_splits_into_language_sections_via_flag() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let html = render_polyglot_html(tmp.path(), &["--split-by-language"])?;
-    assert!(
-        html.contains("<h2>Rust — "),
-        "a Rust section heading is rendered"
+    assert_contains(&html, "<h2>Rust — ", "a Rust section heading is rendered");
+    assert_contains(&html, "<h2>Dart — ", "a Dart section heading is rendered");
+    assert_not_contains(
+        &html,
+        "<h2>Duplicate groups</h2>",
+        "the flat heading is replaced by per-language sections",
     );
-    assert!(
-        html.contains("<h2>Dart — "),
-        "a Dart section heading is rendered"
-    );
-    assert!(
-        !html.contains("<h2>Duplicate groups</h2>"),
-        "the flat heading is replaced by per-language sections"
-    );
-    assert!(
-        html.contains("By language:"),
-        "the intro gains a per-language breakdown"
+    assert_contains(
+        &html,
+        "By language:",
+        "the intro gains a per-language breakdown",
     );
     Ok(())
 }

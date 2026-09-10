@@ -41,7 +41,10 @@ fn cluster_occurrence_paths(cluster: &Value) -> Vec<String> {
 
 #[test]
 fn rust_iter_map_collect_idiom_does_not_cluster_across_unrelated_types() -> Result<()> {
-    let report = run_report(&fixture("rust-issue-147-iter-collect-idiom"), ITER_COLLECT_MIN_NODES)?;
+    let report = run_report(
+        &fixture("rust-issue-147-iter-collect-idiom"),
+        ITER_COLLECT_MIN_NODES,
+    )?;
     let cross_file_clusters: Vec<&Value> = clusters(&report)
         .iter()
         .filter(|cluster| {

@@ -10,11 +10,7 @@
 
 use std::{
     io::{BufRead, BufReader},
-    process::{ChildStdin, ChildStdout, Command, Stdio},
-    sync::{
-        atomic::{AtomicI64, Ordering},
-        mpsc,
-    },
+    sync::mpsc,
     thread,
     time::{Duration, Instant},
 };
@@ -22,9 +18,10 @@ use std::{
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 
-use crate::common::*;
-
-static NEXT_ID: AtomicI64 = AtomicI64::new(120_000);
+use crate::common::{
+    session::{shutdown, spawn_logging_lsp, take_stdin_stdout},
+    *,
+};
 
 /// Longest a startup log line may take to appear before the knob is
 /// considered unrecorded. A failure bound, never a synchronisation
@@ -38,16 +35,7 @@ const STARTUP_LOG_TIMEOUT: Duration = Duration::from_secs(20);
 #[test]
 fn lsp_startup_log_records_the_worker_threads_knob() -> Result<()> {
     let workspace = tempfile::tempdir()?;
-    let mut child = Command::new(assert_cmd::cargo::cargo_bin("deslop-lsp"))
-        .arg(workspace.path())
-        .arg("--worker-threads")
-        .arg("2")
-        .env("RUST_LOG", "info")
-        .env("NO_COLOR", "1")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
+    let mut child = spawn_logging_lsp(workspace.path(), &["--worker-threads", "2"])?;
     let stderr = child
         .stderr
         .take()
@@ -120,18 +108,7 @@ fn read_stderr_until(stderr: std::process::ChildStderr, marker: &str) -> String 
 #[test]
 fn lsp_nice_and_worker_knobs_preserve_idle_cpu_report() -> Result<()> {
     let workspace = tempfile::tempdir()?;
-    let mut child = Command::new(assert_cmd::cargo::cargo_bin("deslop-lsp"))
-        .arg(workspace.path())
-        .arg("--worker-threads")
-        .arg("1")
-        .arg("--nice")
-        .arg("5")
-        .env("RUST_LOG", "info")
-        .env("NO_COLOR", "1")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
+    let mut child = spawn_logging_lsp(workspace.path(), &["--worker-threads", "1", "--nice", "5"])?;
 
     thread::sleep(Duration::from_millis(250));
     if child.try_wait()?.is_some() {
@@ -142,16 +119,7 @@ fn lsp_nice_and_worker_knobs_preserve_idle_cpu_report() -> Result<()> {
         ));
     }
 
-    let stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| anyhow!("child stdin missing"))?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| anyhow!("child stdout missing"))?;
-    let mut stdin = stdin;
-    let mut reader = BufReader::new(stdout);
+    let (mut stdin, mut reader) = take_stdin_stdout(&mut child)?;
 
     let _init = handshake(&mut stdin, &mut reader)?;
     let response = call(&mut stdin, &mut reader, "deslop/cpuReport", &json!({}))?;
@@ -213,56 +181,4 @@ fn lsp_nice_and_worker_knobs_preserve_idle_cpu_report() -> Result<()> {
         "startup log must record nice=5; stderr was:\n{stderr_buf}"
     );
     Ok(())
-}
-
-fn request_without_params(method: &str) -> Result<(i64, String)> {
-    let id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
-    let payload = json!({"jsonrpc":"2.0","id":id,"method":method});
-    Ok((id, serde_json::to_string(&payload)?))
-}
-
-fn read_frame(reader: &mut BufReader<ChildStdout>) -> Result<Value> {
-    deslop_test_support::read_lsp_frame(reader)
-}
-
-fn send_and_recv(
-    stdin: &mut ChildStdin,
-    reader: &mut BufReader<ChildStdout>,
-    id: i64,
-    payload: &str,
-) -> Result<Value> {
-    write_frame(stdin, payload)?;
-    loop {
-        let frame = read_frame(reader)?;
-        if frame.get("id").and_then(Value::as_i64) == Some(id) {
-            return Ok(frame);
-        }
-    }
-}
-
-fn handshake(stdin: &mut ChildStdin, reader: &mut BufReader<ChildStdout>) -> Result<Value> {
-    let (id, payload) = request(
-        "initialize",
-        &json!({"processId": null, "rootUri": null, "capabilities": {}}),
-    )?;
-    let response = send_and_recv(stdin, reader, id, &payload)?;
-    write_frame(stdin, &notification("initialized", &json!({}))?)?;
-    Ok(response)
-}
-
-fn shutdown(stdin: &mut ChildStdin, reader: &mut BufReader<ChildStdout>) -> Result<Value> {
-    let (id, payload) = request_without_params("shutdown")?;
-    let response = send_and_recv(stdin, reader, id, &payload)?;
-    write_frame(stdin, &notification("exit", &json!({}))?)?;
-    Ok(response)
-}
-
-fn call(
-    stdin: &mut ChildStdin,
-    reader: &mut BufReader<ChildStdout>,
-    method: &str,
-    params: &Value,
-) -> Result<Value> {
-    let (id, payload) = request(method, params)?;
-    send_and_recv(stdin, reader, id, &payload)
 }

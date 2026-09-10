@@ -30,7 +30,10 @@ fn cluster_occurrence_paths(cluster: &Value) -> std::collections::BTreeSet<Strin
 
 #[test]
 fn rust_match_dispatch_arms_do_not_cluster_as_duplicates() -> Result<()> {
-    let report = run_report(&fixture("rust-issue-176-match-dispatch"), MATCH_DISPATCH_MIN_NODES)?;
+    let report = run_report(
+        &fixture("rust-issue-176-match-dispatch"),
+        MATCH_DISPATCH_MIN_NODES,
+    )?;
     let count = cluster_count(&report);
     assert_eq!(
         count, 0,
@@ -42,7 +45,10 @@ fn rust_match_dispatch_arms_do_not_cluster_as_duplicates() -> Result<()> {
 
 #[test]
 fn rust_verbatim_copied_match_arms_still_cluster() -> Result<()> {
-    let report = run_report(&fixture("rust-issue-176-verbatim-copy"), MATCH_DISPATCH_MIN_NODES)?;
+    let report = run_report(
+        &fixture("rust-issue-176-verbatim-copy"),
+        MATCH_DISPATCH_MIN_NODES,
+    )?;
     let cross_file = clusters(&report)
         .iter()
         .any(|cluster| cluster_occurrence_paths(cluster).len() >= 2);

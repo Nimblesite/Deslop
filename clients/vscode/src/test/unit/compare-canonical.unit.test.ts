@@ -14,6 +14,7 @@ import { occurrence, wireCluster } from "../cluster.helpers";
 import { activateExtension } from "../suite/helpers";
 import { reportWithClusters } from "./report.helpers";
 import { tempFile } from "./temp-file.helpers";
+import { storeWith } from "./report-store.helpers";
 
 const FIXTURE_PREFIX = "deslop-canonical-";
 const FIXTURE_FILENAME = "ranges.ts";
@@ -53,8 +54,7 @@ async function withCompareFixture(run: (fixture: CompareFixture) => Promise<void
   const { dir, file } = tempFile(FIXTURE_PREFIX, FIXTURE_FILENAME);
   fs.writeFileSync(file, SOURCE_PARTS.join(""), UTF8_ENCODING);
   const cluster = fixtureCluster(file);
-  const store = new ReportStore();
-  store.setSnapshot(reportWithClusters([cluster]), CANONICAL_INDEX);
+  const store = storeWith(reportWithClusters([cluster]), CANONICAL_INDEX);
   try {
     await closeEditors();
     await run({ store, cluster, file });
@@ -112,8 +112,7 @@ suite("canonical comparison", () => {
     const [canonical, ...peers] = source.occurrences;
     assert.ok(canonical);
     const cluster = { ...source, occurrences: [{ ...canonical, path: DIRTY_SOURCE_PATH }, ...peers] };
-    const store = new ReportStore();
-    store.setSnapshot(reportWithClusters([cluster]), CANONICAL_INDEX);
+    const store = storeWith(reportWithClusters([cluster]), CANONICAL_INDEX);
     assertTreeContexts(store, cluster, [CANONICAL_CONTEXT, PEER_CONTEXT, PEER_CONTEXT]);
     store.markFileDirty(DIRTY_SOURCE_PATH);
     const projected = store.current.visibleReport?.clusters[CANONICAL_INDEX];

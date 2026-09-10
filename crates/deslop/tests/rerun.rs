@@ -237,9 +237,10 @@ fn issue_189_new_exclude_pattern_drops_existing_corpus_files() -> Result<()> {
         "excluding Beta.cs must remove the Alpha/Beta clone cluster: {delta:#}"
     );
     let report = fs::read_to_string(tmp.path().join("report.json"))?;
-    assert!(
-        !report.contains("Beta.cs"),
-        "generation 1 report must not mention the excluded file"
+    assert_not_contains(
+        &report,
+        "Beta.cs",
+        "generation 1 report must not mention the excluded file",
     );
     Ok(())
 }
@@ -268,9 +269,10 @@ fn issue_189_removed_exclude_pattern_rediscovers_files() -> Result<()> {
         "dropping the exclude must re-discover Beta.cs and surface its cluster: {delta:#}"
     );
     let report = fs::read_to_string(tmp.path().join("report.json"))?;
-    assert!(
-        report.contains("Beta.cs"),
-        "generation 1 report must include the re-included file"
+    assert_contains(
+        &report,
+        "Beta.cs",
+        "generation 1 report must include the re-included file",
     );
     Ok(())
 }
