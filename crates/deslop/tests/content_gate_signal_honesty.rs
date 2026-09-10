@@ -11,13 +11,17 @@
 //! by construction on the current wire. The suite pins the migration
 //! instead, at the same strength:
 //!
-//! 1. **Recall** — every pair this fixture exists for is still
+//! 1. **Recall** — every pair this fixture exists to report is still
 //!    **admitted** and reported, with the same rank ordering and the
 //!    wire mass formula `canonical_node_count × (occurrence_count − 1)`
 //!    ([RANK-MASS-SUM]). A cutover that silently dropped the
-//!    near-saturated Type-3 pair, the digest-equal control, or the
-//!    accessor pair is caught exactly as the old signal assertions
-//!    would have caught a silently-demoted cluster.
+//!    near-saturated Type-3 pair or the digest-equal control is caught
+//!    exactly as the old signal assertions would have caught a
+//!    silently-demoted cluster. The accessor pair is the same contract
+//!    read from the other side: it is the gh #460 false positive, the
+//!    aligned core refuses it ([FUSED-SHARED-SUBTREE-CORE]), and this
+//!    suite pins its absence beside a control that stays visible in the
+//!    same run.
 //! 2. **No fabricated evidence surface** — no cluster on the wire may
 //!    carry `signals`, `bucket`, `category`, `evidence_verdict`, or any
 //!    other pair-only or presentation field. Reintroducing a cluster
@@ -31,9 +35,12 @@
 //! in `content-gate-unsaturated` proves the digest-equal population
 //! separately.
 
-use deslop_core::report::{PairClassification, PairComparison};
+use deslop_core::report::{PairClassification, PairComparison, PairEndpoint};
 use serde_json::Value;
 
+use crate::common::negative_pin::{
+    assert_control_is_the_only_published_cluster, assert_family_hidden_with_control,
+};
 use crate::common::{signals::*, *};
 
 /// Node floor for the small control and accessor fixtures.
@@ -55,17 +62,220 @@ const SATURATED_CONTROL_PAIR: [&str; 2] = ["control_alpha.rs", "control_beta.rs"
 /// The pair that reproduces gh #460: two unrelated tree-sitter field
 /// accessors — different node kind, different field, different body —
 /// whose only shared authored logic is the grammar-mandated accessor
-/// idiom. Their shared-subtree shape does not saturate, so the content
-/// gate measures its observations but does not use them for routing.
+/// idiom. The aligned core pairs `return value` against
+/// `collect_identifiers(left, source, out)` and finds an inconsistent
+/// rename, so the rescue refuses the pair
+/// ([FUSED-SHARED-SUBTREE-CORE]). The pair is held CLEARLY OUT in
+/// `corpus/register/deslop.json`; this suite pins its absence from the
+/// fixture report and the refusal on the pair wire.
 const ACCESSOR_PAIR: [&str; 2] = ["accessor_argument.rs", "accessor_assignment.rs"];
 
 const EXACT_SCORE: f64 = 1.0;
 
 const SHAPE_SATURATION_FLOOR: f64 = 0.99;
 
-/// Renders the unsaturated-gate fixture once per assertion below. Both
-/// of its pairs are single function bodies, so they cluster at the same
-/// [`MIN_NODES`] floor the ledger corpus uses.
+/// The duplication this fixture publishes: the byte-identical control,
+/// seven lines in each of its two copies. Measured, never hand-counted —
+/// `metrics.duplicated_loc` of the fixture report.
+const CONTROL_DUPLICATED_LOC: u64 = 14;
+
+/// The control leads the report: it is the only finding, and a
+/// byte-identical copy outranks anything a fixture can stage against it.
+const CONTROL_RANK: u64 = 1;
+
+/// `canonical_node_count × (occurrence_count − 1)` for the control.
+const CONTROL_MASS: u64 = 32;
+
+/// Normalised nodes in the control's canonical extent.
+const CONTROL_CANONICAL_NODES: u64 = 32;
+
+/// Both copies of the control are visible members.
+const CONTROL_OCCURRENCES: u64 = 2;
+
+/// Label the accessor family carries in every assertion below.
+const ACCESSOR_LABEL: &str = "gh #460 accessor idiom";
+
+/// Label the byte-identical control carries.
+const CONTROL_LABEL: &str = "byte-identical control";
+
+/// The whole `argument_payload` function, lines 6–13 of its file.
+const ACCESSOR_ARGUMENT_FN: (&str, usize, usize) = ("accessor_argument.rs", 161, 375);
+
+/// The whole `assignment_targets` function, lines 6–12 of its file.
+const ACCESSOR_ASSIGNMENT_FN: (&str, usize, usize) = ("accessor_assignment.rs", 166, 417);
+
+/// `node.kind() == "keyword_argument"` — one of the two one-line spans
+/// the pre-correction build published as a duplicate of the other.
+const ACCESSOR_ARGUMENT_KIND: (&str, usize, usize) = ("accessor_argument.rs", 222, 255);
+
+/// `node.kind() == "assignment"` — the other half of that published pair.
+const ACCESSOR_ASSIGNMENT_KIND: (&str, usize, usize) = ("accessor_assignment.rs", 255, 282);
+
+/// The refusal every accessor comparison must reach, with the measured
+/// axes that produce it ([FUSED-CONTENT-GATE], gh #460).
+struct RefusedPair {
+    /// Measured ordered structural overlap.
+    structural: f64,
+    /// Measured token Jaccard.
+    token_jaccard: f64,
+    /// Measured raw-content agreement.
+    agreement: f64,
+    /// Measured consistent-renaming support.
+    rename_consistency: f64,
+    /// Whether saturated normalised evidence demanded content support.
+    content_required: bool,
+    /// Whether every applicable content guard passed.
+    content_ok: bool,
+    /// The presentation classification, when the pair earns one.
+    classification: Option<PairClassification>,
+    /// The engine's own sentence about the refusal.
+    explanation: &'static str,
+}
+
+/// The two whole authored functions: unsaturated shape, so the content
+/// guard is never asked, and the pair falls at the LSH-only floors.
+const ACCESSOR_FUNCTIONS: RefusedPair = RefusedPair {
+    structural: 0.689_655_172_413_793_1,
+    token_jaccard: 0.453_125,
+    agreement: 0.3,
+    rename_consistency: 0.0,
+    content_required: false,
+    content_ok: true,
+    classification: None,
+    explanation: "rejected: pair fails the LSH-only guards",
+};
+
+/// The two one-line `node.kind()` tests the pre-correction build
+/// published: shape and tokens both saturate at 1.00, and the content
+/// guard is what refuses them. This is the gh #431 fabrication surface
+/// asserted at the pair wire — a pair whose shape agrees completely is
+/// still not told its content agreed.
+const ACCESSOR_KIND_TESTS: RefusedPair = RefusedPair {
+    structural: 1.0,
+    token_jaccard: 1.0,
+    agreement: 0.666_666_666_666_666_6,
+    rename_consistency: 0.333_333_333_333_333_3,
+    content_required: true,
+    content_ok: false,
+    classification: Some(PairClassification::StructuralOnly),
+    explanation: "rejected: saturated normalised evidence lacks required pair content support",
+};
+
+/// One fixture span as the endpoint the pair wire names it by.
+fn endpoint(scan_root: &std::path::Path, span: (&str, usize, usize)) -> PairEndpoint {
+    PairEndpoint {
+        path: scan_root.join(span.0),
+        start_byte: span.1,
+        end_byte: span.2,
+    }
+}
+
+/// Compares two named fixture spans through the pair wire, without
+/// deriving either endpoint from a cluster — the pair under test is
+/// refused, so no cluster names it.
+fn compare_spans(
+    scan_root: &std::path::Path,
+    left: (&str, usize, usize),
+    right: (&str, usize, usize),
+) -> Result<PairComparison> {
+    compare_endpoints(
+        scan_root,
+        MIN_NODES,
+        endpoint(scan_root, left),
+        endpoint(scan_root, right),
+    )
+}
+
+/// Asserts one pair's measured axes and its refusal, exactly.
+fn assert_refused(comparison: &PairComparison, expected: &RefusedPair, label: &str) {
+    assert_refused_axes(comparison, expected, label);
+    assert_refused_verdict(comparison, expected, label);
+    assert!(
+        !comparison.evidence.admitted,
+        "{label}: two unrelated accessors must never be an admitted edge: {comparison:#?}"
+    );
+}
+
+/// The four measured axes the pair wire publishes for this pair.
+fn assert_refused_axes(comparison: &PairComparison, expected: &RefusedPair, label: &str) {
+    let evidence = &comparison.evidence;
+    assert_pair_metric(evidence.structural, expected.structural, label);
+    assert_pair_metric(evidence.token_jaccard, expected.token_jaccard, label);
+    assert_pair_metric(evidence.agreement, expected.agreement, label);
+    assert_pair_metric(
+        evidence.rename_consistency,
+        expected.rename_consistency,
+        label,
+    );
+}
+
+/// The verdict those axes produce, and the refusal itself.
+fn assert_refused_verdict(comparison: &PairComparison, expected: &RefusedPair, label: &str) {
+    let evidence = &comparison.evidence;
+    assert_eq!(
+        (
+            evidence.content_required,
+            evidence.content_ok,
+            evidence.classification,
+            evidence.explanation.as_str(),
+        ),
+        (
+            expected.content_required,
+            expected.content_ok,
+            expected.classification,
+            expected.explanation,
+        ),
+        "{label}: the pair wire must publish the measured verdict: {comparison:#?}"
+    );
+}
+
+/// Both accessor comparisons, each pinned on the saturation band it sits
+/// in and on its exact refusal. The whole functions never saturate, so
+/// the content guard is never asked; the one-line kind tests do, and the
+/// guard is what refuses them.
+fn assert_both_accessor_pairs_are_refused(scan_root: &std::path::Path) -> Result<()> {
+    let functions = compare_spans(scan_root, ACCESSOR_ARGUMENT_FN, ACCESSOR_ASSIGNMENT_FN)?;
+    assert!(
+        functions.evidence.structural < SHAPE_SATURATION_FLOOR,
+        "the whole accessor functions must stay unsaturated: {functions:#?}"
+    );
+    assert_refused(
+        &functions,
+        &ACCESSOR_FUNCTIONS,
+        "the whole accessor functions",
+    );
+    let fragments = compare_spans(scan_root, ACCESSOR_ARGUMENT_KIND, ACCESSOR_ASSIGNMENT_KIND)?;
+    assert!(
+        fragments.evidence.structural >= SHAPE_SATURATION_FLOOR,
+        "the one-line kind tests must saturate: {fragments:#?}"
+    );
+    assert_refused(&fragments, &ACCESSOR_KIND_TESTS, "the one-line kind tests");
+    Ok(())
+}
+
+/// The exact published facts of the byte-identical control.
+fn assert_control_facts(control: &Value, report: &Value) {
+    assert_eq!(
+        (
+            field(control, "rank").as_u64(),
+            field(control, "mass").as_u64(),
+            field(control, "canonical_node_count").as_u64(),
+            field(control, "occurrence_count").as_u64(),
+        ),
+        (
+            Some(CONTROL_RANK),
+            Some(CONTROL_MASS),
+            Some(CONTROL_CANONICAL_NODES),
+            Some(CONTROL_OCCURRENCES),
+        ),
+        "the byte-identical control must keep its exact published facts: {report:#}"
+    );
+}
+
+/// Renders the unsaturated-gate fixture once per assertion below, at the
+/// same [`MIN_NODES`] floor the ledger corpus uses. Only the
+/// byte-identical control clusters; the accessor pair is refused, and
+/// this suite pins that refusal.
 fn render_unsaturated() -> Result<Value> {
     run_report(&fixture("content-gate-unsaturated"), MIN_NODES)
 }
@@ -186,95 +396,61 @@ fn a_digest_equal_pair_keeps_its_saturated_signals() -> Result<()> {
     Ok(())
 }
 
-// [FUSED-CONTENT-GATE] gh #460 — the report may not tell a reader that
-// content evidence corroborated a match whose evidence did not
-// corroborate it. On the mass-only wire the corroboration sentence is
-// gone with the `evidence_verdict` field; what survives is the
-// admission ordering: the gate-skipped accessor pair still reports
-// (recall), ranked below the corroborated control, and no pair-only
-// surface claims anything about its content.
+// [FUSED-CONTENT-GATE] gh #460, gh #532 — the report may not tell a
+// reader that content evidence corroborated a match whose evidence did
+// not corroborate it. The corrected engine states that contract twice
+// over, and this test asserts both statements.
 //
-// Skipped under gh #532: this pins the accessor pair as *reported*, and
-// the fixture's own description of that pair — two unrelated accessors
-// sharing only the grammar-mandated idiom — is what gh #460 filed as a
-// false positive. The aligned core of a rescued pair now refuses it
-// ([FUSED-SHARED-SUBTREE-CORE]), the pair is held CLEARLY OUT in
-// `corpus/register/deslop.json`, and this assertion stays red, untouched,
-// until it is rewritten to the corrected contract.
+// At the report: the match is never published. The two accessors share
+// only the grammar-mandated field-read idiom, the aligned core refuses
+// them ([FUSED-SHARED-SUBTREE-CORE]), and the corroborated control in
+// the same run is published untouched. The absence is asserted as a
+// decision rather than a scan that never looked —
+// `assert_family_hidden_with_control` demands both accessor files carry
+// analysed lines, and that the control leads the report whole.
+//
+// At the pair wire: both spans still resolve, so both are measured.
+// The whole functions never reach saturation, so the content guard is
+// not asked and the pair falls at the LSH-only floors. The two one-line
+// `node.kind()` tests the pre-correction build published *do* saturate,
+// at 1.00 shape and 1.00 tokens — and are refused by the content guard
+// with `content_ok = false`. That is the gh #431 fabrication surface
+// asserted directly: a pair whose shape agrees completely is still not
+// told its content agreed.
 #[test]
-#[ignore = "[SKIP-UNFINISHED] GH #532 [FUSED-SHARED-SUBTREE-CORE] docs/plans/fused-score-followups.md — \
-            asserts the gh #460 accessor pair is reported; the fixture calls that pair unrelated and \
-            the aligned core refuses it on an inconsistent rename, so the assertion is a known false \
-            positive held red until it is rewritten. Runs via `-- --ignored`."]
 fn a_cluster_whose_evidence_did_not_corroborate_is_not_told_it_agreed() -> Result<()> {
     let scan_root = fixture("content-gate-unsaturated");
     let report = run_report(&scan_root, MIN_NODES)?;
-    let accessor = expect_cluster_spanning(&report, &ACCESSOR_PAIR)?;
-    assert_structural_only_contract(accessor, "accessor pair");
-    assert_no_pair_surface_on_cluster(accessor, "accessor pair");
-    let control_rank = field(
-        expect_cluster_spanning(&report, &SATURATED_CONTROL_PAIR)?,
-        "rank",
-    )
-    .as_u64()
-    .unwrap_or(0);
-    let accessor_rank = field(accessor, "rank").as_u64().unwrap_or(0);
-    assert!(
-        accessor_rank > control_rank,
-        "the below-saturation accessor pair must rank after the corroborated \
-         control (control={control_rank}, accessor={accessor_rank}): {report:#}"
-    );
-    let comparison = explicit_pair(&scan_root, MIN_NODES, accessor, ACCESSOR_PAIR)?;
-    let evidence = &comparison.evidence;
-    assert!(
-        evidence.structural < SHAPE_SATURATION_FLOOR,
-        "accessor control must remain below the saturated content gate: {comparison:#?}"
-    );
-    assert!(
-        !evidence.content_required,
-        "unsaturated pair must not claim content was required: {comparison:#?}"
-    );
-    assert!(
-        evidence.admitted,
-        "the accessor pair must retain its admitted edge: {comparison:#?}"
-    );
-    Ok(())
+    assert_family_hidden_with_control(
+        &report,
+        ACCESSOR_LABEL,
+        &ACCESSOR_PAIR,
+        &SATURATED_CONTROL_PAIR,
+    )?;
+    for cluster in clusters(&report) {
+        assert_no_pair_surface_on_cluster(cluster, "published cluster");
+    }
+    assert_both_accessor_pairs_are_refused(&scan_root)
 }
 
-// The other half of the contract, asserted in the same run: the
-// corroborated control keeps leading the report, the gate-skipped
-// accessor pair still reports behind it, and neither carries a
-// pair-only surface — one cluster can no longer be told a sentence the
-// other is not, because no cluster is told any sentence at all.
-//
-// Skipped under gh #532 for the reason given on the test above: the
-// accessor pair it expects behind the control is the false positive gh
-// #460 filed, and the corrected engine publishes only the control.
+// The other half of the contract, asserted in the same run: with the gh
+// #460 pair correctly refused, the corroborated control is the whole of
+// this report's duplication. The two comparisons the old test made —
+// control mass against accessor mass, control rank against accessor rank
+// — no longer have a second subject, so the contract is stated against
+// the control's own published figures and the report's totals, which a
+// demoted or duplicated control fails just as loudly.
 #[test]
-#[ignore = "[SKIP-UNFINISHED] GH #532 [FUSED-SHARED-SUBTREE-CORE] docs/plans/fused-score-followups.md — \
-            asserts the gh #460 accessor pair is reported behind the control; the fixture calls that \
-            pair unrelated and the aligned core refuses it, so the assertion is a known false positive \
-            held red until it is rewritten. Runs via `-- --ignored`."]
-fn a_gated_cluster_still_reports_the_evidence_that_corroborated_it() -> Result<()> {
+fn the_corroborated_control_is_the_whole_of_this_reports_duplication() -> Result<()> {
     let report = render_unsaturated()?;
     let control = expect_cluster_spanning(&report, &SATURATED_CONTROL_PAIR)?;
-    let accessor = expect_cluster_spanning(&report, &ACCESSOR_PAIR)?;
-    assert_structural_only_contract(control, "byte-identical control");
-    assert_structural_only_contract(accessor, "accessor pair");
-    assert_no_pair_surface_on_cluster(control, "byte-identical control");
-    assert_no_pair_surface_on_cluster(accessor, "accessor pair");
-    assert_ne!(
-        field(control, "mass").as_u64().unwrap_or(0),
-        field(accessor, "mass").as_u64().unwrap_or(0),
-        "one pair is byte-identical and the other differs in kind and body; \
-         a report that gives them the same mass has lost the distinction: \
-         {report:#}"
-    );
-    assert!(
-        field(control, "rank").as_u64().unwrap_or(0)
-            < field(accessor, "rank").as_u64().unwrap_or(0),
-        "the corroborated control must outrank the gate-skipped accessor pair: \
-         {report:#}"
-    );
-    Ok(())
+    assert_structural_only_contract(control, CONTROL_LABEL);
+    assert_no_pair_surface_on_cluster(control, CONTROL_LABEL);
+    assert_control_facts(control, &report);
+    assert_control_is_the_only_published_cluster(
+        &report,
+        CONTROL_LABEL,
+        &SATURATED_CONTROL_PAIR,
+        CONTROL_DUPLICATED_LOC,
+    )
 }

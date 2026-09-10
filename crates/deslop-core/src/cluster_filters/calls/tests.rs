@@ -48,6 +48,16 @@ const REGISTRY_NEEDLE: &str = "registry.register(";
 /// The harness language for the registry pins.
 const RUST_LANGUAGE: &str = "rust";
 
+/// Two calls whose payload is wrapped by *different* constructors. The
+/// authored string agrees; what differs is which helper builds the value.
+const WRAPPER_CALLEE_A: &str = "buildRequest(Url.parse(\"endpoint\"))";
+/// The counterpart, reaching for a different constructor.
+const WRAPPER_CALLEE_B: &str = "buildRequest(Uri.resolve(\"endpoint\"))";
+/// The needle locating the enclosing call in both.
+const WRAPPER_CALLEE_NEEDLE: &str = "buildRequest(";
+/// The harness language for the wrapper pins.
+const TYPESCRIPT_LANGUAGE: &str = "typescript";
+
 /// The needle locating the call statement inside a member source.
 const CALL_NEEDLE: &str = "greet(";
 /// The needle locating the interpolation call.
@@ -167,6 +177,29 @@ fn rust_registry_receiver_flow_is_scaffolding() {
         "the invariant `FileRegistry::new()` binds `registry` through a Rust \
          `let`, and every varying registration consumes that binding as its \
          method receiver; the run is call scaffolding, not a clone: {verdict:?}"
+    );
+}
+
+/// A wrapped literal is payload, but the wrapper's callee is not. Two
+/// members that hand the same string to *different* constructors differ
+/// in which code runs, so the pair is a real difference to report, never
+/// one family varying its test data. Reading the whole wrapper node as
+/// the payload bytes would make `Url.parse` against `Uri.resolve` look
+/// like a differing literal and suppress the pair — a false negative on
+/// the single-enclosing-call route, where no nested position exists for
+/// [`super::same_call_headers`] to catch the callee on.
+#[test]
+fn a_differing_wrapper_callee_is_not_literal_variation() {
+    let verdict = Corpus::new()
+        .member(WRAPPER_CALLEE_A, WRAPPER_CALLEE_NEEDLE)
+        .member(WRAPPER_CALLEE_B, WRAPPER_CALLEE_NEEDLE)
+        .language(TYPESCRIPT_LANGUAGE)
+        .verdict();
+    assert_eq!(
+        verdict, None,
+        "the two members hand the same string to different constructors; \
+         the difference is which code runs, not the data it is given, so \
+         the pair must publish: {verdict:?}"
     );
 }
 

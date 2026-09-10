@@ -94,17 +94,32 @@ fn collect_receiver_arguments(
     }
 }
 
-/// Collects identifier leaves without interpreting their language role.
-fn collect_identifiers(node: Node<'_>, source: &[u8], out: &mut Vec<Vec<u8>>) {
+/// Collects the identifier leaves `keep` accepts, without otherwise
+/// interpreting their language role. The two callers below differ only
+/// in that predicate, so the walk itself is written once.
+fn collect_identifiers_where(
+    node: Node<'_>,
+    source: &[u8],
+    keep: fn(Node<'_>) -> bool,
+    out: &mut Vec<Vec<u8>>,
+) {
     if is_identifier(node.kind()) {
-        if let Some(bytes) = source.get(node.start_byte()..node.end_byte()) {
-            out.push(bytes.to_vec());
+        if keep(node) {
+            if let Some(bytes) = source.get(node.start_byte()..node.end_byte()) {
+                out.push(bytes.to_vec());
+            }
         }
         return;
     }
     for child in named_children(node) {
-        collect_identifiers(child, source, out);
+        collect_identifiers_where(child, source, keep, out);
     }
+}
+
+/// Every identifier leaf. An argument list names only values passed in,
+/// so nothing inside one is a called name to discount.
+fn collect_identifiers(node: Node<'_>, source: &[u8], out: &mut Vec<Vec<u8>>) {
+    collect_identifiers_where(node, source, |_| true, out);
 }
 
 /// Identifier leaf names used by the supported call grammars.
@@ -129,15 +144,10 @@ fn is_statement_boundary(kind: &str) -> bool {
 /// flowing into a method call through its receiver flows into the call
 /// as surely as an argument does.
 fn collect_receiver_identifiers(node: Node<'_>, source: &[u8], out: &mut Vec<Vec<u8>>) {
-    if is_identifier(node.kind()) {
-        if !super::callee::is_called_name(node) {
-            if let Some(bytes) = source.get(node.start_byte()..node.end_byte()) {
-                out.push(bytes.to_vec());
-            }
-        }
-        return;
-    }
-    for child in named_children(node) {
-        collect_receiver_identifiers(child, source, out);
-    }
+    collect_identifiers_where(
+        node,
+        source,
+        |node| !super::callee::is_called_name(node),
+        out,
+    );
 }

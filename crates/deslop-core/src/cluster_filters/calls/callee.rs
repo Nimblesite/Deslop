@@ -65,7 +65,7 @@ fn nested_arguments(
 }
 
 /// Reads syntax without making source whitespace part of the header.
-fn canonical_callee(node: Node<'_>, source: &[u8], language: &str) -> Vec<CalleePart> {
+pub(super) fn canonical_callee(node: Node<'_>, source: &[u8], language: &str) -> Vec<CalleePart> {
     let mut parts = Vec::new();
     append_node(node, source, language, &mut parts);
     parts
@@ -92,7 +92,12 @@ fn append_node(node: Node<'_>, source: &[u8], language: &str, parts: &mut Vec<Ca
 /// Uses the same payload classification as each outer argument slot.
 fn append_argument(node: Node<'_>, source: &[u8], language: &str, parts: &mut Vec<CalleePart>) {
     match arg_shape(node, source, language) {
-        ArgShape::StringLiteral(_, _) => parts.push(CalleePart::Payload),
+        // A wrapper's own callee is compared across members by
+        // [`super::literal_agreement`], which sees every member at once,
+        // so here it needs only the same payload slot a bare string takes.
+        ArgShape::StringLiteral(_, _) | ArgShape::LiteralWrapper(_, _) => {
+            parts.push(CalleePart::Payload);
+        }
         ArgShape::Body => parts.push(CalleePart::Body),
         ArgShape::Other => append_node(node, source, language, parts),
     }

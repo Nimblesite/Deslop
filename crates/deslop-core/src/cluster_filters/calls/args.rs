@@ -6,7 +6,9 @@
 
 use tree_sitter::Node;
 
-use super::{super::constant_table::is_literal_value, ArgShape};
+use super::{
+    super::constant_table::is_literal_value, callee::canonical_callee, ArgShape, CalleePart,
+};
 use crate::ast::named_children;
 
 /// Walks the named children of the call's `arguments`/`argument_list`
@@ -40,8 +42,8 @@ pub(super) fn arg_shape(node: Node<'_>, source: &[u8], language: &str) -> ArgSha
     if let Some(bytes) = literal_collection_bytes(inner, source, language) {
         return ArgShape::StringLiteral(bytes, false);
     }
-    if let Some(bytes) = literal_wrapper_bytes(inner, source, language) {
-        return ArgShape::StringLiteral(bytes, subtree_is_interpolated(inner));
+    if let Some((callee, payload)) = literal_wrapper_parts(inner, source, language) {
+        return ArgShape::LiteralWrapper(callee, payload);
     }
     if carries_statements(inner) {
         return ArgShape::Body;
@@ -118,8 +120,12 @@ fn literal_collection_bytes(node: Node<'_>, source: &[u8], language: &str) -> Op
 /// carry a string. `Money::new(0.1)` against `Money::new(0.2)` therefore
 /// stays `Other`, because a bare number is how a real clone spells the
 /// one parameter it should have been given.
-fn literal_wrapper_bytes(node: Node<'_>, source: &[u8], language: &str) -> Option<Vec<u8>> {
-    if !super::call_kinds(language).contains(&node.kind()) {
+fn literal_wrapper_parts(
+    node: Node<'_>,
+    source: &[u8],
+    language: &str,
+) -> Option<(Vec<CalleePart>, Vec<u8>)> {
+    if !super::call_kinds(language).contains(&node.kind()) || subtree_is_interpolated(node) {
         return None;
     }
     let arguments = node
@@ -132,15 +138,24 @@ fn literal_wrapper_bytes(node: Node<'_>, source: &[u8], language: &str) -> Optio
     if payload.is_empty() || !literal || !payload.iter().copied().any(carries_string_leaf) {
         return None;
     }
+    let callee = node.child_by_field_name("function")?;
+    Some((
+        canonical_callee(callee, source, language),
+        node_bytes(arguments, source)?,
+    ))
+}
+
+/// The exact source bytes a node covers.
+fn node_bytes(node: Node<'_>, source: &[u8]) -> Option<Vec<u8>> {
     source
         .get(node.start_byte()..node.end_byte())
         .map(<[u8]>::to_vec)
 }
 
-/// Whether an interpolation appears anywhere under `node`. A wrapped
-/// literal keeps gh #467's rule: authored interpolation inside the
-/// wrapper is still code choosing data, exactly as it is when the string
-/// is passed bare.
+/// Whether an interpolation appears anywhere under `node`. A wrapper
+/// holding one is refused outright, keeping gh #467's rule: authored
+/// interpolation is code choosing data, and wrapping it in a constructor
+/// does not turn it back into a parameterisable family's payload.
 fn subtree_is_interpolated(node: Node<'_>) -> bool {
     if matches!(node.kind(), "interpolation" | "template_substitution") {
         return true;
