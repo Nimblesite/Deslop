@@ -166,6 +166,8 @@ mod metric_language_agnostic;
 #[path = "metrics_folder_rollup.rs"]
 mod metrics_folder_rollup;
 mod metrics_weighted_wire_refusal;
+#[path = "minified_artifact_exclusion.rs"]
+mod minified_artifact_exclusion;
 #[path = "ollama_failures.rs"]
 mod ollama_failures;
 #[path = "operator_drift_is_not_duplication.rs"]

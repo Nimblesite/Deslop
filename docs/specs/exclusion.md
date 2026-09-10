@@ -8,7 +8,7 @@ Deslop ships with conservative built-in defaults, and a `.deslop.toml` in the sc
 - `exclude` — matching files are dropped in [PIPELINE-DISCOVER-FILES] before parsing. They are not counted in `files_analysed`, never fingerprinted, never embedded, and cannot appear in any cluster. Use for third-party vendored code you do not want analysed at all.
 - `report_hide` — matching files **are analysed** and can contribute to clustering, but each occurrence is flagged `hidden = true` at render time. A cluster where **every** occurrence is hidden is dropped from the rendered `clusters` list and counted under `clusters_hidden`. A cluster with at least one non-hidden occurrence is kept intact so the user sees "regular code duplicates generated code." This is the default tier for generated output like `*.g.cs`, `*.generated.cs`, OpenAPI clients, protobuf output.
 
-**Built-in defaults.** Without a config file, Deslop excludes dependency and build directories per [CONFIG-EXCLUDE-BUILTIN] and report-hides generated output (`generated` path components, Alembic migration files under `alembic/versions`, plus suffixes such as `.g.cs`, `.generated.cs`, `.designer.cs`, `.pb.cs`, `.openapi.cs`, `.generated.py`, `_generated.py`, `_pb2.py`, `_pb2_grpc.py`). Project config adds to these defaults.
+**Built-in defaults.** Without a config file, Deslop excludes dependency and build directories per [CONFIG-EXCLUDE-BUILTIN], excludes bundled and minified build artifacts per [CONFIG-EXCLUDE-MINIFIED], and report-hides generated output (`generated` path components, Alembic migration files under `alembic/versions`, plus suffixes such as `.g.cs`, `.generated.cs`, `.designer.cs`, `.pb.cs`, `.openapi.cs`, `.generated.py`, `_generated.py`, `_pb2.py`, `_pb2_grpc.py`). Project config adds to these defaults.
 
 **File format.** TOML. Parsed via the `toml` crate. Minimal, familiar, diffable:
 
@@ -89,6 +89,18 @@ The Dart predicate above ships per-grammar CST knowledge, so every other languag
 **Predicate.** A finding is recognized as a data table for detection-time visibility when the candidate member's collapsed leaves are at least 0.8 literal positions with at least eight literals and at least two members differ in raw bytes. The fraction is consumed before rendering and is not carried on a cluster.
 
 **Routing interaction.** A literal-dominated family that passes pair admission remains a closure component. `[visibility] data_clones = "ignore"` may drop the finding before ranking; `keep` leaves its membership and mass untouched. No pair classification or data-table predicate changes its mass.
+
+### [CONFIG-EXCLUDE-MINIFIED] Build artifacts are not source
+
+A bundled or minified file is compiler output: one line, whitespace stripped, identifiers shortened. Nobody edits it, no duplicate inside it is actionable, and parsing one costs far more than its size suggests — three such files are 84% of the memory a scan of `gohugoio/hugo` uses, and one of them held rank 10 of that report (gh #539).
+
+Two tests, because either alone leaks. **By name**, the suffixes a bundler writes (`.min.js`, `.bundle.js` and their `.mjs`/`.cjs`/`.css` siblings) — free, and it catches the small ones. **By shape**, a file whose mean bytes per line exceeds `[analysis] max_average_line_bytes` (default 200) — because a bundler is free to emit `app-3f2a.js`, and hugo keeps `renderkatex.bundle.js` in an ordinary source folder no path rule reaches.
+
+The shape test reads a bounded prefix of files above a size floor, so discovery's cost stays proportional to the number of files rather than the size of the corpus. It compares raw bytes: a minified bundle is the file most likely to carry a sequence no UTF-8 decoder accepts, and a guard that gave up there would wave through the artifact it exists to catch.
+
+**Size is never the signal.** A 53 KB file of ordinary source is analysed; a 17 KB artifact is not. Excluding on size would drop real code from the report with nothing to say it had, which is a false negative — the one outcome this project treats as worse than any other. A file that cannot be read is not excluded, for the same reason: the rule can only ever remove code from the analysis, so when it cannot tell, it declines to.
+
+Excluded, not report-hidden: the memory is spent at parse time, so the file has to leave before [PIPELINE-DISCOVER-FILES] hands it on. It is not counted in `files_analysed` and can appear in no cluster.
 
 ### [CONFIG-EXCLUDE-BUILTIN] Built-in component exclusion
 

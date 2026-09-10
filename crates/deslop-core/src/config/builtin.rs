@@ -70,6 +70,105 @@ const BUILTIN_ARTEFACT_COMPONENTS: &[&str] = &[
     ".claude",
 ];
 
+/// File suffixes a bundler or minifier writes. A cheap first pass: it costs
+/// no I/O and catches the artifacts that are named by convention.
+///
+/// It is deliberately not the only test. A bundler is free to emit
+/// `app-3f2a.js`, and `gohugoio/hugo` keeps `renderkatex.bundle.js` in an
+/// ordinary source folder where no path rule reaches it, so the shape of the
+/// file has to decide as well ([CONFIG-EXCLUDE-MINIFIED]).
+const BUILTIN_MINIFIED_SUFFIXES: &[&str] = &[
+    ".min.js",
+    ".min.mjs",
+    ".min.cjs",
+    ".min.css",
+    ".bundle.js",
+    ".bundle.mjs",
+    ".bundle.cjs",
+];
+
+/// Default ceiling on a file's mean bytes per line before it is read as build
+/// output rather than source ([CONFIG-EXCLUDE-MINIFIED]).
+///
+/// Hand-written code sits near 30-40; the readable-but-large fixture in
+/// `minified_artifact_exclusion.rs` measures 17. Minified output starts an
+/// order of magnitude higher — hugo's three artifacts measure 1,163, 10,008
+/// and 474. 200 leaves every hand-written shape a wide berth while still
+/// catching all of them, and GitHub Linguist draws the same line at 110.
+pub const DEFAULT_MAX_AVERAGE_LINE_BYTES: usize = 200;
+
+/// Files below this size are never read for the shape test. A small file
+/// cannot cost enough parse memory to matter, and the suffix pass above still
+/// covers the ones named as artifacts.
+const MINIFIED_SIZE_FLOOR_BYTES: u64 = 16_384;
+
+/// How much of a file the shape test reads. Bounded so discovery never pays
+/// for a whole large file: a bundle gives itself away in its first chunk, and
+/// a prefix keeps the cost of the guard proportional to the number of files
+/// rather than to the size of the corpus.
+const MINIFIED_SAMPLE_BYTES: usize = 65_536;
+
+/// [CONFIG-EXCLUDE-MINIFIED] True when `path` is a build artifact rather than
+/// source: named as one, or shaped like one.
+///
+/// A bundled or minified file is compiler output — one line, whitespace
+/// stripped, identifiers shortened. Nobody edits it and no duplicate found
+/// inside it is actionable, and parsing one costs far more than its size
+/// suggests: three such files are 84% of the memory a scan of `gohugoio/hugo`
+/// uses, and one of them held rank 10 of that report (gh #539).
+///
+/// A file that cannot be read is **not** excluded. This rule can only ever
+/// remove code from the analysis, so when it cannot tell, it declines to.
+pub(super) fn is_minified_artifact(path: &Path, max_average_line_bytes: usize) -> bool {
+    if has_minified_suffix(path) {
+        return true;
+    }
+    let Ok(metadata) = std::fs::metadata(path) else {
+        return false;
+    };
+    if metadata.len() < MINIFIED_SIZE_FLOOR_BYTES {
+        return false;
+    }
+    let Ok(bytes) = std::fs::read(path) else {
+        return false;
+    };
+    exceeds_average_line_bytes(&bytes, max_average_line_bytes)
+}
+
+/// True when `name` ends with one of the bundler suffixes, compared
+/// lowercased so a `.MIN.JS` on a case-preserving filesystem is caught too.
+fn has_minified_suffix(path: &Path) -> bool {
+    let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+        return false;
+    };
+    let lowered = name.to_ascii_lowercase();
+    BUILTIN_MINIFIED_SUFFIXES
+        .iter()
+        .any(|suffix| lowered.ends_with(suffix))
+}
+
+/// Mean bytes per line over the leading [`MINIFIED_SAMPLE_BYTES`] of `bytes`,
+/// against `ceiling`.
+///
+/// A sample with no line break at all is the clearest case there is, and it
+/// divides by one rather than by zero.
+fn exceeds_average_line_bytes(bytes: &[u8], ceiling: usize) -> bool {
+    let sample = bytes.get(..MINIFIED_SAMPLE_BYTES).unwrap_or(bytes);
+    // Split rather than count line breaks: a sample with none is one line, so
+    // the divisor is never zero and needs no correction afterwards. Compared
+    // as raw bytes, because a minified bundle is exactly the file most likely
+    // to carry a sequence no UTF-8 decoder accepts, and a guard that gave up
+    // on such a file would wave through the artifact it exists to catch.
+    let lines = sample.split(|byte| *byte == b'\n').count();
+    // `checked_div` rather than a bare `/`: `count()` cannot return zero, but
+    // nothing in the type says so, and a guard that panicked on an empty file
+    // would take the whole scan with it.
+    sample
+        .len()
+        .checked_div(lines)
+        .is_some_and(|average| average > ceiling)
+}
+
 /// Directory components that are always analysed but hidden from summaries.
 const BUILTIN_REPORT_HIDE_COMPONENTS: &[&str] = &["generated"];
 

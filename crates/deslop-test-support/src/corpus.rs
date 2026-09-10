@@ -71,6 +71,15 @@ pub fn describes_a_repository(path: &Path) -> Result<bool> {
         && !settings.iter().any(|listed| listed.as_str() == Some(name)))
 }
 
+/// The member-count field a rendered cluster actually carries.
+///
+/// Named once because reading a field the report does not emit is silent: the
+/// lookup returns zero and every breach is reported as an empty cluster. The
+/// wire model carries no `size` and no `category`; both were read anyway, in
+/// two separate checks, for as long as nothing asserted what they said
+/// (gh #540).
+pub const OCCURRENCE_COUNT: &str = "occurrence_count";
+
 /// [CORPUS-PIN] How much of a manifest's commit id names its clone directory.
 /// The pin itself is always the full object name; this is only how it reads on
 /// disk and in a log line.

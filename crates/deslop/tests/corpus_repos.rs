@@ -60,6 +60,7 @@ use deslop_test_support::{
     corpus_confidence::{
         check_cluster_mass_contract, check_curated_recall, check_type2_curated_recall,
     },
+    corpus_data_table::{data_table_failure, RANKED_HEAD},
     corpus_determinism::check_reports_agree,
     corpus_precision::{check_boilerplate_not_ranked_first, check_curated_precision},
     corpus_scope::check_scan_scope,
@@ -340,75 +341,27 @@ fn warn_when_accuracy_unasserted(name: &str, manifest: &Value) {
     }
 }
 
-/// Number of top-ranked clusters subjected to the language-agnostic
-/// precision checks. Ranking is the product, so the head of the report is
-/// where a false positive does the most damage.
-const RANKED_HEAD: usize = 10;
-
-/// Fraction of non-whitespace characters that must be digits or data
-/// punctuation before a snippet counts as a data table rather than logic.
-/// Real logic carries identifiers and keywords, so it lands far below this.
-const DATA_TABLE_RATIO: f64 = 0.6;
-
-/// [CORPUS-PRECISION] Language-agnostic: a top-ranked cluster that is essentially a
-/// numeric table must not be classified `logic`. `CloneCategory::data`
-/// exists so such clusters can be demoted; when the classifier does not cover
-/// a language they arrive at full logic weight and outrank real clones.
+/// [CORPUS-PRECISION] Language-agnostic: a top-ranked cluster that is
+/// essentially a numeric table must not rank at full logic weight.
+///
+/// This reads the clone on disk; the judging lives in
+/// `deslop_test_support::corpus_data_table`, where it is under test. A check
+/// nothing asserts is a check that can be wrong for as long as nobody looks
+/// (gh #540).
 fn check_data_tables_not_ranked_as_logic(
     root: &Path,
     run: &CorpusRun,
     failures: &mut Vec<Failure>,
 ) -> Result<()> {
-    for (rank, cluster) in array(&run.report, "clusters")
+    for (position, cluster) in array(&run.report, "clusters")
         .iter()
         .take(RANKED_HEAD)
         .enumerate()
     {
         let text = first_occurrence_text(root, cluster)?;
-        let ratio = data_character_ratio(&text);
-        let category = cluster
-            .get("category")
-            .and_then(Value::as_str)
-            .unwrap_or("absent");
-        if ratio >= DATA_TABLE_RATIO && category != "data" {
-            failures.push(Failure::new(
-                "data_table_rank",
-                format!(
-                    "rank {rank}: cluster of {} occurrences is {:.0}% numeric/separator \
-                     characters — a data table — but is categorised `{category}`, so it ranks \
-                     at full logic weight. Snippet: {}",
-                    field_u64(cluster, "size"),
-                    ratio * 100.0,
-                    text.chars().take(70).collect::<String>().replace('\n', " "),
-                ),
-            ));
-        }
+        failures.extend(data_table_failure(position, cluster, &text));
     }
     Ok(())
-}
-
-/// Fraction of non-whitespace characters that are digits or the punctuation
-/// that separates literals in a table.
-fn data_character_ratio(text: &str) -> f64 {
-    let significant = || text.chars().filter(|character| !character.is_whitespace());
-    let total = significant().count();
-    if total == 0 {
-        return 0.0;
-    }
-    let data = significant()
-        .filter(|character| is_data_character(*character))
-        .count();
-    as_f64(data) / as_f64(total)
-}
-
-/// True for digits and the punctuation that separates literals in a table.
-fn is_data_character(character: char) -> bool {
-    character.is_ascii_digit() || matches!(character, ';' | ',' | '|' | '[' | ']' | '.' | '-')
-}
-
-/// Widens a count to `f64`, saturating rather than wrapping.
-fn as_f64(count: usize) -> f64 {
-    u32::try_from(count).map_or(f64::from(u32::MAX), f64::from)
 }
 
 /// [CORPUS-CEILINGS] The scan must finish inside the manifest's wall-clock and memory

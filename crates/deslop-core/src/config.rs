@@ -32,7 +32,8 @@ use crate::{
 };
 
 pub(crate) use builtin::has_generated_header;
-use builtin::{built_in_report_hidden, corpus_built_in_excluded};
+pub use builtin::DEFAULT_MAX_AVERAGE_LINE_BYTES;
+use builtin::{built_in_report_hidden, corpus_built_in_excluded, is_minified_artifact};
 use ranking::resolve_ranking_policy;
 pub use ranking::{
     ClonePolicy, RankingPolicy, DEFAULT_DATA_CLONE_WEIGHT, DEFAULT_STRUCTURAL_ONLY_WEIGHT,
@@ -95,6 +96,10 @@ pub struct ExclusionConfig {
     /// Whether third-party library source inside the corpus is analysed
     /// ([CONFIG-EXCLUDE-DEPENDENCIES]). Defaults off.
     include_dependencies: bool,
+    /// Ceiling on a file's mean bytes per line before it is treated as build
+    /// output rather than source ([CONFIG-EXCLUDE-MINIFIED]). Defaults to
+    /// [`DEFAULT_MAX_AVERAGE_LINE_BYTES`].
+    max_average_line_bytes: usize,
     /// Whether analysis may consult and fill the on-disk parse store
     /// ([CONFIG-INCREMENTAL-OPTOUT]). Defaults to
     /// [`PersistedProcessing::Enabled`].
@@ -133,6 +138,7 @@ impl ExclusionConfig {
             fail_over_percent: None,
             allow_cross_language_comparison: false,
             include_dependencies: false,
+            max_average_line_bytes: DEFAULT_MAX_AVERAGE_LINE_BYTES,
             incremental: PersistedProcessing::Enabled,
             split_by_language: false,
             ranking_policy: RankingPolicy::default().with_global_override(),
@@ -225,6 +231,7 @@ impl ExclusionConfig {
             fail_over_percent,
             allow_cross_language_comparison: raw.analysis.allow_cross_language_comparison,
             include_dependencies: raw.analysis.include_dependencies,
+            max_average_line_bytes: raw.analysis.max_average_line_bytes,
             incremental: PersistedProcessing::from_key(raw.analysis.incremental),
             split_by_language: raw.report.split_by_language,
             ranking_policy,
@@ -301,6 +308,9 @@ impl ExclusionConfig {
     #[must_use]
     pub fn is_excluded(&self, path: &Path, language: Option<&str>) -> bool {
         if corpus_built_in_excluded(path, self.scan_root.as_deref(), self.include_dependencies) {
+            return true;
+        }
+        if is_minified_artifact(path, self.max_average_line_bytes) {
             return true;
         }
         if matches(&self.default_exclude, path) {

@@ -76,6 +76,12 @@ pub(super) struct RawAnalysis {
     /// every surface — CLI, LSP, MCP — without a per-invocation flag.
     #[serde(default = "default_incremental")]
     pub(super) incremental: bool,
+    /// Ceiling on a file's mean bytes per line before it is read as build
+    /// output rather than source ([CONFIG-EXCLUDE-MINIFIED]). Raise it for a
+    /// corpus whose source genuinely runs long lines; lower it to catch
+    /// artifacts a bundler wrote less densely.
+    #[serde(default = "default_max_average_line_bytes")]
+    pub(super) max_average_line_bytes: usize,
 }
 
 impl Default for RawAnalysis {
@@ -84,6 +90,7 @@ impl Default for RawAnalysis {
             allow_cross_language_comparison: false,
             include_dependencies: false,
             incremental: default_incremental(),
+            max_average_line_bytes: default_max_average_line_bytes(),
         }
     }
 }
@@ -92,6 +99,11 @@ impl Default for RawAnalysis {
 /// ([CONFIG-INCREMENTAL-OPTOUT]).
 const fn default_incremental() -> bool {
     true
+}
+
+/// The shipped mean-bytes-per-line ceiling ([CONFIG-EXCLUDE-MINIFIED]).
+const fn default_max_average_line_bytes() -> usize {
+    crate::config::DEFAULT_MAX_AVERAGE_LINE_BYTES
 }
 
 /// Whether analysis may consult and fill the on-disk parse store

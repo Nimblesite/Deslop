@@ -25,14 +25,11 @@ use serde_json::Value;
 use crate::{
     corpus::{
         array, cluster_shows_span, field_u64, u64_field, visible_clusters, CorpusRun, Failure,
+        OCCURRENCE_COUNT,
     },
     enclosure::{span_of, Span},
 };
 
-/// Visible member-count field on a mass-only cluster; the wire model
-/// carries no `size` and no `bucket`, and reading either printed every
-/// breach as "0 occurrences" in an unlabelled bucket.
-const OCCURRENCE_COUNT: &str = "occurrence_count";
 /// Canonical duplicated-mass field, the ranked figure a breach is judged by.
 const MASS: &str = "mass";
 
