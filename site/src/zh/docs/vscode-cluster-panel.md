@@ -31,7 +31,7 @@ lang: zh
 - **编辑器（中）** 是 LSP 就地绘制发现结果的地方。重复片段在你输入时被加上下划线，提示信息标明分桶与副本数量——*"Identical code × 3 — Safe to extract — every copy is the same."*——随后标出用作比较锚点的**规范**出现位置。发现结果上提供三个操作：**Compare with canonical**、**View cluster** 与 **Copy for AI**（面向 AI 的上下文块，在每个 Deslop 界面上都可用）。
 - **Compare 差异对比（右）** 是 VS Code 原生的并排编辑器，由 **Compare with canonical** 打开：当前出现位置在左、规范副本在右，逐行对齐，让你在提取共享辅助函数之前先确认重复确实存在。
 
-这里的一切都是响应式的。编辑代码后，树、占比、就地警告与差异对比都会随你输入而刷新。同一份实时报告也支撑着 MCP 工具（`find-similar`、`top-offenders`、`cluster-by-id`），因此驱动你编辑器的智能体会在写下副本*之前*就看到这个重复。本页其余部分是对该视图中每个标签、分数和操作的实用指南。
+这里的一切都是响应式的。编辑代码后，树、占比、就地警告与差异对比都会随你输入而刷新。同一份实时报告也支撑着 MCP 工具（`find-similar`、`duplicates`、`cluster-by-id`），因此驱动你编辑器的智能体会在写下副本*之前*就看到这个重复。本页其余部分是对该视图中每个标签、分数和操作的实用指南。
 
 ## 簇 Id
 

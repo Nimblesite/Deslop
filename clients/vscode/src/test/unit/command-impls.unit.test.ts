@@ -38,11 +38,12 @@ import {
 } from "../../commands/treeMenus";
 import { buildCompareUri } from "../../compare/provider";
 import { ReportStore } from "../../reportStore";
-import { seededStore } from "./report-store.helpers";
+import { seededStore, storeWith } from "./report-store.helpers";
 import { activateExtension } from "../suite/helpers";
 import { ClusterNode, OccurrenceNode } from "../../tree/providers";
 import { kindTaxonomy, kindTitle, Report, ReportCluster, ReportOccurrence } from "../../types/report";
 import { FIXTURE_KIND, occurrence, wireCluster } from "../cluster.helpers";
+import { respondingClient } from "./client.helpers";
 
 const UTF8_ENCODING = "utf8";
 // [VSIX-PAIR-COMPARE] Without a language client the diff still opens; the
@@ -217,8 +218,7 @@ suite("register command implementations", () => {
   });
 
   test("openWorstCluster opens a panel when the report has clusters", () => {
-    const store = new ReportStore();
-    store.setSnapshot(report([cluster("c-top", ["/tmp/cdd-A.cs", "/tmp/cdd-B.cs"])]), 0);
+    const store = storeWith(report([cluster("c-top", ["/tmp/cdd-A.cs", "/tmp/cdd-B.cs"])]));
     openWorstCluster(fakeCtx(), store);
   });
 
@@ -257,11 +257,7 @@ suite("register command implementations", () => {
       new vscode.Position(0, TWO_CHARACTER_OFFSET),
       new vscode.Position(0, TWO_CHARACTER_OFFSET),
     );
-    const store = new ReportStore();
-    store.setSnapshot(
-      report([cluster("c-1", [doc.uri.fsPath, "/tmp/cdd-sibling.cs"])]),
-      0,
-    );
+    const store = storeWith(report([cluster("c-1", [doc.uri.fsPath, "/tmp/cdd-sibling.cs"])]));
     await jumpToNextOccurrence(store);
   });
 
@@ -273,8 +269,7 @@ suite("register command implementations", () => {
     fs.writeFileSync(fileA, "public class A { int x = 1; }\n", UTF8_ENCODING);
     fs.writeFileSync(fileB, "public class B { int y = 2; }\n", UTF8_ENCODING);
     fs.writeFileSync(fileC, "public class C { int z = 3; }\n", UTF8_ENCODING);
-    const store = new ReportStore();
-    store.setSnapshot(
+    const store = storeWith(
       report([
         clusterWithRanges(CYCLE_CLUSTER_ID, [
           { path: fileA, start_byte: 0, end_byte: CYCLE_OCCURRENCE_END_BYTE },
@@ -282,7 +277,6 @@ suite("register command implementations", () => {
           { path: fileC, start_byte: 0, end_byte: CYCLE_OCCURRENCE_END_BYTE },
         ]),
       ]),
-      0,
     );
 
     await jumpToNextOccurrence(store, CYCLE_CLUSTER_ID, 0);
@@ -307,15 +301,13 @@ suite("register command implementations", () => {
       language: "plaintext",
     });
     await vscode.window.showTextDocument(doc);
-    const store = new ReportStore();
-    store.setSnapshot(report([cluster("c", ["/other"])]), 0);
+    const store = storeWith(report([cluster("c", ["/other"])]));
     await jumpToNextOccurrence(store);
   });
 
   test("jumpToNextOccurrence bails when there is no active editor", async () => {
     await vscode.commands.executeCommand("workbench.action.closeAllEditors");
-    const store = new ReportStore();
-    store.setSnapshot(report([cluster("c", ["/p"])]), 0);
+    const store = storeWith(report([cluster("c", ["/p"])]));
     await jumpToNextOccurrence(store);
   });
 
@@ -438,8 +430,7 @@ suite("register command implementations", () => {
 
   test("openSchemaDoc prefers packaged docs over a stale snapshot", async () => {
     const expected = fs.readFileSync(packagedSchemaDocPath(), UTF8_ENCODING);
-    const store = new ReportStore();
-    store.setSnapshot(report([]), 0);
+    const store = storeWith(report([]));
     await openSchemaDoc(fakeCtx(), store);
     const active = vscode.window.activeTextEditor;
     assert.ok(active, "schema doc editor should be active");
@@ -616,8 +607,7 @@ suite("tree menu renderers", () => {
       );
     }
 
-    const store = new ReportStore();
-    store.setSnapshot(report([c]), 0);
+    const store = storeWith(report([c]));
     const first = c.occurrences[0];
     assert.ok(first);
     const occurrenceText = aiPayloadForOccurrence(first, store);
@@ -676,8 +666,7 @@ suite("tree menu renderers", () => {
       { path: "src/bar.cs", start_byte: 5, end_byte: 80 },
     ]);
 
-    const store = new ReportStore();
-    store.setSnapshot(report([c]), 0);
+    const store = storeWith(report([c]));
 
     const first = c.occurrences[0];
     assert.ok(first);
@@ -750,8 +739,7 @@ suite("tree menu renderers", () => {
 
   test("clusterIdForTreeNode returns cluster id for cluster nodes", () => {
     const c = clusterWithRanges("c-id", [{ path: "a", start_byte: 0, end_byte: 1 }]);
-    const store = new ReportStore();
-    store.setSnapshot(report([c]), 0);
+    const store = storeWith(report([c]));
     assert.equal(clusterIdForTreeNode(clusterNodeFor(c), store), "c-id");
   });
 
@@ -759,8 +747,7 @@ suite("tree menu renderers", () => {
     const c = clusterWithRanges("c-parent", [
       { path: TEST_SOURCE_PATH, start_byte: 100, end_byte: 120 },
     ]);
-    const store = new ReportStore();
-    store.setSnapshot(report([c]), 0);
+    const store = storeWith(report([c]));
     const occ = c.occurrences[0];
     assert.ok(occ);
     assert.equal(
@@ -825,8 +812,7 @@ suite("tree menu handlers", () => {
       [{ path: TEST_SOURCE_PATH, start_byte: 0, end_byte: DEFAULT_OCCURRENCE_END_BYTE }],
       THIRD_RANK,
     );
-    const store = new ReportStore();
-    store.setSnapshot(report([c]), 0);
+    const store = storeWith(report([c]));
 
     await copyContextForAI(clusterNodeFor(c), store);
     const clipboard = await vscode.env.clipboard.readText();
@@ -839,8 +825,7 @@ suite("tree menu handlers", () => {
     const c = clusterWithRanges("c-occ-ctx", [
       { path: TEST_SOURCE_PATH, start_byte: 0, end_byte: 9 },
     ]);
-    const store = new ReportStore();
-    store.setSnapshot(report([c]), 0);
+    const store = storeWith(report([c]));
 
     const occ = c.occurrences[0];
     assert.ok(occ);
@@ -952,9 +937,7 @@ suite("command dispatch wiring", () => {
       store: seededStore([]),
       clientOf: (): LanguageClient | undefined => {
         clientCalls += 1;
-        return {
-          sendRequest: () => Promise.resolve("# refreshed"),
-        } as unknown as LanguageClient;
+        return respondingClient(() => "# refreshed");
       },
     };
     const refresh = COMMAND_BINDINGS.find((b) => b.id === REFRESH_REPORT_COMMAND);
@@ -1017,8 +1000,7 @@ suite("command target resolution", () => {
     fs.writeFileSync(second.file, "const beta = 2;\n");
     const doc = await vscode.workspace.openTextDocument(second.file);
     await vscode.window.showTextDocument(doc);
-    const store = new ReportStore();
-    store.setSnapshot(
+    const store = storeWith(
       reportWithClusters([
         clusterWithRanges(CYCLE_CLUSTER_ID, [
           { path: first.file, start_byte: 0, end_byte: SHORT_OCCURRENCE_END_BYTE },

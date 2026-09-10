@@ -4,12 +4,13 @@
 //! The cluster must not surface as actionable duplication.
 //! Spec: [CLONE-NOISE-RUST-ITER-COLLECT], [PIPELINE-FINGERPRINT-MERKLE-TYPE-REFERENCE].
 
-use std::fs;
-
 use anyhow::Result;
 use serde_json::Value;
 
 use crate::common::*;
+
+/// The node floor the iterator-chain idiom is judged at.
+const ITER_COLLECT_MIN_NODES: u32 = 4;
 
 const CONTROL_FIXTURE: &str = "rust-small";
 const CONTROL_FILES: &[&str] = &["alpha.rs", "beta.rs"];
@@ -20,17 +21,6 @@ const CONTROL_RANK: u64 = 1;
 const CONTROL_NODES: u64 = 39;
 const CONTROL_START: u64 = 1;
 const CONTROL_END: u64 = 10;
-
-fn run_report(fixture_name: &str) -> Result<Value> {
-    let tmp = tempfile::tempdir()?;
-    let output = tmp.path().join("report");
-    let _assertion = deslop_cmd(&fixture(fixture_name), &output)?
-        .args(["--min-nodes", "4", "--embeddings", "off"])
-        .assert()
-        .success();
-    let body = fs::read_to_string(output.with_extension("json"))?;
-    Ok(serde_json::from_str(&body)?)
-}
 
 fn cluster_occurrence_paths(cluster: &Value) -> Vec<String> {
     cluster
@@ -51,7 +41,10 @@ fn cluster_occurrence_paths(cluster: &Value) -> Vec<String> {
 
 #[test]
 fn rust_iter_map_collect_idiom_does_not_cluster_across_unrelated_types() -> Result<()> {
-    let report = run_report("rust-issue-147-iter-collect-idiom")?;
+    let report = run_report(
+        &fixture("rust-issue-147-iter-collect-idiom"),
+        ITER_COLLECT_MIN_NODES,
+    )?;
     let cross_file_clusters: Vec<&Value> = clusters(&report)
         .iter()
         .filter(|cluster| {
@@ -70,7 +63,7 @@ fn rust_iter_map_collect_idiom_does_not_cluster_across_unrelated_types() -> Resu
 }
 
 fn assert_real_rust_clone() -> Result<()> {
-    let report = run_report(CONTROL_FIXTURE)?;
+    let report = run_report(&fixture(CONTROL_FIXTURE), ITER_COLLECT_MIN_NODES)?;
     let found = clusters(&report);
     assert_eq!(found.len(), CONTROL_CLUSTER_COUNT, "{report:#}");
     let cluster = found

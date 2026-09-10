@@ -1,29 +1,22 @@
 //! GH #66: endpoint mappings with different identifiers and literals
 //! must not be classified as identical code.
 
-use std::{fs, path::Path};
-
 use anyhow::{anyhow, Result};
 use serde_json::Value;
 
 use crate::common::signals::{assert_structural_only_contract, has_verbatim_pair};
 use crate::common::*;
 
-fn run_report(scan_root: &Path) -> Result<Value> {
-    let tmp = tempfile::tempdir()?;
-    let output = tmp.path().join("report");
-    let _assertion = deslop_cmd(scan_root, &output)?
-        .args(["--min-nodes", "30", "--embeddings", "off"])
-        .assert()
-        .success();
-    let mut json_path = output;
-    let _replaced = json_path.set_extension("json");
-    Ok(serde_json::from_str(&fs::read_to_string(json_path)?)?)
-}
+/// The node floor this fixture is judged at: large enough that only a
+/// whole route-handler body can clear it.
+const ROUTE_MAPPING_MIN_NODES: u32 = 30;
 
 #[test]
 fn issue_66_route_mappings_with_value_differences_are_not_identical() -> Result<()> {
-    let report = run_report(&fixture("csharp-issue-66-route-mapping"))?;
+    let report = run_report(
+        &fixture("csharp-issue-66-route-mapping"),
+        ROUTE_MAPPING_MIN_NODES,
+    )?;
     let clusters = report
         .get("clusters")
         .and_then(Value::as_array)

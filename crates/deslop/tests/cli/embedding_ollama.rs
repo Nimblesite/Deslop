@@ -46,10 +46,7 @@ fn load_report_json(path: &Path) -> Result<serde_json::Value> {
 /// `src` scan root. Embedding/cache tests need a mutable scan root so
 /// they can write cache siblings next to the sources.
 fn seed_scan(fixture_name: &str) -> Result<(tempfile::TempDir, PathBuf)> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    seed_scan_root(&fixture(fixture_name), &scan_root)?;
-    Ok((tmp, scan_root))
+    seeded_fixture_root(fixture_name)
 }
 
 /// Runs an Ollama-backed scan, varying only what the cases here
@@ -387,14 +384,16 @@ fn ollama_embedding_cache_persists_across_runs() -> Result<()> {
 fn ollama_provenance_surfaces_in_text_and_html() -> Result<()> {
     let (_tmp, out) = ollama_run("csharp-small", "8", "required")?;
     let text = fs::read_to_string(&out.txt)?;
-    assert!(
-        text.contains("embeddings: ollama/nomic-embed-text@"),
-        "text renderer must carry the Ollama provenance line: {text}"
+    assert_contains(
+        &text,
+        "embeddings: ollama/nomic-embed-text@",
+        "text renderer must carry the Ollama provenance line",
     );
     let html = fs::read_to_string(&out.html)?;
-    assert!(
-        html.contains("embeddings: ollama/nomic-embed-text@"),
-        "html renderer must carry the Ollama provenance line: {html}"
+    assert_contains(
+        &html,
+        "embeddings: ollama/nomic-embed-text@",
+        "html renderer must carry the Ollama provenance line",
     );
     Ok(())
 }

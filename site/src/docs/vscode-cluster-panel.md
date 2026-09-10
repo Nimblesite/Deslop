@@ -30,7 +30,7 @@ Three surfaces are visible, and all of them read the same live report:
 - **The editor (centre)** is where the LSP draws the finding inline. The duplicated span is underlined in the cluster's kind colour as you type, and a message names the kind, the **canonical** occurrence and the copy count — *"Identical code × 3"* — with **View cluster** and **Copy for AI** actions (the AI-ready context block, available on every Deslop surface).
 - **The Compare diff (right)** is VS Code's native side-by-side editor, opened by **Compare** on an occurrence row. It shows the canonical occurrence on the left and the clicked occurrence on the right so you can inspect exactly those two ranges before extracting a shared helper.
 
-Everything here is reactive. Edit the code and the tree, the percentages, the inline warning, and the diff all refresh as you type. The same live report backs the MCP tools (`find-similar`, `top-offenders`, `cluster-by-id`), so the agent driving your editor sees the duplicate *before* it writes the copy. The rest of this page is a field guide to each label, score, and action in that view.
+Everything here is reactive. Edit the code and the tree, the percentages, the inline warning, and the diff all refresh as you type. The same live report backs the MCP tools (`find-similar`, `duplicates`, `cluster-by-id`), so the agent driving your editor sees the duplicate *before* it writes the copy. The rest of this page is a field guide to each label, score, and action in that view.
 
 ## Cluster Id
 

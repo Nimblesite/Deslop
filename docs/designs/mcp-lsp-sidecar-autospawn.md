@@ -93,7 +93,7 @@ A `DESLOP_MCP_NO_AUTOSPAWN=1` env var (and/or `--no-autospawn` flag) disables sp
 
 ## 8. Acceptance criteria (coarse E2E, per CLAUDE.md)
 
-1. **Cold start**: MCP launched against a temp workspace with **no** LSP and auto-spawn on → `top-offenders` returns real clusters (the MCP spawned its own engine).
+1. **Cold start**: MCP launched against a temp workspace with **no** LSP and auto-spawn on → `duplicates` returns real clusters (the MCP spawned its own engine).
 2. **Attach, don't duplicate**: an LSP already bound the socket → MCP connects; assert **no** second `deslop-lsp` process was spawned (`pgrep` count stable).
 3. **No orphan**: kill the MCP → the sidecar LSP exits within ~1 monitor interval (extend [orphan_exit.rs](../../crates/deslop-mcp/tests/orphan_exit.rs)).
 4. **Version safety**: the spawned LSP is the bundled sibling → no `-32601` (extend [issue_148_version_mismatch.rs](../../crates/deslop-mcp/tests/issue_148_version_mismatch.rs)).

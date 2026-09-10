@@ -1,6 +1,8 @@
 //! Mass-only CLI summary rendering.
 
-use deslop_core::{report::ReportCluster, report::ReportOccurrence, Report};
+use deslop_core::{
+    report::ReportCluster, report::ReportOccurrence, report_facts::DiffDelta, Report,
+};
 
 use super::{theme::Theme, ColorChoice};
 
@@ -51,20 +53,17 @@ fn write_headline(theme: &Theme, report: &Report) {
 
 /// Diff-scoped cluster delta line.
 fn write_diff_delta_line(theme: &Theme, report: &Report) {
-    let Some(outside) = report.clusters_outside_diff else {
+    let Some(delta) = DiffDelta::of(report) else {
         return;
     };
-    let newly = report
-        .clusters
-        .iter()
-        .filter(|cluster| cluster.is_newly_introduced == Some(true))
-        .count();
-    let cross_file = report.clusters.len().saturating_sub(newly);
     eprintln!(
         "  {bold}{newly} group(s) newly introduced by this diff, {cross_file} cross-file with untouched code{reset} {dim}({outside} untouched group(s) omitted by --only-changed){reset}",
         bold = theme.bold,
         dim = theme.dim,
         reset = theme.reset,
+        newly = delta.newly,
+        cross_file = delta.cross_file,
+        outside = delta.outside,
     );
 }
 

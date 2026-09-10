@@ -9,6 +9,7 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 
 import { resolveWorkspacePath } from "../pathUtils";
+import type { PairEndpoint } from "../types/report";
 
 export const COMPARE_SCHEME = "deslop-compare";
 
@@ -51,11 +52,10 @@ export function buildCompareUri(
 // label names the pair, not a cluster.
 const COMPARE_PAIR_LABEL = "selected-pair";
 
-export interface CompareEndpointRef {
-  readonly path: string;
-  readonly start_byte: number;
-  readonly end_byte: number;
-}
+/** One end of a pair diff. The shape is the generated wire contract
+ * ([VSIX-PAIR-COMPARE]); this name is kept because the compare commands
+ * read as endpoint *references*, but there is only one definition. */
+export type CompareEndpointRef = PairEndpoint;
 
 export function parseCompareUri(uri: vscode.Uri): CompareCoordinates {
   if (uri.scheme !== COMPARE_SCHEME) {

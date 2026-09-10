@@ -168,15 +168,26 @@ export class FileNode extends vscode.TreeItem {
     this.description = `worst mass ${formatMass(worstMass)}`;
     this.contextValue = "deslop.fileGroup";
     this.iconPath = new vscode.ThemeIcon(FILE_NODE_KIND);
-    this.tooltip = new vscode.MarkdownString(
-      `\`${filePath}\`\n\n` +
-        `${clusterCount} duplicate ${noun} · worst mass \`${formatMass(worstMass)}\``,
-    );
+    this.tooltip = pathRollupTooltip(filePath, `${clusterCount} duplicate ${noun}`, worstMass);
     this.accessibilityInformation = {
       label: `${label}, ${clusterCount} duplicate ${noun}`,
       role: TREE_ITEM_ROLE,
     };
   }
+}
+
+// [VSIX-TOP-OFFENDERS-FILE-MODE] The tooltip both path-keyed rollup rows
+// render: the path on its own line, then a one-line summary ending in the
+// row's worst mass. One function so a file row and a folder row can never
+// drift into describing the same figure two different ways.
+function pathRollupTooltip(
+  rowPath: string,
+  summary: string,
+  worstMass: number,
+): vscode.MarkdownString {
+  return new vscode.MarkdownString(
+    `\`${rowPath}\`\n\n${summary} · worst mass \`${formatMass(worstMass)}\``,
+  );
 }
 
 // Shared group-row machinery for the kind grouping axis: file-mode kind
@@ -235,9 +246,10 @@ export class FolderNode extends vscode.TreeItem {
     this.description = `worst mass ${formatMass(worstMass)} · ${fileCount} ${noun}`;
     this.contextValue = "deslop.folderGroup";
     this.iconPath = vscode.ThemeIcon.Folder;
-    this.tooltip = new vscode.MarkdownString(
-      `\`${folderPath}\`\n\n` +
-        `${fileCount} ${noun} with duplication · worst mass \`${formatMass(worstMass)}\``,
+    this.tooltip = pathRollupTooltip(
+      folderPath,
+      `${fileCount} ${noun} with duplication`,
+      worstMass,
     );
     this.accessibilityInformation = {
       label: `${label}, ${fileCount} duplicated ${noun}`,

@@ -2,7 +2,7 @@
 
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
-import type { LanguageClient } from "vscode-languageclient/node";
+import { notifyingClient, recordingClient, rejectingClient, respondingClient } from "./client.helpers";
 import {
   surfaceStartupFailure,
   currentExtensionVersion,
@@ -169,15 +169,11 @@ suite("extension internals", () => {
   });
 
   test("wireNotifications registers handlers without throwing", () => {
-    const handlers = new Map<string, (...args: unknown[]) => unknown>();
-    const client = {
-      onNotification: (name: string, cb: (...args: unknown[]) => unknown) => handlers.set(name, cb),
-      sendRequest: () => Promise.resolve(null),
-    } as unknown as LanguageClient;
+    const { client, registered } = notifyingClient();
     wireNotifications(client, new ReportStore());
-    assert.ok(handlers.has("deslop/reportChanged"));
-    assert.ok(handlers.has("deslop/analysisState"));
-    assert.ok(handlers.has("deslop/embeddingProgress"));
+    assert.ok(registered("deslop/reportChanged"));
+    assert.ok(registered("deslop/analysisState"));
+    assert.ok(registered("deslop/embeddingProgress"));
   });
 
   test("syncEmbeddingSettingsToLsp forwards shared workspace settings", async () => {
@@ -185,13 +181,7 @@ suite("extension internals", () => {
     await cfg.update(EMBEDDING_MODE_SETTING, "auto", vscode.ConfigurationTarget.Global);
     await cfg.update(EMBEDDING_PROVIDER_SETTING, OLLAMA_PROVIDER_ID, vscode.ConfigurationTarget.Global);
     await cfg.update(EMBEDDING_MODEL_SETTING, DEFAULT_EMBEDDING_MODEL, vscode.ConfigurationTarget.Global);
-    const calls: Array<{ method: string; params: unknown }> = [];
-    const client = {
-      sendRequest: (method: string, params: unknown) => {
-        calls.push({ method, params });
-        return Promise.resolve(null);
-      },
-    } as unknown as LanguageClient;
+    const { calls, client } = recordingClient(() => null);
     const store = new ReportStore();
     await syncEmbeddingSettingsToLsp(store, () => client);
     assert.deepEqual(calls, [
@@ -208,16 +198,10 @@ suite("extension internals", () => {
   });
 
   test("wireNotifications embeddingProgress handler pushes the payload into the store", () => {
-    let progressCb: ((p: unknown) => void) | undefined;
-    const client = {
-      onNotification: (name: string, cb: (p: unknown) => void) => {
-        if (name === "deslop/embeddingProgress") progressCb = cb;
-      },
-      sendRequest: () => Promise.resolve(null),
-    } as unknown as LanguageClient;
+    const { client, notify } = notifyingClient();
     const store = new ReportStore();
     wireNotifications(client, store);
-    progressCb?.({
+    notify("deslop/embeddingProgress", {
       phase: "starting",
       provider_id: OLLAMA_PROVIDER_ID,
       model_id: DEFAULT_EMBEDDING_MODEL,
@@ -225,7 +209,7 @@ suite("extension internals", () => {
       total: 100,
     });
     assert.equal(store.current.embeddingProgress?.total, 100);
-    progressCb?.({
+    notify("deslop/embeddingProgress", {
       phase: "complete",
       provider_id: OLLAMA_PROVIDER_ID,
       model_id: DEFAULT_EMBEDDING_MODEL,
@@ -238,34 +222,26 @@ suite("extension internals", () => {
   });
 
   test("wireNotifications embeddingProgress complete refreshes the report", async () => {
-    let progressCb: ((p: unknown) => void) | undefined;
-    const requests: string[] = [];
-    const client = {
-      onNotification: (name: string, cb: (p: unknown) => void) => {
-        if (name === "deslop/embeddingProgress") progressCb = cb;
-      },
-      sendRequest: (name: string) => {
-        requests.push(name);
-        return Promise.resolve(emptyReport({
-          tool_version: "v",
-          files_analysed: 7,
-          metrics: repoMetrics(),
-          embedding_provenance: {
-            provider_id: "ollama",
-            model_id: "nomic-embed-text",
-            model_version: "test",
-            dimensions: 768,
-            attempted_subtrees: 1,
-            succeeded_subtrees: 1,
-            indexed_subtrees: 1,
-            failed_subtrees: 0,
-          },
-        }));
-      },
-    } as unknown as LanguageClient;
+    const { calls, client, notify } = notifyingClient(() =>
+      emptyReport({
+        tool_version: "v",
+        files_analysed: 7,
+        metrics: repoMetrics(),
+        embedding_provenance: {
+          provider_id: "ollama",
+          model_id: "nomic-embed-text",
+          model_version: "test",
+          dimensions: 768,
+          attempted_subtrees: 1,
+          succeeded_subtrees: 1,
+          indexed_subtrees: 1,
+          failed_subtrees: 0,
+        },
+      }),
+    );
     const store = new ReportStore();
     const schedule = wireNotifications(client, store);
-    progressCb?.({
+    notify("deslop/embeddingProgress", {
       phase: "complete",
       provider_id: OLLAMA_PROVIDER_ID,
       model_id: DEFAULT_EMBEDDING_MODEL,
@@ -275,40 +251,29 @@ suite("extension internals", () => {
     // The refresh runs on the serialised queue; awaiting the schedule is the
     // deterministic completion point (no microtask counting, no timers).
     await schedule.settled();
-    assert.ok(requests.includes("deslop/reportGet"));
+    assert.ok(calls.some((call) => call.method === "deslop/reportGet"));
     assert.equal(store.current.report?.files_analysed, 7);
   });
 
   test("wireNotifications analysisState handler logs without throwing", () => {
-    let stateCb: ((s: string) => void) | undefined;
-    const client = {
-      onNotification: (name: string, cb: (s: string) => void) => {
-        if (name === "deslop/analysisState") stateCb = cb;
-      },
-      sendRequest: () => Promise.resolve(null),
-    } as unknown as LanguageClient;
+    const { client, notify } = notifyingClient();
     wireNotifications(client, new ReportStore());
-    stateCb?.("running");
+    notify("deslop/analysisState", "running");
   });
 
   test("seedInitialReport stores the returned snapshot", async () => {
-    const client = {
-      sendRequest: () =>
-        Promise.resolve(emptyReport({
+    const client = respondingClient(() => emptyReport({
           tool_version: "v",
           files_analysed: 2,
           metrics: repoMetrics(),
-        })),
-    } as unknown as LanguageClient;
+        }));
     const store = new ReportStore();
     await seedInitialReport(client, store);
     assert.equal(store.current.report?.files_analysed, 2);
   });
 
   test("seedInitialReport swallows a rejected request", async () => {
-    const client = {
-      sendRequest: () => Promise.reject(new Error("no backend")),
-    } as unknown as LanguageClient;
+    const client = rejectingClient("no backend");
     await seedInitialReport(client, new ReportStore());
   });
 

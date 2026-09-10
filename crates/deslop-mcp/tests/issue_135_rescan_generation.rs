@@ -13,7 +13,7 @@ use serde_json::{json, Value};
 
 use crate::common;
 use common::{
-    copied_fixture, spawn_lsp_and_wait_for_socket, structured_content,
+    call_tool, copied_fixture, spawn_lsp_and_wait_for_socket, structured_content,
     wait_for_state_then_init_mcp, McpHandle,
 };
 
@@ -35,18 +35,15 @@ fn issue_135_rescan_generation_matches_report_get_and_session_config() -> Result
         b"namespace Solo { class Only { public int Go() => 1; } }\n",
     )?;
 
-    let rescan = mcp.request(
-        "tools/call",
+    let rescan_structured = call_tool(
+        &mut mcp,
+        "rescan",
         &json!({
-            "name": "rescan",
-            "arguments": {
-                "paths": [beta.to_string_lossy().into_owned()],
-                "n": 1
-            }
+            "paths": [beta.to_string_lossy().into_owned()],
+            "n": 1
         }),
     )?;
-    let rescan_structured = structured_content(&rescan, "rescan")?;
-    let rescan_generation = read_generation(&rescan_structured, "rescan", &rescan)?;
+    let rescan_generation = read_generation(&rescan_structured, "rescan", &rescan_structured)?;
 
     let session = mcp.request("tools/call", &json!({ "name": "session", "arguments": {} }))?;
     let session_structured = structured_content(&session, "session")?;

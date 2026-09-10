@@ -212,19 +212,23 @@ abstract class LifecycleAwareProvider implements vscode.TreeDataProvider<Node>, 
   }
 }
 
+// Reads one `deslop.topOffenders.*` view axis and normalises it, so an
+// unrecognised setting value falls back rather than reaching the tree.
+function readAxis<T>(key: string, fallback: string, normalise: (value: string) => T): T {
+  return normalise(
+    vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE).get<string>(key, fallback),
+  );
+}
+
 // [VSIX-TOP-OFFENDERS-GROUPING] Reads `deslop.topOffenders.groupBy`
 // (cluster | file | folder | type, default cluster).
 function readGroupBy(): GroupBy {
-  return normalizeGroupBy(
-    vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE).get<string>("topOffenders.groupBy", "cluster"),
-  );
+  return readAxis("topOffenders.groupBy", "cluster", normalizeGroupBy);
 }
 
 // [VSIX-TOP-OFFENDERS-SORT] Reads `deslop.topOffenders.sortBy`.
 function readSortBy(): SortBy {
-  return normalizeSortBy(
-    vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE).get<string>("topOffenders.sortBy", "impact"),
-  );
+  return readAxis("topOffenders.sortBy", "impact", normalizeSortBy);
 }
 
 export class TopOffendersProvider extends LifecycleAwareProvider {

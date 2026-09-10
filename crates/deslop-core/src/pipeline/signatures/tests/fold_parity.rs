@@ -5,6 +5,7 @@
 //! helpers live in the parent test module.
 
 use super::*;
+use crate::registry_fixtures::{pair_ids, REPEAT_A_FS, REPEAT_B_FS, WINDOW_A_FS, WINDOW_B_FS};
 
 /// [PERF-FLUTTER-TODO-CORPUS] The fold must reproduce the historical
 /// top-down construction byte-for-byte over the full fingerprint
@@ -151,9 +152,7 @@ fn fold_signatures_match_top_down_over_a_real_parse() -> Result<(), String> {
 // their tokens agree.
 #[test]
 fn issue_339_sibling_window_signature_is_offset_invariant() -> Result<(), String> {
-    let mut registry = FileRegistry::new();
-    let short = registry.register(PathBuf::from("window_a.fs"));
-    let long = registry.register(PathBuf::from("window_b.fs"));
+    let (short, long) = pair_ids(WINDOW_A_FS, WINDOW_B_FS);
 
     let short_source = format!("module ParseHelpers\n\n{SHARED_WINDOW}");
     let long_source = format!("module ParseHelpersWithALongerName\n\n{SHARED_WINDOW}");
@@ -232,9 +231,7 @@ fn issue_339_sibling_window_signature_is_offset_invariant() -> Result<(), String
 // instead of counting constructions.
 #[test]
 fn repeated_token_streams_produce_byte_identical_signatures() -> Result<(), String> {
-    let mut registry = FileRegistry::new();
-    let first = registry.register(PathBuf::from("repeat_a.fs"));
-    let second = registry.register(PathBuf::from("repeat_b.fs"));
+    let (first, second) = pair_ids(REPEAT_A_FS, REPEAT_B_FS);
 
     let first_source = format!(
         "module RepeatFirst

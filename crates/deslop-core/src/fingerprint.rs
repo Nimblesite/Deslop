@@ -34,15 +34,26 @@ pub struct Fingerprint {
 #[must_use]
 pub fn collect_fingerprints(root: &NormalizedNode, min_nodes: usize) -> Vec<Fingerprint> {
     let mut out = Vec::new();
+    visit_fingerprints(root, min_nodes, |_, fingerprint| out.push(fingerprint));
+    out
+}
+
+/// Visits each emitted fingerprint beside the exact node it describes.
+/// Byte ranges can be shared by a grammar wrapper and its child, so
+/// [FUSED-SHARED-SUBTREE-CORE] must retain node identity during indexing.
+pub(crate) fn visit_fingerprints(
+    root: &NormalizedNode,
+    min_nodes: usize,
+    mut visit: impl FnMut(&NormalizedNode, Fingerprint),
+) {
     let _ = hash_and_collect(
         root,
         min_nodes,
-        &mut out,
+        &mut visit,
         None,
         false,
         &mut HashScratch::default(),
     );
-    out
 }
 
 /// Returns fingerprints for non-boilerplate subtrees only.
@@ -56,7 +67,7 @@ pub fn collect_non_boilerplate_fingerprints(
     let _ = hash_and_collect(
         root,
         min_nodes,
-        &mut out,
+        &mut |_, fingerprint| out.push(fingerprint),
         Some(language),
         false,
         &mut HashScratch::default(),
@@ -64,39 +75,31 @@ pub fn collect_non_boilerplate_fingerprints(
     out
 }
 
-/// Hashes `node` bottom-up, pushing a [`Fingerprint`] into `out` whenever a
+/// Hashes `node` bottom-up, visiting a [`Fingerprint`] whenever a
 /// subtree meets the minimum node count. Returns `(hash, subtree_node_count)`
 /// for the caller to incorporate into its own hash.
 ///
 /// `scratch` supplies the frame stack and hash arena; a caller invoking this
 /// repeatedly over one tree ([`subtree_hash`]) reuses their capacity so the
 /// walk allocates only on its first call.
+/// The root hash is returned by value; its arena entry is then removed
+/// to restore the caller's scratch baseline.
 fn hash_and_collect<'tree>(
     node: &'tree NormalizedNode,
     min_nodes: usize,
-    out: &mut Vec<Fingerprint>,
+    visit: &mut impl FnMut(&NormalizedNode, Fingerprint),
     language: Option<&str>,
     inside_boilerplate: bool,
     scratch: &mut HashScratch<'tree>,
 ) -> ([u8; 32], usize) {
     let mut root_result = ([0_u8; 32], 0_usize);
-    let base = scratch.hashes.len();
-    scratch
-        .frames
-        .push(Frame::new(node, language, inside_boilerplate, base));
+    scratch.descend(node, language, inside_boilerplate);
     while let Some(step) = next_step(&mut scratch.frames) {
         match step {
-            Step::Descend(child, inherited) => {
-                let base = scratch.hashes.len();
-                scratch
-                    .frames
-                    .push(Frame::new(child, language, inherited, base));
-            }
-            Step::Finish => finish_top(scratch, min_nodes, out, &mut root_result),
+            Step::Descend(child, inherited) => scratch.descend(child, language, inherited),
+            Step::Finish => finish_top(scratch, min_nodes, visit, &mut root_result),
         }
     }
-    // The root's hash is returned by value; popping its arena entry restores
-    // `scratch` to its caller's baseline for the next reuse.
     let _root_hash = scratch.hashes.pop();
     root_result
 }
@@ -106,13 +109,13 @@ fn hash_and_collect<'tree>(
 fn finish_top(
     scratch: &mut HashScratch<'_>,
     min_nodes: usize,
-    out: &mut Vec<Fingerprint>,
+    visit: &mut impl FnMut(&NormalizedNode, Fingerprint),
     root_result: &mut ([u8; 32], usize),
 ) {
     let Some(frame) = scratch.frames.pop() else {
         return;
     };
-    let (hash, count) = frame.finish(min_nodes, out, &mut scratch.hashes);
+    let (hash, count) = frame.finish(min_nodes, visit, &mut scratch.hashes);
     match scratch.frames.last_mut() {
         Some(parent) => parent.absorb(count),
         None => *root_result = (hash, count),
@@ -133,6 +136,14 @@ pub(crate) struct HashScratch<'tree> {
     /// Finished child hashes; each open frame's children occupy the
     /// contiguous run starting at its [`Frame::hash_base`].
     hashes: Vec<[u8; 32]>,
+}
+
+impl<'tree> HashScratch<'tree> {
+    /// Opens a node at the current end of the shared child-hash arena.
+    fn descend(&mut self, node: &'tree NormalizedNode, language: Option<&str>, inherited: bool) {
+        self.frames
+            .push(Frame::new(node, language, inherited, self.hashes.len()));
+    }
 }
 
 /// One node's in-progress state on [`hash_and_collect`]'s explicit stack.
@@ -202,23 +213,28 @@ impl<'tree> Frame<'tree> {
         self.node_count = self.node_count.saturating_add(count);
     }
 
+    /// The finished node's fingerprint, retaining its extent and mass.
+    fn fingerprint(&self, hash: [u8; 32]) -> Fingerprint {
+        Fingerprint {
+            hash,
+            file_id: self.node.file_id,
+            byte_range: self.node.byte_range,
+            node_count: self.node_count,
+        }
+    }
+
     /// Closes the frame: digests the node over its children's arena hashes,
     /// emits a [`Fingerprint`] when the subtree qualifies, then replaces the
     /// children's arena run with this node's own hash.
     fn finish(
         self,
         min_nodes: usize,
-        out: &mut Vec<Fingerprint>,
+        visit: &mut impl FnMut(&NormalizedNode, Fingerprint),
         hashes: &mut Vec<[u8; 32]>,
     ) -> ([u8; 32], usize) {
         let hash = digest_node(self.node, hashes.get(self.hash_base..).unwrap_or(&[]));
         if self.node_count >= min_nodes && !self.boilerplate && !self.viewless {
-            out.push(Fingerprint {
-                hash,
-                file_id: self.node.file_id,
-                byte_range: self.node.byte_range,
-                node_count: self.node_count,
-            });
+            visit(self.node, self.fingerprint(hash));
         }
         hashes.truncate(self.hash_base);
         hashes.push(hash);
@@ -263,7 +279,14 @@ pub(crate) fn subtree_hash<'tree>(
     scratch: &mut HashScratch<'tree>,
 ) -> [u8; 32] {
     let mut discarded = Vec::new();
-    let (hash, _count) = hash_and_collect(node, usize::MAX, &mut discarded, None, true, scratch);
+    let (hash, _count) = hash_and_collect(
+        node,
+        usize::MAX,
+        &mut |_, fingerprint| discarded.push(fingerprint),
+        None,
+        true,
+        scratch,
+    );
     hash
 }
 

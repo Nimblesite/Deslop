@@ -25,9 +25,10 @@ use tempfile::TempDir;
 
 use crate::common;
 use common::{
-    copied_fixture, fixture_root,
+    assert_production_embedding_models, copied_fixture, fixture_root,
     rpc::{StdioRpc, MCP_PROTOCOL_VERSION},
-    spawn_lsp_and_wait_for_socket, value_array, value_get, ChildKillOnDrop,
+    spawn_lsp_and_wait_for_socket, str_field, value_array, value_get, ChildKillOnDrop, NAME_FIELD,
+    PROVIDER_ID_FIELD, STUB_PROVIDER,
 };
 
 const REPORT_GET_TOOL: &str = "report-get";
@@ -61,12 +62,10 @@ const RESCAN_CLUSTERS_POINTER: &str = "/page/clusters";
 const RESCAN_PAGE_LIMIT_POINTER: &str = "/page/page/limit";
 const PATH_FIELD: &str = "path";
 const LANGUAGE_FIELD: &str = "language";
-const NAME_FIELD: &str = "name";
 const TOP_OFFENDERS_TOOL: &str = "top-offenders";
 const SESSION_CONFIG_TOOL: &str = "session-config";
 const CSHARP_LANGUAGE: &str = "csharp";
 const ERROR_FIELD: &str = "error";
-const PROVIDER_ID_FIELD: &str = "provider_id";
 const END_BYTE_FIELD: &str = "end_byte";
 const ID_FIELD: &str = "id";
 const ARGUMENTS_FIELD: &str = "arguments";
@@ -75,6 +74,39 @@ const SET_EMBEDDING_MODEL_TOOL: &str = "set-embedding-model";
 const START_BYTE_FIELD: &str = "start_byte";
 const ALPHA_FILE_NAME: &str = "Alpha.cs";
 const BUCKET_FIELD: &str = "bucket";
+/// Fused-score page filter retired with the twelve-tool surface.
+const RETIRED_MIN_SCORE_KNOB: &str = "min_score";
+/// A clone kind the retired `bucket` filter used to accept.
+const LOOSELY_SIMILAR_KIND: &str = "loosely_similar";
+/// Per-cluster keys the mass-only wire never carries on a full cluster
+/// ([PIPELINE-CLUSTER-CLOSURE]).
+const RETIRED_CLUSTER_KEYS: [&str; 5] = [
+    BUCKET_FIELD,
+    "interpretation",
+    "weight",
+    "signals",
+    "verdict",
+];
+/// The same closure for a `detail=summary` row, which additionally
+/// never carries the retired pair `score`.
+const RETIRED_CLUSTER_SUMMARY_KEYS: [&str; 5] =
+    [BUCKET_FIELD, "score", "weight", "signals", "verdict"];
+/// Why a retired key is a defect wherever it appears.
+const RETIRED_KEY_REASON: &str = "mass-only wire must not carry a per-cluster label";
+/// Why a deep-dive key is a defect on a summary row.
+const DEEP_DIVE_KEY_REASON: &str = "ClusterSummary must leave this to the cluster-by-id deep dive";
+/// Keys a `detail=summary` row drops because they live behind the
+/// `cluster-by-id` deep dive rather than on every page row.
+const SUMMARY_DEEP_DIVE_KEYS: [&str; 2] = ["members", OCCURRENCES_FIELD];
+/// The summary row's own copy of its worst occurrence.
+const FIRST_OCCURRENCE_POINTER: &str = "/first_occurrence";
+/// Echo of the filters a page actually applied.
+const FILTERS_POINTER: &str = "/filters";
+/// `models[]` inside a `session` tool result.
+const STRUCTURED_MODELS_POINTER: &str = "/result/structuredContent/models";
+/// Flags the binary accepts before any workspace is opened.
+const VERSION_FLAG: &str = "--version";
+const EMBEDDINGS_FLAG: &str = "--embeddings";
 const FIND_SIMILAR_TOOL: &str = "find-similar";
 const MODEL_ID_FIELD: &str = "model_id";
 const TOOLS_LIST_METHOD: &str = "tools/list";
@@ -93,16 +125,13 @@ const CLUSTER_BY_ID_TOOL: &str = "cluster-by-id";
 const JSONRPC_VERSION: &str = "2.0";
 const SECOND_FILE_NAME: &str = "Two.cs";
 const MIN_SIZE_FIELD: &str = "min_size";
-const CLUSTERS_ARRAY_ERROR: &str = "clusters must be an array";
 
 const MCP_PROGRAM_NAME: &str = "deslop-mcp";
 const SNIPPET_FIELD: &str = "snippet";
 const LANGUAGES_POINTER: &str = "/languages";
 const EMBEDDING_PROVENANCE_POINTER: &str = "/embedding_provenance";
 const SCHEMA_URI: &str = "deslop://schema";
-const STUB_PROVIDER: &str = "stub";
 const REPORT_URI: &str = "deslop://report";
-const CLUSTERS_NOT_ARRAY_ERROR: &str = "clusters not array";
 const STRUCTURED_CLUSTERS_POINTER: &str = "/result/structuredContent/clusters";
 const PATHS_FIELD: &str = "paths";
 const SERVER_INFO_NAME_POINTER: &str = "/result/serverInfo/name";
@@ -416,30 +445,147 @@ fn assert_empty_page(page: &Value) -> Result<()> {
     Ok(())
 }
 
+/// The `clusters[]` array of a duplicates page. [MCP-TOOLS] every page
+/// carries this key, so its absence is a wire-contract failure.
+fn page_clusters(payload: &Value) -> Result<Vec<Value>> {
+    value_array(payload, CLUSTERS_POINTER)
+}
+
+/// Total occurrences shipped across `clusters` — the quantity
+/// [MCP-OCCURRENCE-BUDGET] caps.
+fn shipped_occurrences(clusters: &[Value]) -> u64 {
+    clusters
+        .iter()
+        .map(|cluster| {
+            cluster
+                .get(OCCURRENCES_FIELD)
+                .and_then(Value::as_array)
+                .map_or(0, |occurrences| occurrences.len() as u64)
+        })
+        .sum()
+}
+
+/// Asserts no cluster in `clusters` carries any key in `omitted`,
+/// reporting `reason` when one does.
+/// [PIPELINE-CLUSTER-CLOSURE]: a published cluster owns identity,
+/// extent, membership, mass and mass-derived rank — nothing that could
+/// mislabel it on any surface.
+fn assert_clusters_omit(clusters: &[Value], omitted: &[&str], reason: &str) {
+    for key in omitted {
+        assert!(
+            clusters.iter().all(|cluster| cluster.get(key).is_none()),
+            "{reason}: carried {key}: {clusters:#?}"
+        );
+    }
+}
+
+/// Asserts `response` is the JSON-RPC error frame carrying `code`.
+fn assert_error_code(response: &Value, code: i64) -> Result<()> {
+    assert_eq!(
+        value_get(response, ERROR_CODE_POINTER)?.as_i64(),
+        Some(code),
+        "expected JSON-RPC error code {code}: {response}"
+    );
+    Ok(())
+}
+
+/// The text body a `resources/read` of `uri` serves.
+fn resource_text(child: &mut McpChild, uri: &str) -> Result<String> {
+    let response = child.request(RESOURCES_READ_METHOD, &json!({ (URI_FIELD): uri }))?;
+    value_get(&response, CONTENT_TEXT_POINTER)?
+        .as_str()
+        .map(str::to_owned)
+        .ok_or_else(|| anyhow!("{uri} resource must serve a text body: {response}"))
+}
+
+/// Runs the binary with `args` alone, asserting a clean exit and a
+/// silent stderr, and returns its stdout.
+fn binary_stdout(args: &[&str]) -> Result<Vec<u8>> {
+    let output = Command::new(mcp_binary_path()).args(args).output()?;
+    assert!(output.status.success(), "status was {}", output.status);
+    assert!(output.stderr.is_empty(), "stderr must stay empty");
+    Ok(output.stdout)
+}
+
+/// Runs the binary over the fixture root with `args` and asserts it
+/// refuses to start, naming both streams when it wrongly succeeds.
+fn assert_binary_refuses_to_start(args: &[&str], reason: &str) -> Result<()> {
+    let output = Command::new(mcp_binary_path())
+        .arg(ROOT_FLAG)
+        .arg(fixture_root())
+        .args(args)
+        .output()?;
+    assert!(
+        !output.status.success(),
+        "{reason}: stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Ok(())
+}
+
+/// [MCP-TOOLS] A knob retired with the twelve-tool surface must neither
+/// narrow the mass-only page nor appear in its filters echo — a client
+/// must never be able to misread the filter as applied.
+fn assert_retired_knob_is_ignored(knob: &str, value: Value) -> Result<()> {
+    let plain = json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT });
+    let (baseline_child, baseline) = init_and_tool_payload(DUPLICATES_TOOL, &plain)?;
+    let unfiltered_total = value_get(&baseline, TOTAL_CLUSTERS_POINTER)?.as_u64();
+    let _ = baseline_child.finish();
+
+    let mut with_knob = plain;
+    let displaced = with_knob
+        .as_object_mut()
+        .ok_or_else(|| anyhow!("page arguments must be a JSON object"))?
+        .insert(knob.to_owned(), value);
+    assert!(
+        displaced.is_none(),
+        "the plain page arguments must not already carry {knob}"
+    );
+    let (child, page) = init_and_tool_payload(DUPLICATES_TOOL, &with_knob)?;
+    let knobbed_total = value_get(&page, TOTAL_CLUSTERS_POINTER)?.as_u64();
+    assert_eq!(
+        knobbed_total, unfiltered_total,
+        "retired {knob} must not narrow the mass-only page: \
+         with={knobbed_total:?} without={unfiltered_total:?}"
+    );
+    let filters = value_get(&page, FILTERS_POINTER)?;
+    assert!(
+        filters.get(knob).is_none(),
+        "filters echo must not carry a retired {knob} row: {filters}"
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
+/// [REMOVE-STUB] `session` reads provenance from the state file and
+/// never contacts Ollama, so the key is present whatever Ollama's
+/// state — that is how the editor detects the disabled state.
+fn assert_session_reports_provenance(reason: &str) -> Result<()> {
+    let (child, snapshot) = init_and_tool_payload(SESSION_TOOL, &json!({}))?;
+    assert!(
+        snapshot.get(EMBEDDING_PROVENANCE_FIELD).is_some(),
+        "{reason}: {snapshot}"
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
 #[test]
 fn prints_exact_version_contract() -> Result<()> {
-    let binary = mcp_binary_path();
-    let output = Command::new(binary).arg("--version").output()?;
-    assert!(output.status.success(), "status was {}", output.status);
+    let stdout = binary_stdout(&[VERSION_FLAG])?;
     assert_eq!(
-        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&stdout),
         format!("deslop-mcp {}\n", expected_version())
     );
-    assert!(output.stderr.is_empty(), "stderr must stay empty");
     Ok(())
 }
 
 #[test]
 fn prints_json_version_contract() -> Result<()> {
-    let binary = mcp_binary_path();
-    let output = Command::new(binary)
-        .arg("--version")
-        .arg("--json")
-        .output()?;
-    assert!(output.status.success(), "status was {}", output.status);
-    let value: Value = serde_json::from_slice(&output.stdout)?;
+    let stdout = binary_stdout(&[VERSION_FLAG, "--json"])?;
+    let value: Value = serde_json::from_slice(&stdout)?;
     assert_version_manifest(&value, MCP_PROGRAM_NAME, "mcp");
-    assert!(output.stderr.is_empty(), "stderr must stay empty");
     Ok(())
 }
 
@@ -515,6 +661,39 @@ fn init_and_tool_response(tool: &str, arguments: &Value) -> Result<(McpChild, Va
         &json!({ (NAME_FIELD): tool, (ARGUMENTS_FIELD): arguments }),
     )?;
     Ok((child, response))
+}
+
+/// Asserts `response` carries the JSON-RPC invalid-params error code. The
+/// wire code is negative; [`INVALID_PARAMS_CODE_MAGNITUDE`] holds its
+/// magnitude, so the expected value is negated here once for every caller.
+fn assert_invalid_params(response: &Value) -> Result<()> {
+    assert_eq!(
+        value_get(response, ERROR_CODE_POINTER)?.as_i64(),
+        Some(-INVALID_PARAMS_CODE_MAGNITUDE),
+        "expected an invalid-params error envelope: {response}"
+    );
+    Ok(())
+}
+
+/// Asserts the MCP tool `tool` rejects `arguments` with invalid-params.
+/// Spawns one child, calls the tool, checks the envelope, and shuts the
+/// child down — the whole shape every argument-validation test repeats.
+fn assert_tool_rejects_invalid_params(tool: &str, arguments: &Value) -> Result<()> {
+    let (child, response) = init_and_tool_response(tool, arguments)?;
+    assert_invalid_params(&response)?;
+    let _ = child.finish();
+    Ok(())
+}
+
+/// Asserts the raw JSON-RPC `method` rejects `params` with invalid-params.
+/// The sibling of [`assert_tool_rejects_invalid_params`] for the methods
+/// that are not `tools/call`.
+fn assert_method_rejects_invalid_params(method: &str, params: &Value) -> Result<()> {
+    let mut child = spawn_and_init()?;
+    let response = child.request(method, params)?;
+    assert_invalid_params(&response)?;
+    let _ = child.finish();
+    Ok(())
 }
 
 #[test]
@@ -654,10 +833,7 @@ fn duplicates_returns_full_clusters_ranked_by_mass() -> Result<()> {
         Some(REQUESTED_TOP_OFFENDERS_COUNT as u64),
         "page must echo the requested limit"
     );
-    let clusters = value_get(&payload, CLUSTERS_POINTER)?;
-    let clusters_arr = clusters
-        .as_array()
-        .ok_or_else(|| anyhow!(CLUSTERS_ARRAY_ERROR))?;
+    let clusters_arr = page_clusters(&payload)?;
     assert!(
         clusters_arr.len() <= REQUESTED_TOP_OFFENDERS_COUNT,
         "returned {} clusters but requested max 3",
@@ -691,18 +867,11 @@ fn duplicates_returns_full_clusters_ranked_by_mass() -> Result<()> {
             .is_some_and(|band| !band.is_empty()),
         "duplicates must return the mass-derived rank band: {first}"
     );
-    for retired in [
-        BUCKET_FIELD,
-        "interpretation",
-        "weight",
-        "signals",
-        "verdict",
-    ] {
-        assert!(
-            first.get(retired).is_none(),
-            "mass-only wire must not carry per-cluster {retired}: {first}"
-        );
-    }
+    assert_clusters_omit(
+        std::slice::from_ref(first),
+        &RETIRED_CLUSTER_KEYS,
+        RETIRED_KEY_REASON,
+    );
     let _ = child.finish();
     Ok(())
 }
@@ -715,10 +884,7 @@ fn duplicates_defaults_to_five_pages_worst_first_by_mass() -> Result<()> {
         Some(SMALL_PAGE_LIMIT),
         "omitting limit must default to 5"
     );
-    let clusters = value_get(&payload, CLUSTERS_POINTER)?;
-    let clusters_arr = clusters
-        .as_array()
-        .ok_or_else(|| anyhow!(CLUSTERS_ARRAY_ERROR))?;
+    let clusters_arr = page_clusters(&payload)?;
     assert!(
         u64::try_from(clusters_arr.len()).is_ok_and(|len| len <= SMALL_PAGE_LIMIT),
         "default limit=5 must not return more than 5 clusters"
@@ -783,18 +949,8 @@ fn duplicates_max_occurrences_caps_response_and_reports_total() -> Result<()> {
         Some(baseline_total),
         "total_occurrences must equal the unfiltered count, not the budgeted count"
     );
-    let clusters = value_get(&payload, CLUSTERS_POINTER)?;
-    let clusters_arr = clusters
-        .as_array()
-        .ok_or_else(|| anyhow!(CLUSTERS_ARRAY_ERROR))?;
-    let returned: u64 = clusters_arr
-        .iter()
-        .map(|c| {
-            c.get(OCCURRENCES_FIELD)
-                .and_then(Value::as_array)
-                .map_or(0u64, |a| a.len() as u64)
-        })
-        .sum();
+    let clusters_arr = page_clusters(&payload)?;
+    let returned = shipped_occurrences(&clusters_arr);
     assert!(
         returned <= budget,
         "budget={budget} must yield at most {budget} occurrences total across returned clusters; got {returned}"
@@ -827,18 +983,8 @@ fn duplicates_max_occurrences_caps_response_and_reports_total() -> Result<()> {
 #[test]
 fn duplicates_default_max_occurrences_is_fifteen() -> Result<()> {
     let (child, payload) = init_and_tool_payload(DUPLICATES_TOOL, &json!({}))?;
-    let clusters = value_get(&payload, CLUSTERS_POINTER)?
-        .as_array()
-        .ok_or_else(|| anyhow!(CLUSTERS_ARRAY_ERROR))?
-        .clone();
-    let shipped: u64 = clusters
-        .iter()
-        .map(|c| {
-            c.get(OCCURRENCES_FIELD)
-                .and_then(Value::as_array)
-                .map_or(0u64, |a| a.len() as u64)
-        })
-        .sum();
+    let clusters = page_clusters(&payload)?;
+    let shipped = shipped_occurrences(&clusters);
     assert!(
         shipped <= DEFAULT_MAX_OCCURRENCES,
         "omitting max_occurrences must cap shipped occurrences at 15 \
@@ -859,28 +1005,12 @@ fn duplicates_clusters_carry_no_per_cluster_labels() -> Result<()> {
         DUPLICATES_TOOL,
         &json!({ (LIMIT_PARAM): DEFAULT_TOP_OFFENDERS_COUNT }),
     )?;
-    let clusters = value_get(&payload, CLUSTERS_POINTER)?
-        .as_array()
-        .ok_or_else(|| anyhow!(CLUSTERS_ARRAY_ERROR))?
-        .clone();
+    let clusters = page_clusters(&payload)?;
     assert!(
         !clusters.is_empty(),
         "fixture must surface at least one cluster for the label check"
     );
-    for retired in [
-        BUCKET_FIELD,
-        "signals",
-        "verdict",
-        "weight",
-        "interpretation",
-    ] {
-        assert!(
-            clusters
-                .iter()
-                .all(|cluster| cluster.get(retired).is_none()),
-            "mass-only wire must not carry per-cluster {retired} on any cluster: {clusters:#?}"
-        );
-    }
+    assert_clusters_omit(&clusters, &RETIRED_CLUSTER_KEYS, RETIRED_KEY_REASON);
     let _ = child.finish();
     Ok(())
 }
@@ -905,10 +1035,7 @@ fn issue_113_find_similar_description_leads_with_prevention() -> Result<()> {
     let tool = find_similar_tools
         .first()
         .ok_or_else(|| anyhow!("find-similar tool must be present"))?;
-    let description = tool
-        .get("description")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("find-similar tool must include a description"))?;
+    let description = str_field(tool, "description")?;
     assert!(
         description.starts_with("Call before writing code to prevent duplication"),
         "issue #113: find-similar description must lead with prevention guidance: {description}"
@@ -1082,12 +1209,7 @@ fn issue_110_duplicates_pages_omit_schema_doc_and_schema_doc_tool_serves_it() ->
         "schema-doc must return the full report schema markdown, got {} chars",
         schema_doc.len()
     );
-    let resource_response =
-        child.request(RESOURCES_READ_METHOD, &json!({ (URI_FIELD): SCHEMA_URI }))?;
-    let resource_doc_value = value_get(&resource_response, CONTENT_TEXT_POINTER)?;
-    let resource_doc = resource_doc_value
-        .as_str()
-        .ok_or_else(|| anyhow!("deslop://schema resource must return text"))?;
+    let resource_doc = resource_text(&mut child, SCHEMA_URI)?;
     assert_eq!(
         schema_doc, resource_doc,
         "schema-doc tool and deslop://schema resource must serve the same markdown"
@@ -1169,26 +1291,11 @@ fn duplicates_clusters_are_slim_summaries_only() -> Result<()> {
             (DETAIL_FIELD): DETAIL_SUMMARY,
         }),
     )?;
-    let clusters = value_get(&page, CLUSTERS_POINTER)?;
-    let array = clusters
-        .as_array()
-        .ok_or_else(|| anyhow!(CLUSTERS_NOT_ARRAY_ERROR))?;
+    let array = page_clusters(&page)?;
     assert!(!array.is_empty(), "fixture should produce >= 1 cluster");
-    for cluster in array {
-        assert!(
-            cluster.get("members").is_none(),
-            "ClusterSummary must drop full member list (lives behind cluster-by-id): {cluster}"
-        );
-        assert!(
-            cluster.get(OCCURRENCES_FIELD).is_none(),
-            "ClusterSummary must drop full occurrences[] (lives behind cluster-by-id): {cluster}"
-        );
-        for retired in [BUCKET_FIELD, "score", "weight", "signals", "verdict"] {
-            assert!(
-                cluster.get(retired).is_none(),
-                "mass-only ClusterSummary must not carry {retired}: {cluster}"
-            );
-        }
+    assert_clusters_omit(&array, &RETIRED_CLUSTER_SUMMARY_KEYS, RETIRED_KEY_REASON);
+    assert_clusters_omit(&array, &SUMMARY_DEEP_DIVE_KEYS, DEEP_DIVE_KEY_REASON);
+    for cluster in &array {
         for required in [
             ID_FIELD,
             MASS_FIELD,
@@ -1203,7 +1310,7 @@ fn duplicates_clusters_are_slim_summaries_only() -> Result<()> {
                 "ClusterSummary missing required field {required:?}: {cluster}"
             );
         }
-        let first_occ = value_get(cluster, "/first_occurrence")?;
+        let first_occ = value_get(cluster, FIRST_OCCURRENCE_POINTER)?;
         for occ_field in [
             PATH_FIELD,
             START_BYTE_FIELD,
@@ -1367,10 +1474,7 @@ fn duplicates_filters_by_language() -> Result<()> {
             (DETAIL_FIELD): DETAIL_SUMMARY,
         }),
     )?;
-    let clusters = value_get(&page, CLUSTERS_POINTER)?;
-    let array = clusters
-        .as_array()
-        .ok_or_else(|| anyhow!(CLUSTERS_NOT_ARRAY_ERROR))?;
+    let array = page_clusters(&page)?;
     assert!(
         !array.is_empty(),
         "fixture should match >= 1 csharp cluster"
@@ -1483,28 +1587,7 @@ fn duplicates_ignores_retired_min_score_argument() -> Result<()> {
     // score. [MCP-TOOLS] deletes that surface wholesale: the mass-only
     // page must ignore the retired knob entirely rather than silently
     // re-filtering by a score that no longer exists on the wire.
-    let (baseline_child, baseline) = init_and_tool_payload(
-        DUPLICATES_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT }),
-    )?;
-    let unfiltered_total = value_get(&baseline, TOTAL_CLUSTERS_POINTER)?.as_u64();
-    let _ = baseline_child.finish();
-    let (child, page) = init_and_tool_payload(
-        DUPLICATES_TOOL,
-        &json!({
-            (OFFSET_PARAM): 0,
-            (LIMIT_PARAM): QUERY_PAGE_LIMIT,
-            "min_score": 9_999_999.0,
-        }),
-    )?;
-    let with_retired_knob = value_get(&page, TOTAL_CLUSTERS_POINTER)?.as_u64();
-    assert_eq!(
-        with_retired_knob, unfiltered_total,
-        "retired min_score must not filter the mass-only page: \
-         with={with_retired_knob:?} without={unfiltered_total:?}"
-    );
-    let _ = child.finish();
-    Ok(())
+    assert_retired_knob_is_ignored(RETIRED_MIN_SCORE_KNOB, json!(9_999_999.0))
 }
 
 #[test]
@@ -1528,33 +1611,7 @@ fn duplicates_ignores_retired_bucket_argument() -> Result<()> {
     // The page must ignore a retired bucket filter and its echo must
     // not carry a bucket row, so no client can misread the filter as
     // applied ([MCP-TOOLS] normative cutover).
-    let (baseline_child, baseline) = init_and_tool_payload(
-        DUPLICATES_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT }),
-    )?;
-    let unfiltered_total = value_get(&baseline, TOTAL_CLUSTERS_POINTER)?.as_u64();
-    let _ = baseline_child.finish();
-    let (child, page) = init_and_tool_payload(
-        DUPLICATES_TOOL,
-        &json!({
-            (OFFSET_PARAM): 0,
-            (LIMIT_PARAM): QUERY_PAGE_LIMIT,
-            (BUCKET_FIELD): "loosely_similar",
-        }),
-    )?;
-    let with_bucket = value_get(&page, TOTAL_CLUSTERS_POINTER)?.as_u64();
-    assert_eq!(
-        with_bucket, unfiltered_total,
-        "retired bucket filter must not narrow the page: \
-         with={with_bucket:?} without={unfiltered_total:?}"
-    );
-    let filters = value_get(&page, "/filters")?;
-    assert!(
-        filters.get(BUCKET_FIELD).is_none(),
-        "filters echo must not carry a retired bucket row: {filters}"
-    );
-    let _ = child.finish();
-    Ok(())
+    assert_retired_knob_is_ignored(BUCKET_FIELD, json!(LOOSELY_SIMILAR_KIND))
 }
 
 #[test]
@@ -1627,10 +1684,7 @@ fn duplicates_echoes_filters_in_response() -> Result<()> {
 fn duplicates_scope_path_returns_only_matching_clusters() -> Result<()> {
     let (child, payload) =
         init_and_tool_payload(DUPLICATES_TOOL, &json!({ (PATH_FIELD): ALPHA_FILE_NAME }))?;
-    let clusters = value_get(&payload, CLUSTERS_POINTER)?;
-    let array = clusters
-        .as_array()
-        .ok_or_else(|| anyhow!(CLUSTERS_NOT_ARRAY_ERROR))?;
+    let array = page_clusters(&payload)?;
     assert!(
         !array.is_empty(),
         "Alpha.cs participates in the planted Type-2 clone"
@@ -1655,16 +1709,10 @@ fn duplicates_scope_path_returns_only_matching_clusters() -> Result<()> {
 
 #[test]
 fn duplicates_scope_range_rejects_inverted_range() -> Result<()> {
-    let (child, response) = init_and_tool_response(
+    assert_tool_rejects_invalid_params(
         DUPLICATES_TOOL,
         &json!({ (PATH_FIELD): ALPHA_FILE_NAME, (START_BYTE_FIELD): BROAD_RESULT_LIMIT, (END_BYTE_FIELD): 1 }),
-    )?;
-    assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-INVALID_PARAMS_CODE_MAGNITUDE)
-    );
-    let _ = child.finish();
-    Ok(())
+    )
 }
 
 #[test]
@@ -1711,13 +1759,7 @@ fn find_similar_snippet_unsupported_language_yields_error() -> Result<()> {
 
 #[test]
 fn find_similar_requires_exactly_one_input_variant() -> Result<()> {
-    let (child, response) = init_and_tool_response(FIND_SIMILAR_TOOL, &json!({}))?;
-    assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-INVALID_PARAMS_CODE_MAGNITUDE)
-    );
-    let _ = child.finish();
-    Ok(())
+    assert_tool_rejects_invalid_params(FIND_SIMILAR_TOOL, &json!({}))
 }
 
 #[test]
@@ -1778,14 +1820,7 @@ fn cluster_by_id_round_trips() -> Result<()> {
 
 #[test]
 fn cluster_by_id_unknown_returns_error() -> Result<()> {
-    let (child, response) =
-        init_and_tool_response(CLUSTER_BY_ID_TOOL, &json!({ (ID_FIELD): "not-a-real-id" }))?;
-    assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-INVALID_PARAMS_CODE_MAGNITUDE)
-    );
-    let _ = child.finish();
-    Ok(())
+    assert_tool_rejects_invalid_params(CLUSTER_BY_ID_TOOL, &json!({ (ID_FIELD): "not-a-real-id" }))
 }
 
 #[test]
@@ -1798,14 +1833,8 @@ fn list_embedding_models_excludes_stub_when_ollama_unreachable() -> Result<()> {
         SESSION_TOOL,
         &json!({ (ACTION_FIELD): LIST_EMBEDDING_MODELS_ACTION }),
     )?;
-    let models = value_array(&response, "/result/structuredContent/models")?;
-    let has_stub = models
-        .iter()
-        .any(|model| model.get(PROVIDER_ID_FIELD) == Some(&json!(STUB_PROVIDER)));
-    assert!(
-        !has_stub,
-        "list-embedding-models must never include the stub provider: {response}",
-    );
+    let models = value_array(&response, STRUCTURED_MODELS_POINTER)?;
+    assert_production_embedding_models(&models)?;
     let _ = child.finish();
     Ok(())
 }
@@ -1978,11 +2007,7 @@ fn resources_list_returns_report_and_schema_uris() -> Result<()> {
 #[test]
 fn resources_read_report_returns_parseable_json() -> Result<()> {
     let mut child = spawn_and_init()?;
-    let response = child.request(RESOURCES_READ_METHOD, &json!({ (URI_FIELD): REPORT_URI }))?;
-    let text = value_get(&response, CONTENT_TEXT_POINTER)?
-        .as_str()
-        .ok_or_else(|| anyhow!("report text payload missing"))?
-        .to_owned();
+    let text = resource_text(&mut child, REPORT_URI)?;
     let parsed: Value = serde_json::from_str(&text)?;
     assert!(value_get(&parsed, CLUSTERS_POINTER)?.is_array());
     let _ = child.finish();
@@ -1992,11 +2017,7 @@ fn resources_read_report_returns_parseable_json() -> Result<()> {
 #[test]
 fn resources_read_schema_returns_markdown_body() -> Result<()> {
     let mut child = spawn_and_init()?;
-    let response = child.request(RESOURCES_READ_METHOD, &json!({ (URI_FIELD): SCHEMA_URI }))?;
-    let text = value_get(&response, CONTENT_TEXT_POINTER)?
-        .as_str()
-        .ok_or_else(|| anyhow!("schema text payload missing"))?
-        .to_owned();
+    let text = resource_text(&mut child, SCHEMA_URI)?;
     assert!(!text.is_empty(), "schema_doc must not be empty");
     let _ = child.finish();
     Ok(())
@@ -2004,27 +2025,17 @@ fn resources_read_schema_returns_markdown_body() -> Result<()> {
 
 #[test]
 fn resources_read_unknown_uri_errors() -> Result<()> {
-    let mut child = spawn_and_init()?;
-    let response = child.request(
+    assert_method_rejects_invalid_params(
         RESOURCES_READ_METHOD,
         &json!({ (URI_FIELD): "deslop://invalid" }),
-    )?;
-    assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-INVALID_PARAMS_CODE_MAGNITUDE)
-    );
-    let _ = child.finish();
-    Ok(())
+    )
 }
 
 #[test]
 fn unknown_method_returns_method_not_found() -> Result<()> {
     let mut child = spawn_and_init()?;
     let response = child.request("completely/made-up", &json!({}))?;
-    assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-32_601)
-    );
+    assert_error_code(&response, -32_601)?;
     let _ = child.finish();
     Ok(())
 }
@@ -2034,10 +2045,7 @@ fn malformed_frame_returns_parse_error() -> Result<()> {
     let mut child = spawn_and_init()?;
     child.send_raw_line("{this is not valid json")?;
     let response = child.read_frame()?;
-    assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-32_700)
-    );
+    assert_error_code(&response, -32_700)?;
     let _ = child.finish();
     Ok(())
 }
@@ -2055,10 +2063,7 @@ fn path_outside_root_is_rejected() -> Result<()> {
             (ARGUMENTS_FIELD): { (PATH_FIELD): outside_file }
         }),
     )?;
-    assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-32_003)
-    );
+    assert_error_code(&response, -32_003)?;
     let _ = child.finish();
     Ok(())
 }
@@ -2248,37 +2253,20 @@ fn find_similar_snippet_with_empty_source_returns_empty_result() -> Result<()> {
 
 #[test]
 fn tools_call_missing_name_returns_invalid_params() -> Result<()> {
-    let mut child = spawn_and_init()?;
-    let response = child.request(TOOLS_CALL_METHOD, &json!({ (ARGUMENTS_FIELD): {} }))?;
-    assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-INVALID_PARAMS_CODE_MAGNITUDE)
-    );
-    let _ = child.finish();
-    Ok(())
+    assert_method_rejects_invalid_params(TOOLS_CALL_METHOD, &json!({ (ARGUMENTS_FIELD): {} }))
 }
 
 #[test]
 fn tools_call_unknown_tool_returns_method_not_found_error() -> Result<()> {
     let (child, response) = init_and_tool_response("bogus-tool", &json!({}))?;
-    assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-32_601)
-    );
+    assert_error_code(&response, -32_601)?;
     let _ = child.finish();
     Ok(())
 }
 
 #[test]
 fn resources_read_missing_uri_returns_invalid_params() -> Result<()> {
-    let mut child = spawn_and_init()?;
-    let response = child.request(RESOURCES_READ_METHOD, &json!({}))?;
-    assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-INVALID_PARAMS_CODE_MAGNITUDE)
-    );
-    let _ = child.finish();
-    Ok(())
+    assert_method_rejects_invalid_params(RESOURCES_READ_METHOD, &json!({}))
 }
 
 #[test]
@@ -2286,10 +2274,7 @@ fn invalid_jsonrpc_version_returns_invalid_request() -> Result<()> {
     let mut child = spawn_and_init()?;
     child.send_raw_line(r#"{"jsonrpc":"1.5","id":99,"method":"ping"}"#)?;
     let response = child.read_frame()?;
-    assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-32_600)
-    );
+    assert_error_code(&response, -32_600)?;
     let _ = child.finish();
     Ok(())
 }
@@ -2346,76 +2331,46 @@ fn relative_path_insideworkspace_is_accepted() -> Result<()> {
 #[test]
 fn tool_missing_required_string_arg_returns_invalid_params() -> Result<()> {
     // compare-pair needs both endpoints — omit them.
-    let (child, response) = init_and_tool_response(COMPARE_PAIR_TOOL, &json!({}))?;
-    assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-INVALID_PARAMS_CODE_MAGNITUDE)
-    );
-    let _ = child.finish();
-    Ok(())
+    assert_tool_rejects_invalid_params(COMPARE_PAIR_TOOL, &json!({}))
 }
 
 #[test]
 fn tool_missing_required_integer_arg_returns_invalid_params() -> Result<()> {
     // compare-pair needs left AND right — provide only one.
-    let (child, response) = init_and_tool_response(
+    assert_tool_rejects_invalid_params(
         COMPARE_PAIR_TOOL,
         &json!({ (LEFT_ENDPOINT_FIELD): { (PATH_FIELD): ALPHA_FILE_NAME } }),
-    )?;
-    assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-INVALID_PARAMS_CODE_MAGNITUDE)
-    );
-    let _ = child.finish();
-    Ok(())
+    )
 }
 
 #[test]
 fn set_embedding_model_missing_model_id_returns_invalid_params() -> Result<()> {
-    let (child, response) = init_and_tool_response(
+    assert_tool_rejects_invalid_params(
         SESSION_TOOL,
         &json!({
             (ACTION_FIELD): SET_EMBEDDING_MODEL_ACTION,
             (PROVIDER_ID_FIELD): OLLAMA_PROVIDER,
             (USER_INITIATED_FIELD): true
         }),
-    )?;
-    assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-INVALID_PARAMS_CODE_MAGNITUDE)
-    );
-    let _ = child.finish();
-    Ok(())
+    )
 }
 
 #[test]
 fn set_embedding_model_without_user_initiation_returns_invalid_params() -> Result<()> {
     // Tests [MCP-EMBEDDING-CONSENT]
-    let (child, response) = init_and_tool_response(
+    assert_tool_rejects_invalid_params(
         SESSION_TOOL,
         &json!({
             (ACTION_FIELD): SET_EMBEDDING_MODEL_ACTION,
             (PROVIDER_ID_FIELD): OLLAMA_PROVIDER,
             (MODEL_ID_FIELD): DEFAULT_EMBEDDING_MODEL
         }),
-    )?;
-    assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-INVALID_PARAMS_CODE_MAGNITUDE)
-    );
-    let _ = child.finish();
-    Ok(())
+    )
 }
 
 #[test]
 fn cluster_by_id_missing_id_returns_invalid_params() -> Result<()> {
-    let (child, response) = init_and_tool_response(CLUSTER_BY_ID_TOOL, &json!({}))?;
-    assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-INVALID_PARAMS_CODE_MAGNITUDE)
-    );
-    let _ = child.finish();
-    Ok(())
+    assert_tool_rejects_invalid_params(CLUSTER_BY_ID_TOOL, &json!({}))
 }
 
 #[test]
@@ -2477,64 +2432,37 @@ fn binary_starts_without_ollama_returns_provenance_field() -> Result<()> {
     // to a stub provider when Ollama is unreachable, but the
     // provenance key must always be present so the editor can detect
     // the disabled state.
-    let (child, snapshot) = init_and_tool_payload(SESSION_TOOL, &json!({}))?;
-    assert!(
-        snapshot.get(EMBEDDING_PROVENANCE_FIELD).is_some(),
-        "session must include embedding_provenance key: {snapshot}"
-    );
-    let _ = child.finish();
-    Ok(())
+    assert_session_reports_provenance("session must include embedding_provenance key")
 }
 
 /// `[LSP-EMBEDDING-CONSENT]` Audience: HUMAN. Issue #35. `StateFileBackend` does
 /// not contact Ollama — the server always starts and `session-config` responds.
 #[test]
 fn binary_survives_when_required_ollama_endpoint_is_unreachable() -> Result<()> {
-    let (child, snapshot) = init_and_tool_payload(SESSION_TOOL, &json!({}))?;
-    assert!(
-        snapshot.get(EMBEDDING_PROVENANCE_FIELD).is_some(),
-        "session must respond even when Ollama is not running: {snapshot}"
-    );
-    let _ = child.finish();
-    Ok(())
+    assert_session_reports_provenance("session must respond even when Ollama is not running")
 }
 
 #[test]
 fn binary_rejects_invalid_embedding_mode_string() -> Result<()> {
     // Spawn the binary directly (bypassing the McpChild harness) so we
     // can assert on the non-zero exit status.
-    let binary = mcp_binary_path();
-    let output = Command::new(binary)
-        .arg(ROOT_FLAG)
-        .arg(fixture_root())
-        .arg("--embeddings")
-        .arg("nonsense")
-        .output()?;
-    assert!(
-        !output.status.success(),
-        "invalid --embeddings value must not succeed: stdout={} stderr={}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    Ok(())
+    assert_binary_refuses_to_start(
+        &[EMBEDDINGS_FLAG, "nonsense"],
+        "invalid --embeddings value must not succeed",
+    )
 }
 
 #[test]
 fn binary_rejects_unknown_embedding_provider_at_init() -> Result<()> {
-    let binary = mcp_binary_path();
-    let output = Command::new(binary)
-        .arg(ROOT_FLAG)
-        .arg(fixture_root())
-        .arg("--embeddings")
-        .arg("auto")
-        .arg("--embedding-provider")
-        .arg("zzz-not-real")
-        .output()?;
-    assert!(
-        !output.status.success(),
-        "unknown provider must exit non-zero"
-    );
-    Ok(())
+    assert_binary_refuses_to_start(
+        &[
+            EMBEDDINGS_FLAG,
+            "auto",
+            "--embedding-provider",
+            "zzz-not-real",
+        ],
+        "unknown embedding provider must exit non-zero",
+    )
 }
 
 #[test]
@@ -2758,28 +2686,8 @@ fn list_embedding_models_response_omits_legacy_keys_and_stub() -> Result<()> {
             (ARGUMENTS_FIELD): { (ACTION_FIELD): LIST_EMBEDDING_MODELS_ACTION }
         }),
     )?;
-    let models = value_array(&response, "/result/structuredContent/models")?;
-    let has_stub = models
-        .iter()
-        .any(|model| model.get(PROVIDER_ID_FIELD) == Some(&json!(STUB_PROVIDER)));
-    assert!(
-        !has_stub,
-        "list-embedding-models must never include the stub provider: {response}",
-    );
-    for model in &models {
-        for legacy_key in [
-            NAME_FIELD,
-            "bare_id",
-            "digest",
-            "size_bytes",
-            "is_embedding_model",
-        ] {
-            assert!(
-                model.get(legacy_key).is_none(),
-                "issue #87: model row must not expose legacy key {legacy_key}: {model}",
-            );
-        }
-    }
+    let models = value_array(&response, STRUCTURED_MODELS_POINTER)?;
+    assert_production_embedding_models(&models)?;
     let _ = child.finish();
     Ok(())
 }

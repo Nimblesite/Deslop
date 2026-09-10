@@ -25,6 +25,7 @@ use anyhow::Result;
 use assert_cmd::Command;
 use serde_json::Value;
 
+use crate::common::scan_dir::temp_scan_dir;
 use crate::common::signals::{
     assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
 };
@@ -114,8 +115,7 @@ fn run_report(src: &Path, tmp: &Path) -> Result<Value> {
 
 /// Builds the fixture (plus optional `.deslop.toml` body) and reports.
 fn report_for_config(config: Option<&str>) -> Result<Value> {
-    let tmp = tempfile::tempdir()?;
-    let src = tmp.path().join("src");
+    let (tmp, src) = temp_scan_dir("src")?;
     write_fixture(&src)?;
     if let Some(body) = config {
         fs::write(src.join(".deslop.toml"), body)?;
@@ -267,31 +267,12 @@ fn retired_structural_only_knobs_do_not_change_the_ranking() -> Result<()> {
     Ok(())
 }
 
-/// The stable, order-insensitive fingerprint of a report's ranking:
-/// `(rank, id, mass)` per cluster, so a retired knob cannot reorder or
-/// re-mass without the assertion seeing it.
-fn rankable(report: &Value) -> Vec<(u64, &str, u64)> {
-    let mut rows: Vec<(u64, &str, u64)> = clusters(report)
-        .iter()
-        .map(|cluster| {
-            (
-                field(cluster, "rank").as_u64().unwrap_or(0),
-                cluster_id(cluster),
-                field(cluster, "mass").as_u64().unwrap_or(0),
-            )
-        })
-        .collect();
-    rows.sort_unstable();
-    rows
-}
-
 /// An out-of-range `structural_only_weight` still fails the load with a
 /// diagnostic naming the key — the legacy keys are parsed and validated
 /// even though they no longer feed ranking.
 #[test]
 fn invalid_structural_only_weight_is_rejected_with_a_clear_error() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let src = tmp.path().join("src");
+    let (_tmp, src) = temp_scan_dir("src")?;
     write_fixture(&src)?;
     for (body, fragment) in [
         (

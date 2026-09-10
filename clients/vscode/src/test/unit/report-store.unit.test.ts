@@ -5,7 +5,7 @@ import * as assert from "node:assert/strict";
 import { ReportStore } from "../../reportStore";
 import { Report, ReportDelta } from "../../types/report";
 
-import { cluster, delta, emptyReport, metrics, occurrence } from "./report-store.helpers";
+import { cluster, delta, emptyReport, metrics, occurrence, storeWith } from "./report-store.helpers";
 
 
 /** The recomputed metrics every applyDelta case asserts against. */
@@ -179,8 +179,7 @@ suite("ReportStore", () => {
   // carried-over seed metrics with the delta's recomputed values, or the
   // headline freezes for the rest of the session.
   test("applyDelta replaces report.metrics with the delta's recomputed metrics (#199)", () => {
-    const store = new ReportStore();
-    store.setSnapshot(
+    const store = storeWith(
       emptyReport({
         metrics: metrics({ analysed_loc: 8981, duplicated_loc: 1588, duplication_percent: 17.7 }),
       }),
@@ -201,8 +200,7 @@ suite("ReportStore", () => {
   // zero-seed -> delta transition moves metrics off zero AND populates
   // clusters, so the two panels can no longer disagree.
   test("applyDelta moves metrics off a zero seed when a delta brings clusters (#196)", () => {
-    const store = new ReportStore();
-    store.setSnapshot(emptyReport(), 1);
+    const store = storeWith(emptyReport(), 1);
     assert.equal(store.current.report?.metrics.duplicated_loc, 0, "seed starts clean");
     const out = applyAndRead(store, {
       clusters_added: [
@@ -274,8 +272,7 @@ suite("ReportStore", () => {
   // Every delta cloned the whole accumulated history, so N removals cost O(N)
   // retained ids and O(N²) copying over the session's life.
   test("the retraction ledger stays bounded across a long delta-only session", () => {
-    const store = new ReportStore();
-    store.setSnapshot(emptyReport({ clusters: [cluster("seed", 1)] }), 1);
+    const store = storeWith(emptyReport({ clusters: [cluster("seed", 1)] }), 1);
 
     const churn = 2_000;
     for (let index = 0; index < churn; index += 1) {

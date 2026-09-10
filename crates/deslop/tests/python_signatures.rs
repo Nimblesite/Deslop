@@ -13,21 +13,10 @@
 
 use anyhow::Result;
 
-use crate::common::signals::{assert_structural_only_contract, has_verbatim_pair};
+use crate::common::signals::{
+    assert_structural_only_contract, has_verbatim_pair, top_visible_cluster,
+};
 use crate::common::*;
-
-/// Drives the `deslop` binary over the named fixture at `min_nodes` and
-/// returns the parsed JSON report, asserting the process exited cleanly.
-fn run_cli(fixture_name: &str, min_nodes: u32) -> Result<serde_json::Value> {
-    let tmp = tempfile::tempdir()?;
-    let output = tmp.path().join("report");
-    let min_nodes = min_nodes.to_string();
-    let _assertion = deslop_cmd(&fixture(fixture_name), &output)?
-        .args(["--min-nodes", min_nodes.as_str()])
-        .assert()
-        .success();
-    load_json(&output.with_extension("json"))
-}
 
 // [FUSED-SIGNALS-THREE-LAYER] Type-2 Python clones (identical after
 // normalisation) must be detected — proves the signature pipeline maps
@@ -38,15 +27,8 @@ fn run_cli(fixture_name: &str, min_nodes: u32) -> Result<serde_json::Value> {
 #[test]
 fn python_type2_clone_is_byte_identical() -> Result<()> {
     let scan_root = fixture("python-small");
-    let report = run_cli("python-small", 10)?;
-    let clusters = clusters(&report);
-    assert!(
-        !clusters.is_empty(),
-        "python-small must produce at least one cluster",
-    );
-    let top = clusters
-        .first()
-        .ok_or_else(|| anyhow::anyhow!("python-small must produce at least one cluster"))?;
+    let report = run_fixture_report("python-small", 10)?;
+    let top = top_visible_cluster(&report, "python-small")?;
     assert_structural_only_contract(top, "python Type-2 clone");
     assert!(
         !has_verbatim_pair(&scan_root, top)?,
@@ -78,7 +60,7 @@ fn python_type2_clone_is_byte_identical() -> Result<()> {
 fn python_multi_file_corpus_produces_cross_file_cluster_with_positive_token_jaccard() -> Result<()>
 {
     let scan_root = fixture("python-type3");
-    let report = run_cli("python-type3", 8)?;
+    let report = run_fixture_report("python-type3", 8)?;
     let cluster = expect_cluster_spanning(&report, &["alpha.py", "beta.py"])?;
     // The shared-subtree cluster is a near-miss: the two functions differ
     // by the extra statement, so the cluster must be admitted and its
@@ -100,8 +82,8 @@ fn python_multi_file_corpus_produces_cross_file_cluster_with_positive_token_jacc
 // signatures), so checking token_jaccard is the direct proof.
 #[test]
 fn python_report_is_deterministic_across_runs() -> Result<()> {
-    let run1 = run_cli("python-small", 10)?;
-    let run2 = run_cli("python-small", 10)?;
+    let run1 = run_fixture_report("python-small", 10)?;
+    let run2 = run_fixture_report("python-small", 10)?;
     let ids1: Vec<(String, u64)> = clusters(&run1)
         .iter()
         .map(|cluster| (cluster_id(cluster).to_owned(), cluster_size(cluster)))

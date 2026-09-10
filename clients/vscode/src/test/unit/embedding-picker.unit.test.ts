@@ -4,6 +4,8 @@
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
+
+import { recordingClient, rejectingClient } from "./client.helpers";
 import {
   buildItems,
   pickEmbeddingModel,
@@ -204,20 +206,12 @@ suite("embeddingPicker helpers", () => {
   });
 
   test("setModel short-circuits when the request throws (covers error branch)", async () => {
-    const client = {
-      sendRequest: () => Promise.reject(new Error("boom")),
-    } as unknown as LanguageClient;
+    const client = rejectingClient("boom");
     await setModel(client, model(OLLAMA_PROVIDER_ID, NOMIC_MODEL_ID));
   });
 
   test("setModel happy path persists the workspace config", async () => {
-    const calls: Array<{ method: string; params: unknown }> = [];
-    const client = {
-      sendRequest: (method: string, params: unknown) => {
-        calls.push({ method, params });
-        return Promise.resolve(undefined);
-      },
-    } as unknown as LanguageClient;
+    const { calls, client } = recordingClient();
     await setModel(client, model(OLLAMA_PROVIDER_ID, CODE_MODEL_ID));
     const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIG_SECTION);
     assert.equal(calls.length, 1, `expected one RPC call, got ${JSON.stringify(calls)}`);
@@ -232,13 +226,7 @@ suite("embeddingPicker helpers", () => {
   });
 
   test("setModel dispatches deslop/embeddingSetModel with the chosen provider + model", async () => {
-    const calls: Array<{ method: string; params: unknown }> = [];
-    const client = {
-      sendRequest: (method: string, params: unknown) => {
-        calls.push({ method, params });
-        return Promise.resolve(undefined);
-      },
-    } as unknown as LanguageClient;
+    const { calls, client } = recordingClient();
     await setModel(client, model(OLLAMA_PROVIDER_ID, NOMIC_MODEL_ID));
     const swap = calls.find((call) => call.method === EMBEDDING_SET_MODEL_METHOD);
     const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIG_SECTION);
@@ -257,19 +245,15 @@ suite("embeddingPicker helpers", () => {
     const store = newStore();
     const events: string[] = [];
     const recorded: Array<string | null> = [];
-    const calls: Array<{ method: string; params: unknown }> = [];
     store.onDidChange((s) => {
       events.push("change");
       recorded.push(s.pendingEmbeddingModel);
     });
-    const client = {
-      sendRequest: (method: string, params: unknown) => {
-        // Capture the store's pending state at the moment the RPC is issued.
-        events.push(`rpc(${store.current.pendingEmbeddingModel ?? "null"})`);
-        calls.push({ method, params });
-        return Promise.resolve(undefined);
-      },
-    } as unknown as LanguageClient;
+    // Capture the store's pending state at the moment each RPC is issued.
+    const { calls, client } = recordingClient(() => {
+      events.push(`rpc(${store.current.pendingEmbeddingModel ?? "null"})`);
+      return undefined;
+    });
     await setModelFromPicker(client, store, model(OLLAMA_PROVIDER_ID, NOMIC_MODEL_ID));
     const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIG_SECTION);
     assert.equal(calls.length, 1, `expected one RPC call, got ${JSON.stringify(calls)}`);
@@ -453,17 +437,13 @@ suite("embeddingPicker helpers", () => {
   });
 
   test("setModel handles non-Error rejections", async () => {
-    const client = {
-      sendRequest: () => Promise.reject(new Error(STRING_FAILURE_MESSAGE)),
-    } as unknown as LanguageClient;
+    const client = rejectingClient(STRING_FAILURE_MESSAGE);
     await setModel(client, model(OLLAMA_PROVIDER_ID, BROKEN_MODEL_ID));
   });
 
   test("setModelFromPicker clears pending state after a rejected request", async () => {
     const store = newStore();
-    const client = {
-      sendRequest: () => Promise.reject(new Error(STRING_FAILURE_MESSAGE)),
-    } as unknown as LanguageClient;
+    const client = rejectingClient(STRING_FAILURE_MESSAGE);
 
     await setModelFromPicker(client, store, model(OLLAMA_PROVIDER_ID, BROKEN_MODEL_ID));
     assert.equal(store.current.pendingEmbeddingModel, null);
@@ -495,14 +475,9 @@ suite("turn embeddings off", () => {
 
   test("turnEmbeddingsOff sends the off request, persists mode=off, and applies the returned delta", async () => {
     const store = newStore();
-    const calls: Array<{ method: string; params: unknown }> = [];
-    const client = {
-      sendRequest: (method: string, params: unknown) => {
-        calls.push({ method, params });
-        if (method === REPORT_DELTA_METHOD) return Promise.resolve(emptyDelta(7));
-        return Promise.resolve(null);
-      },
-    } as unknown as LanguageClient;
+    const { calls, client } = recordingClient((method) =>
+      method === REPORT_DELTA_METHOD ? emptyDelta(7) : null,
+    );
 
     await turnEmbeddingsOff(client, store);
 
@@ -538,9 +513,7 @@ suite("turn embeddings off", () => {
 
   test("turnEmbeddingsOff reverts the pending marker when the LSP rejects", async () => {
     const store = newStore();
-    const client = {
-      sendRequest: () => Promise.reject(new Error("backend unavailable")),
-    } as unknown as LanguageClient;
+    const client = rejectingClient("backend unavailable");
 
     await turnEmbeddingsOff(client, store);
     assert.equal(

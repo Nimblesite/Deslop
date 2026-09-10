@@ -18,7 +18,7 @@ use crate::{
             emit_merge_helper, plain_call, BraceStyle, HelperDialect, HelperPlacement,
             InsertionPoint,
         },
-        shared::{build_normalised_root, intern_kind, parse_source, IDENTIFIER_KIND, LITERAL_KIND},
+        shared::{build_normalised_root, normalise_kind_with, parse_source},
         LanguageParser,
     },
     refactor::{
@@ -111,30 +111,18 @@ impl LanguageParser for RustParser {
 /// default parameter values ([AUTOFIX-MERGE-DEFAULTS]).
 const MERGE_TABLES: MergeTables = MergeTables {
     boundary_kinds: &[
-        BoundaryKind {
-            node_kind: "return_expression",
-            allowed_containers: &[],
-        },
-        BoundaryKind {
-            node_kind: "try_expression",
-            allowed_containers: &[],
-        },
-        BoundaryKind {
-            node_kind: "await_expression",
-            allowed_containers: &[],
-        },
-        BoundaryKind {
-            node_kind: "yield_expression",
-            allowed_containers: &[],
-        },
-        BoundaryKind {
-            node_kind: "break_expression",
-            allowed_containers: &["for_expression", "while_expression", "loop_expression"],
-        },
-        BoundaryKind {
-            node_kind: "continue_expression",
-            allowed_containers: &["for_expression", "while_expression", "loop_expression"],
-        },
+        BoundaryKind::new("return_expression", &[]),
+        BoundaryKind::new("try_expression", &[]),
+        BoundaryKind::new("await_expression", &[]),
+        BoundaryKind::new("yield_expression", &[]),
+        BoundaryKind::new(
+            "break_expression",
+            &["for_expression", "while_expression", "loop_expression"],
+        ),
+        BoundaryKind::new(
+            "continue_expression",
+            &["for_expression", "while_expression", "loop_expression"],
+        ),
     ],
     literal_types: &[
         ("integer_literal", "i64"),
@@ -214,36 +202,12 @@ fn merge_signature_text(helper_name: &str, parameters: &str) -> String {
 /// block-local `const` items. A match arm's `value` runs with its
 /// pattern already in scope, so it walks late.
 const BINDING_KINDS: &[BindingKind] = &[
-    BindingKind {
-        node_kind: "let_declaration",
-        name_field: Some("pattern"),
-        late_fields: &[],
-    },
-    BindingKind {
-        node_kind: "parameter",
-        name_field: Some("pattern"),
-        late_fields: &[],
-    },
-    BindingKind {
-        node_kind: "for_expression",
-        name_field: Some("pattern"),
-        late_fields: &[],
-    },
-    BindingKind {
-        node_kind: "let_condition",
-        name_field: Some("pattern"),
-        late_fields: &[],
-    },
-    BindingKind {
-        node_kind: "match_arm",
-        name_field: Some("pattern"),
-        late_fields: &["value"],
-    },
-    BindingKind {
-        node_kind: "const_item",
-        name_field: Some("name"),
-        late_fields: &[],
-    },
+    BindingKind::new("let_declaration", Some("pattern"), &[]),
+    BindingKind::new("parameter", Some("pattern"), &[]),
+    BindingKind::new("for_expression", Some("pattern"), &[]),
+    BindingKind::new("let_condition", Some("pattern"), &[]),
+    BindingKind::new("match_arm", Some("pattern"), &["value"]),
+    BindingKind::new("const_item", Some("name"), &[]),
 ];
 
 /// Rust identifier-reference recognition for
@@ -273,18 +237,8 @@ const REFERENCE_TABLE: ReferenceTable = ReferenceTable {
 
 /// Nested Rust scopes that open a frame during the free-variable walk.
 const FRAME_KINDS: &[FrameKind] = &[
-    FrameKind {
-        node_kind: "closure_expression",
-        bind_inside_field: Some("parameters"),
-        bind_outside_field: None,
-        bind_first_kinds: &[],
-    },
-    FrameKind {
-        node_kind: "function_item",
-        bind_inside_field: None,
-        bind_outside_field: Some("name"),
-        bind_first_kinds: &[],
-    },
+    FrameKind::new("closure_expression", Some("parameters"), None, &[]),
+    FrameKind::new("function_item", None, Some("name"), &[]),
 ];
 
 /// Rust container kinds for [AUTOFIX-EXTRACT-PRECONDITIONS] rules 4–5:
@@ -304,18 +258,8 @@ const SCOPE_KINDS: ScopeKinds = ScopeKinds {
     // state a parameter still reaches; the borrow checker backstops
     // the rest, so no marker or destructuring entries are needed.
     write_kinds: &[
-        WriteKind {
-            node_kind: "assignment_expression",
-            target_field: Some("left"),
-            marker_tokens: &[],
-            destructuring_kinds: &[],
-        },
-        WriteKind {
-            node_kind: "compound_assignment_expr",
-            target_field: Some("left"),
-            marker_tokens: &[],
-            destructuring_kinds: &[],
-        },
+        WriteKind::new("assignment_expression", Some("left"), &[], &[]),
+        WriteKind::new("compound_assignment_expr", Some("left"), &[], &[]),
     ],
     relocation_unsafe_kinds: &[],
 };
@@ -407,18 +351,39 @@ fn function_text(request: &EmitRequest<'_, '_>, indent: &str, method_name: &str)
 /// 0.24.x. Every other named kind passes through interned so the hash
 /// stays stable across runs.
 fn normalise_kind(raw: &str) -> Option<&'static str> {
-    match raw {
-        "line_comment" | "block_comment" => None,
+    normalise_kind_with(raw, is_comment_kind, is_identifier_kind, is_literal_kind)
+}
+
+/// Rust trivia.
+fn is_comment_kind(raw: &str) -> bool {
+    matches!(raw, "line_comment" | "block_comment")
+}
+
+/// Rust identifier leaves, collapsed for Type-2 renamed-clone detection.
+fn is_identifier_kind(raw: &str) -> bool {
+    matches!(
+        raw,
         "identifier"
-        | "type_identifier"
-        | "field_identifier"
-        | "shorthand_field_identifier"
-        | "primitive_type"
-        | "scoped_identifier"
-        | "scoped_type_identifier"
-        | "metavariable" => Some(IDENTIFIER_KIND),
-        "string_literal" | "raw_string_literal" | "char_literal" | "integer_literal"
-        | "float_literal" | "boolean_literal" => Some(LITERAL_KIND),
-        other => Some(intern_kind(other)),
-    }
+            | "type_identifier"
+            | "field_identifier"
+            | "shorthand_field_identifier"
+            | "primitive_type"
+            | "scoped_identifier"
+            | "scoped_type_identifier"
+            | "metavariable"
+    )
+}
+
+/// Rust literal leaves, collapsed so constant edits do not perturb
+/// fingerprints.
+fn is_literal_kind(raw: &str) -> bool {
+    matches!(
+        raw,
+        "string_literal"
+            | "raw_string_literal"
+            | "char_literal"
+            | "integer_literal"
+            | "float_literal"
+            | "boolean_literal"
+    )
 }

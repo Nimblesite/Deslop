@@ -3,7 +3,7 @@
 //! Drives the CLI against the mixed-language fixture so the public
 //! `.deslop.toml` contract is tested through the same path users run.
 
-use std::{collections::BTreeSet, fs, path::Path, path::PathBuf};
+use std::{collections::BTreeSet, fs, path::Path};
 
 use anyhow::Result;
 use serde_json::Value;
@@ -78,8 +78,4 @@ fn occurrence_extensions(cluster: &Value) -> Result<BTreeSet<String>> {
 
 fn extension(path: &str) -> Option<&str> {
     Path::new(path).extension()?.to_str()
-}
-
-fn with_ext(base: &Path, ext: &str) -> PathBuf {
-    deslop_test_support::with_ext(base, ext)
 }

@@ -11,14 +11,9 @@
 //! proof of both: a reported rename must slice to differing bytes
 //! ([PIPELINE-CLUSTER-CLOSURE]).
 
-use std::{collections::BTreeSet, path::Path};
-
 use anyhow::Result;
-use serde_json::Value;
 
-use crate::common::signals::{
-    assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
-};
+use crate::common::signals::{assert_admitted_rename_cluster, top_visible_cluster};
 use crate::common::*;
 
 #[test]
@@ -66,9 +61,8 @@ fn typescript_near_miss_produces_cross_file_structural_cluster() -> Result<()> {
 fn assert_type2_clone(fixture_name: &str, min_nodes: u32, left: &str, right: &str) -> Result<()> {
     let scan_root = fixture(fixture_name);
     let report = run_report(&scan_root, min_nodes)?;
-    let top = top_cluster(&report, fixture_name)?;
-    assert_admitted_rename_cluster(&scan_root, top, fixture_name, left, right, &report)?;
-    Ok(())
+    let top = top_visible_cluster(&report, fixture_name)?;
+    assert_admitted_rename_cluster(&scan_root, top, fixture_name, &[left, right], &report)
 }
 
 /// Asserts that a Type-3 near miss surfaces as a cross-file cluster whose
@@ -77,66 +71,14 @@ fn assert_type2_clone(fixture_name: &str, min_nodes: u32, left: &str, right: &st
 fn assert_type3_clone(fixture_name: &str, min_nodes: u32, left: &str, right: &str) -> Result<()> {
     let scan_root = fixture(fixture_name);
     let report = run_report(&scan_root, min_nodes)?;
+    let files = [left, right];
     let cluster = clusters(&report)
         .iter()
-        .find(|cluster| spans_both(cluster, left, right))
+        .find(|cluster| cluster_covers_files(cluster, &files))
         .ok_or_else(|| {
             anyhow::anyhow!(
                 "{fixture_name} must report a clone spanning {left} and {right}: {report:#}"
             )
         })?;
-    assert_admitted_rename_cluster(&scan_root, cluster, fixture_name, left, right, &report)?;
-    Ok(())
-}
-
-/// The wire contract every renamed/near-miss clone must satisfy
-/// ([PIPELINE-CLUSTER-CLOSURE]): admitted and mass-honest, no pair-only
-/// surface on the cluster, and — the byte-level truth the deleted
-/// `structural`/`token_jaccard` axes used to proxy — the occurrences
-/// slice to *differing* source bytes. A Merkle-equal fragment selected in
-/// place of the enclosing view would slice to identical bytes and fail
-/// here, which is exactly the gh #408/#427 recall hole.
-fn assert_admitted_rename_cluster(
-    scan_root: &Path,
-    cluster: &Value,
-    fixture_name: &str,
-    left: &str,
-    right: &str,
-    report: &Value,
-) -> Result<()> {
-    assert_structural_only_contract(cluster, fixture_name);
-    assert_no_pair_surface_on_cluster(cluster, fixture_name);
-    assert!(
-        !has_verbatim_pair(scan_root, cluster)?,
-        "{fixture_name}: {left} and {right} are a rename / near-miss and must \
-         slice to differing bytes — a verbatim (byte-identical) reading means \
-         the fragment view was selected in place of the enclosing pair, the \
-         gh #408 recall hole: {report:#}"
-    );
-    assert!(
-        spans_both(cluster, left, right),
-        "{fixture_name}: the clone must span {left} and {right}: {report:#}"
-    );
-    Ok(())
-}
-
-/// Returns the top-ranked visible cluster, or an actionable test error.
-fn top_cluster<'a>(report: &'a Value, fixture_name: &str) -> Result<&'a Value> {
-    clusters(report)
-        .first()
-        .ok_or_else(|| anyhow::anyhow!("{fixture_name} must produce at least one cluster"))
-}
-
-/// Returns true when `cluster` contains occurrences in both files.
-fn spans_both(cluster: &Value, left: &str, right: &str) -> bool {
-    let files: BTreeSet<String> = occurrence_files(cluster)
-        .into_iter()
-        .filter_map(|path| {
-            Path::new(&path)
-                .file_name()
-                .map(std::borrow::ToOwned::to_owned)
-        })
-        .map(|name| name.to_string_lossy().into_owned())
-        .collect();
-    files.contains(left) && files.contains(right)
+    assert_admitted_rename_cluster(&scan_root, cluster, fixture_name, &files, &report)
 }

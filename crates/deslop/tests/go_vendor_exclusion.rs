@@ -66,9 +66,10 @@ fn committed_go_vendor_tree_is_excluded_from_discovery() -> Result<()> {
                 !path_components(&path).contains(&"vendor"),
                 "a vendored dependency leaked into a rendered cluster: {path}",
             );
-            assert!(
-                !path.contains("example.com"),
-                "a vendored module path leaked into a rendered cluster: {path}",
+            assert_not_contains(
+                &path,
+                "example.com",
+                "a vendored module path leaked into a rendered cluster",
             );
         }
     }

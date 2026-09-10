@@ -26,16 +26,12 @@ Only `find-similar` belongs in the authoring inner loop. Everything else is a re
 | Tool | When to call it |
 | --- | --- |
 | `find-similar` | **Before** writing new code — does an equivalent already exist? This is the prevention tool. |
-| `top-offenders` | Worst clusters in the workspace, worst first. Start cleanup here. |
+| `duplicates` | Ranked clusters, worst first. Narrow to a file, a byte range, or a language. Start cleanup here. |
 | `cluster-by-id` | Full member list and signals for one cluster you are about to merge. |
-| `report-for-file` | Per-file cluster slice. |
-| `report-for-range` | Per-selection cluster slice. |
-| `report-get` | Whole-workspace report. |
-| `report-query` | Filtered query over the report. |
+| `compare-pair` | Why two specific occurrences were admitted as duplicates of each other. |
+| `merge-plan` | Read-only mechanical merge plan for a cluster, before you hand-edit. |
 | `rescan` | Force-refresh after large external changes. |
-| `list-embedding-models` | Models the provider advertises. |
-| `set-embedding-model` | Switch the same behavior, different code [Type-4] semantic model at runtime. |
-| `session-config` | Inspect the running server's effective config. |
+| `session` | Session metadata; list the semantic models a provider advertises, or switch to one you picked. |
 | `schema-doc` | Authoritative JSON schema for every response. Call **once** per session, not per response. |
 
 Every response is computed against the **live** workspace state. The editor server holds the live report in memory and refreshes it on every change (debounced, with a hard cap); the MCP server reads that live state over the local IPC endpoint on the next tool call. macOS and Linux use `.deslop/cache/deslop.sock`; Windows uses a token-gated TCP loopback endpoint discovered through `.deslop/cache/deslop.port`. There is no batch step.
@@ -116,7 +112,7 @@ The headline workflow is reactive, not batch:
 1. The agent proposes a change. Before it writes the new code, it calls `find-similar` over the proposed snippet.
 2. If `find-similar` returns a cluster above the similarity floor, the agent reuses the canonical occurrence or rewrites the call site.
 3. As the agent edits files, the file watcher fires and the analysis refreshes. The MCP server serves the new state on the next tool call.
-4. The agent re-queries `top-offenders` or `report-for-file` to confirm the cluster is gone. No re-run, no flag, no batch CLI invocation.
+4. The agent re-queries `duplicates` to confirm the cluster is gone. No re-run, no flag, no batch CLI invocation.
 
 When MCP is not available — CI, a cold-cache audit, or an agent with no MCP client — the loop degrades to the `deslop` CLI, which runs the identical pipeline and emits the identical JSON. The incremental cache is on by default, so a re-run after an edit only re-parses the files that changed. The step-by-step fallback is on [For AI](/docs/for-ai/#if-the-mcp-server-is-unavailable-use-the-cli).
 

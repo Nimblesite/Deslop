@@ -23,13 +23,13 @@
 
 use std::{fs, time::Duration};
 
-use anyhow::{anyhow, ensure, Context, Result};
+use anyhow::{ensure, Context, Result};
 use serde_json::{json, Value};
 
 use crate::common;
 use common::{
-    cluster_ids, copied_fixture, initialized_mcp, lsp_workspace_with_socket,
-    spawn_lsp_and_wait_for_socket, structured_content, wait_for_path, SOCKET_TIMEOUT,
+    call_tool, cluster_ids, copied_fixture, initialized_mcp, lsp_workspace_with_socket,
+    spawn_lsp_and_wait_for_socket, structured_content, u64_field, wait_for_path, SOCKET_TIMEOUT,
 };
 
 /// [MCP-IPC-CLIENT] Repurposes `issue_90_report_get_reloads_state_file_between_plain_calls`.
@@ -50,10 +50,7 @@ fn issue_90_report_get_reflects_lsp_state_between_plain_calls() -> Result<()> {
     let mut mcp = initialized_mcp(workspace.path())?;
 
     let before = call_report_get(&mut mcp, /*offset*/ 0, /*limit*/ 64)?;
-    let before_total = before
-        .get("total_clusters")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| anyhow!("total_clusters missing: {before}"))?;
+    let before_total = u64_field(&before, "total_clusters")?;
     ensure!(
         before_total > 0,
         "fixture must produce at least one visible cluster before mutation: {before}",
@@ -67,25 +64,15 @@ fn issue_90_report_get_reflects_lsp_state_between_plain_calls() -> Result<()> {
         &beta,
         b"namespace Beta { public class Differ { public int Run(int x) { return x + 1; } } }\n",
     )?;
-    let rescan = mcp.request(
-        "tools/call",
-        &json!({"name": "rescan", "arguments": {"n": 5}}),
-    )?;
-    let rescan_structured = structured_content(&rescan, "rescan")?;
-    let rescan_generation = rescan_structured
-        .get("generation")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| anyhow!("rescan generation missing: {rescan}"))?;
+    let rescan_structured = call_tool(&mut mcp, "rescan", &json!({"n": 5}))?;
+    let rescan_generation = u64_field(&rescan_structured, "generation")?;
     ensure!(
         rescan_generation > 0,
-        "rescan must advance generation past zero: {rescan}",
+        "rescan must advance generation past zero: {rescan_structured}",
     );
 
     let after = call_report_get(&mut mcp, /*offset*/ 0, /*limit*/ 64)?;
-    let after_total = after
-        .get("total_clusters")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| anyhow!("total_clusters missing: {after}"))?;
+    let after_total = u64_field(&after, "total_clusters")?;
 
     ensure!(
         after_total != before_total
@@ -158,10 +145,7 @@ fn issue_118_incompatible_seed_cache_cannot_brick_lsp_startup() -> Result<()> {
 
     let mut mcp = initialized_mcp(workspace.path())?;
     let response = call_report_get(&mut mcp, 0, 64)?;
-    let total = response
-        .get("total_clusters")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| anyhow!("total_clusters missing: {response}"))?;
+    let total = u64_field(&response, "total_clusters")?;
     ensure!(
         total > 0,
         "incompatible seed cache must not block the cold pass; LSP must produce live clusters from source: {response}",

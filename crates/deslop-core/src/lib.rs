@@ -23,6 +23,7 @@ pub mod cluster;
 mod cluster_filters;
 pub mod config;
 pub mod content;
+mod counters;
 pub mod delta;
 pub mod diff_scope;
 pub mod discover;
@@ -41,9 +42,12 @@ pub mod paths;
 pub mod pipeline;
 pub mod process;
 pub mod refactor;
+#[cfg(any(test, feature = "test-support"))]
+pub mod registry_fixtures;
 pub mod render;
 pub mod report;
 pub mod report_boilerplate;
+pub mod report_facts;
 #[cfg(any(test, feature = "test-support"))]
 pub mod report_fixtures;
 pub mod report_location;

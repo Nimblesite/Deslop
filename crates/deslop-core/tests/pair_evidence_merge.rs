@@ -7,7 +7,7 @@
 //! key set that refuses later arrivals silently drops evidence and can
 //! hide a real duplicate.
 
-use std::{collections::HashMap, path::PathBuf};
+use std::collections::HashMap;
 
 use anyhow::{Context, Result};
 
@@ -17,7 +17,8 @@ use deslop_core::{
     fingerprint::Fingerprint,
     lsh::{Signature, SignatureIndex, SIGNATURE_LEN},
     pair::candidate_pairs,
-    state::{FileId, FileRegistry},
+    registry_fixtures::python_pair_ids,
+    state::FileId,
 };
 
 /// Strong cosine: clears the fused threshold on its own evidence.
@@ -31,9 +32,7 @@ const NODE_COUNT: usize = 80;
 /// whether the Merkle hashes collide (a structural star pair) or are
 /// distinct (embedding-only discovery).
 fn fixture(structural_clone: bool) -> (Vec<Fingerprint>, Vec<Signature>) {
-    let mut registry = FileRegistry::new();
-    let left = registry.register(PathBuf::from("left.py"));
-    let right = registry.register(PathBuf::from("right.py"));
+    let (left, right) = python_pair_ids();
     let left_hash = [7_u8; 32];
     let right_hash = if structural_clone {
         left_hash
@@ -50,9 +49,7 @@ fn fixture(structural_clone: bool) -> (Vec<Fingerprint>, Vec<Signature>) {
 
 /// The language map over the same two files `fixture` registers.
 fn fixture_languages() -> HashMap<FileId, &'static str> {
-    let mut registry = FileRegistry::new();
-    let left = registry.register(PathBuf::from("left.py"));
-    let right = registry.register(PathBuf::from("right.py"));
+    let (left, right) = python_pair_ids();
     HashMap::from([(left, "python"), (right, "python")])
 }
 

@@ -17,7 +17,10 @@ use anyhow::{anyhow, ensure, Context, Result};
 use serde_json::{json, Value};
 
 use crate::common;
-use common::{initialized_mcp, lsp_workspace_with_socket, structured_content, McpHandle};
+use common::{
+    array_field, call_tool, initialized_mcp, lsp_workspace_with_socket, str_field,
+    structured_content, McpHandle,
+};
 
 /// Lower bound for the slug shared with `clusterSlug()` in the VSIX
 /// (`clients/vscode/src/types/report.ts`). Hard-coded here so a drift
@@ -83,14 +86,8 @@ fn cluster_by_id_accepts_seven_hex_slug() -> Result<()> {
     let mut mcp = initialized_mcp(workspace.path())?;
     let full = mcp_cluster_by_id(&mut mcp, &full_id)?;
     let by_slug = mcp_cluster_by_id(&mut mcp, &slug)?;
-    let full_resolved = full
-        .get("id")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("cluster-by-id (full id) response missing id: {full}"))?;
-    let slug_resolved = by_slug
-        .get("id")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("cluster-by-id (slug) response missing id: {by_slug}"))?;
+    let full_resolved = str_field(&full, "id")?;
+    let slug_resolved = str_field(&by_slug, "id")?;
     assert_eq!(
         full_resolved, full_id,
         "cluster-by-id with full id must round-trip the same canonical id; got {full_resolved}",
@@ -108,10 +105,7 @@ fn cluster_by_id_accepts_seven_hex_slug() -> Result<()> {
 /// which never reorders or drops clusters — only caps occurrences).
 fn lsp_report_cluster_ids(socket: &Path) -> Result<Vec<String>> {
     let result = lsp_ipc_call(socket, "report/get", &json!({}))?;
-    let clusters = result
-        .get("clusters")
-        .and_then(Value::as_array)
-        .ok_or_else(|| anyhow!("LSP report missing clusters array: {result}"))?;
+    let clusters = array_field(&result, "clusters")?;
     Ok(clusters
         .iter()
         .filter_map(|cluster| cluster.get("id").and_then(Value::as_str).map(str::to_owned))
@@ -123,21 +117,15 @@ fn lsp_report_cluster_ids(socket: &Path) -> Result<Vec<String>> {
 /// `n` matches the canonical list length so the response can never
 /// claim a cluster the LSP did not also surface.
 fn mcp_top_offenders_ids(mcp: &mut McpHandle, n: usize) -> Result<Vec<String>> {
-    let response = mcp.request(
-        "tools/call",
+    let payload = call_tool(
+        mcp,
+        "duplicates",
         &json!({
-            "name": "duplicates",
-            "arguments": {
-                "n": n.max(1),
-                "max_occurrences": 100_000_usize,
-            }
+            "n": n.max(1),
+            "max_occurrences": 100_000_usize,
         }),
     )?;
-    let payload = structured_content(&response, "duplicates")?;
-    let clusters = payload
-        .get("clusters")
-        .and_then(Value::as_array)
-        .ok_or_else(|| anyhow!("top-offenders payload missing clusters array: {payload}"))?;
+    let clusters = array_field(&payload, "clusters")?;
     Ok(clusters
         .iter()
         .filter_map(|cluster| cluster.get("id").and_then(Value::as_str).map(str::to_owned))

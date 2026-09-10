@@ -1,144 +1,72 @@
-//! E2E regression for [CLONE-NOISE-POLYMORPHIC-CONTRACT] — the boundary
-//! of the [CLONE-NOISE-POLYMORPHIC-SIGNATURE] suppression.
+//! [CLONE-NOISE-POLYMORPHIC-CONTRACT] — the boundary of
+//! [CLONE-NOISE-POLYMORPHIC-SIGNATURE] suppression.
 //!
-//! The polymorphic gate may only delete a same-named cross-file cluster
-//! when a contract *forces* the signature it matched on. Reading that
-//! requirement as "the enclosing type names some base" makes every
-//! ordinary subclass a contract implementation, so a method copied into
-//! two unrelated subclasses of one shared base is hidden the moment the
-//! copies rename the collaborators they reach for — a false negative on
-//! exactly the duplication a user most wants back.
+//! `LedgerSink` declares the abstract `record_entry` both sinks
+//! override, so the contract is what forces their signature and
+//! statement shape to agree; buckets against blobs, `serialise` against
+//! `encode` are the entire behavioural difference. Nothing about an S3
+//! sink can be refactored into a GCS sink.
+//! `CommonWorker` declares only `__init__` and `stamp`; it does not force
+//! `InvoiceWorker.synchronise` and `UserWorker.synchronise` to agree.
+//! Their copied bodies must survive the filter despite renamed collaborators.
+//! [FUSED-CONTENT-GATE-CALL-TARGET] permits the repeated bijective rename
+//! demonstrated by the copied receiver properties.
 //!
 //! Both directions live in ONE scan so a fix for either can never trade
-//! away the other. `LedgerSink` is an `ABC` that declares
-//! `record_entry`, so its two implementations are genuinely forced into
-//! the same signature and must stay hidden. `CommonWorker` declares only
-//! `__init__` and `stamp`; `InvoiceWorker.synchronise` and
-//! `UserWorker.synchronise` are a copy-paste with every local, parameter
-//! and collaborator renamed, and nothing forces them to agree — that
-//! clone must surface with its real files, ranges, bucket and signals.
-//! [FUSED-CONTENT-GATE-CALL-TARGET] permits its method renames because
-//! the copied receiver properties demonstrate a repeated bijective rename.
-//! An empty report satisfies the absence half and fails the presence
-//! half, so a detector that went blind cannot pass this test.
+//! away the other: the contract pair must stay hidden while a copied
+//! `synchronise` must surface with its real files, ranges and
+//! occurrence count. An empty report satisfies the absence half and
+//! fails the presence half, so a detector that went blind cannot pass.
 
-use crate::common::signals::{
-    assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
-};
-use crate::common::*;
+use crate::common::contract_boundary::ContractBoundaryCase;
+use crate::common::Result;
 
-/// The fixture holding the real contract pair and the inherited-but-not-
-/// declared copy.
+/// The fixture holding the contract pair and the copied pair.
 const FIXTURE: &str = "python-inherited-contract-boundary";
 
-/// Node floor for the scan. Low enough to admit both ten-line subjects,
-/// so neither half of the test can pass by not matching.
-const MIN_NODES: u32 = 12;
+/// Exercise the original floor and the lower floor introduced by consolidation.
+const MIN_NODE_FLOORS: [u32; 2] = [8, 12];
 
-/// Every `.py` file in the fixture: the abstract base, its two
-/// implementations, the plain base, and the two copies.
+/// The abstract contract forces these signatures to agree.
+const CONTRACT_REASON: &str = "`LedgerSink` declares the abstract `record_entry` both sinks \
+    override, so the contract forces their signature and statement shape to agree; \
+    buckets against blobs, `serialise` against `encode` are the behavioural difference.";
+
+/// Every `.py` file in the fixture.
 const FILES_ANALYSED: u64 = 6;
 
-/// The `LedgerSink` implementation that writes to buckets.
+/// The contract implementation that writes to S3 buckets.
 const S3_SINK: &str = "s3_sink.py";
 
-/// The `LedgerSink` implementation that writes to blobs.
+/// The contract implementation that writes to GCS blobs.
 const GCS_SINK: &str = "gcs_sink.py";
 
-/// The copy's canonical half, a `CommonWorker` subclass.
+/// The copied clone's canonical half.
 const INVOICE_WORKER: &str = "invoice_worker.py";
 
-/// The copy, with every local, parameter and collaborator renamed.
+/// The copied clone's other half.
 const USER_WORKER: &str = "user_worker.py";
 
-/// First line of the matched view in both copies — the whole module,
-/// because the import and the class shell around `synchronise` are
-/// identical too.
+/// First line of the clone in both files.
 const CLONE_FIRST_LINE: u64 = 1;
 
-/// Last line of `synchronise` in both copies.
+/// Last line of the clone in both files.
 const CLONE_LAST_LINE: u64 = 14;
-
-/// One occurrence per file.
-const CLONE_OCCURRENCES: u64 = 2;
 
 #[test]
 fn an_inherited_method_no_base_declares_is_not_a_contract_implementation() -> Result<()> {
-    let scan_root = fixture(FIXTURE);
-    let report = run_report(&scan_root, MIN_NODES)?;
-    let visible = visible_cluster_lines(&report);
-
-    assert_eq!(
-        field(&report, "files_analysed").as_u64(),
-        Some(FILES_ANALYSED),
-        "every fixture file must be parsed — a scan that skipped them \
-         would satisfy the absence half of this test by measuring \
-         nothing: {report:#}"
-    );
-    assert!(
-        cluster_spanning(&report, &[S3_SINK, GCS_SINK]).is_none(),
-        "`LedgerSink` declares the abstract `record_entry` both sinks \
-         override, so the contract is what forces their signature and \
-         statement shape to agree; buckets against blobs, `serialise` \
-         against `encode` are the entire behavioural difference. A \
-         cluster pairing them reports the contract as duplication: \
-         {visible:#?}"
-    );
-    assert!(
-        clusters_hidden(&report) >= 1,
-        "the contract pair must be actively suppressed, not merely \
-         absent from a report that found nothing: {report:#}"
-    );
-
-    let clone = expect_cluster_spanning(&report, &[INVOICE_WORKER, USER_WORKER])?;
-    assert_eq!(
-        cluster_count(&report),
-        1,
-        "the copied `synchronise` pair is the only duplication in this \
-         fixture: {visible:#?}"
-    );
-    assert_eq!(
-        cluster_size(clone),
-        CLONE_OCCURRENCES,
-        "one occurrence per file: {report:#}"
-    );
-    // [PIPELINE-CLUSTER-CLOSURE] The nearly-identical verdict and the
-    // content axes are pair-scoped now. The wire facts that hold the
-    // acceptance: the copied `synchronise` pair is admitted, mass-honest,
-    // clean-surfaced and byte-distinct — a total consistent rename, never
-    // a verbatim paste.
-    assert_structural_only_contract(clone, "inherited contract boundary");
-    assert_no_pair_surface_on_cluster(clone, "inherited contract boundary");
-    assert!(
-        !has_verbatim_pair(&scan_root, clone)?,
-        "`synchronise` is renamed across the two workers and must slice to \
-         differing bytes: {report:#}"
-    );
-    for occurrence in occurrences(clone) {
-        assert_eq!(
-            field(occurrence, "start_line").as_u64(),
-            Some(CLONE_FIRST_LINE),
-            "the clone covers the module from its import down in both \
-             files: \
-             {visible:#?}"
-        );
-        assert_eq!(
-            field(occurrence, "end_line").as_u64(),
-            Some(CLONE_LAST_LINE),
-            "the clone covers the whole method in both files: \
-             {visible:#?}"
-        );
+    for min_nodes in MIN_NODE_FLOORS {
+        ContractBoundaryCase {
+            fixture: FIXTURE,
+            min_nodes,
+            files_analysed: FILES_ANALYSED,
+            contract_pair: [S3_SINK, GCS_SINK],
+            contract_reason: CONTRACT_REASON,
+            clone_pair: [INVOICE_WORKER, USER_WORKER],
+            clone_lines: (CLONE_FIRST_LINE, CLONE_LAST_LINE),
+            clone_subject: "the copied `synchronise`",
+        }
+        .assert()?;
     }
-    assert!(
-        visible_duplicated_loc(&report) > 0,
-        "two rename-identical methods duplicate real lines: {report:#}"
-    );
-    assert!(
-        metric_field(&report, "duplication_percent")
-            .as_f64()
-            .unwrap_or(0.0)
-            > 0.0,
-        "the headline figure must count the surviving copy: {report:#}"
-    );
     Ok(())
 }

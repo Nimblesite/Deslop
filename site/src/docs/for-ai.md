@@ -25,7 +25,7 @@ Before you author any new code unit — function, method, class, helper, fixture
 
 Every cluster carries a `kind` — `identical`, `nearly_identical`, `same_behavior`, `structural_only`, or `loosely_similar` — the weakest relation between its first occurrence and any other member, measured exactly as an explicit pair comparison would. `identical` means every copy is byte-for-byte the first; anything else means at least one copy differs, so read the occurrences. The engine carries no cluster-level signal scores. To see what differs between two locations, request an explicit pair comparison with both endpoints; pair evidence values never attach to a cluster.
 
-`find-similar` is the **authoring** tool. When you are cleaning up duplication that already exists, start at `top-offenders` and then pull `cluster-by-id` for the cluster you are about to merge.
+`find-similar` is the **authoring** tool. When you are cleaning up duplication that already exists, start at `duplicates` and then pull `cluster-by-id` for the cluster you are about to merge.
 
 The paste-ready rule block for a project's `AGENTS.md` / `CLAUDE.md` is in the [agent recipe](https://github.com/Nimblesite/Deslop/blob/main/docs/snippets/agents-md-recipe.md).
 

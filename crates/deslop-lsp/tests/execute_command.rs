@@ -4,10 +4,19 @@
 //! client-bound `window/showDocument` requests so command handlers run
 //! through the same transport a real editor uses.
 
-use std::path::Path;
-use std::process::{ChildStdin, ChildStdout};
+use std::{
+    path::Path,
+    process::{ChildStdin, ChildStdout},
+};
 
 use anyhow::{anyhow, Result};
+use deslop_lsp::{
+    commands::{
+        OPEN_CLUSTER, OPEN_REPORT, PICK_EMBEDDING_MODEL, REFRESH_REPORT, TOGGLE_INCREMENTAL,
+    },
+    notifications::REPORT_CHANGED,
+    LspBackend,
+};
 use futures::{FutureExt, SinkExt, StreamExt};
 use serde_json::{json, Value};
 use tower::Service;
@@ -17,16 +26,11 @@ use tower_lsp::{
 };
 
 use crate::common::{
-    call, copy_fixture, handshake, read_frame, request, spawn_lsp_on_fixture, write_frame,
-};
-use deslop_lsp::{
-    commands::{
-        OPEN_CLUSTER, OPEN_REPORT, PICK_EMBEDDING_MODEL, REFRESH_REPORT, TOGGLE_INCREMENTAL,
-    },
-    notifications::REPORT_CHANGED,
-    LspBackend,
+    call, copy_fixture, read_frame, request, session::FixtureSession, write_frame,
 };
 
+/// The two-file C# workspace these cases are served from.
+const CSHARP_FIXTURE: &str = "csharp-small";
 const EXECUTE_COMMAND: &str = "workspace/executeCommand";
 const COMMAND_FIELD: &str = "command";
 const RESULT_COMMAND_POINTER: &str = "/result/command";
@@ -42,14 +46,12 @@ const NOTIFIED_REMOVED_POINTER: &str = "/params/summary/clusters_removed";
 
 #[test]
 fn execute_command_provider_advertises_and_opens_virtual_documents() -> Result<()> {
-    let (_workspace, mut child, mut stdin, mut stdout, _stderr) =
-        spawn_lsp_on_fixture("csharp-small")?;
-    let init = handshake(&mut stdin, &mut stdout)?;
-    assert_advertised_commands(&init)?;
+    let mut lsp = FixtureSession::open(CSHARP_FIXTURE)?;
+    assert_advertised_commands(&lsp.init)?;
 
     let (report_response, report_shows) = call_with_show_document_response(
-        &mut stdin,
-        &mut stdout,
+        &mut lsp.stdin,
+        &mut lsp.stdout,
         &json!({ (COMMAND_FIELD): OPEN_REPORT }),
     )?;
     assert_eq!(report_shows.len(), 1, "expected one showDocument request");
@@ -65,8 +67,8 @@ fn execute_command_provider_advertises_and_opens_virtual_documents() -> Result<(
     );
 
     let (cluster_response, cluster_shows) = call_with_show_document_response(
-        &mut stdin,
-        &mut stdout,
+        &mut lsp.stdin,
+        &mut lsp.stdout,
         &json!({ (COMMAND_FIELD): OPEN_CLUSTER, "arguments": ["abc123"] }),
     )?;
     assert_eq!(cluster_shows.len(), 1, "expected one cluster document open");
@@ -85,17 +87,14 @@ fn execute_command_provider_advertises_and_opens_virtual_documents() -> Result<(
         Some(true)
     );
 
-    let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
+    drop(lsp);
     Ok(())
 }
 
 #[test]
 fn execute_command_dispatches_refresh_models_and_incremental_toggle() -> Result<()> {
-    let (_workspace, mut child, mut stdin, mut stdout, _stderr) =
-        spawn_lsp_on_fixture("csharp-small")?;
-    let _init = handshake(&mut stdin, &mut stdout)?;
-
-    let initial_config = call(&mut stdin, &mut stdout, "deslop/sessionConfig", &json!({}))?;
+    let mut lsp = FixtureSession::open(CSHARP_FIXTURE)?;
+    let initial_config = lsp.call("deslop/sessionConfig", &json!({}))?;
     assert_eq!(
         initial_config
             .pointer("/result/incremental")
@@ -104,8 +103,8 @@ fn execute_command_dispatches_refresh_models_and_incremental_toggle() -> Result<
     );
 
     let toggled = execute(
-        &mut stdin,
-        &mut stdout,
+        &mut lsp.stdin,
+        &mut lsp.stdout,
         &json!({
             (COMMAND_FIELD): TOGGLE_INCREMENTAL
         }),
@@ -122,7 +121,12 @@ fn execute_command_dispatches_refresh_models_and_incremental_toggle() -> Result<
             .and_then(Value::as_bool),
         Some(false)
     );
-    let updated_config = call(&mut stdin, &mut stdout, "deslop/sessionConfig", &json!({}))?;
+    let updated_config = call(
+        &mut lsp.stdin,
+        &mut lsp.stdout,
+        "deslop/sessionConfig",
+        &json!({}),
+    )?;
     assert_eq!(
         updated_config
             .pointer("/result/incremental")
@@ -131,8 +135,8 @@ fn execute_command_dispatches_refresh_models_and_incremental_toggle() -> Result<
     );
 
     let refreshed = execute(
-        &mut stdin,
-        &mut stdout,
+        &mut lsp.stdin,
+        &mut lsp.stdout,
         &json!({
             (COMMAND_FIELD): REFRESH_REPORT
         }),
@@ -154,8 +158,8 @@ fn execute_command_dispatches_refresh_models_and_incremental_toggle() -> Result<
     assert!(refreshed.pointer("/result/clustersUpdated").is_some());
 
     let models = execute(
-        &mut stdin,
-        &mut stdout,
+        &mut lsp.stdin,
+        &mut lsp.stdout,
         &json!({
             (COMMAND_FIELD): PICK_EMBEDDING_MODEL
         }),
@@ -187,7 +191,7 @@ fn execute_command_dispatches_refresh_models_and_incremental_toggle() -> Result<
         );
     }
 
-    let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
+    drop(lsp);
     Ok(())
 }
 

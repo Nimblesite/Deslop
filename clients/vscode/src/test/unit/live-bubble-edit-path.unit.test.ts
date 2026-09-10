@@ -15,6 +15,7 @@ import {
   FIXTURE_KIND_TITLE,
 } from "./bubble.helpers";
 import { reportWithClusters } from "./report.helpers";
+import { rejectingClient } from "./client.helpers";
 
 suite("LiveBubble onEdit path", () => {
   test("buffer edit path reaches probe and the LSP request is dispatched with byte offsets", async () => {
@@ -58,9 +59,7 @@ suite("LiveBubble onEdit path", () => {
 
   test("probe rejection clears the bubble without propagating the error", async () => {
     const { editor, store } = await openLiveDocument("xyz\n");
-    const fakeClient = {
-      sendRequest: () => Promise.reject(new Error("probe boom")),
-    } as unknown as LanguageClient;
+    const fakeClient = rejectingClient("probe boom");
     const bubble = new LiveBubble(store, () => fakeClient);
     const capture = capturingEditor();
     // [VSIX-LIVE-BUBBLE] Only reported clusters render, so seed the report

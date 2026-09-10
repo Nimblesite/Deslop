@@ -108,13 +108,19 @@ fn count_call_free(covered: &[Node<'_>], kinds: &[&str]) -> usize {
         .count()
 }
 
-/// Statement and binding declarations used by the grammars this filter scans.
+/// Statement and binding declarations used by the grammars this filter
+/// scans. Rust spells its binding statement `let_declaration`, with no
+/// `_statement` suffix and no `variable_declaration` spelling: leave it
+/// out and a Rust run has no covered statements at all, so
+/// [`covered_statements_admissible`] refuses on an empty set and the
+/// whole scaffolding rule is skipped for the language.
 pub(super) fn is_statement_shape(kind: &str) -> bool {
     kind.ends_with("_statement")
         || matches!(
             kind,
             "assignment"
                 | "expression_statement"
+                | "let_declaration"
                 | "lexical_declaration"
                 | "local_variable_declaration"
                 | "variable_declaration"

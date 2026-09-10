@@ -33,17 +33,20 @@ fn default_run_writes_log_to_timestamped_file_not_stderr() -> Result<()> {
         .assert()
         .success();
     let stderr = stderr_text(&assertion)?;
-    assert!(
-        !stderr.contains(" INFO "),
-        "default stderr must not carry tracing INFO lines: {stderr}"
+    assert_not_contains(
+        &stderr,
+        " INFO ",
+        "default stderr must not carry tracing INFO lines",
     );
-    assert!(
-        stderr.contains("Found"),
-        "default stderr must carry the summary block: {stderr}"
+    assert_contains(
+        &stderr,
+        "Found",
+        "default stderr must carry the summary block",
     );
-    assert!(
-        stderr.contains("done"),
-        "default stderr must carry the success footer: {stderr}"
+    assert_contains(
+        &stderr,
+        "done",
+        "default stderr must carry the success footer",
     );
     assert!(
         out.json.exists(),
@@ -61,9 +64,10 @@ fn default_run_writes_log_to_timestamped_file_not_stderr() -> Result<()> {
         .next()
         .ok_or_else(|| anyhow::anyhow!("log_files vec unexpectedly empty"))?;
     let log_body = fs::read_to_string(&log_file)?;
-    assert!(
-        log_body.contains(DESLOP_INVOKED_MESSAGE),
-        "log file missing the invoked event: {log_body}"
+    assert_contains(
+        &log_body,
+        DESLOP_INVOKED_MESSAGE,
+        "log file missing the invoked event",
     );
     Ok(())
 }
@@ -85,9 +89,10 @@ fn log_to_console_flag_routes_events_to_stderr() -> Result<()> {
         .assert()
         .success();
     let stderr = stderr_text(&assertion)?;
-    assert!(
-        stderr.contains(DESLOP_INVOKED_MESSAGE),
-        "--log-to-console must surface the invoked event on stderr: {stderr}"
+    assert_contains(
+        &stderr,
+        DESLOP_INVOKED_MESSAGE,
+        "--log-to-console must surface the invoked event on stderr",
     );
     let log_files = find_timestamped_logs(tmp.path())?;
     assert!(
@@ -120,9 +125,10 @@ fn log_level_warn_suppresses_info_events() -> Result<()> {
         .next()
         .ok_or_else(|| anyhow::anyhow!("no timestamped log file written"))?;
     let log_body = fs::read_to_string(&log_path)?;
-    assert!(
-        !log_body.contains(DESLOP_INVOKED_MESSAGE),
-        "warn level must suppress the INFO invoked event: {log_body}"
+    assert_not_contains(
+        &log_body,
+        DESLOP_INVOKED_MESSAGE,
+        "warn level must suppress the INFO invoked event",
     );
     Ok(())
 }
@@ -144,22 +150,22 @@ fn preamble_announces_what_the_run_will_do() -> Result<()> {
         .assert()
         .success();
     let stderr = stderr_text(&assertion)?;
-    assert!(
-        stderr.contains("deslop scanning"),
-        "preamble must announce the scan: {stderr}"
+    assert_contains(
+        &stderr,
+        "deslop scanning",
+        "preamble must announce the scan",
     );
-    assert!(
-        stderr.contains("min-nodes=8"),
-        "--technical preamble must surface the min-nodes knob: {stderr}"
+    assert_contains(
+        &stderr,
+        "min-nodes=8",
+        "--technical preamble must surface the min-nodes knob",
     );
-    assert!(
-        stderr.contains("report →"),
-        "preamble must show where the report goes: {stderr}"
+    assert_contains(
+        &stderr,
+        "report →",
+        "preamble must show where the report goes",
     );
-    assert!(
-        stderr.contains("log    →"),
-        "preamble must show where the log goes: {stderr}"
-    );
+    assert_contains(&stderr, "log    →", "preamble must show where the log goes");
     Ok(())
 }
 
@@ -224,9 +230,10 @@ fn rust_log_env_controls_severity_filter() -> Result<()> {
         .assert()
         .success();
     let stderr = stderr_text(&assertion)?;
-    assert!(
-        !stderr.contains(DESLOP_INVOKED_MESSAGE),
-        "RUST_LOG=warn must suppress INFO events: {stderr}"
+    assert_not_contains(
+        &stderr,
+        DESLOP_INVOKED_MESSAGE,
+        "RUST_LOG=warn must suppress INFO events",
     );
     Ok(())
 }
@@ -278,9 +285,10 @@ fn technical_mode_surfaces_raw_cache_stats_line() -> Result<()> {
         .assert()
         .success();
     let stderr = stderr_text(&assertion)?;
-    assert!(
-        stderr.contains("cache: 2 hit / 0 miss"),
-        "--technical must surface the raw cache-stats line: {stderr}"
+    assert_contains(
+        &stderr,
+        "cache: 2 hit / 0 miss",
+        "--technical must surface the raw cache-stats line",
     );
     Ok(())
 }
@@ -313,9 +321,10 @@ fn technical_mode_surfaces_embedding_provenance_line() -> Result<()> {
         .assert()
         .success();
     let stderr = stderr_text(&assertion)?;
-    assert!(
-        stderr.contains("embeddings: ollama/nomic-embed-text@"),
-        "--technical must surface the provenance triple on stderr: {stderr}"
+    assert_contains(
+        &stderr,
+        "embeddings: ollama/nomic-embed-text@",
+        "--technical must surface the provenance triple on stderr",
     );
     Ok(())
 }
@@ -343,9 +352,10 @@ fn technical_mode_names_the_clone_kind_in_the_breakdown_row() -> Result<()> {
         .assert()
         .success();
     let stderr = stderr_text(&assertion)?;
-    assert!(
-        stderr.contains("columns: rank, kind, id, mass, occurrences, canonical AST nodes, files"),
-        "--technical must print the column legend naming the kind column: {stderr}"
+    assert_contains(
+        &stderr,
+        "columns: rank, kind, id, mass, occurrences, canonical AST nodes, files",
+        "--technical must print the column legend naming the kind column",
     );
     assert!(
         stderr.contains(&format!("#1  {NEARLY_IDENTICAL_TITLE} ["))
@@ -353,9 +363,10 @@ fn technical_mode_names_the_clone_kind_in_the_breakdown_row() -> Result<()> {
         "--technical must print the mass-ranked cluster row with kind, id, mass, \
          occurrences, nodes and files: {stderr}"
     );
-    assert!(
-        stderr.contains("Alpha.cs, Beta.cs"),
-        "--technical cluster row must name both files: {stderr}"
+    assert_contains(
+        &stderr,
+        "Alpha.cs, Beta.cs",
+        "--technical cluster row must name both files",
     );
     Ok(())
 }
@@ -372,9 +383,10 @@ fn plain_summary_on_empty_scan_root_has_no_worst_offender_line() -> Result<()> {
     let mut cmd = deslop_command(&empty, &tmp.path().join(REPORT_OUTPUT_STEM))?;
     let assertion = cmd.arg(NO_COLOR_FLAG).assert().success();
     let stderr = stderr_text(&assertion)?;
-    assert!(
-        !stderr.contains("Worst offender"),
-        "empty scan must not print a worst-offender line: {stderr}"
+    assert_not_contains(
+        &stderr,
+        "Worst offender",
+        "empty scan must not print a worst-offender line",
     );
     Ok(())
 }

@@ -19,6 +19,7 @@ use serde_json::{json, Value};
 use tempfile::TempDir;
 
 use crate::common;
+use common::{array_field, str_field, u64_field};
 
 fn initialized_mcp_at(
     root: &Path,
@@ -103,28 +104,16 @@ fn issue_141_cargo_cache_under_root_is_not_analysed() -> Result<()> {
         "duplicates",
         &json!({ "offset": 0, "limit": 50, "detail": "full" }),
     )?;
-    let files_analysed = page
-        .get("files_analysed")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| anyhow!("duplicates missing files_analysed: {page}"))?;
+    let files_analysed = u64_field(&page, "files_analysed")?;
     assert_eq!(
         files_analysed, 1,
         "the three .cargo cache files must not enter discovery: {page}"
     );
-    let clusters = page
-        .get("clusters")
-        .and_then(Value::as_array)
-        .ok_or_else(|| anyhow!("duplicates missing clusters: {page}"))?;
+    let clusters = array_field(&page, "clusters")?;
     for cluster in clusters {
-        let occurrences = cluster
-            .get("occurrences")
-            .and_then(Value::as_array)
-            .ok_or_else(|| anyhow!("full duplicates cluster missing occurrences: {cluster}"))?;
+        let occurrences = array_field(cluster, "occurrences")?;
         for occurrence in occurrences {
-            let path = occurrence
-                .get("path")
-                .and_then(Value::as_str)
-                .ok_or_else(|| anyhow!("occurrence missing path: {occurrence}"))?;
+            let path = str_field(occurrence, "path")?;
             assert!(
                 !path.contains(".cargo/"),
                 "cluster occurrence leaked cargo cache: {path}",

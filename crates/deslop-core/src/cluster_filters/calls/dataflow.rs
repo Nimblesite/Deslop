@@ -13,16 +13,8 @@ use crate::ast::named_children;
 pub(super) fn assigned_binding(call: Node<'_>, source: &[u8]) -> Option<Vec<u8>> {
     let mut cursor = call;
     while let Some(parent) = cursor.parent() {
-        if matches!(
-            parent.kind(),
-            "variable_declarator" | "assignment_expression"
-        ) {
-            let name = parent
-                .child_by_field_name("name")
-                .or_else(|| parent.child_by_field_name("left"))?;
-            return source
-                .get(name.start_byte()..name.end_byte())
-                .map(<[u8]>::to_vec);
+        if is_binding_site(parent.kind()) {
+            return bound_name(parent, source);
         }
         if is_statement_boundary(parent.kind()) {
             return None;
@@ -30,6 +22,33 @@ pub(super) fn assigned_binding(call: Node<'_>, source: &[u8]) -> Option<Vec<u8>>
         cursor = parent;
     }
     None
+}
+
+/// Declaration and assignment shapes that name what a call result becomes.
+/// Rust's `let_declaration` belongs here for the same reason it belongs in
+/// [`super::is_statement_shape`]: it is the language's only binding statement.
+fn is_binding_site(kind: &str) -> bool {
+    matches!(
+        kind,
+        "variable_declarator" | "assignment_expression" | "let_declaration"
+    )
+}
+
+/// The single name a binding site introduces, under whichever field the
+/// grammar spells it. A compound target — a destructuring pattern, a
+/// field assignment — introduces no single local name, so it binds
+/// nothing this rule can follow and must not be read as raw text.
+fn bound_name(site: Node<'_>, source: &[u8]) -> Option<Vec<u8>> {
+    let name = site
+        .child_by_field_name("name")
+        .or_else(|| site.child_by_field_name("left"))
+        .or_else(|| site.child_by_field_name("pattern"))?;
+    if !is_identifier(name.kind()) {
+        return None;
+    }
+    source
+        .get(name.start_byte()..name.end_byte())
+        .map(<[u8]>::to_vec)
 }
 
 /// Raw identifiers the call consumes: every identifier inside its
@@ -45,6 +64,7 @@ pub(super) fn consumed_identifiers(call: Node<'_>, source: &[u8], kinds: &[&str]
     }
     if let Some(callee) = call.child_by_field_name("function") {
         collect_receiver_arguments(callee, source, kinds, &mut identifiers);
+        collect_receiver_identifiers(callee, source, &mut identifiers);
     }
     identifiers
 }
@@ -74,17 +94,32 @@ fn collect_receiver_arguments(
     }
 }
 
-/// Collects identifier leaves without interpreting their language role.
-fn collect_identifiers(node: Node<'_>, source: &[u8], out: &mut Vec<Vec<u8>>) {
+/// Collects the identifier leaves `keep` accepts, without otherwise
+/// interpreting their language role. The two callers below differ only
+/// in that predicate, so the walk itself is written once.
+fn collect_identifiers_where(
+    node: Node<'_>,
+    source: &[u8],
+    keep: fn(Node<'_>) -> bool,
+    out: &mut Vec<Vec<u8>>,
+) {
     if is_identifier(node.kind()) {
-        if let Some(bytes) = source.get(node.start_byte()..node.end_byte()) {
-            out.push(bytes.to_vec());
+        if keep(node) {
+            if let Some(bytes) = source.get(node.start_byte()..node.end_byte()) {
+                out.push(bytes.to_vec());
+            }
         }
         return;
     }
     for child in named_children(node) {
-        collect_identifiers(child, source, out);
+        collect_identifiers_where(child, source, keep, out);
     }
+}
+
+/// Every identifier leaf. An argument list names only values passed in,
+/// so nothing inside one is a called name to discount.
+fn collect_identifiers(node: Node<'_>, source: &[u8], out: &mut Vec<Vec<u8>>) {
+    collect_identifiers_where(node, source, |_| true, out);
 }
 
 /// Identifier leaf names used by the supported call grammars.
@@ -99,4 +134,20 @@ fn is_statement_boundary(kind: &str) -> bool {
             kind,
             "lexical_declaration" | "local_variable_declaration" | "variable_declaration"
         )
+}
+
+/// Identifiers a call consumes through its callee rather than through
+/// its arguments: the receiver a method is invoked on, and the qualifier
+/// a scoped name is reached through. Neither is the called name, which
+/// [`super::callee::is_called_name`] recognises for the header, so the
+/// receiver is exactly what the header normalises away — and the value
+/// flowing into a method call through its receiver flows into the call
+/// as surely as an argument does.
+fn collect_receiver_identifiers(node: Node<'_>, source: &[u8], out: &mut Vec<Vec<u8>>) {
+    collect_identifiers_where(
+        node,
+        source,
+        |node| !super::callee::is_called_name(node),
+        out,
+    );
 }

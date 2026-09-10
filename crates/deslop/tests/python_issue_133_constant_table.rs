@@ -15,43 +15,22 @@
 //! unrelated constant tables are hidden, and the verbatim copy stays
 //! visible across both files.
 
-use std::{fs, path::Path};
-
 use anyhow::Result;
 use serde_json::Value;
 
 use crate::common::*;
 
-fn run_report(scan_root: &Path) -> Result<Value> {
-    let tmp = tempfile::tempdir()?;
-    let output = tmp.path().join("report");
-    let mut cmd = deslop_cmd(scan_root, &output)?;
-    let _assertion = cmd
-        .args(["--min-nodes", "4", "--embeddings", "off"])
-        .assert()
-        .success();
-    let body = fs::read_to_string(output.with_extension("json"))?;
-    Ok(serde_json::from_str(&body)?)
-}
+/// The node floor the constant-table rows are judged at.
+const CONSTANT_TABLE_MIN_NODES: u32 = 4;
 
 /// Resolves the named fixture and runs the constant-table report over it.
 fn fixture_report(fixture_name: &str) -> Result<(std::path::PathBuf, Value)> {
     let scan_root = fixture(fixture_name);
-    let report = run_report(&scan_root)?;
+    let report = run_report(&scan_root, CONSTANT_TABLE_MIN_NODES)?;
     Ok((scan_root, report))
 }
 
 /// Collects every visible cluster whose occurrences contain `needle`.
-fn clusters_touching(report: &Value, scan_root: &Path, needle: &str) -> Result<Vec<Vec<String>>> {
-    let mut hits = Vec::new();
-    for cluster in clusters(report) {
-        let texts = occurrence_texts(scan_root, cluster)?;
-        if texts.iter().any(|text| text.contains(needle)) {
-            hits.push(texts);
-        }
-    }
-    Ok(hits)
-}
 
 // GH #133 acceptance: a module of SQL query string constants and a module
 // of registry/config value constants must NOT cluster as duplicate logic

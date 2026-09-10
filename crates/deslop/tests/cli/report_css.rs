@@ -62,19 +62,21 @@ fn render_html(tmp: &Path) -> Result<String> {
 fn html_report_inlines_real_design_system_css() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let html = render_html(tmp.path())?;
-    assert!(
-        html.contains("<article class=\"cluster-card"),
-        "the corpus must produce a rendered cluster card"
+    assert_contains(
+        &html,
+        "<article class=\"cluster-card",
+        "the corpus must produce a rendered cluster card",
     );
     assert!(
         html.contains(BASE_CSS_MARKER),
         "base.css design tokens must be inlined verbatim; \
          expected `{BASE_CSS_MARKER}` in the report's <style> block"
     );
-    assert!(
-        !html.contains("@import url("),
+    assert_not_contains(
+        &html,
+        "@import url(",
         "no unresolved @import url( may leak into the inline <style>; \
-         a file:// report cannot resolve relative stylesheet imports"
+         a file:// report cannot resolve relative stylesheet imports",
     );
     Ok(())
 }

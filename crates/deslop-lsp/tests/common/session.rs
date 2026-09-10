@@ -5,17 +5,51 @@
 
 use std::{
     io::BufReader,
-    process::{ChildStdin, ChildStdout},
+    path::Path,
+    process::{Child, ChildStdin, ChildStdout, Command, Stdio},
 };
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use serde_json::Value;
 use tower_lsp::lsp_types::Url;
 
 use super::{
-    call, call_capturing, code_action_params, handshake, rewrite_offer,
-    spawn_lsp_on_fixture_guarded, wait_for_actions, workspace_file_uri, LspGuard,
+    call, call_capturing, code_action_params, handshake, notification, rewrite_offer,
+    spawn_lsp_on_fixture_guarded, wait_for_actions, workspace_file_uri, write_frame, LspGuard,
 };
+
+/// Spawns the real LSP with observable startup logs and caller-selected flags.
+pub fn spawn_logging_lsp(workspace: &Path, args: &[&str]) -> Result<Child> {
+    Ok(Command::new(assert_cmd::cargo::cargo_bin("deslop-lsp"))
+        .arg(workspace)
+        .args(args)
+        .env("RUST_LOG", "info")
+        .env("NO_COLOR", "1")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?)
+}
+
+/// Takes stdin and buffered stdout, leaving stderr for the caller to capture.
+pub fn take_stdin_stdout(child: &mut Child) -> Result<(ChildStdin, BufReader<ChildStdout>)> {
+    let stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| anyhow!("child stdin missing"))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| anyhow!("child stdout missing"))?;
+    Ok((stdin, BufReader::new(stdout)))
+}
+
+/// Sends shutdown, retains the response for assertions, then notifies exit.
+pub fn shutdown(stdin: &mut ChildStdin, reader: &mut BufReader<ChildStdout>) -> Result<Value> {
+    let response = call(stdin, reader, "shutdown", &Value::Null)?;
+    write_frame(stdin, &notification("exit", &serde_json::json!({}))?)?;
+    Ok(response)
+}
 
 /// Title of the lazily resolved merge offer ([AUTOFIX-MERGE-CODE-ACTION]).
 pub const MERGE_OFFER_TITLE: &str = "Merge duplicates into one parameterised helper";

@@ -2,13 +2,22 @@ import { type Page } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 
-import type { Report } from "../src/types/report";
+import { anchorForClusterId, clusterPanelFeed } from "../src/clusterSelection";
+import {
+  CANONICAL_OCCURRENCE_INDEX,
+  FIRST_PEER_INDEX,
+  reportWithoutSignalSource,
+  sampleReport,
+  screenshotDir,
+  type ViewKind,
+  webviewHtml,
+  withCanonicalUnsaved,
+} from "./playwright-webview-fixture";
 
 // `test`/`expect` come from the coverage fixture so this same suite records the
 // webview V8 coverage when WEBVIEW_COVERAGE=1 (no separate rendering harness).
 import { expect, test } from "./webview-coverage-fixture";
 
-type ViewKind = "cluster" | "duplication" | "report";
 
 interface ViewportCase {
   readonly name: string;
@@ -16,22 +25,6 @@ interface ViewportCase {
   readonly height: number;
 }
 
-interface PostedMessage {
-  readonly kind?: string;
-  readonly clusterId?: string;
-  readonly occurrence?: { readonly path?: string; readonly start_byte?: number; readonly end_byte?: number };
-}
-
-declare global {
-  interface Window {
-    __deslopPosts?: PostedMessage[];
-    acquireVsCodeApi?: () => { postMessage: (data: PostedMessage) => void };
-  }
-}
-
-const repoRoot = findRepoRoot(process.cwd());
-const webviewDir = path.join(repoRoot, "clients", "vscode", "media", "webview");
-const screenshotDir = path.join(repoRoot, "target", "playwright-webview");
 const PAIR_EVIDENCE_HEADING = "PAIR EVIDENCE";
 const PAIR_CONJOINED_SEPARATOR = "↔";
 const PAIR_EVIDENCE_UNAVAILABLE = "PAIR EVIDENCE UNAVAILABLE";
@@ -60,8 +53,15 @@ const RETIRED_COMPARE_SELECTED_LABEL = "Compare selected occurrences";
 const NEXT_CLUSTER_LABEL = "Next cluster";
 const FIRST_CLUSTER_INDEX = 0;
 const SECOND_CLUSTER_INDEX = 1;
-const FIRST_PEER_INDEX = 1;
 const SECOND_PEER_INDEX = 2;
+// [VSIX-PAIR-COMPARE] The row role the panel prints for the canonical member.
+const CANONICAL_ROW_PREFIX = "Canonical occurrence:";
+const CANONICAL_ROW_COUNT = 1;
+const NAVIGATED_ROW_COUNT = 3;
+const NAVIGATED_PEER_COUNT = 2;
+const NEXT_CLUSTER_KEY = "n";
+const PREVIOUS_CLUSTER_KEY = "p";
+const DESKTOP_VIEWPORT_INDEX = 0;
 
 const viewports: readonly ViewportCase[] = [
   { name: "desktop", width: 1280, height: 900 },
@@ -194,6 +194,59 @@ test.describe("VSIX webview bundles", () => {
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
+  test("navigating to a cluster whose canonical is unsaved keeps every peer comparable", async ({ page }) => {
+    // [VSIX-PAIR-COMPARE] `n` moves the selection inside the webview, so a
+    // cluster the user never opened still becomes the detail. This drives the
+    // real host feed builder over a real dirty projection: with the second
+    // cluster's canonical occurrence in an unsaved buffer, the projection on
+    // its own leaves the first clean peer in the canonical slot — labelled
+    // canonical, its own Compare suppressed as a self-comparison, and the peer
+    // below it diffed against the wrong range.
+    const errors = await loadView(page, "cluster", viewports[DESKTOP_VIEWPORT_INDEX]);
+    const opened = sampleReport.clusters[FIRST_CLUSTER_INDEX];
+    const navigated = sampleReport.clusters[SECOND_CLUSTER_INDEX];
+    const feed = clusterPanelFeed(
+      sampleReport,
+      withCanonicalUnsaved(sampleReport, SECOND_CLUSTER_INDEX),
+      anchorForClusterId(sampleReport, opened.id),
+    );
+
+    await postHostMessage(page, { kind: "report/snapshot", report: feed.report });
+    await postHostMessage(page, { kind: "select/cluster", id: feed.selectedId });
+    await expect(page.getByRole("heading", { name: IDENTICAL_TITLE })).toBeVisible();
+
+    await page.keyboard.press(NEXT_CLUSTER_KEY);
+    await expect(page.getByRole("heading", { name: NEARLY_IDENTICAL_TITLE })).toBeVisible();
+
+    // Exactly one row is canonical, and it is the engine's canonical — not the
+    // first member that happens to be saved.
+    const canonicalRows = await rowTitlesStartingWith(page, CANONICAL_ROW_PREFIX);
+    expect(canonicalRows).toHaveLength(CANONICAL_ROW_COUNT);
+    expect(canonicalRows[CANONICAL_OCCURRENCE_INDEX]).toContain(
+      navigated.occurrences[CANONICAL_OCCURRENCE_INDEX].path,
+    );
+    const canonicalCompare = page.getByRole("button", { name: CANONICAL_COMPARE_LABEL });
+    await expect(canonicalCompare).toHaveCount(CANONICAL_ROW_COUNT);
+    await expect(canonicalCompare).toBeDisabled();
+    await expect(page.locator(OCCURRENCE_ROW)).toHaveCount(NAVIGATED_ROW_COUNT);
+
+    // Every surviving peer keeps its Compare action ...
+    const peers = page.getByRole("button", { name: PEER_COMPARE_LABEL });
+    await expect(peers).toHaveCount(NAVIGATED_PEER_COUNT);
+    for (const peer of await peers.all()) {
+      await expect(peer).toBeEnabled();
+    }
+
+    // ... and clicking one names that exact peer, against the engine's canonical.
+    await clearPostedMessages(page);
+    await peers.first().click();
+    await expectPostedCanonical(page, SECOND_CLUSTER_INDEX, FIRST_PEER_INDEX);
+
+    await page.keyboard.press(PREVIOUS_CLUSTER_KEY);
+    await expect(page.getByRole("heading", { name: IDENTICAL_TITLE })).toBeVisible();
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+
   test("a cluster renders no pair scores with or without a signal source", async ({ page }) => {
     const errors = await loadView(page, "cluster", viewports[0]);
 
@@ -279,6 +332,14 @@ async function expectPostedPair(
     });
 }
 
+/** The `title` of every occurrence row whose role starts with `prefix`. */
+async function rowTitlesStartingWith(page: Page, prefix: string): Promise<string[]> {
+  const titles = await page
+    .locator(OCCURRENCE_ROW)
+    .evaluateAll((rows) => rows.map((row) => row.getAttribute("title") ?? ""));
+  return titles.filter((title) => title.startsWith(prefix));
+}
+
 async function expectNothingPosted(page: Page): Promise<void> {
   await expect
     .poll(async () => {
@@ -335,165 +396,4 @@ async function expectHealthyRender(
   );
   expect(metrics.offenders).toEqual([]);
   expect(errors).toEqual([]);
-}
-
-function webviewHtml(kind: ViewKind): string {
-  const bundle = fs
-    .readFileSync(path.join(webviewDir, `${kind}.js`), "utf8")
-    .replaceAll("</script", "<\\/script");
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Deslop ${kind}</title>
-    <style>body { margin: 0; }</style>
-    <script>
-      window.__deslopPosts = [];
-      window.acquireVsCodeApi = function () {
-        return {
-          postMessage: function (data) {
-            window.__deslopPosts.push(data);
-          }
-        };
-      };
-    </script>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module">${bundle}</script>
-  </body>
-</html>`;
-}
-
-function findRepoRoot(startDir: string): string {
-  let current = startDir;
-  while (true) {
-    const marker = path.join(current, "clients", "vscode", "media", "webview", "report.js");
-    if (fs.existsSync(marker)) return current;
-    const parent = path.dirname(current);
-    if (parent === current) {
-      throw new Error(`Could not find repo root from ${startDir}`);
-    }
-    current = parent;
-  }
-}
-
-const sampleReport = {
-  tool_version: "playwright-smoke",
-  min_nodes: 5,
-  files_analysed: 4,
-  clusters_hidden: 0,
-  cache_stats: { hits: 7, misses: 2 },
-  metrics: {
-    analysed_loc: 520,
-    duplicated_loc: 96,
-    duplication_percent: 18.4,
-    clusters_total: 3,
-    duplicated_files: 3,
-    threshold: { percent: 15, breached: true, source: "config" },
-    per_file: [
-      { path: "src/dart/alpha.dart", analysed_loc: 120, duplicated_loc: 42, duplication_percent: 35 },
-      { path: "src/dart/parser_beta.dart", analysed_loc: 180, duplicated_loc: 38, duplication_percent: 21.1 },
-      { path: "src/models/models.g.dart", analysed_loc: 220, duplicated_loc: 16, duplication_percent: 7.3 },
-    ],
-    // Engine-computed folder rows ([METRICS-REPO]) — the webview renders
-    // these verbatim and performs no arithmetic of its own.
-    folders: [
-      { path: "src/dart", analysed_loc: 300, duplicated_loc: 80, duplication_percent: 26.7 },
-      { path: "src", analysed_loc: 520, duplicated_loc: 96, duplication_percent: 18.5 },
-      { path: "src/models", analysed_loc: 220, duplicated_loc: 16, duplication_percent: 7.3 },
-    ],
-  },
-  schema_doc: "playwright smoke schema",
-  action_hints: [],
-  boilerplate_hints: [],
-  embedding_provenance: {
-    provider_id: "ollama",
-    model_id: "nomic-embed-text",
-    model_version: "smoke",
-    dimensions: 768,
-    attempted_subtrees: 12,
-    succeeded_subtrees: 12,
-    indexed_subtrees: 12,
-    failed_subtrees: 0,
-  },
-  clusters: [
-    {
-      id: "abcdef1234567890",
-      rank: 1,
-      rank_band: "worst",
-      kind: "identical",
-      mass: 43,
-      canonical_node_count: 18,
-      occurrences_total: 2,
-      occurrence_count: 2,
-      occurrences_truncated: false,
-      occurrences: [
-        occurrence("src/dart/alpha.dart", 120, 248, 12, 3),
-        occurrence("src/dart/beta.dart", 420, 558, 31, 5),
-      ],
-    },
-    {
-      id: "bcdefa2345678901",
-      rank: 2,
-      rank_band: "mid",
-      kind: "nearly_identical",
-      mass: 27,
-      canonical_node_count: 14,
-      occurrences_total: 3,
-      occurrence_count: 3,
-      occurrences_truncated: false,
-      occurrences: [
-        occurrence("src/dart/parser_alpha.dart", 210, 330, 44, 7),
-        occurrence("src/dart/parser_beta.dart", 610, 742, 88, 9),
-        occurrence("src/dart/parser_gamma.dart", 1000, 1130, 122, 11),
-      ],
-    },
-    {
-      id: "cdefab3456789012",
-      rank: 3,
-      rank_band: "faint",
-      kind: "structural_only",
-      mass: 11,
-      canonical_node_count: 9,
-      occurrences_total: 2,
-      occurrence_count: 2,
-      occurrences_truncated: false,
-      occurrences: [
-        occurrence("src/models/models.g.dart", 80, 160, 15, 1),
-        occurrence("src/models/serializers.g.dart", 180, 260, 27, 1, true),
-      ],
-    },
-  ],
-} satisfies Report;
-
-const reportWithoutSignalSource: Report = {
-  ...sampleReport,
-  clusters: sampleReport.clusters.map((cluster, index) =>
-    index === 0 ? cluster : cluster),
-};
-
-function occurrence(
-  filePath: string,
-  startByte: number,
-  endByte: number,
-  line: number,
-  column: number,
-  hidden = false,
-): object {
-  return {
-    path: filePath,
-    start_byte: startByte,
-    end_byte: endByte,
-    start_line: line,
-    end_line: line + 4,
-    hidden,
-    displayLocation: {
-      line,
-      column,
-      label: `${filePath}:${line}:${column}`,
-      description: `line ${line}, column ${column}`,
-      commandTitle: "Open occurrence",
-    },
-  };
 }

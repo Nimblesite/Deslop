@@ -9,9 +9,18 @@ import { LanguageClient } from "vscode-languageclient/node";
 import type { ExtensionApi } from "../../extension";
 import { parseCompareUri } from "../../compare/provider";
 import { compareTitle, INDENTATION_ONLY_VERDICT, measurePair, PAIR_COMPARE_METHOD } from "../../compare/title";
-import { kindTitle, type PairComparison, type PairEvidence, type Report, type ReportCluster, type ReportOccurrence } from "../../types/report";
-import { activateExtension, sleep } from "./helpers";
+import { kindTitle, type PairComparison, type PairEvidence, type ReportCluster, type ReportOccurrence } from "../../types/report";
+import {
+  deleteRange,
+  editThenRestore,
+  fixtureRoot,
+  openFixture,
+  sleep,
+  waitForCluster,
+  waitForReport,
+} from "./helpers";
 
+const BUBBLE_RENDER_SETTLE_MS = 2500;
 const ALPHA_FILE = "Alpha.cs";
 const BETA_FILE = "Beta.cs";
 const GAMMA_FILE = "Gamma.cs";
@@ -22,32 +31,6 @@ const NEARLY_IDENTICAL_KIND = "nearly_identical";
 const CLOSE_ALL_EDITORS = "workbench.action.closeAllEditors";
 const COMPARE_WITH_CANONICAL = "deslop.compareWithCanonical";
 const LINE_BREAK = "\n";
-
-async function waitForReport(): Promise<ExtensionApi> {
-  const api = await activateExtension();
-  // Initial report seeding takes time over stdio.
-  for (let i = 0; i < 20; i++) {
-    await sleep(250);
-    const cmds = await vscode.commands.getCommands(true);
-    if (cmds.includes("deslop.openCluster")) return api;
-  }
-  throw new Error("extension did not activate in time");
-}
-
-async function waitForCluster(
-  client: LanguageClient,
-  accept: (candidate: ReportCluster) => boolean,
-  failure: string,
-): Promise<ReportCluster> {
-  let last: Report | undefined;
-  for (let i = 0; i < 40; i += 1) {
-    last = await client.sendRequest<Report>("deslop/reportGet");
-    const cluster = last.clusters.find((candidate) => candidate.occurrences.length >= 2 && accept(candidate));
-    if (cluster) return cluster;
-    await sleep(250);
-  }
-  throw new Error(`${failure}; last cluster count ${last?.clusters.length ?? 0}`);
-}
 
 function waitForRelativePathCluster(client: LanguageClient): Promise<ReportCluster> {
   return waitForCluster(
@@ -157,12 +140,7 @@ suite("cluster navigation", () => {
   });
 
   test("jumping inside a fixture file while positioned at the start", async () => {
-    const fixture = process.env["DESLOP_TEST_FIXTURE"];
-    assert.ok(fixture, "fixture path must be set");
-    const doc = await vscode.workspace.openTextDocument(
-      vscode.Uri.file(`${fixture}/Alpha.cs`),
-    );
-    const editor = await vscode.window.showTextDocument(doc);
+    const editor = await openFixture(ALPHA_FILE);
     editor.selection = new vscode.Selection(
       new vscode.Position(2, 8),
       new vscode.Position(2, 8),
@@ -185,12 +163,7 @@ suite("cluster navigation", () => {
     // its getChildren returns 5 SessionFieldNode items. We exercise it by
     // triggering a redraw via the active-editor change hook that all providers
     // subscribe to.
-    const fixture = process.env["DESLOP_TEST_FIXTURE"];
-    assert.ok(fixture);
-    const doc = await vscode.workspace.openTextDocument(
-      vscode.Uri.file(`${fixture}/Alpha.cs`),
-    );
-    await vscode.window.showTextDocument(doc);
+    await openFixture(ALPHA_FILE);
     await sleep(300);
   });
 
@@ -268,11 +241,9 @@ suite("cluster navigation", () => {
     assert.ok(left && right, "cluster must expose two endpoints to compare");
 
     await vscode.commands.executeCommand("workbench.action.closeAllEditors");
-    const fixture = process.env["DESLOP_TEST_FIXTURE"];
-    assert.ok(fixture, "fixture path must be set");
     const dirtyUri = path.isAbsolute(left.path)
       ? vscode.Uri.file(left.path)
-      : vscode.Uri.file(path.join(fixture, left.path));
+      : vscode.Uri.file(path.join(fixtureRoot(), left.path));
     const doc = await vscode.workspace.openTextDocument(dirtyUri);
     const editor = await vscode.window.showTextDocument(doc);
 
@@ -304,24 +275,13 @@ suite("cluster navigation", () => {
       // tests in this suite. The diff command may close the source editor —
       // reopen the source document explicitly so the edit call can target it.
       const restored = await vscode.window.showTextDocument(doc, { preview: false });
-      await restored.edit((b) =>
-        b.delete(new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 1))),
-      );
+      await deleteRange(restored, 0, 0, 0, 1);
     }
   });
 
   test("bubble inline render triggered by edit", async () => {
-    const fixture = process.env["DESLOP_TEST_FIXTURE"];
-    assert.ok(fixture);
-    const doc = await vscode.workspace.openTextDocument(
-      vscode.Uri.file(`${fixture}/Alpha.cs`),
-    );
-    const editor = await vscode.window.showTextDocument(doc);
-    await editor.edit((b) => b.insert(new vscode.Position(3, 0), "        // x\n"));
+    const editor = await openFixture(ALPHA_FILE);
     // Wait past DEBOUNCE_MS (250) + BUDGET_MS (250) + LSP round trip.
-    await sleep(2500);
-    await editor.edit((b) =>
-      b.delete(new vscode.Range(new vscode.Position(3, 0), new vscode.Position(4, 0))),
-    );
+    await editThenRestore(editor, 3, "        // x\n", BUBBLE_RENDER_SETTLE_MS);
   });
 });

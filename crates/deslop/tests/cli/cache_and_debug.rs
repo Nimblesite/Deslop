@@ -45,17 +45,16 @@ fn report_hide_drops_cluster_when_all_members_hidden() -> Result<()> {
         .success();
     let json = fs::read_to_string(&out.json)?;
     assert!(json.contains("\"files_analysed\": 2"));
-    assert!(
-        !json.contains("\"hidden\": false"),
-        "every member should be hidden: {json}"
+    assert_not_contains(&json, "\"hidden\": false", "every member should be hidden");
+    assert_not_contains(
+        &json,
+        "\"structural\": 1.0",
+        "hidden-only cluster must be dropped from visible list",
     );
-    assert!(
-        !json.contains("\"structural\": 1.0"),
-        "hidden-only cluster must be dropped from visible list"
-    );
-    assert!(
-        json.contains("\"clusters_hidden\": 1"),
-        "clusters_hidden must count the suppressed cluster"
+    assert_contains(
+        &json,
+        "\"clusters_hidden\": 1",
+        "clusters_hidden must count the suppressed cluster",
     );
     Ok(())
 }
@@ -70,17 +69,13 @@ fn report_hide_drops_cluster_when_all_members_hidden() -> Result<()> {
 // file as a hit and still surface the duplicated cluster.
 #[test]
 fn incremental_cache_hits_on_second_run() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
+    let (tmp, scan_root) = seeded_fixture_root("csharp-small")?;
     let first_json = run_incremental_pass(&scan_root, &tmp.path().join("first"))?;
-    assert!(
-        first_json.contains("\"hits\": 0"),
-        "first run must be a clean miss: {first_json}"
-    );
-    assert!(
-        first_json.contains("\"misses\": 2"),
-        "first run must register two misses: {first_json}"
+    assert_contains(&first_json, "\"hits\": 0", "first run must be a clean miss");
+    assert_contains(
+        &first_json,
+        "\"misses\": 2",
+        "first run must register two misses",
     );
     let cache_dir = scan_root.join(".deslop/cache").join("fingerprints");
     assert!(
@@ -89,13 +84,15 @@ fn incremental_cache_hits_on_second_run() -> Result<()> {
         cache_dir.display()
     );
     let second_json = run_incremental_pass(&scan_root, &tmp.path().join("second"))?;
-    assert!(
-        second_json.contains("\"hits\": 2"),
-        "second run must hit the cache for both files: {second_json}"
+    assert_contains(
+        &second_json,
+        "\"hits\": 2",
+        "second run must hit the cache for both files",
     );
-    assert!(
-        second_json.contains("\"misses\": 0"),
-        "second run must have zero misses: {second_json}"
+    assert_contains(
+        &second_json,
+        "\"misses\": 0",
+        "second run must have zero misses",
     );
     // Deduplication must still fire even when the fingerprints came
     // from the cache — the rehydration is only useful if downstream
@@ -103,18 +100,20 @@ fn incremental_cache_hits_on_second_run() -> Result<()> {
     // Type-2 cluster by its presence with the mass fields and both
     // occurrences ([RANK-MASS-SUM]); the retired `structural: 1.0`
     // cluster signal no longer exists.
-    assert!(
-        second_json.contains("\"mass\":"),
-        "cached run must still detect the Type-2 cluster: {second_json}"
+    assert_contains(
+        &second_json,
+        "\"mass\":",
+        "cached run must still detect the Type-2 cluster",
     );
     assert!(
         second_json.contains("\"Alpha.cs\"") && second_json.contains("\"Beta.cs\""),
         "cached run must report both copies of the Type-2 cluster: {second_json}"
     );
     let second_txt = fs::read_to_string(tmp.path().join("second.txt"))?;
-    assert!(
-        second_txt.contains("cache: 2 hit / 0 miss"),
-        "text renderer must surface cache stats: {second_txt}"
+    assert_contains(
+        &second_txt,
+        "cache: 2 hit / 0 miss",
+        "text renderer must surface cache stats",
     );
     Ok(())
 }
@@ -133,9 +132,10 @@ fn default_run_uses_the_cache() -> Result<()> {
         &[MIN_NODES_FLAG, MIN_NODES_VALUE],
     )?;
     let json = report_json_text(&tmp)?;
-    assert!(
-        json.contains("\"misses\": 2"),
-        "a bare run must consult the cache and miss on a cold tree: {json}"
+    assert_contains(
+        &json,
+        "\"misses\": 2",
+        "a bare run must consult the cache and miss on a cold tree",
     );
     assert!(
         scan_root
@@ -161,13 +161,15 @@ fn no_incremental_flag_skips_the_cache() -> Result<()> {
         &[MIN_NODES_FLAG, MIN_NODES_VALUE, "--no-incremental"],
     )?;
     let json = report_json_text(&tmp)?;
-    assert!(
-        json.contains("\"hits\": 0"),
-        "--no-incremental must record zero hits: {json}"
+    assert_contains(
+        &json,
+        "\"hits\": 0",
+        "--no-incremental must record zero hits",
     );
-    assert!(
-        json.contains("\"misses\": 0"),
-        "--no-incremental must not increment misses either: {json}"
+    assert_contains(
+        &json,
+        "\"misses\": 0",
+        "--no-incremental must not increment misses either",
     );
     assert!(
         !scan_root
@@ -184,9 +186,7 @@ fn no_incremental_flag_skips_the_cache() -> Result<()> {
 // as a hard error. The pipeline still produces a correct report.
 #[test]
 fn corrupt_cache_entry_degrades_to_miss() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
+    let (tmp, scan_root) = seeded_fixture_root("csharp-small")?;
     let _first_json = run_incremental_pass(&scan_root, &tmp.path().join("first"))?;
     let fingerprints_root = scan_root.join(".deslop/cache").join("fingerprints");
     for language_dir in fs::read_dir(&fingerprints_root)? {
@@ -203,9 +203,10 @@ fn corrupt_cache_entry_degrades_to_miss() -> Result<()> {
         }
     }
     let second_json = run_incremental_pass(&scan_root, &tmp.path().join("second"))?;
-    assert!(
-        second_json.contains("\"misses\": 2"),
-        "corrupt entries must be treated as misses: {second_json}"
+    assert_contains(
+        &second_json,
+        "\"misses\": 2",
+        "corrupt entries must be treated as misses",
     );
     assert!(
         second_json.contains("\"mass\":") && second_json.contains("\"Alpha.cs\""),
@@ -237,9 +238,7 @@ fn help_text_documents_incremental_flag() -> Result<()> {
 // snapshot of a tree that no longer exists on disk.
 #[test]
 fn offline_edit_invalidates_only_the_changed_file() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
+    let (tmp, scan_root) = seeded_fixture_root("csharp-small")?;
     let _cold = run_incremental_pass(&scan_root, &tmp.path().join("cold"))?;
     let warm = run_incremental_pass(&scan_root, &tmp.path().join("warm"))?;
     assert!(
@@ -255,14 +254,12 @@ fn offline_edit_invalidates_only_the_changed_file() -> Result<()> {
         format!("{source}\n// edited with nothing watching\n"),
     )?;
     let after = run_incremental_pass(&scan_root, &tmp.path().join("after"))?;
-    assert!(
-        after.contains("\"misses\": 1"),
-        "the edited file must miss and be re-parsed from disk: {after}"
+    assert_contains(
+        &after,
+        "\"misses\": 1",
+        "the edited file must miss and be re-parsed from disk",
     );
-    assert!(
-        after.contains("\"hits\": 1"),
-        "the untouched file must still hit: {after}"
-    );
+    assert_contains(&after, "\"hits\": 1", "the untouched file must still hit");
     // A run against a wiped cache must agree with the warm run — the
     // cache is an accelerator, never a source of truth.
     fs::remove_dir_all(scan_root.join(".deslop").join("cache"))?;
@@ -297,9 +294,7 @@ fn cluster_count(json: &str) -> Result<usize> {
 fn cache_write_failure_is_degraded_not_fatal() -> Result<()> {
     use std::os::unix::fs::PermissionsExt as _;
 
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    fs::create_dir_all(&scan_root)?;
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     for entry in fs::read_dir(fixture("csharp-small"))? {
         let entry = entry?;
         let _bytes = fs::copy(entry.path(), scan_root.join(entry.file_name()))?;
@@ -320,9 +315,10 @@ fn cache_write_failure_is_degraded_not_fatal() -> Result<()> {
     restore.set_mode(0o755);
     fs::set_permissions(&locked_dir, restore)?;
     let json = report_json_text(&tmp)?;
-    assert!(
-        json.contains("\"files_analysed\": 2"),
-        "pipeline must still report both files: {json}"
+    assert_contains(
+        &json,
+        "\"files_analysed\": 2",
+        "pipeline must still report both files",
     );
     Ok(())
 }
@@ -372,9 +368,10 @@ fn synthetic_corpus_scale_smoke_test() -> Result<()> {
         "synthetic corpus ran for {elapsed:?} — something is catastrophically wrong",
     );
     let json = report_json_text(&tmp)?;
-    assert!(
-        json.contains("\"files_analysed\": 10"),
-        "synthetic corpus must analyse every generated file: {json}"
+    assert_contains(
+        &json,
+        "\"files_analysed\": 10",
+        "synthetic corpus must analyse every generated file",
     );
     // Every file shares the identical method template, so the
     // ranked output must contain at least one cluster — catches
@@ -398,9 +395,10 @@ fn bug_fixture_walks_trivial_class_body_without_panicking() -> Result<()> {
     let (tmp, mut cmd) = fixture_run_command("bug-empty-class")?;
     let _assertion = cmd.args(["--min-nodes", "4"]).assert().success();
     let json = report_json_text(&tmp)?;
-    assert!(
-        json.contains("\"files_analysed\": 1"),
-        "empty-class fixture must still analyse its one file: {json}"
+    assert_contains(
+        &json,
+        "\"files_analysed\": 1",
+        "empty-class fixture must still analyse its one file",
     );
     Ok(())
 }

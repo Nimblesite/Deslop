@@ -19,7 +19,7 @@ use crate::{
     ast::NormalizedNode,
     error::CoreError,
     lang::{
-        shared::{build_normalised_root, intern_kind, parse_source, IDENTIFIER_KIND, LITERAL_KIND},
+        shared::{build_normalised_root, normalise_kind_with, parse_source},
         LanguageParser,
     },
     refactor::{
@@ -107,31 +107,11 @@ impl LanguageParser for CSharpParser {
 /// Binding-introducing C# nodes for [AUTOFIX-EXTRACT-FREE-VARS]:
 /// declarators, parameters, `foreach`/`catch`/out-var declarations.
 const BINDING_KINDS: &[BindingKind] = &[
-    BindingKind {
-        node_kind: "variable_declarator",
-        name_field: Some("name"),
-        late_fields: &[],
-    },
-    BindingKind {
-        node_kind: "parameter",
-        name_field: Some("name"),
-        late_fields: &[],
-    },
-    BindingKind {
-        node_kind: "foreach_statement",
-        name_field: Some("left"),
-        late_fields: &[],
-    },
-    BindingKind {
-        node_kind: "catch_declaration",
-        name_field: Some("name"),
-        late_fields: &[],
-    },
-    BindingKind {
-        node_kind: "declaration_expression",
-        name_field: Some("name"),
-        late_fields: &[],
-    },
+    BindingKind::new("variable_declarator", Some("name"), &[]),
+    BindingKind::new("parameter", Some("name"), &[]),
+    BindingKind::new("foreach_statement", Some("left"), &[]),
+    BindingKind::new("catch_declaration", Some("name"), &[]),
+    BindingKind::new("declaration_expression", Some("name"), &[]),
 ];
 
 /// C# identifier-reference recognition for [AUTOFIX-EXTRACT-FREE-VARS].
@@ -161,24 +141,9 @@ const REFERENCE_TABLE: ReferenceTable = ReferenceTable {
 
 /// Nested C# scopes that open a frame during the free-variable walk.
 const FRAME_KINDS: &[FrameKind] = &[
-    FrameKind {
-        node_kind: "lambda_expression",
-        bind_inside_field: Some("parameters"),
-        bind_outside_field: None,
-        bind_first_kinds: &[],
-    },
-    FrameKind {
-        node_kind: "anonymous_method_expression",
-        bind_inside_field: None,
-        bind_outside_field: None,
-        bind_first_kinds: &[],
-    },
-    FrameKind {
-        node_kind: "local_function_statement",
-        bind_inside_field: None,
-        bind_outside_field: Some("name"),
-        bind_first_kinds: &[],
-    },
+    FrameKind::new("lambda_expression", Some("parameters"), None, &[]),
+    FrameKind::new("anonymous_method_expression", None, None, &[]),
+    FrameKind::new("local_function_statement", None, Some("name"), &[]),
 ];
 
 /// C# container kinds for [AUTOFIX-EXTRACT-PRECONDITIONS] rules 4–5:
@@ -206,30 +171,25 @@ const SCOPE_KINDS: ScopeKinds = ScopeKinds {
     // Increments and `ref`/`out` arguments have no target field, so
     // they match via marker tokens and their own named leaves.
     write_kinds: &[
-        WriteKind {
-            node_kind: "assignment_expression",
-            target_field: Some("left"),
-            marker_tokens: &[],
-            destructuring_kinds: &["tuple_expression"],
-        },
-        WriteKind {
-            node_kind: "postfix_unary_expression",
-            target_field: None,
-            marker_tokens: &["++", "--"],
-            destructuring_kinds: &["postfix_unary_expression"],
-        },
-        WriteKind {
-            node_kind: "prefix_unary_expression",
-            target_field: None,
-            marker_tokens: &["++", "--"],
-            destructuring_kinds: &["prefix_unary_expression"],
-        },
-        WriteKind {
-            node_kind: "argument",
-            target_field: None,
-            marker_tokens: &["ref", "out"],
-            destructuring_kinds: &["argument"],
-        },
+        WriteKind::new(
+            "assignment_expression",
+            Some("left"),
+            &[],
+            &["tuple_expression"],
+        ),
+        WriteKind::new(
+            "postfix_unary_expression",
+            None,
+            &["++", "--"],
+            &["postfix_unary_expression"],
+        ),
+        WriteKind::new(
+            "prefix_unary_expression",
+            None,
+            &["++", "--"],
+            &["prefix_unary_expression"],
+        ),
+        WriteKind::new("argument", None, &["ref", "out"], &["argument"]),
     ],
     relocation_unsafe_kinds: &[],
 };
@@ -301,12 +261,17 @@ fn method_signature(request: &EmitRequest<'_, '_>, method_name: &str) -> String 
 /// `&'static str` comes from a fixed placeholder set or is interned on
 /// first sight so downstream hashing is cheap and stable.
 fn normalise_kind(raw: &str) -> Option<&'static str> {
-    match raw {
-        "comment" => None,
-        "identifier" | "predefined_type" | "type_parameter" => Some(IDENTIFIER_KIND),
-        raw if is_literal_kind(raw) => Some(LITERAL_KIND),
-        other => Some(intern_kind(other)),
-    }
+    normalise_kind_with(raw, is_comment_kind, is_identifier_kind, is_literal_kind)
+}
+
+/// C# trivia.
+fn is_comment_kind(raw: &str) -> bool {
+    matches!(raw, "comment")
+}
+
+/// C# identifier leaves, collapsed for Type-2 renamed-clone detection.
+fn is_identifier_kind(raw: &str) -> bool {
+    matches!(raw, "identifier" | "predefined_type" | "type_parameter")
 }
 
 /// Returns true when `raw` is a C# literal node collapsed by normalisation.

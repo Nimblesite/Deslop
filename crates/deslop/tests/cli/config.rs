@@ -89,14 +89,12 @@ fn hidden_flag_for(report: &Value, suffix: &str) -> Option<bool> {
 #[test]
 fn exclude_pattern_drops_file_from_discovery() -> Result<()> {
     let json = run_with_config("[defaults]\nexclude = [\"**/Beta.cs\"]\n")?;
-    assert!(
-        json.contains("\"files_analysed\": 1"),
-        "exclude should drop Beta.cs, leaving one file: {json}"
+    assert_contains(
+        &json,
+        "\"files_analysed\": 1",
+        "exclude should drop Beta.cs, leaving one file",
     );
-    assert!(
-        !json.contains("Beta.cs"),
-        "Beta.cs must not appear when excluded"
-    );
+    assert_not_contains(&json, "Beta.cs", "Beta.cs must not appear when excluded");
     Ok(())
 }
 
@@ -107,15 +105,17 @@ fn exclude_pattern_drops_file_from_discovery() -> Result<()> {
 #[test]
 fn report_hide_keeps_mixed_cluster_and_flags_hidden_occurrence() -> Result<()> {
     let json = run_with_config("[defaults]\nreport_hide = [\"**/Beta.cs\"]\n")?;
-    assert!(
-        json.contains("\"files_analysed\": 2"),
-        "report_hide must still analyse the file"
+    assert_contains(
+        &json,
+        "\"files_analysed\": 2",
+        "report_hide must still analyse the file",
     );
     assert!(json.contains("Alpha.cs"));
     assert!(json.contains("Beta.cs"));
-    assert!(
-        json.contains("\"hidden\": true"),
-        "hidden occurrence must be flagged"
+    assert_contains(
+        &json,
+        "\"hidden\": true",
+        "hidden occurrence must be flagged",
     );
     Ok(())
 }
@@ -174,9 +174,10 @@ fn files_without_extensions_are_skipped_silently() -> Result<()> {
     fs::write(scan_root.join("README"), "nothing to see here\n")?;
     let _assertion = cmd.assert().success();
     let json = fs::read_to_string(outputs_under(tmp.path()).json)?;
-    assert!(
-        json.contains("\"files_analysed\": 1"),
-        "Makefile / README must be filtered before the language dispatch: {json}"
+    assert_contains(
+        &json,
+        "\"files_analysed\": 1",
+        "Makefile / README must be filtered before the language dispatch",
     );
     Ok(())
 }
@@ -270,13 +271,11 @@ fn exclude_pattern_is_scan_root_relative() -> Result<()> {
     )?;
     let _assertion = cmd.assert().success();
     let body = fs::read_to_string(outputs_under(tmp.path()).json)?;
-    assert!(
-        body.contains("\"files_analysed\": 1"),
-        "scan-root-relative `exclude` pattern must drop benchmarks/fixtures/Alpha.cs and leave only Beta.cs analysed: {body}",
-    );
-    assert!(
-        !body.contains("benchmarks/fixtures/Alpha.cs"),
-        "Alpha.cs under benchmarks/fixtures must not appear in the report: {body}",
+    assert_contains(&body, "\"files_analysed\": 1", "scan-root-relative `exclude` pattern must drop benchmarks/fixtures/Alpha.cs and leave only Beta.cs analysed");
+    assert_not_contains(
+        &body,
+        "benchmarks/fixtures/Alpha.cs",
+        "Alpha.cs under benchmarks/fixtures must not appear in the report",
     );
     Ok(())
 }
@@ -290,9 +289,7 @@ fn exclude_pattern_is_scan_root_relative() -> Result<()> {
 // prove the outputs follow the scan root rather than the CWD.
 #[test]
 fn default_output_written_to_deslop_dir_under_scan_root() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
+    let (tmp, scan_root) = seeded_fixture_root("csharp-small")?;
     let cwd = tmp.path().join("elsewhere");
     fs::create_dir_all(&cwd)?;
     let mut cmd = Command::cargo_bin("deslop")?;

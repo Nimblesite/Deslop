@@ -6,6 +6,7 @@
 
 use std::{fs, path::Path, path::PathBuf};
 
+use crate::common::scan_dir::temp_scan_dir;
 use anyhow::Result;
 use assert_cmd::Command;
 use serde_json::Value;
@@ -13,8 +14,7 @@ use serde_json::Value;
 /// Same-file overlap collapse must not leave singleton report rows.
 #[test]
 fn same_file_overlapping_sibling_windows_do_not_render_singletons() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     write_single_file_overlap_fixture(&scan_root)?;
     let report = run_and_load_report(tmp.path(), &scan_root)?;
     let clusters = report_clusters(&report);

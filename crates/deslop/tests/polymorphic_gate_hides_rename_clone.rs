@@ -116,20 +116,22 @@ fn hidden_group_summary_names_the_hider_not_the_users_config() -> Result<()> {
         .assert()
         .success();
     let stderr = String::from_utf8_lossy(&assertion.get_output().stderr).into_owned();
-    assert!(
-        stderr.contains("(2 more groups hidden by built-in noise filters or report policy)"),
+    assert_contains(
+        &stderr,
+        "(2 more groups hidden by built-in noise filters or report policy)",
         "the contract clusters this fixture hides are suppressed by \
          Deslop's own polymorphic and signature-only filters, and the \
          summary must say so — no .deslop.toml exists in this scan root \
-         to blame. stderr:\n{stderr}"
+         to blame. stderr",
     );
-    assert!(
-        stderr.contains("Found 0 groups"),
+    assert_contains(
+        &stderr,
+        "Found 0 groups",
         "the count above is only honest while the visible surface is empty: \
          nothing across these four backends is extractable, so a group that \
          became *visible* would be a false positive the hidden count was \
          quietly absorbing ([CLONE-NOISE-POLYMORPHIC-SIGNATURE], gh #69). \
-         stderr:\n{stderr}"
+         stderr",
     );
     Ok(())
 }

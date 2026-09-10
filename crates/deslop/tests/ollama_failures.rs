@@ -65,9 +65,7 @@ fn ollama_context_rejection_retries_small_subtrees_individually() -> Result<()> 
 /// Ollama embeddings against `endpoint`, asserts success, and returns the
 /// report's `embedding_provenance` object.
 fn run_with_ollama(endpoint: &str) -> Result<Value> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
+    let (tmp, scan_root) = seeded_fixture_root("csharp-small")?;
     let mut cmd = deslop_cmd(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
         .args([
@@ -85,17 +83,6 @@ fn run_with_ollama(endpoint: &str) -> Result<Value> {
         .assert()
         .success();
     embedding_provenance(tmp.path())
-}
-
-fn seed_scan_root(src: &Path, dst: &Path) -> Result<()> {
-    fs::create_dir_all(dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        if entry.file_type()?.is_file() {
-            let _bytes = fs::copy(entry.path(), dst.join(entry.file_name()))?;
-        }
-    }
-    Ok(())
 }
 
 fn embedding_provenance(tmp: &Path) -> Result<Value> {

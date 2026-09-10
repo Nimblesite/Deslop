@@ -1,6 +1,6 @@
 //! Regression coverage for GH #91 embedding ROI signal loss.
 
-use std::{collections::HashMap, path::PathBuf};
+use std::collections::HashMap;
 
 use anyhow::{Context, Result};
 use deslop_core::{
@@ -10,8 +10,9 @@ use deslop_core::{
     fingerprint::Fingerprint,
     lsh::{Signature, SignatureIndex, SIGNATURE_LEN},
     pair::{candidate_pairs, cluster_by_transitive_closure, FUSED_THRESHOLD, LSH_ONLY_MIN_JACCARD},
+    registry_fixtures::python_pair_ids,
     report_fixtures::{UniformKind, FIXTURE_KIND},
-    state::{FileId, FileRegistry},
+    state::FileId,
 };
 
 #[test]
@@ -86,9 +87,7 @@ fn issue_91_embedding_only_pair_survives_when_lsh_misses_match() -> Result<()> {
 }
 
 fn low_jaccard_fixture() -> (Vec<Fingerprint>, Vec<Signature>) {
-    let mut registry = FileRegistry::new();
-    let left = registry.register(PathBuf::from("left.py"));
-    let right = registry.register(PathBuf::from("right.py"));
+    let (left, right) = python_pair_ids();
     (
         vec![fingerprint(left, 0, 80), fingerprint(right, 1, 80)],
         vec![[0; SIGNATURE_LEN], [1; SIGNATURE_LEN]],

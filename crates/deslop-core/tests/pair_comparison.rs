@@ -32,29 +32,17 @@ const INDENTED_SOURCE: &str = "pub fn calculate(input: u32, offset: u32) -> u32 
 
 #[tokio::test]
 async fn explicit_pair_comparison_owns_exact_admission_evidence() -> Result<()> {
-    let workspace = tempfile::tempdir().context("pair workspace")?;
-    fs::write(workspace.path().join(LEFT_FILE), SOURCE).context("write left endpoint")?;
-    fs::write(workspace.path().join(RIGHT_FILE), SOURCE).context("write right endpoint")?;
-    let session = live_session_at(workspace.path(), MIN_NODES)?;
-    let report = session.report();
-    let cluster = two_file_cluster(&report)?;
-    assert_eq!(
-        cluster.kind,
+    let fixture = PairFixture::new(SOURCE, SOURCE)?;
+    let cluster = fixture.cluster_of_kind(
         ClusterKind::Identical,
-        "two byte-identical copies fold to the identical kind: {cluster:#?}"
-    );
+        "two byte-identical copies fold to the identical kind",
+    )?;
     let left = endpoint_for(cluster, LEFT_FILE)?;
     let right = endpoint_for(cluster, RIGHT_FILE)?;
-    let service = LiveService::new(Arc::new(Mutex::new(session)));
 
-    let comparison = service
-        .pair_compare(&PairComparisonParams {
-            left: left.clone(),
-            right: right.clone(),
-        })
-        .await
-        .context("compare exact endpoints")?;
-
+    let comparison = fixture
+        .compare(&left, &right, "compare exact endpoints")
+        .await?;
     assert_eq!(
         comparison.left, left,
         "response must echo the selected left endpoint"
@@ -65,13 +53,9 @@ async fn explicit_pair_comparison_owns_exact_admission_evidence() -> Result<()> 
     );
     assert_exact_evidence(&comparison);
 
-    let reversed = service
-        .pair_compare(&PairComparisonParams {
-            left: right.clone(),
-            right: left.clone(),
-        })
-        .await
-        .context("compare reversed endpoints")?;
+    let reversed = fixture
+        .compare(&right, &left, "compare reversed endpoints")
+        .await?;
     assert_eq!(
         reversed.left, right,
         "reversal must preserve the caller's left endpoint"
@@ -87,36 +71,19 @@ async fn explicit_pair_comparison_owns_exact_admission_evidence() -> Result<()> 
     Ok(())
 }
 
-// A copy that differs from its original only by indentation is not
-// byte-identical, so it keeps its nearly-identical classification; the
-// evidence says outright that indentation is the whole difference, so a
-// reader can confirm the finding at a glance.
 #[tokio::test]
 async fn an_indentation_only_copy_reports_indentation_as_its_whole_difference() -> Result<()> {
-    let workspace = tempfile::tempdir().context("indentation workspace")?;
-    fs::write(workspace.path().join(LEFT_FILE), SOURCE).context("write original")?;
-    fs::write(workspace.path().join(RIGHT_FILE), INDENTED_SOURCE)
-        .context("write re-indented copy")?;
-    let session = live_session_at(workspace.path(), MIN_NODES)?;
-    let report = session.report();
-    let cluster = two_file_cluster(&report)?;
-    assert_eq!(
-        cluster.kind,
+    let fixture = PairFixture::new(SOURCE, INDENTED_SOURCE)?;
+    let cluster = fixture.cluster_of_kind(
         ClusterKind::NearlyIdentical,
-        "a re-indented copy is not byte-identical, so the cluster folds to nearly identical: {cluster:#?}"
-    );
+        "a re-indented copy is not byte-identical, so the cluster folds to nearly identical",
+    )?;
     let left = endpoint_for(cluster, LEFT_FILE)?;
     let right = endpoint_for(cluster, RIGHT_FILE)?;
-    let service = LiveService::new(Arc::new(Mutex::new(session)));
 
-    let comparison = service
-        .pair_compare(&PairComparisonParams {
-            left: left.clone(),
-            right: right.clone(),
-        })
-        .await
-        .context("compare re-indented endpoints")?;
-
+    let comparison = fixture
+        .compare(&left, &right, "compare re-indented endpoints")
+        .await?;
     let evidence = &comparison.evidence;
     assert_eq!(
         evidence.text_identity,
@@ -139,25 +106,15 @@ async fn an_indentation_only_copy_reports_indentation_as_its_whole_difference() 
 
 #[tokio::test]
 async fn content_rejected_pair_never_enters_cluster_closure() -> Result<()> {
-    let workspace = tempfile::tempdir().context("content-gate workspace")?;
-    fs::write(workspace.path().join(LEFT_FILE), UNRELATED_LEFT).context("write unrelated left")?;
-    fs::write(workspace.path().join(RIGHT_FILE), UNRELATED_RIGHT)
-        .context("write unrelated right")?;
-    let session = live_session_at(workspace.path(), MIN_NODES)?;
-    let report = session.report();
+    let fixture = PairFixture::new(UNRELATED_LEFT, UNRELATED_RIGHT)?;
     let left = source_endpoint(LEFT_FILE, UNRELATED_LEFT);
     let right = source_endpoint(RIGHT_FILE, UNRELATED_RIGHT);
-    let service = LiveService::new(Arc::new(Mutex::new(session)));
 
-    let comparison = service
-        .pair_compare(&PairComparisonParams {
-            left: left.clone(),
-            right: right.clone(),
-        })
-        .await
-        .context("compare content-rejected pair")?;
-
+    let comparison = fixture
+        .compare(&left, &right, "compare content-rejected pair")
+        .await?;
     assert_rejected_evidence(&comparison);
+    let report = &fixture.report;
     assert!(
         !report.clusters.iter().any(|cluster| {
             cluster
@@ -172,6 +129,58 @@ async fn content_rejected_pair_never_enters_cluster_closure() -> Result<()> {
         "a rejected pair must never enter closure: {report:#?}"
     );
     Ok(())
+}
+
+/// One live session over a two-file workspace, with the report it
+/// produced and the service every comparison runs through. Owns the
+/// temp directory so the workspace outlives the session that reads it.
+struct PairFixture {
+    /// Keeps the workspace on disk for the test's duration.
+    _workspace: tempfile::TempDir,
+    /// The report the session produced before the service took it.
+    report: Arc<Report>,
+    /// The service every `pair_compare` in the test runs through.
+    service: LiveService,
+}
+
+impl PairFixture {
+    /// Writes `left` and `right` as the two endpoints of a fresh
+    /// workspace and starts one live session over them.
+    fn new(left: &str, right: &str) -> Result<Self> {
+        let workspace = tempfile::tempdir().context("pair workspace")?;
+        fs::write(workspace.path().join(LEFT_FILE), left).context("write left endpoint")?;
+        fs::write(workspace.path().join(RIGHT_FILE), right).context("write right endpoint")?;
+        let session = live_session_at(workspace.path(), MIN_NODES)?;
+        let report = session.report();
+        Ok(Self {
+            _workspace: workspace,
+            report,
+            service: LiveService::new(Arc::new(Mutex::new(session))),
+        })
+    }
+
+    /// The single cross-file cluster, asserted to carry `kind`.
+    fn cluster_of_kind(&self, kind: ClusterKind, why: &str) -> Result<&ReportCluster> {
+        let cluster = two_file_cluster(&self.report)?;
+        assert_eq!(cluster.kind, kind, "{why}: {cluster:#?}");
+        Ok(cluster)
+    }
+
+    /// Compares `left` against `right` through the live service.
+    async fn compare(
+        &self,
+        left: &PairEndpoint,
+        right: &PairEndpoint,
+        why: &'static str,
+    ) -> Result<PairComparison> {
+        self.service
+            .pair_compare(&PairComparisonParams {
+                left: left.clone(),
+                right: right.clone(),
+            })
+            .await
+            .context(why)
+    }
 }
 
 fn assert_exact_evidence(comparison: &PairComparison) {

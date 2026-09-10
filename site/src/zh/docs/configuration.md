@@ -111,11 +111,15 @@ max_duplication_percent = 20
 ```toml
 [analysis]
 allow_cross_language_comparison = false
+include_dependencies = false
+incremental = true
 ```
 
 | 键 | 类型 | 默认值 | 含义 |
 | --- | --- | --- | --- |
 | `allow_cross_language_comparison` | 布尔 | `false` | 为 `true` 时，候选克隆对可以跨越不同语言。默认关闭，使报告聚焦于同语言重构。 |
+| `include_dependencies` | 布尔 | `false` | 连依赖树一起分析。默认关闭：否则最严重者优先的排序会把你无法修改的重复排在自己的代码之上。 |
+| `incremental` | 布尔 | `true` | 复用磁盘上的解析缓存。设为 `false` 则每次运行都完整重新解析，且对所有入口生效 —— CLI、编辑器与智能体皆然。 |
 
 ## `[report]`
 
@@ -153,13 +157,18 @@ structural_only_weight = 0.15
 
 ## 内置规则（始终生效）
 
-无论你如何配置，这些规则都会运行且**无法关闭** — 它们让依赖树和机器生成代码远离每一份报告。
+这些规则无需任何配置即会运行 — 它们让依赖树和机器生成代码远离每一份报告。
 
-**始终排除**（路径中包含以下任一目录组件的文件）：
+**构建产物与工具缓存**，一律排除且无法重新纳入 —— 它们都不是你写的源码：
 
 ```
-node_modules   target   dist   build   .venv   __pycache__
-.cargo   .git   .claude   .dart_tool   .pub-cache
+target   dist   build   __pycache__   .dart_tool   .git   .claude
+```
+
+**依赖树**，除非你设置 `[analysis] include_dependencies = true`，否则一律排除：
+
+```
+node_modules   vendor   .cargo   .pub-cache   .venv
 ```
 
 **始终从报告中隐藏**（会被分析，但不进入头条）：
@@ -212,13 +221,15 @@ structural_only = "ignore"
 | --- | --- | --- |
 | `PATH` | `.` | 要分析的目录（位置参数）。 |
 | `--min-nodes <N>` | `30` | 构成克隆候选的最小 AST 子树节点数。越大 = 克隆越少、越大。 |
-| `--output <PREFIX>` | `deslop-report` | 报告的基路径；会追加 `.json` / `.txt` / `.html`。 |
+| `--output <PREFIX>` | `.deslop/deslop-report` | 报告的基路径；会追加 `.json` / `.txt` / `.html`。日志一并写入 `<dir>/logs/`。 |
 | `--config <FILE>` | `<root>/.deslop.toml` | 显式配置文件。 |
 | `--split-by-language` | 关 | 每种语言一个 HTML 区段（等同于 `[report] split_by_language`）。 |
 | `--nojson` / `--notext` / `--nohtml` | 全开 | 抑制单一输出格式。至少需保留一种。 |
 | `--fail-over <PERCENT>` | — | 重复超过 `PERCENT` 时以 `3` 退出。覆盖 `[threshold]`。 |
 | `--no-fail-over` | — | 在该次运行中清除任何阈值；绝不以 `3` 退出。 |
 | `--technical` | 关 | 在 stderr 上显示研究者视图（分类 id、信号字母、节点数）。 |
+| `--diff <FILE>` | — | 将报告限定到统一 diff 的新增行；`-` 表示从 stdin 读取。扫描仍覆盖整棵树。与该树不匹配的 diff 会被拒绝。 |
+| `--only-changed` | 关 | 丢弃未命中 diff 的簇，并让 `--fail-over` 按 diff 范围内的占比判定，使历史欠债无法让合并前检查失败。需要 `--diff`。 |
 
 ### 嵌入
 

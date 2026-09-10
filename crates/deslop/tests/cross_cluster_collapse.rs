@@ -10,15 +10,11 @@
 //! Spec: [PIPELINE-CLUSTER-EXACT] commits to one canonical cluster
 //! per duplicated region.
 
-use std::{
-    collections::BTreeSet,
-    fs,
-    ops::RangeInclusive,
-    path::{Path, PathBuf},
-};
+use std::{collections::BTreeSet, fs, ops::RangeInclusive, path::Path};
 
 use anyhow::Result;
 
+use crate::common::scan_dir::report_path;
 use crate::common::signals::assert_no_pair_surface_on_cluster;
 use crate::common::*;
 
@@ -34,12 +30,6 @@ const PREMIUM_VIEW_LINES: RangeInclusive<u64> = 16..=21;
 const SHARED_PREFIX_RUN: &str = "policy.Stage(ticket);\n        policy.Validate(ticket);\n        policy.Record(ticket);\n        policy.Publish(ticket);";
 /// The 1-based lines `SHARED_LOGIC` occupies in both wrappers.
 const SHARED_LOGIC_LINES: RangeInclusive<u64> = 8..=13;
-
-fn report_path(tmp: &Path) -> PathBuf {
-    let mut path = tmp.join("report");
-    let _replaced = path.set_extension("json");
-    path
-}
 
 fn run_report(tmp: &Path, scan_root: &Path) -> Result<serde_json::Value> {
     report_with(tmp, scan_root, &["--min-nodes", "8", "--embeddings", "off"])
@@ -362,9 +352,10 @@ fn widest_same_declaration_view_is_the_published_finding() -> Result<()> {
         "the premium method grew an archive branch, so the two methods stay byte-distinct"
     );
     for text in &texts {
-        assert!(
-            text.contains(SHARED_PREFIX_RUN),
-            "each method carries the byte-identical run the near-miss is built on: {text}"
+        assert_contains(
+            text,
+            SHARED_PREFIX_RUN,
+            "each method carries the byte-identical run the near-miss is built on",
         );
     }
     let lines: Vec<(u64, u64)> = occurrences(clone)

@@ -11,17 +11,8 @@ use serde_json::Value;
 
 use crate::common::*;
 
-fn run_report(scan_root: &Path) -> Result<Value> {
-    let tmp = tempfile::tempdir()?;
-    let output = tmp.path().join("report");
-    let mut cmd = deslop_cmd(scan_root, &output)?;
-    let _assertion = cmd
-        .args(["--min-nodes", "10", "--embeddings", "off"])
-        .assert()
-        .success();
-    let body = fs::read_to_string(output.with_extension("json"))?;
-    Ok(serde_json::from_str(&body)?)
-}
+/// The node floor the two independent verifiers are judged at.
+const JWT_MIN_NODES: u32 = 10;
 
 fn jwt_verifier_clusters(report: &Value, scan_root: &Path) -> Result<Vec<String>> {
     let mut offenders = Vec::new();
@@ -71,20 +62,23 @@ fn independent_hs256_test_verifiers_do_not_surface_as_duplicate_logic() -> Resul
         "coverage verifier fixture must exist"
     );
     assert!(fly_test.is_file(), "fly-host verifier fixture must exist");
-    assert!(
-        fs::read_to_string(&production)?.contains("hmac.new"),
-        "production fixture must implement HMAC signing"
+    assert_contains(
+        &fs::read_to_string(&production)?,
+        "hmac.new",
+        "production fixture must implement HMAC signing",
     );
-    assert!(
-        fs::read_to_string(&coverage_test)?.contains("expected_hs256"),
-        "coverage test fixture must independently compute expected HS256"
+    assert_contains(
+        &fs::read_to_string(&coverage_test)?,
+        "expected_hs256",
+        "coverage test fixture must independently compute expected HS256",
     );
-    assert!(
-        fs::read_to_string(&fly_test)?.contains("expected_hs256"),
-        "fly-host test fixture must independently compute expected HS256"
+    assert_contains(
+        &fs::read_to_string(&fly_test)?,
+        "expected_hs256",
+        "fly-host test fixture must independently compute expected HS256",
     );
 
-    let report = run_report(&scan_root)?;
+    let report = run_report(&scan_root, JWT_MIN_NODES)?;
     let offenders = jwt_verifier_clusters(&report, &scan_root)?;
     assert!(
         offenders.is_empty(),

@@ -29,23 +29,8 @@
 
 use anyhow::Result;
 
-use crate::common::signals::{
-    assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
-};
+use crate::common::signals::{assert_admitted_rename_cluster, top_visible_cluster};
 use crate::common::*;
-
-/// Drives the `deslop` binary over the named fixture at `min_nodes` and
-/// returns the parsed JSON report, asserting the process exited cleanly.
-fn run_cli(fixture_name: &str, min_nodes: u32) -> Result<serde_json::Value> {
-    let tmp = tempfile::tempdir()?;
-    let output = tmp.path().join("report");
-    let min_nodes = min_nodes.to_string();
-    let _assertion = deslop_cmd(&fixture(fixture_name), &output)?
-        .args(["--min-nodes", min_nodes.as_str()])
-        .assert()
-        .success();
-    load_json(&output.with_extension("json"))
-}
 
 // [FUSED-SIGNALS-THREE-LAYER] Type-2 Dart clones (identical after
 // normalisation, every identifier renamed) must produce both
@@ -56,32 +41,20 @@ fn run_cli(fixture_name: &str, min_nodes: u32) -> Result<serde_json::Value> {
 // identical source text ([PIPELINE-CLUSTER-CLOSURE]).
 #[test]
 fn dart_type2_clone_is_byte_identical_and_spans_both_files() -> Result<()> {
-    let scan_root = fixture("dart-small");
-    let report = run_cli("dart-small", 10)?;
-    let clusters = clusters(&report);
-    assert!(
-        !clusters.is_empty(),
-        "dart-small must produce at least one cluster",
-    );
-    let top = clusters
-        .first()
-        .ok_or_else(|| anyhow::anyhow!("dart-small must produce at least one cluster"))?;
     // A Type-2 clone is a rename: its occurrences differ in raw bytes
     // (`compute(input)` against `run(limit)`), so the wire proves it by
     // admission plus the byte truth that it is NOT a verbatim copy
     // ([PIPELINE-CLUSTER-CLOSURE]).
-    assert_structural_only_contract(top, "Dart Type-2 clone");
-    assert!(
-        !has_verbatim_pair(&scan_root, top)?,
-        "the Type-2 Dart clone is a rename — its occurrences must differ in \
-         raw bytes, never be byte-identical: {top:#}",
-    );
-    let files = cluster_file_set(top);
-    assert!(
-        files.contains("alpha.dart") && files.contains("beta.dart"),
-        "the Type-2 cluster must span both alpha.dart and beta.dart, got {files:?}",
-    );
-    Ok(())
+    let scan_root = fixture("dart-small");
+    let report = run_fixture_report("dart-small", 10)?;
+    let top = top_visible_cluster(&report, "dart-small")?;
+    assert_admitted_rename_cluster(
+        &scan_root,
+        top,
+        "dart-small",
+        &["alpha.dart", "beta.dart"],
+        &report,
+    )
 }
 
 // [FUSED-SIGNALS-THREE-LAYER] Two Dart functions sharing control-flow
@@ -109,22 +82,16 @@ fn dart_type2_clone_is_byte_identical_and_spans_both_files() -> Result<()> {
 // admission floor.
 #[test]
 fn dart_near_miss_produces_genuine_cross_file_structural_cluster() -> Result<()> {
-    let scan_root = fixture("dart-type3");
-    let report = run_cli("dart-type3", 8)?;
-    let cluster = expect_cluster_spanning(&report, &["delta.dart", "epsilon.dart"])?;
     // Admission is the near-miss proof on the mass-only wire: the
     // enclosing pair cleared the shared-subtree bar or it would not be a
     // cluster. The byte-level truth is that the view is a near-miss, not
     // a verbatim copy — the whole point of gh #408 is that the enclosing
     // method differs by the extra statement.
-    assert!(
-        !has_verbatim_pair(&scan_root, cluster)?,
-        "the reported view must be the enclosing near-miss (bytes differ by the \
-         extra statement), not a Merkle-exact fragment nested inside it (gh #408): \
-         {cluster:#}",
-    );
-    assert_structural_only_contract(cluster, "dart-type3");
-    assert_no_pair_surface_on_cluster(cluster, "dart-type3");
+    let scan_root = fixture("dart-type3");
+    let report = run_fixture_report("dart-type3", 8)?;
+    let files = ["delta.dart", "epsilon.dart"];
+    let cluster = expect_cluster_spanning(&report, &files)?;
+    assert_admitted_rename_cluster(&scan_root, cluster, "dart-type3", &files, &report)?;
     let occurrence_count = occurrences(cluster).len();
     assert!(
         occurrence_count >= 2,
@@ -139,7 +106,7 @@ fn dart_near_miss_produces_genuine_cross_file_structural_cluster() -> Result<()>
 // file — a human reading the report must not be told they are duplicates.
 #[test]
 fn dissimilar_dart_functions_never_form_a_cross_file_cluster() -> Result<()> {
-    let report = run_cli("dart-dissimilar-functions", 8)?;
+    let report = run_fixture_report("dart-dissimilar-functions", 8)?;
     for cluster in clusters(&report) {
         let files = cluster_file_set(cluster);
         assert!(
@@ -158,8 +125,8 @@ fn dissimilar_dart_functions_never_form_a_cross_file_cluster() -> Result<()> {
 // actually hold across sessions ([PIPELINE-DETERMINISM]).
 #[test]
 fn dart_report_is_deterministic_across_runs() -> Result<()> {
-    let run1 = run_cli("dart-small", 10)?;
-    let run2 = run_cli("dart-small", 10)?;
+    let run1 = run_fixture_report("dart-small", 10)?;
+    let run2 = run_fixture_report("dart-small", 10)?;
     let jaccards1: Vec<(String, u64, u64)> = clusters(&run1)
         .iter()
         .map(|cluster| {
@@ -207,7 +174,7 @@ fn any_cluster_spans(report: &serde_json::Value, left: &str, right: &str) -> boo
 // two identical hand-written parsers — only the generated pair may vanish.
 #[test]
 fn dart_generated_files_are_hidden_but_handwritten_clones_surface() -> Result<()> {
-    let report = run_cli("dart-generated-files", 10)?;
+    let report = run_fixture_report("dart-generated-files", 10)?;
     assert!(
         !any_cluster_spans(&report, "serializers.g.dart", "models.g.dart"),
         "generated `.g.dart` files must not surface as a ranked duplicate cluster",
@@ -229,7 +196,7 @@ fn dart_generated_files_are_hidden_but_handwritten_clones_surface() -> Result<()
 // reported as a clone of one another.
 #[test]
 fn dart_export_barrels_are_not_flagged_as_duplicates() -> Result<()> {
-    let report = run_cli("dart-export-barrel", 8)?;
+    let report = run_fixture_report("dart-export-barrel", 8)?;
     assert!(
         !any_cluster_spans(&report, "widgets.dart", "models.dart"),
         "Dart export barrels are import scaffolding and must not cluster as duplicates",
@@ -246,7 +213,7 @@ fn dart_export_barrels_are_not_flagged_as_duplicates() -> Result<()> {
 // with entirely different bodies.
 #[test]
 fn dart_signature_only_match_with_differing_bodies_is_suppressed() -> Result<()> {
-    let report = run_cli("dart-signature-only", 8)?;
+    let report = run_fixture_report("dart-signature-only", 8)?;
     assert!(
         !any_cluster_spans(&report, "alpha.dart", "beta.dart"),
         "a signature-only structural match with differing bodies must be suppressed for Dart",
@@ -266,7 +233,7 @@ fn dart_signature_only_match_with_differing_bodies_is_suppressed() -> Result<()>
 // them — exactly the dart-lang/http FFI-binding case from the real-repo sweep.
 #[test]
 fn dart_generated_header_files_are_hidden_without_a_suffix() -> Result<()> {
-    let report = run_cli("dart-generated-header", 8)?;
+    let report = run_fixture_report("dart-generated-header", 8)?;
     assert!(
         !any_cluster_spans(
             &report,
@@ -295,7 +262,7 @@ fn dart_generated_header_files_are_hidden_without_a_suffix() -> Result<()> {
 // must still surface, proving the suppression is targeted.
 #[test]
 fn dart_polymorphic_override_signatures_are_suppressed() -> Result<()> {
-    let report = run_cli("dart-issue-69-polymorphic", 8)?;
+    let report = run_fixture_report("dart-issue-69-polymorphic", 8)?;
     let measure_pairs = [
         ("circle.dart", "square.dart"),
         ("circle.dart", "triangle.dart"),
@@ -331,7 +298,7 @@ fn dart_polymorphic_override_signatures_are_suppressed() -> Result<()> {
 // `summarize` clone must still surface.
 #[test]
 fn dart_literal_variation_calls_are_suppressed() -> Result<()> {
-    let report = run_cli("dart-issue-70-test-data", 8)?;
+    let report = run_fixture_report("dart-issue-70-test-data", 8)?;
     assert!(
         !any_cluster_spans(&report, "events_alpha.dart", "events_beta.dart"),
         "calls varying only in string-literal arguments must not surface (#70)",

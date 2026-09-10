@@ -19,7 +19,7 @@ use assert_cmd::{assert::Assert, Command};
 use serde_json::Value;
 
 use crate::common::signals::has_verbatim_pair;
-use crate::common::{clusters, field, load_json, occurrences, Result};
+use crate::common::{assert_contains, clusters, field, load_json, occurrences, Result};
 
 /// A ten-line function duplicated byte-for-byte across the legacy
 /// pair — enough structure to cluster in the `identical` bucket.
@@ -152,18 +152,17 @@ fn diff_metrics(report: &Value) -> Value {
 fn hunk_without_a_target_line_is_refused_naming_the_line() -> Result<()> {
     let scenario = Scenario::dup_pair()?;
     let stderr = scenario.refusal_stderr("diff nonsense\n@@ -0,0 +1 @@\n+x\n", ZERO_GATE)?;
-    assert!(
-        stderr.contains("invalid unified diff"),
-        "the refusal is a parse error: {stderr}"
+    assert_contains(
+        &stderr,
+        "invalid unified diff",
+        "the refusal is a parse error",
     );
-    assert!(
-        stderr.contains("line 2"),
-        "the refusal names the hunk header's diff line: {stderr}"
+    assert_contains(
+        &stderr,
+        "line 2",
+        "the refusal names the hunk header's diff line",
     );
-    assert!(
-        stderr.contains("+++"),
-        "the refusal names the missing target line: {stderr}"
-    );
+    assert_contains(&stderr, "+++", "the refusal names the missing target line");
     assert!(
         !scenario.output.with_extension("json").exists(),
         "a refused diff must not produce a report"
@@ -213,17 +212,20 @@ fn missing_supported_target_in_root_is_refused_as_stale() -> Result<()> {
         "+pub fn ghost() {}\n",
     );
     let stderr = scenario.refusal_stderr(diff, ZERO_GATE)?;
-    assert!(
-        stderr.contains("does not match the scanned tree"),
-        "the refusal is a stale-diff usage error: {stderr}"
+    assert_contains(
+        &stderr,
+        "does not match the scanned tree",
+        "the refusal is a stale-diff usage error",
     );
-    assert!(
-        stderr.contains("src/missing.rs"),
-        "the refusal names the missing path: {stderr}"
+    assert_contains(
+        &stderr,
+        "src/missing.rs",
+        "the refusal names the missing path",
     );
-    assert!(
-        stderr.contains("line 1"),
-        "the refusal names the first claimed new-side line: {stderr}"
+    assert_contains(
+        &stderr,
+        "line 1",
+        "the refusal names the first claimed new-side line",
     );
     Ok(())
 }
@@ -378,9 +380,10 @@ fn copy_sections_that_disagree_with_the_tree_are_refused() -> Result<()> {
         "copy to repo/src/dup_b.rs\n",
     );
     let stderr = scenario.refusal_stderr(missing_source, &[])?;
-    assert!(
-        stderr.contains("src/ghost.rs"),
-        "missing copy source must be a stale refusal naming the path: {stderr}"
+    assert_contains(
+        &stderr,
+        "src/ghost.rs",
+        "missing copy source must be a stale refusal naming the path",
     );
 
     let divergent = Scenario::with_files(&[
@@ -464,17 +467,20 @@ fn empty_new_side_target_is_refused_naming_the_line() -> Result<()> {
         ),
         ZERO_GATE,
     )?;
-    assert!(
-        stderr.contains("invalid unified diff"),
-        "the refusal is a parse error: {stderr}"
+    assert_contains(
+        &stderr,
+        "invalid unified diff",
+        "the refusal is a parse error",
     );
-    assert!(
-        stderr.contains("line 4"),
-        "the refusal names the offending `+++` line: {stderr}"
+    assert_contains(
+        &stderr,
+        "line 4",
+        "the refusal names the offending `+++` line",
     );
-    assert!(
-        stderr.contains("names no path"),
-        "the refusal says the target names nothing: {stderr}"
+    assert_contains(
+        &stderr,
+        "names no path",
+        "the refusal says the target names nothing",
     );
     assert!(
         !scenario.output.with_extension("json").exists(),

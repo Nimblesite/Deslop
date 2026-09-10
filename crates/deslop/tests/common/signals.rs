@@ -20,9 +20,46 @@ use deslop_core::{
 use serde_json::Value;
 
 use super::{
-    cluster_file_set, cluster_id, clusters, field, occurrence_is_hidden, occurrence_texts,
-    occurrences, Result,
+    cluster_covers_files, cluster_file_set, cluster_id, clusters, field, occurrence_is_hidden,
+    occurrence_texts, occurrences, row_for_path, Result,
 };
+
+/// The top-ranked visible cluster, or an actionable test error.
+pub(crate) fn top_visible_cluster<'a>(report: &'a Value, fixture_name: &str) -> Result<&'a Value> {
+    clusters(report)
+        .first()
+        .ok_or_else(|| anyhow!("{fixture_name} must produce at least one cluster"))
+}
+
+/// The wire contract every renamed/near-miss clone must satisfy
+/// ([PIPELINE-CLUSTER-CLOSURE]): admitted and mass-honest, no pair-only
+/// surface on the cluster, and — the byte-level truth the deleted
+/// `structural`/`token_jaccard` axes used to proxy — the occurrences
+/// slice to *differing* source bytes. A Merkle-equal fragment selected in
+/// place of the enclosing view would slice to identical bytes and fail
+/// here, which is exactly the gh #408/#427 recall hole.
+pub(crate) fn assert_admitted_rename_cluster(
+    scan_root: &Path,
+    cluster: &Value,
+    fixture_name: &str,
+    files: &[&str],
+    report: &Value,
+) -> Result<()> {
+    assert_structural_only_contract(cluster, fixture_name);
+    assert_no_pair_surface_on_cluster(cluster, fixture_name);
+    assert!(
+        !has_verbatim_pair(scan_root, cluster)?,
+        "{fixture_name}: {files:?} are a rename / near-miss and must slice to \
+         differing bytes — a verbatim (byte-identical) reading means the \
+         fragment view was selected in place of the enclosing pair, the \
+         gh #408 recall hole: {report:#}"
+    );
+    assert!(
+        cluster_covers_files(cluster, files),
+        "{fixture_name}: the clone must span {files:?}: {report:#}"
+    );
+    Ok(())
+}
 
 /// Recomputes pair evidence for two explicitly supplied report occurrences.
 pub(crate) fn compare_pair(
@@ -68,13 +105,7 @@ pub(crate) fn compare_endpoints(
 
 /// Returns the occurrence for the caller's explicit file choice.
 pub(crate) fn occurrence_for_file<'a>(cluster: &'a Value, file: &str) -> Result<&'a Value> {
-    occurrences(cluster)
-        .iter()
-        .find(|occurrence| {
-            field(occurrence, "path")
-                .as_str()
-                .is_some_and(|path| path.ends_with(file))
-        })
+    row_for_path(occurrences(cluster), file)
         .ok_or_else(|| anyhow!("cluster has no occurrence for {file}: {cluster:#}"))
 }
 
@@ -257,7 +288,7 @@ pub(crate) fn assert_near_miss_rename_contract(
 /// numbers first; the negative pin closes the mislabelling path the
 /// routing table used to be able to fabricate.
 fn assert_admission_and_clean_surface(cluster: &Value, label: &str) {
-    assert_rename_verdict(cluster, label);
+    assert_structural_only_contract(cluster, label);
     assert_no_pair_surface_on_cluster(cluster, label);
 }
 
@@ -287,33 +318,6 @@ pub(crate) fn assert_no_pair_surface_on_cluster(cluster: &Value, label: &str) {
              routing table could fabricate a value through it again: {cluster:#}"
         );
     }
-}
-
-/// Verdict half of the rename contracts. On the mass-only wire the
-/// cluster carries no bucket and no evidence verdict, so the honest
-/// assertion is the admission + visibility + mass contract
-/// ([PIPELINE-CLUSTER-CLOSURE], [RANK-MASS-SUM]) plus the byte-level
-/// not-a-copy checks in [`assert_rename_is_not_a_copy`]. The old
-/// `nearly_identical` verdict and content-gate routing were cluster-
-/// surface facts; what a rendered cluster can still prove about a
-/// fixture is that it was admitted with a consistent, visible
-/// membership.
-fn assert_rename_verdict(cluster: &Value, label: &str) {
-    let dump = signal_dump(cluster);
-    let canonical_nodes = field(cluster, "canonical_node_count").as_u64().unwrap_or(0);
-    let occurrence_count = field(cluster, "occurrence_count").as_u64().unwrap_or(0);
-    let mass = field(cluster, "mass").as_u64().unwrap_or(0);
-    assert!(
-        canonical_nodes > 0 && occurrence_count >= 2,
-        "{label}: an admitted cluster must carry canonical_node_count and \
-         occurrence_count — {dump}"
-    );
-    assert_eq!(
-        mass,
-        canonical_nodes.saturating_mul(occurrence_count.saturating_sub(1)),
-        "{label}: mass must be canonical_node_count × (occurrence_count − 1) \
-         — {dump}"
-    );
 }
 
 /// Occurrence half: every occurrence must differ in raw bytes, or the

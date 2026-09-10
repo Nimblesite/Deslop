@@ -12,9 +12,7 @@ import {
 } from "../../types/report";
 import { buildKindMode, getGroupNodeChildren } from "../../tree/grouping";
 import { ClusterNode, KindGroupNode } from "../../tree/nodes";
-import { StatusTicker, TopOffendersProvider } from "../../tree/providers";
-import { ReportStore } from "../../reportStore";
-import { cluster, labelText, report, withSetting } from "./tree.helpers";
+import { cluster, labelText, report, storeWith, topOffenders, withSetting } from "./tree.helpers";
 import { stampRanks } from "../cluster.helpers";
 
 const WORST_SEVERITY = "worst";
@@ -139,10 +137,9 @@ suite("clone-kind grouping mode ([FACET-GROUP-BY-KIND])", () => {
 suite("facet filter cross-surface consistency", () => {
   test("filtered tree = shared slice, rank gaps kept, status row leads with clear action", async () => {
     const worstSetting = "topOffenders.filterSeverities";
-    const store = new ReportStore();
-    store.setSnapshot(report(ALL), 0);
+    const store = storeWith(report(ALL));
     store.setLifecycle({ kind: "ready" });
-    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const provider = topOffenders(store);
 
     await withSetting(worstSetting, [WORST_SEVERITY], () => {
       const nodes = provider.getChildren();
@@ -211,10 +208,9 @@ suite("facet filter cross-surface consistency", () => {
       cluster("ddddddd4", 3, "d.rs", 0, 20, FAINT_SEVERITY, 2),
     ]);
     await withSetting("topOffenders.filterSeverities", ["top10"], () => {
-      const store = new ReportStore();
-      store.setSnapshot(report(small), 0);
+      const store = storeWith(report(small));
       store.setLifecycle({ kind: "ready" });
-      const provider = new TopOffendersProvider(store, new StatusTicker());
+      const provider = topOffenders(store);
       const nodes = provider.getChildren();
       assert.equal(nodes.length, 1, "only the filtered status row renders");
       const [statusRow] = nodes;

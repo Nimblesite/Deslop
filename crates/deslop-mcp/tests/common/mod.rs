@@ -384,6 +384,75 @@ pub fn rescan_call(mcp: &mut McpHandle, paths: &[String]) -> Result<Value> {
     structured_content(&response, "rescan")
 }
 
+/// Reads `field` off `value` as an unsigned integer. The error names
+/// the payload that lacked it, so a missing field is diagnosable
+/// without the caller re-formatting the response.
+pub fn u64_field(value: &Value, field: &str) -> Result<u64> {
+    value
+        .get(field)
+        .and_then(Value::as_u64)
+        .ok_or_else(|| anyhow!("{field} missing or not a number in {value}"))
+}
+
+/// Reads `field` off `value` as a string.
+pub fn str_field<'a>(value: &'a Value, field: &str) -> Result<&'a str> {
+    value
+        .get(field)
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("{field} missing or not a string in {value}"))
+}
+
+/// Reads `field` off `value` as an array.
+pub fn array_field<'a>(value: &'a Value, field: &str) -> Result<&'a Vec<Value>> {
+    value
+        .get(field)
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("{field} missing or not an array in {value}"))
+}
+
+/// `name` key, carried by both tool descriptors and model rows.
+pub const NAME_FIELD: &str = "name";
+/// `provider_id` row key in an embedding-model listing.
+pub const PROVIDER_ID_FIELD: &str = "provider_id";
+/// `models[]` key inside a `session` list-embedding-models result.
+pub const MODELS_FIELD: &str = "models";
+/// The deterministic BLAKE3 test provider ([REMOVE-STUB]). It is test
+/// infrastructure and must never appear in a production payload.
+pub const STUB_PROVIDER: &str = "stub";
+/// Row keys the retired twelve-tool surface leaked out of Ollama's raw
+/// manifest. [MCP-IPC-CLIENT] keeps them off the wire for good.
+pub const LEGACY_EMBEDDING_MODEL_KEYS: [&str; 5] = [
+    NAME_FIELD,
+    "bare_id",
+    "digest",
+    "size_bytes",
+    "is_embedding_model",
+];
+
+/// Asserts an embedding-model listing is a production payload: it never
+/// advertises the deterministic test stub, and no row carries a legacy
+/// key ([MCP-IPC-CLIENT], [REMOVE-STUB]).
+///
+/// # Errors
+///
+/// Returns an error naming the offending row, and the legacy key it
+/// carried when that is the failure.
+pub fn assert_production_embedding_models(models: &[Value]) -> Result<()> {
+    for model in models {
+        ensure!(
+            model.get(PROVIDER_ID_FIELD) != Some(&json!(STUB_PROVIDER)),
+            "list-embedding-models must never include the stub provider: {model}"
+        );
+        for legacy_key in LEGACY_EMBEDDING_MODEL_KEYS {
+            ensure!(
+                model.get(legacy_key).is_none(),
+                "model row must not expose legacy key {legacy_key}: {model}"
+            );
+        }
+    }
+    Ok(())
+}
+
 /// Resolves a JSON pointer in `value`, erroring when the path is absent.
 pub fn value_get(value: &Value, pointer: &str) -> Result<Value> {
     value

@@ -7,39 +7,13 @@
 //! field filter missed. Such clusters must be hidden from the ranked
 //! report.
 
-use std::{
-    fmt::Write as _,
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{fmt::Write as _, fs};
 
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::scan_dir::temp_scan_dir;
+use crate::common::scan_dir::{report_path, temp_scan_dir};
 use crate::common::*;
-
-fn report_path(tmp: &Path) -> PathBuf {
-    let mut path = tmp.join("report");
-    let _replaced = path.set_extension("json");
-    path
-}
-
-fn any_cluster_touches(report: &Value, file_name: &str) -> bool {
-    clusters(report).iter().any(|cluster| {
-        occurrence_paths(cluster)
-            .iter()
-            .any(|path| path.ends_with(file_name))
-    })
-}
-
-fn any_cluster_spans(report: &Value, left: &str, right: &str) -> bool {
-    clusters(report).iter().any(|cluster| {
-        let paths = occurrence_paths(cluster);
-        paths.iter().any(|path| path.ends_with(left))
-            && paths.iter().any(|path| path.ends_with(right))
-    })
-}
 
 #[test]
 fn dart_const_constructor_registry_is_hidden() -> Result<()> {
@@ -93,11 +67,11 @@ fn dart_const_constructor_registry_is_hidden() -> Result<()> {
     let body = fs::read_to_string(&report)?;
     let json: Value = serde_json::from_str(&body)?;
     assert!(
-        any_cluster_spans(&json, "scorer_a.dart", "scorer_b.dart"),
+        report_spans(&json, "scorer_a.dart", "scorer_b.dart"),
         "positive control: the duplicated score() method must still cluster: {body}"
     );
     assert!(
-        !any_cluster_touches(&json, "icons.dart"),
+        !report_touches(&json, "icons.dart"),
         "a const data registry (sibling static-const constructor calls) must \
          not rank as duplication: {body}"
     );

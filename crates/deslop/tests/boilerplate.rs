@@ -10,6 +10,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use crate::common::scan_dir::temp_scan_dir;
 use anyhow::{anyhow, Result};
 use assert_cmd::Command;
 use serde_json::Value;
@@ -62,8 +63,7 @@ fn run_report(root: &Path, tmp: &Path, config: Option<&Path>) -> Result<RunOutpu
 
 #[test]
 fn import_boilerplate_is_suppressed_but_real_clones_still_report() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     let prologues = write_sources(&scan_root)?;
     let out = run_report(&scan_root, tmp.path(), None)?;
     let report = load_json(&out.json)?;
@@ -77,8 +77,7 @@ fn import_boilerplate_is_suppressed_but_real_clones_still_report() -> Result<()>
 
 #[test]
 fn import_boilerplate_report_mode_emits_low_noise_hints() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     let prologues = write_sources(&scan_root)?;
     let config = tmp.path().join("deslop.toml");
     fs::write(&config, "[defaults.boilerplate]\nimports = \"report\"\n")?;

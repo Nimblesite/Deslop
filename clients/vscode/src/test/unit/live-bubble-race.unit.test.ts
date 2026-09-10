@@ -7,21 +7,13 @@
 // revision (not the wire generation) is the freshness token.
 
 import * as assert from "node:assert/strict";
-import {
-  bubbleCluster,
-  bubbleFixture,
-  deferredProbeClient,
-  editAt,
-  resolveProbe,
-  FIXTURE_KIND_TITLE,
-} from "./bubble.helpers";
+import { FIXTURE_KIND_TITLE, bubbleCluster, bubbleFixture, deferredProbeClient, editAt, resolveProbe, withBubble } from "./bubble.helpers";
 import { reportWithClusters } from "./report.helpers";
 
 suite("LiveBubble stale-probe races", () => {
   test("a stalled probe rejecting after a newer probe rendered leaves the newer bubble intact", async () => {
     const { client, requests } = deferredProbeClient();
-    const { capture, bubble } = await bubbleFixture({ generation: 1, client });
-    try {
+    await withBubble({ generation: 1, client }, async ({ capture, bubble }) => {
       const probeA = bubble.probe(capture.editor, editAt(0, "aaaa"));
       const probeB = bubble.probe(capture.editor, editAt(6, "bbbb"));
       assert.equal(requests.length, 2, "both probes must dispatch a findSimilar request");
@@ -55,15 +47,13 @@ suite("LiveBubble stale-probe races", () => {
         /×\s*5/,
         "the surviving bubble text is B's, verbatim",
       );
-    } finally {
-      bubble.dispose();
-    }
+    
+    });
   });
 
   test("a probe resolving after a newer snapshot dropped its cluster paints nothing", async () => {
     const { client, requests } = deferredProbeClient();
-    const { store, capture, bubble } = await bubbleFixture({ generation: 1, client });
-    try {
+    await withBubble({ generation: 1, client }, async ({ store, capture, bubble }) => {
       const probeA = bubble.probe(capture.editor, editAt(0, "aaaa"));
 
       // The newer full snapshot omits c-a entirely — and settles every
@@ -97,15 +87,13 @@ suite("LiveBubble stale-probe races", () => {
         "a fresh probe against the new snapshot must still render its bubble",
       );
       assert.match(capture.visible() ?? "", /×\s*2/, "with the new cluster's occurrence count");
-    } finally {
-      bubble.dispose();
-    }
+    
+    });
   });
 
   test("generation ABA cannot defeat freshness and the store never rolls backward", async () => {
     const { client, requests } = deferredProbeClient();
-    const { store, capture, bubble } = await bubbleFixture({ generation: 3, client });
-    try {
+    await withBubble({ generation: 3, client }, async ({ store, capture, bubble }) => {
       const revisionAtDispatch = store.current.revision;
       const probeA = bubble.probe(capture.editor, editAt(0, "aaaa"));
 
@@ -150,9 +138,8 @@ suite("LiveBubble stale-probe races", () => {
         "a probe dispatched before the ABA must not repaint the dropped cluster",
       );
       assert.equal(capture.visible(), undefined, "the surface stays empty");
-    } finally {
-      bubble.dispose();
-    }
+    
+    });
   });
 
   test("dispose() cancels the in-flight probe and strands its completion", async () => {

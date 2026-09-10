@@ -163,23 +163,6 @@ fn retired_data_clone_knobs_do_not_change_the_report() -> Result<()> {
     Ok(())
 }
 
-/// The stable, order-insensitive fingerprint of a report's ranking:
-/// `(rank, id, mass)` per cluster.
-fn rankable(report: &Value) -> Vec<(u64, &str, u64)> {
-    let mut rows: Vec<(u64, &str, u64)> = clusters(report)
-        .iter()
-        .map(|cluster| {
-            (
-                field(cluster, "rank").as_u64().unwrap_or(0),
-                cluster_id(cluster),
-                field(cluster, "mass").as_u64().unwrap_or(0),
-            )
-        })
-        .collect();
-    rows.sort_unstable();
-    rows
-}
-
 // [CLONE-NOISE-LITERAL-TABLE] verbatim escape hatch (#190): a
 // byte-for-byte copied table is genuine duplication and is byte-proven
 // like any copy — never misread as a shape-only family.
