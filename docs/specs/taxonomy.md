@@ -1,103 +1,119 @@
-# Clone taxonomy — pair classifications and the cluster kind
+# Code similarity categories
 
-## [CLONE-BUCKETS-NORTH-STAR] Taxonomy explains an explicit pair, and folds onto the cluster
+## [CLONE-BUCKETS-NORTH-STAR] What the four categories mean
 
-Deslop's clone taxonomy classifies two explicitly identified occurrences. It explains pair admission evidence to humans and agents. It is never a weight, a ranking input, or a mass input.
+| Category  |  What to expect  |  Research taxonomy  |  Counts as duplication? |
+| --- | --- | --- | --- |
+| **Identical code**  |  The same source text, apart from whitespace.  |  **Type-1** exact copies. Research also allows comment differences; Deslop's text-identity rule is stricter.  |  Yes |
+| **Nearly identical code**  |  The same work in almost the same code. Names, inputs, constants or messages may differ; small edits may be present.  |  **Type-2** renamed/parameterized copies and close **Type-3** copies with small edits.  |  Yes |
+| **Similar code**  |  Substantial copied work remains, but statements or control flow have changed enough that it is no longer a near-copy.  |  More extensively edited **Type-3** clones. This is not Type-4.  |  Yes, for established clone occurrences |
+| **Same shape, different content**  |  A similar layout, but none or almost none of the actual content is shared. Only the shape matches. **Not a clone; listed for interest.**  |  No research clone type. This is Deslop's informational category.  |  **No** |
 
-A cluster is many pairs, so no single pair's label describes it. Every cluster instead carries a **clone kind** ([CLONE-KIND-FOLD]): the weakest pair classification between its canonical occurrence and any other member. Cluster surfaces title the cluster by that kind and colour it by that kind ([CLONE-KIND-LABELS], [CLONE-KIND-COLOR]). Pair surfaces name both endpoints and may render the pair's own classification and evidence.
+The corpus pins known examples: CLEARLY IN must be found and CLEARLY OUT must not be reported as clones. Other code can qualify through sufficiently strong evidence; it need not already appear in the corpus. Shape without reasonable content similarity does not qualify.
 
-## [CLONE-KIND] The clone kind of a cluster
+Repeating the same calls in the same order with different arguments or test messages belongs in **Nearly identical code**. Changing names or values does not, by itself, make code shape-only. A systematic rename or parameter substitution is still a copy.
 
-### [CLONE-KIND-FOLD] The kind is the weakest relation to the canonical occurrence
+The optional fifth category, **Same behavior, different code**, corresponds to **Type-4**: equivalent work implemented in different ways. Deslop uses embedding evidence to find candidates; similarity between embeddings alone is not proof that a refactor preserves behaviour.
 
-The engine stamps every reported cluster with one `kind`, computed after ranking and before rendering. For each occurrence other than the first, the engine measures the pair `(canonical, occurrence)` using the shared structural, token and content calculations, admission algebra and classification. Its embedding input is the cosine already observed during that scan. The cluster's kind is the weakest of those readings:
+### [CLONE-BUCKETS-STRUCTURAL-ONLY] Shape-only is not duplication
 
-| Reading for some member | Kind the cluster can be at most |
-|---|---|
-| Every member is byte-identical to the canonical | `Identical` |
-| Every member is an admitted near-copy; at least one is not byte-identical | `NearlyIdentical` |
-| At least one member matches on embedding evidence alone | `SameBehavior` |
-| At least one member shares only normalised shape and fails the content guard | `StructuralOnly` |
-| At least one member is a looser admitted relation, or is not admitted against the canonical at all (welded in only through other members) | `LooselySimilar` |
+**Shape-only means matching structure with no or negligible content similarity. It is not a clone.** It is always the last category, below Similar, regardless of its size or number of matches.
 
-Strength order, strongest first: `Identical`, `NearlyIdentical`, `SameBehavior`, `StructuralOnly`, `LooselySimilar`. The fold never averages, never sums, and reads no cluster quantity. Mass, rank, and rank band never read the kind ([RANK-MASS-SUM]). The embedding axis of each folded pair is the cosine the embedding pass measured for that pair, or zero when the pass never measured it; the fold does not request a fresh embedding. An explicit `pair/compare` request measures its endpoints through the supplied embedding provider and can therefore have embedding evidence absent from the scan's recorded pairs. The two routes share the calculation, but their embedding inputs and resulting classifications need not be identical.
+Shape-only contributes nothing to duplicated lines, duplicated files, clone counts, duplicated mass, repository/file/folder/diff percentages or threshold breaches. Its source lines remain in the analysed-line denominator. Showing it, hiding it or enabling its diagnostics cannot change those figures ([METRICS-REPO](pipeline.md#metrics-repo-repo-wide-duplication-metrics)).
 
-A whole-file or whole-class occurrence that differs from the canonical only in a wrapper's name is not byte-identical, and the cluster is `NearlyIdentical`. Identity is a fact about the compared slices, not about the method inside them ([CLONE-BUCKETS-IDENTICAL]).
+Keep genuine clones inside a mixed group. An unrelated member must neither make its lines count nor hide a real copied subset. If a real clone and an informational finding cover the same line, that line counts once for the real clone.
 
-**For AI.** Wire: `ReportCluster.kind` and `ClusterSummary.kind`, one of `identical`, `nearly_identical`, `same_behavior`, `structural_only`, `loosely_similar`. Code: `crates/deslop-core/src/pipeline/session/pair_compare/cluster_kind.rs` (`ClusterKindMeasurer`, a `cluster::ClusterKindJudge`), folded through `buckets::ClusterKind::weaker`, stamped in `cluster::build_ranked_fused_clusters`, carried by `report_render::cluster_to_report`. Tests: `buckets::tests`, `crates/deslop/tests/cli/bucket_groups.rs`, `crates/deslop/tests/csharp_type1_type2_byte_truth.rs`, the golden `report-golden/expected-report.json`.
+Shape-only publishes no diagnostic by default, even when clone diagnostics are enabled. The user can explicitly choose another severity; it remains a non-clone ([SEVERITY-DIAGNOSTICS-STRUCTURAL-ONLY](severity.md#severity-diagnostics-structural-only-shape-only-is-silent-by-default)).
 
-### [CLONE-KIND-LABELS] One registry names each kind
+## [CLONE-TYPE-TAXONOMY] How this relates to the research
 
-| Kind | Title every cluster surface shows | Taxonomy name (tooltips, agent context) | HTML class suffix |
-|---|---|---|---|
-| `identical` | Identical code | Type-1 exact clone | `identical` |
-| `nearly_identical` | Nearly identical code | Type-2/3 near-copy | `nearly-identical` |
-| `same_behavior` | Same behavior, different code | Type-4 semantic clone | `same-behavior` |
-| `structural_only` | Same shape, different content | structural-only match | `structural-only` |
-| `loosely_similar` | Loosely similar code | weak Type-3 relation | `loosely-similar` |
+The standard taxonomy describes pairs of code fragments:
 
-The title names the relation and nothing else: no advice, no "safe to merge", no evidence sentence. The text report writes `kind=<wire label>`; the markdown, HTML, terminal summary, LSP diagnostic (`<title> × <count> — mass <mass>`), MCP summary, editor bubble, hover, tree row, webview, cluster document, and copy-for-AI payload all use the title from this table. The extension mirrors the table in `clients/vscode/src/types/report.ts`; its CLI parity test scans a fixture with the bundled CLI and asserts both sides print the same words.
+- **Type-1:** identical apart from whitespace and comments.
+- **Type-2:** the same structure with renamed identifiers, types or changed literals.
+- **Type-3:** a copy with added, removed or modified statements.
+- **Type-4:** equivalent behaviour implemented with different code.
 
-**For AI.** Code: `crates/deslop-core/src/buckets.rs` (`ClusterKind::labels`, `KindLabels`, `wire_label`). TypeScript: `kindTitle`, `kindTaxonomy`, `CLUSTER_KINDS` in `clients/vscode/src/types/report.ts`; parity pinned by `clients/vscode/src/test/unit/kind.unit.test.ts`.
+Deslop splits Type-3 between Nearly identical and Similar for readability. That boundary is a product choice, not a fifth research type. Shape-only is outside the clone taxonomy. Source: [Roy, Cordy and Koschke, 2009](https://doi.org/10.1016/j.scico.2009.02.007).
 
-### [CLONE-KIND-COLOR] Colour follows the kind; the glyph follows the rank band
+## [CLONE-KIND] How a group gets its label
 
-Every cluster surface has two visual channels and never mixes them:
+### [CLONE-KIND-FOLD] Compare the actual members
 
-- **Colour** is the clone kind, from one table. Crimson `#b3261e` is `identical` — the only kind whose evidence is character-by-character proof. Amber `#e8912d` is `nearly_identical`. Violet `#a98cff` is `same_behavior`. Muted `#a9a2a0` is `structural_only`. Blue `#00619e` is `loosely_similar`. The Top Offenders tree also gives each kind its own icon (`circle-filled`, `circle-large-filled`, `sparkle`, `circle-slash`, `circle-outline`) so kinds stay distinct without colour.
-- **Glyph density** is the mass rank band ([SEVERITY-BAND]): `●●` worst, `●` top 10%, `◐` mid, `○` faint.
+Compare each member with the group's reference occurrence. Use the weakest **established** relation to describe the group, while preserving stronger clone subsets. A chain of matches does not prove that its first and last members match. Separate groups where necessary; a rejected or unmeasured comparison must not turn near-copies into Similar code.
 
-A shape-only family that ranks first by mass is muted; a byte-identical cluster in the faint tail is crimson. Rank never chooses a colour.
+Classify and separate informational findings before applying [RANK-MASS-SUM](pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only) and [METRICS-REPO].
 
-One table is the paint. The extension declares it once in `clients/vscode/src/design.ts` (`KIND_COLOR`); the tree reads the contributed VS Code theme colours `deslop.kind.*`, whose defaults in `package.json` are the same values; the webviews import that same table; the HTML report declares the same values as `--kind-*` CSS variables. The parity test in `kind.unit.test.ts` holds the copies together.
+### [CLONE-KIND-LABELS] Use the same names everywhere
 
-### [CLONE-KIND-TESTING] Acceptance
+| Kind | Display title | Research label |
+|---|---|---|
+| `identical` | Identical code | Type-1 exact clone |
+| `nearly_identical` | Nearly identical code | Type-2 / close Type-3 clone |
+| `same_behavior` | Same behavior, different code | Type-4 semantic clone |
+| `loosely_similar` | Similar code | Type-3 clone with larger edits |
+| `structural_only` | Same shape, different content | Informational non-clone |
 
-Tests assert: a byte-identical pair folds to `identical` and a renamed pair to `nearly_identical`, in rank order; a wrapper-renamed whole-class occurrence is `nearly_identical`, not `identical`; a shape-only rank-1 cluster is painted muted while a smaller byte-identical cluster is crimson; every kind has a distinct colour and icon; the tree, bubble, decoration, and webview read the one table; the extension's titles equal the CLI's; every renderer titles the cluster by its kind and none prints the retired neutral `Duplicate code`; no cluster surface renders pair evidence values.
+This is the category display order. `loosely_similar` remains the machine key; its human title is **Similar code**. Every renderer, tree, hover, diagnostic and Copy Context For AI uses this registry. Titles describe the relation; they do not promise that merging is safe. Diagnostic defaults and user overrides come from [SEVERITY-DESLOP-MAP](severity.md#severity-deslop-map-defaults-when-diagnostics-are-enabled), not from mass rank.
 
-## [CLONE-BUCKETS] Canonical pair classifications
+### [CLONE-KIND-COLOR] Colour describes the category
 
-| Pair kind | Plain title | Technical label | Meaning for the exact pair |
-|---|---|---|---|
-| `Identical` | Identical code | Type-1 | The two raw slices are byte-equivalent after ASCII-whitespace folding. |
-| `NearlyIdentical` | Nearly identical code | Type-2/3 | The pair has strong normalized shape or token evidence and content support. |
-| `SameBehavior` | Same behavior, different code | Type-4 | The pair has strong embedding support despite low syntactic similarity. |
-| `StructuralOnly` | Same shape, unsupported content | structural-only candidate | Normalized shape agrees but the required pair-content support is absent; classification does not admit the pair. |
-| `LooselySimilar` | Weakly similar candidate | weak candidate | The measured pair lacks enough corroboration; classification does not admit the pair. |
+Use crimson for Identical, amber for Nearly identical, violet for Same behavior, blue for Similar, and muted grey for shape-only. Keep an icon for each so colour is not the only distinction.
 
-Pair classification and pair admission are distinct outputs. [FUSED-STRATEGY-BOUNDED-MAX] alone decides `admitted`; a label never admits a pair. An admitted edge never donates its label to a component: the component's kind is the fold over every member's comparison with the canonical occurrence ([CLONE-KIND-FOLD]), not any one edge.
+### [CLONE-KIND-TESTING] Required examples and assertions
 
-### [CLONE-BUCKETS-DUAL-LABEL] Labelling policy
+CLI fixtures must cover exact copies, consistent renames, the same calls with changed inputs/messages, small edits, larger edits, and shape-only matches. Assert category, occurrence count, paths and order. Include a mixed group so unrelated content cannot hide near-copies.
 
-An explicit visual pair view uses the plain title. Shared text uses `Plain title [technical label]`. Machine pair records carry the enum, title, technical label, endpoints, evidence, and admission result.
+A corpus containing only shape-only information must report zero duplication. A mixed corpus must count only its genuine clone lines, once, with exact repository/file/folder/diff percentages and threshold verdicts. Shape-only appears last and changing its visibility or diagnostic severity changes none of those figures. Diagnostic defaults and overrides must pass [SEVERITY-TESTING](severity.md#severity-testing-required-checks).
 
-No surface may render a pair's classification or evidence without identifying both endpoints. Cluster cards, trees, diagnostics, reports, MCP cluster results, and AI cluster context render the cluster's folded kind ([CLONE-KIND-LABELS]) and never a single pair's classification, evidence sentence, or measured values.
+## [CLONE-IMPLEMENTATION] For AI: implementation contract
 
-One core registry owns the titles and technical labels ([CLONE-KIND-LABELS]); pair UI, pair serializers, and cluster renderers all reuse it.
+### [CLONE-BUCKETS] Pair classifications
 
-### [CLONE-BUCKETS-ROUTING] Evidence to pair classification
+Classifications describe two explicit source ranges. `Identical`, `NearlyIdentical`, `SameBehavior` and `LooselySimilar` require the corresponding clone evidence. `StructuralOnly` is informational and never admitted as a clone. Other rejected or unmeasured pairs receive no clone classification; they must not fall into a catch-all LooselySimilar bucket.
 
-Classification reads the same exact pair evidence as admission. It runs for explicit comparison whether the pair was admitted or rejected.
+### [CLONE-BUCKETS-DUAL-LABEL] Label ownership
 
-| Condition, evaluated top-down | Pair kind |
-|---|---|
-| Raw slices are byte-equivalent after ASCII-whitespace folding | `Identical` |
-| `embedding_cos ≥ embedding_support_floor` and syntactic shape is low | `SameBehavior` |
-| The pair is admitted through strong normalized shape or token evidence with applicable content support | `NearlyIdentical` |
-| Normalized shape is strong but applicable content support fails | `StructuralOnly` |
-| Otherwise | `LooselySimilar` |
+Pair records identify both endpoints and may include their evidence and admission decision. Group records carry their kind and membership, never one selected pair's measurements. Clone records also carry mass and rank; informational records do not claim those duplicate quantities.
 
-All numeric thresholds are named configuration values defined by [FUSED-TUNING-LEVERS]. Admission and ranking never read pair classification; the report build reads it only to fold the cluster kind after ranking ([CLONE-KIND-FOLD]).
+### [CLONE-BUCKETS-ROUTING] Classification must match the definitions
 
-Embedding-carried pairs still obey [CLONE-NOISE-EMBEDDING-ROLE-MISMATCH]. Literal comparisons produced by the value-level join use raw-value equality for `Identical`; otherwise they are `NearlyIdentical` when admitted.
+Use the shared pair measurement and admission rules ([FUSED-CONTENT-GATE], [FUSED-STRATEGY-BOUNDED-MAX]). Exact text proof selects Identical. A consistent rename, parameter substitution or near-copy selects NearlyIdentical. An established copy with substantial edits selects LooselySimilar. Independent evidence of equivalent behaviour with different code selects SameBehavior.
 
-### [CLONE-BUCKETS-IDENTICAL] Identity is a pair proof
+Identical normalized structure with no or negligible content similarity and no independent evidence strong enough to establish a clone selects StructuralOnly. Failing `content_gate.support_floor` or `content_gate.promote_floor` is not enough: moderate content similarity is not negligible. Near-zero content uses `routing.shape_only_max_content`; category defaults and TOML keys are listed below. Missing measurements are unknown, not proof of zero similarity.
 
-`Identical` requires byte-equivalence of the two compared raw slices after folding ASCII whitespace. Normalized structural and token equality are insufficient because normalization collapses identifiers and literals. Missing source bytes cannot prove identity. A cluster is `identical` only when every member's slice is byte-equivalent to the canonical slice ([CLONE-KIND-FOLD]); nothing is inferred from normalised equality.
+Do not lower admission thresholds merely to repair a misleading label. Consistent renaming, parameter substitutions and shared copied operations are content evidence even when many raw names or literals differ. Classification must consider that evidence. Every relation lacking meaningful content similarity and independent evidence strong enough to establish a clone is excluded from metrics regardless of its label.
 
-## [CLONE-CATEGORY-REGISTRY] Finding kinds do not classify closure components
+### [CLONE-BUCKETS-THRESHOLDS] Defaults and TOML settings
 
-Logic/data-table and literal-family kinds describe how a dedicated detector found a repetition. They may control detection-time visibility or an occurrence-level action, but they never classify a pair, appear as a cluster similarity label, or change mass.
+These settings classify a pair after the clone-admission checks. They never make a rejected pair into a clone. Exact copies and proven consistent renames/parameter substitutions keep their Identical/Nearly identical classification without a raw-name similarity penalty.
+
+| TOML key under `[tuning.routing]` | Default | Meaning |
+|---|---|---|
+| `nearly_identical_min_shape` | `0.90` | Minimum code-structure similarity for the general near-copy route. |
+| `nearly_identical_min_content` | `0.70` | Minimum content support for that route. |
+| `similar_min_content` | `0.50` | Minimum content support for the general Similar route; the pair must also pass clone admission. |
+| `shape_only_max_content` | `0.05` | At most this much content support counts as none or negligible, provided shape matches and no independent clone evidence qualifies. |
+
+**These are new, provisional classification defaults, pending corpus validation and implementation.** They are Deslop settings, not research-mandated boundaries. Content support uses matching content or consistent-renaming evidence, not just equal identifier spellings. Pairs between the Similar minimum and the shape-only maximum are not silently counted as clones. Missing evidence is not zero evidence.
+
+```toml
+[tuning.routing]
+nearly_identical_min_shape = 0.90
+nearly_identical_min_content = 0.70
+similar_min_content = 0.50
+shape_only_max_content = 0.05
+```
+
+All values must be finite and within `[0, 1]`; require `shape_only_max_content < similar_min_content <= nearly_identical_min_content`. Reject invalid settings. [FUSED-TUNING-LEVERS] lists the existing admission, structural, token and embedding thresholds with their defaults; all remain configurable through `.deslop.toml`. Classification must not confuse admission floors with the near-zero ceiling. Record effective settings in reports. Before implementation is accepted, corpus and CLI assertions must verify every default, boundary and override, including changed arguments/messages remaining Nearly identical.
+
+### [CLONE-BUCKETS-IDENTICAL] Identity needs source text
+
+`Identical` requires byte-equivalence of the compared source slices after ASCII-whitespace folding. Equal normalized trees or token signatures cannot prove it because names and literals have been removed. Missing source cannot prove identity. Every member of an Identical group must satisfy this rule against its reference. An unchanged method does not make its containing class Identical if the class name differs.
+
+### [CLONE-CATEGORY-REGISTRY] Other finding kinds
+
+These describe dedicated findings rather than research clone types. They never turn an informational finding into a clone or alter the clone mass formula.
 
 | Finding kind | Wire label | Purpose |
 |---|---|---|
@@ -109,15 +125,8 @@ Logic/data-table and literal-family kinds describe how a dedicated detector foun
 | `ConstantDrift` | `constant_drift` | Same constant name resolves to conflicting values. |
 | `ConstantAlias` | `constant_alias` | One value has several constant names. |
 
-A closure-component cluster record does not carry this finding kind; it carries the clone kind of [CLONE-KIND-FOLD]. Dedicated literal-finding records may carry the finding kind under [LITERAL-WIRE].
+Dedicated literal records follow [LITERAL-WIRE]. Generated wire models must keep informational findings distinct from clone counts and ranking; update `docs/models/live-ipc.td`, never hand-written wire types.
 
-## [CLONE-TYPE-TAXONOMY] Academic reference
+### [CLONE-IMPLEMENTATION-STATUS] Required implementation work
 
-The Type-1 through Type-4 taxonomy is standard in clone-detection literature (Bellon/Koschke; Roy/Cordy). It describes a relation between code fragments, which is why Deslop measures it on pairs and folds it onto a component only through the component's canonical occurrence ([CLONE-KIND-FOLD]).
-
-- Type-1: identical code aside from layout and comments.
-- Type-2: identical structure with identifier, literal, or type renaming.
-- Type-3: Type-2 plus added, removed, or modified statements.
-- Type-4: semantically equivalent code with different syntax or algorithms.
-
-Embeddings provide optional Type-4 candidate and admission evidence. With embeddings off, that evidence is unavailable; deterministic pair admission continues unchanged on the other axes.
+This revised contract is specified, not yet implemented or verified. Relevant owners: `buckets.rs` (labels), `pipeline/session/pair_compare/cluster_kind.rs` (group classification), `report_metrics.rs` (counting), `report_weight.rs` (clone ranking), LSP diagnostics and VSIX renderers. Acceptance belongs in `crates/deslop/tests/cli/bucket_groups.rs`, `crates/deslop/tests/cli/metrics.rs`, the pair-comparison suites and diagnostic/VSIX suites. Preserve existing assertions and add the cases above when implementing.

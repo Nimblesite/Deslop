@@ -8,7 +8,7 @@ It must reach **full feature parity with the VS Code extension** (`clients/vscod
 Today it does not: it is a thin LSP bridge plus an HTML-report tool window. This
 file is the authoritative gap list so the next pass has the complete checklist.
 
-The plugin must stay thin. Kotlin owns editor integration, settings UI, tool windows, and context-menu actions only. Clone detection, mass ranking, report schema, mass severity, exact pair comparison, and embedding-model discovery stay in Rust behind the LSP custom methods (`deslop/reportGet`, `deslop/comparePair`, `deslop/embeddingListModels`, …). Kotlin never infers or selects pair evidence for a cluster. Do not port the VSIX webviews and do not parse hover markdown to recover structured data.
+The plugin must stay thin. Kotlin owns editor integration, settings UI, tool windows, and context-menu actions only. Clone detection, mass ranking, report schema, diagnostic severity, exact pair comparison, and embedding-model discovery stay in Rust behind the LSP custom methods (`deslop/reportGet`, `deslop/comparePair`, `deslop/embeddingListModels`, …). Kotlin never infers or selects pair evidence for a cluster. Do not port the VSIX webviews and do not parse hover markdown to recover structured data.
 
 ## Landed
 
@@ -44,7 +44,7 @@ The plugin must stay thin. Kotlin owns editor integration, settings UI, tool win
 | Embedding model picker | `deslop.pickEmbeddingModel` QuickPick | **Missing** | native popup over `deslop/embeddingListModels` + `deslop/embeddingSetModel` |
 | Settings UI (the ~18 `deslop.*` settings) | VS Code settings | **Missing** | `DeslopSettings` persists the contract but there is no IDE settings page; launch is `.deslop.toml`-driven, embeddings forced off |
 | Live bubble | `deslop.liveBubble.*` | **Missing** | |
-| Severity colours (mass rank band) | client `severity.ts` | **Missing** | gutter/lens/tree colour channel |
+| Diagnostic severity by kind | client `severity.ts` | **Missing** | shared diagnostic defaults and overrides |
 | Selected-cluster synchronisation | client signal | **Missing** | lock editor caret ↔ tree ↔ detail |
 | Toggle all code lenses / schema doc / reveal CPU report / reveal active binary | commands | **Missing** | low priority |
 

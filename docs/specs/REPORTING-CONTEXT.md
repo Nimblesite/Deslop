@@ -1,73 +1,53 @@
-# Report context — cluster mass and explicit pair evidence
+# Reading a Deslop report
 
-## [REPORT-CONTEXT-SCOPE] What the report says
+## [REPORT-CONTEXT-SCOPE] Definitions
 
-Deslop detects duplicated code with normalized AST fingerprints, token MinHash/LSH, and optional embeddings. The report lists closure components worst-first by duplicated mass. It assigns no similarity score or evidence values to a component; each component carries a clone kind, the weakest pair classification between its canonical occurrence and any other member ([CLONE-KIND-FOLD]).
+Use the [category guide](taxonomy.md) for category meanings, research types, display order and thresholds. [Diagnostic severity](severity.md) defines diagnostic defaults and overrides. [Weight](pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only) and [duplication metrics](pipeline.md#metrics-repo-repo-wide-duplication-metrics) have one calculation each in the engine.
 
-## [REPORT-CONTEXT-PIPELINE] How a finding forms
+## [REPORT-CONTEXT-PIPELINE] How findings form
 
-Candidate generation proposes concrete pairs through exact fingerprints, token LSH, or embedding neighbours. For each candidate pair, the engine measures structural similarity, token Jaccard, embedding similarity, content agreement, and rename consistency. The complete pair admission rule decides whether that pair becomes an edge. Connected components of admitted edges are the cluster inputs. After closure, [CLONE-NOISE-VERBATIM-SUBGROUP] may replace a component that a noise filter actually convicts with its qualifying byte-identical families and drop outsiders; a component no filter convicts remains untouched. This is the only post-closure partition and it neither changes admission nor creates cluster evidence.
+The engine compares source ranges, applies the [admission rules](admission.md), and groups qualifying matches under [CLONE-KIND-FOLD](taxonomy.md#clone-kind-fold-compare-the-actual-members). Informational matches follow [CLONE-BUCKETS-STRUCTURAL-ONLY](taxonomy.md#clone-buckets-structural-only-shape-only-is-not-duplication). A connection through other members does not prove that two selected occurrences match.
 
-Cross-language comparison is off by default. `.deslop.toml` may enable `[analysis] allow_cross_language_comparison = true`. Boilerplate and noise filters operate under their own explicit contracts; they do not manufacture a cluster score.
-
-## [REPORT-CONTEXT-CLUSTER] How to read a cluster
-
-A cluster record contains identity, occurrence membership, canonical extent, duplicated mass, rank, and clone kind. Its essential fields are:
+## [REPORT-CONTEXT-CLUSTER] Group fields
 
 | Field | Meaning |
 |---|---|
-| `id` | Stable 16-character cluster identity. |
-| `rank` | One-based position in the engine's mass-descending order. |
-| `kind` | The clone kind: `identical` (every member byte-identical to the canonical), `nearly_identical`, `same_behavior`, `structural_only`, or `loosely_similar` — the weakest pair classification against the canonical occurrence ([CLONE-KIND-FOLD]). |
-| `mass` | Duplicated mass exactly. |
-| `canonical_node_count` | Normalized AST nodes in the canonical extent. |
+| `id` | Stable group identity. |
+| `kind` | Category from [CLONE-KIND-LABELS](taxonomy.md#clone-kind-labels-use-the-same-names-everywhere). |
+| `rank` | Engine-assigned position among actual clones. |
+| `mass` | Clone weight under [RANK-MASS-SUM](pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only). |
+| `canonical_node_count` | AST size of the reference occurrence; size alone does not establish a clone. |
 | `occurrence_count` | Number of visible occurrences. |
-| `occurrences[]` | Exact file paths and byte ranges belonging to the component. |
+| `occurrences[]` | File paths and exact source ranges. |
 
-The mass formula is:
+Informational records follow the exclusions in [CLONE-BUCKETS-STRUCTURAL-ONLY]. Consumers display the engine's counts and order without recalculating them.
 
-$$
-\mathrm{mass}(c)=\mathrm{canonical\_node\_count}(c)\times\max(\mathrm{visible\_occurrences}(c)-1,0)
-$$
+## [REPORT-CONTEXT-PAIR] Comparing two occurrences
 
-A component with fewer than two visible occurrences has zero mass and is not a reported duplicate. Clusters sort by mass descending and cluster id ascending. Similarity evidence, pair classification, category, confidence, file spread, and policy multipliers never change mass or order.
-
-## [REPORT-CONTEXT-PAIR] How to read pair evidence
-
-Pair evidence exists only for two explicitly identified occurrences. A pair response names both endpoints and may contain:
+A pair response identifies both source ranges. Its evidence explains that comparison only:
 
 | Field | Meaning |
 |---|---|
-| `structural` | Normalized-AST structural similarity for this pair. |
-| `token_jaccard` | MinHash estimate of normalized token-set Jaccard for this pair. |
-| `embedding_cos` | Embedding cosine similarity for this pair, when measured. |
-| `agreement` | Raw content agreement for this pair. |
-| `rename_consistency` | Consistent-renaming support for this pair. |
-| `literal_fraction` | Literal share measured for this pair. |
-| `text_identity` | How far the two raw ranges are the same text: `byte_identical`, `indentation_only` (the same lines once each line's leading whitespace is removed, so a diff of them shows indentation and nothing else), or `different`. |
-| `admitted` | Whether this exact pair passed the admission contract. |
-| `classification` | Optional presentation classification of this exact pair. |
+| `structural` | Similarity of parsed code structure. |
+| `token_jaccard` | Similarity of normalized token sets. |
+| `embedding_cos` | Embedding similarity, when measured. |
+| `agreement` | Matching source content. |
+| `rename_consistency` | Support for consistent renaming. |
+| `literal_fraction` | Share of literal values. |
+| `text_identity` | `byte_identical`, `indentation_only`, or `different`. |
+| `admitted` | Whether this pair passed admission. |
+| `classification` | Pair category under [CLONE-BUCKETS-ROUTING](taxonomy.md#clone-buckets-routing-classification-must-match-the-definitions). |
 
-These values explain why the exact edge was or was not admitted. They do not describe the other edges in a transitive closure and must never be copied onto a cluster. There is no automatic pair selection for a cluster.
+Do not apply one pair's measurements to the whole group. Exact calculations belong to [admission.md](admission.md).
 
-## [REPORT-CONTEXT-METRIC] Repository duplication percentage
+## [REPORT-CONTEXT-METRIC] Duplication percentage
 
-The report carries one repository duplication percentage:
+`Report.metrics` contains the engine's [METRICS-REPO](pipeline.md#metrics-repo-repo-wide-duplication-metrics) values. All renderers use these values, including their exclusions and denominator. The configured threshold and exit behaviour follow [EXIT-CODES].
 
-$$
-\mathrm{duplication\_percent}=\begin{cases}0 & \mathrm{analysed\_loc}=0\\100\times\mathrm{duplicated\_loc}/\mathrm{analysed\_loc} & \mathrm{otherwise}\end{cases}
-$$
+## [REPORT-CONTEXT-ACTION] Reviewing findings
 
-`duplicated_loc` counts physical lines covered by at least two non-hidden fragment-clone occurrences, deduplicated per file. `analysed_loc` counts physical lines in analyzed files. Pair evidence never weights a line. There is no evidence-weighted companion percentage.
+Review actual clones in rank order. Compare the concrete source ranges before deciding how to merge them. Category meanings and informational handling come from the [category guide](taxonomy.md); diagnostic settings do not change clone status.
 
-`--fail-over <percent>` or `[threshold] max_duplication_percent` exits with code `3` when the engine-computed percentage exceeds the configured threshold. No threshold means no duplication gate.
+## [REPORT-CONTEXT-METADATA] Rendering
 
-## [REPORT-CONTEXT-ACTION] How to act on a report
-
-Work from highest mass downward. Inspect the occurrence membership and exact byte ranges. Before a refactor depends on similarity or consistent renaming, explicitly compare the concrete source and target occurrences involved in that edit. Never treat one pair's evidence as proof about the entire component.
-
-Generated-code exclusions and `report_hide` rules affect visibility, not pair evidence or the mass formula. Import-only repetition is boilerplate hygiene rather than a clone finding.
-
-## [REPORT-CONTEXT-METADATA] Canonical rendering contract
-
-The text and HTML reports are renderers over the canonical engine model. Cluster surfaces render identity, kind, membership, mass, and rank; the kind is titled from one registry ([CLONE-KIND-LABELS]). Pair surfaces render the exact two endpoints and their engine-computed evidence. Consumers do not recompute percentages, mass, admission, or evidence.
+Every surface uses the shared category titles and engine figures. Show pair measurements only when both endpoints are identified. Do not recalculate admission, weight or percentages in clients.

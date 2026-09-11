@@ -55,7 +55,7 @@ Deslop's only `initialize` capabilities are therefore **purely additive** — ea
 | `textDocumentSync = Incremental` | Track in-memory edits so the daemon can analyse buffer contents before save. Affects no editor command. |
 | `codeLensProvider` | Inline "N copies of this block — jump to next" badge at the head of every clone occurrence. A Deslop-owned lens, never a standard feature. |
 | `executeCommandProvider` | Deslop's own `deslop.*` verbs ([LSP-COMMANDS]): refresh report, open full report, pick embedding model, etc. |
-| `diagnosticProvider` (pull-based, LSP 3.17) | Publish clone occurrences as diagnostics. **Off by default** ([severity.md §SEVERITY-DIAGNOSTICS-GATE](severity.md#severity-diagnostics-gate)); when enabled, severity follows the engine-stamped mass rank band ([LSP-SEVERITY]). Additive Problems-panel entries never replace another tool's diagnostics. |
+| `diagnosticProvider` (LSP 3.17 pull) | Apply [SEVERITY-DIAGNOSTICS](severity.md#severity-diagnostics-resolve-the-configured-level) and [SEVERITY-DIAGNOSTICS-GATE](severity.md#severity-diagnostics-gate-master-switch). Deslop diagnostics are additive and never replace another tool's diagnostics. |
 | `workspace/didChangeWatchedFiles` | Register for writes outside the editor (build output, generated files, `git checkout`). |
 | Custom: `deslop/*` | Methods listed in [LSP-CUSTOM-METHODS] — all namespaced; never a standard request. |
 
@@ -71,30 +71,13 @@ Every Deslop request handler that reads the report (`diagnostic`, `codeLens`) an
 
 ### [LSP-SEVERITY] Diagnostic severity — the Problems-panel projection
 
-The LSP is one consumer of the mass-only severity model defined in [severity.md §SEVERITY-MODEL](severity.md#severity-model). This section owns how that diagnostic projection reaches the Problems panel. Pair evidence and pair classification are unavailable to severity resolution.
+The LSP consumes the configurable kind-to-diagnostic map in [SEVERITY-MODEL](severity.md#severity-model-severity-means-diagnostic-severity). This section owns how it reaches the Problems panel. Resolution reads the engine-authored kind, not raw pair evidence; mass rank never selects diagnostic severity.
 
-#### [LSP-SEVERITY-BUCKET] Mass rank band determines severity
+#### [LSP-SEVERITY-BUCKET] Kind determines default diagnostic severity
 
-Every cluster diagnostic derives from the engine-stamped mass rank band: `worst → Error`, `top10 → Warning`, `mid → Information`, and `faint → Hint`. Resolution lives in `crates/deslop-lsp/src/diagnostics.rs::severity_for` and is the single source of truth. Clients consume the published diagnostic rather than recomputing rank or reading pair evidence.
+Use the defaults, override rules and validation in [SEVERITY-CONFIG](severity.md#severity-config-configuration). `crates/deslop-lsp/src/diagnostics.rs::severity_for` is the single resolver; clients consume its result.
 
-#### [LSP-SEVERITY-PERCENTILE] Secondary axis: mass-percentile thresholds
-
-**Status: ⏳ Planned (#177).** Percentile floors are not yet implemented. A cluster is published only when its engine-stamped mass percentile meets the configured floor for the resolved severity.
-
-| Percentile threshold setting | Default | Effect |
-|---|---|---|
-| `deslop.severity.errorPercentileFloor` | `0` (all) | Only clusters at or above this percentile floor publish as `Error`. |
-| `deslop.severity.warningPercentileFloor` | `0` (all) | Only clusters at or above this floor publish as `Warning`. |
-| `deslop.severity.informationPercentileFloor` | `0` (all) | Only clusters at or above this floor publish as `Information`. |
-| `deslop.severity.hintPercentileFloor` | `0` (all) | Only clusters at or above this floor publish as `Hint`. |
-
-**Percentile is computed across the whole report, not per file.** The defaults (`0`) publish every cluster. Teams that want only the worst 10% by mass to raise diagnostics set the applicable percentile floor to `90`.
-
-Because severity depends on the global mass set, the diagnostic provider declares `inter_file_dependencies: true` ([LSP-CAPABILITIES]); editing one file can shift every other file's percentile, and the client must refresh the corresponding diagnostics.
-
-Clusters below the configured mass percentile remain visible via code lens, hover, and the VSIX tree; pair classifications do not affect diagnostic publication.
-
-**Diagnostic resolution is stateless per cluster**: `gate_enabled → mass percentile → configured severity → publish or suppress` ([severity.md §SEVERITY-DIAGNOSTICS-GATE](severity.md#severity-diagnostics-gate)). Resolution lives in `crates/deslop-lsp/src/diagnostics.rs`; no pair score, content evidence, or pair classification is legal input.
+Diagnostic resolution is `master switch → configured kind severity → scope → publish or suppress`. `none` suppresses publication. Pull and push use the same resolver; configuration changes refresh diagnostics without re-analysis ([SEVERITY-CONFIG]).
 
 ### [LSP-DIAGNOSTICS] Diagnostic content
 
@@ -102,8 +85,8 @@ Each published diagnostic carries:
 
 - `range` — derived from `(start_byte, end_byte)` of the occurrence on this file, using the open buffer's line-index.
 - `severity` — per [LSP-SEVERITY].
-- `data` — `{ "cluster_id": <16-char cluster id>, "kind": <clone kind>, "mass", "rank", "rank_band" }`. The stable cluster id lets an agent call `deslop/clusterById` without parsing the message ([LSP-AGENT-FRIENDLY]); the kind is the engine's fold ([CLONE-KIND-FOLD]); cluster diagnostics carry no pair evidence.
-- `message` — `"<kind title> × <count> — mass <mass>"`, e.g. `Identical code × 3 — mass 144` ([CLONE-KIND-LABELS]). The message states the cluster's kind, membership, and mass. Pair scores and explanations appear only after an explicit comparison identifies both endpoints ([FUSED-PAIR-SIGNALS]).
+- `data` — stable finding identity and engine-authored `kind`; clone diagnostics also carry `mass` and `rank`. Shape-only diagnostics enabled by override omit duplicate mass and ranking metadata. No diagnostic carries pair evidence ([LSP-AGENT-FRIENDLY], [CLONE-KIND-FOLD](taxonomy.md#clone-kind-fold-compare-the-actual-members)).
+- `message` — clones use `"<kind title> × <count> — mass <mass>"`, e.g. `Identical code × 3 — mass 144`. Opted-in shape-only diagnostics say `"Same shape, different content — informational, not a clone"` and never claim duplicated mass ([CLONE-KIND-LABELS](taxonomy.md#clone-kind-labels-use-the-same-names-everywhere)). Pair explanations require explicit endpoints ([FUSED-PAIR-SIGNALS]).
 - `source` — `"deslop"`.
 - `tags` — never `Unnecessary` or `Deprecated`; duplication isn't dead code.
 - `relatedInformation` — one entry per *other* occurrence of the cluster, with its `Location` and "occurrence N of M" label. This is what makes the Problems panel jumpable across occurrences.
@@ -124,7 +107,7 @@ Pull-based diagnostics only travel to the editor for files the client actively p
 
 - After every `report/changed`, the LSP iterates the cluster set, groups occurrences by file, and pushes one `publishDiagnostics` per offender file with the full per-file diagnostic list (same payload `diagnostic()` would have produced for a pull).
 - Files that drop out of the offender set in a later pass receive an empty `publishDiagnostics` so the editor clears their stale entries — this is non-negotiable per [LSP-PUSH] reactivity.
-- Severity, percentile gating, and message content are identical to pull mode — `[LSP-SEVERITY]` is the single source of truth.
+- Diagnostic severity and messages use the same resolver as pull mode ([LSP-SEVERITY]).
 - Pull (`textDocument/diagnostic`) keeps working in both modes; `workspace` mode is additive, never replacing the pull path.
 
 `open-files` is the default because pushing thousands of diagnostics on first open of a large workspace is noisy and slows the editor's Problems panel; users who want full coverage opt in. The setting is workspace-scoped (`scope: "window"` in the VSIX) and forwarded to the LSP at `initialize` and on `workspace/didChangeConfiguration`.
@@ -134,10 +117,10 @@ Pull-based diagnostics only travel to the editor for files the client actively p
 At the first line of every clone occurrence, a code lens reads:
 
 ```
-●● 4 copies · mass 142 — jump to next
+4 copies · mass 142 — jump to next
 ```
 
-The leading glyph (`●●`) matches the mass-derived diagnostic severity. The title contains cluster membership and mass only. Plain text is mandatory because clients render a lens title verbatim.
+The lens title states the category and occurrence count, plus mass for actual clones. Shape-only information is identified as a non-clone. Use plain text.
 
 Clicking the lens runs the Deslop-owned `deslop.jumpToNextOccurrence` command, which cycles through the remaining occurrences, wrapping at the end. It deliberately does **not** route through `textDocument/definition` ([LSP-NON-INTERFERENCE]) — the code lens carries its own command so canonical navigation never touches the editor's Go To Definition. Shift-click runs `deslop.openCluster` (see [LSP-CUSTOM-METHODS]).
 
@@ -261,7 +244,7 @@ The LSP does not attempt to auto-surface clone warnings to the agent — the age
 Coarse E2E only, per CLAUDE.md. `crates/deslop-lsp/tests/cli.rs` spawns the real LSP binary, talks JSON-RPC over stdio, and asserts against:
 
 - `initialize` + `initialized` handshake returning expected capabilities.
-- Opening a fixture workspace produces diagnostics on the known-clone files.
+- With the master diagnostic gate enabled, opening a fixture workspace produces the configured kind severity on known-clone files and no shape-only diagnostic by default ([SEVERITY-TESTING](severity.md#severity-testing-required-checks)).
 - Editing a buffer triggers `deslop/reportChanged` with a non-empty delta.
 - `deslop/reportForRange` returns the expected cluster for a known range.
 - `deslop/duplicatesFindSimilar` returns the expected cluster for a hand-crafted snippet.

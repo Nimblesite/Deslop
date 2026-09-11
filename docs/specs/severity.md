@@ -1,62 +1,54 @@
-# Severity model
+# Diagnostic severity
 
-### [SEVERITY-MODEL] Severity is a projection of mass rank
+### [SEVERITY-MODEL] Severity means diagnostic severity
 
-Cluster severity communicates duplicated impact. It is derived only from the engine-stamped mass rank band. Structural, Jaccard, embedding, content, rename, and literal values are forbidden inputs because they belong to concrete pairs, and the clone kind ([CLONE-KIND-FOLD]) is a separate channel that never changes severity.
+Severity controls the editor's diagnostic level. It is separate from clone weight and ranking, and never changes duplication percentages.
 
-Severity is presentation metadata, not a second weight. It never changes cluster mass, rank, membership, kind, or repository metrics.
+### [SEVERITY-DESLOP-MAP] Defaults when diagnostics are enabled
 
-### [SEVERITY-DESLOP-MAP] One fixed mass-band map
-
-| Rank band | Severity |
+| Category | Default diagnostic |
 |---|---|
-| `worst` | `error` |
-| `top10` | `warning` |
-| `mid` | `information` |
-| `faint` | `hint` |
+| Identical code | Warning |
+| Nearly identical code | Warning |
+| Same behavior, different code | Information |
+| Similar code | Information |
+| Same shape, different content | None |
 
-The map is shared by the CLI, HTML, LSP, VSIX, and agent surfaces. Consumers read `rank_band` and do not recompute percentiles.
+One shared map owns these defaults. A clone's size or rank does not change its diagnostic level.
 
-### [SEVERITY-DIAGNOSTICS] Diagnostic severity uses the same map
+### [SEVERITY-DIAGNOSTICS] Resolve the configured level
 
-When diagnostics are enabled, the LSP projects [SEVERITY-DESLOP-MAP] into the editor's diagnostic enum. There is no bucket-specific or pair-specific override. A disabled diagnostic does not remove the cluster from other surfaces.
+Use the finding's kind and `deslop.diagnostics.severityByKind`. Missing entries use the defaults above. `none` means no diagnostic; `hint`, `information`, `warning` and `error` map directly to the editor's levels.
 
-### [SEVERITY-DIAGNOSTICS-GATE] Diagnostics default off
+### [SEVERITY-DIAGNOSTICS-STRUCTURAL-ONLY] Shape-only is silent by default
 
-`deslop.diagnostics.enabled` defaults to `false`. When false, the LSP publishes no Deslop diagnostics. Code lenses, cluster navigation, the Top Offenders tree, and explicit pair comparison remain available.
+Shape-only produces no diagnostic, including when clone diagnostics are enabled. The user may explicitly override `structural_only` to any diagnostic level. Its clone status still follows [CLONE-BUCKETS-STRUCTURAL-ONLY](taxonomy.md#clone-buckets-structural-only-shape-only-is-not-duplication).
 
-An optional mass-percentile floor may suppress diagnostics below a configured impact threshold. The floor consumes the engine-stamped mass percentile only and cannot inspect pair evidence.
+### [SEVERITY-DIAGNOSTICS-GATE] Master switch
 
-### [SEVERITY-COLOR] The glyph follows mass severity; colour follows the clone kind
+`deslop.diagnostics.enabled` defaults to `false`. When false, publish no Deslop diagnostics, including explicit severity overrides. Findings remain available for inspection and navigation.
 
-Severity has one visual channel on cluster surfaces: glyph density (`●●`, `●`, `◐`, `○`) for `worst`, `top10`, `mid`, and `faint`. Colour belongs to the other channel, the clone kind ([CLONE-KIND-COLOR]): crimson means byte-identical code, never "biggest finding". The two channels are never mixed, so a rank-1 cluster that only shares shape is muted and a faint byte-identical cluster is crimson.
+### [SEVERITY-COLOR] Diagnostic colours
 
-Diagnostics keep the host editor's own severity colours for `Error`, `Warning`, `Information`, and `Hint` ([SEVERITY-DIAGNOSTICS]); those are the Problems panel's, not Deslop's paint.
+The editor owns diagnostic colours. Deslop's category colours are defined separately in [CLONE-KIND-COLOR](taxonomy.md#clone-kind-color-colour-describes-the-category).
 
-### [SEVERITY-BAND] The engine computes the band once
-
-After sorting by [RANK-MASS-SUM], the engine stamps every cluster with one band:
-
-| Band | Population |
-|---|---|
-| `worst` | Top 1% by mass rank, at least the first cluster when non-empty. |
-| `top10` | Remaining top 10%. |
-| `mid` | Remaining top 50%. |
-| `faint` | Remaining clusters. |
-
-The thresholds are applied to stable one-based rank over the full report. Filtering a client-side view does not renumber or recolour clusters.
-
-### [SEVERITY-CONFIG] Configuration surface
+### [SEVERITY-CONFIG] Configuration
 
 ```json
 {
   "deslop.diagnostics.enabled": false,
-  "deslop.diagnostics.massPercentileFloor": 0
+  "deslop.diagnostics.severityByKind": {
+    "identical": "warning",
+    "nearly_identical": "warning",
+    "same_behavior": "information",
+    "loosely_similar": "information",
+    "structural_only": "none"
+  }
 }
 ```
 
-The floor is finite and in `[0, 100]`. The retired per-bucket severity maps are invalid configuration.
+Accept only these five kind keys and the levels `none`, `hint`, `information`, `warning`, `error`. Reject unknown keys or levels. Apply user/workspace precedence per entry. Configuration changes refresh or clear diagnostics without re-analysis, in both pull and workspace-push modes. Diagnostic scope and the master switch still apply.
 
-### [SEVERITY-TESTING] Acceptance
+### [SEVERITY-TESTING] Required checks
 
-Tests assert that equal-mass ordering uses cluster id, rank bands never brighten down the report, every cluster surface uses the engine-stamped band for its glyph, diagnostics-off publishes nothing, no pair evidence changes severity, and the band never chooses a colour ([CLONE-KIND-TESTING]).
+Verify each default and override, including `none`, omitted entries, invalid configuration and the master switch. Defaults must hold at every clone rank. Pull and push modes must agree and refresh when settings change. No diagnostic setting may change clone weight, rank, counts, percentages or category order.

@@ -1,13 +1,14 @@
 # Remove evidence-weighted metrics — wholesale deletion plan
 
-[METRICS-REPO-WEIGHTED](../specs/pipeline.md#metrics-repo-weighted) and [EXIT-CODES-WEIGHTED](../specs/pipeline.md#exit-codes-weighted) prohibit evidence-weighted repository figures and gates. Pair evidence cannot be projected onto a closure component or a covered line. This plan deletes the design and every partial implementation in one cutover; it does not preserve a dormant configuration or compatibility wire field.
+[METRICS-REPO-WEIGHTED](../specs/pipeline.md#metrics-repo-weighted-evidence-weighting-is-prohibited) and [EXIT-CODES-WEIGHTED](../specs/pipeline.md#exit-codes-weighted-evidence-weighted-gates-are-prohibited) prohibit evidence-weighted repository figures and gates. Pair evidence cannot be projected onto a closure component or a covered line. This plan deletes the design and every partial implementation in one cutover; it does not preserve a dormant configuration or compatibility wire field.
 
 ## Contract
 
-- The repository carries one duplication percentage: `100 × duplicated_loc / analysed_loc`, with the zero-denominator rule in [METRICS-REPO](../specs/pipeline.md#metrics-repo).
+- Use the one repository percentage, formula and eligibility rules in [METRICS-REPO](../specs/pipeline.md#metrics-repo-repo-wide-duplication-metrics).
 - Each duplicated line counts once. Pair evidence, pair classification, finding kind, confidence, and severity do not scale it.
+- Shape-only is a non-clone and contributes nothing, even when visible or assigned a diagnostic severity. Preserve true clone subsets in mixed groups; count only eligible clone coverage ([CLONE-BUCKETS-STRUCTURAL-ONLY](../specs/taxonomy.md#clone-buckets-structural-only-shape-only-is-not-duplication)). Exclusion of non-clones is required, not evidence weighting.
 - The repository has one threshold gate: `--fail-over` or `[threshold] max_duplication_percent`. No weighted gate exists.
-- Cluster mass is [RANK-MASS-SUM], not a metric percentage and not an input to `duplication_percent`.
+- Cluster mass is [RANK-MASS-SUM](../specs/pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only), not a metric percentage and not an input to `duplication_percent`.
 
 ## One destructive removal
 
@@ -24,7 +25,8 @@
 - [ ] Black-box CLI tests assert exact `analysed_loc`, `duplicated_loc`, `duplication_percent`, per-file values, folder values, threshold source, breach flag, exit code, and rendered text/HTML.
 - [ ] Configuration tests reject every retired weighted key and flag with a named invalid-configuration or invalid-argument error.
 - [ ] Generated-model tests prove no weighted field or table exists in Rust or TypeScript.
-- [ ] Regression tests prove changing pair evidence without changing visible occurrence coverage cannot change repository metrics.
+- [ ] Tests prove changing pair evidence without changing clone eligibility or eligible occurrence coverage cannot change repository metrics; showing or hiding shape-only information and overriding its diagnostic severity also leave metrics unchanged.
+- [ ] CLI fixtures pin shape-only-only zero duplication and mixed-corpus true-clone coverage, including exact file/folder/diff percentages, clone counts, paths, ordering and threshold verdicts ([CLONE-KIND-TESTING](../specs/taxonomy.md#clone-kind-testing-required-examples-and-assertions), [METRICS-REPO](../specs/pipeline.md#metrics-repo-repo-wide-duplication-metrics)).
 - [ ] Repository-wide searches find no executable weighted-metric type, field, flag, config key, renderer, or compatibility branch.
 - [ ] Full CI and installed VSIX verification pass with the one mechanical metric on every surface.
 

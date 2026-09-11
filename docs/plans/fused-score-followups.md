@@ -6,33 +6,33 @@ This plan replaces the shipped cluster-evidence design in one cutover so code, t
 
 - Structural similarity, token Jaccard, embedding similarity, content agreement, rename consistency, literal fraction, admission result, and pair classification belong to one exact pair.
 - Candidate pairs are admitted under [FUSED-STRATEGY-BOUNDED-MAX](../specs/fused.md#fused-strategy-bounded-max). Clusters form from the transitive closure of admitted pairs.
-- [CLONE-NOISE-VERBATIM-SUBGROUP](../specs/noise.md#clone-noise-verbatim-subgroup) is the only post-closure partition: a convicted component becomes its qualifying byte-identical families; an unconvicted component remains untouched.
-- A clone cluster owns identity, canonical extent, occurrence membership, mass, rank, and mass-derived rank band. It owns no similarity evidence, pair classification, finding category, content verdict, or source-edge field.
-- `mass = canonical_node_count × max(visible_occurrences - 1, 0)`. Sort by mass descending, then cluster id ascending. No multiplier or evidence tie-break exists.
+- Preserve genuine clone subsets when separating noisy or informational relations ([CLONE-NOISE-VERBATIM-SUBGROUP], [CLONE-KIND-FOLD](../specs/taxonomy.md#clone-kind-fold-compare-the-actual-members)). Rejected or indirect comparisons must not mislabel near-copies as Similar code.
+- A clone cluster owns identity, membership, kind, AST size, duplicated mass and rank. Raw pair measurements stay on explicit comparisons. Shape-only information is a non-clone, listed last with zero duplication weight ([CLONE-BUCKETS-STRUCTURAL-ONLY](../specs/taxonomy.md#clone-buckets-structural-only-shape-only-is-not-duplication)).
+- Keep the existing AST-node formula and eligibility rules in [RANK-MASS-SUM](../specs/pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only). Do not introduce another weight or formula.
 - Pair evidence renders only after a caller explicitly identifies two distinct occurrences. The VSIX pair view uses a compact `PAIR EVIDENCE` surface; content evidence is a muted secondary line, never a cluster card.
 
 ## One destructive replacement
 
 - [x] Cleanse the governing specifications so pair evidence, closure, convicted-noise handling, mass, wire ownership, presentation, metrics, and severity do not contradict one another.
 - [ ] Replace the canonical wire model in `docs/models/live-ipc.td`: delete every cluster `signals`, `bucket`, `category`, `interpretation`, evidence-verdict, pair-source, and fused-gate field; add one explicit pair-comparison request/response keyed by two occurrence endpoints; regenerate Rust and TypeScript models once.
-- [ ] Delete the engine path that stamps a cluster from any pair or aggregate. Remove all component means, per-axis maxima, edge selection, cluster content measurement, cluster classification, cluster confidence, evidence-weighted ranking, category multipliers, and structural-only multipliers.
+- [ ] Keep the engine-authored kind under [CLONE-KIND-FOLD]. Delete component evidence averages, maxima, confidence scores and weighting multipliers; never copy one pair's measurements onto a group.
 - [ ] Make pair measurement the single owner of `S`, `J`, `E`, `A`, `R`, literal fraction, admission, and optional pair classification. Store or recompute the exact endpoint-keyed record without copying it into a component.
-- [ ] Enforce closure directly from admitted edges. Retain only the exhaustive convicted-noise behavior from [CLONE-NOISE-VERBATIM-SUBGROUP]; delete every generic component repair, family fallback, silent drop, or control-flow panic.
-- [ ] Replace report weighting wholesale with [RANK-MASS-SUM]. Delete every multiplier, boost, confidence factor, spanned-byte factor, and evidence tie-break. Equal mass sorts by cluster id.
-- [ ] Replace text, Markdown, HTML, JSON, LSP, MCP cluster responses, AI context, site examples, and CLI summaries so cluster output contains membership and mass only. Delete neutralized helpers rather than leaving no-op shims.
-- [ ] Replace VSIX cluster surfaces wholesale: bubble, hover, code lens, Top Offenders, cluster webview, report webview, tooltips, accessibility labels, copy-for-AI, history, and fixtures contain neutral cluster identity, membership, and mass only.
+- [ ] Form candidates from admitted pairs, preserve established clone subsets, and separate informational relations before counting or ranking ([CLONE-KIND-FOLD]). No rejected pair becomes a clone through an indirect connection.
+- [ ] Replace report weighting wholesale with [RANK-MASS-SUM](../specs/pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only). Delete every multiplier, boost, confidence factor, spanned-byte factor, and evidence tie-break. Equal mass sorts by cluster id.
+- [ ] Update every renderer and client to show shared category names, actual-clone mass and rank, and separate shape-only information last. Pair measurements appear only in explicit comparisons.
+- [ ] Use Similar code as the public label for `loosely_similar`. Same shape, different content is informational, not a merge recommendation or a default diagnostic.
 - [x] Restore one-click canonical comparison ([VSIX-PAIR-COMPARE]) while preserving the explicit `deslop.comparePair` endpoint command. Both routes show the exact source ranges in the native diff; engine pair measurements remain separate from cluster surfaces ([VSIX-PAIR-EVIDENCE]).
-- [ ] Delete cluster bucket/category facets and per-bucket severity configuration. Cluster severity derives only from the engine-stamped mass rank band. Cluster filters use language, path, and mass severity.
+- [ ] Implement category grouping and configurable diagnostic severities from [FACET-GROUP-BY-KIND] and [SEVERITY-CONFIG](../specs/severity.md#severity-config-configuration). Diagnostic severity never comes from mass rank; shape-only defaults to no diagnostic.
 - [ ] Separate literal-family findings from clone closure components so literal kind cannot masquerade as pair classification or cluster evidence. Kept literal findings use unmodified mass.
 - [ ] Delete evidence-weighted repository metrics, weight tables, weighted gate flags, weighted wire fields, configuration, renderers, and tests. The one repository duplication percentage remains unweighted line density.
 
 ## Assertions that must fail before the replacement and pass after it
 
-- [ ] Black-box JSON, text, Markdown, and HTML tests assert exact cluster ids, occurrence paths and ranges, canonical node count, visible count, exact mass, and global order. They assert cluster records contain no pair-evidence or classification fields.
+- [ ] Black-box reports assert kinds, exact occurrence paths/ranges/counts, clone mass, ordering, and clone-only metrics. Shape-only-only input reports zero duplication; mixed groups preserve the real clones ([CLONE-KIND-TESTING](../specs/taxonomy.md#clone-kind-testing-required-examples-and-assertions)).
 - [ ] Pair-comparison tests select two concrete endpoints and assert exact `S`, `J`, `E`, `A`, `R`, literal fraction, admission result, and pair classification. Reversing endpoint order preserves symmetric evidence while replacing either endpoint asks a different relation; a cluster id alone cannot request evidence.
-- [ ] Closure tests assert the admitted edge set and exact connected components. Convicted-noise tests assert qualifying byte-identical families survive and outsiders drop; unconvicted components remain byte-for-byte unchanged.
-- [ ] Ranking tests assert mass exactly, id-only tie-breaking, and invariance under every pair-evidence value, classification, language, path, and visibility configuration that does not change visible membership.
-- [ ] LSP and MCP tests assert cluster payloads and messages contain membership plus mass only, while explicit pair responses identify both endpoints and contain pair evidence only.
+- [ ] Grouping tests preserve exact copies and near-copies beside unrelated or more extensively edited members; rejected comparisons cannot supply clone membership or a fallback clone label.
+- [ ] Ranking tests retain the AST-node mass formula for actual clones and assert zero duplication weight for every non-clone. Informational visibility and diagnostic overrides never change clone rank or percentages.
+- [ ] LSP/MCP and VSIX tests assert shared category names, configured diagnostic defaults and overrides, and no shape-only diagnostics by default. Raw pair evidence requires explicit endpoints ([SEVERITY-TESTING](../specs/severity.md#severity-testing-required-checks)).
 - [x] VSIX unit and Playwright assertions pin [VSIX-PAIR-COMPARE]: the canonical row is disabled, one peer click posts that exact occurrence, and the native diff shows canonical bytes alongside the selected peer even for a third occurrence in the same file. Cluster pages continue to exclude pair measurements ([VSIX-PAIR-EVIDENCE]).
 - [ ] Generated-model tests assert removed cluster fields do not exist in Rust or TypeScript and that hand-written mirror types cannot drift from the generated contract.
 - [ ] Regression fixtures assert exact clusters, occurrences, paths, ranges, mass, and order across every affected language; no assertion is weakened to a cluster count.
@@ -40,7 +40,7 @@ This plan replaces the shipped cluster-evidence design in one cutover so code, t
 ## Whole-system proof
 
 - [ ] Run formatting, lint, generated-model verification, Rust build, Rust tests with coverage, TypeScript typecheck, VSIX unit tests, Playwright webview smoke, packaging verification, and the full repository CI target with zero failures.
-- [ ] Build and install the current VSIX artifact without killing VS Code. From the real extension UI, verify a cluster opens with membership and mass only, click Compare on a non-canonical occurrence, verify its exact range beside the canonical range ([VSIX-PAIR-COMPARE]), edit a watched file, and verify the tree, bubble, cluster view, diagnostics, and mass refresh coherently.
+- [ ] Verify the installed VSIX: category names/order, explicit comparisons, kind-based diagnostic defaults/overrides, and clone-only totals. A watched edit refreshes every surface. Follow the deployment workflow without killing VS Code.
 - [ ] Re-run repository-wide searches for every removed cluster field, old command, old label, compatibility shim, multiplier, and weighted-metric surface. Only historical issue prose outside executable/spec contracts may remain.
 - [ ] Run [spec-check](../../.agents/skills/spec-check/SKILL.md) and [ci-prep](../../.agents/skills/ci-prep/SKILL.md). Submit through [submit-pr](../../.agents/skills/submit-pr/SKILL.md) only after all gates pass.
 

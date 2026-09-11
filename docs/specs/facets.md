@@ -2,21 +2,21 @@
 
 ### [FACET-MODEL] Cluster facets use cluster-owned data only
 
-A cluster list may group or filter by language, path, visibility, engine-stamped mass severity, and the engine-stamped clone kind. Structural, Jaccard, embedding, content, rename, and literal values belong to explicit pair records and are forbidden cluster facets.
+A cluster list may group or filter by language, path, visibility, configured diagnostic severity, and the engine-stamped clone kind. Structural, Jaccard, embedding, content, rename, and literal values belong to explicit pair records and are forbidden cluster facets.
 
 | Axis | Values | Source of truth |
 |---|---|---|
 | `language` | Registered parser ids | Core language registry. |
 | `path` | Workspace-relative path prefixes | Cluster occurrence membership. |
-| `severity` | `worst`, `top10`, `mid`, `faint` | Engine-stamped mass rank band through [SEVERITY-MODEL]. |
-| `kind` | `identical`, `nearly_identical`, `same_behavior`, `structural_only`, `loosely_similar` | Engine-stamped clone kind through [CLONE-KIND-FOLD]. |
+| `severity` | Configured diagnostic levels | [SEVERITY-CONFIG](severity.md#severity-config-configuration), independent of the master on/off switch. |
+| `kind` | [CLONE-KIND-LABELS](taxonomy.md#clone-kind-labels-use-the-same-names-everywhere) | Engine-stamped kind through [CLONE-KIND-FOLD](taxonomy.md#clone-kind-fold-compare-the-actual-members). |
 | `visibility` | Visible or hidden occurrence state | [EXCLUSION-CONFIG]. |
 
 Facet filters are presentation-only. They never mutate the canonical report, renumber ranks, recalculate mass, or trigger analysis.
 
 ### [FACET-TOP-OFFENDERS-FILTER] Top Offenders filter
 
-The Top Offenders filter supports language, path, and mass severity. Options are derived from values present in the current report. Unknown values are ignored with fallback-to-all. Filtering happens after the engine has ranked the full report, so a filtered view keeps global ranks and may show gaps.
+The Top Offenders filter supports language, path, and diagnostic severity. Options are derived from values present in the current report. Unknown values are ignored with fallback-to-all. Filtering happens after the engine has ranked the full report, so a filtered view keeps global ranks and may show gaps.
 
 The filter applies to cluster-list surfaces: the Top Offenders tree, full-report webview, and the status-bar count that summarizes the list. It does not hide live prevention surfaces such as diagnostics, decorations, or code lenses.
 
@@ -26,7 +26,7 @@ When a filter is active, the first root row states the active filter and offers 
 
 ### [FACET-GROUP-BY-KIND] Clone kind is a cluster grouping mode
 
-Top Offenders supports cluster, file, folder, and kind grouping. Kind mode shows one flat group per clone kind present, strongest kind first (`Identical code` down to `Loosely similar code`), each titled and coloured by its kind ([CLONE-KIND-LABELS], [CLONE-KIND-COLOR]) and carrying its live cluster count; absent kinds render no group. File mode nests the same kind groups under each file, ordered by each group's worst cluster. The kind is the engine's fold ([CLONE-KIND-FOLD]); the client projects no pair classification of its own. Every cluster row keeps the engine-stamped global rank and mass.
+Top Offenders supports cluster, file, folder and kind grouping. Use the names and order in [CLONE-KIND-LABELS](taxonomy.md#clone-kind-labels-use-the-same-names-everywhere) and the informational handling in [CLONE-BUCKETS-STRUCTURAL-ONLY] in every mode. Omit empty groups. Preserve engine rank for clone rows; show informational match counts separately from clone counts.
 
 ### [FACET-GROUP-BY-TYPE] Every clone category has a plain group title
 
@@ -36,20 +36,20 @@ The title is a property of the category, resolved once by `CloneCategory::group_
 
 ### [FACET-REPORT-WEBVIEW] Full-report webview filters
 
-The full-report webview exposes mass-severity, clone-kind, and path filters, each option list derived from the shared registries. Sort is fixed to engine rank. The webview performs no calculation and receives no pair evidence until the user opens an explicit two-occurrence comparison.
+The full-report webview filters by diagnostic severity, kind and path. It preserves engine ordering and applies [CLONE-BUCKETS-STRUCTURAL-ONLY] to informational findings. Filtering never changes reported totals.
 
 ### [FACET-HTML] HTML report facets
 
-The static HTML report groups cluster cards into one collapsible expander per clone kind present, in the order kinds first appear down the worst-first list, inside the language sections when `split_by_language` is on. Each expander and card is titled by the kind and carries the kind's class suffix so the kind colour keys on it ([CLONE-KIND-LABELS], [CLONE-KIND-COLOR]). Cards contain the kind title, membership, and mass. No pair-evidence class is emitted on a card.
+HTML uses one collapsible group per kind, following [FACET-GROUP-BY-KIND] within each language section. Cards use the shared title and colour; display membership and the engine-provided clone weight where applicable. Apply [CLONE-BUCKETS-STRUCTURAL-ONLY] to informational findings. Pair measurements require an explicit comparison.
 
 ### [FACET-CLI] CLI summary breakdown
 
-The CLI summary may break cluster counts down by language and mass severity, and titles each listed cluster row by its clone kind ([CLONE-KIND-LABELS]). Pair evidence is available only through the explicit pair-comparison command or tool.
+The CLI summary may break cluster counts down by language and diagnostic severity, and titles each listed cluster row by its clone kind ([CLONE-KIND-LABELS]). Pair evidence is available only through the explicit pair-comparison command or tool.
 
 ### [FACET-MCP] MCP filters
 
-MCP cluster-list tools accept language, path, and mass-severity filters. An explicit pair-comparison tool accepts two occurrence endpoints and returns pair evidence; pair fields are not accepted as cluster filters.
+MCP cluster-list tools accept language, path, and diagnostic-severity filters. An explicit pair-comparison tool accepts two occurrence endpoints and returns pair evidence; pair fields are not accepted as cluster filters.
 
 ### [FACET-TESTING] Proof
 
-Tests assert that every cluster filter consumes only cluster-owned fields, filtered views preserve global rank and mass, unknown filters fall back safely, filtered-empty differs from truly empty, kind groups appear only for kinds present and strongest first, and pair evidence never appears in cluster facet payloads or HTML classes.
+Required tests preserve engine rank and totals under filtering, handle unknown and empty filters, and verify [CLONE-KIND-TESTING](taxonomy.md#clone-kind-testing-required-examples-and-assertions) across every grouping mode. No client calculates pair classifications or duplication figures.
