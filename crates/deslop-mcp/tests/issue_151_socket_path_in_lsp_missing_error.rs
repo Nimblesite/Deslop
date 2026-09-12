@@ -11,12 +11,12 @@
 #![cfg(unix)]
 
 use anyhow::{ensure, Result};
-use tempfile::TempDir;
-
-use crate::common;
 use common::{
     error_and_message, expected_socket_fragment, initialized_mcp, request_duplicates_summary,
 };
+use tempfile::TempDir;
+
+use crate::common;
 
 /// Clusters requested per page; the error path never reads them.
 const PAGE_LIMIT: u64 = 5;

@@ -7,8 +7,6 @@
 //! `WorkspaceEdit` client-side, and asserts the resulting buffer
 //! matches the shared golden snapshot.
 
-use crate::common;
-
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -21,6 +19,8 @@ use common::{
     ANALYSIS_TIMEOUT, POLL_INTERVAL,
 };
 use serde_json::{json, Value};
+
+use crate::common;
 
 /// Golden files live beside this test per [AUTOFIX-EXTRACT-TESTING].
 fn golden(name: &str) -> PathBuf {

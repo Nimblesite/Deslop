@@ -6,10 +6,11 @@
 
 import * as assert from "node:assert/strict";
 import { ReportStore } from "../../reportStore";
-import { cluster, emptyReport, occurrence, seededStore } from "./report-store.helpers";
+import { cluster, emptyReport, metrics, occurrence, seededStore } from "./report-store.helpers";
 
 const ENGINE_CANONICAL_NODE_COUNT = 42;
 const VISIBLE_PEER_COUNT = 2;
+const ENGINE_CLUSTER_COUNT = 4;
 
 suite("ReportStore dirty-file projection", () => {
   test("visibleReport elides dirty-file occurrences and singleton clusters; canonical report keeps everything (#78, #117, #130)", () => {
@@ -20,6 +21,7 @@ suite("ReportStore dirty-file projection", () => {
     });
     store.setSnapshot(
       emptyReport({
+        metrics: metrics({ clusters_total: ENGINE_CLUSTER_COUNT }),
         clusters: [
           cluster("only-dirty", 30, [occurrence("/repo/Dirty.cs", 10, 20)]),
           cluster("mixed-singleton", 25, [
@@ -80,7 +82,8 @@ suite("ReportStore dirty-file projection", () => {
       visible.clusters.every((c) => c.occurrences.length >= 2),
       "visible projection must not leave a one-copy top offender",
     );
-    assert.equal(visible.metrics.clusters_total, 2, "visible metrics reflect the visible cluster count");
+    assert.equal(visible.metrics.clusters_total, ENGINE_CLUSTER_COUNT, "only Rust computes duplication metrics");
+    assert.deepEqual(visible.metrics, canonical.metrics, "dirty-file visibility preserves every measured figure");
     assert.equal(fired, 2, "setSnapshot and markFileDirty both notify subscribers");
   });
 

@@ -91,12 +91,11 @@ use std::{
 
 use tree_sitter::Node;
 
-use crate::{ast::named_children, cluster::Cluster, state::FileId};
-
 use super::{
     collect_snippets, enclosing_kind, forwarding::forwarding_body, node_intersects_range,
     parse_for, spans_multiple_files, uniform_language, ParseCache, Snippet,
 };
+use crate::{ast::named_children, cluster::Cluster, state::FileId};
 
 /// Returns true when `cluster` is a single-file family of sibling
 /// declarations rather than real duplication ([RANK-STRUCTURAL-ONLY]).

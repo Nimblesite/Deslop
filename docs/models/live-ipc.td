@@ -193,7 +193,7 @@ type ReportOccurrence {
 type ReportCluster {
   id: String
   rank: Int
-  rank_band: String
+  severity: String
   kind: ClusterKind
   mass: Int
   canonical_node_count: Int
@@ -223,6 +223,7 @@ type PairEvidence {
   structural: Float
   token_jaccard: Float
   embedding_cos: Float
+  content_measurement: ContentMeasurement
   agreement: Float
   rename_consistency: Float
   literal_fraction: Float
@@ -233,6 +234,11 @@ type PairEvidence {
   admitted: Bool
   classification: Option<PairClassification>
   explanation: String
+}
+
+union ContentMeasurement {
+  Measured
+  Unmeasured
 }
 
 union PairClassification {
@@ -308,6 +314,13 @@ type LiteralFinding {
   canonical_target: Option<CanonicalTarget>
 }
 
+type RoutingTuning {
+  nearly_identical_min_shape: Float
+  nearly_identical_min_content: Float
+  similar_min_content: Float
+  shape_only_max_content: Float
+}
+
 type Report {
   tool_version: String
   min_nodes: Int
@@ -315,6 +328,7 @@ type Report {
   clusters_hidden: Int
   cache_stats: CacheStats
   metrics: RepoMetrics
+  routing: RoutingTuning
   schema_doc: String
   boilerplate_hints: List<ReportBoilerplateHint>
   embedding_provenance: Option<EmbeddingProvenance>
@@ -337,6 +351,7 @@ type ReportDelta {
   literal_findings_removed: List<String>
   literal_findings_updated: List<LiteralFinding>
   metrics: RepoMetrics
+  routing: RoutingTuning
   cache_stats: CacheStats
   tool_version: String
 }
@@ -476,7 +491,7 @@ type OccurrenceSummary {
 type ClusterSummary {
   id: String
   rank: Int
-  rank_band: String
+  severity: String
   kind: ClusterKind
   mass: Int
   size_nodes: Int

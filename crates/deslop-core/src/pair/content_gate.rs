@@ -2,6 +2,10 @@
 
 use std::{collections::HashMap, hash::BuildHasher};
 
+use super::{
+    token_carried, CandidatePair, ExactClones, EMBEDDING_SUPPORT_FLOOR, LSH_ONLY_MIN_JACCARD,
+    SHARED_SUBTREE_MIN_NODE_COUNT, SHARED_SUBTREE_MIN_OVERLAP,
+};
 use crate::{
     ast::NormalizedNode,
     buckets::{CONTENT_PROMOTE_FLOOR, CONTENT_SUPPORT_FLOOR},
@@ -10,11 +14,6 @@ use crate::{
     content::{measure_pair_content_indexed, ContentEvidence},
     fingerprint::Fingerprint,
     state::FileId,
-};
-
-use super::{
-    token_carried, CandidatePair, ExactClones, EMBEDDING_SUPPORT_FLOOR, LSH_ONLY_MIN_JACCARD,
-    SHARED_SUBTREE_MIN_NODE_COUNT, SHARED_SUBTREE_MIN_OVERLAP,
 };
 
 /// Structural overlap at which normalised shape saturates the content guard.
@@ -284,6 +283,7 @@ fn content_floor(pair: &CandidatePair, left: &Fingerprint, right: &Fingerprint) 
 mod tests {
     use std::collections::HashMap;
 
+    use super::apply_pair_content_gate;
     use crate::{
         ast::ByteRange,
         cluster_filters::ParseCache,
@@ -291,8 +291,6 @@ mod tests {
         pair::{CandidatePair, PairScore},
         state::{FileId, FileRegistry},
     };
-
-    use super::apply_pair_content_gate;
 
     const PYTHON: &str = "python";
     const RUST: &str = "rust";

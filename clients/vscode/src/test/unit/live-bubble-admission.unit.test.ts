@@ -5,7 +5,7 @@
 // either side of a UI-restated clone-kind cutoff; that classification is
 // gone from the wire and from this client ([REPORT-CONTEXT-CLUSTER]). These
 // tests pin what the user must see: a reported cluster always renders —
-// however low its mass — the bubble carries cluster facts (mass severity,
+
 // count, canonical) and never pair evidence ([FUSED-PAIR-SIGNALS]).
 
 import * as assert from "node:assert/strict";
@@ -13,6 +13,7 @@ import { ghostText, inlineText } from "../../bubble/live";
 import { BubbleCapture, bubbleCluster, renderStep, renderStepOffersNothing, setBubbleMode, withBubble } from "./bubble.helpers";
 import type { LiveBubble } from "../../bubble/live";
 import type { ReportCluster } from "../../types/report";
+import { SEVERITY_DOT } from "../../design";
 import { reportWithClusters } from "./report.helpers";
 
 
@@ -35,6 +36,19 @@ function renderWithoutSignalBars(
 }
 
 suite("LiveBubble admission", () => {
+  test("a clone is preferred to shape-only information, and severity refresh needs no probe", async () => {
+    const clone = bubbleCluster("clone", 12);
+    const information: ReportCluster = { ...bubbleCluster("shape", 0), kind: "structural_only", rank: 0, severity: "none" };
+    await withBubble({ snapshot: reportWithClusters([information, clone]) }, ({ capture, bubble, store }) => {
+      const visible = renderStep(capture, bubble, 0, [information, clone], "clone ahead of shape");
+      assert.ok(visible.includes("clone"), visible);
+      assert.equal(visible.includes("Same shape"), false, visible);
+      const revision = store.current.revision;
+      store.setSeverityOverrides({ nearly_identical: "error" });
+      assert.ok(capture.visible()?.includes(SEVERITY_DOT.error));
+      assert.equal(store.current.revision, revision, "diagnostic presentation never requests analysis");
+    });
+  });
   test("a reported near-miss cluster still reaches the bubble", async () => {
     // A genuine near miss reported by the engine: identical shape, real
     // edits, so the engine's own admission stands. The bubble must
@@ -95,8 +109,8 @@ suite("LiveBubble admission", () => {
         /evidence|verdict|shape|token|embedding/i,
         "no pair-evidence word may reach the bubble",
       );
-      assert.equal(ghostText(faint, "faint").includes("pair"), false, "ghost text carries no pair label");
-      assert.equal(inlineText(faint, "faint").includes("pair"), false, "inline text carries no pair label");
+      assert.equal(ghostText(faint, "hint").includes("pair"), false, "ghost text carries no pair label");
+      assert.equal(inlineText(faint, "hint").includes("pair"), false, "inline text carries no pair label");
     
     });
   });

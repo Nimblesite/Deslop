@@ -3,14 +3,11 @@
 //! Drives the real `deslop-lsp` binary over stdio; no pipeline internals
 //! are called.
 
-use crate::common;
-
 use std::{
     io::BufReader,
     process::{ChildStdin, ChildStdout},
 };
 
-use crate::mock_ollama::MockOllama;
 use anyhow::{anyhow, Result};
 use common::{
     at, call, handshake, path as json_path,
@@ -21,6 +18,8 @@ use common::{
     spawn_lsp_guarded,
 };
 use serde_json::{json, Value};
+
+use crate::{common, mock_ollama::MockOllama};
 
 const SET_MODEL: &str = "deslop/embeddingSetModel";
 const LEDGER_FILES: [&str; 2] = ["ledger_a.ts", "ledger_c.ts"];

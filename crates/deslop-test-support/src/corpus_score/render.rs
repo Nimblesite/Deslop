@@ -14,12 +14,11 @@ mod cells;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use serde::Serialize;
-
 use cells::{
     counted, cpu, header, megabytes, row, score_cell, seconds, signed, signed_amount,
     signed_fraction, ABSENT,
 };
+use serde::Serialize;
 
 use super::{
     gate::{Breach, CorpusChange, CorpusTotals, Degradation, Thresholds},

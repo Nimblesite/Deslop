@@ -1,8 +1,13 @@
+pub(crate) use std::{
+    fs,
+    path::{Path, PathBuf},
+};
+
 pub(crate) use anyhow::Result;
 pub(crate) use assert_cmd::Command;
+use deslop_core::report::ReportCluster;
 pub(crate) use predicates::str::contains;
 pub(crate) use serde_json::Value;
-pub(crate) use std::{fs, path::Path, path::PathBuf};
 pub(crate) use tempfile::TempDir;
 
 pub(crate) use crate::common::scan_dir::temp_scan_dir;
@@ -26,6 +31,48 @@ pub(crate) const NO_COLOR_FLAG: &str = "--no-color";
 pub(crate) const REPORT_OUTPUT_STEM: &str = "report";
 /// Canonical small C# fixture name.
 pub(crate) const CSHARP_SMALL_FIXTURE: &str = "csharp-small";
+/// Informational findings have no duplication weight, rank, or default diagnostic.
+const NO_DUPLICATION_MASS: u64 = 0;
+const NO_DUPLICATION_RANK: usize = 0;
+const NO_DIAGNOSTIC: &str = "none";
+
+/// [CLONE-BUCKETS-STRUCTURAL-ONLY] Validate every finding before selecting genuine clones.
+pub(crate) fn assert_finding_weights(findings: &[Value]) -> Result<Vec<&Value>> {
+    let mut clones = Vec::new();
+    for finding in findings {
+        let typed: ReportCluster = serde_json::from_value(finding.clone())?;
+        if typed.kind.is_clone() {
+            assert!(
+                typed.mass > NO_DUPLICATION_MASS,
+                "a clone has positive duplication weight: {finding}"
+            );
+            assert!(
+                typed.rank > NO_DUPLICATION_RANK,
+                "a clone has an ordinal rank: {finding}"
+            );
+            clones.push(finding);
+        } else {
+            assert_informational_fields(&typed);
+        }
+    }
+    Ok(clones)
+}
+
+/// Non-clones never acquire duplication or diagnostic importance from their size.
+fn assert_informational_fields(finding: &ReportCluster) {
+    assert_eq!(
+        finding.mass, NO_DUPLICATION_MASS,
+        "information has no duplication weight: {finding:?}"
+    );
+    assert_eq!(
+        finding.rank, NO_DUPLICATION_RANK,
+        "information has no duplication rank: {finding:?}"
+    );
+    assert_eq!(
+        finding.severity, NO_DIAGNOSTIC,
+        "information has no default diagnostic: {finding:?}"
+    );
+}
 
 /// Runs the binary in `<tmp>` with `--output <tmp>/report`, returning
 /// the three on-disk paths the CLI should have written.

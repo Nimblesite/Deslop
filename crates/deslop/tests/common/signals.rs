@@ -159,19 +159,9 @@ pub(crate) fn assert_pair_metric(actual: f64, expected: f64, label: &str) {
     );
 }
 
-/// Asserts the admission + visibility + mass contract the wire still
-/// exposes for a shape-only fixture ([RANK-MASS-SUM],
-/// [PIPELINE-CLUSTER-CLOSURE]).
-///
-/// The former `structural_only` bucket contract died with the routing
-/// table: clusters no longer carry a bucket, a category, or any
-/// cluster-level signal. What a rendered cluster can still prove about
-/// a shape-only fixture is that it was **admitted** (it is on the
-/// report), that every occurrence is **visible**, and that its **mass**
-/// is the wire formula `canonical_node_count × (occurrence_count − 1)`
-/// with `occurrence_count` equal to the visible membership. A suite
-/// that needs a stronger shape-only guarantee must assert it against
-/// the pair wire (explicit `PairComparison`), not against the cluster.
+/// [RANK-MASS-SUM] [PIPELINE-CLUSTER-CLOSURE] Every finding has visible occurrences.
+/// Clone mass counts canonical nodes across additional copies; informational findings
+/// have zero mass and rank. Stronger similarity checks use explicit pair comparisons.
 pub(crate) fn assert_structural_only_contract(cluster: &Value, label: &str) {
     let id = cluster_id(cluster);
     let canonical_nodes = field(cluster, "canonical_node_count").as_u64().unwrap_or(0);
@@ -184,9 +174,13 @@ pub(crate) fn assert_structural_only_contract(cluster: &Value, label: &str) {
     );
     assert_eq!(
         mass,
-        canonical_nodes.saturating_mul(occurrence_count.saturating_sub(1)),
-        "{label}: mass must be the wire formula canonical_node_count × \
-         (occurrence_count − 1) — {id} reports mass={mass} nodes={canonical_nodes} \
+        if crate::common::findings::is_clone_finding(cluster) {
+            canonical_nodes.saturating_mul(occurrence_count.saturating_sub(1))
+        } else {
+            0
+        },
+        "{label}: clone mass is canonical_node_count × (occurrence_count − 1); \
+         informational mass is zero — {id} reports mass={mass} nodes={canonical_nodes} \
          count={occurrence_count}: {cluster:#}"
     );
     assert!(

@@ -17,18 +17,20 @@
 
 use std::path::Path;
 
-use crate::mock_ollama::MockOllama;
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::{
-    embeddings::run_mock_embedding_report,
-    signals::{
-        assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
-        signal_dump,
+use crate::{
+    common::{
+        embeddings::run_mock_embedding_report,
+        signals::{
+            assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
+            signal_dump,
+        },
+        verdict::duplicated_loc_for_path,
+        *,
     },
-    verdict::duplicated_loc_for_path,
-    *,
+    mock_ollama::MockOllama,
 };
 
 /// Scans a private copy of just the LSH-plus-embedding pair from

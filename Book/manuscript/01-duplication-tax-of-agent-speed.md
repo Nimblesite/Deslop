@@ -86,7 +86,7 @@ Identical code is the cleanest case because Deslop has proved that the copied so
 
 - **Nearly identical code** means the locations are strongly alike, but small differences may matter. Name every difference before consolidating.
 - **Same shape, different content** means the structure lines up without enough content support. It is often sibling boilerplate. Inspect before extracting.
-- **Loosely similar code** is a hint, not a refactoring instruction.
+- **Similar code** is a hint, not a refactoring instruction.
 - **Same behavior, different code** is an optional semantic signal. Read both implementations and their tests before merging them.
 
 At this point, you need to think about the design. Two similar validators may encode separate policies that currently coincide. Two decoders may share a stable algorithm with one parameterized difference. Deslop supplies the locations and similarity evidence. You decide what to do by considering DRY, coupling, ownership, performance, and domain boundaries.

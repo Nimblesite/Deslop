@@ -9,9 +9,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use super::super::body_shape::OwnedShapeToken;
-use super::super::{calls::CallShape, polymorphic::OwnedSubject};
-use super::{locked, CallSequence, ParseCache, Snippet, SnippetKey};
+use super::{
+    super::{body_shape::OwnedShapeToken, calls::CallShape, polymorphic::OwnedSubject},
+    locked, CallSequence, ParseCache, Snippet, SnippetKey,
+};
 
 /// Most cells each cache may retain. Beyond the cap a value is
 /// recomputed on demand — results are identical, only reuse ends, so

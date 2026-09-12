@@ -56,9 +56,16 @@ const comparableRows = (statsA, statsB) =>
 const bothPresent = ([, a, b]) => a !== undefined && b !== undefined;
 const eitherAbsent = (row) => !bothPresent(row);
 
+// Fields retired from the current schema (`rank_band`, `bucket`, `category`)
+// stay listed on purpose: this document compares two *engine versions*, and the
+// older side still publishes them. `columnsFor` drops a column the report being
+// rendered does not populate, so a retired field prints for the release that
+// has it and silently vanishes for the release that does not.
 const CLUSTER_DISPLAY = [
   ["rank", (c) => c.rank],
   ["id", (c) => c.id],
+  ["kind", (c) => c.kind],
+  ["severity", (c) => c.severity],
   ["band", (c) => c.rank_band],
   ["mass", (c) => c.mass],
   ["weight", (c) => c.weight],

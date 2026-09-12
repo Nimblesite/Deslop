@@ -2,8 +2,6 @@
 //! live LSP admits into a workspace. Drives the real `deslop-lsp` binary
 //! over stdio; no pipeline internals are called.
 
-use crate::common;
-
 use std::{collections::BTreeSet, fs, path::Path};
 
 use anyhow::Result;
@@ -16,6 +14,8 @@ use common::{
     spawn_lsp_guarded,
 };
 use serde_json::Value;
+
+use crate::common;
 
 const CSHARP_FILES: [&str; 2] = ["Alpha.cs", "Beta.cs"];
 

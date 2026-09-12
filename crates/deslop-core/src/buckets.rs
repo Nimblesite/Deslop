@@ -5,6 +5,7 @@
 
 pub use crate::wire_generated::ClusterKind;
 use crate::wire_generated::PairClassification;
+pub(crate) mod grouping;
 
 /// Default pair-content support floor ([FUSED-CONTENT-GATE]).
 pub const CONTENT_SUPPORT_FLOOR: f64 = 0.7;
@@ -36,6 +37,22 @@ pub struct KindLabels {
 }
 
 impl ClusterKind {
+    /// [SEVERITY-DESLOP-MAP] Shared defaults; mass never selects diagnostic severity.
+    #[must_use]
+    pub const fn default_diagnostic_severity(self) -> &'static str {
+        match self {
+            Self::Identical | Self::NearlyIdentical => "warning",
+            Self::SameBehavior | Self::LooselySimilar => "information",
+            Self::StructuralOnly => "none",
+        }
+    }
+
+    /// [CLONE-BUCKETS-STRUCTURAL-ONLY] Shape-only is informational, not duplication.
+    #[must_use]
+    pub const fn is_clone(self) -> bool {
+        !matches!(self, Self::StructuralOnly)
+    }
+
     /// Every kind, strongest first — the order surfaces list kinds in.
     #[must_use]
     pub const fn all() -> [Self; 5] {
@@ -43,22 +60,21 @@ impl ClusterKind {
             Self::Identical,
             Self::NearlyIdentical,
             Self::SameBehavior,
-            Self::StructuralOnly,
             Self::LooselySimilar,
+            Self::StructuralOnly,
         ]
     }
 
-    /// The kind one pair classification folds into ([CLONE-KIND-FOLD]).
-    /// A pair the direct comparison does not admit at all is welded only
-    /// through other members, the loosest relation a cluster can carry.
+    /// [CLONE-KIND-FOLD] An unclassified comparison supplies no clone kind.
     #[must_use]
-    pub const fn from_pair(classification: Option<PairClassification>) -> Self {
+    pub const fn from_pair(classification: Option<PairClassification>) -> Option<Self> {
         match classification {
-            Some(PairClassification::Identical) => Self::Identical,
-            Some(PairClassification::NearlyIdentical) => Self::NearlyIdentical,
-            Some(PairClassification::SameBehavior) => Self::SameBehavior,
-            Some(PairClassification::StructuralOnly) => Self::StructuralOnly,
-            Some(PairClassification::LooselySimilar) | None => Self::LooselySimilar,
+            Some(PairClassification::Identical) => Some(Self::Identical),
+            Some(PairClassification::NearlyIdentical) => Some(Self::NearlyIdentical),
+            Some(PairClassification::SameBehavior) => Some(Self::SameBehavior),
+            Some(PairClassification::StructuralOnly) => Some(Self::StructuralOnly),
+            Some(PairClassification::LooselySimilar) => Some(Self::LooselySimilar),
+            None => None,
         }
     }
 
@@ -76,8 +92,8 @@ impl ClusterKind {
     /// relation carried only through other members the least.
     const fn strength(self) -> u8 {
         match self {
-            Self::LooselySimilar => 0,
-            Self::StructuralOnly => 1,
+            Self::StructuralOnly => 0,
+            Self::LooselySimilar => 1,
             Self::SameBehavior => 2,
             Self::NearlyIdentical => 3,
             Self::Identical => 4,
@@ -107,7 +123,7 @@ impl ClusterKind {
             },
             Self::NearlyIdentical => KindLabels {
                 title: "Nearly identical code",
-                taxonomy: "Type-2/3 near-copy",
+                taxonomy: "Type-2 / close Type-3 clone",
                 css_suffix: "nearly-identical",
             },
             Self::SameBehavior => KindLabels {
@@ -117,12 +133,12 @@ impl ClusterKind {
             },
             Self::StructuralOnly => KindLabels {
                 title: "Same shape, different content",
-                taxonomy: "structural-only match",
+                taxonomy: "Informational non-clone",
                 css_suffix: "structural-only",
             },
             Self::LooselySimilar => KindLabels {
-                title: "Loosely similar code",
-                taxonomy: "weak Type-3 relation",
+                title: "Similar code",
+                taxonomy: "Type-3 clone with larger edits",
                 css_suffix: "loosely-similar",
             },
         }
@@ -163,7 +179,7 @@ mod tests {
         );
         assert_eq!(
             ClusterKind::StructuralOnly.weaker(ClusterKind::LooselySimilar),
-            ClusterKind::LooselySimilar
+            ClusterKind::StructuralOnly
         );
         assert_eq!(
             ClusterKind::Identical.weaker(ClusterKind::Identical),
@@ -172,15 +188,15 @@ mod tests {
     }
 
     #[test]
-    fn a_pair_the_direct_comparison_rejects_folds_to_the_loosest_kind() {
-        assert_eq!(ClusterKind::from_pair(None), ClusterKind::LooselySimilar);
+    fn a_rejected_pair_has_no_clone_kind() {
+        assert_eq!(ClusterKind::from_pair(None), None);
         assert_eq!(
             ClusterKind::from_pair(Some(PairClassification::Identical)),
-            ClusterKind::Identical
+            Some(ClusterKind::Identical)
         );
         assert_eq!(
             ClusterKind::from_pair(Some(PairClassification::StructuralOnly)),
-            ClusterKind::StructuralOnly
+            Some(ClusterKind::StructuralOnly)
         );
     }
 

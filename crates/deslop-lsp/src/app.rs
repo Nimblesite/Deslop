@@ -8,11 +8,12 @@
 use std::{io::Write, path::PathBuf, process::ExitCode};
 
 use anyhow::{anyhow, Result};
-use deslop_core::{requests_version, version_contract_output, ComponentKind};
+use deslop_core::{
+    config::ClonePolicy, live::transport::IpcMode, requests_version, version_contract_output,
+    ComponentKind,
+};
 use tokio::runtime::{Builder, Runtime};
 use tracing_subscriber::EnvFilter;
-
-use deslop_core::{config::ClonePolicy, live::transport::IpcMode};
 
 use crate::backend::LspEmbeddingConfig;
 

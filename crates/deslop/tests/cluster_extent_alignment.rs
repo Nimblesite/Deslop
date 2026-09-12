@@ -24,8 +24,7 @@
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::go_scope::*;
-use crate::common::*;
+use crate::common::{go_scope::*, *};
 
 /// Fixture whose two modules are a line-for-line identifier rename.
 const EXTENT_FIXTURE: &str = "python-cluster-extent-alignment";

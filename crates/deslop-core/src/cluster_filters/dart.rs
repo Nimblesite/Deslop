@@ -2,32 +2,59 @@
 
 use tree_sitter::Node;
 
+use super::{
+    node_intersects_range,
+    node_search::{covered_children_satisfy, KindSearch},
+    parse_for, raw_snippet_texts_differ, ParseCache, Snippet,
+};
 use crate::ast::named_children;
 
-use super::{
-    node_intersects_range, node_search::covered_children_satisfy, parse_for,
-    raw_snippet_texts_differ, ParseCache, Snippet,
-};
+/// Framework superclass markers ([CLONE-NOISE-DART-WIDGET-SCAFFOLD]).
+/// These identify potential shells; authored logic must still pass the body check.
+const WIDGET_SUPERCLASS_MARKERS: &[&str] = &["StatelessWidget", "StatefulWidget", "State"];
 
-/// Superclass markers of Flutter's mandated widget-declaration scaffold
-/// ([CLONE-NOISE-DART-WIDGET-SCAFFOLD]). Every `StatefulWidget`
-/// must declare its own `createState`, every `StatelessWidget` its own
-/// `build`, and every state class extends `State<T>` — none of it can
-/// be extracted or merged, so a cluster of such declarations must never
-/// rank as actionable duplication.
-const WIDGET_SUPERCLASS_MARKERS: &[&str] = &["StatelessWidget", "StatefulWidget", "State<"];
+/// A closed set of construction-only body nodes. Computation, control flow,
+/// closures and unknown syntax cannot establish scaffolding.
+const SCAFFOLD_BODY_KINDS: &[&str] = &[
+    "function_body",
+    "block",
+    "return_statement",
+    "call_expression",
+    "member_expression",
+    "arguments",
+    "named_argument",
+    "label",
+    "identifier",
+    "type",
+    "type_identifier",
+    "type_arguments",
+    "instantiation_expression",
+    "list_literal",
+    "decimal_integer_literal",
+    "decimal_floating_point_literal",
+    "true",
+    "false",
+    "null_literal",
+    "string_literal",
+    "string_literal_single_quotes",
+    "string_literal_double_quotes",
+    "template_chars_single_single",
+    "template_chars_double_single",
+];
 
 /// Returns true when every member of a Dart cluster covers only whole
-/// widget-scaffold class declarations ([CLONE-NOISE-DART-WIDGET-SCAFFOLD]).
+/// construction-only widget classes ([CLONE-NOISE-DART-WIDGET-SCAFFOLD]).
 /// Containment is deliberate in both directions: a member must contain
 /// its classes entirely (so a subtree *inside* a widget body — the
 /// actual copy-pasted logic — never matches), and every top-level node
 /// the member touches must be such a class (so a window mixing a free
-/// function with a widget shell keeps clustering as logic). Body-level
-/// clones keep surfacing as their own subtree clusters, which is what
-/// makes hiding the shells recall-safe.
+/// function with a widget shell keeps clustering as logic). Classes containing
+/// authored logic do not qualify, so their copied bodies remain reportable.
 pub(super) fn is_dart_widget_scaffold_cluster(snippets: &[Snippet<'_>]) -> bool {
-    snippets.len() >= 2 && snippets.iter().all(covers_only_widget_scaffold_classes)
+    snippets.len() >= 2
+        && raw_snippet_texts_differ(snippets)
+        && snippets.iter().all(covers_only_widget_scaffold_classes)
+        && !has_copied_build_body(snippets)
 }
 
 /// True when the snippet covers ≥1 widget-scaffold class and nothing else.
@@ -53,33 +80,136 @@ fn covers_only_widget_scaffold_classes(snippet: &Snippet<'_>) -> bool {
     covered_classes >= 1
 }
 
-/// True when `node` is fully inside the snippet range and is (part of)
-/// the mandated Flutter app launcher — `void main() => runApp(…)`. The
-/// Dart grammar splits a top-level function into signature and body
-/// siblings, so both halves are recognised by their launcher markers.
+/// Recognises only a complete `main` declaration calling `runApp` once.
 fn is_contained_main_launcher(node: Node<'_>, snippet: &Snippet<'_>) -> bool {
     if node.start_byte() < snippet.range.start || node.end_byte() > snippet.range.end {
         return false;
     }
-    node.utf8_text(snippet.source)
-        .is_ok_and(|text| text.starts_with("void main(") || text.contains("runApp("))
+    if node.kind() != "function_declaration"
+        || declaration_name(node, snippet.source) != Some(b"main")
+    {
+        return false;
+    }
+    node.child_by_field_name("body")
+        .and_then(launcher_call)
+        .is_some_and(|call| {
+            call.child_by_field_name("function")
+                .filter(|callee| callee.kind() == "identifier")
+                .and_then(|callee| snippet.source.get(callee.byte_range()))
+                == Some(b"runApp")
+                && body_is_scaffold(call)
+        })
+}
+
+/// Unwraps only a single call, rejecting additional statements or expressions.
+fn launcher_call(node: Node<'_>) -> Option<Node<'_>> {
+    match node.kind() {
+        "call_expression" => Some(node),
+        "function_body" | "block" | "expression_statement" => {
+            let children = named_children(node);
+            let [child] = children.as_slice() else {
+                return None;
+            };
+            launcher_call(*child)
+        }
+        _ => None,
+    }
 }
 
 /// True when `node` is a class declaration fully inside the snippet
 /// range whose superclass names a Flutter widget marker.
 fn is_contained_widget_scaffold_class(node: Node<'_>, snippet: &Snippet<'_>) -> bool {
-    if node.kind() != "class_definition"
+    if node.kind() != "class_declaration"
         || node.start_byte() < snippet.range.start
         || node.end_byte() > snippet.range.end
     {
         return false;
     }
-    named_children(node).into_iter().any(|child| {
-        child.kind() == "superclass"
-            && child
-                .utf8_text(snippet.source)
-                .is_ok_and(|text| WIDGET_SUPERCLASS_MARKERS.iter().any(|m| text.contains(m)))
+    is_widget_superclass(node, snippet.source) && has_only_scaffold_bodies(node, snippet)
+}
+
+/// Matches the parsed superclass identifier exactly, without substring matches.
+fn is_widget_superclass(node: Node<'_>, source: &[u8]) -> bool {
+    node.child_by_field_name("superclass")
+        .and_then(|superclass| superclass.child_by_field_name("type"))
+        .and_then(|kind| kind.named_child(0))
+        .filter(|name| name.kind() == "type_identifier")
+        .and_then(|name| source.get(name.byte_range()))
+        .is_some_and(|name| {
+            WIDGET_SUPERCLASS_MARKERS
+                .iter()
+                .any(|marker| name == marker.as_bytes())
+        })
+}
+
+/// A whole group survives only when every member shares the same copied layout.
+fn has_copied_build_body(snippets: &[Snippet<'_>]) -> bool {
+    let Some(first) = snippets.first().and_then(widget_layout_key) else {
+        return false;
+    };
+    snippets
+        .iter()
+        .all(|snippet| widget_layout_key(snippet).as_ref() == Some(&first))
+}
+
+/// [CLONE-NOISE-DART-WIDGET-SCAFFOLD] The full ordered layout of a proven scaffold.
+pub(super) fn widget_layout_key(snippet: &Snippet<'_>) -> Option<Vec<Vec<u8>>> {
+    if !covers_only_widget_scaffold_classes(snippet) {
+        return None;
+    }
+    let bodies = build_body_bytes(snippet)?;
+    (!bodies.is_empty()).then_some(bodies)
+}
+
+/// Collects complete `build` bodies contained in the reported range.
+fn build_body_bytes(snippet: &Snippet<'_>) -> Option<Vec<Vec<u8>>> {
+    let tree = parse_for(snippet)?;
+    KindSearch::enclosed(snippet.range, |kind| kind == "method_declaration")
+        .nodes(tree.root_node())
+        .into_iter()
+        .filter(|method| declaration_name(*method, snippet.source) == Some(b"build"))
+        .map(|method| {
+            let body = method.child_by_field_name("body")?;
+            snippet.source.get(body.byte_range()).map(<[u8]>::to_vec)
+        })
+        .collect()
+}
+
+/// Reads the declared name through a function or method signature.
+fn declaration_name<'src>(node: Node<'_>, source: &'src [u8]) -> Option<&'src [u8]> {
+    let signature = node.child_by_field_name("signature")?;
+    let function = if signature.kind() == "method_signature" {
+        signature.named_child(0)?
+    } else {
+        signature
+    };
+    let name = function.child_by_field_name("name")?;
+    source.get(name.byte_range())
+}
+
+/// Every covered executable body must prove construction-only scaffolding.
+fn has_only_scaffold_bodies(node: Node<'_>, snippet: &Snippet<'_>) -> bool {
+    KindSearch::enclosed(snippet.range, |kind| {
+        matches!(kind, "function_body" | "function_expression")
     })
+    .nodes(node)
+    .into_iter()
+    .all(body_is_scaffold)
+}
+
+/// Rejects authored computation and unknown syntax in an iterative AST walk.
+fn body_is_scaffold(body: Node<'_>) -> bool {
+    let mut pending = vec![body];
+    while let Some(node) = pending.pop() {
+        if node.is_extra() {
+            continue;
+        }
+        if !SCAFFOLD_BODY_KINDS.contains(&node.kind()) {
+            return false;
+        }
+        pending.extend(named_children(node));
+    }
+    true
 }
 
 /// Returns true for repeated Dart field/const declarations. Field lists

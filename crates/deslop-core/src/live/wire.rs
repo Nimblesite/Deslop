@@ -9,7 +9,6 @@
 //! data shape itself is generated).
 
 use crate::delta::ReportDelta;
-
 pub use crate::wire_generated::{
     AnalysisState, ChangeSummary, EmbeddingModelInfo, EmbeddingPhase, EmbeddingProgress,
     FileReport, FindSimilarInput, FindSimilarRequest, FindSimilarResult, ReportChangedNotification,

@@ -33,9 +33,9 @@
 
 use serde_json::Value;
 
-use crate::common::scan_dir::temp_scan_dir;
-use crate::common::signals::assert_no_pair_surface_on_cluster;
-use crate::common::{multilang::*, *};
+use crate::common::{
+    multilang::*, scan_dir::temp_scan_dir, signals::assert_no_pair_surface_on_cluster, *,
+};
 
 /// The floor gh #389 reproduces at. The 13-node signature window only
 /// exists below `MULTILANG_MIN_NODES`, so a suite that never scans this

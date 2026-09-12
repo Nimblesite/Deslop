@@ -26,4 +26,5 @@ macro_rules! summed_counters {
     };
 }
 
-pub(crate) use {absorb_counters, summed_counters};
+pub(crate) use absorb_counters;
+pub(crate) use summed_counters;

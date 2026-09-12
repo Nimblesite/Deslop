@@ -4,9 +4,8 @@
 
 use std::path::Path;
 
-use crate::logging::LogSink;
-
 use super::{theme::Theme, ColorChoice, PreambleKnobs, WrittenArtefacts};
+use crate::logging::LogSink;
 
 /// Prints the "about to do" line. Plain English by default; technical
 /// knobs (min-nodes, incremental, etc.) are hidden unless `--technical`

@@ -14,12 +14,13 @@ use std::{
 use anyhow::{anyhow, Result};
 use serde_json::Value;
 
-use crate::common::scan_dir::temp_scan_dir;
-use crate::common::{
-    cluster_size, embeddings::run_mock_embedding_report, expect_cluster_spanning, occurrence_files,
-    signals::has_verbatim_pair,
+use crate::{
+    common::{
+        cluster_size, embeddings::run_mock_embedding_report, expect_cluster_spanning,
+        occurrence_files, scan_dir::temp_scan_dir, signals::has_verbatim_pair,
+    },
+    mock_ollama::MockOllama,
 };
-use crate::mock_ollama::MockOllama;
 
 /// Clone files each corpus writes.
 const CLONE_FILES: usize = 8;

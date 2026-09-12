@@ -26,6 +26,8 @@
 
 use std::collections::HashMap;
 
+use fold::{join_states, TokenState};
+
 use crate::{
     ast::NormalizedNode,
     boilerplate::is_boilerplate,
@@ -35,8 +37,6 @@ use crate::{
     state::FileId,
     tokens::{cross_language_token_stream_for_fingerprint, kgrams, KGRAM_WIDTH},
 };
-
-use fold::{join_states, TokenState};
 
 /// The composable per-subtree fold state ([PIPELINE-SIGNATURE-FOLD]).
 mod fold;
@@ -346,7 +346,7 @@ pub fn build_cross_language_signatures<S: std::hash::BuildHasher>(
 }
 
 /// Builds one cross-language signature, falling back to fingerprint scope.
-fn cross_language_signature(
+pub(crate) fn cross_language_signature(
     fingerprint: &Fingerprint,
     tree_index: &HashMap<FileId, &NormalizedNode>,
     language: Option<&str>,

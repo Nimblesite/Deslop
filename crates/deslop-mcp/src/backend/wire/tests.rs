@@ -37,8 +37,8 @@ const BELOW_MIN_NODES: bool = false;
 const ENDPOINT: &str = "/workspace/.deslop/cache/deslop.sock";
 /// The remedy the message must name.
 const REMEDY: &str = "reinstall the Deslop VSIX";
-/// The field this wire carries where the foreign report carries `weight`.
-const RENAMED_FIELD: &str = "missing field `mass`";
+/// The first required field absent from the foreign report's cluster shape.
+const MISSING_FIELD: &str = "missing field `severity`";
 /// The prefix of every raw serde field error.
 const FIELD_ERROR: &str = "missing field";
 /// What the guard reports as the engine version of an unstamped reply.
@@ -100,7 +100,7 @@ fn a_same_version_reply_that_does_not_decode_names_the_field_the_wire_moved() ->
     let message = refused_report_message(REPORT_GET, reply)?;
     ensure_names_the_condition(&message, REPORT_GET, crate::version())?;
     ensure!(
-        message.contains(RENAMED_FIELD),
+        message.contains(MISSING_FIELD),
         "names the field this binary expects and the reply lacks: {message}"
     );
     Ok(())

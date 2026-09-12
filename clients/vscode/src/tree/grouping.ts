@@ -4,20 +4,14 @@
 // [VSIX-TOP-OFFENDERS-FOLDER-MODE]. No VS Code disposables here — only
 // TreeItem construction. Folder-mode building lives in `./folder`,
 // which reuses `groupByFile` / `fileNodeWithChildren` from here.
-//
-// Every figure these builders show belongs to the engine. The global
-// rank, the severity band and the clone kind are stamped on the cluster
-// ([VSIX-TOP-OFFENDERS-RANK-GLOBAL], [SEVERITY-BAND], [CLONE-KIND-FOLD])
-// instead of being re-derived here, and a group's headline mass is read
-// off its worst member rather than recomputed as a maximum. What is left
-// here is ordering and nesting — presentation mechanics over engine
-// values.
+// Every displayed mass and rank comes from the engine.
 
 import {
   CLUSTER_KINDS,
   ClusterKind,
   ReportCluster,
   ReportOccurrence,
+  compareClusterRank,
 } from "../types/report";
 import {
   ClusterNode,
@@ -55,7 +49,7 @@ export interface FileAgg {
  * which cluster this is, ties included. */
 export function worstCluster(clusters: ReportCluster[]): ReportCluster | undefined {
   return clusters.reduce<ReportCluster | undefined>(
-    (worst, cluster) => (worst && worst.rank <= cluster.rank ? worst : cluster),
+    (worst, cluster) => (worst && compareClusterRank(worst, cluster) <= 0 ? worst : cluster),
     undefined,
   );
 }
@@ -69,9 +63,7 @@ function totalMass(clusters: ReportCluster[]): number {
 // Worst-first display order is the engine's own ranking, so ordering by
 // `rank` reproduces it exactly — including the tie-break the engine
 // applies between equally weighted clusters.
-function byRank(left: ReportCluster, right: ReportCluster): number {
-  return left.rank - right.rank;
-}
+const byRank = compareClusterRank;
 
 // Shared display ordering for cluster mode and kind mode: impact
 // keeps the report's worst-first order; path re-orders by representative
@@ -162,25 +154,36 @@ export function fileNodeWithChildren(file: FileAgg): FileNode {
 // provider's getChildren impl trivial.
 const fileNodeClusters = new WeakMap<FileNode, ReportCluster[]>();
 
-// Children of a FileNode: one KindGroupNode per clone kind present,
-// ordered by each kind's worst cluster, with the clusters inside each
-// group in the engine's worst-first order.
+// [CLONE-KIND-LABELS] Splits clusters into one section per kind present,
+// in the category display order the registry declares — strongest
+// relation first, informational shape matches last. Both grouping axes
+// call this, so a file's sections and the kind-mode roots can never order
+// the same categories differently.
+//
+// Category order is not mass order: [CLONE-BUCKETS-STRUCTURAL-ONLY] puts
+// shape-only "always the last category, below Similar, regardless of its
+// size or number of matches", so a heavy informational finding must not
+// float above the copies it sits beside. Ordering WITHIN each section is
+// the caller's, and stays the engine's worst-first rank ([RANK-MASS-SUM]).
+function kindSections(
+  clusters: ReportCluster[],
+  order: (list: ReportCluster[]) => ReportCluster[],
+): { kind: ClusterKind; list: ReportCluster[] }[] {
+  return CLUSTER_KINDS.map((kind) => ({
+    kind,
+    list: order(clusters.filter((cluster) => cluster.kind === kind)),
+  })).filter(({ list }) => list.length > 0);
+}
+
+// Children of a FileNode: one KindGroupNode per clone kind present, in the
+// category display order, with the clusters inside each group in the
+// engine's worst-first order.
 export function getFileNodeChildren(file: FileNode): Node[] {
   const clusters = fileNodeClusters.get(file);
   if (!clusters) return [];
-  const byKind = new Map<ClusterKind, ReportCluster[]>();
-  for (const cluster of clusters) {
-    const list = byKind.get(cluster.kind);
-    if (list) list.push(cluster);
-    else byKind.set(cluster.kind, [cluster]);
-  }
-  const groups = Array.from(byKind.entries()).flatMap(([kind, list]) => {
-    const ordering = list.slice().sort(byRank);
-    const worst = worstCluster(ordering);
-    return worst ? [{ kind, list: ordering, worst }] : [];
-  });
-  groups.sort((left, right) => right.worst.mass - left.worst.mass);
-  return groups.map(({ kind, list }) => registerGroup(new KindGroupNode(kind, list), list));
+  return kindSections(clusters, (list) => list.slice().sort(byRank)).map(({ kind, list }) =>
+    registerGroup(new KindGroupNode(kind, list), list),
+  );
 }
 
 // Per-GroupNode side table — one machinery for BOTH group axes
@@ -212,11 +215,7 @@ export function getGroupNodeChildren(group: GroupNode): Node[] {
 // orders them by representative path, exactly like cluster mode. Rank #N
 // stays global.
 export function buildKindMode(clusters: ReportCluster[], sortBy: SortBy): Node[] {
-  const display = ordered(clusters, sortBy);
-  return CLUSTER_KINDS.map((kind) => ({
-    kind,
-    list: display.filter((cluster) => cluster.kind === kind),
-  }))
-    .filter(({ list }) => list.length > 0)
-    .map(({ kind, list }) => registerGroup(new KindGroupNode(kind, list, true), list));
+  return kindSections(ordered(clusters, sortBy), (list) => list).map(({ kind, list }) =>
+    registerGroup(new KindGroupNode(kind, list, true), list),
+  );
 }

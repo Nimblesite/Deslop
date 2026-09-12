@@ -14,13 +14,13 @@ use std::{
 };
 
 use anyhow::{anyhow, ensure, Context, Result};
-use serde_json::{json, Value};
-
-use crate::common;
 use common::{
     array_field, call_tool, initialized_mcp, lsp_workspace_with_socket, str_field,
     structured_content, McpHandle,
 };
+use serde_json::{json, Value};
+
+use crate::common;
 
 /// Lower bound for the slug shared with `clusterSlug()` in the VSIX
 /// (`clients/vscode/src/types/report.ts`). Hard-coded here so a drift

@@ -1,7 +1,10 @@
+import { buildServerArgs, currentInitializationOptions, syncEmbeddingSettingsToLsp, DESLOP_CONFIGURATION_NAMESPACE } from "./extensionConfiguration";
+export { buildServerArgs, currentInitializationOptions, syncEmbeddingSettingsToLsp } from "./extensionConfiguration";
 // Deslop VSIX entry point. Per CLAUDE.md: < 500 lines, thin glue,
 // all UI logic split across bubble/, tree/, decorations/, commands/, webview/.
 
 import * as vscode from "vscode";
+import { watchDiagnosticPresentation } from "./diagnosticPresentation";
 import {
   LanguageClient,
   LanguageClientOptions,
@@ -55,7 +58,6 @@ let activeReportStore: ReportStore | undefined;
 
 const REPORT_READY_CONTEXT = "deslop.reportReady";
 const SET_CONTEXT_COMMAND = "setContext";
-const DESLOP_CONFIGURATION_NAMESPACE = "deslop";
 
 // Derived from the single language registry so a newly supported language
 // reaches the hover card and LSP document sync without a per-site edit
@@ -64,18 +66,6 @@ const ANALYSED_DOCUMENTS = ANALYSED_LANGUAGE_IDS.map((language) => ({
   language,
   scheme: "file",
 }));
-
-const PRODUCTION_EMBEDDING_PROVIDER = "ollama";
-const DEFAULT_EMBEDDING_MODEL = "nomic-embed-text";
-const DEFAULT_EMBEDDING_ENDPOINT = "http://127.0.0.1:11434";
-const DEFAULT_EMBEDDING_MODE = "off";
-
-interface EmbeddingSettings {
-  readonly provider: typeof PRODUCTION_EMBEDDING_PROVIDER;
-  readonly model: string;
-  readonly endpoint: string;
-  readonly mode: string;
-}
 
 /// Public API returned by `activate()`. Lets tests reach the live
 /// LanguageClient without parallel activation or command-surface hacks.
@@ -122,6 +112,7 @@ export async function activate(
   // [FACET-TOP-OFFENDERS-FILTER] Seed the store's facet-filter mirror so
   // the status bar and webviews slice correctly from the first render.
   reportStore.setFacetFilter(readTopOffendersFilter());
+  context.subscriptions.push(watchDiagnosticPresentation(reportStore));
 
   const topOffenders = new TopOffendersProvider(reportStore, ticker);
   const metrics = new MetricsProvider(reportStore, ticker);
@@ -377,74 +368,11 @@ export function startLanguageClient(
   return new LanguageClient(DESLOP_CONFIGURATION_NAMESPACE, "Deslop", serverOptions, clientOptions);
 }
 
-export function buildServerArgs(
-  workspaceRoot: string | undefined,
-  debug: boolean,
-): string[] {
-  if (!workspaceRoot) return debug ? ["--debug"] : [];
-  const args = [workspaceRoot];
-  const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE);
-  const workerThreads = cfg.get<number>("lsp.workerThreads", 0);
-  if (Number.isInteger(workerThreads) && workerThreads > 0) {
-    args.push("--worker-threads", String(workerThreads));
-  }
-  const nice = cfg.get<number>("lsp.nice", 0);
-  if (Number.isInteger(nice) && nice !== 0) {
-    args.push("--nice", String(Math.max(-20, Math.min(19, nice))));
-  }
-  // [RANK-STRUCTURAL-ONLY] / [RANK-STRUCTURAL-ONLY]: "default" defers
-  // to .deslop.toml; anything else overrides it for this session.
-  const structuralOnly = cfg.get<string>("ranking.structuralOnly", "default");
-  if (["demote", "ignore", "keep"].includes(structuralOnly)) {
-    args.push("--ranking-structural-only", structuralOnly);
-  }
-  if (debug) args.push("--debug");
-  return args;
-}
-
 export function resolveWorkspaceRoot(): string | undefined {
   const folders = vscode.workspace.workspaceFolders;
   if (!folders || folders.length === 0) return undefined;
   const first = folders[0];
   return first?.uri.fsPath;
-}
-
-export function currentInitializationOptions(): Record<string, unknown> {
-  const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE);
-  const embedding = embeddingSettingsFromConfiguration(cfg);
-  return {
-    minNodes: cfg.get<number>("minNodes", 30),
-    embedding,
-    incremental: cfg.get<boolean>("incremental", true),
-    configPath: cfg.get<string>("configPath", ""),
-  };
-}
-
-function embeddingSettingsFromConfiguration(
-  cfg: vscode.WorkspaceConfiguration,
-): EmbeddingSettings {
-  const provider = cfg.get<string>(
-    "embedding.provider",
-    PRODUCTION_EMBEDDING_PROVIDER,
-  );
-  const endpoint = cfg.get<string>(
-    "embedding.endpoint",
-    DEFAULT_EMBEDDING_ENDPOINT,
-  );
-  if (provider !== PRODUCTION_EMBEDDING_PROVIDER) {
-    return {
-      provider: PRODUCTION_EMBEDDING_PROVIDER,
-      model: DEFAULT_EMBEDDING_MODEL,
-      endpoint,
-      mode: DEFAULT_EMBEDDING_MODE,
-    };
-  }
-  return {
-    provider: PRODUCTION_EMBEDDING_PROVIDER,
-    model: cfg.get<string>("embedding.model", DEFAULT_EMBEDDING_MODEL),
-    endpoint,
-    mode: cfg.get<string>("embedding.mode", DEFAULT_EMBEDDING_MODE),
-  };
 }
 
 export function wireDirtyDocuments(store: ReportStore): vscode.Disposable {
@@ -463,31 +391,6 @@ export function wireDirtyDocuments(store: ReportStore): vscode.Disposable {
       onSave.dispose();
     },
   };
-}
-
-export async function syncEmbeddingSettingsToLsp(
-  store: ReportStore,
-  clientOf: () => LanguageClient | undefined,
-): Promise<void> {
-  const c = clientOf();
-  if (!c) return;
-  const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE);
-  const { provider, model, endpoint, mode } = embeddingSettingsFromConfiguration(cfg);
-  if (mode === "off") return;
-  if (store.current.pendingEmbeddingModel === model) return;
-  const active = store.current.report?.embedding_provenance;
-  if (active?.provider_id === provider && active.model_id === model) return;
-  store.setPendingEmbeddingModel(model);
-  try {
-    await c.sendRequest("deslop/embeddingSetModel", {
-      provider_id: provider,
-      model_id: model,
-      endpoint,
-    });
-  } catch (err) {
-    store.setPendingEmbeddingModel(null);
-    throw err;
-  }
 }
 
 export async function seedInitialReport(

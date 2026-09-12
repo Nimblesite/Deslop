@@ -23,7 +23,14 @@ use std::{
     path::{Path, PathBuf},
 };
 
+pub(crate) use builtin::has_generated_header;
+use builtin::{built_in_report_hidden, corpus_built_in_excluded};
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
+use ranking::resolve_ranking_policy;
+pub use ranking::{
+    ClonePolicy, RankingPolicy, DEFAULT_DATA_CLONE_WEIGHT, DEFAULT_STRUCTURAL_ONLY_WEIGHT,
+};
+use raw::{resolve_threshold, PersistedProcessing, RawConfig};
 use serde::Deserialize;
 
 use crate::{
@@ -31,17 +38,11 @@ use crate::{
     report_metrics::{ThresholdSource, ThresholdSummary},
 };
 
-pub(crate) use builtin::has_generated_header;
-use builtin::{built_in_report_hidden, corpus_built_in_excluded};
-use ranking::resolve_ranking_policy;
-pub use ranking::{
-    ClonePolicy, RankingPolicy, DEFAULT_DATA_CLONE_WEIGHT, DEFAULT_STRUCTURAL_ONLY_WEIGHT,
-};
-use raw::{resolve_threshold, PersistedProcessing, RawConfig};
-
 mod builtin;
 mod ranking;
 mod raw;
+mod tuning;
+pub use tuning::RoutingTuning;
 
 /// Default configuration file name searched for next to the scan root.
 pub const DEFAULT_CONFIG_FILENAME: &str = ".deslop.toml";
@@ -104,6 +105,8 @@ pub struct ExclusionConfig {
     split_by_language: bool,
     /// Compiled clone-category ranking policy ([RANK-CATEGORY]).
     ranking_policy: RankingPolicy,
+    /// [CLONE-BUCKETS-THRESHOLDS] Effective validated category thresholds.
+    routing: RoutingTuning,
 }
 
 /// Compiled matchers for a single language overlay.
@@ -119,6 +122,12 @@ struct LanguageMatchers {
 }
 
 impl ExclusionConfig {
+    /// Effective category settings shared by admission evidence and reporting.
+    #[must_use]
+    pub const fn routing(&self) -> RoutingTuning {
+        self.routing
+    }
+
     /// An empty configuration — nothing excluded, nothing hidden. Used
     /// when no config file is present.
     #[must_use]
@@ -136,6 +145,7 @@ impl ExclusionConfig {
             incremental: PersistedProcessing::Enabled,
             split_by_language: false,
             ranking_policy: RankingPolicy::default().with_global_override(),
+            routing: RoutingTuning::default(),
         }
     }
 
@@ -228,6 +238,7 @@ impl ExclusionConfig {
             incremental: PersistedProcessing::from_key(raw.analysis.incremental),
             split_by_language: raw.report.split_by_language,
             ranking_policy,
+            routing: raw.tuning.routing.validate(path)?,
         })
     }
 

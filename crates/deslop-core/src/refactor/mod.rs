@@ -24,6 +24,7 @@ pub(crate) mod wire_edit;
 
 use std::path::Path;
 
+pub use emit::{ExtractMethodPlan, PlannedEdit};
 use free_vars::WalkTables;
 
 use crate::{
@@ -33,8 +34,6 @@ use crate::{
     refactor::emit::EmitRequest,
     report::ReportCluster,
 };
-
-pub use emit::{ExtractMethodPlan, PlannedEdit};
 
 /// Refactor-computation failure. Reserved for "we tried to compute and
 /// the parse tree was missing" — failed preconditions are `Ok(None)`,

@@ -1,10 +1,11 @@
 //! Explicit endpoint-to-endpoint evidence measurement ([FUSED-PAIR-SIGNALS]).
 
 use std::{
-    collections::HashMap,
+    collections::{hash_map::RandomState, HashMap},
     path::{Path, PathBuf},
 };
 
+use super::PipelineSession;
 use crate::{
     ast::NormalizedNode,
     content::{measure_aligned_core, measure_pair_content_indexed, tree_index_of, PairScope},
@@ -12,13 +13,14 @@ use crate::{
     error::CoreError,
     fingerprint::Fingerprint,
     lsh::{estimate_jaccard, SignatureLookup},
-    overlap::{judge_core, OverlapMeasurer},
-    pair::PairScore,
-    report::{PairComparison, PairComparisonParams, PairEndpoint, PairEvidence, PairTextIdentity},
+    overlap::{judge_core, OverlapMeasurer, RescueContext},
+    pair::{CandidatePair, PairScore},
+    report::{
+        ContentMeasurement, PairComparison, PairComparisonParams, PairEndpoint, PairEvidence,
+        PairTextIdentity,
+    },
     state::FileId,
 };
-
-use super::PipelineSession;
 
 mod admission;
 use admission::AdmissionFacts;
@@ -92,10 +94,25 @@ impl PipelineSession {
         provider: Option<&dyn EmbeddingProvider>,
     ) -> Result<PairEvidence, CoreError> {
         let trees = self.trees_for_pair(pair)?;
-        let mut axes = PairAxes::new(&trees);
+        let pairs = self.comparison_anchor_pairs();
+        let mut axes = PairAxes::new(&trees, self, &pairs);
         let embedding_cos = self.embedding_cos(pair, provider)?;
         let measurements = self.measure_axes(pair, &mut axes, embedding_cos);
         Ok(self.build_evidence(pair, measurements))
+    }
+
+    /// [FUSED-SHARED-SUBTREE] Explicit comparisons use discovery's exact-copy anchors.
+    fn comparison_anchor_pairs(&self) -> Vec<CandidatePair> {
+        let signatures = self.store.signatures();
+        crate::pair::candidate_pairs_for_language_policy(
+            self.store.fingerprints(),
+            &signatures,
+            &crate::lsh::BandCollisionSource::new(&signatures),
+            &[],
+            None,
+            &self.file_languages,
+            self.exclusion.allows_cross_language_comparison(),
+        )
     }
 
     /// Measures structural, token, and raw-content evidence beside the
@@ -113,7 +130,7 @@ impl PipelineSession {
         let structural = axes
             .overlap
             .overlap(pair.left.fingerprint, pair.right.fingerprint);
-        let token_jaccard = self.token_jaccard(pair, merkle_equal);
+        let token_jaccard = self.token_jaccard(pair, merkle_equal, &axes.trees);
         let content = measure_pair_content_indexed(
             pair.left.fingerprint,
             pair.right.fingerprint,
@@ -128,10 +145,13 @@ impl PipelineSession {
                 token_jaccard,
                 embedding_cos,
             },
-            agreement: content.agreement,
-            rename_consistency: content.rename_consistency,
-            literal_fraction: content.literal_fraction,
+            content,
             core_is_copy: self.core_is_copy(pair, axes),
+            rescue_scope: axes.rescue.allows_rescue(
+                pair.left.fingerprint,
+                pair.right.fingerprint,
+                structural,
+            ),
             merkle_equal,
             text,
         }
@@ -164,15 +184,41 @@ impl PipelineSession {
     }
 
     /// Estimates token Jaccard, applying the pair-local Merkle correction.
-    fn token_jaccard(&self, pair: &ResolvedPair<'_>, merkle_equal: bool) -> f64 {
+    fn token_jaccard(
+        &self,
+        pair: &ResolvedPair<'_>,
+        merkle_equal: bool,
+        trees: &HashMap<FileId, &NormalizedNode>,
+    ) -> f64 {
         if merkle_equal {
             return 1.0;
+        }
+        if pair.cross_language(&self.file_languages) {
+            return self.cross_language_jaccard(pair, trees);
         }
         let signatures = self.store.signatures();
         pair.left
             .signature(&signatures)
             .zip(pair.right.signature(&signatures))
             .map_or(0.0, |(left, right)| estimate_jaccard(left, right))
+    }
+
+    /// [CONFIG-CROSS-LANGUAGE] Uses discovery's alias signatures for the same endpoints.
+    fn cross_language_jaccard(
+        &self,
+        pair: &ResolvedPair<'_>,
+        trees: &HashMap<FileId, &NormalizedNode>,
+    ) -> f64 {
+        let signature = |endpoint: ResolvedEndpoint<'_>| {
+            super::super::signatures::cross_language_signature(
+                endpoint.fingerprint,
+                trees,
+                self.file_languages
+                    .get(&endpoint.fingerprint.file_id)
+                    .copied(),
+            )
+        };
+        estimate_jaccard(&signature(pair.left), &signature(pair.right))
     }
 
     /// Measures cosine for the two exact source slices when embeddings are active.
@@ -237,10 +283,15 @@ impl PipelineSession {
             structural: measured.score.structural,
             token_jaccard: measured.score.token_jaccard,
             embedding_cos: measured.score.embedding_cos,
-            agreement: measured.agreement,
-            rename_consistency: measured.rename_consistency,
-            literal_fraction: measured.literal_fraction,
-            text_identity: measured.text,
+            agreement: measured.content.agreement,
+            content_measurement: if measured.content.measured {
+                ContentMeasurement::Measured
+            } else {
+                ContentMeasurement::Unmeasured
+            },
+            rename_consistency: measured.content.rename_consistency,
+            literal_fraction: measured.content.literal_fraction,
+            text_identity: measured.text.raw,
             fused_score: measured.score.bounded_fused(),
             content_required: facts.content_required,
             content_ok: facts.content_ok,
@@ -260,14 +311,28 @@ struct PairAxes<'corpus> {
     overlap: OverlapMeasurer<'corpus>,
     /// `FileId → normalised root` for the content axes.
     trees: HashMap<FileId, &'corpus NormalizedNode>,
+    /// Original candidate anchors preserve rescue scope and container checks.
+    rescue: RescueContext<'corpus, RandomState, RandomState>,
 }
 
 impl<'corpus> PairAxes<'corpus> {
     /// Indexes `trees` for every measurement that follows.
-    fn new(trees: &'corpus [NormalizedNode]) -> Self {
+    fn new(
+        trees: &'corpus [NormalizedNode],
+        session: &'corpus PipelineSession,
+        pairs: &[CandidatePair],
+    ) -> Self {
         Self {
             overlap: OverlapMeasurer::new(trees),
             trees: tree_index_of(trees),
+            rescue: RescueContext::new(
+                pairs,
+                session.store.fingerprints(),
+                trees,
+                &session.sources,
+                &session.file_languages,
+                usize::try_from(session.min_nodes).unwrap_or(usize::MAX),
+            ),
         }
     }
 }
@@ -313,24 +378,54 @@ impl ResolvedPair<'_> {
         self.left.fingerprint.file_id != self.right.fingerprint.file_id
     }
 
+    /// Whether endpoint languages require discovery's cross-language token space.
+    fn cross_language(&self, languages: &HashMap<FileId, &'static str>) -> bool {
+        languages.get(&self.left.fingerprint.file_id)
+            != languages.get(&self.right.fingerprint.file_id)
+    }
+
     /// How far the two raw endpoint snippets are the same text, read once
     /// from the same bytes so the byte answer and the indentation answer
     /// cannot disagree ([FUSED-PAIR-SIGNALS]).
     fn text_identity(
         &self,
         sources: &std::collections::HashMap<crate::state::FileId, Vec<u8>>,
-    ) -> PairTextIdentity {
+    ) -> SourceIdentity {
         let snippets = self.snippets(sources);
         let [left, right] = snippets.as_slice() else {
-            return PairTextIdentity::Different;
+            return SourceIdentity {
+                raw: PairTextIdentity::Different,
+                identical: false,
+            };
         };
-        if left == right {
-            return PairTextIdentity::ByteIdentical;
+        SourceIdentity::measure(left, right)
+    }
+}
+
+/// Raw identity stays precise for refactoring; classification folds whitespace.
+#[derive(Clone, Copy)]
+struct SourceIdentity {
+    /// Whether an edit can preserve the exact source representation.
+    raw: PairTextIdentity,
+    /// [CLONE-BUCKETS-IDENTICAL] Equality after the shared ASCII-whitespace fold.
+    identical: bool,
+}
+
+impl SourceIdentity {
+    /// Measures both forms from the same source slices.
+    fn measure(left: &str, right: &str) -> Self {
+        let raw = if left == right {
+            PairTextIdentity::ByteIdentical
+        } else if same_lines_ignoring_indentation(left, right) {
+            PairTextIdentity::IndentationOnly
+        } else {
+            PairTextIdentity::Different
+        };
+        let fold = crate::report_render::canonicalise_whitespace;
+        Self {
+            raw,
+            identical: left == right || fold(left.as_bytes()) == fold(right.as_bytes()),
         }
-        if same_lines_ignoring_indentation(left, right) {
-            return PairTextIdentity::IndentationOnly;
-        }
-        PairTextIdentity::Different
     }
 }
 
@@ -349,19 +444,17 @@ fn same_lines_ignoring_indentation(left: &str, right: &str) -> bool {
 struct Measurements {
     /// Three bounded shape/semantic axes.
     score: PairScore,
-    /// Raw authored-content agreement.
-    agreement: f64,
-    /// Consistent rename evidence.
-    rename_consistency: f64,
-    /// Literal share.
-    literal_fraction: f64,
+    /// Keep the complete measured content, including rename proof and missing evidence.
+    content: crate::content::ContentEvidence,
     /// [FUSED-SHARED-SUBTREE-CORE] Whether the pair's aligned core clears
     /// the content gate — the rescue's content term.
     core_is_copy: bool,
+    /// Scope and container checks measured by the original rescue implementation.
+    rescue_scope: bool,
     /// Exact Merkle identity.
     merkle_equal: bool,
     /// How far the two raw source ranges are the same text.
-    text: PairTextIdentity,
+    text: SourceIdentity,
 }
 
 /// Validates two provider vectors and measures their canonical cosine.

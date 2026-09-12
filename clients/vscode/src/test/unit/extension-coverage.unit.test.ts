@@ -93,6 +93,7 @@ suite("extension coverage branches", () => {
       },
       incremental: false,
       configPath: "/tmp/deslop.toml",
+      diagnostics: { enabled: false, scope: "open-files", severityByKind: {} },
     });
   });
 

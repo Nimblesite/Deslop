@@ -1,22 +1,40 @@
 //! Exhaustive admission algebra for one explicit pair.
 
+use super::{Measurements, ResolvedPair};
 use crate::{
     buckets::{content_support, CONTENT_PROMOTE_FLOOR, CONTENT_SUPPORT_FLOOR},
     pair::{
-        CROSS_LANGUAGE_MIN_JACCARD, EMBEDDING_SUPPORT_FLOOR, FUSED_THRESHOLD, LSH_ONLY_MIN_JACCARD,
-        LSH_ONLY_MIN_NODE_COUNT, MAX_ENDPOINT_NODE_RATIO, SHARED_SUBTREE_MIN_JACCARD,
-        SHARED_SUBTREE_MIN_NODE_COUNT, SHARED_SUBTREE_MIN_OVERLAP,
+        PairScore, CROSS_LANGUAGE_MIN_JACCARD, EMBEDDING_SUPPORT_FLOOR, FUSED_THRESHOLD,
+        LSH_ONLY_MIN_JACCARD, LSH_ONLY_MIN_NODE_COUNT, MAX_ENDPOINT_NODE_RATIO,
+        SHARED_SUBTREE_MIN_JACCARD, SHARED_SUBTREE_MIN_NODE_COUNT, SHARED_SUBTREE_MIN_OVERLAP,
     },
+    pipeline::PipelineSession,
     report::{PairClassification, PairTextIdentity},
 };
-
-use super::{Measurements, ResolvedPair};
-use crate::pipeline::PipelineSession;
 
 /// Structural overlap at which normalised shape saturates the content guard.
 const SHAPE_IDENTICAL_FLOOR: f64 = 0.99;
 /// Token overlap at which the normalised token axis echoes saturated shape.
 const SATURATING_TOKEN_FLOOR: f64 = 0.95;
+/// Exact Merkle equality is the structural evidence available before alignment.
+const EXACT_MERKLE_SCORE: f64 = 1.0;
+/// Unequal hashes have no structural evidence until the alignment is measured.
+const NO_MERKLE_SCORE: f64 = 0.0;
+
+impl Measurements {
+    /// [FUSED-PRE-RESCUE-SCORE] Reproduces discovery's score before measured overlap exists.
+    fn pre_rescue_score(self) -> f64 {
+        PairScore {
+            structural: if self.merkle_equal {
+                EXACT_MERKLE_SCORE
+            } else {
+                NO_MERKLE_SCORE
+            },
+            ..self.score
+        }
+        .bounded_fused()
+    }
+}
 
 /// Fully evaluated pair-admission predicates.
 pub(super) struct AdmissionFacts {
@@ -28,6 +46,8 @@ pub(super) struct AdmissionFacts {
     pub(super) admitted: bool,
     /// First failed guard in specification order.
     failure: Option<AdmissionFailure>,
+    /// Effective category thresholds for this analysis.
+    routing: crate::config::RoutingTuning,
 }
 
 impl AdmissionFacts {
@@ -39,8 +59,7 @@ impl AdmissionFacts {
     ) -> Self {
         let policy = PairPolicy::from(session, pair, measured);
         let content_required = content_required(measured);
-        let content_ok =
-            !content_required || pair_content_support(measured) >= policy.content_floor;
+        let content_ok = !content_required || measured.content.clears(policy.content_floor);
         let failure = policy
             .failure
             .or((!content_ok).then_some(AdmissionFailure::Content));
@@ -49,18 +68,23 @@ impl AdmissionFacts {
             content_ok,
             admitted: failure.is_none(),
             failure,
+            routing: session.exclusion.routing(),
         }
     }
 
-    /// Classifies this pair only; rejected shape-only pairs remain explicit.
+    /// [CLONE-BUCKETS-ROUTING] Classifies established clones or measured near-zero content.
     pub(super) fn classification(&self, measured: Measurements) -> Option<PairClassification> {
-        if measured.text == PairTextIdentity::ByteIdentical {
-            return Some(PairClassification::Identical);
+        if self.admitted {
+            return classify_admitted(measured, self.routing);
         }
-        if self.content_required && !self.content_ok {
-            return Some(PairClassification::StructuralOnly);
-        }
-        classify_admitted(self.admitted, measured)
+        let negligible = measured.content.measured
+            && pair_content_support(measured) <= self.routing.shape_only_max_content;
+        let matching_shape = measured.score.structural >= self.routing.nearly_identical_min_shape;
+        (negligible
+            && matching_shape
+            && !measured.content.consistent_rename
+            && !measured.core_is_copy)
+            .then_some(PairClassification::StructuralOnly)
     }
 
     /// Human-readable result derived from the same predicates as `admitted`.
@@ -129,7 +153,7 @@ impl PairPolicy {
         } else {
             FUSED_THRESHOLD
         };
-        let rescue = rescue_applies(pair, measured, threshold);
+        let rescue = rescue_applies(pair, measured);
         let failure = first_policy_failure([
             (
                 !cross_language || explicit_cross_language,
@@ -144,16 +168,16 @@ impl PairPolicy {
                 AdmissionFailure::Lsh,
             ),
             (
-                measured.score.bounded_fused() >= threshold || rescue,
+                measured.pre_rescue_score() >= threshold || rescue,
                 AdmissionFailure::Score,
             ),
         ]);
         Self {
             failure,
-            content_floor: if pair.cross_file() {
-                CONTENT_SUPPORT_FLOOR
-            } else {
+            content_floor: if lsh_only_pair_needs_content(measured) {
                 CONTENT_PROMOTE_FLOOR
+            } else {
+                CONTENT_SUPPORT_FLOOR
             },
         }
     }
@@ -169,7 +193,8 @@ fn first_policy_failure(results: [(bool, AdmissionFailure); 4]) -> Option<Admiss
 /// Whether saturated normalised evidence needs content corroboration.
 fn content_required(measured: Measurements) -> bool {
     measured.score.embedding_cos < EMBEDDING_SUPPORT_FLOOR
-        && (measured.merkle_equal
+        && (measured.content.contradiction != crate::content::ContentContradiction::None
+            || measured.merkle_equal
             || measured.score.structural >= SHAPE_IDENTICAL_FLOOR
             || measured.score.token_jaccard >= SATURATING_TOKEN_FLOOR
             || lsh_only_pair_needs_content(measured))
@@ -185,15 +210,17 @@ fn lsh_only_pair_needs_content(measured: Measurements) -> bool {
 
 /// Pair-content support, never a cluster quantity.
 fn pair_content_support(measured: Measurements) -> f64 {
-    content_support(measured.agreement, measured.rename_consistency)
+    content_support(
+        measured.content.agreement,
+        measured.content.rename_consistency,
+    )
 }
 
-/// Whether the below-threshold cross-file rescue admits this pair: the
+/// Whether shared-subtree evidence admits this pair: the
 /// structural, token and size floors, and an aligned core the content
 /// gate accepts ([FUSED-SHARED-SUBTREE-CORE]).
-fn rescue_applies(pair: &ResolvedPair<'_>, measured: Measurements, threshold: f64) -> bool {
-    pair.cross_file()
-        && measured.score.bounded_fused() < threshold
+fn rescue_applies(pair: &ResolvedPair<'_>, measured: Measurements) -> bool {
+    measured.rescue_scope
         && measured.score.structural >= SHARED_SUBTREE_MIN_OVERLAP
         && measured.score.token_jaccard >= SHARED_SUBTREE_MIN_JACCARD
         && smaller_node_count(pair) >= SHARED_SUBTREE_MIN_NODE_COUNT
@@ -240,19 +267,29 @@ fn smaller_node_count(pair: &ResolvedPair<'_>) -> usize {
     node_counts(pair).0
 }
 
-/// Presentation classification for a pair that survived admission.
-fn classify_admitted(admitted: bool, measured: Measurements) -> Option<PairClassification> {
-    if !admitted {
-        return None;
-    }
-    if measured.score.embedding_cos >= EMBEDDING_SUPPORT_FLOOR
-        && measured.score.structural < SHARED_SUBTREE_MIN_OVERLAP
-        && measured.score.token_jaccard < SHARED_SUBTREE_MIN_JACCARD
+/// Category thresholds describe admitted pairs; they never lower admission floors.
+fn classify_admitted(
+    measured: Measurements,
+    routing: crate::config::RoutingTuning,
+) -> Option<PairClassification> {
+    // Whitespace inside a literal is content; raw frontier agreement must still be complete.
+    if measured.text.identical
+        && (measured.text.raw == PairTextIdentity::ByteIdentical
+            || measured.content.agreement >= 1.0)
     {
-        return Some(PairClassification::SameBehavior);
+        return Some(PairClassification::Identical);
     }
-    if measured.score.structural >= SHARED_SUBTREE_MIN_OVERLAP {
+    let support = pair_content_support(measured);
+    if measured.content.consistent_rename
+        || (measured.content.measured
+            && measured.score.structural >= routing.nearly_identical_min_shape
+            && support >= routing.nearly_identical_min_content)
+    {
         return Some(PairClassification::NearlyIdentical);
     }
-    Some(PairClassification::LooselySimilar)
+    if measured.score.embedding_cos >= EMBEDDING_SUPPORT_FLOOR {
+        return Some(PairClassification::SameBehavior);
+    }
+    (measured.core_is_copy || (measured.content.measured && support >= routing.similar_min_content))
+        .then_some(PairClassification::LooselySimilar)
 }

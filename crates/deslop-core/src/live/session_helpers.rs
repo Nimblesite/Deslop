@@ -10,6 +10,12 @@ use std::{
     time::Duration,
 };
 
+use super::{
+    cache_seed_key::{seed_key_matches, write_seed_key, CacheSeedKey},
+    errors::LiveError,
+    session::EmbeddingProgressReporter,
+    wire::{EmbeddingModelInfo, EmbeddingPhase, EmbeddingProgress},
+};
 use crate::{
     embedding::{EmbeddingMode, EmbeddingProvider, OllamaModelInfo},
     fingerprint::collect_fingerprints,
@@ -18,13 +24,6 @@ use crate::{
     report::{Report, ReportCluster},
     sibling::collect_sibling_fingerprints,
     state::FileRegistry,
-};
-
-use super::{
-    cache_seed_key::{seed_key_matches, write_seed_key, CacheSeedKey},
-    errors::LiveError,
-    session::EmbeddingProgressReporter,
-    wire::{EmbeddingModelInfo, EmbeddingPhase, EmbeddingProgress},
 };
 
 /// Delay inserted between live embedding batches.

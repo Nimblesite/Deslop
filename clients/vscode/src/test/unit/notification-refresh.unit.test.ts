@@ -1,3 +1,4 @@
+import { FIXTURE_ROUTING } from "../cluster.helpers";
 // Unit: deslop/reportChanged refresh wiring — delta application, snapshot
 // fallback, refresh serialisation, and missed-generation convergence
 // (#230). Split from extension-internals.unit.test.ts to honour the
@@ -61,7 +62,8 @@ suite("reportChanged refresh wiring", () => {
   test("wireNotifications reportChanged applies a delta", async () => {
     const { calls, client, notify } = notifyingClient((name) =>
       name === REPORT_DELTA_METHOD
-        ? wireDelta({ from_generation: 0, to_generation: 1, metrics: repoMetrics() })
+        ? wireDelta({
+      routing: FIXTURE_ROUTING, from_generation: 0, to_generation: 1, metrics: repoMetrics() })
         : {},
     );
     const store = storeWith(
@@ -166,6 +168,7 @@ suite("reportChanged refresh wiring", () => {
       // = 2) returns a delta that cannot, because phantom left in gen 2.
       const since = (params as { since_generation?: number } | undefined)?.since_generation ?? 2;
       return wireDelta({
+      routing: FIXTURE_ROUTING,
         from_generation: since === 1 ? 1 : since,
         to_generation: LIVE_GENERATION,
         clusters_added: [fresh],

@@ -14,6 +14,7 @@ The engine compares source ranges, applies the [admission rules](admission.md), 
 |---|---|
 | `id` | Stable group identity. |
 | `kind` | Category from [CLONE-KIND-LABELS](taxonomy.md#clone-kind-labels-use-the-same-names-everywhere). |
+| `severity` | Default diagnostic level from [SEVERITY-DESLOP-MAP](severity.md#severity-deslop-map-defaults-when-diagnostics-are-enabled); editor overrides apply separately. |
 | `rank` | Engine-assigned position among actual clones. |
 | `mass` | Clone weight under [RANK-MASS-SUM](pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only). |
 | `canonical_node_count` | AST size of the reference occurrence; size alone does not establish a clone. |
@@ -31,6 +32,7 @@ A pair response identifies both source ranges. Its evidence explains that compar
 | `structural` | Similarity of parsed code structure. |
 | `token_jaccard` | Similarity of normalized token sets. |
 | `embedding_cos` | Embedding similarity, when measured. |
+| `content_measurement` | `measured` or `unmeasured`. Unmeasured content is unknown; do not display the next three numeric placeholders as zero similarity. |
 | `agreement` | Matching source content. |
 | `rename_consistency` | Support for consistent renaming. |
 | `literal_fraction` | Share of literal values. |
@@ -38,7 +40,7 @@ A pair response identifies both source ranges. Its evidence explains that compar
 | `admitted` | Whether this pair passed admission. |
 | `classification` | Pair category under [CLONE-BUCKETS-ROUTING](taxonomy.md#clone-buckets-routing-classification-must-match-the-definitions). |
 
-Do not apply one pair's measurements to the whole group. Exact calculations belong to [admission.md](admission.md).
+Do not apply one pair's measurements to the whole group. Exact calculations belong to [fused.md](fused.md); [admission.md](admission.md) is the short guide.
 
 ## [REPORT-CONTEXT-METRIC] Duplication percentage
 
@@ -51,3 +53,5 @@ Review actual clones in rank order. Compare the concrete source ranges before de
 ## [REPORT-CONTEXT-METADATA] Rendering
 
 Every surface uses the shared category titles and engine figures. Show pair measurements only when both endpoints are identified. Do not recalculate admission, weight or percentages in clients.
+
+`Report.routing` and live deltas carry the effective [category thresholds](taxonomy.md#clone-buckets-thresholds-defaults-and-toml-settings) for the current analysis.

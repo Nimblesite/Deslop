@@ -3,7 +3,7 @@
 // leaves and the shared `./pathTree` for the folder structure, so a file
 // leaf behaves identically to a file-mode root.
 
-import { ReportCluster } from "../types/report";
+import { isClone, ReportCluster } from "../types/report";
 import { FileAgg, fileNodeWithChildren, groupByFile, worstCluster } from "./grouping";
 import { FolderNode, Node } from "./nodes";
 import { baseName, displayPath } from "./paths";
@@ -63,6 +63,7 @@ function folderChild(folder: PathTree<FileAgg>, sortBy: SortBy): BuiltChild[] {
     children.map((child) => child.node),
     worst.mass,
     countLeaves(folder),
+    isClone(worst),
   );
   return [{ weighted: { path: folder.label, mass: worst.mass, massTotal }, worst, node }];
 }

@@ -72,7 +72,7 @@ fn unrelated_statement_runs_are_never_published_as_one_duplication() -> Result<(
 /// One duplication is one region repeated, so every occurrence covers the same
 /// number of rows ([PIPELINE-CLUSTER-EXACT-SCOPE]).
 fn assert_no_cluster_mixes_row_counts(report: &Value, floor: u32) {
-    for cluster in clusters(report) {
+    for cluster in &clone_findings(report) {
         let rows: BTreeSet<u64> = cluster_line_spans(cluster)
             .into_iter()
             .map(|(start, end)| end.saturating_sub(start).saturating_add(1))
@@ -89,7 +89,7 @@ fn assert_no_cluster_mixes_row_counts(report: &Value, floor: u32) {
 /// No cluster may hold two of the unrelated helper regions, and none may reach
 /// across both files, which share no authored logic.
 fn assert_no_cluster_welds_unrelated_regions(report: &Value, floor: u32) {
-    for cluster in clusters(report) {
+    for cluster in &clone_findings(report) {
         let held = UNRELATED_REGIONS
             .iter()
             .filter(|(path, line)| cluster_covers(cluster, path, *line))
@@ -158,7 +158,7 @@ fn opening_line_prefix(source: &[u8], opening: usize) -> String {
 /// `canonical_node_count` prices every member through [RANK-MASS-SUM], so no
 /// cluster may claim an element count no member's span can hold.
 fn assert_node_count_fits_every_member(report: &Value, floor: u32) {
-    for cluster in clusters(report) {
+    for cluster in &clone_findings(report) {
         let nodes = field(cluster, "canonical_node_count")
             .as_u64()
             .unwrap_or_default();
@@ -182,7 +182,7 @@ const MAX_NODES_PER_ROW: u64 = 24;
 /// figure is exactly zero and no file is named as duplicated.
 fn assert_nothing_is_published(report: &Value, floor: u32) {
     assert_eq!(
-        cluster_count(report),
+        clone_findings(report).len(),
         NO_CLUSTERS,
         "--min-nodes {floor}: unrelated browser checks publish nothing: {report:#}"
     );
@@ -302,11 +302,11 @@ fn a_shared_preamble_never_rescues_a_stranger_onto_a_copied_run() -> Result<()> 
 /// file that holds it.
 fn assert_only_the_copy_is_published(report: &Value, floor: u32, run: &CopiedRun) {
     assert_eq!(
-        cluster_count(report),
+        clone_findings(report).len(),
         ONE_CLUSTER,
         "--min-nodes {floor}: one run copied once is one duplication: {report:#}"
     );
-    for cluster in clusters(report) {
+    for cluster in &clone_findings(report) {
         assert_copy_is_the_whole_finding(cluster, floor, run);
     }
     assert_eq!(

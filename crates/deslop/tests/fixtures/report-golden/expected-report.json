@@ -52,6 +52,12 @@
     ],
     "folders": []
   },
+  "routing": {
+    "nearly_identical_min_shape": 0.9,
+    "nearly_identical_min_content": 0.7,
+    "similar_min_content": 0.5,
+    "shape_only_max_content": 0.05
+  },
   "schema_doc": "",
   "boilerplate_hints": [],
   "embedding_provenance": null,
@@ -59,7 +65,7 @@
     {
       "id": "2dd2cdd63ce33c26",
       "rank": 1,
-      "rank_band": "worst",
+      "severity": "warning",
       "kind": "identical",
       "mass": 144,
       "canonical_node_count": 72,
@@ -96,7 +102,7 @@
     {
       "id": "3fb2a8328b849757",
       "rank": 2,
-      "rank_band": "faint",
+      "severity": "warning",
       "kind": "identical",
       "mass": 44,
       "canonical_node_count": 44,

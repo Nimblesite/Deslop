@@ -9,6 +9,8 @@ pub(crate) mod support;
 mod bucket_groups;
 #[path = "cli/cache_and_debug.rs"]
 mod cache_and_debug;
+#[path = "cli/category_members.rs"]
+mod category_members;
 #[path = "cli/config.rs"]
 mod config;
 #[path = "cli/detection.rs"]
@@ -29,5 +31,7 @@ mod logging;
 mod metrics;
 #[path = "cli/report_css.rs"]
 mod report_css;
+#[path = "cli/routing.rs"]
+mod routing;
 #[path = "cli/thresholds.rs"]
 mod thresholds;

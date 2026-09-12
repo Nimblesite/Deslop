@@ -21,13 +21,13 @@
 use std::{fs, path::Path};
 
 use anyhow::{anyhow, ensure, Result};
-use serde_json::{json, Value};
-
-use crate::common;
 use common::{
     call_tool, copied_fixture, initialized_mcp, lsp_workspace_with_socket,
     spawn_lsp_and_wait_for_socket, str_field, structured_content,
 };
+use serde_json::{json, Value};
+
+use crate::common;
 
 /// Sanity guard for the full `tools/list` payload. Picked an order
 /// of magnitude under what most JSON-RPC clients tolerate so a

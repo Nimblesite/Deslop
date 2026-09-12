@@ -26,8 +26,7 @@
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::go_scope::*;
-use crate::common::*;
+use crate::common::{go_scope::*, *};
 
 /// The fixture whose first-party pair sits beside a committed `vendor/`.
 const VENDORED_FIXTURE: &str = "go-vendored";
@@ -53,8 +52,9 @@ fn committed_go_vendor_tree_is_excluded_from_discovery() -> Result<()> {
     );
 
     let reported = clusters(&report);
+    let clones = clone_findings(&report);
     assert!(
-        !reported.is_empty(),
+        !clones.is_empty(),
         "the first-party pair is a genuine clone and must still be reported — an empty \
          report would satisfy the vendor guard below without proving anything. \
          report={report}",

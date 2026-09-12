@@ -38,10 +38,13 @@
 use deslop_core::report::{PairClassification, PairComparison, PairEndpoint};
 use serde_json::Value;
 
-use crate::common::negative_pin::{
-    assert_control_is_the_only_published_cluster, assert_family_hidden_with_control,
+use crate::common::{
+    negative_pin::{
+        assert_control_is_the_only_published_cluster, assert_family_hidden_with_control,
+    },
+    signals::*,
+    *,
 };
-use crate::common::{signals::*, *};
 
 /// Node floor for the small control and accessor fixtures.
 const MIN_NODES: u32 = 8;
@@ -157,8 +160,8 @@ const ACCESSOR_KIND_TESTS: RefusedPair = RefusedPair {
     rename_consistency: 0.333_333_333_333_333_3,
     content_required: true,
     content_ok: false,
-    classification: Some(PairClassification::StructuralOnly),
-    explanation: "rejected: saturated normalised evidence lacks required pair content support",
+    classification: None,
+    explanation: "rejected: pair fails content corroboration",
 };
 
 /// One fixture span as the endpoint the pair wire names it by.
@@ -342,11 +345,14 @@ fn the_content_gate_publishes_no_token_jaccard_it_did_not_measure() -> Result<()
         evidence.content_ok,
         "the renamed ledger pair must clear pair content: {comparison:#?}"
     );
-    assert!(!evidence.admitted, "the explicit ledger pair lacks the LSH-only floor and must not be an edge: {comparison:#?}");
-    assert_eq!(evidence.classification, None);
+    assert!(evidence.admitted, "the reported near-identical ledger must also be admitted by explicit comparison: {comparison:#?}");
+    assert_eq!(
+        evidence.classification,
+        Some(PairClassification::NearlyIdentical)
+    );
     assert_eq!(
         evidence.explanation,
-        "rejected: pair fails the LSH-only guards"
+        "admitted: explicit pair clears every admission guard"
     );
     assert!(
         !clusters(&report)

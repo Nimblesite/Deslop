@@ -18,14 +18,15 @@
 use std::{collections::BTreeSet, ops::RangeInclusive};
 
 use anyhow::Result;
-
 use deslop_test_support::{write_csharp_star_shadow_fixture, CSHARP_COPIED_BODY};
 
-use crate::common::signals::{
-    assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
+use crate::common::{
+    signals::{
+        assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
+    },
+    verdict::{assert_reported, expect_only_finding_is_the_pair},
+    *,
 };
-use crate::common::verdict::{assert_reported, expect_only_finding_is_the_pair};
-use crate::common::*;
 
 /// One file, two classes, one method copied byte for byte between them.
 const SIBLING_CLASS_FIXTURE: &str = "csharp-same-file-class-echo";

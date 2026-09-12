@@ -31,9 +31,8 @@ use std::{
     time::SystemTime,
 };
 
-use crate::embedding::bytes_hash;
-
 use super::{blob_file_name, FINGERPRINT_DIR, TOOL_VERSION};
+use crate::embedding::bytes_hash;
 
 /// Total on-disk budget for the fingerprint store, enforced after every
 /// full pass. ~11× the pinned benchmark corpus's measured 185.8 MiB

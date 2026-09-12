@@ -5,7 +5,6 @@
 //! the server against stdin / stdout.
 
 use std::{env, io, path::PathBuf, sync::Arc};
-
 #[cfg(unix)]
 use std::{thread, time::Duration};
 

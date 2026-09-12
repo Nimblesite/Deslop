@@ -299,6 +299,23 @@ fn an_unchanged_cluster_produces_no_delta_at_all() {
     );
 }
 
+// [CONFIG-TUNING-DECLARED] Live readers receive the settings behind the latest figures.
+#[test]
+fn live_delta_carries_effective_routing_even_when_membership_is_unchanged() -> anyhow::Result<()> {
+    const CONTENT_FLOOR: f64 = 0.8;
+    let previous = report_of(baseline_cluster());
+    let mut next = report_of(baseline_cluster());
+    next.routing.nearly_identical_min_content = CONTENT_FLOOR;
+    let delta = ReportDelta::between(Some((1, &previous)), 2, &next);
+    let wire = serde_json::to_value(delta)?;
+    assert_eq!(
+        wire.get("routing"),
+        Some(&serde_json::to_value(next.routing)?)
+    );
+    assert_eq!(wire.get("clusters_updated"), Some(&serde_json::json!([])));
+    Ok(())
+}
+
 // Dropping an occurrence is a user-visible change even when every
 // remaining field matches — the array length is part of the payload,
 // and a scalar-leaf walk cannot reach it.

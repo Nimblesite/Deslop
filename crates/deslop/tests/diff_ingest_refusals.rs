@@ -18,8 +18,9 @@ use anyhow::Context as _;
 use assert_cmd::{assert::Assert, Command};
 use serde_json::Value;
 
-use crate::common::signals::has_verbatim_pair;
-use crate::common::{assert_contains, clusters, field, load_json, occurrences, Result};
+use crate::common::{
+    assert_contains, clusters, field, load_json, occurrences, signals::has_verbatim_pair, Result,
+};
 
 /// A ten-line function duplicated byte-for-byte across the legacy
 /// pair — enough structure to cluster in the `identical` bucket.

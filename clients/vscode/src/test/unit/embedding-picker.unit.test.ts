@@ -1,3 +1,4 @@
+import { FIXTURE_ROUTING } from "../cluster.helpers";
 // Unit: pure helper logic inside embeddingPicker. Runs under vscode-test so
 // the transitive `vscode` import resolves against the real host.
 
@@ -452,6 +453,7 @@ suite("embeddingPicker helpers", () => {
 
 function emptyDelta(toGeneration: number): ReportDelta {
   return {
+      routing: FIXTURE_ROUTING,
     from_generation: 0,
     to_generation: toGeneration,
     clusters_added: [],

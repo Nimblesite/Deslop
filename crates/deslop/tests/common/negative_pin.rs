@@ -33,9 +33,9 @@ use std::collections::BTreeSet;
 use serde_json::Value;
 
 use super::{
-    approx, cluster_count, cluster_id, cluster_size, cluster_spanning, clusters,
-    expect_cluster_spanning, field, metric_field, occurrence_files, occurrence_is_hidden,
-    occurrences,
+    approx, clone_findings, cluster_id, cluster_size, clusters, expect_cluster_spanning, field,
+    findings::is_clone_finding,
+    metric_field, occurrence_files, occurrence_is_hidden, occurrences,
     signals::{assert_no_pair_surface_on_cluster, signal_dump},
     verdict::{duplicated_loc, loc_as_f64},
     visible_cluster_lines, visible_duplicated_lines, Result,
@@ -64,7 +64,8 @@ pub(crate) fn assert_family_hidden_with_control(
     assert_control_visible(report, label, control_files)
 }
 
-/// The suppression half: nothing spanning the family reaches the report,
+/// [CLONE-BUCKETS-STRUCTURAL-ONLY] Informational rows cannot claim duplication.
+/// The suppression half: no clone spans the family,
 /// and every family file was parsed, so the absence is a decision, never
 /// a scan that never looked.
 ///
@@ -79,7 +80,9 @@ pub(crate) fn assert_family_hidden_with_control(
 /// old counter existed to catch.
 fn assert_family_hidden(report: &Value, label: &str, family_files: &[&str]) {
     assert!(
-        cluster_spanning(report, family_files).is_none(),
+        clusters_over_family(report, family_files)
+            .into_iter()
+            .all(|finding| !is_clone_finding(finding)),
         "{label}: the family is scaffolding, not duplication — no cluster may span \
          {family_files:?}: {published:#?}",
         published = published_summary(report),
@@ -217,7 +220,7 @@ pub(crate) fn assert_control_is_the_only_published_cluster(
             duplicated_loc(report),
             metric_field(report, "clusters_total").as_u64(),
             metric_field(report, "duplicated_files").as_u64(),
-            cluster_count(report),
+            clone_findings(report).len(),
         ),
         (
             control_loc,

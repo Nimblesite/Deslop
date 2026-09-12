@@ -5,6 +5,14 @@
 
 use std::{collections::HashMap, path::Path, thread, time::Duration};
 
+use super::{
+    config::PipelineConfig,
+    embedding_batch::{
+        pairs_from_successful_embeddings, provenance_from, snippet_for, EmbeddingBatch,
+        PendingEmbedding,
+    },
+    embedding_observability::{token_count, EmbeddingObserver},
+};
 use crate::{
     embedding::{
         content_hash, EmbeddingCache, EmbeddingMode, EmbeddingPair, EmbeddingProvider,
@@ -14,15 +22,6 @@ use crate::{
     fingerprint::Fingerprint,
     report::EmbeddingProvenance,
     state::FileId,
-};
-
-use super::{
-    config::PipelineConfig,
-    embedding_batch::{
-        pairs_from_successful_embeddings, provenance_from, snippet_for, EmbeddingBatch,
-        PendingEmbedding,
-    },
-    embedding_observability::{token_count, EmbeddingObserver},
 };
 
 /// Outcome of the embedding pass. Empty `pairs` + `None` provenance

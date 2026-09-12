@@ -14,8 +14,10 @@ use deslop_core::pipeline::language_ids;
 use serde_json::{json, Value};
 use tracing::debug;
 
-use crate::backend::McpBackend;
-use crate::protocol::{jsonrpc_error, JsonRpcError};
+use crate::{
+    backend::McpBackend,
+    protocol::{jsonrpc_error, JsonRpcError},
+};
 
 mod handlers;
 mod limits;
@@ -91,7 +93,7 @@ const TOOLS: [ToolDefinition; 8] = [
 /// fallback set when the engine is unreachable. `tools/list` must
 /// advertise this set so the `language` enum can never claim a language
 /// the runtime validator would reject under MCP/engine version skew
-///.
+/// .
 #[must_use]
 pub fn advertised_languages(backend: &dyn McpBackend) -> Vec<String> {
     backend.session_config().map_or_else(
@@ -207,8 +209,7 @@ fn dispatch_inner(
 /// Maps a [`BackendError`] onto the JSON-RPC error envelope.
 #[must_use]
 pub fn backend_to_rpc(err: crate::backend::BackendError) -> JsonRpcError {
-    use crate::backend::BackendError;
-    use crate::protocol::ErrorCode;
+    use crate::{backend::BackendError, protocol::ErrorCode};
     match err {
         BackendError::UnparseableInput(message) => {
             jsonrpc_error(ErrorCode::UnparseableInput, message)

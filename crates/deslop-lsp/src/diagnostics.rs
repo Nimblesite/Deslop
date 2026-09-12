@@ -1,10 +1,7 @@
 //! LSP diagnostic builder ([LSP-DIAGNOSTICS], [LSP-SEVERITY]).
 //!
 //! Translates a [`FileReport`] into the LSP `Diagnostic` shape.
-//! Severity is determined by clone bucket per [LSP-SEVERITY-BUCKET]:
-//!   `Identical` → `Error`, all others → `Warning` by default.
-//! Configurable per-bucket via `deslop.severity.*` settings; future
-//! percentile-floor support is specced in [LSP-SEVERITY-PERCENTILE].
+//! [SEVERITY-DESLOP-MAP] Category and user settings determine severity.
 //!
 //! Occurrence paths in the report are workspace-relative; this module
 //! resolves them against the session's workspace root before
@@ -12,17 +9,24 @@
 //! real files. Byte offsets are translated to `(line, character)` LSP
 //! positions by reading the source text and counting UTF-16 code units.
 
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
-use deslop_core::live::FileReport;
-use deslop_core::report::{ReportCluster, ReportOccurrence};
+use deslop_core::{
+    live::FileReport,
+    report::{ReportCluster, ReportOccurrence},
+};
 use tower_lsp::lsp_types::{
     Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Location, Position, Range, Url,
 };
 
-use crate::position::position_for_byte;
-use crate::presentation::{diagnostic_data, diagnostic_message};
+use crate::{
+    diagnostic_settings::DiagnosticSettings,
+    position::position_for_byte,
+    presentation::{diagnostic_data, diagnostic_message},
+};
 
 /// Builds the diagnostics for one file report ([LSP-DIAGNOSTICS]).
 ///
@@ -30,7 +34,11 @@ use crate::presentation::{diagnostic_data, diagnostic_message};
 /// relative occurrence paths are resolved against it so
 /// `relatedInformation` URLs are valid.
 #[must_use]
-pub fn build_for_file(report: &FileReport, workspace_root: &Path) -> Vec<Diagnostic> {
+pub fn build_for_file(
+    report: &FileReport,
+    workspace_root: &Path,
+    settings: &DiagnosticSettings,
+) -> Vec<Diagnostic> {
     let primary_path = absolute_path(&report.path, workspace_root);
     let primary_source = std::fs::read_to_string(&primary_path).unwrap_or_default();
     let mut source_cache: HashMap<PathBuf, String> = HashMap::new();
@@ -44,6 +52,7 @@ pub fn build_for_file(report: &FileReport, workspace_root: &Path) -> Vec<Diagnos
                 workspace_root,
                 &primary_source,
                 &mut source_cache,
+                settings,
             )
         })
         .collect()
@@ -78,8 +87,11 @@ fn build_for_cluster(
     workspace_root: &Path,
     source_bytes: &str,
     cache: &mut HashMap<PathBuf, String>,
+    settings: &DiagnosticSettings,
 ) -> Vec<Diagnostic> {
-    let severity = severity_for(cluster);
+    let Some(severity) = severity_for(cluster, settings) else {
+        return Vec::new();
+    };
     cluster
         .occurrences
         .iter()
@@ -103,13 +115,21 @@ pub(crate) fn occurrence_matches_path(occurrence: &ReportOccurrence, path: &Path
     occurrence.path == path || occurrence.path.ends_with(path) || path.ends_with(&occurrence.path)
 }
 
-/// Maps the engine-stamped mass rank band to LSP severity.
-fn severity_for(cluster: &ReportCluster) -> DiagnosticSeverity {
-    match cluster.rank_band.as_str() {
-        "worst" => DiagnosticSeverity::ERROR,
-        "top10" => DiagnosticSeverity::WARNING,
-        "mid" => DiagnosticSeverity::INFORMATION,
-        _ => DiagnosticSeverity::HINT,
+/// [SEVERITY-DESLOP-MAP] The single category-to-diagnostic resolver.
+fn severity_for(
+    cluster: &ReportCluster,
+    settings: &DiagnosticSettings,
+) -> Option<DiagnosticSeverity> {
+    if !settings.enabled {
+        return None;
+    }
+    if let Some(level) = settings.severity_by_kind.get(&cluster.kind) {
+        return level.severity();
+    }
+    match cluster.kind.default_diagnostic_severity() {
+        "warning" => Some(DiagnosticSeverity::WARNING),
+        "information" => Some(DiagnosticSeverity::INFORMATION),
+        _ => None,
     }
 }
 
@@ -169,3 +189,7 @@ pub fn position_at(source: &str, byte_offset: usize) -> Position {
 #[allow(clippy::missing_docs_in_private_items)]
 #[path = "diagnostics_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "diagnostics_kind_tests.rs"]
+mod kind_tests;

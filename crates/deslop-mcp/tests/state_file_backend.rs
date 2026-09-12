@@ -24,13 +24,13 @@
 use std::{fs, time::Duration};
 
 use anyhow::{ensure, Context, Result};
-use serde_json::{json, Value};
-
-use crate::common;
 use common::{
     call_tool, cluster_ids, copied_fixture, initialized_mcp, lsp_workspace_with_socket,
     spawn_lsp_and_wait_for_socket, structured_content, u64_field, wait_for_path, SOCKET_TIMEOUT,
 };
+use serde_json::{json, Value};
+
+use crate::common;
 
 /// [MCP-IPC-CLIENT] Repurposes `issue_90_report_get_reloads_state_file_between_plain_calls`.
 ///
@@ -49,7 +49,7 @@ fn issue_90_report_get_reflects_lsp_state_between_plain_calls() -> Result<()> {
 
     let mut mcp = initialized_mcp(workspace.path())?;
 
-    let before = call_report_get(&mut mcp, /*offset*/ 0, /*limit*/ 64)?;
+    let before = call_report_get(&mut mcp, /* offset */ 0, /* limit */ 64)?;
     let before_total = u64_field(&before, "total_clusters")?;
     ensure!(
         before_total > 0,
@@ -71,7 +71,7 @@ fn issue_90_report_get_reflects_lsp_state_between_plain_calls() -> Result<()> {
         "rescan must advance generation past zero: {rescan_structured}",
     );
 
-    let after = call_report_get(&mut mcp, /*offset*/ 0, /*limit*/ 64)?;
+    let after = call_report_get(&mut mcp, /* offset */ 0, /* limit */ 64)?;
     let after_total = u64_field(&after, "total_clusters")?;
 
     ensure!(

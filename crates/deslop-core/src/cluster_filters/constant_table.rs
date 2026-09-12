@@ -30,11 +30,10 @@
 
 use tree_sitter::Node;
 
-use crate::ast::named_children;
-
 use super::{
     node_intersects_range, parse_for, raw_snippet_texts_differ, trimmed_snippet_range, Snippet,
 };
+use crate::ast::named_children;
 
 /// Returns true when every cluster member's matched range covers a run
 /// of module-level constant declarations and at least two members

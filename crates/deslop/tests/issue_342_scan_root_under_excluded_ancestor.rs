@@ -21,15 +21,17 @@
 //! ancestry defect alone and not because a hand-rolled snippet stopped
 //! clustering.
 
-use anyhow::Result;
 use std::path::Path;
 
+use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::signals::{
-    assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
+use crate::common::{
+    signals::{
+        assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
+    },
+    *,
 };
-use crate::common::*;
 
 /// The two byte-identical files seeded into every scan root below.
 const CLONE_FILES: [&str; 2] = ["tax_alpha.ts", "tax_beta.ts"];

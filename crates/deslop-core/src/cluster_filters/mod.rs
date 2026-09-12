@@ -144,12 +144,11 @@ use std::{
     sync::Arc,
 };
 
-use tree_sitter::Node;
-
 pub(crate) use declaration_family::is_single_file_declaration_family;
 pub use snippets::ParseCache;
 use snippets::{collect_snippets, parse_for, uniform_language, Snippet};
 pub(crate) use structural_families::split_structural_families;
+use tree_sitter::Node;
 pub(crate) use verbatim_subgroup::{
     escapes_as_copy, noise_workers, split_noise_verbatim_families, NOISE_CHUNK_CLUSTERS,
 };

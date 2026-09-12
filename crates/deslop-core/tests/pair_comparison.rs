@@ -75,8 +75,8 @@ async fn explicit_pair_comparison_owns_exact_admission_evidence() -> Result<()> 
 async fn an_indentation_only_copy_reports_indentation_as_its_whole_difference() -> Result<()> {
     let fixture = PairFixture::new(SOURCE, INDENTED_SOURCE)?;
     let cluster = fixture.cluster_of_kind(
-        ClusterKind::NearlyIdentical,
-        "a re-indented copy is not byte-identical, so the cluster folds to nearly identical",
+        ClusterKind::Identical,
+        "[CLONE-BUCKETS-IDENTICAL] indentation does not change copied source content",
     )?;
     let left = endpoint_for(cluster, LEFT_FILE)?;
     let right = endpoint_for(cluster, RIGHT_FILE)?;
@@ -92,8 +92,8 @@ async fn an_indentation_only_copy_reports_indentation_as_its_whole_difference() 
     );
     assert_eq!(
         evidence.classification,
-        Some(PairClassification::NearlyIdentical),
-        "not byte-identical, so not classified identical: {comparison:#?}"
+        Some(PairClassification::Identical),
+        "whitespace-folded source is identical: {comparison:#?}"
     );
     assert_metric(evidence.structural, 1.0, "same normalised shape");
     assert_metric(evidence.agreement, 1.0, "same authored content");
@@ -116,18 +116,28 @@ async fn content_rejected_pair_never_enters_cluster_closure() -> Result<()> {
     assert_rejected_evidence(&comparison);
     let report = &fixture.report;
     assert!(
-        !report.clusters.iter().any(|cluster| {
-            cluster
-                .occurrences
-                .iter()
-                .any(|occurrence| occurrence.path.ends_with(LEFT_FILE))
-                && cluster
+        !report
+            .clusters
+            .iter()
+            .filter(|cluster| cluster.kind.is_clone())
+            .any(|cluster| {
+                cluster
                     .occurrences
                     .iter()
-                    .any(|occurrence| occurrence.path.ends_with(RIGHT_FILE))
-        }),
+                    .any(|occurrence| occurrence.path.ends_with(LEFT_FILE))
+                    && cluster
+                        .occurrences
+                        .iter()
+                        .any(|occurrence| occurrence.path.ends_with(RIGHT_FILE))
+            }),
         "a rejected pair must never enter closure: {report:#?}"
     );
+    assert_eq!(report.metrics.clusters_total, 0);
+    assert_eq!(report.metrics.duplicated_loc, 0);
+    assert!(report
+        .clusters
+        .iter()
+        .all(|finding| finding.mass == 0 && finding.rank == 0));
     Ok(())
 }
 
@@ -240,13 +250,15 @@ fn assert_rejected_evidence(comparison: &PairComparison) {
         !evidence.admitted,
         "the content-rejected pair is not an edge"
     );
-    assert_eq!(
-        evidence.classification,
-        Some(PairClassification::StructuralOnly)
+    // [CLONE-BUCKETS-ROUTING] Rejected content is not necessarily negligible.
+    assert!(
+        evidence.agreement.max(evidence.rename_consistency)
+            > deslop_core::config::RoutingTuning::default().shape_only_max_content
     );
+    assert_eq!(evidence.classification, None);
     assert_eq!(
         evidence.explanation,
-        "rejected: saturated normalised evidence lacks required pair content support"
+        "rejected: pair fails content corroboration"
     );
 }
 

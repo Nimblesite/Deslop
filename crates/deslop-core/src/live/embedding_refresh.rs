@@ -5,17 +5,16 @@
 
 use std::{path::PathBuf, sync::Arc};
 
-use crate::{
-    embedding::{EmbeddingMode, EmbeddingProvider, EmbeddingSpec},
-    pipeline::{EmbeddingSettings, PipelineSession},
-    report::{EmbeddingProvenance, Report},
-};
-
 use super::{
     errors::LiveError,
     session::EmbeddingProgressReporter,
     session_helpers::{live_batch_yield, report_running_progress},
     wire::{EmbeddingPhase, EmbeddingProgress},
+};
+use crate::{
+    embedding::{EmbeddingMode, EmbeddingProvider, EmbeddingSpec},
+    pipeline::{EmbeddingSettings, PipelineSession},
+    report::{EmbeddingProvenance, Report},
 };
 
 /// Immutable description of one queued embedding refresh.

@@ -10,10 +10,17 @@
 //! corpus state — the audited flatten-per-render copy duplicated
 //! ~157 MiB of signature bytes alone on the benchmark corpus.
 
-use std::{collections::HashMap, path::PathBuf, time::Instant};
+use std::time::Instant;
 
+use super::{
+    super::{
+        config::PipelineConfig,
+        embedding_pass::{run_embedding_pass, CorpusView},
+        signatures::build_cross_language_signatures,
+    },
+    PipelineSession,
+};
 use crate::{
-    cluster::{build_ranked_fused_clusters, ClusterBuildInputs},
     cluster_filters::{split_noise_verbatim_families, split_structural_families, ParseCache},
     error::CoreError,
     lsh::BandCollisionSource,
@@ -25,16 +32,8 @@ use crate::{
     state::FileId,
 };
 
-use super::{
-    super::{
-        config::PipelineConfig,
-        embedding_pass::{run_embedding_pass, CorpusView},
-        signatures::build_cross_language_signatures,
-    },
-    pair_compare::ClusterKindMeasurer,
-    store::relative_path_key,
-    PipelineSession,
-};
+#[path = "information.rs"]
+mod information;
 
 impl PipelineSession {
     /// Runs clustering + ranking + rendering over the current
@@ -88,13 +87,27 @@ impl PipelineSession {
             Some(already) => already,
             None => self.materialize_trees()?,
         };
-        let (fused_clusters, shape_families) =
-            self.partition_and_split(fingerprints, pairs, &trees, &parse_cache, &mut ledger);
+        let judge = super::pair_compare::ClusterKindMeasurer::new(
+            self,
+            fingerprints,
+            &trees,
+            &embedding_outcome.pairs,
+            &pairs,
+        );
+        let (fused_clusters, shape_families, informational_candidates) = self.partition_and_split(
+            fingerprints,
+            pairs,
+            &trees,
+            &parse_cache,
+            &mut ledger,
+            &judge,
+        );
         let clusters = self.ranked_clusters(
             fingerprints,
             &fused_clusters,
+            &informational_candidates,
             &trees,
-            &embedding_outcome.pairs,
+            &judge,
             &mut ledger,
         );
         tracing::info!(
@@ -133,9 +146,11 @@ impl PipelineSession {
         trees: &[crate::ast::NormalizedNode],
         parse_cache: &ParseCache,
         ledger: &mut StageLedger,
+        judge: &dyn crate::cluster::ClusterKindJudge,
     ) -> (
         Vec<crate::pair::FusedCluster>,
         Vec<Vec<crate::fingerprint::Fingerprint>>,
+        Vec<crate::pair::FusedCluster>,
     ) {
         // [FUSED-SHARED-SUBTREE] (gh #408): measure the structural
         // overlap the anchor axis discards before survival drops the
@@ -164,6 +179,7 @@ impl PipelineSession {
         // gate decides which edges weld. Noise conviction reads this
         // family; admission below still decides the clusters.
         let shape_families = cluster_by_transitive_closure(&pairs);
+        self.recover_copy_pairs(&mut pairs, &shape_families, fingerprints, judge);
         let content_input = pairs.len();
         let stage_started = Instant::now();
         apply_pair_content_gate(
@@ -227,7 +243,9 @@ impl PipelineSession {
             fused_clusters.len(),
             stage_started,
         );
-        attach_shape_families(fused_clusters, &shape_families, fingerprints)
+        let (clones, families) =
+            attach_shape_families(fused_clusters, &shape_families, fingerprints);
+        (clones, families, shape_families)
     }
 
     /// The LSH/pair construction half of the render: materialises trees
@@ -358,45 +376,6 @@ impl PipelineSession {
             "normalised trees materialised"
         );
         Ok(trees)
-    }
-
-    /// Builds the ranked clusters from the fused ones — each stamped
-    /// with the clone kind folded from its pairs ([CLONE-KIND-FOLD]) —
-    /// and records the `ranked_build` stage row.
-    fn ranked_clusters(
-        &self,
-        fingerprints: &[crate::fingerprint::Fingerprint],
-        fused_clusters: &[crate::pair::FusedCluster],
-        trees: &[crate::ast::NormalizedNode],
-        embedding_pairs: &[crate::embedding::pairs::EmbeddingPair],
-        ledger: &mut StageLedger,
-    ) -> Vec<crate::cluster::Cluster> {
-        // [PIPELINE-DETERMINISM] (gh #430) Workspace-relative path per
-        // fingerprinted file — the second input of the cluster id digest.
-        // Built from the fingerprints themselves so every member's file is
-        // covered by construction, and keyed on the same
-        // workspace-relative form the report renders.
-        let file_paths: HashMap<FileId, PathBuf> = fingerprints
-            .iter()
-            .filter_map(|found| {
-                self.registry
-                    .path(found.file_id)
-                    .map(|path| (found.file_id, relative_path_key(path, &self.root)))
-            })
-            .collect();
-        let started = Instant::now();
-        let ranked_input = fused_clusters.len();
-        let kinds = ClusterKindMeasurer::new(self, fingerprints, trees, embedding_pairs);
-        let clusters = build_ranked_fused_clusters(&ClusterBuildInputs {
-            fingerprints,
-            fused_clusters,
-            trees,
-            file_languages: &self.file_languages,
-            file_paths: &file_paths,
-            kinds: &kinds,
-        });
-        ledger.record("ranked_build", ranked_input, clusters.len(), started);
-        clusters
     }
 }
 

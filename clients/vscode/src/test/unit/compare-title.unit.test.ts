@@ -24,6 +24,7 @@ const REJECTION = "rejected: pair fails content corroboration";
 
 function evidence(overrides: Partial<PairEvidence>): PairEvidence {
   return {
+    content_measurement: "measured",
     structural: 1,
     token_jaccard: 1,
     embedding_cos: 0,
@@ -63,8 +64,14 @@ suite("compare diff title", () => {
   });
 
   test("an unclassified pair repeats the engine's explanation verbatim", () => {
-    const verdict = pairVerdict(evidence({ admitted: false, classification: undefined, explanation: REJECTION }));
-    assert.equal(verdict, REJECTION);
+    // [FUSED-CONTENT-GATE] Unmeasured fallback numbers must not become a zero-content claim.
+    for (const content_measurement of ["measured", "unmeasured"] as const) {
+      const refused = evidence({
+        content_measurement, admitted: false, classification: undefined, explanation: REJECTION,
+      });
+      assert.equal(pairVerdict(refused), REJECTION);
+      assert.equal(compareTitle(LEFT, RIGHT, refused), `${NAMES}${VERDICT_SEPARATOR}${REJECTION}`);
+    }
   });
 
   test("the title names both endpoints by file and ends with the verdict", () => {

@@ -95,7 +95,7 @@ These settings classify a pair after the clone-admission checks. They never make
 | `similar_min_content` | `0.50` | Minimum content support for the general Similar route; the pair must also pass clone admission. |
 | `shape_only_max_content` | `0.05` | At most this much content support counts as none or negligible, provided shape matches and no independent clone evidence qualifies. |
 
-**These are new, provisional classification defaults, pending corpus validation and implementation.** They are Deslop settings, not research-mandated boundaries. Content support uses matching content or consistent-renaming evidence, not just equal identifier spellings. Pairs between the Similar minimum and the shape-only maximum are not silently counted as clones. Missing evidence is not zero evidence.
+**These configurable defaults remain provisional pending corpus validation.** They are Deslop settings, not research-mandated boundaries. Content support uses matching content or consistent-renaming evidence, not just equal identifier spellings. Pairs between the Similar minimum and the shape-only maximum are not silently counted as clones. Missing evidence is not zero evidence.
 
 ```toml
 [tuning.routing]
@@ -109,7 +109,7 @@ All values must be finite and within `[0, 1]`; require `shape_only_max_content <
 
 ### [CLONE-BUCKETS-IDENTICAL] Identity needs source text
 
-`Identical` requires byte-equivalence of the compared source slices after ASCII-whitespace folding. Equal normalized trees or token signatures cannot prove it because names and literals have been removed. Missing source cannot prove identity. Every member of an Identical group must satisfy this rule against its reference. An unchanged method does not make its containing class Identical if the class name differs.
+`Identical` requires equal source content after ASCII-whitespace folding. Whitespace inside a literal is content and must still match. Equal normalized trees or token signatures cannot prove identity because names and literals have been removed. Missing source cannot prove identity. Every member must satisfy this rule against its reference. An unchanged method does not make its containing class Identical if the class name differs.
 
 ### [CLONE-CATEGORY-REGISTRY] Other finding kinds
 
@@ -126,7 +126,3 @@ These describe dedicated findings rather than research clone types. They never t
 | `ConstantAlias` | `constant_alias` | One value has several constant names. |
 
 Dedicated literal records follow [LITERAL-WIRE]. Generated wire models must keep informational findings distinct from clone counts and ranking; update `docs/models/live-ipc.td`, never hand-written wire types.
-
-### [CLONE-IMPLEMENTATION-STATUS] Required implementation work
-
-This revised contract is specified, not yet implemented or verified. Relevant owners: `buckets.rs` (labels), `pipeline/session/pair_compare/cluster_kind.rs` (group classification), `report_metrics.rs` (counting), `report_weight.rs` (clone ranking), LSP diagnostics and VSIX renderers. Acceptance belongs in `crates/deslop/tests/cli/bucket_groups.rs`, `crates/deslop/tests/cli/metrics.rs`, the pair-comparison suites and diagnostic/VSIX suites. Preserve existing assertions and add the cases above when implementing.

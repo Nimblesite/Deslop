@@ -48,6 +48,7 @@ pub(crate) use core::judge_core;
 mod credit;
 /// Rescue application over the candidate set ([FUSED-SHARED-SUBTREE]).
 mod rescue;
+pub(crate) use rescue::RescueContext;
 /// Deterministic tree shapes shared by the measurement tests.
 #[cfg(test)]
 mod shapes;
@@ -63,9 +64,8 @@ mod view;
 #[cfg(test)]
 mod tests;
 
-pub use rescue::apply_shared_subtree_rescue;
-
 use alignment::Aligner;
+pub use rescue::apply_shared_subtree_rescue;
 use view::{build_view, EndpointView};
 
 /// Most endpoint views one measurer retains

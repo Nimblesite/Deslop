@@ -1,7 +1,8 @@
 //! Unit tests for mass-only corpus confidence assertions.
 
-use super::*;
 use serde_json::{json, Value};
+
+use super::*;
 
 /// Returns the single failure when exactly one was reported.
 fn only(failures: &[Failure]) -> Option<&Failure> {
@@ -47,7 +48,7 @@ fn spanning(id: &str, nodes: u64, rank: u64, files: &[&str]) -> Value {
     json!({
         "id": id,
         "rank": rank,
-        "rank_band": "worst",
+        "severity": "warning",
         "kind": "identical",
         "mass": nodes.saturating_mul(occurrence_count.saturating_sub(1)),
         "canonical_node_count": nodes,
@@ -73,7 +74,7 @@ fn mixed(id: &str, nodes: u64, visible: &[&str], hidden: &[&str]) -> Value {
     json!({
         "id": id,
         "rank": 1,
-        "rank_band": "worst",
+        "severity": "warning",
         "kind": "identical",
         "mass": nodes.saturating_mul(visible_count.saturating_sub(1)),
         "canonical_node_count": nodes,

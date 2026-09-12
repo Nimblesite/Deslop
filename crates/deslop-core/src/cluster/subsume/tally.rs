@@ -5,9 +5,8 @@
 
 use std::time::Instant;
 
-use crate::observe::{bump, elapsed_ms};
-
 use super::survivor::Preference;
+use crate::observe::{bump, elapsed_ms};
 
 /// Pair evaluations between two progress records.
 const SUBSUME_PROGRESS_INTERVAL: u64 = 10_000_000;

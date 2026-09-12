@@ -15,8 +15,7 @@ use std::path::Path;
 use anyhow::{anyhow, Result};
 use serde_json::Value;
 
-use crate::common::signals::has_verbatim_pair;
-use crate::common::*;
+use crate::common::{signals::has_verbatim_pair, *};
 
 /// The Type-1 method signature every reported occurrence must carry.
 const TALLY_SIGNATURE: &str = "public int Tally(int bound)";

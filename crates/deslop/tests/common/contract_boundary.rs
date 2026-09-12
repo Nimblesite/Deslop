@@ -11,8 +11,8 @@
 //! the presence half, so a detector that went blind cannot pass.
 
 use super::{
-    cluster_count, cluster_size, cluster_spanning, clusters_hidden, expect_cluster_spanning, field,
-    fixture, metric_field, occurrences, run_report,
+    clone_findings, cluster_size, cluster_spanning, clusters_hidden, expect_cluster_spanning,
+    field, fixture, metric_field, occurrences, run_report,
     signals::{
         assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
     },
@@ -81,6 +81,7 @@ impl ContractBoundaryCase<'_> {
         );
     }
 
+    /// [CLONE-BUCKETS-STRUCTURAL-ONLY] Informational rows are not duplication.
     /// The presence half: the renamed clone is the scan's only
     /// duplication, and it is admitted, mass-honest, clean-surfaced and
     /// byte-distinct ([PIPELINE-CLUSTER-CLOSURE]) across its real extent.
@@ -92,7 +93,7 @@ impl ContractBoundaryCase<'_> {
         let visible = visible_cluster_lines(report);
         let clone = expect_cluster_spanning(report, &self.clone_pair)?;
         assert_eq!(
-            cluster_count(report),
+            clone_findings(report).len(),
             1,
             "the {subject} pair is the only duplication in this fixture: {visible:#?}",
             subject = self.clone_subject,

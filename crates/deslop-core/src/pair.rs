@@ -16,6 +16,7 @@ use crate::fingerprint::Fingerprint;
 
 /// Candidate-pair construction helpers kept separate from closure clustering.
 mod candidates;
+pub(crate) use candidates::missing_structural_pairs;
 pub use candidates::{candidate_pairs, candidate_pairs_for_language_policy, LshPairs};
 
 /// Pair-content admission guard applied before transitive closure.

@@ -93,9 +93,11 @@
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::go_scope::*;
-use crate::common::signals::{assert_no_pair_surface_on_cluster, assert_structural_only_contract};
-use crate::common::*;
+use crate::common::{
+    go_scope::*,
+    signals::{assert_no_pair_surface_on_cluster, assert_structural_only_contract},
+    *,
+};
 
 /// `--min-nodes` every Type-3 fixture in this suite is driven at.
 const TYPE3_MIN_NODES: u32 = 8;

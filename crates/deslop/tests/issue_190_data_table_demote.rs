@@ -22,8 +22,10 @@ use anyhow::Result;
 use deslop_test_support::write_dart_data_table_fixture;
 use serde_json::Value;
 
-use crate::common::signals::{assert_no_pair_surface_on_cluster, has_verbatim_pair};
-use crate::common::*;
+use crate::common::{
+    signals::{assert_no_pair_surface_on_cluster, has_verbatim_pair},
+    *,
+};
 
 /// Runs the CLI against `src`, writing JSON to `<tmp>/<stem>.json`, and
 /// returns the parsed JSON report.

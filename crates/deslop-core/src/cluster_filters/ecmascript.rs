@@ -6,11 +6,10 @@
 
 use tree_sitter::Node;
 
-use crate::ast::named_children;
-
 use super::{
     node_intersects_range, parse_for, raw_snippet_texts_differ, trimmed_snippet_range, Snippet,
 };
+use crate::ast::named_children;
 
 /// Returns true for a cluster of TypeScript `interface` / object-type data
 /// shapes — a run of `property_signature` members (`name: Type;`) — which

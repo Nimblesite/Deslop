@@ -17,9 +17,11 @@
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::scan_dir::run_report_min_nodes;
-use crate::common::signals::{assert_no_pair_surface_on_cluster, assert_structural_only_contract};
-use crate::common::*;
+use crate::common::{
+    scan_dir::run_report_min_nodes,
+    signals::{assert_no_pair_surface_on_cluster, assert_structural_only_contract},
+    *,
+};
 
 #[test]
 fn structural_only_signature_clusters_are_dropped_from_the_report() -> Result<()> {

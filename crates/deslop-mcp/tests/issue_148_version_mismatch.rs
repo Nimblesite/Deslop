@@ -12,12 +12,14 @@
 use std::sync::Arc;
 
 use anyhow::{ensure, Result};
+use common::{
+    error_and_message, initialized_mcp,
+    stub_lsp::{bind_stub_lsp, method_not_found},
+};
 use serde_json::{json, Value};
 use tempfile::TempDir;
 
 use crate::common;
-use common::stub_lsp::{bind_stub_lsp, method_not_found};
-use common::{error_and_message, initialized_mcp};
 
 /// Clusters requested per page; the error path never reads them.
 const PAGE_LIMIT: u64 = 5;

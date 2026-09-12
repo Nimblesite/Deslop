@@ -14,11 +14,13 @@ use std::{collections::BTreeSet, ffi::OsStr, ops::RangeInclusive, path::Path};
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::signals::{
-    assert_no_pair_surface_on_cluster, assert_structural_only_contract, distinct_texts,
-    has_verbatim_pair, rank_of,
+use crate::common::{
+    signals::{
+        assert_no_pair_surface_on_cluster, assert_structural_only_contract, distinct_texts,
+        has_verbatim_pair, rank_of,
+    },
+    *,
 };
-use crate::common::*;
 
 /// The fixture whose three files carry one `reconcileInventory` routine
 /// under the `.js`, `.mjs` and `.cjs` extensions.

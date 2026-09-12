@@ -136,9 +136,9 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
     ReportCluster {
         id: cluster.id.clone(),
         rank: 0,
-        rank_band: String::new(),
+        severity: cluster.kind.default_diagnostic_severity().to_owned(),
         kind: cluster.kind,
-        mass: duplicate_mass(canonical_node_count, occurrence_count),
+        mass: duplicate_mass(cluster.kind, canonical_node_count, occurrence_count),
         canonical_node_count,
         occurrences,
         occurrences_total,

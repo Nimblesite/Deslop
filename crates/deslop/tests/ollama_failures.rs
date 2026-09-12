@@ -7,9 +7,10 @@ use std::{fs, path::Path};
 use anyhow::{anyhow, Result};
 use serde_json::Value;
 
-use crate::common::*;
-
-use crate::mock_ollama::{MockBehavior, MockOllama};
+use crate::{
+    common::*,
+    mock_ollama::{MockBehavior, MockOllama},
+};
 
 #[test]
 fn mock_provider_rejected_subtrees_are_reported() -> Result<()> {

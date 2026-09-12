@@ -16,7 +16,7 @@ import {
   sanitizeFacetFilter,
   severityLabel,
   Severity,
-  clusterBand,
+  clusterSeverity,
 } from "../types/report";
 
 const FILTER_SEVERITIES_SETTING = "topOffenders.filterSeverities";
@@ -67,14 +67,12 @@ interface FacetPickItem extends vscode.QuickPickItem {
   wire: Severity;
 }
 
-/** Rows for every severity band present in `clusters`, each with the
- * shared label and its live cluster count. Only present values are
- * offered. */
+
 function facetPickItems(clusters: ReportCluster[], current: FacetFilter): FacetPickItem[] {
   const noun = (count: number): string => (count === 1 ? "cluster" : "clusters");
   return SEVERITIES.map((severity) => ({
     severity,
-    count: clusters.filter((cluster) => clusterBand(cluster) === severity).length,
+    count: clusters.filter((cluster) => clusterSeverity(cluster) === severity).length,
   }))
     .filter(({ count }) => count > 0)
     .map(({ severity, count }) => ({
@@ -85,10 +83,8 @@ function facetPickItems(clusters: ReportCluster[], current: FacetFilter): FacetP
     }));
 }
 
-// [FACET-TOP-OFFENDERS-FILTER] Choose Filter: a multi-select QuickPick
-// over the severity bands present in the current report. Selecting
-// nothing (and confirming) clears the filter; cancelling leaves it
-// untouched. Writes the persisted, workspace-scoped array.
+// [FACET-TOP-OFFENDERS-FILTER] Selecting no levels clears the filter;
+// cancellation keeps the persisted workspace selection.
 export async function chooseTopOffendersFilter(store: ReportStore): Promise<void> {
   const clusters = store.current.visibleReport?.clusters ?? [];
   const items = facetPickItems(clusters, readTopOffendersFilter());
@@ -99,7 +95,7 @@ export async function chooseTopOffendersFilter(store: ReportStore): Promise<void
   const picked = await vscode.window.showQuickPick(items, {
     canPickMany: true,
     title: "Filter Top Offenders",
-    placeHolder: "Show only the selected severity bands (empty selection shows all)",
+    placeHolder: "Show only the selected diagnostic levels (empty selection shows all)",
   });
   if (!picked) return;
   await updateWorkspace(

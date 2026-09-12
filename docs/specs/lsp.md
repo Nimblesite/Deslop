@@ -117,7 +117,7 @@ Pull-based diagnostics only travel to the editor for files the client actively p
 At the first line of every clone occurrence, a code lens reads:
 
 ```
-4 copies · mass 142 — jump to next
+Identical code × 4 — mass 142 — jump to next
 ```
 
 The lens title states the category and occurrence count, plus mass for actual clones. Shape-only information is identified as a non-clone. Use plain text.

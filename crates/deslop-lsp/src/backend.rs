@@ -1,18 +1,15 @@
 //! `tower-lsp` backend wiring `Deslop` into LSP ([LSP-CAPABILITIES]).
+use std::{
+    path::{Path, PathBuf},
+    sync::{atomic::AtomicBool, Arc, RwLock},
+};
+
 use deslop_core::{
-    embedding::{
-        EmbeddingMode, EmbeddingProvider, NoopProvider, ProviderRegistry, RegistryError,
-        DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID,
-    },
     live::{
         read_report_snapshot, report_for_file_in, ChangeSummary, EmbeddingProgress,
         EmbeddingProgressReporter, LiveApi, LiveError, LiveService, ReportChangedNotification,
     },
     report::Report,
-};
-use std::{
-    path::{Path, PathBuf},
-    sync::{atomic::AtomicBool, Arc, RwLock},
 };
 use tokio::sync::Mutex;
 use tower_lsp::{
@@ -31,9 +28,12 @@ use tower_lsp::{
     Client, LanguageServer,
 };
 
-use crate::notifications::{EmbeddingProgressNotification, ReportChangedLspNotification};
-use crate::observability::Observability;
-use crate::{code_action, code_lens, commands, diagnostics};
+use crate::{
+    code_action, code_lens, commands,
+    diagnostic_session::DiagnosticSession,
+    notifications::{EmbeddingProgressNotification, ReportChangedLspNotification},
+    observability::Observability,
+};
 
 /// User-visible server name advertised in `initialize`.
 pub const SERVER_NAME: &str = "deslop-lsp";
@@ -41,93 +41,10 @@ pub const SERVER_NAME: &str = "deslop-lsp";
 /// Diagnostic `source` + provider `identifier` surfaced to clients.
 pub const DIAGNOSTIC_SOURCE: &str = "deslop";
 
-/// [LSP-EMBEDDING-CONSENT] Embedding startup settings supplied by the client after the user
-/// has explicitly selected a model. `Off` means no startup embedding
-/// pass runs.
-#[derive(Debug, Clone)]
-pub struct LspEmbeddingConfig {
-    /// Live embedding mode.
-    pub mode: EmbeddingMode,
-    /// Provider registry key.
-    pub provider_id: String,
-    /// Model id.
-    pub model_id: String,
-    /// Provider endpoint.
-    pub endpoint: String,
-}
-
-impl Default for LspEmbeddingConfig {
-    fn default() -> Self {
-        Self {
-            mode: EmbeddingMode::Off,
-            provider_id: DEFAULT_PROVIDER_ID.to_owned(),
-            model_id: DEFAULT_OLLAMA_MODEL.to_owned(),
-            endpoint: DEFAULT_OLLAMA_ENDPOINT.to_owned(),
-        }
-    }
-}
-
-/// Resolves the startup `(provider, mode)` pair for the LSP backend.
-///
-/// For `EmbeddingMode::Off` the LSP installs a [`NoopProvider`] and
-/// keeps mode `Off` — embeddings stay disabled until the user picks a
-/// model. For `Auto` / `Required` we ask the production
-/// [`ProviderRegistry`] for the requested provider. When the provider
-/// is unreachable, we install [`NoopProvider`] and downgrade the mode
-/// to `Off` so the editor keeps working without semantic recall — the
-/// LSP must never crash-loop VS Code per. The log level
-/// reflects intent: `error` when the user opted into `Required` and
-/// `warn` when `Auto` silently degraded.
-fn resolve_startup_provider(
-    embedding: &LspEmbeddingConfig,
-) -> Result<(Arc<dyn EmbeddingProvider>, EmbeddingMode), LiveError> {
-    if matches!(embedding.mode, EmbeddingMode::Off) {
-        return Ok((Arc::new(NoopProvider::new()), EmbeddingMode::Off));
-    }
-    let registry = ProviderRegistry::production();
-    match registry.build(
-        &embedding.provider_id,
-        &embedding.model_id,
-        Some(&embedding.endpoint),
-    ) {
-        Ok(provider) => Ok((provider, embedding.mode)),
-        Err(RegistryError::Unsupported {
-            requested,
-            registered,
-        }) => Err(LiveError::UnsupportedProvider {
-            requested,
-            registered,
-        }),
-        Err(RegistryError::Provider(provider_error)) => {
-            log_provider_unreachable(embedding, &provider_error);
-            Ok((Arc::new(NoopProvider::new()), EmbeddingMode::Off))
-        }
-    }
-}
-
-/// Emits the appropriate log when the configured provider is not
-/// reachable. `Required` users opted in explicitly so the failure is
-/// surfaced at `error`; `Auto` users get a `warn`.
-fn log_provider_unreachable(
-    embedding: &LspEmbeddingConfig,
-    error: &deslop_core::embedding::ProviderError,
-) {
-    if matches!(embedding.mode, EmbeddingMode::Required) {
-        tracing::error!(
-            %error,
-            endpoint = %embedding.endpoint,
-            model = %embedding.model_id,
-            "lsp_embedding_required_provider_unreachable",
-        );
-    } else {
-        tracing::warn!(
-            %error,
-            endpoint = %embedding.endpoint,
-            model = %embedding.model_id,
-            "lsp_embedding_auto_provider_unreachable",
-        );
-    }
-}
+#[path = "backend_embedding.rs"]
+mod embedding;
+use embedding::resolve_startup_provider;
+pub use embedding::LspEmbeddingConfig;
 
 /// `tower-lsp` backend backed by a live [`LiveService`].
 ///
@@ -168,6 +85,8 @@ pub struct LspBackend {
     /// `running`/`idle` broadcasts predate the VSIX notification
     /// handlers ([VSIX reactivity]).
     cold_pass_active: Arc<AtomicBool>,
+    /// Shared pull/push diagnostic configuration and publication state.
+    diagnostics: Arc<DiagnosticSession>,
 }
 
 impl LspBackend {
@@ -229,6 +148,8 @@ impl LspBackend {
         let (watcher, scheduler) =
             crate::file_watch::start(&root, None, Arc::clone(&session), exclusion, client.clone())?;
         let report_changed = scheduler.report_changed_sender();
+        let diagnostics = DiagnosticSession::new(root.clone(), Arc::clone(&report_snapshot));
+        diagnostics.watch(client.clone(), scheduler.subscribe_report_changed());
         let ipc = crate::ipc::IpcServer::start(
             &root,
             ipc_mode,
@@ -267,6 +188,7 @@ impl LspBackend {
             workspace_root: root,
             report_snapshot,
             cold_pass_active,
+            diagnostics,
         })
     }
 
@@ -308,6 +230,7 @@ impl LspBackend {
                 self.client
                     .send_notification::<ReportChangedLspNotification>(notification)
                     .await;
+                self.diagnostics.refresh(&self.client).await;
             }
             Ok(None) => {}
             Err(error) => tracing::error!(%error, "failed to apply changed paths"),
@@ -343,6 +266,9 @@ impl LspBackend {
 #[tower_lsp::async_trait]
 impl LanguageServer for LspBackend {
     async fn initialize(&self, params: InitializeParams) -> LspResult<InitializeResult> {
+        self.diagnostics
+            .initialize(&params)
+            .map_err(|error| tower_lsp::jsonrpc::Error::invalid_params(error.to_string()))?;
         crate::parent_process::start_monitor(params.process_id);
         Ok(InitializeResult {
             // [DEPLOY-PROTOCOL-VERSION] serverInfo.version must equal --version.
@@ -406,13 +332,18 @@ impl LanguageServer for LspBackend {
         // live-surface effect is one non-blocking warning when the budget
         // is smashed. Nothing else in the editor changes.
         crate::threshold_warning::push_threshold_warning(&self.client, &self.service).await;
+        self.diagnostics.refresh(&self.client).await;
     }
 
     async fn shutdown(&self) -> LspResult<()> {
         Ok(())
     }
 
-    async fn did_change_configuration(&self, _params: DidChangeConfigurationParams) {}
+    async fn did_change_configuration(&self, params: DidChangeConfigurationParams) {
+        self.diagnostics
+            .update(&self.client, &params.settings)
+            .await;
+    }
 
     async fn did_change_watched_files(&self, params: DidChangeWatchedFilesParams) {
         self.observability
@@ -447,9 +378,7 @@ impl LanguageServer for LspBackend {
         // [LSP-NON-INTERFERENCE-NONBLOCKING] Read the lock-free snapshot —
         // never the session mutex — so clone diagnostics can never block
         // behind an in-flight analysis pass.
-        let report = read_report_snapshot(&self.report_snapshot);
-        let file_report = report_for_file_in(&report, &path);
-        let items = diagnostics::build_for_file(&file_report, &self.workspace_root);
+        let items = self.diagnostics.for_path(&path);
         Ok(DocumentDiagnosticReportResult::Report(
             DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
                 related_documents: None,

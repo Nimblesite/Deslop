@@ -12,7 +12,7 @@ import {
   SEVERITIES,
   Severity,
   applyFacetFilter,
-  clusterBand,
+  clusterSeverity,
   clusterMass,
   clusterSlug,
   occurrenceCount,
@@ -26,12 +26,12 @@ const UTF8_ENCODING = "utf8";
 const FIXTURE_TEN = 10;
 const FIXTURE_FORTY = 40;
 const PAIR_OCCURRENCE_COUNT = 2;
-const SEVERITY_COUNT = 4;
-const UNKNOWN_RANK_BAND = "catastrophic";
+const SEVERITY_COUNT = 5;
+const UNKNOWN_SEVERITY = "catastrophic";
 const WIRE_CLUSTER_FIELDS = [
   "id",
   "rank",
-  "rank_band",
+  "severity",
   "mass",
   "canonical_node_count",
   "occurrences",
@@ -47,7 +47,7 @@ function clusterWith(overrides: Partial<ClusterFixture> = {}): ReportCluster {
   return wireCluster({
     id: "a1b2c3d4e5f67890",
     rank: 1,
-    rank_band: "worst",
+    severity: "error",
     mass: FIXTURE_FORTY,
     canonical_node_count: FIXTURE_TEN,
     occurrences: [
@@ -75,8 +75,8 @@ function reportTypesSource(): string {
 suite("report schema helpers", () => {
   // The severity cut points were once client constants; the assertions
   // that pinned their values moved with them to
-  // `deslop-core::report_weight::rank_band` and its
-  // `rank_band_cut_points` test. The fused cutoff has a different fate:
+  
+  
   // it is deleted outright — from the engine, the wire, and this client.
   // The tests below pin that no copy of either survived.
   test("the client owns neither a fused cutoff nor the severity cut points", () => {
@@ -167,29 +167,30 @@ suite("report schema helpers", () => {
     assert.equal(clusterMass(clusterWith({ mass: 1 })), 1);
   });
 
-  // [SEVERITY-BAND] The band classifies the rank percentile. The engine
-  // stamps it; an empty string (a report written before the field
-  // existed) reads as the tail band.
-  test("clusterBand resolves the engine's rank_band, defaulting to faint", () => {
-    assert.equal(clusterBand(clusterWith({ rank_band: "worst" })), "worst");
-    assert.equal(clusterBand(clusterWith({ rank_band: "top10" })), "top10");
-    assert.equal(clusterBand(clusterWith({ rank_band: "mid" })), "mid");
-    assert.equal(clusterBand(clusterWith({ rank_band: "faint" })), "faint");
-    const legacy = clusterWith({ rank_band: "" as Severity });
-    assert.equal(clusterBand(legacy), "faint", "a legacy empty band reads as faint");
-    const unknown = clusterWith({ rank_band: UNKNOWN_RANK_BAND as Severity });
-    assert.equal(clusterBand(unknown), "faint", "an unknown band reads as faint");
+  
+  // [SEVERITY-MODEL] Empty or unknown levels cannot imply a diagnostic.
+  test("clusterSeverity resolves the engine's severity, defaulting to no diagnostic", () => {
+    assert.equal(clusterSeverity(clusterWith({ severity: "error" })), "error");
+    assert.equal(clusterSeverity(clusterWith({ severity: "warning" })), "warning");
+    assert.equal(clusterSeverity(clusterWith({ severity: "information" })), "information");
+    assert.equal(clusterSeverity(clusterWith({ severity: "hint" })), "hint");
+    const legacy = clusterWith({ severity: "" as Severity });
+    assert.equal(clusterSeverity(legacy), "none", "an empty level creates no diagnostic");
+    const unknown = clusterWith({ severity: UNKNOWN_SEVERITY as Severity });
+    assert.equal(clusterSeverity(unknown), "none", "an unknown level creates no diagnostic");
+    assert.equal(clusterSeverity(clusterWith({ severity: "none" })), "none");
   });
 
-  // [SEVERITY-BAND] Every severity level in rank order, with a human
-  // label shared by every filter surface.
-  test("SEVERITIES is the complete rank-ordered band list", () => {
-    assert.deepEqual(SEVERITIES, ["worst", "top10", "mid", "faint"]);
+  
+  // [FACET-MODEL] Labels are shared across filter surfaces.
+  test("SEVERITIES is the complete diagnostic level list", () => {
+    assert.deepEqual(SEVERITIES, ["error", "warning", "information", "hint", "none"]);
     assert.equal(SEVERITIES.length, SEVERITY_COUNT);
-    assert.equal(severityLabel("worst"), "Worst 1%");
-    assert.equal(severityLabel("top10"), "Top 10%");
-    assert.equal(severityLabel("mid"), "Mid 40%");
-    assert.equal(severityLabel("faint"), "Faint");
+    assert.equal(severityLabel("error"), "Error");
+    assert.equal(severityLabel("warning"), "Warning");
+    assert.equal(severityLabel("information"), "Information");
+    assert.equal(severityLabel("hint"), "Hint");
+    assert.equal(severityLabel("none"), "No diagnostic");
   });
 
   // [VSIX-CLUSTER-ID-CONSISTENCY] The stable display slug is the first
@@ -209,28 +210,28 @@ suite("report schema helpers", () => {
     );
   });
 
-  // [FACET-TOP-OFFENDERS-FILTER] Facets filter on the mass severity band
+  
   // only; a bad persisted value must never yield an empty tree.
-  test("sanitizeFacetFilter keeps only known severity bands", () => {
-    assert.deepEqual(sanitizeFacetFilter(["worst", "top10"]), { severities: ["worst", "top10"] });
+  test("sanitizeFacetFilter keeps only known diagnostic levels", () => {
+    assert.deepEqual(sanitizeFacetFilter(["error", "warning"]), { severities: ["error", "warning"] });
     assert.deepEqual(sanitizeFacetFilter([]), { severities: [] });
     assert.deepEqual(
-      sanitizeFacetFilter(["identical", "worst", "banana"]),
-      { severities: ["worst"] },
+      sanitizeFacetFilter(["identical", "error", "banana"]),
+      { severities: ["error"] },
       "clone-kind values and typos are dropped, not kept",
     );
   });
 
   // [FACET-TOP-OFFENDERS-FILTER] An empty value list means "show all";
   // a non-empty list shows exactly the bands it names.
-  test("applyFacetFilter slices by severity band only", () => {
-    const worst = clusterWith({ id: "1111", rank_band: "worst" });
-    const mid = clusterWith({ id: "2222", rank_band: "mid" });
-    const faint = clusterWith({ id: "3333", rank_band: "faint" });
+  test("applyFacetFilter slices by diagnostic level only", () => {
+    const worst = clusterWith({ id: "1111", severity: "error" });
+    const mid = clusterWith({ id: "2222", severity: "information" });
+    const faint = clusterWith({ id: "3333", severity: "hint" });
     const all = [worst, mid, faint];
     assert.deepEqual(applyFacetFilter(all, { severities: [] }), all);
-    assert.deepEqual(applyFacetFilter(all, { severities: ["worst"] }), [worst]);
-    assert.deepEqual(applyFacetFilter(all, { severities: ["mid", "faint"] }), [mid, faint]);
-    assert.deepEqual(applyFacetFilter(all, { severities: ["top10"] }), []);
+    assert.deepEqual(applyFacetFilter(all, { severities: ["error"] }), [worst]);
+    assert.deepEqual(applyFacetFilter(all, { severities: ["information", "hint"] }), [mid, faint]);
+    assert.deepEqual(applyFacetFilter(all, { severities: ["warning"] }), []);
   });
 });

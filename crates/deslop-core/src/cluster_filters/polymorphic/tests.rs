@@ -13,31 +13,42 @@
 
 use std::collections::HashMap;
 
-use super::super::{is_noise_pattern, NoiseFilter, ParseCache};
-use crate::ast::ByteRange;
-use crate::fingerprint::Fingerprint;
-use crate::state::{FileId, FileRegistry};
+use super::super::{collect_snippets, is_noise_pattern, NoiseFilter, ParseCache};
+use crate::{
+    ast::ByteRange,
+    fingerprint::Fingerprint,
+    state::{FileId, FileRegistry},
+};
 
 /// The template-stamped Flutter widget scaffold, parameterised by the
 /// one body expression a template stamps per app — the #331 corpus.
 fn widget_scaffold(body: &str) -> String {
-    format!(
-        "class ExampleApp extends StatelessWidget {{\n\
-         \x20 const ExampleApp({{super.key}});\n\
-         \x20 @override\n\
-         \x20 Widget build(BuildContext context) {{\n\
-         \x20   return MaterialApp(home: {body});\n\
-         \x20 }}\n\
-         }}\n"
-    )
+    scaffold(body, FRAMEWORK_BASE, OVERRIDE_MARKER)
 }
+
+/// Known Flutter base class.
+const FRAMEWORK_BASE: &str = "StatelessWidget";
+/// Ordinary base class without a known framework contract.
+const GENERIC_BASE: &str = "DomainBase";
+/// Explicit override proof.
+const OVERRIDE_MARKER: &str = "@override";
+/// Class member without an override marker.
+const NO_MARKER: &str = "";
+/// Language of every fixture in this module.
+const DART: &str = "dart";
 
 /// The same scaffold with the `@override` annotation removed — an
 /// ordinary same-named class, no compiler proof of any contract.
 fn widget_scaffold_without_marker(body: &str) -> String {
+    scaffold(body, FRAMEWORK_BASE, NO_MARKER)
+}
+
+/// Builds one class with the requested contract and body.
+fn scaffold(body: &str, base: &str, marker: &str) -> String {
     format!(
-        "class ExampleApp extends StatelessWidget {{\n\
+        "class ExampleApp extends {base} {{\n\
          \x20 const ExampleApp({{super.key}});\n\
+         \x20 {marker}\n\
          \x20 Widget build(BuildContext context) {{\n\
          \x20   return MaterialApp(home: {body});\n\
          \x20 }}\n\
@@ -78,7 +89,7 @@ impl Component {
             let source = body.clone().into_bytes();
             let end = source.len();
             let _previous = component.sources.insert(file_id, source);
-            let _language = component.languages.insert(file_id, "dart");
+            let _language = component.languages.insert(file_id, DART);
             component.members.push(Fingerprint {
                 hash: [0_u8; 32],
                 file_id,
@@ -89,9 +100,15 @@ impl Component {
         component
     }
 
-    /// The noise verdict for this component: `Some(filter)` when a
-    /// noise pattern convicted it, `None` when it must surface.
+    /// Isolates the polymorphic rule from independent language rules.
     fn verdict(&self, cache: &ParseCache) -> Option<NoiseFilter> {
+        let snippets = collect_snippets(&self.members, &self.sources, DART, cache)?;
+        super::is_polymorphic_signature_cluster(&snippets, &self.sources, &self.languages, cache)
+            .then_some(NoiseFilter::Polymorphic)
+    }
+
+    /// The combined verdict, including independent language-specific rules.
+    fn all_noise_verdict(&self, cache: &ParseCache) -> Option<NoiseFilter> {
         is_noise_pattern(&self.members, &self.sources, &self.languages, cache)
     }
 }
@@ -120,8 +137,8 @@ fn framework_stamped_dart_widget_scaffolds_are_convicted_by_the_override_marker(
 
 /// The marker is the proof. The same classes without `@override`
 /// implement nothing the index cannot see, so removing the marker must
-/// leave the component surfaced (gh #373: the gate must not delete
-/// ordinary same-named classes).
+/// leave the component unconvicted by the polymorphic rule. The independent
+/// Flutter rule is tested separately below.
 #[test]
 fn the_same_scaffolds_without_override_markers_are_not_convicted() {
     let bodies: Vec<String> = STAMPED_BODIES
@@ -132,9 +149,35 @@ fn the_same_scaffolds_without_override_markers_are_not_convicted() {
     assert_eq!(
         component.verdict(&ParseCache::new()),
         None,
-        "without the override marker there is no proof a contract declares \
-         build, so the same-named classes must keep surfacing"
+        "without an override marker the polymorphic rule has no contract proof"
     );
+}
+
+/// [CLONE-NOISE-DART-WIDGET-SCAFFOLD] Flutter scaffolds have a separate noise rule.
+#[test]
+fn known_widget_scaffolding_uses_its_language_rule_without_an_override_marker() {
+    let bodies: Vec<String> = STAMPED_BODIES
+        .iter()
+        .map(|body| widget_scaffold_without_marker(body))
+        .collect();
+    let component = Component::across_files(&bodies);
+    assert_eq!(component.verdict(&ParseCache::new()), None);
+    assert_eq!(
+        component.all_noise_verdict(&ParseCache::new()),
+        Some(NoiseFilter::LanguageSpecific)
+    );
+}
+
+/// [CLONE-NOISE-POLYMORPHIC-SIGNATURE] Unknown bases do not prove a contract.
+#[test]
+fn ordinary_subclasses_without_contract_proof_are_not_convicted() {
+    let bodies: Vec<String> = STAMPED_BODIES
+        .iter()
+        .map(|body| scaffold(body, GENERIC_BASE, NO_MARKER))
+        .collect();
+    let component = Component::across_files(&bodies);
+    assert_eq!(component.verdict(&ParseCache::new()), None);
+    assert_eq!(component.all_noise_verdict(&ParseCache::new()), None);
 }
 
 /// A copy-pasted override is never suppressed: the conviction requires

@@ -7,11 +7,11 @@
 //! announced with a `window/showMessage` warning, or the user's click
 //! silently does nothing.
 
-use crate::common;
-
 use anyhow::{ensure, Context, Result};
 use common::session::{FixtureSession, MERGE_OFFER_TITLE};
 use serde_json::{json, Value};
+
+use crate::common;
 
 /// `window/showMessage` `MessageType::WARNING` wire value.
 const WARNING: u64 = 2;

@@ -9,17 +9,16 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{
-    boilerplate::collect_import_boilerplate_ranges, discover::discover_files, error::CoreError,
-    report::CacheStats, state::FileId,
-};
-
 use super::{
     super::{
         config::{EmbeddingSettings, PipelineConfig},
         corpus::{log_skip_too_deep, parse_one_file, parser_for_language, CorpusBuildState},
     },
     PipelineSession,
+};
+use crate::{
+    boilerplate::collect_import_boilerplate_ranges, discover::discover_files, error::CoreError,
+    report::CacheStats, state::FileId,
 };
 
 /// Whether a change pass altered the analysed corpus

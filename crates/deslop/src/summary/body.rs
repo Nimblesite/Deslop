@@ -1,7 +1,10 @@
 //! Mass-only CLI summary rendering.
 
 use deslop_core::{
-    report::ReportCluster, report::ReportOccurrence, report_facts::DiffDelta, Report,
+    render::INFORMATIONAL_FINDING_NOTE,
+    report::{ReportCluster, ReportOccurrence},
+    report_facts::DiffDelta,
+    Report,
 };
 
 use super::{theme::Theme, ColorChoice};
@@ -37,16 +40,11 @@ pub fn summary(color: ColorChoice, report: &Report, technical: bool) {
 
 /// Top line with cluster count and total engine-authored mass.
 fn write_headline(theme: &Theme, report: &Report) {
-    let total_mass = report
-        .clusters
-        .iter()
-        .fold(0_u64, |total, cluster| total.saturating_add(cluster.mass));
     eprintln!(
-        "{bold}Found {clusters} groups of duplicated code{reset} across {files} file(s) {dim}(total mass {total_mass}){reset}",
+        "{bold}Found {clusters} groups of duplicated code{reset} across {files} file(s)",
         bold = theme.bold,
-        dim = theme.dim,
         reset = theme.reset,
-        clusters = report.clusters.len(),
+        clusters = report.metrics.clusters_total,
         files = report.files_analysed,
     );
 }
@@ -149,22 +147,22 @@ fn write_provenance_line(theme: &Theme, report: &Report, technical: bool) {
     }
 }
 
-/// Counts engine-stamped mass rank bands.
+/// Counts diagnostic levels independently of duplication weight.
 fn write_severity_line(theme: &Theme, report: &Report) {
-    let bands = ["worst", "top10", "mid", "faint"];
-    let parts: Vec<String> = bands
+    let levels = ["error", "warning", "information", "hint", "none"];
+    let parts: Vec<String> = levels
         .iter()
-        .filter_map(|band| {
+        .filter_map(|level| {
             let count = report
                 .clusters
                 .iter()
-                .filter(|cluster| cluster.rank_band == *band)
+                .filter(|cluster| cluster.severity == *level)
                 .count();
-            (count > 0).then(|| format!("{count} × {band}"))
+            (count > 0).then(|| format!("{count} × {level}"))
         })
         .collect();
     eprintln!(
-        "  {dim}mass severity: {parts}{reset}",
+        "  {dim}diagnostic severity: {parts}{reset}",
         dim = theme.dim,
         reset = theme.reset,
         parts = parts.join(" · "),
@@ -173,7 +171,11 @@ fn write_severity_line(theme: &Theme, report: &Report) {
 
 /// Names the highest-mass cluster.
 fn write_worst_offender_line(theme: &Theme, report: &Report) {
-    let Some(worst) = report.clusters.first() else {
+    let Some(worst) = report
+        .clusters
+        .iter()
+        .find(|cluster| cluster.kind.is_clone())
+    else {
         return;
     };
     eprintln!(
@@ -191,7 +193,7 @@ fn write_worst_offender_line(theme: &Theme, report: &Report) {
 /// Heading for the mass-ranked list.
 fn write_top_clusters_header(theme: &Theme, report: &Report, technical: bool) {
     eprintln!(
-        "{bold}Highest-mass {count} groups{reset}",
+        "{bold}Top {count} findings{reset}",
         bold = theme.bold,
         reset = theme.reset,
         count = report.clusters.len().min(TOP_CLUSTERS_IN_SUMMARY),
@@ -209,6 +211,13 @@ fn write_top_clusters_header(theme: &Theme, report: &Report, technical: bool) {
 fn render_cluster(theme: &Theme, cluster: &ReportCluster, technical: bool) {
     let files = summarise_files(&cluster.occurrences);
     let title = cluster.kind.labels().title;
+    if !cluster.kind.is_clone() {
+        eprintln!(
+            "  {title} — {INFORMATIONAL_FINDING_NOTE} {matches} matches in {files}",
+            matches = cluster.occurrence_count
+        );
+        return;
+    }
     if technical {
         eprintln!(
             "  {bold}#{rank:<2}{reset} {title} [{dim}{id}{reset}] · mass {mass} · {occurrences} occurrences · {nodes} AST nodes · {cyan}{files}{reset}",

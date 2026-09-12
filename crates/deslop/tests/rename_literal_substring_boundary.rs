@@ -23,9 +23,9 @@
 //! `ts-rename-literal-substring` is the same rename with one mangled
 //! message and must stay a demoted, uncertified `structural_only` match.
 
-use crate::common::{signals::*, *};
-
 use serde_json::Value;
+
+use crate::common::{signals::*, *};
 
 /// Node floor matching the rename suites, so the class body qualifies as
 /// a candidate on both sides of both fixtures.

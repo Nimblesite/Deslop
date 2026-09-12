@@ -30,6 +30,9 @@ import {
   ReportCluster,
   Report,
   ReportDelta,
+  SeverityOverrides,
+  projectDiagnosticSeverity,
+  compareClusterRank,
 } from "./types/report";
 
 export type LifecyclePhase =
@@ -80,10 +83,11 @@ export class ReportStore implements vscode.Disposable {
   private readonly _pendingEmbeddingModel = signal<string | null>(null);
   private readonly _embeddingProgress = signal<EmbeddingProgress | null>(null);
   private readonly _facetFilter = signal<FacetFilter>({ severities: [] });
+  private readonly _severityOverrides = signal<SeverityOverrides>({});
   private readonly _retractedClusters = signal<ReadonlySet<string>>(new Set());
 
   private readonly _visibleReport: ReadonlySignal<Report | null> = computed(() =>
-    projectVisible(this._report.value, this._dirtyFiles.value),
+    projectDiagnosticSeverity(projectVisible(this._report.value, this._dirtyFiles.value), this._severityOverrides.value),
   );
 
   /** Canonical report signal — only the LSP writes this via setSnapshot / applyDelta. */
@@ -154,6 +158,11 @@ export class ReportStore implements vscode.Disposable {
    * by extension.ts on activation and on configuration changes. */
   setFacetFilter(filter: FacetFilter): void {
     this._facetFilter.value = filter;
+  }
+
+  /** [SEVERITY-MODEL] Re-render current findings without another analysis. */
+  setSeverityOverrides(overrides: SeverityOverrides): void {
+    this._severityOverrides.value = overrides;
   }
 
   /**
@@ -238,7 +247,7 @@ export class ReportStore implements vscode.Disposable {
     // carried on each updated cluster, so the merged list is re-ordered
     // by `rank` rather than by a weight comparison that would have to
     // guess the engine's tie-break ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]).
-    const clusters = Array.from(byId.values()).sort((a, b) => a.rank - b.rank);
+    const clusters = Array.from(byId.values()).sort(compareClusterRank);
     const retracted = new Set(this._retractedClusters.value);
     for (const id of delta.clusters_removed) retracted.add(id);
     // A later generation that re-states a cluster un-retracts it: the
@@ -262,6 +271,7 @@ export class ReportStore implements vscode.Disposable {
         // per-file rows freeze at the seed snapshot, since the delta path
         // is the one almost always taken after the first report.
         metrics: delta.metrics,
+        routing: delta.routing,
         cache_stats: delta.cache_stats,
         tool_version: delta.tool_version,
       };
@@ -374,10 +384,6 @@ function projectVisible(canonical: Report | null, dirty: ReadonlySet<string>): R
   if (!changed) return canonical;
   return {
     ...canonical,
-    metrics: {
-      ...canonical.metrics,
-      clusters_total: clusters.length,
-    },
     clusters,
   };
 }

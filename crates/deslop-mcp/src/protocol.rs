@@ -11,11 +11,10 @@
 //! `TYPE_CONFIG` workaround in `scripts/typediagram/` carries a
 //! `TODO(typeDiagram#NN)` link back to the issue that retires it.
 
-use serde_json::Value;
-
 pub use deslop_core::wire_generated::{
     ErrorCode, JsonRpcError, JsonRpcErrorResponse, JsonRpcRequest, JsonRpcResponse, RequestId,
 };
+use serde_json::Value;
 
 /// Fixed JSON-RPC version string. The MCP spec mandates `"2.0"`.
 pub const JSONRPC_VERSION: &str = "2.0";

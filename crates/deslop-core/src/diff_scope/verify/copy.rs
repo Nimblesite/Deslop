@@ -20,6 +20,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use super::{corpus_miss_is_ignorable, resolve_to_scan_root, split_lines, verify_hunk};
 use crate::{
     diff_scope::{
         parser::{FileCopy, FilePatch},
@@ -27,8 +28,6 @@ use crate::{
     },
     error::CoreError,
 };
-
-use super::{corpus_miss_is_ignorable, resolve_to_scan_root, split_lines, verify_hunk};
 
 /// Verifies one copy section and marks every target line added.
 /// Returns `false` when the target is ignorable (outside the scan

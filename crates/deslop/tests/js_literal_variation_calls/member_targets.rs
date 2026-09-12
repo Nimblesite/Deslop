@@ -28,7 +28,7 @@ fn external_method_changes_are_rejected_but_receiver_renames_publish() -> Result
 /// The single control copy publishes completely while unrelated API sequences do not.
 fn assert_receiver_clone(report: &serde_json::Value) -> Result<()> {
     assert_eq!(
-        clusters(report).len(),
+        clone_findings(report).len(),
         CLUSTER_COUNT,
         "one real copy: {report:#}"
     );

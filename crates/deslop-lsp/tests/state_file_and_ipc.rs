@@ -17,8 +17,6 @@
 
 #![cfg(unix)]
 
-use crate::common;
-
 use std::{
     fs,
     io::{BufReader, Write},
@@ -32,6 +30,8 @@ use common::{
     call, cluster_count, copy_fixture, handshake, spawn_lsp_guarded, spawn_lsp_on_fixture_guarded,
     watched_file_changed, write_frame, LspGuard,
 };
+
+use crate::common;
 
 const STATE_FILE: &str = ".deslop/cache/live-report.json";
 
@@ -717,7 +717,7 @@ fn cached_report() -> serde_json::Value {
         "clusters": [{
             "id": "cached-gh73",
             "rank": 1,
-            "rank_band": "worst",
+            "severity": "warning",
             "kind": "identical",
             "mass": 12,
             "canonical_node_count": 6,

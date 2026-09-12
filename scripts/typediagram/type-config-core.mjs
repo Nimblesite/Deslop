@@ -286,12 +286,14 @@ export const CORE_TYPE_CONFIG = {
   ReportDelta: {
     docs: "Diff between two report generations.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldSerdeAttrs: { routing: ["default"] },
     fieldOverrides: {
       from_generation: "u64",
       to_generation: "u64",
     },
     fieldDocs: {
       from_generation: "Generation of the earlier report.",
+      routing: "Effective category thresholds for the later generation.",
       to_generation: "Generation of the later report.",
       clusters_added: "Clusters present in `to` but not in `from`, worst-first.",
       clusters_removed: "Cluster ids present in `from` but not in `to`.",

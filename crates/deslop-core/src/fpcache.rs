@@ -21,13 +21,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use blob::{decode, encode, read_bounded, BlobBinding, MAX_BLOB_BYTES};
+pub use retention::{sweep_store, LiveBlobs};
+
 use crate::{
     ast::NormalizedNode, embedding::bytes_hash, fingerprint::Fingerprint, lsh::Signature,
     state::FileId,
 };
-
-use blob::{decode, encode, read_bounded, BlobBinding, MAX_BLOB_BYTES};
-pub use retention::{sweep_store, LiveBlobs};
 
 mod blob;
 mod retention;

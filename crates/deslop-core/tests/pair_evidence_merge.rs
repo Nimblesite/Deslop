@@ -10,7 +10,6 @@
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-
 use deslop_core::{
     ast::ByteRange,
     embedding::EmbeddingPair,

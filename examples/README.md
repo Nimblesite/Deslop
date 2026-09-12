@@ -29,9 +29,10 @@ title first, academic `Type-N` in brackets for AI readers:
 - **Identical code [Type-1/2]** — exact match or renamed identifiers.
 - **Nearly identical code [Type-3]** — same shape with small differences.
 - **Same shape, different content [structural-only]** — identical AST
-  shape, no token or semantic overlap (sibling boilerplate; demoted in
-  ranking).
-- **Loosely similar code [weak LSH]** — loose textual overlap.
+  shape with no or negligible shared content (sibling boilerplate).
+  Informational, not a clone: it counts toward no duplication figure.
+- **Similar code [Type-3]** — substantial copied work, with statements or
+  control flow changed enough that it is no longer a near-copy.
 - **Same behavior, different code [Type-4]** — semantically equivalent,
   syntactically different.
 

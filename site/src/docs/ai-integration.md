@@ -27,7 +27,7 @@ Only `find-similar` belongs in the authoring inner loop. Everything else is a re
 | --- | --- |
 | `find-similar` | **Before** writing new code — does an equivalent already exist? This is the prevention tool. |
 | `duplicates` | Ranked clusters, worst first. Narrow to a file, a byte range, or a language. Start cleanup here. |
-| `cluster-by-id` | Full member list and signals for one cluster you are about to merge. |
+| `cluster-by-id` | Full member list for one cluster you are about to merge. Evidence belongs to `compare-pair`, never to a cluster. |
 | `compare-pair` | Why two specific occurrences were admitted as duplicates of each other. |
 | `merge-plan` | Read-only mechanical merge plan for a cluster, before you hand-edit. |
 | `rescan` | Force-refresh after large external changes. |

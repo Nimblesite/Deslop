@@ -25,6 +25,8 @@ pub mod registry;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
 
+use std::sync::Arc;
+
 pub use cache::{bytes_hash, content_hash, EmbeddingCache};
 pub use mode::{EmbeddingMode, ParseModeError};
 pub use noop::{NoopProvider, NOOP_PROVIDER_ID};
@@ -37,8 +39,6 @@ pub use provider::{
     EmbeddingProvider, EmbeddingSpec, ProviderError, DEFAULT_MAX_INPUT_CHARS, DEFAULT_PROVIDER_ID,
 };
 pub use registry::{ProviderRegistry, RegistryError};
-
-use std::sync::Arc;
 
 /// Attempts to connect to Ollama. Returns `Some(provider)` when Ollama
 /// is reachable and `None` otherwise so callers can fall through to

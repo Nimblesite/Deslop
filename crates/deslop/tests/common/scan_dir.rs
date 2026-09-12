@@ -5,9 +5,10 @@
 //! the pairing lives here once and every test binds the returned
 //! [`TempDir`] to keep the workspace alive.
 
-use std::fs;
-use std::path::Path;
-use std::path::PathBuf;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Result;
 use tempfile::TempDir;

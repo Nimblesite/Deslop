@@ -16,9 +16,8 @@
 //! contain, so a regression back to the static enum fails here.
 
 use anyhow::{anyhow, Result};
-use serde_json::Value;
-
 use deslop_mcp::tools::tools_list_payload;
+use serde_json::Value;
 
 use crate::common::array_field;
 

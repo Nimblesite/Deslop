@@ -67,14 +67,13 @@ export const KIND_ICON: Record<ClusterKind, string> = {
   loosely_similar: "circle-outline",
 } as const;
 
-// [SEVERITY-BAND] Glyph density is the mass rank band's channel — how
-// much of the repository's duplication this cluster is — orthogonal to the
-// kind colour.
+// [SEVERITY-MODEL] Diagnostic glyphs are independent of mass and kind colour.
 export const SEVERITY_DOT = {
-  worst: "●●",
-  top10: "●",
-  mid: "◐",
-  faint: "○",
+  error: "⊗",
+  warning: "⚠",
+  information: "ⓘ",
+  hint: "◇",
+  none: "○",
 } as const;
 
 export const FONT = {

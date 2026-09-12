@@ -29,8 +29,10 @@
 
 use anyhow::Result;
 
-use crate::common::signals::{assert_admitted_rename_cluster, top_visible_cluster};
-use crate::common::*;
+use crate::common::{
+    signals::{assert_admitted_rename_cluster, top_visible_cluster},
+    *,
+};
 
 // [FUSED-SIGNALS-THREE-LAYER] Type-2 Dart clones (identical after
 // normalisation, every identifier renamed) must produce both

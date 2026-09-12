@@ -28,12 +28,18 @@ export interface ColorContribution {
   defaults: Record<string, string>;
 }
 
-/** A `contributes.configuration.properties` entry. */
+/** A `contributes.configuration.properties` entry. Object-typed settings
+ * declare their own nested `properties` and `additionalProperties`: that
+ * nested schema is the contract VS Code validates a user's settings
+ * against, so suites assert it rather than the prose description. */
 export interface ConfigurationProperty {
   default?: unknown;
   description?: string;
   enum?: unknown[];
   type?: string;
+  properties?: Record<string, ConfigurationProperty>;
+  additionalProperties?: boolean;
+  scope?: string;
 }
 
 /** The subset of `package.json` the unit suites assert against. */

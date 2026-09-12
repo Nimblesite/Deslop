@@ -6,13 +6,12 @@
 
 use std::path::Path;
 
-use crate::{error::CoreError, render::render_ast_dump, report::Report, state::FileRegistry};
-
 use super::{
     config::PipelineConfig,
     corpus::{default_parsers, read_source},
     session::PipelineSession,
 };
+use crate::{error::CoreError, render::render_ast_dump, report::Report, state::FileRegistry};
 
 /// Runs the full analysis pipeline and returns a rendered report.
 ///

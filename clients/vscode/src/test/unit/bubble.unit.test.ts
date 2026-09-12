@@ -30,7 +30,7 @@ function cluster(): ReportCluster {
 
 suite("bubble rendering helpers", () => {
   test("inlineText includes the count and filename", () => {
-    const text = inlineText(cluster(), "worst");
+    const text = inlineText(cluster(), "error");
     assert.match(text, /×\s*4/);
     assert.match(text, /Alpha\.cs/);
   });
@@ -38,12 +38,12 @@ suite("bubble rendering helpers", () => {
   test("inlineText without occurrences omits the location tail", () => {
     const c = cluster();
     c.occurrences = [];
-    const text = inlineText(c, "faint");
+    const text = inlineText(c, "hint");
     assert.doesNotMatch(text, /Alpha/);
   });
 
   test("ghostText encodes the tree-branch prefix and count", () => {
-    const text = ghostText(cluster(), "top10");
+    const text = ghostText(cluster(), "warning");
     assert.match(text, /└─/);
     assert.match(text, /×\s*4/);
   });
@@ -54,7 +54,7 @@ suite("bubble rendering helpers", () => {
     // The ghost line carries the verdict, slug and count — never the former
     // `pair 1↔2` bar strip.
     const c = cluster();
-    const ghost = ghostText(c, "top10");
+    const ghost = ghostText(c, "warning");
     assert.equal(ghost.includes("pair"), false, "no pair label may render");
     assert.equal(ghost.includes("↔"), false, "no pair separator may render");
     assert.match(ghost, /└─/);
@@ -78,14 +78,14 @@ suite("bubble rendering helpers", () => {
       ["sourced cluster", sourced],
       ["unsourced cluster", unsourced],
     ] as const) {
-      assert.equal(ghostText(c, "top10").includes("pair"), false, context);
+      assert.equal(ghostText(c, "warning").includes("pair"), false, context);
       assert.equal(
-        ghostText(c, "top10").includes("█"),
+        ghostText(c, "warning").includes("█"),
         false,
         `${context}: no bar glyph`,
       );
       assert.equal(
-        inlineText(c, "top10").includes("pair"),
+        inlineText(c, "warning").includes("pair"),
         false,
         `${context}: inline line carries no pair label`,
       );
@@ -215,9 +215,9 @@ suite("bubble rendering helpers", () => {
         "live bubble surfaces must be rebuilt through one shared render function",
       );
     }
-    const parts = renderBubbleParts(c, "top10");
-    assert.equal(inlineText(c, "top10"), parts.inline);
-    assert.equal(ghostText(c, "top10"), parts.ghost);
+    const parts = renderBubbleParts(c, "warning");
+    assert.equal(inlineText(c, "warning"), parts.inline);
+    assert.equal(ghostText(c, "warning"), parts.ghost);
     assert.equal(bubbleHover(c).value, parts.hover.value);
     assert.equal(
       "signalStrip" in parts,
@@ -275,4 +275,37 @@ suite("bubble rendering helpers", () => {
       `stable slug must appear in full hover; got: ${firstLine}`,
     );
   });
+});
+
+// [CLONE-BUCKETS-STRUCTURAL-ONLY] Informational matches never claim clone status.
+const SHAPE_ONLY_KIND = "structural_only";
+const INFORMATIONAL_NOTICE = "Informational — not a clone.";
+const COMPACT_HOVER_COUNT = 2;
+const HOVER_STABLE_SLUG = "abcdef0";
+const HOVER_OPEN_COMMAND = "command:deslop.openCluster";
+const HOVER_CANONICAL_FILE = "Alpha.cs";
+const DUPLICATED_MASS_LABEL = "mass";
+const DUPLICATION_RANK_LABEL = "rank";
+const COPY_COUNT_MARKER = "×";
+const SHAPE_HOVER_OPTIONS = [
+  { showVerdict: true, showDismiss: true },
+  { showVerdict: false, count: COMPACT_HOVER_COUNT },
+] as const;
+suite("shape-only hover presentation", () => {
+  for (const options of SHAPE_HOVER_OPTIONS) {
+    test(options.showVerdict ? "full card" : "compact card", () => {
+      const shape = { ...cluster(), kind: SHAPE_ONLY_KIND } as const;
+      const text = clusterHoverMarkdown(shape, options).value;
+      assert.ok(text.includes(INFORMATIONAL_NOTICE), text);
+      assert.ok(text.includes(HOVER_STABLE_SLUG), text);
+      assert.ok(text.includes(HOVER_OPEN_COMMAND), text);
+      assert.ok(text.includes(HOVER_CANONICAL_FILE), text);
+      assert.equal(text.includes(DUPLICATED_MASS_LABEL), false, text);
+      assert.equal(text.includes(DUPLICATION_RANK_LABEL), false, text);
+      assert.equal(text.includes(COPY_COUNT_MARKER), false, text);
+      const clone = clusterHoverMarkdown(cluster(), options).value;
+      assert.equal(clone.includes(INFORMATIONAL_NOTICE), false, clone);
+      assert.ok(clone.includes(COPY_COUNT_MARKER), clone);
+    });
+  }
 });

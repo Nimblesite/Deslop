@@ -3,12 +3,14 @@
 //! granularity the reported range intersects — the enclosing `test_*`
 //! function view and the assert-run window whose payload sits above it.
 
-use super::super::{is_noise_pattern, NoiseFilter, ParseCache};
-use crate::ast::ByteRange;
-use crate::fingerprint::Fingerprint;
-use crate::state::{FileId, FileRegistry};
-
 use std::collections::HashMap;
+
+use super::super::{is_noise_pattern, NoiseFilter, ParseCache};
+use crate::{
+    ast::ByteRange,
+    fingerprint::Fingerprint,
+    state::{FileId, FileRegistry},
+};
 
 /// The pytest module the #107 fixture stages: a payload binding and the
 /// two chained assertions that consume it, wrapped in one `test_`

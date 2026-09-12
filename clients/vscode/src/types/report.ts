@@ -97,20 +97,19 @@ export type {
   ReportBoilerplateOccurrence as BoilerplateHintOccurrence,
 } from "./wire-generated";
 
-// Severity bucketing per [LSP-SEVERITY-BUCKET]. The band classifies the
-// cluster's rank percentile, which is a calculation, so it is computed
-// once in `report_weight::rank_band` and carried on the wire.
-export type Severity = "worst" | "top10" | "mid" | "faint";
+// [SEVERITY-MODEL] Diagnostic severity is independent of duplicated mass.
+export type Severity = "error" | "warning" | "information" | "hint" | "none";
 
-/** Every severity level in rank order. Filter surfaces enumerate this
+/** Every diagnostic level. Filter surfaces enumerate this
  * instead of hand-listing levels ([FACET-REPORT-WEBVIEW]). */
-export const SEVERITIES: readonly Severity[] = ["worst", "top10", "mid", "faint"] as const;
+export const SEVERITIES: readonly Severity[] = ["error", "warning", "information", "hint", "none"] as const;
 
 const SEVERITY_LABELS: Record<Severity, string> = {
-  worst: "Worst 1%",
-  top10: "Top 10%",
-  mid: "Mid 40%",
-  faint: "Faint",
+  error: "Error",
+  warning: "Warning",
+  information: "Information",
+  hint: "Hint",
+  none: "No diagnostic",
 };
 
 /** Human label for a severity level, shared by every filter surface. */
@@ -118,11 +117,36 @@ export function severityLabel(severity: Severity): string {
   return SEVERITY_LABELS[severity];
 }
 
-/** The cluster's severity band as the engine stamped it
- * ([SEVERITY-BAND]). A report written before the field existed carries
- * an empty string and reads as the tail band. */
-export function clusterBand(cluster: ReportCluster): Severity {
-  return SEVERITIES.find((band) => band === cluster.rank_band) ?? "faint";
+/** The reported diagnostic level. Unrecognized values do not create diagnostics. */
+export function clusterSeverity(cluster: ReportCluster): Severity {
+  return SEVERITIES.find((severity) => severity === cluster.severity) ?? "none";
+}
+
+/** [CLONE-TYPE-TAXONOMY] Shape-only findings carry no duplication claims. */
+export function isClone(cluster: ReportCluster): boolean {
+  return cluster.kind !== "structural_only";
+}
+
+/** [RANK-MASS-SUM] Preserve engine ranks; unranked information comes last. */
+export function compareClusterRank(left: ReportCluster, right: ReportCluster): number {
+  if (isClone(left) !== isClone(right)) return isClone(left) ? -1 : 1;
+  return left.rank - right.rank || left.id.localeCompare(right.id);
+}
+
+export const INFORMATIONAL_FINDING = "Informational — not a clone.";
+
+export type SeverityOverrides = Partial<Record<ClusterKind, Severity>>;
+
+/** [SEVERITY-MODEL] Presentation overrides never alter the engine's report. */
+export function projectDiagnosticSeverity(report: Report | null, overrides: SeverityOverrides): Report | null {
+  if (!report || Object.keys(overrides).length === 0) return report;
+  return {
+    ...report,
+    clusters: report.clusters.map((cluster) => ({
+      ...cluster,
+      severity: overrides[cluster.kind] ?? cluster.severity,
+    })),
+  };
 }
 
 /** The duplicated mass — the worst-first ranking metric. One formula
@@ -143,8 +167,8 @@ export const CLUSTER_KINDS: readonly ClusterKind[] = [
   "identical",
   "nearly_identical",
   "same_behavior",
-  "structural_only",
   "loosely_similar",
+  "structural_only",
 ] as const;
 
 interface KindLabels {
@@ -156,10 +180,10 @@ interface KindLabels {
 
 const KIND_LABELS: Record<ClusterKind, KindLabels> = {
   identical: { title: "Identical code", taxonomy: "Type-1 exact clone" },
-  nearly_identical: { title: "Nearly identical code", taxonomy: "Type-2/3 near-copy" },
+  nearly_identical: { title: "Nearly identical code", taxonomy: "Type-2 / close Type-3 clone" },
   same_behavior: { title: "Same behavior, different code", taxonomy: "Type-4 semantic clone" },
-  structural_only: { title: "Same shape, different content", taxonomy: "structural-only match" },
-  loosely_similar: { title: "Loosely similar code", taxonomy: "weak Type-3 relation" },
+  structural_only: { title: "Same shape, different content", taxonomy: "Informational non-clone" },
+  loosely_similar: { title: "Similar code", taxonomy: "Type-3 clone with larger edits" },
 };
 
 /** The title every cluster surface shows for a kind ([CLONE-KIND-LABELS]). */
@@ -172,11 +196,7 @@ export function kindTaxonomy(kind: ClusterKind): string {
   return KIND_LABELS[kind].taxonomy;
 }
 
-// [FACET-TOP-OFFENDERS-FILTER] The tree facet filters on the mass
-// severity band; the report webview adds the clone kind ([FACET-MODEL]).
-
-/** A sanitized facet filter: only registry-known severity bands
- * survive. */
+// [FACET-TOP-OFFENDERS-FILTER] Every listing shares this diagnostic filter.
 export interface FacetFilter {
   severities: Severity[];
 }
@@ -202,5 +222,5 @@ export function applyFacetFilter(
 ): ReportCluster[] {
   const { severities } = filter;
   if (severities.length === 0) return clusters;
-  return clusters.filter((cluster) => severities.includes(clusterBand(cluster)));
+  return clusters.filter((cluster) => severities.includes(clusterSeverity(cluster)));
 }

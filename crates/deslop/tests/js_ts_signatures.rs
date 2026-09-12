@@ -13,8 +13,10 @@
 
 use anyhow::Result;
 
-use crate::common::signals::{assert_admitted_rename_cluster, top_visible_cluster};
-use crate::common::*;
+use crate::common::{
+    signals::{assert_admitted_rename_cluster, top_visible_cluster},
+    *,
+};
 
 #[test]
 fn javascript_type2_rename_clone_is_reported_byte_distinct() -> Result<()> {

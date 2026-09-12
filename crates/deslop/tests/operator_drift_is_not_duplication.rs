@@ -38,6 +38,7 @@
 //! families clustering also has to leave that pair `identical` and
 //! saturated, asserted in the same run.
 
+use deslop_core::report::{ContentMeasurement, PairComparison, PairEndpoint};
 use serde_json::Value;
 
 use crate::common::{signals::*, *};
@@ -320,5 +321,41 @@ fn each_family_member_normalises_to_its_own_operator_leaves() -> Result<()> {
             label = family.label,
         );
     }
+    Ok(())
+}
+
+// [FUSED-CONTENT-GATE] Contradiction vetoes do not manufacture measured zero content.
+const LEDGER_ENDPOINTS: [(&str, usize); 2] = [("ledger_credit.py", 458), ("ledger_debit.py", 457)];
+const LEDGER_CONTENT_SHAPE_FLOOR: f64 = 0.9;
+
+fn compare_operator_ledger() -> Result<PairComparison> {
+    let scan_root = fixture("operator-drift");
+    let [left, right] = LEDGER_ENDPOINTS.map(|(file, end_byte)| PairEndpoint {
+        path: scan_root.join(file),
+        start_byte: 0,
+        end_byte,
+    });
+    compare_endpoints(&scan_root, MIN_NODES, left, right)
+}
+
+#[test]
+fn an_operator_veto_preserves_measured_content() -> Result<()> {
+    let comparison = compare_operator_ledger()?;
+    let evidence = &comparison.evidence;
+    assert!(
+        evidence.structural > LEDGER_CONTENT_SHAPE_FLOOR
+            && evidence.agreement > LEDGER_CONTENT_SHAPE_FLOOR,
+        "{comparison:#?}"
+    );
+    assert_eq!(evidence.content_measurement, ContentMeasurement::Measured);
+    assert!(!evidence.content_ok, "{comparison:#?}");
+    assert!(!evidence.admitted, "{comparison:#?}");
+    assert_eq!(evidence.classification, None, "{comparison:#?}");
+    let wire = serde_json::to_value(evidence)?;
+    assert_eq!(
+        field(&wire, "content_measurement").as_str(),
+        Some("measured")
+    );
+
     Ok(())
 }

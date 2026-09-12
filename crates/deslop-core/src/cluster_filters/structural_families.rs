@@ -45,9 +45,8 @@
 
 use std::{collections::HashMap, hash::BuildHasher};
 
-use crate::{fingerprint::Fingerprint, pair::FusedCluster, state::FileId};
-
 use super::family::{families_by, restrict};
+use crate::{fingerprint::Fingerprint, pair::FusedCluster, state::FileId};
 
 /// [PIPELINE-CLUSTER-ELECT-CONTAINER] — election of concatenation
 /// members out of a welded component.

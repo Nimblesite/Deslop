@@ -14,8 +14,10 @@ use std::{
     sync::{Arc, Mutex, MutexGuard, PoisonError},
 };
 
-use super::body_shape::OwnedShapeToken;
-use super::{calls::CallShape, contract_index::ContractIndex, polymorphic::OwnedSubject};
+use super::{
+    body_shape::OwnedShapeToken, calls::CallShape, contract_index::ContractIndex,
+    polymorphic::OwnedSubject,
+};
 use crate::{
     ast::{named_children, ByteRange},
     fingerprint::Fingerprint,

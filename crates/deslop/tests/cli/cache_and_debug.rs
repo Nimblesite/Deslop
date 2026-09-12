@@ -1,6 +1,8 @@
-use super::support::*;
-use deslop_core::lang::shared::OPERATOR_KIND_PREFIX;
 use std::fmt::Write as _;
+
+use deslop_core::lang::shared::OPERATOR_KIND_PREFIX;
+
+use super::support::*;
 
 /// Runs a default (cache-on, [PIPELINE-INCREMENTAL]) pass over
 /// `scan_root`, writing `<prefix>.json` (and siblings), asserts the

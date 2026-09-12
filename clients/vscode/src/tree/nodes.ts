@@ -13,10 +13,12 @@ import { resolveWorkspacePath } from "../pathUtils";
 import { formatMass, formatPercent } from "../types/format";
 import {
   ClusterKind,
-  clusterBand,
+  clusterSeverity,
   FileMetric,
   kindTaxonomy,
   kindTitle,
+  isClone,
+  INFORMATIONAL_FINDING,
   occurrenceCount,
   ReportCluster,
   ReportOccurrence,
@@ -60,8 +62,8 @@ export function kindIcon(kind: ClusterKind): vscode.ThemeIcon {
 // File mode passes `file: undefined` so the redundant `· <file>`
 // suffix is dropped under a parent FileNode; cluster mode passes the
 // display path. Tooltip is built separately and stays mode-invariant.
-// The title is the cluster's clone kind ([CLONE-KIND-LABELS]); the dot is
-// the mass rank band's glyph density ([SEVERITY-BAND]).
+// [CLONE-KIND-LABELS] The title names the category; the glyph shows diagnostic severity.
+
 export function clusterRowLabel(args: {
   slug: string;
   severity: Severity;
@@ -90,19 +92,19 @@ export class ClusterNode extends vscode.TreeItem {
     const fileLabel = displayPath(filePath);
     const showFile = options.showFile ?? true;
     const slug = clusterSlug(cluster);
-    const severity = clusterBand(cluster);
+    const severity = clusterSeverity(cluster);
     const kind = cluster.kind;
     const title = kindTitle(kind);
     const labelArgs = showFile ? { slug, severity, kind, file: fileLabel } : { slug, severity, kind };
     super(clusterRowLabel(labelArgs), vscode.TreeItemCollapsibleState.Collapsed);
     const rank = cluster.rank;
     this.rank = rank;
-    this.description = `rank #${rank} · ${occurrenceCount(cluster)} copies`;
+    this.description = isClone(cluster) ? `rank #${rank} · ${occurrenceCount(cluster)} copies` : INFORMATIONAL_FINDING;
     this.contextValue =
       occurrenceCount(cluster) > 1 ? "deslop.clusterComparable" : "deslop.clusterSingle";
     this.iconPath = kindIcon(kind);
     this.accessibilityInformation = {
-      label: `${title} in ${fileLabel}, cluster ${cluster.id}, rank ${rank}`,
+      label: `${title} in ${fileLabel}, cluster ${cluster.id}, ${this.description}`,
       role: TREE_ITEM_ROLE,
     };
     // Tooltip is the AI-scrapable hover surface and stays mode-invariant
@@ -110,7 +112,7 @@ export class ClusterNode extends vscode.TreeItem {
     this.tooltip = new vscode.MarkdownString(
       `**${title}** (${kindTaxonomy(kind)})\n\n` +
         `file: \`${filePath}\`\n\n` +
-        `rank #${rank} · mass: \`${formatMass(cluster.mass)}\` · nodes: \`${cluster.canonical_node_count}\` · copies: \`${occurrenceCount(cluster)}\`\n\n` +
+        (isClone(cluster) ? `rank #${rank} · mass: \`${formatMass(cluster.mass)}\` · nodes: \`${cluster.canonical_node_count}\` · copies: \`${occurrenceCount(cluster)}\`\n\n` : `${INFORMATIONAL_FINDING}\n\n`) +
         `cluster id: \`${cluster.id}\``,
     );
     this.command = {
@@ -138,7 +140,7 @@ export class OccurrenceNode extends vscode.TreeItem {
         : "deslop.occurrence";
     if (parentCluster !== undefined && occurrenceIndex !== undefined) {
       const total = occurrenceCount(parentCluster);
-      const rankText = parentRank !== undefined ? `rank #${parentRank} · ` : "";
+      const rankText = isClone(parentCluster) && parentRank !== undefined ? `rank #${parentRank} · ` : "";
       this.tooltip = new vscode.MarkdownString(
         `**${rankText}${kindTitle(parentCluster.kind)}** · occurrence ${occurrenceIndex + 1} of ${total}`,
       );
@@ -164,13 +166,14 @@ export class FileNode extends vscode.TreeItem {
     const label = displayPath(filePath);
     const clusterCount = clusters.length;
     const noun = clusterCount === 1 ? "cluster" : "clusters";
+    const hasClones = clusters.some(isClone);
     super(`${label} · ${clusterCount} ${noun}`, vscode.TreeItemCollapsibleState.Collapsed);
-    this.description = `worst mass ${formatMass(worstMass)}`;
+    this.description = hasClones ? `worst mass ${formatMass(worstMass)}` : INFORMATIONAL_FINDING;
     this.contextValue = "deslop.fileGroup";
     this.iconPath = new vscode.ThemeIcon(FILE_NODE_KIND);
-    this.tooltip = pathRollupTooltip(filePath, `${clusterCount} duplicate ${noun}`, worstMass);
+    this.tooltip = hasClones ? pathRollupTooltip(filePath, `${clusterCount} ${noun}`, worstMass) : new vscode.MarkdownString(INFORMATIONAL_FINDING);
     this.accessibilityInformation = {
-      label: `${label}, ${clusterCount} duplicate ${noun}`,
+      label: `${label}, ${clusterCount} ${noun}. ${hasClones ? "" : INFORMATIONAL_FINDING}`,
       role: TREE_ITEM_ROLE,
     };
   }
@@ -240,19 +243,20 @@ export class FolderNode extends vscode.TreeItem {
     readonly children: Node[],
     worstMass: number,
     fileCount: number,
+    hasClones = true,
   ) {
     super(label, vscode.TreeItemCollapsibleState.Collapsed);
     const noun = fileCount === 1 ? FILE_NODE_KIND : "files";
-    this.description = `worst mass ${formatMass(worstMass)} · ${fileCount} ${noun}`;
+    this.description = hasClones ? `worst mass ${formatMass(worstMass)} · ${fileCount} ${noun}` : INFORMATIONAL_FINDING;
     this.contextValue = "deslop.folderGroup";
     this.iconPath = vscode.ThemeIcon.Folder;
-    this.tooltip = pathRollupTooltip(
+    this.tooltip = hasClones ? pathRollupTooltip(
       folderPath,
       `${fileCount} ${noun} with duplication`,
       worstMass,
-    );
+    ) : new vscode.MarkdownString(INFORMATIONAL_FINDING);
     this.accessibilityInformation = {
-      label: `${label}, ${fileCount} duplicated ${noun}`,
+      label: `${label}, ${fileCount} ${noun}. ${hasClones ? "" : INFORMATIONAL_FINDING}`,
       role: TREE_ITEM_ROLE,
     };
   }

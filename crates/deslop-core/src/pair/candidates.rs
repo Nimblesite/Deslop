@@ -18,6 +18,8 @@
 
 use std::{collections::HashMap, hash::BuildHasher};
 
+use builder::PairBuilder;
+
 use super::{CandidatePair, PairScore, CROSS_LANGUAGE_MIN_JACCARD, LSH_ONLY_MIN_NODE_COUNT};
 use crate::{
     embedding::EmbeddingPair,
@@ -26,10 +28,29 @@ use crate::{
     state::FileId,
 };
 
-use builder::PairBuilder;
-
 /// The insertion-time admission builder ([PERF-FLUTTER-TODO-PAIRS]).
 mod builder;
+
+/// [CLONE-KIND-FOLD] Builds missing copy edges through the ordinary construction guards.
+/// `existing` is sorted by endpoint pair; recovered groups add only exact structural matches.
+pub(crate) fn missing_structural_pairs<S: BuildHasher>(
+    fingerprints: &[Fingerprint],
+    signatures: &dyn SignatureLookup,
+    groups: impl Iterator<Item = Vec<usize>>,
+    existing: &[CandidatePair],
+    languages: &HashMap<FileId, &'static str, S>,
+    allow_cross_language: bool,
+) -> Vec<CandidatePair> {
+    let mut builder = PairBuilder::new(
+        fingerprints,
+        signatures,
+        Some(languages),
+        allow_cross_language,
+    );
+    groups.for_each(|members| builder.add_missing_structural_pairs(&members, existing));
+    builder.flush_evidence();
+    builder.finish()
+}
 
 /// A source of LSH band-collision pairs. Abstract so the batch render can
 /// stream straight out of the band sort ([`crate::lsh::for_each_band_collision`])

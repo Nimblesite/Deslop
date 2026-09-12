@@ -15,11 +15,11 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
+use common::{array_field, str_field, u64_field};
 use serde_json::{json, Value};
 use tempfile::TempDir;
 
 use crate::common;
-use common::{array_field, str_field, u64_field};
 
 fn initialized_mcp_at(
     root: &Path,

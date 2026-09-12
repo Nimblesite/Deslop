@@ -23,7 +23,7 @@ export function reportWithClusters(
     files_analysed: 1,
     metrics: repoMetrics({ clusters_total: clusters.length, ...metricsOverrides }),
     // The engine stamps the ranking onto the report it publishes, so a
-    // fixture report carries it too ([SEVERITY-BAND]).
+    // fixture report carries it too ([RANK-MASS-SUM]).
     clusters: stampRanks(clusters),
     ...reportOverrides,
   });

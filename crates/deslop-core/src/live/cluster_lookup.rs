@@ -9,9 +9,8 @@
 //! owns that lookup so the LSP IPC, the MCP wire, and `find-similar`'s
 //! id-match fast path all agree on what a "match" means.
 
-use crate::report::ReportCluster;
-
 use super::errors::LiveError;
+use crate::report::ReportCluster;
 
 /// Minimum cluster-id prefix length accepted by
 /// [`resolve_cluster_by_id_prefix`]. Mirrors the 7-hex slug surfaced in

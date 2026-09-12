@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import type { Report, ReportCluster } from "../src/types/report";
+import { FIXTURE_ROUTING } from "../src/test/cluster.helpers";
 
 /** The three webview bundles the smoke drives. */
 export type ViewKind = "cluster" | "duplication" | "report";
@@ -105,6 +106,7 @@ export const sampleReport = {
   files_analysed: 4,
   clusters_hidden: 0,
   cache_stats: { hits: 7, misses: 2 },
+  routing: FIXTURE_ROUTING,
   metrics: {
     analysed_loc: 520,
     duplicated_loc: 96,
@@ -142,7 +144,7 @@ export const sampleReport = {
     {
       id: "abcdef1234567890",
       rank: 1,
-      rank_band: "worst",
+      severity: "warning",
       kind: "identical",
       mass: 43,
       canonical_node_count: 18,
@@ -157,7 +159,7 @@ export const sampleReport = {
     {
       id: "bcdefa2345678901",
       rank: 2,
-      rank_band: "mid",
+      severity: "warning",
       kind: "nearly_identical",
       mass: 27,
       canonical_node_count: 14,
@@ -172,10 +174,10 @@ export const sampleReport = {
     },
     {
       id: "cdefab3456789012",
-      rank: 3,
-      rank_band: "faint",
+      rank: 0,
+      severity: "none",
       kind: "structural_only",
-      mass: 11,
+      mass: 0,
       canonical_node_count: 9,
       occurrences_total: 2,
       occurrence_count: 2,

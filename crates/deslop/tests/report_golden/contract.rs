@@ -247,7 +247,7 @@ fn assert_authored_cluster(cluster_list: &[Value], rank: usize, copies: u64) -> 
 
 /// Every figure the report states about a cluster that a consumer would
 /// otherwise have to derive: the worst-first rank and its severity band
-/// ([SEVERITY-BAND]), the display occurrence count, and the byte-proven
+/// ([SEVERITY-MODEL]), the display occurrence count, and the byte-proven
 /// clone fact with a clean cluster surface.
 ///
 /// Every one of these is carried precisely so no client recomputes it,
@@ -283,18 +283,18 @@ fn assert_engine_derived_fields(golden: &Value) {
         );
     }
     // Two clusters: the worse of them tops the percentile, the other
-    // closes it ([SEVERITY-BAND]).
+    // closes it ([SEVERITY-MODEL]).
     assert_eq!(
         total, 2,
         "the corpus authors exactly two clusters: {golden}"
     );
     let bands: Vec<&str> = cluster_list
         .iter()
-        .map(|cluster| field(cluster, "rank_band").as_str().unwrap_or_default())
+        .map(|cluster| field(cluster, "severity").as_str().unwrap_or_default())
         .collect();
     assert_eq!(
         bands,
-        vec!["worst", "faint"],
+        vec!["warning", "warning"],
         "the engine bands the ranking; a client never re-derives it: {golden}"
     );
 }

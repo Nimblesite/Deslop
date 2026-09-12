@@ -18,8 +18,7 @@
 //! occurrence count. An empty report satisfies the absence half and
 //! fails the presence half, so a detector that went blind cannot pass.
 
-use crate::common::contract_boundary::ContractBoundaryCase;
-use crate::common::Result;
+use crate::common::{contract_boundary::ContractBoundaryCase, Result};
 
 /// The fixture holding the contract pair and the copied pair.
 const FIXTURE: &str = "python-inherited-contract-boundary";

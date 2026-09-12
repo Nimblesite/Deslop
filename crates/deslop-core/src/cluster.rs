@@ -1,13 +1,4 @@
-//! Clone cluster materialisation and ranking.
-//!
-//! Implements [PIPELINE-CLUSTER-EXACT], the fused-clustering output of
-//! [FUSED-STRATEGY-BOUNDED-MAX], and the "worst offenders first" scoring of
-//! [PIPELINE-RANK-WORST-FIRST]. Consumes [`FusedCluster`]s from
-//! [`crate::pair::cluster_by_transitive_closure`] — the two inputs
-//! contributing to those clusters are (a) exact structural buckets per
-//! [PIPELINE-CLUSTER-EXACT] / Baxter 1998 ([TECH-AST-FINGERPRINT]) and
-//! (b) token LSH bucket collisions per `SourcererCC`
-//! ([TECH-TOKEN-SOURCERERCC]).
+//! Materialises admitted and informational groups ([PIPELINE-CLUSTER-EXACT]).
 
 use std::{
     collections::{BTreeMap, HashMap},
@@ -35,8 +26,7 @@ use identity::{name_clusters, Unnamed};
 use scope::DeclarationScopes;
 use subsume::collapse_cross_cluster_overlap;
 
-/// A set of fingerprints that share the same hash, i.e. a detected
-/// (structural) clone cluster.
+/// Source occurrences with an established clone or informational relation.
 #[derive(Debug, Clone)]
 pub struct Cluster {
     /// Names this finding and no other ([PIPELINE-DETERMINISM]): the
@@ -63,7 +53,15 @@ pub struct Cluster {
 /// answers with; the build stays ignorant of how a kind is measured.
 pub trait ClusterKindJudge: Sync {
     /// The weakest relation between `members[0]` and every other member.
-    fn kind(&self, members: &[usize]) -> ClusterKind;
+    fn kind(&self, members: &[usize]) -> Option<ClusterKind>;
+
+    /// [CLONE-KIND-FOLD] Separate unrelated members before counting or ranking.
+    fn groups(&self, members: &[usize]) -> Vec<(Vec<usize>, ClusterKind)> {
+        self.kind(members)
+            .map(|kind| (members.to_vec(), kind))
+            .into_iter()
+            .collect()
+    }
 }
 
 impl std::fmt::Debug for dyn ClusterKindJudge + '_ {
@@ -76,22 +74,7 @@ impl std::fmt::Debug for dyn ClusterKindJudge + '_ {
 /// duplicate cluster after same-file overlap collapse.
 const MIN_REPORTABLE_MEMBERS: usize = 2;
 
-/// Builds ranked clusters from a fused-cluster list produced by
-/// [`crate::pair::cluster_by_transitive_closure`]. Each `FusedCluster`
-/// references fingerprint indices; this function materialises the full
-/// [`Cluster`] so the ranking and rendering stages do not have to know
-/// how the cluster was discovered.
-///
-/// Cluster ids are derived in [`identity`] from the smallest member's
-/// digest, every member's workspace-relative path, and the cluster's
-/// position rank among the clusters sharing both
-/// ([PIPELINE-DETERMINISM]), so identical fused clusters across runs
-/// always report the same id while no two findings in one run share one.
-/// Inputs accepted by [`build_ranked_fused_clusters`]. Grouped for the
-/// same reason [`crate::report::ReportInputs`] exists: the list
-/// outgrew the 7-argument function budget, and every field here is
-/// borrowed for the whole build so one struct keeps the call sites
-/// name-checked.
+/// Inputs to [`build_ranked_fused_clusters`]; stable ids come from [`identity`].
 #[derive(Debug)]
 pub struct ClusterBuildInputs<'a, L: BuildHasher> {
     /// Every live fingerprint, flat, in corpus order.
@@ -148,7 +131,7 @@ fn reportable_clusters<L: BuildHasher + Sync>(
     let drafts: Vec<Unnamed> = inputs
         .fused_clusters
         .iter()
-        .filter_map(|fused| build_fused_cluster(inputs, fused, scopes))
+        .flat_map(|fused| build_fused_cluster(inputs, fused, scopes))
         .collect();
     name_clusters(drafts, inputs.file_paths)
 }
@@ -173,18 +156,24 @@ fn build_fused_cluster<L: BuildHasher + Sync>(
     inputs: &ClusterBuildInputs<'_, L>,
     fused: &FusedCluster,
     scopes: &DeclarationScopes<'_, impl BuildHasher>,
-) -> Option<Unnamed> {
+) -> Vec<Unnamed> {
     let fingerprints = inputs.fingerprints;
     let occurrence_indices = collapse_overlapping_per_file(fused, fingerprints, scopes);
     if occurrence_indices.len() < MIN_REPORTABLE_MEMBERS {
-        return None;
+        return Vec::new();
     }
-    let members: Vec<Fingerprint> = occurrence_indices
-        .iter()
-        .filter_map(|index| fingerprints.get(*index).cloned())
-        .collect();
-    let kind = inputs.kinds.kind(&occurrence_indices);
-    Some(materialize_cluster(members, kind, fused.shape_family))
+    inputs
+        .kinds
+        .groups(&occurrence_indices)
+        .into_iter()
+        .map(|(indices, kind)| {
+            let members = indices
+                .iter()
+                .filter_map(|index| fingerprints.get(*index).cloned())
+                .collect();
+            materialize_cluster(members, kind, fused.shape_family)
+        })
+        .collect()
 }
 
 /// Builds the reportable cluster from already-filtered members, still
@@ -196,7 +185,7 @@ fn materialize_cluster(
 ) -> Unnamed {
     let size = members.len();
     let smallest_nodes = smallest_node_count(&members);
-    let mass = duplicate_mass(smallest_nodes, size);
+    let mass = duplicate_mass(kind, smallest_nodes, size);
     Unnamed {
         members,
         kind,
@@ -333,17 +322,7 @@ struct Occurrence {
 }
 
 impl Occurrence {
-    /// True when the two occupy one authored declaration's worth of
-    /// scope, so the enclosing view describes the other's code too.
-    ///
-    /// Two occurrences strictly inside the *same* declaration qualify.
-    /// So does the asymmetric case: `self` at or above declaration
-    /// level (no function production encloses it) against `other`
-    /// inside one. A whole-file view holding a function whole, against
-    /// an interior window of that same function, is the same
-    /// non-comparability seen from one level up — the window covers
-    /// less of what the file says, so the wider authored scope stays
-    /// the representative (`lsh_only_nearmiss_recall`).
+    /// Whether one authored declaration covers both views, including a file around a function.
     fn shares_declaration_with(&self, other: &Self) -> bool {
         match (self.declaration, other.declaration) {
             (Some(mine), Some(theirs)) => mine == theirs,
@@ -498,7 +477,14 @@ impl OverlapRun {
 ///
 /// `mass = canonical_node_count × max(visible_occurrences − 1, 0)`
 #[must_use]
-pub(crate) fn duplicate_mass(canonical_node_count: usize, visible_occurrences: usize) -> u64 {
+pub(crate) fn duplicate_mass(
+    kind: ClusterKind,
+    canonical_node_count: usize,
+    visible_occurrences: usize,
+) -> u64 {
+    if !kind.is_clone() {
+        return 0;
+    }
     let nodes = u64::try_from(canonical_node_count).unwrap_or(u64::MAX);
     let copies = u64::try_from(visible_occurrences.saturating_sub(1)).unwrap_or(u64::MAX);
     nodes.saturating_mul(copies)

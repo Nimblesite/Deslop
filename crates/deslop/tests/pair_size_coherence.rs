@@ -31,15 +31,17 @@
 
 use std::path::Path;
 
-use crate::mock_ollama::MockOllama;
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::{
-    embeddings::{mock_embedding_run, run_mock_embedding_report},
-    signals::*,
-    verdict::duplicated_loc_for_path,
-    *,
+use crate::{
+    common::{
+        embeddings::{mock_embedding_run, run_mock_embedding_report},
+        signals::*,
+        verdict::duplicated_loc_for_path,
+        *,
+    },
+    mock_ollama::MockOllama,
 };
 
 /// Largest byte span an occurrence may have relative to the smallest in

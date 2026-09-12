@@ -3,7 +3,11 @@
 use std::{fs, io::Write as _, path::PathBuf};
 
 use anyhow::{Context, Result};
-use deslop_core::{paths, render::render_html, render::render_text, Report};
+use deslop_core::{
+    paths,
+    render::{render_html, render_text},
+    Report,
+};
 
 use crate::Cli;
 

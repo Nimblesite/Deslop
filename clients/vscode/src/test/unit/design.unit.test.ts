@@ -14,7 +14,7 @@ import {
   TYPE,
   SHADOW,
 } from "../../design";
-import { CLUSTER_KINDS } from "../../types/report";
+import { CLUSTER_KINDS, SEVERITIES, type ClusterKind } from "../../types/report";
 
 const HEX_COLOR = /^#[0-9a-fA-F]{3,8}$/;
 
@@ -34,15 +34,32 @@ suite("design tokens", () => {
       assert.match(String(tokens[index]), HEX_COLOR, `${kind} is not a hex token`);
     }
     assert.equal(new Set(tokens).size, CLUSTER_KINDS.length, "kinds must not share a token");
+  });
+
+  test("every kind wears the colour the taxonomy names for it", () => {
+    // [CLONE-KIND-COLOR] "Use crimson for Identical, amber for Nearly
+    // identical, violet for Same behavior, blue for Similar, and muted
+    // grey for shape-only." All five, so a later token rename cannot
+    // quietly reassign one category's colour to another's.
+    const EXPECTED_PAINT: readonly (readonly [ClusterKind, string, string])[] = [
+      ["identical", COLOR.primaryContainer, "crimson — byte-identical code, the only kind proven character by character"],
+      ["nearly_identical", COLOR.amber, "amber — a near-copy, renamed or lightly edited"],
+      ["same_behavior", COLOR.violet, "violet — equivalent behaviour reached by different code"],
+      ["loosely_similar", COLOR.tertiary, "blue — an established copy with larger edits"],
+      ["structural_only", COLOR.onSurfaceMuted, "muted grey — shape only, and not a clone however high it ranks"],
+    ];
     assert.equal(
-      KIND_COLOR.identical,
-      COLOR.primaryContainer,
-      "crimson is reserved for byte-identical code — the only kind whose evidence is character-by-character proof",
+      EXPECTED_PAINT.length,
+      CLUSTER_KINDS.length,
+      "the taxonomy names a colour for every category",
     );
-    assert.equal(
-      KIND_COLOR.structural_only,
-      COLOR.onSurfaceMuted,
-      "a cluster that only shares shape is muted, however high it ranks",
+    for (const [kind, token, rationale] of EXPECTED_PAINT) {
+      assert.equal(KIND_COLOR[kind], token, rationale);
+    }
+    assert.deepEqual(
+      EXPECTED_PAINT.map(([kind]) => kind),
+      [...CLUSTER_KINDS],
+      "the colour list follows the category display order ([CLONE-KIND-LABELS])",
     );
   });
 
@@ -55,11 +72,20 @@ suite("design tokens", () => {
     assert.equal(new Set(Object.values(KIND_THEME_COLOR)).size, CLUSTER_KINDS.length, "theme ids must be distinct");
   });
 
-  test("SEVERITY_DOT covers every rank band", () => {
-    assert.ok(SEVERITY_DOT.worst);
-    assert.ok(SEVERITY_DOT.top10);
-    assert.ok(SEVERITY_DOT.mid);
-    assert.ok(SEVERITY_DOT.faint);
+  test("SEVERITY_DOT gives every diagnostic level its own distinct glyph", () => {
+    // [SEVERITY-DIAGNOSTICS] The five levels a finding may carry. A glyph
+    // per level, all different, so severity reads without colour — and
+    // `none` is a level with a mark of its own, not a blank.
+    const glyphs = SEVERITIES.map((severity) => SEVERITY_DOT[severity]);
+    for (const [index, severity] of SEVERITIES.entries()) {
+      assert.ok(glyphs[index], `${severity} has no glyph`);
+    }
+    assert.equal(new Set(glyphs).size, SEVERITIES.length, `levels must not share a glyph: ${glyphs.join()}`);
+    assert.equal(
+      Object.keys(SEVERITY_DOT).length,
+      SEVERITIES.length,
+      "one glyph per level, and no glyph for a level that does not exist",
+    );
   });
 
   test("FONT has ui and mono stacks", () => {

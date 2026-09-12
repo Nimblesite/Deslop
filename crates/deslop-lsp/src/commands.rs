@@ -1,9 +1,11 @@
 //! `workspace/executeCommand` support for editor-neutral LSP commands
 //! ([LSP-COMMANDS]).
 
-use deslop_core::live::{ChangeSummary, LiveApi, LiveError, ReportChangedNotification};
-use deslop_core::render::render_html;
-use deslop_core::report::{Report, LIVE_WIRE_OCCURRENCE_CAP};
+use deslop_core::{
+    live::{ChangeSummary, LiveApi, LiveError, ReportChangedNotification},
+    render::render_html,
+    report::{Report, LIVE_WIRE_OCCURRENCE_CAP},
+};
 use serde_json::{json, Value};
 use tower_lsp::{
     jsonrpc::{Error, Result as LspResult},

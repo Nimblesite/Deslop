@@ -1,18 +1,5 @@
-// One `ReportCluster` fixture builder for every VS Code suite.
-//
-// A cluster carries the figures the engine computed for it — the global
-// rank, the severity band, the mass, and the occurrence count — and
-// every surface reads them verbatim. A suite that hand-rolled its own
-// literal would be free to omit one, and a surface reading an omitted
-// field renders a zero instead of failing, which is exactly the silent
-// wrong answer the accuracy contract forbids. One builder means one
-// place where a new wire field has to be answered for.
-//
-// The defaults describe a single mid-band near-copy cluster; suites
-// override whatever they are pinning. Pair signals are NOT fixture data:
-// they belong to explicit pair records ([FACET-MODEL]); the clone kind is
-// the engine's fold of them ([CLONE-KIND-FOLD]) and does ride on the
-// cluster.
+// [FACET-MODEL] Shared fixtures carry complete engine fields. Individual
+// tests override the facts they exercise; pair evidence belongs to pairs.
 
 import type {
   ClusterKind,
@@ -25,13 +12,19 @@ import type {
  * another — the ordinary admitted near-copy, mirroring
  * `deslop_core::report_fixtures::FIXTURE_KIND`. */
 export const FIXTURE_KIND: ClusterKind = "nearly_identical";
+export const FIXTURE_ROUTING = {
+  nearly_identical_min_shape: 0.9,
+  nearly_identical_min_content: 0.7,
+  similar_min_content: 0.5,
+  shape_only_max_content: 0.05,
+};
 
 /** Everything a suite may pin on a fixture cluster. */
 export interface ClusterFixture {
   id: string;
   occurrences: ReportOccurrence[];
   rank?: number;
-  rank_band?: Severity;
+  severity?: Severity;
   kind?: ClusterKind;
   mass?: number;
   canonical_node_count?: number;
@@ -56,7 +49,7 @@ export function wireCluster(fixture: ClusterFixture): ReportCluster {
   return {
     id: fixture.id,
     rank: fixture.rank ?? 1,
-    rank_band: fixture.rank_band ?? "mid",
+    severity: fixture.severity ?? "information",
     kind: fixture.kind ?? FIXTURE_KIND,
     mass: fixture.mass ?? 1,
     canonical_node_count: fixture.canonical_node_count ?? 4,
@@ -91,35 +84,8 @@ export function occurrence(
   };
 }
 
-/**
- * Stamps the ranking the engine would have stamped on this list —
- * `deslop-core::report_weight::stamp_ranks` — so a fixture report's
- * clusters carry ranks and bands consistent with each other and with
- * their order.
- *
- * Fixture staging, not a client calculation: production code reads
- * `rank` and `rank_band` and never computes them
- * ([PRINCIPLES-ONE-CALCULATION]). The cut points themselves are pinned
- * in Rust by `report_weight::rank_band_cut_points`.
- */
+
 export function stampRanks(clusters: ReportCluster[]): ReportCluster[] {
-  const total = clusters.length;
-  return clusters.map((cluster, index) => ({
-    ...cluster,
-    rank: index + 1,
-    rank_band: bandOf(index + 1, total),
-  }));
+  return clusters.map((cluster, index) => ({ ...cluster, rank: index + 1 }));
 }
 
-/** The engine's band for a rank in a report of `total` clusters —
- * `report_weight::rank_band_cut_points` (pinned in Rust). Exported so
- * suites can compute the bands a stamped fixture WILL carry; production
- * code never uses this ([PRINCIPLES-ONE-CALCULATION]). The cut points are
- * the engine's integer ceil boundaries — e.g. the sole cluster of a
- * one-cluster report is rank 1 of 1 and is "worst". */
-export function bandOf(rank: number, total: number): Severity {
-  if (rank <= Math.ceil(total / 100)) return "worst";
-  if (rank <= Math.ceil(total / 10)) return "top10";
-  if (rank <= Math.ceil(total / 2)) return "mid";
-  return "faint";
-}

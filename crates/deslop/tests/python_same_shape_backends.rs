@@ -22,8 +22,7 @@
 //! report satisfies the absence half and fails the presence half, so a
 //! detector that went blind cannot pass this test.
 
-use crate::common::contract_boundary::ContractBoundaryCase;
-use crate::common::Result;
+use crate::common::{contract_boundary::ContractBoundaryCase, Result};
 
 /// The fixture holding the contract pair and the rename clone.
 const FIXTURE: &str = "python-same-shape-backends";

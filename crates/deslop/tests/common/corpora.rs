@@ -10,8 +10,7 @@ use std::fs;
 
 use serde_json::Value;
 
-use super::scan_dir::temp_scan_dir;
-use super::{cluster_file_set, clusters, field, run_report, Result};
+use super::{cluster_file_set, clusters, field, run_report, scan_dir::temp_scan_dir, Result};
 
 /// A genuine copy-pasted F# function — byte-identical across two files.
 /// Shared recall-guard source for the #331/#336 shape-only fixtures.

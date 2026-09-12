@@ -15,17 +15,16 @@ import { ClusterNode, KindGroupNode } from "../../tree/nodes";
 import { cluster, labelText, report, storeWith, topOffenders, withSetting } from "./tree.helpers";
 import { stampRanks } from "../cluster.helpers";
 
-const WORST_SEVERITY = "worst";
-const MID_SEVERITY = "mid";
-const FAINT_SEVERITY = "faint";
+const WORST_SEVERITY = "error";
+const MID_SEVERITY = "information";
+const FAINT_SEVERITY = "hint";
 
-// A twenty-cluster report: the engine's stamping gives rank 1 the worst
-// band, rank 2 the top-10 band, ranks 3–10 mid, and 11–20 faint — enough
-// distinct bands to prove a filtered view keeps global rank gaps.
+// Independent diagnostic levels prove filtering preserves global rank gaps.
 const STAMPED_COUNT = 20;
+const FIXTURE_SEVERITIES = [WORST_SEVERITY, "warning"] as const;
 const ALL = stampRanks(
   Array.from({ length: STAMPED_COUNT }, (_, index) =>
-    cluster(`cluster${String(index + 1).padStart(2, "0")}`, STAMPED_COUNT - index, `f${index + 1}.cs`, 0, 20, MID_SEVERITY, index + 1),
+    cluster(`cluster${String(index + 1).padStart(2, "0")}`, STAMPED_COUNT - index, `f${index + 1}.cs`, 0, 20, FIXTURE_SEVERITIES[index] ?? MID_SEVERITY, index + 1),
   ),
 );
 const RANK_ONE_ID = "cluster01";
@@ -35,10 +34,7 @@ const IDENTICAL_KIND = "identical";
 const NEARLY_IDENTICAL_KIND = "nearly_identical";
 const LOOSELY_SIMILAR_KIND = "loosely_similar";
 
-// A small report for the grouping-mode suite: the engine's stamping bands
-// ranks 1–4 worst / mid / mid / faint, and the clone kinds are spread so
-// the heaviest cluster is NOT the strongest kind — grouping by kind must
-// not follow rank.
+// Category grouping is independent of mass and diagnostic severity.
 const KIND_GROUPED = stampRanks([
   cluster("aaaaaaa1", 9, "a.cs", 0, 20, WORST_SEVERITY, 1, NEARLY_IDENTICAL_KIND),
   cluster("bbbbbbb2", 7, "b.cs", 0, 20, MID_SEVERITY, 2, IDENTICAL_KIND),
@@ -56,7 +52,7 @@ suite("facet filter slice ([FACET-TOP-OFFENDERS-FILTER])", () => {
     const out = applyFacetFilter(ALL, { severities: [WORST_SEVERITY] });
     assert.deepEqual(out.map((c) => c.id), [RANK_ONE_ID]);
     assert.deepEqual(
-      out.map((c) => c.rank_band),
+      out.map((c) => c.severity),
       [WORST_SEVERITY],
     );
   });
@@ -148,7 +144,7 @@ suite("facet filter cross-surface consistency", () => {
       assert.ok(statusRow, "the filtered status row must lead the tree");
       assert.equal(
         labelText(statusRow),
-        "Filtered: Worst 1% — Clear filter",
+        "Filtered: Error — Clear filter",
         "the status row names the active facet with the shared severity label",
       );
       assert.equal(
@@ -176,12 +172,12 @@ suite("facet filter cross-surface consistency", () => {
       );
     });
 
-    // Widening the filter to the top-10 band must surface rank #2 while
+    
     // rank #1 is absent — a gap proves ranks stay global, never renumbered.
-    await withSetting(worstSetting, [WORST_SEVERITY, "top10"], () => {
+    await withSetting(worstSetting, [WORST_SEVERITY, "warning"], () => {
       const nodes = provider.getChildren();
       const rows = nodes.filter((node): node is ClusterNode => node instanceof ClusterNode);
-      const expected = applyFacetFilter(ALL, { severities: [WORST_SEVERITY, "top10"] });
+      const expected = applyFacetFilter(ALL, { severities: [WORST_SEVERITY, "warning"] });
       assert.deepEqual(
         rows.map((node) => node.cluster.id),
         expected.map((c) => c.id),
@@ -207,7 +203,7 @@ suite("facet filter cross-surface consistency", () => {
       cluster("aaaaaaa1", 9, "a.cs", 0, 20, WORST_SEVERITY, 1),
       cluster("ddddddd4", 3, "d.rs", 0, 20, FAINT_SEVERITY, 2),
     ]);
-    await withSetting("topOffenders.filterSeverities", ["top10"], () => {
+    await withSetting("topOffenders.filterSeverities", ["warning"], () => {
       const store = storeWith(report(small));
       store.setLifecycle({ kind: "ready" });
       const provider = topOffenders(store);

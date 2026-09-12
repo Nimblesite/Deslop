@@ -110,8 +110,63 @@ fn external_call_target(
     Some(((selector.start, selector.end), receiver))
 }
 
-/// External selectors obey the same positional/substitution rule as behavior-bearing operators.
+/// QUARANTINED -- this gate vetoed corroborated method renames.
+///
+/// **What it did.** It reported a content contradiction whenever two
+/// aligned frontier positions selected different external methods,
+/// unless a *receiver property* at the same position was itself a
+/// corroborated rename. A contradiction zeroes the pair's content, so
+/// the pair failed `content_gate.support_floor` and never reached
+/// closure.
+///
+/// **Why it was removed.** That exemption is reachable only through a
+/// collaborator property. A call on a plain receiver variable --
+/// `ledger.postEntry(..)` -- has no collaborator property at all, so
+/// every external method rename on an ordinary receiver was an
+/// unconditional veto, however many times the same substitution was
+/// corroborated across the region. That deletes the copy:
+/// `tests/fixtures/type2-rename-method-calls` is one function written
+/// twice with its names substituted one for one, and the shipped engine
+/// reported it as clean -- 0 clusters, 0 duplicated lines -- against
+/// 100% duplication for the control that differs only in two method
+/// names. A systematic rename is still a copy
+/// ([CLONE-BUCKETS-NORTH-STAR], [FUSED-CONTENT-GATE-RENAME]); reporting
+/// copied code as clean is the false negative this tool is measured
+/// against.
+///
+/// The gate's purpose is sound -- `toHaveCount` against `toContainText`
+/// is a changed operation, not a rename. But the veto never asked
+/// whether the *selector*'s own substitution was corroborated, though
+/// [TECH-PMATCH-BAKER] corroboration is the instrument that separates
+/// the two, `rename::corroborated_substitution` implements it, and this
+/// same function already applied it to the collaborator. Supplying that
+/// missing check would be the repair, which the accuracy rule forbids
+/// here, so the veto panics on every firing -- including the firings
+/// that were correct -- rather than continuing to publish a verdict
+/// that cannot be trusted either way.
+///
+/// **Pinned by** `type2_rename_call_targets`:
+/// `a_corroborated_method_rename_is_still_a_type2_clone` and
+/// `a_method_rename_may_not_move_a_duplication_figure`, with
+/// `the_same_copy_with_its_method_names_left_alone_is_reported` as the
+/// control that attributes the loss to the rename alone.
+// The accuracy quarantine mandated by AGENTS.md is the one place a panic
+// is required rather than forbidden. `assert!` is the form `clippy::pedantic`
+// mandates over a bare `panic!`, so no lint ignore is needed to carry it.
 pub(super) fn contradicts(left: &MemberContent, right: &MemberContent) -> bool {
+    assert!(
+        !vetoes(left, right),
+        "[FUSED-CONTENT-GATE-CALL-TARGET] quarantined: this gate vetoed \
+         corroborated method renames, reporting copied code as clean. It \
+         published no trustworthy verdict in either direction. See \
+         crates/deslop/tests/type2_rename_call_targets.rs"
+    );
+    false
+}
+
+/// The removed verdict, retained only so the quarantine can detect the
+/// firing it must refuse to answer.
+fn vetoes(left: &MemberContent, right: &MemberContent) -> bool {
     if !frontiers_aligned(left, right) {
         return identities_substitute(external_identities(left), external_identities(right));
     }

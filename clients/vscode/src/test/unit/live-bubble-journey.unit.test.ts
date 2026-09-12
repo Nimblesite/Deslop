@@ -1,3 +1,4 @@
+import { FIXTURE_ROUTING } from "../cluster.helpers";
 // Unit: multi-step live-surface journeys ([VSIX-LIVE-BUBBLE]).
 //
 // The per-step suites pin one transition each. These drive a whole
@@ -125,6 +126,7 @@ suite("LiveBubble journeys", () => {
 
       // 4. A delta removing the surviving cluster clears the surface.
       store.applyDelta({
+      routing: FIXTURE_ROUTING,
         from_generation: 2,
         to_generation: 3,
         clusters_added: [],

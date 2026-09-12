@@ -1,9 +1,9 @@
 // Unit: [CLONE-KIND-COLOR] the extension host holds exactly one table that
 // maps a cluster to a colour.
 //
-// gh #522: three tables were live at once. One was keyed by mass rank band and
+
 // its own comment called using it to paint "a defect"; a second was keyed by an
-// evidence level that was itself computed from the rank band and renamed; a
+
 // third sat privately in the tree and painted from VS Code's chart palette
 // rather than the Deslop tokens every other surface used. The same finding could
 // therefore be one colour in the Top Offenders list and another in the editor,
@@ -42,7 +42,7 @@ const COLOR_NAMESPACE = "COLOR";
 const FOREIGN_PALETTE_PREFIX = "charts.";
 
 /** Keys that mean "how big is this finding", never "how well does it match". */
-const RANK_BAND_KEYS = ["worst", "top10", "mid", "faint"];
+const RANK_BAND_KEYS = ["error", "warning", "information", "hint"];
 
 /** How many colour tables the host may declare. */
 const ALLOWED_PAINT_TABLES = 1;
@@ -70,7 +70,7 @@ suite("[CLONE-KIND-COLOR] one paint table for the extension host", () => {
     );
     assert.ok(
       declared[0]?.endsWith(PAINT_TABLE_NAME),
-      `the one colour table is ${PAINT_TABLE_NAME}; found ${declared[0]}`,
+      `the one colour table is ${PAINT_TABLE_NAME}; found ${declared[0] ?? "none"}`,
     );
   });
 

@@ -25,11 +25,13 @@ use anyhow::Result;
 use assert_cmd::Command;
 use serde_json::Value;
 
-use crate::common::scan_dir::temp_scan_dir;
-use crate::common::signals::{
-    assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
+use crate::common::{
+    scan_dir::temp_scan_dir,
+    signals::{
+        assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
+    },
+    *,
 };
-use crate::common::*;
 
 /// Generates one shape-identical API method. The method name, endpoint
 /// literal, and every local identifier differ per call (normalisation

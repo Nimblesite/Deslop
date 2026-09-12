@@ -1,29 +1,18 @@
-//! [CLONE-KIND-FOLD] The clone kind of a whole cluster, folded through the
-//! shared pair measurement using the scan's recorded embedding evidence.
-//!
-//! A cluster is the transitive closure of admitted pairs, so no single
-//! measurement describes it. Its kind is the weakest pair classification
-//! between the canonical (first) occurrence and every other member. The
-//! fold supplies the scan's observed cosine, or zero; an explicit comparison
-//! may re-embed the endpoints and obtain different evidence.
-//! A cluster whose every member is byte-identical to the
-//! canonical is `Identical`; one member that only shares shape makes the
-//! whole cluster `StructuralOnly`; one member the direct comparison does
-//! not admit at all — welded in only through other members — makes it
-//! `LooselySimilar`. The fold never averages, and it reads no cluster
-//! quantity.
+//! [CLONE-KIND-FOLD] Groups established copies separately from informational matches.
+//! Each relation uses the shared pair measurement and recorded embedding evidence.
+//! Rejected comparisons do not become Similar, and unrelated members cannot hide copies.
 
 use std::{
     collections::HashMap,
     sync::{Mutex, PoisonError},
 };
 
+use super::{AdmissionFacts, PairAxes, ResolvedEndpoint, ResolvedPair};
 use crate::{
     ast::NormalizedNode, buckets::ClusterKind, cluster::ClusterKindJudge,
-    embedding::pairs::EmbeddingPair, fingerprint::Fingerprint, pipeline::PipelineSession,
+    embedding::pairs::EmbeddingPair, fingerprint::Fingerprint, pair::CandidatePair,
+    pipeline::PipelineSession,
 };
-
-use super::{AdmissionFacts, PairAxes, ResolvedEndpoint, ResolvedPair};
 
 /// The embedding cosine of a pair the embedding pass never measured: the
 /// axis contributes nothing, exactly as it did at admission.
@@ -54,11 +43,12 @@ impl<'corpus> ClusterKindMeasurer<'corpus> {
         fingerprints: &'corpus [Fingerprint],
         trees: &'corpus [NormalizedNode],
         embedding_pairs: &[EmbeddingPair],
+        pairs: &[CandidatePair],
     ) -> Self {
         Self {
             session,
             fingerprints,
-            axes: Mutex::new(PairAxes::new(trees)),
+            axes: Mutex::new(PairAxes::new(trees, session, pairs)),
             embedding_cosines: embedding_pairs
                 .iter()
                 .map(|pair| {
@@ -88,7 +78,7 @@ impl<'corpus> ClusterKindMeasurer<'corpus> {
         &self,
         canonical: ResolvedEndpoint<'corpus>,
         member: ResolvedEndpoint<'corpus>,
-    ) -> ClusterKind {
+    ) -> Option<ClusterKind> {
         let pair = ResolvedPair {
             left: canonical,
             right: member,
@@ -114,16 +104,18 @@ impl ClusterKindJudge for ClusterKindMeasurer<'_> {
     /// The weakest relation between the canonical member and any other.
     /// The fold starts from `Identical` — a member is identical to
     /// itself — and every other member can only weaken it.
-    fn kind(&self, members: &[usize]) -> ClusterKind {
-        let Some((canonical, rest)) = members.split_first() else {
-            return ClusterKind::Identical;
-        };
-        let Some(canonical) = self.endpoint(*canonical) else {
-            return ClusterKind::LooselySimilar;
-        };
-        rest.iter()
-            .filter_map(|index| self.endpoint(*index))
-            .map(|member| self.pair_kind(canonical, member))
-            .fold(ClusterKind::Identical, ClusterKind::weaker)
+    fn kind(&self, members: &[usize]) -> Option<ClusterKind> {
+        let (canonical, rest) = members.split_first()?;
+        let canonical = self.endpoint(*canonical)?;
+        rest.iter().try_fold(ClusterKind::Identical, |kind, index| {
+            let relation = self.pair_kind(canonical, self.endpoint(*index)?)?;
+            Some(kind.weaker(relation))
+        })
+    }
+
+    fn groups(&self, members: &[usize]) -> Vec<(Vec<usize>, ClusterKind)> {
+        crate::buckets::grouping::group_members(members, |left, right| {
+            self.pair_kind(self.endpoint(left)?, self.endpoint(right)?)
+        })
     }
 }

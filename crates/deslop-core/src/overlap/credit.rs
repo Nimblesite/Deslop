@@ -33,9 +33,8 @@
 
 use std::collections::HashMap;
 
-use crate::fingerprint::Fingerprint;
-
 use super::EndpointView;
+use crate::fingerprint::Fingerprint;
 
 /// One matched span's byte extent.
 type Span = (usize, usize);

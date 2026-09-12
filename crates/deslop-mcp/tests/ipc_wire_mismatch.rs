@@ -10,12 +10,14 @@
 use std::{path::Path, sync::Arc};
 
 use anyhow::{ensure, Result};
+use common::{
+    error_and_message, expected_socket_fragment, initialized_mcp,
+    stub_lsp::{bind_stub_lsp, method_not_found, Reply},
+};
 use serde_json::{json, Value};
 use tempfile::TempDir;
 
 use crate::common;
-use common::stub_lsp::{bind_stub_lsp, method_not_found, Reply};
-use common::{error_and_message, expected_socket_fragment, initialized_mcp};
 
 /// A report another Deslop release wrote: stamped with that release's
 /// version, carrying `weight` where this wire carries `mass`. It is the
@@ -33,8 +35,8 @@ const REPORT_GET: &str = "report/get";
 const CLUSTER_BY_ID: &str = "cluster/byId";
 /// What the guard names as the engine version of a reply with no stamp.
 const UNSTAMPED_ENGINE: &str = "unknown (reply carries no tool_version)";
-/// The field this wire expects where the foreign cluster carries `weight`.
-const RENAMED_FIELD: &str = "missing field `mass`";
+/// The first required field absent from the foreign cluster's wire shape.
+const MISSING_FIELD: &str = "missing field `severity`";
 /// The remedy the message must name.
 const REMEDY: &str = "reinstall the Deslop VSIX";
 /// The message the guard replaced, on every site: `ipc <thing> parse:`.
@@ -141,7 +143,7 @@ fn cluster_by_id_over_a_report_from_another_release_names_the_same_condition() -
     )?;
     ensure_named_mismatch(&message, &socket, CLUSTER_BY_ID, UNSTAMPED_ENGINE)?;
     ensure!(
-        message.contains(RENAMED_FIELD),
+        message.contains(MISSING_FIELD),
         "an unstamped cluster page names the field the wire moved: {message}"
     );
     Ok(())

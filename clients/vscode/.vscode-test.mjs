@@ -25,6 +25,7 @@ const launchArgs = ["--disable-extensions", "--user-data-dir", vscodeTestUserDat
 export default defineConfig({
   tests: [
     {
+      label: "workspace",
       // Excludes `out/test/ollama/**` — those run only via
       // `.vscode-test-ollama.mjs` / `npm run test:ollama` /
       // `make _vsix-test-ollama`. See docs/specs/vsix.md.
@@ -48,6 +49,7 @@ export default defineConfig({
       },
     },
     {
+      label: "empty-window",
       // [#201] No `workspaceFolder` → VS Code launches an EMPTY window. This
       // is the only config that exercises activate()'s no-folder path (the
       // LSP-launch guard + the "ready" idle else-branch); the fixture entry

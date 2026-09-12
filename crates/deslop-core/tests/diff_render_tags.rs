@@ -155,6 +155,7 @@ fn report(
         clusters_hidden: 0,
         cache_stats: CacheStats::default(),
         metrics: metrics(diff),
+        routing: deslop_core::config::RoutingTuning::default(),
         schema_doc: "schema".to_owned(),
         boilerplate_hints: Vec::new(),
         embedding_provenance: None,

@@ -108,7 +108,7 @@ No chapter introduces more than four new conceptual families. Visuals either pro
 - Identical code
 - Nearly identical code
 - Same shape, different content
-- Loosely similar code
+- Similar code
 - Same behavior, different code
 - Group, occurrence, canonical occurrence, score, and worst offender
 - Why the label describes evidence while the maintainer owns the decision

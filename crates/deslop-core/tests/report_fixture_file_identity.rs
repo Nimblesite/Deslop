@@ -7,11 +7,11 @@
 //! misdescribes the corpus makes every assertion built on it vacuous:
 //! these tests pin the harness itself to reality.
 
-use crate::common;
-
 use anyhow::{bail, Result};
 use common::ReportFixture;
 use deslop_core::report::ReportCluster;
+
+use crate::common;
 
 /// Two same-shaped loaders in one file whose identifiers and literals
 /// diverge inconsistently: structural evidence saturates while the

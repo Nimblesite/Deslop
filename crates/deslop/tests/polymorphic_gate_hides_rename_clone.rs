@@ -17,10 +17,12 @@
 //! surface, and the genuine abstract-method implementations of gh #69
 //! must stay suppressed in the same run.
 
-use crate::common::signals::{
-    assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
+use crate::common::{
+    signals::{
+        assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
+    },
+    *,
 };
-use crate::common::*;
 
 #[test]
 fn same_named_rename_clone_surfaces_while_real_polymorphism_stays_hidden() -> Result<()> {

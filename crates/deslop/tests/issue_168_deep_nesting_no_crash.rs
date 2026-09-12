@@ -12,8 +12,10 @@ use std::fs;
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::scan_dir::{report_path, temp_scan_dir};
-use crate::common::*;
+use crate::common::{
+    scan_dir::{report_path, temp_scan_dir},
+    *,
+};
 
 #[test]
 fn deeply_nested_dart_file_is_skipped_not_crashed() -> Result<()> {

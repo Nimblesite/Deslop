@@ -33,8 +33,10 @@ use std::fs;
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::scan_dir::{report_path, temp_scan_dir};
-use crate::common::*;
+use crate::common::{
+    scan_dir::{report_path, temp_scan_dir},
+    *,
+};
 
 /// Nesting depths the depth guard accepts and the recursive walks then
 /// overflow on. 164 is the deepest input the guard admits; 165 is rejected.

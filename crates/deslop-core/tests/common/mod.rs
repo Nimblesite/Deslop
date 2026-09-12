@@ -15,11 +15,12 @@ pub(crate) mod census;
 pub(crate) mod clusters;
 pub(crate) mod merge;
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::fmt;
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
+    fmt, fs,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
+};
 
 use anyhow::{anyhow, Context, Result};
 use deslop_core::{

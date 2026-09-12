@@ -11,7 +11,7 @@
 
 import * as vscode from "vscode";
 
-import { clusterSlug, kindTitle, occurrenceCount, ReportCluster } from "./types/report";
+import { clusterSlug, INFORMATIONAL_FINDING, isClone, kindTitle, occurrenceCount, ReportCluster } from "./types/report";
 
 export { clusterSlug };
 
@@ -32,12 +32,10 @@ export function clusterHoverMarkdown(
   const slug = clusterSlug(cluster);
   const showVerdict = options.showVerdict ?? true;
 
-  md.appendMarkdown(
-    showVerdict
-      ? `**${slug} ${kindTitle(cluster.kind)}** × ${count}\n\n`
-      : `**${slug}** × ${count}\n\n`,
-  );
-
+  const heading = showVerdict ? `${slug} ${kindTitle(cluster.kind)}` : slug;
+  const countText = isClone(cluster) ? ` × ${count}` : "";
+  md.appendMarkdown(`**${heading}**${countText}\n\n`);
+  if (!isClone(cluster)) md.appendMarkdown(`${INFORMATIONAL_FINDING}\n\n`);
   const canonical = cluster.occurrences[0];
   if (canonical) {
     const relPath = vscode.workspace.asRelativePath(canonical.path, false);

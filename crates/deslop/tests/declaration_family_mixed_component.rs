@@ -33,7 +33,7 @@ fn a_divergent_same_shape_sibling_does_not_join_the_real_pair() -> Result<()> {
     let scan_root = fixture("csharp-mixed-declaration-component");
     let report = run_report(&scan_root, 20)?;
 
-    let visible = clusters(&report);
+    let visible = clone_findings(&report);
     assert_eq!(
         visible.len(),
         1,

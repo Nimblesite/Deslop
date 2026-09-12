@@ -4,7 +4,7 @@
 
 import { ReportStore } from "../../reportStore";
 import { Report, ReportCluster, ReportDelta, RepoMetrics } from "../../types/report";
-import { wireCluster } from "../cluster.helpers";
+import { FIXTURE_ROUTING, wireCluster } from "../cluster.helpers";
 
 export function metrics(overrides: Partial<RepoMetrics> = {}): RepoMetrics {
   return {
@@ -28,6 +28,7 @@ export function emptyReport(overrides: Partial<Report> = {}): Report {
     clusters_hidden: 0,
     cache_stats: { hits: 0, misses: 0 },
     metrics: metrics(),
+    routing: FIXTURE_ROUTING,
     schema_doc: "",
     boilerplate_hints: [],
     embedding_provenance: undefined,
@@ -85,6 +86,7 @@ export function seededStore(clusters: ReportCluster[], generation = 1): ReportSt
 export function delta(overrides: Partial<ReportDelta> = {}): ReportDelta {
   return {
     from_generation: 1,
+    routing: FIXTURE_ROUTING,
     to_generation: 2,
     clusters_added: [],
     clusters_removed: [],

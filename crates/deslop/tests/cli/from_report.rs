@@ -21,7 +21,7 @@ fn replay_report(tmp: &Path, file_name: &str, report_body: &str, no_color: bool)
 #[test]
 fn from_report_preserves_current_report_fields_issue_85() -> Result<()> {
     // A current-wire report replays cleanly: the engine's cluster facts
-    // (rank, band, mass, node count) survive round-trip and the retired
+    // (rank, diagnostic severity, mass, node count) survive round-trip and the retired
     // similarity fields never appear in the re-emitted JSON ([FACET-MODEL]).
     let tmp = tempfile::tempdir()?;
     let current_report = "{\n\
@@ -115,7 +115,7 @@ fn from_report_rejects_retired_bucket_wire() -> Result<()> {
 }
 
 #[test]
-fn from_report_preserves_mass_and_band_in_html() -> Result<()> {
+fn from_report_preserves_mass_and_kind_in_html() -> Result<()> {
     // The replayed HTML is a cluster surface: it renders the cluster's
     // folded kind title and its mass, and never pair evidence
     // ([FACET-HTML], [CLONE-KIND-LABELS], [VSIX-PAIR-COMPARE]).
@@ -133,7 +133,7 @@ fn from_report_preserves_mass_and_band_in_html() -> Result<()> {
                   \"clusters\": [{\n\
                     \"id\": \"reported-dup\",\n\
                     \"rank\": 1,\n\
-                    \"rank_band\": \"worst\",\n\
+                    \"severity\": \"warning\",\n\
                     \"kind\": \"identical\",\n\
                     \"mass\": 89,\n\
                     \"canonical_node_count\": 12,\n\
@@ -178,12 +178,17 @@ fn cross_cluster_collapse_removes_occurrence_subset_clusters() -> Result<()> {
         .get("clusters")
         .and_then(|v| v.as_array())
         .ok_or_else(|| anyhow::anyhow!("clusters missing from report"))?;
-    for (index_a, cluster_a) in clusters.iter().enumerate() {
+    let clones = assert_finding_weights(clusters)?;
+    assert!(
+        !clones.is_empty(),
+        "the fixture must retain genuine clones: {json}"
+    );
+    for (index_a, cluster_a) in clones.iter().enumerate() {
         let occs_a: &[serde_json::Value] = cluster_a
             .get("occurrences")
             .and_then(|v| v.as_array())
             .map_or(&[], Vec::as_slice);
-        for (index_b, cluster_b) in clusters.iter().enumerate() {
+        for (index_b, cluster_b) in clones.iter().enumerate() {
             if index_a == index_b {
                 continue;
             }

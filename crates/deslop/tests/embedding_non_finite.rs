@@ -16,11 +16,13 @@
 //! structural pipeline is deterministic and independent of the provider,
 //! so the fixture's clone still publishes with positive mass.
 
-use crate::mock_ollama::{MockBehavior, MockOllama};
 use anyhow::Result;
 
-use crate::common::{
-    clusters, embeddings::mock_embedding_run, field, signals::assert_no_pair_surface_on_cluster,
+use crate::{
+    common::{
+        clusters, embeddings::mock_embedding_run, field, signals::assert_no_pair_surface_on_cluster,
+    },
+    mock_ollama::{MockBehavior, MockOllama},
 };
 
 /// Source files the `csharp-small` fixture contributes to the scan.
@@ -109,7 +111,7 @@ fn assert_structural_finding_survived(cluster: &serde_json::Value) {
          occurrences: {nodes} x ({visible} - 1) = {expected}: {cluster:#}"
     );
     assert!(
-        field(cluster, "rank_band")
+        field(cluster, "severity")
             .as_str()
             .is_some_and(|band| !band.is_empty()),
         "every published cluster carries a mass-derived rank band: {cluster:#}"

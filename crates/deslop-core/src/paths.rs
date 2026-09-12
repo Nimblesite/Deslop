@@ -6,8 +6,8 @@
 //!
 //! ```text
 //! <root>/
-//!.deslop.toml # config — user-authored, tracked
-//!.deslop/ # everything Deslop writes
+//! .deslop.toml # config — user-authored, tracked
+//! .deslop/ # everything Deslop writes
 //! deslop-report.{json,txt,html} # rendered reports (CLI)
 //! logs/deslop-<epoch>.log # tracing sink (CLI)
 //! cache/ # analysis state, never hand-edited
@@ -122,8 +122,9 @@ pub fn logs_dir(report_dir: &Path) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::{reported, REPORT_SEPARATOR};
     use std::path::{Path, PathBuf};
+
+    use super::{reported, REPORT_SEPARATOR};
 
     /// A workspace-relative path two directories deep — the shape every
     /// occurrence, per-file metric and folder rollup carries, spelled

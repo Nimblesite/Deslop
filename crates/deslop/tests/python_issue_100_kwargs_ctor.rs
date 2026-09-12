@@ -8,6 +8,11 @@
 
 use crate::common::*;
 
+const NO_CLONES: usize = 0;
+const NO_DUPLICATION: u64 = 0;
+const INFORMATIONAL_FINDINGS: usize = 3;
+const SUPPRESSED_CONSTRUCTOR_PAIR: u64 = 1;
+
 #[test]
 fn message_vs_agentlog_kwargs_constructors_do_not_cluster() -> Result<()> {
     let scan_root = fixture("python-issue-100-kwargs-ctor");
@@ -22,20 +27,25 @@ fn message_vs_agentlog_kwargs_constructors_do_not_cluster() -> Result<()> {
         agent_log_hits.is_empty(),
         "AgentLog(...) constructor calls must not surface as duplicates: {agent_log_hits:#?}"
     );
-    let visible = visible_cluster_lines(&report);
-    assert!(
-        visible.is_empty(),
+    let visible = clone_findings(&report);
+    assert_eq!(
+        visible.len(),
+        NO_CLONES,
         "the two models share only the mandatory kwargs-constructor \
          scaffolding, so no visible cluster may exist over this fixture at \
          all — nested windows below the constructor call are the same \
-         non-duplicate seen narrower, not new findings: {visible:#?}"
+         non-duplicate seen narrower, not new clones: {visible:#?}"
     );
+    // [CLONE-BUCKETS-STRUCTURAL-ONLY] Keep the measured shapes visible with zero weight.
+    assert_eq!(clusters(&report).len(), INFORMATIONAL_FINDINGS);
     assert_eq!(
         clusters_hidden(&report),
-        1,
-        "the whole constructor pair is measured and then hidden by \
-         [CLONE-NOISE-PY-KWARGS-CTOR] — hidden, not unseen: a zero here \
-         means the detector went blind to the pair rather than judging it"
+        SUPPRESSED_CONSTRUCTOR_PAIR,
+        "the constructor noise rule must still identify and suppress the whole pair"
+    );
+    assert_eq!(
+        metric_field(&report, "duplicated_loc").as_u64(),
+        Some(NO_DUPLICATION)
     );
     Ok(())
 }
