@@ -589,23 +589,23 @@
     "vscode-languageclient": "^10.1.1"
   },
   "devDependencies": {
-    "@playwright/test": "^1.62.1",
+    "@playwright/test": "^1.63.0",
     "@types/mocha": "^10.0.9",
-    "@types/node": "^26.4.1",
+    "@types/node": "^26.5.1",
     "@types/vscode": "~1.134.0",
-    "@typescript-eslint/eslint-plugin": "^8.69.0",
-    "@typescript-eslint/parser": "^8.69.0",
+    "@typescript-eslint/eslint-plugin": "^8.70.0",
+    "@typescript-eslint/parser": "^8.70.0",
     "@vscode/test-cli": "^0.0.15",
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^3.9.2",
     "c8": "^12.0.0",
     "esbuild": "^0.28.2",
-    "eslint": "^10.9.0",
+    "eslint": "^10.10.0",
     "glob": "^13.0.6",
     "istanbul-lib-coverage": "^3.2.2",
     "mocha": "^12.0.0",
     "typescript": "^7.0.2",
-    "typescript-eslint": "^8.69.0",
+    "typescript-eslint": "^8.70.0",
     "v8-to-istanbul": "^9.3.0"
   }
 }
