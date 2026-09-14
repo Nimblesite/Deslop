@@ -14,6 +14,13 @@
 /// Shared fixture helpers, declared once for every suite below.
 mod common;
 
+/// The HTTP mock for the embedding provider, declared once for the whole
+/// suite. Twelve files used to `#[path]`-include it; as one binary that is
+/// the same file loaded twelve times (`clippy::duplicate_mod`), so it is
+/// declared here and reached as `crate::mock_ollama` everywhere.
+#[path = "cli/mock_ollama.rs"]
+mod mock_ollama;
+
 #[path = "boilerplate.rs"]
 mod boilerplate;
 #[path = "cache_blob_integrity.rs"]
@@ -24,12 +31,24 @@ mod cache_key_lossy_utf8_collision;
 mod cache_retention;
 #[path = "cli.rs"]
 mod cli;
+#[path = "cluster_extent_alignment.rs"]
+mod cluster_extent_alignment;
+#[path = "cluster_extent_statement_runs.rs"]
+mod cluster_extent_statement_runs;
+#[path = "cluster_id_uniqueness.rs"]
+mod cluster_id_uniqueness;
 #[path = "config_include_dependencies.rs"]
 mod config_include_dependencies;
+#[path = "content_gate_signal_honesty.rs"]
+mod content_gate_signal_honesty;
+#[path = "corpus_commit_pins.rs"]
+mod corpus_commit_pins;
 #[path = "corpus_manifest_contract.rs"]
 mod corpus_manifest_contract;
-#[path = "corpus_repos.rs"]
-mod corpus_repos;
+#[path = "corpus_register_contract.rs"]
+mod corpus_register_contract;
+#[path = "corpus_selection_contract.rs"]
+mod corpus_selection_contract;
 #[path = "cross_cluster_collapse.rs"]
 mod cross_cluster_collapse;
 #[path = "cross_cluster_enclosure.rs"]
@@ -38,8 +57,10 @@ mod cross_cluster_enclosure;
 mod cross_language;
 #[path = "csharp_issue_66_route_mapping.rs"]
 mod csharp_issue_66_route_mapping;
-#[path = "csharp_type1_type2_distinct_buckets.rs"]
-mod csharp_type1_type2_distinct_buckets;
+#[path = "csharp_merged_clone_families.rs"]
+mod csharp_merged_clone_families;
+#[path = "csharp_type1_type2_byte_truth.rs"]
+mod csharp_type1_type2_byte_truth;
 #[path = "csharp_unrelated_xunit_classes.rs"]
 mod csharp_unrelated_xunit_classes;
 #[path = "dart_forwarding_fail_open.rs"]
@@ -78,12 +99,6 @@ mod fsharp_issue_336_data_table_category;
 mod fsharp_issue_339_sibling_window_rename;
 #[path = "fsharp_issue_339_token_fallback_rename.rs"]
 mod fsharp_issue_339_token_fallback_rename;
-#[path = "fused_golden_bands.rs"]
-mod fused_golden_bands;
-#[path = "fused_golden_invariants.rs"]
-mod fused_golden_invariants;
-#[path = "fused_score_bounds.rs"]
-mod fused_score_bounds;
 #[path = "go_vendor_exclusion.rs"]
 mod go_vendor_exclusion;
 #[path = "incremental_equivalence.rs"]
@@ -114,10 +129,16 @@ mod issue_331_336_shape_only_saturation;
 mod issue_342_scan_root_under_excluded_ancestor;
 #[path = "issue_343_sum_clamp_saturation.rs"]
 mod issue_343_sum_clamp_saturation;
+#[path = "issue_362_two_file_const_tables.rs"]
+mod issue_362_two_file_const_tables;
 #[path = "issue_372_identical_snippet_cosine.rs"]
 mod issue_372_identical_snippet_cosine;
+#[path = "issue_389_subsumption_modifier_straddle.rs"]
+mod issue_389_subsumption_modifier_straddle;
 #[path = "js_language_features.rs"]
 mod js_language_features;
+#[path = "js_literal_variation_calls.rs"]
+mod js_literal_variation_calls;
 #[path = "js_ts_clone_buckets.rs"]
 mod js_ts_clone_buckets;
 #[path = "js_ts_extensions.rs"]
@@ -134,6 +155,8 @@ mod js_ts_signatures;
 mod jsx_tsx_components;
 #[path = "jwt_independent_verification_false_positive.rs"]
 mod jwt_independent_verification_false_positive;
+#[path = "live_session_equivalence.rs"]
+mod live_session_equivalence;
 #[path = "location_rendering.rs"]
 mod location_rendering;
 #[path = "lsh_only_nearmiss_recall.rs"]
@@ -144,10 +167,19 @@ mod metric_excludes_hidden_clusters;
 mod metric_language_agnostic;
 #[path = "metrics_folder_rollup.rs"]
 mod metrics_folder_rollup;
+mod metrics_weighted_wire_refusal;
 #[path = "ollama_failures.rs"]
 mod ollama_failures;
+#[path = "operator_drift_is_not_duplication.rs"]
+mod operator_drift_is_not_duplication;
+#[path = "pair_consistent_signals.rs"]
+mod pair_consistent_signals;
 #[path = "pair_size_coherence.rs"]
 mod pair_size_coherence;
+#[path = "perf_sample.rs"]
+mod perf_sample;
+#[path = "polymorphic_gate_hides_rename_clone.rs"]
+mod polymorphic_gate_hides_rename_clone;
 #[path = "python_dict_assert_payload_proof.rs"]
 mod python_dict_assert_payload_proof;
 #[path = "python_dict_assert_reach.rs"]
@@ -158,8 +190,12 @@ mod python_dict_assert_rhs_logic;
 mod python_dict_false_positive;
 #[path = "python_generated_template_false_positive.rs"]
 mod python_generated_template_false_positive;
+#[path = "python_inherited_contract_boundary.rs"]
+mod python_inherited_contract_boundary;
 #[path = "python_issue_100_kwargs_ctor.rs"]
 mod python_issue_100_kwargs_ctor;
+#[path = "python_issue_103_helper_call_sites.rs"]
+mod python_issue_103_helper_call_sites;
 #[path = "python_issue_104_module_preamble.rs"]
 mod python_issue_104_module_preamble;
 #[path = "python_issue_105_mapped_column.rs"]
@@ -176,6 +212,8 @@ mod python_issue_115_strenum;
 mod python_issue_119_embedding_role_mismatch;
 #[path = "python_issue_133_constant_table.rs"]
 mod python_issue_133_constant_table;
+#[path = "python_issue_467_copy_paste_pair.rs"]
+mod python_issue_467_copy_paste_pair;
 #[path = "python_issue_69_abstract_method.rs"]
 mod python_issue_69_abstract_method;
 #[path = "python_issue_72_monkeypatch.rs"]
@@ -186,12 +224,22 @@ mod python_issue_96_all_exports;
 mod python_issue_97_parametric_invariant_tests;
 #[path = "python_literal_variation_calls.rs"]
 mod python_literal_variation_calls;
+#[path = "python_same_shape_backends.rs"]
+mod python_same_shape_backends;
 #[path = "python_signatures.rs"]
 mod python_signatures;
+#[path = "rank_mass.rs"]
+mod rank_mass;
 #[path = "rank_structural_only_policy.rs"]
 mod rank_structural_only_policy;
+#[path = "regex_literal_delimiters.rs"]
+mod regex_literal_delimiters;
 #[path = "rename_literal_monotonicity.rs"]
 mod rename_literal_monotonicity;
+#[path = "rename_literal_substring_boundary.rs"]
+mod rename_literal_substring_boundary;
+#[path = "rename_needs_an_anchor.rs"]
+mod rename_needs_an_anchor;
 #[path = "report_golden.rs"]
 mod report_golden;
 #[path = "rerun.rs"]
@@ -212,6 +260,7 @@ mod rust_issue_232_token_jaccard_identical;
 mod rust_test_boilerplate_false_positive;
 #[path = "rust_trait_boilerplate_false_positive.rs"]
 mod rust_trait_boilerplate_false_positive;
+mod same_file_rescue;
 #[path = "showstoppers.rs"]
 mod showstoppers;
 #[path = "sibling_dedup.rs"]
@@ -220,9 +269,27 @@ mod sibling_dedup;
 mod sibling_ranking;
 #[path = "signature_reuse.rs"]
 mod signature_reuse;
+#[path = "skip_policy_contract.rs"]
+mod skip_policy_contract;
+#[path = "spec_id_traceability.rs"]
+mod spec_id_traceability;
+#[path = "ts_issue_283_object_literal_tables.rs"]
+mod ts_issue_283_object_literal_tables;
+#[path = "ts_issue_284_produce_then_assert.rs"]
+mod ts_issue_284_produce_then_assert;
+#[path = "ts_issue_285_diagnostic_scenarios.rs"]
+mod ts_issue_285_diagnostic_scenarios;
 #[path = "type2_rename_anchor_floor.rs"]
 mod type2_rename_anchor_floor;
+#[path = "type2_rename_literal_drift.rs"]
+mod type2_rename_literal_drift;
 #[path = "type3_enclosing_method.rs"]
 mod type3_enclosing_method;
 #[path = "typescript_features.rs"]
 mod typescript_features;
+#[path = "verbatim_family_survives_stranger.rs"]
+mod verbatim_family_survives_stranger;
+#[path = "verbatim_subgroup_idiom_price.rs"]
+mod verbatim_subgroup_idiom_price;
+#[path = "verbatim_subgroup_survives_noise.rs"]
+mod verbatim_subgroup_survives_noise;

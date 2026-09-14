@@ -12,14 +12,16 @@ export function formatPercent(percent: number): string {
   return `${percent.toFixed(1)}%`;
 }
 
-/** Two decimals — the precision every human-facing row shows a signal or
- * a ranking weight at. */
+/** Two decimals — the precision every human-facing row shows a measured
+ * pair signal at. */
 export function formatScore(value: number): string {
   return value.toFixed(2);
 }
 
-/** Four decimals — the copy-for-AI payload, which quotes the same figures
- * at more precision than a human row needs. */
-export function formatScorePrecise(value: number): string {
-  return value.toFixed(4);
+/** No decimals — mass is a whole-number count, canonical nodes × additional
+ * visible occurrences ([RANK-MASS-SUM]), and prints exactly as the CLI text
+ * report prints it: `527`, never `527.00`. A decimal point would claim a
+ * precision a count cannot have. */
+export function formatMass(mass: number): string {
+  return String(mass);
 }

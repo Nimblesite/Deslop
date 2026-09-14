@@ -4,6 +4,7 @@
 // an intersection so the wire shape stays the source of truth.
 
 import type {
+  ClusterKind,
   Report as WireReport,
   ReportCluster as WireReportCluster,
   ReportOccurrence as WireReportOccurrence,
@@ -11,8 +12,8 @@ import type {
 
 export type {
   CacheStats,
+  ClusterKind,
   EmbeddingProvenance,
-  ReportSignals,
 } from "./wire-generated";
 
 // Wire `ReportOccurrence` plus the VSIX-only display projection the
@@ -63,18 +64,22 @@ export function occurrenceCount(cluster: ReportCluster): number {
 }
 
 // Wire-format models generated from `docs/models/live-ipc.td` by
-// `scripts/typediagram-gen.mjs`. Re-exported here so the historical
+// `scripts/typediagram/generate.mjs`. Re-exported here so the historical
 // `clients/vscode/src/types/report` import path keeps resolving for
 // every consumer. The generated source is gitignored; `make
 // typediagram-gen` (chained into `make vsix-build`) regenerates it.
 export type {
-  ActionHint,
   AnalysisState,
   ChangeSummary,
   EmbeddingModelInfo,
   EmbeddingPhase,
   EmbeddingProgress,
   FileMetric,
+  PairClassification,
+  PairComparison,
+  PairComparisonParams,
+  PairEndpoint,
+  PairEvidence,
   ReportChangedNotification,
   ReportDelta,
   RepoMetrics,
@@ -92,9 +97,9 @@ export type {
   ReportBoilerplateOccurrence as BoilerplateHintOccurrence,
 } from "./wire-generated";
 
-// Severity bucketing per [LSP-SEVERITY]. Orthogonal to Bucket:
-// severity = "how bad is this cluster in the ranking?", bucket =
-// "what kind of clone is it?".
+// Severity bucketing per [LSP-SEVERITY-BUCKET]. The band classifies the
+// cluster's rank percentile, which is a calculation, so it is computed
+// once in `report_weight::rank_band` and carried on the wire.
 export type Severity = "worst" | "top10" | "mid" | "faint";
 
 /** Every severity level in rank order. Filter surfaces enumerate this
@@ -114,248 +119,88 @@ export function severityLabel(severity: Severity): string {
 }
 
 /** The cluster's severity band as the engine stamped it
- * ([SEVERITY-BAND]). The band classifies the cluster's rank percentile,
- * which is a calculation, so it is computed once in
- * `report_weight::rank_band` and carried on the wire. A report written
- * before the field existed carries an empty string and reads as the
- * tail band. */
+ * ([SEVERITY-BAND]). A report written before the field existed carries
+ * an empty string and reads as the tail band. */
 export function clusterBand(cluster: ReportCluster): Severity {
   return SEVERITIES.find((band) => band === cluster.rank_band) ?? "faint";
 }
 
-// [SEVERITY-DESLOP-MAP] The Deslop severity level — the *other* visual
-// channel, and the one that answers "how alarming is this kind of
-// duplicate?". It is a function of the bucket alone, never of the ranking:
-// per [SEVERITY-COLOR] colour carries the bucket and glyph density carries
-// the weight percentile, and the two are orthogonal by design. A faint
-// identical clone is a red `○`; a high-impact shape-only family is a grey
-// `●●`. Collapsing them into one channel is what let a demoted family wear
-// the loudest paint in the editor.
-export type DeslopSeverity = "error" | "warning" | "information" | "hint";
+/** The duplicated mass — the worst-first ranking metric. One formula
+ * lives in Rust ([RANK-MASS-SUM]); clients carry the value. */
+export function clusterMass(cluster: ReportCluster): number {
+  return cluster.mass;
+}
 
-/** Every Deslop severity level, loudest first. */
-export const DESLOP_SEVERITIES: readonly DeslopSeverity[] = [
-  "error",
-  "warning",
-  "information",
-  "hint",
-] as const;
+// [CLONE-KIND-LABELS] The clone kind is the engine's fold of the pair
+// classifications inside the cluster ([CLONE-KIND-FOLD]); it rides the
+// wire on every cluster and every surface titles the cluster by it. The
+// words mirror `deslop_core::buckets::ClusterKind::labels` — the CLI
+// parity test in `kind.unit.test.ts` holds the two registries together.
 
-// ---------------------------------------------------------------------------
-// Canonical clone buckets — mirrors deslop-core::buckets.
-// Single source of truth for every user-facing surface in the VS Code
-// extension per docs/specs/taxonomy.md [CLONE-BUCKETS-DUAL-LABEL].
-// ---------------------------------------------------------------------------
-
-// Wire label used in JSON `cluster.bucket`. Stable contract for the
-// current report shape.
-export type Bucket =
-  | "identical"
-  | "nearly_identical"
-  | "structural_only"
-  | "loosely_similar"
-  | "same_behavior";
-
-export const BUCKETS: readonly Bucket[] = [
+/** Every clone kind, strongest first — the order `ClusterKind::all()`
+ * lists them in, and the order filter surfaces enumerate them. */
+export const CLUSTER_KINDS: readonly ClusterKind[] = [
   "identical",
   "nearly_identical",
+  "same_behavior",
   "structural_only",
   "loosely_similar",
-  "same_behavior",
 ] as const;
 
-export interface BucketLabels {
-  // Pure-visual surfaces (bubble, tree view, webview card titles) — no Type-N.
-  plainTitle: string;
-  // Shared-text surfaces (Problems panel, hover, diagnostic message) —
-  // plain prose + bracketed Type-N suffix for AI scrapers.
-  hybridTitle: string;
-  // Plain-English one-liner shown under the title on every surface.
-  actionSentence: string;
-  // Academic taxonomy reference composed into AI-only sentences.
-  taxonomyLabel: string;
-  // CSS class suffix for HTML / webview cards.
-  cssSuffix: string;
-  // True only for SameBehavior (Type-4, embedding-pass output).
-  aiMatch: boolean;
+interface KindLabels {
+  /** The title a cluster surface shows. Never carries advice. */
+  title: string;
+  /** The clone-taxonomy name, for tooltips and agent context. */
+  taxonomy: string;
 }
 
-const LABELS: Record<Bucket, BucketLabels> = {
-  identical: {
-    plainTitle: "Identical code",
-    hybridTitle: "Identical code [Type-1/2]",
-    actionSentence: "Safe to extract — every copy is the same.",
-    taxonomyLabel: "Type-1 or Type-2 exact clone",
-    cssSuffix: "identical",
-    aiMatch: false,
-  },
-  nearly_identical: {
-    plainTitle: "Nearly identical code",
-    hybridTitle: "Nearly identical code [Type-3]",
-    actionSentence: "Review the locations — small differences may matter.",
-    taxonomyLabel: "Type-3 near-miss",
-    cssSuffix: "nearly-identical",
-    aiMatch: false,
-  },
-  structural_only: {
-    plainTitle: "Same shape, different content",
-    hybridTitle: "Same shape, different content [structural-only]",
-    actionSentence:
-      "Only the code shape matches — usually sibling boilerplate. Verify before extracting.",
-    taxonomyLabel: "structural-only match (unverified Type-2/3 candidate)",
-    cssSuffix: "structural-only",
-    aiMatch: false,
-  },
-  loosely_similar: {
-    plainTitle: "Loosely similar code",
-    hybridTitle: "Loosely similar code [weak LSH]",
-    actionSentence: "Loose textual overlap. Treat as a hint.",
-    taxonomyLabel: "weak LSH-only signal (sub-Type-3)",
-    cssSuffix: "loosely-similar",
-    aiMatch: false,
-  },
-  same_behavior: {
-    plainTitle: "Same behavior, different code",
-    hybridTitle: "Same behavior, different code [Type-4, AI match]",
-    actionSentence:
-      "The AI noticed these do the same thing written two ways — read both before merging.",
-    taxonomyLabel: "Type-4 semantic clone (AI match)",
-    cssSuffix: "same-behavior",
-    aiMatch: true,
-  },
+const KIND_LABELS: Record<ClusterKind, KindLabels> = {
+  identical: { title: "Identical code", taxonomy: "Type-1 exact clone" },
+  nearly_identical: { title: "Nearly identical code", taxonomy: "Type-2/3 near-copy" },
+  same_behavior: { title: "Same behavior, different code", taxonomy: "Type-4 semantic clone" },
+  structural_only: { title: "Same shape, different content", taxonomy: "structural-only match" },
+  loosely_similar: { title: "Loosely similar code", taxonomy: "weak Type-3 relation" },
 };
 
-export function bucketLabels(bucket: Bucket): BucketLabels {
-  return LABELS[bucket];
+/** The title every cluster surface shows for a kind ([CLONE-KIND-LABELS]). */
+export function kindTitle(kind: ClusterKind): string {
+  return KIND_LABELS[kind].title;
 }
 
-// [CLONE-BUCKETS-ROUTING] The engine owns the routing and is the only
-// place it can be decided. `deslop-core::report_render::report_bucket_kind`
-// weighs four inputs — the *raw* signal triple, measured `ContentEvidence`,
-// raw-source byte-equivalence, and the member spread — and the triple that
-// reaches this client is the *post-gate projection* of that decision:
-// `content_gated_signals` overwrites `token_jaccard` to 1.0 for a
-// shape-identical near miss (#232) and rewrites `fused`. Re-running the
-// engine's raw-signal table over rendered signals is therefore a category
-// error, and every arm that tried it shipped a defect: a proven rename read
-// back as byte-identical ("Safe to extract — every copy is the same" about
-// code whose identifiers all differ), a content-gated family promoted to
-// act-now, and two low-structural arms the engine never had. The UI reads
-// the engine's label and never manufactures one.
-export function resolveBucket(cluster: ReportCluster): Bucket {
-  if (
-    cluster.bucket &&
-    (BUCKETS as readonly string[]).includes(cluster.bucket)
-  ) {
-    return cluster.bucket as Bucket;
-  }
-  // A report carrying no engine label carries no verdict. `loosely_similar`
-  // is the only honest destination: it is the sole bucket whose action
-  // sentence claims nothing beyond "treat as a hint", so an unlabelled
-  // cluster can never be repainted as something to act on.
-  return "loosely_similar";
+/** The clone-taxonomy name of a kind ([CLONE-TYPE-TAXONOMY]). */
+export function kindTaxonomy(kind: ClusterKind): string {
+  return KIND_LABELS[kind].taxonomy;
 }
 
-// Buckets the engine considers actionable. A surface that withholds one of
-// these is a false negative; a surface that paints anything else with them
-// is a false positive. Exported so the live bubble, the tree, and the tests
-// share one definition ([VSIX-LIVE-BUBBLE]).
-export const ACT_NOW_BUCKETS: readonly Bucket[] = [
-  "identical",
-  "nearly_identical",
-] as const;
+// [FACET-TOP-OFFENDERS-FILTER] The tree facet filters on the mass
+// severity band; the report webview adds the clone kind ([FACET-MODEL]).
 
-export function isActNow(bucket: Bucket): boolean {
-  return ACT_NOW_BUCKETS.includes(bucket);
-}
-
-// ---------------------------------------------------------------------------
-// Canonical clone categories — mirrors deslop-core::clone_category.
-// Orthogonal to Bucket per [FACET-MODEL]: bucket = "how similar",
-// category = "what kind of repetition". The shipped registry is
-// logic + data; the literal families join when [LITERAL-CATEGORY] ships.
-// ---------------------------------------------------------------------------
-
-// Wire label carried in JSON `cluster.category`.
-export type Category = "logic" | "data";
-
-export const CATEGORIES: readonly Category[] = ["logic", "data"] as const;
-
-export interface CategoryLabels {
-  // Plain title for facet surfaces (filter QuickPick, webview category
-  // options, HTML facet chips): the shared chip for chip-carrying
-  // categories, "Code clones" for the chip-less logic default.
-  groupTitle: string;
-  // Short chip shown next to bucket titles; null for logic — the
-  // absence of a chip already communicates "ordinary logic clone".
-  chip: string | null;
-}
-
-const CATEGORY_LABELS: Record<Category, CategoryLabels> = {
-  logic: { groupTitle: "Code clones", chip: null },
-  data: { groupTitle: "data table", chip: "data table" },
-};
-
-export function categoryLabels(category: Category): CategoryLabels {
-  return CATEGORY_LABELS[category];
-}
-
-// Resolves a cluster's category from the wire label, defaulting to
-// "logic" for absent or unknown values — mirrors
-// deslop-core::clone_category::from_wire_label.
-export function resolveCategory(cluster: ReportCluster): Category {
-  return cluster.category === "data" ? "data" : "logic";
-}
-
-/** A sanitized facet filter: only registry-known values survive. */
+/** A sanitized facet filter: only registry-known severity bands
+ * survive. */
 export interface FacetFilter {
-  buckets: Bucket[];
-  categories: Category[];
+  severities: Severity[];
 }
 
 // [FACET-TOP-OFFENDERS-FILTER] Drops unknown values from the persisted
-// filter arrays (the typo fallback — a bad value must never yield an
-// empty tree). Both lists empty means the filter is inactive.
-export function sanitizeFacetFilter(
-  filterBuckets: readonly string[],
-  filterCategories: readonly string[],
-): FacetFilter {
+// filter array (the typo fallback — a bad value must never yield an
+// empty tree). An empty list means the filter is inactive.
+export function sanitizeFacetFilter(filterSeverities: readonly string[]): FacetFilter {
   return {
-    buckets: filterBuckets.filter((value): value is Bucket =>
-      (BUCKETS as readonly string[]).includes(value),
-    ),
-    categories: filterCategories.filter((value): value is Category =>
-      (CATEGORIES as readonly string[]).includes(value),
+    severities: filterSeverities.filter((value): value is Severity =>
+      (SEVERITIES as readonly string[]).includes(value),
     ),
   };
 }
 
 // [FACET-TOP-OFFENDERS-FILTER] The one facet-filter slice shared by the
 // Top Offenders tree, the report webview, and the status-bar count so
-// the three surfaces always agree. An empty value list means "show all"
-// for that axis; the two axes compose as an AND. Presentation-only:
-// never mutates the report.
+// the three surfaces always agree. An empty value list means "show all".
+// Presentation-only: never mutates the report.
 export function applyFacetFilter(
   clusters: ReportCluster[],
   filter: FacetFilter,
 ): ReportCluster[] {
-  const { buckets, categories } = filter;
-  if (buckets.length === 0 && categories.length === 0) return clusters;
-  return clusters.filter(
-    (cluster) =>
-      (buckets.length === 0 || buckets.includes(resolveBucket(cluster))) &&
-      (categories.length === 0 || categories.includes(resolveCategory(cluster))),
-  );
+  const { severities } = filter;
+  if (severities.length === 0) return clusters;
+  return clusters.filter((cluster) => severities.includes(clusterBand(cluster)));
 }
-
-// Returns the cluster's interpretation line, falling back to the
-// bucket's action sentence when the live wire has blanked the field.
-// Every UI surface (hover, decorations, panels) funnels through this
-// so the "what does this cluster mean" prose stays consistent whether
-// the cluster came from a live LSP response or a CLI-loaded report.
-export function clusterInterpretation(cluster: ReportCluster): string {
-  return cluster.interpretation && cluster.interpretation.length > 0
-    ? cluster.interpretation
-    : bucketLabels(resolveBucket(cluster)).actionSentence;
-}
-

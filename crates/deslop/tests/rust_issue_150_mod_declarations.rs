@@ -4,28 +4,20 @@
 //! not actionable duplication, and must never surface in the report.
 //! Spec: [CLONE-NOISE-RUST-DECL].
 
-use std::fs;
-
 use anyhow::Result;
-use serde_json::Value;
 
 use crate::common::*;
 
-fn run_report(fixture_name: &str) -> Result<Value> {
-    let tmp = tempfile::tempdir()?;
-    let output = tmp.path().join("report");
-    let mut cmd = deslop_cmd(&fixture(fixture_name), &output)?;
-    let _assertion = cmd
-        .args(["--min-nodes", "3", "--embeddings", "off"])
-        .assert()
-        .success();
-    let body = fs::read_to_string(output.with_extension("json"))?;
-    Ok(serde_json::from_str(&body)?)
-}
+/// The node floor `mod`/`use` runs are judged at — low enough that a
+/// declaration run would cluster if it were not filtered.
+const MOD_DECLARATION_MIN_NODES: u32 = 3;
 
 #[test]
 fn rust_mod_and_use_declarations_do_not_cluster_as_duplicates() -> Result<()> {
-    let report = run_report("rust-issue-150-mod-declarations")?;
+    let report = run_report(
+        &fixture("rust-issue-150-mod-declarations"),
+        MOD_DECLARATION_MIN_NODES,
+    )?;
     let count = cluster_count(&report);
     assert_eq!(
         count, 0,

@@ -1,15 +1,31 @@
-pub(crate) use anyhow::{Context, Result};
+pub(crate) use anyhow::Result;
 pub(crate) use assert_cmd::Command;
 pub(crate) use predicates::str::contains;
 pub(crate) use serde_json::Value;
 pub(crate) use std::{fs, path::Path, path::PathBuf};
+pub(crate) use tempfile::TempDir;
 
-pub(crate) fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(name)
-}
+pub(crate) use crate::common::scan_dir::temp_scan_dir;
+/// The report-walking and workspace vocabulary the `cli` suites share
+/// with every standalone suite. These lived here as second definitions
+/// until the whole crate became one binary ([TEST-ONE-BINARY]) — now the
+/// `common` copy is the only one, and `cli` reads it through this
+/// re-export so `use super::support::*;` still resolves them.
+pub(crate) use crate::common::{
+    assert_contains, assert_not_contains, field, fixture, load_json as read_json_report,
+    metric_field, seed as seed_scan_root, seeded_fixture_root, with_ext,
+};
+
+/// Shared CLI flag selecting the minimum AST node count.
+pub(crate) const MIN_NODES_FLAG: &str = "--min-nodes";
+/// Shared small-fixture node-count value.
+pub(crate) const MIN_NODES_VALUE: &str = "8";
+/// Shared CLI flag disabling ANSI colour sequences.
+pub(crate) const NO_COLOR_FLAG: &str = "--no-color";
+/// Shared output stem used by CLI integration tests.
+pub(crate) const REPORT_OUTPUT_STEM: &str = "report";
+/// Canonical small C# fixture name.
+pub(crate) const CSHARP_SMALL_FIXTURE: &str = "csharp-small";
 
 /// Runs the binary in `<tmp>` with `--output <tmp>/report`, returning
 /// the three on-disk paths the CLI should have written.
@@ -24,12 +40,70 @@ pub(crate) struct RunOutputs {
 
 /// Renders the three output paths for an `--output <dir>/report` layout.
 pub(crate) fn outputs_under(dir: &Path) -> RunOutputs {
-    let base = dir.join("report");
+    let base = dir.join(REPORT_OUTPUT_STEM);
     RunOutputs {
         json: with_ext(&base, "json"),
         txt: with_ext(&base, "txt"),
         html: with_ext(&base, "html"),
     }
+}
+
+/// Reads the raw JSON report text a run wrote under `<tmp>/report.json`.
+///
+/// Tests that assert on the report's *text* (a substring of the rendered
+/// JSON) read it through here rather than re-deriving the path.
+pub(crate) fn report_json_text(tmp: &TempDir) -> Result<String> {
+    Ok(fs::read_to_string(
+        tmp.path().join(REPORT_OUTPUT_STEM).with_extension("json"),
+    )?)
+}
+
+/// Opens a fixture-driven CLI scenario: a fresh temp dir, the three
+/// report paths the run will write under it, and a `deslop` command
+/// already pointed at the named fixture with `--output <tmp>/report`.
+/// The caller MUST bind the returned [`TempDir`] — dropping it deletes
+/// the workspace the command is about to write into.
+pub(crate) fn fixture_run(name: &str) -> Result<(TempDir, RunOutputs, Command)> {
+    let tmp = tempfile::tempdir()?;
+    let outputs = outputs_under(tmp.path());
+    let command = fixture_command(name, &tmp.path().join(REPORT_OUTPUT_STEM))?;
+    Ok((tmp, outputs, command))
+}
+
+/// The three renderings one CLI run writes ([OUTPUT-SCHEMA-JSON],
+/// [CLI-TEXT], [OUTPUT-HUMAN-HTML]), read into memory before the temp
+/// workspace drops.
+pub(crate) struct RenderedReports {
+    /// The canonical JSON report, as written.
+    pub(crate) json: String,
+    /// The terse ASCII rendering.
+    pub(crate) txt: String,
+    /// The human HTML rendering.
+    pub(crate) html: String,
+}
+
+/// Runs the CLI over fixture `name` with `args` and returns all three
+/// renderings, asserting the process succeeded.
+pub(crate) fn fixture_run_reports(name: &str, args: &[&str]) -> Result<RenderedReports> {
+    let (_tmp, out, mut cmd) = fixture_run(name)?;
+    let _assertion = cmd.args(args).assert().success();
+    Ok(RenderedReports {
+        json: std::fs::read_to_string(&out.json)?,
+        txt: std::fs::read_to_string(&out.txt)?,
+        html: std::fs::read_to_string(&out.html)?,
+    })
+}
+
+/// The JSON rendering alone, for suites that assert on nothing else.
+pub(crate) fn fixture_run_json_text(name: &str, args: &[&str]) -> Result<String> {
+    Ok(fixture_run_reports(name, args)?.json)
+}
+
+/// Opens a fixture-driven CLI scenario that asserts only on the process
+/// result, not on the written report.
+pub(crate) fn fixture_run_command(name: &str) -> Result<(TempDir, Command)> {
+    let (tmp, _outputs, command) = fixture_run(name)?;
+    Ok((tmp, command))
 }
 
 pub(crate) fn deslop_command(scan_root: &Path, output_prefix: &Path) -> Result<Command> {
@@ -54,28 +128,28 @@ pub(crate) fn fixture_command(name: &str, output_prefix: &Path) -> Result<Comman
     Ok(cmd)
 }
 
-/// Appends `.<ext>` to `base` by cloning and replacing the file name.
-pub(crate) fn with_ext(base: &Path, ext: &str) -> PathBuf {
-    deslop_test_support::with_ext(base, ext)
+/// Creates the temp workspace, builds a `<dir_name>` scan root inside
+/// it, seeds the root with `seed`, and renders the output paths under
+/// the same temp root. `seed` may be a fixture-writer function directly
+/// or a closure composing several writes; a no-op seed (`|_| Ok(())`)
+/// leaves the root empty.
+pub(crate) fn seeded_scan(
+    dir_name: &str,
+    seed: impl FnOnce(&Path) -> Result<()>,
+) -> Result<(TempDir, PathBuf, RunOutputs)> {
+    let (tmp, scan_root) = temp_scan_dir(dir_name)?;
+    seed(&scan_root)?;
+    let out = outputs_under(tmp.path());
+    Ok((tmp, scan_root, out))
 }
 
-/// Copies every top-level entry in `src` into a freshly created `dst`.
-/// Used by tests that need a mutable scan root seeded from an
-/// immutable fixture (cache/embedding tests write siblings next to the
-/// sources).
-pub(crate) fn seed_scan_root(src: &Path, dst: &Path) -> Result<()> {
-    fs::create_dir_all(dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        // Source files only. A fixture directory can pick up a nested
-        // `.deslop/` output directory ([OUTPUT-DIR]) from a stray run, and
-        // `fs::copy` on a directory fails outright — seeding must not be
-        // hostage to whatever else happens to be sitting there.
-        if !entry.file_type()?.is_file() {
-            continue;
-        }
-        let _bytes = fs::copy(entry.path(), dst.join(entry.file_name()))?;
-    }
+/// Runs the CLI against `scan_root` with `--output <output_prefix>` and
+/// `args`, asserting the process succeeded. Callers that must inspect
+/// stderr/stdout build their own [`deslop_command`] instead — inspecting
+/// the streams is the point of those tests.
+pub(crate) fn run_scan(scan_root: &Path, output_prefix: &Path, args: &[&str]) -> Result<()> {
+    let mut cmd = deslop_command(scan_root, output_prefix)?;
+    let _assertion = cmd.args(args).assert().success();
     Ok(())
 }
 
@@ -143,12 +217,6 @@ pub(crate) fn write_clone_pair(dir: &Path) -> Result<u64> {
     Ok(26)
 }
 
-/// Returns the parsed JSON report from a successful run.
-pub(crate) fn read_json_report(path: &Path) -> Result<serde_json::Value> {
-    let body = fs::read_to_string(path)?;
-    Ok(serde_json::from_str(&body)?)
-}
-
 /// The JSON object at `key` in `value`, erroring with `context` when the key
 /// is absent or its value is not an object. Centralises the
 /// `get(key).and_then(as_object).ok_or_else(...)` idiom while preserving each
@@ -162,18 +230,6 @@ pub(crate) fn object_field<'a>(
         .get(key)
         .and_then(Value::as_object)
         .ok_or_else(|| anyhow::anyhow!("{context}"))
-}
-
-/// Looks up a named field on `value`; returns `Value::Null` when the
-/// field is absent so callers get a deterministic `!=` instead of a
-/// panic ([TESTS-NO-INDEXING]).
-pub(crate) fn field<'a>(value: &'a serde_json::Value, name: &str) -> &'a serde_json::Value {
-    value.get(name).unwrap_or(&serde_json::Value::Null)
-}
-
-/// Shortcut for `field(field(value, "metrics"), key)`.
-pub(crate) fn metric_field<'a>(report: &'a serde_json::Value, key: &str) -> &'a serde_json::Value {
-    field(field(report, "metrics"), key)
 }
 
 /// Shortcut for `field(field(field(value, "metrics"), "threshold"), key)`.

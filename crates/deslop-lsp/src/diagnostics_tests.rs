@@ -1,43 +1,37 @@
 use super::*;
 use anyhow::{anyhow, Result};
-use deslop_core::report::ReportSignals;
+use deslop_core::report::ReportCluster;
 use tempfile::TempDir;
 
-// [LSP-SEVERITY-BUCKET] Every bucket, the severity it must publish, and the
-// rationale that mapping pins.
-const BUCKET_SEVERITIES: [(&str, DiagnosticSeverity, &str); 4] = [
-    (
-        "identical",
-        DiagnosticSeverity::ERROR,
-        "Identical code → Error (no justification for bit-for-bit duplicates)",
-    ),
-    (
-        "nearly_identical",
-        DiagnosticSeverity::WARNING,
-        "NearlyIdentical → Warning",
-    ),
-    (
-        "loosely_similar",
-        DiagnosticSeverity::WARNING,
-        "LooselySimilar → Warning",
-    ),
-    (
-        "same_behavior",
-        DiagnosticSeverity::WARNING,
-        "SameBehavior → Warning",
-    ),
-];
+const ALPHA_FILE: &str = "Alpha.cs";
+const A_CAPITAL_FILE: &str = "A.cs";
+const MAIN_FILE: &str = "Main.cs";
+const A_FILE: &str = "a.cs";
+const HELLO_SOURCE: &str = "hello\n";
+const LIGHT_CLUSTER_MASS: u64 = 1;
+const HEAVY_CLUSTER_MASS: u64 = 100;
+const FIXTURE_END_BYTE: usize = 5;
 
-// [FUSION-CONTENT-GATE] #344: each measured axis a diagnostic built from the
-// `sample_cluster` signals must state, with the evidence that axis carries.
-const SAMPLE_EVIDENCE_AXES: [(&str, &str); 7] = [
-    ("structural 1.00", "structural axis"),
-    ("jaccard 0.90", "token axis"),
-    ("embedding 0.40", "embedding axis"),
-    ("fused 0.91", "fused confidence"),
-    ("agreement 0.58", "pooled byte agreement"),
-    ("rename 0.72", "Baker rename corroboration"),
-    ("literal 0.24", "literal share of the match"),
+// [LSP-SEVERITY-BUCKET] Every mass rank band, the severity it must publish,
+// and the rationale that mapping pins. Severity is a function of the
+// mass-derived rank band, never of pair measurements.
+const RANK_BAND_SEVERITIES: [(&str, DiagnosticSeverity, &str); 4] = [
+    (
+        "worst",
+        DiagnosticSeverity::ERROR,
+        "Worst band → Error (highest duplicated mass in the report)",
+    ),
+    (
+        "top10",
+        DiagnosticSeverity::WARNING,
+        "Top-10 band → Warning",
+    ),
+    (
+        "mid",
+        DiagnosticSeverity::INFORMATION,
+        "Mid band → Information",
+    ),
+    ("faint", DiagnosticSeverity::HINT, "Tail band → Hint"),
 ];
 
 fn write_source(dir: &Path, name: &str, body: &str) -> Result<PathBuf> {
@@ -46,30 +40,28 @@ fn write_source(dir: &Path, name: &str, body: &str) -> Result<PathBuf> {
     Ok(path)
 }
 
-fn sample_cluster(
-    id: &str,
-    weight: f64,
-    occurrences: Vec<ReportOccurrence>,
-    bucket: &str,
-) -> ReportCluster {
-    let signals = ReportSignals {
-        structural: 1.0,
-        token_jaccard: 0.9,
-        shape: 1.0,
-        embedding_cos: 0.4,
-        fused: 0.91,
-        agreement: 0.58,
-        rename_consistency: 0.72,
-        literal_fraction: 0.24,
-    };
+/// Mass-only fixture cluster: id, rank band, mass, canonical extent, and
+/// membership. No signals, no bucket, no weight — the cluster carries
+/// membership and mass only ([FUSED-PAIR-SIGNALS]).
+fn sample_cluster(id: &str, mass: u64, occurrences: Vec<ReportOccurrence>) -> ReportCluster {
+    // restamp_fixture recomputes mass as canonical_node_count × (count − 1),
+    // so the canonical extent is derived from the requested mass and the
+    // cluster's membership ([RANK-MASS-SUM]).
+    let visible = occurrences
+        .iter()
+        .filter(|occurrence| !occurrence.hidden)
+        .count();
     let mut cluster = deslop_core::report_fixtures::fixture_cluster(id, occurrences);
-    cluster.weight = weight;
-    cluster.canonical_node_count = 25;
-    cluster.signals = signals;
-    bucket.clone_into(&mut cluster.bucket);
-    "csharp".clone_into(&mut cluster.language);
-    "summary".clone_into(&mut cluster.summary);
-    "interp".clone_into(&mut cluster.interpretation);
+    let copies = u64::try_from(visible.saturating_sub(1)).unwrap_or(0).max(1);
+    let canonical_node_count = mass
+        .checked_div(copies)
+        .and_then(|nodes| usize::try_from(nodes).ok());
+    assert!(
+        canonical_node_count.is_some(),
+        "fixture mass must be divisible by its visible-copy count and fit usize"
+    );
+    cluster.canonical_node_count = canonical_node_count.unwrap_or_default();
+    cluster.mass = mass;
     deslop_core::report_fixtures::restamp_fixture(&mut cluster);
     cluster
 }
@@ -93,13 +85,12 @@ fn file_report_total_occurrences(clusters: &[ReportCluster]) -> usize {
         .sum()
 }
 
-/// The nearly-identical, two-file cluster the message tests describe.
+/// The two-file cluster the message tests describe.
 fn two_file_cluster() -> ReportCluster {
     sample_cluster(
         "c",
-        100.0,
-        vec![occurrence("a.cs", 0, 1), occurrence("b.cs", 0, 1)],
-        "nearly_identical",
+        HEAVY_CLUSTER_MASS,
+        vec![occurrence(A_FILE, 0, 1), occurrence("b.cs", 0, 1)],
     )
 }
 
@@ -143,11 +134,12 @@ fn assert_single_canonical_link(diagnostic: &Diagnostic, context: &str) -> Resul
     Ok(())
 }
 
-// [LSP-SEVERITY-BUCKET] Bucket → severity mapping.
+// [LSP-SEVERITY-BUCKET] Rank band → severity mapping.
 #[test]
-fn severity_for_maps_bucket_to_lsp_level() {
-    for (bucket, expected_severity, rationale) in BUCKET_SEVERITIES {
-        let cluster = sample_cluster(bucket, 1.0, vec![occurrence("a.cs", 0, 1)], bucket);
+fn severity_for_maps_rank_band_to_lsp_level() {
+    for (band, expected_severity, rationale) in RANK_BAND_SEVERITIES {
+        let mut cluster = sample_cluster(band, LIGHT_CLUSTER_MASS, vec![occurrence(A_FILE, 0, 1)]);
+        cluster.rank_band = band.to_owned();
         assert_eq!(severity_for(&cluster), expected_severity, "{rationale}");
     }
 }
@@ -205,28 +197,57 @@ fn byte_range_to_lsp_spans_newlines_and_utf16() {
 // link rather than an indexed list of all occurrences.
 
 #[test]
-fn diagnostic_data_stores_cluster_id_for_machine_readers() -> Result<()> {
+fn diagnostic_data_stores_cluster_id_and_mass_for_machine_readers() -> Result<()> {
     let cluster = sample_cluster(
         "abc123",
-        10.0,
-        vec![occurrence("Alpha.cs", 0, 5)],
-        "identical",
+        LIGHT_CLUSTER_MASS,
+        vec![
+            occurrence(ALPHA_FILE, 0, FIXTURE_END_BYTE),
+            occurrence("b.cs", 0, FIXTURE_END_BYTE),
+        ],
     );
-    assert_eq!(cluster_id_of(Some(&diagnostic_data(&cluster)))?, "abc123");
+    let data = diagnostic_data(&cluster);
+    assert_eq!(cluster_id_of(Some(&data))?, "abc123");
+    assert_eq!(
+        data.get("mass").and_then(serde_json::Value::as_u64),
+        Some(LIGHT_CLUSTER_MASS)
+    );
+    assert_eq!(
+        data.get("rank_band").and_then(serde_json::Value::as_str),
+        Some("worst")
+    );
+    // [CLONE-KIND-LABELS] The diagnostic data carries the folded kind so
+    // the extension colours the squiggle by kind without re-deriving it.
+    assert_eq!(
+        data.get("kind").and_then(serde_json::Value::as_str),
+        Some(FIXTURE_KIND_WIRE)
+    );
     Ok(())
 }
 
+/// [CLONE-KIND-LABELS] The fixture kind's wire spelling and title, spelled
+/// out so a registry drift shows up here as words, not as a pass.
+const FIXTURE_KIND_WIRE: &str = "nearly_identical";
+const FIXTURE_KIND_TITLE: &str = "Nearly identical code";
+
 #[test]
-fn diagnostic_message_shows_category_count_and_action() {
+fn fixture_kind_labels_are_the_registry_labels() {
+    let fixture = deslop_core::report_fixtures::FIXTURE_KIND;
+    assert_eq!(fixture.wire_label(), FIXTURE_KIND_WIRE);
+    assert_eq!(fixture.labels().title, FIXTURE_KIND_TITLE);
+}
+
+#[test]
+fn diagnostic_message_shows_kind_count_and_mass() {
     let message = diagnostic_message(&two_file_cluster());
     assert!(message.contains(" — "), "joined with em dash: {message}");
     assert!(
-        message.contains("Nearly identical code"),
-        "diagnostic message must use human label: {message}"
+        message.starts_with(&format!("{FIXTURE_KIND_TITLE} × 2")),
+        "kind title and instance count first: {message}"
     );
     assert!(
-        message.contains("× 2"),
-        "diagnostic message must include instance count: {message}"
+        message.contains(&format!("mass {HEAVY_CLUSTER_MASS}")),
+        "message carries the duplicated mass: {message}"
     );
     assert!(
         !message.contains("Type-"),
@@ -234,75 +255,102 @@ fn diagnostic_message_shows_category_count_and_action() {
     );
 }
 
-// [FUSION-CONTENT-GATE] #344: the bucket title alone cannot tell a
-// corroborated Type-2 rename from an anchor-poor scaffolding family — both
-// render structural=1.00. The diagnostic must state the fused confidence and
-// the measured content evidence the gate scored, using the one shared
-// `render::signals` rendering.
+// [FUSED-PAIR-SIGNALS] The admission signals are pair measurements and
+// never touch the cluster. An LSP diagnostic on one occurrence must not
+// render them: the message quotes the folded kind, the count and the
+// duplicated mass, and nothing else.
 #[test]
-fn diagnostic_message_states_fused_confidence_and_measured_content_evidence() {
+fn diagnostic_message_renders_no_pair_evidence() {
     let cluster = two_file_cluster();
     let message = diagnostic_message(&cluster);
     assert!(
-        message.contains("Nearly identical code × 2"),
-        "the existing human label and count survive the addition: {message}"
+        message.contains(&format!("{FIXTURE_KIND_TITLE} × 2")),
+        "the kind title and count survive: {message}"
     );
-    for (evidence, axis) in SAMPLE_EVIDENCE_AXES {
-        assert!(message.contains(evidence), "{axis}: {message}");
+    assert!(
+        !message.contains("fused"),
+        "no cluster fused score on any surface: {message}"
+    );
+    for axis in [
+        "structural",
+        "jaccard",
+        "embedding",
+        "agreement",
+        "rename",
+        "literal",
+    ] {
+        assert!(
+            !message.contains(axis),
+            "pair evidence must not reach the diagnostic ({axis}): {message}"
+        );
     }
     assert!(
-        message.ends_with(&deslop_core::render::signals::plain_explanation(
-            cluster.signals
-        )),
-        "the explanation must be the shared render::signals rendering, never a \
-         second hand-rolled formatter: {message}"
+        !message.contains("measured pair") && !message.contains("occurrences 1 and 2"),
+        "no pair attribution on a cluster surface: {message}"
     );
 }
 
-// A cluster with different evidence must produce a different message — pins
-// that the text reads this cluster's signals, not a constant.
+// The message is a pure function of count and duplicated mass: two
+// clusters with the same membership shape and mass quote the same text
+// regardless of any pair measurements, and a mass difference shows.
 #[test]
-fn diagnostic_message_tracks_each_clusters_own_evidence() {
-    let mut anchor_poor = sample_cluster(
-        "scaffolding",
-        100.0,
-        vec![occurrence("a.cs", 0, 1), occurrence("b.cs", 0, 1)],
-        "structural_only",
+fn diagnostic_message_depends_on_count_and_mass_only() {
+    let same_mass = sample_cluster(
+        "twin",
+        HEAVY_CLUSTER_MASS,
+        vec![occurrence(A_FILE, 0, 1), occurrence("b.cs", 0, 1)],
     );
-    anchor_poor.signals = ReportSignals {
-        structural: 1.0,
-        token_jaccard: 0.0,
-        shape: 1.0,
-        embedding_cos: 0.0,
-        fused: 0.33,
-        agreement: 0.04,
-        rename_consistency: 0.02,
-        literal_fraction: 0.77,
-    };
-    let message = diagnostic_message(&anchor_poor);
-    assert!(
-        message.contains("structural 1.00 · jaccard 0.00 · embedding 0.00"),
-        "shape-only support: {message}"
+    assert_eq!(
+        diagnostic_message(&same_mass),
+        diagnostic_message(&two_file_cluster()),
+        "same count and mass → same message: {}",
+        diagnostic_message(&same_mass)
     );
-    assert!(
-        message.contains("fused 0.33 · agreement 0.04 · rename 0.02 · literal 0.77"),
-        "anchor-poor evidence is what separates this from a real rename: {message}"
+    let heavier = sample_cluster(
+        "heavy",
+        HEAVY_CLUSTER_MASS * 2,
+        vec![occurrence(A_FILE, 0, 1), occurrence("b.cs", 0, 1)],
     );
-    assert!(
-        !message.contains("agreement 0.58"),
-        "must not echo another cluster's evidence: {message}"
+    assert_ne!(
+        diagnostic_message(&heavier),
+        diagnostic_message(&two_file_cluster()),
+        "mass must show in the message: {} vs {}",
+        diagnostic_message(&heavier),
+        diagnostic_message(&two_file_cluster())
     );
 }
 
-// [LSP-SEVERITY-BUCKET] Identical code → Error; canonical link present.
 #[test]
-fn build_for_file_emits_error_for_identical_cluster_with_canonical_link() -> Result<()> {
+fn diagnostic_never_renders_pair_scores() {
+    let cluster = sample_cluster(
+        "unsourced",
+        HEAVY_CLUSTER_MASS,
+        vec![occurrence(A_FILE, 0, 1)],
+    );
+    let message = diagnostic_message(&cluster);
+    assert!(message.contains(&format!("{FIXTURE_KIND_TITLE} × 1")));
+    assert!(
+        !message.contains("structural"),
+        "unsourced structural score leaked: {message}"
+    );
+    assert!(
+        !message.contains("agreement"),
+        "unsourced content score leaked: {message}"
+    );
+}
+
+// [LSP-SEVERITY-BUCKET] Worst band → Error; canonical link present.
+#[test]
+fn build_for_file_emits_error_for_worst_band_cluster_with_canonical_link() -> Result<()> {
     let workspace = TempDir::new()?;
-    let _primary = write_source(workspace.path(), "Alpha.cs", "alpha\nbeta\ngamma\n")?;
+    let _primary = write_source(workspace.path(), ALPHA_FILE, "alpha\nbeta\ngamma\n")?;
     let _secondary = write_source(workspace.path(), "Beta.cs", "a\nbb\nccc\ndddd\n")?;
-    let occurrences = vec![occurrence("Alpha.cs", 0, 5), occurrence("Beta.cs", 2, 5)];
-    let cluster = sample_cluster("cluster-1", 100.0, occurrences, "identical");
-    let diagnostics = diagnostics_for(cluster, "Alpha.cs", workspace.path());
+    let occurrences = vec![
+        occurrence(ALPHA_FILE, 0, FIXTURE_END_BYTE),
+        occurrence("Beta.cs", 2, FIXTURE_END_BYTE),
+    ];
+    let cluster = sample_cluster("cluster-1", HEAVY_CLUSTER_MASS, occurrences);
+    let diagnostics = diagnostics_for(cluster, ALPHA_FILE, workspace.path());
     assert_eq!(
         diagnostics.len(),
         1,
@@ -312,31 +360,31 @@ fn build_for_file_emits_error_for_identical_cluster_with_canonical_link() -> Res
         .first()
         .ok_or_else(|| anyhow!("diagnostic present"))?;
     assert_eq!(diagnostic.source.as_deref(), Some("deslop"));
-    // [FUSION-CONTENT-GATE] #344: the evidence reaches the published
-    // Diagnostic, not merely the formatter.
+    // [FUSED-PAIR-SIGNALS] The diagnostic is a cluster surface and renders
+    // no pair signals.
     assert!(
-        diagnostic
-            .message
-            .contains("fused 0.91 · agreement 0.58 · rename 0.72 · literal 0.24"),
-        "published diagnostic carries the fused score and content evidence: {}",
+        !diagnostic.message.contains("agreement"),
+        "published diagnostic must not carry content evidence: {}",
         diagnostic.message
     );
     assert!(
-        diagnostic.message.starts_with("Identical code × 2 — "),
-        "the existing bucket title and count are still first: {}",
+        diagnostic
+            .message
+            .starts_with(&format!("{FIXTURE_KIND_TITLE} × 2 — ")),
+        "the neutral title and count are still first: {}",
         diagnostic.message
     );
     assert_eq!(
         diagnostic.severity,
         Some(DiagnosticSeverity::ERROR),
-        "Identical bucket → Error per [LSP-SEVERITY-BUCKET]"
+        "worst rank band → Error per [LSP-SEVERITY-BUCKET]"
     );
     assert!(
         diagnostic.code.is_none(),
         "cluster hash must not be visible as deslop(<id>) in editor hovers"
     );
     assert_eq!(cluster_id_of(diagnostic.data.as_ref())?, "cluster-1");
-    assert_single_canonical_link(diagnostic, "a two-occurrence identical cluster")?;
+    assert_single_canonical_link(diagnostic, "a two-occurrence cluster")?;
     assert_eq!(
         diagnostic.range.start.line, 0,
         "start on first line of Alpha.cs"
@@ -344,26 +392,31 @@ fn build_for_file_emits_error_for_identical_cluster_with_canonical_link() -> Res
     Ok(())
 }
 
-// [LSP-SEVERITY-BUCKET] All buckets publish diagnostics — none are suppressed by default.
+// [LSP-SEVERITY-BUCKET] All rank bands publish diagnostics — none are suppressed by default.
 #[test]
-fn build_for_file_publishes_all_buckets_with_correct_severity() -> Result<()> {
+fn build_for_file_publishes_all_rank_bands_with_correct_severity() -> Result<()> {
     let workspace = TempDir::new()?;
-    let _primary = write_source(workspace.path(), "A.cs", "abc\n")?;
-    for (bucket, expected_severity, rationale) in BUCKET_SEVERITIES {
-        let cluster = sample_cluster("c", 1.0, vec![occurrence("A.cs", 0, 2)], bucket);
-        let diagnostics = diagnostics_for(cluster, "A.cs", workspace.path());
+    let _primary = write_source(workspace.path(), A_CAPITAL_FILE, "abc\n")?;
+    for (band, expected_severity, rationale) in RANK_BAND_SEVERITIES {
+        let mut cluster = sample_cluster(
+            "c",
+            LIGHT_CLUSTER_MASS,
+            vec![occurrence(A_CAPITAL_FILE, 0, 2)],
+        );
+        cluster.rank_band = band.to_owned();
+        let diagnostics = diagnostics_for(cluster, A_CAPITAL_FILE, workspace.path());
         assert_eq!(
             diagnostics.len(),
             1,
-            "bucket '{bucket}' must always produce a diagnostic (no weight-percentile suppression)"
+            "band '{band}' must always produce a diagnostic (no mass-percentile suppression)"
         );
         let diag = diagnostics
             .first()
-            .ok_or_else(|| anyhow!("no diagnostic for bucket '{bucket}'"))?;
+            .ok_or_else(|| anyhow!("no diagnostic for band '{band}'"))?;
         assert_eq!(
             diag.severity,
             Some(expected_severity),
-            "bucket '{bucket}' → {expected_severity:?} ({rationale})"
+            "band '{band}' → {expected_severity:?} ({rationale})"
         );
     }
     Ok(())
@@ -372,14 +425,13 @@ fn build_for_file_publishes_all_buckets_with_correct_severity() -> Result<()> {
 #[test]
 fn build_for_file_empty_related_info_becomes_none() -> Result<()> {
     let workspace = TempDir::new()?;
-    let _primary = write_source(workspace.path(), "Alpha.cs", "abcdef\n")?;
+    let _primary = write_source(workspace.path(), ALPHA_FILE, "abcdef\n")?;
     let cluster = sample_cluster(
         "solo",
-        100.0,
-        vec![occurrence("Alpha.cs", 0, 3)],
-        "identical",
+        HEAVY_CLUSTER_MASS,
+        vec![occurrence(ALPHA_FILE, 0, 3)],
     );
-    let diagnostics = diagnostics_for(cluster, "Alpha.cs", workspace.path());
+    let diagnostics = diagnostics_for(cluster, ALPHA_FILE, workspace.path());
     assert_eq!(diagnostics.len(), 1);
     let diagnostic = diagnostics
         .first()
@@ -396,14 +448,14 @@ fn many_occurrences_produce_exactly_one_canonical_related_item() -> Result<()> {
     // The diagnostic hover must never dump a full occurrence list.
     // 38 occurrences → still exactly 1 "Canonical" related-info link.
     let workspace = TempDir::new()?;
-    let _primary = write_source(workspace.path(), "Main.cs", "fn a() {}\n")?;
+    let _primary = write_source(workspace.path(), MAIN_FILE, "fn a() {}\n")?;
     let _other = write_source(workspace.path(), "Other.cs", "fn b() {}\n")?;
-    let mut occs = vec![occurrence("Main.cs", 0, 5)];
+    let mut occs = vec![occurrence(MAIN_FILE, 0, FIXTURE_END_BYTE)];
     for _ in 0..37 {
         occs.push(occurrence("Other.cs", 0, 3));
     }
-    let cluster = sample_cluster("big", 100.0, occs, "identical");
-    let diagnostics = diagnostics_for(cluster, "Main.cs", workspace.path());
+    let cluster = sample_cluster("big", HEAVY_CLUSTER_MASS, occs);
+    let diagnostics = diagnostics_for(cluster, MAIN_FILE, workspace.path());
     let diagnostic = diagnostics.first().ok_or_else(|| anyhow!("diagnostic"))?;
     assert_single_canonical_link(diagnostic, "38 occurrences")
 }
@@ -411,10 +463,10 @@ fn many_occurrences_produce_exactly_one_canonical_related_item() -> Result<()> {
 #[test]
 fn load_cached_source_reuses_cache_and_survives_missing_files() -> Result<()> {
     let workspace = TempDir::new()?;
-    let real = write_source(workspace.path(), "Real.cs", "hello\n")?;
+    let real = write_source(workspace.path(), "Real.cs", HELLO_SOURCE)?;
     let mut cache: HashMap<PathBuf, String> = HashMap::new();
     let first = load_cached_source(&real, &mut cache);
-    assert_eq!(first, "hello\n");
+    assert_eq!(first, HELLO_SOURCE);
     assert!(cache.contains_key(&real), "entry cached after first read");
     let missing = workspace.path().join("missing.cs");
     let body = load_cached_source(&missing, &mut cache);
@@ -423,6 +475,6 @@ fn load_cached_source_reuses_cache_and_survives_missing_files() -> Result<()> {
         "missing files fall back to empty string, not panic"
     );
     let second = load_cached_source(&real, &mut cache);
-    assert_eq!(second, "hello\n", "cached read returns same content");
+    assert_eq!(second, HELLO_SOURCE, "cached read returns same content");
     Ok(())
 }

@@ -12,7 +12,10 @@ import {
   openLiveDocument,
   probeCluster as cluster,
   renderFullConfidenceBubble,
+  FIXTURE_KIND_TITLE,
 } from "./bubble.helpers";
+import { reportWithClusters } from "./report.helpers";
+import { rejectingClient } from "./client.helpers";
 
 suite("LiveBubble onEdit path", () => {
   test("buffer edit path reaches probe and the LSP request is dispatched with byte offsets", async () => {
@@ -56,11 +59,15 @@ suite("LiveBubble onEdit path", () => {
 
   test("probe rejection clears the bubble without propagating the error", async () => {
     const { editor, store } = await openLiveDocument("xyz\n");
-    const fakeClient = {
-      sendRequest: () => Promise.reject(new Error("probe boom")),
-    } as unknown as LanguageClient;
+    const fakeClient = rejectingClient("probe boom");
     const bubble = new LiveBubble(store, () => fakeClient);
     const capture = capturingEditor();
+    // [VSIX-LIVE-BUBBLE] Only reported clusters render, so seed the report
+    // with both clusters the test renders.
+    store.setSnapshot(
+      reportWithClusters([cluster("c-seed", 10), cluster("c-after", 10)]),
+      0,
+    );
     try {
       // Seed an active bubble so we can observe the rejection → clearBubble path
       // exercise the `active.editor` branch of clearBubble.
@@ -76,8 +83,8 @@ suite("LiveBubble onEdit path", () => {
       const visible = renderFullConfidenceBubble(capture, bubble, 6, "c-after");
       assert.match(
         visible,
-        /Identical code/,
-        "the recovered bubble keeps its bucket title",
+        new RegExp(FIXTURE_KIND_TITLE),
+        "the recovered bubble keeps its clone kind verdict",
       );
     } finally {
       bubble.dispose();

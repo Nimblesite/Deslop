@@ -217,17 +217,19 @@ fn now_ms() -> u64 {
 mod tests {
     use super::*;
 
+    const REPORT_GET_METHOD: &str = "deslop/reportGet";
+
     #[test]
     fn records_handler_counts_and_phase_lifecycle() -> Result<(), Box<dyn std::error::Error>> {
         let observability = Observability::default();
-        observability.record_handler("deslop/reportGet");
-        observability.record_handler("deslop/reportGet");
+        observability.record_handler(REPORT_GET_METHOD);
+        observability.record_handler(REPORT_GET_METHOD);
 
         let guard = observability.start_phase(CpuPhase::Parsing, vec!["src/Alpha.cs".to_owned()]);
         let running = observability.snapshot();
         assert_eq!(running.current_phase, CpuPhase::Parsing);
         assert_eq!(
-            running.handler_counts.get("deslop/reportGet"),
+            running.handler_counts.get(REPORT_GET_METHOD),
             Some(&2),
             "handler counts must saturating-increment by method name"
         );

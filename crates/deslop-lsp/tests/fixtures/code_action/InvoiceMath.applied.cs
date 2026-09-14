@@ -1,6 +1,6 @@
 public class InvoiceMath
 {
-    private static object ExtractedFromCluster_b50f11(object amounts /* TODO: deslop — fix type */, object taxRate /* TODO: deslop — fix type */) // TODO: deslop — fix return type
+    private static object ExtractedFromCluster_bc3aa8(object amounts /* TODO: deslop — fix type */, object taxRate /* TODO: deslop — fix type */) // TODO: deslop — fix return type
     {
         var total = 0;
         foreach (var amount in amounts)
@@ -17,11 +17,11 @@ public class InvoiceMath
 
     public int TotalWithTax(int[] amounts, int taxRate)
     {
-        ExtractedFromCluster_b50f11(amounts, taxRate);
+        ExtractedFromCluster_bc3aa8(amounts, taxRate);
     }
 
     public int SubtotalWithTax(int[] amounts, int taxRate)
     {
-        ExtractedFromCluster_b50f11(amounts, taxRate);
+        ExtractedFromCluster_bc3aa8(amounts, taxRate);
     }
 }

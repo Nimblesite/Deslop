@@ -17,8 +17,7 @@
 use tree_sitter::Node;
 
 use super::{
-    enclosing_kind, node_contains_kind, node_intersects_range, parse_for, raw_snippet_texts_differ,
-    Snippet,
+    node_contains_kind, node_search::covered_children_satisfy, raw_snippet_texts_differ, Snippet,
 };
 
 /// Tree-sitter node kinds for Dart collection literals whose elements may
@@ -42,25 +41,7 @@ pub(super) fn is_dart_collection_data_table_cluster(snippets: &[Snippet<'_>]) ->
 /// covers any closure-bearing element falls through and keeps clustering as
 /// logic — closures encode behaviour, not a data row.
 fn covers_only_data_elements(snippet: &Snippet<'_>) -> bool {
-    let Some(tree) = parse_for(snippet) else {
-        return false;
-    };
-    let Some(literal) = enclosing_kind(tree.root_node(), snippet.range, COLLECTION_LITERAL_KINDS)
-    else {
-        return false;
-    };
-    let mut cursor = literal.walk();
-    let mut covered = 0_usize;
-    for element in literal.named_children(&mut cursor) {
-        if !node_intersects_range(element, snippet.range) {
-            continue;
-        }
-        if !is_data_element(element) {
-            return false;
-        }
-        covered = covered.saturating_add(1);
-    }
-    covered >= 1
+    covered_children_satisfy(snippet, COLLECTION_LITERAL_KINDS, is_data_element)
 }
 
 /// Returns true when a collection-literal child is a pure data element.

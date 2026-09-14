@@ -34,6 +34,12 @@ use common::{
 };
 
 const STATE_FILE: &str = ".deslop/cache/live-report.json";
+
+/// The run-identity key written beside the state file
+/// ([LIVE-CACHE-SEED-KEY]). A seed is served as an answer, so the
+/// loader refuses a report whose recorded key is absent or does not
+/// describe the run asking for it.
+const SEED_KEY_FILE: &str = ".deslop/cache/live-report.key";
 const ANALYSIS_TIMEOUT: Duration = Duration::from_secs(15);
 const POLL_INTERVAL: Duration = Duration::from_millis(50);
 
@@ -328,7 +334,7 @@ fn ipc_socket_handles_list_models_request() -> Result<()> {
 ///
 /// The assertions are deliberately on the post-refresh state, never on the
 /// refresh pass's own delta. The filesystem watcher ingests the external
-/// `Beta.cs` write concurrently ([DESLOP-LIVE]); whichever pass runs first
+/// `Beta.cs` write concurrently ([LIVE-SCHEDULER]); whichever pass runs first
 /// legitimately carries the removal, so `clustersRemoved` on the refresh
 /// response is schedule-dependent — asserting it `>= 1` failed on loaded CI
 /// runners whenever the watcher won the race (delta 0/0/0 at generation 3).
@@ -370,7 +376,15 @@ fn ipc_socket_handles_refresh_report_request() -> Result<()> {
             .is_some_and(|generation| generation >= 2),
         "refreshReport result must advance or expose a live generation: {response}"
     );
-    for delta_field in ["clustersAdded", "clustersRemoved", "clustersUpdated"] {
+    for delta_field in [
+        "clustersAdded",
+        "clustersRemoved",
+        "clustersUpdated",
+        "literalFindingsAdded",
+        "literalFindingsRemoved",
+        "literalFindingsUpdated",
+        "worstMass",
+    ] {
         ensure!(
             response
                 .pointer(&format!("/result/{delta_field}"))
@@ -515,6 +529,20 @@ fn fixture_socket_ready(
 /// stdin/stdout for follow-up `call`s. Every startup-with-persisted-state test
 /// shares this setup; what varies is the staged bytes and which post-handshake
 /// reads they assert.
+/// Stages `state` as the workspace's cached live report and starts the
+/// LSP against it, returning once the handshake completes.
+///
+/// [LIVE-CACHE-SEED-KEY] made the seed loader refuse a report whose
+/// sibling run-identity key is absent or foreign, so a bare
+/// hand-written state file no longer models a cache the contract
+/// serves — it models the stale-seed defect the key exists to close.
+/// The staging therefore prewarms first: one real LSP run against this
+/// exact workspace writes the state file *and* its key, that server is
+/// shut down, and only the report bytes are replaced with `state`. The
+/// key still describes the run identity — root, settings, tool
+/// version — which is all it records; a seed is an ordinary earlier
+/// generation, and the sentinel cluster it now carries is how the
+/// tests observe it being served.
 fn seeded_workspace_ready(
     state: &[u8],
 ) -> Result<(
@@ -526,10 +554,13 @@ fn seeded_workspace_ready(
 )> {
     let workspace = copy_fixture("csharp-small")?;
     let state_path = workspace.path().join(STATE_FILE);
-    let parent = state_path
-        .parent()
-        .ok_or_else(|| anyhow!("state path must have parent: {}", state_path.display()))?;
-    fs::create_dir_all(parent)?;
+    {
+        let (prewarm, mut stdin, mut stdout) = spawn_lsp_guarded(workspace.path())?;
+        let _init = handshake(&mut stdin, &mut stdout)?;
+        wait_for_file(&workspace.path().join(SEED_KEY_FILE), ANALYSIS_TIMEOUT)?;
+        wait_for_file(&state_path, ANALYSIS_TIMEOUT)?;
+        drop(prewarm);
+    }
     fs::write(&state_path, state)?;
     let (guard, mut stdin, mut stdout) = spawn_lsp_guarded(workspace.path())?;
     let _init = handshake(&mut stdin, &mut stdout)?;
@@ -659,6 +690,13 @@ fn cached_report_bytes() -> Result<Vec<u8>> {
 }
 
 fn cached_report() -> serde_json::Value {
+    // The seed must satisfy the current generated wire contract
+    // (`wire_generated::Report`/`ReportCluster`/`ReportOccurrence`) or the
+    // loader rejects it and the cold pass silently replaces the staged
+    // state. Clusters carry mass only ([MCP-TOOLS]): no signals, weight,
+    // bucket, summary, interpretation, or action_hints. Mass is the
+    // canonical extent times visible occurrences ([RANK-MASS-SUM]):
+    // 6 canonical nodes x 2 visible occurrences = 12.
     serde_json::json!({
         "tool_version": "test-cache",
         "min_nodes": 4,
@@ -674,24 +712,27 @@ fn cached_report() -> serde_json::Value {
             "threshold": {"percent": 0.0, "breached": false, "source": "none"}
         },
         "schema_doc": "",
-        "action_hints": [],
         "boilerplate_hints": [],
         "embedding_provenance": null,
         "clusters": [{
             "id": "cached-gh73",
-            "weight": 9.0,
-            "size": 2,
+            "rank": 1,
+            "rank_band": "worst",
+            "kind": "identical",
+            "mass": 12,
             "canonical_node_count": 6,
-            "signals": {"structural": 1.0, "token_jaccard": 1.0, "embedding_cos": 0.0, "fused": 1.0, "agreement": 1.0, "rename_consistency": 0.0, "literal_fraction": 0.0},
-            "bucket": "identical",
             "occurrences": [
-                {"path": "Alpha.cs", "start_byte": 0, "end_byte": 10, "hidden": false},
-                {"path": "Beta.cs", "start_byte": 0, "end_byte": 10, "hidden": false}
+                {"path": "Alpha.cs", "start_byte": 0, "end_byte": 10, "start_line": 1, "end_line": 1, "hidden": false},
+                {"path": "Beta.cs", "start_byte": 0, "end_byte": 10, "start_line": 1, "end_line": 1, "hidden": false}
             ],
             "occurrences_total": 2,
-            "occurrences_truncated": false,
-            "summary": "",
-            "interpretation": ""
-        }]
+            "occurrence_count": 2,
+            "occurrences_truncated": false
+        }],
+        "literal_findings": [],
+        "literal_findings_total": 0,
+        "literal_findings_hidden": 0,
+        "literal_findings_capped": false,
+        "literal_max_findings": 0
     })
 }

@@ -1,5 +1,5 @@
 //! Black-box regression for the five-language Type-3 recall hole
-//! (#408, [PIPELINE-CLUSTER-SUBSUME], [REPAIR-SUBSUME-CONTENT-FIRST]): one
+//! (#408, [PIPELINE-CLUSTER-SUBSUME], [FUSED-SHARED-SUBTREE]): one
 //! inserted statement must not hide a whole-method clone behind its own
 //! fragments.
 //!
@@ -7,7 +7,7 @@
 //! single inserted statement. The insertion rehashes every ancestor
 //! Merkle node, so the enclosing pair carries `structural = 0.0` while
 //! saturated fragments nested inside it carry `structural = 1.0` by
-//! construction. Pre-#367, destructive subsumption elected on that raw
+//! construction. Pre-#367, destructive subsumption selected on that raw
 //! geometry and deleted the method pair before content was measured;
 //! the report then showed only `structural_only` fragments — or, for
 //! `ts-type3-stmt`, nothing at all.
@@ -21,7 +21,7 @@
 //! # How all five came to pass (GH #408)
 //!
 //! Four of the five once failed here, and the cause was **admission,
-//! not subsumption**: no election order can elect a pair that was never
+//! not subsumption**: no selection order can select a pair that was never
 //! built. `bounded_fused()` is `max(structural, token_jaccard,
 //! embedding_cos)`, the LSH path wrote a literal `structural = 0.0`,
 //! embeddings are off, and the exact whole-method k-gram Jaccard falls
@@ -34,6 +34,36 @@
 //! | `ts-type3-stmt` | 48 / 42 | 0.8067 | 0.875 |
 //! | `go-type3` | 53 / 48 | 0.7755 | 0.906 |
 //! | `python-type3` | 37 / 31 | 0.7429 | 0.842 |
+//! | `javascript-type3` | 52 / 45 | 0.8438 | 0.868 |
+//! | `typescript-type3` | 59 / 52 | 0.8438 | 0.857 |
+//!
+//! # The two ECMAScript rows (GH #427)
+//!
+//! `javascript-type3` and `typescript-type3` hold the same source shape
+//! as `ts-type3-stmt` — `accumulate`/`aggregate`, a full identifier
+//! rename plus one trailing `running = running + 2;` — and neither was
+//! pinned here, so both regressed unobserved. Each reported the nested
+//! `let running = 0; for (…)` run at lines 2-9 and dropped the method
+//! pair entirely.
+//!
+//! Admission was *not* the cause, which is what separates #427 from the
+//! five rows above. The rescue measures the enclosing pair on both
+//! fixtures — `left_nodes=52 right_nodes=45 token_jaccard=0.8438
+//! overlap=0.8679` for JavaScript — clearing
+//! `SHARED_SUBTREE_MIN_OVERLAP` 0.75 and `SHARED_SUBTREE_MIN_JACCARD`
+//! 0.65, so the pair enters clustering as `SurvivedSharedSubtree`. It
+//! was lost in the same-file overlap collapse, which ranks the views of
+//! one run by the cross-file edge each carries: the Merkle-equal
+//! fragment reads 1.00 *because* it excludes the inserted statement, and
+//! no honest graded overlap of the view containing that statement can
+//! outrank it.
+//!
+//! [PIPELINE-CLUSTER-EXACT-SCOPE] stops that contest inside one authored
+//! declaration. It reached TypeScript first because type annotations put
+//! a fingerprint boundary strictly inside the declaration; JavaScript has
+//! no such boundary, its widest member carries no enclosing declaration
+//! of its own, and the guard could not fire until it also covered a
+//! representative that *is* the declaration rather than one inside it.
 //!
 //! C# cleared the bar on tokens alone only because its
 //! `namespace`/`class` scaffolding dilutes the one-statement delta. The
@@ -46,7 +76,7 @@
 //! unchanged statements inside these methods stay Merkle-identical,
 //! which is exactly why the fragment views survived. `structural` is
 //! now that overlap, measured by ordered tree alignment
-//! ([FUSION-SHARED-SUBTREE]); [CLONE-BUCKETS-ROUTING] row 4b routes it
+//! ([FUSED-SHARED-SUBTREE]); [CLONE-BUCKETS-ROUTING] row 4b routes it
 //! on the same two floors that admit the pair.
 //!
 //! A second defect sat behind the first and only became visible once
@@ -63,22 +93,31 @@
 use anyhow::Result;
 use serde_json::Value;
 
+use crate::common::go_scope::*;
+use crate::common::signals::{assert_no_pair_surface_on_cluster, assert_structural_only_contract};
 use crate::common::*;
 
+/// `--min-nodes` every Type-3 fixture in this suite is driven at.
+const TYPE3_MIN_NODES: u32 = 8;
+/// The Go near-miss pair ([LANG-CAND-GO]).
+const GO_TYPE3_FIXTURE: &str = "go-type3";
+
 /// The whole-method span the surviving cluster must cover in one file,
-/// and the exact extent the elected occurrence must publish.
+/// and the exact extent the selected occurrence must publish.
 struct MethodSpan {
     path: &'static str,
     first_line: u64,
     last_line: u64,
     /// First line of the exact published extent. Equal to the method's
-    /// own span for shell-less languages; for C# and Go it additionally
-    /// carries the namespace/class or package shell. Each fixture file
-    /// holds nothing but the one method, so the shell is the method's
-    /// own address — but any *other* extent, wider or narrower, is a
-    /// mis-scoped survivor, and the previous covers-only check accepted
-    /// any class-, module-, or file-sized view that happened to enclose
-    /// the method.
+    /// own span for every language except C#, where the method sits
+    /// inside a namespace and class shell that is a genuine enclosing
+    /// node. Go's `package` clause is not a shell: it is a sibling of the
+    /// function, so a Go occurrence that opens on it has taken the whole
+    /// file rather than the authored declaration
+    /// ([PIPELINE-CLUSTER-EXACT-SCOPE]). Any *other* extent, wider or
+    /// narrower, is a mis-scoped survivor, and the previous covers-only
+    /// check accepted any class-, module-, or file-sized view that
+    /// happened to enclose the method.
     published_first: u64,
     /// Last line of the exact published extent.
     published_last: u64,
@@ -130,6 +169,18 @@ fn assert_fragments_absorbed(report: &Value, survivor: &Value, files: [&str; 2])
     }
 }
 
+/// The enclosing pair's final-contract evidence: a measured rescue, not
+/// a reconstructed cluster-confidence scalar.
+fn assert_rescued_pair_evidence(cluster: &Value) {
+    // The rescue's proof was admission: the enclosing pair cleared the
+    // shared-subtree bar, so the cluster exists. On the mass-only wire
+    // the honest reading is the admission + mass + clean-surface
+    // contract; the pair-grade numbers that used to live in
+    // `signal_source` are pair-scoped now ([PIPELINE-CLUSTER-CLOSURE]).
+    assert_structural_only_contract(cluster, "#408 enclosing pair");
+    assert_no_pair_surface_on_cluster(cluster, "#408 enclosing pair");
+}
+
 /// The full #408 contract for one language fixture.
 fn assert_enclosing_pair_visible(name: &str, left: &MethodSpan, right: &MethodSpan) -> Result<()> {
     for side in [left, right] {
@@ -140,7 +191,7 @@ fn assert_enclosing_pair_visible(name: &str, left: &MethodSpan, right: &MethodSp
             side.path
         );
     }
-    let report = run_report(&fixture(name), 8)?;
+    let report = run_report(&fixture(name), TYPE3_MIN_NODES)?;
     let Some(cluster) = enclosing_pair_cluster(&report, left, right) else {
         anyhow::bail!(
             "#408: the enclosing method pair {}:{}-{} / {}:{}-{} is not a visible \
@@ -158,16 +209,9 @@ fn assert_enclosing_pair_visible(name: &str, left: &MethodSpan, right: &MethodSp
         2,
         "the method pair must span exactly two occurrences: {cluster:#}"
     );
-    assert_eq!(
-        cluster_bucket(cluster),
-        "nearly_identical",
-        "a one-statement Type-3 near-miss must render as a credible near-identical \
-         clone, not a demoted shape match: {cluster:#}"
-    );
-    assert!(
-        signal(cluster, "fused") >= 0.6,
-        "the pair's confidence must reach the reuse band ([FUSED-THRESHOLD]): {cluster:#}"
-    );
+    assert_structural_only_contract(cluster, name);
+    assert_no_pair_surface_on_cluster(cluster, name);
+    assert_rescued_pair_evidence(cluster);
     assert_fragments_absorbed(&report, cluster, [left.path, right.path]);
     Ok(())
 }
@@ -198,6 +242,27 @@ fn csharp_type3_reports_the_enclosing_method_pair() -> Result<()> {
     )
 }
 
+// [FUSED-SHARED-SUBTREE-SAME-FILE] A shared-subtree rescue is evidence
+// about the two authored methods, and the file boundary records where the
+// copy was pasted rather than whether it is a copy — the spec says so in
+// as many words. `ApplyStandard` and `ApplyPremium` measure overlap 0.82.
+// While the rescue was cross-file only, `DriftLimits.cs` published
+// `:6-8`/`:18-20` and `:9-12`/`:25-28` — two statement fragments that
+// name neither method — and never the pair, so a reader was told about
+// pieces of a duplication and never about the duplication. The pair is
+// the finding, and the fragments are absorbed into it.
+#[test]
+fn csharp_same_file_type3_reports_both_methods_in_one_cluster() -> Result<()> {
+    const FIXTURE: &str = "csharp-merge-drift";
+    const FILE: &str = "DriftLimits.cs";
+
+    assert_enclosing_pair_visible(
+        FIXTURE,
+        &span(FILE, 3, 13, 3, 13),
+        &span(FILE, 15, 29, 15, 29),
+    )
+}
+
 #[test]
 
 fn dart_type3_reports_the_enclosing_method_pair() -> Result<()> {
@@ -211,11 +276,21 @@ fn dart_type3_reports_the_enclosing_method_pair() -> Result<()> {
 #[test]
 
 fn go_type3_reports_the_enclosing_method_pair() -> Result<()> {
+    // [PIPELINE-CLUSTER-EXACT-SCOPE] The published extent is the
+    // function's own rows. Row 1 is `package delta` / `package epsilon`
+    // and row 2 is blank; neither belongs to the duplication.
     assert_enclosing_pair_visible(
-        "go-type3",
-        &span("delta.go", 3, 13, 1, 13),
-        &span("epsilon.go", 3, 12, 1, 12),
-    )
+        GO_TYPE3_FIXTURE,
+        &span("delta.go", 3, 13, 3, 13),
+        &span("epsilon.go", 3, 12, 3, 12),
+    )?;
+
+    // The same contract over every cluster the fixture emits, so a padded
+    // fragment view cannot survive beside the correctly-scoped pair.
+    let scan_root = fixture(GO_TYPE3_FIXTURE);
+    let report = run_report(&scan_root, TYPE3_MIN_NODES)?;
+    assert_go_authored_scope(&scan_root, &report, GO_TYPE3_FIXTURE)?;
+    assert_every_occurrence_opens_a_declaration(&scan_root, &report, GO_TYPE3_FIXTURE)
 }
 
 #[test]
@@ -235,5 +310,25 @@ fn ts_type3_one_inserted_statement_must_not_erase_the_method_pair() -> Result<()
         "ts-type3-stmt",
         &span("pointBoard.ts", 1, 12, 1, 12),
         &span("scoreBoard.ts", 1, 11, 1, 11),
+    )
+}
+
+#[test]
+
+fn javascript_type3_reports_the_enclosing_method_pair() -> Result<()> {
+    assert_enclosing_pair_visible(
+        "javascript-type3",
+        &span("delta.js", 1, 12, 1, 12),
+        &span("epsilon.js", 1, 11, 1, 11),
+    )
+}
+
+#[test]
+
+fn typescript_type3_reports_the_enclosing_method_pair() -> Result<()> {
+    assert_enclosing_pair_visible(
+        "typescript-type3",
+        &span("delta.ts", 1, 12, 1, 12),
+        &span("epsilon.ts", 1, 11, 1, 11),
     )
 }

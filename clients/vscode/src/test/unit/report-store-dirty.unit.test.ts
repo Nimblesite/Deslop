@@ -8,6 +8,9 @@ import * as assert from "node:assert/strict";
 import { ReportStore } from "../../reportStore";
 import { cluster, emptyReport, occurrence, seededStore } from "./report-store.helpers";
 
+const ENGINE_CANONICAL_NODE_COUNT = 42;
+const VISIBLE_PEER_COUNT = 2;
+
 suite("ReportStore dirty-file projection", () => {
   test("visibleReport elides dirty-file occurrences and singleton clusters; canonical report keeps everything (#78, #117, #130)", () => {
     const store = new ReportStore();
@@ -23,11 +26,11 @@ suite("ReportStore dirty-file projection", () => {
             occurrence("/repo/Dirty.cs", 30, 40),
             occurrence("/repo/Clean.cs", 50, 60),
           ]),
-          cluster("mixed-peers", 20, [
+          { ...cluster("mixed-peers", 20, [
             occurrence("/repo/Dirty.cs", 70, 80),
             occurrence("/repo/CleanA.cs", 90, 100),
             occurrence("/repo/CleanB.cs", 110, 120),
-          ]),
+          ]), canonical_node_count: ENGINE_CANONICAL_NODE_COUNT },
           cluster("untouched", 10, [
             occurrence("/repo/OtherA.cs", 130, 140),
             occurrence("/repo/OtherB.cs", 150, 160),
@@ -69,7 +72,9 @@ suite("ReportStore dirty-file projection", () => {
       ["/repo/CleanA.cs", "/repo/CleanB.cs"],
       "visible cluster keeps clean peer occurrences outside the edited file",
     );
-    assert.equal(visible.clusters[0]?.size, 2, "visible count is reduced after pruning stale offsets");
+    assert.equal(visible.clusters[0]?.occurrence_count, VISIBLE_PEER_COUNT, "visible count is reduced after pruning stale offsets");
+    assert.equal(visible.clusters[0]?.canonical_node_count, ENGINE_CANONICAL_NODE_COUNT, "the engine's canonical node count survives projection");
+    assert.equal(canonical.clusters.find((c) => c.id === "mixed-peers")?.canonical_node_count, ENGINE_CANONICAL_NODE_COUNT);
     assert.equal(visible.clusters[0]?.occurrences_total, 2, "wire total is reduced with visible count");
     assert.ok(
       visible.clusters.every((c) => c.occurrences.length >= 2),
@@ -105,7 +110,7 @@ suite("ReportStore dirty-file projection", () => {
   // Regression: #130 (VSIX-STATE-DIRTY). Editor-side dirty tracking must not
   // [PRINCIPLES-LIVE-IS-REACTIVE] Dirty-file projection must not
   // mutate the canonical report. Commands that resolve a cluster by id
-  // (compareWithCanonical, openCluster, openOccurrence, ...) read
+  // (comparePair, openCluster, openOccurrence, ...) read
   // store.current.report and break the moment a 2-occurrence cluster loses one
   // peer to an unsaved edit. The canonical report is owned by the LSP — only
   // deslop/reportChanged retracts a cluster.
@@ -123,7 +128,7 @@ suite("ReportStore dirty-file projection", () => {
     const found = canonical.clusters.find((x) => x.id === "only-cluster");
     assert.ok(
       found,
-      "cluster id must stay resolvable in canonical report after markFileDirty so compareWithCanonical / openCluster / openOccurrence keep working",
+      "cluster id must stay resolvable in canonical report after markFileDirty so comparePair / openCluster / openOccurrence keep working",
     );
     assert.equal(
       found.occurrences.length,

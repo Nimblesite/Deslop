@@ -2,7 +2,7 @@
 
 Drop the block below into your project's `AGENTS.md` (used by Codex / Continue / Cursor) **and** `CLAUDE.md` (used by Claude Code) so every coding agent in your loop is told to call Deslop's `find-similar` MCP tool **before** writing new code, not afterwards.
 
-The whole point of Deslop is to keep duplicates out of the repo in the first place. If your agents only run `top-offenders` to scrub existing dupes, you've reduced Deslop to a static analyzer. The live MCP loop earns its keep when agents query **during authoring**.
+The whole point of Deslop is to keep duplicates out of the repo in the first place. If your agents only run `duplicates` to scrub existing dupes, you've reduced Deslop to a static analyzer. The live MCP loop earns its keep when agents query **during authoring**.
 
 ---
 
@@ -50,15 +50,14 @@ larger than a few lines, you MUST call the `find-similar` MCP tool with the
 proposed code (or its byte range, if it already exists in a draft buffer) and
 inspect the response.
 
-- If the response shows a cluster with **`signals.fused ≥ 0.85`** *or* the
-  bucket is `identical` / `nearly_identical`, do NOT write the new copy.
+- If the response shows a cluster whose bucket is
+  **`identical` or `nearly_identical`**, do NOT write the new copy.
   A `structural_only` match means only the code shape lines up (no token
   or semantic evidence) — read the match before deciding; it is often
   sibling boilerplate rather than a reusable implementation.
   Reuse the canonical occurrence the tool returns. Extract a helper if needed.
-- If the response is empty or the closest match is structurally distant
-  (`signals.fused < 0.6`), proceed with authoring.
-- If the response is borderline (`0.6 ≤ fused < 0.85`), read the canonical
+- If the response is empty, proceed with authoring.
+- If the bucket is `loosely_similar` or `same_behavior`, read the canonical
   occurrence and decide whether the new code is genuinely different. Bias
   toward reuse.
 
@@ -70,10 +69,10 @@ inspect the response.
 ### When to use the OTHER Deslop tools instead
 
 - **Fixing existing duplicates** (refactor / dedup work) → start with
-  `top-offenders`, then `cluster-by-id` for the cluster you'll merge. Don't
+  `duplicates`, then `cluster-by-id` for the cluster you'll merge. Don't
   use `find-similar` for this — it answers a different question.
-- **Investigating a specific file** → `report-for-file`.
-- **Investigating a specific block before refactor** → `report-for-range`.
+- **Narrowing to one file or one block** → `duplicates` with `path`, plus
+  `start_byte`/`end_byte` for a block.
 - **Schema reference for the JSON shapes** → call `schema-doc` *once* per
   session. Don't bundle it into every response.
 

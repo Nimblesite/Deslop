@@ -1,90 +1,218 @@
-# Cluster-noise suppression
+# [CLONE-NOISE] Cluster-noise suppression
 
-`[CLONE-NOISE-*]` is the family of false-positive filters that run **after**
-clustering and **before** ranking. Each one re-parses the real tree-sitter CST of
-a cluster's members (never a regex over source) and suppresses the cluster when
-its members match a pattern that is *shape-identical but not extractable
-duplication* — language scaffolding, framework-mandated mirrors, schema/data
-tables, or test idioms. Filters are **additive and conservative**: a filter only
-ever hides a cluster, never re-routes a bucket ([taxonomy.md §CLONE-BUCKETS-ROUTING](taxonomy.md#clone-buckets-routing)),
-and every filter that could hide genuine copy-paste carries a **verbatim escape
-hatch** — if the members are byte-identical it is a real clone and must still
-surface. The Dart collection-literal data-table filter is a sibling of this
-family but lives with the ranking policy it feeds: see
-[exclusion.md §CLONE-NOISE-DART-DATA-TABLE-LITERAL](exclusion.md#clone-noise-dart-data-table-literal).
+`[CLONE-NOISE-*]` is the family of false-positive filters that run **after** clustering and **before** ranking. Each one re-parses the real tree-sitter CST of a component's members (never a regex over source) and convicts the component when its members match a pattern that is *shape-identical but not extractable duplication* — language scaffolding, framework-mandated mirrors, schema/data tables, or test idioms. Filters are **additive and conservative**: a filter consumes member syntax and geometry, never invents or aggregates pair evidence, never classifies a component, and never changes pair classification ([taxonomy.md §CLONE-BUCKETS-ROUTING](taxonomy.md#clone-buckets-routing)). Every filter that could hide genuine copy-paste carries a **verbatim escape hatch** — if the component contains a qualifying byte-identical family, that family must still surface under [CLONE-NOISE-VERBATIM-SUBGROUP]. The Dart collection-literal data-table filter is a sibling of this family but lives with the exclusion policy it feeds: see [exclusion.md §CLONE-NOISE-DART-DATA-TABLE-LITERAL](exclusion.md#clone-noise-dart-data-table-literal).
 
-## Language-agnostic filters
+### [CLONE-NOISE-VERBATIM-SUBGROUP] The escape hatch protects a family, not a whole cluster
+
+The verbatim escape hatch above was written as **"at least two members differ in raw bytes"**, which one unrelated member is enough to satisfy. A component holding a proven copy `A`/`A` *plus* a shape-compatible stranger `C` therefore took the suppression whole, and the copy — byte-for-byte duplication, the thing the tool exists to find — disappeared from the report entirely. Nothing about `C` has to be unusual: it only has to normalise to the same shape, which is precisely what every noise family is made of. Three routes were measured (`[CLONE-NOISE-CONSTANT-TABLE]`, `[CLONE-NOISE-LITERAL-VARIATION-CALLS]`, `[CLONE-NOISE-PY-COLLECTION-SIBLING-CELLS]`), and the rule is shared by every filter that carries the hatch. All three stay open: the cross-file arbitration below narrowed the hatch and must not close any of them.
+
+Loosening the predicate alone would trade the false negative for a false positive: keeping the component publishes `C` as an occurrence of a copy it is not part of. The **family** is what gets separated. After closure, a component that a noise filter convicts is replaced by one component per qualifying byte-identical family it holds, and every member outside those families is dropped. Each surviving component receives a stable identity, canonical extent, membership, mass, and mass-derived rank from exactly the occurrences it kept. It inherits no pair evidence, classification, label, score, or weight from any edge or departed member. Two disjoint copies inside one convicted component therefore emerge as two mass-ranked components rather than one merged component or none.
+
+A component the filters do **not** suppress is handed on untouched, so a consistently-renamed three-way clone stays one three-way clone. **The contract is exhaustive.** A component a filter convicts is replaced by one cluster per qualifying byte-identical family it holds, and the members outside those families are dropped; a component no filter convicts is handed on untouched — it is never split, silently dropped, or panicked. The split exists only to protect a byte-identical family from a suppression that would eat it; it is never unconditional, and no generic fallback may classify an unrecognised component as suppressible or splittable. This is the post-closure suppression stage; admission and closure formation are governed by [FUSED-STRATEGY-BOUNDED-MAX] step 4, which acts earlier and is unchanged. Implemented in `cluster_filters/verbatim_subgroup.rs`, pinned by `crates/deslop/tests/verbatim_subgroup_survives_noise.rs` and `crates/deslop/tests/verbatim_family_survives_stranger.rs`.
+
+#### [CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY] Conviction reads the shape family, admission decides the clusters
+
+The filters recognise an idiom by looking at every member that shares its shape — the same normalised subtree, by Merkle hash, as a member of the admitted component. The pre-gate closure also welds in the containers and sub-windows rescued around those shapes; they are not asked about, because an ordered call sequence read across mixed depths has no common header and convicts nothing. The content gate ([FUSED-CONTENT-GATE]) rejects most of the pairs inside such an idiom — the literals differ, that is what makes it scaffolding — so the admitted components are fragments of the family: two byte-identical sub-expressions in one test file, one pair of sibling `test(...)` blocks that happen to share a message. Seen alone, a fragment is not the idiom, and every one of them escaped as a visible cluster while the family it was cut from would have been convicted whole.
+
+So the two questions are asked of two different things. **Conviction** reads the *shape family*: the connected component over every candidate pair that cleared the shape and token floors before the content gate ran. **Admission** still decides what welds: the clusters handed on are the components of the gate-passed pairs, exactly as before. For each shape family:
+
+- no filter convicts it — its admitted components are handed on untouched;
+- a filter convicts it and it holds a qualifying byte-identical copy — the copy is published as its own cluster, everything else in the family is dropped, as the escape hatch above requires;
+- a filter convicts it and it holds no such copy — its admitted components are handed on carrying the conviction, so the report hides them and counts them as suppressed.
+
+Nothing here admits a pair the gate rejected, and no component is invented: a shape family with no admitted component contributes nothing. Implemented in `pipeline/session/render.rs` (the pre-gate closure) and `cluster_filters/verbatim_subgroup.rs`; pinned by `python_issue_107_chained_dict_assert` and `verbatim_subgroup_idiom_price`.
+
+#### [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] A verbatim family must be a copy, and usually a copy spans files
+
+Two failure modes were measured against this pass (gh #434). On `python-issue-72` the filter fired and an **intra-file** byte-identical core of the very family it recognised escaped as a visible component — scaffolding passing through the hatch built to protect copies and counting its 15 lines in `duplicated_loc`. The arbitration: **a byte-identical family escapes suppression only when its occurrences span at least two files** — except where the filter that recognised it only ever sees one file, which [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL] below carves out.
+
+Byte-identity across files is proof of copying — independently authored code does not coincide byte-for-byte. Byte-identity within one file is usually proof of the *idiom* the filter just recognised: the same `monkeypatch.setenv` tail, the same assertion pair against the same fixture, written the same way because the pattern mandates it. There the filter's classification is the better evidence, and the family takes the suppression with its component. The false negative this pass exists to close — a proven copy `A`/`A` vanishing when a shape-compatible stranger joined its cluster — is cross-file by construction, so it still escapes. What this deliberately gives up: a genuine intra-file byte-identical copy sitting inside a component one of these filters suppressed stays hidden. That price is **paid visibly, by a pin that owes it** — `verbatim_subgroup_idiom_price.rs` stages one file holding a call run twice over, asserts the copy hidden, and asserts the same bytes published the moment they are split across two files.
+
+#### [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL] Filters that only ever see one file are exempt
+
+Asking for a second file is only meaningful when the filter could have found one. [CLONE-NOISE-PY-COLLECTION-SIBLING-CELLS] suppresses entries of a *single* collection literal, so every family it recognises sits in one file by construction. Requiring cross-file spread there is a question with one possible answer, and it closed the escape hatch on that route permanently — one of the three routes the hatch was built to protect.
+
+What that cost was measured (gh #462). In a list of three entries where the first two are byte-identical, the pair published as a visible cluster when all three entries matched, and vanished the moment the third entry was *changed*. Editing an unrelated row deleted a duplicate that had nothing to do with it. A report that depends on a copy's neighbours rather than on the copy cannot be read, because nothing tells the reader which of the two answers they were given.
+
+The rule: **a filter whose members must share one file does not get to demand two.** Its byte-identical families escape suppression on byte-identity alone.
+
+This does not weaken the idiom argument anywhere it applies. The reasoning behind CROSS-FILE is that a repeated idiom explains repeated bytes better than a paste does — true of a `monkeypatch.setenv` tail or a mirrored assertion pair, which the pattern mandates be written the same way. A data table's idiom is the opposite: its rows are meant to *differ*, and the sibling-cell filter says so itself by only firing when at least two entries differ in raw bytes. Two identical rows are not that pattern. They are a pasted row, and usually a bug.
+
+Which filter recognised a component therefore decides which question the hatch asks of it. The filters whose families can span files are unchanged; only the sibling-cell route is exempt.
+
+A family this pass hides contributes nothing to any metric: `duplicated_loc` and `duplication_percent` fold visible clusters only, pinned green by `metric_excludes_hidden_clusters`.
+
+#### [CLONE-NOISE-VERBATIM-SUBGROUP-EXACT-BYTES] "Byte-identical" means exact source bytes
+
+On `python-issue-107` the published pairs were **not byte-identical at all** — adjacent one-line assertions differing in their compared keys and values — so the grouping itself was manufacturing "verbatim" families out of differing bytes. The rule: the family grouping compares the **exact source bytes** of the members' ranges — no normalised comparison, no trivia tolerance. A family whose members differ in one byte is not a verbatim family and inherits its component's suppression. A pass documented as grouping "by the exact source bytes" must publish only pairs that are.
+
+A family is then sized by the **distinct source locations** it covers, not by how many members landed in it. One location can arrive twice: the fingerprint collector emits both a block node and the full run of that block's own children, which span the same bytes and hash apart, so they are byte-identical to each other by construction. Counted as two members, that pair read as a copy — every component holding a multi-statement body looked splittable, the noise filters re-parsed and convicted components no split could ever change, and the [PERF-FLUTTER-TODO-OBSERVABILITY] counters reported those convictions as work the corpus had asked for. Both views stay in the family once it qualifies. The pre-admission same-file overlap collapse selects the authored physical view by scope and width under [PIPELINE-CLUSTER-EXACT-SCOPE]; it never examines cross-file edge strength or any other pair evidence. Pinned by `one_location_seen_twice_is_not_a_splittable_family` and `a_copy_stays_splittable_and_keeps_both_views_of_its_locations` in `cluster_filters/verbatim_subgroup/tests.rs`, and end to end by `render_stage_noise_convictions_reach_the_emitted_totals`.
+
+The restated #434 pins carry both directions: each fixture's real cross-file control clone stays visible and ranked first, while the intra-file cores on `python-issue-72` and `python-issue-107` stay hidden. `verbatim_subgroup_survives_noise.rs` stages the third route beside such a control — the copied cells publish, the differing cell earns nothing, and the control still leads the report.
+
+The regression pins cover both file geometries: every qualifying family stays visible, while the raw-differing member of a convicted component is absent. `verbatim_subgroup_survives_noise.rs` proves the same separation for copied collection cells.
+
+### [CLONE-NOISE-SCAFFOLDING] A shape repeated across three or more files is the project's scaffolding
+
+A shape that recurs in three or more files is how the project is built, not something someone copied. Test-class skeletons, registration blocks, handler stubs and configuration shells all reach that spread by construction: each new file is written to the same template because the framework requires it, and reporting the template as a duplicate asks the author to delete the thing that makes the files work.
+
+The spread is the whole signal, so the rule is deliberately narrow. It reaches only a component whose members are spread across **three or more files**; a two-file spread is a copy until something else proves otherwise, which is why the constant-table shape of gh #362 needed its own rule rather than a widening of this one ([CLONE-NOISE-CONSTANT-TABLE]) — widening the spread rule would have let it eat genuine two-file clones. A single-file family is likewise out of scope and belongs to [RANK-STRUCTURAL-ONLY].
+
+## [CLONE-NOISE-LANGUAGE-AGNOSTIC] Language-agnostic filters
 
 ### [CLONE-NOISE-SIGNATURE-ONLY] Signature-only matches
-A structural fingerprint can match entirely inside a function or method
-signature — the parameter list and return type — without touching the body;
-after normalisation `fn check_foo(ctx: &mut Ctx)` and `fn check_bar(ctx: &mut Ctx)`
-reach `structural=1.0`, and token Jaccard cannot refute the match because the
-distinguishing identifiers normalise away too. A cluster is suppressed (for any
-language) when every member's matched range lies entirely before its enclosing
-function's body and at least two of those bodies differ in AST node-kind shape.
-Comparing bodies by node-kind sequence rather than raw bytes preserves genuine
-near-miss clusters whose bodies share shape but differ only in literals or
-identifiers.
+A structural fingerprint can match entirely inside a function or method signature — the parameter list and return type — without touching the body; after normalisation `fn check_foo(ctx: &mut Ctx)` and `fn check_bar(ctx: &mut Ctx)` reach `structural=1.0`, and token Jaccard cannot refute the match because the distinguishing identifiers normalise away too. A cluster is suppressed (for any language) when every member's matched range lies entirely before its enclosing function's body and at least two of those bodies differ in AST node-kind shape. Comparing bodies by normalised node-kind stream rather than raw bytes preserves genuine near-miss clusters whose bodies share shape but differ only in literals, identifiers, or comments. The stream is shared with [CLONE-NOISE-POLYMORPHIC-SIGNATURE] — one definition of "same body shape", `cluster_filters/body_shape.rs`. It carries behaviour-bearing anonymous tokens alongside named kinds ([pipeline.md §PIPELINE-NORMALIZE-AST-OPERATOR](pipeline.md#pipeline-normalize-ast-operator)): reading named children alone made `base + fee` and `base - fee` identical streams, so both suppressions answered "these bodies are the same" about implementations that compute different answers. It also carries the *bytes* of every collaborator a body reaches for — the identifier held by a call's or member access's `function`/`attribute`/`field`/`property`/`name` field — while every local and parameter stays erased. Which collaborator a body reaches for is behaviour: reading kinds alone made `self.containers[i] … container.invoke(…)` and `self.machines[i] … machine.execute(…)` one identical stream, so both suppressions answered "same body" about two implementations of one abstract contract that share nothing but the signature the contract forces (`python_same_shape_backends.rs`).
 
 ### [CLONE-NOISE-POLYMORPHIC-SIGNATURE] Interface implementations sharing one name
-Every member resolves to one subject function — the innermost function enclosing
-the member's range or, when the range is wider than any single function, the
-sole function the range contains with nothing but declaration scaffolding
-(imports, docstrings, the class shell) around it — all declaring the same name
-across at least two files, with bodies that are not byte-equivalent. That is the
-abstract/interface implementation pattern: the contract forces the signatures to
-agree, and what differs is each implementation's behaviour, so nothing can share
-a refactor. The widened resolution direction exists because
-[FUSION-SHARED-SUBTREE](fusion.md#fusion-shared-subtree) admits module-wide
-views: a whole-file view of a single-method class was promoted to a
-near-identical pair on the strength of the bytes the contract forces to agree,
-reporting two different backends 100% duplicated
-(`python-issue-69-abstract-method`,
-`different_backend_implementations_never_pair_across_files`). A copy-pasted
-helper that happens to share a name still fires as a cluster, because its
-bodies are byte-equivalent.
+Every member resolves to one subject function — the innermost function enclosing the member's range or, when the range is wider than any single function, the sole function the range contains with nothing but declaration scaffolding (imports, docstrings, the class shell) around it — all declaring the same name across at least two files, with bodies that differ in normalised node-kind shape (the shared `body_shape` stream above). That is the abstract/interface implementation pattern: the contract forces the signatures to agree, and what differs is each implementation's behaviour, so nothing can share a refactor. The widened resolution direction exists because [FUSED-SHARED-SUBTREE](fused.md#fused-shared-subtree) admits module-wide views: a whole-file view of a single-method class was promoted to a near-identical pair on the strength of the bytes the contract forces to agree, reporting two different backends 100% duplicated (`python-issue-69-abstract-method`, `different_backend_implementations_never_pair_across_files`). A copy-pasted helper that happens to share a name still fires as a cluster, because its bodies share one normalised shape — byte-identical and consistently-renamed copies alike. Deciding this on raw source bytes classified every same-named Type-2 rename as polymorphism and deleted the finding — the tool reported `0.0%` and exited clean (gh #373, `polymorphic_gate_hides_rename_clone.rs` pins both directions).
 
-### [CLONE-NOISE-EMBEDDING-ROLE-MISMATCH] Embedding role mismatch (type vs function)
-An embedding-dominant `same_behavior` cluster may pair snippets that share topic
-vocabulary but sit in structurally incompatible top-level constructs — a
-class/type definition matched against a function or method. There is no safe
-shared extraction across a type definition and a function, so the cluster is
-suppressed. The role gate re-parses each member, resolves its innermost
-enclosing construct to one of two roles (type definition or function/method,
-descending through decorator wrappers), and hides the cluster only when the
-members do not all resolve to the same role. It never suppresses when a
-member's role cannot be resolved.
+### [CLONE-NOISE-POLYMORPHIC-CONTRACT] The contract must declare the method
+[CLONE-NOISE-POLYMORPHIC-SIGNATURE] may only fire when a contract genuinely
+forces the signature the cluster matched on, and the proof is method-level: the
+subject's nearest enclosing type declaration must derive — transitively — from a
+type that itself declares a member of the subject's name. A free function has no
+enclosing type, so nothing forces its signature and it is never suppressed.
 
-It engages wherever **embedding evidence is what carried the cluster into an
-act-now bucket**, leaving the deterministic Type-1/2/3 buckets untouched. That
-is the `same_behavior` bucket, and — since [FUSION-SHARED-SUBTREE](fusion.md#fusion-shared-subtree)
-— also a [CLONE-BUCKETS-ROUTING](taxonomy.md#clone-buckets-routing) row-4b
-near-miss whose shape was corroborated by the embedding axis rather than the
-token axis (`structural < 0.99`, `token_jaccard` below the corroboration floor,
-`embedding_cos` at or above the support floor). The condition is the *evidence*,
-not the bucket label: keyed on `same_behavior` alone, the Python
-role-mismatch pair reached an act-now bucket through the new door and walked
-straight past the gate written to catch it.
+Reading the requirement as "the enclosing type names *some* base" makes every
+ordinary subclass a contract implementation. A method copied into two unrelated
+subclasses of one shared base is then deleted from the report the moment the
+copies rename the collaborators they reach for, because the collaborator-aware
+stream above makes the bodies differ — a false negative on exactly the
+duplication a user most wants back (`python_inherited_contract_boundary.rs`:
+`CommonWorker` declares `__init__` and `stamp`, never `synchronise`, so the
+copied `synchronise` pair must surface; the sibling `LedgerSink` `ABC` does
+declare `record_entry`, so its two implementations must stay hidden — one scan
+asserts both).
+
+The base is normally declared in another file, so the proof is corpus-wide.
+`cluster_filters/contract_index.rs` builds one index per report per language —
+declared type name to its bases and its own member names, bodied members and
+body-less signatures alike — from the same source map the render already holds,
+lazily, only once a cluster has already passed the cheap per-cluster checks.
+Files in other languages are excluded: a Python `Sink` and a C# `Sink` are
+unrelated contracts. An unresolved base — declared outside the scanned corpus —
+contributes no proof.
+
+**An explicit override marker is the same proof, for the contracts a scan never
+reaches.** A method implementing a *framework* interface has no declaring base
+in the index — Flutter's `State<T>.build` is not in the user's repository — so
+the index alone reads every `@override` implementation as an ordinary same-named
+function and clusters it as duplication. Six distinct Flutter widgets did
+exactly that, two of their `build` overrides routing `nearly_identical` on
+`structural = 0.889, token_jaccard = 0.797` while the
+measured content evidence said `agreement = 0.25, rename_consistency = 0.0`
+([FUSED-CONTENT-GATE] keys on saturation and this pair sits under it). The
+languages that spell the relationship — Dart `@override`, C# `override`,
+TypeScript `override` — reject the marker outright when nothing is being
+overridden, so its presence is compiler-enforced evidence the index cannot
+supply and convention cannot forge. `cluster_filters/override_marker.rs` carries
+one row per parsed language; a language without a marker returns `None` and
+keeps relying on the index alone, which is why Python — where inheritance is
+checked and never declared — is unaffected and gh #373 stays closed. Recall is
+untouched in the direction that matters: the filter still requires the bodies to
+*differ*, so a genuinely copy-pasted override is never suppressed. Pinned by
+`issue_331_distinct_widget_declarations_must_not_saturate_fused_confidence` and
+by the per-language unit tests in `cluster_filters/override_marker/tests.rs`.
+
+Languages whose contracts are implicit **fail open**. Go declares methods outside the receiver type and never writes interface satisfaction down, so a Go method has no enclosing type declaration to resolve and the filter never suppresses it. That is a missed suppression, never a false negative, and it is the deliberate choice: no proof, no deletion (gh #423).
+
+### [CLONE-NOISE-PY-COLLECTION-SIBLING-CELLS] Sibling cells of one collection literal
+At a permissive `--min-nodes`, two entries of a single collection literal —
+`"name": name` and `"arguments": arguments` inside one request-body dict —
+admit as a structural pair: the entry shape saturates while the distinguishing
+vocabulary normalises away, and the pair renders `structural_only` over two
+byte ranges of one line (gh #421). A cluster is suppressed when every member's
+smallest enclosing collection literal (dict/list/set/tuple) is the *same
+instance* — same file, same literal node — no member carries a lambda
+(logic inside an element is extractable and keeps clustering), and at least two
+members differ in raw bytes (the standard verbatim escape hatch: a
+byte-identical repeated entry is a real copy and still surfaces under
+[CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL]). Members of
+*different* literals fall through to the data-table family
+([CLONE-NOISE-LITERAL-TABLE]). Python is the one language measured; other
+languages fall through unchanged. Pinned by
+`different_backend_implementations_never_pair_across_files`, which asserts the
+gh #69 fixture's whole visible surface is empty.
+
+### [CLONE-NOISE-EMBEDDING-ROLE-MISMATCH] Embedding role mismatch is a pair-admission guard
+
+This rule is the deliberate exception to the post-closure placement of the other `[CLONE-NOISE-*]` rules: it runs on one candidate pair before admission because its inputs and decision are pair-only. A candidate can share topic vocabulary while its endpoints occupy structurally incompatible top-level constructs — a class or type definition at one endpoint and a function or method at the other. There is no coherent duplicated unit across those roles. The guard re-parses the two endpoint ranges, resolves each endpoint's innermost enclosing construct to `type` or `function` while descending through decorator wrappers, and rejects the pair when the roles are both resolved and disagree. An unresolved role does not trigger this guard.
+
+The guard applies only when that exact pair needs embedding corroboration to pass admission: its structural and token evidence do not independently clear their route, while `E(p)` clears the configured embedding support floor. It reads the endpoint-keyed pair record directly and neither names nor inspects a component. Pair classification may describe the rejected pair for an explicit comparison, but no bucket, label, score, or evidence from this decision is copied to a cluster.
 
 ### [CLONE-NOISE-LITERAL-VARIATION-CALLS] Literal-variation call scaffolding
-Scaffolding repeats one call shape varying only its string-literal arguments —
-`setenv` keys, event names, endpoint paths — so after literal normalisation the
-members collapse to one subtree even though the differing literals are payload,
-not extractable logic. A cluster is suppressed when every member resolves to the
-same callee and arity (one enclosing call per member, or the same ordered call
-sequence contained in each member's range) and at least one argument position
-differs in string-literal bytes. Members whose literals all agree never match,
-so byte-identical copies keep the family's verbatim escape hatch.
+Scaffolding repeats one call shape varying only its string-literal arguments — `setenv` keys, event names, endpoint paths — so after literal normalisation the members collapse to one subtree even though the differing literals are payload, not extractable logic. A cluster is suppressed when every member resolves to the same callee and arity (one enclosing call per member, or the same ordered call sequence contained in each member's range), at least one literal-bearing call position differs in string-literal bytes, and every literal-bearing position differs. In a sequence, a literal-bearing position must name one callee — the same helper called with different data is the scaffold — while a literal-free position is plumbing whose callee may differ between members (`generateRust` in one scenario, `generateTypeScript` in another), provided it is the bound-and-consumed adapter every invariant position must be. A call position that carries no string literal is neutral: it neither proves variation nor blocks the sequence, and a result it binds that a later varying call reads — as an argument, or through that call's receiver, the way `expect(generated).toContain("…")` reads the `generated` that `generateRust(schema)` bound — is the varying call's payload, not logic beside it. An invariant literal-bearing position is shared authored logic and blocks suppression. A call whose argument carries statements — a test case, a `describe` or `group` wrapper, a callback block — holds a body, and a body is authored logic, never payload: the one-enclosing-call rule declines such a call outright, and in a sequence its position is neutral while the calls of its body decide. A family of test cases is therefore judged by what the bodies do and never by their names — read as "`describe` varying one string", the `axios` progress suites were hidden with five real duplicates inside them (`js_literal_variation_calls`, `cluster_filters/calls/tests.rs`). Members whose literals all agree never match, so byte-identical copies keep the family's verbatim escape hatch.
 
-The sequence form requires **every** position to vary. A sequence mixing
-varying calls with invariant ones is not payload: the invariant calls are
-shared logic the members genuinely duplicate, so the cluster stays visible.
-Two tests that fetch different URLs and then run the same four assertions —
-one varying call, four invariant — are a Type-2 clone, while scaffolding has
-nothing left once its literals are removed.
+Call headers come from the parsed syntax: direct called names and member method selectors remain exact, receiver variable names are normalised, and string payloads inside a chained callee become argument slots. For example, `expect(left.locator("nav")).toContainText("Home")` and `expect(right.locator("status")).toContainText("Ready")` share a header, with both selector text and expected text compared by the same literal-variation rule. Nested receiver invocations belong to that enclosing call; they do not add independent sequence steps. Their statement-bearing arguments retain the body guard, and an invariant literal in any nested slot still blocks suppression. An argument counts as payload when it is a string literal, a pure literal collection carrying text (`["a", "b"]`, `{ kind: "record", width: 4 }`), or a call wrapping only such literals (`PathBuf::from("stored.rs")`, `String::from("x")`) — a value the language has no literal syntax for, written the long way round. Every payload argument must carry at least one string, so `applyDiscount(0.1)` against `applyDiscount(0.2)` stays a clone worth reporting: a bare number is how a real clone spells the one parameter it should have been given. Code: `cluster_filters/calls/callee.rs` and `cluster_filters/calls/args.rs`. Tests: `js_literal_variation_calls::member_targets` pins chained payload variation beside a visible receiver-rename duplicate; `cluster_filters/calls/tests.rs` pins identical callback bodies.
 
-## Python idioms
+#### [CLONE-NOISE-LITERAL-VARIATION-CALLS-MEMBER-CALL] A member is judged by the call it is
+
+The one-enclosing-call rule asks which call a member *is*. For a member that is exactly a call, that is the call itself. For a member that is an expression wrapped around one call — the `await` of a call, a call under a cast or a parenthesis — the smallest call enclosing it is not that call but whatever encloses the statement, and inside a test body that is the test case: a call carrying a body, which the rule above rightly declines to judge by its name. Declining there left such a member judged by nothing. Six `await page.locator("…").boundingBox()` expressions on six selectors, in two files, published as one cluster because the only call the rule ever looked at was the `test(…)` around each of them.
+
+So when the smallest call enclosing the member carries a body — or when no call encloses the member at all, the same check sitting in a plain function body — and the member is an expression holding exactly one outermost call and no complete statement, that call is the member's call, and the rule judges it. An enclosing call that carries no body is the member's call as before — `expect(nav.locator("…")).toContainText("…")` around its own callee is the very call whose payload varies. A member that holds a complete statement is a run, and a run is the sequence rule's question, never the one call it happens to contain: `click`'s `command` and `group` overload blocks each hold one `TypeVar` call whose string is the type variable's own name, and judging thirty lines of consistently renamed overloads by that one literal hid the copy (`a_statement_run_is_never_judged_by_the_one_call_it_contains`). A member that holds no call, or holds several, keeps its enclosing call. Implemented in `cluster_filters/calls.rs` (`call_shape`, `held_call`); pinned by `cluster_filters/calls/tests.rs::an_awaited_call_inside_a_test_body_is_judged_by_its_own_call` and, end to end, by `cluster_extent_statement_runs::a_scenario_tail_is_never_welded_onto_a_copied_scenario`.
+
+#### [CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT] The covered-statement precondition
+
+The filter may only fire on a range whose **every covered statement contains a
+call**, with one exception: a **single lone call-free statement** is admitted
+when — and only when — it is an assertion (a Python `assert_statement`) whose
+subject identifiers are non-empty and **all bound by the assignment targets of
+the covered calls**. That is the idiom made precise: an assertion on the value
+a varying call returned (`monkeypatch.setenv("HOST", h)` then
+`assert host == h`) is part of the scaffolding, not authored logic beside it,
+so it may not block the filter on its own (gh #434, `python-issue-70` /
+`python-issue-71`).
+
+**Three or more call-free statements always block the filter, and two block it
+unless they are exactly the literal tautology below.** Authored call-free data
+handling between the varying calls is exactly the extractable logic a real clone
+shares, which is why `rename_needs_an_anchor` pins the precondition and keeps
+holding unchanged: a Type-2 clone that mixes one varying call with its own
+invariant assertions and data handling must keep publishing.
+
+##### [CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT-TAUTOLOGY] The literal tautology
+
+A second call-free statement is admitted — only ever the second, and only alongside the assertion — when it writes a literal into a local that nothing but that assertion reads, and the assertion then checks the local against a literal. In full:
+
+```python
+monkeypatch.setenv("FLY_API_TOKEN", "abc")
+monkeypatch.setenv("FLY_APP_NAME", "app")
+explicit_host_id = "fly-1"
+assert explicit_host_id == "fly-1"
+```
+
+Those last two lines test nothing. The value asserted is the value written two
+lines above, in the same range; nothing is computed, nothing is called, and no
+state from outside the range is consulted. It is the scaffolding the lone
+assertion clause already admits, spelled across two lines instead of one, so it
+may not block the filter either (gh #72,
+`python-issue-72-monkeypatch-setenv`).
+
+Each term is exact.
+
+**A literal** is a single string, number, boolean, or `None`, and nothing else.
+An identifier, an attribute, a subscript, an interpolated string, a
+concatenation, an arithmetic expression — none of those qualify, so
+`explicit_host_id = host_prefix + "1"` keeps blocking the filter. Building a
+value is authored data handling, and the tautology clause must never reach it
+(`python-computed-value-not-a-tautology`).
+
+**Nothing but the assertion reads it** means the local's name occurs exactly
+twice across the covered statements: once as the target it is written to, once
+inside the assertion. A local that any other covered statement touches, or that
+nothing reads at all, is not admitted.
+
+**The assertion** is the second of the two statements, in source order — an
+assertion cannot be reading a value written after it. It is judged by the lone
+assertion clause above, with one addition: the tautology's target counts as a
+bound name. Without that addition the example fails its own rule, because
+`explicit_host_id` is bound by the literal rather than by a call.
+
+The pair is admitted whole or not at all: fail any of these terms and both statements block the filter, exactly as two call-free statements did before.
+
+The sequence form requires **every** position to vary. A sequence mixing varying calls with invariant ones is not payload: the invariant calls are shared logic the members genuinely duplicate, so the cluster stays visible. Two tests that fetch different URLs and then run the same four assertions — one varying call, four invariant — are a Type-2 clone, while scaffolding has nothing left once its literals are removed.
+
+## [CLONE-NOISE-PYTHON] Python idioms
 
 ### [CLONE-NOISE-PY-ALL-EXPORTS] `__all__` export lists
 A module-level `__all__ = [...]` export list is package-surface convention, not
@@ -163,10 +291,7 @@ be closed over everything the range covers:
   test methods would ride along unread. An undecorated class at module scope
   already fails open, and a decorator may not buy one a pass.
 
-A cluster is suppressed when it spans at least two files, members' raw bytes
-differ (a verbatim copy stays visible), and every member's range passes the
-closed proof. Distinct tests verifying distinct contracts are not extractable
-duplication.
+A cluster is suppressed when it spans at least two files, members' raw bytes differ (a verbatim copy stays visible), and every member's range passes the closed proof. Distinct tests verifying distinct contracts are not extractable duplication.
 
 ### [CLONE-NOISE-PY-DICT-FIXTURE] Dict-literal test fixtures
 Dict-literal fixtures inside pytest tests carry the same AST shape and a
@@ -178,13 +303,7 @@ of top-level string keys. The differing-key-set requirement keeps a genuinely
 copy-pasted identical fixture visible.
 
 ### [CLONE-NOISE-PY-PYTEST-FIXTURE] pytest fixture boilerplate
-pytest fixtures that build ORM rows repeat the same session setup idiom (add /
-commit / refresh / return) by design — the fixture is already the test
-abstraction, so surfacing those bodies as refactor targets is noise. A cluster is
-suppressed when it spans at least two files and every member's enclosing Python
-function is decorated with `@fixture` or any dotted fixture decorator
-(`@pytest.fixture`, `@pytest_asyncio.fixture`). The shared shape is fixed by the
-fixture protocol, not by the program under analysis.
+pytest fixtures that build ORM rows repeat the same session setup idiom (add / commit / refresh / return) by design — the fixture is already the test abstraction, so surfacing those bodies as refactor targets is noise. A cluster is suppressed when it spans at least two files and every member's enclosing Python function is decorated with `@fixture` or any dotted fixture decorator (`@pytest.fixture`, `@pytest_asyncio.fixture`). This includes decorator calls such as `@fixture()` and `@pytest.fixture(scope="class")`, including multiline arguments. Module-level functions and methods inside classes follow the same rule. Only the function's own decorator name or callee qualifies; a fixture name inside another decorator's arguments, or a decorator on the containing class, does not decorate the function. The shared shape is fixed by the fixture protocol, not by the program under analysis.
 
 ### [CLONE-NOISE-PY-PARAMETRIC-INVARIANT-TESTS] Parametric invariant tests
 Parametric invariant tests — a family of `test_register_<variant>()` functions
@@ -253,18 +372,35 @@ share identical concatenated definition bodies. Keying on body divergence rather
 than name divergence keeps a verbatim or renamed copy (whose bodies stay
 byte-identical) visible as real duplication.
 
-### [CLONE-NOISE-PY-MODULE-CONSTANT-TABLE] Module-level constant tables
-A Python module that is just a run of module-level `NAME = <literal>` constant
-assignments — a table of SQL query strings, registry values, or config
-defaults — normalises to the same structural subtree as any other such table once
-identifiers, literals, and comments are stripped, so two unrelated tables reach
-`structural=1.00, token_jaccard=1.00`. A cluster is suppressed when every
-member's reported range, at module top level, covers only comments, docstrings,
-and bare-name constant assignments to plain literal values (with at least one
-constant present), and the members differ in raw bytes. Interpolated f-strings or
-any call/name/attribute right-hand side disqualify a member, and the
-byte-divergence requirement keeps a constants module copied verbatim across files
-visible.
+### [CLONE-NOISE-CONSTANT-TABLE] Module-level constant tables
+A range that is just a run of module-level `NAME = <literal>` declarations — a
+table of SQL query strings, registry values, config defaults, or the data blobs a
+test suite feeds its subject — normalises to the same structural subtree as any
+other such table once identifiers, literals, and comments are stripped, so an unrelated endpoint pair can reach `S=1.00`. A component is convicted when every
+member's reported range, at module top level, covers only trivia (comments,
+docstrings, attributes) and constant declarations bound to plain literal values,
+with at least one constant present, and the members differ in raw bytes. Any
+call, name, attribute or interpolated-string right-hand side disqualifies a
+member, and the byte-divergence requirement keeps a constants module copied
+verbatim across files visible.
+
+The rule is one rule; only the grammar of "a top-level constant declaration" is per-language, so a language absent from that map can never match:
+
+- **Python** (#133) — `NAME = <literal>` assignments to a bare name.
+- **Rust** (#362) — `const` / `static` items whose initialiser is a literal.
+  A `function_item`, `use_declaration`, `struct_item`, `impl_item` or `mod_item`
+  inside the range classifies as *other* and takes the whole range out of the
+  shape, which is what stops the filter reaching a run of copy-pasted top-level
+  functions.
+
+gh #362 is the Rust case: two test files whose `const NAME: &str = r"…";` runs share nothing but their shape were reported as the largest single finding in the repository hosting them and moved that repository's CI duplication budget by 344 LOC. Pair admission must reject that false relation; ranking cannot discount it after closure.
+Neither the ≥3-file `[CLONE-NOISE-SCAFFOLDING]` hide nor the single-file
+[RANK-STRUCTURAL-ONLY] declaration-family hide covers a **two**-file spread.
+Widening either of those would let it eat a real two-file clone; recognising the
+table for what it is does not. Pinned with its false-negative control in the same
+run by `issue_362_two_file_const_tables.rs` — the fixture's byte-identical
+`apply_discount_schedule` must stay visible with the expected occurrences and mass, rank first, and
+keep counting its own lines in the metric.
 
 ### [CLONE-NOISE-PY-WORKSPACE-LOCAL-MIRROR] Workspace-local schema mirror (out of scope)
 When a sandboxed workspace cannot import from the backend, it must keep a local
@@ -277,7 +413,7 @@ configuration: an [exclusion.md §EXCLUSION-CONFIG](exclusion.md#exclusion-confi
 `exclude = ["workspaces/**/*"]`). This ID records the decision *not* to build a
 generic filter, so reviewers do not re-litigate it.
 
-## Rust idioms
+## [CLONE-NOISE-RUST] Rust idioms
 
 ### [CLONE-NOISE-RUST-LANGPARSER] LanguageParser trait adapters
 Every first-party Rust language plug-in implements the same `LanguageParser`
@@ -285,9 +421,14 @@ trait, so each adapter carries an identical method outline (`id`,
 `file_extensions`, `grammar`, `parse_and_normalize`) even though the bodies
 differ entirely; the shape is mandated by the trait contract, not extractable
 logic. A cluster is suppressed when it spans at least two files, every member is
-an `impl LanguageParser for …` block whose directly declared methods match that
-canonical set, and at least two members' impl bodies differ in raw bytes. The
-byte-divergence guard keeps a verbatim-copied impl visible.
+an `impl LanguageParser for …` block — or a window inside one, the enclosing
+impl carrying the contract shape for sibling-window members (gh #339) — whose
+directly declared methods **include** that canonical set, and at least two
+members' impl bodies differ in raw bytes. The subset relation, not set
+equality, is load-bearing: the trait grows methods over time and no plug-in
+overrides every default, so an equality test pins the filter to one
+historical trait revision and silently stops matching every impl (gh #391).
+The byte-divergence guard keeps a verbatim-copied impl visible.
 
 ### [CLONE-NOISE-RUST-DECL] Bodiless top-level declarations
 Bodiless Rust top-level declarations — `mod NAME;`, `use …;`, `pub use …;` —
@@ -322,21 +463,9 @@ bytes. The distinct-pattern and byte-divergence guards keep a verbatim
 copy-pasted run of arms visible as a genuine clone.
 
 ### [CLONE-NOISE-RUST-STRUCT-FIELDS] Struct field-declaration runs
-A struct's field list encodes a data model's *shape*, not extractable duplicate
-logic: after identifier, type, and literal normalisation `pub a: Option<String>`
-collapses to the same subtree as `pub b: Option<String>`, so unrelated runs of
-distinct fields — and whole structs that are nothing but such fields — cluster as
-`structural_only` on serde-heavy or polyglot repos and dominate the duplication
-metric with matches no refactor can remove. A cluster is suppressed when every
-member covers only Rust struct field declarations — a run of sibling fields
-inside one `field_declaration_list`, or one or more whole `struct_item`s whose
-in-range body is nothing but `field_declaration` nodes (their `#[derive]` /
-`#[serde]` attributes and doc comments are trivia) — and at least two members
-differ in raw bytes. The byte-divergence guard keeps a verbatim copy-pasted
-struct visible as a genuine clone. This is the Rust counterpart of the Dart
-class-field filter ([CLONE-NOISE-DART-DATA-TABLE-LITERAL]); see GH #224.
+A struct's field list encodes a data model's *shape*, not extractable duplicate logic: after identifier, type, and literal normalisation `pub a: Option<String>` collapses to the same subtree as `pub b: Option<String>`, so unrelated runs of distinct fields — and whole structs that are nothing but such fields — can be admitted and closed on shape alone on serde-heavy or polyglot repositories, dominating the duplication metric with matches no refactor can remove. A component is convicted when every member covers only Rust struct field declarations — a run of sibling fields inside one `field_declaration_list`, or one or more whole `struct_item`s whose in-range body is nothing but `field_declaration` nodes (their `#[derive]` / `#[serde]` attributes and doc comments are trivia) — and at least two members differ in raw bytes. The byte-divergence guard keeps a verbatim copy-pasted struct visible as a genuine clone. This is the Rust counterpart of the Dart class-field filter ([CLONE-NOISE-DART-DATA-TABLE-LITERAL]); see GH #224.
 
-## Performance
+## [CLONE-NOISE-PERFORMANCE] Performance
 
 ### [CLONE-NOISE-REPARSE-CACHE] Parse-once filter cache
 The cluster-noise and role-compatibility filters re-parse each member's original

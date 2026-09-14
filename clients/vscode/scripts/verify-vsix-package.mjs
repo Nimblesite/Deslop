@@ -4,7 +4,10 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { assertNoStubProvider, PACKAGE_ENTRY } from "./stub-gate.mjs";
+import { assertDeclaredEntriesPresent, assertOnlyExpectedEntries } from "./package-contents-gate.mjs";
 import { currentPlatformTarget } from "./platform.mjs";
+import { openArchive } from "../../../scripts/lib/zip.mjs";
+import { executableName } from "../../../scripts/release/vsix-platforms.mjs";
 
 // Verifies [DEPLOY-VSIX-PACKAGE] against the produced .vsix, not the
 // staging directory, so release artifacts cannot hide manifest or binary drift.
@@ -16,14 +19,18 @@ const targetPlatform = process.argv[3] ?? currentPlatformTarget();
 const packageEntry = PACKAGE_ENTRY;
 const manifestEntry = "extension/shipwright.json";
 
-const entries = unzipText(["-Z1", vsixPath]).split("\n").filter(Boolean);
-assertPackageIdentity(entries);
+const archive = openArchive(vsixPath);
+const entries = archive.names;
+const packageJson = readPackageJson(entries);
+assertPackageIdentity(packageJson);
 assertEntry(entries, manifestEntry);
-assertNoEntryPrefix(entries, "extension/out/");
-assertNoEntryPrefix(entries, "extension/node_modules/");
-assertNoEntryPrefix(entries, "extension/--stdio/");
+// [DEPLOY-VSIX-PACKAGE] Allow-list, never a deny-list: a deny-list cannot name
+// a directory that did not exist when it was written, which is how Playwright's
+// `test-results/` shipped to users (#472). Anything new fails closed here.
+assertOnlyExpectedEntries({ entries, label: vsixPath });
+const declaredAssets = assertDeclaredEntriesPresent({ entries, packageJson, label: vsixPath });
 
-const manifest = JSON.parse(unzipText(["-p", vsixPath, manifestEntry]));
+const manifest = JSON.parse(archive.readText(manifestEntry));
 const components = executableComponents(manifest);
 const binRoot = "extension/bin/";
 const binPrefix = `${binRoot}${targetPlatform}/`;
@@ -38,7 +45,7 @@ if (foreignBinEntries.length > 0) {
 }
 
 for (const component of components) {
-  assertEntry(entries, `${binPrefix}${nameWithSuffix(component)}`);
+  assertEntry(entries, `${binPrefix}${executableName(component.binaryName, targetPlatform)}`);
 }
 for (const entry of binEntries) {
   verifyBundledEntry(entry, componentForEntry(entry, components));
@@ -46,16 +53,23 @@ for (const entry of binEntries) {
 
 const stubScanned = assertNoStubProvider({
   entries,
-  readText: (entry) => unzipText(["-p", vsixPath, entry]),
+  readText: (entry) => archive.readText(entry),
   label: vsixPath,
 });
 console.log(`Verified ${stubScanned.length} packaged assets carry no stub provider strings`);
 
+console.log(
+  `Verified ${entries.length} packaged entries against the shipping allow-list, `
+    + `including ${declaredAssets.length} manifest-declared assets`,
+);
 console.log(`Verified deployment manifest and ${binEntries.length} ${targetPlatform} VSIX binaries`);
 
-function assertPackageIdentity(entries) {
+function readPackageJson(entries) {
   assertEntry(entries, packageEntry);
-  const packageJson = JSON.parse(unzipText(["-p", vsixPath, packageEntry]));
+  return JSON.parse(archive.readText(packageEntry));
+}
+
+function assertPackageIdentity(packageJson) {
   if (packageJson.publisher !== "nimblesite" || packageJson.name !== "deslop-live") {
     throw new Error(
       `${vsixPath} extension id must be nimblesite.deslop-live; found ${packageJson.publisher}.${packageJson.name}`,
@@ -67,8 +81,7 @@ function verifyBundledEntry(entry, component) {
   if (!component) throw new Error(`Undeclared executable in VSIX: ${entry}`);
   const temp = mkdtempSync(join(tmpdir(), "deslop-vsix-"));
   try {
-    unzipText(["-q", vsixPath, entry, "-d", temp]);
-    const binaryPath = join(temp, entry);
+    const binaryPath = archive.extract(entry, temp);
     assertExecutable(binaryPath);
     assertVersion(binaryPath, component);
   } finally {
@@ -78,7 +91,9 @@ function verifyBundledEntry(entry, component) {
 
 function componentForEntry(entry, components) {
   const fileName = entry.slice(entry.lastIndexOf("/") + 1);
-  return components.find((component) => nameWithSuffix(component) === fileName);
+  return components.find(
+    (component) => executableName(component.binaryName, targetPlatform) === fileName,
+  );
 }
 
 function assertVersion(binaryPath, component) {
@@ -112,23 +127,6 @@ function executableComponents(manifest) {
 
 function assertEntry(entries, entry) {
   if (!entries.includes(entry)) throw new Error(`Missing ${entry} in ${vsixPath}`);
-}
-
-function assertNoEntryPrefix(entries, prefix) {
-  const matches = entries.filter((entry) => entry.startsWith(prefix));
-  if (matches.length > 0) throw new Error(`${vsixPath} must not include ${prefix}`);
-}
-
-function unzipText(args) {
-  const result = spawnSync("unzip", args, { encoding: "utf8" });
-  if (result.status !== 0) {
-    throw new Error(`unzip ${args.join(" ")} failed: ${String(result.stderr)}`);
-  }
-  return String(result.stdout);
-}
-
-function nameWithSuffix(component) {
-  return `${component.binaryName}${targetPlatform.startsWith("win32") ? ".exe" : ""}`;
 }
 
 function firstLine(text) {

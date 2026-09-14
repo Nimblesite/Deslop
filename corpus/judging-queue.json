@@ -1,0 +1,12 @@
+{
+  "why": "Repositories waiting on a first judging pass. [CORPUS-REGISTER-COVERAGE] A repository cannot become a register until a judge has ruled on its pairs, and a judge cannot rule on pairs until a comparison has produced two reports for it — so a repository that is not yet judged still has to be scanned. This file is that queue: the comparison scans every register plus everything here, and `make judging-folder` turns each into a workspace. When the verdicts come back, the repository moves into corpus/register/ and out of this list. Every entry is pinned to a full commit id for the same reason a register is: the judge and the scan must read identical source.",
+  "repositories": [
+    {
+      "name": "Serilog",
+      "url": "https://github.com/serilog/serilog.git",
+      "sha": "49b5339ce85385dc52d4d8e8f2b8308becf23506",
+      "language": "csharp",
+      "why": "C# carries one register, and it is the language the merge refactor emits for, so the ground truth under that feature is the thinnest it can be. A structured-logging library builds the same enricher, sink and configuration-extension shape many times over, which is exactly the sibling-family question the register decides badly when it has only one repository to learn from."
+    }
+  ]
+}

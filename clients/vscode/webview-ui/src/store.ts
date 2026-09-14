@@ -5,41 +5,39 @@
 import { signal, computed, batch } from "@preact/signals";
 import {
   applyFacetFilter,
-  resolveBucket,
-  resolveCategory,
   type AnalysisState,
-  type Bucket,
-  type Category,
+  type ClusterKind,
   type FacetFilter,
   type Report,
   type ReportCluster,
+  type ReportOccurrence,
   type Severity,
   clusterBand,
 } from "../../src/types/report";
 
+// [FACET-REPORT-WEBVIEW] Filters are the mass severity band, the clone
+// kind the engine stamped on the cluster ([CLONE-KIND-FOLD]), and a path
+// glob. Every axis is read off the wire; the webview re-derives nothing.
 export type Filters = {
-  language: string | null;
   severity: Severity | null;
-  bucket: Bucket | null;
-  category: Category | null;
+  kind: ClusterKind | null;
   pathGlob: string;
 };
 
 export const EMPTY_FILTERS: Filters = {
-  language: null,
   severity: null,
-  bucket: null,
-  category: null,
+  kind: null,
   pathGlob: "",
 };
 
 export const report = signal<Report | null>(null);
 export const selectedClusterId = signal<string | null>(null);
+
 export const analysisState = signal<AnalysisState>({ state: "idle" });
 export const filters = signal<Filters>(EMPTY_FILTERS);
 // [FACET-TOP-OFFENDERS-FILTER] Workspace facet filter pushed by the
 // extension host so this list agrees with the filtered tree.
-export const facetFilter = signal<FacetFilter>({ buckets: [], categories: [] });
+export const facetFilter = signal<FacetFilter>({ severities: [] });
 export const lastUpdatedAt = signal<number>(0);
 
 export const clusters = computed<ReportCluster[]>(() => report.value?.clusters ?? []);
@@ -61,20 +59,49 @@ export const selectedCluster = computed<ReportCluster | null>(() => {
   return clusters.value.find((c) => c.id === id) ?? null;
 });
 
+// [VSIX-PAIR-COMPARE] The occurrence row one tap picked, waiting for a second
+// tap to name the other endpoint. Cleared when the selected cluster changes.
+export const pickedOccurrence = signal<ReportOccurrence | null>(null);
+const COMPARE_PAIR_MESSAGE = "compare/pair";
+
+function sameOccurrence(left: ReportOccurrence, right: ReportOccurrence): boolean {
+  return left.path === right.path && left.start_byte === right.start_byte && left.end_byte === right.end_byte;
+}
+
+/** Whether this row is the one a tap picked. */
+export function isPicked(occurrence: ReportOccurrence): boolean {
+  const picked = pickedOccurrence.value;
+  return picked !== null && sameOccurrence(picked, occurrence);
+}
+
+// [VSIX-PAIR-COMPARE] One tap picks a row. A second tap on another row of the
+// same cluster posts both endpoints, first tap on the left, and clears the
+// pick; tapping the picked row again unpicks it. A pick that is no longer a
+// member of the cluster is replaced, never compared.
+export function tapOccurrenceRow(cluster: ReportCluster, occurrence: ReportOccurrence): void {
+  const picked = pickedOccurrence.value;
+  const pickedIsMember = picked !== null && cluster.occurrences.some((member) => sameOccurrence(member, picked));
+  if (picked === null || !pickedIsMember) {
+    pickedOccurrence.value = occurrence;
+    return;
+  }
+  if (sameOccurrence(picked, occurrence)) {
+    pickedOccurrence.value = null;
+    return;
+  }
+  post({ kind: COMPARE_PAIR_MESSAGE, left: picked, right: occurrence });
+  pickedOccurrence.value = null;
+}
+
 export const filteredClusters = computed<ReportCluster[]>(() => {
-  const { language, severity, bucket, category, pathGlob } = filters.value;
+  const { severity, kind, pathGlob } = filters.value;
   const byId = severityByClusterId.value;
   const glob = pathGlob.trim().toLowerCase();
   // Base slice: the workspace facet filter, shared with the tree and
   // status bar; the webview's own selects refine it below.
   return applyFacetFilter(clusters.value, facetFilter.value).filter((cluster) => {
-    // The language is the engine's, stamped from the parser registry
-    // that actually parsed the file ([PIPELINE-LANG-TRAIT]); this filter
-    // never re-derives one from a path extension.
-    if (language && cluster.language !== language) return false;
     if (severity && byId.get(cluster.id) !== severity) return false;
-    if (bucket && resolveBucket(cluster) !== bucket) return false;
-    if (category && resolveCategory(cluster) !== category) return false;
+    if (kind && cluster.kind !== kind) return false;
     if (glob && !cluster.occurrences.some((o) => o.path.toLowerCase().includes(glob))) {
       return false;
     }
@@ -108,6 +135,7 @@ export function applyHostMessage(message: HostMessage): void {
         break;
       case "select/cluster":
         selectedClusterId.value = message.id;
+        pickedOccurrence.value = null;
         break;
       case "filter/set":
         filters.value = message.filters;

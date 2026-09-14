@@ -1,6 +1,8 @@
 // Kinetic Manuscript design tokens — single source of truth for every VSIX surface.
 // Mirrors docs/designs/designsystem.md. Change tokens here, never inline colors.
 
+import type { ClusterKind } from "./types/wire-generated";
+
 export const COLOR = {
   surface: "#131313",
   surfaceContainerLowest: "#0e0e0e",
@@ -20,35 +22,54 @@ export const COLOR = {
 
   errorContainer: "#93000a",
 
+  amber: "#e8912d",
+  violet: "#a98cff",
+
   onSurface: "#ece0dd",
   onSurfaceMuted: "#a9a2a0",
   ghostBorder: "rgba(90, 64, 61, 0.2)",
 } as const;
 
-// Percentile ramp per [LSP-SEVERITY-PERCENTILE]. Drives the *filter facet*
-// and the webview badge, which both sort by impact. It is NOT the paint:
-// [SEVERITY-COLOR] gives colour to the bucket, and using this ramp to paint
-// an editor surface is what made rank-1 shape-only scaffolding crimson.
-export const SEVERITY_COLOR = {
-  worst: COLOR.primaryContainer,
-  top10: COLOR.primary,
-  mid: COLOR.tertiary,
-  faint: COLOR.onSurfaceMuted,
+// [CLONE-KIND-COLOR] The one paint table. Colour follows the cluster's
+// clone kind ([CLONE-KIND-FOLD]) and nothing else: crimson is the
+// byte-proven copy, and a cluster that only shares shape is muted however
+// high it ranks. Every surface — tree icon, bubble, editor underline,
+// webview badge, HTML report — reads this table; the tree paints through
+// the contributed `KIND_THEME_COLOR` ids whose package.json defaults carry
+// the same values, and the HTML report declares the same values as its
+// `--kind-*` variables. `kind.unit.test.ts` holds the copies together.
+export const KIND_COLOR: Record<ClusterKind, string> = {
+  identical: COLOR.primaryContainer,
+  nearly_identical: COLOR.amber,
+  same_behavior: COLOR.violet,
+  structural_only: COLOR.onSurfaceMuted,
+  loosely_similar: COLOR.tertiary,
 } as const;
 
-// [SEVERITY-COLOR] The paint. Keyed by the Deslop severity level, which is a
-// function of the bucket alone ([SEVERITY-DESLOP-MAP]), so an occurrence is
-// coloured by what kind of duplicate it is and never by where it happens to
-// sort. Same four tokens as the percentile ramp — crimson is still the
-// surgical tool — but earned by evidence rather than by position.
-export const DESLOP_SEVERITY_COLOR = {
-  error: COLOR.primaryContainer,
-  warning: COLOR.primary,
-  information: COLOR.tertiary,
-  hint: COLOR.onSurfaceMuted,
+// [CLONE-KIND-COLOR] The theme colour ids the tree paints kind icons with.
+// package.json contributes each id with the matching KIND_COLOR value as
+// its default, so a themed icon and a hex-painted surface show one colour.
+export const KIND_THEME_COLOR: Record<ClusterKind, string> = {
+  identical: "deslop.kind.identical",
+  nearly_identical: "deslop.kind.nearlyIdentical",
+  same_behavior: "deslop.kind.sameBehavior",
+  structural_only: "deslop.kind.structuralOnly",
+  loosely_similar: "deslop.kind.looselySimilar",
 } as const;
 
-// Glyph density per [SEVERITY-COLOR]: the weight-percentile channel.
+// [CLONE-KIND-COLOR] One codicon per kind, so kinds stay distinct even
+// where colour is unavailable.
+export const KIND_ICON: Record<ClusterKind, string> = {
+  identical: "circle-filled",
+  nearly_identical: "circle-large-filled",
+  same_behavior: "sparkle",
+  structural_only: "circle-slash",
+  loosely_similar: "circle-outline",
+} as const;
+
+// [SEVERITY-BAND] Glyph density is the mass rank band's channel — how
+// much of the repository's duplication this cluster is — orthogonal to the
+// kind colour.
 export const SEVERITY_DOT = {
   worst: "●●",
   top10: "●",
@@ -57,7 +78,7 @@ export const SEVERITY_DOT = {
 } as const;
 
 export const FONT = {
-  ui: "Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif",
+  ui: "Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif",
   mono: "'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace",
 } as const;
 

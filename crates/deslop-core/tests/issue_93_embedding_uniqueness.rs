@@ -1,7 +1,7 @@
 //! Regression coverage for GH #93: the embedding pass must recall
 //! clusters the LSH pass missed.
 //!
-//! This suite used to assert the inverse of [REPAIR-COSINE-MERGE] (#351)
+//! This suite used to assert the inverse of [FUSED-PAIR-SIGNALS] (#351)
 //! — that a pair LSH already found is denied its ANN cosine, to preserve
 //! "unique-recall accounting". No consumer of that accounting ever
 //! existed, and the denial made discovery route decide evidence: the same
@@ -16,15 +16,17 @@ use std::{collections::HashMap, path::PathBuf};
 use anyhow::{Context, Result};
 use deslop_core::{
     ast::ByteRange,
-    cluster::{build_ranked_fused_clusters, Cluster},
+    cluster::{build_ranked_fused_clusters, ClusterBuildInputs},
     embedding::EmbeddingPair,
     fingerprint::Fingerprint,
-    lsh::{Signature, SIGNATURE_LEN},
+    lsh::{Signature, SignatureIndex, SIGNATURE_LEN},
     pair::{
         candidate_pairs, cluster_by_transitive_closure, FusedCluster, LSH_ONLY_MIN_JACCARD,
         LSH_ONLY_MIN_NODE_COUNT,
     },
-    state::{FileId, FileRegistry},
+    registry_fixtures::{registry_pair, LSH_LEFT_PY, LSH_RIGHT_PY},
+    report_fixtures::{UniformKind, FIXTURE_KIND},
+    state::FileId,
 };
 
 #[test]
@@ -44,7 +46,13 @@ fn issue_93_embedding_pass_recalls_lsh_missed_clusters_and_credits_every_cosine(
         },
     ];
 
-    let candidates = candidate_pairs(&fingerprints, &signatures, &lsh_pairs, &embedding_pairs);
+    let signature_index = SignatureIndex::from_slice(&signatures);
+    let candidates = candidate_pairs(
+        &fingerprints,
+        &signature_index,
+        &lsh_pairs,
+        &embedding_pairs,
+    );
     assert_eq!(
         candidates.len(),
         2,
@@ -59,7 +67,7 @@ fn issue_93_embedding_pass_recalls_lsh_missed_clusters_and_credits_every_cosine(
         lsh_visible.score.token_jaccard >= LSH_ONLY_MIN_JACCARD,
         "fixture must prove this pair was already visible to LSH"
     );
-    // [REPAIR-COSINE-MERGE] #351: a measured cosine is evidence about the
+    // [FUSED-PAIR-SIGNALS] #351: a measured cosine is evidence about the
     // pair; the pass that reached it first is telemetry. This pair was
     // surfaced by LSH *and* measured by the ANN pass, so the LSH hit must
     // not erase the cosine.
@@ -116,86 +124,43 @@ fn issue_93_embedding_pass_recalls_lsh_missed_clusters_and_credits_every_cosine(
         "the LSH-missed pair must remain its own component"
     );
 
-    assert_rendered_signals_are_measured(&fingerprints, &signatures, &clusters)
+    assert_materialised_clusters_are_mass_only(&fingerprints, &clusters)
 }
 
-/// [FUSION-CLUSTER-SIGNALS] Rendered signals are measured between the
-/// rendered occurrences. The LSH-visible pair's *discovery edge*
-/// deliberately withholds embedding credit (asserted by the caller), but
-/// the report still shows the true cosine of the two vectors — discovery
-/// bookkeeping never becomes a rendered figure.
-fn assert_rendered_signals_are_measured(
+/// [RANK-MASS-SUM] Pair evidence stays on the candidate pairs; a
+/// materialised component contains membership and duplicated mass only.
+fn assert_materialised_clusters_are_mass_only(
     fingerprints: &[Fingerprint],
-    signatures: &[Signature],
     clusters: &[FusedCluster],
 ) -> Result<()> {
-    let vectors = HashMap::from([
-        (0, vec![1.0, 0.0]),
-        (1, vec![0.99, 0.141_067_36]),
-        (2, vec![1.0, 0.0]),
-        (3, vec![0.98, 0.198_997_49]),
-    ]);
-    let rendered = build_ranked_fused_clusters(
+    let rendered = build_ranked_fused_clusters(&ClusterBuildInputs {
         fingerprints,
-        signatures,
-        &vectors,
-        clusters,
-        &[],
-        &HashMap::new(),
-    );
+        fused_clusters: clusters,
+        trees: &[],
+        file_languages: &HashMap::new(),
+        file_paths: &HashMap::new(),
+        kinds: &UniformKind(FIXTURE_KIND),
+    });
     assert_eq!(
         rendered.len(),
         2,
         "both clusters must survive materialisation"
     );
-    let rendered_unique = find_by_leading_hash(&rendered, 2)
+    let rendered_unique = rendered
+        .iter()
+        .find(|cluster| cluster.members.iter().any(|member| member.hash == [2; 32]))
         .context("expected the rendered embedding-only cluster")?;
-    assert!(
-        rendered_unique.signals.embedding_cos > 0.95,
-        "issue #93: embedding pass must keep at least one LSH-missed cluster; got {}",
-        rendered_unique.signals.embedding_cos
-    );
-    assert!(
-        (rendered_unique.signals.embedding_cos - 0.98).abs() < 1e-5,
-        "rendered cosine must equal the measured vector cosine (0.98); got {}",
-        rendered_unique.signals.embedding_cos
-    );
-    assert!(
-        rendered_unique.signals.token_jaccard.abs() < f64::EPSILON,
-        "the LSH-missed cluster must render zero token evidence; got {}",
-        rendered_unique.signals.token_jaccard
-    );
-
-    let rendered_lsh =
-        find_by_leading_hash(&rendered, 0).context("expected the rendered LSH-visible cluster")?;
-    assert!(
-        (rendered_lsh.signals.token_jaccard - 1.0).abs() < f64::EPSILON,
-        "identical signatures must render Jaccard exactly 1.0; got {}",
-        rendered_lsh.signals.token_jaccard
-    );
-    assert!(
-        (rendered_lsh.signals.embedding_cos - 0.99).abs() < 1e-5,
-        "issue #93: withholding unique-recall credit on the discovery edge must not erase the measured cosine of the rendered pair; got {}",
-        rendered_lsh.signals.embedding_cos
+    assert_eq!(rendered_unique.members.len(), 2);
+    assert_eq!(
+        rendered_unique.mass,
+        u64::try_from(LSH_ONLY_MIN_NODE_COUNT)?
     );
 
     Ok(())
 }
 
-/// Finds a rendered cluster by the hash seed of its lowest member.
-fn find_by_leading_hash(clusters: &[Cluster], seed: u8) -> Option<&Cluster> {
-    clusters.iter().find(|cluster| {
-        cluster
-            .members
-            .iter()
-            .any(|member| member.hash == [seed; 32])
-    })
-}
-
 fn embedding_roi_fixture() -> (Vec<Fingerprint>, Vec<Signature>) {
-    let mut registry = FileRegistry::new();
-    let lsh_left = registry.register(PathBuf::from("lsh_left.py"));
-    let lsh_right = registry.register(PathBuf::from("lsh_right.py"));
+    let (mut registry, lsh_left, lsh_right) = registry_pair(LSH_LEFT_PY, LSH_RIGHT_PY);
     let semantic_left = registry.register(PathBuf::from("semantic_left.py"));
     let semantic_right = registry.register(PathBuf::from("semantic_right.py"));
     (

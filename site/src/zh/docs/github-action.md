@@ -1,12 +1,12 @@
 ---
 layout: layouts/docs.njk
 title: GitHub Action — 在 CI 中为重复代码设置门禁
-description: Deslop.live GitHub Action 的完整配置 — 每一个输入与输出、退出码约定、阈值优先级、只度量不拦截、受支持的运行器、产物处理，以及固定的标签如何决定所安装的 CLI 版本。
-keywords: deslop, github action, ci 门禁, 重复代码, fail-over, 重复率阈值, 代码质量, 持续集成
+description: 配置 Deslop GitHub Action，以度量重复代码、按阈值设置 CI 门禁、上传报告、校验发布产物并选择 CLI 版本。
 eleventyNavigation:
   key: GitHub Action
   order: 7
 icon: rule
+docsGroup: guides
 lang: zh
 ---
 
@@ -74,13 +74,13 @@ jobs:
 | `duplication-percent` | 重复行数占已分析行数的百分比 |
 | `cluster-count` | 报告正文中的簇数量 —— 在 `only-changed` 下为经过筛选后保留的、受 diff 影响的簇 |
 | `threshold-percent` | 本次运行所对照的上限 |
-| `exit-code` | `0` 干净、`1` 运行时错误、`2` 用法错误、`3` 突破阈值 |
+| `exit-code` | `0` 成功、`1` 运行时错误、`2` 用法错误、`3` 突破阈值 |
 | `report-json` / `report-text` / `report-html` | 渲染出的报告路径 |
 | `gate-scope` | 门禁所度量的总体 —— 在 `only-changed` 下为 `added-lines`，否则为 `repository` |
 | `gate-percent` | 门禁与其上限相比较的百分比，覆盖 `gate-scope` 所指的总体 |
 | `gate-threshold-percent` | `gate-percent` 所对照的上限 |
 
-**即使门禁被触发，输出仍会发布**，因此后续步骤可以评论该数字或逐步收紧预算。设置 `nojson: true` 会让它们为空 — 它们是从 JSON 报告中读取的。
+**即使门禁被触发，输出仍会发布**，因此后续步骤可以在评论中发布该数值，或逐步收紧预算。设置 `nojson: true` 会让它们为空 — 它们是从 JSON 报告中读取的。
 
 ## 阈值优先级
 
@@ -99,10 +99,8 @@ jobs:
         id: deslop
         with:
           no-fail-over: "true"   # 只度量，不拦截
-      - run: echo "{% raw %}${{ steps.deslop.outputs.duplication-percent }}{% endraw %}% duplicated"
+      - run: echo "{% raw %}${{ steps.deslop.outputs.duplication-percent }}{% endraw %}% 重复"
 ```
-
-这是把 Deslop 引入既有代码库的推荐方式：先无门禁运行几周，观察数字稳定在哪里，然后把 `fail-over` 设在略低于该值的位置并逐步收紧。
 
 ## 退出码
 
@@ -111,13 +109,11 @@ jobs:
 | 代码 | 含义 |
 | --- | --- |
 | `0` | 分析成功，且重复率在阈值之内（或未设置阈值）。 |
-| `1` | 运行时错误 — 扫描路径错误、解析/IO 失败，或 `required` 的嵌入提供方不可达。绝不是 panic。 |
+| `1` | 运行时错误 — 扫描路径错误、解析/IO 失败，或 `required` 的嵌入提供方不可达。 |
 | `2` | 用法错误 — 未知参数，或超出范围/非有限的阈值。 |
 | `3` | **重复率突破阈值。** 报告仍会完整写出，以便 CI 呈现最严重的问题。 |
 
 突破阈值会让步骤失败，并给出指明实测百分比与上限的消息。`1` 与 `2` 会给出各自不同的消息，因此配置错误绝不会被误认为重复率突破。
-
-关键在于：报告的渲染与产物上传发生在门禁重新抛出状态**之前** — 失败的构建仍然会把最严重的问题交到你手上。
 
 ## 报告与产物
 
@@ -148,8 +144,8 @@ HTML 报告是给人看的；JSON 报告是用来解析的。各自的结构见[
 ## 供应链说明
 
 - 归档及其已发布的 `.sha256` 附属文件都会被下载，并且**在解压任何内容之前**校验摘要。不匹配即中止作业。
-- 每个输入都通过 `env` 到达其脚本，绝不插值进 shell 命令体，因此精心构造的输入无法注入 shell。
-- 只有运行器自有的常量会被写入 `$GITHUB_PATH` 与 `$GITHUB_ENV`，因此调用方提供的值无法影响后续步骤解析可执行文件的位置。
+- Action 输入通过环境变量传给脚本，而不是插值进 shell 命令体。
+- 只有运行器自有的常量会写入 `$GITHUB_PATH` 与 `$GITHUB_ENV`。
 
 ## 不使用 GitHub Actions？
 
@@ -164,5 +160,3 @@ deslop . --fail-over 5.0
 ```
 
 退出码 `3` 会像任何非零状态一样让步骤失败。各平台的归档见[发布页](https://github.com/Nimblesite/Deslop/releases)。
-
-在 CI 中驱动 Deslop 的智能体应阅读 [For AI](/zh/docs/ai-integration/) 指南，其中包含同样的门禁以及如何解析 JSON 报告。

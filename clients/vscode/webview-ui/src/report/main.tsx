@@ -13,32 +13,28 @@ import {
 import { COLOR, FONT, GLOBAL_CSS } from "../theme";
 import { FilterSelect } from "../components/FilterSelect";
 import { MetricHeading } from "../components/MetricHeading";
-import { SeverityBadge } from "../components/SeverityBadge";
+import { ClusterBadge } from "../components/ClusterBadge";
 import {
-  BUCKETS,
-  bucketLabels,
-  CATEGORIES,
-  categoryLabels,
+  CLUSTER_KINDS,
   clusterSlug,
+  kindTitle,
   occurrenceCount,
-  resolveBucket,
   SEVERITIES,
   severityLabel,
-  type Bucket,
-  type Category,
+  type ClusterKind,
   type Severity,
 } from "../../../src/types/report";
-import { LANGUAGES, languageDisplayName } from "../../../src/types/languages";
+
+const GRID_DISPLAY = "grid";
+const TWELVE_PIXEL_SIZE = "12px";
+const LARGE_SPACING = "24px";
+const MEDIUM_SPACING = "16px";
+const RIGHT_ALIGNMENT = "right";
+const MONOSPACE_CLASS = "mono";
 
 // [FACET-REPORT-WEBVIEW] Every option list derives from the shared
-// registries (the #170/#198 anti-drift rule): languages from the
-// language registry, severities from SEVERITIES, buckets/categories
-// from the canonical mirrors. `null` = no filter on that axis.
-const LANG_OPTIONS = [
-  { label: "Any language", value: null as string | null },
-  ...LANGUAGES.map((id) => ({ label: languageDisplayName(id), value: id as string | null })),
-];
-
+// registries (the #170/#198 anti-drift rule): severities from SEVERITIES,
+// clone kinds from CLUSTER_KINDS. `null` = no filter on that axis.
 const SEVERITY_OPTIONS = [
   { label: "All severities", value: null as Severity | null },
   ...SEVERITIES.map((severity) => ({
@@ -47,19 +43,11 @@ const SEVERITY_OPTIONS = [
   })),
 ];
 
-const BUCKET_OPTIONS = [
-  { label: "All clone types", value: null as Bucket | null },
-  ...BUCKETS.map((bucket) => ({
-    label: bucketLabels(bucket).plainTitle,
-    value: bucket as Bucket | null,
-  })),
-];
-
-const CATEGORY_OPTIONS = [
-  { label: "All categories", value: null as Category | null },
-  ...CATEGORIES.map((category) => ({
-    label: categoryLabels(category).groupTitle,
-    value: category as Category | null,
+const KIND_OPTIONS = [
+  { label: "All clone kinds", value: null as ClusterKind | null },
+  ...CLUSTER_KINDS.map((kind) => ({
+    label: kindTitle(kind),
+    value: kind as ClusterKind | null,
   })),
 ];
 
@@ -70,7 +58,7 @@ function ReportApp() {
 
   if (!snapshot) {
     return (
-      <main style={{ padding: "24px" }}>
+      <main style={{ padding: LARGE_SPACING }}>
         <p>Deslop is warming up…</p>
       </main>
     );
@@ -78,7 +66,7 @@ function ReportApp() {
 
   return (
     <main style={{ padding: "24px clamp(16px, 6vw, 32px)" }}>
-      <header style={{ display: "grid", gap: "16px", paddingBottom: "24px" }}>
+      <header style={{ display: GRID_DISPLAY, gap: MEDIUM_SPACING, paddingBottom: LARGE_SPACING }}>
         <div
           class="label"
           style={{ fontFamily: FONT.mono, color: COLOR.onSurfaceMuted }}
@@ -87,18 +75,18 @@ function ReportApp() {
         </div>
         <div
           style={{
-            display: "grid",
+            display: GRID_DISPLAY,
             gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
             alignItems: "baseline",
-            gap: "24px",
+            gap: LARGE_SPACING,
           }}
         >
           <MetricHeading value={snapshot.metrics.duplication_percent} label="duplicated" />
           <div
             style={{
-              textAlign: "right",
+              textAlign: RIGHT_ALIGNMENT,
               fontFamily: FONT.mono,
-              fontSize: "12px",
+              fontSize: TWELVE_PIXEL_SIZE,
               minWidth: 0,
             }}
           >
@@ -116,31 +104,21 @@ function ReportApp() {
 
       <section
         style={{
-          display: "grid",
+          display: GRID_DISPLAY,
           gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
-          gap: "12px",
-          paddingBottom: "16px",
+          gap: TWELVE_PIXEL_SIZE,
+          paddingBottom: MEDIUM_SPACING,
         }}
       >
-        <FilterSelect
-          options={LANG_OPTIONS}
-          value={filters.value.language}
-          onChange={(language) => (filters.value = { ...filters.value, language })}
-        />
         <FilterSelect
           options={SEVERITY_OPTIONS}
           value={filters.value.severity}
           onChange={(severity) => (filters.value = { ...filters.value, severity })}
         />
         <FilterSelect
-          options={BUCKET_OPTIONS}
-          value={filters.value.bucket}
-          onChange={(bucket) => (filters.value = { ...filters.value, bucket })}
-        />
-        <FilterSelect
-          options={CATEGORY_OPTIONS}
-          value={filters.value.category}
-          onChange={(category) => (filters.value = { ...filters.value, category })}
+          options={KIND_OPTIONS}
+          value={filters.value.kind}
+          onChange={(kind) => (filters.value = { ...filters.value, kind })}
         />
         <input
           type="text"
@@ -168,9 +146,9 @@ function ReportApp() {
                 post({ kind: "open/cluster", id: cluster.id });
               }}
               style={{
-                display: "grid",
+                display: GRID_DISPLAY,
                 gridTemplateColumns: "auto minmax(0,1fr) auto auto",
-                gap: "16px",
+                gap: MEDIUM_SPACING,
                 alignItems: "center",
                 padding: "12px 20px",
                 background: i % 2 === 0 ? COLOR.surfaceContainerLow : COLOR.surface,
@@ -185,7 +163,7 @@ function ReportApp() {
                   i % 2 === 0 ? COLOR.surfaceContainerLow : COLOR.surface)
               }
             >
-              <SeverityBadge severity={severity} label={`${slug}`} />
+              <ClusterBadge kind={cluster.kind} severity={severity} label={`${slug}`} />
               <div style={{ minWidth: 0 }}>
                 <div
                   style={{
@@ -199,37 +177,21 @@ function ReportApp() {
                   }}
                 >
                   <span style={{ fontWeight: 600, overflowWrap: "anywhere" }}>
-                    {bucketLabels(resolveBucket(cluster)).plainTitle}
+                    {kindTitle(cluster.kind)}
                   </span>
-                  {bucketLabels(resolveBucket(cluster)).aiMatch ? (
-                    <span
-                      style={{
-                        background: COLOR.secondaryContainer ?? COLOR.surfaceContainerLow,
-                        color: COLOR.onSurface,
-                        padding: "1px 5px",
-                        borderRadius: "3px",
-                        fontSize: "9px",
-                        letterSpacing: "0.1em",
-                        fontWeight: 700,
-                      }}
-                      title="Detected by the AI embedding pass."
-                    >
-                      AI
-                    </span>
-                  ) : null}
                 </div>
                 <div
-                  class="mono"
+                  class={MONOSPACE_CLASS}
                   style={{ color: COLOR.onSurfaceMuted, fontSize: "11px", marginTop: "2px" }}
                 >
                   {cluster.occurrences[0]?.path ?? "?"}
                 </div>
               </div>
-              <div class="mono" style={{ fontSize: "12px", textAlign: "right" }}>
+              <div class={MONOSPACE_CLASS} style={{ fontSize: TWELVE_PIXEL_SIZE, textAlign: RIGHT_ALIGNMENT }}>
                 × {occurrenceCount(cluster)}
               </div>
-              <div class="mono" style={{ fontSize: "12px", textAlign: "right" }}>
-                w {cluster.weight.toFixed(1)}
+              <div class={MONOSPACE_CLASS} style={{ fontSize: TWELVE_PIXEL_SIZE, textAlign: RIGHT_ALIGNMENT }}>
+                mass {cluster.mass}
               </div>
             </li>
           );

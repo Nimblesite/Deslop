@@ -13,6 +13,9 @@ type Tree = [(&'static str, &'static [u8])];
 /// The tree every test about a target the analysis never saw verifies
 /// against: one unrelated analysed file.
 const KEEP_ONLY: &Tree = &[("src/x.rs", b"fn keep() {}\n")];
+const SOURCE_A_PATH: &str = "src/a.rs";
+const SOURCE_B_PATH: &str = "src/b.rs";
+const SOURCE_X_PATH: &str = "src/x.rs";
 
 /// Builds an in-memory corpus from `(relative path, bytes)` pairs.
 fn corpus(entries: &Tree) -> BTreeMap<PathBuf, &'static [u8]> {
@@ -72,12 +75,12 @@ fn matching_diff_projects_added_lines() -> Result<()> {
                 fn keep() {}\n\
                 +fn one() {}\n\
                 +fn two() {}\n";
-    let tree: &Tree = &[("src/x.rs", b"fn keep() {}\nfn one() {}\nfn two() {}\n")];
+    let tree: &Tree = &[(SOURCE_X_PATH, b"fn keep() {}\nfn one() {}\nfn two() {}\n")];
     let scope = verified(text, tree, "clean diff verifies")?;
     assert_eq!(scope.added_line_total(), 2);
-    assert!(marks_added(&scope, "src/x.rs", 2));
-    assert!(marks_added(&scope, "src/x.rs", 3));
-    assert!(!marks_added(&scope, "src/x.rs", 1));
+    assert!(marks_added(&scope, SOURCE_X_PATH, 2));
+    assert!(marks_added(&scope, SOURCE_X_PATH, 3));
+    assert!(!marks_added(&scope, SOURCE_X_PATH, 1));
     Ok(())
 }
 
@@ -90,9 +93,9 @@ fn stale_context_line_names_file_and_line() -> Result<()> {
                 @@ -1,1 +1,2 @@\n \
                 fn old_shape() {}\n\
                 +fn added() {}\n";
-    let tree: &Tree = &[("src/x.rs", b"fn keep() {}\nfn added() {}\n")];
+    let tree: &Tree = &[(SOURCE_X_PATH, b"fn keep() {}\nfn added() {}\n")];
     let (path, line) = refused(text, tree, "stale context")?;
-    assert_eq!(path, PathBuf::from("src/x.rs"));
+    assert_eq!(path, PathBuf::from(SOURCE_X_PATH));
     assert_eq!(line, 1);
     Ok(())
 }
@@ -196,17 +199,20 @@ const METADATA_ONLY_COPY: &str = "diff --git a/src/a.rs b/src/b.rs\n\
 #[test]
 fn metadata_only_copy_marks_every_target_line_added() -> Result<()> {
     let tree: &Tree = &[
-        ("src/a.rs", b"alpha\nbeta\ngamma\n"),
-        ("src/b.rs", b"alpha\nbeta\ngamma\n"),
+        (SOURCE_A_PATH, b"alpha\nbeta\ngamma\n"),
+        (SOURCE_B_PATH, b"alpha\nbeta\ngamma\n"),
     ];
     let scope = verified(METADATA_ONLY_COPY, tree, "clean copy verifies")?;
     assert_eq!(scope.added_line_total(), 3, "every target line is added");
     assert_eq!(scope.files_with_added_lines(), 1, "only the copy target");
     for line in 1..=3 {
-        assert!(marks_added(&scope, "src/b.rs", line), "line {line}");
+        assert!(marks_added(&scope, SOURCE_B_PATH, line), "line {line}");
     }
-    assert!(!marks_added(&scope, "src/a.rs", 1), "source stays existing");
-    assert!(!marks_added(&scope, "src/b.rs", 4), "no phantom lines");
+    assert!(
+        !marks_added(&scope, SOURCE_A_PATH, 1),
+        "source stays existing"
+    );
+    assert!(!marks_added(&scope, SOURCE_B_PATH, 4), "no phantom lines");
     Ok(())
 }
 
@@ -217,11 +223,11 @@ fn metadata_only_copy_marks_every_target_line_added() -> Result<()> {
 #[test]
 fn metadata_only_copy_divergence_is_refused_at_first_divergent_line() -> Result<()> {
     let tree: &Tree = &[
-        ("src/a.rs", b"alpha\nbeta\ngamma\n"),
-        ("src/b.rs", b"alpha\nCHANGED\ngamma\n"),
+        (SOURCE_A_PATH, b"alpha\nbeta\ngamma\n"),
+        (SOURCE_B_PATH, b"alpha\nCHANGED\ngamma\n"),
     ];
     let (path, line) = refused(METADATA_ONLY_COPY, tree, "divergent copy")?;
-    assert_eq!(path, PathBuf::from("src/b.rs"));
+    assert_eq!(path, PathBuf::from(SOURCE_B_PATH));
     assert_eq!(line, 2, "the first divergent line");
     Ok(())
 }
@@ -236,7 +242,7 @@ fn copy_target_missing_from_tree_is_refused() -> Result<()> {
                 similarity index 100%\n\
                 copy from src/a.rs\n\
                 copy to src/missing.rs\n";
-    let tree: &Tree = &[("src/a.rs", b"alpha\n")];
+    let tree: &Tree = &[(SOURCE_A_PATH, b"alpha\n")];
     let (path, line) = refused(text, tree, "missing copy target")?;
     assert_eq!(path, PathBuf::from("src/missing.rs"));
     assert_eq!(line, 1);
@@ -275,7 +281,7 @@ fn copy_source_missing_everywhere_is_refused() -> Result<()> {
                 similarity index 100%\n\
                 copy from src/ghost.rs\n\
                 copy to src/b.rs\n";
-    let tree: &Tree = &[("src/b.rs", b"alpha\n")];
+    let tree: &Tree = &[(SOURCE_B_PATH, b"alpha\n")];
     let (path, _line) = refused(text, tree, "missing copy source")?;
     assert_eq!(path, PathBuf::from("src/ghost.rs"));
     Ok(())
@@ -303,14 +309,20 @@ const COPY_WITH_HUNKS: &str = "diff --git a/src/a.rs b/src/b.rs\n\
 #[test]
 fn copy_with_hunks_counts_every_target_line_once() -> Result<()> {
     let tree: &Tree = &[
-        ("src/a.rs", b"one\nold\nthree\nfour\n"),
-        ("src/b.rs", b"one\nnew\nthree\nfour\n"),
+        (SOURCE_A_PATH, b"one\nold\nthree\nfour\n"),
+        (SOURCE_B_PATH, b"one\nnew\nthree\nfour\n"),
     ];
     let scope = verified(COPY_WITH_HUNKS, tree, "copy with hunks verifies")?;
     assert_eq!(scope.added_line_total(), 4, "whole target, counted once");
-    assert!(marks_added(&scope, "src/b.rs", 1), "line before the hunk");
-    assert!(marks_added(&scope, "src/b.rs", 4), "line after the hunk");
-    assert!(!marks_added(&scope, "src/a.rs", 2), "source stays existing");
+    assert!(
+        marks_added(&scope, SOURCE_B_PATH, 1),
+        "line before the hunk"
+    );
+    assert!(marks_added(&scope, SOURCE_B_PATH, 4), "line after the hunk");
+    assert!(
+        !marks_added(&scope, SOURCE_A_PATH, 2),
+        "source stays existing"
+    );
     Ok(())
 }
 
@@ -319,11 +331,11 @@ fn copy_with_hunks_counts_every_target_line_once() -> Result<()> {
 #[test]
 fn copy_with_stale_hunk_is_refused() -> Result<()> {
     let tree: &Tree = &[
-        ("src/a.rs", b"one\nold\nthree\nfour\n"),
-        ("src/b.rs", b"one\nDIFFERENT\nthree\nfour\n"),
+        (SOURCE_A_PATH, b"one\nold\nthree\nfour\n"),
+        (SOURCE_B_PATH, b"one\nDIFFERENT\nthree\nfour\n"),
     ];
     let (path, line) = refused(COPY_WITH_HUNKS, tree, "stale copy hunk")?;
-    assert_eq!(path, PathBuf::from("src/b.rs"));
+    assert_eq!(path, PathBuf::from(SOURCE_B_PATH));
     assert_eq!(line, 2);
     Ok(())
 }
@@ -339,7 +351,7 @@ fn pure_rename_metadata_projects_nothing() -> Result<()> {
                 rename from src/a.rs\n\
                 rename to src/renamed.rs\n";
     let tree: &Tree = &[
-        ("src/a.rs", b"alpha\nbeta\n"),
+        (SOURCE_A_PATH, b"alpha\nbeta\n"),
         ("src/renamed.rs", b"alpha\nbeta\n"),
     ];
     let scope = verified(text, tree, "pure rename is skipped")?;

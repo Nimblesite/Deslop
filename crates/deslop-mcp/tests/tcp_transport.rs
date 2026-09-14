@@ -1,12 +1,14 @@
-//! E2E proof for the TCP loopback IPC transport ([LIVE-IPC-TCP],
+//! Windows E2E proof for the TCP loopback IPC transport ([LIVE-IPC-TCP],
 //! [MCP-IPC-DISCOVERY]).
 //!
 //! Spawns the real `deslop-lsp` with `--ipc-transport tcp`, waits for
 //! the `.deslop/cache/deslop.port` discovery record, then drives the
 //! real `deslop-mcp` over stdio. Every assertion exercises the exact
-//! code path Windows uses in production — no Unix sockets appear
-//! anywhere in this file, so the suite runs on every platform,
-//! including the Windows CI check leg.
+//! code path Windows uses in production. Keeping the dedicated target
+//! Windows-only makes the workflow execute these tests exactly once; the
+//! ordinary Linux collector does not run a duplicate copy.
+
+#![cfg(windows)]
 
 use std::{
     fs,
@@ -17,11 +19,16 @@ use std::{
 use anyhow::{anyhow, ensure, Context, Result};
 use serde_json::{json, Value};
 
-use crate::common;
+mod common;
 use common::{
-    copied_fixture, initialized_mcp, spawn_lsp_with_args, structured_content, wait_for_path,
-    ChildKillOnDrop, SOCKET_TIMEOUT,
+    array_field, call_tool, copied_fixture, initialized_mcp, request_duplicates_summary,
+    spawn_lsp_with_args, str_field, structured_content, u64_field, wait_for_path, ChildKillOnDrop,
+    SOCKET_TIMEOUT,
 };
+
+/// Clusters requested per page: a small page is enough to prove the
+/// transport carries a live report.
+const PAGE_LIMIT: u64 = 3;
 
 /// Reads and validates the discovery record, returning `(port, token)`.
 fn read_discovery_record(workspace: &std::path::Path) -> Result<(u16, String)> {
@@ -29,16 +36,10 @@ fn read_discovery_record(workspace: &std::path::Path) -> Result<(u16, String)> {
     let record: Value =
         serde_json::from_slice(&fs::read(&port_file).context("read discovery record")?)
             .context("parse discovery record")?;
-    let port = record
-        .get("port")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| anyhow!("discovery record missing port: {record}"))?;
+    let port = u64_field(&record, "port")?;
     let port = u16::try_from(port).context("port out of range")?;
     ensure!(port > 0, "discovery record must carry a bound port");
-    let token = record
-        .get("token")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("discovery record missing token: {record}"))?;
+    let token = str_field(&record, "token")?;
     ensure!(
         token.len() == 64,
         "token must be a 64-char hex secret, got {} chars",
@@ -81,38 +82,36 @@ fn mcp_tools_work_over_tcp_transport() -> Result<()> {
 
     let mut mcp = initialized_mcp(workspace.path())?;
 
-    let response = mcp.request(
-        "tools/call",
-        &json!({ "name": "top-offenders", "arguments": { "n": 3 } }),
-    )?;
-    let offenders = structured_content(&response, "top-offenders")?;
+    let response = request_duplicates_summary(&mut mcp, PAGE_LIMIT)?;
+    let offenders = structured_content(&response, "duplicates")?;
+    let total_clusters = u64_field(&offenders, "total_clusters")?;
+    // Not merely "the field is present": the fixture is four C# files
+    // built to duplicate each other, so a live report with nothing in it
+    // is a false negative that the shape check alone waves through — and
+    // it is the state that makes the find-similar assertion below fail
+    // without saying why.
     ensure!(
-        offenders
-            .get("total_clusters")
-            .and_then(Value::as_u64)
-            .is_some(),
-        "top-offenders over TCP must return the live report shape: {response}"
+        total_clusters > 0,
+        "top-offenders over TCP must find the fixture's duplication, not \
+         an empty live report: {offenders}"
     );
 
-    let response = mcp.request(
-        "tools/call",
+    let similar = call_tool(
+        &mut mcp,
+        "find-similar",
         &json!({
-            "name": "find-similar",
-            "arguments": {
-                "snippet": include_str!("fixtures/csharp-mcp/Alpha.cs"),
-                "language": "csharp",
-                "top_n": 5
-            }
+            "snippet": include_str!("fixtures/csharp-mcp/Alpha.cs"),
+            "language": "csharp",
+            "top_n": 5
         }),
     )?;
-    let similar = structured_content(&response, "find-similar")?;
-    let clusters = similar
-        .get("clusters")
-        .and_then(Value::as_array)
-        .ok_or_else(|| anyhow!("clusters must be an array: {response}"))?;
+    let clusters = array_field(&similar, "clusters")?;
     ensure!(
         !clusters.is_empty(),
-        "find-similar over TCP must return live LSP clusters: {response}"
+        "find-similar over TCP must return live LSP clusters. The live \
+         report holds {total_clusters} cluster(s), so the snippet's \
+         subtree hashes matched none of their ids: {response}\n\
+         live report: {offenders}"
     );
 
     let response = mcp.request("tools/call", &json!({ "name": "rescan", "arguments": {} }))?;
@@ -180,10 +179,7 @@ fn stale_discovery_record_reports_lsp_not_running() -> Result<()> {
     )?;
 
     let mut mcp = initialized_mcp(workspace.path())?;
-    let response = mcp.request(
-        "tools/call",
-        &json!({ "name": "top-offenders", "arguments": { "n": 3 } }),
-    )?;
+    let response = request_duplicates_summary(&mut mcp, PAGE_LIMIT)?;
     let message = response
         .pointer("/error/message")
         .and_then(Value::as_str)

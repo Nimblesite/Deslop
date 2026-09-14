@@ -1,0 +1,76 @@
+{
+  "tool_version": "0.31.0",
+  "min_nodes": 30,
+  "files_analysed": 2,
+  "clusters_hidden": 0,
+  "cache_stats": {
+    "hits": 0,
+    "misses": 0
+  },
+  "metrics": {
+    "analysed_loc": 34,
+    "duplicated_loc": 34,
+    "duplication_percent": 100.0,
+    "clusters_total": 1,
+    "duplicated_files": 2,
+    "threshold": {
+      "percent": 0.0,
+      "breached": false,
+      "source": "none"
+    },
+    "per_file": [
+      {
+        "path": "Alpha.cs",
+        "analysed_loc": 17,
+        "duplicated_loc": 17,
+        "duplication_percent": 100.0
+      },
+      {
+        "path": "Beta.cs",
+        "analysed_loc": 17,
+        "duplicated_loc": 17,
+        "duplication_percent": 100.0
+      }
+    ],
+    "folders": []
+  },
+  "schema_doc": "",
+  "boilerplate_hints": [],
+  "embedding_provenance": null,
+  "clusters": [
+    {
+      "id": "a5b1c68838489f44",
+      "rank": 1,
+      "rank_band": "worst",
+      "kind": "identical",
+      "canonical_node_count": 89,
+      "occurrences": [
+        {
+          "path": "Alpha.cs",
+          "start_byte": 0,
+          "end_byte": 391,
+          "start_line": 1,
+          "end_line": 17,
+          "hidden": false
+        },
+        {
+          "path": "Beta.cs",
+          "start_byte": 0,
+          "end_byte": 392,
+          "start_line": 1,
+          "end_line": 17,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrence_count": 2,
+      "occurrences_truncated": false,
+      "weight": 89.0
+    }
+  ],
+  "literal_findings": [],
+  "literal_findings_total": 0,
+  "literal_findings_hidden": 0,
+  "literal_findings_capped": false,
+  "literal_max_findings": 0
+}

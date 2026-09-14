@@ -1,4 +1,30 @@
 use super::support::*;
+use crate::common::go_scope::*;
+use crate::common::signals::{assert_no_pair_surface_on_cluster, has_verbatim_pair};
+
+const TYPE2_EXPECTED_FILES_ANALYSED: u64 = 2;
+const TYPE2_EXPECTED_OCCURRENCES: usize = 2;
+const MINIMUM_DUPLICATED_MASS: u64 = 1;
+const VALID_MASS_RANK_BANDS: [&str; 4] = ["worst", "top10", "mid", "faint"];
+
+/// [LANG-CAND-GO] [PIPELINE-CLUSTER-EXACT-SCOPE] The Go fixtures this suite
+/// drives, with the `--min-nodes` each is driven at. Every report they
+/// produce must satisfy the authored-window contract in `common::go_scope`,
+/// so the fixture names are constants rather than literals repeated at each
+/// call site.
+const MIN_NODES_FLAG: &str = "--min-nodes";
+const GO_SMALL_FIXTURE: &str = "go-small";
+const GO_SMALL_MIN_NODES: &str = "10";
+const GO_SMALL_FIRST: &str = "alpha.go";
+const GO_SMALL_SECOND: &str = "beta.go";
+const GO_TYPE3_FIXTURE: &str = "go-type3";
+const GO_TYPE3_MIN_NODES: &str = "8";
+const GO_CLOSURE_FIXTURE: &str = "go-closure-signature-only";
+const GO_CLOSURE_MIN_NODES: &str = "8";
+const GO_PROLOGUE_FIXTURE: &str = "go-prologue-false-positive";
+const GO_PROLOGUE_MIN_NODES: &str = "15";
+const GO_DISSIMILAR_FIXTURE: &str = "go-dissimilar-functions";
+const GO_DISSIMILAR_MIN_NODES: &str = "8";
 
 /// Runs the CLI against `fixture(fixture_name)` with `--min-nodes
 /// <min_nodes>`, asserts the process succeeded, and returns the raw
@@ -6,9 +32,7 @@ use super::support::*;
 /// fixture with an explicit `--min-nodes` and then asserts on the
 /// rendered report.
 fn run_min_nodes(fixture_name: &str, min_nodes: &str) -> Result<String> {
-    let tmp = tempfile::tempdir()?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = fixture_command(fixture_name, &tmp.path().join("report"))?;
+    let (_tmp, out, mut cmd) = fixture_run(fixture_name)?;
     let _assertion = cmd.args(["--min-nodes", min_nodes]).assert().success();
     Ok(fs::read_to_string(&out.json)?)
 }
@@ -30,13 +54,52 @@ fn run_with_args(fixture_name: &str, extra_args: &[&str]) -> Result<(PathBuf, se
 }
 
 /// Asserts the canonical Type-2 report shape shared by every
-/// per-language `*-small` fixture: both files analysed, both file
-/// names present, and a structural = 1.0 cluster signal.
-fn assert_type2_report(json: &str, first_file: &str, second_file: &str) {
-    assert!(json.contains("\"files_analysed\": 2"));
-    assert!(json.contains(first_file));
-    assert!(json.contains(second_file));
-    assert!(json.contains("\"structural\": 1.0"));
+/// per-language `*-small` fixture: both files analysed, one component spans
+/// exactly both source files, and its only cluster-level measures are
+/// mass-derived ([RANK-MASS-SUM], [FUSED-PAIR-SIGNALS]). The old
+/// `structural: 1.0` cluster signal is retired from the wire; no pair-only
+/// evidence may silently return.
+fn assert_type2_report(json: &str, first_file: &str, second_file: &str) -> Result<()> {
+    let report: serde_json::Value = serde_json::from_str(json)?;
+    assert_eq!(
+        require_u64(&report, "/files_analysed", "report")?,
+        TYPE2_EXPECTED_FILES_ANALYSED,
+        "the Type-2 fixture must analyse both authored source files"
+    );
+    let clusters = require_array(&report, "/clusters", "report")?;
+    assert!(
+        !clusters.is_empty(),
+        "a Type-2 fixture must surface a cluster: {json}"
+    );
+    let clone = require_cluster_spanning(clusters, first_file, second_file)?;
+    assert_eq!(
+        cluster_file_basenames(clone),
+        std::collections::BTreeSet::from([first_file.to_owned(), second_file.to_owned()]),
+        "the Type-2 component must contain exactly its two fixture files"
+    );
+    assert_eq!(
+        require_array(clone, "/occurrences", "Type-2 cluster")?.len(),
+        TYPE2_EXPECTED_OCCURRENCES,
+        "the Type-2 component must preserve its two exact occurrences"
+    );
+    assert_no_pair_surface_on_cluster(clone, "Type-2 cluster");
+    for cluster in clusters {
+        let band = cluster
+            .get("rank_band")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| anyhow::anyhow!("cluster carries no rank band: {cluster}"))?;
+        assert!(
+            VALID_MASS_RANK_BANDS.contains(&band),
+            "cluster {} carries no rank band: {cluster}",
+            cluster_id(cluster)
+        );
+        let mass = require_u64(cluster, "/mass", "cluster")?;
+        assert!(
+            mass >= MINIMUM_DUPLICATED_MASS,
+            "cluster mass must be positive: {cluster}"
+        );
+    }
+    Ok(())
 }
 
 /// The array `owner` carries at `pointer`, or an error dumping the whole
@@ -140,38 +203,20 @@ fn require_cluster_spanning<'a>(
         })
 }
 
-/// Asserts the Type-3 near-miss contract on a cross-file cluster: the
-/// reported view is the *near-miss itself* — shape evidence above the
-/// admission floor but short of Merkle equality — with at least two
-/// occurrences and a `token_jaccard` signal present.
-///
-/// The bound is two-sided on purpose, and the upper half is the half
-/// that matters. This assertion used to demand `structural == 1.0`,
-/// which is satisfiable only by a byte-identical *fragment* nested
-/// inside the near-miss — the run of statements the inserted line did
-/// not disturb. That is precisely the finding gh #408 declares wrong:
-/// the enclosing method is the duplication, the fragment re-describes a
-/// piece of it, and a Type-3 near-miss can never be Merkle-exact by
-/// construction. Asserting exactness therefore asserted that the
-/// detector had missed the clone. Measured on the fixtures this guards:
-/// `go-type3` 0.906, `csharp-type3` 0.898, `fsharp-type3` 0.851.
-fn assert_type3_signals(cluster: &serde_json::Value) {
-    let structural = cluster
-        .pointer("/signals/structural")
-        .and_then(serde_json::Value::as_f64)
-        .unwrap_or(f64::NAN);
-    assert!(
-        structural >= deslop_core::pair::SHARED_SUBTREE_MIN_OVERLAP,
-        "the near-miss cluster must clear the shared-subtree admission floor {floor}, \
-         got {structural}",
-        floor = deslop_core::pair::SHARED_SUBTREE_MIN_OVERLAP,
-    );
-    assert!(
-        structural < 1.0,
-        "the reported view must be the near-miss itself, not a byte-identical \
-         fragment nested inside it: structural = 1.0 means a Merkle-exact match, \
-         which a one-statement Type-3 near-miss cannot be (gh #408), got {structural}",
-    );
+/// Asserts the Type-3 near-miss contract on a cross-file cluster:
+/// at least two occurrences and the mass-only wire fields. The
+/// admission-floor and not-Merkle-exact bounds this helper used to
+/// pin via `signals.structural` moved to the pair surface when the
+/// cluster wire went mass-only: a cluster names components, pair
+/// evidence names edges ([FUSED-PAIR-SIGNALS]). The not-verbatim half
+/// is proven by the byte truth — a one-statement Type-3 near-miss can
+/// never be Merkle-exact by construction (gh #408) — and the clean
+/// surface keeps pair-only fields off the cluster.
+fn assert_type3_signals(
+    scan_root: &Path,
+    cluster: &serde_json::Value,
+    language: &str,
+) -> Result<()> {
     let occurrences = cluster
         .pointer("/occurrences")
         .and_then(serde_json::Value::as_array)
@@ -181,9 +226,13 @@ fn assert_type3_signals(cluster: &serde_json::Value) {
         "a clone cluster must have at least two occurrences, got {occurrences}",
     );
     assert!(
-        cluster.pointer("/signals/token_jaccard").is_some(),
-        "the cross-file cluster must carry a token_jaccard signal",
+        !has_verbatim_pair(scan_root, cluster)?,
+        "the reported view must be the near-miss itself, not a byte-identical pair: \
+         a one-statement Type-3 near-miss cannot be Merkle-exact by construction (gh #408); \
+         got {cluster:#}",
     );
+    assert_no_pair_surface_on_cluster(cluster, &format!("{language} type-3 near-miss"));
+    Ok(())
 }
 
 /// Zero-false-positive guard shared by every `*-dissimilar-functions`
@@ -213,7 +262,7 @@ fn assert_every_cluster_single_file(json: &str, language_label: &str) -> Result<
 #[test]
 fn detects_type2_clone_in_csharp_fixture() -> Result<()> {
     let json = run_min_nodes("csharp-small", "8")?;
-    assert_type2_report(&json, "Alpha.cs", "Beta.cs");
+    assert_type2_report(&json, "Alpha.cs", "Beta.cs")?;
     Ok(())
 }
 
@@ -221,7 +270,7 @@ fn detects_type2_clone_in_csharp_fixture() -> Result<()> {
 #[test]
 fn detects_type2_clone_in_rust_fixture() -> Result<()> {
     let json = run_min_nodes("rust-small", "10")?;
-    assert_type2_report(&json, "alpha.rs", "beta.rs");
+    assert_type2_report(&json, "alpha.rs", "beta.rs")?;
     Ok(())
 }
 
@@ -229,72 +278,70 @@ fn detects_type2_clone_in_rust_fixture() -> Result<()> {
 #[test]
 fn detects_type2_clone_in_python_fixture() -> Result<()> {
     let json = run_min_nodes("python-small", "10")?;
-    assert_type2_report(&json, "alpha.py", "beta.py");
+    assert_type2_report(&json, "alpha.py", "beta.py")?;
     Ok(())
 }
 
-// Implements [PIPELINE-LANG-TRAIT] for Dart ([LANG-CAND-DART]): Type-2
-// renamed-clone detection. `alpha.dart` and `beta.dart` are the same
-// accumulate loop with every identifier renamed; Dart normalisation
-// collapses identifiers/literals so the two functions fingerprint
-// identically and cluster at structural = 1.0.
+// [PIPELINE-LANG-TRAIT] Dart Type-2 fixture: the report cluster is mass-only; any pair measurements require explicit endpoints.
 #[test]
 fn detects_type2_clone_in_dart_fixture() -> Result<()> {
     let json = run_min_nodes("dart-small", "10")?;
-    assert_type2_report(&json, "alpha.dart", "beta.dart");
+    assert_type2_report(&json, "alpha.dart", "beta.dart")?;
     Ok(())
 }
 
-// Implements [PIPELINE-LANG-TRAIT] for PHP ([PARSE-PHP-NORMALIZE]):
-// Type-2 renamed-clone detection. `alpha.php` and `beta.php` implement
-// the same accumulate loop with every identifier renamed; PHP
-// normalisation collapses identifiers/literals so the two functions
-// fingerprint identically and cluster at structural = 1.0.
+// [PIPELINE-LANG-TRAIT] PHP Type-2 fixture: the report cluster is mass-only; any pair measurements require explicit endpoints.
 #[test]
 fn detects_type2_clone_in_php_fixture() -> Result<()> {
     let json = run_min_nodes("php-small", "10")?;
-    assert_type2_report(&json, "alpha.php", "beta.php");
+    assert_type2_report(&json, "alpha.php", "beta.php")?;
     Ok(())
 }
 
-// Implements [PIPELINE-LANG-TRAIT] for F# ([PARSE-FSHARP-NORMALIZE]):
-// Type-2 renamed-clone detection. `alpha.fs` and `beta.fs` implement the
-// same accumulate loop with every identifier renamed and the integer
-// literals changed; F# normalisation collapses identifiers/literals so the
-// two functions fingerprint identically and cluster at structural = 1.0.
+// [PIPELINE-LANG-TRAIT] F# Type-2 fixture: the report cluster is mass-only; any pair measurements require explicit endpoints.
 #[test]
 fn detects_type2_clone_in_fsharp_fixture() -> Result<()> {
     let json = run_min_nodes("fsharp-small", "10")?;
-    assert_type2_report(&json, "alpha.fs", "beta.fs");
+    assert_type2_report(&json, "alpha.fs", "beta.fs")?;
     Ok(())
 }
 
-// Implements [PIPELINE-LANG-TRAIT] for Go ([LANG-CAND-GO]): Type-2
-// renamed-clone detection. `alpha.go` and `beta.go` implement the same
-// accumulate loop with every identifier renamed and the integer literals
-// changed; Go normalisation collapses identifiers/literals so the two
-// functions fingerprint identically and cluster at structural = 1.0.
+// [PIPELINE-LANG-TRAIT] Go Type-2 fixture: the report cluster is mass-only; any pair measurements require explicit endpoints.
 #[test]
 fn detects_type2_clone_in_go_fixture() -> Result<()> {
-    let json = run_min_nodes("go-small", "10")?;
-    assert_type2_report(&json, "alpha.go", "beta.go");
+    let (scan_root, report) =
+        run_with_args(GO_SMALL_FIXTURE, &[MIN_NODES_FLAG, GO_SMALL_MIN_NODES])?;
+    assert_type2_report(
+        &serde_json::to_string(&report)?,
+        GO_SMALL_FIRST,
+        GO_SMALL_SECOND,
+    )?;
+
+    // [PIPELINE-CLUSTER-EXACT-SCOPE] A Type-2 pair is the same authored
+    // declaration in both files. Neither half may reach back to row 1 for
+    // the package clause and import block, and because the two sides are
+    // the same shape they must cover the same number of rows.
+    assert_go_authored_scope(&scan_root, &report, GO_SMALL_FIXTURE)?;
+    assert_every_occurrence_opens_a_declaration(&scan_root, &report, GO_SMALL_FIXTURE)?;
+    assert_symmetric_rows_everywhere(&report, GO_SMALL_FIXTURE);
     Ok(())
 }
 
-// Implements [FUSION-SIGNALS-THREE-LAYER] for F#: a genuine Type-3
+// Implements [FUSED-SIGNALS-THREE-LAYER] for F#: a genuine Type-3
 // near-miss. `delta.fs`'s loop body runs two accumulator updates per
 // iteration; `epsilon.fs`'s runs one. The shared control-flow subtrees
 // (`_ < 0 then 0`, `_ <- _ + _`, `_ in 0 .. _`) surface as a cross-file
-// cluster at structural = 1.0, while the signature-only sibling match
+// cluster, while the signature-only sibling match
 // (`f (_: int) : int`, whose bodies differ) is correctly suppressed
 // ([CLONE-NOISE-SIGNATURE-ONLY], #154) — proving both the structural
 // near-miss path and the signature filter are wired for F#.
 #[test]
 fn detects_type3_clone_in_fsharp_fixture() -> Result<()> {
     let json = run_min_nodes("fsharp-type3", "8")?;
+    let scan_root = fixture("fsharp-type3");
     let clusters = report_clusters(&json)?;
     let cluster = require_cluster_spanning(&clusters, "delta.fs", "epsilon.fs")?;
-    assert_type3_signals(cluster);
+    assert_type3_signals(&scan_root, cluster, "F#")?;
     Ok(())
 }
 
@@ -338,10 +385,11 @@ fn assert_enclosing_near_miss(
     let mut carrying = 0_usize;
     for occurrence in occurrences {
         let text = require_occurrence_text(scan_root, occurrence)?;
-        assert!(
-            text.contains("func "),
+        assert_contains(
+            &text,
+            "func ",
             "the near-miss view must span the whole enclosing declaration, not a \
-             fragment of it (gh #408); got:\n{text}",
+             fragment of it (gh #408); got",
         );
         if text.contains(divergent_statement) {
             carrying = carrying.saturating_add(1);
@@ -356,7 +404,7 @@ fn assert_enclosing_near_miss(
     Ok(())
 }
 
-// Implements [FUSION-SIGNALS-THREE-LAYER] for Go ([LANG-CAND-GO]): a
+// Implements [FUSED-SIGNALS-THREE-LAYER] for Go ([LANG-CAND-GO]): a
 // genuine Type-3 near-miss. `delta.go` and `epsilon.go` run the same
 // guarded accumulator algorithm, but `delta.go`'s loop body performs two
 // updates per iteration and `epsilon.go`'s performs one. The shared
@@ -374,16 +422,23 @@ fn assert_enclosing_near_miss(
 // original "some cluster spans both files" assertion could not.
 #[test]
 fn detects_type3_clone_in_go_fixture() -> Result<()> {
-    let json = run_min_nodes("go-type3", "8")?;
-    let scan_root = fixture("go-type3");
+    let json = run_min_nodes(GO_TYPE3_FIXTURE, GO_TYPE3_MIN_NODES)?;
+    let scan_root = fixture(GO_TYPE3_FIXTURE);
+    let report: serde_json::Value = serde_json::from_str(&json)?;
     let clusters = report_clusters(&json)?;
+
+    // [PIPELINE-CLUSTER-EXACT-SCOPE] A near-miss is still one authored
+    // declaration on each side. No occurrence may open at row 1, carry the
+    // package clause or import block, or sit at a different depth from its
+    // counterpart.
+    assert_go_authored_scope(&scan_root, &report, GO_TYPE3_FIXTURE)?;
     assert_eq!(
         files_analysed(&json)?,
         2,
         "the go-type3 fixture is a two-file pair; anything else means discovery missed a file",
     );
     let cluster = require_cluster_spanning(&clusters, "delta.go", "epsilon.go")?;
-    assert_type3_signals(cluster);
+    assert_type3_signals(&scan_root, cluster, "Go")?;
     for cluster in &clusters {
         let files = cluster_file_basenames(cluster);
         if files.len() > 1 {
@@ -412,7 +467,13 @@ fn detects_type3_clone_in_go_fixture() -> Result<()> {
 // cross-file `identical` cluster. This test is that mutation's detector.
 #[test]
 fn go_closure_signature_only_match_is_suppressed() -> Result<()> {
-    let json = run_min_nodes("go-closure-signature-only", "8")?;
+    let json = run_min_nodes(GO_CLOSURE_FIXTURE, GO_CLOSURE_MIN_NODES)?;
+    let scan_root = fixture(GO_CLOSURE_FIXTURE);
+    let report: serde_json::Value = serde_json::from_str(&json)?;
+
+    // [PIPELINE-CLUSTER-EXACT-SCOPE] Suppressing the cross-file signature
+    // match does not license the survivors to take their whole file.
+    assert_go_authored_scope(&scan_root, &report, GO_CLOSURE_FIXTURE)?;
     assert_eq!(
         files_analysed(&json)?,
         2,
@@ -451,16 +512,33 @@ fn go_closure_signature_only_match_is_suppressed() -> Result<()> {
 // line 1 — the single worst offender in the report, and pure noise.
 #[test]
 fn go_package_and_import_prologue_never_becomes_a_cross_file_cluster() -> Result<()> {
-    let (scan_root, report) = run_with_args("go-prologue-false-positive", &["--min-nodes", "15"])?;
+    let (scan_root, report) = run_with_args(
+        GO_PROLOGUE_FIXTURE,
+        &[MIN_NODES_FLAG, GO_PROLOGUE_MIN_NODES],
+    )?;
+
+    // [PIPELINE-CLUSTER-EXACT-SCOPE] Whatever this report publishes, no
+    // occurrence may contain the `package` clause or `import` block, and
+    // none may open at row 1.
+    assert_go_authored_scope(&scan_root, &report, GO_PROLOGUE_FIXTURE)?;
     assert_eq!(
         require_u64(&report, "/files_analysed", "report")?,
         6,
         "all six package files must be analysed; report={report:#?}",
     );
+    // Liveness proof on the mass-only wire: the fixture's six files
+    // genuinely diverge below the shared prologue, so the honest report
+    // carries no clusters at all — the old "some cluster must appear"
+    // bound was satisfied by the very over-clustering this regression
+    // exists to kill. What proves the scan was live is the metrics: the
+    // parser consumed the whole corpus (analysed_loc > 0) and the
+    // boilerplate carriers were counted, so a detector that stopped
+    // looking would fail `files_analysed`, not pass it.
+    let analysed_loc = require_u64(&report, "/metrics/analysed_loc", "report")?;
     assert!(
-        !require_array(&report, "/clusters", "report")?.is_empty(),
-        "the fixture must still produce clone candidates below the prologue, otherwise \
-         the guard proves only that nothing was fingerprinted at all",
+        analysed_loc >= 180,
+        "the six divergent Go files must all be parsed (analysed_loc >= 180, got \
+         {analysed_loc}) — the prologue guard must never double as a silence guard",
     );
     assert_no_cross_file_prologue_cluster(&report, &scan_root, "go prologue");
     Ok(())
@@ -485,8 +563,18 @@ fn dissimilar_fsharp_functions_across_files_stay_in_separate_clusters() -> Resul
 // single file.
 #[test]
 fn dissimilar_go_functions_across_files_stay_in_separate_clusters() -> Result<()> {
-    let json = run_min_nodes("go-dissimilar-functions", "8")?;
-    assert_every_cluster_single_file(&json, "Go")
+    let (scan_root, report) = run_with_args(
+        GO_DISSIMILAR_FIXTURE,
+        &[MIN_NODES_FLAG, GO_DISSIMILAR_MIN_NODES],
+    )?;
+    let json = serde_json::to_string(&report)?;
+    assert_every_cluster_single_file(&json, "Go")?;
+
+    // [PIPELINE-CLUSTER-EXACT-SCOPE] A single-file cluster is still bound
+    // by the authored window: it may not open at row 1 or swallow the
+    // package clause and import block above the function it reports.
+    assert_go_authored_scope(&scan_root, &report, GO_DISSIMILAR_FIXTURE)?;
+    assert_every_occurrence_opens_a_declaration(&scan_root, &report, GO_DISSIMILAR_FIXTURE)
 }
 
 // Audience: HUMAN. Zero-false-positive guard for Dart ([LANG-CAND-DART]).
@@ -660,23 +748,24 @@ fn handles_mixed_language_fixture() -> Result<()> {
     Ok(())
 }
 
-// Implements [DECISION-TYPE3-TWO-PASS] + [FUSION-STRATEGY-BOUNDED-MAX]:
+// Implements [DECISION-TYPE3-TWO-PASS] + [FUSED-STRATEGY-BOUNDED-MAX]:
 // Type-3 near-miss cross-file cluster with `structural=0.0`.
 #[test]
 fn detects_type3_clone_in_csharp_fixture() -> Result<()> {
     let json = run_min_nodes("csharp-type3", "15")?;
+    let scan_root = fixture("csharp-type3");
     assert!(json.contains("Delta.cs"));
     assert!(json.contains("Epsilon.cs"));
     // This asserted the raw literal `"structural": 0.0`, which gh #408
     // is the issue filed against: the two methods share ~90% of their
     // AST, and the zero was the candidate layer writing a literal for
     // every cross-bucket pair rather than a measurement
-    // ([FUSION-SHARED-SUBTREE]). Asserting the zero asserted the defect.
+    // ([FUSED-SHARED-SUBTREE]). Asserting the zero asserted the defect.
     // The honest contract is the two-sided one — real shape evidence,
     // short of the Merkle equality a near-miss cannot have.
     let clusters = report_clusters(&json)?;
     let cluster = require_cluster_spanning(&clusters, "Delta.cs", "Epsilon.cs")?;
-    assert_type3_signals(cluster);
+    assert_type3_signals(&scan_root, cluster, "C#")?;
     Ok(())
 }
 

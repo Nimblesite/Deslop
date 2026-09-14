@@ -1,12 +1,12 @@
 ---
 layout: layouts/docs.njk
 title: GitHub Action — gate CI on duplicated code
-description: Full configuration for the Deslop.live GitHub Action — every input and output, the exit-code contract, threshold precedence, measure-without-gating, supported runners, artifact handling, and how the pinned tag selects the CLI version.
-keywords: deslop, github action, ci gate, duplicate code, fail-over, duplication threshold, code quality, continuous integration
+description: Configure the Deslop GitHub Action to measure duplicate code, gate CI by threshold, upload reports, verify release artifacts, and select the CLI version.
 eleventyNavigation:
   key: GitHub Action
   order: 7
 icon: rule
+docsGroup: guides
 ---
 
 # GitHub Action
@@ -101,8 +101,6 @@ Report the number on every PR and let a human decide, rather than blocking the m
       - run: echo "{% raw %}${{ steps.deslop.outputs.duplication-percent }}{% endraw %}% duplicated"
 ```
 
-This is the recommended way to introduce Deslop to an existing codebase: run it ungated for a few weeks, watch where the number settles, then set `fail-over` just below it and ratchet down.
-
 ## Exit codes
 
 The action **surfaces** the CLI's status; it never reinterprets it.
@@ -110,13 +108,11 @@ The action **surfaces** the CLI's status; it never reinterprets it.
 | Code | Meaning |
 | --- | --- |
 | `0` | Analysis succeeded and duplication was within the threshold (or no threshold was set). |
-| `1` | Runtime error — bad scan path, parse/I-O failure, or an unreachable `required` embedding provider. Never a panic. |
+| `1` | Runtime error — bad scan path, parse/I-O failure, or an unreachable `required` embedding provider. |
 | `2` | Usage error — unknown flag, or an out-of-range / non-finite threshold value. |
 | `3` | **Duplication threshold breached.** The full report is still written so CI can surface the offenders. |
 
 A breach fails the step with a message naming the measured percentage and the ceiling. `1` and `2` fail with distinct messages, so a misconfigured input is never mistaken for a duplication breach.
-
-Crucially, the reports are rendered and the artifact is uploaded **before** the gate re-raises the status — a failing build still gives you the offenders.
 
 ## Reports and artifacts
 
@@ -147,8 +143,8 @@ Any other pair is a hard error naming the unsupported combination. There is no W
 ## Supply-chain notes
 
 - The archive and its published `.sha256` sidecar are both downloaded, and the digest is **verified before anything is extracted**. A mismatch aborts the job.
-- Every input reaches its script through `env`, never interpolated into a shell body, so a crafted input cannot inject shell.
-- Only runner-owned constants are written to `$GITHUB_PATH` and `$GITHUB_ENV`, so no caller-supplied value can influence where later steps resolve executables from.
+- Action inputs reach the script through environment variables rather than interpolation into the shell body.
+- Only runner-owned constants are written to `$GITHUB_PATH` and `$GITHUB_ENV`.
 
 ## Not using GitHub Actions?
 
@@ -163,5 +159,3 @@ deslop . --fail-over 5.0
 ```
 
 Exit code `3` fails the step like any other non-zero status. Archives for every platform are on the [Releases page](https://github.com/Nimblesite/Deslop/releases).
-
-Agents driving CI should read the [AI Agents](/docs/ai-integration/) guide for the same gate plus how to parse the JSON report.

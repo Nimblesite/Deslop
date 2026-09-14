@@ -1,13 +1,9 @@
-//! Unit tests for [`super`] — the `fused_bounded_max`,
-//! `type2_gate_liveness` and curated `type2_recall` corpus confidence
-//! checks ([CORPUS-BASELINE], [CORPUS-RECALL]).
+//! Unit tests for mass-only corpus confidence assertions.
 
 use super::*;
-use serde_json::json;
+use serde_json::{json, Value};
 
-/// The single reported failure, or `None` when there is not exactly one.
-/// Returning an `Option` keeps the assertions in the tests, where their
-/// messages can name the report that produced them.
+/// Returns the single failure when exactly one was reported.
 fn only(failures: &[Failure]) -> Option<&Failure> {
     match failures {
         [single] => Some(single),
@@ -15,21 +11,17 @@ fn only(failures: &[Failure]) -> Option<&Failure> {
     }
 }
 
-/// The check id of the single reported failure, for direct comparison.
+/// Returns the check id of the single failure.
 fn only_check(failures: &[Failure]) -> Option<&str> {
     only(failures).map(|failure| failure.check.as_str())
 }
 
-/// True when the single reported failure's detail contains `needle`.
+/// Whether the single failure detail contains `needle`.
 fn detail_mentions(failures: &[Failure], needle: &str) -> bool {
     only(failures).is_some_and(|failure| failure.detail.contains(needle))
 }
 
-/// Asserts `failures` is exactly one failure of `check` whose detail
-/// mentions `needle`. The curated, liveness and fused suites each
-/// respelled this same triple; Deslop scored the copies against this
-/// repo's own corpus. Both messages stay per-call so no suite loses the
-/// sentence that says what its case is actually proving.
+/// Asserts one named failure with useful detail.
 fn assert_only_failure(
     failures: &[Failure],
     check: &str,
@@ -45,89 +37,72 @@ fn assert_only_failure(
     );
 }
 
-/// One cluster with the given bucket, signal triple and rendered fused.
-fn cluster(bucket: &str, structural: f64, token: f64, fused: f64) -> Value {
-    with_embedding(bucket, structural, token, 0.0, fused)
-}
-
-/// The same, with the semantic axis set too.
-fn with_embedding(bucket: &str, structural: f64, token: f64, embedding: f64, fused: f64) -> Value {
-    json!({
-        "bucket": bucket,
-        "signals": {
-            "structural": structural,
-            "token_jaccard": token,
-            "embedding_cos": embedding,
-            "fused": fused,
-        },
-        "occurrences": [{ "hidden": false }, { "hidden": false }],
-    })
-}
-
-/// The shipped arithmetic: the strongest single axis, bounded.
-fn bounded_max(structural: f64, token: f64, embedding: f64) -> f64 {
-    structural.max(token).max(embedding).clamp(0.0, 1.0)
-}
-
-/// The quarantined arithmetic from gh #343, kept here as a negative
-/// control. A gate that never fails against the code it was written to
-/// catch asserts nothing, so every `fused_bounded_max` test that expects a
-/// pass is re-run through this to prove it would have caught the revert.
-fn sum_then_clamp(structural: f64, token: f64, embedding: f64) -> f64 {
-    (structural + token + embedding).clamp(0.0, 1.0)
-}
-
-/// The same cluster with every occurrence hidden, so it renders nothing.
-fn hide(mut cluster: Value) -> Value {
-    if let Some(entry) = cluster.get_mut("occurrences") {
-        *entry = json!([{ "hidden": true }, { "hidden": true }]);
-    }
-    cluster
-}
-
-fn report(clusters: &[Value]) -> Value {
-    json!({ "clusters": clusters })
-}
-
-/// The signal triples the negative control is run over. Each is a shape
-/// the engine really renders, and each has at least two positive axes so
-/// the sum and the max provably disagree.
-const TRIPLES: [(&str, f64, f64, f64); 5] = [
-    ("identical", 1.0, 1.0, 0.0),
-    ("nearly_identical", 1.0, 1.0, 0.42),
-    ("structural_only", 1.0, 0.30, 0.0),
-    ("loosely_similar", 0.20, 0.30, 0.94),
-    ("same_behavior", 0.10, 0.20, 0.88),
-];
-
-/// One cluster whose occurrences carry the given rendered paths.
-fn spanning(bucket: &str, structural: f64, token: f64, files: &[&str]) -> Value {
+/// One valid mass-only cluster over the supplied visible files.
+fn spanning(id: &str, nodes: u64, rank: u64, files: &[&str]) -> Value {
     let occurrences: Vec<Value> = files
         .iter()
-        .map(|file| json!({ "path": file, "hidden": false }))
+        .map(|file| json!({"path": file, "hidden": false}))
         .collect();
+    let occurrence_count = u64::try_from(files.len()).unwrap_or(u64::MAX);
     json!({
-        "bucket": bucket,
-        "signals": {
-            "structural": structural,
-            "token_jaccard": token,
-            "embedding_cos": 0.0,
-            "fused": token.max(structural),
-        },
+        "id": id,
+        "rank": rank,
+        "rank_band": "worst",
+        "kind": "identical",
+        "mass": nodes.saturating_mul(occurrence_count.saturating_sub(1)),
+        "canonical_node_count": nodes,
+        "occurrence_count": occurrence_count,
+        "occurrences_total": occurrence_count,
         "occurrences": occurrences,
     })
 }
 
-/// A manifest curating one hand-verified Type-2 pair.
-fn manifest_with_type2(files: &[&str]) -> Value {
+/// [EXCLUSION-CONFIG] A mixed cluster: `visible` occurrences the report
+/// shows beside `hidden` `report_hide`-suppressed copies of the same
+/// code. `occurrence_count` counts what the user sees, mass follows from
+/// it, and `occurrences_total` counts every copy the cluster carries.
+fn mixed(id: &str, nodes: u64, visible: &[&str], hidden: &[&str]) -> Value {
+    let occurrence = |path: &&str, is_hidden: bool| json!({"path": path, "hidden": is_hidden});
+    let occurrences: Vec<Value> = visible
+        .iter()
+        .map(|path| occurrence(path, false))
+        .chain(hidden.iter().map(|path| occurrence(path, true)))
+        .collect();
+    let visible_count = u64::try_from(visible.len()).unwrap_or(u64::MAX);
+    let carried = u64::try_from(occurrences.len()).unwrap_or(u64::MAX);
     json!({
-        "must_find_type2": [{
-            "files": files,
-            "why": "hand-verified rename pair for the unit test",
-        }]
+        "id": id,
+        "rank": 1,
+        "rank_band": "worst",
+        "kind": "identical",
+        "mass": nodes.saturating_mul(visible_count.saturating_sub(1)),
+        "canonical_node_count": nodes,
+        "occurrence_count": visible_count,
+        "occurrences_total": carried,
+        "occurrences": occurrences,
     })
 }
 
+/// One mass-only report.
+fn report(clusters: &[Value]) -> Value {
+    json!({"clusters": clusters})
+}
+
+/// Marks one matching occurrence hidden.
+fn hide_occurrence(mut cluster: Value, path: &str) -> Value {
+    let Some(occurrences) = cluster.get_mut("occurrences").and_then(Value::as_array_mut) else {
+        return cluster;
+    };
+    for occurrence in occurrences {
+        if occurrence.get("path").and_then(Value::as_str) == Some(path) {
+            let _old = occurrence
+                .as_object_mut()
+                .and_then(|fields| fields.insert("hidden".to_owned(), Value::Bool(true)));
+        }
+    }
+    cluster
+}
+
 mod curated;
-mod fused;
 mod liveness;
+mod recall;

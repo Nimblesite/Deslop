@@ -78,6 +78,13 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     labels: ["dependencies"]
+    ignore:
+      # @types/vscode must track engines.vscode (clients/vscode/package.json):
+      # vsce refuses to package when the types outrun the engine. Patches stay
+      # inside the `~` pin; minor/major moves are made by hand, together with
+      # the engine bump.
+      - dependency-name: "@types/vscode"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
     groups:
       npm:
         applies-to: version-updates

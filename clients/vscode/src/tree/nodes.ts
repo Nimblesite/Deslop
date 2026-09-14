@@ -7,21 +7,21 @@
 import * as vscode from "vscode";
 
 import { clusterSlug } from "../clusterHover";
+import { KIND_ICON, KIND_THEME_COLOR, SEVERITY_DOT } from "../design";
 import { occurrenceDisplayLocation } from "../locations";
 import { resolveWorkspacePath } from "../pathUtils";
-import { formatPercent, formatScore } from "../types/format";
-import { SEVERITY_DOT } from "../severity";
+import { formatMass, formatPercent } from "../types/format";
 import {
-  Bucket,
-  bucketLabels,
+  ClusterKind,
+  clusterBand,
   FileMetric,
+  kindTaxonomy,
+  kindTitle,
   occurrenceCount,
   ReportCluster,
   ReportOccurrence,
-  resolveBucket,
   Severity,
 } from "../types/report";
-import { languageDisplayName } from "./language";
 import { baseName, displayPath, representativePath } from "./paths";
 import type { ThresholdStatus } from "./threshold";
 
@@ -29,32 +29,27 @@ import type { ThresholdStatus } from "./threshold";
 // after the helpers moved to the cycle-free `./paths` leaf module.
 export { displayPath, representativePath } from "./paths";
 
+const TREE_ITEM_ROLE = "treeitem";
+const FILE_NODE_KIND = "file";
+const CANONICAL_OCCURRENCE_INDEX = 0;
+
 export type Node =
   | ClusterNode
   | OccurrenceNode
   | FileNode
   | FolderNode
-  | LanguageGroupNode
-  | BucketGroupNode
+  | KindGroupNode
   | MetricsHeadlineNode
   | FolderMetricNode
   | FileMetricNode
   | SessionFieldNode
   | StatusNode;
 
-// [VSIX-TOP-OFFENDERS-CATEGORY-COLORS] Category colour is metadata
-// backed by text/a11y labels, never the only signal.
-export const CATEGORY_STYLE: Record<Bucket, { icon: string; color: string }> = {
-  identical: { icon: "circle-filled", color: "charts.red" },
-  nearly_identical: { icon: "circle-large-filled", color: "charts.orange" },
-  structural_only: { icon: "circle-slash", color: "charts.foreground" },
-  loosely_similar: { icon: "circle-outline", color: "charts.blue" },
-  same_behavior: { icon: "sparkle", color: "charts.purple" },
-};
-
-export function categoryIcon(bucket: Bucket): vscode.ThemeIcon {
-  const style = CATEGORY_STYLE[bucket];
-  return new vscode.ThemeIcon(style.icon, new vscode.ThemeColor(style.color));
+// [CLONE-KIND-COLOR] The row icon is the cluster's clone kind: one codicon
+// and one contributed theme colour per kind, from the single paint table
+// in design.ts. Rank never chooses a colour.
+export function kindIcon(kind: ClusterKind): vscode.ThemeIcon {
+  return new vscode.ThemeIcon(KIND_ICON[kind], new vscode.ThemeColor(KIND_THEME_COLOR[kind]));
 }
 
 // [VSIX-TOP-OFFENDERS-CLUSTER-ID] The bold label leads with the cluster's
@@ -65,14 +60,15 @@ export function categoryIcon(bucket: Bucket): vscode.ThemeIcon {
 // File mode passes `file: undefined` so the redundant `· <file>`
 // suffix is dropped under a parent FileNode; cluster mode passes the
 // display path. Tooltip is built separately and stays mode-invariant.
+// The title is the cluster's clone kind ([CLONE-KIND-LABELS]); the dot is
+// the mass rank band's glyph density ([SEVERITY-BAND]).
 export function clusterRowLabel(args: {
   slug: string;
   severity: Severity;
-  bucket: Bucket;
+  kind: ClusterKind;
   file?: string;
 }): string {
-  const labels = bucketLabels(args.bucket);
-  const head = `${args.slug} ${SEVERITY_DOT[args.severity]} ${labels.plainTitle}`;
+  const head = `${args.slug} ${SEVERITY_DOT[args.severity]} ${kindTitle(args.kind)}`;
   return args.file ? `${head} · ${args.file}` : head;
 }
 
@@ -88,35 +84,33 @@ export class ClusterNode extends vscode.TreeItem {
 
   constructor(
     readonly cluster: ReportCluster,
-    severity: Severity,
     options: ClusterNodeOptions = {},
   ) {
-    const bucket = resolveBucket(cluster);
-    const labels = bucketLabels(bucket);
     const filePath = representativePath(cluster);
     const fileLabel = displayPath(filePath);
     const showFile = options.showFile ?? true;
     const slug = clusterSlug(cluster);
-    const labelArgs = showFile
-      ? { slug, severity, bucket, file: fileLabel }
-      : { slug, severity, bucket };
+    const severity = clusterBand(cluster);
+    const kind = cluster.kind;
+    const title = kindTitle(kind);
+    const labelArgs = showFile ? { slug, severity, kind, file: fileLabel } : { slug, severity, kind };
     super(clusterRowLabel(labelArgs), vscode.TreeItemCollapsibleState.Collapsed);
     const rank = cluster.rank;
     this.rank = rank;
     this.description = `rank #${rank} · ${occurrenceCount(cluster)} copies`;
     this.contextValue =
       occurrenceCount(cluster) > 1 ? "deslop.clusterComparable" : "deslop.clusterSingle";
-    this.iconPath = categoryIcon(bucket);
+    this.iconPath = kindIcon(kind);
     this.accessibilityInformation = {
-      label: `${labels.plainTitle} in ${fileLabel}, cluster ${cluster.id}, rank ${rank}`,
-      role: "treeitem",
+      label: `${title} in ${fileLabel}, cluster ${cluster.id}, rank ${rank}`,
+      role: TREE_ITEM_ROLE,
     };
     // Tooltip is the AI-scrapable hover surface and stays mode-invariant
     // — always carries the full file path. [VSIX-TOP-OFFENDERS-FILE-MODE]
     this.tooltip = new vscode.MarkdownString(
-      `**${labels.hybridTitle}** — ${labels.actionSentence}\n\n` +
+      `**${title}** (${kindTaxonomy(kind)})\n\n` +
         `file: \`${filePath}\`\n\n` +
-        `rank #${rank} · weight: \`${formatScore(cluster.weight)}\` · size: \`${cluster.size}\` · copies: \`${occurrenceCount(cluster)}\`\n\n` +
+        `rank #${rank} · mass: \`${formatMass(cluster.mass)}\` · nodes: \`${cluster.canonical_node_count}\` · copies: \`${occurrenceCount(cluster)}\`\n\n` +
         `cluster id: \`${cluster.id}\``,
     );
     this.command = {
@@ -133,21 +127,20 @@ export class OccurrenceNode extends vscode.TreeItem {
     parentCluster?: ReportCluster,
     parentRank?: number,
     occurrenceIndex?: number,
+    canonicalOccurrence: ReportOccurrence | null = parentCluster?.occurrences[CANONICAL_OCCURRENCE_INDEX] ?? null,
   ) {
     const location = occurrenceDisplayLocation(occurrence);
     super(location?.label ?? occurrence.path, vscode.TreeItemCollapsibleState.None);
     if (location) this.description = location.description;
     this.contextValue =
-      parentCluster !== undefined && occurrenceIndex === 0
+      parentCluster !== undefined && occurrence === canonicalOccurrence
         ? "deslop.occurrenceCanonical"
         : "deslop.occurrence";
     if (parentCluster !== undefined && occurrenceIndex !== undefined) {
-      const labels = bucketLabels(resolveBucket(parentCluster));
       const total = occurrenceCount(parentCluster);
       const rankText = parentRank !== undefined ? `rank #${parentRank} · ` : "";
       this.tooltip = new vscode.MarkdownString(
-        `**${rankText}${labels.plainTitle}** · occurrence ${occurrenceIndex + 1} of ${total}\n\n` +
-          labels.actionSentence,
+        `**${rankText}${kindTitle(parentCluster.kind)}** · occurrence ${occurrenceIndex + 1} of ${total}`,
       );
     }
     this.command = {
@@ -159,36 +152,46 @@ export class OccurrenceNode extends vscode.TreeItem {
 }
 
 // [VSIX-TOP-OFFENDERS-FILE-MODE] Top-level row in file mode. The caller
-// passes the weight of the file's worst cluster — the engine's figure,
+// passes the mass of the file's worst cluster — the engine's figure,
 // read off the lowest-ranked member — so "impact at a glance" matches
-// the sort key without any weight being recomputed here.
+// the sort key without any mass being recomputed here.
 export class FileNode extends vscode.TreeItem {
   constructor(
     readonly filePath: string,
     readonly clusters: ReportCluster[],
-    worstWeight: number,
+    worstMass: number,
   ) {
     const label = displayPath(filePath);
     const clusterCount = clusters.length;
     const noun = clusterCount === 1 ? "cluster" : "clusters";
     super(`${label} · ${clusterCount} ${noun}`, vscode.TreeItemCollapsibleState.Collapsed);
-    this.description = `worst weight ${formatScore(worstWeight)}`;
+    this.description = `worst mass ${formatMass(worstMass)}`;
     this.contextValue = "deslop.fileGroup";
-    this.iconPath = new vscode.ThemeIcon("file");
-    this.tooltip = new vscode.MarkdownString(
-      `\`${filePath}\`\n\n` +
-        `${clusterCount} duplicate ${noun} · worst weight \`${formatScore(worstWeight)}\``,
-    );
+    this.iconPath = new vscode.ThemeIcon(FILE_NODE_KIND);
+    this.tooltip = pathRollupTooltip(filePath, `${clusterCount} duplicate ${noun}`, worstMass);
     this.accessibilityInformation = {
       label: `${label}, ${clusterCount} duplicate ${noun}`,
-      role: "treeitem",
+      role: TREE_ITEM_ROLE,
     };
   }
 }
 
-// Shared group-row machinery for the two grouping axes: file-mode
-// bucket sections and type-mode bucket roots render through this one
-// base ([FACET-GROUP-BY-TYPE] "one implementation, two group axes").
+// [VSIX-TOP-OFFENDERS-FILE-MODE] The tooltip both path-keyed rollup rows
+// render: the path on its own line, then a one-line summary ending in the
+// row's worst mass. One function so a file row and a folder row can never
+// drift into describing the same figure two different ways.
+function pathRollupTooltip(
+  rowPath: string,
+  summary: string,
+  worstMass: number,
+): vscode.MarkdownString {
+  return new vscode.MarkdownString(
+    `\`${rowPath}\`\n\n${summary} · worst mass \`${formatMass(worstMass)}\``,
+  );
+}
+
+// Shared group-row machinery for the kind grouping axis: file-mode kind
+// sections and kind roots render through this one base.
 // Display-only: clusters carry the navigation command; the group row
 // carries the shared label and live count.
 export abstract class GroupNode extends vscode.TreeItem {
@@ -206,29 +209,24 @@ export abstract class GroupNode extends vscode.TreeItem {
     if (icon) this.iconPath = icon;
     this.accessibilityInformation = {
       label: `${title}, ${clusters.length} clusters`,
-      role: "treeitem",
+      role: TREE_ITEM_ROLE,
     };
   }
 }
 
-// [VSIX-TOP-OFFENDERS-FILE-MODE] Bucket section under a FileNode, and
-// [FACET-GROUP-BY-TYPE] bucket root in type grouping mode (#258) — one
-// node for both axes, labelled by the shared bucket plain title.
-// `showFileInChildren` is true only for type-mode roots, where no file
+// [VSIX-TOP-OFFENDERS-FILE-MODE] Kind section under a FileNode, and kind
+// root in kind grouping mode ([FACET-GROUP-BY-KIND]) — one node for both
+// axes, titled and coloured by the clone kind.
+// `showFileInChildren` is true only for root mode, where no file
 // ancestor implies the file.
-export class BucketGroupNode extends GroupNode {
+export class KindGroupNode extends GroupNode {
   constructor(
-    readonly bucket: Bucket,
+    readonly kind: ClusterKind,
     clusters: ReportCluster[],
     showFileInChildren = false,
   ) {
-    super(
-      bucketLabels(bucket).plainTitle,
-      clusters,
-      "deslop.bucketGroup",
-      showFileInChildren,
-      categoryIcon(bucket),
-    );
+    super(kindTitle(kind), clusters, "deslop.kindGroup", showFileInChildren, kindIcon(kind));
+    this.tooltip = new vscode.MarkdownString(`**${kindTitle(kind)}** — ${kindTaxonomy(kind)}`);
   }
 }
 
@@ -240,42 +238,22 @@ export class FolderNode extends vscode.TreeItem {
     readonly folderPath: string,
     label: string,
     readonly children: Node[],
-    worstWeight: number,
+    worstMass: number,
     fileCount: number,
   ) {
     super(label, vscode.TreeItemCollapsibleState.Collapsed);
-    const noun = fileCount === 1 ? "file" : "files";
-    this.description = `worst weight ${formatScore(worstWeight)} · ${fileCount} ${noun}`;
+    const noun = fileCount === 1 ? FILE_NODE_KIND : "files";
+    this.description = `worst mass ${formatMass(worstMass)} · ${fileCount} ${noun}`;
     this.contextValue = "deslop.folderGroup";
     this.iconPath = vscode.ThemeIcon.Folder;
-    this.tooltip = new vscode.MarkdownString(
-      `\`${folderPath}\`\n\n` +
-        `${fileCount} ${noun} with duplication · worst weight \`${formatScore(worstWeight)}\``,
+    this.tooltip = pathRollupTooltip(
+      folderPath,
+      `${fileCount} ${noun} with duplication`,
+      worstMass,
     );
     this.accessibilityInformation = {
       label: `${label}, ${fileCount} duplicated ${noun}`,
-      role: "treeitem",
-    };
-  }
-}
-
-// [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] Outer per-language group. Wraps a
-// full cluster/file/folder subtree for one language; rank stays global.
-export class LanguageGroupNode extends vscode.TreeItem {
-  constructor(
-    readonly language: string,
-    readonly children: Node[],
-    worstWeight: number,
-    clusterCount: number,
-  ) {
-    super(languageDisplayName(language), vscode.TreeItemCollapsibleState.Expanded);
-    const noun = clusterCount === 1 ? "cluster" : "clusters";
-    this.description = `worst weight ${formatScore(worstWeight)} · ${clusterCount} ${noun}`;
-    this.contextValue = "deslop.languageGroup";
-    this.iconPath = new vscode.ThemeIcon("symbol-namespace");
-    this.accessibilityInformation = {
-      label: `${languageDisplayName(language)}, ${clusterCount} ${noun}`,
-      role: "treeitem",
+      role: TREE_ITEM_ROLE,
     };
   }
 }
@@ -331,7 +309,7 @@ export class FolderMetricNode extends vscode.TreeItem {
     );
     this.accessibilityInformation = {
       label: `${label}, ${formatPercent(percent)} duplicated`,
-      role: "treeitem",
+      role: TREE_ITEM_ROLE,
     };
   }
 }
@@ -343,7 +321,7 @@ export class FileMetricNode extends vscode.TreeItem {
     super(baseName(displayPath(metric.path)), vscode.TreeItemCollapsibleState.None);
     this.description = `${formatPercent(metric.duplication_percent)} · ${metric.duplicated_loc}/${metric.analysed_loc} LOC`;
     this.contextValue = "deslop.fileMetric";
-    this.iconPath = new vscode.ThemeIcon("file");
+    this.iconPath = new vscode.ThemeIcon(FILE_NODE_KIND);
     // `metric.path` is rendered relative to the scan root by the engine, so
     // it must be resolved against the workspace before it names a file on
     // disk — otherwise the row opens a phantom path at the filesystem root

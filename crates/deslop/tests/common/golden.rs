@@ -53,11 +53,32 @@ pub(crate) fn assert_matches_golden(
         expected,
         "rendered output drifted from {} [PIPELINE-DETERMINISM]. {drift_hint} Regenerating is \
          NOT the default remedy — prove the drift is intended, re-bless with {bless_command}, \
-         and review the diff.",
+         and review the diff.\n{EPOCH_REMINDER}",
         path.display()
     );
     Ok(())
 }
+
+/// The one thing a proven-intended report drift must be paired with, and
+/// the one a reviewer cannot see in the diff
+/// ([PIPELINE-INCREMENTAL-INTEGRITY]).
+///
+/// Parse-store blobs are addressed by `(language, tool_version,
+/// min_nodes, source_hash)`, and the workspace version is the
+/// permanently-reused `0.0.0-dev` — so a change that alters what a
+/// parse *means* without altering the blob layout leaves every stored
+/// blob addressable and a warm run keeps serving the pre-change tree and
+/// signatures. That is the only way a warm report can differ from the
+/// cold report of the same tree
+/// ([PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE]), and no equivalence
+/// test can catch it: both sides of the comparison would be stale
+/// together.
+const EPOCH_REMINDER: &str = "\
+If the drift came from a change to parsing, normalisation, fingerprinting or \
+signature construction — rather than from ranking, bucketing or rendering — \
+bump `fpcache::blob::SEMANTIC_EPOCH` in the same change, or every warm run \
+against an existing store keeps serving the pre-change analysis \
+([PIPELINE-INCREMENTAL-INTEGRITY]).";
 
 /// Reads and parses a committed golden, naming the regeneration command
 /// when it is missing or unreadable.

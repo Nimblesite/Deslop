@@ -7,7 +7,6 @@ use crate::common;
 
 use anyhow::Result;
 use common::ReportFixture;
-use deslop_core::pair::PairScore;
 
 #[test]
 fn pytest_fixture_row_builders_stay_out_of_ranked_report() -> Result<()> {
@@ -32,17 +31,12 @@ fn pytest_fixture_row_builders_stay_out_of_ranked_report() -> Result<()> {
             ),
         ],
         118,
-        PairScore {
-            structural: 1.0,
-            token_jaccard: 0.97,
-            embedding_cos: 0.0,
-        },
     );
     let report = fixture.render(&[fixture_cluster]);
     let visible_clusters = report
         .clusters
         .iter()
-        .map(|cluster| (&cluster.id, &cluster.bucket, cluster.size, cluster.signals))
+        .map(|cluster| (&cluster.id, cluster.mass, cluster.occurrence_count))
         .collect::<Vec<_>>();
 
     assert_eq!(
@@ -60,7 +54,7 @@ fn pytest_fixture_row_builders_stay_out_of_ranked_report() -> Result<()> {
     assert!(
         visible_clusters
             .iter()
-            .all(|(id, _, _, _)| *id != "pytest-fixture-row-builders"),
+            .all(|(id, _, _)| *id != "pytest-fixture-row-builders"),
         "GH #121 fixture builder cluster leaked into the ranked report"
     );
 

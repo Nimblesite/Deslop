@@ -6,19 +6,25 @@
 //! that asserts nothing is indistinguishable from a check that passes. These
 //! tests make that state fail loudly instead.
 //!
-//! They read JSON only, so unlike `corpus_repos` they need no clone on disk
-//! and are not skipped by `--skip corpus_`. The test names deliberately avoid
-//! that prefix: a contract that only runs in `make test-corpus` would have
-//! been absent from exactly the pipeline that let the lists go empty.
+//! [TEST-SELECTION-SKIP] They read JSON only, so unlike the `corpus_repos`
+//! gate they need no clone on disk and carry no `#[ignore]` — they run in
+//! `make test`. A contract that only ran in `make test-corpus` would have been
+//! absent from exactly the pipeline that let the lists go empty, and a name
+//! filter would have taken them anyway: `--skip corpus_` matched this file's
+//! whole target by its name alone (gh #412).
 
 use std::{fs, path::Path};
 
 use anyhow::{Context, Result};
-use deslop_test_support::corpus::repo_root;
+use deslop_test_support::{
+    corpus::{repo_root, NOT_A_REPOSITORY},
+    read_json,
+};
 use serde_json::Value;
 
-/// The corpus manifests, each with its file stem. `known-failures.json` is
-/// the check registry rather than a repository, so it is not one of these.
+/// The corpus manifests, each with its file stem. The files that describe no
+/// single repository — the check registry, the score-gate thresholds, and the
+/// judging queue — are not manifests and are excluded.
 fn manifests() -> Result<Vec<(String, Value)>> {
     let directory = repo_root().join("corpus");
     let mut found = Vec::new();
@@ -27,9 +33,9 @@ fn manifests() -> Result<Vec<(String, Value)>> {
         if path
             .extension()
             .is_some_and(|extension| extension == "json")
-            && stem(&path) != "known-failures"
+            && !NOT_A_REPOSITORY.contains(&stem(&path).as_str())
         {
-            let manifest = read_manifest(&path)?;
+            let manifest: Value = read_json(&path)?;
             found.push((stem(&path), manifest));
         }
     }
@@ -47,12 +53,6 @@ fn stem(path: &Path) -> String {
         .and_then(|stem| stem.to_str())
         .unwrap_or_default()
         .to_owned()
-}
-
-fn read_manifest(path: &Path) -> Result<Value> {
-    let text =
-        fs::read_to_string(path).with_context(|| format!("unreadable: {}", path.display()))?;
-    serde_json::from_str(&text).with_context(|| format!("not JSON: {}", path.display()))
 }
 
 /// The curated entries of one manifest, empty when the key is absent.
@@ -112,9 +112,26 @@ fn every_curated_type2_entry_names_a_verifiable_cross_file_pair() -> Result<()> 
                 .filter_map(Value::as_str)
                 .collect();
             assert_ground_truth_pair(&name, &files, entry);
+            assert_curated_extent(&name, &files, entry);
         }
     }
     Ok(())
+}
+
+/// Every curated entry must pin its extent. `min_nodes` is the floor
+/// [CORPUS-RECALL] compares against the reported `canonical_node_count`;
+/// without it, any cluster touching both curated paths satisfies the recall
+/// check, however small — the vacuous green gh #439 documents. The judge
+/// fails an uncurated entry at gate time; this refuses the manifest before
+/// any scan is paid for.
+fn assert_curated_extent(name: &str, files: &[&str], entry: &Value) {
+    let min_nodes = entry.get("min_nodes").and_then(Value::as_u64);
+    assert!(
+        min_nodes.is_some_and(|nodes| nodes > 0),
+        "{name}: curated entry for {files:?} must curate a positive `min_nodes` extent \
+         floor, measured against the pinned clone and set below build-to-build drift \
+         (gh #439)"
+    );
 }
 
 /// One curated entry must name at least two distinct files and carry the
@@ -165,4 +182,39 @@ fn a_manifest_status_never_contradicts_its_curated_list() -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[test]
+fn every_manifest_curates_a_non_vacuous_scan_scope() -> Result<()> {
+    for (name, manifest) in manifests()? {
+        assert_positive_file_floor(&name, &manifest);
+        assert_valid_cluster_band(&name, &manifest);
+    }
+    Ok(())
+}
+
+/// Requires a positive lower bound for the number of files reached by a scan.
+fn assert_positive_file_floor(name: &str, manifest: &Value) {
+    let minimum = manifest.get("expect_files_min").and_then(Value::as_u64);
+    assert!(
+        minimum.is_some_and(|value| value > 0),
+        "{name}: `expect_files_min` must be a positive curated floor; without it, a scan that \
+         analysed zero files can pass every cluster assertion"
+    );
+}
+
+/// Requires a positive, ordered inclusive band for the report's cluster count.
+fn assert_valid_cluster_band(name: &str, manifest: &Value) {
+    let band = manifest.get("expect_clusters");
+    let minimum = band
+        .and_then(|value| value.get("min"))
+        .and_then(Value::as_u64);
+    let maximum = band
+        .and_then(|value| value.get("max"))
+        .and_then(Value::as_u64);
+    assert!(
+        matches!((minimum, maximum), (Some(min), Some(max)) if min > 0 && min <= max),
+        "{name}: `expect_clusters` must have a positive `min` no greater than `max`; without \
+         a curated band, a repository-wide detection collapse or explosion passes silently"
+    );
 }

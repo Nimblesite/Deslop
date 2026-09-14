@@ -1,4 +1,4 @@
-//! Language parser plugins.
+//! Language parser plugins; Kotlin remains unregistered ([LANG-CAND-KOTLIN]).
 //!
 //! Implements [PIPELINE-LANG-TRAIT]. Each language implementation provides a
 //! tree-sitter grammar, a file-extension filter, and per-language
@@ -26,11 +26,32 @@ pub(crate) mod ecmascript;
 pub mod fsharp;
 pub mod go;
 pub mod javascript;
+mod merge_emit;
 pub mod php;
 pub mod python;
 pub mod rust_lang;
 pub mod shared;
 pub mod typescript;
+
+/// [PIPELINE-LANG-TRAIT] The registered parser that claims `path`'s
+/// extension — matched lowercase and without the leading `.` — or `None`
+/// when no parser does. The one place a file is mapped to its language,
+/// so a report consumer and the engine cannot disagree about which
+/// grammar a path belongs to.
+#[must_use]
+pub fn parser_for_path<'parsers>(
+    parsers: &'parsers [Box<dyn LanguageParser>],
+    path: &std::path::Path,
+) -> Option<&'parsers dyn LanguageParser> {
+    let extension = path
+        .extension()
+        .and_then(std::ffi::OsStr::to_str)
+        .map(str::to_lowercase)?;
+    parsers
+        .iter()
+        .map(Box::as_ref)
+        .find(|parser| parser.file_extensions().contains(&extension.as_str()))
+}
 
 /// A language plugin. One instance per language per pipeline run.
 pub trait LanguageParser: std::fmt::Debug + Send + Sync {

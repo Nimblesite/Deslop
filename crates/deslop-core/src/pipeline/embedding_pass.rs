@@ -19,8 +19,8 @@ use crate::{
 use super::{
     config::PipelineConfig,
     embedding_batch::{
-        pairs_from_successful_embeddings, provenance_from, snippet_for, vectors_by_fingerprint,
-        EmbeddingBatch, PendingEmbedding,
+        pairs_from_successful_embeddings, provenance_from, snippet_for, EmbeddingBatch,
+        PendingEmbedding,
     },
     embedding_observability::{token_count, EmbeddingObserver},
 };
@@ -31,13 +31,6 @@ use super::{
 pub struct EmbeddingOutcome {
     /// ANN-nearest-neighbour pairs produced by the embedding pass.
     pub pairs: Vec<EmbeddingPair>,
-    /// Every successfully embedded vector, keyed by fingerprint index.
-    ///
-    /// Cluster materialisation measures `embedding_cos` between the
-    /// occurrences it actually renders, which needs the vectors — the
-    /// ANN pair list alone only covers the neighbours the index
-    /// surfaced. Empty when the pass was skipped or failed gracefully.
-    pub vectors: HashMap<usize, Vec<f32>>,
     /// Provenance to record in the rendered report.
     pub provenance: Option<EmbeddingProvenance>,
 }
@@ -121,7 +114,6 @@ fn embed_corpus(
     let provenance = provenance_from(spec, &batch);
     Ok(EmbeddingOutcome {
         pairs,
-        vectors: vectors_by_fingerprint(batch.vectors),
         provenance: Some(provenance),
     })
 }

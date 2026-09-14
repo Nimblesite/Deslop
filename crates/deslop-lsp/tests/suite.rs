@@ -14,6 +14,13 @@
 /// Shared fixture helpers, declared once for every suite below.
 mod common;
 
+/// The HTTP mock for the embedding provider, declared once for the whole
+/// suite. Twelve files used to `#[path]`-include it; as one binary that is
+/// the same file loaded twelve times (`clippy::duplicate_mod`), so it is
+/// declared here and reached as `crate::mock_ollama` everywhere.
+#[path = "../../deslop/tests/cli/mock_ollama.rs"]
+mod mock_ollama;
+
 #[path = "app.rs"]
 mod app;
 #[path = "cli.rs"]
@@ -34,6 +41,8 @@ mod embedding_failure_progress;
 mod execute_command;
 #[path = "history_determinism.rs"]
 mod history_determinism;
+#[path = "lifecycle.rs"]
+mod lifecycle;
 #[path = "lsp_embedding_determinism.rs"]
 mod lsp_embedding_determinism;
 #[path = "lsp_workspace_scoping.rs"]

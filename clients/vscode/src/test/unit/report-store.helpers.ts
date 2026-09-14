@@ -4,7 +4,6 @@
 
 import { ReportStore } from "../../reportStore";
 import { Report, ReportCluster, ReportDelta, RepoMetrics } from "../../types/report";
-import { bucketSignals } from "../signals.helpers";
 import { wireCluster } from "../cluster.helpers";
 
 export function metrics(overrides: Partial<RepoMetrics> = {}): RepoMetrics {
@@ -30,10 +29,14 @@ export function emptyReport(overrides: Partial<Report> = {}): Report {
     cache_stats: { hits: 0, misses: 0 },
     metrics: metrics(),
     schema_doc: "",
-    action_hints: [],
     boilerplate_hints: [],
     embedding_provenance: undefined,
     clusters: [],
+    literal_findings: [],
+    literal_findings_total: 0,
+    literal_findings_hidden: 0,
+    literal_findings_capped: false,
+    literal_max_findings: 100,
     ...overrides,
   };
 }
@@ -42,34 +45,36 @@ export { occurrence } from "../cluster.helpers";
 
 export function cluster(
   id: string,
-  weight: number,
+  mass: number,
   occurrences: ReportCluster["occurrences"] = [],
   rank = 1,
 ): ReportCluster {
   return wireCluster({
     id,
     rank,
-    weight,
-    size: Math.max(1, occurrences.length),
+    mass,
     canonical_node_count: 0,
-    bucket: "identical",
-    signals: bucketSignals("identical"),
     occurrences,
     occurrences_total: occurrences.length,
   });
 }
 
 /**
- * A store already carrying one snapshot. Suites opened with the same
- * `new ReportStore()` + `setSnapshot(emptyReport({ clusters }), gen)`
- * pair; Deslop scored the copies against this repo's own corpus. Suites
- * that must observe the seeding `onDidChange` still wire the listener
- * themselves before calling `setSnapshot`.
+ * A store already carrying `snapshot`. The `new ReportStore()` +
+ * `setSnapshot(..)` pair was the single largest scaffolding cluster in
+ * the TypeScript corpus — Deslop scored the copies against this repo's
+ * own report. Suites that must observe the seeding `onDidChange` still
+ * wire the listener themselves before calling `setSnapshot`.
  */
-export function seededStore(clusters: ReportCluster[], generation = 1): ReportStore {
+export function storeWith(snapshot: Report, generation = 0): ReportStore {
   const store = new ReportStore();
-  store.setSnapshot(emptyReport({ clusters }), generation);
+  store.setSnapshot(snapshot, generation);
   return store;
+}
+
+/** `storeWith` over a report whose only interesting content is `clusters`. */
+export function seededStore(clusters: ReportCluster[], generation = 1): ReportStore {
+  return storeWith(emptyReport({ clusters }), generation);
 }
 
 /**
@@ -84,6 +89,9 @@ export function delta(overrides: Partial<ReportDelta> = {}): ReportDelta {
     clusters_added: [],
     clusters_removed: [],
     clusters_updated: [],
+    literal_findings_added: [],
+    literal_findings_removed: [],
+    literal_findings_updated: [],
     metrics: metrics(),
     cache_stats: { hits: 0, misses: 0 },
     tool_version: "tool-v1",

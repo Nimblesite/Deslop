@@ -81,8 +81,7 @@ fn python_trio_body(class: &str) -> String {
 /// beside five under `generated/` — a dir the built-in
 /// `BUILTIN_REPORT_HIDE_COMPONENTS` marks hidden at render time.
 fn trio_and_mixed_summer_root() -> Result<(tempfile::TempDir, PathBuf)> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     let visible_dir = scan_root.join("visible");
     let generated_dir = scan_root.join("generated");
     fs::create_dir_all(&visible_dir)?;
@@ -286,9 +285,10 @@ fn issue_142_cargo_cache_paths_are_built_in_excluded() -> Result<()> {
     // No rendered occurrence may point inside the cargo cache.
     for cluster in clusters(&report) {
         for path in occurrence_paths(cluster) {
-            assert!(
-                !path.contains(".cargo/"),
-                "cargo-cache path leaked into a rendered cluster: {path}",
+            assert_not_contains(
+                &path,
+                ".cargo/",
+                "cargo-cache path leaked into a rendered cluster",
             );
         }
     }

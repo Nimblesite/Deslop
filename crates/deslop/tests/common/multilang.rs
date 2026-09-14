@@ -15,12 +15,15 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 
 use super::{
-    cluster_bucket, cluster_size, clusters, expect_cluster_spanning, field, fixture,
-    occurrence_files, seed, Result,
+    cluster_size, clusters, expect_cluster_spanning, field, fixture,
+    go_scope::{assert_no_occurrence_takes_the_file, assert_symmetric_rows},
+    occurrence_files, seed,
+    signals::assert_no_pair_surface_on_cluster,
+    Result,
 };
 
 /// Subtree-size floor the fixture is scanned at. Every authored clone
-/// measures 35–52 nodes, so 20 keeps all six clusters. It must sit
+/// measures 40–57 nodes, so 20 keeps all six clusters. It must sit
 /// *above* 13: at lower floors the C# pair renders a second `identical`
 /// cluster — a 13-node sibling window over the method's signature line
 /// that starts at `public` while the method view starts at `static`,
@@ -111,8 +114,8 @@ pub(crate) const MULTILANG_CASES: &[LangCase] = &[
         "rust",
         "ledger_alpha.rs",
         "ledger_beta.rs",
-        "d8a38df1507e6efd",
-        45,
+        "927b05fad1c1cc0f",
+        51,
         (5, 15, 124, 381),
         (7, 17, 131, 388),
     ),
@@ -120,8 +123,8 @@ pub(crate) const MULTILANG_CASES: &[LangCase] = &[
         "python",
         "ledger_alpha.py",
         "ledger_beta.py",
-        "3b08286c43ec5193",
-        35,
+        "b63105455a75704b",
+        40,
         (6, 13, 109, 315),
         (8, 15, 118, 324),
     ),
@@ -129,8 +132,8 @@ pub(crate) const MULTILANG_CASES: &[LangCase] = &[
         "typescript",
         "ledger_alpha.ts",
         "ledger_beta.ts",
-        "75331bdf6bb59eea",
-        51,
+        "ffa9824eae18b341",
+        57,
         (5, 15, 127, 391),
         (7, 17, 138, 402),
     ),
@@ -138,8 +141,8 @@ pub(crate) const MULTILANG_CASES: &[LangCase] = &[
         "dart",
         "ledger_alpha.dart",
         "ledger_beta.dart",
-        "09ec87de54dfeffb",
-        50,
+        "7c61b26360939eaa",
+        55,
         (5, 15, 121, 350),
         (7, 17, 123, 352),
     ),
@@ -147,8 +150,8 @@ pub(crate) const MULTILANG_CASES: &[LangCase] = &[
         "csharp",
         "LedgerAlpha.cs",
         "LedgerBeta.cs",
-        "f887f991dc1f4969",
-        46,
+        "dc672f7f39f21ba4",
+        51,
         (9, 24, 173, 537),
         (9, 24, 180, 544),
     ),
@@ -156,23 +159,11 @@ pub(crate) const MULTILANG_CASES: &[LangCase] = &[
         "go",
         "ledger_alpha.go",
         "ledger_beta.go",
-        "7e9099352ffa58f5",
-        52,
+        "f44d1ebae4c45e3a",
+        57,
         (7, 17, 125, 345),
         (9, 19, 135, 355),
     ),
-];
-
-/// Every authored clone is a byte-identical Type-1 copy with embeddings
-/// off, so all four signals are pinned to exact values — no bands, no
-/// approximation. `token_jaccard` is the load-bearing one: the audit's
-/// corrupted-signature regression surfaced precisely as this value
-/// moving while every other field held ([PIPELINE-INCREMENTAL-INTEGRITY]).
-pub(crate) const MULTILANG_SIGNALS: &[(&str, f64)] = &[
-    ("structural", 1.0),
-    ("token_jaccard", 1.0),
-    ("embedding_cos", 0.0),
-    ("fused", 1.0),
 ];
 
 /// `tests/fixtures/incremental-multilang`.
@@ -221,17 +212,18 @@ pub(crate) fn assert_multilang_contract(report: &Value, label: &str) -> Result<(
         let language = case.language;
         let clone = expect_lang_clone(report, case)?;
         assert_eq!(
-            cluster_bucket(clone),
-            "identical",
-            "{label}/{language}: the authored pair is a byte-identical body \
-             in two distinct files: {report:#}"
-        );
-        assert_eq!(
             cluster_size(clone),
             2,
             "{label}/{language}: the clone must span exactly the two authored \
              occurrences: {report:#}"
         );
+        let scoped = format!("{label}/{language}");
+        assert_no_pair_surface_on_cluster(clone, &scoped);
+        // [PIPELINE-CLUSTER-EXACT-SCOPE] The Go pair is two `func`
+        // declarations, never two files: the package clause, banner and
+        // unique top-level item above each are not part of the clone.
+        assert_no_occurrence_takes_the_file(clone, &scoped);
+        assert_symmetric_rows(clone, &scoped);
         let mut files = occurrence_files(clone);
         files.sort();
         let mut expected = case.files().map(ToOwned::to_owned).to_vec();

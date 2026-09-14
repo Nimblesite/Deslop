@@ -15,7 +15,7 @@ use crate::{
     ast::NormalizedNode,
     error::CoreError,
     lang::{
-        shared::{build_normalised_root, intern_kind, parse_source, IDENTIFIER_KIND, LITERAL_KIND},
+        shared::{build_normalised_root, normalise_kind_with, parse_source},
         LanguageParser,
     },
     refactor::{
@@ -87,61 +87,17 @@ impl LanguageParser for PythonParser {
 /// matching Python's own local-binding semantics for the extracted
 /// scope.
 const BINDING_KINDS: &[BindingKind] = &[
-    BindingKind {
-        node_kind: "assignment",
-        name_field: Some("left"),
-        late_fields: &[],
-    },
-    BindingKind {
-        node_kind: "for_statement",
-        name_field: Some("left"),
-        late_fields: &[],
-    },
-    BindingKind {
-        node_kind: "for_in_clause",
-        name_field: Some("left"),
-        late_fields: &[],
-    },
-    BindingKind {
-        node_kind: "named_expression",
-        name_field: Some("name"),
-        late_fields: &[],
-    },
-    BindingKind {
-        node_kind: "as_pattern",
-        name_field: Some("alias"),
-        late_fields: &[],
-    },
-    BindingKind {
-        node_kind: "global_statement",
-        name_field: None,
-        late_fields: &[],
-    },
-    BindingKind {
-        node_kind: "nonlocal_statement",
-        name_field: None,
-        late_fields: &[],
-    },
-    BindingKind {
-        node_kind: "import_statement",
-        name_field: None,
-        late_fields: &[],
-    },
-    BindingKind {
-        node_kind: "import_from_statement",
-        name_field: None,
-        late_fields: &[],
-    },
-    BindingKind {
-        node_kind: "parameters",
-        name_field: None,
-        late_fields: &[],
-    },
-    BindingKind {
-        node_kind: "lambda_parameters",
-        name_field: None,
-        late_fields: &[],
-    },
+    BindingKind::new("assignment", Some("left"), &[]),
+    BindingKind::new("for_statement", Some("left"), &[]),
+    BindingKind::new("for_in_clause", Some("left"), &[]),
+    BindingKind::new("named_expression", Some("name"), &[]),
+    BindingKind::new("as_pattern", Some("alias"), &[]),
+    BindingKind::new("global_statement", None, &[]),
+    BindingKind::new("nonlocal_statement", None, &[]),
+    BindingKind::new("import_statement", None, &[]),
+    BindingKind::new("import_from_statement", None, &[]),
+    BindingKind::new("parameters", None, &[]),
+    BindingKind::new("lambda_parameters", None, &[]),
 ];
 
 /// Python identifier-reference recognition for
@@ -162,48 +118,13 @@ const REFERENCE_TABLE: ReferenceTable = ReferenceTable {
 /// Nested Python scopes that open a frame during the free-variable
 /// walk: functions, lambdas, classes, and comprehension scopes.
 const FRAME_KINDS: &[FrameKind] = &[
-    FrameKind {
-        node_kind: "function_definition",
-        bind_inside_field: None,
-        bind_outside_field: Some("name"),
-        bind_first_kinds: &[],
-    },
-    FrameKind {
-        node_kind: "lambda",
-        bind_inside_field: Some("parameters"),
-        bind_outside_field: None,
-        bind_first_kinds: &[],
-    },
-    FrameKind {
-        node_kind: "class_definition",
-        bind_inside_field: None,
-        bind_outside_field: Some("name"),
-        bind_first_kinds: &[],
-    },
-    FrameKind {
-        node_kind: "list_comprehension",
-        bind_inside_field: None,
-        bind_outside_field: None,
-        bind_first_kinds: &["for_in_clause"],
-    },
-    FrameKind {
-        node_kind: "set_comprehension",
-        bind_inside_field: None,
-        bind_outside_field: None,
-        bind_first_kinds: &["for_in_clause"],
-    },
-    FrameKind {
-        node_kind: "dictionary_comprehension",
-        bind_inside_field: None,
-        bind_outside_field: None,
-        bind_first_kinds: &["for_in_clause"],
-    },
-    FrameKind {
-        node_kind: "generator_expression",
-        bind_inside_field: None,
-        bind_outside_field: None,
-        bind_first_kinds: &["for_in_clause"],
-    },
+    FrameKind::new("function_definition", None, Some("name"), &[]),
+    FrameKind::new("lambda", Some("parameters"), None, &[]),
+    FrameKind::new("class_definition", None, Some("name"), &[]),
+    FrameKind::new("list_comprehension", None, None, &["for_in_clause"]),
+    FrameKind::new("set_comprehension", None, None, &["for_in_clause"]),
+    FrameKind::new("dictionary_comprehension", None, None, &["for_in_clause"]),
+    FrameKind::new("generator_expression", None, None, &["for_in_clause"]),
 ];
 
 /// Python container kinds for [AUTOFIX-EXTRACT-PRECONDITIONS] rules
@@ -224,12 +145,12 @@ const SCOPE_KINDS: ScopeKinds = ScopeKinds {
     // write of a free variable (rule 7). `nonlocal` spans
     // cannot relocate: the module-scope helper has no enclosing
     // function binding — `global` survives, same module either way.
-    write_kinds: &[WriteKind {
-        node_kind: "augmented_assignment",
-        target_field: Some("left"),
-        marker_tokens: &[],
-        destructuring_kinds: &[],
-    }],
+    write_kinds: &[WriteKind::new(
+        "augmented_assignment",
+        Some("left"),
+        &[],
+        &[],
+    )],
     relocation_unsafe_kinds: &["nonlocal_statement"],
 };
 
@@ -330,17 +251,32 @@ fn indented_body(
 /// the identifier / literal / trivia families emitted by
 /// `tree-sitter-python` 0.25.x.
 fn normalise_kind(raw: &str) -> Option<&'static str> {
-    match raw {
-        "comment" => None,
-        "identifier" | "type" => Some(IDENTIFIER_KIND),
+    normalise_kind_with(raw, is_comment_kind, is_identifier_kind, is_literal_kind)
+}
+
+/// Python trivia.
+fn is_comment_kind(raw: &str) -> bool {
+    matches!(raw, "comment")
+}
+
+/// Python identifier leaves, collapsed for Type-2 renamed-clone
+/// detection.
+fn is_identifier_kind(raw: &str) -> bool {
+    matches!(raw, "identifier" | "type")
+}
+
+/// Python literal leaves, collapsed so constant edits do not perturb
+/// fingerprints.
+fn is_literal_kind(raw: &str) -> bool {
+    matches!(
+        raw,
         "string"
-        | "concatenated_string"
-        | "integer"
-        | "float"
-        | "true"
-        | "false"
-        | "none"
-        | "ellipsis" => Some(LITERAL_KIND),
-        other => Some(intern_kind(other)),
-    }
+            | "concatenated_string"
+            | "integer"
+            | "float"
+            | "true"
+            | "false"
+            | "none"
+            | "ellipsis"
+    )
 }

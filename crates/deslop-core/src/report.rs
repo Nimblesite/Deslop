@@ -1,114 +1,64 @@
-//! Report data structures.
-//!
-//! Implements the agent-first output contract described in
-//! [PRINCIPLES-AUDIENCE-AGENT]. JSON is canonical; text and HTML
-//! rendering are derived views over the same structs
-//! ([OUTPUT-SCHEMA-JSON]). Report hide/exclude semantics follow
-//! [EXCLUSION-CONFIG] — hidden occurrences are flagged per-occurrence,
-//! hidden-only clusters are dropped and counted in `clusters_hidden`.
+//! Canonical mass-only report assembly ([REPORT-CONTEXT-CLUSTER]).
 
-use std::{collections::HashMap, hash::BuildHasher, path::Path};
-
-/// Cluster visibility rules and their trace.
-mod hidden;
-use hidden::{cluster_is_hidden, log_hidden_cluster, BucketDistribution};
+use std::{collections::HashMap, hash::BuildHasher, path::Path, time::Instant};
 
 use crate::{
     boilerplate::BoilerplateRange,
-    buckets::{classify, ClusterKind},
-    clone_category::CloneCategory,
     cluster::Cluster,
-    cluster_filters::{classify_clone_category, ParseCache},
-    config::{ExclusionConfig, RankingPolicy},
-    pair::PairScore,
+    cluster_filters::{noise_workers, NOISE_CHUNK_CLUSTERS},
+    config::ExclusionConfig,
+    fingerprint::Fingerprint,
+    observe::elapsed_ms,
     report_boilerplate::build_boilerplate_hints,
     report_metrics::{compute_repo_metrics, AnalysedLines, MetricsInputs},
-    report_render::{cluster_to_report, ReportSources},
-    report_weight::reweigh_by_visible_occurrences,
+    report_render::ReportSources,
+    report_weight::rank_by_mass,
     state::{FileId, FileRegistry},
 };
 
-// `Report`, `CacheStats`, `EmbeddingProvenance`, `ReportCluster`,
-// `ReportSignals`, and `ReportOccurrence` are generated from
-// `docs/models/live-ipc.td` by `scripts/typediagram-gen.mjs`. The data
-// shapes live in `crate::wire_generated`; the impls below stay here.
-pub use crate::report_hints::{default_action_hints, ActionHint};
+mod hidden;
+use hidden::{log_hidden_cluster, materialise_with_visibility, NOISE_TOTALS_RUN_STAGE};
+
 pub use crate::wire_generated::{
-    CacheStats, EmbeddingProvenance, Report, ReportCluster, ReportOccurrence, ReportSignals,
+    CacheStats, EmbeddingProvenance, PairClassification, PairComparison, PairComparisonParams,
+    PairEndpoint, PairEvidence, PairTextIdentity, Report, ReportCluster, ReportOccurrence,
 };
 
-/// Serde default for [`ReportSignals::agreement`] when replaying a
-/// report written before the content gate existed: an absent field
-/// means nothing was measured, and the unmeasured convention is full
-/// agreement so a missing measurement never demotes a cluster the
-/// original run vouched for ([FUSION-CONTENT-GATE],
-/// [`crate::content::ContentEvidence::unmeasured`]).
-#[must_use]
-pub fn unmeasured_agreement() -> f64 {
-    1.0
-}
+/// The render-stage parse cache, re-exported where [`ReportInputs`]
+/// carries it ([CLONE-NOISE-REPARSE-CACHE]).
+pub use crate::cluster_filters::ParseCache;
 
 /// Default occurrence cap applied by [`Report::truncate_for_wire`].
-/// Chosen so a pathological 26k-occurrence cluster (real-world alembic
-/// migration case) drops from ~2.7 MB to ~10 KB while still giving the
-/// agent enough distinct locations to act on. Clients page the rest
-/// via `cluster/byId` on the non-live transport.
 pub const LIVE_WIRE_OCCURRENCE_CAP: usize = 100;
 
-/// Markdown explaining the report schema. Embedded via `include_str!`
-/// from the single source of truth in `docs/specs/REPORTING-CONTEXT.md`
-/// so the JSON can never drift from the human-readable description.
+/// Canonical report schema documentation.
 pub const SCHEMA_DOC: &str = include_str!("../../../docs/specs/REPORTING-CONTEXT.md");
 
+/// Unlimited literal-finding cap until the literal detector supplies one.
+const UNLIMITED_LITERAL_FINDINGS: usize = 0;
+
 impl Report {
-    /// Projects this report into its live-wire shape: caps every
-    /// cluster's `occurrences` at `cap`, blanks the fat derivable
-    /// strings (`schema_doc`, `summary`, `interpretation`), and records
-    /// the original occurrence count per cluster so clients can surface
-    /// "N of M" and page via `cluster/byId`.
-    ///
-    /// `evidence_verdict` deliberately survives: it is engine-authored
-    /// and not client-derivable, so blanking it would force clients to
-    /// grow their own verdict engine — the exact duplicate-calculation
-    /// defect the field exists to remove.
-    ///
-    /// Idempotent: running it twice yields the same shape. Leaves the
-    /// CLI / `render_report` path untouched — only transports that ship
-    /// reports over a JSON-RPC socket should call this.
+    /// Caps occurrence payloads without changing their authoritative totals.
     #[must_use]
     pub fn truncate_for_wire(mut self, cap: usize) -> Self {
         self.schema_doc.clear();
         for cluster in &mut self.clusters {
-            let count = occurrence_count(cluster);
-            cluster.occurrences_total = count;
-            cluster.occurrence_count = count;
             if cluster.occurrences.len() > cap {
                 cluster.occurrences.truncate(cap);
                 cluster.occurrences_truncated = true;
             }
-            cluster.summary.clear();
-            cluster.interpretation.clear();
         }
         self
     }
 }
 
-/// Returns the authoritative occurrence count for user-facing copy.
+/// Returns the authoritative total occurrence count.
 #[must_use]
 pub fn occurrence_count(cluster: &ReportCluster) -> usize {
-    let total = if cluster.occurrences_total > 0 {
-        cluster.occurrences_total
-    } else {
-        cluster.size
-    };
-    total.max(cluster.occurrences.len())
+    cluster.occurrences_total.max(cluster.occurrences.len())
 }
 
-/// Distinct paths among a cluster's visible (non-hidden) occurrences —
-/// the cross-file screen every consolidation surface shares
-/// ([AUTOFIX-CONSOLIDATE-SURFACE]). Two or more distinct paths imply
-/// two or more visible occurrences, so callers need no separate count
-/// check.
+/// Counts distinct visible paths in one cluster.
 #[must_use]
 pub fn distinct_visible_path_count(cluster: &ReportCluster) -> usize {
     cluster
@@ -120,122 +70,98 @@ pub fn distinct_visible_path_count(cluster: &ReportCluster) -> usize {
         .len()
 }
 
-impl From<PairScore> for ReportSignals {
-    /// The content triple is left at zero here and stamped later by
-    /// [`crate::buckets::content_gated_signals`] ([FUSION-CONTENT-GATE],
-    /// #344). A `PairScore` is the deterministic pair evidence, produced
-    /// before any content is measured, so it has nothing truthful to put
-    /// in those fields — every rendered cluster passes through the gate,
-    /// which does.
-    fn from(score: PairScore) -> Self {
-        let mut signals = Self {
-            structural: score.structural,
-            token_jaccard: score.token_jaccard,
-            // Stamped below through the one [`ReportSignals::shape_score`]
-            // definition once the source fields exist.
-            shape: 0.0,
-            embedding_cos: score.embedding_cos,
-            fused: score.bounded_fused(),
-            agreement: 0.0,
-            rename_consistency: 0.0,
-            literal_fraction: 0.0,
-        };
-        signals.shape = signals.shape_score();
-        signals
-    }
-}
-
-impl ReportSignals {
-    /// The shape reading — the stronger of `structural` and
-    /// `token_jaccard`, two views of one normalised representation, so
-    /// the max is what "the shape matched" means
-    /// ([FUSION-CONTENT-GATE]). The single definition behind the wire
-    /// `shape` field, the content gate's fused reduction, and the
-    /// evidence verdict; consumers render the stamped field verbatim
-    /// and never re-derive the max.
-    #[must_use]
-    pub fn shape_score(&self) -> f64 {
-        self.structural.max(self.token_jaccard)
-    }
-}
-
-/// Parameters accepted by [`render_report`]. Grouped because the
-/// list has outgrown the 7-argument function budget without the
-/// struct and because adding provenance / languages should not force
-/// every call site to re-shuffle positional arguments.
+/// Inputs accepted by [`render_report`].
 #[derive(Debug)]
 pub struct ReportInputs<'a, S: BuildHasher> {
-    /// Final ranked clusters from [`crate::cluster`].
+    /// Final closure components.
     pub clusters: &'a [Cluster],
-    /// File registry used to resolve `FileId → path`.
+    /// The shape families the clusters were admitted out of, indexed by
+    /// [`Cluster::shape_family`] ([CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY]).
+    pub shape_families: &'a [Vec<Fingerprint>],
+    /// Registry resolving file identities to paths.
     pub registry: &'a FileRegistry,
-    /// `FileId → language_id` map so per-language `report_hide`
-    /// patterns apply correctly.
+    /// Language id by file.
     pub file_languages: &'a HashMap<FileId, &'static str, S>,
-    /// Count of files actually parsed (reported in the header).
+    /// Number of analysed files.
     pub files_analysed: usize,
-    /// Minimum subtree node count used for clustering.
+    /// Configured subtree node floor.
     pub min_nodes: u32,
-    /// Absolute scan root for relative-path rendering.
+    /// Absolute scan root.
     pub scan_root: &'a Path,
-    /// Exclusion config providing `report_hide` semantics.
+    /// Exclusion and report-hide policy.
     pub exclusion: &'a ExclusionConfig,
-    /// Embedding provenance — `None` when the embedding pass did not
-    /// run or produced no signal.
+    /// Embedding provider provenance.
     pub embedding_provenance: Option<EmbeddingProvenance>,
-    /// Incremental-cache telemetry captured during fingerprinting
-    /// ([PIPELINE-INCREMENTAL]).
+    /// Incremental-cache telemetry.
     pub cache_stats: CacheStats,
-    /// Per-file source bytes used to project occurrence `byte_range`s
-    /// onto line sets for [METRICS-REPO]. Borrowed; never cloned.
+    /// Source bytes by file.
     pub sources: &'a HashMap<FileId, Vec<u8>>,
-    /// Per-file analysed-line counts accumulated during the corpus
-    /// read-pass ([METRICS-REPO]).
+    /// Analysed lines by file.
     pub analysed_lines: &'a AnalysedLines,
-    /// Import/prologue ranges suppressed before clustering.
+    /// Suppressed import/prologue ranges.
     pub boilerplate_ranges: &'a [BoilerplateRange],
-    /// Verified diff scope when the run carried `--diff`
-    /// ([CLI-ARG-DIFF]). Drives occurrence/cluster tagging
-    /// ([OUTPUT-SCHEMA-DIFF-TAGS]) and `metrics.diff`
-    /// ([METRICS-DIFF-SCOPE]); `None` leaves every diff field absent.
+    /// Verified diff scope.
     pub diff: Option<&'a crate::diff_scope::DiffScope>,
+    /// Shared parse cache for the render-stage noise checks
+    /// ([CLONE-NOISE-REPARSE-CACHE]).
+    pub parse_cache: &'a ParseCache,
 }
 
-/// Converts the internal representation into a report ready for
-/// serialisation. Applies [EXCLUSION-CONFIG] `report_hide` semantics:
-/// per-occurrence `hidden` flags come from `exclusion`, and any cluster
-/// whose every member is hidden is dropped into `clusters_hidden`
-/// instead of `clusters`.
+/// [PERF-FLUTTER-TODO-SUBSUME] Materialises every cluster with its
+/// visibility decision across worker threads sharing one parse cache —
+/// the render-stage convictions run the same filters the noise split
+/// shards, and ran here on one thread for a quarter of an hour on the
+/// Flutter corpus. Results come back in input order, so the report is
+/// the same whatever the workers' timing.
+fn materialise_all<'a, S: BuildHasher + Sync>(
+    inputs: &ReportInputs<'a, S>,
+    report_sources: &ReportSources<'a>,
+) -> Vec<(ReportCluster, bool)> {
+    let (chunks, _states) = crate::shard::map_chunks(
+        inputs.clusters.chunks(NOISE_CHUNK_CLUSTERS),
+        noise_workers(inputs.clusters.len()),
+        || (),
+        |(), chunk: &[Cluster]| {
+            chunk
+                .iter()
+                .map(|cluster| {
+                    materialise_with_visibility(cluster, inputs, report_sources, inputs.parse_cache)
+                })
+                .collect::<Vec<(ReportCluster, bool)>>()
+        },
+    );
+    chunks.into_iter().flatten().collect()
+}
+
+/// Converts closure components to the canonical report.
 #[must_use]
-pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
-    // Parse each source file at most once for the whole render, shared
-    // across every cluster's noise/role checks ([CLONE-NOISE-REPARSE-CACHE]).
-    let parse_cache = ParseCache::new();
+pub fn render_report<S: BuildHasher + Sync>(inputs: ReportInputs<'_, S>) -> Report {
+    let started = Instant::now();
     let report_sources = ReportSources::new(inputs.sources);
-    let policy = inputs.exclusion.ranking_policy();
-    let materialised: Vec<(ReportCluster, bool)> = inputs
-        .clusters
-        .iter()
-        .map(|cluster| materialise_cluster(cluster, &inputs, &report_sources, &parse_cache, policy))
-        .collect();
-    let clusters_hidden = materialised.iter().filter(|(_, hidden)| *hidden).count();
-    // The metric must count the same clusters the report renders, so it
-    // sees only the survivors of `materialise_cluster` — never a cluster
-    // dropped as report-hidden, noise, or structural-only sibling
-    // boilerplate. Aligned positionally with `inputs.clusters` because
-    // `materialised` was mapped over it in order ([METRICS-REPO]).
+    let materialised = materialise_all(&inputs, &report_sources);
+    // Every render-stage noise check has now run: `cluster_is_hidden` is
+    // the only render-stage caller of the noise filters, and it is
+    // reached solely from the loop above. Without this the render
+    // stage's convictions were recorded into the shared counters and
+    // discarded unread ([PERF-FLUTTER-TODO-OBSERVABILITY]).
+    inputs.parse_cache.log_noise_totals(NOISE_TOTALS_RUN_STAGE);
+    for (cluster, hidden) in &materialised {
+        if *hidden {
+            log_hidden_cluster(cluster, "noise or role gate");
+        }
+    }
     let visible_internal: Vec<&Cluster> = inputs
         .clusters
         .iter()
         .zip(&materialised)
         .filter_map(|(cluster, (_, hidden))| (!hidden).then_some(cluster))
         .collect();
-    let mut visible_clusters: Vec<ReportCluster> = materialised
+    let clusters_hidden = materialised.iter().filter(|(_, hidden)| *hidden).count();
+    let mut clusters: Vec<ReportCluster> = materialised
         .into_iter()
         .filter_map(|(cluster, hidden)| if hidden { None } else { Some(cluster) })
         .collect();
-    reweigh_by_visible_occurrences(&mut visible_clusters, policy);
-    log_bucket_distribution(&visible_clusters, clusters_hidden);
+    rank_by_mass(&mut clusters);
     let mut metrics = compute_repo_metrics(&MetricsInputs {
         clusters: &visible_internal,
         sources: inputs.sources,
@@ -247,24 +173,25 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
         scan_root: inputs.scan_root,
         diff: inputs.diff,
     });
-    // [OUTPUT-SCHEMA-DIFF-TAGS] Tags are stamped on the exact cluster
-    // list the report carries — after hiding and reweighing — so a
-    // tagged report and an untagged one always list identical clusters.
     if let Some(scope) = inputs.diff {
-        crate::diff_scope::tag_clusters(&mut visible_clusters, scope);
+        crate::diff_scope::tag_clusters(&mut clusters, scope);
     }
-    // Resolve the [EXIT-CODES] duplication gate here so every surface that
-    // renders through this path carries the breach verdict — the live
-    // LSP/MCP servers, not just the CLI. `compute_repo_metrics` leaves it
-    // `none()` because it has no config; the CLI may still override the
-    // result via `--fail-over` / `--no-fail-over` after this returns.
-    let measured = metrics.duplication_percent;
-    metrics.threshold = inputs.exclusion.resolve_threshold(measured);
+    metrics.threshold = inputs
+        .exclusion
+        .resolve_threshold(metrics.duplication_percent);
     let boilerplate_hints = build_boilerplate_hints(
         inputs.boilerplate_ranges,
         inputs.registry,
         inputs.scan_root,
         inputs.exclusion,
+    );
+    tracing::info!(
+        stage = "report_build",
+        visible_clusters = clusters.len(),
+        clusters_hidden,
+        highest_mass = clusters.first().map_or(0, |cluster| cluster.mass),
+        elapsed_ms = elapsed_ms(started),
+        "mass-ranked report built"
     );
     Report {
         tool_version: crate::version().to_owned(),
@@ -274,69 +201,14 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
         cache_stats: inputs.cache_stats,
         metrics,
         schema_doc: SCHEMA_DOC.to_owned(),
-        action_hints: default_action_hints(),
         boilerplate_hints,
         embedding_provenance: inputs.embedding_provenance,
-        clusters: visible_clusters,
-        // Set by `diff_scope::apply_only_changed` when the CLI filters;
-        // absent otherwise ([CLI-ARG-ONLY-CHANGED]).
+        clusters,
         clusters_outside_diff: None,
+        literal_findings: Vec::new(),
+        literal_findings_total: 0,
+        literal_findings_hidden: 0,
+        literal_findings_capped: false,
+        literal_max_findings: UNLIMITED_LITERAL_FINDINGS,
     }
-}
-
-/// Builds one [`ReportCluster`], stamps its [`CloneCategory`]
-/// ([RANK-CATEGORY]), and decides whether it is hidden from the ranked
-/// report. A cluster is hidden when it is a known noise pattern *or* when it
-/// is a `data`-category cluster and the policy is `ignore`. The category is
-/// classified once here using the shared parse cache and the result is both
-/// stamped onto the wire cluster and reused for the drop decision, so the
-/// re-parse never happens twice.
-fn materialise_cluster<S: BuildHasher>(
-    cluster: &Cluster,
-    inputs: &ReportInputs<'_, S>,
-    report_sources: &ReportSources<'_>,
-    parse_cache: &ParseCache,
-    policy: RankingPolicy,
-) -> (ReportCluster, bool) {
-    let mut report_cluster = cluster_to_report(
-        cluster,
-        inputs.registry,
-        inputs.file_languages,
-        inputs.scan_root,
-        inputs.exclusion,
-        report_sources,
-        parse_cache,
-    );
-    let category = classify_clone_category(
-        &cluster.members,
-        cluster.content.literal_fraction,
-        inputs.sources,
-        inputs.file_languages,
-        parse_cache,
-    );
-    category
-        .wire_label()
-        .clone_into(&mut report_cluster.category);
-    let dropped_as_data = category == CloneCategory::DataTable && policy.drops_data_clusters();
-    // [RANK-STRUCTURAL-ONLY] `ignore` drops shape-only-evidence
-    // clusters the same way the data `ignore` policy drops tables.
-    let dropped_as_structural_only =
-        policy.drops_structural_only() && classify(&report_cluster) == ClusterKind::StructuralOnly;
-    let hidden = dropped_as_data
-        || dropped_as_structural_only
-        || cluster_is_hidden(cluster, &report_cluster, inputs, parse_cache, category);
-    if hidden {
-        log_hidden_cluster(
-            &report_cluster,
-            cluster.content,
-            dropped_as_data,
-            dropped_as_structural_only,
-        );
-    }
-    (report_cluster, hidden)
-}
-
-/// Logs the visible cluster bucket distribution after classification.
-fn log_bucket_distribution(clusters: &[ReportCluster], hidden: usize) {
-    BucketDistribution::from_clusters(clusters).log(clusters.len(), hidden);
 }

@@ -1,24 +1,25 @@
 // Shared hover card renderer — [VSIX-HOVER-SHARED].
-// Two layouts controlled by `showCategory`:
+// Two layouts controlled by `showVerdict`:
 //   Full (bubble, no adjacent diagnostic):
-//     **{slug} Category** × count  /  Canonical: `path`  /  links + Dismiss
+//     **{slug} Identical code** × count  /  Canonical: `path`  /  links + Dismiss
 //   Compact (squiggle hover, alongside diagnostic):
 //     **{slug}** × count  /  Canonical: `path`  /  links + Copy for AI
-//   The compact form omits the category label — the diagnostic already shows it.
+//   The compact form omits the verdict — the diagnostic already shows it.
+// The verdict is the cluster's clone kind ([CLONE-KIND-LABELS]).
 // Slug is the first 7 hex chars of cluster.id — stable across runs.
 // Rank must never take the id slot: Deslop#149, Deslop#349.
 
 import * as vscode from "vscode";
 
-import { bucketLabels, clusterSlug, occurrenceCount, ReportCluster, resolveBucket } from "./types/report";
+import { clusterSlug, kindTitle, occurrenceCount, ReportCluster } from "./types/report";
 
 export { clusterSlug };
 
 export interface ClusterHoverOptions {
   readonly showDismiss?: boolean;
   readonly count?: number;
-  /// When false, the category label is omitted (use alongside a diagnostic).
-  readonly showCategory?: boolean;
+  /// When false, the verdict label is omitted (use alongside a diagnostic).
+  readonly showVerdict?: boolean;
 }
 
 export function clusterHoverMarkdown(
@@ -29,14 +30,13 @@ export function clusterHoverMarkdown(
   md.isTrusted = true;
   const count = options.count ?? occurrenceCount(cluster);
   const slug = clusterSlug(cluster);
-  const showCategory = options.showCategory ?? true;
+  const showVerdict = options.showVerdict ?? true;
 
-  if (showCategory) {
-    const labels = bucketLabels(resolveBucket(cluster));
-    md.appendMarkdown(`**${slug} ${labels.plainTitle}** × ${count}\n\n`);
-  } else {
-    md.appendMarkdown(`**${slug}** × ${count}\n\n`);
-  }
+  md.appendMarkdown(
+    showVerdict
+      ? `**${slug} ${kindTitle(cluster.kind)}** × ${count}\n\n`
+      : `**${slug}** × ${count}\n\n`,
+  );
 
   const canonical = cluster.occurrences[0];
   if (canonical) {
@@ -45,11 +45,12 @@ export function clusterHoverMarkdown(
   }
 
   const openArgs = encodeURIComponent(JSON.stringify([cluster.id]));
+  // [VSIX-PAIR-COMPARE] The cluster panel owns the per-occurrence Compare
+  // action, which resolves that row against the cluster's canonical range.
   const links: string[] = [
-    `[Compare with canonical](command:deslop.compareWithCanonical?${openArgs})`,
     `[View cluster](command:deslop.openCluster?${openArgs})`,
   ];
-  if (!showCategory) {
+  if (!showVerdict) {
     links.push(`[Copy for AI](command:deslop.copyClusterContextById?${openArgs})`);
   }
   if (options.showDismiss) {

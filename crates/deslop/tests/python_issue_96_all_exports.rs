@@ -2,7 +2,6 @@
 //! package-surface boilerplate, not duplicate business logic.
 //! Tests [CLONE-NOISE-PY-ALL-EXPORTS]
 
-
 use crate::common::*;
 
 #[test]

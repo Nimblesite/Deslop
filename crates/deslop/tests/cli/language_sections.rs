@@ -3,7 +3,7 @@ use super::support::*;
 // Two Rust files that are renamed (Type-2) clones of one function: the
 // copy renames the function and its parameter but keeps the body's
 // locals, so most collapsed-leaf content still agrees and the pair
-// routes to `nearly_identical` under [FUSION-CONTENT-GATE]. A fully
+// routes to `nearly_identical` under [FUSED-CONTENT-GATE]. A fully
 // renamed copy carries no content evidence and honestly routes to
 // `structural_only` instead. Shared with `bucket_groups` as its
 // nearly-identical seed pair.
@@ -82,17 +82,20 @@ fn render_polyglot_html(tmp: &Path, extra: &[&str]) -> Result<String> {
 fn html_report_is_one_ranked_list_by_default() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let html = render_polyglot_html(tmp.path(), &[])?;
-    assert!(
-        html.contains("<h2>Duplicate groups</h2>"),
-        "default report keeps the single ranked list"
+    assert_contains(
+        &html,
+        "<h2>Duplicate groups</h2>",
+        "default report keeps the single ranked list",
     );
-    assert!(
-        !html.contains("group(s)</h2>"),
-        "no per-language section headings appear without the flag"
+    assert_not_contains(
+        &html,
+        "group(s)</h2>",
+        "no per-language section headings appear without the flag",
     );
-    assert!(
-        !html.contains("By language:"),
-        "no per-language intro breakdown without the flag"
+    assert_not_contains(
+        &html,
+        "By language:",
+        "no per-language intro breakdown without the flag",
     );
     Ok(())
 }
@@ -104,21 +107,17 @@ fn html_report_is_one_ranked_list_by_default() -> Result<()> {
 fn html_report_splits_into_language_sections_via_flag() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let html = render_polyglot_html(tmp.path(), &["--split-by-language"])?;
-    assert!(
-        html.contains("<h2>Rust — "),
-        "a Rust section heading is rendered"
+    assert_contains(&html, "<h2>Rust — ", "a Rust section heading is rendered");
+    assert_contains(&html, "<h2>Dart — ", "a Dart section heading is rendered");
+    assert_not_contains(
+        &html,
+        "<h2>Duplicate groups</h2>",
+        "the flat heading is replaced by per-language sections",
     );
-    assert!(
-        html.contains("<h2>Dart — "),
-        "a Dart section heading is rendered"
-    );
-    assert!(
-        !html.contains("<h2>Duplicate groups</h2>"),
-        "the flat heading is replaced by per-language sections"
-    );
-    assert!(
-        html.contains("By language:"),
-        "the intro gains a per-language breakdown"
+    assert_contains(
+        &html,
+        "By language:",
+        "the intro gains a per-language breakdown",
     );
     Ok(())
 }
@@ -128,16 +127,19 @@ fn html_report_splits_into_language_sections_via_flag() -> Result<()> {
 // the CLI flag.
 #[test]
 fn html_report_splits_into_language_sections_via_config() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    write_polyglot_clones(&scan_root)?;
-    fs::write(
-        scan_root.join(".deslop.toml"),
-        "[report]\nsplit_by_language = true\n",
+    let (tmp, scan_root, out) = seeded_scan("src", |root| {
+        write_polyglot_clones(root)?;
+        fs::write(
+            root.join(".deslop.toml"),
+            "[report]\nsplit_by_language = true\n",
+        )?;
+        Ok(())
+    })?;
+    run_scan(
+        &scan_root,
+        &tmp.path().join("report"),
+        &[MIN_NODES_FLAG, MIN_NODES_VALUE],
     )?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     let html = fs::read_to_string(&out.html)?;
     assert!(
         html.contains("<h2>Rust — ") && html.contains("<h2>Dart — "),

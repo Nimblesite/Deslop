@@ -23,14 +23,14 @@ One authored Type-1 clone pair per language, twelve files, all byte-distinct:
 
 Within a pair the `reconcile_entries` body is byte-identical, so exactly one `identical` cluster of size 2 must form. The two files differ only in a leading banner comment plus one structurally unique top-level item (const / struct / class / interface / record), which keeps the file bytes distinct — the store is content-addressed, so byte-identical files would share one blob and the second would hit inside the cold run — and keeps the normalised `__file__` nodes distinct so no whole-file cluster forms.
 
-The fixed flag set is `--min-nodes 20 --embeddings off --notext --nohtml`, with `--no-incremental` for the golden itself. Every authored clone measures 35–52 nodes, so 20 keeps all six clusters — and it deliberately sits above 13, because at lower floors the C# pair renders a second `identical` cluster: a 13-node sibling window over the method's signature line that straddles [PIPELINE-CLUSTER-SUBSUME] containment by the 7 bytes of the `public` modifier (gh #389). This fixture's subject is the parse store, not subsumption, so the floor keeps that edge out of every report here.
+The fixed flag set is `--min-nodes 20 --embeddings off --notext --nohtml`, with `--no-incremental` for the golden itself. Every authored clone measures 40–57 nodes, so 20 keeps all six clusters — and it deliberately sits above 13, because at lower floors the C# pair renders a second `identical` cluster: a 13-node sibling window over the method's signature line that straddles [PIPELINE-CLUSTER-SUBSUME] containment by the 7 bytes of the `public` modifier (gh #389). This fixture's subject is the parse store, not subsumption, so the floor keeps that edge out of every report here.
 
 Neither suite scans this directory in place — both copy `src/` into a throwaway temp root — so no run can drop a `.deslop/` cache here. Editing anything under `src/` invalidates the golden.
 
 ## Regenerating
 
 ```
-DESLOP_BLESS=1 cargo test -p deslop --test incremental_multilang_golden
+DESLOP_BLESS=1 cargo test -p deslop --test suite incremental_multilang_golden::
 ```
 
 The bless run rewrites `expected-report.json` and then fails on purpose, telling you to re-run without the variable. Regenerating is never the remedy on its own: `committed_multilang_golden_satisfies_the_authored_contract` checks the golden against the authored sources themselves — every occurrence must slice back out of `src/` and match its sibling byte-for-byte, every language must appear exactly once, weights must rank non-increasing, and the cold cache counters must be zero — so a golden blessed while a language was silently missing, or while the store was cross-serving trees, fails even though its bytes match.

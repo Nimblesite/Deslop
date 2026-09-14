@@ -66,7 +66,7 @@ fn issue_82_embedding_pass_skips_oversized_subtrees_before_provider_dispatch() -
         "oversized subtrees should be counted as skipped failures"
     );
     // The coverage identity is in OCCURRENCE units. `indexed_subtrees`
-    // is not: [REPORTING-CONTEXT] defines it as the count of *unique*
+    // is not: [OUTPUT-SCHEMA-JSON] defines it as the count of *unique*
     // snippets fed into ANN and says outright that it is "lower than
     // `attempted_subtrees` when duplicate snippets collapse before
     // indexing". This assertion previously read

@@ -4,70 +4,33 @@
 #![cfg(unix)]
 
 use std::{
-    io::{BufRead, BufReader, Write},
     path::Path,
-    process::{Child, ChildStdin, ChildStdout, Command, Stdio},
+    process::{Child, Command, Stdio},
     time::{Duration, Instant},
 };
 
-use anyhow::{anyhow, ensure, Context, Result};
+use anyhow::{ensure, Context, Result};
 use serde_json::{json, Value};
 
 use crate::common;
 use common::{
-    fixture_root, pid_exists, read_mcp_pid, terminate_pid, value_get, wait_for_pid_exit,
-    KILLABLE_PARENT_SCRIPT,
+    fixture_root, pid_exists, read_mcp_pid,
+    rpc::{StdioRpc, MCP_PROTOCOL_VERSION},
+    terminate_pid, value_get, wait_for_pid_exit, KILLABLE_PARENT_SCRIPT,
 };
 
+/// How long an orphaned `deslop-mcp` may take to notice and exit.
+const ORPHAN_EXIT_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// The killable launcher shell, its JSON-RPC link to the MCP grandchild,
+/// and that grandchild's pid so the test can reap it if it lingers.
 struct McpParent {
     child: Child,
-    stdin: ChildStdin,
-    stdout: BufReader<ChildStdout>,
+    rpc: StdioRpc,
     mcp_pid: Option<u32>,
-    next_id: i64,
 }
 
 impl McpParent {
-    fn request(&mut self, method: &str, params: &Value) -> Result<Value> {
-        self.next_id = self.next_id.saturating_add(1);
-        let id = self.next_id;
-        let frame = json!({
-            "jsonrpc": "2.0",
-            "id": id,
-            "method": method,
-            "params": params,
-        });
-        self.send_frame(&frame)?;
-        loop {
-            let response = self.read_frame()?;
-            let response_id = response.get("id").cloned().unwrap_or(Value::Null);
-            if response_id == json!(id) {
-                return Ok(response);
-            }
-            if response.get("method").is_none() {
-                return Err(anyhow!("unexpected frame without id match: {response:?}"));
-            }
-        }
-    }
-
-    fn read_frame(&mut self) -> Result<Value> {
-        let mut line = String::new();
-        let bytes = self.stdout.read_line(&mut line)?;
-        if bytes == 0 {
-            return Err(anyhow!("mcp stdout closed unexpectedly"));
-        }
-        serde_json::from_str(&line)
-            .with_context(|| format!("invalid JSON from mcp: frame was: {line}"))
-    }
-
-    fn send_frame(&mut self, frame: &Value) -> Result<()> {
-        let bytes = serde_json::to_vec(frame)?;
-        self.stdin.write_all(&bytes)?;
-        self.stdin.write_all(b"\n")?;
-        self.stdin.flush()?;
-        Ok(())
-    }
-
     fn disarm_mcp_cleanup(&mut self) {
         self.mcp_pid = None;
     }
@@ -84,14 +47,7 @@ impl Drop for McpParent {
 }
 
 fn init_session(parent: &mut McpParent) -> Result<Value> {
-    parent.request(
-        "initialize",
-        &json!({
-            "protocolVersion": "2024-11-05",
-            "capabilities": {},
-            "clientInfo": { "name": "mcp-orphan-exit-harness", "version": "0.1.0" }
-        }),
-    )
+    parent.rpc.initialize("mcp-orphan-exit-harness")
 }
 
 fn spawn_mcp_with_killable_parent(root: &Path) -> Result<(McpParent, u32)> {
@@ -107,15 +63,12 @@ fn spawn_mcp_with_killable_parent(root: &Path) -> Result<(McpParent, u32)> {
         .spawn()
         .context("spawn killable deslop-mcp parent shell")?;
     let mcp_pid = read_mcp_pid(&mut child)?;
-    let stdin = child.stdin.take().context("parent stdin")?;
-    let stdout = child.stdout.take().context("parent stdout")?;
+    let rpc = StdioRpc::take(&mut child)?;
     Ok((
         McpParent {
             child,
-            stdin,
-            stdout: BufReader::new(stdout),
+            rpc,
             mcp_pid: Some(mcp_pid),
-            next_id: 0,
         },
         mcp_pid,
     ))
@@ -143,9 +96,24 @@ fn exits_when_launching_parent_disappears_with_stdio_open_issue_102() -> Result<
     );
     assert_eq!(
         value_get(&response, "/result/protocolVersion")?,
-        json!("2024-11-05")
+        json!(MCP_PROTOCOL_VERSION)
+    );
+    assert!(
+        value_get(&response, "/result/capabilities/resources")?.is_object(),
+        "resources capability missing: {response}"
     );
 
+    // Checked before the kill, not after. After it, "the mcp is still alive"
+    // is the negation of the contract this test exists to prove, and it holds
+    // only while the mcp has not yet noticed — so a server that reacts
+    // promptly fails here, and one that reacts at all fails under contention.
+    // Observed once in a full-workspace run. Before the kill the same fact is
+    // certain, and it is the fact that matters: the exit below belongs to this
+    // process rather than to one that was already gone.
+    assert!(
+        pid_exists(mcp_pid)?,
+        "mcp must be alive when its parent is killed, or its exit proves nothing"
+    );
     let started = Instant::now();
     parent.child.kill()?;
     let parent_status = parent.child.wait()?;
@@ -153,7 +121,7 @@ fn exits_when_launching_parent_disappears_with_stdio_open_issue_102() -> Result<
         !parent_status.success(),
         "launcher parent should be killed during orphan-exit test"
     );
-    let exited = wait_for_pid_exit(mcp_pid, Duration::from_secs(5))?;
+    let exited = wait_for_pid_exit(mcp_pid, ORPHAN_EXIT_TIMEOUT)?;
     let elapsed = started.elapsed();
     if !exited {
         terminate_pid(mcp_pid)?;
@@ -163,7 +131,7 @@ fn exits_when_launching_parent_disappears_with_stdio_open_issue_102() -> Result<
         "deslop-mcp must exit within 5s when its launching parent disappears"
     );
     assert!(
-        elapsed < Duration::from_secs(5),
+        elapsed < ORPHAN_EXIT_TIMEOUT,
         "orphan-exit observation should complete within 5s, took {elapsed:?}"
     );
     assert!(

@@ -3,7 +3,6 @@
 //! bytes are retrievable from the in-memory pipeline state through the
 //! public `deslop-core` API — never over the wire.
 
-
 use anyhow::{ensure, Context, Result};
 use deslop_core::ast::ByteRange;
 

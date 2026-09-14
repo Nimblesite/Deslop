@@ -15,7 +15,12 @@ use super::{
     },
     *,
 };
-use crate::{ast::ByteRange, lsh::SIGNATURE_LEN, state::FileRegistry};
+use crate::{
+    ast::ByteRange,
+    lsh::SIGNATURE_LEN,
+    registry_fixtures::{pair_ids, REQUESTED_RS, STORED_RS},
+    state::FileRegistry,
+};
 
 /// Source bytes every binding in these tests addresses.
 const SOURCE: &[u8] = b"pub fn twice(value: i32) -> i32 { value + value }\n";
@@ -101,9 +106,7 @@ fn assert_rejected(blob: &[u8], binding: &BlobBinding<'_>, file_id: FileId, labe
 // signatures positionally 1:1 with fingerprints.
 #[test]
 fn round_trip_preserves_tree_fingerprints_and_signatures() -> io::Result<()> {
-    let mut registry = FileRegistry::new();
-    let stored_file_id = registry.register(PathBuf::from("stored.rs"));
-    let requested_file_id = registry.register(PathBuf::from("requested.rs"));
+    let (stored_file_id, requested_file_id) = pair_ids(STORED_RS, REQUESTED_RS);
     let hash = bytes_hash(SOURCE);
     let binding = source_binding(&hash);
     let original = sample(stored_file_id);
@@ -420,10 +423,12 @@ fn the_blob_format_revisions_are_pinned() {
          superseded values must stay rejected, never reused"
     );
     assert_eq!(
-        SEMANTIC_EPOCH, 1,
+        SEMANTIC_EPOCH, 5,
         "the semantic epoch changes when parse/normalise/fingerprint/signature \
          *meaning* changes without moving a byte — the case the `0.0.0-dev` \
-         directory partition cannot invalidate"
+         directory partition cannot invalidate. 5 is the mandated-prologue \
+         root drop ([PIPELINE-FINGERPRINT-MERKLE-ROOT]); bumping past it \
+         requires a new dated entry on the constant's doc, then this pin"
     );
     assert_eq!(
         SIGNATURE_LEN * 8,

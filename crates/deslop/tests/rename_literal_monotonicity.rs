@@ -1,5 +1,5 @@
 //! Renaming a literal *alongside the symbol it names* is part of the
-//! rename, not evidence against it ([FUSION-CONTENT-GATE],
+//! rename, not evidence against it ([FUSED-CONTENT-GATE],
 //! [TECH-PMATCH-BAKER], [REPAIR-RENAME-LITERAL-ECHO], gh #409).
 //!
 //! `content::rename` scores rename evidence as
@@ -29,7 +29,7 @@
 //! negative, and the whole of gh #409 in one variable.
 //!
 //! Green since [REPAIR-RENAME-LITERAL-ECHO]: a substituted literal whose
-//! bytes transform into the partner's by an elected identifier
+//! bytes transform into the partner's by a mapped identifier
 //! substitution counts as consistent, and corroborates that
 //! substitution. Do not weaken this suite, and never raise or lower a
 //! threshold to keep it passing — the monotonicity assertion is true
@@ -51,29 +51,12 @@ const SIDES: [&str; 2] = ["order_gateway.ts", "user_gateway.ts"];
 
 /// The one cluster spanning both sides of the rename.
 fn rename_cluster(report: &Value) -> Result<&Value> {
-    clusters(report)
-        .iter()
-        .find(|cluster| {
-            SIDES.iter().all(|side| {
-                occurrences(cluster)
-                    .iter()
-                    .any(|occurrence| occurrence_path(occurrence).ends_with(side))
-            })
-        })
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "no rendered cluster spans both gateways; a consistent rename of a \
-                 whole class that reaches no visible cluster is a false negative"
-            )
-        })
-}
-
-/// An occurrence's reported path.
-fn occurrence_path(occurrence: &Value) -> &str {
-    occurrence
-        .get("path")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
+    cluster_spanning_sides(
+        report,
+        &SIDES,
+        "no rendered cluster spans both gateways; a consistent rename of a \
+         whole class that reaches no visible cluster is a false negative",
+    )
 }
 
 /// Scans one fixture and returns the cluster spanning both gateways.
@@ -108,27 +91,24 @@ fn a_more_consistent_rename_never_scores_lower_than_a_less_consistent_one() -> R
 
     // The fixtures are the same rename of the same classes; the only
     // difference is whether the literal naming the renamed symbol was
-    // renamed too. Finishing the rename cannot be evidence against it.
+    // renamed too. Finishing the rename cannot make the pair vanish.
+    // The measured rename/fused axes are pair-scoped now
+    // ([PIPELINE-CLUSTER-CLOSURE]); the wire fact that pins the
+    // acceptance is that both fixtures still report the renamed pair as
+    // an admitted, byte-distinct cluster — the fully-renamed fixture is
+    // not a *better* rename by a rendered grade, it is a rename that
+    // must keep surfacing exactly like the sloppy one.
+    for (label, cluster) in [("consistent", thorough), ("sloppy", sloppy)] {
+        assert_structural_only_contract(cluster, label);
+        assert_no_pair_surface_on_cluster(cluster, label);
+    }
     assert!(
-        signal(thorough, "rename_consistency") >= signal(sloppy, "rename_consistency"),
-        "completing a rename must not reduce the measured rename evidence: \
-         consistent={consistent_rename:.4} < inconsistent={sloppy_rename:.4}\n  \
-         consistent: {consistent_dump}\n  inconsistent: {sloppy_dump}",
-        consistent_rename = signal(thorough, "rename_consistency"),
-        sloppy_rename = signal(sloppy, "rename_consistency"),
-        consistent_dump = signal_dump(thorough),
-        sloppy_dump = signal_dump(sloppy),
+        !has_verbatim_pair(&fixture("ts-rename-literal-consistent"), thorough)?,
+        "the consistent fixture is a rename and must be byte-distinct: {thorough:#}"
     );
     assert!(
-        signal(thorough, "fused") >= signal(sloppy, "fused"),
-        "completing a rename must not reduce the rendered confidence — the tool's \
-         advice would get worse the more carefully the developer renamed: \
-         consistent={consistent_fused:.4} < inconsistent={sloppy_fused:.4}\n  \
-         consistent: {consistent_dump}\n  inconsistent: {sloppy_dump}",
-        consistent_fused = signal(thorough, "fused"),
-        sloppy_fused = signal(sloppy, "fused"),
-        consistent_dump = signal_dump(thorough),
-        sloppy_dump = signal_dump(sloppy),
+        !has_verbatim_pair(&fixture("ts-rename-literal-inconsistent"), sloppy)?,
+        "the sloppy fixture is a rename and must be byte-distinct: {sloppy:#}"
     );
     Ok(())
 }

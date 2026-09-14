@@ -5,7 +5,7 @@ import * as assert from "node:assert/strict";
 import { ReportStore } from "../../reportStore";
 import { Report, ReportDelta } from "../../types/report";
 
-import { cluster, delta, emptyReport, metrics, occurrence } from "./report-store.helpers";
+import { cluster, delta, emptyReport, metrics, occurrence, storeWith } from "./report-store.helpers";
 
 
 /** The recomputed metrics every applyDelta case asserts against. */
@@ -14,6 +14,7 @@ const DELTA_METRICS = metrics({
   duplicated_loc: 1046,
   duplication_percent: 11.2,
 });
+const EMBEDDING_MODEL_ID = "nomic-embed-text";
 
 /**
  * Applies one delta and returns the resulting report. Every applyDelta
@@ -71,6 +72,9 @@ suite("ReportStore", () => {
       clusters_added: [cluster("c", 2)],
       clusters_removed: [],
       clusters_updated: [],
+    literal_findings_added: [],
+    literal_findings_removed: [],
+    literal_findings_updated: [],
       metrics: metrics(),
       cache_stats: { hits: 0, misses: 0 },
       tool_version: "tool-v2",
@@ -145,6 +149,9 @@ suite("ReportStore", () => {
         clusters_added: [cluster("c", 10, [], 1)],
         clusters_removed: ["a"],
         clusters_updated: [cluster("b", 5, [], 2)],
+        literal_findings_added: [],
+        literal_findings_removed: [],
+        literal_findings_updated: [],
         cache_stats: { hits: 3, misses: 4 },
         tool_version: "v2",
       }),
@@ -172,8 +179,7 @@ suite("ReportStore", () => {
   // carried-over seed metrics with the delta's recomputed values, or the
   // headline freezes for the rest of the session.
   test("applyDelta replaces report.metrics with the delta's recomputed metrics (#199)", () => {
-    const store = new ReportStore();
-    store.setSnapshot(
+    const store = storeWith(
       emptyReport({
         metrics: metrics({ analysed_loc: 8981, duplicated_loc: 1588, duplication_percent: 17.7 }),
       }),
@@ -194,8 +200,7 @@ suite("ReportStore", () => {
   // zero-seed -> delta transition moves metrics off zero AND populates
   // clusters, so the two panels can no longer disagree.
   test("applyDelta moves metrics off a zero seed when a delta brings clusters (#196)", () => {
-    const store = new ReportStore();
-    store.setSnapshot(emptyReport(), 1);
+    const store = storeWith(emptyReport(), 1);
     assert.equal(store.current.report?.metrics.duplicated_loc, 0, "seed starts clean");
     const out = applyAndRead(store, {
       clusters_added: [
@@ -223,14 +228,14 @@ suite("ReportStore", () => {
     store.onDidChange(() => {
       fired += 1;
     });
-    store.setPendingEmbeddingModel("nomic-embed-text");
-    assert.equal(store.current.pendingEmbeddingModel, "nomic-embed-text");
+    store.setPendingEmbeddingModel(EMBEDDING_MODEL_ID);
+    assert.equal(store.current.pendingEmbeddingModel, EMBEDDING_MODEL_ID);
     assert.equal(fired, 1);
   });
 
   test("setSnapshot clears any pending embedding model once a fresh report arrives", () => {
     const store = new ReportStore();
-    store.setPendingEmbeddingModel("nomic-embed-text");
+    store.setPendingEmbeddingModel(EMBEDDING_MODEL_ID);
     store.setSnapshot(emptyReport(), 1);
     assert.equal(store.current.pendingEmbeddingModel, null);
   });
@@ -244,7 +249,7 @@ suite("ReportStore", () => {
     store.setEmbeddingProgress({
       phase: "starting",
       provider_id: "ollama",
-      model_id: "nomic-embed-text",
+      model_id: EMBEDDING_MODEL_ID,
       done: 0,
       total: 200,
       percent: 0,
@@ -254,7 +259,7 @@ suite("ReportStore", () => {
     assert.deepEqual(store.current.embeddingProgress, {
       phase: "starting",
       provider_id: "ollama",
-      model_id: "nomic-embed-text",
+      model_id: EMBEDDING_MODEL_ID,
       done: 0,
       total: 200,
       percent: 0,
@@ -267,8 +272,7 @@ suite("ReportStore", () => {
   // Every delta cloned the whole accumulated history, so N removals cost O(N)
   // retained ids and O(N²) copying over the session's life.
   test("the retraction ledger stays bounded across a long delta-only session", () => {
-    const store = new ReportStore();
-    store.setSnapshot(emptyReport({ clusters: [cluster("seed", 1)] }), 1);
+    const store = storeWith(emptyReport({ clusters: [cluster("seed", 1)] }), 1);
 
     const churn = 2_000;
     for (let index = 0; index < churn; index += 1) {
@@ -281,6 +285,9 @@ suite("ReportStore", () => {
         // server saying it found the cluster again.
         clusters_removed: index === 0 ? [] : [`c-${index - 1}`],
         clusters_updated: [],
+    literal_findings_added: [],
+    literal_findings_removed: [],
+    literal_findings_updated: [],
         metrics: metrics(),
         cache_stats: { hits: 0, misses: 0 },
         tool_version: "v",
@@ -313,7 +320,7 @@ suite("ReportStore", () => {
     store.setEmbeddingProgress({
       phase: "complete",
       provider_id: "ollama",
-      model_id: "nomic-embed-text",
+      model_id: EMBEDDING_MODEL_ID,
       done: 64,
       total: 64,
       percent: 100,

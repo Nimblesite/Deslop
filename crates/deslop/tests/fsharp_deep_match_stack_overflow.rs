@@ -28,25 +28,17 @@
 //! So the dangerous band is precisely the depths the guard lets through.
 //! This test pins the deepest accepted inputs.
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::fs;
 
 use anyhow::Result;
 use serde_json::Value;
 
+use crate::common::scan_dir::{report_path, temp_scan_dir};
 use crate::common::*;
 
 /// Nesting depths the depth guard accepts and the recursive walks then
 /// overflow on. 164 is the deepest input the guard admits; 165 is rejected.
 const ACCEPTED_BUT_OVERFLOWING: [usize; 4] = [150, 156, 160, 164];
-
-fn report_path(tmp: &Path) -> PathBuf {
-    let mut path = tmp.join("report");
-    let _replaced = path.set_extension("json");
-    path
-}
 
 /// An F# function of `nesting` right-nested `match` expressions — the shape
 /// `LargeMatches-maxtested.fs` uses, reduced to the smallest form that
@@ -62,9 +54,7 @@ fn nested_matches(nesting: usize) -> String {
 
 #[test]
 fn deep_fsharp_matches_under_the_guard_do_not_abort_the_run() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let src = tmp.path().join("src");
-    fs::create_dir(&src)?;
+    let (tmp, src) = temp_scan_dir("src")?;
 
     for nesting in ACCEPTED_BUT_OVERFLOWING {
         fs::write(

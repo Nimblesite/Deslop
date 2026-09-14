@@ -11,6 +11,7 @@
 mod ast_access;
 mod change;
 mod diff;
+mod pair_compare;
 mod render;
 mod store;
 
@@ -21,6 +22,7 @@ use std::{
 };
 
 use crate::{
+    ast::ByteRange,
     boilerplate::BoilerplateRange,
     config::{is_config_path, watched_config_paths, ExclusionConfig},
     discover::{
@@ -330,6 +332,34 @@ impl PipelineSession {
         self.store.fingerprint_count()
     }
 
+    /// Resolves subtree digests to the live occurrences that carry
+    /// them — the workspace path and byte range of every fingerprint
+    /// whose normalised-subtree hash is in `hashes`
+    /// ([PIPELINE-FINGERPRINT-MERKLE]).
+    ///
+    /// The join `find_similar` runs for snippet input: a snippet has no
+    /// workspace identity, so it can only be located by content. The
+    /// public cluster id is *not* content alone ([PIPELINE-DETERMINISM],
+    /// gh #430 — it mixes the members' paths so same-shape findings in
+    /// different files never share one), so a caller that matched
+    /// `encode_short_id(hash) == cluster.id` returned empty for every
+    /// snippet the moment ids stopped being bare member digests. The
+    /// occurrence ranges this returns are joined against the report
+    /// through [`Report`] range lookups, which is the same join the
+    /// open-range variant of `find_similar` uses.
+    #[must_use]
+    pub fn subtree_occurrences(&self, hashes: &[[u8; 32]]) -> Vec<(PathBuf, ByteRange)> {
+        self.store
+            .fingerprints()
+            .iter()
+            .filter(|found| hashes.contains(&found.hash))
+            .filter_map(|found| {
+                self.path_for(found.file_id)
+                    .map(|path| (path.to_path_buf(), found.byte_range))
+            })
+            .collect()
+    }
+
     /// Returns the path associated with `file_id`, if the session has
     /// seen it.
     #[must_use]
@@ -414,26 +444,43 @@ impl PipelineSession {
     }
 }
 
-/// Moves the freshly-parsed per-file bundles into the canonical flat
-/// store, feeding them in ascending `(relative path, id)` order so
-/// every insert is an append ([PIPELINE-DETERMINISM]).
+/// Takes the corpus loop's flat record vectors as the store — they
+/// were built directly in canonical ascending `(path, file id)` order
+/// ([PIPELINE-DETERMINISM], [PERF-FLUTTER-TODO-MEMORY]), so the store
+/// is a move, not a rebuild.
 fn build_store(
     corpus: &mut FingerprintCorpus,
     files: &[DiscoveredFile],
     root: &Path,
 ) -> CorpusStore {
-    let mut keys: Vec<(PathBuf, FileId)> = files
-        .iter()
-        .map(|file| (store::relative_path_key(&file.path, root), file.file_id))
-        .collect();
-    keys.sort_unstable();
-    let mut built = CorpusStore::default();
-    for (path_key, file_id) in keys {
-        if let Some(cached) = corpus.per_file.remove(&file_id) {
-            built.upsert(file_id, path_key, cached);
-        }
+    // Entries in the corpus loop's processed order (ascending
+    // `(path, file id)`); `processed` is a subsequence of the same
+    // ordering over the discovery list, so one zip walks both.
+    let mut ordered: Vec<&DiscoveredFile> = files.iter().collect();
+    ordered.sort_by(|left, right| {
+        left.path
+            .cmp(&right.path)
+            .then(left.file_id.cmp(&right.file_id))
+    });
+    let mut processed = std::mem::take(&mut corpus.per_file).into_iter().peekable();
+    let mut entries = Vec::with_capacity(ordered.len());
+    for discovered in ordered {
+        let Some((file_id, count)) = processed.next_if(|&(id, _)| id == discovered.file_id) else {
+            // Not processed (no parser, or skipped as too deep) —
+            // no records, no entry.
+            continue;
+        };
+        entries.push(store::StoreEntry {
+            file_id,
+            path_key: store::relative_path_key(&discovered.path, root),
+            fingerprint_count: count,
+        });
     }
-    built
+    CorpusStore::from_flat_parts(
+        entries,
+        std::mem::take(&mut corpus.fingerprints),
+        std::mem::take(&mut corpus.signatures),
+    )
 }
 
 /// True when a change to `path` re-scopes the corpus rather than

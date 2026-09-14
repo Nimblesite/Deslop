@@ -10,11 +10,10 @@ import type { LanguageClient } from "vscode-languageclient/node";
 import { ReportStore, LifecyclePhase } from "../reportStore";
 import {
   applyFacetFilter,
-  bucketLabels,
-  categoryLabels,
   FacetFilter,
   ReportCluster,
   RepoMetrics,
+  severityLabel,
 } from "../types/report";
 import { readTopOffendersFilter } from "../commands/topOffendersView";
 import {
@@ -23,7 +22,6 @@ import {
   FolderMetricNode,
   FolderNode,
   GroupNode,
-  LanguageGroupNode,
   MetricsHeadlineNode,
   Node,
   OccurrenceNode,
@@ -33,17 +31,15 @@ import {
 import {
   buildClusterMode,
   buildFileMode,
-  buildTypeMode,
+  buildKindMode,
   getFileNodeChildren,
   getGroupNodeChildren,
   GroupBy,
   normalizeGroupBy,
   orderedOccurrences,
-  worstCluster,
 } from "./grouping";
 import { buildFolderMode } from "./folder";
 import { buildMetricRows } from "./metrics";
-import { groupByLanguage, normalizeSplitByLanguage } from "./language";
 import { normalizeSortBy, SortBy } from "./sort";
 import { thresholdStatus } from "./threshold";
 
@@ -51,14 +47,12 @@ import { thresholdStatus } from "./threshold";
 // (commands/register.ts, commands/treeMenus.ts, tests, e2e suites)
 // keep working without import-path churn.
 export {
-  BucketGroupNode,
   ClusterNode,
   FileMetricNode,
   FileNode,
   FolderMetricNode,
   FolderNode,
   GroupNode,
-  LanguageGroupNode,
   MetricsHeadlineNode,
   OccurrenceNode,
   SessionFieldNode,
@@ -67,6 +61,9 @@ export {
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const SPINNER_INTERVAL_MS = 120;
+const FAILED_LIFECYCLE_KIND = "failed";
+const INFORMATION_STATUS_KIND = "info";
+const DESLOP_CONFIGURATION_NAMESPACE = "deslop";
 
 // [VSIX reactivity] The busy/error status row for any non-"ready"
 // lifecycle. `hasReport` picks the scan-kind label: the initial cold
@@ -82,7 +79,7 @@ function scanStatus(
   frame: number,
 ): StatusNode | null {
   if (lifecycle.kind === "ready") return null;
-  if (lifecycle.kind === "failed") {
+  if (lifecycle.kind === FAILED_LIFECYCLE_KIND) {
     return new StatusNode(
       `Stopped: ${lifecycle.message}`,
       "error",
@@ -215,42 +212,39 @@ abstract class LifecycleAwareProvider implements vscode.TreeDataProvider<Node>, 
   }
 }
 
+// Reads one `deslop.topOffenders.*` view axis and normalises it, so an
+// unrecognised setting value falls back rather than reaching the tree.
+function readAxis<T>(key: string, fallback: string, normalise: (value: string) => T): T {
+  return normalise(
+    vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE).get<string>(key, fallback),
+  );
+}
+
 // [VSIX-TOP-OFFENDERS-GROUPING] Reads `deslop.topOffenders.groupBy`
 // (cluster | file | folder | type, default cluster).
 function readGroupBy(): GroupBy {
-  return normalizeGroupBy(
-    vscode.workspace.getConfiguration("deslop").get<string>("topOffenders.groupBy", "cluster"),
-  );
+  return readAxis("topOffenders.groupBy", "cluster", normalizeGroupBy);
 }
 
 // [VSIX-TOP-OFFENDERS-SORT] Reads `deslop.topOffenders.sortBy`.
 function readSortBy(): SortBy {
-  return normalizeSortBy(
-    vscode.workspace.getConfiguration("deslop").get<string>("topOffenders.sortBy", "impact"),
-  );
-}
-
-// [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] Reads `deslop.topOffenders.splitByLanguage`.
-function readSplitByLanguage(): boolean {
-  return normalizeSplitByLanguage(
-    vscode.workspace
-      .getConfiguration("deslop")
-      .get<boolean>("topOffenders.splitByLanguage", false),
-  );
+  return readAxis("topOffenders.sortBy", "impact", normalizeSortBy);
 }
 
 export class TopOffendersProvider extends LifecycleAwareProvider {
   getChildren(node?: Node): Node[] {
-    if (node instanceof FolderNode || node instanceof LanguageGroupNode) return node.children;
+    if (node instanceof FolderNode) return node.children;
     if (node instanceof FileNode) return getFileNodeChildren(node);
-    // One machinery for both group axes: file-mode bucket sections and
-    // type-mode category roots ([FACET-GROUP-BY-TYPE]).
+    // One machinery for both group axes: file-mode kind sections and
+    // kind-mode roots.
     if (node instanceof GroupNode) return getGroupNodeChildren(node);
     if (node instanceof ClusterNode) {
-      // [VSIX-TOP-OFFENDERS-SORT] Order occurrences by the active axis while
-      // keeping each one's original index so the canonical badge stays put.
+      // [VSIX-PAIR-COMPARE] Dirty projection and path sorting never promote
+      // a surviving peer into the original canonical occurrence.
+      const [canonical] = this.store.current.report?.clusters
+        .find((cluster) => cluster.id === node.cluster.id)?.occurrences ?? [];
       return orderedOccurrences(node.cluster, readSortBy()).map(({ occurrence, index }) =>
-        new OccurrenceNode(occurrence, node.cluster, node.rank, index),
+        new OccurrenceNode(occurrence, node.cluster, node.rank, index, canonical ?? null),
       );
     }
     if (node) return [];
@@ -259,14 +253,14 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
     // gates the scan-kind label (cold vs incremental).
     const { visibleReport, report, lifecycle } = this.store.current;
     const indicator = scanStatus(lifecycle, !!report, this.ticker.currentFrame);
-    if (lifecycle.kind === "failed") return indicator ? [indicator] : [];
+    if (lifecycle.kind === FAILED_LIFECYCLE_KIND) return indicator ? [indicator] : [];
     if (!visibleReport || visibleReport.clusters.length === 0) {
       // Never declare the codebase clean until the server confirms a
       // completed scan ("ready"); while scanning, show progress instead.
       if (indicator) return [indicator];
       // [VSIX-PRINCIPLES] Silence when clean: a single calm empty-state row
       // when there is no duplication (principle 2).
-      return [new StatusNode("No duplication detected", "info")];
+      return [new StatusNode("No duplication detected", INFORMATION_STATUS_KIND)];
     }
     const roots = buildRoots(visibleReport.clusters);
     // [req: incremental indicator] Keep clusters visible during a
@@ -296,30 +290,10 @@ function buildRoots(clusters: ReportCluster[]): Node[] {
   const build = (subset: ReportCluster[]): Node[] => {
     if (groupBy === "file") return buildFileMode(subset, sortBy);
     if (groupBy === "folder") return buildFolderMode(subset, sortBy);
-    if (groupBy === "type") return buildTypeMode(subset, sortBy);
+    if (groupBy === "kind") return buildKindMode(subset, sortBy);
     return buildClusterMode(subset, sortBy);
   };
-  const roots = readSplitByLanguage()
-    ? groupByLanguage(visible).flatMap(({ language, clusters: members }) =>
-        languageGroup(language, members, build(members)),
-      )
-    : build(visible);
-  return [...filterStatusRow(filter), ...roots];
-}
-
-// One per-language root. Its headline weight is the weight of the
-// language's worst cluster, read off the engine's lowest-ranked member
-// rather than recomputed as a maximum here
-// ([VSIX-TOP-OFFENDERS-LANGUAGE-GROUP]).
-function languageGroup(
-  language: string,
-  members: ReportCluster[],
-  children: Node[],
-): Node[] {
-  const worst = worstCluster(members);
-  return worst
-    ? [new LanguageGroupNode(language, children, worst.weight, members.length)]
-    : [];
+  return [...filterStatusRow(filter), ...build(visible)];
 }
 
 // [FACET-TOP-OFFENDERS-FILTER-EMPTY] A non-collapsible status row leads
@@ -327,10 +301,7 @@ function languageGroup(
 // bound — a filtered-empty tree must never be mistakable for the
 // "No duplication detected" clean state.
 function filterStatusRow(filter: FacetFilter): Node[] {
-  const parts = [
-    ...filter.buckets.map((bucket) => bucketLabels(bucket).plainTitle),
-    ...filter.categories.map((category) => categoryLabels(category).groupTitle),
-  ];
+  const parts = filter.severities.map((severity) => severityLabel(severity));
   if (parts.length === 0) return [];
   const row = new StatusNode(
     `Filtered: ${parts.join(" · ")} — Clear filter`,
@@ -352,16 +323,16 @@ export class MetricsProvider extends LifecycleAwareProvider {
     if (node) return [];
     const { visibleReport, report, lifecycle } = this.store.current;
     const indicator = scanStatus(lifecycle, !!report, this.ticker.currentFrame);
-    if (lifecycle.kind === "failed") return indicator ? [indicator] : [];
+    if (lifecycle.kind === FAILED_LIFECYCLE_KIND) return indicator ? [indicator] : [];
     if (!visibleReport) {
-      return indicator ? [indicator] : [new StatusNode("No session yet", "info")];
+      return indicator ? [indicator] : [new StatusNode("No session yet", INFORMATION_STATUS_KIND)];
     }
     const metrics = visibleReport.metrics;
     if (metrics.duplicated_loc === 0) {
       // Same completion gate as Top Offenders: only the server's idle
       // state may render the terminal "clean" verdict ([VSIX reactivity]).
       if (indicator) return [indicator];
-      return [new StatusNode("No duplication detected", "info")];
+      return [new StatusNode("No duplication detected", INFORMATION_STATUS_KIND)];
     }
     return [metricsHeadline(metrics), ...buildMetricRows(metrics)];
   }
@@ -398,11 +369,11 @@ export class SessionProvider extends LifecycleAwareProvider {
     // Show spinner only before first report arrives, or on error. Once
     // session data exists it stays visible during re-analysis (stale >
     // blank); the Top Offenders panel carries the in-flight badge.
-    if (lifecycle.kind === "failed" || !report) {
+    if (lifecycle.kind === FAILED_LIFECYCLE_KIND || !report) {
       const status = scanStatus(lifecycle, !!report, this.ticker.currentFrame);
       if (status) return [status];
     }
-    if (!report) return [new StatusNode("No session yet", "info")];
+    if (!report) return [new StatusNode("No session yet", INFORMATION_STATUS_KIND)];
     const activeModel =
       report.embedding_provenance?.model_id ?? "Select model to enable AI matches";
     const model = pendingEmbeddingModel

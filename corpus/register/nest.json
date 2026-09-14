@@ -1,0 +1,1256 @@
+{
+  "name": "nest",
+  "language": "typescript",
+  "url": "https://github.com/nestjs/nest.git",
+  "sha": "dfaa376170168d12d9d28bcfe137a9bacce579a3",
+  "protocol": {
+    "spec": "docs/specs/corpus.md",
+    "spec_section": "[CORPUS-REGISTER]",
+    "judging_skill": ".agents/skills/judge-clone-pairs/SKILL.md",
+    "preparer_skill": ".agents/skills/clone-register-prepare/SKILL.md"
+  },
+  "clearly_in": [
+    {
+      "why": "integration/microservices/src/app.controller.ts and its tcp-tls twin carry the same @MessagePattern and @Post handlers verbatim.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 14-29 lines.",
+      "occurrences": [
+        "integration/microservices/src/redis/redis.controller.ts:25-47",
+        "integration/microservices/src/tcp-tls/app.controller.ts:69-91"
+      ]
+    },
+    {
+      "why": "The same forty-three line block of the media-type versioning spec appears in both the Express and the Fastify copy.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 43 lines.",
+      "occurrences": [
+        "integration/versioning/e2e/media-type-versioning.spec.ts:399-441",
+        "integration/versioning/e2e/media-type-versioning-fastify.spec.ts:409-451"
+      ]
+    },
+    {
+      "why": "sum-rpc-tls.spec.ts and sum-rpc.spec.ts carry the same sixty-odd line block of microservice tests, word for word.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 69-70 lines.",
+      "occurrences": [
+        "integration/microservices/e2e/sum-rpc-tls.spec.ts:61-129",
+        "integration/microservices/e2e/sum-rpc.spec.ts:46-114"
+      ]
+    },
+    {
+      "why": "sum-rpc-tls.spec.ts and sum-rpc.spec.ts carry the same sixty-odd line block of microservice tests, word for word.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 69-70 lines.",
+      "occurrences": [
+        "integration/microservices/e2e/sum-rpc-tls.spec.ts:68-137",
+        "integration/microservices/e2e/sum-rpc.spec.ts:53-122"
+      ]
+    },
+    {
+      "why": "The versioning e2e specs are written twice, once for Express and once for Fastify. These windows - 130 to 310 lines of describe/it blocks - are verbatim in both files.",
+      "verified": "Diffed both ranges out of source/: byte-identical over the whole window.",
+      "occurrences": [
+        "integration/versioning/e2e/uri-versioning-fastify.spec.ts:207-363",
+        "integration/versioning/e2e/uri-versioning.spec.ts:197-353"
+      ]
+    },
+    {
+      "why": "A thirteen-line ExceptionsZone test fixture appears verbatim twice in the same spec file.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 13 lines.",
+      "occurrences": [
+        "packages/core/test/errors/test/exceptions-zone.spec.ts:21-33",
+        "packages/core/test/errors/test/exceptions-zone.spec.ts:76-88"
+      ]
+    },
+    {
+      "why": "The versioning e2e specs are written twice, once for Express and once for Fastify. These windows - 130 to 310 lines of describe/it blocks - are verbatim in both files.",
+      "verified": "Diffed both ranges out of source/: byte-identical over the whole window.",
+      "occurrences": [
+        "integration/versioning/e2e/media-type-versioning-fastify.spec.ts:31-343",
+        "integration/versioning/e2e/media-type-versioning.spec.ts:24-336"
+      ]
+    },
+    {
+      "why": "The module-hook test setUp - moduleRef, sampleProvider and the two addProvider calls - is written out identically in on-module-init.hook.spec.ts and before-app-shutdown.hook.spec.ts.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 19 lines.",
+      "occurrences": [
+        "packages/core/test/hooks/on-module-init.hook.spec.ts:19-37",
+        "packages/core/test/hooks/before-app-shutdown.hook.spec.ts:19-37"
+      ]
+    },
+    {
+      "why": "The users.resolver.spec.ts of the code-first and schema-first GraphQL federation samples is the same file.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 34-39 lines.",
+      "occurrences": [
+        "sample/32-graphql-federation-schema-first/users-application/src/users/users.resolver.spec.ts:1-39",
+        "sample/31-graphql-federation-code-first/users-application/src/users/users.resolver.spec.ts:1-39"
+      ]
+    },
+    {
+      "why": "The eslint.config.mjs of two GraphQL federation sample applications is the same file.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 35 lines.",
+      "occurrences": [
+        "sample/32-graphql-federation-schema-first/posts-application/eslint.config.mjs:8-42",
+        "sample/31-graphql-federation-code-first/users-application/eslint.config.mjs:8-42"
+      ]
+    },
+    {
+      "why": "The users.resolver.spec.ts of the code-first and schema-first GraphQL federation samples is the same file.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 34-39 lines.",
+      "occurrences": [
+        "sample/31-graphql-federation-code-first/users-application/src/users/users.resolver.spec.ts:6-39",
+        "sample/32-graphql-federation-schema-first/users-application/src/users/users.resolver.spec.ts:6-39"
+      ]
+    },
+    {
+      "why": "The versioning e2e specs are written twice, once for Express and once for Fastify. These windows - 130 to 310 lines of describe/it blocks - are verbatim in both files.",
+      "verified": "Diffed both ranges out of source/: byte-identical over the whole window.",
+      "occurrences": [
+        "integration/versioning/e2e/header-versioning-fastify.spec.ts:31-343",
+        "integration/versioning/e2e/header-versioning.spec.ts:24-336"
+      ]
+    },
+    {
+      "why": "The cats e2e spec of sample/01-cats-app and sample/36-hmr-esm is the same file.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 34 lines.",
+      "occurrences": [
+        "sample/01-cats-app/e2e/cats/cats.e2e-spec.ts:1-34",
+        "sample/36-hmr-esm/e2e/cats/cats.e2e-spec.ts:1-34"
+      ]
+    },
+    {
+      "why": "integration/microservices/src/app.controller.ts and its tcp-tls twin carry the same @MessagePattern and @Post handlers verbatim.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 14-29 lines.",
+      "occurrences": [
+        "integration/microservices/src/app.controller.ts:99-114",
+        "integration/microservices/src/tcp-tls/app.controller.ts:112-127"
+      ]
+    },
+    {
+      "why": "The users controller of the inspector and repl integration apps is the same file.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 29 lines.",
+      "occurrences": [
+        "integration/inspector/src/users/users.controller.ts:14-42",
+        "integration/repl/src/users/users.controller.ts:14-42"
+      ]
+    },
+    {
+      "why": "An eighteen-line versioning describe block appears verbatim twice in custom-versioning-fastify.spec.ts.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 19 lines.",
+      "occurrences": [
+        "integration/versioning/e2e/custom-versioning-fastify.spec.ts:780-798",
+        "integration/versioning/e2e/custom-versioning-fastify.spec.ts:299-317"
+      ]
+    },
+    {
+      "why": "The versioning e2e specs are written twice, once for Express and once for Fastify. These windows - 130 to 310 lines of describe/it blocks - are verbatim in both files.",
+      "verified": "Diffed both ranges out of source/: byte-identical over the whole window.",
+      "occurrences": [
+        "integration/versioning/e2e/header-versioning-fastify.spec.ts:365-671",
+        "integration/versioning/e2e/header-versioning.spec.ts:355-661"
+      ]
+    },
+    {
+      "why": "The cats controller of sample/01-cats-app and sample/36-hmr-esm carries the same route handlers, comments included.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 18 lines.",
+      "occurrences": [
+        "sample/01-cats-app/src/cats/cats.controller.ts:15-32",
+        "sample/36-hmr-esm/src/cats/cats.controller.ts:15-32"
+      ]
+    },
+    {
+      "why": "integration/microservices/src/app.controller.ts and its tcp-tls twin carry the same @MessagePattern and @Post handlers verbatim.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 14-29 lines.",
+      "occurrences": [
+        "integration/microservices/src/app.controller.ts:32-45",
+        "integration/microservices/src/tcp-tls/app.controller.ts:45-58"
+      ]
+    },
+    {
+      "why": "integration/microservices/src/app.controller.ts and its tcp-tls twin carry the same @MessagePattern and @Post handlers verbatim.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 14-29 lines.",
+      "occurrences": [
+        "integration/microservices/src/app.controller.ts:99-117",
+        "integration/microservices/src/tcp-tls/app.controller.ts:112-130"
+      ]
+    }
+  ],
+  "clearly_out": [],
+  "not_clear": [
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "integration/hello-world/e2e/middleware-fastify.spec.ts:638-640",
+        "integration/hello-world/e2e/middleware-fastify.spec.ts:747-749"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "packages/common/test/pipes/validation.pipe.spec.ts:512-519",
+        "packages/common/test/pipes/validation.pipe.spec.ts:543-550"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/microservices/server/server-kafka.ts:122-153",
+        "packages/microservices/client/client-kafka.ts:306-337"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "integration/versioning/e2e/custom-versioning-fastify.spec.ts:150-157",
+        "integration/versioning/e2e/custom-versioning-fastify.spec.ts:631-638"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/common/test/serializer/class-serializer.interceptor.spec.ts:356-358",
+        "packages/common/test/serializer/class-serializer.interceptor.spec.ts:159-161"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/core/test/helpers/external-proxy.spec.ts:19-22",
+        "packages/core/test/router/router-proxy.spec.ts:21-24"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "integration/microservices/e2e/sum-mqtt.spec.ts:146-156",
+        "integration/microservices/e2e/sum-kafka.spec.ts:93-103"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/microservices/client/client-redis.ts:79-88",
+        "packages/microservices/server/server-redis.ts:60-69"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "sample/25-dynamic-modules/src/app.module.ts:1-11",
+        "sample/26-queues/src/audio/audio.module.ts:1-15"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/core/test/scope/transient-scope.spec.ts:76-77",
+        "packages/core/test/scope/transient-scope.spec.ts:56-57"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "integration/graphql-schema-first/e2e/graphql-request-scoped.spec.ts:50-52",
+        "integration/scopes/e2e/circular-request-scope.spec.ts:46-48"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "integration/microservices/e2e/orders-grpc.spec.ts:97-105",
+        "integration/microservices/e2e/orders-grpc.spec.ts:187-195"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "integration/websockets/e2e/gateway.spec.ts:170-172",
+        "integration/websockets/e2e/gateway.spec.ts:112-114"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/core/test/injector/topology-tree/tree-node.spec.ts:113-115",
+        "packages/core/test/injector/topology-tree/tree-node.spec.ts:104-106"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "packages/core/test/nest-application-context.spec.ts:169-178",
+        "packages/core/test/nest-application-context.spec.ts:193-202"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "integration/hello-world/e2e/middleware-fastify.spec.ts:782-784",
+        "integration/hello-world/e2e/middleware-fastify.spec.ts:231-233"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/microservices/test/client/client-kafka.spec.ts:945-946",
+        "packages/microservices/test/client/client-kafka.spec.ts:885-886"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/common/test/services/logger.service.spec.ts:452-459",
+        "packages/core/test/router/legacy-route-converter.spec.ts:66-73"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/core/test/injector/nested-transient-isolation.spec.ts:19-49",
+        "integration/scopes/e2e/transient-scope.spec.ts:457-487"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "integration/microservices/e2e/sum-kafka.spec.ts:77-103",
+        "integration/microservices/e2e/sum-rpc.spec.ts:85-106"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/core/test/guards/guards-context-creator.spec.ts:133-165",
+        "packages/core/test/interceptors/interceptors-context-creator.spec.ts:139-170"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "integration/hello-world/e2e/force-console.spec.ts:59-72",
+        "integration/hello-world/e2e/force-console.spec.ts:44-57"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/core/test/middleware/routes-mapper.spec.ts:115-120",
+        "packages/core/test/middleware/routes-mapper.spec.ts:122-129"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/platform-fastify/decorators/route-schema.decorator.ts:1-15",
+        "packages/common/serializer/decorators/serialize-options.decorator.ts:1-9"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/core/test/injector/injector.spec.ts:68-70",
+        "packages/core/test/discovery/discovery-service.spec.ts:126-128"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "integration/websockets/e2e/gateway.spec.ts:158-168",
+        "integration/websockets/e2e/gateway.spec.ts:129-139"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "integration/websockets/e2e/ws-gateway.spec.ts:197-219",
+        "integration/websockets/e2e/ws-gateway.spec.ts:25-47"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "integration/microservices/src/redis/redis.controller.ts:60-62",
+        "integration/microservices/src/nats/nats.controller.ts:100-102"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/microservices/test/helpers/kafka-reply-partition-assigner.spec.ts:150-164",
+        "packages/microservices/test/helpers/kafka-reply-partition-assigner.spec.ts:165-179"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "packages/microservices/test/json-socket/message-parsing.spec.ts:25-26",
+        "packages/microservices/test/json-socket/message-parsing.spec.ts:69-70"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/common/test/services/logger.service.spec.ts:136-184",
+        "packages/common/test/services/logger.service.spec.ts:662-707"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/platform-fastify/adapters/middie/fastify-middie.ts:213-218",
+        "packages/platform-fastify/adapters/fastify-adapter.ts:909-914"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "integration/versioning/e2e/custom-versioning-fastify.spec.ts:32-40",
+        "integration/versioning/e2e/header-versioning-fastify.spec.ts:20-28"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "packages/core/exceptions/base-exception-filter.ts:77-79",
+        "packages/websockets/exceptions/base-ws-exception-filter.ts:118-120"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/microservices/server/server-mqtt.ts:129-167",
+        "packages/microservices/server/server-nats.ts:143-177"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/common/test/pipes/file/max-file-size.validator.spec.ts:91-116",
+        "packages/common/test/pipes/file/file-type.validator.spec.ts:360-389"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/microservices/client/client-proxy.ts:208-219",
+        "packages/microservices/client/client-proxy.ts:221-232"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/core/guards/guards-context-creator.ts:58-93",
+        "packages/core/exceptions/base-exception-filter-context.ts:39-78"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "integration/nest-application/app-locals/e2e/express.spec.ts:24-25",
+        "integration/nest-application/app-locals/e2e/express.spec.ts:31-32"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/core/test/helpers/execution-context-host.spec.ts:43-51",
+        "packages/core/test/helpers/execution-context-host.spec.ts:65-73"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "integration/hello-world/e2e/fastify-middleware-before-init.spec.ts:126-127",
+        "integration/hello-world/e2e/fastify-middleware-before-init.spec.ts:84-85"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/core/injector/module-ref.ts:53-87",
+        "packages/common/interfaces/nest-application-context.interface.ts:43-61"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/core/test/nest-application-context.spec.ts:465-472",
+        "packages/core/test/nest-application-context.spec.ts:20-27"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "integration/microservices/src/rmq/rmq-broadcast.controller.ts:13-25",
+        "integration/microservices/src/rmq/rmq.controller.ts:20-32"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/microservices/ctx-host/kafka.context.ts:45-61",
+        "packages/microservices/ctx-host/rmq.context.ts:16-32"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/core/test/inspector/graph-inspector.spec.ts:90-105",
+        "packages/core/test/inspector/graph-inspector.spec.ts:74-89"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "integration/microservices/src/tcp-tls/app.controller.ts:132-140",
+        "integration/microservices/src/app.controller.ts:119-127"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "integration/scopes/e2e/request-scope.spec.ts:113-115",
+        "integration/scopes/e2e/request-modules-scope.spec.ts:59-61"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/microservices/test/context/exception-filters-context.spec.ts:11-18",
+        "packages/core/test/router/router-exception-filters.spec.ts:12-19"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "integration/scopes/e2e/request-modules-scope.spec.ts:58-62",
+        "integration/scopes/e2e/request-scope.spec.ts:112-116"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/common/test/serializer/class-serializer.interceptor.spec.ts:113-115",
+        "packages/common/test/serializer/class-serializer.interceptor.spec.ts:218-220"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/microservices/test/server/server-grpc.spec.ts:776-777",
+        "packages/microservices/test/server/server-grpc.spec.ts:752-753"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/common/test/serializer/class-serializer.interceptor.spec.ts:298-302",
+        "packages/common/test/serializer/class-serializer.interceptor.spec.ts:276-280"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/microservices/test/server/server-redis.spec.ts:93-94",
+        "packages/microservices/test/server/server-redis.spec.ts:86-87"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "packages/microservices/test/server/server-grpc.spec.ts:14-18",
+        "packages/microservices/test/client/client-grpc.spec.ts:12-16"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/common/test/services/logger.service.spec.ts:313-315",
+        "packages/common/test/services/logger.service.spec.ts:327-329"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/core/test/nest-application.spec.ts:99-100",
+        "packages/core/test/nest-application.spec.ts:79-80"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/core/test/scanner.spec.ts:406-412",
+        "packages/core/test/scanner.spec.ts:420-426"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "integration/microservices/src/redis/redis.controller.ts:50-52",
+        "integration/microservices/src/mqtt/mqtt.controller.ts:202-204"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "integration/nest-application/raw-body/src/express.controller.ts:1-13",
+        "integration/nest-application/raw-body/src/fastify.controller.ts:1-13"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "sample/10-fastify/src/core/interceptors/transform.interceptor.ts:1-24",
+        "integration/inspector/src/core/interceptors/transform.interceptor.ts:1-25"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "sample/06-mongoose/src/cats/cats.controller.spec.ts:89-95",
+        "sample/06-mongoose/src/cats/cats.controller.spec.ts:107-113"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "packages/platform-fastify/interfaces/external/fastify-static-options.interface.ts:96-103",
+        "packages/platform-fastify/interfaces/external/fastify-static-options.interface.ts:61-68"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/core/test/discovery/discovery-service.spec.ts:377-389",
+        "packages/core/test/discovery/discovery-service.spec.ts:422-434"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/core/test/injector/module.spec.ts:273-278",
+        "packages/core/test/injector/module.spec.ts:175-181"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/microservices/client/client-rmq.ts:315-338",
+        "packages/microservices/client/client-mqtt.ts:176-194"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/core/nest-application-context.ts:472-480",
+        "packages/core/nest-application-context.ts:458-466"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/common/decorators/http/route-params.decorator.ts:609-720",
+        "packages/common/decorators/http/route-params.decorator.ts:432-526"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/microservices/test/server/server-grpc.spec.ts:772-774",
+        "packages/microservices/test/server/server-grpc.spec.ts:745-747"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "integration/nest-application/get-url/e2e/express.spec.ts:37-39",
+        "integration/nest-application/get-url/e2e/fastify.spec.ts:30-32"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/microservices/test/server/server-rmq.spec.ts:275-277",
+        "packages/microservices/test/client/client-rmq.spec.ts:244-246"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/microservices/test/client/client-rmq.spec.ts:131-132",
+        "packages/microservices/test/client/client-rmq.spec.ts:109-110"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "integration/nest-application/sse/e2e/utils.ts:12-70",
+        "integration/nest-application/sse/e2e/utils.ts:80-143"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "integration/scopes/e2e/transient-scope.spec.ts:510-527",
+        "integration/scopes/e2e/transient-scope.spec.ts:348-365"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/core/test/injector/injector.spec.ts:307-309",
+        "packages/core/test/injector/injector.spec.ts:289-291"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/common/test/services/logger.service.spec.ts:643-650",
+        "packages/common/test/services/logger.service.spec.ts:89-96"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "integration/nest-application/get-url/e2e/express.spec.ts:8-58",
+        "integration/nest-application/get-url/e2e/fastify.spec.ts:7-51"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/core/test/scanner.spec.ts:692-733",
+        "packages/core/test/scanner.spec.ts:650-691"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "packages/core/test/injector/instance-wrapper.spec.ts:337-341",
+        "packages/core/test/injector/instance-wrapper.spec.ts:348-352"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "packages/platform-express/test/multer/multer/multer.module.spec.ts:36-38",
+        "packages/platform-express/test/multer/multer/multer.module.spec.ts:54-56"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "integration/scopes/src/main.ts:1-8",
+        "integration/mongoose/src/main.ts:1-8"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/common/test/pipes/validation.pipe.spec.ts:638-641",
+        "packages/common/test/pipes/validation.pipe.spec.ts:633-636"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/core/test/nest-application-context.spec.ts:435-442",
+        "packages/core/test/nest-application-context.spec.ts:20-27"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "integration/hello-world/e2e/middleware-fastify.spec.ts:788-820",
+        "integration/hello-world/e2e/middleware-fastify.spec.ts:855-886"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "integration/injector/e2e/scoped-instances.spec.ts:131-137",
+        "integration/scopes/e2e/transient-scope.spec.ts:553-559"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/microservices/context/rpc-context-creator.ts:168-211",
+        "packages/websockets/context/ws-context-creator.ts:164-206"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/core/test/router/paths-explorer.spec.ts:159-160",
+        "packages/core/test/router/paths-explorer.spec.ts:109-110"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/microservices/test/server/server-kafka.spec.ts:206-208",
+        "packages/microservices/test/server/server-kafka.spec.ts:280-283"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "integration/hello-world/e2e/middleware-fastify.spec.ts:315-331",
+        "integration/hello-world/e2e/middleware-fastify.spec.ts:352-368"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "integration/scopes/e2e/request-modules-scope.spec.ts:34-36",
+        "integration/scopes/e2e/msvc-request-scope.spec.ts:50-52"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "integration/versioning/e2e/media-type-versioning-fastify.spec.ts:324-330",
+        "integration/versioning/e2e/custom-versioning-fastify.spec.ts:395-402"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "integration/hello-world/e2e/force-console.spec.ts:87-94",
+        "integration/hello-world/e2e/force-console.spec.ts:19-26"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "integration/discovery/src/app.module.ts:1-10",
+        "sample/22-graphql-prisma/src/posts/posts.module.ts:1-10"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "packages/common/test/decorators/route-params.decorator.spec.ts:269-271",
+        "packages/common/test/decorators/route-params.decorator.spec.ts:520-522"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/common/test/pipes/parse-date.pipe.spec.ts:22-24",
+        "packages/common/test/pipes/parse-date.pipe.spec.ts:17-19"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/common/decorators/http/route-params.decorator.ts:184-249",
+        "packages/microservices/decorators/payload.decorator.ts:10-62"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/microservices/test/client/client-nats.spec.ts:88-93",
+        "packages/microservices/test/client/client-redis.spec.ts:93-100"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/common/decorators/core/use-pipes.decorator.ts:29-49",
+        "packages/common/decorators/core/use-interceptors.decorator.ts:28-67"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/microservices/server/server-kafka.ts:52-105",
+        "packages/microservices/client/client-kafka.ts:93-143"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "packages/core/test/injector/instance-wrapper.spec.ts:555-560",
+        "packages/core/test/injector/instance-wrapper.spec.ts:566-571"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/platform-express/test/multer/interceptors/no-files.inteceptor.spec.ts:21-30",
+        "packages/platform-express/test/multer/interceptors/any-files.interceptor.spec.ts:21-30"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/core/test/injector/instance-wrapper.spec.ts:137-139",
+        "packages/core/test/injector/instance-wrapper.spec.ts:308-310"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/core/test/guards/guards-context-creator.spec.ts:59-77",
+        "packages/core/test/interceptors/interceptors-context-creator.spec.ts:60-82"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/microservices/test/server/server-grpc.spec.ts:62-75",
+        "packages/microservices/test/server/server-kafka.spec.ts:171-182"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "integration/websockets/src/request.interceptor.ts:6-8",
+        "packages/websockets/exceptions/base-ws-exception-filter.ts:58-60"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/core/hooks/on-module-destroy.hook.ts:1-68",
+        "packages/core/hooks/on-app-bootstrap.hook.ts:1-69"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/core/test/discovery/discoverable-meta-host-collection.spec.ts:338-352",
+        "packages/core/test/discovery/discoverable-meta-host-collection.spec.ts:204-218"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "integration/scopes/e2e/durable-providers.spec.ts:37-40",
+        "integration/scopes/e2e/durable-providers.spec.ts:53-56"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "packages/microservices/test/server/server-tcp.spec.ts:167-169",
+        "packages/microservices/test/server/server-tcp.spec.ts:159-161"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/common/test/decorators/redirect.decorator.spec.ts:20-23",
+        "packages/common/test/decorators/redirect.decorator.spec.ts:15-18"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/common/decorators/http/route-params.decorator.ts:241-267",
+        "packages/common/decorators/http/route-params.decorator.ts:502-526"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/microservices/decorators/payload.decorator.ts:10-53",
+        "packages/common/decorators/http/route-params.decorator.ts:346-389"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "sample/35-use-esm-package-after-node22/src/app.controller.ts:1-12",
+        "sample/34-using-esm-packages/src/app.controller.ts:1-12"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/microservices/test/client/client-nats.spec.ts:133-133",
+        "packages/microservices/test/client/client-nats.spec.ts:145-147"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/microservices/test/server/server-redis.spec.ts:255-262",
+        "packages/microservices/test/server/server-redis.spec.ts:247-254"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/core/test/helpers/execution-context-host.spec.ts:45-47",
+        "packages/core/test/helpers/execution-context-host.spec.ts:67-69"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/microservices/test/client/client-nats.spec.ts:117-119",
+        "packages/microservices/test/client/client-nats.spec.ts:395-397"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/microservices/server/server-tcp.ts:152-170",
+        "packages/microservices/server/server-mqtt.ts:294-312"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "packages/core/test/router/paths-explorer.spec.ts:140-141",
+        "packages/core/test/router/paths-explorer.spec.ts:125-126"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/core/test/injector/instance-wrapper.spec.ts:895-914",
+        "packages/core/test/injector/instance-wrapper.spec.ts:856-876"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/microservices/test/ctx-host/tcp.context.spec.ts:4-21",
+        "packages/microservices/test/ctx-host/nats.context.spec.ts:6-20"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "integration/hello-world/e2e/exclude-middleware.spec.ts:14-63",
+        "integration/hello-world/e2e/exclude-middleware-fastify.spec.ts:18-67"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "sample/01-cats-app/src/cats/cats.controller.spec.ts:6-54",
+        "sample/36-hmr-esm/src/cats/cats.service.spec.ts:5-48"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "packages/microservices/test/json-socket/message-parsing.spec.ts:123-124",
+        "packages/microservices/test/json-socket/message-parsing.spec.ts:172-173"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/microservices/interfaces/client-metadata.interface.ts:40-50",
+        "packages/microservices/interfaces/microservice-configuration.interface.ts:106-116"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/microservices/test/server/server-grpc.spec.ts:750-751",
+        "packages/microservices/test/server/server-grpc.spec.ts:748-749"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "integration/versioning/e2e/header-versioning-fastify.spec.ts:293-301",
+        "integration/versioning/e2e/header-versioning-fastify.spec.ts:627-635"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "integration/scopes/src/circular-transient/hello.module.ts:11-20",
+        "integration/inspector/src/circular-hello/hello.module.ts:10-19"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/websockets/test/utils/socket-gateway.decorator.spec.ts:33-41",
+        "packages/websockets/test/utils/socket-gateway.decorator.spec.ts:9-17"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/microservices/test/client/client-redis.spec.ts:375-387",
+        "packages/microservices/test/client/client-redis.spec.ts:413-425"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "integration/injector/e2e/parallel-request-scoped-resolution.spec.ts:228-245",
+        "integration/injector/e2e/parallel-request-scoped-resolution.spec.ts:175-192"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "integration/scopes/e2e/request-scope.spec.ts:143-145",
+        "integration/scopes/e2e/request-scope.spec.ts:137-139"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/core/test/injector/nested-transient-isolation.spec.ts:254-256",
+        "packages/core/test/injector/nested-transient-isolation.spec.ts:92-94"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/core/interceptors/interceptors-context-creator.ts:110-117",
+        "packages/core/guards/guards-context-creator.ts:108-115"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/core/helpers/external-context-creator.ts:156-162",
+        "packages/microservices/context/rpc-context-creator.ts:117-123"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "packages/core/test/injector/topology-tree/tree-node.spec.ts:99-100",
+        "packages/core/test/injector/topology-tree/tree-node.spec.ts:107-109"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "sample/32-graphql-federation-schema-first/posts-application/src/posts/posts.resolver.ts:17-19",
+        "sample/31-graphql-federation-code-first/users-application/src/users/users.resolver.ts:10-12"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "integration/websockets/e2e/gateway.spec.ts:71-101",
+        "integration/websockets/e2e/gateway.spec.ts:22-52"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "integration/microservices/src/mqtt/mqtt.controller.ts:32-35",
+        "integration/microservices/src/nats/nats.controller.ts:38-41"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tools/benchmarks/src/frameworks/nest-express.ts:6-13",
+        "tools/benchmarks/src/frameworks/nest-fastify.ts:6-13"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/microservices/client/client-redis.ts:292-294",
+        "packages/microservices/client/client-nats.ts:237-239"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/microservices/test/json-socket/data/long-payload-with-special-chars.ts:124-169",
+        "packages/microservices/test/json-socket/data/long-payload-with-special-chars.ts:86-123"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "integration/microservices/e2e/sum-rpc.spec.ts:9-127",
+        "integration/microservices/e2e/sum-rmq.spec.ts:8-116"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/core/test/exceptions/external-exceptions-handler.spec.ts:45-49",
+        "packages/websockets/test/exceptions/ws-exceptions-handler.spec.ts:127-131"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "packages/microservices/client/client-mqtt.ts:233-235",
+        "packages/microservices/client/client-redis.ts:299-301"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/microservices/test/json-socket/connection.spec.ts:75-76",
+        "packages/microservices/test/json-socket/connection.spec.ts:55-56"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "integration/hooks/e2e/enable-shutdown-hook.spec.ts:76-77",
+        "integration/hooks/e2e/enable-shutdown-hook.spec.ts:42-43"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "integration/microservices/src/nats/nats.controller.ts:26-43",
+        "integration/microservices/src/app.controller.ts:27-39"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/common/test/module-utils/configurable-module.builder.spec.ts:134-135",
+        "integration/lazy-modules/e2e/lazy-import-transient-providers.spec.ts:27-29"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/common/test/pipes/parse-int.pipe.spec.ts:13-18",
+        "packages/common/test/pipes/parse-float.pipe.spec.ts:13-18"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/common/test/pipes/file/parse-file.pipe.spec.ts:63-79",
+        "packages/common/test/pipes/file/parse-file.pipe.spec.ts:82-98"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "packages/common/test/utils/shared.utils.spec.ts:62-64",
+        "packages/common/test/utils/shared.utils.spec.ts:76-78"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "sample/29-file-upload/e2e/app/app.e2e-spec.ts:19-23",
+        "sample/29-file-upload/e2e/app/app.e2e-spec.ts:33-37"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "packages/microservices/client/client-mqtt.ts:37-58",
+        "packages/microservices/client/client-redis.ts:34-61"
+      ]
+    }
+  ],
+  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 200 candidates at this commit and no pair was called CLEARLY OUT by all of them. 2 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing."
+}

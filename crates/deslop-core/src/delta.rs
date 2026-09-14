@@ -10,10 +10,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::report::{Report, ReportCluster};
+use crate::{
+    report::{Report, ReportCluster},
+    wire_generated::LiteralFinding,
+};
 
 // `ReportDelta` is generated from `docs/models/live-ipc.td` by
-// `scripts/typediagram-gen.mjs`. The data shape lives in
+// `scripts/typediagram/generate.mjs`. The data shape lives in
 // `crate::wire_generated`; the `between`/`is_empty` impls stay here.
 pub use crate::wire_generated::ReportDelta;
 
@@ -54,6 +57,8 @@ impl ReportDelta {
             .map(|id| (*id).to_owned())
             .collect();
         clusters_removed.sort();
+        let (literal_findings_added, literal_findings_removed, literal_findings_updated) =
+            literal_changes(prev.map(|(_, report)| report), next);
 
         Self {
             from_generation,
@@ -61,6 +66,9 @@ impl ReportDelta {
             clusters_added,
             clusters_removed,
             clusters_updated,
+            literal_findings_added,
+            literal_findings_removed,
+            literal_findings_updated,
             metrics: next.metrics.clone(),
             cache_stats: next.cache_stats,
             tool_version: next.tool_version.clone(),
@@ -76,7 +84,50 @@ impl ReportDelta {
         self.clusters_added.is_empty()
             && self.clusters_removed.is_empty()
             && self.clusters_updated.is_empty()
+            && self.literal_findings_added.is_empty()
+            && self.literal_findings_removed.is_empty()
+            && self.literal_findings_updated.is_empty()
     }
+}
+
+/// Computes deterministic literal-finding changes separately from clone clusters.
+fn literal_changes(
+    previous: Option<&Report>,
+    next: &Report,
+) -> (Vec<LiteralFinding>, Vec<String>, Vec<LiteralFinding>) {
+    let previous = previous.map(literals_by_id).unwrap_or_default();
+    let next_by_id = literals_by_id(next);
+    let added = next
+        .literal_findings
+        .iter()
+        .filter(|finding| !previous.contains_key(finding.id.as_str()))
+        .cloned()
+        .collect();
+    let updated = next
+        .literal_findings
+        .iter()
+        .filter(|finding| {
+            previous
+                .get(finding.id.as_str())
+                .is_some_and(|old| *old != *finding)
+        })
+        .cloned()
+        .collect();
+    let removed = previous
+        .keys()
+        .filter(|id| !next_by_id.contains_key(**id))
+        .map(|id| (*id).to_owned())
+        .collect();
+    (added, removed, updated)
+}
+
+/// Indexes literal findings by stable id.
+fn literals_by_id(report: &Report) -> BTreeMap<&str, &LiteralFinding> {
+    report
+        .literal_findings
+        .iter()
+        .map(|finding| (finding.id.as_str(), finding))
+        .collect()
 }
 
 /// Indexes a report's clusters by id. `BTreeMap` keeps the iteration
@@ -89,50 +140,24 @@ fn clusters_by_id(report: &Report) -> BTreeMap<&str, &ReportCluster> {
         .collect()
 }
 
-/// Returns `true` when two clusters with the same id carry the same
-/// user-visible payload. Avoids a full structural `PartialEq` on
-/// [`ReportCluster`] (which would need derives across the whole report
-/// type surface) by comparing the fields a subscriber actually
-/// observes.
+/// Returns `true` when two clusters with the same id are the same
+/// cluster, field for field.
+///
+/// This was a hand-written list of the fields "a subscriber actually
+/// observes", and it had drifted: `bucket`, `category`,
+/// `occurrences_total`, `occurrences_truncated`, `intersects_diff` and
+/// `is_newly_introduced` were absent from it, as were the content axes
+/// of [`ReportSignals`] and the line numbers and diff tag of each
+/// occurrence. A cluster could change bucket, change category, gain or
+/// lose its diff tags, or move to different lines, and
+/// [`ReportDelta::between`] would report nothing — leaving every live
+/// subscriber rendering the previous generation's answer.
+///
+/// The list is gone. [`ReportCluster`] derives [`PartialEq`] in the
+/// generated wire module, so the comparison covers every field the wire
+/// carries, and a field added to `docs/models/live-ipc.td` is covered
+/// the day it lands rather than the day someone remembers this
+/// function.
 fn clusters_equal(left: &ReportCluster, right: &ReportCluster) -> bool {
-    (left.weight - right.weight).abs() <= f64::EPSILON
-        && left.size == right.size
-        && left.canonical_node_count == right.canonical_node_count
-        && signals_equal(left.signals, right.signals)
-        && left.rank == right.rank
-        && left.rank_band == right.rank_band
-        && left.language == right.language
-        && left.meets_fused_gate == right.meets_fused_gate
-        && left.evidence_verdict == right.evidence_verdict
-        && left.occurrence_count == right.occurrence_count
-        && left.summary == right.summary
-        && left.interpretation == right.interpretation
-        && occurrences_equal(&left.occurrences, &right.occurrences)
-}
-
-/// Bit-approximate equality for the rendered signal components.
-fn signals_equal(left: crate::report::ReportSignals, right: crate::report::ReportSignals) -> bool {
-    (left.structural - right.structural).abs() <= f64::EPSILON
-        && (left.token_jaccard - right.token_jaccard).abs() <= f64::EPSILON
-        && (left.embedding_cos - right.embedding_cos).abs() <= f64::EPSILON
-        && (left.fused - right.fused).abs() <= f64::EPSILON
-        && (left.shape - right.shape).abs() <= f64::EPSILON
-}
-
-/// Exact equality across two occurrence lists. Ordered — occurrence
-/// order is stable under [PIPELINE-CLUSTER-EXACT] so a reorder would
-/// itself be a semantic change.
-fn occurrences_equal(
-    left: &[crate::report::ReportOccurrence],
-    right: &[crate::report::ReportOccurrence],
-) -> bool {
-    if left.len() != right.len() {
-        return false;
-    }
-    left.iter().zip(right.iter()).all(|(a, b)| {
-        a.path == b.path
-            && a.start_byte == b.start_byte
-            && a.end_byte == b.end_byte
-            && a.hidden == b.hidden
-    })
+    left == right
 }

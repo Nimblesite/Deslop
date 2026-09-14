@@ -2,7 +2,7 @@
 
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
-import type { LanguageClient } from "vscode-languageclient/node";
+import { recordingClient } from "./client.helpers";
 
 import {
   currentInitializationOptions,
@@ -143,13 +143,7 @@ suite("embedding settings", () => {
       "embedding.model": legacyModelId(),
       "embedding.endpoint": "http://127.0.0.1:11434",
     });
-    const calls: Array<{ method: string; params: unknown }> = [];
-    const client = {
-      sendRequest: (method: string, params: unknown) => {
-        calls.push({ method, params });
-        return Promise.resolve(undefined);
-      },
-    } as unknown as LanguageClient;
+    const { calls, client } = recordingClient();
     const store = new ReportStore();
 
     try {

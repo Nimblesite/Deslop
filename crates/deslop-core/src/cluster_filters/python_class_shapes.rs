@@ -16,9 +16,10 @@
 use tree_sitter::Node;
 
 use super::{
-    enclosing_kind, is_multi_member_language_cluster, parse_for, trimmed_snippet_range, Snippet,
+    enclosing_kind, is_multi_member_language_cluster, language_cluster_shapes,
+    node_search::KindSearch, parse_for, trimmed_snippet_range, Snippet,
 };
-use crate::ast::ByteRange;
+use crate::ast::{named_children, ByteRange};
 
 /// Detects **a**: every cluster occurrence is a Python
 /// `class X(StrEnum)` (or `class X(str, Enum)`) declaration whose body
@@ -38,7 +39,7 @@ pub(super) fn is_strenum_class_shape_cluster(snippets: &[Snippet<'_>]) -> bool {
 /// **Every** class, not exactly one. This required a sole class, which
 /// held while a cluster occurrence was always a single declaration. It
 /// is no longer: an occurrence may span a whole module
-/// ([FUSION-SHARED-SUBTREE] widened which view wins), and both fixture
+/// ([FUSED-SHARED-SUBTREE] widened which view wins), and both fixture
 /// modules here declare two enums apiece — so the filter found three
 /// classes, returned `None`, and silently stopped firing. A module
 /// whose declarations are *all* closed-discriminator enums is still
@@ -73,43 +74,16 @@ fn enclosing_class(node: Node<'_>, range: ByteRange) -> Option<Node<'_>> {
     if node.start_byte() > range.start || node.end_byte() < range.end {
         return None;
     }
-    let mut cursor = node.walk();
-    let inner = node
-        .named_children(&mut cursor)
-        .find_map(|child| enclosing_class(child, range));
-    inner.or_else(|| (node.kind() == "class_definition").then_some(node))
+    named_children(node)
+        .into_iter()
+        .find_map(|child| enclosing_class(child, range))
+        .or_else(|| (node.kind() == "class_definition").then_some(node))
 }
 
 /// Walks `root` collecting every `class_definition` fully enclosed by
 /// `range`.
 fn classes_in_range(root: Node<'_>, range: ByteRange) -> Vec<Node<'_>> {
-    let mut classes = Vec::new();
-    collect_classes_in_range(root, range, &mut classes);
-    classes
-}
-
-/// Walks the tree appending `class_definition` nodes fully contained in
-/// `range`. Stops descending once a class is captured so nested classes
-/// are not double-counted.
-fn collect_classes_in_range<'tree>(
-    node: Node<'tree>,
-    range: ByteRange,
-    out: &mut Vec<Node<'tree>>,
-) {
-    if node.end_byte() <= range.start || node.start_byte() >= range.end {
-        return;
-    }
-    if node.kind() == "class_definition"
-        && node.start_byte() >= range.start
-        && node.end_byte() <= range.end
-    {
-        out.push(node);
-        return;
-    }
-    let mut cursor = node.walk();
-    for child in node.named_children(&mut cursor) {
-        collect_classes_in_range(child, range, out);
-    }
+    KindSearch::enclosed(range, |kind| kind == "class_definition").nodes(root)
 }
 
 /// Returns true when `class.superclasses` contains an `StrEnum`
@@ -118,10 +92,9 @@ fn class_has_strenum_base(class: Node<'_>, source: &[u8]) -> bool {
     let Some(supers) = class.child_by_field_name("superclasses") else {
         return false;
     };
-    let mut cursor = supers.walk();
     let mut has_str = false;
     let mut has_enum = false;
-    for child in supers.named_children(&mut cursor) {
+    for child in named_children(supers) {
         let Some(name) = identifier_bytes(child, source) else {
             continue;
         };
@@ -150,9 +123,8 @@ fn class_body_is_docstring_and_assignments(class: Node<'_>) -> bool {
     let Some(body) = class.child_by_field_name("body") else {
         return false;
     };
-    let mut cursor = body.walk();
     let mut saw_assignment = false;
-    for child in body.named_children(&mut cursor) {
+    for child in named_children(body) {
         match expression_statement_inner_kind(child) {
             Some("string") => {}
             Some("assignment") => saw_assignment = true,
@@ -169,9 +141,7 @@ fn expression_statement_inner_kind(node: Node<'_>) -> Option<&'static str> {
     if node.kind() != "expression_statement" {
         return None;
     }
-    let mut cursor = node.walk();
-    let inner = node.named_children(&mut cursor).next()?;
-    Some(inner.kind())
+    Some(node.named_child(0)?.kind())
 }
 
 /// Detects **b**: a cluster of Pydantic `BaseModel` subclasses
@@ -180,13 +150,8 @@ fn expression_statement_inner_kind(node: Node<'_>) -> Option<&'static str> {
 /// cluster — the `XUpdate` mirror is mandated by Pydantic's PATCH
 /// semantics, not extractable duplication.
 pub(super) fn is_pydantic_partial_update_cluster(snippets: &[Snippet<'_>]) -> bool {
-    if !is_multi_member_language_cluster(snippets, "python") {
-        return false;
-    }
-    let shapes: Option<Vec<PartialUpdateShape>> =
-        snippets.iter().map(partial_update_shape).collect();
-    let Some(shapes) = shapes else { return false };
-    shapes.iter().all(|shape| shape.is_partial_basemodel)
+    language_cluster_shapes(snippets, "python", partial_update_shape)
+        .is_some_and(|shapes| shapes.iter().all(|shape| shape.is_partial_basemodel))
 }
 
 /// Per-member partial-update detection result.
@@ -231,11 +196,9 @@ fn class_has_base_named(class: Node<'_>, source: &[u8], needle: &[u8]) -> bool {
     let Some(supers) = class.child_by_field_name("superclasses") else {
         return false;
     };
-    let mut cursor = supers.walk();
-    let found = supers
-        .named_children(&mut cursor)
-        .any(|child| identifier_bytes(child, source) == Some(needle));
-    found
+    named_children(supers)
+        .into_iter()
+        .any(|child| identifier_bytes(child, source) == Some(needle))
 }
 
 /// Returns true when every body statement is `field: T | None = None`
@@ -244,9 +207,8 @@ fn class_body_is_all_optional_fields(class: Node<'_>, source: &[u8]) -> bool {
     let Some(body) = class.child_by_field_name("body") else {
         return false;
     };
-    let mut cursor = body.walk();
     let mut saw_field = false;
-    for child in body.named_children(&mut cursor) {
+    for child in named_children(body) {
         if !child_is_optional_field_or_docstring(child, source, &mut saw_field) {
             return false;
         }
@@ -265,8 +227,7 @@ fn child_is_optional_field_or_docstring(
     if child.kind() != "expression_statement" {
         return false;
     }
-    let mut inner_cursor = child.walk();
-    let Some(inner) = child.named_children(&mut inner_cursor).next() else {
+    let Some(inner) = child.named_child(0) else {
         return false;
     };
     if inner.kind() == "string" {
@@ -308,8 +269,7 @@ fn is_none_literal(node: Node<'_>, source: &[u8]) -> bool {
 /// Returns true when `type_node` is `T | None`, `None | T`, or
 /// `Optional[T]`.
 fn type_is_optional_annotation(type_node: Node<'_>, source: &[u8]) -> bool {
-    let mut cursor = type_node.walk();
-    let Some(inner) = type_node.named_children(&mut cursor).next() else {
+    let Some(inner) = type_node.named_child(0) else {
         return false;
     };
     annotation_inner_is_optional(inner, source)

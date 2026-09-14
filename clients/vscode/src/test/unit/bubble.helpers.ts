@@ -7,85 +7,60 @@ import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 import { BudgetScheduler, LiveBubble } from "../../bubble/live";
 import { ReportStore } from "../../reportStore";
-import { Bucket, Report, ReportCluster } from "../../types/report";
+import { kindTitle, Report, ReportCluster } from "../../types/report";
 import { repoMetrics, reportWithClusters } from "./report.helpers";
-import { occurrence, wireCluster } from "../cluster.helpers";
-import { signalsWith } from "../signals.helpers";
+import { FIXTURE_KIND, occurrence, wireCluster } from "../cluster.helpers";
 
-export interface ClusterSignalOptions {
-  // Engine-routed wire bucket. `resolveBucket` prefers it over
-  // re-deriving one from the signal triple.
-  bucket?: Bucket;
-  structural?: number;
-  token?: number;
-  /** The engine's shape reading. Defaults to the stronger shape axis,
-   * which is what the engine stamps, but a suite pinning the bubble's
-   * shape bar sets it outright. */
-  shape?: number;
-  embedding?: number;
-  /** The engine's fused-gate verdict. Set when a suite stages a cluster
-   * on a specific side of the reportable line. */
-  meetsFusedGate?: boolean;
+/** The verdict every bubble surface renders for a fixture cluster: the
+ * title of its clone kind ([CLONE-KIND-LABELS], [VSIX-LIVE-BUBBLE]). */
+export const FIXTURE_KIND_TITLE = kindTitle(FIXTURE_KIND);
+
+export interface ClusterFixtureOptions {
   /** The engine's global worst-first rank, when the suite stages more
    * than one candidate and pins which wins. */
   rank?: number;
   occurrenceTotal?: number;
 }
 
-/** The confidence the engine's reportable cutoff sits at today
- * (`deslop-core::pair::FUSED_THRESHOLD`). Restated here so these
- * fixtures can stage clusters on either side of it — production code
- * reads the engine's own `meets_fused_gate` verdict and owns no copy of
- * this number ([FUSION-CONTENT-GATE]). */
-export const ENGINE_FUSED_CUTOFF = 0.85;
+const FIXTURE_TEN = 10;
+export const DEFAULT_BUBBLE_CLUSTER_MASS = FIXTURE_TEN;
+export const PRIMARY_BUBBLE_CLUSTER_ID = "c-a";
+const FIXTURE_OCCURRENCE_END_BYTE = FIXTURE_TEN;
+const FIXTURE_ANALYSED_LOC = FIXTURE_TEN;
+const FIXTURE_LINE_LENGTH = FIXTURE_TEN;
 
-// Builds a two-occurrence cluster whose fused confidence is explicit, so
-// a test can stage the exact [FUSION-CONTENT-GATE] band it is asserting.
+// Builds a two-occurrence cluster carrying only cluster-owned facts:
+// rank, mass, and the occurrence count. Admission is the engine's
+// rank-band decision; pair signals never ride on a cluster
+// ([FACET-MODEL]).
 export function bubbleCluster(
   id: string,
-  weight: number,
-  fused: number,
-  options: ClusterSignalOptions = {},
+  mass: number,
+  options: ClusterFixtureOptions = {},
 ): ReportCluster {
   const total = options.occurrenceTotal ?? 2;
-  const bucket = options.bucket ?? "identical";
-  const structural = options.structural ?? 1;
-  const token = options.token ?? 1;
   return wireCluster({
     id,
     rank: options.rank ?? 1,
-    weight,
-    size: total,
-    bucket,
-    signals: signalsWith(bucket, {
-      structural,
-      token_jaccard: token,
-      shape: options.shape ?? Math.max(structural, token),
-      embedding_cos: options.embedding ?? 0,
-      fused,
-    }),
-    meets_fused_gate: options.meetsFusedGate ?? fused >= ENGINE_FUSED_CUTOFF,
+    mass,
     occurrences: [
-      occurrence("/tmp/A.cs", 0, 10),
-      occurrence("/tmp/B.cs", 0, 10),
+      occurrence("/tmp/A.cs", 0, FIXTURE_OCCURRENCE_END_BYTE),
+      occurrence("/tmp/B.cs", 0, FIXTURE_OCCURRENCE_END_BYTE),
     ],
     occurrences_total: total,
     occurrence_count: total,
-    interpretation: "interp",
   });
 }
 
 // The probe-shaped cluster the live-surface suites drive renders with:
-// an embedding-bearing default whose occurrence total is only set when a
-// test is pinning the report-vs-probe count contract.
+// a default whose occurrence total is only set when a test is pinning
+// the report-vs-probe count contract.
 export function probeCluster(
   id: string,
-  weight: number,
-  fused: number,
+  mass: number,
   occurrenceTotal?: number,
 ): ReportCluster {
-  const built = bubbleCluster(id, weight, fused, {
-    embedding: 0.5,
+  const built = bubbleCluster(id, mass, {
     occurrenceTotal: occurrenceTotal ?? 2,
   });
   return { ...built, occurrences_total: occurrenceTotal ?? 0 };
@@ -95,10 +70,10 @@ export function probeCluster(
 // so a probe claiming a different count is visibly wrong.
 export function probeReport(): Report {
   return reportWithClusters(
-    [probeCluster("c-a", 10, 0.95, 5)],
+    [probeCluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_MASS, 5)],
     {},
     {
-      analysed_loc: 10,
+      analysed_loc: FIXTURE_ANALYSED_LOC,
       duplicated_loc: 2,
       duplication_percent: 20,
       duplicated_files: 2,
@@ -184,7 +159,7 @@ function fakeDocument(file: string): vscode.TextDocument {
     lineAt: () => ({
       range: new vscode.Range(
         new vscode.Position(0, 0),
-        new vscode.Position(0, 10),
+        new vscode.Position(0, FIXTURE_LINE_LENGTH),
       ),
     }),
   } as unknown as vscode.TextDocument;
@@ -238,7 +213,7 @@ export async function resolveProbe(
   request: DeferredProbeRequest | undefined,
   probe: Promise<void>,
   cancellationExpected?: boolean,
-  clusters: ReportCluster[] = [probeCluster("c-a", 10, 0.95)],
+  clusters: ReportCluster[] = [probeCluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_MASS)],
 ): Promise<void> {
   assert.ok(request !== undefined, "probe request must exist");
   if (cancellationExpected !== undefined) {
@@ -279,13 +254,7 @@ export async function openLiveDocument(content: string): Promise<{
 // test opens with this — the five-line preamble it replaces was the
 // repo's third-worst duplication cluster.
 export async function bubbleFixture(
-  options: {
-    snapshot?: Report | null;
-    generation?: number;
-    mode?: "inline" | "ghost";
-    client?: LanguageClient;
-    budget?: BudgetScheduler;
-  } = {},
+  options: BubbleFixtureOptions = {},
 ): Promise<BubbleFixture> {
   const store = new ReportStore();
   const snapshot =
@@ -301,6 +270,32 @@ export async function bubbleFixture(
 
 // Asserts a bubble is on screen carrying `title`, and returns its text so
 // the caller can keep asserting against the same rendered string.
+/** Everything `bubbleFixture` accepts, named so `withBubble` can forward it. */
+export interface BubbleFixtureOptions {
+  snapshot?: Report | null;
+  generation?: number;
+  mode?: "inline" | "ghost";
+  client?: LanguageClient;
+  budget?: BudgetScheduler;
+}
+
+/** Opens a bubble fixture, hands it to `body`, and always disposes the bubble
+ * and restores inline mode afterwards — the try/finally every live-bubble test
+ * repeated. Cleanup runs even when an assertion fails, so a ghost-mode test can
+ * no longer leak its mode into the next one. */
+export async function withBubble(
+  options: BubbleFixtureOptions,
+  body: (fixture: BubbleFixture) => Promise<void> | void,
+): Promise<void> {
+  const fixture = await bubbleFixture(options);
+  try {
+    await body(fixture);
+  } finally {
+    await setBubbleMode("inline");
+    fixture.bubble.dispose();
+  }
+}
+
 export function assertBubbleShows(
   capture: BubbleCapture,
   title: string,
@@ -316,6 +311,37 @@ export function assertBubbleShows(
   return visible ?? "";
 }
 
+/**
+ * One step of a live editing journey: paints `clusters` at `startChar`
+ * and returns the text on screen, failing `context` when the surface
+ * stays empty ([VSIX-LIVE-BUBBLE]).
+ */
+export function renderStep(
+  capture: BubbleCapture,
+  bubble: LiveBubble,
+  startChar: number,
+  clusters: ReportCluster[],
+  context: string,
+): string {
+  bubble.render(capture.editor, span(startChar), clusters);
+  return assertBubbleShows(capture, FIXTURE_KIND_TITLE, context);
+}
+
+/**
+ * The same step for a cluster the surface must not offer: paints, then
+ * asserts nothing reached the screen.
+ */
+export function renderStepOffersNothing(
+  capture: BubbleCapture,
+  bubble: LiveBubble,
+  startChar: number,
+  clusters: ReportCluster[],
+  context: string,
+): void {
+  bubble.render(capture.editor, span(startChar), clusters);
+  assert.equal(capture.visible(), undefined, context);
+}
+
 export function renderFullConfidenceBubble(
   capture: BubbleCapture,
   bubble: LiveBubble,
@@ -323,13 +349,23 @@ export function renderFullConfidenceBubble(
   clusterId: string,
 ): string {
   bubble.render(capture.editor, span(startChar), [
-    probeCluster(clusterId, 10, 0.95),
+    probeCluster(clusterId, DEFAULT_BUBBLE_CLUSTER_MASS),
   ]);
-  return assertBubbleShows(
+  // [VSIX-LIVE-BUBBLE] The inline surface and the hover card both carry
+  // the cluster's clone kind as the verdict.
+  const visible = assertBubbleShows(
     capture,
-    "Identical code",
+    FIXTURE_KIND_TITLE,
     `expected ${clusterId} at character ${startChar}`,
   );
+  const hover = capture.visibleHover();
+  assert.ok(hover !== undefined, "a rendered bubble must attach its hover card");
+  assert.match(
+    hover?.value ?? "",
+    new RegExp(FIXTURE_KIND_TITLE),
+    "the hover card must carry the clone kind title",
+  );
+  return visible;
 }
 
 export function retractCluster(store: ReportStore, clusterId: string): void {
@@ -339,7 +375,10 @@ export function retractCluster(store: ReportStore, clusterId: string): void {
     clusters_added: [],
     clusters_removed: [clusterId],
     clusters_updated: [],
-    metrics: repoMetrics({ analysed_loc: 10 }),
+    literal_findings_added: [],
+    literal_findings_removed: [],
+    literal_findings_updated: [],
+    metrics: repoMetrics({ analysed_loc: FIXTURE_ANALYSED_LOC }),
     cache_stats: { hits: 0, misses: 0 },
     tool_version: "v2",
   });

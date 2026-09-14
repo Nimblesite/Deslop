@@ -1,342 +1,209 @@
-//! Canonical clone buckets — single source of truth for every renderer.
-//!
-//! Implements `[CLONE-BUCKETS]`, `[CLONE-BUCKETS-DUAL-LABEL]`, and
-//! `[CLONE-BUCKETS-ROUTING]` from
-//! [`docs/specs/taxonomy.md`](../../../../docs/specs/taxonomy.md).
-//!
-//! **Two audiences, three surface classes, one bucket identity.**
-//! - **Pure-visual** (HTML card, VS Code bubble / webviews / tree view)
-//!   → humans only. Use [`BucketLabels::plain_title`] + [`action_sentence`].
-//!   No `Type-N`, no enum names, no signal triples in prose.
-//! - **Shared-text** (CLI stderr, LSP `diagnostic.message`, VS Code
-//!   Problems panel, hover tooltip) → humans first, agents scrape.
-//!   Use [`BucketLabels::hybrid_title`] — plain prose with bracketed
-//!   `Type-N` suffix (e.g. `"Identical code [Type-1/2]"`). Per user
-//!   mandate: *"Shoot for human readable, but include technical terms
-//!   in brackets for the ai"*.
-//! - **AI-only** (JSON `interpretation`, `action_hints`, `schema_doc`,
-//!   MCP responses) → agents only. Use plain title + action sentence +
-//!   [`BucketLabels::taxonomy_label`] assembled into one precise
-//!   sentence. Dropping `Type-N` would break prompts in the wild.
-//!
-//! Every renderer calls [`bucket_labels`] rather than hard-coding
-//! strings so the four parallel vocabularies we used to ship can never
-//! regrow. The helper carries all three forms; the renderer picks.
+//! The clone-kind registry ([CLONE-KIND-LABELS]): one label set per
+//! [`ClusterKind`], the strength order the cluster fold reads
+//! ([CLONE-KIND-FOLD]), and the pair-content support floors that
+//! admission and explicit comparison share ([FUSED-CONTENT-GATE]).
 
-use crate::report::{ReportCluster, ReportSignals};
+pub use crate::wire_generated::ClusterKind;
+use crate::wire_generated::PairClassification;
 
-/// [FUSION-CONTENT-GATE] floors and the fused-confidence correction.
-mod gate;
-/// The shape-identical routing tail shared by renderer and subsumption.
-mod routing;
+/// Default pair-content support floor ([FUSED-CONTENT-GATE]).
+pub const CONTENT_SUPPORT_FLOOR: f64 = 0.7;
 
-pub use gate::{
-    content_gated_signals, content_support, has_saturating_shape_evidence, lacks_content_support,
-    CONTENT_PROMOTE_FLOOR, CONTENT_SUPPORT_FLOOR, LITERAL_TABLE_MIN_FRACTION,
-    RENAME_CONSISTENCY_DISCOUNT, SATURATING_TOKEN_FLOOR, STRUCTURAL_SATURATION_FLOOR,
-};
-pub(crate) use routing::{
-    is_demoted_tier, measured_kind, route_shape_identical, spans_multiple_files,
-};
+/// Stronger pair-content support floor an unanchored LSH-only pair pays
+/// in every scope ([FUSED-CONTENT-GATE]).
+pub const CONTENT_PROMOTE_FLOOR: f64 = 0.85;
 
-/// Canonical bucket identity. The enum is the one source of truth;
-/// every human / agent label attaches to one of these variants via
-/// [`bucket_labels`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ClusterKind {
-    /// Type-1 / Type-2 exact clones. Identical after normalisation
-    /// (whitespace, comments, renamed identifiers).
-    Identical,
-    /// Type-3 near-miss: same shape with small structural or token
-    /// differences that may be semantically meaningful.
-    NearlyIdentical,
-    /// Structural-only match ([RANK-STRUCTURAL-ONLY]):
-    /// the normalized AST shape is the only positive evidence — no
-    /// token overlap, no semantic support. Usually a sibling
-    /// boilerplate family (REST CRUD, settings getters, builders);
-    /// occasionally a genuine Type-2 rename candidate. Surfaced, but
-    /// demoted in ranking by default.
-    StructuralOnly,
-    /// Weak LSH-only overlap that survived the sub-threshold filters.
-    /// Hint, not a directive.
-    LooselySimilar,
-    /// Type-4 semantic match: the embedding pass noticed two
-    /// syntactically distinct implementations share behaviour. Only
-    /// reachable when embeddings ran.
-    SameBehavior,
+/// Returns the independent pair-content support `max(A, R)`.
+#[must_use]
+pub fn content_support(agreement: f64, rename_consistency: f64) -> f64 {
+    agreement.max(rename_consistency)
+}
+
+/// The human labels of one clone kind ([CLONE-KIND-LABELS]). Every
+/// surface that names a kind reads them from here, so the HTML report,
+/// the terminal summary, the LSP diagnostic and the extension agree on
+/// the words.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KindLabels {
+    /// The title a cluster surface shows, e.g. `Identical code`. Never
+    /// carries advice.
+    pub title: &'static str,
+    /// The clone-taxonomy name ([CLONE-TYPE-TAXONOMY]), for tooltips and
+    /// agent context.
+    pub taxonomy: &'static str,
+    /// The CSS class suffix the HTML report keys its colours on.
+    pub css_suffix: &'static str,
 }
 
 impl ClusterKind {
-    /// Every variant in canonical order. Used by renderers that need
-    /// to iterate over all buckets (e.g. the CLI breakdown line).
+    /// Every kind, strongest first — the order surfaces list kinds in.
     #[must_use]
     pub const fn all() -> [Self; 5] {
         [
             Self::Identical,
             Self::NearlyIdentical,
+            Self::SameBehavior,
             Self::StructuralOnly,
             Self::LooselySimilar,
-            Self::SameBehavior,
         ]
     }
 
-    /// Stable wire label used in the JSON report's `cluster.bucket`
-    /// field. `snake_case` so agents can pattern-match without
-    /// deserialising the whole enum.
+    /// The kind one pair classification folds into ([CLONE-KIND-FOLD]).
+    /// A pair the direct comparison does not admit at all is welded only
+    /// through other members, the loosest relation a cluster can carry.
+    #[must_use]
+    pub const fn from_pair(classification: Option<PairClassification>) -> Self {
+        match classification {
+            Some(PairClassification::Identical) => Self::Identical,
+            Some(PairClassification::NearlyIdentical) => Self::NearlyIdentical,
+            Some(PairClassification::SameBehavior) => Self::SameBehavior,
+            Some(PairClassification::StructuralOnly) => Self::StructuralOnly,
+            Some(PairClassification::LooselySimilar) | None => Self::LooselySimilar,
+        }
+    }
+
+    /// The weaker of two kinds ([CLONE-KIND-FOLD]).
+    #[must_use]
+    pub const fn weaker(self, other: Self) -> Self {
+        if other.strength() < self.strength() {
+            other
+        } else {
+            self
+        }
+    }
+
+    /// How much a kind claims: the byte-proven kind claims the most, a
+    /// relation carried only through other members the least.
+    const fn strength(self) -> u8 {
+        match self {
+            Self::LooselySimilar => 0,
+            Self::StructuralOnly => 1,
+            Self::SameBehavior => 2,
+            Self::NearlyIdentical => 3,
+            Self::Identical => 4,
+        }
+    }
+
+    /// The stable wire spelling, identical to the serde form.
     #[must_use]
     pub const fn wire_label(self) -> &'static str {
         match self {
             Self::Identical => "identical",
             Self::NearlyIdentical => "nearly_identical",
+            Self::SameBehavior => "same_behavior",
             Self::StructuralOnly => "structural_only",
             Self::LooselySimilar => "loosely_similar",
-            Self::SameBehavior => "same_behavior",
+        }
+    }
+
+    /// The human labels of this kind ([CLONE-KIND-LABELS]).
+    #[must_use]
+    pub const fn labels(self) -> KindLabels {
+        match self {
+            Self::Identical => KindLabels {
+                title: "Identical code",
+                taxonomy: "Type-1 exact clone",
+                css_suffix: "identical",
+            },
+            Self::NearlyIdentical => KindLabels {
+                title: "Nearly identical code",
+                taxonomy: "Type-2/3 near-copy",
+                css_suffix: "nearly-identical",
+            },
+            Self::SameBehavior => KindLabels {
+                title: "Same behavior, different code",
+                taxonomy: "Type-4 semantic clone",
+                css_suffix: "same-behavior",
+            },
+            Self::StructuralOnly => KindLabels {
+                title: "Same shape, different content",
+                taxonomy: "structural-only match",
+                css_suffix: "structural-only",
+            },
+            Self::LooselySimilar => KindLabels {
+                title: "Loosely similar code",
+                taxonomy: "weak Type-3 relation",
+                css_suffix: "loosely-similar",
+            },
         }
     }
 }
 
-/// Triple-labelled copy for one bucket. One struct, one helper, every
-/// renderer reads from it. [`BucketLabels`] is what lets HTML, CLI,
-/// LSP, VS Code, and the JSON `interpretation` agree without shared
-/// string constants scattered across the crate.
-///
-/// Renderers pick a field by surface class per [CLONE-BUCKETS-DUAL-LABEL]:
-/// - Pure-visual → [`Self::plain_title`] + [`Self::action_sentence`].
-/// - Shared-text → [`Self::hybrid_title`] + [`Self::action_sentence`].
-/// - AI-only → compose via [`Self::agent_summary`].
-#[derive(Debug, Clone, Copy)]
-pub struct BucketLabels {
-    /// Plain-English heading for pure-visual surfaces (HTML card, VS
-    /// Code webview, live bubble decoration). Never contains `Type-N`.
-    /// Example: `"Identical code"`.
-    pub plain_title: &'static str,
-    /// Heading for shared-text surfaces (CLI stderr, LSP
-    /// `diagnostic.message`, VS Code Problems panel, hover tooltip).
-    /// Plain prose prefix + bracketed taxonomy for AI scrapers.
-    /// Example: `"Identical code [Type-1/2]"`.
-    pub hybrid_title: &'static str,
-    /// Plain-English one-liner shown under the title on every surface.
-    /// Same copy regardless of class.
-    pub action_sentence: &'static str,
-    /// Academic taxonomy reference appended to AI-only prose and
-    /// bracketed into `hybrid_title`. Example: `"Type-1 or Type-2
-    /// exact clone"` (note: the bracketed form inside `hybrid_title`
-    /// uses a shorter `"Type-1/2"` for readability).
-    pub taxonomy_label: &'static str,
-    /// CSS class suffix used by the HTML renderer (e.g. `"identical"`
-    /// → `.kind-identical`). Kept in sync with the Kinetic Manuscript
-    /// palette in `render/html_css.rs`.
-    pub css_suffix: &'static str,
-    /// `true` when this bucket is populated exclusively by the
-    /// embedding pass. Drives the `(AI match)` badge per
-    /// `[CLONE-BUCKETS]` rule 5.
-    pub ai_match: bool,
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-impl BucketLabels {
-    /// AI-only sentence combining plain title, action sentence, and
-    /// academic taxonomy. Used by JSON `cluster.interpretation` and
-    /// `action_hints[*].recommendation`. Deterministic — safe to
-    /// include in golden-test assertions.
-    #[must_use]
-    pub fn agent_summary(&self) -> String {
-        format!(
-            "{}. {} ({})",
-            self.plain_title, self.action_sentence, self.taxonomy_label
-        )
+    #[test]
+    fn every_kind_is_listed_once_strongest_first() {
+        let kinds = ClusterKind::all();
+        for pair in kinds.windows(2) {
+            let [stronger, weaker] = pair else {
+                continue;
+            };
+            assert!(
+                stronger.strength() > weaker.strength(),
+                "{stronger:?} must list before {weaker:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_fold_keeps_the_weaker_kind_whichever_side_it_is_on() {
+        assert_eq!(
+            ClusterKind::Identical.weaker(ClusterKind::NearlyIdentical),
+            ClusterKind::NearlyIdentical
+        );
+        assert_eq!(
+            ClusterKind::NearlyIdentical.weaker(ClusterKind::Identical),
+            ClusterKind::NearlyIdentical
+        );
+        assert_eq!(
+            ClusterKind::SameBehavior.weaker(ClusterKind::StructuralOnly),
+            ClusterKind::StructuralOnly
+        );
+        assert_eq!(
+            ClusterKind::StructuralOnly.weaker(ClusterKind::LooselySimilar),
+            ClusterKind::LooselySimilar
+        );
+        assert_eq!(
+            ClusterKind::Identical.weaker(ClusterKind::Identical),
+            ClusterKind::Identical
+        );
+    }
+
+    #[test]
+    fn a_pair_the_direct_comparison_rejects_folds_to_the_loosest_kind() {
+        assert_eq!(ClusterKind::from_pair(None), ClusterKind::LooselySimilar);
+        assert_eq!(
+            ClusterKind::from_pair(Some(PairClassification::Identical)),
+            ClusterKind::Identical
+        );
+        assert_eq!(
+            ClusterKind::from_pair(Some(PairClassification::StructuralOnly)),
+            ClusterKind::StructuralOnly
+        );
+    }
+
+    #[test]
+    fn wire_labels_match_the_serde_spelling_and_titles_carry_no_advice() -> anyhow::Result<()> {
+        for kind in ClusterKind::all() {
+            let serde_form = serde_json::to_value(kind)?;
+            assert_eq!(serde_form, serde_json::Value::from(kind.wire_label()));
+            let labels = kind.labels();
+            assert!(
+                !labels.title.contains("merge") && !labels.title.contains("safe"),
+                "{kind:?} title advises instead of naming: {}",
+                labels.title
+            );
+            assert!(
+                !labels.title.contains("Type-"),
+                "{kind:?} title carries jargon"
+            );
+            assert!(
+                !labels.css_suffix.contains('_'),
+                "{kind:?} css suffix is kebab-case"
+            );
+        }
+        Ok(())
     }
 }
-
-/// Canonical bucket copy. Must match `docs/specs/taxonomy.md
-/// [CLONE-BUCKETS]` byte-for-byte on the plain / hybrid / action
-/// columns; if the table changes, this function changes in the same
-/// commit.
-#[must_use]
-pub const fn bucket_labels(kind: ClusterKind) -> BucketLabels {
-    match kind {
-        ClusterKind::Identical => BucketLabels {
-            plain_title: "Identical code",
-            hybrid_title: "Identical code [Type-1/2]",
-            action_sentence: "Safe to extract — every copy is the same.",
-            taxonomy_label: "Type-1 or Type-2 exact clone",
-            css_suffix: "identical",
-            ai_match: false,
-        },
-        ClusterKind::NearlyIdentical => BucketLabels {
-            plain_title: "Nearly identical code",
-            hybrid_title: "Nearly identical code [Type-3]",
-            action_sentence: "Review the locations — small differences may matter.",
-            taxonomy_label: "Type-3 near-miss",
-            css_suffix: "nearly-identical",
-            ai_match: false,
-        },
-        ClusterKind::StructuralOnly => BucketLabels {
-            plain_title: "Same shape, different content",
-            hybrid_title: "Same shape, different content [structural-only]",
-            action_sentence:
-                "Only the code shape matches — usually sibling boilerplate. Verify before extracting.",
-            taxonomy_label: "structural-only match (unverified Type-2/3 candidate)",
-            css_suffix: "structural-only",
-            ai_match: false,
-        },
-        ClusterKind::LooselySimilar => BucketLabels {
-            plain_title: "Loosely similar code",
-            hybrid_title: "Loosely similar code [weak LSH]",
-            action_sentence: "Loose textual overlap. Treat as a hint.",
-            taxonomy_label: "weak LSH-only signal (sub-Type-3)",
-            css_suffix: "loosely-similar",
-            ai_match: false,
-        },
-        ClusterKind::SameBehavior => BucketLabels {
-            plain_title: "Same behavior, different code",
-            hybrid_title: "Same behavior, different code [Type-4, AI match]",
-            action_sentence:
-                "The AI noticed these do the same thing written two ways — read both before merging.",
-            taxonomy_label: "Type-4 semantic clone (AI match)",
-            css_suffix: "same-behavior",
-            ai_match: true,
-        },
-    }
-}
-
-/// Resolves a report cluster's canonical bucket. Fresh reports carry the
-/// authoritative wire label; older reports fall back to signal routing.
-#[must_use]
-pub fn classify(cluster: &ReportCluster) -> ClusterKind {
-    kind_from_wire_label(&cluster.bucket).unwrap_or_else(|| classify_signals(cluster.signals))
-}
-
-/// Parses the stable JSON `cluster.bucket` wire label.
-fn kind_from_wire_label(label: &str) -> Option<ClusterKind> {
-    match label {
-        "identical" => Some(ClusterKind::Identical),
-        "nearly_identical" => Some(ClusterKind::NearlyIdentical),
-        "structural_only" => Some(ClusterKind::StructuralOnly),
-        "loosely_similar" => Some(ClusterKind::LooselySimilar),
-        "same_behavior" => Some(ClusterKind::SameBehavior),
-        _ => None,
-    }
-}
-
-/// Maximum token / embedding support a cluster may show while still
-/// counting as evidence-free for [`is_structural_only_signals`]. The
-/// 0.05 ceiling matches the #197 acceptance criterion
-/// (`token_jaccard=0.00`, `embedding_cos=0.00`) while tolerating
-/// `MinHash` collision noise.
-pub const STRUCTURAL_ONLY_MAX_SUPPORT: f64 = 0.05;
-
-/// Single source of truth for the structural-only evidence test
-/// ([RANK-STRUCTURAL-ONLY]): the structural fingerprint is
-/// the only positive support. Shared by the bucket routing and the
-/// ranking demotion so a cluster labelled `structural_only` is always
-/// the cluster the `[ranking]` policy demotes — the label and the
-/// weight can no longer diverge.
-#[must_use]
-pub fn is_structural_only_signals(signals: ReportSignals) -> bool {
-    signals.structural >= 0.99
-        && signals.token_jaccard < STRUCTURAL_ONLY_MAX_SUPPORT
-        && signals.embedding_cos < STRUCTURAL_ONLY_MAX_SUPPORT
-}
-
-/// Signals-only fallback for reports that do not carry `cluster.bucket`.
-#[must_use]
-pub fn classify_signals(signals: ReportSignals) -> ClusterKind {
-    if signals.structural >= 0.99 && signals.token_jaccard >= 0.99 {
-        ClusterKind::Identical
-    } else if signals.embedding_cos >= crate::pair::EMBEDDING_SUPPORT_FLOOR
-        && signals.structural < 0.50
-    {
-        ClusterKind::SameBehavior
-    } else if is_structural_only_signals(signals) {
-        ClusterKind::StructuralOnly
-    } else if is_token_carried_nearmiss(signals)
-        || is_shape_corroborated_nearmiss(signals)
-        || signals.structural >= 0.99
-    {
-        // [CLONE-BUCKETS-ROUTING] rows 4, 4b and 5 share this
-        // destination: the token-carried near-miss
-        // ([`is_token_carried_nearmiss`]), the shared-subtree
-        // near-miss ([`is_shape_corroborated_nearmiss`],
-        // [FUSION-SHARED-SUBTREE]) and the shape-saturating
-        // near-miss. Kept as one arm because all three routes produce
-        // the identical bucket — the named predicates are what keep
-        // the rows legible and greppable.
-        ClusterKind::NearlyIdentical
-    } else {
-        ClusterKind::LooselySimilar
-    }
-}
-
-/// [CLONE-BUCKETS-ROUTING] row 4: a cluster whose token overlap clears
-/// [`LSH_ONLY_NEARMISS_MIN_JACCARD`] without a saturating shape is a
-/// genuine Type-3 near-miss, in **every** language.
-///
-/// A cluster only reaches the renderer with this token evidence by
-/// surviving `pair::survival_decision`, which admits a
-/// structurally-unanchored pair only above the same Jaccard floor and
-/// above the endpoint node-count floor — the pipeline has already ruled
-/// out low-information token noise, which is why this row is a signal
-/// test and needs no language, size, or spread condition. Routing it
-/// anywhere else means the pipeline admitted a pair as real duplication
-/// and the renderer then discarded it: previously it fell to
-/// [`ClusterKind::LooselySimilar`], which the renderer hides, so a fully
-/// duplicated pair reported zero duplication in every language except
-/// the one a report-render carve-out special-cased (gh #390). Pinned by
-/// `crates/deslop/tests/lsh_only_nearmiss_recall.rs`.
-///
-/// There is deliberately no upper `structural` condition: `structural`
-/// is now the measured shared-subtree overlap
-/// ([FUSION-SHARED-SUBTREE]), and additional shape evidence must never
-/// *hide* a cluster the token axis already carries. The old
-/// `structural <= 0.01` leg predates the overlap measurement, when any
-/// non-zero value meant a Merkle anchor; clusters below
-/// [`crate::pair::SHARED_SUBTREE_MIN_OVERLAP`] keep the anchor-free
-/// demotion guard (`routing::route_anchor_free`) exactly as before.
-#[must_use]
-pub fn is_token_carried_nearmiss(signals: ReportSignals) -> bool {
-    signals.token_jaccard >= LSH_ONLY_NEARMISS_MIN_JACCARD
-}
-
-/// [CLONE-BUCKETS-ROUTING] row 4b ([FUSION-SHARED-SUBTREE], gh #408): a
-/// cluster whose measured shared-subtree overlap clears the admission
-/// floor **and** whose token axis independently corroborates it is a
-/// Type-3 near-miss even below the LSH-only token floor. This is the
-/// render-side twin of `pair::shared_subtree_rescued` — the same two
-/// floors that admit the pair route the cluster, so the pipeline can
-/// never admit a shared-subtree near-miss the renderer then hides.
-/// Pinned by `crates/deslop/tests/type3_enclosing_method.rs` in all
-/// five fixture languages.
-#[must_use]
-pub fn is_shape_corroborated_nearmiss(signals: ReportSignals) -> bool {
-    signals.structural >= crate::pair::SHARED_SUBTREE_MIN_OVERLAP && corroborates_shape(signals)
-}
-
-/// The independent evidence a shared-subtree near-miss must carry
-/// besides its shape ([FUSION-SHARED-SUBTREE]).
-///
-/// Either measured axis will do, and requiring the token one
-/// specifically was a hole. Normalisation makes scaffolding
-/// Merkle-identical across unrelated files, so shape alone must never
-/// admit — but the *point* is corroboration by an axis that does not
-/// read the normalised tree, and the embedding axis qualifies exactly
-/// as the token axis does. Requiring tokens specifically dropped a pair
-/// measuring `structural = 0.91` **and** `embedding_cos = 0.91` to
-/// `loosely_similar`, which the renderer hides, purely because its
-/// `token_jaccard` was 0.55 — two strong independent signals agreeing,
-/// and the report showed nothing (`issue_119_role_gate_exercised`).
-/// A `while` loop and a `for` loop over one accumulator chain are the
-/// case: identical statements, different loop keyword, so the k-gram
-/// set diverges far more than either the shape or the meaning does.
-fn corroborates_shape(signals: ReportSignals) -> bool {
-    signals.token_jaccard >= crate::pair::SHARED_SUBTREE_MIN_JACCARD
-        || signals.embedding_cos >= crate::pair::EMBEDDING_SUPPORT_FLOOR
-}
-
-/// Token overlap an anchor-free cluster must clear to count as a
-/// Type-3 near-miss ([CLONE-BUCKETS-ROUTING] row 4). **Is**
-/// [`crate::pair::LSH_ONLY_MIN_JACCARD`], not a copy of its value: the
-/// pair layer admits an LSH-only candidate at exactly this floor, so a
-/// lower value here would hide clusters the pipeline admitted and a
-/// higher one would reject them after admission. Naming it separately
-/// keeps the routing row greppable while leaving one number to change.
-pub const LSH_ONLY_NEARMISS_MIN_JACCARD: f64 = crate::pair::LSH_ONLY_MIN_JACCARD;

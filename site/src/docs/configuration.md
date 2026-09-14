@@ -1,12 +1,12 @@
 ---
 layout: layouts/docs.njk
 title: Configuration and Reports — .deslop.toml, flags, output
-description: Every Deslop knob in one place — the .deslop.toml sections (exclude, report_hide, threshold, ranking, analysis, report), the built-in rules you can't turn off, every CLI flag, the three report formats, and the exit codes.
-keywords: deslop, configuration, .deslop.toml, cli flags, exclude, report_hide, threshold, exit codes, json report, html report
+description: Configure Deslop with .deslop.toml and CLI flags. Review exclusions, thresholds, ranking, analysis settings, JSON/HTML/text reports, and exit codes.
 eleventyNavigation:
   key: Configuration
   order: 6
 icon: tune
+docsGroup: reference
 ---
 
 # Configuration and Reports
@@ -106,11 +106,15 @@ This is the **only** opt-in failure path. With no `[threshold]` block (and no `-
 ```toml
 [analysis]
 allow_cross_language_comparison = false
+include_dependencies = false
+incremental = true
 ```
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `allow_cross_language_comparison` | bool | `false` | When `true`, candidate clone pairs may span different languages. Off by default, so reports stay focused on same-language refactoring. |
+| `include_dependencies` | bool | `false` | Analyse dependency trees too. Off by default: worst-first ranking would otherwise put duplication you cannot edit above your own. |
+| `incremental` | bool | `true` | Reuse the on-disk parse cache. Set `false` to force a full re-parse on every run, on every surface — CLI, editor, and agent alike. |
 
 ## `[report]`
 
@@ -146,13 +150,18 @@ A weight of `0.0` is rejected (a demoted cluster must never be silently erased),
 
 ## Built-in rules (always on)
 
-These run regardless of your config and **cannot be disabled** — they keep dependency trees and machine-generated code out of every report.
+These run without any config — they keep dependency trees and machine-generated code out of every report.
 
-**Always excluded** (any path containing one of these directory components):
+**Build output and tool caches**, excluded with no way to opt back in — none of it is source you wrote:
 
 ```
-node_modules   target   dist   build   .venv   __pycache__
-.cargo   .git   .claude   .dart_tool   .pub-cache
+target   dist   build   __pycache__   .dart_tool   .git   .claude
+```
+
+**Dependency trees**, excluded unless you set `[analysis] include_dependencies = true`:
+
+```
+node_modules   vendor   .cargo   .pub-cache   .venv
 ```
 
 **Always hidden from the report** (analysed, but kept out of the headline):
@@ -205,13 +214,15 @@ Every run also takes flags. A flag overrides the matching `.deslop.toml` key for
 | --- | --- | --- |
 | `PATH` | `.` | Directory to analyse (positional). |
 | `--min-nodes <N>` | `30` | Minimum AST subtree node count for a clone candidate. Higher = fewer, larger clones. |
-| `--output <PREFIX>` | `deslop-report` | Base path for reports; `.json` / `.txt` / `.html` are appended. |
+| `--output <PREFIX>` | `.deslop/deslop-report` | Base path for reports; `.json` / `.txt` / `.html` are appended. Logs follow into `<dir>/logs/`. |
 | `--config <FILE>` | `<root>/.deslop.toml` | Explicit config file. |
 | `--split-by-language` | off | One HTML section per language (same as `[report] split_by_language`). |
 | `--nojson` / `--notext` / `--nohtml` | all on | Suppress a single output format. At least one must remain. |
 | `--fail-over <PERCENT>` | — | Exit `3` when duplication exceeds `PERCENT`. Overrides `[threshold]`. |
 | `--no-fail-over` | — | Clear any threshold for this run; never exit `3`. |
 | `--technical` | off | Show the researcher view (taxonomy IDs, signal letters, node counts) on stderr. |
+| `--diff <FILE>` | — | Scope the report to a unified diff's added lines; `-` reads stdin. The scan still covers the whole tree. A diff that does not match the tree is refused. |
+| `--only-changed` | off | Drop clusters that miss the diff, and gate `--fail-over` on the diff-scoped percentage so old debt cannot fail a pre-merge check. Requires `--diff`. |
 
 ### Embeddings
 
@@ -231,7 +242,7 @@ The hybrid embedding layer is **off by default**; Deslop ships structural and to
 | `--log-to-console` | off | Send logs to stderr instead of a timestamped `deslop-<timestamp>.log` file. |
 | `--log-level <LEVEL>` | `info` | `error` \| `warn` \| `info` \| `debug` \| `trace`. Overridden by `RUST_LOG`. |
 | `--no-color` | off | Disable colour in the stderr preamble and summary. |
-| `--no-incremental` | off | Turn **off** the on-disk fingerprint cache under `<root>/.deslop/cache/`. The cache is on by default, so unchanged files skip parsing on the next run; pass this to leave the scanned tree untouched. |
+| `--no-incremental` | off | Disable reads and writes for the on-disk fingerprint and embedding caches under `<root>/.deslop/cache/`. Reports and logs are still written normally. |
 
 ### Developer and simulation flags
 
@@ -289,7 +300,7 @@ The HTML renderer uses the same ranking and the same cluster summaries as JSON a
 
 - syntax-highlighted example snippets, with long snippets and extra locations folded into collapsible toggles
 - an "AI match" badge and an impact chip on each duplicate group
-- a per-group signals table (structural / token / embedding / fused) in a collapsible "Run details" footer
+- a per-group signals table (structural / token / embedding) in a collapsible "Run details" footer
 
 It does not add: scores not in the JSON, commentary beyond the `summary` field, or links to external services.
 
@@ -308,10 +319,10 @@ Diagnostics are separate from reports. By default they go to a timestamped log f
 | Code | Meaning |
 | --- | --- |
 | `0` | Completed. Duplication was below the threshold, or no threshold was set. |
-| `1` | Runtime error — nonexistent scan path, analysis failure, I/O error, or a `required` embedding provider that was unreachable. Never a panic. |
+| `1` | Runtime error — nonexistent scan path, analysis failure, I/O error, or a `required` embedding provider that was unreachable. |
 | `2` | Usage error — unknown flag, or an out-of-range / non-finite threshold value, rejected before the run starts. |
 | `3` | **Threshold breached.** The full report is still written to disk so the offenders can be surfaced. |
 
-`deslop` never panics on user input. Failures surface through these exit codes and a structured error on `stderr`.
+Failures surface through these exit codes and a structured error on `stderr`.
 
 Exit `3` is the **CI gate**. It only ever fires when you opt in — by passing `--fail-over <percent>` or setting `[threshold] max_duplication_percent`. See [Gate CI on a duplication threshold](/docs/#gate-ci-on-a-duplication-threshold) for the walkthrough, or the [GitHub Action](/docs/github-action/) for a ready-to-use CI job.

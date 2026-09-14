@@ -11,7 +11,7 @@
 //! apply.
 //!
 //! Left in, those files are parsed, fingerprinted, ranked — and because
-//! ranking is worst-offenders-first ([RANK-SCORE]), third-party
+//! ranking is worst-offenders-first ([RANK-MASS-SUM]), third-party
 //! duplication the user cannot act on outranks every first-party finding.
 //! On a real vendored repository that is the difference between a usable
 //! report and an unusable one, which is why this sits alongside the #142
@@ -26,7 +26,13 @@
 use anyhow::Result;
 use serde_json::Value;
 
+use crate::common::go_scope::*;
 use crate::common::*;
+
+/// The fixture whose first-party pair sits beside a committed `vendor/`.
+const VENDORED_FIXTURE: &str = "go-vendored";
+/// `--min-nodes` for the vendored fixture.
+const VENDORED_MIN_NODES: u32 = 8;
 
 /// Path components of a reported occurrence path, split on both
 /// separators so the assertion holds on Windows runners too.
@@ -36,7 +42,8 @@ fn path_components(path: &str) -> Vec<&str> {
 
 #[test]
 fn committed_go_vendor_tree_is_excluded_from_discovery() -> Result<()> {
-    let report = run_report(&fixture("go-vendored"), 8)?;
+    let scan_root = fixture(VENDORED_FIXTURE);
+    let report = run_report(&scan_root, VENDORED_MIN_NODES)?;
 
     assert_eq!(
         report.get("files_analysed").and_then(Value::as_u64),
@@ -59,9 +66,10 @@ fn committed_go_vendor_tree_is_excluded_from_discovery() -> Result<()> {
                 !path_components(&path).contains(&"vendor"),
                 "a vendored dependency leaked into a rendered cluster: {path}",
             );
-            assert!(
-                !path.contains("example.com"),
-                "a vendored module path leaked into a rendered cluster: {path}",
+            assert_not_contains(
+                &path,
+                "example.com",
+                "a vendored module path leaked into a rendered cluster",
             );
         }
     }
@@ -79,5 +87,14 @@ fn committed_go_vendor_tree_is_excluded_from_discovery() -> Result<()> {
         vec!["helper.go".to_owned(), "main.go".to_owned()],
         "the ranked report must be exactly the first-party clone pair",
     );
+
+    // [PIPELINE-CLUSTER-EXACT-SCOPE] The first-party pair is two authored
+    // functions. Excluding `vendor/` does not license the survivor to take
+    // its whole file: neither half may open at row 1, carry the package
+    // clause or import block, or cover a different row count from the
+    // other.
+    assert_go_authored_scope(&scan_root, &report, VENDORED_FIXTURE)?;
+    assert_every_occurrence_opens_a_declaration(&scan_root, &report, VENDORED_FIXTURE)?;
+    assert_symmetric_rows_everywhere(&report, VENDORED_FIXTURE);
     Ok(())
 }

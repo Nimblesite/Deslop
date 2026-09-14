@@ -3,7 +3,9 @@
 
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
-import { activateExtension, sleep } from "./helpers";
+import { activateExtension, fixtureRoot, sleep } from "./helpers";
+
+const POST_COMMAND_SETTLE_MS = 200;
 
 // [VSIX-COMMANDS]
 suite("commands", () => {
@@ -15,16 +17,16 @@ suite("commands", () => {
 
   test("openReport + openReport again reveals the existing panel", async () => {
     await vscode.commands.executeCommand("deslop.openReport");
-    await sleep(200);
+    await sleep(POST_COMMAND_SETTLE_MS);
     await vscode.commands.executeCommand("deslop.openReport");
-    await sleep(200);
+    await sleep(POST_COMMAND_SETTLE_MS);
   });
 
   test("openWorstCluster twice reveals the cluster panel", async () => {
     await vscode.commands.executeCommand("deslop.openWorstCluster");
-    await sleep(200);
+    await sleep(POST_COMMAND_SETTLE_MS);
     await vscode.commands.executeCommand("deslop.openWorstCluster");
-    await sleep(200);
+    await sleep(POST_COMMAND_SETTLE_MS);
   });
 
   test("openCluster with a bad id does not throw", async () => {
@@ -33,14 +35,12 @@ suite("commands", () => {
   });
 
   test("openOccurrence opens the referenced file", async () => {
-    const fixture = process.env["DESLOP_TEST_FIXTURE"];
-    assert.ok(fixture, "fixture path must be set");
     await vscode.commands.executeCommand("deslop.openOccurrence", {
-      path: `${fixture}/Alpha.cs`,
+      path: `${fixtureRoot()}/Alpha.cs`,
       start_byte: 0,
       end_byte: 10,
     });
-    await sleep(200);
+    await sleep(POST_COMMAND_SETTLE_MS);
     const active = vscode.window.activeTextEditor;
     assert.ok(active, "an editor should be open");
   });
@@ -49,8 +49,10 @@ suite("commands", () => {
     await vscode.commands.executeCommand("deslop.jumpToNextOccurrence");
   });
 
-  test("compareWithCanonical with a bad id is a no-op", async () => {
-    await vscode.commands.executeCommand("deslop.compareWithCanonical", "nonexistent");
+  test("comparePair without two explicit endpoints is a no-op", async () => {
+    // [VSIX-PAIR-COMPARE] The command has no single-argument form; a bad or
+    // missing endpoint pair must not throw or open a diff.
+    await vscode.commands.executeCommand("deslop.comparePair", "nonexistent", undefined);
   });
 
   test("toggleShowAllLenses flips the workspace setting", async () => {
@@ -91,6 +93,6 @@ suite("commands", () => {
     // The command shows a modal; we don't need to dismiss it — when the
     // extension-host test session ends VS Code tears all windows down.
     vscode.commands.executeCommand("deslop.revealActiveBinary");
-    await sleep(200);
+    await sleep(POST_COMMAND_SETTLE_MS);
   });
 });

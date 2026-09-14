@@ -14,6 +14,14 @@ function navigationOrder(group?: string): number {
   return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
 }
 
+// [VSIX-PAIR-COMPARE] Tree rows expose the canonical comparison directly.
+const CANONICAL_COMPARE_COMMANDS = [
+  "deslop.compareWithCanonical",
+  "deslop.compareOccurrenceWithCanonical",
+] as const;
+
+const COMPARE_PAIR_COMMAND = "deslop.comparePair";
+
 suite("package menu contributions", () => {
   test("extension id stays aligned with the released VSIX id", () => {
     const pkg = extensionPackage();
@@ -29,7 +37,7 @@ suite("package menu contributions", () => {
     );
   });
 
-  test("occurrence context menu compares with canonical instead of opening", () => {
+  test("occurrence context menu compares the selected occurrence with its canonical", () => {
     const pkg = extensionPackage();
     const contextItems = pkg.contributes.menus["view/item/context"];
     assert.ok(contextItems, "view/item/context menu must be contributed");
@@ -37,50 +45,36 @@ suite("package menu contributions", () => {
       (item) => item.when === "viewItem == deslop.occurrence",
     );
 
-    assert.deepEqual(
-      occurrenceItems
-        .filter((item) => item.group === "navigation@1")
-        .map((item) => item.command),
-      ["deslop.compareOccurrenceWithCanonical"],
-    );
-    assert.equal(
-      commandTitle(pkg, "deslop.compareOccurrenceWithCanonical"),
-      "Compare With Canonical",
-    );
+    assert.ok(occurrenceItems.some((item) => item.command === CANONICAL_COMPARE_COMMANDS[1]));
+    assert.ok(!occurrenceItems.some((item) => item.command === CANONICAL_COMPARE_COMMANDS[0]));
     assert.ok(!occurrenceItems.some((item) => item.command === "deslop.openOccurrence"));
   });
 
-  test("compare with canonical menus are hidden for canonical-only rows (#14)", () => {
+  test("canonical comparison is contributed alongside the explicit pair command", () => {
     const pkg = extensionPackage();
-    const contextItems = pkg.contributes.menus["view/item/context"];
-    assert.ok(contextItems, "view/item/context menu must be contributed");
 
-    const clusterCompareItems = contextItems.filter(
-      (item) =>
-        item.when === "viewItem == deslop.clusterComparable" &&
-        item.command === "deslop.compareWithCanonical",
+    for (const command of CANONICAL_COMPARE_COMMANDS) {
+      assert.equal(commandTitle(pkg, command), "Compare With Canonical");
+    }
+
+    assert.equal(
+      commandTitle(pkg, COMPARE_PAIR_COMMAND),
+      "Deslop: Compare Selected Occurrences",
     );
-    assert.equal(commandTitle(pkg, "deslop.compareWithCanonical"), "Compare With Canonical");
-    assert.deepEqual(
-      clusterCompareItems.map((item) => item.group),
-      ["navigation@4"],
-    );
+    const palette = pkg.contributes.menus.commandPalette ?? [];
     assert.ok(
-      !contextItems.some(
-        (item) =>
-          item.command === "deslop.compareWithCanonical" &&
-          item.when?.includes("clusterSingle"),
-      ),
-      "single-occurrence cluster rows must not expose compare with canonical",
+      palette.some((item) => item.command === COMPARE_PAIR_COMMAND && item.when === "false"),
+      "the explicit pair command requires endpoints and stays out of the palette",
     );
+    const contextItems = pkg.contributes.menus["view/item/context"];
     assert.ok(
-      !contextItems.some(
-        (item) =>
-          item.command === "deslop.compareOccurrenceWithCanonical" &&
-          item.when?.includes("occurrenceCanonical"),
-      ),
-      "canonical occurrence rows must not expose compare with canonical",
+      !contextItems?.some((item) => item.command === COMPARE_PAIR_COMMAND),
+      "tree rows use the canonical comparison command",
     );
+    assert.ok(contextItems?.some((item) =>
+      item.command === CANONICAL_COMPARE_COMMANDS[0] && item.when === "viewItem == deslop.clusterComparable"));
+    assert.ok(!contextItems?.some((item) =>
+      CANONICAL_COMPARE_COMMANDS.some((command) => command === item.command) && item.when === "viewItem == deslop.occurrenceCanonical"));
   });
 
   test("Expand All and Collapse All are adjacent Top Offenders title actions", () => {
@@ -165,9 +159,9 @@ suite("package menu contributions", () => {
     );
   });
 
-  // [FACET-GROUP-BY-TYPE] The grouping toggle cycles all four modes:
-  // cluster → file → folder → type → cluster.
-  test("grouping cycle includes the type mode", () => {
+  // [FACET-GROUP-BY-KIND] The grouping toggle cycles all four modes:
+  // cluster → file → folder → kind → cluster.
+  test("grouping cycle includes the clone-kind mode", () => {
     const pkg = extensionPackage();
     const titleItems = (pkg.contributes.menus["view/title"] ?? []).filter(
       (item) =>
@@ -177,11 +171,17 @@ suite("package menu contributions", () => {
       titleItems.find((item) => item.command === command)?.when ?? "";
     assert.ok(whenOf("deslop.topOffenders.showByFile").includes("== 'cluster'"));
     assert.ok(whenOf("deslop.topOffenders.showByFolder").includes("== 'file'"));
-    assert.ok(whenOf("deslop.topOffenders.showByType").includes("== 'folder'"));
-    assert.ok(whenOf("deslop.topOffenders.showByCluster").includes("== 'type'"));
+    assert.ok(whenOf("deslop.topOffenders.showByKind").includes("== 'folder'"));
+    assert.ok(whenOf("deslop.topOffenders.showByCluster").includes("== 'kind'"));
+    assert.equal(
+      commandTitle(pkg, "deslop.topOffenders.showByKind"),
+      "Deslop: Group Top Offenders by Clone Kind",
+    );
+    // The clone-type axis is retired: no type-mode toggle may exist.
     assert.equal(
       commandTitle(pkg, "deslop.topOffenders.showByType"),
-      "Deslop: Group Top Offenders by Type",
+      undefined,
+      "type-mode grouping was removed with the bucket axes",
     );
   });
 

@@ -6,24 +6,23 @@ use super::support::*;
 /// parsed JSON report. The temp dir is dropped on return — the report is
 /// already fully materialised in the returned `Value`.
 fn run_clone_pair(min_nodes: &str) -> Result<(u64, Value)> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     let analysed = write_clone_pair(&scan_root)?;
     let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let _assertion = cmd.args(["--min-nodes", min_nodes]).assert().success();
+    run_scan(
+        &scan_root,
+        &tmp.path().join("report"),
+        &[MIN_NODES_FLAG, min_nodes],
+    )?;
     let json = read_json_report(&out.json)?;
     Ok((analysed, json))
 }
 
 #[test]
 fn metrics_zero_on_empty_corpus() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("empty");
-    fs::create_dir_all(&scan_root)?;
+    let (tmp, scan_root) = temp_scan_dir("empty")?;
     let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let _assertion = cmd.assert().success();
+    run_scan(&scan_root, &tmp.path().join("report"), &[])?;
     let json = read_json_report(&out.json)?;
     assert_eq!(metric_field(&json, "analysed_loc").as_u64(), Some(0));
     assert_eq!(metric_field(&json, "duplicated_loc").as_u64(), Some(0));
@@ -184,12 +183,14 @@ fn metrics_match_hand_counted_fixture() -> Result<()> {
 #[test]
 fn metrics_exclude_hidden_occurrences() -> Result<()> {
     // Baseline without any hide policy.
-    let tmp_plain = tempfile::tempdir()?;
-    let plain_root = tmp_plain.path().join("src");
-    let _ = write_clone_pair(&plain_root)?;
+    let (tmp_plain, plain_root) = temp_scan_dir("src")?;
+    let _analysed = write_clone_pair(&plain_root)?;
     let plain_out = outputs_under(tmp_plain.path());
-    let mut cmd_plain = deslop_command(&plain_root, &tmp_plain.path().join("report"))?;
-    let _plain_assertion = cmd_plain.args(["--min-nodes", "8"]).assert().success();
+    run_scan(
+        &plain_root,
+        &tmp_plain.path().join("report"),
+        &[MIN_NODES_FLAG, MIN_NODES_VALUE],
+    )?;
     let plain_metrics = field(&read_json_report(&plain_out.json)?, "metrics").clone();
     let plain_dup = field(&plain_metrics, "duplicated_loc")
         .as_u64()
@@ -204,16 +205,18 @@ fn metrics_exclude_hidden_occurrences() -> Result<()> {
 
     // With Alpha.cs report_hidden: metric shrinks, hidden file drops
     // out of `duplicated_files`.
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    let _ = write_clone_pair(&scan_root)?;
+    let (tmp, scan_root) = temp_scan_dir("src")?;
+    let _analysed = write_clone_pair(&scan_root)?;
     fs::write(
         scan_root.join(".deslop.toml"),
         "[defaults]\nreport_hide = [\"**/Alpha.cs\"]\n",
     )?;
     let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
+    run_scan(
+        &scan_root,
+        &tmp.path().join("report"),
+        &[MIN_NODES_FLAG, MIN_NODES_VALUE],
+    )?;
     let metrics = field(&read_json_report(&out.json)?, "metrics").clone();
     let hidden_dup = field(&metrics, "duplicated_loc").as_u64().unwrap_or(0);
     let hidden_files = field(&metrics, "duplicated_files").as_u64().unwrap_or(0);
@@ -248,16 +251,20 @@ fn metrics_deduplicate_overlapping_sibling_ranges() -> Result<()> {
 // duplication and the CLI exits 3 with the report on disk.
 #[test]
 fn fail_over_cli_exits_three_on_breach() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    let _ = write_clone_pair(&scan_root)?;
+    let (tmp, scan_root) = temp_scan_dir("src")?;
+    let _analysed = write_clone_pair(&scan_root)?;
     let out = outputs_under(tmp.path());
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let assertion = cmd
-        .args(["--min-nodes", "8", "--fail-over", "0", "--no-color"])
+    let _assertion = cmd
+        .args([
+            MIN_NODES_FLAG,
+            MIN_NODES_VALUE,
+            "--fail-over",
+            "0",
+            NO_COLOR_FLAG,
+        ])
         .assert()
         .code(3);
-    let _ = assertion;
     assert!(
         out.json.exists(),
         "report must land on disk before exit 3: {}",

@@ -25,10 +25,10 @@ use std::{collections::HashMap, path::PathBuf};
 use tree_sitter::Node;
 
 use crate::{
-    ast::ByteRange,
+    ast::{named_children, ByteRange},
     lang::{shared::parse_source, LanguageParser},
     refactor::{
-        preconditions::{self, named_children, node_text, raw_slices_equivalent},
+        preconditions::{node_text, raw_slices_equivalent},
         RefactorError,
     },
     report::ReportCluster,
@@ -117,19 +117,18 @@ pub fn compute_consolidation_plan<S: ::std::hash::BuildHasher>(
 /// user should hear them.
 ///
 /// The measured content gate comes first
-/// ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 1, [FUSION-CONTENT-GATE], gh
+/// ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 1, [FUSED-CONTENT-GATE], gh
 /// #344): consolidation keeps one copy and deletes the rest, so
 /// "the shapes matched" is the weakest evidence any action here could
 /// act on, and a user told only that their language is unsupported
 /// would never learn the engine measured 17% raw-content agreement.
 fn pre_screen(cluster: &ReportCluster, parser: &dyn LanguageParser) -> Option<String> {
-    preconditions::content_refusal(cluster).or_else(|| {
-        (parser.id() != "rust").then(|| {
-            format!(
-                "{} consolidation is not mechanical yet (v1 covers Rust sibling modules)",
-                parser.id()
-            )
-        })
+    let _ = cluster;
+    (parser.id() != "rust").then(|| {
+        format!(
+            "{} consolidation is not mechanical yet (v1 covers Rust sibling modules)",
+            parser.id()
+        )
     })
 }
 

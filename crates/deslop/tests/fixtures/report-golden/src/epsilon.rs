@@ -1,7 +1,7 @@
 //! Epsilon labelling module. Carries occurrence 2 of 2 of the
 //! `merge_labels` clone (the smaller cluster in the golden report).
 
-pub static EPSILON_FLAG: bool = true;
+pub static REGION_FLAG: bool = true;
 
 pub fn merge_labels(first: &str, second: &str) -> String {
     let mut combined = String::from(first);

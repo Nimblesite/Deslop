@@ -10,20 +10,18 @@ tags:
   - ai-generated-code
   - duplicate-code
 category: engineering
-description: "使用结构化克隆检测，在 Go 和 Golang 仓库中查找重复代码。Deslop 现已通过 tree-sitter 解析 .go 文件，并借助 LSP 和 MCP 实时检查代码。"
+description: "使用 tree-sitter 结构分析、实时 LSP 反馈和面向编码智能体的 MCP 检查，在 Go 与 Golang 仓库中查找重复代码。"
 excerpt: "Deslop 现在读得懂 Go。它会解析 .go 语法树、捕捉经过重命名的克隆结构、将最严重的重复排在最前面，并让编码智能体在写下另一份副本之前先行搜索。"
-heroImage: "/assets/img/blog/find-duplicate-code-go-header.png"
+heroImage: "/assets/img/blog/find-duplicate-code-go-header.webp"
 heroImageWidth: "1600"
 heroImageHeight: "900"
 heroImageAlt: "两棵重复的 Go 语法树通过实时分析中枢汇聚为一个可复用的实现。"
-ogImage: "/assets/img/blog/find-duplicate-code-go-og.png"
+ogImage: "/assets/img/blog/find-duplicate-code-go-og.jpg"
 ogImageWidth: "1200"
 ogImageHeight: "630"
 ogImageAlt: "两棵重复的 Go 语法树由实时分析中枢标出，旁边呈现一个可复用的结构。"
 lang: zh
 ---
-
-如果你搜索过 **“find duplicate code in Go”、“Golang duplicate code”** 或 **“Go linter for duplicate code”**，简短的答案是：Deslop 现在读得懂 `.go` 文件了。
 
 Go 支持采用与 Deslop 其他语言相同的结构化克隆检测流水线。这意味着用 tree-sitter 解析而非正则表达式、归一化标识符和字面量而非匹配原始代码行、将最严重的重复排在最前面而非抛出一堆无序警告，并在仓库变化时通过 LSP + MCP 提供实时反馈。
 
@@ -31,7 +29,7 @@ Go 支持采用与 Deslop 其他语言相同的结构化克隆检测流水线。
 
 ## Go 支持来自社区贡献
 
-Go 支持由 **[Lance Haig](https://haigmail.com)** 在 [PR #310](https://github.com/Nimblesite/Deslop/pull/310) 中贡献。他的工作加入了解析器和最初的端到端语言接线，覆盖 `.go` 文件发现、归一化、报告、编辑器激活、fixture 和回归测试。
+Go 支持由 **[Lance Haig](https://haigmail.com)** 在 [PR #310](https://github.com/Nimblesite/Deslop/pull/310) 中贡献。他的工作加入了解析器和最初的端到端语言接线，覆盖 `.go` 文件发现、归一化、报告、编辑器激活、测试夹具和回归测试。
 
 ## Go 支持究竟添加了什么
 
@@ -43,7 +41,7 @@ Deslop 现在会发现 `.go` 文件，并用 [`tree-sitter-go`](https://github.c
 - 复合字面量与函数字面量会保留其形状，因为这种形状是有价值的证据；
 - package 子句和 import 声明会被视为前置部分，因此重复的 import 不会伪装成重复的业务逻辑。
 
-归一化后的语法树会进入[工作原理](/zh/docs/how-it-works/)中记录的同一套指纹、同级节点窗口、token、信号融合、聚簇和排名阶段。Go 不是外挂在系统上的文本扫描器，而是为共享引擎提供输入的一等公民解析器。
+归一化后的语法树会进入[工作原理](/zh/docs/how-it-works/)中记录的同一套指纹、同级节点窗口、词元、信号融合、聚簇和排名阶段。Go 不是外挂在系统上的文本扫描器，而是共享引擎正式支持的解析器。
 
 Go 也已经接入面向人类的界面。报告和筛选器中会将该语言显示为 **Go**，`.go` 文件会唤醒编辑器扩展，而实时闭环则会在 Go 缓冲区发生变化时刷新发现结果。
 
@@ -53,20 +51,20 @@ Go 的简洁是一项优势，但一致的代码形状也很容易被复现。�
 
 常见的藏身之处都很熟悉：
 
-- 绑定输入、进行校验、调用服务、映射错误并写入响应的 HTTP handler；
+- 绑定输入、进行校验、调用服务、映射错误并写入响应的 HTTP 处理程序；
 - 只有实体名称或查询不同的仓库方法；
-- 使用相同守卫逻辑和上下文传递的 middleware；
-- 散落在多个 package 中、重复出现的 DTO 到领域模型 mapper；
+- 使用相同守卫逻辑和上下文传递的中间件；
+- 散落在多个包中、重复出现的 DTO 到领域模型映射器；
 - 只有字面量略有变化的重试和错误包装路径；
-- setup 逐渐膨胀成多个近乎相同 fixture 的表驱动测试。
+- 初始化代码逐渐膨胀成多个近乎相同测试夹具的表驱动测试。
 
-`gofmt` 会让这些副本保持漂亮的一致性。另一个 package 中经过重命名的 handler，在审查时仍然可能显得合理，因为代码整洁、可以编译，也符合本地风格。维护成本会在后来才显现出来：一份副本得到了安全修复，而另一份没有。
+`gofmt` 会让这些副本保持漂亮的一致性。另一个包中经过重命名的处理程序，在审查时仍然可能显得合理，因为代码整洁、可以编译，也符合本地风格。维护成本会在后来才显现出来：一份副本得到了安全修复，而另一份没有。
 
 ## Go linter 不一定是克隆检测器
 
 围绕这个问题的搜索通常会包含 “Go linter”，但 lint 涵盖了几种不同的工作。`go vet`、Staticcheck 以及 golangci-lint 收集的各项检查，非常擅长发现可疑结构、正确性问题、可简化之处、风格问题和未使用代码。它们处理的问题，与仓库范围内的结构性重复并不相同。
 
-Go 已经有一个专门的克隆检测器：[`dupl`](https://pkg.go.dev/github.com/golangci/dupl)，也可以通过 [golangci-lint](https://golangci-lint.run/docs/linters/#dupl) 使用。它会序列化 Go AST，用后缀树进行搜索，并刻意忽略节点值，让经过重命名的代码片段仍能匹配。它自己的文档也提醒，这种方法可能产生误报，并使用最小 token 序列来控制噪声。
+Go 已经有一个专门的克隆检测器：[`dupl`](https://pkg.go.dev/github.com/golangci/dupl)，也可以通过 [golangci-lint](https://golangci-lint.run/docs/linters/#dupl) 使用。它会序列化 Go AST，用后缀树进行搜索，并刻意忽略节点值，让经过重命名的代码片段仍能匹配。它自己的文档也提醒，这种方法可能产生误报，并使用最小词元序列来控制噪声。
 
 Deslop 位于工作流中的另一个位置。它将归一化后的结构指纹与近似匹配信号结合起来，按影响对发现结果排序，并向编辑器和编码智能体同时暴露实时结果。`dupl` 是一项实用的批量克隆检查；Deslop 则是智能体内循环中的仓库记忆。
 
@@ -85,7 +83,7 @@ Go 的新解析器在前两类中作用最大。一旦名称、常量和注释�
 
 在合并之后发现重复的 Go 代码很有用。在重复落地之前阻止它，则更好。
 
-Deslop 的 MCP 服务器为编码智能体提供由实时工作区支撑的 `find-similar` 工具。在智能体编写另一个 handler、mapper、仓库方法或测试辅助函数之前，它可以提交拟议的代码形状，并询问仓库中是否已经存在。强匹配会让任务从“编写新的实现”变成“复用或扩展规范实现”。
+Deslop 的 MCP 服务器为编码智能体提供由实时工作区支撑的 `find-similar` 工具。在智能体编写另一个处理程序、映射器、仓库方法或测试辅助函数之前，它可以提交拟议的代码形状，并询问仓库中是否已经存在。强匹配会让任务从“编写新的实现”变成“复用或扩展规范实现”。
 
 实际的闭环如下：
 
@@ -101,9 +99,9 @@ MCP 配置请参阅 [AI 集成](/zh/docs/ai-integration/)，完整的预防模�
 
 不要自动重构。克隆是证据，不是裁决。
 
-- **抽取** —— 当两个 handler、mapper 或校验路径属于一个稳定的抽象，并且将一起变化时。
-- **复用** —— 当其中一个实现已经是经过测试的事实来源，而另一个应当调用它时。
-- **接受** —— 当重复比抽象引入的耦合更便宜，或生成的代码和 fixture 本就有意保持独立时。
+- **抽取** —— 当两个处理程序、映射器或校验路径属于一个稳定的抽象，并且将一起变化时。
+- **复用** —— 当其中一个实现已经过测试且应作为权威实现，而另一个应当调用它时。
+- **接受** —— 当重复比抽象引入的耦合更便宜，或生成代码与测试夹具本就有意保持独立时。
 
 真正危险的是意外的重复：两份*本应*一起变化的副本，却由不知道另一份存在的人分别维护。
 
@@ -118,27 +116,3 @@ deslop .
 CLI 会输出 JSON、文本和 HTML 报告。VS Code 扩展会添加实时发现结果，以及按最严重者优先排列的簇视图。连接 MCP 服务器后，你的编码智能体就能在动笔之前查询同一份实时分析。
 
 从第一个簇开始。它是实测影响最大的重复，而不仅仅是扫描器碰巧先遇到的那个。
-
-## 常见问题
-
-### Deslop 支持 Go 还是 Golang？
-
-支持。该语言的正式名称是 Go；“Golang” 是便于搜索的标签。Deslop 会发现 `.go` 文件，并将语言报告为 Go。
-
-### 这会取代 gofmt、go vet、Staticcheck 或 golangci-lint 吗？
-
-不会。请继续使用它们。它们解决格式、正确性、风格、安全性和其他静态分析问题。Deslop 专注于代码克隆和重复代码预防。
-
-### Deslop 会用正则表达式或原始代码行比较 Go 吗？
-
-都不会。它用 tree-sitter 解析 Go，比较归一化后的语法树结构，再加入 token 和可选的语义信号。为什么这条边界很重要，请阅读 [Tree-sitter 而非正则表达式](/zh/blog/tree-sitter-over-regex/)。
-
-### 所有重复的 Go 代码都是坏事吗？
-
-不是。生成的文件、小型测试 fixture 和有意分离的路径，可能更适合保持原样。Deslop 对证据进行排名；由你决定要抽取、复用，还是接受它。
-
-### 编码智能体可以在编写 Go 代码之前先检查吗？
-
-可以。这正是 `find-similar` 的意义：在仍然可以选择复用而非写下第二份副本时，智能体会向实时仓库询问拟议的代码形状是否已经存在。
-
-Go 支持之所以到来，是因为 Lance 贡献了它、共享引擎已为它做好准备，也因为 Go 团队理应拥有比“在生产事故中才发现第二份实现”更好的选择。打开你手头最混乱的 Go 仓库，从第一行开始看。

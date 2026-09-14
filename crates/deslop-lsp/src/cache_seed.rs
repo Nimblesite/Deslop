@@ -253,6 +253,10 @@ mod tests {
     use super::*;
     use crate::notifications::{ANALYSIS_STATE, REPORT_CHANGED};
 
+    const METHOD_POINTER: &str = "/method";
+    const STATE_POINTER: &str = "/params/state";
+    const IDLE_STATE: &str = "idle";
+
     #[test]
     fn open_session_reports_cache_seed_status() -> Result<(), Box<dyn std::error::Error>> {
         let temp = tempfile::tempdir()?;
@@ -303,7 +307,7 @@ mod tests {
         join.await?;
 
         assert_eq!(
-            first.pointer("/method").and_then(Value::as_str),
+            first.pointer(METHOD_POINTER).and_then(Value::as_str),
             Some(REPORT_CHANGED),
             "commit must publish a reportChanged notification first: {first}"
         );
@@ -314,7 +318,7 @@ mod tests {
             "reportChanged must include a delta summary: {first}"
         );
         assert_eq!(
-            second.pointer("/method").and_then(Value::as_str),
+            second.pointer(METHOD_POINTER).and_then(Value::as_str),
             Some(ANALYSIS_STATE),
             "commit must publish the idle analysis state after the report: {second}"
         );
@@ -324,8 +328,8 @@ mod tests {
              string the VSIX reads as `state.state === undefined`: {second}"
         );
         assert_eq!(
-            second.pointer("/params/state").and_then(Value::as_str),
-            Some("idle"),
+            second.pointer(STATE_POINTER).and_then(Value::as_str),
+            Some(IDLE_STATE),
             "the tagged object must carry state=idle so the editor settles to ready: {second}"
         );
         Ok(())
@@ -347,20 +351,20 @@ mod tests {
 
         let running = next_client_frame(&mut fixture.socket).await?;
         assert_eq!(
-            running.pointer("/params/state").and_then(Value::as_str),
+            running.pointer(STATE_POINTER).and_then(Value::as_str),
             Some("running"),
             "spawn_refresh must push the Running state first: {running}"
         );
         let changed = next_client_frame(&mut fixture.socket).await?;
         assert_eq!(
-            changed.pointer("/method").and_then(Value::as_str),
+            changed.pointer(METHOD_POINTER).and_then(Value::as_str),
             Some(REPORT_CHANGED),
             "the committed cold pass must publish reportChanged: {changed}"
         );
         let idle = next_client_frame(&mut fixture.socket).await?;
         assert_eq!(
-            idle.pointer("/params/state").and_then(Value::as_str),
-            Some("idle"),
+            idle.pointer(STATE_POINTER).and_then(Value::as_str),
+            Some(IDLE_STATE),
             "the cold pass must settle to idle once committed: {idle}"
         );
         assert!(
@@ -383,12 +387,12 @@ mod tests {
 
         let frame = next_client_frame(&mut socket).await?;
         assert_eq!(
-            frame.pointer("/method").and_then(Value::as_str),
+            frame.pointer(METHOD_POINTER).and_then(Value::as_str),
             Some(ANALYSIS_STATE),
             "refresh errors must publish analysis-state changes: {frame}"
         );
         assert_eq!(
-            frame.pointer("/params/state").and_then(Value::as_str),
+            frame.pointer(STATE_POINTER).and_then(Value::as_str),
             Some("errored"),
             "refresh errors must surface the errored state as a tagged object: {frame}"
         );
@@ -410,12 +414,12 @@ mod tests {
 
         let frame = next_client_frame(&mut socket).await?;
         assert_eq!(
-            frame.pointer("/method").and_then(Value::as_str),
+            frame.pointer(METHOD_POINTER).and_then(Value::as_str),
             Some(ANALYSIS_STATE),
             "initialized() must publish the startup analysis state: {frame}"
         );
         assert_eq!(
-            frame.pointer("/params/state").and_then(Value::as_str),
+            frame.pointer(STATE_POINTER).and_then(Value::as_str),
             Some("running"),
             "a late-connecting editor must see Running while the cold pass is still in flight: {frame}"
         );
@@ -430,8 +434,8 @@ mod tests {
 
         let frame = next_client_frame(&mut socket).await?;
         assert_eq!(
-            frame.pointer("/params/state").and_then(Value::as_str),
-            Some("idle"),
+            frame.pointer(STATE_POINTER).and_then(Value::as_str),
+            Some(IDLE_STATE),
             "a settled (fresh or committed) session must report Idle so the panel can reach ready: {frame}"
         );
         Ok(())

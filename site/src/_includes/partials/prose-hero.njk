@@ -8,6 +8,8 @@
 {%- if heroImage -%}
 <figure class="prose-hero">
   <img class="prose-hero__img" src="{{ heroImage }}"
+       srcset="{{ heroImage | replace('.webp', '-800.webp') }} 800w, {{ heroImage }} 1600w"
+       sizes="(max-width: 48rem) calc(100vw - 3rem), 48rem"
        alt="{{ heroImageAlt | default(title) }}"
        width="{{ heroImageWidth | default('1200') }}" height="{{ heroImageHeight | default('630') }}"
        loading="eager" decoding="async">

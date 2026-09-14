@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use deslop_core::buckets::{classify, ClusterKind};
 use deslop_core::live::FileReport;
 use deslop_core::report::{ReportCluster, ReportOccurrence};
 use tower_lsp::lsp_types::{
@@ -104,18 +103,13 @@ pub(crate) fn occurrence_matches_path(occurrence: &ReportOccurrence, path: &Path
     occurrence.path == path || occurrence.path.ends_with(path) || path.ends_with(&occurrence.path)
 }
 
-/// Maps cluster bucket → LSP severity per [LSP-SEVERITY-BUCKET].
-/// Defaults: `Identical` → `Error`, `StructuralOnly` → `Hint`
-/// (shape-only evidence, demoted in ranking per
-/// [RANK-STRUCTURAL-ONLY]), all others → `Warning`.
-/// Future: configurable per bucket via `deslop.severity.*` settings.
+/// Maps the engine-stamped mass rank band to LSP severity.
 fn severity_for(cluster: &ReportCluster) -> DiagnosticSeverity {
-    match classify(cluster) {
-        ClusterKind::Identical => DiagnosticSeverity::ERROR,
-        ClusterKind::StructuralOnly => DiagnosticSeverity::HINT,
-        ClusterKind::NearlyIdentical | ClusterKind::LooselySimilar | ClusterKind::SameBehavior => {
-            DiagnosticSeverity::WARNING
-        }
+    match cluster.rank_band.as_str() {
+        "worst" => DiagnosticSeverity::ERROR,
+        "top10" => DiagnosticSeverity::WARNING,
+        "mid" => DiagnosticSeverity::INFORMATION,
+        _ => DiagnosticSeverity::HINT,
     }
 }
 

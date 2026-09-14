@@ -8,7 +8,7 @@
 //!
 //! See `docs/plans/typeDiagram-migration.md` for the seven typeDiagram
 //! features tracked at upstream nimblesite/typeDiagram#24..#30; each
-//! `TYPE_CONFIG` workaround in `scripts/typediagram-gen/` carries a
+//! `TYPE_CONFIG` workaround in `scripts/typediagram/` carries a
 //! `TODO(typeDiagram#NN)` link back to the issue that retires it.
 
 use serde_json::Value;

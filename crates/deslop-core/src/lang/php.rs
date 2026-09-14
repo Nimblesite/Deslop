@@ -23,7 +23,7 @@ use crate::{
     ast::NormalizedNode,
     error::CoreError,
     lang::{
-        shared::{build_normalised_root, intern_kind, parse_source, IDENTIFIER_KIND, LITERAL_KIND},
+        shared::{build_normalised_root, normalise_kind_with, parse_source},
         LanguageParser,
     },
     state::FileId,
@@ -71,15 +71,32 @@ impl LanguageParser for PhpParser {
 /// identifier / literal / trivia families emitted by `tree-sitter-php`
 /// 0.24.x ([PARSE-PHP-NORMALIZE]).
 fn normalise_kind(raw: &str) -> Option<&'static str> {
-    match raw {
-        // Drop trivia — [PIPELINE-NORMALIZE-AST]
-        "comment" | "doc_comment" => None,
-        // Identifier-like tokens — collapse for Type-2 renamed-clone detection
-        "name" => Some(IDENTIFIER_KIND),
-        // Literals — collapse so constant edits do not perturb fingerprints
-        "integer" | "float" | "boolean" | "null" | "string" | "encapsed_string" | "heredoc"
-        | "nowdoc" => Some(LITERAL_KIND),
-        // All structural kinds pass through unchanged
-        other => Some(intern_kind(other)),
-    }
+    normalise_kind_with(raw, is_comment_kind, is_identifier_kind, is_literal_kind)
+}
+
+/// PHP trivia.
+fn is_comment_kind(raw: &str) -> bool {
+    matches!(raw, "comment" | "doc_comment")
+}
+
+/// PHP identifier-like tokens, collapsed for Type-2 renamed-clone
+/// detection.
+fn is_identifier_kind(raw: &str) -> bool {
+    matches!(raw, "name")
+}
+
+/// PHP literal leaves, collapsed so constant edits do not perturb
+/// fingerprints.
+fn is_literal_kind(raw: &str) -> bool {
+    matches!(
+        raw,
+        "integer"
+            | "float"
+            | "boolean"
+            | "null"
+            | "string"
+            | "encapsed_string"
+            | "heredoc"
+            | "nowdoc"
+    )
 }

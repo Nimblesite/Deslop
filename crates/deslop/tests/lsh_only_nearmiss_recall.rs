@@ -1,4 +1,5 @@
-//! [CLONE-BUCKETS-ROUTING] row 4 recall — in every language (gh #390).
+//! [FUSED-SHARED-SUBTREE] anchored near-miss recall — in every language
+//! (gh #390).
 //!
 //! The spec routes `structural ≤ 0.01 ∧ token_jaccard ≥ 0.90` to
 //! `NearlyIdentical` with no language condition. `classify_signals` had
@@ -15,28 +16,20 @@
 //! pins the recall it owed.
 //!
 //! **The precision half lives in `issue_331_336_shape_only_saturation.rs`
-//! and this file is its counterweight.** Row 4 admits on token overlap
-//! alone, so it passes through [FUSION-CONTENT-GATE] like every other
-//! shape-saturating route: a framework-mandated declaration family
-//! measures the same anchor-free triple (`structural=0.00,
-//! token_jaccard=0.93` across six distinct Flutter widgets) and is
-//! demoted there on measured content evidence. That gate must not cost
-//! this pair its confidence, so the assertions below pin the *fused*
-//! value at act-now grade, not merely the bucket label — a fix that
-//! bought #331's precision by widening the gate over genuine duplicates
-//! fails here.
-
+//! and this file is its counterweight.** The pair clears the shared-subtree
+//! rescue with corroborating token evidence and therefore joins the closure.
 
 use std::fs;
 use std::path::Path;
 
+use crate::common::scan_dir::temp_scan_dir;
 use crate::common::{
-    approx, cluster_bucket, cluster_size, expect_cluster_spanning, field,
+    cluster_size, expect_cluster_spanning, field,
     incremental::{
         assert_pass, assert_reports_equal, assert_warm_pass, cold_then_warm,
         edit_preserving_offsets, run_store_on, ColdThenWarm,
     },
-    metric_field, run_report, signal,
+    metric_field, run_report,
     verdict::loc_as_f64,
     Result,
 };
@@ -44,7 +37,17 @@ use crate::common::{
 /// Subtree floor at which only the two function roots (and whole-body
 /// windows straddling the reorder) fingerprint — probed so exactly one
 /// candidate cluster exists and no sibling window matches structurally.
-const MIN_NODES: u32 = 35;
+///
+/// It must sit **above** the coincidental window, not merely above the
+/// statements. At 35 the scan published a 38-node three-statement window
+/// instead of the reordered pair: `closing_total = 0, carried_balance = 0,
+/// for …` against `opening_total = 0, closing_total = 0, for …` is
+/// `[assign, assign, for]` on both sides, which normalisation collapses to
+/// one tree, so it rendered a legitimate `structural = 1.0` and the fixture
+/// stopped exercising the LSH-only route it exists for. Kept at the same
+/// value as [`LSH_ONLY_NODE_FLOOR`], which the surviving endpoints must
+/// clear anyway.
+const MIN_NODES: u32 = 40;
 
 /// `pair::LSH_ONLY_MIN_NODE_COUNT`: both endpoints of an LSH-only pair
 /// must carry at least this many nodes to survive clustering.
@@ -68,9 +71,14 @@ const LEFT_SOURCE: &str = "import os\nimport sys\n\n\ndef reconcile(entries, flo
 
 /// The same statements reordered — `carried_balance` moved across the
 /// loop and the settlement tail swapped — so no ≥[`MIN_NODES`]-node
-/// subtree or sibling window survives structurally identical
-/// (`structural = 0.0`) while the token k-gram overlap stays at the
-/// measured `0.9296875`, above the `LSH_ONLY_MIN_JACCARD = 0.90` floor.
+/// subtree or sibling window survives structurally identical, while the
+/// token k-gram overlap stays at the measured [`MEASURED_JACCARD`], above
+/// the `LSH_ONLY_MIN_JACCARD = 0.90` floor.
+///
+/// The reordered pair itself still shares every statement subtree, so it
+/// measures a graded overlap rather than nothing ([FUSED-SHARED-SUBTREE]);
+/// what it does not have is an *exact* anchor, which is what makes the
+/// token axis the only route that admits it.
 const RIGHT_SOURCE: &str = "import os\nimport sys\n\n\ndef settle(entries, floor):\n\
     \x20   opening_total = 0\n\
     \x20   closing_total = 0\n\
@@ -88,12 +96,6 @@ const RIGHT_SOURCE: &str = "import os\nimport sys\n\n\ndef settle(entries, floor
 /// The file the mixed pass edits — the right-hand member of the pair.
 const RIGHT_FILE: &str = "ledger_right.py";
 
-/// Token-Jaccard the pair measures (`MinHash` estimate, deterministic per
-/// [PIPELINE-DETERMINISM]) — captured from the reproducing run. Above
-/// the 0.90 LSH-only floor, below the 0.95 saturating-shape line, so
-/// the spec's row 4 is the *only* row that admits it.
-const MEASURED_JACCARD: f64 = 0.929_687_5;
-
 /// Seeds the two-file Python corpus.
 fn seed(scan_root: &Path) -> Result<()> {
     fs::create_dir_all(scan_root)?;
@@ -102,14 +104,11 @@ fn seed(scan_root: &Path) -> Result<()> {
     Ok(())
 }
 
-// [CLONE-BUCKETS-ROUTING] `structural ≤ 0.01 ∧ token_jaccard ≥ 0.90` →
-// `NearlyIdentical`, for every language. A pure statement-reorder clone
-// is exactly the Type-3 population the LSH-only path exists to recall;
-// hiding it renders a fully-duplicated pair as zero duplication.
+// [FUSED-SHARED-SUBTREE] the statement-reorder pair clears the compound
+// rescue and the anchor-free near-miss router keeps it visible.
 #[test]
-fn a_python_lsh_only_type3_pair_is_reported_as_nearly_identical() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
+fn a_python_rescued_type3_pair_is_reported_as_nearly_identical() -> Result<()> {
+    let (_tmp, scan_root) = temp_scan_dir("src")?;
     seed(&scan_root)?;
     let report = run_report(&scan_root, MIN_NODES)?;
 
@@ -129,32 +128,22 @@ fn assert_pair_verdict(report: &serde_json::Value, label: &str) -> Result<()> {
     );
     let cluster = expect_cluster_spanning(report, &["ledger_left.py", "ledger_right.py"])?;
     assert_eq!(
-        cluster_bucket(cluster),
-        "nearly_identical",
-        "{label}: spec row `structural ≤ 0.01 ∧ token_jaccard ≥ 0.90` routes \
-         to NearlyIdentical with no language condition (taxonomy.md \
-         [CLONE-BUCKETS-ROUTING]); the C#-only carve-out must not decide \
-         recall: {cluster:#}"
-    );
-    assert_eq!(
         cluster_size(cluster),
         2,
         "{label}: exactly the two reordered functions form the pair: {cluster:#}"
     );
-    assert_signal_triple(cluster);
+    assert_mass_only_cluster(cluster);
     assert_recall_metrics(report)
 }
 
-// [PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE] The LSH-only route runs on
-// *reused* signatures on a warm pass, and a signature is the only
-// evidence this pair has — there is no structural anchor to fall back on.
-// So the whole persistence matrix owes this verdict identically: cold,
+// [PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE] The compound rescue reads
+// reusable signatures on a warm pass. The whole persistence matrix
+// therefore owes this verdict identically: cold,
 // fully warm, a mixed pass where one file's signatures are rebuilt and
 // the other's are served from the store, and a revert that full-hits.
 #[test]
-fn the_lsh_only_pair_keeps_its_verdict_across_the_persistence_matrix() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
+fn the_rescued_pair_keeps_its_verdict_across_the_persistence_matrix() -> Result<()> {
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     seed(&scan_root)?;
     let right_fingerprints = right_file_fingerprint_count(tmp.path())?;
 
@@ -210,54 +199,8 @@ fn right_file_fingerprint_count(tmp: &Path) -> Result<u64> {
     Ok(events.fingerprints)
 }
 
-/// The agent-facing act-now line ([FUSED-THRESHOLD]) this pair must
-/// stay at or above: a verbatim statement-reorder clone is duplication
-/// an agent may act on, and [FUSION-CONTENT-GATE] measures real content
-/// agreement here, so the gate that demotes shape-only families
-/// ([CLONE-NOISE-DART-WIDGET-SCAFFOLD], #331) must leave this pair alone.
-const ACT_NOW_FUSED: f64 = 0.85;
-
-/// The pair's exact signal triple: no structural anchor, the measured
-/// token overlap, embeddings off, and a fused confidence the content
-/// gate left at act-now grade.
-fn assert_signal_triple(cluster: &serde_json::Value) {
-    let structural = signal(cluster, "structural");
-    assert!(
-        structural < 0.99,
-        "a pure statement reorder has no *exact* structural anchor — reordering \
-         rehashes the enclosing Merkle node, so an exact match here would mean \
-         the reported view is not the reordered pair at all, got {structural}: \
-         {cluster:#}"
-    );
-    // The bound is two-sided. `<= 0.01` was the old form, and it read as
-    // "no structural evidence" — which was only ever true because
-    // `structural` was Merkle equality. A statement reorder shares every
-    // statement subtree; only their order differs, so it measures real
-    // overlap ([FUSION-SHARED-SUBTREE]). Asserting the zero asserted that
-    // the shared statements did not exist.
-    assert!(
-        structural >= deslop_core::pair::SHARED_SUBTREE_MIN_OVERLAP,
-        "the reordered statements are shared subtrees and must register as \
-         shape evidence, got {structural}: {cluster:#}"
-    );
-    let jaccard = signal(cluster, "token_jaccard");
-    assert!(
-        approx(jaccard, MEASURED_JACCARD),
-        "token_jaccard must be the measured {MEASURED_JACCARD}, got \
-         {jaccard}: {cluster:#}"
-    );
-    let cosine = signal(cluster, "embedding_cos");
-    assert!(
-        approx(cosine, 0.0),
-        "embeddings are off, so the cosine must be 0.0, got {cosine}: {cluster:#}"
-    );
-    let fused = signal(cluster, "fused");
-    assert!(
-        fused >= ACT_NOW_FUSED,
-        "the content gate must leave a genuine reorder clone at act-now \
-         confidence (>= {ACT_NOW_FUSED}), got {fused} — demoting this pair \
-         is how a #331 precision fix silently costs recall: {cluster:#}"
-    );
+/// The rendered closure exposes mass and membership, never admission evidence.
+fn assert_mass_only_cluster(cluster: &serde_json::Value) {
     let nodes = field(cluster, "canonical_node_count").as_u64().unwrap_or(0);
     assert!(
         nodes >= LSH_ONLY_NODE_FLOOR,
@@ -265,6 +208,19 @@ fn assert_signal_triple(cluster: &serde_json::Value) {
          floor to survive, so the canonical count must too, got {nodes}: \
          {cluster:#}"
     );
+    assert_eq!(field(cluster, "mass").as_u64(), Some(nodes));
+    for forbidden in [
+        "signals",
+        "signal_source",
+        "bucket",
+        "classification",
+        "weight",
+    ] {
+        assert!(
+            cluster.get(forbidden).is_none(),
+            "cluster field {forbidden} is forbidden: {cluster:#}"
+        );
+    }
 }
 
 /// [METRICS-REPO] The recall half: a reported pair must move every
@@ -293,7 +249,7 @@ fn assert_recall_metrics(report: &serde_json::Value) -> Result<()> {
         .unwrap_or(-1.0);
     let expected = 100.0 * loc_as_f64(duplicated)? / loc_as_f64(analysed)?;
     assert!(
-        approx(reported, expected),
+        (reported - expected).abs() <= f64::EPSILON,
         "duplication_percent must be duplicated/analysed × 100 \
          ({duplicated}/{analysed}), got {reported}: {report}"
     );

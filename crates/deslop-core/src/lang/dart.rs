@@ -1,6 +1,6 @@
 //! Dart language plugin.
 //!
-//! Implements [PIPELINE-LANG-TRAIT] for Dart using the
+//! Implements [PIPELINE-LANG-TRAIT] and [LANG-CAND-DART] using the
 //! `tree-sitter-dart` grammar (nielsenko fork, Dart 3.x: records,
 //! patterns, class modifiers, extension types, null-aware elements).
 //! Normalisation follows the same Type-2-invariance principle as the
@@ -21,22 +21,27 @@
 //! Shared walking / interning plumbing lives in [`super::shared`].
 
 use crate::{
-    ast::NormalizedNode,
+    ast::{named_children, NormalizedNode},
     error::CoreError,
     lang::{
-        shared::{build_normalised_root, intern_kind, parse_source, IDENTIFIER_KIND, LITERAL_KIND},
+        merge_emit::{
+            emit_merge_helper, plain_call, BraceStyle, HelperDialect, HelperPlacement,
+            InsertionPoint,
+        },
+        shared::{build_normalised_root, normalise_kind_with, parse_source},
         LanguageParser,
     },
     refactor::{
-        emit::{cluster_id_prefix, line_indent_at, line_start_at},
-        merge::{plain_call_text, MergeEmitOutcome, MergeEmitRequest},
-        preconditions::{field_text, named_children, node_text},
+        emit::{line_indent_at, line_start_at},
+        merge::{MergeEmitOutcome, MergeEmitRequest},
+        preconditions::{field_text, node_text},
         tables::{
             BindingKind, BoundaryKind, FrameKind, MergeTables, ReferenceTable, ScopeKinds,
             WriteKind,
         },
     },
     state::FileId,
+    wire_generated::MergeParameter,
 };
 
 /// Stable language identifier reported by [`DartParser::id`].
@@ -110,26 +115,10 @@ impl LanguageParser for DartParser {
 /// [AUTOFIX-MERGE-SAFETY]: variable definitions, formal parameters,
 /// and `for`-in bindings.
 const BINDING_KINDS: &[BindingKind] = &[
-    BindingKind {
-        node_kind: "initialized_variable_definition",
-        name_field: Some("name"),
-        late_fields: &[],
-    },
-    BindingKind {
-        node_kind: "initialized_identifier",
-        name_field: None,
-        late_fields: &[],
-    },
-    BindingKind {
-        node_kind: "formal_parameter",
-        name_field: Some("name"),
-        late_fields: &[],
-    },
-    BindingKind {
-        node_kind: "for_statement",
-        name_field: Some("name"),
-        late_fields: &[],
-    },
+    BindingKind::new("initialized_variable_definition", Some("name"), &[]),
+    BindingKind::new("initialized_identifier", None, &[]),
+    BindingKind::new("formal_parameter", Some("name"), &[]),
+    BindingKind::new("for_statement", Some("name"), &[]),
 ];
 
 /// Dart identifier-reference recognition. Member names (`.add`),
@@ -148,12 +137,7 @@ const REFERENCE_TABLE: ReferenceTable = ReferenceTable {
 };
 
 /// Nested Dart scopes that open a frame during walks.
-const FRAME_KINDS: &[FrameKind] = &[FrameKind {
-    node_kind: "function_expression",
-    bind_inside_field: None,
-    bind_outside_field: None,
-    bind_first_kinds: &[],
-}];
+const FRAME_KINDS: &[FrameKind] = &[FrameKind::new("function_expression", None, None, &[])];
 
 /// Dart container kinds: statement runs live in blocks, scopes are
 /// function or method declarations, shared parents are classes or the
@@ -173,30 +157,15 @@ const SCOPE_KINDS: ScopeKinds = ScopeKinds {
     // conservatively matches any named leaf under it — including the
     // right-hand side, an accepted over-refusal.
     write_kinds: &[
-        WriteKind {
-            node_kind: "assignment_expression",
-            target_field: Some("left"),
-            marker_tokens: &[],
-            destructuring_kinds: &[],
-        },
-        WriteKind {
-            node_kind: "postfix_expression",
-            target_field: Some("argument"),
-            marker_tokens: &["++", "--"],
-            destructuring_kinds: &[],
-        },
-        WriteKind {
-            node_kind: "unary_expression",
-            target_field: None,
-            marker_tokens: &["++", "--"],
-            destructuring_kinds: &["unary_expression"],
-        },
-        WriteKind {
-            node_kind: "pattern_assignment",
-            target_field: None,
-            marker_tokens: &[],
-            destructuring_kinds: &["pattern_assignment"],
-        },
+        WriteKind::new("assignment_expression", Some("left"), &[], &[]),
+        WriteKind::new("postfix_expression", Some("argument"), &["++", "--"], &[]),
+        WriteKind::new(
+            "unary_expression",
+            None,
+            &["++", "--"],
+            &["unary_expression"],
+        ),
+        WriteKind::new("pattern_assignment", None, &[], &["pattern_assignment"]),
     ],
     relocation_unsafe_kinds: &[],
 };
@@ -206,35 +175,23 @@ const SCOPE_KINDS: ScopeKinds = ScopeKinds {
 /// readability nicety only ([AUTOFIX-MERGE-DEFAULTS]).
 const MERGE_TABLES: MergeTables = MergeTables {
     boundary_kinds: &[
-        BoundaryKind {
-            node_kind: "return_statement",
-            allowed_containers: &[],
-        },
-        BoundaryKind {
-            node_kind: "yield_statement",
-            allowed_containers: &[],
-        },
-        BoundaryKind {
-            node_kind: "await_expression",
-            allowed_containers: &[],
-        },
-        BoundaryKind {
-            node_kind: "break_statement",
-            allowed_containers: &[
+        BoundaryKind::new("return_statement", &[]),
+        BoundaryKind::new("yield_statement", &[]),
+        BoundaryKind::new("await_expression", &[]),
+        BoundaryKind::new(
+            "break_statement",
+            &[
                 "for_statement",
                 "while_statement",
                 "do_statement",
                 "switch_statement",
             ],
-        },
-        BoundaryKind {
-            node_kind: "continue_statement",
-            allowed_containers: &["for_statement", "while_statement", "do_statement"],
-        },
-        BoundaryKind {
-            node_kind: "throw_expression",
-            allowed_containers: &["try_statement"],
-        },
+        ),
+        BoundaryKind::new(
+            "continue_statement",
+            &["for_statement", "while_statement", "do_statement"],
+        ),
+        BoundaryKind::new("throw_expression", &["try_statement"]),
     ],
     literal_types: &[
         ("decimal_integer_literal", "int"),
@@ -273,46 +230,34 @@ fn declared_type_of(function: tree_sitter::Node<'_>, name: &str, source: &[u8]) 
 /// function with real declared types above the first occurrence's
 /// function ([AUTOFIX-MERGE-NAMES]).
 fn emit_merge(request: &MergeEmitRequest<'_, '_>) -> Option<MergeEmitOutcome> {
-    let first = request.scopes.first()?;
-    let function = first.function?;
-    let insertion_offset = line_start_at(request.source, function.start_byte());
-    let indent = line_indent_at(request.source, function.start_byte());
-    let helper_name = format!(
-        "mergedFromCluster_{}",
-        cluster_id_prefix(request.cluster_id)
-    );
-    let call_texts = (0..request.scopes.len())
-        .map(|site| plain_call_text(request.parameters, &helper_name, site))
-        .collect();
-    Some(MergeEmitOutcome {
-        insertion_text: merge_helper_text(request, &indent, &helper_name),
-        insertion_offset,
-        helper_name,
-        call_texts,
-    })
+    let anchor = request.scopes.first()?.function?.start_byte();
+    let placement = HelperPlacement {
+        insertion_offset: line_start_at(request.source, anchor),
+        indent: line_indent_at(request.source, anchor),
+        point: InsertionPoint::LineStart,
+    };
+    Some(emit_merge_helper(request, &placement, &MERGE_DIALECT))
 }
 
-/// Renders the merged helper with typed parameters.
-fn merge_helper_text(
-    request: &MergeEmitRequest<'_, '_>,
-    indent: &str,
-    helper_name: &str,
-) -> String {
-    let statement_indent = format!("{indent}{INDENT_STEP}");
-    let parameters = request
-        .parameters
-        .iter()
-        .map(|parameter| format!("{} {}", parameter.type_name, parameter.name))
-        .collect::<Vec<_>>()
-        .join(", ");
-    format!(
-        "{indent}void {helper_name}({parameters}) {{
-{statement_indent}{}
-{indent}}}
+/// How Dart spells a merged helper: a lowerCamel top-level function
+/// whose parameters are `Type name`.
+const MERGE_DIALECT: HelperDialect = HelperDialect {
+    name_prefix: "mergedFromCluster_",
+    indent_step: INDENT_STEP,
+    brace: BraceStyle::SameLine,
+    parameter: merge_parameter_text,
+    signature: merge_signature_text,
+    call: plain_call,
+};
 
-",
-        request.helper_body
-    )
+/// Renders one Dart parameter as `Type name`.
+fn merge_parameter_text(parameter: &MergeParameter) -> String {
+    format!("{} {}", parameter.type_name, parameter.name)
+}
+
+/// Renders the Dart helper declaration line.
+fn merge_signature_text(helper_name: &str, parameters: &str) -> String {
+    format!("void {helper_name}({parameters})")
 }
 
 /// Maps a tree-sitter Dart node kind to its normalised form. Returns
@@ -320,12 +265,23 @@ fn merge_helper_text(
 /// returned `&'static str` comes from a fixed placeholder set or is
 /// interned on first sight so downstream hashing is cheap and stable.
 fn normalise_kind(raw: &str) -> Option<&'static str> {
-    match raw {
-        "comment" | "block_comment" | "documentation_block_comment" => None,
-        "identifier" | "identifier_dollar_escaped" | "type_identifier" => Some(IDENTIFIER_KIND),
-        raw if is_literal_kind(raw) => Some(LITERAL_KIND),
-        other => Some(intern_kind(other)),
-    }
+    normalise_kind_with(raw, is_comment_kind, is_identifier_kind, is_literal_kind)
+}
+
+/// Dart trivia.
+fn is_comment_kind(raw: &str) -> bool {
+    matches!(
+        raw,
+        "comment" | "block_comment" | "documentation_block_comment"
+    )
+}
+
+/// Dart identifier leaves, collapsed for Type-2 renamed-clone detection.
+fn is_identifier_kind(raw: &str) -> bool {
+    matches!(
+        raw,
+        "identifier" | "identifier_dollar_escaped" | "type_identifier"
+    )
 }
 
 /// Returns true when `raw` is a Dart literal node collapsed by

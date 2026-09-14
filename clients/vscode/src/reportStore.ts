@@ -10,7 +10,7 @@
 //   * report          — canonical truth from the LSP. Only setSnapshot /
 //                       applyDelta (driven by deslop/reportChanged) write it.
 //                       Lookup by cluster id is always honoured here so
-//                       commands like compareWithCanonical, openCluster,
+//                       commands like comparePair, openCluster,
 //                       openOccurrence keep working through unsaved edits.
 //   * visibleReport   — derived projection. For each file the user has
 //                       edited locally (markFileDirty), occurrences in that
@@ -79,7 +79,7 @@ export class ReportStore implements vscode.Disposable {
   private readonly _lifecycle = signal<LifecyclePhase>({ kind: "starting" });
   private readonly _pendingEmbeddingModel = signal<string | null>(null);
   private readonly _embeddingProgress = signal<EmbeddingProgress | null>(null);
-  private readonly _facetFilter = signal<FacetFilter>({ buckets: [], categories: [] });
+  private readonly _facetFilter = signal<FacetFilter>({ severities: [] });
   private readonly _retractedClusters = signal<ReadonlySet<string>>(new Set());
 
   private readonly _visibleReport: ReadonlySignal<Report | null> = computed(() =>
@@ -362,11 +362,10 @@ function projectVisible(canonical: Report | null, dirty: ReadonlySet<string>): R
     // that live in an unsaved buffer, so the counts it carries are counts
     // of that view. Derived once here and written to every count field
     // together, so no surface can show the engine's total beside the
-    // projection's shorter list ([VSIX-REACTIVITY-DIRTY]).
+    // projection's shorter list ([VSIX-STATE-DIRTY]).
     const projectedCount = Math.max(kept.length, cluster.occurrence_count - removed);
     clusters.push({
       ...cluster,
-      size: projectedCount,
       occurrences: kept,
       occurrence_count: projectedCount,
       occurrences_total: projectedCount,

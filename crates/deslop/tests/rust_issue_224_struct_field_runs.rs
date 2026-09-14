@@ -39,9 +39,8 @@ fn distinct_struct_field_runs_are_not_reported_as_duplication() -> Result<()> {
         })
         .map(|cluster| {
             format!(
-                "cluster {id} bucket={bucket} files={files:?}",
+                "cluster {id} files={files:?}",
                 id = cluster_id(cluster),
-                bucket = cluster_bucket(cluster),
                 files = occurrence_files(cluster),
             )
         })

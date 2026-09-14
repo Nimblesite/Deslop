@@ -2,7 +2,7 @@
 //!
 //! Inside one MCP session, the `generation` returned by `rescan` must
 //! match the `generation` returned by the immediately following
-//! `report-get` and `session-config`. Agents use this counter to detect
+//! `duplicates` and `session`. Agents use this counter to detect
 //! stale results — three different counters in the same session means
 //! they cannot tell which MCP result reflects the current codebase.
 
@@ -13,11 +13,11 @@ use serde_json::{json, Value};
 
 use crate::common;
 use common::{
-    copied_fixture, spawn_lsp_and_wait_for_socket, structured_content,
+    call_tool, copied_fixture, spawn_lsp_and_wait_for_socket, structured_content,
     wait_for_state_then_init_mcp, McpHandle,
 };
 
-/// Issue #135: `rescan`, `session-config`, and `report-get` must all
+/// Issue #135: `rescan`, `session`, and `duplicates` must all
 /// report the same `generation` for the same report state.
 #[test]
 fn issue_135_rescan_generation_matches_report_get_and_session_config() -> Result<()> {
@@ -35,37 +35,31 @@ fn issue_135_rescan_generation_matches_report_get_and_session_config() -> Result
         b"namespace Solo { class Only { public int Go() => 1; } }\n",
     )?;
 
-    let rescan = mcp.request(
-        "tools/call",
+    let rescan_structured = call_tool(
+        &mut mcp,
+        "rescan",
         &json!({
-            "name": "rescan",
-            "arguments": {
-                "paths": [beta.to_string_lossy().into_owned()],
-                "n": 1
-            }
+            "paths": [beta.to_string_lossy().into_owned()],
+            "n": 1
         }),
     )?;
-    let rescan_structured = structured_content(&rescan, "rescan")?;
-    let rescan_generation = read_generation(&rescan_structured, "rescan", &rescan)?;
+    let rescan_generation = read_generation(&rescan_structured, "rescan", &rescan_structured)?;
 
-    let session = mcp.request(
-        "tools/call",
-        &json!({ "name": "session-config", "arguments": {} }),
-    )?;
-    let session_structured = structured_content(&session, "session-config")?;
-    let session_generation = read_generation(&session_structured, "session-config", &session)?;
+    let session = mcp.request("tools/call", &json!({ "name": "session", "arguments": {} }))?;
+    let session_structured = structured_content(&session, "session")?;
+    let session_generation = read_generation(&session_structured, "session", &session)?;
 
     let report = call_report_get(&mut mcp)?;
-    let report_structured = structured_content(&report, "report-get")?;
-    let report_generation = read_generation(&report_structured, "report-get", &report)?;
+    let report_structured = structured_content(&report, "duplicates")?;
+    let report_generation = read_generation(&report_structured, "duplicates", &report)?;
 
     ensure!(
         rescan_generation == session_generation,
-        "issue #135: rescan generation ({rescan_generation}) must match the next session-config generation ({session_generation}); rescan={rescan_structured} session={session_structured}"
+        "issue #135: rescan generation ({rescan_generation}) must match the next session generation ({session_generation}); rescan={rescan_structured} session={session_structured}"
     );
     ensure!(
         rescan_generation == report_generation,
-        "issue #135: rescan generation ({rescan_generation}) must match the next report-get generation ({report_generation}); rescan={rescan_structured} report={report_structured}"
+        "issue #135: rescan generation ({rescan_generation}) must match the next duplicates generation ({report_generation}); rescan={rescan_structured} report={report_structured}"
     );
     Ok(())
 }
@@ -74,7 +68,7 @@ fn call_report_get(mcp: &mut McpHandle) -> Result<Value> {
     mcp.request(
         "tools/call",
         &json!({
-            "name": "report-get",
+            "name": "duplicates",
             "arguments": { "offset": 0, "limit": 0 }
         }),
     )

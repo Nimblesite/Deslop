@@ -1,23 +1,20 @@
-//! [CI-RELEASE-BUILD] [TEST-ONE-BINARY] The crate's whole integration
-//! suite, linked once.
+//! [CI-RELEASE-BUILD] [TEST-ONE-BINARY] The crate's whole integration suite, linked once.
 //!
-//! Cargo builds one executable per `tests/*.rs`, and each one statically
-//! links the entire workspace under the release profile. At 176 files that
-//! was 176 whole-program links per CI run — the bulk of a 20-minute compile
-//! that cancelled every Rust shard at its cap. Declaring the suites as
-//! modules of a single binary links them once instead.
+//! Cargo builds one executable per `tests/*.rs`, and each one statically links the entire workspace under the release profile. At 176 files that was 176 whole-program links per CI run — the bulk of a 20-minute compile that cancelled every Rust shard at its cap. Declaring the suites as modules of a single binary links them once instead.
 //!
-//! Each module below is a former `tests/*.rs`, unchanged apart from its
-//! `mod common;` line: the shared helpers are declared here, once, so
-//! `crate::common::…` still resolves from every suite.
+//! Each module below is a former `tests/*.rs`, unchanged apart from its `mod common;` line: the shared helpers are declared here, once, so `crate::common::…` still resolves from every suite.
 
 /// Shared fixture helpers, declared once for every suite below.
 mod common;
 
 #[path = "cluster_overlap_collapse.rs"]
 mod cluster_overlap_collapse;
-#[path = "cluster_subsumption.rs"]
+#[path = "cluster_subsumption/mod.rs"]
 mod cluster_subsumption;
+#[path = "content_gate_admits.rs"]
+mod content_gate_admits;
+#[path = "content_gate_rejects.rs"]
+mod content_gate_rejects;
 #[path = "cross_language_threshold.rs"]
 mod cross_language_threshold;
 #[path = "diff_render_tags.rs"]
@@ -56,12 +53,18 @@ mod issue_98_99_108_120_122_thresholds;
 mod lang_registry_vsix_parity;
 #[path = "live.rs"]
 mod live;
+#[path = "live_delta_field_coverage.rs"]
+mod live_delta_field_coverage;
 #[path = "live_merge_plan.rs"]
 mod live_merge_plan;
 #[path = "live_session_status.rs"]
 mod live_session_status;
 #[path = "pair_admission_bounded_max.rs"]
 mod pair_admission_bounded_max;
+#[path = "pair_comparison.rs"]
+mod pair_comparison;
+#[path = "pair_evidence_merge.rs"]
+mod pair_evidence_merge;
 #[path = "refactor_ast_access.rs"]
 mod refactor_ast_access;
 #[path = "refactor_consolidate.rs"]
@@ -78,5 +81,9 @@ mod refactor_extract_write_gate;
 mod refactor_merge;
 #[path = "refactor_merge_refusals.rs"]
 mod refactor_merge_refusals;
+#[path = "render_noise_totals_observability.rs"]
+mod render_noise_totals_observability;
 #[path = "report_api.rs"]
 mod report_api;
+#[path = "report_fixture_file_identity.rs"]
+mod report_fixture_file_identity;

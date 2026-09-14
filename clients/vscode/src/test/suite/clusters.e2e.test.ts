@@ -1,4 +1,4 @@
-// E2E: drive jumpToNextOccurrence / compareWithCanonical / openOccurrence
+// E2E: drive jumpToNextOccurrence / comparePair / openOccurrence
 // with real cluster data from the LSP's initial report, and exercise the
 // bubble render path by positioning inside a known cluster.
 
@@ -7,49 +7,120 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import { LanguageClient } from "vscode-languageclient/node";
 import type { ExtensionApi } from "../../extension";
-import type { Report, ReportCluster } from "../../types/report";
-import { activateExtension, sleep } from "./helpers";
+import { parseCompareUri } from "../../compare/provider";
+import { compareTitle, INDENTATION_ONLY_VERDICT, measurePair, PAIR_COMPARE_METHOD } from "../../compare/title";
+import { kindTitle, type PairComparison, type PairEvidence, type ReportCluster, type ReportOccurrence } from "../../types/report";
+import {
+  deleteRange,
+  editThenRestore,
+  fixtureRoot,
+  openFixture,
+  sleep,
+  waitForCluster,
+  waitForReport,
+} from "./helpers";
 
-async function waitForReport(): Promise<ExtensionApi> {
-  const api = await activateExtension();
-  // Initial report seeding takes time over stdio.
-  for (let i = 0; i < 20; i++) {
-    await sleep(250);
-    const cmds = await vscode.commands.getCommands(true);
-    if (cmds.includes("deslop.openCluster")) return api;
-  }
-  throw new Error("extension did not activate in time");
-}
+const BUBBLE_RENDER_SETTLE_MS = 2500;
+const ALPHA_FILE = "Alpha.cs";
+const BETA_FILE = "Beta.cs";
+const GAMMA_FILE = "Gamma.cs";
+const DELTA_FILE = "Delta.cs";
+const DIFFERENT_TEXT = "different";
+const INDENTATION_ONLY_TEXT = "indentation_only";
+const NEARLY_IDENTICAL_KIND = "nearly_identical";
+const CLOSE_ALL_EDITORS = "workbench.action.closeAllEditors";
+const COMPARE_WITH_CANONICAL = "deslop.compareWithCanonical";
+const LINE_BREAK = "\n";
 
-async function waitForRelativePathCluster(client: LanguageClient): Promise<ReportCluster> {
-  let last: Report | undefined;
-  for (let i = 0; i < 40; i += 1) {
-    last = await client.sendRequest<Report>("deslop/reportGet");
-    const cluster = last.clusters.find((candidate) =>
-      candidate.occurrences.length >= 2
-        && candidate.occurrences.some((occurrence) => !path.isAbsolute(occurrence.path)),
-    );
-    if (cluster) return cluster;
-    await sleep(250);
-  }
-  throw new Error(
-    `no relative-path cluster in LSP report; last cluster count ${last?.clusters.length ?? 0}`,
+function waitForRelativePathCluster(client: LanguageClient): Promise<ReportCluster> {
+  return waitForCluster(
+    client,
+    (candidate) => candidate.occurrences.some((occurrence) => !path.isAbsolute(occurrence.path)),
+    "no relative-path cluster in LSP report",
   );
 }
 
-async function waitForDiffTab(): Promise<vscode.TabInputTextDiff> {
+function waitForClusterHolding(client: LanguageClient, fileName: string): Promise<ReportCluster> {
+  return waitForCluster(
+    client,
+    (candidate) => candidate.occurrences.some((occurrence) => path.basename(occurrence.path) === fileName),
+    `no cluster holding ${fileName} in LSP report`,
+  );
+}
+
+interface OpenedDiff {
+  readonly label: string;
+  readonly input: vscode.TabInputTextDiff;
+}
+
+async function waitForDiff(): Promise<OpenedDiff> {
   // Under coverage instrumentation `vscode.diff` can take >2s to materialise
   // a TabInputTextDiff after closeAllEditors. 10s matches the rest of this
   // suite's wait helpers and absorbs that variance.
   for (let i = 0; i < 100; i += 1) {
     for (const group of vscode.window.tabGroups.all) {
       for (const tab of group.tabs) {
-        if (tab.input instanceof vscode.TabInputTextDiff) return tab.input;
+        if (tab.input instanceof vscode.TabInputTextDiff) return { label: tab.label, input: tab.input };
       }
     }
     await sleep(100);
   }
   throw new Error("compare command did not open a diff tab");
+}
+
+async function waitForDiffTab(): Promise<vscode.TabInputTextDiff> {
+  return (await waitForDiff()).input;
+}
+
+// The engine's own answer for exactly these two endpoints, over the real LSP.
+async function pairEvidence(
+  client: LanguageClient,
+  left: ReportOccurrence,
+  right: ReportOccurrence,
+): Promise<PairEvidence> {
+  const comparison = await client.sendRequest<PairComparison>(PAIR_COMPARE_METHOD, {
+    left: { path: left.path, start_byte: left.start_byte, end_byte: left.end_byte },
+    right: { path: right.path, start_byte: right.start_byte, end_byte: right.end_byte },
+  });
+  const measured = await measurePair(client, left, right);
+  assert.deepEqual(measured, comparison.evidence, "measurePair preserves the real engine's evidence for these exact endpoints");
+  return comparison.evidence;
+}
+
+function assertDiffEndpoints(input: vscode.TabInputTextDiff, left: ReportOccurrence, right: ReportOccurrence): void {
+  const original = parseCompareUri(input.original);
+  const modified = parseCompareUri(input.modified);
+  assert.equal(original.sourcePath, left.path);
+  assert.equal(original.startByte, left.start_byte);
+  assert.equal(original.endByte, left.end_byte);
+  assert.equal(modified.sourcePath, right.path);
+  assert.equal(modified.startByte, right.start_byte);
+  assert.equal(modified.endByte, right.end_byte);
+  assert.notEqual(input.original.toString(), input.modified.toString());
+}
+
+// One click on a peer: the canonical range lands on the left, the clicked
+// occurrence on the right, and the title names both files and repeats the
+// engine's verdict on that exact pair ([VSIX-PAIR-COMPARE]).
+async function compareWithCanonicalOneClick(
+  client: LanguageClient,
+  cluster: ReportCluster,
+): Promise<{ diff: OpenedDiff; canonical: ReportOccurrence; peer: ReportOccurrence; evidence: PairEvidence }> {
+  const [canonical, peer] = cluster.occurrences;
+  assert.ok(canonical && peer, "cluster must expose a canonical occurrence and a peer");
+  await vscode.commands.executeCommand(CLOSE_ALL_EDITORS);
+  await vscode.commands.executeCommand(COMPARE_WITH_CANONICAL, cluster.id, peer);
+  const diff = await waitForDiff();
+  assertDiffEndpoints(diff.input, canonical, peer);
+  const evidence = await pairEvidence(client, canonical, peer);
+  assert.equal(diff.label, compareTitle(canonical, peer, evidence), "the title is the engine's verdict on this pair");
+  assert.ok(diff.label.includes(path.basename(canonical.path)), `title names the canonical file: ${diff.label}`);
+  assert.ok(diff.label.includes(path.basename(peer.path)), `title names the peer file: ${diff.label}`);
+  return { diff, canonical, peer, evidence };
+}
+
+function linesWithoutIndentation(text: string): string[] {
+  return text.split(LINE_BREAK).map((line) => line.trimStart());
 }
 
 suite("cluster navigation", () => {
@@ -69,12 +140,7 @@ suite("cluster navigation", () => {
   });
 
   test("jumping inside a fixture file while positioned at the start", async () => {
-    const fixture = process.env["DESLOP_TEST_FIXTURE"];
-    assert.ok(fixture, "fixture path must be set");
-    const doc = await vscode.workspace.openTextDocument(
-      vscode.Uri.file(`${fixture}/Alpha.cs`),
-    );
-    const editor = await vscode.window.showTextDocument(doc);
+    const editor = await openFixture(ALPHA_FILE);
     editor.selection = new vscode.Selection(
       new vscode.Position(2, 8),
       new vscode.Position(2, 8),
@@ -97,21 +163,59 @@ suite("cluster navigation", () => {
     // its getChildren returns 5 SessionFieldNode items. We exercise it by
     // triggering a redraw via the active-editor change hook that all providers
     // subscribe to.
-    const fixture = process.env["DESLOP_TEST_FIXTURE"];
-    assert.ok(fixture);
-    const doc = await vscode.workspace.openTextDocument(
-      vscode.Uri.file(`${fixture}/Alpha.cs`),
-    );
-    await vscode.window.showTextDocument(doc);
+    await openFixture(ALPHA_FILE);
     await sleep(300);
   });
 
-  test("compareWithCanonical opens populated virtual documents for real relative paths", async () => {
+  test("one click compares a renamed copy with its canonical and titles the diff with its clone kind", async () => {
+    assert.ok(api.client, "extension must expose the real LanguageClient");
+    const cluster = await waitForClusterHolding(api.client, ALPHA_FILE);
+    const { diff, evidence } = await compareWithCanonicalOneClick(api.client, cluster);
+    assert.equal(evidence.text_identity, DIFFERENT_TEXT, "renamed copies do not differ only by indentation");
+    assert.ok(!diff.label.includes(INDENTATION_ONLY_VERDICT), `no indentation claim for a rename: ${diff.label}`);
+    assert.ok(diff.label.endsWith(kindTitle(cluster.kind)), `title ends with the pair's kind: ${diff.label}`);
+    assert.ok(diff.label.includes(ALPHA_FILE) && diff.label.includes(BETA_FILE), `title names Alpha and Beta: ${diff.label}`);
+    const original = (await vscode.workspace.openTextDocument(diff.input.original)).getText();
+    const modified = (await vscode.workspace.openTextDocument(diff.input.modified)).getText();
+    assert.notDeepEqual(
+      linesWithoutIndentation(original),
+      linesWithoutIndentation(modified),
+      "the renamed copies differ by more than indentation",
+    );
+  });
+
+  test("a copy that differs only by indentation is titled that way and the diff shows nothing else", async () => {
+    assert.ok(api.client, "extension must expose the real LanguageClient");
+    const cluster = await waitForClusterHolding(api.client, GAMMA_FILE);
+    assert.equal(cluster.kind, NEARLY_IDENTICAL_KIND, "a re-indented copy is not byte-identical");
+    const { diff, evidence } = await compareWithCanonicalOneClick(api.client, cluster);
+    assert.equal(evidence.text_identity, INDENTATION_ONLY_TEXT, "the engine sees indentation as the whole difference");
+    assert.ok(diff.label.endsWith(INDENTATION_ONLY_VERDICT), `title says indentation only: ${diff.label}`);
+    assert.ok(
+      diff.label.includes(GAMMA_FILE) && diff.label.includes(DELTA_FILE),
+      `title names both copies: ${diff.label}`,
+    );
+    const original = (await vscode.workspace.openTextDocument(diff.input.original)).getText();
+    const modified = (await vscode.workspace.openTextDocument(diff.input.modified)).getText();
+    assert.notEqual(original, modified, "the two copies are not the same bytes");
+    assert.deepEqual(
+      linesWithoutIndentation(original),
+      linesWithoutIndentation(modified),
+      "once indentation is removed the two copies are the same lines",
+    );
+  });
+
+  test("comparePair opens populated virtual documents for two explicit endpoints with real relative paths", async () => {
     assert.ok(api.client, "extension must expose the real LanguageClient");
     const cluster = await waitForRelativePathCluster(api.client);
+    const left = cluster.occurrences[0];
+    const right = cluster.occurrences[1];
+    assert.ok(left && right, "cluster must expose two endpoints to compare");
 
     await vscode.commands.executeCommand("workbench.action.closeAllEditors");
-    await vscode.commands.executeCommand("deslop.compareWithCanonical", cluster.id);
+    // [VSIX-PAIR-COMPARE] Both endpoints are passed explicitly; the command
+    // has no single-argument form.
+    await vscode.commands.executeCommand("deslop.comparePair", left, right);
     const diff = await waitForDiffTab();
 
     assert.equal(diff.original.scheme, "deslop-compare");
@@ -129,18 +233,17 @@ suite("cluster navigation", () => {
   // lookups silently no-op. The store now splits canonical (LSP-authored) from
   // the visible projection — the diff command must still resolve through
   // canonical even while the file is dirty.
-  test("Compare with Canonical works on a cluster whose file is edited but unsaved (#130)", async () => {
+  test("comparePair works on a cluster whose file is edited but unsaved (#130)", async () => {
     assert.ok(api.client, "extension must expose the real LanguageClient");
     const cluster = await waitForRelativePathCluster(api.client);
-    const dirtyOccurrence = cluster.occurrences[0];
-    assert.ok(dirtyOccurrence, "cluster must have a peer to edit");
+    const left = cluster.occurrences[0];
+    const right = cluster.occurrences[1];
+    assert.ok(left && right, "cluster must expose two endpoints to compare");
 
     await vscode.commands.executeCommand("workbench.action.closeAllEditors");
-    const fixture = process.env["DESLOP_TEST_FIXTURE"];
-    assert.ok(fixture, "fixture path must be set");
-    const dirtyUri = path.isAbsolute(dirtyOccurrence.path)
-      ? vscode.Uri.file(dirtyOccurrence.path)
-      : vscode.Uri.file(path.join(fixture, dirtyOccurrence.path));
+    const dirtyUri = path.isAbsolute(left.path)
+      ? vscode.Uri.file(left.path)
+      : vscode.Uri.file(path.join(fixtureRoot(), left.path));
     const doc = await vscode.workspace.openTextDocument(dirtyUri);
     const editor = await vscode.window.showTextDocument(doc);
 
@@ -152,7 +255,7 @@ suite("cluster navigation", () => {
       await editor.edit((b) => b.insert(new vscode.Position(0, 0), " "));
       assert.ok(doc.isDirty, "dirty marker must be set after edit");
 
-      await vscode.commands.executeCommand("deslop.compareWithCanonical", cluster.id);
+      await vscode.commands.executeCommand("deslop.comparePair", left, right);
       const diff = await waitForDiffTab();
 
       assert.equal(diff.original.scheme, "deslop-compare");
@@ -172,24 +275,13 @@ suite("cluster navigation", () => {
       // tests in this suite. The diff command may close the source editor —
       // reopen the source document explicitly so the edit call can target it.
       const restored = await vscode.window.showTextDocument(doc, { preview: false });
-      await restored.edit((b) =>
-        b.delete(new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 1))),
-      );
+      await deleteRange(restored, 0, 0, 0, 1);
     }
   });
 
   test("bubble inline render triggered by edit", async () => {
-    const fixture = process.env["DESLOP_TEST_FIXTURE"];
-    assert.ok(fixture);
-    const doc = await vscode.workspace.openTextDocument(
-      vscode.Uri.file(`${fixture}/Alpha.cs`),
-    );
-    const editor = await vscode.window.showTextDocument(doc);
-    await editor.edit((b) => b.insert(new vscode.Position(3, 0), "        // x\n"));
+    const editor = await openFixture(ALPHA_FILE);
     // Wait past DEBOUNCE_MS (250) + BUDGET_MS (250) + LSP round trip.
-    await sleep(2500);
-    await editor.edit((b) =>
-      b.delete(new vscode.Range(new vscode.Position(3, 0), new vscode.Position(4, 0))),
-    );
+    await editThenRestore(editor, 3, "        // x\n", BUBBLE_RENDER_SETTLE_MS);
   });
 });

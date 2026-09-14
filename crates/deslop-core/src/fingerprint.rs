@@ -9,7 +9,7 @@ use blake3::Hasher;
 
 use crate::{
     ast::{ByteRange, NormalizedNode},
-    boilerplate::is_boilerplate,
+    boilerplate::{is_boilerplate, is_mandated_prologue},
     lang::shared::{FILE_KIND, LITERAL_KIND},
     state::FileId,
 };
@@ -28,19 +28,32 @@ pub struct Fingerprint {
 }
 
 /// Returns fingerprints for every subtree in `root` whose size is
-/// `>= min_nodes`. The root itself is included when it meets the threshold.
+/// `>= min_nodes`. The root itself is included when it meets the threshold
+/// and is not denied a view by [`is_viewless_root`]; with no language, only
+/// the only-child rule can deny it.
 #[must_use]
 pub fn collect_fingerprints(root: &NormalizedNode, min_nodes: usize) -> Vec<Fingerprint> {
     let mut out = Vec::new();
+    visit_fingerprints(root, min_nodes, |_, fingerprint| out.push(fingerprint));
+    out
+}
+
+/// Visits each emitted fingerprint beside the exact node it describes.
+/// Byte ranges can be shared by a grammar wrapper and its child, so
+/// [FUSED-SHARED-SUBTREE-CORE] must retain node identity during indexing.
+pub(crate) fn visit_fingerprints(
+    root: &NormalizedNode,
+    min_nodes: usize,
+    mut visit: impl FnMut(&NormalizedNode, Fingerprint),
+) {
     let _ = hash_and_collect(
         root,
         min_nodes,
-        &mut out,
+        &mut visit,
         None,
         false,
         &mut HashScratch::default(),
     );
-    out
 }
 
 /// Returns fingerprints for non-boilerplate subtrees only.
@@ -54,7 +67,7 @@ pub fn collect_non_boilerplate_fingerprints(
     let _ = hash_and_collect(
         root,
         min_nodes,
-        &mut out,
+        &mut |_, fingerprint| out.push(fingerprint),
         Some(language),
         false,
         &mut HashScratch::default(),
@@ -62,39 +75,31 @@ pub fn collect_non_boilerplate_fingerprints(
     out
 }
 
-/// Hashes `node` bottom-up, pushing a [`Fingerprint`] into `out` whenever a
+/// Hashes `node` bottom-up, visiting a [`Fingerprint`] whenever a
 /// subtree meets the minimum node count. Returns `(hash, subtree_node_count)`
 /// for the caller to incorporate into its own hash.
 ///
 /// `scratch` supplies the frame stack and hash arena; a caller invoking this
 /// repeatedly over one tree ([`subtree_hash`]) reuses their capacity so the
 /// walk allocates only on its first call.
+/// The root hash is returned by value; its arena entry is then removed
+/// to restore the caller's scratch baseline.
 fn hash_and_collect<'tree>(
     node: &'tree NormalizedNode,
     min_nodes: usize,
-    out: &mut Vec<Fingerprint>,
+    visit: &mut impl FnMut(&NormalizedNode, Fingerprint),
     language: Option<&str>,
     inside_boilerplate: bool,
     scratch: &mut HashScratch<'tree>,
 ) -> ([u8; 32], usize) {
     let mut root_result = ([0_u8; 32], 0_usize);
-    let base = scratch.hashes.len();
-    scratch
-        .frames
-        .push(Frame::new(node, language, inside_boilerplate, base));
+    scratch.descend(node, language, inside_boilerplate);
     while let Some(step) = next_step(&mut scratch.frames) {
         match step {
-            Step::Descend(child, inherited) => {
-                let base = scratch.hashes.len();
-                scratch
-                    .frames
-                    .push(Frame::new(child, language, inherited, base));
-            }
-            Step::Finish => finish_top(scratch, min_nodes, out, &mut root_result),
+            Step::Descend(child, inherited) => scratch.descend(child, language, inherited),
+            Step::Finish => finish_top(scratch, min_nodes, visit, &mut root_result),
         }
     }
-    // The root's hash is returned by value; popping its arena entry restores
-    // `scratch` to its caller's baseline for the next reuse.
     let _root_hash = scratch.hashes.pop();
     root_result
 }
@@ -104,13 +109,13 @@ fn hash_and_collect<'tree>(
 fn finish_top(
     scratch: &mut HashScratch<'_>,
     min_nodes: usize,
-    out: &mut Vec<Fingerprint>,
+    visit: &mut impl FnMut(&NormalizedNode, Fingerprint),
     root_result: &mut ([u8; 32], usize),
 ) {
     let Some(frame) = scratch.frames.pop() else {
         return;
     };
-    let (hash, count) = frame.finish(min_nodes, out, &mut scratch.hashes);
+    let (hash, count) = frame.finish(min_nodes, visit, &mut scratch.hashes);
     match scratch.frames.last_mut() {
         Some(parent) => parent.absorb(count),
         None => *root_result = (hash, count),
@@ -131,6 +136,14 @@ pub(crate) struct HashScratch<'tree> {
     /// Finished child hashes; each open frame's children occupy the
     /// contiguous run starting at its [`Frame::hash_base`].
     hashes: Vec<[u8; 32]>,
+}
+
+impl<'tree> HashScratch<'tree> {
+    /// Opens a node at the current end of the shared child-hash arena.
+    fn descend(&mut self, node: &'tree NormalizedNode, language: Option<&str>, inherited: bool) {
+        self.frames
+            .push(Frame::new(node, language, inherited, self.hashes.len()));
+    }
 }
 
 /// One node's in-progress state on [`hash_and_collect`]'s explicit stack.
@@ -161,6 +174,8 @@ struct Frame<'tree> {
     node_count: usize,
     /// Whether this node or an ancestor is boilerplate.
     boilerplate: bool,
+    /// A node denied its own view while its hash still contributes to its parent.
+    viewless: bool,
 }
 
 /// What the walk does next with the frame on top of the stack.
@@ -188,6 +203,7 @@ impl<'tree> Frame<'tree> {
             boilerplate: inherited
                 || is_boilerplate(language, node)
                 || is_literal_data_subtree(node),
+            viewless: is_viewless_root(language, node) || is_type_reference(language, node),
         }
     }
 
@@ -197,24 +213,28 @@ impl<'tree> Frame<'tree> {
         self.node_count = self.node_count.saturating_add(count);
     }
 
+    /// The finished node's fingerprint, retaining its extent and mass.
+    fn fingerprint(&self, hash: [u8; 32]) -> Fingerprint {
+        Fingerprint {
+            hash,
+            file_id: self.node.file_id,
+            byte_range: self.node.byte_range,
+            node_count: self.node_count,
+        }
+    }
+
     /// Closes the frame: digests the node over its children's arena hashes,
     /// emits a [`Fingerprint`] when the subtree qualifies, then replaces the
     /// children's arena run with this node's own hash.
     fn finish(
         self,
         min_nodes: usize,
-        out: &mut Vec<Fingerprint>,
+        visit: &mut impl FnMut(&NormalizedNode, Fingerprint),
         hashes: &mut Vec<[u8; 32]>,
     ) -> ([u8; 32], usize) {
         let hash = digest_node(self.node, hashes.get(self.hash_base..).unwrap_or(&[]));
-        if self.node_count >= min_nodes && !self.boilerplate && !re_describes_only_child(self.node)
-        {
-            out.push(Fingerprint {
-                hash,
-                file_id: self.node.file_id,
-                byte_range: self.node.byte_range,
-                node_count: self.node_count,
-            });
+        if self.node_count >= min_nodes && !self.boilerplate && !self.viewless {
+            visit(self.node, self.fingerprint(hash));
         }
         hashes.truncate(self.hash_base);
         hashes.push(hash);
@@ -259,29 +279,89 @@ pub(crate) fn subtree_hash<'tree>(
     scratch: &mut HashScratch<'tree>,
 ) -> [u8; 32] {
     let mut discarded = Vec::new();
-    let (hash, _count) = hash_and_collect(node, usize::MAX, &mut discarded, None, true, scratch);
+    let (hash, _count) = hash_and_collect(
+        node,
+        usize::MAX,
+        &mut |_, fingerprint| discarded.push(fingerprint),
+        None,
+        true,
+        scratch,
+    );
     hash
 }
 
-/// True when the synthetic `__file__` root adds nothing to its only child.
+/// True when the synthetic `__file__` root is denied a view of its own
+/// ([PIPELINE-FINGERPRINT-MERKLE-ROOT]). It is still hashed — its
+/// children's hashes fold into it — but no fingerprint is emitted for it.
 ///
-/// [PIPELINE-NORMALIZE-AST] gives the root the extent of the nodes
-/// normalisation kept, so a file holding a single declaration yields a root
-/// whose byte range — and therefore whose source text — is identical to that
-/// declaration's. Fingerprinting both reports one region twice: it
-/// double-counts in `clusters_total` and the duplication metric, and because
-/// the two spans carry byte-identical text the embedding pass scores them a
-/// perfect match *inside a single file*, seeding clusters through transitive
-/// closure that describe no duplication at all.
+/// The root is a view by default: a module copied whole, import line and
+/// all, is one duplication at the extent of the file, and the Python and
+/// JavaScript suites pin it there (`python_inherited_contract_boundary`,
+/// `js_ts_extensions`, `verbatim_subgroup_survives_noise`,
+/// `js_ts_false_positive_filters`). Two cases deny it a view:
 ///
-/// Only the synthetic root is suppressed, and only when a single child covers
-/// it exactly. That child is always fingerprinted in its place, and any
-/// cluster the root could have joined the child joins on the same bytes, so
-/// no finding is lost. Pinned by `deslop::issue_343_sum_clamp_saturation`.
-fn re_describes_only_child(node: &NormalizedNode) -> bool {
+/// - It re-describes its only child ([`re_describes_only_child`]).
+///   [PIPELINE-NORMALIZE-AST] gives the root the extent of the nodes
+///   normalisation kept, so a file holding a single declaration yields a
+///   root whose byte range — and therefore whose source text — is
+///   identical to that declaration's. Fingerprinting both reports one
+///   region twice: it double-counts in `clusters_total` and the
+///   duplication metric, and because the two spans carry byte-identical
+///   text the embedding pass scores them a perfect match *inside a single
+///   file*, seeding clusters through transitive closure that describe no
+///   duplication at all. Pinned by `deslop::issue_343_sum_clamp_saturation`.
+/// - The file carries the prologue its language mandates
+///   ([`opens_with_mandated_prologue`]). Go's `package` clause is dictated
+///   by the directory the file lives in, not chosen and copied by an
+///   author, so a whole-file view claims it as duplication — and being the
+///   widest range in its file it would win the same-file collapse of
+///   [PIPELINE-CLUSTER-EXACT-SCOPE] over the declaration actually copied:
+///   `alpha.go:1-13` against `beta.go:1-13`, `package` clause included,
+///   and `json_report.go:1-55` against a two-function run of its
+///   counterpart. The root's children and the sibling pass carry the copy
+///   instead. Pinned by the Go scope contract every Go suite calls
+///   (`deslop::common::go_scope`) and `cluster_extent_alignment`.
+fn is_viewless_root(language: Option<&str>, node: &NormalizedNode) -> bool {
     node.kind == FILE_KIND
-        && matches!(node.children.as_slice(), [only] if only.byte_range == node.byte_range)
+        && (re_describes_only_child(node) || opens_with_mandated_prologue(language, node))
 }
+
+/// [PIPELINE-FINGERPRINT-MERKLE-TYPE-REFERENCE] A Rust type reference has no
+/// copied implementation of its own. Keep its full hash and count in the
+/// enclosing declaration or expression, without reporting the annotation alone.
+fn is_type_reference(language: Option<&str>, node: &NormalizedNode) -> bool {
+    language == Some("rust")
+        && matches!(
+            node.kind,
+            "generic_type"
+                | "type_arguments"
+                | "reference_type"
+                | "pointer_type"
+                | "array_type"
+                | "tuple_type"
+                | "function_type"
+                | "scoped_type_identifier"
+        )
+}
+
+/// True when a single child covers the root's whole extent, so the root
+/// adds nothing to it.
+fn re_describes_only_child(node: &NormalizedNode) -> bool {
+    matches!(node.children.as_slice(), [only] if only.byte_range == node.byte_range)
+}
+
+/// True when a top-level child of the root is the clause the language
+/// requires every file to open with ([`is_mandated_prologue`]).
+fn opens_with_mandated_prologue(language: Option<&str>, node: &NormalizedNode) -> bool {
+    language.is_some_and(|lang| {
+        node.children
+            .iter()
+            .any(|child| is_mandated_prologue(lang, child.kind))
+    })
+}
+
+#[cfg(test)]
+mod tests;
 
 /// Half-open overlap test on two fingerprints' byte ranges.
 pub(crate) fn ranges_overlap(left: &Fingerprint, right: &Fingerprint) -> bool {

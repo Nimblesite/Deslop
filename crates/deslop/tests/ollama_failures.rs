@@ -9,9 +9,7 @@ use serde_json::Value;
 
 use crate::common::*;
 
-#[path = "cli/mock_ollama.rs"]
-mod mock_ollama;
-use mock_ollama::{MockBehavior, MockOllama};
+use crate::mock_ollama::{MockBehavior, MockOllama};
 
 #[test]
 fn mock_provider_rejected_subtrees_are_reported() -> Result<()> {
@@ -39,7 +37,7 @@ fn mock_provider_rejected_subtrees_are_reported() -> Result<()> {
     Ok(())
 }
 
-// [FUSION-EMBED-PROVIDER] A context-length rejection on an aggregate Ollama
+// [FUSED-EMBED-PROVIDER] A context-length rejection on an aggregate Ollama
 // batch must bisect and retry rather than marking all subtrees as failed.
 #[test]
 fn ollama_context_rejection_retries_small_subtrees_individually() -> Result<()> {
@@ -67,9 +65,7 @@ fn ollama_context_rejection_retries_small_subtrees_individually() -> Result<()> 
 /// Ollama embeddings against `endpoint`, asserts success, and returns the
 /// report's `embedding_provenance` object.
 fn run_with_ollama(endpoint: &str) -> Result<Value> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
+    let (tmp, scan_root) = seeded_fixture_root("csharp-small")?;
     let mut cmd = deslop_cmd(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
         .args([
@@ -87,17 +83,6 @@ fn run_with_ollama(endpoint: &str) -> Result<Value> {
         .assert()
         .success();
     embedding_provenance(tmp.path())
-}
-
-fn seed_scan_root(src: &Path, dst: &Path) -> Result<()> {
-    fs::create_dir_all(dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        if entry.file_type()?.is_file() {
-            let _bytes = fs::copy(entry.path(), dst.join(entry.file_name()))?;
-        }
-    }
-    Ok(())
 }
 
 fn embedding_provenance(tmp: &Path) -> Result<Value> {

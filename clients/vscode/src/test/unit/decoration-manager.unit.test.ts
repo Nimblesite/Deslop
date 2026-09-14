@@ -10,7 +10,6 @@ import { ReportStore } from "../../reportStore";
 import { ScheduleFn } from "../../util/debounce";
 import { Report, ReportCluster } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
-import { bucketSignals } from "../signals.helpers";
 import { occurrence, wireCluster } from "../cluster.helpers";
 
 // Runs the debounced flush synchronously so each redraw path executes inline.
@@ -52,11 +51,9 @@ function capturingScheduler(): {
 function cluster(path: string): ReportCluster {
   return wireCluster({
     id: "dm-1",
-    weight: 10,
-    size: 3,
-    bucket: "identical",
-    signals: bucketSignals("identical"),
-    occurrences: [occurrence(path, 0, 3)],
+    mass: 10,
+    canonical_node_count: 3,
+        occurrences: [occurrence(path, 0, 3)],
   });
 }
 

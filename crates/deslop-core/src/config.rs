@@ -169,7 +169,7 @@ impl ExclusionConfig {
         })?;
         let raw: RawConfig = toml::from_str(&source).map_err(|err| CoreError::ConfigParse {
             path: path.to_path_buf(),
-            source: err,
+            source: Box::new(err),
         })?;
         Self::compile(path, scan_root, &raw)
     }
@@ -409,14 +409,14 @@ fn build_matcher(
             return Err(CoreError::ConfigPattern {
                 path: source.to_path_buf(),
                 pattern: pattern.clone(),
-                source: err,
+                source: Box::new(err),
             });
         }
     }
     builder.build().map_err(|err| CoreError::ConfigPattern {
         path: source.to_path_buf(),
         pattern: String::new(),
-        source: err,
+        source: Box::new(err),
     })
 }
 

@@ -22,10 +22,13 @@ tracing-subscriber.workspace = true
 
 [dev-dependencies]
 assert_cmd.workspace = true
-deslop-core = { path = "../deslop-core", features = ["test-support"] }
+deslop-core = { path = "../deslop-core", features = ["live", "test-support"] }
 deslop-test-support = { path = "../deslop-test-support" }
 predicates.workspace = true
 tempfile.workspace = true
+tree-sitter.workspace = true
+tree-sitter-rust.workspace = true
+tree-sitter-typescript.workspace = true
 
 [lints]
 workspace = true
@@ -33,3 +36,12 @@ workspace = true
 [[test]]
 name = "suite"
 path = "tests/suite.rs"
+
+# [CORPUS-PIN] [TEST-SELECTION] `corpus_repos` stays its own test target for
+# the same reason `tcp_transport` does in deslop-mcp: `make test-corpus` and
+# `make test-corpus-ci` select it by target name, and every test in it is
+# `#[ignore]`d, so `-- --ignored` against the whole `suite` would drag in
+# every other ignored test in the crate.
+[[test]]
+name = "corpus_repos"
+path = "tests/corpus_repos.rs"

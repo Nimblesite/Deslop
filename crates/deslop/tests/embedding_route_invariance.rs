@@ -1,5 +1,5 @@
-//! The blast-radius pins for `[REPAIR-COSINE-MERGE]` /
-//! [FUSION-CLUSTER-SIGNALS]: restoring a pair's measured cosine must not
+//! The blast-radius pins for `[FUSED-PAIR-SIGNALS]` /
+//! [FUSED-PAIR-SIGNALS]: restoring a pair's measured cosine must not
 //! cost a finding.
 //!
 //! A measured cosine belongs to the pair, not to the pass that surfaced
@@ -22,18 +22,14 @@
 //! bucket. A single hand-built cluster could only pin one corner of
 //! that; this pins every cluster of every corpus swept.
 
-#[path = "cli/mock_ollama.rs"]
-mod mock_ollama;
-
-
 use std::collections::BTreeMap;
 
+use crate::mock_ollama::MockOllama;
 use anyhow::{Context, Result};
-use mock_ollama::MockOllama;
 
 use crate::common::{
-    cluster_bucket, cluster_file_set, clusters, embeddings::run_mock_embedding_report, field,
-    fixture, run_report, seed,
+    cluster_file_set, cluster_id, clusters, embeddings::mock_embedding_run, field, fixture,
+    run_report, signals::assert_no_pair_surface_on_cluster,
 };
 
 /// Corpora swept, with the node floor each is sized for. C# leads
@@ -54,14 +50,10 @@ const CORPORA: [(&str, &str); 3] = [
 type Published = BTreeMap<Vec<String>, Vec<String>>;
 
 /// Runs the corpus with embeddings served by the deterministic mock and
-/// returns its published clusters.
-fn with_embeddings(corpus: &str, min_nodes: &str) -> Result<Published> {
+/// returns its full report.
+fn with_embeddings(corpus: &str, min_nodes: &str) -> Result<serde_json::Value> {
     let server = MockOllama::spawn()?;
-    let workspace = tempfile::tempdir()?;
-    seed(&fixture(corpus), workspace.path())?;
-    let output = workspace.path().join("report");
-    let report =
-        run_mock_embedding_report(workspace.path(), &output, min_nodes, server.endpoint())?;
+    let (_workspace, report) = mock_embedding_run(&server, corpus, min_nodes)?;
     let provenance = field(&report, "embedding_provenance");
     let indexed = field(provenance, "indexed_subtrees")
         .as_u64()
@@ -71,50 +63,42 @@ fn with_embeddings(corpus: &str, min_nodes: &str) -> Result<Published> {
         "{corpus} never indexed a vector, so this run proves nothing about \
          the cosine consumers: {report:#}"
     );
-    Ok(published(&report))
+    Ok(report)
 }
 
 /// The same corpus with the embedding pass off.
-fn without_embeddings(corpus: &str, min_nodes: &str) -> Result<Published> {
+fn without_embeddings(corpus: &str, min_nodes: &str) -> Result<serde_json::Value> {
     let floor = min_nodes.parse().context("node floor")?;
-    Ok(published(&run_report(&fixture(corpus), floor)?))
+    run_report(&fixture(corpus), floor)
 }
 
 fn published(report: &serde_json::Value) -> Published {
     let mut out = Published::new();
     for cluster in clusters(report) {
         let files: Vec<String> = cluster_file_set(cluster).into_iter().collect();
-        let buckets = out.entry(files).or_default();
-        buckets.push(cluster_bucket(cluster).to_owned());
-        buckets.sort();
+        let ids = out.entry(files).or_default();
+        ids.push(cluster_id(cluster).to_owned());
+        ids.sort();
     }
     out
 }
 
-/// [FUSION-CLUSTER-SIGNALS] Restored cosines may add findings. They may
+/// [FUSED-PAIR-SIGNALS] Restored cosines may add findings. They may
 /// never remove one: every file set the embeddings-off run reported as
 /// duplicated must still be reported when the same pairs arrive
 /// carrying their measured cosine — through the mega-cluster hide, the
 /// C# Type-3 near-miss carve-out, and every other cosine-reading
 /// filter.
 #[test]
-#[ignore = "GH #356: ollama-provider suite, excluded from the release gate. RED ON PURPOSE — \
-            the surviving half of #356, and a measured false negative, not a flake. \
-            `ts-mixed-band`: ledger_a/ledger_b are one Merkle class (fingerprints 93+277, \
-            `structural = 1.00`) and publish `structural_only` with embeddings off. With \
-            them on the ANN pass adds nine cosine-0.98 whole-file-root edges that chain all \
-            five ledgers into ONE 11-member component; the mean over its rendered pairs is \
-            `structural = 0.60, token_jaccard = 0.76, cos = 0.57`, which routes \
-            `loosely_similar`, which `report::cluster_is_hidden` drops. The proven pair is \
-            destroyed by a mean that describes none of its members — Merkle equality is \
-            bimodal (1.0 or 0.0), so 0.60 is 6 proven pairs plus 4 unproven ones, not a \
-            weak match. Fixing it means transitive closure must stop dissolving a proven \
-            equivalence class into a weaker component, which moves assertions across the \
-            suite and is not this change. Assertions are intact — run with `-- --ignored`."]
+#[ignore = "[SKIP-UNFINISHED] GH #491 [FUSED-PAIR-SIGNALS] docs/plans/embedding-accuracy-plan.md — \
+            with embeddings on, cosine-carried pairs skip the shared-subtree echo test and weld the \
+            byte-identical ledger_d/ledger_e pair into the ts-mixed-band near-miss family that \
+            embeddings off keeps; embedding routes are a 0.33.0 non-goal. Assertions are intact — \
+            run with `-- --ignored`."]
 fn embeddings_on_reports_every_file_set_embeddings_off_reported() -> Result<()> {
     for (corpus, min_nodes) in CORPORA {
-        let cold = without_embeddings(corpus, min_nodes)?;
-        let warm = with_embeddings(corpus, min_nodes)?;
+        let cold = published(&without_embeddings(corpus, min_nodes)?);
+        let warm = published(&with_embeddings(corpus, min_nodes)?);
         assert!(
             !cold.is_empty(),
             "{corpus} publishes nothing with embeddings off, so the comparison \
@@ -132,27 +116,32 @@ fn embeddings_on_reports_every_file_set_embeddings_off_reported() -> Result<()> 
     Ok(())
 }
 
-/// [CLONE-BUCKETS] How similar two copies are is a property of the
-/// copies, not of the pass that surfaced them. A structurally proven
-/// duplicate (`structural = 1.0`) must not be re-labelled by the
-/// arrival of a cosine: `same_behavior` claims semantic-only evidence
-/// and reads as strictly weaker than the byte-level proof the cold run
-/// already had.
+/// [FUSED-PAIR-SIGNALS] Embedding discovery belongs to the run and the
+/// exact pair, never to a cluster. It may change which pair-derived view
+/// is selected for a file set, so a cluster id is not an evidence verdict.
+/// The report-level provenance is the only public indication that the
+/// embedding route ran; every cluster remains mass-only in both modes.
 #[test]
-fn embeddings_on_never_moves_a_reported_bucket() -> Result<()> {
+fn embeddings_on_keeps_provenance_off_every_cluster() -> Result<()> {
     for (corpus, min_nodes) in CORPORA {
         let cold = without_embeddings(corpus, min_nodes)?;
         let warm = with_embeddings(corpus, min_nodes)?;
-        for (files, cold_buckets) in &cold {
-            let Some(warm_buckets) = warm.get(files) else {
-                continue;
-            };
-            assert_eq!(
-                warm_buckets, cold_buckets,
-                "{corpus}: {files:?} was published as {cold_buckets:?} with \
-                 embeddings off and {warm_buckets:?} with them on — the bucket \
-                 followed the discovery route, not the code"
-            );
+        assert!(
+            field(&cold, "embedding_provenance").is_null(),
+            "{corpus}: an embedding-off run must not claim embedding provenance: {cold:#}"
+        );
+        assert!(
+            field(&warm, "embedding_provenance").is_object(),
+            "{corpus}: an embedding-on run must declare its report-level provenance: {warm:#}"
+        );
+        for report in [&cold, &warm] {
+            for cluster in clusters(report) {
+                assert_no_pair_surface_on_cluster(cluster, corpus);
+                assert!(
+                    cluster.get("embedding_provenance").is_none(),
+                    "{corpus}: embedding provenance is report-level, never cluster data: {cluster:#}"
+                );
+            }
         }
     }
     Ok(())

@@ -6,12 +6,7 @@
 // sleeps.
 
 import * as assert from "node:assert/strict";
-import {
-  bubbleFixture,
-  deferredProbeClient,
-  editAt,
-  resolveProbe,
-} from "./bubble.helpers";
+import { FIXTURE_KIND_TITLE, deferredProbeClient, editAt, resolveProbe, withBubble } from "./bubble.helpers";
 import { BudgetScheduler } from "../../bubble/live";
 
 /** Captures scheduled budget deadlines so tests fire them on demand. */
@@ -38,8 +33,7 @@ suite("LiveBubble probe budget deadline", () => {
   test("a success arriving after the deadline renders nothing, even when cancellation is ignored", async () => {
     const { client, requests } = deferredProbeClient();
     const { scheduler, deadlines } = manualBudget();
-    const { capture, bubble } = await bubbleFixture({ generation: 1, client, budget: scheduler });
-    try {
+    await withBubble({ generation: 1, client, budget: scheduler }, async ({ capture, bubble }) => {
       const probe = bubble.probe(capture.editor, editAt(0, "aaaa"));
       assert.equal(requests.length, 1, "the probe must dispatch a findSimilar request");
       assert.equal(deadlines.length, 1, "the probe must arm its budget deadline");
@@ -53,21 +47,19 @@ suite("LiveBubble probe budget deadline", () => {
         undefined,
         "a late success must not render — the edit cycle is skipped outright",
       );
-    } finally {
-      bubble.dispose();
-    }
+    
+    });
   });
 
   test("a failure arriving after the deadline leaves the previously rendered bubble intact", async () => {
     const { client, requests } = deferredProbeClient();
     const { scheduler, deadlines } = manualBudget();
-    const { capture, bubble } = await bubbleFixture({ generation: 1, client, budget: scheduler });
-    try {
+    await withBubble({ generation: 1, client, budget: scheduler }, async ({ capture, bubble }) => {
       const probeA = bubble.probe(capture.editor, editAt(0, "aaaa"));
       await resolveProbe(requests[0], probeA);
       const rendered = capture.visible();
       assert.ok(rendered !== undefined, "the in-budget probe must render its bubble");
-      assert.match(rendered ?? "", /Identical code/, "the bubble carries the bucket title");
+      assert.match(rendered ?? "", new RegExp(FIXTURE_KIND_TITLE), "the bubble carries the clone kind verdict");
 
       const probeB = bubble.probe(capture.editor, editAt(6, "bbbb"));
       deadlines[1]?.expire();
@@ -78,21 +70,19 @@ suite("LiveBubble probe budget deadline", () => {
         rendered,
         "an expired probe's failure must not clear the earlier bubble",
       );
-    } finally {
-      bubble.dispose();
-    }
+    
+    });
   });
 
   test("a response inside the budget renders and disposes its deadline", async () => {
     const { client, requests } = deferredProbeClient();
     const { scheduler, deadlines } = manualBudget();
-    const { capture, bubble } = await bubbleFixture({ generation: 1, client, budget: scheduler });
-    try {
+    await withBubble({ generation: 1, client, budget: scheduler }, async ({ capture, bubble }) => {
       const probe = bubble.probe(capture.editor, editAt(0, "aaaa"));
       await resolveProbe(requests[0], probe);
       assert.match(
         capture.visible() ?? "",
-        /Identical code/,
+        new RegExp(FIXTURE_KIND_TITLE),
         "an in-budget response renders normally",
       );
       assert.equal(
@@ -100,8 +90,7 @@ suite("LiveBubble probe budget deadline", () => {
         true,
         "a settled probe must disarm its budget deadline",
       );
-    } finally {
-      bubble.dispose();
-    }
+    
+    });
   });
 });

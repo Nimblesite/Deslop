@@ -9,7 +9,6 @@ import {
   findClusterContaining,
 } from "../../commands/register";
 import { ReportCluster } from "../../types/report";
-import { bucketSignals } from "../signals.helpers";
 import { occurrence, wireCluster } from "../cluster.helpers";
 
 async function mkDoc(content: string): Promise<vscode.TextDocument> {
@@ -19,12 +18,9 @@ async function mkDoc(content: string): Promise<vscode.TextDocument> {
 function cluster(path: string, start: number, end: number): ReportCluster {
   return wireCluster({
     id: `${path}:${start}:${end}`,
-    weight: 1,
-    size: 1,
-    canonical_node_count: 0,
-    bucket: "identical",
-    signals: bucketSignals("identical"),
-    occurrences: [occurrence(path, start, end)],
+    mass: 1,
+        canonical_node_count: 1,
+        occurrences: [occurrence(path, start, end)],
   });
 }
 

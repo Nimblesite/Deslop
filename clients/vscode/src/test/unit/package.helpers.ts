@@ -21,6 +21,13 @@ export interface MenuContribution {
   group?: string;
 }
 
+/** A `contributes.colors` entry. */
+export interface ColorContribution {
+  id: string;
+  description: string;
+  defaults: Record<string, string>;
+}
+
 /** A `contributes.configuration.properties` entry. */
 export interface ConfigurationProperty {
   default?: unknown;
@@ -36,6 +43,7 @@ export interface PackageContribution {
   keywords: string[];
   activationEvents: string[];
   contributes: {
+    colors: ColorContribution[];
     commands: CommandContribution[];
     menus: Record<string, MenuContribution[]>;
     configuration: {

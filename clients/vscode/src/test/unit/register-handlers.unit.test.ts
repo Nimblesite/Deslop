@@ -6,7 +6,8 @@
 import * as assert from "node:assert/strict";
 import * as path from "node:path";
 import * as vscode from "vscode";
-import type { LanguageClient } from "vscode-languageclient/node";
+
+import { recordingClient, respondingClient } from "./client.helpers";
 import {
   copyClusterContextById,
   openClusterDetails,
@@ -19,7 +20,6 @@ import { ClusterNode, OccurrenceNode } from "../../tree/providers";
 import { ReportStore } from "../../reportStore";
 import { Report, ReportCluster } from "../../types/report";
 import { emptyReport, repoMetrics } from "./report.helpers";
-import { bucketSignals } from "../signals.helpers";
 import { occurrence, wireCluster } from "../cluster.helpers";
 
 function fakeCtx(): vscode.ExtensionContext {
@@ -33,11 +33,9 @@ function fakeCtx(): vscode.ExtensionContext {
 function cluster(id: string): ReportCluster {
   return wireCluster({
     id,
-    weight: 7,
+    mass: 7,
     canonical_node_count: 3,
-    bucket: "identical",
-    signals: bucketSignals("identical"),
-    occurrences: [occurrence("/a.cs", 0, 10), occurrence("/b.cs", 0, 10)],
+        occurrences: [occurrence("/a.cs", 0, 10), occurrence("/b.cs", 0, 10)],
   });
 }
 
@@ -87,13 +85,7 @@ suite("register command handlers", () => {
   });
 
   test("refreshReport forwards the LSP refresh command when a client is live", () => {
-    const calls: Array<{ method: string; params: unknown }> = [];
-    const client = {
-      sendRequest: (method: string, params: unknown) => {
-        calls.push({ method, params });
-        return Promise.resolve(null);
-      },
-    } as unknown as LanguageClient;
+    const { calls, client } = recordingClient(() => null);
 
     refreshReport(() => client);
     assert.deepEqual(calls, [
@@ -109,13 +101,7 @@ suite("register command handlers", () => {
   });
 
   test("openHtmlReport renders via the LSP and shows the report tab", async () => {
-    const calls: Array<{ method: string; params: unknown }> = [];
-    const client = {
-      sendRequest: (method: string, params: unknown) => {
-        calls.push({ method, params });
-        return Promise.resolve("<!doctype html><html><body>report</body></html>");
-      },
-    } as unknown as LanguageClient;
+    const { calls, client } = recordingClient(() => "<!doctype html><html><body>report</body></html>");
 
     await openHtmlReport(() => client);
     assert.deepEqual(calls, [
@@ -148,18 +134,14 @@ suite("register command handlers", () => {
 
   test("openHtmlReport opens no tab when the report is empty", async () => {
     const before = reportTabCount();
-    const client = {
-      sendRequest: () => Promise.resolve(""),
-    } as unknown as LanguageClient;
+    const client = respondingClient(() => "");
     await openHtmlReport(() => client);
     assert.equal(reportTabCount(), before, "empty report → no report tab is opened");
   });
 
   test("openHtmlReport opens no tab when the LSP returns a non-string", async () => {
     const before = reportTabCount();
-    const client = {
-      sendRequest: () => Promise.resolve(null as unknown as string),
-    } as unknown as LanguageClient;
+    const client = respondingClient(() => null);
     await openHtmlReport(() => client);
     assert.equal(reportTabCount(), before, "non-string response → no report tab is opened");
   });
@@ -187,9 +169,7 @@ suite("register command handlers", () => {
       return task(progress, token);
     };
 
-    const client = {
-      sendRequest: () => Promise.resolve("<!doctype html><html><body>report</body></html>"),
-    } as unknown as LanguageClient;
+    const client = respondingClient(() => "<!doctype html><html><body>report</body></html>");
 
     try {
       await openHtmlReport(() => client);
@@ -241,7 +221,7 @@ suite("register command handlers", () => {
     openClusterDetails(
       fakeCtx(),
       store,
-      new OccurrenceNode({ path: "/orphan.cs", start_byte: 0, end_byte: 4, hidden: false }),
+      new OccurrenceNode({path: "/orphan.cs", start_byte: 0, end_byte: 4, hidden: false, start_line: 1, end_line: 2}),
     );
     const tabsAfter = vscode.window.tabGroups.all.flatMap((g) => g.tabs).length;
     assert.equal(tabsAfter, tabsBefore, "an unresolved row must not spawn a cluster panel");
@@ -250,7 +230,7 @@ suite("register command handlers", () => {
   test("openClusterDetails opens the cluster panel for a resolvable node", () => {
     const store = storeWith([cluster("details-target")]);
     const tabsBefore = vscode.window.tabGroups.all.flatMap((g) => g.tabs).length;
-    openClusterDetails(fakeCtx(), store, new ClusterNode(cluster("details-target"), "mid"));
+    openClusterDetails(fakeCtx(), store, new ClusterNode(cluster("details-target")));
     const tabsAfter = vscode.window.tabGroups.all.flatMap((g) => g.tabs).length;
     assert.ok(tabsAfter >= tabsBefore, "a resolvable node opens (or reveals) the cluster panel");
   });

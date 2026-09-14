@@ -1,4 +1,4 @@
-//! Production embedding-provider registry ([FUSION-EMBED-PROVIDER]).
+//! Production embedding-provider registry ([FUSED-EMBED-PROVIDER]).
 //!
 //! Maps `provider_id` strings to a small factory function that builds
 //! a concrete [`EmbeddingProvider`] from a `(model_id, endpoint?)`

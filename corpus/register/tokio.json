@@ -1,0 +1,1209 @@
+{
+  "name": "tokio",
+  "language": "rust",
+  "url": "https://github.com/tokio-rs/tokio.git",
+  "sha": "e3b89bbefa7564e2eba2fb9f849ef7bf87d60fad",
+  "protocol": {
+    "spec": "docs/specs/corpus.md",
+    "spec_section": "[CORPUS-REGISTER]",
+    "judging_skill": ".agents/skills/judge-clone-pairs/SKILL.md",
+    "preparer_skill": ".agents/skills/clone-register-prepare/SKILL.md"
+  },
+  "clearly_in": [
+    {
+      "why": "A twenty-eight line dump-assertion block appears verbatim twice in tests/dump.rs.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 28 lines.",
+      "occurrences": [
+        "tokio/tests/dump.rs:35-62",
+        "tokio/tests/dump.rs:73-100"
+      ]
+    },
+    {
+      "why": "Sixteen lines of socket-pair setup appear verbatim twice in tests/tcp_stream.rs.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 16 lines.",
+      "occurrences": [
+        "tokio/tests/tcp_stream.rs:38-53",
+        "tokio/tests/tcp_stream.rs:297-312"
+      ]
+    },
+    {
+      "why": "tokio/src/runtime/time_alt/wheel/level.rs and time/wheel/level.rs carry the same Debug impl, the same four helpers and the same test module, word for word.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 43 lines.",
+      "occurrences": [
+        "tokio/src/runtime/time_alt/wheel/level.rs:152-194",
+        "tokio/src/runtime/time/wheel/level.rs:150-192"
+      ]
+    },
+    {
+      "why": "The timer wheel in tokio/src/runtime/time and the one in tokio-util/src/time are the same code in two crates; these windows are verbatim in both.",
+      "verified": "Diffed both ranges out of source/: byte-identical (candidate 60) or 3 of 33 lines differing (candidate 140).",
+      "occurrences": [
+        "tokio/src/runtime/time/wheel/mod.rs:292-331",
+        "tokio-util/src/time/wheel/mod.rs:278-317"
+      ]
+    },
+    {
+      "why": "Four assert_*_by_polling! macros are written out in full in both tests/tcp_stream.rs and tests/uds_stream.rs.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 33 lines.",
+      "occurrences": [
+        "tokio/tests/tcp_stream.rs:181-213",
+        "tokio/tests/uds_stream.rs:209-241"
+      ]
+    },
+    {
+      "why": "The same twenty-one line deprecation and cfg attribute stack - including the identical note string - sits above two methods in net/tcp/socket.rs.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 21 lines.",
+      "occurrences": [
+        "tokio/src/net/tcp/socket.rs:655-675",
+        "tokio/src/net/tcp/socket.rs:595-615"
+      ]
+    },
+    {
+      "why": "examples/connect-udp.rs and connect-tcp.rs open with the same seventeen lines of argument parsing and setup.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 17 lines.",
+      "occurrences": [
+        "examples/connect-udp.rs:28-44",
+        "examples/connect-tcp.rs:28-44"
+      ]
+    },
+    {
+      "why": "Fourteen lines of file-test body appear verbatim twice in src/fs/file/tests.rs.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 14 lines.",
+      "occurrences": [
+        "tokio/src/fs/file/tests.rs:617-635",
+        "tokio/src/fs/file/tests.rs:651-669"
+      ]
+    }
+  ],
+  "clearly_out": [],
+  "not_clear": [
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio-stream/fuzz/fuzz_targets/fuzz_stream_map.rs:18-20",
+        "tokio-stream/tests/stream_stream_map.rs:331-333"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/src/net/unix/ucred.rs:120-128",
+        "tokio/src/net/unix/ucred.rs:162-170"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/src/sync/rwlock/read_guard.rs:34-79",
+        "tokio/src/sync/rwlock/write_guard.rs:38-87"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tokio/src/signal/windows.rs:143-232",
+        "tokio/src/signal/windows.rs:366-454"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tokio/tests/time_pause.rs:80-84",
+        "tokio/tests/time_sleep.rs:106-109"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio/tests/sync_mpsc.rs:326-328",
+        "tokio/tests/sync_mpsc.rs:284-286"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio/tests/io_buf_reader.rs:87-95",
+        "tokio/tests/io_buf_reader.rs:231-239"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/src/io/util/buf_reader.rs:261-289",
+        "tokio/src/io/async_write.rs:224-252"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio-util/tests/length_delimited.rs:477-491",
+        "tokio-util/tests/length_delimited.rs:453-460"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio-stream/tests/stream_stream_map.rs:203-206",
+        "tokio-stream/tests/stream_stream_map.rs:275-278"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tokio/src/runtime/task/state.rs:163-171",
+        "tokio/src/runtime/task/state.rs:122-132"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio/src/runtime/time_alt/timer.rs:87-88",
+        "tokio/src/runtime/time_alt/timer.rs:76-77"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio/src/task/coop/mod.rs:522-523",
+        "tokio/src/task/coop/mod.rs:528-529"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/src/runtime/metrics/histogram.rs:558-564",
+        "tokio/src/runtime/metrics/histogram.rs:425-431"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/tests/io_async_fd.rs:636-638",
+        "tokio/tests/io_async_fd.rs:632-634"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "examples/named-pipe.rs:19-21",
+        "tokio/tests/net_named_pipe.rs:45-47"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/tests/task_id.rs:109-115",
+        "tokio/tests/rt_basic.rs:157-163"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio-util/tests/codecs.rs:133-135",
+        "tokio-util/tests/codecs.rs:342-344"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/tests/time_alt.rs:55-57",
+        "tokio/tests/time_alt.rs:62-64"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/src/net/unix/datagram/socket.rs:1476-1529",
+        "tokio/src/net/unix/stream.rs:914-936"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio-stream/tests/stream_stream_map.rs:70-77",
+        "tokio-stream/tests/stream_stream_map.rs:106-113"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio-test/src/macros.rs:62-94",
+        "tokio-test/src/macros.rs:95-127"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tokio-util/src/cfg.rs:53-70",
+        "tokio/src/macros/cfg.rs:481-495"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/tests/rt_unstable_metrics.rs:101-115",
+        "tokio/tests/rt_metrics.rs:23-36"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio-stream/tests/stream_merge.rs:40-48",
+        "tokio-stream/tests/stream_merge.rs:49-57"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/src/io/ready.rs:158-175",
+        "tokio/src/io/ready.rs:190-207"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/src/io/split.rs:129-131",
+        "tokio/src/io/split.rs:133-135"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio-stream/tests/stream_stream_map.rs:99-110",
+        "tokio-stream/tests/stream_stream_map.rs:63-74"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio/src/io/async_write.rs:310-312",
+        "tokio/src/io/async_write.rs:400-402"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio-util/tests/mpsc.rs:203-205",
+        "tokio-util/tests/mpsc.rs:258-260"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tokio/tests/net_named_pipe.rs:32-68",
+        "examples/named-pipe.rs:4-60"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/src/sync/tests/semaphore_batch.rs:304-308",
+        "tokio/tests/sync_mpsc.rs:486-492"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio-util/tests/codecs.rs:354-360",
+        "tokio-util/tests/codecs.rs:372-378"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/tests/async_send_sync.rs:228-230",
+        "tokio/tests/async_send_sync.rs:206-208"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/src/net/tcp/socket.rs:227-255",
+        "tokio/src/net/tcp/stream.rs:1335-1358"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/tests/task_local_set.rs:33-52",
+        "tokio/tests/task_local_set.rs:329-363"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/tests/io_util_empty.rs:40-41",
+        "tokio/tests/io_util_empty.rs:45-46"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio-util/src/codec/bytes_codec.rs:68-76",
+        "tokio-util/src/codec/bytes_codec.rs:78-86"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio/src/runtime/tests/mod.rs:57-59",
+        "tokio/src/runtime/tests/mod.rs:45-47"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio-stream/tests/stream_stream_map.rs:507-522",
+        "tokio-stream/tests/stream_stream_map.rs:491-506"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/src/net/unix/datagram/socket.rs:644-693",
+        "tokio/src/net/udp.rs:1261-1272"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/src/process/unix/orphan.rs:237-243",
+        "tokio/src/process/unix/orphan.rs:230-236"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tokio/tests/task_local_set.rs:766-777",
+        "tokio/tests/task_local_set.rs:782-792"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tokio/src/net/tcp/socket.rs:962-987",
+        "tokio/src/net/tcp/socket.rs:1003-1026"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/src/net/unix/stream.rs:90-98",
+        "tokio/src/net/unix/stream.rs:49-65"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/src/fs/file/tests.rs:818-823",
+        "tokio/src/fs/file/tests.rs:787-792"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/tests/io_buf_reader.rs:341-342",
+        "tokio/tests/io_buf_reader.rs:227-228"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/tests/rt_unstable_metrics.rs:765-768",
+        "tokio/tests/rt_unstable_metrics.rs:747-750"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/tests/time_pause.rs:214-218",
+        "tokio/tests/time_pause.rs:208-212"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/tests/io_read_line.rs:48-50",
+        "tokio/tests/io_read_line.rs:43-45"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/src/loom/std/parking_lot.rs:31-36",
+        "tokio/src/loom/std/parking_lot.rs:37-42"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio-util/src/compat.rs:192-216",
+        "tokio-stream/src/stream_ext/throttle.rs:43-66"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio-util/tests/future.rs:65-81",
+        "tokio-util/tests/future.rs:186-202"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tokio/tests/io_buf_writer.rs:136-138",
+        "tokio/tests/io_buf_writer.rs:184-185"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tokio/src/process/unix/orphan.rs:285-289",
+        "tokio/src/process/unix/orphan.rs:325-330"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio-stream/tests/stream_stream_map.rs:394-396",
+        "tokio-stream/tests/stream_stream_map.rs:525-527"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio-test/tests/io.rs:66-68",
+        "tokio-test/tests/io.rs:56-58"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/src/fs/symlink.rs:11-16",
+        "tokio/src/fs/symlink_dir.rs:14-19"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio-util/tests/mpsc.rs:203-205",
+        "tokio-util/tests/mpsc.rs:262-264"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/src/runtime/metrics/histogram.rs:429-439",
+        "tokio/src/runtime/metrics/histogram.rs:353-363"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/src/net/windows/named_pipe.rs:355-390",
+        "tokio/src/net/udp.rs:710-746"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/src/runtime/metrics/histogram.rs:327-337",
+        "tokio/src/runtime/metrics/histogram.rs:384-394"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/tests/task_id.rs:116-120",
+        "tokio/tests/task_id.rs:136-140"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/tests/rt_basic.rs:409-418",
+        "tokio/tests/rt_basic.rs:398-407"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/src/macros/cfg.rs:228-242",
+        "tokio/src/macros/cfg.rs:449-463"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio/tests/io_poll_aio.rs:311-318",
+        "tokio/tests/io_poll_aio.rs:290-297"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/src/util/linked_list.rs:606-628",
+        "tokio/src/util/linked_list.rs:666-671"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio-util/src/codec/length_delimited.rs:616-620",
+        "tokio-util/src/codec/length_delimited.rs:533-537"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio/tests/io_buf_writer.rs:89-91",
+        "tokio/tests/io_buf_writer.rs:154-156"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/tests/async_send_sync.rs:338-340",
+        "tokio/tests/async_send_sync.rs:585-587"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio-util/tests/time_delay_queue.rs:686-687",
+        "tokio-util/tests/time_delay_queue.rs:369-370"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/src/loom/std/atomic_u32.rs:7-47",
+        "tokio/src/loom/std/atomic_u16.rs:7-47"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio-util/src/codec/framed_write.rs:100-112",
+        "tokio-util/src/codec/framed_read.rs:103-115"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio-util/src/task/join_queue.rs:276-277",
+        "tokio/tests/task_local_set.rs:178-179"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio-util/tests/codecs.rs:361-368",
+        "tokio-util/tests/codecs.rs:212-219"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tokio/src/runtime/time/wheel/mod.rs:216-271",
+        "tokio/src/runtime/time_alt/wheel/mod.rs:155-212"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/src/task/join_set.rs:681-685",
+        "tokio/src/task/join_set.rs:637-641"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tokio-stream/tests/stream_chunks_timeout.rs:13-14",
+        "tokio-stream/tests/chunks_timeout.rs:73-73"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/src/macros/select.rs:785-790",
+        "tokio/src/macros/select.rs:767-772"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio-util/tests/mpsc.rs:59-62",
+        "tokio-util/tests/mpsc.rs:237-240"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/src/sync/rwlock.rs:987-991",
+        "tokio/src/sync/rwlock.rs:785-789"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/tests/async_send_sync.rs:187-190",
+        "tokio/tests/async_send_sync.rs:191-194"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio-util/src/lib.rs:1-23",
+        "tokio-stream/src/lib.rs:6-76"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio-util/src/codec/framed_read.rs:194-196",
+        "tokio-util/src/codec/framed_read.rs:186-188"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tokio/tests/udp.rs:93-98",
+        "tokio/tests/udp.rs:138-142"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio/src/util/linked_list.rs:608-610",
+        "tokio/src/util/linked_list.rs:666-668"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/src/process/windows.rs:50-56",
+        "tokio/src/sync/oneshot.rs:1587-1592"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tokio/tests/sync_mpsc.rs:473-477",
+        "tokio/tests/sync_mpsc.rs:730-735"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tokio/src/net/unix/stream.rs:233-641",
+        "tokio/src/net/windows/named_pipe.rs:355-753"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests-build/tests/fail/macros_invalid_input.rs:52-59",
+        "tests-build/tests/fail/macros_invalid_input.rs:60-67"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio/tests/sync_notify_owned.rs:165-167",
+        "tokio/tests/sync_notify_owned.rs:143-145"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "examples/udp-codec.rs:74-76",
+        "examples/udp-codec.rs:62-64"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio-stream/src/stream_ext.rs:1004-1091",
+        "tokio-stream/src/stream_ext.rs:1092-1121"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/tests/fs_uring_read.rs:190-198",
+        "tokio/tests/fs_uring_read.rs:180-188"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tokio/tests/udp.rs:649-695",
+        "tokio/tests/tcp_socket.rs:79-121"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio-util/tests/length_delimited.rs:649-654",
+        "tokio-util/tests/length_delimited.rs:624-629"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/src/runtime/metrics/histogram.rs:557-566",
+        "tokio/src/runtime/metrics/histogram.rs:477-486"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/tests/task_local_set.rs:623-656",
+        "tokio/tests/rt_basic.rs:116-149"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio/tests/io_poll_aio.rs:292-294",
+        "tokio/tests/io_poll_aio.rs:313-315"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/src/io/stdout.rs:1-183",
+        "tokio/src/io/stderr.rs:1-134"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/src/fs/file/tests.rs:21-33",
+        "tokio/src/fs/file/tests.rs:136-147"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/tests/async_send_sync.rs:169-171",
+        "tokio/tests/async_send_sync.rs:172-174"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/src/net/udp.rs:1698-1800",
+        "tokio/src/net/udp.rs:1315-1433"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tokio/src/net/unix/split.rs:79-123",
+        "tokio/src/net/tcp/split.rs:165-211"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio-util/tests/framed.rs:67-79",
+        "tokio-util/tests/framed_write.rs:31-42"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/tests/rt_unstable_metrics.rs:296-303",
+        "tokio/tests/rt_unstable_metrics.rs:278-285"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/src/io/util/read_line.rs:94-119",
+        "tokio/src/io/util/read_to_string.rs:50-78"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio-util/tests/length_delimited.rs:521-524",
+        "tokio-util/tests/length_delimited.rs:516-519"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/src/io/async_seek.rs:55-87",
+        "tokio/src/io/async_buf_read.rs:65-97"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tokio-util/tests/panic.rs:21-50",
+        "tokio/tests/support/panic.rs:4-34"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio-util/tests/sync_cancellation_token.rs:525-537",
+        "tokio-util/tests/sync_cancellation_token.rs:458-470"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio/src/runtime/park.rs:284-286",
+        "tokio/src/runtime/context/blocking.rs:90-92"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio-util/tests/codecs.rs:215-219",
+        "tokio-util/tests/codecs.rs:364-368"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio/tests/task_hooks.rs:130-132",
+        "tokio/tests/task_hooks.rs:79-81"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio-util/tests/sync_cancellation_token.rs:144-159",
+        "tokio-util/tests/sync_cancellation_token.rs:364-384"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio-stream/tests/chunks_timeout.rs:71-73",
+        "tokio-stream/tests/chunks_timeout.rs:41-43"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/src/io/async_fd.rs:712-733",
+        "tokio/src/io/async_fd.rs:750-771"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tokio/src/signal/windows.rs:66-130",
+        "tokio/src/signal/windows.rs:366-429"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/tests/sync_notify.rs:218-232",
+        "tokio/tests/sync_notify_owned.rs:219-233"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio-util/tests/length_delimited.rs:796-798",
+        "tokio-util/tests/length_delimited.rs:806-808"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/tests/sync_notify_owned.rs:70-84",
+        "tokio/tests/sync_notify_owned.rs:165-175"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tokio/tests/sync_watch.rs:362-369",
+        "tokio/tests/sync_rwlock.rs:99-102"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tokio/src/io/util/buf_reader.rs:291-311",
+        "tokio/src/io/util/buf_writer.rs:289-310"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio-stream/src/stream_ext.rs:1093-1122",
+        "tokio-stream/src/stream_ext.rs:1005-1092"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio/tests/net_quickack.rs:56-58",
+        "tokio/tests/net_quickack.rs:36-38"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tokio/tests/rt_common.rs:976-986",
+        "tokio/tests/rt_common.rs:986-997"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio-stream/tests/stream_collect.rs:76-78",
+        "tokio-stream/tests/stream_collect.rs:72-74"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/tests/io_buf_writer.rs:213-226",
+        "tokio/tests/io_buf_reader.rs:45-58"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/tests/fs_try_exists.rs:10-14",
+        "tokio/tests/fs_write.rs:8-16"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio-util/tests/udp.rs:69-75",
+        "tokio-util/tests/udp.rs:43-49"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "benches/sync_broadcast.rs:71-78",
+        "benches/sync_notify.rs:78-86"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/src/process/unix/orphan.rs:230-234",
+        "tokio/src/process/unix/orphan.rs:237-241"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/tests/time_pause.rs:275-289",
+        "tokio/tests/time_pause.rs:241-255"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio/tests/io_poll_aio.rs:226-228",
+        "tokio/tests/io_poll_aio.rs:85-87"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio/tests/sync_mpsc.rs:930-932",
+        "tokio/tests/sync_mpsc.rs:914-916"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio-stream/src/stream_ext/chain.rs:47-49",
+        "tokio-stream/src/stream_ext/merge.rs:55-57"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/tests/io_buf_reader.rs:368-371",
+        "tokio/tests/sync_watch.rs:26-29"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/tests/io_read_buf.rs:65-73",
+        "tokio/tests/io_read_buf.rs:44-52"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/tests/async_send_sync.rs:196-198",
+        "tokio/tests/async_send_sync.rs:313-315"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio/tests/time_sleep.rs:155-157",
+        "tokio/tests/time_sleep.rs:104-106"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio-util/tests/mpsc.rs:25-30",
+        "tokio-stream/tests/stream_merge.rs:45-51"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/src/runtime/builder.rs:1061-1107",
+        "tokio/src/net/windows/named_pipe.rs:2164-2228"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio/src/sync/rwlock.rs:979-983",
+        "tokio/src/sync/rwlock.rs:1037-1041"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tokio-util/tests/io_simplex.rs:50-52",
+        "tokio-util/tests/io_simplex.rs:13-15"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tokio/src/runtime/metrics/runtime.rs:186-246",
+        "tokio/src/runtime/metrics/runtime.rs:733-785"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/src/sync/rwlock/owned_read_guard.rs:34-90",
+        "tokio/src/sync/rwlock/write_guard_mapped.rs:36-140"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio-util/tests/mpsc.rs:46-51",
+        "tokio-util/tests/mpsc.rs:21-26"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/tests/async_send_sync.rs:401-403",
+        "tokio/tests/async_send_sync.rs:366-368"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/src/util/linked_list.rs:651-653",
+        "tokio/src/util/linked_list.rs:668-670"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio-util/tests/framed_read.rs:133-135",
+        "tokio-util/tests/framed_read.rs:285-287"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "benches/sync_rwlock.rs:67-82",
+        "benches/sync_semaphore.rs:108-127"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/src/runtime/task/core.rs:292-294",
+        "tokio/src/runtime/task/core.rs:284-286"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/tests/fs_remove_file.rs:9-23",
+        "tokio/tests/fs_remove_dir_all.rs:12-24"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/src/process/mod.rs:1785-1798",
+        "tokio/src/process/mod.rs:1769-1782"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio-util/src/io/sync_bridge.rs:364-367",
+        "tokio-util/src/io/sync_bridge.rs:321-324"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tokio/src/runtime/time/tests/mod.rs:79-92",
+        "tokio/src/runtime/time/tests/mod.rs:114-122"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio/src/sync/watch.rs:359-369",
+        "tokio/src/sync/mutex.rs:293-301"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/src/sync/mpsc/bounded.rs:1616-1655",
+        "tokio/src/sync/mpsc/unbounded.rs:687-726"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tokio-stream/src/wrappers/interval.rs:30-70",
+        "tokio-stream/src/wrappers/signal_windows.rs:59-122"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio/tests/async_send_sync.rs:359-361",
+        "tokio/tests/async_send_sync.rs:438-440"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tokio-stream/src/wrappers/broadcast.rs:98-102",
+        "tokio-stream/src/wrappers/mpsc_unbounded.rs:92-96"
+      ]
+    }
+  ],
+  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 200 candidates at this commit and no pair was called CLEARLY OUT by all of them. 3 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing."
+}

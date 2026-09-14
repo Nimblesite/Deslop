@@ -1,6 +1,6 @@
 ---
 layout: layouts/blog.njk
-title: "MCP for Coding Agents: Stop Duplicate Code Before It Lands"
+title: "MCP for Coding Agents: Catch Duplicate Code Before It Lands"
 date: 2026-06-12
 updated: 2026-06-12
 author: Christian Findlay
@@ -11,17 +11,16 @@ tags:
   - ai-coding-agents
   - duplicate-code
 category: engineering
-description: "How Deslop's live MCP + LSP server lets coding agents call find-similar before writing code, preventing duplicate code while the repo is still changing."
-keywords: "Model Context Protocol, MCP server, AI coding tools, coding agent, duplicate code, code duplication, duplicate-code analysis, technical debt, AI-generated code, LSP server, find-similar"
+description: "How Deslop's live MCP and LSP servers help coding agents call find-similar before writing code and catch duplicate logic while the repository changes."
 excerpt: "MCP gives coding agents tools. Deslop gives them live repository memory: call find-similar before writing, then reuse the code that already exists."
-heroImage: "/assets/img/blog/live-mcp-lsp-duplicate-code-prevention-header.png"
+heroImage: "/assets/img/blog/live-mcp-lsp-duplicate-code-prevention-header.webp"
 heroImageWidth: "1600"
 heroImageHeight: "900"
-heroImageAlt: "Header image showing a live MCP and LSP sidecar intercepting duplicate code before it reaches a repository."
-ogImage: "/assets/img/blog/live-mcp-lsp-duplicate-code-prevention-og.png"
+heroImageAlt: "Header image showing a live MCP and LSP sidecar checking duplicate code before it reaches a repository."
+ogImage: "/assets/img/blog/live-mcp-lsp-duplicate-code-prevention-og.jpg"
 ogImageWidth: "1200"
 ogImageHeight: "630"
-ogImageAlt: "Deslop live MCP and LSP sidecar preventing duplicate code before it lands."
+ogImageAlt: "Deslop live MCP and LSP sidecar checking duplicate code before it lands."
 ---
 
 By the time duplicate code shows up in CI, the agent has already written it, the pull request already contains it, and a reviewer has to ask why the same rule now exists in two places.
@@ -103,7 +102,7 @@ Deslop's MCP surface returns duplicate clusters worst-first, with the fields an 
 
 The report is deliberately JSON-first. The human-readable text and HTML views are renderings of the same schema, not a second truth. The docs page on [Output Formats](/docs/configuration/#report-output) explains the consumer contract, and [How It Works](/docs/how-it-works/) explains the parse, normalize, fingerprint, cluster, and rank pipeline.
 
-The MCP tools also carry an occurrence budget. Real repositories can have clusters with dozens of locations, and dumping every occurrence into an agent context window is not helpful. Deslop tools such as `top-offenders`, `report-for-file`, `report-for-range`, and `find-similar` accept a `max_occurrences` budget so the result stays useful instead of becoming a transcript flood. When an agent truly needs the full cluster, it can follow up with `cluster-by-id`.
+The MCP tools also carry an occurrence budget. Real repositories can have clusters with dozens of locations, and dumping every occurrence into an agent context window is not helpful. Deslop tools such as `duplicates` and `find-similar` accept a `max_occurrences` budget so the result stays useful instead of becoming a transcript flood. When an agent truly needs the full cluster, it can follow up with `cluster-by-id`.
 
 That small constraint matters. Agent tools should be designed for the agent's context budget, not merely exposed because the protocol allows it.
 
@@ -141,27 +140,3 @@ another copy.
 That instruction is stronger than "avoid duplication." It names the tool, the timing, and the expected action.
 
 For teams that already maintain an `AGENTS.md`, `CLAUDE.md`, or equivalent coding-agent instruction file, this is where Deslop belongs. The tool is most valuable before the agent writes code, not after a reviewer asks why the same validation rule appears in four files.
-
-## FAQ
-
-### What is an MCP server for coding agents?
-
-An MCP server exposes tools and resources to an AI application through the Model Context Protocol. In a coding workflow, that might mean codebase lookup, docs lookup, issue access, build actions, or repository analysis. Deslop's MCP server exposes duplicate-code analysis tools, led by `find-similar`.
-
-### Why does Deslop also need an LSP server?
-
-Because duplicate-code prevention has two audiences. The human needs editor feedback through LSP: diagnostics, hovers, code lens, and navigation. The agent needs callable tools through MCP. A live LSP process is also the right owner for watching the workspace and keeping the report current.
-
-### Why not just run the CLI before a pull request?
-
-The CLI is still useful for CI and one-shot audits. It is too late for prevention. Once the duplicate is in a pull request, the agent has already spent context and code review has already started. `find-similar` belongs before generation.
-
-### Does this replace code review?
-
-No. Deslop reports evidence: cluster ids, locations, scores, and signals. A human or agent still decides whether to extract, reuse, or accept the duplication. The difference is that the decision happens while the code is fresh.
-
-### Is this only about exact copy-paste?
-
-No. Exact duplicates are the easy case. Deslop's parser-first pipeline is designed to catch renamed and near-duplicate structure as well. The clone taxonomy is discussed in [Research Background](/docs/research-background/) and in the classic survey paper [Comparison and Evaluation of Code Clone Detection Techniques and Tools](https://www.cs.usask.ca/~croy/papers/2009/RCK_SCP_Clones.pdf).
-
-MCP gives the agent hands. LSP gives the editor eyes. Deslop uses both so duplicate code can be stopped at the only point where prevention is cheap: before the second copy lands.

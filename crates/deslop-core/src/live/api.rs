@@ -13,7 +13,7 @@ use tokio::sync::Mutex;
 use crate::{
     delta::ReportDelta,
     embedding::{EmbeddingProvider, ProviderRegistry, RegistryError},
-    report::{EmbeddingProvenance, Report, ReportCluster},
+    report::{EmbeddingProvenance, PairComparison, PairComparisonParams, Report, ReportCluster},
 };
 
 use super::{
@@ -53,6 +53,17 @@ pub trait LiveApi: Send + Sync + std::fmt::Debug {
     ///
     /// Returns [`LiveError::UnknownCluster`] when no cluster matches.
     async fn cluster_by_id(&self, id: &str) -> Result<ReportCluster, LiveError>;
+
+    /// `pair/compare` — evidence for exactly two caller-selected endpoints.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LiveError`] when an endpoint is absent from the current
+    /// generation or active embedding evidence cannot be measured.
+    async fn pair_compare(
+        &self,
+        params: &PairComparisonParams,
+    ) -> Result<PairComparison, LiveError>;
 
     /// `merge/plan` — the mechanical call-site merge for a cluster
     /// ([AUTOFIX-MERGE-MCP]). Read-only; refusals arrive as
@@ -98,13 +109,8 @@ pub trait LiveApi: Send + Sync + std::fmt::Debug {
     /// `session/config` — resolved configuration snapshot.
     async fn session_config(&self) -> SessionConfig;
 
-    /// Returns every cluster weight in the live report, in cluster-id
-    /// order. Used by transports that need to bucket per-cluster
-    /// signals (e.g. LSP severity at [LSP-SEVERITY]) against the global
-    /// distribution rather than re-cloning the whole report. Cheaper
-    /// than `report_get().clusters.iter().map(weight).collect()`
-    /// because no cluster body is touched.
-    async fn all_cluster_weights(&self) -> Vec<f64>;
+    /// Returns every cluster mass in report order.
+    async fn all_cluster_masses(&self) -> Vec<u64>;
 }
 
 /// Concrete [`LiveApi`] implementation backed by an [`AnalysisSession`].
@@ -235,6 +241,15 @@ impl LiveApi for LiveService {
         guard.cluster_by_id(id)
     }
 
+    async fn pair_compare(
+        &self,
+        params: &PairComparisonParams,
+    ) -> Result<PairComparison, LiveError> {
+        let mut guard = self.inner.lock().await;
+        guard.refresh_if_stale();
+        guard.compare_pair(params)
+    }
+
     async fn merge_plan(
         &self,
         cluster_id: &str,
@@ -275,13 +290,13 @@ impl LiveApi for LiveService {
         guard.session_config()
     }
 
-    async fn all_cluster_weights(&self) -> Vec<f64> {
+    async fn all_cluster_masses(&self) -> Vec<u64> {
         let guard = self.inner.lock().await;
         guard
             .report()
             .clusters
             .iter()
-            .map(|cluster| cluster.weight)
+            .map(|cluster| cluster.mass)
             .collect()
     }
 }

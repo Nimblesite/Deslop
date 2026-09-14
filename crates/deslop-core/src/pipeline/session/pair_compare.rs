@@ -1,0 +1,403 @@
+//! Explicit endpoint-to-endpoint evidence measurement ([FUSED-PAIR-SIGNALS]).
+
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
+
+use crate::{
+    ast::NormalizedNode,
+    content::{measure_aligned_core, measure_pair_content_indexed, tree_index_of, PairScope},
+    embedding::{cosine_similarity, EmbeddingProvider},
+    error::CoreError,
+    fingerprint::Fingerprint,
+    lsh::{estimate_jaccard, SignatureLookup},
+    overlap::{judge_core, OverlapMeasurer},
+    pair::PairScore,
+    report::{PairComparison, PairComparisonParams, PairEndpoint, PairEvidence, PairTextIdentity},
+    state::FileId,
+};
+
+use super::PipelineSession;
+
+mod admission;
+use admission::AdmissionFacts;
+mod cluster_kind;
+pub(crate) use cluster_kind::ClusterKindMeasurer;
+
+impl PipelineSession {
+    /// Recomputes evidence for exactly the two requested occurrences.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CoreError::SamePairEndpoint`] for a repeated endpoint,
+    /// [`CoreError::UnknownPairEndpoint`] when either range is absent from
+    /// this generation, and [`CoreError::Embedding`] when an active provider
+    /// returns invalid evidence.
+    pub fn compare_pair(
+        &self,
+        params: &PairComparisonParams,
+        provider: Option<&dyn EmbeddingProvider>,
+    ) -> Result<PairComparison, CoreError> {
+        if params.left == params.right {
+            return Err(CoreError::SamePairEndpoint);
+        }
+        let pair = self.resolve_pair(params)?;
+        let evidence = self.measure_pair(&pair, provider)?;
+        Ok(PairComparison {
+            left: params.left.clone(),
+            right: params.right.clone(),
+            evidence,
+        })
+    }
+
+    /// Resolves both endpoint identities against the current flat corpus.
+    fn resolve_pair<'corpus>(
+        &'corpus self,
+        params: &PairComparisonParams,
+    ) -> Result<ResolvedPair<'corpus>, CoreError> {
+        let left = self.resolve_endpoint(&params.left)?;
+        let right = self.resolve_endpoint(&params.right)?;
+        Ok(ResolvedPair { left, right })
+    }
+
+    /// Resolves one exact path/range to its fingerprint and signature index.
+    fn resolve_endpoint(&self, endpoint: &PairEndpoint) -> Result<ResolvedEndpoint<'_>, CoreError> {
+        let requested = canonical_endpoint_path(&self.root, &endpoint.path);
+        self.store
+            .fingerprints()
+            .iter()
+            .enumerate()
+            .find(|(_, fingerprint)| self.endpoint_matches(fingerprint, endpoint, &requested))
+            .map(|(index, fingerprint)| ResolvedEndpoint { index, fingerprint })
+            .ok_or_else(|| unknown_endpoint(endpoint))
+    }
+
+    /// Tests exact file identity and byte range for one fingerprint.
+    fn endpoint_matches(
+        &self,
+        fingerprint: &Fingerprint,
+        endpoint: &PairEndpoint,
+        requested: &Path,
+    ) -> bool {
+        fingerprint.byte_range.start == endpoint.start_byte
+            && fingerprint.byte_range.end == endpoint.end_byte
+            && self.registry.path(fingerprint.file_id) == Some(requested)
+    }
+
+    /// Measures every pair-owned axis and applies the admission algebra.
+    fn measure_pair(
+        &self,
+        pair: &ResolvedPair<'_>,
+        provider: Option<&dyn EmbeddingProvider>,
+    ) -> Result<PairEvidence, CoreError> {
+        let trees = self.trees_for_pair(pair)?;
+        let mut axes = PairAxes::new(&trees);
+        let embedding_cos = self.embedding_cos(pair, provider)?;
+        let measurements = self.measure_axes(pair, &mut axes, embedding_cos);
+        Ok(self.build_evidence(pair, measurements))
+    }
+
+    /// Measures structural, token, and raw-content evidence beside the
+    /// caller-supplied embedding cosine. The explicit comparison asks a
+    /// provider for the cosine; the cluster fold reads the one the
+    /// embedding pass already measured ([CLONE-KIND-FOLD]).
+    fn measure_axes(
+        &self,
+        pair: &ResolvedPair<'_>,
+        axes: &mut PairAxes<'_>,
+        embedding_cos: f64,
+    ) -> Measurements {
+        let merkle_equal = pair.left.fingerprint.hash == pair.right.fingerprint.hash;
+        let text = pair.text_identity(&self.sources);
+        let structural = axes
+            .overlap
+            .overlap(pair.left.fingerprint, pair.right.fingerprint);
+        let token_jaccard = self.token_jaccard(pair, merkle_equal);
+        let content = measure_pair_content_indexed(
+            pair.left.fingerprint,
+            pair.right.fingerprint,
+            &axes.trees,
+            &self.sources,
+            &self.file_languages,
+            false,
+        );
+        Measurements {
+            score: PairScore {
+                structural,
+                token_jaccard,
+                embedding_cos,
+            },
+            agreement: content.agreement,
+            rename_consistency: content.rename_consistency,
+            literal_fraction: content.literal_fraction,
+            core_is_copy: self.core_is_copy(pair, axes),
+            merkle_equal,
+            text,
+        }
+    }
+
+    /// [FUSED-SHARED-SUBTREE-CORE] Whether the code the endpoints share
+    /// is a copy by the content gate's own measure — the rescue's
+    /// content term, read here exactly as the pipeline reads it.
+    fn core_is_copy(&self, pair: &ResolvedPair<'_>, axes: &mut PairAxes<'_>) -> bool {
+        let core = axes
+            .overlap
+            .aligned_core(pair.left.fingerprint, pair.right.fingerprint);
+        let scope = PairScope {
+            same_file: !pair.cross_file(),
+            interior: false,
+            core: true,
+        };
+        let floor = usize::try_from(self.min_nodes).unwrap_or(usize::MAX);
+        judge_core(&core, floor, || {
+            measure_aligned_core(
+                (pair.left.fingerprint, pair.right.fingerprint),
+                &core,
+                &axes.trees,
+                &self.sources,
+                &self.file_languages,
+                scope,
+            )
+        })
+        .copy
+    }
+
+    /// Estimates token Jaccard, applying the pair-local Merkle correction.
+    fn token_jaccard(&self, pair: &ResolvedPair<'_>, merkle_equal: bool) -> f64 {
+        if merkle_equal {
+            return 1.0;
+        }
+        let signatures = self.store.signatures();
+        pair.left
+            .signature(&signatures)
+            .zip(pair.right.signature(&signatures))
+            .map_or(0.0, |(left, right)| estimate_jaccard(left, right))
+    }
+
+    /// Measures cosine for the two exact source slices when embeddings are active.
+    fn embedding_cos(
+        &self,
+        pair: &ResolvedPair<'_>,
+        provider: Option<&dyn EmbeddingProvider>,
+    ) -> Result<f64, CoreError> {
+        let Some(provider) = provider else {
+            return Ok(0.0);
+        };
+        let snippets = pair.snippets(&self.sources);
+        if snippets
+            .iter()
+            .any(|snippet| snippet.chars().count() > provider.max_input_chars())
+        {
+            return Ok(0.0);
+        }
+        let vectors = provider
+            .embed_batch(&snippets)
+            .map_err(|error| CoreError::Embedding {
+                message: error.to_string(),
+            })?;
+        valid_cosine(provider, &vectors)
+    }
+
+    /// Parses each distinct endpoint file once for overlap and content evidence.
+    fn trees_for_pair(&self, pair: &ResolvedPair<'_>) -> Result<Vec<NormalizedNode>, CoreError> {
+        let mut file_ids = vec![pair.left.fingerprint.file_id];
+        if pair.right.fingerprint.file_id != pair.left.fingerprint.file_id {
+            file_ids.push(pair.right.fingerprint.file_id);
+        }
+        file_ids
+            .into_iter()
+            .map(|file_id| self.parse_tree(file_id))
+            .collect()
+    }
+
+    /// Re-parses one held source using its registered language parser.
+    fn parse_tree(&self, file_id: crate::state::FileId) -> Result<NormalizedNode, CoreError> {
+        let source = self
+            .sources
+            .get(&file_id)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        let language = self
+            .file_languages
+            .get(&file_id)
+            .copied()
+            .unwrap_or("unknown");
+        let parser = self.parsers.iter().find(|parser| parser.id() == language);
+        parser
+            .ok_or(CoreError::ParseFailed { language })?
+            .parse_and_normalize(source, file_id)
+    }
+
+    /// Converts measured axes into the public admission response.
+    fn build_evidence(&self, pair: &ResolvedPair<'_>, measured: Measurements) -> PairEvidence {
+        let facts = AdmissionFacts::from(self, pair, measured);
+        let classification = facts.classification(measured);
+        PairEvidence {
+            structural: measured.score.structural,
+            token_jaccard: measured.score.token_jaccard,
+            embedding_cos: measured.score.embedding_cos,
+            agreement: measured.agreement,
+            rename_consistency: measured.rename_consistency,
+            literal_fraction: measured.literal_fraction,
+            text_identity: measured.text,
+            fused_score: measured.score.bounded_fused(),
+            content_required: facts.content_required,
+            content_ok: facts.content_ok,
+            admitted: facts.admitted,
+            classification,
+            explanation: facts.explanation(classification),
+        }
+    }
+}
+
+/// The corpus-backed measurers one pair measurement reads: the memoising
+/// structural overlap measurer and the per-file tree index the content
+/// axes walk. Built once per explicit comparison over its two trees, and
+/// once per render over the whole population for the cluster fold.
+struct PairAxes<'corpus> {
+    /// Structural overlap, memoised per structural pair.
+    overlap: OverlapMeasurer<'corpus>,
+    /// `FileId → normalised root` for the content axes.
+    trees: HashMap<FileId, &'corpus NormalizedNode>,
+}
+
+impl<'corpus> PairAxes<'corpus> {
+    /// Indexes `trees` for every measurement that follows.
+    fn new(trees: &'corpus [NormalizedNode]) -> Self {
+        Self {
+            overlap: OverlapMeasurer::new(trees),
+            trees: tree_index_of(trees),
+        }
+    }
+}
+
+/// One resolved endpoint and its positional signature index.
+#[derive(Clone, Copy)]
+struct ResolvedEndpoint<'corpus> {
+    /// Flat-corpus index.
+    index: usize,
+    /// Exact fingerprint occurrence.
+    fingerprint: &'corpus Fingerprint,
+}
+
+impl ResolvedEndpoint<'_> {
+    /// Signature aligned with this endpoint's flat-corpus index.
+    fn signature(self, signatures: &dyn SignatureLookup) -> Option<&crate::lsh::Signature> {
+        signatures.signature(self.index)
+    }
+}
+
+/// Two exact endpoint occurrences.
+struct ResolvedPair<'corpus> {
+    /// Caller-selected left endpoint.
+    left: ResolvedEndpoint<'corpus>,
+    /// Caller-selected right endpoint.
+    right: ResolvedEndpoint<'corpus>,
+}
+
+impl ResolvedPair<'_> {
+    /// Source snippets for the pair, preserving request order.
+    fn snippets(
+        &self,
+        sources: &std::collections::HashMap<crate::state::FileId, Vec<u8>>,
+    ) -> Vec<String> {
+        [self.left.fingerprint, self.right.fingerprint]
+            .into_iter()
+            .map(|fingerprint| super::super::embedding_batch::snippet_for(fingerprint, sources))
+            .collect()
+    }
+
+    /// Whether the pair spans two source files.
+    fn cross_file(&self) -> bool {
+        self.left.fingerprint.file_id != self.right.fingerprint.file_id
+    }
+
+    /// How far the two raw endpoint snippets are the same text, read once
+    /// from the same bytes so the byte answer and the indentation answer
+    /// cannot disagree ([FUSED-PAIR-SIGNALS]).
+    fn text_identity(
+        &self,
+        sources: &std::collections::HashMap<crate::state::FileId, Vec<u8>>,
+    ) -> PairTextIdentity {
+        let snippets = self.snippets(sources);
+        let [left, right] = snippets.as_slice() else {
+            return PairTextIdentity::Different;
+        };
+        if left == right {
+            return PairTextIdentity::ByteIdentical;
+        }
+        if same_lines_ignoring_indentation(left, right) {
+            return PairTextIdentity::IndentationOnly;
+        }
+        PairTextIdentity::Different
+    }
+}
+
+/// Whether two snippets hold the same lines once each line's leading
+/// whitespace is dropped. Line endings are consumed with the line and a
+/// missing final line break adds no line, so neither counts as a
+/// difference.
+fn same_lines_ignoring_indentation(left: &str, right: &str) -> bool {
+    left.lines()
+        .map(str::trim_start)
+        .eq(right.lines().map(str::trim_start))
+}
+
+/// Pair axes and raw-content populations before admission gates.
+#[derive(Clone, Copy)]
+struct Measurements {
+    /// Three bounded shape/semantic axes.
+    score: PairScore,
+    /// Raw authored-content agreement.
+    agreement: f64,
+    /// Consistent rename evidence.
+    rename_consistency: f64,
+    /// Literal share.
+    literal_fraction: f64,
+    /// [FUSED-SHARED-SUBTREE-CORE] Whether the pair's aligned core clears
+    /// the content gate — the rescue's content term.
+    core_is_copy: bool,
+    /// Exact Merkle identity.
+    merkle_equal: bool,
+    /// How far the two raw source ranges are the same text.
+    text: PairTextIdentity,
+}
+
+/// Validates two provider vectors and measures their canonical cosine.
+fn valid_cosine(provider: &dyn EmbeddingProvider, vectors: &[Vec<f32>]) -> Result<f64, CoreError> {
+    let dimensions = provider.spec().dimensions;
+    let [left, right] = vectors else {
+        return Err(CoreError::Embedding {
+            message: "pair comparison provider returned invalid vectors".to_owned(),
+        });
+    };
+    let valid = [left, right].into_iter().all(|vector| {
+        vector.len() == dimensions && vector.iter().all(|component| component.is_finite())
+    });
+    if valid {
+        return Ok(cosine_similarity(left, right));
+    }
+    Err(CoreError::Embedding {
+        message: "pair comparison provider returned invalid vectors".to_owned(),
+    })
+}
+
+/// Canonical absolute identity of a wire endpoint path.
+fn canonical_endpoint_path(root: &Path, path: &Path) -> PathBuf {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        root.join(path)
+    };
+    std::fs::canonicalize(&absolute).unwrap_or(absolute)
+}
+
+/// Constructs the structured unknown-endpoint error.
+fn unknown_endpoint(endpoint: &PairEndpoint) -> CoreError {
+    CoreError::UnknownPairEndpoint {
+        path: endpoint.path.clone(),
+        start_byte: endpoint.start_byte,
+        end_byte: endpoint.end_byte,
+    }
+}

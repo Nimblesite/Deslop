@@ -1,0 +1,5 @@
+{
+  "include": ["scripts/issues"],
+  "pythonVersion": "3.11",
+  "typeCheckingMode": "strict"
+}

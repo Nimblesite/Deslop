@@ -31,6 +31,7 @@ use std::{fs, path::Path};
 use anyhow::Result;
 use serde_json::Value;
 
+use crate::common::scan_dir::temp_scan_dir;
 use crate::common::{incremental::*, *};
 
 /// The clone body shared by both files. Seven lines, identical in each,
@@ -118,8 +119,7 @@ fn occurrence_span(report: &Value, file_name: &str) -> Result<(u64, u64, u64, u6
 // `--no-incremental` computes from the real bytes.
 #[test]
 fn lossy_utf8_cache_key_must_not_collide_across_distinct_files() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
+    let (_tmp, scan_root) = temp_scan_dir("src")?;
     seed_colliding_pair(&scan_root)?;
 
     // The two files really are distinct on disk, and really do decode to

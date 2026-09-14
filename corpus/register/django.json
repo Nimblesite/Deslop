@@ -1,0 +1,1322 @@
+{
+  "name": "django",
+  "language": "python",
+  "url": "https://github.com/django/django.git",
+  "sha": "6ef1f6fbe33e9882f82dae026b527800ecb78c36",
+  "protocol": {
+    "spec": "docs/specs/corpus.md",
+    "spec_section": "[CORPUS-REGISTER]",
+    "judging_skill": ".agents/skills/judge-clone-pairs/SKILL.md",
+    "preparer_skill": ".agents/skills/clone-register-prepare/SKILL.md"
+  },
+  "clearly_in": [
+    {
+      "why": "Nineteen lines of assertQuerySetEqual over Min('events__dt') pasted verbatim twice in tests/timezones/tests.py.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 19 lines.",
+      "occurrences": [
+        "tests/timezones/tests.py:493-511",
+        "tests/timezones/tests.py:212-230"
+      ]
+    },
+    {
+      "why": "A forty-eight line block of the expected-relations fixture table in tests/model_meta/results.py appears verbatim twice.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 48 lines.",
+      "occurrences": [
+        "tests/model_meta/results.py:482-529",
+        "tests/model_meta/results.py:356-403"
+      ]
+    },
+    {
+      "why": "A twenty-five line table of LIKE-escaping check cases, comments included, pasted twice in test_operations.py.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 25 lines.",
+      "occurrences": [
+        "tests/migrations/test_operations.py:4388-4412",
+        "tests/migrations/test_operations.py:4319-4343"
+      ]
+    },
+    {
+      "why": "sqlsequencereset and sqlflush each define the same output_transaction attribute and the same add_arguments method, word for word including the help text.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 13 lines.",
+      "occurrences": [
+        "django/core/management/commands/sqlsequencereset.py:10-22",
+        "django/core/management/commands/sqlflush.py:12-24"
+      ]
+    },
+    {
+      "why": "Six whole test methods - flatpage view and fallback tests - are written out identically in test_csrf.py and test_middleware.py.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 34 lines.",
+      "occurrences": [
+        "tests/flatpages_tests/test_csrf.py:72-105",
+        "tests/flatpages_tests/test_middleware.py:71-104"
+      ]
+    },
+    {
+      "why": "The four-flatpage setUpTestData fixture is written out identically in test_middleware.py and test_csrf.py.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 36 lines.",
+      "occurrences": [
+        "tests/flatpages_tests/test_middleware.py:17-52",
+        "tests/flatpages_tests/test_csrf.py:32-67"
+      ]
+    },
+    {
+      "why": "The same flatpage fixture again, verbatim in test_templatetags.py and test_views.py.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 35 lines.",
+      "occurrences": [
+        "tests/flatpages_tests/test_templatetags.py:13-47",
+        "tests/flatpages_tests/test_views.py:15-49"
+      ]
+    },
+    {
+      "why": "The router db_for_write / allow_relation block is written out identically in two related-descriptor setters in the same module.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 13 lines.",
+      "occurrences": [
+        "django/db/models/fields/related_descriptors.py:578-590",
+        "django/db/models/fields/related_descriptors.py:297-309"
+      ]
+    },
+    {
+      "why": "Fifteen lines of makemigrations prompt assertions pasted verbatim twice in test_commands.py.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 15 lines.",
+      "occurrences": [
+        "tests/migrations/test_commands.py:1973-1987",
+        "tests/migrations/test_commands.py:1895-1909"
+      ]
+    }
+  ],
+  "clearly_out": [],
+  "not_clear": [
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/template_tests/test_extends.py:13-14",
+        "tests/template_tests/test_extends.py:75-76"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/generic_views/test_dates.py:793-797",
+        "tests/urlpatterns_reverse/tests.py:1358-1362"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/admin_inlines/tests.py:1617-1640",
+        "tests/admin_inlines/tests.py:1715-1738"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/admin_inlines/tests.py:1715-1748",
+        "tests/admin_inlines/tests.py:1633-1663"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/forms_tests/tests/test_forms.py:287-313",
+        "tests/forms_tests/tests/test_forms.py:2032-2060"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/migrations/test_autodetector.py:4514-4518",
+        "tests/migrations/test_autodetector.py:2322-2326"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/mail/tests.py:1478-1480",
+        "tests/mail/tests.py:1457-1459"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "django/test/client.py:1703-1729",
+        "django/test/client.py:1563-1596"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/template_tests/test_loaders.py:30-35",
+        "tests/template_tests/test_loaders.py:41-46"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/template_tests/syntax_tests/test_filter_syntax.py:123-142",
+        "tests/template_tests/syntax_tests/test_basic.py:43-60"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/basic/tests.py:754-757",
+        "tests/many_to_one/tests.py:400-409"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/migrations/test_autodetector.py:4419-4421",
+        "tests/migrations/test_autodetector.py:4103-4107"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/admin_views/test_adminsite.py:80-82",
+        "tests/admin_views/test_adminsite.py:88-90"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/auth_tests/test_auth_backends.py:777-779",
+        "tests/auth_tests/test_auth_backends.py:795-797"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/admin_views/test_actions.py:64-66",
+        "tests/admin_views/test_actions.py:197-199"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/many_to_many/tests.py:440-441",
+        "tests/many_to_many/tests.py:375-376"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/staticfiles_tests/test_storage.py:287-294",
+        "tests/staticfiles_tests/test_storage.py:239-246"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/queries/tests.py:2547-2548",
+        "tests/queries/tests.py:2523-2524"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/expressions_case/tests.py:686-687",
+        "tests/expressions_case/tests.py:704-705"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "django/conf/locale/ka/formats.py:12-45",
+        "django/conf/locale/sl/formats.py:12-40"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/test_client_regress/tests.py:441-449",
+        "tests/test_client_regress/tests.py:584-591"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/postgres_tests/test_aggregates.py:899-905",
+        "tests/postgres_tests/test_aggregates.py:321-331"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/get_earliest_or_latest/tests.py:103-177",
+        "tests/get_earliest_or_latest/tests.py:20-96"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/postgres_tests/test_trigram.py:141-153",
+        "tests/postgres_tests/test_trigram.py:125-139"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/utils_tests/test_choices.py:268-273",
+        "tests/utils_tests/test_choices.py:285-290"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/queryset_pickle/tests.py:331-333",
+        "tests/model_regress/test_pickle.py:25-27"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/db_functions/datetime/test_extract_trunc.py:440-464",
+        "tests/db_functions/datetime/test_extract_trunc.py:864-894"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/staticfiles_tests/test_storage.py:272-282",
+        "tests/staticfiles_tests/test_storage.py:322-332"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/migrations/test_autodetector.py:3208-3231",
+        "tests/migrations/test_autodetector.py:4632-4640"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/sitemaps_tests/test_http.py:356-376",
+        "tests/sitemaps_tests/test_http.py:386-406"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/expressions_case/tests.py:59-61",
+        "tests/expressions_case/tests.py:49-51"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/migrations/test_optimizer.py:989-999",
+        "tests/migrations/test_optimizer.py:853-863"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/schema/tests.py:3951-3953",
+        "tests/schema/tests.py:2957-2959"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "django/contrib/admin/migrations/0001_initial.py:15-70",
+        "django/contrib/flatpages/migrations/0001_initial.py:10-67"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/csrf_tests/tests.py:1091-1095",
+        "tests/csrf_tests/tests.py:600-604"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/utils_tests/test_deconstruct.py:89-94",
+        "tests/field_deconstruction/tests.py:457-461"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/model_forms/tests.py:1890-1892",
+        "tests/model_forms/tests.py:1622-1624"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/auth_tests/test_hashers.py:50-52",
+        "tests/admin_custom_urls/tests.py:49-51"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/forms_tests/tests/test_forms.py:1981-2011",
+        "tests/forms_tests/tests/test_forms.py:2126-2137"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/db_functions/comparison/test_greatest.py:14-101",
+        "tests/db_functions/comparison/test_least.py:14-95"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/forms_tests/widget_tests/test_numberinput.py:10-32",
+        "tests/forms_tests/widget_tests/test_textarea.py:44-78"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/postgres_tests/test_array.py:1388-1389",
+        "tests/postgres_tests/test_array.py:1364-1365"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/admin_changelist/tests.py:462-465",
+        "tests/admin_views/tests.py:4644-4646"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/sessions_tests/tests.py:283-285",
+        "tests/sessions_tests/tests.py:260-262"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/modeladmin/tests.py:368-407",
+        "tests/modeladmin/tests.py:434-472"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/schema/tests.py:4695-4702",
+        "tests/schema/tests.py:4668-4675"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/admin_views/tests.py:3640-3649",
+        "tests/admin_views/test_actions.py:153-164"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "django/db/backends/postgresql/schema.py:30-40",
+        "django/db/backends/base/schema.py:127-135"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/auth_tests/test_views.py:1556-1589",
+        "tests/auth_tests/test_views.py:1635-1645"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "django/test/testcases.py:1701-1710",
+        "django/test/runner.py:484-497"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/migrations/test_graph.py:150-155",
+        "tests/migrations/test_graph.py:80-85"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/timezones/tests.py:430-431",
+        "tests/timezones/tests.py:432-433"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "django/db/models/fields/generated.py:170-178",
+        "django/db/models/fields/generated.py:156-164"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/utils_tests/test_choices.py:67-70",
+        "tests/pagination/tests.py:390-393"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/gis_tests/relatedapp/tests.py:276-278",
+        "tests/admin_filters/tests.py:656-658"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/template_loader/tests.py:32-34",
+        "tests/template_loader/tests.py:28-30"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/invalid_models_tests/test_relative_fields.py:1606-1611",
+        "tests/max_lengths/models.py:11-15"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/model_inheritance_regress/tests.py:77-111",
+        "tests/model_inheritance_regress/tests.py:131-173"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/auth_tests/test_decorators.py:362-373",
+        "tests/auth_tests/test_decorators.py:379-390"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/admin_views/tests.py:1165-1167",
+        "tests/admin_views/tests.py:1162-1164"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/test_client_regress/tests.py:1096-1100",
+        "tests/test_client/tests.py:261-268"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/template_tests/test_callables.py:126-127",
+        "tests/template_tests/test_custom.py:188-189"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/update/tests.py:249-249",
+        "tests/aggregation_regress/tests.py:426-428"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/backends/postgresql/test_operations.py:69-77",
+        "tests/backends/base/test_operations.py:161-169"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/admin_views/tests.py:5831-5832",
+        "tests/admin_views/tests.py:5809-5810"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/model_forms/tests.py:1771-1803",
+        "tests/model_forms/tests.py:1525-1554"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/admin_scripts/tests.py:338-435",
+        "tests/admin_scripts/tests.py:246-335"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/admin_changelist/tests.py:531-542",
+        "tests/admin_changelist/tests.py:554-565"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/db_functions/datetime/test_extract_trunc.py:541-574",
+        "tests/db_functions/datetime/test_extract_trunc.py:576-603"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/field_deconstruction/tests.py:93-93",
+        "tests/modeladmin/models.py:41-43"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/admin_views/tests.py:1251-1254",
+        "tests/admin_views/tests.py:1246-1249"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/migrations/test_commands.py:1832-1839",
+        "tests/migrations/test_commands.py:1803-1813"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/model_formsets/tests.py:753-758",
+        "tests/model_formsets/tests.py:590-594"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/forms_tests/tests/test_formsets.py:430-448",
+        "tests/forms_tests/tests/test_formsets.py:488-506"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/i18n/tests.py:785-800",
+        "tests/i18n/tests.py:1022-1035"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/generic_inline_admin/tests.py:245-263",
+        "tests/generic_inline_admin/tests.py:225-243"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/many_to_many/tests.py:236-244",
+        "tests/many_to_one/tests.py:383-391"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/model_forms/tests.py:1770-1803",
+        "tests/model_forms/tests.py:1575-1608"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/auth_tests/test_forms.py:1613-1615",
+        "tests/auth_tests/test_forms.py:1598-1600"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/aggregation_regress/tests.py:216-218",
+        "tests/aggregation_regress/tests.py:237-239"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/postgres_tests/test_search.py:194-196",
+        "tests/postgres_tests/test_search.py:188-190"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/update_only_fields/tests.py:75-76",
+        "tests/update_only_fields/tests.py:89-90"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/forms_tests/widget_tests/test_select.py:201-213",
+        "tests/forms_tests/widget_tests/test_radioselect.py:258-270"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/migrations/test_state.py:99-100",
+        "tests/migrations/test_state.py:405-406"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/migrations/test_operations.py:1704-1712",
+        "tests/migrations/test_operations.py:1823-1831"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/forms_tests/widget_tests/test_checkboxselectmultiple.py:197-227",
+        "tests/forms_tests/widget_tests/test_radioselect.py:428-462"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "django/contrib/contenttypes/fields.py:680-713",
+        "django/db/models/fields/related_descriptors.py:804-839"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "django/templatetags/i18n.py:562-567",
+        "django/templatetags/i18n.py:573-578"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/generic_views/test_edit.py:390-392",
+        "tests/generic_views/test_edit.py:451-453"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/admin_views/tests.py:5375-5380",
+        "tests/admin_views/tests.py:5486-5491"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/forms_tests/field_tests/test_choicefield.py:11-15",
+        "tests/forms_tests/field_tests/test_multiplechoicefield.py:8-12"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/admin_views/tests.py:8916-8923",
+        "tests/admin_views/tests.py:8794-8797"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/db_functions/text/test_sha512.py:11-49",
+        "tests/db_functions/text/test_sha384.py:11-49"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/deprecation/test_middleware_mixin.py:76-84",
+        "tests/deprecation/test_middleware_mixin.py:67-75"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/serializers/models/data.py:221-253",
+        "tests/serializers/models/data.py:61-90"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/forms_tests/field_tests/test_uuidfield.py:20-22",
+        "tests/forms_tests/tests/test_forms.py:3959-3961"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/test_client_regress/tests.py:605-613",
+        "tests/test_client_regress/tests.py:380-388"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/schema/tests.py:3496-3498",
+        "tests/schema/tests.py:4131-4133"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/admin_inlines/tests.py:1261-1264",
+        "tests/admin_inlines/tests.py:1213-1216"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/lookup/tests.py:266-274",
+        "tests/lookup/tests.py:251-259"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/db_functions/datetime/test_extract_trunc.py:1217-1259",
+        "tests/db_functions/datetime/test_extract_trunc.py:1505-1549"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/custom_pk/tests.py:119-122",
+        "tests/migrations/test_operations.py:6416-6418"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/admin_changelist/tests.py:191-193",
+        "tests/admin_filters/tests.py:737-739"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/admin_inlines/models.py:54-56",
+        "tests/admin_views/models.py:444-446"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "django/db/models/fields/related_descriptors.py:1054-1059",
+        "django/db/models/fields/related_descriptors.py:1047-1052"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/migrations/test_autodetector.py:4740-4780",
+        "tests/migrations/test_autodetector.py:4696-4738"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/gis_tests/gis_migrations/test_operations.py:271-278",
+        "tests/gis_tests/gis_migrations/test_operations.py:280-287"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/expressions_window/tests.py:1742-1751",
+        "tests/aggregation/tests.py:1892-1901"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/forms_tests/widget_tests/test_checkboxinput.py:7-42",
+        "tests/forms_tests/widget_tests/test_textinput.py:8-44"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/schema/tests.py:4128-4138",
+        "tests/schema/tests.py:3493-3503"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/gis_tests/distapp/tests.py:587-589",
+        "tests/gis_tests/distapp/tests.py:577-579"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/migrations/test_operations.py:1064-1078",
+        "tests/migrations/test_operations.py:1209-1223"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/migrations/test_autodetector.py:1509-1525",
+        "tests/migrations/test_autodetector.py:1490-1506"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/auth_tests/client.py:39-41",
+        "tests/auth_tests/client.py:43-45"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/invalid_models_tests/test_models.py:2506-2619",
+        "tests/invalid_models_tests/test_models.py:348-447"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/migrations/test_operations.py:2894-2934",
+        "tests/migrations/test_operations.py:2823-2863"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/forms_tests/tests/test_forms.py:462-489",
+        "tests/forms_tests/tests/test_forms.py:2021-2051"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "django/contrib/gis/gdal/envelope.py:154-162",
+        "django/contrib/gis/db/backends/base/models.py:88-96"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/forms_tests/tests/test_media.py:235-243",
+        "tests/forms_tests/tests/test_media.py:206-214"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/queries/test_qs_combinators.py:365-366",
+        "tests/queries/test_qs_combinators.py:487-488"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/forms_tests/tests/test_input_formats.py:97-105",
+        "tests/forms_tests/tests/test_input_formats.py:834-844"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/postgres_tests/test_operations.py:502-509",
+        "tests/postgres_tests/test_operations.py:566-573"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/model_forms/tests.py:1578-1607",
+        "tests/model_forms/tests.py:1527-1553"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/migrations/test_operations.py:3060-3109",
+        "tests/migrations/test_operations.py:3208-3256"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/schema/tests.py:1794-1838",
+        "tests/schema/tests.py:1749-1792"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "django/contrib/admin/options.py:576-589",
+        "django/contrib/admin/options.py:591-604"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/migrations/test_operations.py:6368-6370",
+        "tests/migrations/test_operations.py:2947-2949"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/check_framework/test_urls.py:37-46",
+        "tests/template_tests/test_extends.py:81-83"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/admin_views/test_password_form.py:56-60",
+        "tests/admin_views/test_password_form.py:45-49"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/gis_tests/gdal_tests/test_raster.py:742-762",
+        "tests/gis_tests/gdal_tests/test_raster.py:613-635"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/db_functions/math/test_round.py:34-36",
+        "tests/db_functions/math/test_round.py:105-107"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/serializers/test_jsonl.py:249-271",
+        "tests/serializers/test_jsonl.py:135-157"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/aggregation_regress/tests.py:1488-1489",
+        "tests/aggregation_regress/tests.py:1462-1463"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "django/contrib/postgres/indexes.py:219-229",
+        "django/contrib/postgres/indexes.py:199-209"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/generic_views/urls.py:141-150",
+        "tests/generic_views/urls.py:286-302"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/forms_tests/tests/test_input_formats.py:19-29",
+        "tests/forms_tests/tests/test_input_formats.py:301-309"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/m2m_signals/tests.py:511-532",
+        "tests/m2m_signals/tests.py:557-578"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/forms_tests/field_tests/test_nullbooleanfield.py:76-78",
+        "tests/forms_tests/field_tests/test_booleanfield.py:50-52"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "django/db/models/functions/datetime.py:426-439",
+        "django/db/models/functions/datetime.py:172-185"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "django/core/files/base.py:154-156",
+        "django/core/files/base.py:149-151"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/delete_regress/models.py:110-116",
+        "tests/proxy_models/models.py:128-137"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/forms_tests/tests/test_utils.py:193-195",
+        "tests/files/tests.py:76-80"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/schema/tests.py:4202-4206",
+        "tests/schema/tests.py:3618-3622"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/file_storage/tests.py:162-165",
+        "tests/file_storage/tests.py:237-240"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/migrations/test_state.py:646-647",
+        "tests/model_inheritance/test_abstract_inheritance.py:31-32"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/test_client_regress/tests.py:1116-1117",
+        "tests/test_client_regress/tests.py:1120-1121"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/expressions/tests.py:480-481",
+        "tests/expressions/tests.py:487-488"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/generic_views/test_base.py:396-397",
+        "tests/generic_views/test_base.py:406-407"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/conditional_processing/tests.py:61-65",
+        "tests/conditional_processing/tests.py:47-51"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/migrations/test_operations.py:5373-5382",
+        "tests/migrations/test_operations.py:6104-6113"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/forms_tests/widget_tests/test_splithiddendatetimewidget.py:22-83",
+        "tests/forms_tests/widget_tests/test_splitdatetimewidget.py:19-77"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/model_fields/test_booleanfield.py:79-81",
+        "tests/queries/test_qs_combinators.py:32-34"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/generic_relations/tests.py:688-690",
+        "tests/generic_relations/tests.py:705-707"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "django/contrib/admin/static/admin/js/admin/DateTimeShortcuts.js:246-280",
+        "django/contrib/admin/static/admin/js/admin/DateTimeShortcuts.js:118-151"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "django/contrib/sessions/backends/db.py:152-157",
+        "django/contrib/sessions/backends/db.py:126-129"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/forms_tests/tests/test_forms.py:2022-2060",
+        "tests/forms_tests/tests/test_forms.py:278-313"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/admin_inlines/models.py:187-192",
+        "tests/postgres_tests/models.py:165-174"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/admin_changelist/tests.py:1183-1185",
+        "tests/admin_views/test_autocomplete_view.py:388-388"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "django/core/exceptions.py:56-92",
+        "django/db/migrations/exceptions.py:10-37"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/postgres_tests/test_ranges.py:518-527",
+        "tests/postgres_tests/test_ranges.py:507-516"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/queries/tests.py:2004-2006",
+        "tests/cache/tests.py:461-463"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/cache/tests.py:1047-1048",
+        "tests/cache/tests.py:809-810"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/check_framework/test_urls.py:143-145",
+        "tests/gis_tests/gdal_tests/test_srs.py:354-356"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/migrations/test_autodetector.py:1360-1370",
+        "tests/migrations/test_autodetector.py:1342-1352"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/model_indexes/tests.py:72-73",
+        "tests/check_framework/tests.py:58-59"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/auth_tests/test_management.py:1210-1234",
+        "tests/auth_tests/test_management.py:1246-1270"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/admin_inlines/tests.py:1505-1520",
+        "tests/admin_inlines/tests.py:1698-1713"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/model_forms/test_modelchoicefield.py:278-285",
+        "tests/model_forms/test_modelchoicefield.py:249-254"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/migrations/test_executor.py:53-63",
+        "tests/migrations/test_executor.py:101-111"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/forms_tests/tests/test_formsets.py:1368-1387",
+        "tests/forms_tests/tests/test_formsets.py:1336-1355"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/migrations/test_state.py:894-907",
+        "tests/migrations/test_state.py:871-884"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/migrations/test_operations.py:2801-2836",
+        "tests/migrations/test_operations.py:2872-2907"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "tests/dates/tests.py:12-91",
+        "tests/datetimes/tests.py:10-96"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "tests/validation/tests.py:179-181",
+        "tests/validation/tests.py:155-157"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "tests/auth_tests/test_views.py:309-312",
+        "tests/auth_tests/test_views.py:356-359"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "tests/admin_inlines/models.py:244-267",
+        "tests/select_related/models.py:46-62"
+      ]
+    }
+  ],
+  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 200 candidates at this commit and no pair was called CLEARLY OUT by all of them. 10 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing."
+}

@@ -9,7 +9,7 @@ use crate::{
 
 // `ReportBoilerplateHint` and `ReportBoilerplateOccurrence` are
 // generated from `docs/models/live-ipc.td` by
-// `scripts/typediagram-gen.mjs`. The data shapes live in
+// `scripts/typediagram/generate.mjs`. The data shapes live in
 // `crate::wire_generated`; the constructor below stays here.
 pub use crate::wire_generated::{ReportBoilerplateHint, ReportBoilerplateOccurrence};
 

@@ -7,20 +7,13 @@
 // revision (not the wire generation) is the freshness token.
 
 import * as assert from "node:assert/strict";
-import {
-  bubbleCluster,
-  bubbleFixture,
-  deferredProbeClient,
-  editAt,
-  resolveProbe,
-} from "./bubble.helpers";
+import { FIXTURE_KIND_TITLE, bubbleCluster, bubbleFixture, deferredProbeClient, editAt, resolveProbe, withBubble } from "./bubble.helpers";
 import { reportWithClusters } from "./report.helpers";
 
 suite("LiveBubble stale-probe races", () => {
   test("a stalled probe rejecting after a newer probe rendered leaves the newer bubble intact", async () => {
     const { client, requests } = deferredProbeClient();
-    const { capture, bubble } = await bubbleFixture({ generation: 1, client });
-    try {
+    await withBubble({ generation: 1, client }, async ({ capture, bubble }) => {
       const probeA = bubble.probe(capture.editor, editAt(0, "aaaa"));
       const probeB = bubble.probe(capture.editor, editAt(6, "bbbb"));
       assert.equal(requests.length, 2, "both probes must dispatch a findSimilar request");
@@ -35,7 +28,7 @@ suite("LiveBubble stale-probe races", () => {
       await resolveProbe(requests[1], probeB, false);
       const rendered = capture.visible();
       assert.ok(rendered !== undefined, "probe B must render its bubble");
-      assert.match(rendered ?? "", /Identical code/, "B carries the report's bucket title");
+      assert.match(rendered ?? "", new RegExp(FIXTURE_KIND_TITLE), "B carries the clone kind verdict");
       assert.match(rendered ?? "", /×\s*5/, "B carries the authoritative occurrence count");
       assert.match(rendered ?? "", /A\.cs/, "B names the canonical file");
 
@@ -54,21 +47,19 @@ suite("LiveBubble stale-probe races", () => {
         /×\s*5/,
         "the surviving bubble text is B's, verbatim",
       );
-    } finally {
-      bubble.dispose();
-    }
+    
+    });
   });
 
   test("a probe resolving after a newer snapshot dropped its cluster paints nothing", async () => {
     const { client, requests } = deferredProbeClient();
-    const { store, capture, bubble } = await bubbleFixture({ generation: 1, client });
-    try {
+    await withBubble({ generation: 1, client }, async ({ store, capture, bubble }) => {
       const probeA = bubble.probe(capture.editor, editAt(0, "aaaa"));
 
       // The newer full snapshot omits c-a entirely — and settles every
       // retraction tombstone, which is exactly why the ledger cannot guard
       // this race on its own.
-      store.setSnapshot(reportWithClusters([bubbleCluster("c-other", 3, 0.95)]), 2);
+      store.setSnapshot(reportWithClusters([bubbleCluster("c-other", 3)]), 2);
       assert.equal(
         store.current.retractedClusters.size,
         0,
@@ -88,29 +79,27 @@ suite("LiveBubble stale-probe races", () => {
       // probe against the new snapshot still renders.
       const probeB = bubble.probe(capture.editor, editAt(6, "bbbb"));
       await resolveProbe(requests[1], probeB, undefined, [
-        bubbleCluster("c-other", 3, 0.95),
+        bubbleCluster("c-other", 3),
       ]);
       assert.match(
         capture.visible() ?? "",
-        /Identical code/,
+        new RegExp(FIXTURE_KIND_TITLE),
         "a fresh probe against the new snapshot must still render its bubble",
       );
       assert.match(capture.visible() ?? "", /×\s*2/, "with the new cluster's occurrence count");
-    } finally {
-      bubble.dispose();
-    }
+    
+    });
   });
 
   test("generation ABA cannot defeat freshness and the store never rolls backward", async () => {
     const { client, requests } = deferredProbeClient();
-    const { store, capture, bubble } = await bubbleFixture({ generation: 3, client });
-    try {
+    await withBubble({ generation: 3, client }, async ({ store, capture, bubble }) => {
       const revisionAtDispatch = store.current.revision;
       const probeA = bubble.probe(capture.editor, editAt(0, "aaaa"));
 
       // A stale completion labelled with an older generation must be
       // rejected outright: content and generation both stay put.
-      const staleSnapshot = reportWithClusters([bubbleCluster("c-stale", 9, 0.95)]);
+      const staleSnapshot = reportWithClusters([bubbleCluster("c-stale", 9)]);
       assert.equal(
         store.setSnapshot(staleSnapshot, 2),
         false,
@@ -132,7 +121,7 @@ suite("LiveBubble stale-probe races", () => {
       // generation, but different content — c-a is gone. The wire label
       // reads 3 again; only the client-owned revision records the change.
       assert.equal(
-        store.setSnapshot(reportWithClusters([bubbleCluster("c-other", 3, 0.95)]), 3),
+        store.setSnapshot(reportWithClusters([bubbleCluster("c-other", 3)]), 3),
         true,
         "a same-generation replacement is accepted",
       );
@@ -149,9 +138,8 @@ suite("LiveBubble stale-probe races", () => {
         "a probe dispatched before the ABA must not repaint the dropped cluster",
       );
       assert.equal(capture.visible(), undefined, "the surface stays empty");
-    } finally {
-      bubble.dispose();
-    }
+    
+    });
   });
 
   test("dispose() cancels the in-flight probe and strands its completion", async () => {

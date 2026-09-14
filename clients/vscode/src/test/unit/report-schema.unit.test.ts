@@ -1,68 +1,64 @@
-// Unit tests for the report-schema pure helpers. Bucket tests exercise
-// the canonical [CLONE-BUCKETS-ROUTING] table — every assertion here
-// mirrors one row of that table.
+// Unit tests for the report-schema pure helpers. The cluster wire model
+// carries cluster facts and mass only ([REPORT-CONTEXT-CLUSTER],
+// [RANK-MASS-SUM]): no clone-kind classification, no pair signals, no
+// interpretation, no language. Every assertion here mirrors one clause
+// of that contract.
 
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as reportModule from "../../types/report";
 import {
-  ACT_NOW_BUCKETS,
-  bucketLabels,
-  isActNow,
+  SEVERITIES,
+  Severity,
+  applyFacetFilter,
+  clusterBand,
+  clusterMass,
+  clusterSlug,
   occurrenceCount,
-  resolveBucket,
+  sanitizeFacetFilter,
+  severityLabel,
   type ReportCluster,
-  type ReportSignals,
 } from "../../types/report";
-import { wireCluster, type ClusterFixture } from "../cluster.helpers";
-import { signalsWith } from "../signals.helpers";
+import { occurrence, wireCluster, type ClusterFixture } from "../cluster.helpers";
 
-// `fused` is a confidence in [0,1], never a raw sum — the engine's gate
-// multiplies shape evidence by content evidence ([FUSION-CONTENT-GATE]).
-// Tests that need a specific band pass it explicitly.
-const signals = (
-  s: number,
-  j: number,
-  e: number,
-  fused = Math.min(1, Math.max(s, j, e)),
-  // What the engine would have stamped as this triple's shape reading.
-  // Staged here, never derived by the client ([FUSION-CONTENT-GATE]).
-  shape = Math.max(s, j),
-): ReportSignals =>
-  signalsWith("identical", {
-    structural: s,
-    token_jaccard: j,
-    shape,
-    embedding_cos: e,
-    fused,
-  });
+const UTF8_ENCODING = "utf8";
+const FIXTURE_TEN = 10;
+const FIXTURE_FORTY = 40;
+const PAIR_OCCURRENCE_COUNT = 2;
+const SEVERITY_COUNT = 4;
+const UNKNOWN_RANK_BAND = "catastrophic";
+const WIRE_CLUSTER_FIELDS = [
+  "id",
+  "rank",
+  "rank_band",
+  "mass",
+  "canonical_node_count",
+  "occurrences",
+  "occurrences_total",
+  "occurrence_count",
+  "occurrences_truncated",
+] as const;
 
-// Some rows here deliberately stage a bucket label the wire type
-// forbids — the empty label a v3 report carries, and an unknown one —
-// because `resolveBucket` must refuse to manufacture a verdict from
-// either. The engine-derived fields still come from the known bucket
-// when there is one.
-type ClusterOverrides = Partial<Omit<ClusterFixture, "bucket">> & { bucket?: string };
-
-const cluster = (overrides: ClusterOverrides = {}): ReportCluster => {
-  const { bucket, ...rest } = overrides;
-  const known = reportModule.BUCKETS.find((candidate) => candidate === bucket);
-  const base = wireCluster({
-    id: "x",
-    weight: 1,
-    size: 4,
-    canonical_node_count: 10,
-    bucket: known ?? "identical",
-    signals: signals(0, 0, 0),
+// A two-occurrence cluster whose mass is the fixture formula
+// (canonical nodes × (occurrences − 1)), staged through the shared
+// wireCluster helper so every suite agrees on the fixture contract.
+function clusterWith(overrides: Partial<ClusterFixture> = {}): ReportCluster {
+  return wireCluster({
+    id: "a1b2c3d4e5f67890",
+    rank: 1,
+    rank_band: "worst",
+    mass: FIXTURE_FORTY,
+    canonical_node_count: FIXTURE_TEN,
     occurrences: [
-      { path: "A.cs", start_byte: 0, end_byte: 10, hidden: false },
-      { path: "B.cs", start_byte: 0, end_byte: 10, hidden: false },
+      occurrence("/repo/A.cs", 0, FIXTURE_TEN),
+      occurrence("/repo/B.cs", FIXTURE_TEN, FIXTURE_FORTY),
     ],
-    ...rest,
+    occurrences_total: PAIR_OCCURRENCE_COUNT,
+    occurrence_count: PAIR_OCCURRENCE_COUNT,
+    ...overrides,
   });
-  return bucket === undefined ? base : { ...base, bucket };
-};
+}
 
 function reportTypesPath(): string {
   const compiledRun = path.resolve(__dirname, "../../../src/types/report.ts");
@@ -73,38 +69,17 @@ function reportTypesPath(): string {
 }
 
 function reportTypesSource(): string {
-  return fs.readFileSync(reportTypesPath(), "utf8");
-}
-
-function legacyName(): string {
-  return ["Verd", "ict"].join("");
-}
-
-/**
- * Asserts `resolveBucket` hands back the engine's own label for a signal
- * triple. Each [CLONE-BUCKETS-ROUTING] row respelled the same
- * build-cluster / resolve / compare shape; Deslop scored the copies
- * against this repo's own corpus. The row's name and comment stay on the
- * `test(..)` that carries them, so what each row proves is unchanged.
- */
-function assertCarriesBucket(
-  bucket: ReportCluster["bucket"],
-  structural: number,
-  token: number,
-  embedding: number,
-): void {
-  assert.equal(resolveBucket(cluster({ bucket, signals: signals(structural, token, embedding) })), bucket);
+  return fs.readFileSync(reportTypesPath(), UTF8_ENCODING);
 }
 
 suite("report schema helpers", () => {
-  // The reportable-confidence cutoff and the severity cut points were
-  // both client constants. They are the engine's, and the assertions that
-  // pinned their values moved with them: the cutoff to
-  // `deslop-core::pair::FUSED_THRESHOLD` (read here through the wire flag
-  // `meets_fused_gate`), the four band cut points to
-  // `deslop-core::report_weight::rank_band` and its `rank_band_cut_points`
-  // test. What is pinned here is that no copy of either survived.
-  test("the client owns neither the fused cutoff nor the severity cut points", () => {
+  // The severity cut points were once client constants; the assertions
+  // that pinned their values moved with them to
+  // `deslop-core::report_weight::rank_band` and its
+  // `rank_band_cut_points` test. The fused cutoff has a different fate:
+  // it is deleted outright — from the engine, the wire, and this client.
+  // The tests below pin that no copy of either survived.
+  test("the client owns neither a fused cutoff nor the severity cut points", () => {
     assert.ok(
       !("FUSED_THRESHOLD" in reportModule),
       "the reportable-confidence cutoff must exist only in the engine",
@@ -117,400 +92,145 @@ suite("report schema helpers", () => {
       !("rankPercentile" in reportModule),
       "the rank percentile must exist only in the engine",
     );
-    assert.equal(
-      cluster({ bucket: "identical" }).meets_fused_gate,
-      true,
-      "a byte-proven cluster arrives already judged against the cutoff",
-    );
-    assert.equal(
-      cluster({ bucket: "structural_only" }).meets_fused_gate,
-      false,
-      "and a demoted one arrives judged the other way",
-    );
-  });
-
-  // [CLONE-BUCKETS-ROUTING] These five rows were assertions about a
-  // UI-local routing table that no longer exists. They are re-stated —
-  // not weakened — against `resolveBucket`, the surface the extension
-  // actually calls: the engine's label is what every row must produce,
-  // whatever its signal triple would once have suggested. Two of the
-  // five previously asserted the *defective* contract and are inverted
-  // here; both inversions are called out on the row that carries them.
-  test("resolveBucket carries the engine's identical verdict", () => {
-    assertCarriesBucket("identical", 1.0, 1.0, 0);
-  });
-
-  test("resolveBucket carries the engine's same_behavior verdict", () => {
-    assertCarriesBucket("same_behavior", 0.2, 0.3, 0.9);
-  });
-
-  // ⚠️ INVERTED. This row used to assert `nearly_identical` for
-  // `structural 0.00, token 0.95`. The engine calls that
-  // `loosely_similar` — `classify_signals` requires `structural >= 0.20`
-  // before a token signal can reach an act-now bucket and has no
-  // low-structural arm at all — so the old expectation encoded the very
-  // divergence this change removes. Every assertion is kept; the
-  // expected value now agrees with the engine instead of contradicting it.
-  test("resolveBucket carries a weak-shape verdict as the hint the engine made it", () => {
-    const weakShape = cluster({
-      bucket: "loosely_similar",
-      signals: signals(0.0, 0.95, 0),
-    });
-    assert.equal(resolveBucket(weakShape), "loosely_similar");
-    assert.equal(
-      bucketLabels(resolveBucket(weakShape)).actionSentence,
-      "Loose textual overlap. Treat as a hint.",
-      "the user must not be told to act on a pair the engine ranked as a hint",
-    );
-  });
-
-  test("resolveBucket carries the engine's fused-family near-miss verdict", () => {
-    assertCarriesBucket("nearly_identical", 0.4, 0.96, 0);
-  });
-
-  test("resolveBucket carries the engine's loosely_similar verdict", () => {
-    assert.equal(
-      resolveBucket(cluster({ bucket: "loosely_similar", signals: signals(0.3, 0.4, 0.2) })),
-      "loosely_similar",
-    );
-  });
-
-  test("resolveBucket carries the engine's structural_only verdict", () => {
-    // The demoted tier is reachable only with content evidence, which is
-    // not on the wire — so this row is proof on its own that the label
-    // has to come from the engine.
-    assert.equal(
-      resolveBucket(cluster({ bucket: "structural_only", signals: signals(1.0, 0.0, 0) })),
-      "structural_only",
-    );
-    assert.equal(
-      bucketLabels("structural_only").plainTitle,
-      "Same shape, different content",
-    );
-  });
-
-  test("fused is a confidence in [0,1] that the content gate may pull below shape", () => {
-    // A fused value outside the unit interval is not a confidence, and a
-    // fixture carrying one silently invalidates every band built on it.
-    // The gate is one-directional: content evidence can only discount
-    // shape evidence, never inflate it past full confidence.
-    const gated = signals(1.0, 0.3, 0, 0.31);
-    for (const triple of [signals(1.0, 1.0, 0), signals(0.2, 0.3, 0.9), gated]) {
-      assert.ok(
-        triple.fused >= 0 && triple.fused <= 1,
-        `fused must be a confidence in [0,1], got ${triple.fused}`,
-      );
-    }
     assert.ok(
-      gated.fused < gated.structural,
-      "a demoted cluster's confidence must sit below its shape evidence",
-    );
-    assert.equal(
-      signals(1.0, 1.0, 0).fused,
-      1,
-      "byte-identical evidence carries full confidence",
-    );
-  });
-
-  // [CLONE-BUCKETS-ROUTING] The routing divergence found 17 Aug, pinned
-  // at the surface that ships. `classifyCluster` claimed byte-for-byte
-  // parity with `deslop-core::buckets::classify_signals` and had two arms
-  // the engine never carried: it gated on `structural > 0.0` where the
-  // engine gates on `structural >= 0.20`, and added
-  // `structural <= 0.01 && token >= 0.9` outright. Both triples below are
-  // `loosely_similar` in the engine, so a hint was repainted as an
-  // act-now "Review the locations" on the flagship surface.
-  test("a weak-shape pair the engine called a hint is never promoted to act-now", () => {
-    for (const triple of [signals(0.1, 0.96, 0), signals(0.0, 0.92, 0)]) {
-      const routed = resolveBucket(cluster({ bucket: "loosely_similar", signals: triple }));
-      assert.equal(
-        routed,
-        "loosely_similar",
-        `the engine's hint verdict must survive the triple ${JSON.stringify(triple)}`,
-      );
-      assert.equal(
-        bucketLabels(routed).actionSentence,
-        "Loose textual overlap. Treat as a hint.",
-        "the user must not be told to act on a pair the engine ranked as a hint",
-      );
-      assert.equal(bucketLabels(routed).aiMatch, false);
-    }
-  });
-
-  // DEFECT B1 — restored, re-stated against `resolveBucket`. The old
-  // `classifyCluster` could not see content evidence (it is not on the
-  // wire, #344) *and* was handed post-gate signals, so it read a proven
-  // rename's corrected triple as "identical" and told the user "Safe to
-  // extract — every copy is the same" about code whose identifiers all
-  // differ. Every assertion is preserved; the surface under test is the
-  // one the extension calls.
-  // → docs/plans/fused-score-followups.md § "Where fused stands against it"
-  test("a content-gated rename is never labelled byte-identical", () => {
-    // A maximal Type-2 rename proven by its literal anchors: the engine
-    // routes `nearly_identical` at fused 0.9 and renders token_jaccard
-    // 1.0 because the Merkle match already proves the token multiset
-    // (#232). The triple alone therefore reads "identical" — this is the
-    // exact shape that produced the false claim.
-    const rename = signals(1.0, 1.0, 0, 0.9);
-    assert.ok(rename.fused < 1.0, "fixture: a proven rename is not full confidence");
-    assert.equal(
-      rename.structural,
-      signals(1.0, 1.0, 0, 1.0).structural,
-      "fixture: its shape evidence is indistinguishable from a verbatim copy",
-    );
-    const routed = resolveBucket(cluster({ bucket: "nearly_identical", signals: rename }));
-    assert.equal(
-      routed,
-      "nearly_identical",
-      "a rename below full confidence must not be labelled byte-identical",
-    );
-    assert.equal(
-      bucketLabels(routed).actionSentence,
-      "Review the locations — small differences may matter.",
-      "the user must be told to review, not that extraction is safe",
-    );
-    assert.notEqual(
-      bucketLabels(routed).actionSentence,
-      bucketLabels("identical").actionSentence,
-      "the rename must not borrow the byte-identical action sentence",
-    );
-  });
-
-  // DEFECT B2 — restored, re-stated against `resolveBucket`. A shape-only
-  // family fell through the old `structural >= 0.99` arm into an act-now
-  // bucket — the exact false positive #341 exists to stop — because
-  // `lacks_content_support` is invisible from the signal triple.
-  // → docs/plans/fused-score-followups.md § "Where fused stands against it"
-  test("a shape-only family the content gate demoted is never promoted", () => {
-    // Sibling boilerplate: shape saturates, content evidence is absent,
-    // so the engine demotes it to `structural_only` at fused 0.31.
-    const shapeOnly = signals(1.0, 0.3, 0, 0.31);
-    const demoted = cluster({ bucket: "structural_only", signals: shapeOnly });
-    assert.equal(
-      demoted.meets_fused_gate,
-      false,
-      "fixture: the engine judged it under its own reportable cutoff",
+      !("resolveBucket" in reportModule),
+      "the clone-kind routing table must exist only in the engine",
     );
     assert.ok(
-      shapeOnly.structural >= 0.99,
-      "fixture: its shape signal is exactly what used to promote it",
-    );
-    const routed = resolveBucket(demoted);
-    assert.equal(
-      routed,
-      "structural_only",
-      "shape without content evidence must never reach an act-now bucket",
-    );
-    assert.equal(
-      bucketLabels(routed).plainTitle,
-      "Same shape, different content",
-      "the demoted family must keep its honest title",
-    );
-    assert.equal(bucketLabels(routed).aiMatch, false);
-  });
-
-  // The anti-regression assertion for the whole change: nothing in the
-  // client may re-derive a bucket from a signal triple. A cluster whose
-  // triple saturates on every axis, carrying no engine label, must still
-  // come back as the hint bucket — any surviving re-derivation would
-  // answer "identical" here.
-  test("an unlabelled cluster is a hint, however loudly its signals saturate", () => {
-    const unlabelled = resolveBucket(cluster({ bucket: "", signals: signals(1.0, 1.0, 1.0, 1.0) }));
-    assert.equal(
-      unlabelled,
-      "loosely_similar",
-      "a report with no engine verdict carries no verdict to render",
-    );
-    assert.equal(
-      bucketLabels(unlabelled).actionSentence,
-      "Loose textual overlap. Treat as a hint.",
-    );
-    assert.equal(
-      resolveBucket(cluster({ bucket: "not_a_bucket", signals: signals(1.0, 1.0, 1.0, 1.0) })),
-      "loosely_similar",
-      "an unrecognised label is no more a verdict than a missing one",
+      !("bucketLabels" in reportModule),
+      "clone-kind labels must not be spelled in the client",
     );
   });
 
-  test("every routed bucket carries a coherent, self-consistent label set", () => {
-    // Walks the routing table row by row. Each row asserts the bucket the
-    // UI resolves, then that the labels it will render for that bucket are
-    // usable on every surface: a jargon-free plain title, a hybrid title
-    // carrying the bracketed taxonomy for AI scrapers, and a complete
-    // action sentence. A row that routes correctly but renders an empty
-    // or malformed label is still a broken user-facing surface.
-    //
-    // The `nearly_identical` row's triple is `structural 0.00,
-    // token 0.95`, which the engine itself calls `loosely_similar` — it
-    // is kept verbatim on purpose. It is now a *cross-check*: the engine
-    // label must win over the triple, so a row whose two disagree is
-    // exactly the row that catches a re-derivation coming back.
-    const rows = [
-      { signals: signals(1.0, 1.0, 0, 1.0), bucket: "identical" as const },
-      { signals: signals(0.2, 0.3, 0.9, 0.9), bucket: "same_behavior" as const },
-      { signals: signals(1.0, 0.0, 0.0, 0.31), bucket: "structural_only" as const },
-      { signals: signals(0.0, 0.95, 0, 0.95), bucket: "nearly_identical" as const },
-      { signals: signals(0.3, 0.4, 0.2, 0.4), bucket: "loosely_similar" as const },
-    ];
-
-    for (const row of rows) {
-      const routed = resolveBucket(cluster({ bucket: row.bucket, signals: row.signals }));
-      assert.equal(
-        routed,
-        row.bucket,
-        `routing drifted for ${JSON.stringify(row.signals)}`,
-      );
-      const labels = bucketLabels(routed);
-      assert.ok(labels.plainTitle.length > 0, `${routed}: plain title must not be empty`);
-      assert.doesNotMatch(
-        labels.plainTitle,
-        /\bType-\d/,
-        `${routed}: the plain title must stay jargon-free`,
-      );
-      assert.match(
-        labels.hybridTitle,
-        /\[.+\]/,
-        `${routed}: the hybrid title must carry a bracketed taxonomy`,
-      );
-      assert.ok(
-        labels.hybridTitle.startsWith(labels.plainTitle),
-        `${routed}: the hybrid title must extend the plain title, not restate it`,
-      );
-      assert.match(
-        labels.actionSentence,
-        /\.$/,
-        `${routed}: the action sentence must be a complete sentence`,
-      );
-      assert.equal(
-        labels.aiMatch,
-        routed === "same_behavior",
-        `${routed}: only the embedding-pass bucket is an AI match`,
-      );
-    }
-  });
-
-  test("report types do not keep legacy clone bucket aliases (#84)", () => {
+  // The wire contract itself: the generated types are the single source
+  // the extension compiles against. If a fused field ever reappears on
+  // them, every admission surface regains a threshold to argue with —
+  // the exact defect this cutover removed.
+  test("the generated wire types carry no fused field on clusters", () => {
     const source = reportTypesSource();
-    const alias = legacyName();
-    const helper = ["verd", "ict", "Of"].join("");
-    assert.doesNotMatch(source, new RegExp(`export\\s+type\\s+${alias}\\b`));
-    assert.doesNotMatch(source, new RegExp(`function\\s+${helper}\\b`));
-    assert.doesNotMatch(source, new RegExp(`Legacy\\s+${alias}`));
-    assert.doesNotMatch(source, /\bDUPLICATE\b/);
-    assert.doesNotMatch(source, /\bNEAR-MISS\b/);
-    assert.doesNotMatch(source, /\bSEMANTIC MATCH\b/);
-  });
-
-  test("resolveBucket prefers JSON wire label over recomputation", () => {
-    const bucket = resolveBucket(
-      cluster({
-        bucket: "same_behavior",
-      }),
+    assert.doesNotMatch(source, /\bfused\b/, "no fused on the wire types");
+    assert.doesNotMatch(source, /\bmeets_fused_gate\b/, "no gate flag on the wire types");
+    const generated = fs.readFileSync(
+      path.resolve(__dirname, "../../../src/types/wire-generated.ts"),
+      UTF8_ENCODING,
     );
-    assert.equal(bucket, "same_behavior");
-  });
-
-  // ⚠️ INVERTED. This row used to assert that a report with no engine
-  // label is re-routed from its signal triple to `identical`. That is the
-  // defect: the client cannot see the content evidence, byte-equivalence
-  // proof or member spread the engine routed on, so "identical" there is
-  // manufactured — "Safe to extract — every copy is the same" asserted
-  // about code nothing has proven. The assertion is kept and its expected
-  // value corrected to the honest one.
-  test("resolveBucket never manufactures a verdict for a v3 report with no bucket", () => {
-    const bucket = resolveBucket(cluster({ bucket: "", signals: signals(1.0, 1.0, 0) }));
-    assert.equal(bucket, "loosely_similar");
-    assert.notEqual(
-      bucket,
-      "identical",
-      "an unproven triple must never be presented as byte-identical",
+    assert.doesNotMatch(generated, /\bfused\b/, "no fused in the generated wire model");
+    assert.doesNotMatch(
+      generated,
+      /\bmeets_fused_gate\b/,
+      "no gate flag in the generated wire model",
     );
   });
 
-  test("occurrenceCount reports the engine's count, not the loaded subset", () => {
-    // The live wire truncates `occurrences`, so the carried list is not
-    // the cluster. The count is computed once by
-    // `deslop-core::report::occurrence_count` and read verbatim here.
-    assert.equal(occurrenceCount(cluster({ occurrence_count: 35 })), 35);
-    const truncated = cluster({ occurrence_count: 35, occurrences_truncated: true });
-    assert.equal(truncated.occurrences.length, 2, "fixture: only two occurrences travelled");
-    assert.equal(
-      occurrenceCount(truncated),
-      35,
-      "a truncated wire list must never shrink the reported count",
-    );
-  });
-
-  test("occurrenceCount never falls back to a client-derived number", () => {
-    assert.equal(occurrenceCount(cluster()), 4, "the fixture's own count, stamped as the engine would");
-    assert.equal(
-      occurrenceCount(cluster({ occurrence_count: 2 })),
-      2,
-      "a smaller engine count is still the engine's answer",
-    );
-  });
-
-  test("bucketLabels hybrid_title carries bracketed Type-N on every bucket", () => {
-    assert.ok(bucketLabels("identical").hybridTitle.includes("[Type-1/2]"));
-    assert.ok(
-      bucketLabels("nearly_identical").hybridTitle.includes("[Type-3]"),
-    );
-    assert.ok(
-      bucketLabels("loosely_similar").hybridTitle.includes("[weak LSH]"),
-    );
-    assert.ok(bucketLabels("same_behavior").hybridTitle.includes("[Type-4"));
-  });
-
-  test("bucketLabels plain_title never contains Type-N", () => {
-    for (const b of [
-      "identical",
-      "nearly_identical",
-      "loosely_similar",
-      "same_behavior",
-    ] as const) {
-      const title = bucketLabels(b).plainTitle;
-      assert.ok(
-        !/\bType-\d/.test(title),
-        `plain_title must be jargon-free: ${title}`,
-      );
+  // [REPORT-CONTEXT-CLUSTER] A cluster surface renders cluster facts and mass
+  // only. The cluster type must not be able to spell a bucket, pair
+  // signals, an interpretation, or a language — the fields the old
+  // surfaces re-derived or quoted.
+  test("a wire cluster carries cluster facts and mass only", () => {
+    const cluster = clusterWith();
+    for (const field of WIRE_CLUSTER_FIELDS) {
+      assert.ok(field in cluster, `wire cluster must carry ${field}`);
+    }
+    const retired = [
+      "bucket",
+      "signals",
+      "signal_source",
+      "evidence_verdict",
+      "summary",
+      "interpretation",
+      "language",
+      "weight",
+      "size",
+    ] as const;
+    for (const field of retired) {
+      assert.equal(field in cluster, false, `wire cluster must not carry ${field}`);
     }
   });
 
-  // [VSIX-LIVE-BUBBLE] The act-now set is what the live bubble admits
-  // without a second opinion, so it must be exactly the buckets whose
-  // action sentence tells the user to do something now, and nothing else.
-  test("the act-now set is exactly the buckets that tell the user to act", () => {
-    assert.deepEqual([...ACT_NOW_BUCKETS], ["identical", "nearly_identical"]);
-    assert.ok(isActNow("identical"), "a byte-proven copy is act-now");
-    assert.ok(isActNow("nearly_identical"), "a proven near miss is act-now");
-    assert.equal(
-      isActNow("structural_only"),
-      false,
-      "the demoted tier says 'verify before extracting' — that is not act-now",
-    );
-    assert.equal(
-      isActNow("loosely_similar"),
-      false,
-      "a hint is not something to act on",
-    );
-    assert.equal(
-      isActNow("same_behavior"),
-      false,
-      "an AI match says 'read both before merging' — it earns its place on confidence, not on a verdict",
-    );
-    for (const bucket of ACT_NOW_BUCKETS) {
-      assert.match(
-        bucketLabels(bucket).actionSentence,
-        /extract|Review/,
-        `${bucket}: an act-now bucket must actually ask for an action`,
-      );
+  // Every occurrence on the wire carries line bounds; the extension's
+  // decoration surfaces resolve byte ranges against the editor only
+  // after the pair is verified, and a fixture without lines cannot.
+  test("every occurrence carries start_line and end_line", () => {
+    const cluster = clusterWith();
+    assert.equal(cluster.occurrences.length, PAIR_OCCURRENCE_COUNT);
+    for (const item of cluster.occurrences) {
+      assert.equal(typeof item.start_line, "number", "start_line must be a number");
+      assert.equal(typeof item.end_line, "number", "end_line must be a number");
+      assert.ok(item.end_line >= item.start_line, "end_line must not precede start_line");
     }
   });
 
-  test("only same_behavior is flagged as an AI match", () => {
-    assert.equal(bucketLabels("identical").aiMatch, false);
-    assert.equal(bucketLabels("nearly_identical").aiMatch, false);
-    assert.equal(bucketLabels("loosely_similar").aiMatch, false);
-    assert.equal(bucketLabels("same_behavior").aiMatch, true);
+  // [RANK-MASS-SUM] The duplicated mass is the worst-first ranking
+  // metric; the client carries the engine's value verbatim.
+  test("clusterMass carries the engine's mass verbatim", () => {
+    assert.equal(clusterMass(clusterWith()), FIXTURE_FORTY);
+    assert.equal(clusterMass(clusterWith({ mass: 1 })), 1);
+  });
+
+  // [SEVERITY-BAND] The band classifies the rank percentile. The engine
+  // stamps it; an empty string (a report written before the field
+  // existed) reads as the tail band.
+  test("clusterBand resolves the engine's rank_band, defaulting to faint", () => {
+    assert.equal(clusterBand(clusterWith({ rank_band: "worst" })), "worst");
+    assert.equal(clusterBand(clusterWith({ rank_band: "top10" })), "top10");
+    assert.equal(clusterBand(clusterWith({ rank_band: "mid" })), "mid");
+    assert.equal(clusterBand(clusterWith({ rank_band: "faint" })), "faint");
+    const legacy = clusterWith({ rank_band: "" as Severity });
+    assert.equal(clusterBand(legacy), "faint", "a legacy empty band reads as faint");
+    const unknown = clusterWith({ rank_band: UNKNOWN_RANK_BAND as Severity });
+    assert.equal(clusterBand(unknown), "faint", "an unknown band reads as faint");
+  });
+
+  // [SEVERITY-BAND] Every severity level in rank order, with a human
+  // label shared by every filter surface.
+  test("SEVERITIES is the complete rank-ordered band list", () => {
+    assert.deepEqual(SEVERITIES, ["worst", "top10", "mid", "faint"]);
+    assert.equal(SEVERITIES.length, SEVERITY_COUNT);
+    assert.equal(severityLabel("worst"), "Worst 1%");
+    assert.equal(severityLabel("top10"), "Top 10%");
+    assert.equal(severityLabel("mid"), "Mid 40%");
+    assert.equal(severityLabel("faint"), "Faint");
+  });
+
+  // [VSIX-CLUSTER-ID-CONSISTENCY] The stable display slug is the first
+  // seven hex chars of the id — the same identity on every surface.
+  test("clusterSlug is the id prefix shared across surfaces", () => {
+    assert.equal(clusterSlug(clusterWith()), "a1b2c3d");
+    assert.equal(clusterSlug(clusterWith({ id: "1234567abcd" })), "1234567");
+  });
+
+  // There is one occurrence-counting formula and it lives in Rust; the
+  // client carries the engine's count verbatim ([RANK-MASS-SUM]).
+  test("occurrenceCount carries the engine's count verbatim", () => {
+    assert.equal(occurrenceCount(clusterWith()), PAIR_OCCURRENCE_COUNT);
+    assert.equal(
+      occurrenceCount(clusterWith({ occurrence_count: FIXTURE_TEN })),
+      FIXTURE_TEN,
+    );
+  });
+
+  // [FACET-TOP-OFFENDERS-FILTER] Facets filter on the mass severity band
+  // only; a bad persisted value must never yield an empty tree.
+  test("sanitizeFacetFilter keeps only known severity bands", () => {
+    assert.deepEqual(sanitizeFacetFilter(["worst", "top10"]), { severities: ["worst", "top10"] });
+    assert.deepEqual(sanitizeFacetFilter([]), { severities: [] });
+    assert.deepEqual(
+      sanitizeFacetFilter(["identical", "worst", "banana"]),
+      { severities: ["worst"] },
+      "clone-kind values and typos are dropped, not kept",
+    );
+  });
+
+  // [FACET-TOP-OFFENDERS-FILTER] An empty value list means "show all";
+  // a non-empty list shows exactly the bands it names.
+  test("applyFacetFilter slices by severity band only", () => {
+    const worst = clusterWith({ id: "1111", rank_band: "worst" });
+    const mid = clusterWith({ id: "2222", rank_band: "mid" });
+    const faint = clusterWith({ id: "3333", rank_band: "faint" });
+    const all = [worst, mid, faint];
+    assert.deepEqual(applyFacetFilter(all, { severities: [] }), all);
+    assert.deepEqual(applyFacetFilter(all, { severities: ["worst"] }), [worst]);
+    assert.deepEqual(applyFacetFilter(all, { severities: ["mid", "faint"] }), [mid, faint]);
+    assert.deepEqual(applyFacetFilter(all, { severities: ["top10"] }), []);
   });
 });

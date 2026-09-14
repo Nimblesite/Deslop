@@ -1,28 +1,22 @@
 //! GH #66: endpoint mappings with different identifiers and literals
 //! must not be classified as identical code.
 
-use std::{fs, path::Path};
-
 use anyhow::{anyhow, Result};
 use serde_json::Value;
 
+use crate::common::signals::{assert_structural_only_contract, has_verbatim_pair};
 use crate::common::*;
 
-fn run_report(scan_root: &Path) -> Result<Value> {
-    let tmp = tempfile::tempdir()?;
-    let output = tmp.path().join("report");
-    let _assertion = deslop_cmd(scan_root, &output)?
-        .args(["--min-nodes", "30", "--embeddings", "off"])
-        .assert()
-        .success();
-    let mut json_path = output;
-    let _replaced = json_path.set_extension("json");
-    Ok(serde_json::from_str(&fs::read_to_string(json_path)?)?)
-}
+/// The node floor this fixture is judged at: large enough that only a
+/// whole route-handler body can clear it.
+const ROUTE_MAPPING_MIN_NODES: u32 = 30;
 
 #[test]
 fn issue_66_route_mappings_with_value_differences_are_not_identical() -> Result<()> {
-    let report = run_report(&fixture("csharp-issue-66-route-mapping"))?;
+    let report = run_report(
+        &fixture("csharp-issue-66-route-mapping"),
+        ROUTE_MAPPING_MIN_NODES,
+    )?;
     let clusters = report
         .get("clusters")
         .and_then(Value::as_array)
@@ -45,23 +39,17 @@ fn issue_66_route_mappings_with_value_differences_are_not_identical() -> Result<
         occurrences.len() >= 2,
         "target cluster must include both endpoint mappings: {cluster}"
     );
-    assert_ne!(
-        cluster.get("bucket").and_then(Value::as_str),
-        Some("identical"),
-        "value-different endpoint mappings must not use the identical bucket: {cluster}"
-    );
-    let interpretation = cluster
-        .get("interpretation")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("target cluster must carry interpretation copy: {cluster}"))?;
+    // The bucket label and the interpretation sentence are gone from the
+    // mass-only wire; what proves the mappings are NOT identical is the
+    // byte truth: their occurrences differ in raw bytes (different
+    // identifiers and literals), so the pair is a rename, never a copy
+    // ([PIPELINE-CLUSTER-CLOSURE]).
+    let scan_root = fixture("csharp-issue-66-route-mapping");
     assert!(
-        !interpretation.contains("Identical code"),
-        "value-different endpoint mappings must not be titled Identical code: {interpretation}"
+        !has_verbatim_pair(&scan_root, cluster)?,
+        "value-different endpoint mappings must not be byte-identical: {cluster}"
     );
-    assert!(
-        !interpretation.contains("every copy is the same"),
-        "value-different endpoint mappings must not claim every copy is the same: {interpretation}"
-    );
+    assert_structural_only_contract(cluster, "issue #66 route mapping");
     Ok(())
 }
 

@@ -108,7 +108,7 @@ fn boundary_scan(
             ));
         }
     }
-    for child in crate::refactor::preconditions::named_children(node) {
+    for child in crate::ast::named_children(node) {
         boundary_scan(child, span, tables, scope_kinds)?;
     }
     Ok(())
@@ -260,7 +260,7 @@ fn interpolation_guard(
                         .to_owned(),
                 );
             }
-            stack.extend(crate::refactor::preconditions::named_children(node));
+            stack.extend(crate::ast::named_children(node));
         }
     }
     Ok(())

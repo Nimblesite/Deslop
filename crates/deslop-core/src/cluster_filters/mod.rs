@@ -44,6 +44,11 @@
 //! - [CLONE-NOISE-PY-DICT-FIXTURE] — small nested dict literals
 //!   inside pytest test functions share AST shape across files but
 //!   encode unrelated request/response payloads.
+//! - [CLONE-NOISE-PY-COLLECTION-SIBLING-CELLS] — two entries of one
+//!   collection literal instance admit as a structural pair at a
+//!   permissive `--min-nodes`. Cells of one record are its fields, not
+//!   extractable duplication; a byte-identical repeated entry still
+//!   surfaces.
 //! - async `SQLAlchemy` row-building pytest fixtures repeat the
 //!   same add/commit/refresh/return setup idiom by design.
 //! - `mod e0001;` / `use foo::Bar;` top-level declarations
@@ -92,30 +97,37 @@
 //!   They are un-refactorable data, not logic. Suppressed only when the
 //!   members differ in raw bytes (a verbatim copy survives) and none holds
 //!   a closure/lambda initialiser (logic-bearing fields keep clustering).
-//! - [CLONE-NOISE-PY-MODULE-CONSTANT-TABLE] — a Python module that
-//!   is just a run of module-level `NAME = <literal>` constant assignments
-//!   (SQL query strings, registry/config values) normalises to the same
-//!   subtree as any other such table after identifier/literal/comment
+//! - [CLONE-NOISE-CONSTANT-TABLE] — a range that is just a run of
+//!   module-level `NAME = <literal>` declarations (SQL query strings,
+//!   registry/config values, a test suite's data blobs) normalises to the
+//!   same subtree as any other such table after identifier/literal/comment
 //!   stripping, so two unrelated tables cluster at `structural=1.00`. A
 //!   table of distinct named constants is data, not extractable logic.
-//!   Suppressed only when the members differ in raw bytes (a verbatim copy
-//!   survives).
+//!   One rule, per-language only in the grammar of "a top-level constant
+//!   declaration": Python `NAME = <literal>` (#133) and Rust `const` /
+//!   `static` items (#362). Suppressed only when the members differ in raw
+//!   bytes (a verbatim copy survives).
 //!
 //! The filter is purely additive: it never re-routes a `nearly_identical`
 //! cluster as `identical`, only suppresses noise. Any cluster whose
 //! member sources cannot be parsed (missing language plug-in, partial
 //! source bytes) falls through unchanged.
 
+mod body_shape;
 mod calls;
+mod constant_table;
+mod contract_index;
 mod dart;
-mod dart_data_table;
 mod declaration_family;
 mod ecmascript;
+mod family;
 mod forwarding;
+mod node_search;
+mod override_marker;
 mod polymorphic;
 mod python;
 mod python_class_shapes;
-mod python_constants;
+mod python_collection_cells;
 mod python_dict_assert;
 mod python_idioms;
 mod python_module_preamble;
@@ -123,127 +135,243 @@ mod python_orm;
 mod role_compat;
 mod rust;
 mod snippets;
+mod structural_families;
+mod verbatim_subgroup;
 
 use std::{
     collections::{BTreeSet, HashMap},
     hash::BuildHasher,
+    sync::Arc,
 };
 
 use tree_sitter::Node;
 
 pub(crate) use declaration_family::is_single_file_declaration_family;
-pub(crate) use snippets::ParseCache;
+pub use snippets::ParseCache;
 use snippets::{collect_snippets, parse_for, uniform_language, Snippet};
+pub(crate) use structural_families::split_structural_families;
+pub(crate) use verbatim_subgroup::{
+    escapes_as_copy, noise_workers, split_noise_verbatim_families, NOISE_CHUNK_CLUSTERS,
+};
 
 use crate::{
-    ast::ByteRange, clone_category::CloneCategory, fingerprint::Fingerprint, state::FileId,
+    ast::{named_children, ByteRange},
+    fingerprint::Fingerprint,
+    state::FileId,
 };
 
 /// Decides whether `cluster` is a known noise pattern that must not be
-/// surfaced as duplication. Returns `true` when the cluster should be
-/// hidden from the ranked report.
+/// surfaced as duplication. Returns **which** filter recognised it, and
+/// `None` when none did.
+///
+/// Callers that only need "hide this" use `.is_some()`. The identity is
+/// retained for observability; the verbatim escape hatch applies every
+/// qualifying exact-byte family independently of the filter.
 pub(crate) fn is_noise_pattern<S: BuildHasher>(
     members: &[Fingerprint],
     sources: &HashMap<FileId, Vec<u8>>,
     file_languages: &HashMap<FileId, &'static str, S>,
     cache: &ParseCache,
-) -> bool {
-    let Some(language) = uniform_language(members, file_languages) else {
-        return false;
-    };
-    let Some(snippets) = collect_snippets(members, sources, language, cache) else {
-        return false;
-    };
-    // Generic, language-agnostic noise checks run for every language (they
-    // key off per-language kind maps). The language-specific idiom filters
-    // only fire for their own language, so gate them by `language` rather
-    // than walking every Dart/C# cluster's CST through Python/Rust matchers
-    // that can never match — that wasted walk dominated analysis time on
-    // large codegen-heavy repos ([CLONE-NOISE-REPARSE-CACHE]).
-    polymorphic::is_polymorphic_signature_cluster(&snippets)
-        || is_signature_only_cluster(&snippets)
-        || calls::is_literal_variation_call_cluster(&snippets)
-        || language_specific_noise(language, &snippets)
+) -> Option<NoiseFilter> {
+    let language = pre_gate(
+        uniform_language(members, file_languages),
+        NoiseFilter::UniformLanguage,
+        members.len(),
+        cache,
+    )?;
+    let snippets = pre_gate(
+        collect_snippets(members, sources, language, cache),
+        NoiseFilter::CollectSnippets,
+        members.len(),
+        cache,
+    )?;
+    run_noise_checks(language, &snippets, sources, file_languages, cache)
 }
 
-/// Classifies a cluster's [`CloneCategory`] ([RANK-CATEGORY]) by re-parsing
-/// its member sources the same way [`is_noise_pattern`] does. Returns
-/// [`CloneCategory::DataTable`] for a data-structure literal whose repeated
-/// rows are un-refactorable data; otherwise [`CloneCategory::Logic`]. The
-/// verbatim escape hatch (`raw_snippet_texts_differ`) lives inside each
-/// per-language predicate, so a byte-for-byte copied table stays `Logic`.
+/// Records a pre-gate that could not even reach the filters, and passes
+/// its value through.
+fn pre_gate<T>(
+    value: Option<T>,
+    filter: NoiseFilter,
+    members: usize,
+    cache: &ParseCache,
+) -> Option<T> {
+    if value.is_none() {
+        cache.record_noise(filter, members, false, std::time::Duration::ZERO);
+    }
+    value
+}
+
+/// Runs every noise filter over `snippets` in short-circuit order,
+/// returning the first that fires.
 ///
-/// Distinct from `is_noise_pattern`: a `DataTable` is real repetition the
-/// user *may* act on (a builder, an asset file), so the policy demotes or
-/// drops it per config rather than silently hiding it.
-pub(crate) fn classify_clone_category<S: BuildHasher>(
-    members: &[Fingerprint],
-    literal_fraction: f64,
+/// Generic, language-agnostic checks run for every language (they key
+/// off per-language kind maps). The language-specific idiom filters only
+/// fire for their own language, so gate them by `language` rather than
+/// walking every Dart/C# cluster's CST through Python/Rust matchers that
+/// can never match — that wasted walk dominated analysis time on large
+/// codegen-heavy repos ([CLONE-NOISE-REPARSE-CACHE]). Each check runs
+/// only until one fires, and the counters record only what actually ran
+/// ([PERF-FLUTTER-TODO-OBSERVABILITY]).
+fn run_noise_checks<S: BuildHasher>(
+    language: &str,
+    snippets: &[Snippet<'_>],
     sources: &HashMap<FileId, Vec<u8>>,
     file_languages: &HashMap<FileId, &'static str, S>,
     cache: &ParseCache,
-) -> CloneCategory {
-    let Some(language) = uniform_language(members, file_languages) else {
-        return CloneCategory::Logic;
-    };
-    let Some(snippets) = collect_snippets(members, sources, language, cache) else {
-        return CloneCategory::Logic;
-    };
-    if is_data_table_cluster(language, literal_fraction, &snippets) {
-        CloneCategory::DataTable
-    } else {
-        CloneCategory::Logic
-    }
-}
-
-/// Dispatches data-table detection. The language-agnostic
-/// literal-dominance test ([CLONE-NOISE-LITERAL-TABLE]) covers
-/// pure value tables in every language; the Dart predicate additionally
-/// recognises collection literals of constructor rows
-/// ([CLONE-NOISE-DART-DATA-TABLE-LITERAL]), whose identifier-heavy rows
-/// sit below the literal-dominance floor.
-fn is_data_table_cluster(language: &str, literal_fraction: f64, snippets: &[Snippet<'_>]) -> bool {
-    is_literal_dominated_table(literal_fraction, snippets)
-        || match language {
-            "dart" => dart_data_table::is_dart_collection_data_table_cluster(snippets),
-            _ => false,
+) -> Option<NoiseFilter> {
+    let polymorphic =
+        || polymorphic::is_polymorphic_signature_cluster(snippets, sources, file_languages, cache);
+    let signature_only = || is_signature_only_cluster(snippets, cache);
+    let literal_calls = || calls::is_literal_variation_call_cluster(snippets, cache);
+    let constant_table = || constant_table::is_constant_table_cluster(snippets);
+    let checks: [(NoiseFilter, &dyn Fn() -> bool); 4] = [
+        (NoiseFilter::Polymorphic, &polymorphic),
+        (NoiseFilter::SignatureOnly, &signature_only),
+        (NoiseFilter::LiteralCalls, &literal_calls),
+        (NoiseFilter::ConstantTable, &constant_table),
+    ];
+    for (filter, check) in checks {
+        if let Some(fired) = timed(filter, check, snippets.len(), cache) {
+            return Some(fired);
         }
+    }
+    timed_language_specific(language, snippets, cache)
 }
 
-/// Language-agnostic data-table test ([CLONE-NOISE-LITERAL-TABLE]): the
-/// cluster's normalised leaves are overwhelmingly literal positions —
-/// measured in the pipeline, where the normalised trees live — and at
-/// least two members differ in raw bytes. The verbatim escape hatch is
-/// the same #190 rule the Dart predicate applies: a byte-for-byte
-/// copied table is genuine duplication and stays `logic`.
-fn is_literal_dominated_table(literal_fraction: f64, snippets: &[Snippet<'_>]) -> bool {
-    literal_fraction >= crate::buckets::LITERAL_TABLE_MIN_FRACTION
-        && snippets.len() >= 2
-        && raw_snippet_texts_differ(snippets)
+/// Times one generic check, records its counter row, and reports the
+/// filter when it fired.
+fn timed(
+    filter: NoiseFilter,
+    check: &dyn Fn() -> bool,
+    snippets: usize,
+    cache: &ParseCache,
+) -> Option<NoiseFilter> {
+    let started = std::time::Instant::now();
+    let result = check();
+    cache.record_noise(filter, snippets, result, started.elapsed());
+    result.then_some(filter)
+}
+
+/// Times the language-specific bank. Its counter row stays under the one
+/// `language_specific` label so the per-run log is unchanged, while the
+/// returned identity is the individual filter that fired.
+fn timed_language_specific(
+    language: &str,
+    snippets: &[Snippet<'_>],
+    cache: &ParseCache,
+) -> Option<NoiseFilter> {
+    let started = std::time::Instant::now();
+    let fired = language_specific_noise(language, snippets, cache);
+    cache.record_noise(
+        NoiseFilter::LanguageSpecific,
+        snippets.len(),
+        fired.is_some(),
+        started.elapsed(),
+    );
+    fired
+}
+
+/// One cluster-noise sub-check, for [`ParseCache`]'s aggregate counters
+/// ([PERF-FLUTTER-TODO-OBSERVABILITY]): which filter the corpus-scale
+/// time actually goes to, and which of them ever fire.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum NoiseFilter {
+    /// The uniform-language pre-gate.
+    UniformLanguage,
+    /// The snippet-collection pre-gate.
+    CollectSnippets,
+    /// The polymorphic-signature contract filter.
+    Polymorphic,
+    /// The signature-only filter.
+    SignatureOnly,
+    /// The literal-variation call filter.
+    LiteralCalls,
+    /// The constant-table filter.
+    ConstantTable,
+    /// The language-specific idiom filters.
+    LanguageSpecific,
+    /// The Python sibling-cell filter, named apart from the rest of the
+    /// language-specific bank for per-filter observability.
+    PyCollectionSiblingCells,
+}
+
+impl NoiseFilter {
+    /// Stable label for the aggregate record.
+    pub(crate) const fn label(self) -> &'static str {
+        match self {
+            Self::UniformLanguage => "uniform_language",
+            Self::CollectSnippets => "collect_snippets",
+            Self::Polymorphic => "polymorphic",
+            Self::SignatureOnly => "signature_only",
+            Self::LiteralCalls => "literal_calls",
+            Self::ConstantTable => "constant_table",
+            Self::LanguageSpecific => "language_specific",
+            Self::PyCollectionSiblingCells => "py_collection_sibling_cells",
+        }
+    }
+
+    /// Whether a byte-identical family must span two files before it
+    /// escapes this filter ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE]).
+    ///
+    /// Every filter here recognises a family that *may* be spread over
+    /// many files, so byte-identity confined to one file is better
+    /// explained by the idiom than by a paste — except the sibling-cell
+    /// filter, whose members must already share one file and one literal
+    /// node. Asking a family that is single-file by construction to span
+    /// two files is a question with one answer, and it closed the escape
+    /// hatch on that route permanently
+    /// ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL]).
+    pub(crate) const fn demands_cross_file_copy(self) -> bool {
+        !matches!(self, Self::PyCollectionSiblingCells)
+    }
 }
 
 /// Language-specific idiom filters, dispatched by language so a cluster is
 /// only walked by matchers that can fire for it. C# has no idiom filter
 /// today; Dart suppresses const-data-registry field clusters. Both
 /// also rely on the generic checks plus the fusion and report-hide gates.
-fn language_specific_noise(language: &str, snippets: &[Snippet<'_>]) -> bool {
+fn language_specific_noise(
+    language: &str,
+    snippets: &[Snippet<'_>],
+    cache: &ParseCache,
+) -> Option<NoiseFilter> {
+    let generic = NoiseFilter::LanguageSpecific;
     match language {
-        "dart" => {
-            dart::is_dart_class_field_declaration_cluster(snippets)
-                || dart::is_dart_widget_scaffold_cluster(snippets)
-        }
+        "dart" => (dart::is_dart_class_field_declaration_cluster(snippets, cache)
+            || dart::is_dart_widget_scaffold_cluster(snippets))
+        .then_some(generic),
         "python" => python_noise(snippets),
-        "rust" => rust_noise(snippets),
+        "rust" => rust_noise(snippets).then_some(generic),
         "javascript" | "typescript" | "tsx" => {
-            ecmascript::is_ecmascript_data_shape_cluster(snippets)
+            ecmascript::is_ecmascript_data_shape_cluster(snippets).then_some(generic)
         }
-        _ => false,
+        _ => None,
     }
 }
 
 /// All Python idiom noise filters (/
-/// #112/#114/#115/#121/#126/#133 and monkeypatch scaffolding).
-fn python_noise(snippets: &[Snippet<'_>]) -> bool {
+/// #112/#114/#115/#121/#126/#133 and monkeypatch scaffolding), in
+/// short-circuit order, reporting which one fired.
+///
+/// The sibling-cell filter is named apart from the rest because its
+/// members must already share one file *and* one literal node, so a
+/// byte-identical family it recognises can never span two files
+/// ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL]). Its
+/// position in the chain is unchanged: a cluster an earlier filter
+/// claims is still credited to that filter.
+fn python_noise(snippets: &[Snippet<'_>]) -> Option<NoiseFilter> {
+    if python_noise_before_cells(snippets) {
+        return Some(NoiseFilter::LanguageSpecific);
+    }
+    if python_collection_cells::is_collection_sibling_cell_cluster(snippets) {
+        return Some(NoiseFilter::PyCollectionSiblingCells);
+    }
+    python_noise_after_cells(snippets).then_some(NoiseFilter::LanguageSpecific)
+}
+
+/// The Python idiom filters that run before the sibling-cell check.
+fn python_noise_before_cells(snippets: &[Snippet<'_>]) -> bool {
     python_idioms::is_generated_template_output_cluster(snippets)
         || python_idioms::is_jwt_hmac_independent_verifier_cluster(snippets)
         || python_idioms::is_monkeypatch_scaffolding_literal_cluster(snippets)
@@ -254,11 +382,14 @@ fn python_noise(snippets: &[Snippet<'_>]) -> bool {
         || python_orm::is_sqlalchemy_mapped_column_cluster(snippets)
         || python::is_test_dict_literal_cluster(snippets)
         || python::is_pytest_fixture_boilerplate_cluster(snippets)
-        || python_class_shapes::is_strenum_class_shape_cluster(snippets)
+}
+
+/// The Python idiom filters that run after the sibling-cell check.
+fn python_noise_after_cells(snippets: &[Snippet<'_>]) -> bool {
+    python_class_shapes::is_strenum_class_shape_cluster(snippets)
         || python_class_shapes::is_pydantic_partial_update_cluster(snippets)
         || python::is_parametric_invariant_test_cluster(snippets)
         || python_module_preamble::is_module_preamble_sequence_cluster(snippets)
-        || python_constants::is_module_constant_table_cluster(snippets)
 }
 
 /// All Rust idiom noise filters.
@@ -270,24 +401,22 @@ fn rust_noise(snippets: &[Snippet<'_>]) -> bool {
         || rust::is_rust_struct_field_declaration_cluster(snippets)
 }
 
-/// Decides whether an embedding-dominant `same_behavior` cluster pairs
-/// members of incompatible top-level roles — a class/type definition
-/// with a function/method (issue
-/// [CLONE-NOISE-EMBEDDING-ROLE-MISMATCH]). Returns `true` when the
-/// cluster should be hidden. The caller restricts this to the
-/// `same_behavior` bucket so deterministic Type-1/2/3 clusters are
-/// untouched. Falls through to `false` when sources or a uniform
-/// language are unavailable.
+/// Decides whether two exact pair endpoints hold incompatible top-level
+/// roles — a class/type definition and a function/method
+/// ([CLONE-NOISE-EMBEDDING-ROLE-MISMATCH]). Unresolved roles do not
+/// reject the candidate pair.
 pub(crate) fn is_embedding_role_mismatch<S: BuildHasher>(
-    members: &[Fingerprint],
+    left: &Fingerprint,
+    right: &Fingerprint,
     sources: &HashMap<FileId, Vec<u8>>,
     file_languages: &HashMap<FileId, &'static str, S>,
     cache: &ParseCache,
 ) -> bool {
-    let Some(language) = uniform_language(members, file_languages) else {
+    let members = [left.clone(), right.clone()];
+    let Some(language) = uniform_language(&members, file_languages) else {
         return false;
     };
-    let Some(snippets) = collect_snippets(members, sources, language, cache) else {
+    let Some(snippets) = collect_snippets(&members, sources, language, cache) else {
         return false;
     };
     role_compat::is_role_incompatible_embedding_match(&snippets)
@@ -328,6 +457,20 @@ pub(super) fn is_multi_member_language_cluster(snippets: &[Snippet<'_>], languag
     snippets.len() >= 2 && snippets.iter().all(|snippet| snippet.language == language)
 }
 
+/// Returns every member's shape when `snippets` is a multi-member cluster
+/// written wholly in `language` and `shape_of` recognises every member;
+/// `None` otherwise. Every shape-comparing language filter opens this
+/// way, so the gate and the all-or-nothing collection live here once.
+pub(super) fn language_cluster_shapes<'snip, 'src, Shape>(
+    snippets: &'snip [Snippet<'src>],
+    language: &str,
+    shape_of: impl FnMut(&'snip Snippet<'src>) -> Option<Shape>,
+) -> Option<Vec<Shape>> {
+    is_multi_member_language_cluster(snippets, language)
+        .then(|| snippets.iter().map(shape_of).collect())
+        .flatten()
+}
+
 /// Returns true when at least two raw reported snippet ranges differ.
 pub(super) fn raw_snippet_texts_differ(snippets: &[Snippet<'_>]) -> bool {
     let Some(first) = snippets.first().and_then(snippet_range_text) else {
@@ -344,11 +487,9 @@ pub(super) fn node_contains_kind(node: Node<'_>, kind: &str) -> bool {
     if node.kind() == kind {
         return true;
     }
-    let mut cursor = node.walk();
-    let found = node
-        .named_children(&mut cursor)
-        .any(|child| node_contains_kind(child, kind));
-    found
+    named_children(node)
+        .into_iter()
+        .any(|child| node_contains_kind(child, kind))
 }
 
 /// Returns true when `needle` occurs in `bytes`.
@@ -386,16 +527,27 @@ pub(super) fn trim_ascii_start(bytes: &[u8]) -> &[u8] {
 /// erases the distinguishing tokens too.
 ///
 /// We suppress these clusters only when at least two of the enclosing
-/// function bodies differ in raw source bytes. A real Type-2 clone
-/// where two functions share the same signature and body would have
-/// identical body bytes, so this check keeps genuine duplication.
-fn is_signature_only_cluster(snippets: &[Snippet<'_>]) -> bool {
+/// function bodies differ as normalised trees
+/// ([`body_shape::body_kind_stream`]). A real Type-1/Type-2 clone
+/// where two functions share the same signature and body — byte for
+/// byte or under a consistent rename — has equal streams, so genuine
+/// duplication keeps clustering.
+fn is_signature_only_cluster(snippets: &[Snippet<'_>], cache: &ParseCache) -> bool {
     if snippets.len() < 2 {
         return false;
     }
-    let shapes: Option<Vec<Vec<String>>> = snippets
+    let shapes: Option<Vec<Arc<Vec<body_shape::OwnedShapeToken>>>> = snippets
         .iter()
-        .map(snippet_body_shape_when_signature_only)
+        .map(|snippet| {
+            cache.signature_shape(snippet, || {
+                snippet_body_shape_when_signature_only(snippet).map(|stream| {
+                    stream
+                        .iter()
+                        .map(body_shape::OwnedShapeToken::from)
+                        .collect()
+                })
+            })
+        })
         .collect();
     let Some(shapes) = shapes else { return false };
     let Some(first) = shapes.first() else {
@@ -404,17 +556,18 @@ fn is_signature_only_cluster(snippets: &[Snippet<'_>]) -> bool {
     shapes.iter().any(|shape| shape != first)
 }
 
-/// Returns the enclosing function body's AST node-kind sequence when
-/// `snippet.range` lies entirely inside that function's signature
-/// (before the body) — the signature-only match condition for
-/// [CLONE-NOISE-SIGNATURE-ONLY]. The node-kind sequence is the
-/// flattened, ordered list of every named descendant's kind so two
-/// bodies that share AST shape (and differ only by literals/identifiers)
-/// compare equal — i.e. a legitimate near-miss cluster keeps clustering.
-/// Returns `None` when the snippet is not contained in a function, when
-/// the function has no `body` field, or when the range intersects the
-/// body in any way.
-fn snippet_body_shape_when_signature_only(snippet: &Snippet<'_>) -> Option<Vec<String>> {
+/// Returns the enclosing function body's normalised kind stream
+/// ([`body_shape::body_kind_stream`]) when `snippet.range` lies
+/// entirely inside that function's signature (before the body) — the
+/// signature-only match condition for [CLONE-NOISE-SIGNATURE-ONLY].
+/// Two bodies that share AST shape (and differ only by literals,
+/// identifiers, or comments) compare equal — i.e. a legitimate
+/// near-miss cluster keeps clustering. Returns `None` when the snippet
+/// is not contained in a function, when the function has no `body`
+/// field, or when the range intersects the body in any way.
+fn snippet_body_shape_when_signature_only<'src>(
+    snippet: &Snippet<'src>,
+) -> Option<Vec<body_shape::ShapeToken<'src>>> {
     let tree = parse_for(snippet)?;
     let function = enclosing_kind(
         tree.root_node(),
@@ -425,21 +578,7 @@ fn snippet_body_shape_when_signature_only(snippet: &Snippet<'_>) -> Option<Vec<S
     if snippet.range.end > body.start_byte() {
         return None;
     }
-    let mut kinds: Vec<String> = Vec::new();
-    collect_named_kinds(body, &mut kinds);
-    Some(kinds)
-}
-
-/// Pushes every named descendant's `kind` into `kinds` in source order.
-/// Used by [`snippet_body_shape_when_signature_only`] so cluster members
-/// whose bodies share AST shape compare equal regardless of literal or
-/// identifier divergence.
-fn collect_named_kinds(node: Node<'_>, kinds: &mut Vec<String>) {
-    let mut cursor = node.walk();
-    for child in node.named_children(&mut cursor) {
-        kinds.push(child.kind().to_owned());
-        collect_named_kinds(child, kinds);
-    }
+    Some(body_shape::body_kind_stream(body, snippet.source))
 }
 
 /// Returns the set of tree-sitter node kinds that count as function
@@ -482,17 +621,65 @@ pub(super) const fn function_kinds(language: &str) -> &'static [&'static str] {
     }
 }
 
+/// The declaration shell the widened polymorphic-subject resolution may
+/// walk through ([CLONE-NOISE-POLYMORPHIC-SIGNATURE]): when a member
+/// view is wider than any single function, the subject is the sole
+/// function the range contains with nothing but declaration scaffolding
+/// around it. A row lists the grammar's inert shell kinds — the file
+/// root, the class/mixin/enum/extension containers, and constructor
+/// signatures, none of which execute; kinds that can carry behaviour
+/// (function bodies, field initialisers) are deliberately absent, so a
+/// member containing them vetoes the widened resolution and keeps the
+/// component surfaced. A language with no row keeps the
+/// containing-function behaviour.
+pub(super) const fn declaration_shell_kinds(language: &str) -> &'static [&'static str] {
+    match language.as_bytes() {
+        b"python" => &[
+            "module",
+            "class_definition",
+            "block",
+            "decorated_definition",
+            "decorator",
+        ],
+        b"dart" => &[
+            "source_file",
+            "class_declaration",
+            "class_body",
+            "class_member",
+            "declaration",
+            "constant_constructor_signature",
+            "constructor_signature",
+            "constructor_param",
+            "formal_parameter_list",
+            "optional_formal_parameters",
+            "formal_parameter",
+            "super_formal_parameter",
+            "super",
+            "superclass",
+            "type",
+            "type_identifier",
+            "identifier",
+            "annotation",
+            "enum_declaration",
+            "enum_body",
+            "mixin_declaration",
+            "extension_declaration",
+            "extension_body",
+            "function_signature",
+        ],
+        _ => &[],
+    }
+}
+
 /// Walks `node` looking for an identifier with the requested bytes.
 pub(super) fn node_contains_identifier(node: Node<'_>, source: &[u8], needle: &[u8]) -> bool {
     if node.kind() == "identifier" && source.get(node.start_byte()..node.end_byte()) == Some(needle)
     {
         return true;
     }
-    let mut cursor = node.walk();
-    let found = node
-        .named_children(&mut cursor)
-        .any(|child| node_contains_identifier(child, source, needle));
-    found
+    named_children(node)
+        .into_iter()
+        .any(|child| node_contains_identifier(child, source, needle))
 }
 
 /// Walks `root` looking for the smallest descendant of `kinds` whose
@@ -511,10 +698,7 @@ pub(crate) fn enclosing_kind<'tree>(
         if kinds.contains(&node.kind()) {
             best = Some(node);
         }
-        let mut cursor = node.walk();
-        for child in node.named_children(&mut cursor) {
-            stack.push(child);
-        }
+        stack.extend(named_children(node));
     }
     best
 }

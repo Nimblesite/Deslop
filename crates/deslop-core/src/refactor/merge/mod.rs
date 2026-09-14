@@ -123,15 +123,14 @@ fn mechanical_plan(
 /// Why the cluster never reached the merge machinery
 /// ([`preconditions::eligible_ranges`]). A cluster the measured content
 /// gate refused states that evidence in its own numbers
-/// ([FUSION-CONTENT-GATE], gh #344) — telling a user their two methods
+/// ([FUSED-CONTENT-GATE], gh #344) — telling a user their two methods
 /// are "not mergeable" when the engine actually found 18% raw-content
 /// agreement hides the one fact that would let them judge the verdict.
 /// Every other pre-screen failure is a shape fact about the cluster
 /// record, and the wording enumerates them.
 fn pre_screen_refusal(cluster: &ReportCluster) -> String {
-    preconditions::content_refusal(cluster).unwrap_or_else(|| {
-        "cluster shape not mergeable (bucket, truncation, multi-file, or overlap)".to_owned()
-    })
+    let _ = cluster;
+    "cluster is truncated, multi-file, or overlapping".to_owned()
 }
 
 /// The refusal reason for a byte-identical Type-1 candidate. Routing

@@ -7,17 +7,19 @@
 import * as fs from "node:fs";
 import * as vscode from "vscode";
 
+const UTF8_ENCODING = "utf8";
+
 import { occurrenceDisplayLocation } from "../locations";
-import { formatScorePrecise } from "../types/format";
+import { formatMass } from "../types/format";
 import { languageForPath } from "../types/languages";
 import { ReportStore } from "../reportStore";
 import {
   ReportCluster,
   ReportOccurrence,
-  bucketLabels,
   clusterSlug,
+  kindTaxonomy,
+  kindTitle,
   occurrenceCount,
-  resolveBucket,
 } from "../types/report";
 import { ClusterNode, OccurrenceNode } from "../tree/providers";
 import { resolveOccurrenceUri } from "./register";
@@ -136,8 +138,7 @@ async function openOccurrenceNonPreview(
 
 /// Builds the clipboard text for [`copyClusterLocations`].
 export function clusterLocationsText(cluster: ReportCluster): string {
-  const bucket = bucketLabels(resolveBucket(cluster)).plainTitle;
-  const header = `cluster ${cluster.id} · ${bucket} · ${occurrenceCount(cluster)} occurrences`;
+  const header = `cluster ${cluster.id} · ${kindTitle(cluster.kind)} · mass ${formatMass(cluster.mass)} · ${occurrenceCount(cluster)} occurrences`;
   const rows = cluster.occurrences.map(humanLocation);
   return [header, ...rows].join("\n");
 }
@@ -147,18 +148,14 @@ export function aiPayloadForCluster(
   cluster: ReportCluster,
   rank: number,
 ): string {
-  const bucket = resolveBucket(cluster);
-  const labels = bucketLabels(bucket);
   const header = [
     `slug: ${clusterSlug(cluster)}`,
     `cluster_id: ${cluster.id}`,
     `rank: ${rank}`,
-    `bucket: ${bucket} (${labels.taxonomyLabel})`,
-    `weight: ${formatScorePrecise(cluster.weight)}`,
-    `size: ${cluster.size}`,
+    `kind: ${cluster.kind} (${kindTitle(cluster.kind)} — ${kindTaxonomy(cluster.kind)})`,
+    `mass: ${formatMass(cluster.mass)}`,
     `canonical_node_count: ${cluster.canonical_node_count}`,
     `occurrences: ${occurrenceCount(cluster)}`,
-    signalsLine(cluster),
   ];
   const rows = cluster.occurrences.map(
     (o) => `- ${o.path} | ${humanLocation(o)} | ${o.start_byte}..${o.end_byte}`,
@@ -210,31 +207,18 @@ function humanLocation(occurrence: ReportOccurrence): string {
   return occurrenceDisplayLocation(occurrence)?.label ?? occurrence.path;
 }
 
-function signalsLine(cluster: ReportCluster): string {
-  const s = cluster.signals;
-  return (
-    `signals: structural=${formatScorePrecise(s.structural)} ` +
-    `token=${formatScorePrecise(s.token_jaccard)} ` +
-    `embed=${formatScorePrecise(s.embedding_cos)} ` +
-    `fused=${formatScorePrecise(s.fused)}`
-  );
-}
-
 function parentClusterLines(
   parent: ReportCluster,
   store: ReportStore,
 ): string[] {
-  const bucket = resolveBucket(parent);
-  const labels = bucketLabels(bucket);
   const all = store.current.report?.clusters ?? [];
   const rankIndex = all.findIndex((c) => c.id === parent.id);
   return [
     `cluster_id: ${parent.id}`,
     `rank: ${rankIndex >= 0 ? rankIndex + 1 : "?"}`,
-    `bucket: ${bucket} (${labels.taxonomyLabel})`,
-    `weight: ${formatScorePrecise(parent.weight)}`,
-    `size: ${parent.size}`,
-    signalsLine(parent),
+    `kind: ${parent.kind} (${kindTitle(parent.kind)} — ${kindTaxonomy(parent.kind)})`,
+    `mass: ${formatMass(parent.mass)}`,
+    `canonical_nodes: ${parent.canonical_node_count}`,
     `sibling_occurrences: ${Math.max(parent.occurrences.length - 1, 0)}`,
   ];
 }
@@ -267,12 +251,12 @@ function dedupeOccurrences(
 function readOccurrenceBytes(occurrence: ReportOccurrence): string {
   try {
     const uri = resolveOccurrenceUri(occurrence.path);
-    const content = fs.readFileSync(uri.fsPath, "utf8");
-    const buffer = Buffer.from(content, "utf8");
+    const content = fs.readFileSync(uri.fsPath, UTF8_ENCODING);
+    const buffer = Buffer.from(content, UTF8_ENCODING);
     const clamp = (n: number): number => Math.max(0, Math.min(n, buffer.length));
     return buffer
       .slice(clamp(occurrence.start_byte), clamp(occurrence.end_byte))
-      .toString("utf8");
+      .toString(UTF8_ENCODING);
   } catch {
     return "";
   }

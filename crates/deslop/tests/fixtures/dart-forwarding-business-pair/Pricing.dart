@@ -7,19 +7,19 @@
 // duplication is liftable by parameterising `computePrice`.
 //
 // `quarterlyFee`/`annualCharge` are the one-call arrow form, renamed
-// end to end so their raw bytes mostly disagree and content evidence
-// cannot promote them out of `structural_only`. Their shared string
-// argument is identical deliberately: same-callee *string*-literal
-// variation is [CLONE-NOISE-LITERAL-VARIATION-CALLS] territory,
-// suppressed by design, and this fixture pins the reach the forwarding
-// proof added *beyond* that filter.
+// end to end. Three of eight positions agree and the rename carries
+// five anchors, so under [FUSED-CONTENT-GATE]'s anchor mass the
+// one-line pair sits below the support floor and is not a finding.
+// Their shared `"tier"` is identical deliberately: same-callee
+// *string*-literal variation is [CLONE-NOISE-LITERAL-VARIATION-CALLS]
+// territory, and this fixture pins the reach beyond that filter.
 //
 // `standardTotal`/`premiumTotal` are the bound-result form whose
 // binding is passed through a second call; their invariant `roundMoney`
 // position keeps them outside the literal-variation sequence rule.
 //
-// Hiding either pair is a false negative: a wrapper is proven by
-// *where the call goes* ([RANK-STRUCTURAL-ONLY-FORWARDING]), and these
+// Hiding the bound-result pair is a false negative: a wrapper is proven
+// by *where the call goes* ([RANK-STRUCTURAL-ONLY-FORWARDING]), and these
 // calls go nowhere but back into the class's own logic.
 class Order {}
 

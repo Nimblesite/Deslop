@@ -1,11 +1,12 @@
 ---
 layout: layouts/docs.njk
 title: 快速开始 — 安装 Deslop 并查找重复代码
-description: 安装 Deslop，在九种编程语言中查找重复代码。VS Code 扩展一次安装即捆绑实时编辑器警告、面向编码智能体的检查与 CLI。仅需 CLI 可使用 Homebrew 和 Scoop。
+description: 安装 Deslop，在九种编程语言中查找重复代码。一个 VS Code 扩展即可获得实时警告、面向编码智能体的 MCP 检查和 CLI。
 eleventyNavigation:
   key: 快速开始
   order: 1
 icon: rocket_launch
+docsGroup: start
 lang: zh
 ---
 
@@ -15,11 +16,9 @@ lang: zh
 
 安装它的首选方式是 **VS Code 扩展**。一次安装即可获得全部三个接口面：实时编辑器警告、智能体写代码前所做的那次检查，以及 CLI。
 
-> **JetBrains 插件**（先支持 Rider，随后是 IntelliJ IDEA、PyCharm、WebStorm、RustRover、CLion）正在积极开发中。Zed 与 Neovim 已列入路线图。在它们发布之前，VSIX 是首要安装方式，而 Homebrew tap / Scoop bucket 则是仅需 CLI 时的快捷方式。
-
 ## 安装（首选） —— VS Code 扩展
 
-直接从 **VS Code Marketplace** 安装。无需下载，无需管理文件 —— 挑选离你最近的方式即可：
+从 **VS Code Marketplace** 安装：
 
 - **在 VS Code 中：** 打开**扩展**（`⇧⌘X` / `Ctrl+Shift+X`），搜索 **Deslop**，点击**安装**。
 - **命令行：** `code --install-extension nimblesite.deslop-live`
@@ -49,7 +48,7 @@ brew install nimblesite/tap/deslop
 deslop --version
 ```
 
-Tap 源：[github.com/Nimblesite/homebrew-tap](https://github.com/Nimblesite/homebrew-tap)。
+Homebrew 配方源：[github.com/Nimblesite/homebrew-tap](https://github.com/Nimblesite/homebrew-tap)。
 
 ### Windows（Scoop）
 
@@ -63,7 +62,7 @@ Bucket 源：[github.com/Nimblesite/scoop-bucket](https://github.com/Nimblesite/
 
 ### macOS / Linux（curl）
 
-没有 Homebrew？直接从最新的 GitHub release 拉取归档文件。以下脚本会解析最新版本号，选择对应平台，校验官方发布的 SHA-256 校验和，并安装与 Homebrew formula 相同的三个二进制文件（`deslop`、`deslop-lsp`、`deslop-mcp`）。脚本采用失败即终止的方式：下载或校验和验证失败时，不会解压也不会安装任何内容：
+没有 Homebrew？直接从最新的 GitHub 发布版拉取归档文件。以下脚本会解析最新版本号，选择对应平台，校验官方发布的 SHA-256 校验和，并安装与 Homebrew 配方相同的三个二进制文件（`deslop`、`deslop-lsp`、`deslop-mcp`）。脚本采用失败即终止的方式：下载或校验和验证失败时，不会解压也不会安装任何内容：
 
 ```bash
 (
@@ -110,11 +109,11 @@ deslop .
 
 ```
 .deslop/
-  deslop-report.json   # canonical, agent-consumable
-  deslop-report.txt    # line-oriented plain text
-  deslop-report.html   # standalone, human-readable
-  logs/                # timestamped run logs
-  cache/               # fingerprints and embeddings; safe to delete
+  deslop-report.json   # 权威格式，供智能体读取
+  deslop-report.txt    # 按行组织的纯文本
+  deslop-report.html   # 独立文件，供人阅读
+  logs/                # 按时间戳命名的运行日志
+  cache/               # 指纹与嵌入缓存；可安全删除
 ```
 
 使用 `--output <prefix>` 可以把报告（及其日志）改写到别处。
@@ -131,7 +130,7 @@ deslop . --min-nodes 20
 
 ## 启用语义检测 —— 行为相同、代码不同（Type-4）
 
-结构与 token 通道是确定性的，无需联网即可运行。行为相同的匹配（Type-4） —— 行为相同、语法不同 —— 需要嵌入（向量嵌入）。嵌入**默认关闭**：
+结构与词元通道是确定性的，无需联网即可运行。行为相同的匹配（Type-4） —— 行为相同、语法不同 —— 需要嵌入（向量嵌入）。嵌入**默认关闭**：
 
 ```bash
 deslop . --embeddings auto
@@ -169,7 +168,7 @@ report_hide = [
 默认情况下，无论发现多少重复，`deslop` 都会以 `0` 退出 —— 它只报告，不评判，因此绝不会破坏一个你并未要求它把关的构建。一旦选择启用门禁，当全仓库范围的重复超过你的上限时，它会以 `3` 退出（使构建失败）。可以传入一个标志用于一次性运行，或将上限提交入库，让本地运行、CI 与智能体共享同一个数值：
 
 ```bash
-deslop . --fail-over 5.0          # exit 3 if more than 5% of analysed LOC is duplicated
+deslop . --fail-over 5.0          # 已分析 LOC 中的重复超过 5% 时以 3 退出
 ```
 
 ```toml
@@ -179,11 +178,3 @@ max_duplication_percent = 5.0
 ```
 
 `--fail-over` 会覆盖配置键；`--fail-over 0` 在任何重复时都会失败；`--no-fail-over` 会为单次本地运行清除门禁。完整的[退出码对照表](/zh/docs/configuration/#exit-codes)在配置参考中，而 [GitHub Action](/zh/docs/github-action/) 为 CI 封装了同一套门禁。
-
-## 下一步做什么
-
-1. 阅读 [工作原理](/zh/docs/how-it-works/)，理解排名公式与实时流水线。
-2. 阅读 [AI 智能体](/zh/docs/ai-integration/)，把 `deslop-mcp` 接入 Claude Code、Cursor、Continue 或 Codex —— 然后把智能体本身指向[面向 AI](/zh/docs/for-ai/)，那是写给机器的操作手册，其中包括 MCP 不可用时该怎么做。
-3. 当你需要了解某个面板标签、评分或操作的含义时，阅读 [VS Code](/zh/docs/vscode-cluster-panel/)。
-4. 阅读[配置与报告](/zh/docs/configuration/)，了解每一个 `.deslop.toml` 键、每一个命令行参数、三种报告格式与退出码。
-5. 查看[发布](/zh/releases/)以获取当前 VSIX、CLI 归档、校验和与变更日志链接。

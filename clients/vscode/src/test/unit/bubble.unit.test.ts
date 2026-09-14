@@ -5,43 +5,31 @@ import * as assert from "node:assert/strict";
 import {
   inlineText,
   ghostText,
-  signalStrip,
   shortPath,
   bubbleHover,
 } from "../../bubble/live";
 import * as liveBubble from "../../bubble/live";
 import { clusterHoverMarkdown } from "../../clusterHover";
-import { ReportCluster } from "../../types/report";
-import { occurrence, wireCluster } from "../cluster.helpers";
-import { bucketSignals, signalsWith } from "../signals.helpers";
+import { kindTitle, ReportCluster } from "../../types/report";
+import { FIXTURE_KIND, occurrence, wireCluster } from "../cluster.helpers";
 
-function cluster(
-  signals = signalsWith("nearly_identical", {
-    structural: 1,
-    token_jaccard: 0.9,
-    shape: 1,
-    embedding_cos: 0.5,
-    fused: 0.95,
-  }),
-): ReportCluster {
+const IDENTICAL_KIND = "identical";
+
+function cluster(): ReportCluster {
   return wireCluster({
     id: "abcdef0123456789",
-    weight: 3,
-    size: 4,
-    canonical_node_count: 5,
-    bucket: "identical",
-    signals,
+    mass: 3,
+    canonical_node_count: 4,
     occurrences: [
       occurrence("/tmp/a/b/Alpha.cs", 0, 10),
       occurrence("/tmp/a/b/Beta.cs", 0, 10),
     ],
     occurrence_count: 4,
-    interpretation: "interp",
   });
 }
 
 suite("bubble rendering helpers", () => {
-  test("inlineText includes the severity dot, bucket label, authoritative count, and filename", () => {
+  test("inlineText includes the count and filename", () => {
     const text = inlineText(cluster(), "worst");
     assert.match(text, /×\s*4/);
     assert.match(text, /Alpha\.cs/);
@@ -54,24 +42,54 @@ suite("bubble rendering helpers", () => {
     assert.doesNotMatch(text, /Alpha/);
   });
 
-  test("ghostText encodes the signal strip", () => {
+  test("ghostText encodes the tree-branch prefix and count", () => {
     const text = ghostText(cluster(), "top10");
     assert.match(text, /└─/);
     assert.match(text, /×\s*4/);
   });
 
-  test("signalStrip clamps inputs to the bar range", () => {
-    const strip = signalStrip(
-      cluster(
-        signalsWith("identical", {
-          structural: 2,
-          token_jaccard: -1,
-          embedding_cos: 0.5,
-          fused: 1,
-        }),
-      ),
-    );
-    assert.equal(strip.length, 3);
+  test("the ghost line renders no pair evidence for any cluster", () => {
+    // [FUSED-PAIR-SIGNALS] Admission signals (structural, token, embedding,
+    // content similarity) are pair-only and never touch a cluster surface.
+    // The ghost line carries the verdict, slug and count — never the former
+    // `pair 1↔2` bar strip.
+    const c = cluster();
+    const ghost = ghostText(c, "top10");
+    assert.equal(ghost.includes("pair"), false, "no pair label may render");
+    assert.equal(ghost.includes("↔"), false, "no pair separator may render");
+    assert.match(ghost, /└─/);
+    assert.match(ghost, /×\s*4/);
+    for (const glyph of ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]) {
+      assert.equal(
+        ghost.includes(glyph),
+        false,
+        `signal bar glyph ${glyph} must not render on a cluster surface`,
+      );
+    }
+  });
+
+  test("no cluster renders pair scores", () => {
+    // The former strip showed the elected pair's bars when a source was
+    // named and nothing otherwise. Pair evidence now renders on no cluster
+    // surface at all, so both arms assert the same absence.
+    const sourced = cluster();
+    const unsourced = cluster();
+    for (const [context, c] of [
+      ["sourced cluster", sourced],
+      ["unsourced cluster", unsourced],
+    ] as const) {
+      assert.equal(ghostText(c, "top10").includes("pair"), false, context);
+      assert.equal(
+        ghostText(c, "top10").includes("█"),
+        false,
+        `${context}: no bar glyph`,
+      );
+      assert.equal(
+        inlineText(c, "top10").includes("pair"),
+        false,
+        `${context}: inline line carries no pair label`,
+      );
+    }
   });
 
   test("shortPath returns the basename for posix and windows separators", () => {
@@ -80,31 +98,36 @@ suite("bubble rendering helpers", () => {
     assert.equal(shortPath("no-separator"), "no-separator");
   });
 
-  test("bubbleHover renders three action links", () => {
+  test("bubbleHover links open and dismiss, never an implicit compare", () => {
     const md = bubbleHover(cluster());
     const text = md.value;
     assert.match(text, /command:deslop.openCluster/);
-    assert.match(text, /command:deslop.compareWithCanonical/);
     assert.match(text, /command:deslop.bubble.dismissCluster/);
+    // [VSIX-PAIR-COMPARE] A bubble hover names one cluster — it can never
+    // supply both pair endpoints, so no compare link may render here.
+    assert.doesNotMatch(text, /command:deslop\.compareWithCanonical/);
+    assert.doesNotMatch(text, /command:deslop\.comparePair/);
   });
 
-  // Audience: HUMAN. Issue #30. The plain human bucket label
+  // Audience: HUMAN. Issue #30. The plain human clone-kind title
   // ("Identical code", "Nearly identical code", …) must be bold in
-  // the first line — never the hybridTitle taxonomy variant.
-  test("bubbleHover bucket label in the title is the plain human name (#30)", () => {
+  // the first line — never the taxonomy jargon ([CLONE-KIND-LABELS]).
+  test("bubbleHover title is the plain human clone kind (#30)", () => {
     const c = cluster();
-    c.signals = bucketSignals("identical");
     const text = bubbleHover(c).value;
     const firstLine = text.split("\n")[0] ?? "";
     assert.match(
       firstLine,
-      /\*\*[0-9a-f]+ Identical code\*\*/,
-      `human title must contain the plain bucket label; got first line: ${firstLine}`,
+      new RegExp(`\\*\\*[0-9a-f]+ ${kindTitle(FIXTURE_KIND)}\\*\\*`),
+      `human title must carry the cluster's kind title; got first line: ${firstLine}`,
     );
-    assert.doesNotMatch(
-      firstLine,
-      /Type-\d/,
-      `human title must not expose taxonomy Type-N label: ${firstLine}`,
+    assert.doesNotMatch(firstLine, /Type-/, `no taxonomy jargon in the title: ${firstLine}`);
+    const identical = { ...c, kind: IDENTICAL_KIND } as const;
+    const identicalFirstLine = bubbleHover(identical).value.split("\n")[0] ?? "";
+    assert.match(
+      identicalFirstLine,
+      new RegExp(`\\*\\*[0-9a-f]+ ${kindTitle(IDENTICAL_KIND)}\\*\\*`),
+      `a byte-identical cluster is titled as such: ${identicalFirstLine}`,
     );
   });
 
@@ -166,9 +189,9 @@ suite("bubble rendering helpers", () => {
     );
     assert.match(bubble.value, /^\*\*abcdef0 [A-Z][A-Za-z, ]+\*\* × 4/);
     assert.match(bubble.value, /Canonical: `.*Alpha\.cs`/);
-    assert.match(bubble.value, /command:deslop\.compareWithCanonical/);
     assert.match(bubble.value, /command:deslop\.openCluster/);
     assert.match(bubble.value, /command:deslop\.bubble\.dismissCluster/);
+    assert.doesNotMatch(bubble.value, /command:deslop\.compareWithCanonical/);
   });
 
   test("renderBubbleParts is the single rebuild path for live bubble text (#46)", () => {
@@ -195,8 +218,12 @@ suite("bubble rendering helpers", () => {
     const parts = renderBubbleParts(c, "top10");
     assert.equal(inlineText(c, "top10"), parts.inline);
     assert.equal(ghostText(c, "top10"), parts.ghost);
-    assert.equal(signalStrip(c), parts.signalStrip);
     assert.equal(bubbleHover(c).value, parts.hover.value);
+    assert.equal(
+      "signalStrip" in parts,
+      false,
+      "no bubble render part may carry a pair signal strip",
+    );
     assert.match(parts.inline, /\babcdef0\b/);
     assert.match(parts.ghost, /\babcdef0\b/);
     assert.match(parts.hover.value, /^\*\*abcdef0 /);
@@ -211,7 +238,7 @@ suite("bubble rendering helpers", () => {
   test("compact hover uses stable slug, not rank, and closes bold cleanly", () => {
     const c = cluster();
     c.id = "ab3f9c2def012345";
-    const md = clusterHoverMarkdown(c, { showCategory: false });
+    const md = clusterHoverMarkdown(c, { showVerdict: false });
     const firstLine = md.value.split("\n")[0] ?? "";
 
     assert.doesNotMatch(
@@ -234,7 +261,7 @@ suite("bubble rendering helpers", () => {
   test("full hover uses stable slug, not rank, in the bold headline", () => {
     const c = cluster();
     c.id = "ab3f9c2def012345";
-    const md = clusterHoverMarkdown(c, { showCategory: true });
+    const md = clusterHoverMarkdown(c, { showVerdict: true });
     const firstLine = md.value.split("\n")[0] ?? "";
 
     assert.doesNotMatch(

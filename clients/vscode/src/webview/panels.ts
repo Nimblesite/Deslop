@@ -11,9 +11,28 @@ import { reportWithDisplayLocations } from "../locations";
 import { logWarn } from "../logging";
 import { ReportStore } from "../reportStore";
 import { anchorForClusterId, ClusterAnchor, clusterPanelFeed } from "../clusterSelection";
-import { Report, ReportOccurrence } from "../types/report";
+import { PairEndpoint, Report, ReportOccurrence } from "../types/report";
 
 type PanelKind = "cluster" | "report" | "duplication";
+
+const CLUSTER_PANEL_KIND: PanelKind = "cluster";
+const REPORT_PANEL_KIND: PanelKind = "report";
+const DUPLICATION_PANEL_KIND: PanelKind = "duplication";
+
+// [VSIX-PAIR-COMPARE] The wire endpoint identity: path plus byte range. A
+// payload without all three well-typed fields is not an endpoint. The shape
+// is the generated wire type — a second hand-written copy here could drift
+// from what the engine actually sends.
+export type PairEndpointPayload = PairEndpoint;
+
+export function compareEndpointFromPayload(value: unknown): PairEndpointPayload | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const candidate = value as Partial<PairEndpointPayload>;
+  if (typeof candidate.path !== "string" || candidate.path.length === 0) return undefined;
+  if (typeof candidate.start_byte !== "number" || !Number.isFinite(candidate.start_byte)) return undefined;
+  if (typeof candidate.end_byte !== "number" || !Number.isFinite(candidate.end_byte)) return undefined;
+  return { path: candidate.path, start_byte: candidate.start_byte, end_byte: candidate.end_byte };
+}
 
 interface WebviewPanelState {
   panel: vscode.WebviewPanel;
@@ -23,39 +42,49 @@ interface WebviewPanelState {
 
 const activePanels = new Map<string, WebviewPanelState>();
 
+// Reveal-or-create, shared by every panel: a second open of the same key
+// raises the live panel instead of stacking a duplicate, and disposal drops
+// both the store subscription and the registry entry.
+function openPanel(
+  context: vscode.ExtensionContext,
+  store: ReportStore,
+  key: string,
+  kind: PanelKind,
+  title: string,
+  selection?: ClusterSelection,
+): void {
+  const existing = activePanels.get(key);
+  if (existing) return existing.panel.reveal(vscode.ViewColumn.Active);
+  const panel = createPanel(context, kind, title);
+  const unsub = wirePanel(panel, store, kind, selection);
+  wireMessages(panel, store);
+  panel.onDidDispose(() => {
+    unsub.dispose();
+    activePanels.delete(key);
+  });
+  activePanels.set(key, { panel, kind, storeSubscription: unsub });
+}
+
 export function openClusterPanel(
   context: vscode.ExtensionContext,
   store: ReportStore,
   clusterId: string,
 ): void {
-  const key = `cluster:${clusterId}`;
-  const existing = activePanels.get(key);
-  if (existing) return existing.panel.reveal(vscode.ViewColumn.Active);
   const anchor = anchorForClusterId(store.current.report, clusterId);
-  const panel = createPanel(context, "cluster", `Deslop: cluster ${clusterId}`);
-  const unsub = wirePanel(panel, store, "cluster", { anchor });
-  wireMessages(panel, store);
-  panel.onDidDispose(() => {
-    unsub.dispose();
-    activePanels.delete(key);
-  });
-  activePanels.set(key, { panel, kind: "cluster", storeSubscription: unsub });
+  openPanel(
+    context,
+    store,
+    `cluster:${clusterId}`,
+    CLUSTER_PANEL_KIND,
+    `Deslop: cluster ${clusterId}`,
+    { anchor },
+  );
 }
 
 // [VSIX-REPORT-WEBVIEW] Full report webview — the host pushes report
 // snapshots; the webview stays dumb and renders from store signals.
 export function openReportPanel(context: vscode.ExtensionContext, store: ReportStore): void {
-  const key = "report";
-  const existing = activePanels.get(key);
-  if (existing) return existing.panel.reveal(vscode.ViewColumn.Active);
-  const panel = createPanel(context, "report", "Deslop: report");
-  const unsub = wirePanel(panel, store, "report");
-  wireMessages(panel, store);
-  panel.onDidDispose(() => {
-    unsub.dispose();
-    activePanels.delete(key);
-  });
-  activePanels.set(key, { panel, kind: "report", storeSubscription: unsub });
+  openPanel(context, store, "report", REPORT_PANEL_KIND, "Deslop: report");
 }
 
 // [VSIX-METRICS-REPORT] Duplication report — the headline of the
@@ -65,17 +94,7 @@ export function openDuplicationReportPanel(
   context: vscode.ExtensionContext,
   store: ReportStore,
 ): void {
-  const key = "duplication";
-  const existing = activePanels.get(key);
-  if (existing) return existing.panel.reveal(vscode.ViewColumn.Active);
-  const panel = createPanel(context, "duplication", "Deslop: Duplication");
-  const unsub = wirePanel(panel, store, "duplication");
-  wireMessages(panel, store);
-  panel.onDidDispose(() => {
-    unsub.dispose();
-    activePanels.delete(key);
-  });
-  activePanels.set(key, { panel, kind: "duplication", storeSubscription: unsub });
+  openPanel(context, store, "duplication", DUPLICATION_PANEL_KIND, "Deslop: Duplication");
 }
 
 function createPanel(
@@ -242,8 +261,22 @@ export async function handleMessage(_store: ReportStore, message: unknown): Prom
       return;
     }
     case "compare/canonical": {
-      const id = typeof m["clusterId"] === "string" ? m["clusterId"] : null;
-      if (id) await vscode.commands.executeCommand("deslop.compareWithCanonical", id);
+      // [VSIX-PAIR-COMPARE] Preserve the clicked row and resolve its current canonical.
+      const id = m["clusterId"];
+      const occurrence = compareEndpointFromPayload(m["occurrence"]);
+      if (typeof id === "string" && occurrence) {
+        await vscode.commands.executeCommand("deslop.compareWithCanonical", id, occurrence);
+      }
+      return;
+    }
+    case "compare/pair": {
+      // [VSIX-PAIR-COMPARE] Both endpoints arrive explicitly from the
+      // caller; the host never substitutes an endpoint in this route.
+      const left = compareEndpointFromPayload(m["left"]);
+      const right = compareEndpointFromPayload(m["right"]);
+      if (left && right) {
+        await vscode.commands.executeCommand("deslop.comparePair", left, right);
+      }
       return;
     }
     case "refresh":

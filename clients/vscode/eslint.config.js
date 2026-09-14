@@ -304,6 +304,7 @@ module.exports = tseslint.config(
       "*.vsix",
       "eslint.config.js",
       "esbuild.mjs",
+      "playwright.config.mjs",
       ".vscode-test.mjs",
       ".vscode-test-ollama.mjs",
       "scripts/**",

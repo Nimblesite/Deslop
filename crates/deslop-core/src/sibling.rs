@@ -31,7 +31,7 @@ const SIBLING_WINDOW_KIND: &str = "__sibling_window__";
 /// children — the typical Type-3 near-miss clone spans a handful of
 /// statements, not an entire class body. Values above 8 in practice only
 /// rediscover matches the exact subtree pass already emitted.
-const MAX_WINDOW_WIDTH: usize = 8;
+pub const MAX_WINDOW_WIDTH: usize = 8;
 
 /// Emits a [`Fingerprint`] for every contiguous sibling window whose total
 /// subtree node count meets `min_nodes`. Singleton windows are skipped —

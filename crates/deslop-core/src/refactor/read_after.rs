@@ -13,11 +13,11 @@ use std::collections::HashSet;
 use tree_sitter::Node;
 
 use crate::{
-    ast::ByteRange,
+    ast::{named_children, ByteRange},
     lang::LanguageParser,
     refactor::{
         free_vars,
-        preconditions::{named_children, node_text, OccurrenceScope},
+        preconditions::{node_text, OccurrenceScope},
         tables::{ScopeKinds, WriteKind},
     },
 };

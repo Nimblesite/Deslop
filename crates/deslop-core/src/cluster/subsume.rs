@@ -33,18 +33,11 @@
 //! one-line statement family nested inside them, which also reaches a
 //! file the functions never mention.
 //!
-//! *Which view survives?* Measured content credibility first
-//! ([`precision_preference`], [REPAIR-SUBSUME-CONTENT-FIRST], #367/#408),
-//! then physical enclosure —
-//! never ranking weight. A whole-method clone and the run of
-//! single-statement clones inside it cover the same bytes in both
-//! directions, and the fine-grained view always ranks heavier because
-//! it contributes one occurrence per statement. Choosing by weight
-//! therefore rendered a duplicated 60-statement method as 120 one-line
-//! occurrences and dropped the method itself — the only extractable
-//! duplicate in the corpus, reported as unactionable line noise. Within
-//! one credibility tier the enclosing view is the duplication; the
-//! nested view re-describes it.
+//! *Which view survives?* File coverage, physical enclosure,
+//! occurrence coverage, duplicated mass, then stable cluster id, in
+//! that order. Pair evidence is forbidden because the component owns
+//! none. A nested fragment cannot displace an enclosing authored view
+//! merely because the fragment's pair happened to score more highly.
 //!
 //! *Before either question, file coverage.* A view that names a file
 //! the survivor does not name is never dropped, however deeply it nests
@@ -52,99 +45,94 @@
 //! the finding does not move to the survivor — it disappears. Enclosure
 //! makes this easy to get wrong, because the enclosing view can be the
 //! narrower one.
+//!
+//! *How the verdicts combine.* A view is published when no published
+//! view re-describes its region and outranks it; every other view is
+//! absorbed by one that does. That is a property of the published set,
+//! not of the order the views were met in, so when a survivor leaves the
+//! set — outranked, or dropped as a straddler — whatever it absorbed is
+//! judged again against the views that remain ([`kernel`]). Only views
+//! over exactly the same files can re-describe or straddle one another,
+//! so each file set is resolved on its own
+//! ([PIPELINE-CLUSTER-SUBSUME-FILESET]).
 
-use crate::fingerprint::Fingerprint;
+use std::collections::BTreeMap;
+
+use crate::{fingerprint::Fingerprint, state::FileId};
 
 use super::Cluster;
 
-/// Survivor election ([PIPELINE-CLUSTER-SUBSUME]).
-mod election;
-use election::{covers_same_region, demoted, preferred_view, Preference};
+/// Survivor selection inside one file set.
+mod kernel;
+/// Deterministic survivor order ([PIPELINE-CLUSTER-SUBSUME]).
+mod survivor;
+/// Stage records ([PIPELINE-OBSERVABILITY-STAGES]).
+mod tally;
+use kernel::{resolve, Region};
+use tally::SubsumeTally;
 
 /// Collapses redundant clusters that cover the same physical bytes.
 ///
-/// Runs after ranking, so `outer` is always the heavier cluster of a
-/// pair — weight orders the scan, [PIPELINE-CLUSTER-SUBSUME] decides the
-/// survivor.
+/// Runs after mass ranking; [PIPELINE-CLUSTER-SUBSUME] decides which
+/// physical view survives, one file set at a time.
 pub(super) fn collapse_cross_cluster_overlap(clusters: Vec<Cluster>) -> Vec<Cluster> {
-    let len = clusters.len();
-    let mut dropped = vec![false; len];
-    for outer in 0..len {
-        if !cluster_dropped(&dropped, outer) {
-            scan_inner_pairs(&clusters, &mut dropped, outer, len);
-        }
+    let groups = file_set_groups(&clusters);
+    let mut tally = SubsumeTally::new(clusters.len(), groups.len());
+    let mut published = vec![false; clusters.len()];
+    for group in groups.values() {
+        publish_group(&clusters, group, &mut published, &mut tally);
     }
-    clusters
+    let survivors: Vec<Cluster> = clusters
         .into_iter()
+        .zip(published)
+        .filter_map(|(cluster, keep)| keep.then_some(cluster))
+        .collect();
+    tally.complete(survivors.len());
+    survivors
+}
+
+/// [PIPELINE-CLUSTER-SUBSUME-FILESET] Ranked positions grouped by the
+/// exact set of files their views name, rank order kept inside each
+/// group.
+fn file_set_groups(clusters: &[Cluster]) -> BTreeMap<Vec<FileId>, Vec<usize>> {
+    clusters
+        .iter()
         .enumerate()
-        .filter_map(|(index, cluster)| (!cluster_dropped(&dropped, index)).then_some(cluster))
-        .collect()
+        .fold(BTreeMap::new(), |mut groups, (index, cluster)| {
+            groups
+                .entry(file_set(&cluster.members))
+                .or_default()
+                .push(index);
+            groups
+        })
 }
 
-/// Decision produced by [`evaluate_pair`] for one `(outer, inner)` pair.
-enum PairDecision {
-    /// Discard the inner cluster; the outer subsumes it.
-    DropInner,
-    /// Discard the outer cluster; the inner subsumes it.
-    DropOuter,
-    /// Retain both clusters.
-    Keep,
+/// The distinct files a view names, in a canonical order.
+fn file_set(members: &[Fingerprint]) -> Vec<FileId> {
+    let mut files: Vec<FileId> = members.iter().map(|member| member.file_id).collect();
+    files.sort_unstable();
+    files.dedup();
+    files
 }
 
-/// Evaluates every `(outer, inner)` pair for the given `outer` index and
-/// updates `dropped`. Breaks early when `outer` itself is dropped.
-fn scan_inner_pairs(clusters: &[Cluster], dropped: &mut [bool], outer: usize, len: usize) {
-    let mut absorbed: Vec<usize> = Vec::new();
-    for inner in (outer.saturating_add(1))..len {
-        if cluster_dropped(dropped, inner) {
-            continue;
-        }
-        let Some(outer_cluster) = clusters.get(outer) else {
-            continue;
-        };
-        let Some(inner_cluster) = clusters.get(inner) else {
-            continue;
-        };
-        match evaluate_pair(outer_cluster, inner_cluster) {
-            PairDecision::DropInner => {
-                log_subsumption(outer_cluster, inner_cluster, "drop_inner");
-                drop_cluster(dropped, inner);
-                absorbed.push(inner);
-            }
-            PairDecision::DropOuter => {
-                log_subsumption(inner_cluster, outer_cluster, "drop_outer");
-                drop_cluster(dropped, outer);
-                restore_absorbed(dropped, &absorbed, inner);
-                break;
-            }
-            PairDecision::Keep => {}
-        }
-    }
-}
-
-/// Un-drops every view `outer` had absorbed before it was itself
-/// overturned, so they are judged against the view that survived
-/// instead of vanishing with the one that did not.
-///
-/// A view absorbs its nested rivals as the scan walks past them, and
-/// only later meets the rival that overturns it. Without this, those
-/// absorbed views die with their absorber and *nothing* reports their
-/// bytes — the "orphan" this module's history already records
-/// (`issue_343_sum_clamp_saturation` counted one). Measuring
-/// `structural` honestly ([FUSION-SHARED-SUBTREE]) made it routine
-/// rather than rare: a whole-file view is now admitted, absorbs the
-/// genuine method-level view, and is then overturned by one verbatim
-/// core nested inside it — so `javascript-type3` reported a byte-equal
-/// loop body in place of the near-identical function that encloses it.
-///
-/// The survivor is exempt: it is not an orphan, it is the reason the
-/// absorber died. Restored views are re-judged because each is scanned
-/// again in its own turn as an `outer`, so a genuinely redundant one is
-/// re-absorbed by whichever view legitimately covers it.
-fn restore_absorbed(dropped: &mut [bool], absorbed: &[usize], survivor: usize) {
-    for index in absorbed.iter().copied().filter(|index| *index != survivor) {
-        if let Some(slot) = dropped.get_mut(index) {
-            *slot = false;
+/// Resolves one file set and marks its survivors in `published`.
+fn publish_group(
+    clusters: &[Cluster],
+    group: &[usize],
+    published: &mut [bool],
+    tally: &mut SubsumeTally,
+) {
+    let members: Vec<(usize, &Cluster)> = group
+        .iter()
+        .filter_map(|index| clusters.get(*index).map(|cluster| (*index, cluster)))
+        .collect();
+    let region = Region::new(members.iter().map(|(_, cluster)| *cluster).collect(), tally);
+    for local in resolve(&region, tally) {
+        let slot = members
+            .get(local)
+            .and_then(|(index, _)| published.get_mut(*index));
+        if let Some(slot) = slot {
+            *slot = true;
         }
     }
 }
@@ -156,18 +144,12 @@ fn log_subsumption(survivor: &Cluster, discarded: &Cluster, decision: &'static s
         decision,
         survivor = survivor.id.as_str(),
         survivor_size = survivor.members.len(),
-        survivor_structural = survivor.signals.structural,
+        survivor_mass = survivor.mass,
         discarded = discarded.id.as_str(),
         discarded_size = discarded.members.len(),
-        discarded_structural = discarded.signals.structural,
+        discarded_mass = discarded.mass,
         survivor_spans = span_summary(&survivor.members).as_str(),
         discarded_spans = span_summary(&discarded.members).as_str(),
-        survivor_demoted = demoted(survivor),
-        discarded_demoted = demoted(discarded),
-        survivor_verbatim = survivor.content.verbatim_dominated,
-        discarded_verbatim = discarded.content.verbatim_dominated,
-        survivor_content_measured = survivor.content.measured,
-        discarded_content_measured = discarded.content.measured,
         "cross-cluster subsumption",
     );
 }
@@ -187,40 +169,23 @@ fn span_summary(members: &[Fingerprint]) -> String {
         .join(",")
 }
 
-/// Decides which cluster survives when their occurrences cover the same
-/// bytes. Returns [`PairDecision::Keep`] when they are separate regions.
-fn evaluate_pair(outer: &Cluster, inner: &Cluster) -> PairDecision {
-    if !covers_same_region(outer, inner) {
-        return PairDecision::Keep;
-    }
-    // Enclosure is nominated in **both** directions. `outer`/`inner`
-    // are scan positions ordered by weight, not by nesting, so testing
-    // only one direction left the case where the enclosing view is
-    // also the heavier one — which is exactly the whole-method Type-3
-    // near-miss now that its `structural` is a measured overlap
-    // ([FUSION-SHARED-SUBTREE]). There, the untested direction fell
-    // through to `structural_precision`, and a byte-identical fragment
-    // nested inside the method deleted it on `structural 1.00 > 0.88`
-    // — a comparison across two different scopes, where the fragment
-    // scores 1.00 *because* it excludes the inserted statement. Whole
-    // methods vanished from `ts-type3-stmt` entirely (gh #408).
-    if strictly_encloses(&inner.members, &outer.members) {
-        return match preferred_view(inner, outer, Nesting::ProposedEncloses) {
-            Preference::First => PairDecision::DropOuter,
-            Preference::Second => PairDecision::DropInner,
-            Preference::Neither => PairDecision::Keep,
-        };
-    }
-    let nesting = if strictly_encloses(&outer.members, &inner.members) {
-        Nesting::ProposedEncloses
-    } else {
-        Nesting::Neither
-    };
-    match preferred_view(outer, inner, nesting) {
-        Preference::First => PairDecision::DropInner,
-        Preference::Second => PairDecision::DropOuter,
-        Preference::Neither => PairDecision::Keep,
-    }
+/// Returns `true` when every occurrence in `covered` shares at least one
+/// byte with an occurrence in `cover` in the same file.
+fn all_occurrences_overlap(covered: &[Fingerprint], cover: &[Fingerprint]) -> bool {
+    !covered.is_empty()
+        && covered.iter().all(|candidate| {
+            cover
+                .iter()
+                .any(|other| occurrences_overlap(other, candidate))
+        })
+}
+
+/// Returns `true` when two occurrences in the same file share at least
+/// one byte.
+fn occurrences_overlap(left: &Fingerprint, right: &Fingerprint) -> bool {
+    left.file_id == right.file_id
+        && left.byte_range.start < right.byte_range.end
+        && right.byte_range.start < left.byte_range.end
 }
 
 /// Whether the nominated view physically encloses its rival.
@@ -294,16 +259,4 @@ pub(super) fn covers_every_file(candidate: &[Fingerprint], required: &[Fingerpri
             .iter()
             .any(|present| present.file_id == needed.file_id)
     })
-}
-
-/// Returns `true` when `index` is already marked for removal.
-fn cluster_dropped(dropped: &[bool], index: usize) -> bool {
-    dropped.get(index).copied().unwrap_or(true)
-}
-
-/// Marks `index` for removal when the slot exists.
-fn drop_cluster(dropped: &mut [bool], index: usize) {
-    if let Some(slot) = dropped.get_mut(index) {
-        *slot = true;
-    }
 }

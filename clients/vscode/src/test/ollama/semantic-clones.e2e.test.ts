@@ -32,7 +32,8 @@ import { sleep } from "../suite/helpers";
 const EXT_ID = "nimblesite.deslop-live";
 const OLLAMA_ENDPOINT = "http://127.0.0.1:11434";
 const OLLAMA_MODEL = "nomic-embed-text";
-const COS_FLOOR = 0.3;
+const OLLAMA_PROVIDER = "ollama";
+const DISABLED_PROVIDER = "off";
 
 interface ExtensionExports {
   readonly client?: LanguageClient;
@@ -108,7 +109,7 @@ async function seedInitialConfig(): Promise<void> {
   const cfg = vscode.workspace.getConfiguration("deslop");
   await cfg.update(
     "embedding.provider",
-    "ollama",
+    OLLAMA_PROVIDER,
     vscode.ConfigurationTarget.Global,
   );
   await cfg.update(
@@ -158,7 +159,7 @@ async function activateExtension(): Promise<ExtensionExports> {
 
 async function setProvider(
   client: LanguageClient,
-  providerId: "ollama" | "off",
+  providerId: typeof OLLAMA_PROVIDER | typeof DISABLED_PROVIDER,
 ): Promise<SetModelResponse | null> {
   // [REMOVE-STUB] Production accepts `ollama` and the pseudo-provider
   // `off` for disabling. There is no stub fallback any more.
@@ -166,8 +167,8 @@ async function setProvider(
     "deslop/embeddingSetModel",
     {
       provider_id: providerId,
-      model_id: providerId === "ollama" ? OLLAMA_MODEL : "off",
-      endpoint: providerId === "ollama" ? OLLAMA_ENDPOINT : null,
+      model_id: providerId === OLLAMA_PROVIDER ? OLLAMA_MODEL : DISABLED_PROVIDER,
+      endpoint: providerId === OLLAMA_PROVIDER ? OLLAMA_ENDPOINT : null,
     },
   );
 }
@@ -236,7 +237,7 @@ suite("ollama semantic clone detection (real Ollama)", () => {
       "LSP must have Ollama provenance after init",
     );
     ollamaProvenance = initialReport.embedding_provenance;
-    assert.equal(ollamaProvenance.provider_id, "ollama");
+    assert.equal(ollamaProvenance.provider_id, OLLAMA_PROVIDER);
     assert.equal(ollamaProvenance.model_id, OLLAMA_MODEL);
     assert.ok(ollamaProvenance.dimensions > 0, "dimensions must be positive");
   });
@@ -246,7 +247,7 @@ suite("ollama semantic clone detection (real Ollama)", () => {
     await clearSeededConfig();
   });
 
-  test("cross-file Type-4 cluster surfaces with embedding_cos > 0.3", async function () {
+  test("cross-file Type-4 cluster surfaces with Ollama provenance", async function () {
     this.timeout(90_000);
     const report = await waitForReport(
       client,
@@ -259,20 +260,32 @@ suite("ollama semantic clone detection (real Ollama)", () => {
       `no cross-file cluster spans Iterative.cs <-> Recursive.cs; report had ${report.clusters.length} clusters`,
     );
     assert.ok(
-      cluster.signals.embedding_cos > COS_FLOOR,
-      `embedding_cos must exceed ${COS_FLOOR} for a Type-4 semantic match, got ${cluster.signals.embedding_cos}`,
-    );
-    // Type-4 = embedding dominates both deterministic signals. If
-    // structural or token_jaccard beat embedding, the fixture is
-    // actually Type-1/2/3 and the Rust-layer premise is broken.
-    assert.ok(
-      cluster.signals.embedding_cos > cluster.signals.structural,
-      `embedding_cos (${cluster.signals.embedding_cos}) must dominate structural (${cluster.signals.structural}) for Type-4`,
+      cluster.mass > 0,
+      `a reported cluster must carry positive duplicated mass, got ${cluster.mass}`,
     );
     assert.ok(
-      cluster.signals.embedding_cos > cluster.signals.token_jaccard,
-      `embedding_cos (${cluster.signals.embedding_cos}) must dominate token_jaccard (${cluster.signals.token_jaccard}) for Type-4`,
+      cluster.occurrences.length >= 2,
+      `the cross-file cluster must carry both files' occurrences, got ${cluster.occurrences.length}`,
     );
+    const paths = cluster.occurrences.map((o) => o.path.replace(/\\/g, "/"));
+    assert.ok(
+      paths.some((p) => p.endsWith("Iterative.cs")) &&
+        paths.some((p) => p.endsWith("Recursive.cs")),
+      "the cluster must span the recursive and iterative implementations",
+    );
+    assert.equal(
+      report.embedding_provenance?.provider_id,
+      OLLAMA_PROVIDER,
+      "the semantic recall layer must be the real Ollama provider",
+    );
+    // [FUSED-PAIR-SIGNALS] The embedding cosine is a pair measurement and
+    // is not carried on the cluster wire; the Rust-layer proof of the
+    // embedding signal lives in
+    // crates/deslop/tests/cli.rs::ollama_type4_cross_file_cluster_has_positive_embedding_signal.
+    const retiredSignals = ["signals", "signal_source", "embedding_cos"] as const;
+    for (const field of retiredSignals) {
+      assert.equal(field in cluster, false, `cluster wire must not carry ${field}`);
+    }
   });
 
   test("[ollama-non-ci] embeddingListModels lists the real local Ollama models", async function () {
@@ -288,7 +301,7 @@ suite("ollama semantic clone detection (real Ollama)", () => {
       {},
     );
     const listedOllamaIds = listed
-      .filter((model) => model.provider_id === "ollama")
+      .filter((model) => model.provider_id === OLLAMA_PROVIDER)
       .map((model) => model.model_id);
     const installedBareIds = installedNames.map(
       (name) => name.split(":")[0] ?? name,
@@ -321,8 +334,8 @@ suite("ollama semantic clone detection (real Ollama)", () => {
     const beforeCluster = crossFileType4Cluster(beforeReport);
     assert.ok(beforeCluster, "pre-swap cluster must exist with Ollama");
     assert.ok(
-      beforeCluster.signals.embedding_cos > COS_FLOOR,
-      `pre-swap embedding_cos must exceed floor, got ${beforeCluster.signals.embedding_cos}`,
+      beforeCluster.mass > 0,
+      `pre-swap cluster must carry positive mass, got ${beforeCluster.mass}`,
     );
 
     // [REMOVE-STUB] Turning embeddings off is the production-supported
@@ -341,22 +354,22 @@ suite("ollama semantic clone detection (real Ollama)", () => {
     );
     const afterCluster = crossFileType4Cluster(afterReport);
 
-    // Two acceptable outcomes when embeddings are disabled:
-    //   1. Cluster drops entirely (no semantic recall = no Type-4).
-    //   2. Cluster survives via a non-embedding signal, but
-    //      embedding_cos collapses below the Ollama-era value.
-    if (afterCluster === undefined) {
-      // Outcome 1: cluster gone; structural/token alone could not match Type-4.
-      return;
+    // [FUSED-PAIR-SIGNALS] The embedding cosine is a pair measurement and
+    // does not ride on the cluster wire; the Rust-layer proof pins the
+    // embedding signal itself. Here we pin what the wire can prove: with
+    // embeddings off, the provenance flips to null and the semantic
+    // recall layer is provably absent.
+    assert.equal(
+      afterReport.embedding_provenance,
+      null,
+      "off-mode must drop the embedding provenance to null",
+    );
+    if (afterCluster !== undefined) {
+      assert.ok(
+        afterCluster.mass > 0,
+        `a surviving cluster must still carry positive mass, got ${afterCluster.mass}`,
+      );
     }
-    assert.ok(
-      afterCluster.signals.embedding_cos < beforeCluster.signals.embedding_cos,
-      `off-mode embedding_cos (${afterCluster.signals.embedding_cos}) must be strictly below Ollama-era (${beforeCluster.signals.embedding_cos})`,
-    );
-    assert.ok(
-      afterCluster.signals.embedding_cos <= COS_FLOOR,
-      `off-mode must drop embedding_cos to <= ${COS_FLOOR}, got ${afterCluster.signals.embedding_cos}`,
-    );
   });
 
   test("embeddingSetModel(ollama) restores the cross-file cluster", async function () {
@@ -364,17 +377,18 @@ suite("ollama semantic clone detection (real Ollama)", () => {
     // [REMOVE-STUB] `embedding/setModel` returns `Option<EmbeddingProvenance>` —
     // the LSP acknowledges the queued swap with `null` and the new
     // provenance is observed via `reportGet` once the refresh commits.
-    await setProvider(client, "ollama");
+    await setProvider(client, OLLAMA_PROVIDER);
     // And the Type-4 cluster comes back.
     const report = await waitForReport(client, 60_000, (r) => {
-      const c = crossFileType4Cluster(r);
-      return c !== undefined && c.signals.embedding_cos > COS_FLOOR;
+      return r.embedding_provenance?.provider_id === OLLAMA_PROVIDER;
     });
     const cluster = crossFileType4Cluster(report);
     assert.ok(cluster, "restore-to-ollama must re-surface the Type-4 cluster");
-    assert.ok(
-      cluster.signals.embedding_cos > COS_FLOOR,
-      `restored embedding_cos must exceed ${COS_FLOOR}, got ${cluster.signals.embedding_cos}`,
+    assert.equal(
+      report.embedding_provenance?.provider_id,
+      OLLAMA_PROVIDER,
+      "restored provenance must be the real Ollama provider",
     );
+    assert.ok(cluster.mass > 0, `restored cluster must carry mass, got ${cluster.mass}`);
   });
 });

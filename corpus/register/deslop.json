@@ -1,0 +1,146 @@
+{
+  "name": "deslop",
+  "language": "rust",
+  "url": "https://github.com/Nimblesite/Deslop.git",
+  "sha": "77b4681b0f45cc0d5e4b83ce1fb0924d0fa50d7f",
+  "protocol": {
+    "spec": "docs/specs/corpus.md",
+    "spec_section": "[CORPUS-REGISTER]",
+    "judging_skill": ".agents/skills/judge-clone-pairs/SKILL.md",
+    "preparer_skill": ".agents/skills/clone-register-prepare/SKILL.md"
+  },
+  "provenance": "Deslop scanned by itself. This register was not produced by a blinded judging pass: a judge of this repository cannot avoid reading the engine. Every entry was filed by the maintainer from a tracked issue, with the diff recorded under `verified` run at the pinned commit, so the score gate holds the engine to the pairs those issues settled. Nothing enters here without an issue number.",
+  "clearly_in": [
+    {
+      "why": "The ten-line helper `clusters_touching` is copied whole between two E2E suites: same signature, same loop over the report's clusters, same `occurrence_texts` call, same `contains(needle)` filter, same return. Nothing differs at all.",
+      "verified": "diff of crates/deslop/tests/python_issue_104_module_preamble.rs:24-33 against crates/deslop/tests/python_issue_133_constant_table.rs:45-54 at the pinned sha is empty - byte-identical over ten lines.",
+      "occurrences": [
+        "crates/deslop/tests/python_issue_104_module_preamble.rs:24-33",
+        "crates/deslop/tests/python_issue_133_constant_table.rs:45-54"
+      ]
+    },
+    {
+      "why": "The nine-line LSP `handshake` helper - build the initialize request, send it, send the initialized notification, return the response - is copied whole between two LSP suites. Nothing differs at all.",
+      "verified": "diff of crates/deslop-lsp/tests/cpu_throttle_knob.rs:243-251 against crates/deslop-lsp/tests/observability_heartbeat.rs:237-245 at the pinned sha is empty - byte-identical over nine lines.",
+      "occurrences": [
+        "crates/deslop-lsp/tests/cpu_throttle_knob.rs:243-251",
+        "crates/deslop-lsp/tests/observability_heartbeat.rs:237-245"
+      ]
+    },
+    {
+      "why": "A 6-line block beginning `fn shutdown(stdin: &mut ChildStdin, reader: &mut BufReader<ChildStd...` is copied whole between two files: every line of one occurrence is the same line of the other. Nothing differs at all.",
+      "verified": "diff of crates/deslop-lsp/tests/cpu_throttle_knob.rs:253-258 against crates/deslop-lsp/tests/observability_heartbeat.rs:248-253 at the pinned sha is empty - byte-identical over 6 lines.",
+      "occurrences": [
+        "crates/deslop-lsp/tests/cpu_throttle_knob.rs:253-258",
+        "crates/deslop-lsp/tests/observability_heartbeat.rs:248-253"
+      ]
+    },
+    {
+      "why": "A 7-line block beginning `fn child_of_kind<'tree>(node: Node<'tree>, kind: &str) -> Option<No...` is copied whole between two files: every line of one occurrence is the same line of the other. Nothing differs at all.",
+      "verified": "diff of crates/deslop-test-support/src/skip_policy.rs:394-400 against crates/deslop-test-support/src/test_target_parity/suite_scan.rs:190-196 at the pinned sha is empty - byte-identical over 7 lines.",
+      "occurrences": [
+        "crates/deslop-test-support/src/skip_policy.rs:394-400",
+        "crates/deslop-test-support/src/test_target_parity/suite_scan.rs:190-196"
+      ]
+    },
+    {
+      "why": "A 6-line block beginning `let mut ordered: Vec<&DiscoveredFile> = files.iter().collect();` is copied whole between two files: every line of one occurrence is the same line of the other. Nothing differs at all.",
+      "verified": "diff of crates/deslop-core/src/pipeline/corpus.rs:128-133 against crates/deslop-core/src/pipeline/session/mod.rs:459-464 at the pinned sha is empty - byte-identical over 6 lines.",
+      "occurrences": [
+        "crates/deslop-core/src/pipeline/corpus.rs:128-133",
+        "crates/deslop-core/src/pipeline/session/mod.rs:459-464"
+      ]
+    },
+    {
+      "why": "A 5-line block beginning `fn request_without_params(method: &str) -> Result<(i64, String)> {` is copied whole between two files: every line of one occurrence is the same line of the other. Nothing differs at all.",
+      "verified": "diff of crates/deslop-lsp/tests/cpu_throttle_knob.rs:218-222 against crates/deslop-lsp/tests/observability_heartbeat.rs:231-235 at the pinned sha is empty - byte-identical over 5 lines.",
+      "occurrences": [
+        "crates/deslop-lsp/tests/cpu_throttle_knob.rs:218-222",
+        "crates/deslop-lsp/tests/observability_heartbeat.rs:231-235"
+      ]
+    },
+    {
+      "why": "A 6-line block beginning `let tmp = tempfile::tempdir()?;` is copied whole in one file: every line of one occurrence is the same line of the other. Nothing differs at all.",
+      "verified": "diff of crates/deslop/tests/common/corpora.rs:79-84 against crates/deslop/tests/common/corpora.rs:93-98 at the pinned sha is empty - byte-identical over 6 lines.",
+      "occurrences": [
+        "crates/deslop/tests/common/corpora.rs:79-84",
+        "crates/deslop/tests/common/corpora.rs:93-98"
+      ]
+    },
+    {
+      "why": "A 14-line block beginning `fn run_without_embeddings(root: PathBuf) -> Result<Report, CoreErro...` is copied whole between two files: every line of one occurrence is the same line of the other. Nothing differs at all.",
+      "verified": "diff of crates/deslop-core/tests/content_gate_admits.rs:63-76 against crates/deslop-core/tests/content_gate_rejects.rs:47-60 at the pinned sha is empty - byte-identical over 14 lines.",
+      "occurrences": [
+        "crates/deslop-core/tests/content_gate_admits.rs:63-76",
+        "crates/deslop-core/tests/content_gate_rejects.rs:47-60"
+      ]
+    },
+    {
+      "why": "A 9-line block beginning `fn call(` is copied whole between two files: every line of one occurrence is the same line of the other. Nothing differs at all.",
+      "verified": "diff of crates/deslop-lsp/tests/cpu_throttle_knob.rs:260-268 against crates/deslop-lsp/tests/observability_heartbeat.rs:255-263 at the pinned sha is empty - byte-identical over 9 lines.",
+      "occurrences": [
+        "crates/deslop-lsp/tests/cpu_throttle_knob.rs:260-268",
+        "crates/deslop-lsp/tests/observability_heartbeat.rs:255-263"
+      ]
+    },
+    {
+      "why": "A 8-line block beginning `let models = value_array(&response, \"/result/structuredContent/mode...` is copied whole in one file: every line of one occurrence is the same line of the other. Nothing differs at all.",
+      "verified": "diff of crates/deslop-mcp/tests/cli.rs:1801-1808 against crates/deslop-mcp/tests/cli.rs:2761-2768 at the pinned sha is empty - byte-identical over 8 lines.",
+      "occurrences": [
+        "crates/deslop-mcp/tests/cli.rs:1801-1808",
+        "crates/deslop-mcp/tests/cli.rs:2761-2768"
+      ]
+    },
+    {
+      "why": "A 10-line block beginning `let fingerprints = placed_corpus(&[` is copied whole in one file: every line of one occurrence is the same line of the other. Nothing differs at all.",
+      "verified": "diff of crates/deslop-core/src/cluster_filters/structural_families/tests.rs:305-314 against crates/deslop-core/src/cluster_filters/structural_families/tests.rs:357-366 at the pinned sha is empty - byte-identical over 10 lines.",
+      "occurrences": [
+        "crates/deslop-core/src/cluster_filters/structural_families/tests.rs:305-314",
+        "crates/deslop-core/src/cluster_filters/structural_families/tests.rs:357-366"
+      ]
+    },
+    {
+      "why": "A 6-line block beginning `edits.push(PlannedEdit {` is copied whole between two files: every line of one occurrence is the same line of the other. Nothing differs at all.",
+      "verified": "diff of crates/deslop-core/src/refactor/emit.rs:108-113 against crates/deslop-core/src/refactor/merge/mod.rs:245-250 at the pinned sha is empty - byte-identical over 6 lines.",
+      "occurrences": [
+        "crates/deslop-core/src/refactor/emit.rs:108-113",
+        "crates/deslop-core/src/refactor/merge/mod.rs:245-250"
+      ]
+    },
+    {
+      "why": "A 7-line block beginning `let _assertion = run` is copied whole in one file: every line of one occurrence is the same line of the other. Nothing differs at all.",
+      "verified": "diff of crates/deslop/tests/cli/thresholds.rs:131-137 against crates/deslop/tests/cli/thresholds.rs:161-167 at the pinned sha is empty - byte-identical over 7 lines.",
+      "occurrences": [
+        "crates/deslop/tests/cli/thresholds.rs:131-137",
+        "crates/deslop/tests/cli/thresholds.rs:161-167"
+      ]
+    },
+    {
+      "why": "A 7-line block beginning `truncate(&mut clusters, max_results);` is copied whole in one file: every line of one occurrence is the same line of the other. Nothing differs at all.",
+      "verified": "diff of crates/deslop-core/src/live/session.rs:753-759 against crates/deslop-core/src/live/session.rs:779-785 at the pinned sha is empty - byte-identical over 7 lines.",
+      "occurrences": [
+        "crates/deslop-core/src/live/session.rs:753-759",
+        "crates/deslop-core/src/live/session.rs:779-785"
+      ]
+    },
+    {
+      "why": "A 7-line block beginning `fn assert_version_manifest(value: &Value, name: &str, kind: &str) {` is copied whole between two files: every line of one occurrence is the same line of the other. Nothing differs at all.",
+      "verified": "diff of crates/deslop/tests/cli/invocation.rs:29-35 against crates/deslop-lsp/tests/cli.rs:324-330 at the pinned sha is empty - byte-identical over 7 lines.",
+      "occurrences": [
+        "crates/deslop/tests/cli/invocation.rs:29-35",
+        "crates/deslop-lsp/tests/cli.rs:324-330"
+      ]
+    }
+  ],
+  "clearly_out": [
+    {
+      "why": "Two unrelated tree-sitter field accessors (gh #460, gh #532). One tests for a `keyword_argument` node, fetches its `value` field and returns it; the other tests for an `assignment` node, fetches its `left` field and records the identifiers under it. Node kind, field name and body all differ; what they share is the only shape a typed field read against a tree-sitter grammar can take. Extracting a helper would fold two behaviours together and save nothing. Reporting them is a false positive.",
+      "verified": "diff of crates/deslop-core/src/cluster_filters/calls/args.rs:134-139 against crates/deslop-core/src/cluster_filters/calls/asserts.rs:164-168 at the pinned sha: of the five lines that overlap, three differ - the kind string, the field string and the statement inside; the two that agree are the closing braces. A copy of this pair is the `content-gate-unsaturated` fixture, which the scan excludes under **/tests/fixtures/**.",
+      "occurrences": [
+        "crates/deslop-core/src/cluster_filters/calls/args.rs:134-139",
+        "crates/deslop-core/src/cluster_filters/calls/asserts.rs:164-168"
+      ]
+    }
+  ],
+  "not_clear": []
+}

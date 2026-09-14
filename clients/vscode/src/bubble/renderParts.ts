@@ -1,7 +1,13 @@
 // Pure text rendering for the live bubble ([VSIX-LIVE-BUBBLE]). One shared
 // rebuild path (`renderBubbleParts`) feeds every surface — inline decoration,
-// ghost line, inlay strip, hover card — so their strings can never drift
-// apart. No editor state in here: cluster in, strings out.
+// ghost line, hover card — so their strings can never drift apart. No editor
+// state in here: cluster in, strings out.
+//
+// The admission signals (structural, token, embedding, content similarity)
+// are pair measurements and never touch the cluster ([FUSED-PAIR-SIGNALS]).
+// The live bubble renders the cluster's duplicated-mass facts only; an
+// explicit pair comparison is the sole surface allowed to quote a
+// pair's values.
 
 import * as vscode from "vscode";
 
@@ -11,18 +17,13 @@ import { shortPath } from "../pathUtils";
 import {
   ReportCluster,
   Severity,
-  bucketLabels,
+  kindTitle,
   occurrenceCount,
-  resolveBucket,
 } from "../types/report";
 
-// The inline bubble and ghost-line decorations are pure-visual
-// surfaces (rendered only in the editor, never scraped by agents), so
-// they use `plainTitle` per [CLONE-BUCKETS-DUAL-LABEL].
 export interface BubbleRenderParts {
   inline: string;
   ghost: string;
-  signalStrip: string;
   hover: vscode.MarkdownString;
 }
 
@@ -32,14 +33,14 @@ export function renderBubbleParts(
 ): BubbleRenderParts {
   const canonical = cluster.occurrences[0];
   const count = occurrenceCount(cluster);
-  const title = bucketLabels(resolveBucket(cluster)).plainTitle;
+  // [VSIX-LIVE-BUBBLE] The verdict is the cluster's clone kind
+  // ([CLONE-KIND-LABELS]); the dot is the mass rank band's glyph.
+  const title = kindTitle(cluster.kind);
   const slug = clusterSlug(cluster);
   const location = canonical ? ` · ${shortPath(canonical.path)}` : "";
-  const strip = signalStrip(cluster);
   return {
     inline: `  ${SEVERITY_DOT[severity]} ${slug} ${title} × ${count}${location}`,
-    ghost: `  └─ ${SEVERITY_DOT[severity]} ${slug} ${title}  ${strip}  × ${count}`,
-    signalStrip: strip,
+    ghost: `  └─ ${SEVERITY_DOT[severity]} ${slug} ${title} × ${count}`,
     hover: clusterHoverMarkdown(cluster, { showDismiss: true }),
   };
 }
@@ -57,41 +58,6 @@ export function ghostText(
 ): string {
   return renderBubbleParts(cluster, severity).ghost;
 }
-
-// Three bars: shape, semantic, confidence ([VSIX-LIVE-BUBBLE]).
-// `structural` and `token_jaccard` are two views of one normalised
-// representation — "summing them says nothing beyond 'the shapes matched'"
-// (`deslop-core::buckets::content_gated_signals`) — so drawing both spends
-// two of the three slots on a single piece of evidence and leaves none for
-// the content-gated confidence. That confidence is the only thing
-// separating a verbatim copy from a proven rename: after the #232
-// correction both render `structural 1.0 / token_jaccard 1.0`, so a strip
-// without `fused` collapses "safe to extract" and "identifiers differ"
-// onto the same three glyphs. The shape bar draws the engine's `shape`
-// reading — the stronger of the two shape views, reduced once in
-// `deslop-core` and carried on the wire; the third bar draws `fused`.
-export function signalStrip(cluster: ReportCluster): string {
-  const signals = cluster.signals;
-  return `${bar(signals.shape)}${bar(signals.embedding_cos)}${bar(signals.fused)}`;
-}
-
-// The full block is reserved for an exact 1.0 and nothing else. Rounding
-// `value * 7` gave it to everything from 0.929 up, which collapsed the two
-// readings the third bar exists to separate: a byte-proven copy renders
-// `fused 1.00` and a content-gated near-verbatim clone renders `fused 0.96`,
-// and both drew `█`. Proof and near-proof are exactly the distinction a
-// glance at this strip is supposed to make, so the top glyph means proof.
-function bar(value: number): string {
-  if (value >= 1) return BARS[BARS.length - 1] ?? "█";
-  const below = BARS.length - 1;
-  const index = Math.min(
-    below - 1,
-    Math.max(0, Math.round(value * (below - 1))),
-  );
-  return BARS[index] ?? "▁";
-}
-
-const BARS = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"] as const;
 
 // Bubble hover: full card with slug, canonical, and dismiss link.
 export function bubbleHover(

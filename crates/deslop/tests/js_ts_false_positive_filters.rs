@@ -9,24 +9,16 @@
 
 use anyhow::Result;
 
+use crate::common::signals::has_verbatim_pair;
 use crate::common::*;
 
 #[test]
 fn typescript_signature_only_match_with_divergent_bodies_is_suppressed() -> Result<()> {
-    let report = run_report(&fixture("ts-signature-only-noise"), 6)?;
     // Both functions share the typed signature `(_: Context, _: Options):
     // Outcome` — which normalises identically — but their bodies are
     // unrelated. Without #154 this fuses to a top-ranked false positive;
     // with it, the signature-only family is detected and hidden.
-    assert_eq!(
-        field(&report, "files_analysed").as_u64(),
-        Some(2),
-        "both signature-only files must be analysed: {report:#}"
-    );
-    assert!(
-        clusters(&report).is_empty(),
-        "an unrelated-body signature match must not surface as a clone: {report:#}"
-    );
+    let report = assert_no_clone_reported("ts-signature-only-noise", 6, 2)?;
     assert!(
         clusters_hidden(&report) >= 1,
         "the signature-only family must be detected and hidden, proving #154 fired: {report:#}"
@@ -44,7 +36,7 @@ fn typescript_export_default_template_logic_still_clusters() -> Result<()> {
     // must NOT suppress it. The duplicated embedded logic still clusters.
     let clone = expect_cluster_spanning(&report, &["reportA.ts", "reportB.ts"])?;
     assert!(
-        approx(signal(clone, "structural"), 1.0),
+        !has_verbatim_pair(&fixture("ts-export-default-logic"), clone)?,
         "the duplicated template-literal logic must still be detected: {report:#}"
     );
     Ok(())
@@ -62,6 +54,10 @@ fn typescript_reexport_barrels_are_suppressed_but_real_exports_survive() -> Resu
     // A real function exported just below a barrel still surfaces, proving the
     // suppression is scoped to the barrel and never swallows real logic.
     let real = expect_cluster_spanning(&report, &["real_a.ts", "real_b.ts"])?;
-    assert_eq!(cluster_bucket(real), "nearly_identical");
+    assert!(
+        !has_verbatim_pair(&fixture("ts-reexport-barrel"), real)?,
+        "the real export pair must be admitted (a near-miss, byte-distinct): \
+         {real:#}"
+    );
     Ok(())
 }

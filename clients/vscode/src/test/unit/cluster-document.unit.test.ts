@@ -5,28 +5,24 @@ import { clusterDocumentContent } from "../../clusterDocument";
 import type { Report, ReportCluster } from "../../types/report";
 import type { ClusterFixture } from "../cluster.helpers";
 import { emptyReport, repoMetrics } from "./report.helpers";
-import { wireCluster } from "../cluster.helpers";
-import { signalsWith } from "../signals.helpers";
+import { FIXTURE_KIND, occurrence, wireCluster } from "../cluster.helpers";
+import { kindTitle } from "../../types/report";
+
+/** A mass whose two-decimal rendering (`527.00`) differs from its count. */
+const WHOLE_NUMBER_MASS = 527;
+const WHOLE_NUMBER_MASS_LINE = "Mass: 527";
+/** The document names the cluster's clone kind by its title ([CLONE-KIND-LABELS]). */
+const KIND_LINE = `Kind: ${kindTitle(FIXTURE_KIND)}`;
+const TWO_DECIMAL_MASS = "527.00";
 
 function cluster(overrides: Partial<ClusterFixture> = {}): ReportCluster {
   return wireCluster({
     id: "cluster-for-test",
-    weight: 12.345,
-    size: 2,
+    mass: WHOLE_NUMBER_MASS,
     canonical_node_count: 12,
-    bucket: "identical",
-    signals: signalsWith("nearly_identical", {
-      structural: 1,
-      token_jaccard: 0.875,
-      shape: 1,
-      embedding_cos: 0.25,
-      fused: 0.9,
-    }),
     occurrences: [
       {
-        path: "/repo/Alpha.cs",
-        start_byte: 5,
-        end_byte: 30,
+        ...occurrence("/repo/Alpha.cs", 5, 30),
         hidden: false,
         displayLocation: {
           label: "/repo/Alpha.cs:2:6",
@@ -37,9 +33,7 @@ function cluster(overrides: Partial<ClusterFixture> = {}): ReportCluster {
         },
       },
       {
-        path: "/repo/Beta.cs",
-        start_byte: 40,
-        end_byte: 70,
+        ...occurrence("/repo/Beta.cs", 40, 70),
         hidden: true,
       },
     ],
@@ -65,11 +59,23 @@ suite("cluster document", () => {
     );
 
     assert.ok(body.includes("# Deslop cluster cluster-for-test"));
+    assert.ok(
+      body.split("\n").includes(KIND_LINE),
+      `the document must carry the line "${KIND_LINE}":\n${body}`,
+    );
     assert.ok(body.includes("Occurrences: 4"));
-    assert.ok(body.includes("Weight: 12.35"));
-    assert.ok(body.includes("structural 1.00"));
-    assert.ok(body.includes("jaccard 0.88"));
-    assert.ok(body.includes("embedding 0.25"));
+    // [RANK-MASS-SUM] The document names the cluster's mass — the engine's
+    // ranking metric — as the whole number it is, through the shared
+    // formatter ([PRINCIPLES-ONE-CALCULATION]), never at score precision.
+    assert.ok(
+      body.split("\n").includes(WHOLE_NUMBER_MASS_LINE),
+      `the document must carry the line "${WHOLE_NUMBER_MASS_LINE}":\n${body}`,
+    );
+    assert.equal(
+      body.includes(TWO_DECIMAL_MASS),
+      false,
+      "a count must never be printed with the two-decimal signal precision",
+    );
     assert.ok(body.includes("1. /repo/Alpha.cs:2:6"));
     assert.ok(body.includes("2. /repo/Beta.cs hidden"));
   });
@@ -81,6 +87,23 @@ suite("cluster document", () => {
     );
 
     assert.ok(body.includes("# Deslop cluster cluster-for-test"));
+    // [FUSED-PAIR-SIGNALS] The cluster document is a cluster surface and
+    // renders no pair evidence — no pair line, no signal values.
+    for (const gone of ["Elected pair:", "Measured pair:", "Pair signals:", "structural", "jaccard", "embedding", "pair_agreement"]) {
+      assert.equal(body.includes(gone), false, `cluster document must not render ${gone}`);
+    }
+  });
+
+  test("the cluster document never carries pair signals", () => {
+    const body = clusterDocumentContent(
+      vscode.Uri.parse("deslop://cluster/cluster-for-test"),
+      report([cluster({ occurrences: [] })]),
+    );
+
+    assert.equal(body.includes("Elected pair:"), false);
+    assert.equal(body.includes("Measured pair:"), false);
+    assert.equal(body.includes("Pair signals:"), false);
+    assert.equal(body.includes("structural"), false);
   });
 
   test("renders invalid URI diagnostics", () => {

@@ -181,7 +181,7 @@ exclude = [
 #   code_action/code_action_refusal — none introduced here. Tracked in
 #   gh #397. Ratchet down as that work lands.
 #
-# 2026-08-21 — re-measured 16.36 after the subsumption election was fixed;
+# 2026-08-21 — re-measured 16.36 after cross-cluster subsumption was fixed;
 #   pinned 16.4.
 #
 #   Measured with this tree's `target/release/deslop` on itself:
@@ -189,7 +189,7 @@ exclude = [
 #     hidden clusters
 #
 #   The rise from 12.83 is a measurement-basis correction, not added
-#   duplication. The 12.83 figure was taken while the election let any
+#   duplication. The 12.83 figure was taken while subsumption let any
 #   byte-proven sliver — one 8-node mandatory idiom line — overturn the
 #   demoted enclosing view over it ([PIPELINE-CLUSTER-SUBSUME]); the wide
 #   view was deleted and its span dropped out of the redundant-LOC count,

@@ -1,5 +1,6 @@
-use super::mock_ollama::{MockOllama, MOCK_CONTEXT_TOKENS};
 use super::support::*;
+use crate::common::signals::assert_no_pair_surface_on_cluster;
+use crate::mock_ollama::{MockOllama, MOCK_CONTEXT_TOKENS};
 
 // different default. Reports are parsed via `serde_json` so the
 // assertions are schema-aware rather than substring-guessing.
@@ -45,10 +46,7 @@ fn load_report_json(path: &Path) -> Result<serde_json::Value> {
 /// `src` scan root. Embedding/cache tests need a mutable scan root so
 /// they can write cache siblings next to the sources.
 fn seed_scan(fixture_name: &str) -> Result<(tempfile::TempDir, PathBuf)> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    seed_scan_root(&fixture(fixture_name), &scan_root)?;
-    Ok((tmp, scan_root))
+    seeded_fixture_root(fixture_name)
 }
 
 /// Runs an Ollama-backed scan, varying only what the cases here
@@ -90,6 +88,21 @@ fn provenance_str<'a>(
     Ok(object_field(json, "embedding_provenance", missing)?
         .get(key)
         .and_then(serde_json::Value::as_str))
+}
+
+/// Seeds `fixture` into a fresh temp scan root, runs `deslop` against a
+/// live Ollama at `min_nodes` in `mode`, and returns the temp dir (bind
+/// it — dropping it deletes the tree) with the paths the run wrote.
+fn ollama_run(fixture: &str, min_nodes: &str, mode: &str) -> Result<(TempDir, RunOutputs)> {
+    let (tmp, scan_root) = seed_scan(fixture)?;
+    let outputs = outputs_under(tmp.path());
+    run_ollama_scan(
+        &scan_root,
+        &tmp.path().join(REPORT_OUTPUT_STEM),
+        min_nodes,
+        mode,
+    )?;
+    Ok((tmp, outputs))
 }
 
 fn run_ollama_scan(
@@ -156,7 +169,7 @@ fn huge_csharp_source(minimum_chars: usize) -> String {
     )
 }
 
-// GH#286 [FUSION-EMBED-PROVIDER]: the per-input budget belongs to the
+// GH#286 [FUSED-EMBED-PROVIDER]: the per-input budget belongs to the
 // model, not the pipeline. The mock reports a 32,768-token context via
 // `/api/show`, so a ~12k-char method must reach the provider instead of
 // being dropped by the old hard-coded 6,000-char constant. An F# user
@@ -217,7 +230,7 @@ fn issue_286_large_subtree_survives_when_the_model_declares_the_context() -> Res
     Ok(())
 }
 
-// Implements [FUSION-EMBED-PROVIDER] Type-4 end-to-end: the fixture
+// Implements [FUSED-EMBED-PROVIDER] Type-4 end-to-end: the fixture
 // pairs recursive and iterative implementations of factorial /
 // fibonacci / sum-to-n. Without embeddings the two files share no
 // structural or token signal. With live Ollama, the embedding pass
@@ -226,9 +239,7 @@ fn issue_286_large_subtree_survives_when_the_model_declares_the_context() -> Res
 // in the public confidence range.
 #[test]
 fn ollama_type4_cross_file_cluster_has_positive_embedding_signal() -> Result<()> {
-    let (tmp, scan_root) = seed_scan("csharp-type4")?;
-    let out = outputs_under(tmp.path());
-    run_ollama_scan(&scan_root, &tmp.path().join("report"), "15", "required")?;
+    let (_tmp, out) = ollama_run("csharp-type4", "15", "required")?;
     let json = load_report_json(&out.json)?;
     let provenance = object_field(
         &json,
@@ -264,53 +275,39 @@ fn ollama_type4_cross_file_cluster_has_positive_embedding_signal() -> Result<()>
         find_cross_file_cluster(&json, &["Recursive.cs", "Iterative.cs"]).ok_or_else(|| {
             anyhow::anyhow!("no cross-file cluster spanning Recursive.cs + Iterative.cs: {json:#}")
         })?;
-    let signals = object_field(&cluster, "signals", "cluster missing signals object")?;
-    let embedding_cos = signals
-        .get("embedding_cos")
-        .and_then(serde_json::Value::as_f64)
-        .unwrap_or_default();
-    let token_jaccard = signals
-        .get("token_jaccard")
-        .and_then(serde_json::Value::as_f64)
-        .unwrap_or_default();
-    let structural = signals
-        .get("structural")
-        .and_then(serde_json::Value::as_f64)
-        .unwrap_or_default();
-    let fused = signals
-        .get("fused")
-        .and_then(serde_json::Value::as_f64)
-        .unwrap_or_default();
+    // The mass-only wire carries no cluster `signals` object: admission
+    // evidence is pair-scoped ([FUSED-PAIR-SIGNALS]). What proves the
+    // embedding route reached the report is the cluster's mere presence
+    // (a Type-4 pair clusters on embedding evidence alone), the
+    // provenance triple above, and the clean surface — no pair-only
+    // field may sit on the cluster.
+    assert_no_pair_surface_on_cluster(&cluster, "type-4 embedding cluster");
     assert!(
-        embedding_cos > 0.3,
-        "Type-4 cross-file cluster must carry a meaningful embedding_cos, got {embedding_cos}"
+        cluster
+            .get("mass")
+            .and_then(serde_json::Value::as_u64)
+            .is_some_and(|mass| mass > 0),
+        "the embedding-admitted cluster must carry positive mass: {cluster:#}",
     );
-    let deterministic_max = structural.max(token_jaccard);
+    let occurrences = cluster
+        .get("occurrences")
+        .and_then(serde_json::Value::as_array)
+        .map_or(0, Vec::len);
     assert!(
-        fused >= deterministic_max,
-        "fused score {fused} must preserve the best deterministic signal {deterministic_max}",
-    );
-    assert!(
-        fused >= embedding_cos,
-        "fused score {fused} must preserve the embedding signal {embedding_cos}",
-    );
-    assert!(
-        fused <= 1.0,
-        "fused score {fused} must stay in the public confidence range",
+        occurrences >= 2,
+        "the embedding-admitted cluster must report both copies: {cluster:#}",
     );
     Ok(())
 }
 
-// Implements [FUSION-EMBED-PROVIDER] auto mode: when Ollama is
+// Implements [FUSED-EMBED-PROVIDER] auto mode: when Ollama is
 // reachable, `--embeddings=auto` must silently upgrade to the live
 // provider and record provenance. Complements
 // `embeddings_auto_falls_back_when_provider_unreachable` which
 // exercises the fallback direction against a dead endpoint.
 #[test]
 fn ollama_auto_mode_populates_provenance_when_reachable() -> Result<()> {
-    let (tmp, scan_root) = seed_scan("csharp-small")?;
-    let out = outputs_under(tmp.path());
-    run_ollama_scan(&scan_root, &tmp.path().join("report"), "8", "auto")?;
+    let (_tmp, out) = ollama_run("csharp-small", "8", "auto")?;
     let json = load_report_json(&out.json)?;
     assert_eq!(
         provenance_str(
@@ -323,7 +320,7 @@ fn ollama_auto_mode_populates_provenance_when_reachable() -> Result<()> {
     Ok(())
 }
 
-// Implements [FUSION-EMBED-PROVIDER] cache round-trip: the first
+// Implements [FUSED-EMBED-PROVIDER] cache round-trip: the first
 // run populates `.deslop/cache/embeddings/ollama/<model>/<version>/`
 // with one `.bin` per fingerprint; the second run completes in a
 // small fraction of the wall time because every embedding is
@@ -385,23 +382,23 @@ fn ollama_embedding_cache_persists_across_runs() -> Result<()> {
 // derived views against silent drift.
 #[test]
 fn ollama_provenance_surfaces_in_text_and_html() -> Result<()> {
-    let (tmp, scan_root) = seed_scan("csharp-small")?;
-    let out = outputs_under(tmp.path());
-    run_ollama_scan(&scan_root, &tmp.path().join("report"), "8", "required")?;
+    let (_tmp, out) = ollama_run("csharp-small", "8", "required")?;
     let text = fs::read_to_string(&out.txt)?;
-    assert!(
-        text.contains("embeddings: ollama/nomic-embed-text@"),
-        "text renderer must carry the Ollama provenance line: {text}"
+    assert_contains(
+        &text,
+        "embeddings: ollama/nomic-embed-text@",
+        "text renderer must carry the Ollama provenance line",
     );
     let html = fs::read_to_string(&out.html)?;
-    assert!(
-        html.contains("embeddings: ollama/nomic-embed-text@"),
-        "html renderer must carry the Ollama provenance line: {html}"
+    assert_contains(
+        &html,
+        "embeddings: ollama/nomic-embed-text@",
+        "html renderer must carry the Ollama provenance line",
     );
     Ok(())
 }
 
-// Implements [FUSION-EMBED-PROVIDER] × [PIPELINE-INCREMENTAL]: the
+// Implements [FUSED-EMBED-PROVIDER] × [PIPELINE-INCREMENTAL]: the
 // two caches live side-by-side under `.deslop/cache/` and
 // invalidate independently. The first run populates both
 // (`fingerprints/...` and `embeddings/...`); the second run hits
@@ -436,14 +433,16 @@ fn ollama_incremental_plus_embeddings_second_run_hits_both_caches() -> Result<()
 
     let cluster = find_cross_file_cluster(&second_json, &["Recursive.cs", "Iterative.cs"])
         .ok_or_else(|| anyhow::anyhow!("cached run lost the cross-file cluster"))?;
-    let embedding_cos = cluster
-        .get("signals")
-        .and_then(|s| s.get("embedding_cos"))
-        .and_then(serde_json::Value::as_f64)
-        .ok_or_else(|| anyhow::anyhow!("cached cluster missing embedding_cos"))?;
+    // Admission evidence is pair-scoped on the mass-only wire, so the
+    // cached run proves the embedding route by the cluster's presence,
+    // its mass fields, and the provenance the second run must carry.
     assert!(
-        embedding_cos > 0.3,
-        "second run must preserve embedding signal: got {embedding_cos}",
+        cluster
+            .get("mass")
+            .and_then(serde_json::Value::as_u64)
+            .is_some_and(|mass| mass > 0),
+        "second run must preserve the embedding-admitted cluster with mass: {cluster:#}",
     );
+    assert_no_pair_surface_on_cluster(&cluster, "cached type-4 cluster");
     Ok(())
 }

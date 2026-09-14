@@ -12,21 +12,25 @@
 //! reach it directly, and the other crates enable it through the
 //! `test-support` feature they already carry in their dev-dependencies.
 
-use crate::report::{ReportCluster, ReportOccurrence, ReportSignals};
+use crate::{
+    buckets::ClusterKind,
+    cluster::ClusterKindJudge,
+    report::{CacheStats, Report, ReportCluster, ReportOccurrence},
+    report_metrics::RepoMetrics,
+};
 
-/// The signal triple a byte-proven clone renders: a saturated shape
-/// match that the content gate had no reason to discount.
-#[must_use]
-pub fn identical_signals() -> ReportSignals {
-    ReportSignals {
-        structural: 1.0,
-        token_jaccard: 1.0,
-        shape: 1.0,
-        embedding_cos: 0.0,
-        fused: 1.0,
-        agreement: 1.0,
-        rename_consistency: 0.0,
-        literal_fraction: 0.0,
+/// The clone kind every fixture cluster carries unless a suite pins
+/// another: the ordinary admitted near-copy ([CLONE-KIND-FOLD]).
+pub const FIXTURE_KIND: ClusterKind = ClusterKind::NearlyIdentical;
+
+/// A judge that names every cluster the same kind, for suites that drive
+/// the cluster build without a session to measure pairs in.
+#[derive(Debug, Clone, Copy)]
+pub struct UniformKind(pub ClusterKind);
+
+impl ClusterKindJudge for UniformKind {
+    fn kind(&self, _members: &[usize]) -> ClusterKind {
+        self.0
     }
 }
 
@@ -45,47 +49,77 @@ pub fn fixture_occurrence(path: &str, start: usize, end: usize) -> ReportOccurre
     }
 }
 
-/// A complete rendered cluster over `occurrences`: an `identical`
-/// byte-proven clone, ranked first, with every engine-derived field
-/// stamped the way [`crate::report_restamp`] stamps it on a real report.
-///
-/// Suites override whatever they are pinning — weight, bucket, signals,
-/// ids — and call [`restamp_fixture`] afterwards when they changed the
-/// signals, so the shape reading, the gate verdict and the evidence
-/// sentence stay consistent with the numbers the cluster now carries.
+/// A complete rendered cluster over `occurrences`, of [`FIXTURE_KIND`].
 #[must_use]
 pub fn fixture_cluster(id: &str, occurrences: Vec<ReportOccurrence>) -> ReportCluster {
+    let occurrence_count = occurrences
+        .iter()
+        .filter(|occurrence| !occurrence.hidden)
+        .count();
+    let canonical_node_count = 4;
     let mut cluster = ReportCluster {
         id: id.to_owned(),
         rank: 1,
-        rank_band: String::new(),
-        weight: 1.0,
-        size: occurrences.len(),
-        canonical_node_count: 4,
-        signals: identical_signals(),
-        bucket: "identical".to_owned(),
-        category: "logic".to_owned(),
-        language: "rust".to_owned(),
-        meets_fused_gate: false,
-        evidence_verdict: String::new(),
+        rank_band: "worst".to_owned(),
+        kind: FIXTURE_KIND,
+        mass: fixture_mass(canonical_node_count, occurrence_count),
+        canonical_node_count,
         occurrences_total: occurrences.len(),
         occurrences,
-        occurrence_count: 0,
+        occurrence_count,
         occurrences_truncated: false,
-        summary: String::new(),
-        interpretation: String::new(),
         intersects_diff: None,
         is_newly_introduced: None,
     };
-    // A single-cluster report has no spread to express, so the engine
-    // bands its only cluster `faint` ([SEVERITY-BAND]).
-    "faint".clone_into(&mut cluster.rank_band);
     restamp_fixture(&mut cluster);
     cluster
 }
 
-/// Restamps a fixture's engine-derived fields through the one
-/// definition, for a suite that changed its signals or occurrences.
+/// Restamps fixture mass and occurrence counts after membership changes.
 pub fn restamp_fixture(cluster: &mut ReportCluster) {
-    crate::report_restamp::restamp_cluster(cluster);
+    cluster.occurrences_total = cluster.occurrences.len();
+    cluster.occurrence_count = cluster
+        .occurrences
+        .iter()
+        .filter(|occurrence| !occurrence.hidden)
+        .count();
+    cluster.mass = fixture_mass(cluster.canonical_node_count, cluster.occurrence_count);
+}
+
+/// Computes the canonical fixture mass formula.
+fn fixture_mass(canonical_node_count: usize, occurrence_count: usize) -> u64 {
+    u64::try_from(canonical_node_count)
+        .unwrap_or(u64::MAX)
+        .saturating_mul(u64::try_from(occurrence_count.saturating_sub(1)).unwrap_or(u64::MAX))
+}
+
+/// A complete rendered report carrying `clusters` and nothing else —
+/// no cache activity, no boilerplate hints, no embedding pass, and the
+/// zeroed metrics a corpus with no analysed lines produces.
+///
+/// Suites that assert on report-level projections ([LIVE-DELTA]) need a
+/// `Report` and not just its clusters; hand-building one answers a
+/// dozen wire fields that have nothing to do with what is being
+/// asserted, and a copy that omits one renders a zero rather than
+/// failing to compile.
+#[must_use]
+pub fn fixture_report(clusters: Vec<ReportCluster>) -> Report {
+    Report {
+        tool_version: crate::version().to_owned(),
+        min_nodes: 4,
+        files_analysed: clusters.len(),
+        clusters_hidden: 0,
+        cache_stats: CacheStats::default(),
+        metrics: RepoMetrics::default(),
+        schema_doc: String::new(),
+        boilerplate_hints: Vec::new(),
+        embedding_provenance: None,
+        clusters,
+        clusters_outside_diff: None,
+        literal_findings: Vec::new(),
+        literal_findings_total: 0,
+        literal_findings_hidden: 0,
+        literal_findings_capped: false,
+        literal_max_findings: 0,
+    }
 }

@@ -54,6 +54,8 @@ let mcpDefinition: vscode.McpStdioServerDefinition | undefined;
 let activeReportStore: ReportStore | undefined;
 
 const REPORT_READY_CONTEXT = "deslop.reportReady";
+const SET_CONTEXT_COMMAND = "setContext";
+const DESLOP_CONFIGURATION_NAMESPACE = "deslop";
 
 // Derived from the single language registry so a newly supported language
 // reaches the hover card and LSP document sync without a per-site edit
@@ -163,9 +165,7 @@ export async function activate(
       if (
         !event.affectsConfiguration("deslop.topOffenders.groupBy") &&
         !event.affectsConfiguration("deslop.topOffenders.sortBy") &&
-        !event.affectsConfiguration("deslop.topOffenders.splitByLanguage") &&
-        !event.affectsConfiguration("deslop.topOffenders.filterBuckets") &&
-        !event.affectsConfiguration("deslop.topOffenders.filterCategories")
+        !event.affectsConfiguration("deslop.topOffenders.filterSeverities")
       ) {
         return;
       }
@@ -311,19 +311,13 @@ export function currentApi(): ExtensionApi {
 // buttons, and the filter button its active-filter icon state. Unknown
 // / missing values fall back to the spec defaults — never throws.
 export function syncTopOffendersContext(): void {
-  const cfg = vscode.workspace.getConfiguration("deslop");
+  const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE);
   const groupBy = normalizeGroupBy(cfg.get<string>("topOffenders.groupBy", "cluster"));
   const sortBy = cfg.get<string>("topOffenders.sortBy", "impact") === "path" ? "path" : "impact";
-  const splitByLanguage = cfg.get<boolean>("topOffenders.splitByLanguage", false) === true;
-  void vscode.commands.executeCommand("setContext", "deslop.topOffendersGroupBy", groupBy);
-  void vscode.commands.executeCommand("setContext", "deslop.topOffendersSortBy", sortBy);
+  void vscode.commands.executeCommand(SET_CONTEXT_COMMAND, "deslop.topOffendersGroupBy", groupBy);
+  void vscode.commands.executeCommand(SET_CONTEXT_COMMAND, "deslop.topOffendersSortBy", sortBy);
   void vscode.commands.executeCommand(
-    "setContext",
-    "deslop.topOffendersSplitByLanguage",
-    splitByLanguage,
-  );
-  void vscode.commands.executeCommand(
-    "setContext",
+    SET_CONTEXT_COMMAND,
     "deslop.topOffendersFiltered",
     isTopOffendersFilterActive(),
   );
@@ -331,7 +325,7 @@ export function syncTopOffendersContext(): void {
 
 export function syncReportReadyContext(store: ReportStore): void {
   void vscode.commands.executeCommand(
-    "setContext",
+    SET_CONTEXT_COMMAND,
     REPORT_READY_CONTEXT,
     store.current.report !== null,
   );
@@ -368,7 +362,7 @@ export function startLanguageClient(
   const clientOptions: LanguageClientOptions = {
     documentSelector: ANALYSED_DOCUMENTS,
     synchronize: {
-      configurationSection: "deslop",
+      configurationSection: DESLOP_CONFIGURATION_NAMESPACE,
       fileEvents: vscode.workspace.createFileSystemWatcher("**/*.{cs,rs,py}"),
     },
     outputChannel: initOutputChannel(),
@@ -380,7 +374,7 @@ export function startLanguageClient(
     // (registered separately), which stacks alongside the language
     // server's hover instead of replacing it.
   };
-  return new LanguageClient("deslop", "Deslop", serverOptions, clientOptions);
+  return new LanguageClient(DESLOP_CONFIGURATION_NAMESPACE, "Deslop", serverOptions, clientOptions);
 }
 
 export function buildServerArgs(
@@ -389,7 +383,7 @@ export function buildServerArgs(
 ): string[] {
   if (!workspaceRoot) return debug ? ["--debug"] : [];
   const args = [workspaceRoot];
-  const cfg = vscode.workspace.getConfiguration("deslop");
+  const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE);
   const workerThreads = cfg.get<number>("lsp.workerThreads", 0);
   if (Number.isInteger(workerThreads) && workerThreads > 0) {
     args.push("--worker-threads", String(workerThreads));
@@ -398,7 +392,7 @@ export function buildServerArgs(
   if (Number.isInteger(nice) && nice !== 0) {
     args.push("--nice", String(Math.max(-20, Math.min(19, nice))));
   }
-  // [VSIX-SETTINGS-RANKING] / [RANK-STRUCTURAL-ONLY]: "default" defers
+  // [RANK-STRUCTURAL-ONLY] / [RANK-STRUCTURAL-ONLY]: "default" defers
   // to .deslop.toml; anything else overrides it for this session.
   const structuralOnly = cfg.get<string>("ranking.structuralOnly", "default");
   if (["demote", "ignore", "keep"].includes(structuralOnly)) {
@@ -416,7 +410,7 @@ export function resolveWorkspaceRoot(): string | undefined {
 }
 
 export function currentInitializationOptions(): Record<string, unknown> {
-  const cfg = vscode.workspace.getConfiguration("deslop");
+  const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE);
   const embedding = embeddingSettingsFromConfiguration(cfg);
   return {
     minNodes: cfg.get<number>("minNodes", 30),
@@ -477,7 +471,7 @@ export async function syncEmbeddingSettingsToLsp(
 ): Promise<void> {
   const c = clientOf();
   if (!c) return;
-  const cfg = vscode.workspace.getConfiguration("deslop");
+  const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE);
   const { provider, model, endpoint, mode } = embeddingSettingsFromConfiguration(cfg);
   if (mode === "off") return;
   if (store.current.pendingEmbeddingModel === model) return;
@@ -523,7 +517,7 @@ export function tryResolveOptional(
 }
 
 export function currentBinarySettings(): BinarySettings {
-  const cfg = vscode.workspace.getConfiguration("deslop");
+  const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE);
   return {
     lspPath: cfg.get<string>("lspPath", ""),
     mcpPath: cfg.get<string>("mcpPath", ""),

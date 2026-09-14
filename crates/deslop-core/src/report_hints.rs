@@ -6,7 +6,7 @@ use crate::{
 };
 
 // `ActionHint` is generated from `docs/models/live-ipc.td` by
-// `scripts/typediagram-gen.mjs`. The data shape lives in
+// `scripts/typediagram/generate.mjs`. The data shape lives in
 // `crate::wire_generated`; the playbook constructor below stays here.
 pub use crate::wire_generated::ActionHint;
 

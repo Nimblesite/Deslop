@@ -2,61 +2,79 @@
 // Non-`.test.ts` so the Mocha glob does not load this as a suite.
 
 import * as vscode from "vscode";
-import { Bucket, FileMetric, RepoMetrics, Report, ReportCluster } from "../../types/report";
-import { emptyReport, metrics as zeroMetrics } from "./report-store.helpers";
-import { occurrence, stampRanks, wireCluster } from "../cluster.helpers";
-import { bucketSignals } from "../signals.helpers";
+import type { LanguageClient } from "vscode-languageclient/node";
+import {
+  ClusterKind,
+  FileMetric,
+  RepoMetrics,
+  Report,
+  ReportCluster,
+  Severity,
+} from "../../types/report";
+import { ReportStore } from "../../reportStore";
+import {
+  MetricsProvider,
+  SessionProvider,
+  StatusTicker,
+  TopOffendersProvider,
+} from "../../tree/providers";
+import { emptyReport, metrics as zeroMetrics, storeWith } from "./report-store.helpers";
+import { FIXTURE_KIND, occurrence, stampRanks, wireCluster } from "../cluster.helpers";
 
-/** Re-exported so a tree suite needs one helper module, not two. */
-export { bucketSignals };
+/** Re-exported so a tree suite reaches for one helper module, not two. */
+export { storeWith };
+
+/** A store seeded with the tree suites' `report(..)` shape at generation 0
+ * — the seeding line every tree suite opened with. */
+export function treeStore(
+  clusters: ReportCluster[] = [],
+  metricsOverride: Partial<RepoMetrics> = {},
+): ReportStore {
+  return storeWith(report(clusters, metricsOverride));
+}
+
+/** The Top Offenders panel over `store`. The panel constructors take a
+ * fresh `StatusTicker` in every suite; building it here keeps the ticker
+ * out of 35 call sites. */
+export function topOffenders(store: ReportStore): TopOffendersProvider {
+  return new TopOffendersProvider(store, new StatusTicker());
+}
+
+/** The Duplication panel over `store`. */
+export function metricsPanel(store: ReportStore): MetricsProvider {
+  return new MetricsProvider(store, new StatusTicker());
+}
+
+/** The Session panel over `store`, resolving its LSP client through
+ * `clientOf` exactly as the extension does. */
+export function sessionPanel(
+  store: ReportStore,
+  clientOf: () => LanguageClient | undefined,
+): SessionProvider {
+  return new SessionProvider(store, new StatusTicker(), clientOf);
+}
 
 export function cluster(
   id: string,
-  weight: number,
+  mass: number,
   occurrencePath: string,
   startByte = 0,
   endByte = 20,
-  bucket: Bucket = "identical",
-  category?: string,
+  rankBand: Severity = "mid",
   rank = 1,
+  kind: ClusterKind = FIXTURE_KIND,
 ): ReportCluster {
   return wireCluster({
     id,
     rank,
-    weight,
-    size: 2,
-    signals: bucketSignals(bucket),
-    bucket,
-    ...(category === undefined ? {} : { category }),
-    language: languageOfPath(occurrencePath),
+    rank_band: rankBand,
+    kind,
+    mass,
     occurrences: [
       occurrence(occurrencePath, startByte, endByte),
       occurrence(`${occurrencePath}.other`, startByte, endByte),
     ],
-    interpretation: `dup in ${occurrencePath}`,
   });
-}
-
-// The language id the engine would have stamped for a fixture path. A
-// literal table, not a derivation: production code reads the id off the
-// cluster, and the real extension mapping is the parser registry's
-// ([PIPELINE-LANG-TRAIT]). Unlisted extensions read as the engine's own
-// unresolvable label.
-const FIXTURE_LANGUAGES: ReadonlyArray<readonly [string, string]> = [
-  [".cs", "csharp"],
-  [".rs", "rust"],
-  [".py", "python"],
-  [".dart", "dart"],
-  [".js", "javascript"],
-  [".ts", "typescript"],
-  [".tsx", "tsx"],
-  [".go", "go"],
-  [".php", "php"],
-  [".fs", "fsharp"],
-];
-
-function languageOfPath(path: string): string {
-  return FIXTURE_LANGUAGES.find(([extension]) => path.endsWith(extension))?.[1] ?? "unknown";
 }
 
 export function labelText(item: vscode.TreeItem): string {
@@ -149,7 +167,7 @@ export async function withSetting<T>(
 }
 
 export function withGroupBy(
-  value: "cluster" | "file" | "folder" | "type",
+  value: "cluster" | "file" | "folder" | "kind",
   body: () => Promise<void> | void,
 ): Promise<void> {
   return withSetting("topOffenders.groupBy", value, body);

@@ -24,13 +24,16 @@
 //! - **warm** — a fully-warm store-backed run must reproduce that same
 //!   golden, having rebuilt no signature at all.
 //!
-//! Regenerate with `DESLOP_BLESS=1 cargo test -p deslop --test
-//! incremental_multilang_golden`, then review the diff — see
+//! Regenerate with `DESLOP_BLESS=1 cargo test -p deslop --test suite
+//! incremental_multilang_golden::`, then review the diff — see
 //! `tests/fixtures/incremental-multilang/README.md`.
 
 use serde_json::Value;
 
-use crate::common::{golden::*, incremental::*, multilang::*, multilang_warm::*, verdict::*, *};
+use crate::common::{
+    go_scope::*, golden::*, incremental::*, multilang::*, multilang_warm::*,
+    signals::assert_no_pair_surface_on_cluster, verdict::*, *,
+};
 
 /// Renders the fixture cold, with the store never consulted, into a
 /// throwaway scan root — the checked-in fixture is never scanned in
@@ -38,8 +41,7 @@ use crate::common::{golden::*, incremental::*, multilang::*, multilang_warm::*, 
 /// Returns the report's raw bytes; the golden pins the serialisation,
 /// not merely the decoded document.
 fn render_cold_multilang() -> Result<Vec<u8>> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     seed_multilang(&scan_root)?;
     let (bytes, _counters) = run_capturing_bytes(
         &scan_root,
@@ -51,8 +53,12 @@ fn render_cold_multilang() -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
+/// The report every contract assertion below names in its failure.
+const GOLDEN_LABEL: &str = "committed golden";
+
 /// The command that regenerates the committed golden.
-const BLESS: &str = "`DESLOP_BLESS=1 cargo test -p deslop --test incremental_multilang_golden`";
+const BLESS: &str =
+    "`DESLOP_BLESS=1 cargo test -p deslop --test suite incremental_multilang_golden::`";
 
 /// Why a drift here is worth investigating before it is blessed away.
 const DRIFT_HINT: &str = "Ranking, spans, ids and metrics are all user-visible, and a drift \
@@ -81,24 +87,32 @@ fn cold_multilang_report_matches_committed_golden_byte_for_byte() -> Result<()> 
 #[test]
 fn committed_multilang_golden_satisfies_the_authored_contract() -> Result<()> {
     let golden = load_golden(&multilang_golden_path(), BLESS)?;
-    assert_multilang_contract(&golden, "committed golden")?;
+    assert_multilang_contract(&golden, GOLDEN_LABEL)?;
     assert_cold_header(&golden);
     assert_every_occurrence_is_a_real_clone(&golden)?;
     assert_one_cluster_per_language(&golden)?;
     assert_every_cluster_is_reported_exactly(&golden)?;
     assert_golden_metrics(&golden)?;
+    // [PIPELINE-CLUSTER-EXACT-SCOPE] The Go clone is the `func` in each
+    // file, not the file: no occurrence opens at row 1, carries the
+    // `package` clause, or swallows the banner and the unique top-level
+    // item above the function.
+    let corpus = multilang_corpus();
+    assert_go_authored_scope(&corpus, &golden, GOLDEN_LABEL)?;
+    assert_every_occurrence_opens_a_declaration(&corpus, &golden, GOLDEN_LABEL)?;
+    assert_symmetric_rows_everywhere(&golden, GOLDEN_LABEL);
     Ok(())
 }
 
 /// Every user-visible field of every cluster, pinned per language from
 /// [`MULTILANG_CASES`]: the stable id, the subtree size, the exact
-/// occurrence spans, the bucket, the category, and all four signals.
+/// occurrence spans, and the byte-identical clone fact with a clean
+/// cluster surface.
 ///
 /// The looser halves above would survive drifts that matter. A cluster
-/// can span the right file pair with a moved span, a re-derived id, a
-/// halved node count, or — the audit's regression — a `token_jaccard`
-/// that changed while nothing else did. Each of those is a different
-/// report for the same source, so each gets its own assertion.
+/// can span the right file pair with a moved span, a re-derived id, or a
+/// halved node count. Each of those is a different report for the same
+/// source, so each gets its own assertion.
 fn assert_every_cluster_is_reported_exactly(golden: &Value) -> Result<()> {
     for case in MULTILANG_CASES {
         let language = case.language;
@@ -117,15 +131,15 @@ fn assert_every_cluster_is_reported_exactly(golden: &Value) -> Result<()> {
              ranking weight is computed from that count: {clone:#}",
             case.nodes
         );
+        assert_no_pair_surface_on_cluster(clone, language);
         assert_eq!(
-            field(clone, "category").as_str(),
-            Some("logic"),
-            "{language}: an extractable reconciliation routine is `logic`, \
-             never a demoted data table ([RANK-CATEGORY]): {clone:#}"
+            cluster_kind(clone),
+            IDENTICAL_KIND,
+            "{language}: the authored pair is byte-identical, so the folded \
+             kind is identical ([CLONE-KIND-FOLD]): {clone:#}"
         );
         assert_occurrence_shape(clone, language);
         assert_exact_spans(clone, case)?;
-        assert_pinned_signals(clone, language);
     }
     Ok(())
 }
@@ -160,13 +174,7 @@ fn assert_occurrence_shape(clone: &Value, language: &str) {
 fn assert_exact_spans(clone: &Value, case: &LangCase) -> Result<()> {
     let language = case.language;
     for (file, expected) in case.spans() {
-        let occurrence = occurrences(clone)
-            .iter()
-            .find(|candidate| {
-                field(candidate, "path")
-                    .as_str()
-                    .is_some_and(|path| path.ends_with(file))
-            })
+        let occurrence = row_for_path(occurrences(clone), file)
             .ok_or_else(|| anyhow::anyhow!("{language}: no occurrence for {file}: {clone:#}"))?;
         let actual = (
             field(occurrence, "start_line").as_u64().unwrap_or_default(),
@@ -182,22 +190,6 @@ fn assert_exact_spans(clone: &Value, case: &LangCase) -> Result<()> {
         );
     }
     Ok(())
-}
-
-/// All four signals, exactly. Embeddings are off and both copies are
-/// byte-identical, so every value is determined — there is no band to
-/// hide inside ([FUSED-THRESHOLD]).
-fn assert_pinned_signals(clone: &Value, language: &str) {
-    for (name, expected) in MULTILANG_SIGNALS {
-        let actual = signal(clone, name);
-        assert!(
-            approx(actual, *expected),
-            "{language}: signal `{name}` must be {expected}, got {actual}. A \
-             signal that moves while the source does not is the corrupted- \
-             or misaddressed-blob signature ([PIPELINE-INCREMENTAL-INTEGRITY]): \
-             {clone:#}"
-        );
-    }
 }
 
 /// [METRICS-REPO] The reported figures must be transparent and

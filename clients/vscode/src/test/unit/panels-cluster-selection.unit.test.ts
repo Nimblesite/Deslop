@@ -13,8 +13,17 @@ import { ReportStore } from "../../reportStore";
 import { anchorForClusterId, clusterPanelFeed, resolveAnchoredCluster } from "../../clusterSelection";
 import { Report, ReportCluster, ReportOccurrence } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
-import { bucketSignals } from "../signals.helpers";
 import { wireCluster } from "../cluster.helpers";
+import { storeWith } from "./report-store.helpers";
+
+const PRIMARY_CLUSTER_ID = "aaaaaaaa";
+const NEIGHBOUR_CLUSTER_ID = "99999999";
+const TEST_THIRTY = 30;
+const FIRST_OCCURRENCE_INDEX = 0;
+const THREE_OCCURRENCES = 3;
+const CANONICAL_NODE_COUNT = 42;
+const CLEAN_PEER_COUNT = 2;
+const INITIAL_GENERATION = 1;
 
 interface PostedMessage {
   kind?: string;
@@ -77,17 +86,15 @@ function fakeCtx(): vscode.ExtensionContext {
 }
 
 function occ(filePath: string, startByte: number, endByte: number): ReportOccurrence {
-  return { path: filePath, start_byte: startByte, end_byte: endByte, hidden: false };
+  return { path: filePath, start_byte: startByte, end_byte: endByte, start_line: 1, end_line: 2, hidden: false };
 }
 
-function clusterOf(id: string, weight: number, occurrences: ReportOccurrence[]): ReportCluster {
+function clusterOf(id: string, mass: number, occurrences: ReportOccurrence[]): ReportCluster {
   return wireCluster({
     id,
-    weight,
+    mass,
     canonical_node_count: 0,
-    bucket: "identical",
-    signals: bucketSignals("identical"),
-    occurrences,
+        occurrences,
   });
 }
 
@@ -97,6 +104,23 @@ function reportOf(clusters: ReportCluster[]): Report {
 
 function lastOfKind(messages: PostedMessage[], kind: string): PostedMessage | undefined {
   return [...messages].reverse().find((message) => message.kind === kind);
+}
+
+/** The two clusters of the navigation fixture, as the report publishes them. */
+function publishedClusters(report: Report): { opened: ReportCluster; neighbour: ReportCluster } {
+  const opened = report.clusters.find((cluster) => cluster.id === PRIMARY_CLUSTER_ID);
+  const neighbour = report.clusters.find((cluster) => cluster.id === NEIGHBOUR_CLUSTER_ID);
+  assert.ok(opened && neighbour, "the fixture report must publish both clusters");
+  return { opened, neighbour };
+}
+
+/** The dirty-projected form of the neighbour cluster, asserted present. */
+function projectedNeighbour(store: ReportStore): ReportCluster {
+  const projected = store.current.visibleReport?.clusters.find(
+    (cluster) => cluster.id === NEIGHBOUR_CLUSTER_ID,
+  );
+  assert.ok(projected, "the neighbour must survive the projection with two members");
+  return projected;
 }
 
 // Opens a cluster panel against a stubbed webview, drives the `ready`
@@ -121,27 +145,30 @@ function withClusterPanel(
 }
 
 suite("cluster detail panel selection (#173)", () => {
-  const groupOccurrences = [occ("/repo/Alpha.cs", 10, 20), occ("/repo/Beta.cs", 30, 40)];
+  const groupOccurrences = [occ("/repo/Alpha.cs", 10, 20), occ("/repo/Beta.cs", TEST_THIRTY, 40)];
   const otherOccurrences = [occ("/repo/Gamma.cs", 0, 9), occ("/repo/Delta.cs", 0, 9)];
+  // A third member so this cluster still clears the projection's two-visible
+  // floor after its canonical occurrence goes dirty.
+  const neighbourOccurrences = [...otherOccurrences, occ("/repo/Epsilon.cs", 0, 9)];
 
   test("re-resolves the selected cluster when its content-hash id churns across a re-analysis", () => {
     const store = new ReportStore();
     // The opened duplicate group's canonical occurrence is Alpha.cs:10-20.
     store.setSnapshot(
-      reportOf([clusterOf("aaaaaaaa", 30, groupOccurrences), clusterOf("cccccccc", 5, otherOccurrences)]),
+      reportOf([clusterOf(PRIMARY_CLUSTER_ID, TEST_THIRTY, groupOccurrences), clusterOf("cccccccc", 5, otherOccurrences)]),
       1,
     );
 
-    withClusterPanel(store, "aaaaaaaa", (fake) => {
+    withClusterPanel(store, PRIMARY_CLUSTER_ID, (fake) => {
       // After the webview mounts, the panel selects the opened cluster and the
       // cluster is present in the snapshot it was given.
       assert.equal(
         lastOfKind(fake.messages, "select/cluster")?.id,
-        "aaaaaaaa",
+        PRIMARY_CLUSTER_ID,
         "panel must select the opened cluster once the webview is ready",
       );
       assert.ok(
-        lastOfKind(fake.messages, "report/snapshot")?.report?.clusters.some((c) => c.id === "aaaaaaaa"),
+        lastOfKind(fake.messages, "report/snapshot")?.report?.clusters.some((c) => c.id === PRIMARY_CLUSTER_ID),
         "opened cluster must be present in the first snapshot the panel receives",
       );
 
@@ -149,7 +176,7 @@ suite("cluster detail panel selection (#173)", () => {
       // normalised hash shifted, so the wire id churns aaaaaaaa -> bbbbbbbb. The
       // canonical occurrence (Alpha.cs:10-20) is unchanged.
       store.setSnapshot(
-        reportOf([clusterOf("bbbbbbbb", 30, groupOccurrences), clusterOf("cccccccc", 5, otherOccurrences)]),
+        reportOf([clusterOf("bbbbbbbb", TEST_THIRTY, groupOccurrences), clusterOf("cccccccc", 5, otherOccurrences)]),
         2,
       );
 
@@ -171,8 +198,7 @@ suite("cluster detail panel selection (#173)", () => {
   });
 
   test("keeps the opened cluster visible when an unsaved edit would elide it from the projection", () => {
-    const store = new ReportStore();
-    store.setSnapshot(reportOf([clusterOf("dddddddd", 30, groupOccurrences)]), 1);
+    const store = storeWith(reportOf([clusterOf("dddddddd", TEST_THIRTY, groupOccurrences)]), 1);
 
     withClusterPanel(store, "dddddddd", (fake) => {
       // Editing Alpha.cs drops the cluster below two visible occurrences, so the
@@ -195,9 +221,80 @@ suite("cluster detail panel selection (#173)", () => {
     });
   });
 
+  test("a surviving projection preserves the opened cluster's original canonical and figures", () => {
+    // [VSIX-PAIR-COMPARE] A clean peer is never silently promoted to canonical.
+    const canonical = groupOccurrences[FIRST_OCCURRENCE_INDEX];
+    assert.ok(canonical);
+    const occurrences = [...groupOccurrences, ...otherOccurrences].slice(FIRST_OCCURRENCE_INDEX, THREE_OCCURRENCES);
+    const original = { ...clusterOf(PRIMARY_CLUSTER_ID, TEST_THIRTY, occurrences), canonical_node_count: CANONICAL_NODE_COUNT };
+    const report = reportOf([original]);
+    const store = storeWith(report, FIRST_OCCURRENCE_INDEX);
+    store.markFileDirty(canonical.path);
+    const visible = store.current.visibleReport;
+    assert.ok(visible);
+    assert.equal(visible.clusters[FIRST_OCCURRENCE_INDEX]?.occurrences.length, CLEAN_PEER_COUNT);
+    const feed = clusterPanelFeed(report, visible, anchorForClusterId(report, original.id));
+    assert.equal(feed.selectedId, original.id);
+    assert.deepEqual(feed.report.clusters[FIRST_OCCURRENCE_INDEX], report.clusters[FIRST_OCCURRENCE_INDEX]);
+    assert.equal(feed.report.clusters[FIRST_OCCURRENCE_INDEX]?.occurrences[FIRST_OCCURRENCE_INDEX], canonical);
+    assert.equal(feed.report.clusters[FIRST_OCCURRENCE_INDEX]?.canonical_node_count, CANONICAL_NODE_COUNT);
+  });
+
+  // [VSIX-PAIR-COMPARE] `n` / `p` move the panel's selection inside the
+  // webview, with no host round trip — the host keeps no second copy of
+  // cluster selection state. So every cluster in the feed is a cluster the
+  // user can detail, and every one of them must arrive with the engine's own
+  // membership. Hand the panel a projection that elided a dirty canonical and
+  // its first surviving peer takes the canonical slot: mislabelled as
+  // canonical, and its own Compare action suppressed as a self-comparison.
+  test("a cluster the panel can navigate to keeps its canonical, never a promoted peer", () => {
+    const opened = clusterOf(PRIMARY_CLUSTER_ID, TEST_THIRTY, groupOccurrences);
+    const neighbour = clusterOf(NEIGHBOUR_CLUSTER_ID, 5, neighbourOccurrences);
+    const neighbourCanonical = neighbourOccurrences[FIRST_OCCURRENCE_INDEX];
+    assert.ok(neighbourCanonical);
+    const report = reportOf([opened, neighbour]);
+    // `reportOf` stamps the ranking the engine would have stamped, so the
+    // published clusters — not the raw fixtures — are what the panel must get.
+    const published = publishedClusters(report);
+    const store = storeWith(report, INITIAL_GENERATION);
+    try {
+      store.markFileDirty(neighbourCanonical.path);
+      const projected = projectedNeighbour(store);
+      assert.equal(projected.occurrences.length, CLEAN_PEER_COUNT, "precondition: the edit elides one member");
+      assert.notEqual(
+        projected.occurrences[FIRST_OCCURRENCE_INDEX],
+        neighbourCanonical,
+        "precondition: the projection alone leaves a peer in the canonical slot",
+      );
+
+      // The panel is anchored on the OPENED cluster — the neighbour is only
+      // ever reached by navigating, so nothing re-anchors on it.
+      const visible = store.current.visibleReport;
+      assert.ok(visible);
+      const feed = clusterPanelFeed(report, visible, anchorForClusterId(report, PRIMARY_CLUSTER_ID));
+      assert.equal(feed.selectedId, PRIMARY_CLUSTER_ID, "the opened cluster stays selected");
+      const fed = feed.report.clusters.find((cluster) => cluster.id === NEIGHBOUR_CLUSTER_ID);
+      assert.ok(fed, "a cluster the user can navigate to must reach the panel");
+      assert.equal(
+        fed.occurrences[FIRST_OCCURRENCE_INDEX],
+        neighbourCanonical,
+        "the canonical slot holds the engine's canonical occurrence, not the first clean peer",
+      );
+      assert.equal(fed.occurrences.length, THREE_OCCURRENCES, "every peer stays comparable against it");
+      assert.equal(fed.occurrence_count, THREE_OCCURRENCES, "the panel counts the engine's occurrences");
+      assert.equal(fed, published.neighbour, "the navigable cluster arrives as the engine published it");
+      assert.equal(
+        feed.report.clusters.find((cluster) => cluster.id === PRIMARY_CLUSTER_ID),
+        published.opened,
+        "restoring the neighbour does not disturb the opened cluster",
+      );
+    } finally {
+      store.dispose();
+    }
+  });
+
   test("clears the selection and surfaces the dead id when the cluster leaves the report entirely", () => {
-    const store = new ReportStore();
-    store.setSnapshot(reportOf([clusterOf("eeeeeeee", 30, groupOccurrences)]), 1);
+    const store = storeWith(reportOf([clusterOf("eeeeeeee", TEST_THIRTY, groupOccurrences)]), 1);
 
     withClusterPanel(store, "eeeeeeee", (fake) => {
       // The duplication is resolved — the cluster is gone from the next report.
@@ -215,8 +312,7 @@ suite("cluster detail panel selection (#173)", () => {
   });
 
   test("does not re-push the feed on embedding-progress, lifecycle, or pending-model ticks (VSIX-PERF)", () => {
-    const store = new ReportStore();
-    store.setSnapshot(reportOf([clusterOf("ffffffff", 30, groupOccurrences)]), 1);
+    const store = storeWith(reportOf([clusterOf("ffffffff", TEST_THIRTY, groupOccurrences)]), 1);
 
     withClusterPanel(store, "ffffffff", (fake) => {
       const afterReady = fake.messages.length;
@@ -242,7 +338,7 @@ suite("cluster detail panel selection (#173)", () => {
       );
 
       // A genuine report change still re-pushes.
-      store.setSnapshot(reportOf([clusterOf("ffffffff", 30, groupOccurrences)]), 2);
+      store.setSnapshot(reportOf([clusterOf("ffffffff", TEST_THIRTY, groupOccurrences)]), 2);
       assert.ok(
         fake.messages.length > afterReady,
         "a report change re-pushes the feed",
@@ -251,13 +347,13 @@ suite("cluster detail panel selection (#173)", () => {
   });
 
   test("resolveAnchoredCluster falls back to the id when the canonical occurrence has moved", () => {
-    const report = reportOf([clusterOf("aaaaaaaa", 30, [occ("/repo/Alpha.cs", 99, 110)])]);
-    const anchor = anchorForClusterId(reportOf([clusterOf("aaaaaaaa", 30, groupOccurrences)]), "aaaaaaaa");
+    const report = reportOf([clusterOf(PRIMARY_CLUSTER_ID, TEST_THIRTY, [occ("/repo/Alpha.cs", 99, 110)])]);
+    const anchor = anchorForClusterId(reportOf([clusterOf(PRIMARY_CLUSTER_ID, TEST_THIRTY, groupOccurrences)]), PRIMARY_CLUSTER_ID);
     // The anchored occurrence (Alpha.cs:10-20) is gone, but the id survives — the
     // id fallback keeps the selection rather than blanking the panel.
-    assert.equal(resolveAnchoredCluster(report, anchor)?.id, "aaaaaaaa");
+    assert.equal(resolveAnchoredCluster(report, anchor)?.id, PRIMARY_CLUSTER_ID);
     assert.equal(resolveAnchoredCluster(null, anchor), undefined);
     const feed = clusterPanelFeed(report, report, anchor);
-    assert.equal(feed.selectedId, "aaaaaaaa");
+    assert.equal(feed.selectedId, PRIMARY_CLUSTER_ID);
   });
 });

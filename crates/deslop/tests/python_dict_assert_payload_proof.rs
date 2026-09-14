@@ -46,7 +46,7 @@ fn expect_smuggled_logic_reported(
 ) -> Result<()> {
     let scan_root = fixture(fixture_name);
     let report = run_report(&scan_root, 8)?;
-    let texts = expect_cross_file_duplicate(&scan_root, &report, files, 2, 2, 0.99)?;
+    let texts = expect_cross_file_duplicate(&scan_root, &report, files, 2, 2, false)?;
     assert!(
         texts.iter().all(|text| text.contains(smuggled)),
         "{why}; the report must cover it: {texts:#?}"

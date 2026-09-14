@@ -4,10 +4,19 @@
 //! client-bound `window/showDocument` requests so command handlers run
 //! through the same transport a real editor uses.
 
-
-use std::process::{ChildStdin, ChildStdout};
+use std::{
+    path::Path,
+    process::{ChildStdin, ChildStdout},
+};
 
 use anyhow::{anyhow, Result};
+use deslop_lsp::{
+    commands::{
+        OPEN_CLUSTER, OPEN_REPORT, PICK_EMBEDDING_MODEL, REFRESH_REPORT, TOGGLE_INCREMENTAL,
+    },
+    notifications::REPORT_CHANGED,
+    LspBackend,
+};
 use futures::{FutureExt, SinkExt, StreamExt};
 use serde_json::{json, Value};
 use tower::Service;
@@ -17,23 +26,33 @@ use tower_lsp::{
 };
 
 use crate::common::{
-    call, copy_fixture, handshake, read_frame, request, spawn_lsp_on_fixture, write_frame,
+    call, copy_fixture, read_frame, request, session::FixtureSession, write_frame,
 };
-use deslop_lsp::LspBackend;
 
+/// The two-file C# workspace these cases are served from.
+const CSHARP_FIXTURE: &str = "csharp-small";
 const EXECUTE_COMMAND: &str = "workspace/executeCommand";
+const COMMAND_FIELD: &str = "command";
+const RESULT_COMMAND_POINTER: &str = "/result/command";
+const PROVIDER_ID_FIELD: &str = "provider_id";
+/// The `csharp-small` file whose deletion retires the fixture's only cluster.
+const BETA_FILE: &str = "Beta.cs";
+/// Count of clusters the refresh response reports as removed.
+const CLUSTERS_REMOVED_POINTER: &str = "/clustersRemoved";
+/// Generation the pushed notification advanced to.
+const NOTIFIED_GENERATION_POINTER: &str = "/params/generation";
+/// Removed-cluster count carried by the pushed notification's summary.
+const NOTIFIED_REMOVED_POINTER: &str = "/params/summary/clusters_removed";
 
 #[test]
 fn execute_command_provider_advertises_and_opens_virtual_documents() -> Result<()> {
-    let (_workspace, mut child, mut stdin, mut stdout, _stderr) =
-        spawn_lsp_on_fixture("csharp-small")?;
-    let init = handshake(&mut stdin, &mut stdout)?;
-    assert_advertised_commands(&init)?;
+    let mut lsp = FixtureSession::open(CSHARP_FIXTURE)?;
+    assert_advertised_commands(&lsp.init)?;
 
     let (report_response, report_shows) = call_with_show_document_response(
-        &mut stdin,
-        &mut stdout,
-        &json!({ "command": "deslop.lsp.openReport" }),
+        &mut lsp.stdin,
+        &mut lsp.stdout,
+        &json!({ (COMMAND_FIELD): OPEN_REPORT }),
     )?;
     assert_eq!(report_shows.len(), 1, "expected one showDocument request");
     let report_show = only_show_request(&report_shows)?;
@@ -48,18 +67,18 @@ fn execute_command_provider_advertises_and_opens_virtual_documents() -> Result<(
     );
 
     let (cluster_response, cluster_shows) = call_with_show_document_response(
-        &mut stdin,
-        &mut stdout,
-        &json!({ "command": "deslop.lsp.openCluster", "arguments": ["abc123"] }),
+        &mut lsp.stdin,
+        &mut lsp.stdout,
+        &json!({ (COMMAND_FIELD): OPEN_CLUSTER, "arguments": ["abc123"] }),
     )?;
     assert_eq!(cluster_shows.len(), 1, "expected one cluster document open");
     let cluster_show = only_show_request(&cluster_shows)?;
     assert_eq!(show_uri(cluster_show)?, "deslop://cluster/abc123");
     assert_eq!(
         cluster_response
-            .pointer("/result/command")
+            .pointer(RESULT_COMMAND_POINTER)
             .and_then(Value::as_str),
-        Some("deslop.lsp.openCluster")
+        Some(OPEN_CLUSTER)
     );
     assert_eq!(
         cluster_response
@@ -68,17 +87,14 @@ fn execute_command_provider_advertises_and_opens_virtual_documents() -> Result<(
         Some(true)
     );
 
-    let _ = child.kill();
+    drop(lsp);
     Ok(())
 }
 
 #[test]
 fn execute_command_dispatches_refresh_models_and_incremental_toggle() -> Result<()> {
-    let (_workspace, mut child, mut stdin, mut stdout, _stderr) =
-        spawn_lsp_on_fixture("csharp-small")?;
-    let _init = handshake(&mut stdin, &mut stdout)?;
-
-    let initial_config = call(&mut stdin, &mut stdout, "deslop/sessionConfig", &json!({}))?;
+    let mut lsp = FixtureSession::open(CSHARP_FIXTURE)?;
+    let initial_config = lsp.call("deslop/sessionConfig", &json!({}))?;
     assert_eq!(
         initial_config
             .pointer("/result/incremental")
@@ -87,15 +103,17 @@ fn execute_command_dispatches_refresh_models_and_incremental_toggle() -> Result<
     );
 
     let toggled = execute(
-        &mut stdin,
-        &mut stdout,
+        &mut lsp.stdin,
+        &mut lsp.stdout,
         &json!({
-            "command": "deslop.lsp.toggleIncremental"
+            (COMMAND_FIELD): TOGGLE_INCREMENTAL
         }),
     )?;
     assert_eq!(
-        toggled.pointer("/result/command").and_then(Value::as_str),
-        Some("deslop.lsp.toggleIncremental")
+        toggled
+            .pointer(RESULT_COMMAND_POINTER)
+            .and_then(Value::as_str),
+        Some(TOGGLE_INCREMENTAL)
     );
     assert_eq!(
         toggled
@@ -103,7 +121,12 @@ fn execute_command_dispatches_refresh_models_and_incremental_toggle() -> Result<
             .and_then(Value::as_bool),
         Some(false)
     );
-    let updated_config = call(&mut stdin, &mut stdout, "deslop/sessionConfig", &json!({}))?;
+    let updated_config = call(
+        &mut lsp.stdin,
+        &mut lsp.stdout,
+        "deslop/sessionConfig",
+        &json!({}),
+    )?;
     assert_eq!(
         updated_config
             .pointer("/result/incremental")
@@ -112,15 +135,17 @@ fn execute_command_dispatches_refresh_models_and_incremental_toggle() -> Result<
     );
 
     let refreshed = execute(
-        &mut stdin,
-        &mut stdout,
+        &mut lsp.stdin,
+        &mut lsp.stdout,
         &json!({
-            "command": "deslop.lsp.refreshReport"
+            (COMMAND_FIELD): REFRESH_REPORT
         }),
     )?;
     assert_eq!(
-        refreshed.pointer("/result/command").and_then(Value::as_str),
-        Some("deslop.lsp.refreshReport")
+        refreshed
+            .pointer(RESULT_COMMAND_POINTER)
+            .and_then(Value::as_str),
+        Some(REFRESH_REPORT)
     );
     assert_eq!(
         refreshed
@@ -133,15 +158,17 @@ fn execute_command_dispatches_refresh_models_and_incremental_toggle() -> Result<
     assert!(refreshed.pointer("/result/clustersUpdated").is_some());
 
     let models = execute(
-        &mut stdin,
-        &mut stdout,
+        &mut lsp.stdin,
+        &mut lsp.stdout,
         &json!({
-            "command": "deslop.lsp.pickEmbeddingModel"
+            (COMMAND_FIELD): PICK_EMBEDDING_MODEL
         }),
     )?;
     assert_eq!(
-        models.pointer("/result/command").and_then(Value::as_str),
-        Some("deslop.lsp.pickEmbeddingModel")
+        models
+            .pointer(RESULT_COMMAND_POINTER)
+            .and_then(Value::as_str),
+        Some(PICK_EMBEDDING_MODEL)
     );
     // [REMOVE-STUB] Production listing only carries Ollama-provided
     // entries — when Ollama is unreachable the list is empty, when it
@@ -153,18 +180,18 @@ fn execute_command_dispatches_refresh_models_and_incremental_toggle() -> Result<
         .ok_or_else(|| anyhow!("models field missing: {models}"))?;
     for entry in models_array {
         assert_ne!(
-            entry.get("provider_id").and_then(Value::as_str),
+            entry.get(PROVIDER_ID_FIELD).and_then(Value::as_str),
             Some("stub"),
             "production payload must not include the deterministic stub: {entry}",
         );
         assert_eq!(
-            entry.get("provider_id").and_then(Value::as_str),
+            entry.get(PROVIDER_ID_FIELD).and_then(Value::as_str),
             Some("ollama"),
             "production listing must only expose ollama-provided models: {entry}",
         );
     }
 
-    let _ = child.kill();
+    drop(lsp);
     Ok(())
 }
 
@@ -183,19 +210,21 @@ async fn execute_command_handlers_run_in_process_for_coverage() -> Result<()> {
     assert_open_cluster_invalid_id(&mut service, &mut socket).await?;
     assert_unknown_command(&mut service, &mut socket).await?;
     assert_refresh_report_command(&mut service, &mut socket).await?;
+    assert_refresh_after_edit_notifies_report_changed(&mut service, &mut socket, workspace.path())
+        .await?;
     Ok(())
 }
 
 fn assert_advertised_commands(init: &Value) -> Result<()> {
     let commands = advertised_commands(init)?;
     assert_eq!(commands.len(), 7, "unexpected command list: {commands:?}");
-    assert!(commands.contains(&"deslop.lsp.refreshReport".to_owned()));
-    assert!(commands.contains(&"deslop.lsp.openCluster".to_owned()));
-    assert!(commands.contains(&"deslop.lsp.openReport".to_owned()));
+    assert!(commands.contains(&REFRESH_REPORT.to_owned()));
+    assert!(commands.contains(&OPEN_CLUSTER.to_owned()));
+    assert!(commands.contains(&OPEN_REPORT.to_owned()));
     assert!(commands.contains(&"deslop.lsp.renderHtmlReport".to_owned()));
     assert!(commands.contains(&"deslop.lsp.reportJson".to_owned()));
-    assert!(commands.contains(&"deslop.lsp.pickEmbeddingModel".to_owned()));
-    assert!(commands.contains(&"deslop.lsp.toggleIncremental".to_owned()));
+    assert!(commands.contains(&PICK_EMBEDDING_MODEL.to_owned()));
+    assert!(commands.contains(&TOGGLE_INCREMENTAL.to_owned()));
     Ok(())
 }
 
@@ -203,18 +232,14 @@ async fn assert_open_report_command(
     service: &mut LspService<LspBackend>,
     socket: &mut ClientSocket,
 ) -> Result<()> {
-    let (response, shows) = execute_in_process(
-        service,
-        socket,
-        json!({ "command": "deslop.lsp.openReport" }),
-    )
-    .await?;
+    let (response, shows) =
+        execute_in_process(service, socket, json!({ (COMMAND_FIELD): OPEN_REPORT })).await?;
     assert_eq!(shows.len(), 1, "expected one showDocument");
     let show = only_show_request(&shows)?;
     assert_eq!(show_uri(show)?, "deslop://report");
     assert_eq!(show_take_focus(show), Some(true));
     assert_eq!(show_external(show), Some(false));
-    assert_json_str(&response, "/command", "deslop.lsp.openReport");
+    assert_json_str(&response, "/command", OPEN_REPORT);
     Ok(())
 }
 
@@ -225,7 +250,7 @@ async fn assert_render_html_report_command(
     let (response, shows) = execute_in_process(
         service,
         socket,
-        json!({ "command": "deslop.lsp.renderHtmlReport" }),
+        json!({ (COMMAND_FIELD): "deslop.lsp.renderHtmlReport" }),
     )
     .await?;
     assert!(shows.is_empty(), "render must not open documents");
@@ -249,7 +274,7 @@ async fn assert_report_json_command(
     let (response, shows) = execute_in_process(
         service,
         socket,
-        json!({ "command": "deslop.lsp.reportJson" }),
+        json!({ (COMMAND_FIELD): "deslop.lsp.reportJson" }),
     )
     .await?;
     assert!(shows.is_empty(), "reportJson must not open documents");
@@ -269,10 +294,16 @@ fn assert_report_json_shape(report: &Value) -> Result<()> {
     let first = clusters
         .first()
         .ok_or_else(|| anyhow!("csharp-small must yield clusters: {report}"))?;
-    let bucket = first.get("bucket").and_then(Value::as_str);
+    // Mass-only cutover: clusters carry rank and mass, never a retired
+    // clone-type bucket ([MCP-TOOLS]). Pin rank presence and bucket
+    // absence so the fat surface cannot leak back into the wire.
     assert!(
-        bucket.is_some(),
-        "cluster needs a clone-type bucket: {first}"
+        first.get("rank").is_some() && first.get("rank_band").is_some(),
+        "cluster needs its mass-ranked surface: {first}"
+    );
+    assert!(
+        first.get("bucket").is_none(),
+        "retired clone-type bucket must not leak into the wire: {first}"
     );
     let path = first.pointer("/occurrences/0/path").and_then(Value::as_str);
     assert!(path.is_some(), "cluster occurrence needs a path: {first}");
@@ -301,7 +332,7 @@ fn assert_report_shows_real_clusters(html: &str) {
         "the populated cluster card must carry its title heading"
     );
     assert!(
-        html.contains("in 2 places"),
+        html.contains("2 occurrences"),
         "the csharp-small clone spans exactly two occurrences: {}",
         &html[..html.len().min(160)]
     );
@@ -348,7 +379,7 @@ async fn assert_open_cluster_command(
     let (response, shows) = execute_in_process(
         service,
         socket,
-        json!({ "command": "deslop.lsp.openCluster", "arguments": ["abc123"] }),
+        json!({ (COMMAND_FIELD): OPEN_CLUSTER, "arguments": ["abc123"] }),
     )
     .await?;
     assert_eq!(shows.len(), 1, "expected one cluster open");
@@ -367,7 +398,7 @@ async fn assert_toggle_incremental_command(
     let (response, shows) = execute_in_process(
         service,
         socket,
-        json!({ "command": "deslop.lsp.toggleIncremental" }),
+        json!({ (COMMAND_FIELD): TOGGLE_INCREMENTAL }),
     )
     .await?;
     assert!(shows.is_empty(), "toggle must not open documents");
@@ -382,7 +413,7 @@ async fn assert_pick_embedding_model_command(
     let (response, shows) = execute_in_process(
         service,
         socket,
-        json!({ "command": "deslop.lsp.pickEmbeddingModel" }),
+        json!({ (COMMAND_FIELD): PICK_EMBEDDING_MODEL }),
     )
     .await?;
     assert!(shows.is_empty(), "model picker must not open documents");
@@ -395,12 +426,12 @@ async fn assert_pick_embedding_model_command(
         .ok_or_else(|| anyhow!("/models field missing: {response}"))?;
     for entry in models {
         assert_ne!(
-            entry.get("provider_id").and_then(Value::as_str),
+            entry.get(PROVIDER_ID_FIELD).and_then(Value::as_str),
             Some("stub"),
             "pickEmbeddingModel response must not include the stub: {entry}",
         );
         assert_eq!(
-            entry.get("provider_id").and_then(Value::as_str),
+            entry.get(PROVIDER_ID_FIELD).and_then(Value::as_str),
             Some("ollama"),
             "pickEmbeddingModel response must only expose ollama rows: {entry}",
         );
@@ -415,7 +446,7 @@ async fn assert_open_cluster_invalid_id(
     let (response, requests) = execute_raw_in_process(
         service,
         socket,
-        json!({ "command": "deslop.lsp.openCluster", "arguments": ["bad/id"] }),
+        json!({ (COMMAND_FIELD): OPEN_CLUSTER, "arguments": ["bad/id"] }),
     )
     .await?;
     assert!(
@@ -437,8 +468,12 @@ async fn assert_unknown_command(
     service: &mut LspService<LspBackend>,
     socket: &mut ClientSocket,
 ) -> Result<()> {
-    let (response, requests) =
-        execute_raw_in_process(service, socket, json!({ "command": "deslop.unknown" })).await?;
+    let (response, requests) = execute_raw_in_process(
+        service,
+        socket,
+        json!({ (COMMAND_FIELD): "deslop.unknown" }),
+    )
+    .await?;
     assert!(
         requests.is_empty(),
         "unknown command must not contact the client"
@@ -451,17 +486,74 @@ async fn assert_refresh_report_command(
     service: &mut LspService<LspBackend>,
     socket: &mut ClientSocket,
 ) -> Result<()> {
-    let (response, shows) = execute_in_process(
-        service,
-        socket,
-        json!({ "command": "deslop.lsp.refreshReport" }),
-    )
-    .await?;
+    let (response, shows) =
+        execute_in_process(service, socket, json!({ (COMMAND_FIELD): REFRESH_REPORT })).await?;
     assert!(shows.is_empty(), "refresh must not open documents");
-    assert_json_str(&response, "/command", "deslop.lsp.refreshReport");
+    assert_json_str(&response, "/command", REFRESH_REPORT);
     assert!(response.pointer("/generation").is_some());
     assert!(response.pointer("/clustersAdded").is_some());
     Ok(())
+}
+
+/// [LSP-COMMANDS] [LIVE-NOTIFICATIONS] [PRINCIPLES-LIVE-IS-REACTIVE]
+/// `assert_refresh_report_command` above proves a no-change refresh stays
+/// silent. This proves the other half: a refresh whose delta actually retires
+/// a cluster must push `deslop/reportChanged`, naming the generation it
+/// advanced to and reporting the same removal count the command result does.
+/// Without this the notification could be unwired entirely and every existing
+/// assertion would still pass, because an empty delta returns before it.
+async fn assert_refresh_after_edit_notifies_report_changed(
+    service: &mut LspService<LspBackend>,
+    socket: &mut ClientSocket,
+    workspace_root: &Path,
+) -> Result<()> {
+    std::fs::remove_file(workspace_root.join(BETA_FILE))?;
+    let (response, during_call) =
+        execute_in_process(service, socket, json!({ (COMMAND_FIELD): REFRESH_REPORT })).await?;
+    let mut client_frames = during_call;
+    client_frames.extend(drain_client_frames(socket));
+    let removed = response
+        .pointer(CLUSTERS_REMOVED_POINTER)
+        .and_then(Value::as_u64)
+        .ok_or_else(|| anyhow!("refresh reported no removal count: {response}"))?;
+    assert!(
+        removed > 0,
+        "deleting {BETA_FILE} must retire the fixture's cluster: {response}"
+    );
+    let changed = client_frames
+        .iter()
+        .find(|frame| frame.get("method").and_then(Value::as_str) == Some(REPORT_CHANGED))
+        .ok_or_else(|| {
+            anyhow!("a refresh that removed {removed} cluster(s) pushed no {REPORT_CHANGED}: {client_frames:?}")
+        })?;
+    assert!(
+        changed
+            .pointer(NOTIFIED_GENERATION_POINTER)
+            .and_then(Value::as_u64)
+            .is_some_and(|generation| generation > 0),
+        "{REPORT_CHANGED} must name the generation it advanced to: {changed}"
+    );
+    assert_eq!(
+        changed
+            .pointer(NOTIFIED_REMOVED_POINTER)
+            .and_then(Value::as_u64),
+        Some(removed),
+        "{REPORT_CHANGED} summary must agree with the command result: {changed}"
+    );
+    Ok(())
+}
+
+/// Collects every client-bound frame already queued on `socket` without
+/// blocking. `call_service_with_client` returns the instant the response
+/// resolves, so a notification the handler pushed just before returning is
+/// still sitting in the client channel; polling it out here observes the push
+/// without a sleep or a timeout.
+fn drain_client_frames(socket: &mut ClientSocket) -> Vec<Value> {
+    let mut frames = Vec::new();
+    while let Some(Some(request)) = socket.next().now_or_never() {
+        frames.push(client_request_frame(&request));
+    }
+    frames
 }
 
 fn advertised_commands(response: &Value) -> Result<Vec<String>> {
