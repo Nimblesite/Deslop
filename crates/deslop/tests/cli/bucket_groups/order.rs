@@ -132,7 +132,10 @@ fn render_mixed_report() -> Result<(String, Value)> {
         for name in LIGHT_FILES {
             fs::write(root.join(name), LIGHT_IDENTICAL)?;
         }
-        fs::write(root.join(SHAPE_ONLY_FILE), super::information::SHAPE_ONLY_DISJOINT)?;
+        fs::write(
+            root.join(SHAPE_ONLY_FILE),
+            super::information::SHAPE_ONLY_DISJOINT,
+        )?;
         Ok(())
     })?;
     let mut cmd = deslop_command(&scan_root, &tmp.path().join(REPORT_OUTPUT_STEM))?;
@@ -158,7 +161,9 @@ fn html_groups_follow_the_category_display_order_not_the_mass_ranking() -> Resul
         "the corpus must fold both an exact and a renamed relation: {json:#}"
     );
     let first_identical = ranked.iter().position(|kind| *kind == IDENTICAL_KIND);
-    let first_renamed = ranked.iter().position(|kind| *kind == NEARLY_IDENTICAL_KIND);
+    let first_renamed = ranked
+        .iter()
+        .position(|kind| *kind == NEARLY_IDENTICAL_KIND);
     assert!(
         first_renamed < first_identical,
         "this corpus is built so mass order and category order disagree: the \
@@ -198,7 +203,12 @@ fn html_groups_follow_the_category_display_order_not_the_mass_ranking() -> Resul
     // Ordering is presentation: it moves no duplication figure.
     assert_eq!(
         metric_field(&json, "clusters_total").as_u64(),
-        Some(ranked.iter().filter(|kind| **kind != STRUCTURAL_ONLY_KIND).count() as u64),
+        Some(
+            ranked
+                .iter()
+                .filter(|kind| **kind != STRUCTURAL_ONLY_KIND)
+                .count() as u64
+        ),
         "only clones are counted as clone groups, whatever order they render \
          in: {json:#}"
     );

@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use super::{
     frontier::{frontiers_aligned, identities_substitute, population, MemberContent, Population},
-    rename::corroborated_substitution,
+    rename::Corroboration,
 };
 use crate::{
     ast::{ByteRange, NormalizedNode},
@@ -25,10 +25,11 @@ const CALLABLE_DECLARATIONS: &[&str] = &[
     "method_or_prop_defn",
 ];
 
-/// An external selector and the selected collaborator through which it is called.
+/// An external selector and the collaborator it is selected on.
 pub(super) struct CallTarget {
-    /// Frontier position of a receiver property, excluding plain receiver variables.
-    collaborator: Option<usize>,
+    /// Frontier position of the receiver the call is made on — the
+    /// property or the handle at the head of the callee chain.
+    receiver: Option<usize>,
 }
 
 impl CallTarget {
@@ -37,19 +38,19 @@ impl CallTarget {
     /// ([FUSED-SHARED-SUBTREE-CORE]).
     pub(super) fn shifted(&self, offset: usize) -> Self {
         Self {
-            collaborator: self
-                .collaborator
+            receiver: self
+                .receiver
                 .map(|position| position.saturating_add(offset)),
         }
     }
 
     /// The same target inside the stretch of `len` positions starting
-    /// at `first`; a collaborator outside the stretch no longer
-    /// qualifies the selector ([FUSED-SHARED-SUBTREE-CORE]).
+    /// at `first`; a receiver outside the stretch no longer qualifies
+    /// the selector ([FUSED-SHARED-SUBTREE-CORE]).
     pub(super) fn within(&self, first: usize, len: usize) -> Self {
         Self {
-            collaborator: self
-                .collaborator
+            receiver: self
+                .receiver
                 .filter(|position| *position >= first && position.saturating_sub(first) < len)
                 .map(|position| position.saturating_sub(first)),
         }
@@ -76,10 +77,10 @@ pub(super) fn external_targets(
         .collect()
 }
 
-/// Locates a receiver property in the same collapsed frontier as its selector.
+/// Locates a call's receiver in the same collapsed frontier as its selector.
 fn target_for_receiver(receiver: Option<ByteRange>, leaves: &[ByteRange]) -> CallTarget {
     CallTarget {
-        collaborator: receiver.and_then(|range| leaves.iter().position(|leaf| *leaf == range)),
+        receiver: receiver.and_then(|range| leaves.iter().position(|leaf| *leaf == range)),
     }
 }
 
@@ -95,7 +96,7 @@ fn external_selector_ranges(
         .collect()
 }
 
-/// A copied collaborator property can rename the operation selected through it.
+/// A copied collaborator can rename the operation selected on it.
 fn external_call_target(
     call: &NormalizedNode,
     declarations: &BTreeSet<&[u8]>,
@@ -106,71 +107,35 @@ fn external_call_target(
     if declarations.contains(name) {
         return None;
     }
-    let receiver = collaborator_property(call).map(|node| node.byte_range);
+    let receiver = call_receiver(call).map(|node| node.byte_range);
     Some(((selector.start, selector.end), receiver))
 }
 
-/// QUARANTINED -- this gate vetoed corroborated method renames.
+/// [FUSED-CONTENT-GATE-CALL-TARGET] Whether the two members select
+/// different behaviour through the calls they make outside the matched
+/// region.
 ///
-/// **What it did.** It reported a content contradiction whenever two
-/// aligned frontier positions selected different external methods,
-/// unless a *receiver property* at the same position was itself a
-/// corroborated rename. A contradiction zeroes the pair's content, so
-/// the pair failed `content_gate.support_floor` and never reached
-/// closure.
+/// A method declared elsewhere is a fixed name. The copy did not author
+/// it and cannot rename it at will, so `toHaveText` standing where its
+/// partner says `toContainText` is a changed operation, not a copy, and
+/// it contradicts the pair's content.
 ///
-/// **Why it was removed.** That exemption is reachable only through a
-/// collaborator property. A call on a plain receiver variable --
-/// `ledger.postEntry(..)` -- has no collaborator property at all, so
-/// every external method rename on an ordinary receiver was an
-/// unconditional veto, however many times the same substitution was
-/// corroborated across the region. That deletes the copy:
-/// `tests/fixtures/type2-rename-method-calls` is one function written
-/// twice with its names substituted one for one, and the shipped engine
-/// reported it as clean -- 0 clusters, 0 duplicated lines -- against
-/// 100% duplication for the control that differs only in two method
-/// names. A systematic rename is still a copy
-/// ([CLONE-BUCKETS-NORTH-STAR], [FUSED-CONTENT-GATE-RENAME]); reporting
-/// copied code as clean is the false negative this tool is measured
-/// against.
+/// [`selector_renames`] is the one reading that excuses a changed
+/// selector: evidence that the *name* changed rather than the behaviour
+/// ([CLONE-BUCKETS-NORTH-STAR], [TECH-PMATCH-BAKER]).
 ///
-/// The gate's purpose is sound -- `toHaveCount` against `toContainText`
-/// is a changed operation, not a rename. But the veto never asked
-/// whether the *selector*'s own substitution was corroborated, though
-/// [TECH-PMATCH-BAKER] corroboration is the instrument that separates
-/// the two, `rename::corroborated_substitution` implements it, and this
-/// same function already applied it to the collaborator. Supplying that
-/// missing check would be the repair, which the accuracy rule forbids
-/// here, so the veto panics on every firing -- including the firings
-/// that were correct -- rather than continuing to publish a verdict
-/// that cannot be trusted either way.
+/// Unaligned frontiers offer no positions to read, so the two members'
+/// fixed call identities are compared as bags instead.
 ///
-/// **Pinned by** `type2_rename_call_targets`:
-/// `a_corroborated_method_rename_is_still_a_type2_clone` and
-/// `a_method_rename_may_not_move_a_duplication_figure`, with
-/// `the_same_copy_with_its_method_names_left_alone_is_reported` as the
-/// control that attributes the loss to the rename alone.
-// The accuracy quarantine mandated by AGENTS.md is the one place a panic
-// is required rather than forbidden. `assert!` is the form `clippy::pedantic`
-// mandates over a bare `panic!`, so no lint ignore is needed to carry it.
+/// Pinned by `type2_rename_call_targets`,
+/// `js_literal_variation_calls::member_targets` and
+/// `cluster_extent_statement_runs`.
 pub(super) fn contradicts(left: &MemberContent, right: &MemberContent) -> bool {
-    assert!(
-        !vetoes(left, right),
-        "[FUSED-CONTENT-GATE-CALL-TARGET] quarantined: this gate vetoed \
-         corroborated method renames, reporting copied code as clean. It \
-         published no trustworthy verdict in either direction. See \
-         crates/deslop/tests/type2_rename_call_targets.rs"
-    );
-    false
-}
-
-/// The removed verdict, retained only so the quarantine can detect the
-/// firing it must refuse to answer.
-fn vetoes(left: &MemberContent, right: &MemberContent) -> bool {
     if !frontiers_aligned(left, right) {
         return identities_substitute(external_identities(left), external_identities(right));
     }
-    let identifiers = population(&left.keys, &right.keys, Population::Identifier);
+    let corroboration =
+        Corroboration::over(&population(&left.keys, &right.keys, Population::Identifier));
     left.keys
         .iter()
         .zip(&right.keys)
@@ -180,20 +145,35 @@ fn vetoes(left: &MemberContent, right: &MemberContent) -> bool {
                 && left_target
                     .as_ref()
                     .zip(right_target.as_ref())
-                    .is_some_and(|targets| {
-                        !collaborators_rename(left, right, targets, &identifiers)
-                    })
+                    .is_some_and(|targets| !selector_renames(left, right, targets, &corroboration))
         })
 }
 
-/// Matching receiver-property positions must demonstrate a repeated bijective substitution.
-fn collaborators_rename(
+/// Whether a changed external selector is a rename rather than a
+/// changed operation: the **receiver it is selected on** must itself be
+/// a corroborated rename — the same handle or property mapped the same
+/// way more than once, inside a mapping nothing contradicts
+/// ([TECH-PMATCH-BAKER]) — at the same frontier position in both
+/// members.
+///
+/// An operation swapped on the *same* collaborator changed what the code
+/// does: `client.startJob` against `client.cancelJob` renames nothing
+/// else and starts what it used to cancel. An operation carried to a
+/// renamed collaborator is that collaborator's own vocabulary coming
+/// with it: `ledger.postEntry` against `journal.writeRecord`, in a
+/// function whose receiver, parameters, locals and types all rename
+/// together, is one function written twice.
+///
+/// A call made on something that is not a name at all —
+/// `expect(page.locator(..)).toHaveText(..)` — has no receiver to
+/// corroborate and is never excused.
+fn selector_renames(
     left: &MemberContent,
     right: &MemberContent,
     targets: (&CallTarget, &CallTarget),
-    identifiers: &[(u64, u64)],
+    corroboration: &Corroboration,
 ) -> bool {
-    let Some((left_index, right_index)) = targets.0.collaborator.zip(targets.1.collaborator) else {
+    let Some((left_index, right_index)) = targets.0.receiver.zip(targets.1.receiver) else {
         return false;
     };
     left_index == right_index
@@ -201,9 +181,7 @@ fn collaborators_rename(
             .keys
             .get(left_index)
             .zip(right.keys.get(right_index))
-            .is_some_and(|(left, right)| {
-                corroborated_substitution(identifiers, (left.key, right.key))
-            })
+            .is_some_and(|(left, right)| corroboration.admits((left.key, right.key)))
 }
 
 /// The fixed call-target identities, excluding receivers and authored callable declarations.
@@ -246,11 +224,15 @@ fn call_selector(call: &NormalizedNode) -> Option<&NormalizedNode> {
     }
 }
 
-/// A receiver property is a collaborator; a plain variable is only its local handle.
-fn collaborator_property(call: &NormalizedNode) -> Option<&NormalizedNode> {
+/// The collaborator a member call is made on: the property, or the
+/// handle, at the head of the callee chain. A call whose head is not a
+/// name at all — `expect(page.locator(..)).toHaveText(..)` — has no
+/// receiver here, so nothing can excuse a changed operation on it.
+fn call_receiver(call: &NormalizedNode) -> Option<&NormalizedNode> {
     let callee = call.children.first()?;
     let _selector = member_selector(callee)?;
-    member_selector(callee.children.first()?)
+    let head = callee.children.first()?;
+    member_selector(head).or_else(|| selector_identifier(head))
 }
 
 /// The member-access productions preserved by the supported normalizers.

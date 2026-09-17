@@ -463,14 +463,40 @@ fn pair_counts(pairs: impl Iterator<Item = (u64, u64)>) -> BTreeMap<(u64, u64), 
     counts
 }
 
-/// [FUSED-CONTENT-GATE-CALL-TARGET] A receiver property must follow a repeated, unambiguous rename.
-pub(super) fn corroborated_substitution(identifiers: &[(u64, u64)], keys: (u64, u64)) -> bool {
-    let substitutions = substituted_pairs(identifiers);
-    let bijection = ModalBijection::over(&substitutions);
-    keys.0 != keys.1
-        && substitutions.iter().all(|pair| bijection.explains(pair))
-        && substitutions.iter().filter(|pair| **pair == keys).count()
-            >= RENAME_CORROBORATION_MIN_OCCURRENCES
+/// [FUSED-CONTENT-GATE-CALL-TARGET] [TECH-PMATCH-BAKER] One pair's
+/// corroboration ledger: which of its substitutions are repeated
+/// rename evidence rather than unconstrained wildcards.
+///
+/// Built once per pair and asked about as many substitutions as the
+/// caller has questions — every receiver a changed call target is
+/// selected on reads the same ledger.
+pub(super) struct Corroboration {
+    /// Occurrences of each substituted key pair.
+    counts: BTreeMap<(u64, u64), usize>,
+    /// Whether every substitution follows the modal bijection; one
+    /// name mapped two ways corroborates nothing anywhere.
+    consistent: bool,
+}
+
+impl Corroboration {
+    /// Reads the ledger of one pair's aligned identifier positions.
+    pub(super) fn over(identifiers: &[(u64, u64)]) -> Self {
+        let substitutions = substituted_pairs(identifiers);
+        let bijection = ModalBijection::over(&substitutions);
+        Self {
+            consistent: substitutions.iter().all(|pair| bijection.explains(pair)),
+            counts: pair_counts(substitutions.into_iter()),
+        }
+    }
+
+    /// A repeated, unambiguous substitution inside a contradiction-free
+    /// mapping — the rename evidence [TECH-PMATCH-BAKER] recognises.
+    pub(super) fn admits(&self, keys: (u64, u64)) -> bool {
+        keys.0 != keys.1
+            && self.consistent
+            && self.counts.get(&keys).copied().unwrap_or_default()
+                >= RENAME_CORROBORATION_MIN_OCCURRENCES
+    }
 }
 
 /// Modal partner per key: the partner seen most often. Counting and
