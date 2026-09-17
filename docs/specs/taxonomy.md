@@ -11,7 +11,7 @@
 
 The corpus pins known examples: CLEARLY IN must be found and CLEARLY OUT must not be reported as clones. Other code can qualify through sufficiently strong evidence; it need not already appear in the corpus. Shape without reasonable content similarity does not qualify.
 
-Repeating the same calls in the same order with different arguments or test messages belongs in **Nearly identical code**. Changing names or values does not, by itself, make code shape-only. A systematic rename or parameter substitution is still a copy.
+Repeating the same calls in the same order with different arguments or test messages belongs in **Nearly identical code**. Changing names or values does not, by itself, make code shape-only. A systematic rename or parameter substitution is still a copy, including the methods of a renamed collaborator; asking the same collaborator for a different operation is not a rename ([FUSED-CONTENT-GATE-CALL-TARGET](fused.md#fused-content-gate-call-target-changing-an-external-operation-is-not-a-local-rename)).
 
 The optional fifth category, **Same behavior, different code**, corresponds to **Type-4**: equivalent work implemented in different ways. Deslop uses embedding evidence to find candidates; similarity between embeddings alone is not proof that a refactor preserves behaviour.
 
