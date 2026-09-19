@@ -124,15 +124,16 @@ fn external_call_target(
 /// selector: evidence that the *name* changed rather than the behaviour
 /// ([CLONE-BUCKETS-NORTH-STAR], [TECH-PMATCH-BAKER]).
 ///
-/// Unaligned frontiers offer no positions to read, so the two members'
-/// fixed call identities are compared as bags instead.
+/// Unaligned frontiers offer no positions to read; the verdict that
+/// compared their call identities as bags is quarantined in
+/// [`misaligned_contradiction`].
 ///
 /// Pinned by `type2_rename_call_targets`,
 /// `js_literal_variation_calls::member_targets` and
 /// `cluster_extent_statement_runs`.
 pub(super) fn contradicts(left: &MemberContent, right: &MemberContent) -> bool {
     if !frontiers_aligned(left, right) {
-        return identities_substitute(external_identities(left), external_identities(right));
+        return misaligned_contradiction(left, right);
     }
     let corroboration =
         Corroboration::over(&population(&left.keys, &right.keys, Population::Identifier));
@@ -147,6 +148,33 @@ pub(super) fn contradicts(left: &MemberContent, right: &MemberContent) -> bool {
                     .zip(right_target.as_ref())
                     .is_some_and(|targets| !selector_renames(left, right, targets, &corroboration))
         })
+}
+
+/// QUARANTINED [FUSED-CONTENT-GATE-CALL-TARGET]. This branch compared the
+/// two members' external call identities as bags and contradicted the
+/// pair whenever each side called an operation the other never called.
+/// A bag carries no positions, so the receiver rule [`selector_renames`]
+/// applies could not be read here, and a near-miss copy whose receiver
+/// and methods rename together was rejected while the same copy with its
+/// methods left alone was reported at 100% duplication. That is the
+/// false negative pinned by
+/// `type2_rename_call_targets::a_corroborated_method_rename_is_still_a_type3_clone`.
+///
+/// The rejecting verdict is deleted: reaching it now panics. The
+/// no-contradiction verdict is kept, because it never rejected anything.
+/// The accuracy quarantine mandated by AGENTS.md is the one place a panic
+/// is required rather than forbidden, and `assert!` is the form
+/// `clippy::pedantic` mandates over a bare `panic!`, so no lint ignore is
+/// needed to carry it.
+fn misaligned_contradiction(left: &MemberContent, right: &MemberContent) -> bool {
+    let substituted = identities_substitute(external_identities(left), external_identities(right));
+    assert!(
+        !substituted,
+        "[FUSED-CONTENT-GATE-CALL-TARGET] quarantined: a changed external call on \
+         misaligned endpoints cannot be told from a renamed collaborator's method. \
+         Pinned by type2_rename_call_targets::a_corroborated_method_rename_is_still_a_type3_clone"
+    );
+    false
 }
 
 /// Whether a changed external selector is a rename rather than a
