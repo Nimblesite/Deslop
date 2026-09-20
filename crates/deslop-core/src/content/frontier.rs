@@ -225,7 +225,7 @@ fn operators_substitute(left: &[LeafKey], right: &[LeafKey]) -> bool {
 }
 
 /// Two-sided identity replacement; order and one-sided additions/removals remain eligible.
-pub(super) fn identities_substitute(
+fn identities_substitute(
     left: impl Iterator<Item = u64>,
     right: impl Iterator<Item = u64>,
 ) -> bool {

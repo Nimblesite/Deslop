@@ -22,7 +22,8 @@
 //! `ledger.postEntry` against `journal.writeRecord`, in a function whose
 //! receiver, parameters, locals and types all rename together, is one
 //! function written twice. `client.startJob` against `client.cancelJob`
-//! renames nothing else and is a changed operation.
+//! renames nothing else and is a changed operation; the `same-receiver`
+//! corpora pin that side of the line.
 //!
 //! This suite pins that rule with a fixture and its own controls. Every
 //! corpus holds the same two functions and a byte-identical `ledger.ts`.
@@ -58,6 +59,23 @@ const NEAR_MISS_RENAMED_CORPUS: &str = "near-miss-renamed";
 
 /// The near-miss pair with its selectors left alone — its control.
 const NEAR_MISS_PRESERVED_CORPUS: &str = "near-miss-preserved";
+
+/// `ledger.ts` beside a copy that renames nothing and changes both
+/// operations on the same `ledger` — the changed operation the spec
+/// refuses — as a same-shape pair and with one statement inserted.
+const SAME_RECEIVER_CORPORA: [&str; 2] = ["same-receiver", "near-miss-same-receiver"];
+
+/// The two sides of the changed-operation pair.
+const SAME_RECEIVER_SIDES: [&str; 2] = ["ledger.ts", "reversal.ts"];
+
+/// Both files reach analysis; a scan that saw nothing proves nothing.
+const FILES_ANALYSED: u64 = 2;
+
+/// Neither file copies the other, so an honest report publishes no cluster.
+const NO_CLUSTERS: usize = 0;
+
+/// An honest report of two files that ask one ledger for different things.
+const NO_DUPLICATION: f64 = 0.0;
 
 /// The rename contract a rendered cluster must satisfy for one corpus.
 type RenameContract = fn(&Path, &Value, &str) -> Result<()>;
@@ -221,5 +239,52 @@ fn a_corroborated_method_rename_is_still_a_type3_clone() -> Result<()> {
         cluster_kind(copy_cluster(&control, NEAR_MISS_PRESERVED_CORPUS)?),
         "renaming names may not move the copy between buckets: {renamed:#}"
     );
+    Ok(())
+}
+
+/// Asserts a changed-operation corpus was analysed and reports nothing.
+fn assert_nothing_is_reported(report: &Value, corpus: &str) {
+    assert_eq!(
+        field(report, "files_analysed").as_u64(),
+        Some(FILES_ANALYSED),
+        "{corpus}: both files must be analysed, or the silence proves nothing: {report:#}"
+    );
+    assert_eq!(
+        cluster_count(report),
+        NO_CLUSTERS,
+        "{corpus}: `ledger.voidEntry` where the original says `ledger.postEntry` renames \
+         nothing: one collaborator is asked for a different operation: {report:#}"
+    );
+    assert_no_line_is_duplicated(report, corpus);
+}
+
+/// Asserts a changed-operation corpus moves no duplication figure.
+fn assert_no_line_is_duplicated(report: &Value, corpus: &str) {
+    assert_eq!(
+        metric_field(report, "duplication_percent").as_f64(),
+        Some(NO_DUPLICATION),
+        "{corpus}: a changed operation duplicates no line: {report:#}"
+    );
+    for side in SAME_RECEIVER_SIDES {
+        assert_eq!(
+            duplicated_loc_for(report, side),
+            NO_TOLERANCE,
+            "{corpus}: {side} carries no duplicated line: {report:#}"
+        );
+    }
+}
+
+// [FUSED-CONTENT-GATE-CALL-TARGET] The other side of the line. `reversal.ts`
+// is `ledger.ts` with nothing renamed and both operations changed on the
+// same `ledger`: it voids what the original posts, however often the swap
+// repeats, and whether or not a statement is inserted beside it. The
+// preserved corpus is scanned too, so a detector that went blind cannot pass.
+#[test]
+fn changed_operations_on_the_same_receiver_are_not_a_rename() -> Result<()> {
+    let control = report_for(PRESERVED_CORPUS)?;
+    assert_reports_the_copy(&control, PRESERVED_CORPUS, assert_proven_rename_contract)?;
+    for corpus in SAME_RECEIVER_CORPORA {
+        assert_nothing_is_reported(&report_for(corpus)?, corpus);
+    }
     Ok(())
 }

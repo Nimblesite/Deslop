@@ -131,10 +131,12 @@ pub(crate) fn measure_pair_content_indexed<S: BuildHasher, L: BuildHasher>(
 /// or unresolvable core is unmeasured, and an unmeasured pair is never
 /// admitted.
 ///
-/// A contradiction is read over the whole endpoints first: the core
-/// holds only what the two share, and a changed operator or call target
-/// is exactly what they do not ([FUSED-CONTENT-GATE],
-/// [FUSED-CONTENT-GATE-CALL-TARGET]).
+/// A changed operator is read over the whole endpoints first: the core
+/// holds only what the two share, and a changed computation is exactly
+/// what they do not ([FUSED-CONTENT-GATE]). A changed call target needs
+/// positions to be told from a renamed collaborator's method, so on
+/// endpoints that do not line up it is read over the core
+/// ([FUSED-CONTENT-GATE-CALL-TARGET]).
 pub(crate) fn measure_aligned_core<S: BuildHasher, L: BuildHasher>(
     endpoints: (&Fingerprint, &Fingerprint),
     core: &[(Fingerprint, Fingerprint)],
