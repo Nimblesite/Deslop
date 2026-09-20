@@ -2,16 +2,15 @@
 
 use std::{collections::BTreeMap, path::Path};
 
-use crate::{
-    boilerplate::BoilerplateRange, config::ExclusionConfig, report_render::display_path,
-    state::FileRegistry,
-};
-
 // `ReportBoilerplateHint` and `ReportBoilerplateOccurrence` are
 // generated from `docs/models/live-ipc.td` by
 // `scripts/typediagram/generate.mjs`. The data shapes live in
 // `crate::wire_generated`; the constructor below stays here.
 pub use crate::wire_generated::{ReportBoilerplateHint, ReportBoilerplateOccurrence};
+use crate::{
+    boilerplate::BoilerplateRange, config::ExclusionConfig, report_render::display_path,
+    state::FileRegistry,
+};
 
 /// Builds report hints from suppressed boilerplate ranges.
 #[must_use]

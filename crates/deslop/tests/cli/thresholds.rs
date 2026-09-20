@@ -88,8 +88,7 @@ fn assert_threshold(json: &Value, source: &str, breached: bool) {
 /// Creates a `tempdir` with a `src` scan root seeded with the canonical
 /// clone pair, returning both so the `tempdir` guard stays alive.
 fn clone_pair_scan_root() -> Result<(tempfile::TempDir, PathBuf)> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     let _ = write_clone_pair(&scan_root)?;
     Ok((tmp, scan_root))
 }
@@ -97,9 +96,7 @@ fn clone_pair_scan_root() -> Result<(tempfile::TempDir, PathBuf)> {
 /// Creates a `tempdir` with an empty `src` scan root, returning both so
 /// the `tempdir` guard stays alive.
 fn empty_scan_root() -> Result<(tempfile::TempDir, PathBuf)> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    fs::create_dir_all(&scan_root)?;
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     Ok((tmp, scan_root))
 }
 
@@ -258,18 +255,20 @@ fn html_renderer_colour_codes_threshold_state() -> Result<()> {
         .assert()
         .code(THRESHOLD_BREACH_EXIT_CODE);
     let html_breached = fs::read_to_string(&breached.out.html)?;
-    assert!(
-        html_breached.contains("metrics-banner--breached"),
-        "breached HTML must carry the breached class"
+    assert_contains(
+        &html_breached,
+        "metrics-banner--breached",
+        "breached HTML must carry the breached class",
     );
 
     // Neutral variant (no threshold).
     let mut neutral = clone_pair_run()?;
     let _assertion2 = neutral.cmd.args(UNGATED_ARGS).assert().success();
     let html_neutral = fs::read_to_string(&neutral.out.html)?;
-    assert!(
-        html_neutral.contains("metrics-banner--neutral"),
-        "no-threshold HTML must carry the neutral class"
+    assert_contains(
+        &html_neutral,
+        "metrics-banner--neutral",
+        "no-threshold HTML must carry the neutral class",
     );
     Ok(())
 }

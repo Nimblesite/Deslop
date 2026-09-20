@@ -12,7 +12,6 @@ use serde::{Deserialize, Serialize};
 use crate::embedding::provider::{
     EmbeddingProvider, EmbeddingSpec, ProviderError, DEFAULT_MAX_INPUT_CHARS,
 };
-
 // `OllamaModelInfo` is generated from `docs/models/live-ipc.td` by
 // `scripts/typediagram/generate.mjs`. Per CLAUDE.md the IPC model code is
 // not stored in git; the binding lives in `crate::wire_generated`.

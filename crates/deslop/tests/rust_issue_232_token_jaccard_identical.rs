@@ -24,9 +24,9 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::scan_dir::run_report_min_nodes;
 use crate::common::{
     occurrence_texts,
+    scan_dir::run_report_min_nodes,
     signals::{assert_no_pair_surface_on_cluster, assert_structural_only_contract},
 };
 

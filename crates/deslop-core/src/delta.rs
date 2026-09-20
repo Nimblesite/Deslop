@@ -10,15 +10,14 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::{
-    report::{Report, ReportCluster},
-    wire_generated::LiteralFinding,
-};
-
 // `ReportDelta` is generated from `docs/models/live-ipc.td` by
 // `scripts/typediagram/generate.mjs`. The data shape lives in
 // `crate::wire_generated`; the `between`/`is_empty` impls stay here.
 pub use crate::wire_generated::ReportDelta;
+use crate::{
+    report::{Report, ReportCluster},
+    wire_generated::LiteralFinding,
+};
 
 impl ReportDelta {
     /// Builds the delta between two snapshots. A `None` `prev` means
@@ -70,6 +69,7 @@ impl ReportDelta {
             literal_findings_removed,
             literal_findings_updated,
             metrics: next.metrics.clone(),
+            routing: next.routing,
             cache_stats: next.cache_stats,
             tool_version: next.tool_version.clone(),
         }

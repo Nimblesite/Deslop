@@ -17,11 +17,11 @@ import {
   syncTopOffendersContext,
   wireDirtyDocuments,
 } from "../../extension";
-import { ReportStore } from "../../reportStore";
 import { Report, ReportCluster } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
 import { ResolvedBinary } from "../../binary";
 import { occurrence, wireCluster } from "../cluster.helpers";
+import { storeWith } from "./report-store.helpers";
 
 const GROUP_BY_SETTING_KEY = "topOffenders.groupBy";
 
@@ -99,7 +99,7 @@ suite("extension activation glue", () => {
       // Explicit known values exercise the folder/path/split-on arms.
       await read().update(GROUP_BY_SETTING_KEY, "folder", vscode.ConfigurationTarget.Workspace);
       await read().update("topOffenders.sortBy", "path", vscode.ConfigurationTarget.Workspace);
-      await read().update("topOffenders.filterSeverities", ["worst"], vscode.ConfigurationTarget.Workspace);
+      await read().update("topOffenders.filterSeverities", ["error"], vscode.ConfigurationTarget.Workspace);
       assert.equal(read().get<string>(GROUP_BY_SETTING_KEY), "folder");
       syncTopOffendersContext();
 
@@ -177,8 +177,7 @@ suite("extension activation glue", () => {
     const { dir, file: dirtyFile } = tempFile("deslop-dirty-", "Edited.cs");
     fs.writeFileSync(dirtyFile, "code\n", "utf8");
 
-    const store = new ReportStore();
-    store.setSnapshot(reportWith([clusterAcross(dirtyFile, "/other/Stable.cs")]), 0);
+    const store = storeWith(reportWith([clusterAcross(dirtyFile, "/other/Stable.cs")]));
     assert.equal(store.current.visibleReport?.clusters.length, 1, "cluster visible while clean");
 
     const subscription = wireDirtyDocuments(store);

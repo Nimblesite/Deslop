@@ -41,8 +41,7 @@ use crate::common::{
 /// Returns the report's raw bytes; the golden pins the serialisation,
 /// not merely the decoded document.
 fn render_cold_multilang() -> Result<Vec<u8>> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     seed_multilang(&scan_root)?;
     let (bytes, _counters) = run_capturing_bytes(
         &scan_root,
@@ -175,13 +174,7 @@ fn assert_occurrence_shape(clone: &Value, language: &str) {
 fn assert_exact_spans(clone: &Value, case: &LangCase) -> Result<()> {
     let language = case.language;
     for (file, expected) in case.spans() {
-        let occurrence = occurrences(clone)
-            .iter()
-            .find(|candidate| {
-                field(candidate, "path")
-                    .as_str()
-                    .is_some_and(|path| path.ends_with(file))
-            })
+        let occurrence = row_for_path(occurrences(clone), file)
             .ok_or_else(|| anyhow::anyhow!("{language}: no occurrence for {file}: {clone:#}"))?;
         let actual = (
             field(occurrence, "start_line").as_u64().unwrap_or_default(),

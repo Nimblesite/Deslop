@@ -9,9 +9,8 @@
 
 use std::{iter::Peekable, str::Bytes};
 
-use crate::error::CoreError;
-
 use super::parse_error;
+use crate::error::CoreError;
 
 /// Decodes the body of a C-quoted path (the leading `"` already
 /// stripped) into the bytes `git` escaped, then validates them as

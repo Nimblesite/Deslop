@@ -6,7 +6,8 @@
 import * as assert from "node:assert/strict";
 import * as path from "node:path";
 import * as vscode from "vscode";
-import type { LanguageClient } from "vscode-languageclient/node";
+
+import { recordingClient, respondingClient } from "./client.helpers";
 import {
   copyClusterContextById,
   openClusterDetails,
@@ -84,13 +85,7 @@ suite("register command handlers", () => {
   });
 
   test("refreshReport forwards the LSP refresh command when a client is live", () => {
-    const calls: Array<{ method: string; params: unknown }> = [];
-    const client = {
-      sendRequest: (method: string, params: unknown) => {
-        calls.push({ method, params });
-        return Promise.resolve(null);
-      },
-    } as unknown as LanguageClient;
+    const { calls, client } = recordingClient(() => null);
 
     refreshReport(() => client);
     assert.deepEqual(calls, [
@@ -106,13 +101,7 @@ suite("register command handlers", () => {
   });
 
   test("openHtmlReport renders via the LSP and shows the report tab", async () => {
-    const calls: Array<{ method: string; params: unknown }> = [];
-    const client = {
-      sendRequest: (method: string, params: unknown) => {
-        calls.push({ method, params });
-        return Promise.resolve("<!doctype html><html><body>report</body></html>");
-      },
-    } as unknown as LanguageClient;
+    const { calls, client } = recordingClient(() => "<!doctype html><html><body>report</body></html>");
 
     await openHtmlReport(() => client);
     assert.deepEqual(calls, [
@@ -145,18 +134,14 @@ suite("register command handlers", () => {
 
   test("openHtmlReport opens no tab when the report is empty", async () => {
     const before = reportTabCount();
-    const client = {
-      sendRequest: () => Promise.resolve(""),
-    } as unknown as LanguageClient;
+    const client = respondingClient(() => "");
     await openHtmlReport(() => client);
     assert.equal(reportTabCount(), before, "empty report → no report tab is opened");
   });
 
   test("openHtmlReport opens no tab when the LSP returns a non-string", async () => {
     const before = reportTabCount();
-    const client = {
-      sendRequest: () => Promise.resolve(null as unknown as string),
-    } as unknown as LanguageClient;
+    const client = respondingClient(() => null);
     await openHtmlReport(() => client);
     assert.equal(reportTabCount(), before, "non-string response → no report tab is opened");
   });
@@ -184,9 +169,7 @@ suite("register command handlers", () => {
       return task(progress, token);
     };
 
-    const client = {
-      sendRequest: () => Promise.resolve("<!doctype html><html><body>report</body></html>"),
-    } as unknown as LanguageClient;
+    const client = respondingClient(() => "<!doctype html><html><body>report</body></html>");
 
     try {
       await openHtmlReport(() => client);

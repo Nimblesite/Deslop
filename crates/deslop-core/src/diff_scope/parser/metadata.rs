@@ -3,9 +3,8 @@
 //! between file and hunk headers, the no-newline annotation, and the
 //! `+++ ` new-side target payload.
 
-use crate::error::CoreError;
-
 use super::{parse_error, quoting::unquote_c_path};
+use crate::error::CoreError;
 
 /// True for the metadata lines `git diff` interleaves between file and
 /// hunk headers. Blank lines separate sections in some producers.

@@ -7,11 +7,11 @@
 
 use std::{collections::HashMap, hash::BuildHasher};
 
-use super::super::{
-    construction_survives, rescue_eligible, CandidatePair, PairScore, CROSS_LANGUAGE_MIN_JACCARD,
-    FUSED_THRESHOLD, LSH_ONLY_MIN_JACCARD, LSH_ONLY_MIN_NODE_COUNT,
-};
 use super::{
+    super::{
+        construction_survives, rescue_eligible, CandidatePair, PairScore,
+        CROSS_LANGUAGE_MIN_JACCARD, FUSED_THRESHOLD, LSH_ONLY_MIN_JACCARD, LSH_ONLY_MIN_NODE_COUNT,
+    },
     candidate_ranges_are_valid, endpoint_node_counts, jaccard_for, order, same_language_indexes,
 };
 use crate::{
@@ -22,6 +22,8 @@ use crate::{
 /// within-file pair, so [`PairBuilder::pair_within_files`] has nothing
 /// to add: with two members the star *is* the only pair there is.
 const BUCKET_MIN_MEMBERS_FOR_WITHIN_FILE_PAIRS: usize = 3;
+/// Equal Merkle hashes supply complete structural evidence and no embedding evidence.
+const STRUCTURAL_COPY_EVIDENCE: (f64, f64) = (1.0, 0.0);
 
 /// The ordered pair key packed as one `u64`: high half the lower
 /// index, low half the higher ([PERF-FLUTTER-TODO-MEMORY]).
@@ -80,6 +82,37 @@ pub(super) struct PairBuilder<'corpus, S: BuildHasher> {
 }
 
 impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
+    /// Adds a confirmed copy star without materialising every pair in its shape bucket.
+    pub(super) fn add_missing_structural_pairs(
+        &mut self,
+        members: &[usize],
+        existing: &[CandidatePair],
+    ) {
+        let Some((&canonical, rest)) = members.split_first() else {
+            return;
+        };
+        let (structural, embedding) = STRUCTURAL_COPY_EVIDENCE;
+        for &member in rest {
+            let key = order(canonical, member);
+            if self.missing_structural_pair(key, existing) {
+                self.add_evidence(key.0, key.1, structural, embedding);
+            }
+        }
+    }
+
+    /// Existing candidates retain all their recorded evidence and are never reconstructed.
+    fn missing_structural_pair(&self, key: (usize, usize), existing: &[CandidatePair]) -> bool {
+        let (Some(left), Some(right)) =
+            (self.fingerprints.get(key.0), self.fingerprints.get(key.1))
+        else {
+            return false;
+        };
+        left.hash == right.hash
+            && existing
+                .binary_search_by_key(&key, |pair| (pair.left, pair.right))
+                .is_err()
+    }
+
     /// Builder over one corpus view.
     pub(super) fn new(
         fingerprints: &'corpus [Fingerprint],

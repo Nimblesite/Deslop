@@ -7,9 +7,8 @@ use std::path::Path;
 
 use serde::Deserialize;
 
-use crate::error::CoreError;
-
 use super::raw::RawRanking;
+use crate::error::CoreError;
 
 /// How a demotable clone class is ranked. One shared three-way policy
 /// serves both `[ranking]` knobs: `data_clones` for `data`-category

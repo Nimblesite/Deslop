@@ -31,11 +31,14 @@
 
 use std::path::Path;
 
-use crate::common::signals::{
-    assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
-};
-use crate::common::*;
 use serde_json::Value;
+
+use crate::common::{
+    signals::{
+        assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
+    },
+    *,
+};
 
 /// The four-file C# corpus, shared with `deslop-mcp`'s transport suite.
 const FIXTURE: &str = "csharp-mcp";

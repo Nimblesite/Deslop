@@ -2,8 +2,6 @@
 //! [CONFIG-EXCLUDE-DEPENDENCIES]. The real filesystem watcher must honour
 //! the same opt-in as the cold pipeline scan.
 
-use crate::common;
-
 use std::{fs, path::Path, time::Duration};
 
 use anyhow::Result;
@@ -12,6 +10,8 @@ use common::{
     reports::{assert_initialize_contract, assert_report_shell, dependency_workspace},
     spawn_lsp_guarded, wait_for_report_matching,
 };
+
+use crate::common;
 
 const REPORT_TIMEOUT: Duration = Duration::from_secs(20);
 const FILES: [&str; 2] = ["Alpha.cs", "Beta.cs"];

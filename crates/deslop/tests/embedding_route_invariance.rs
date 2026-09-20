@@ -24,12 +24,14 @@
 
 use std::collections::BTreeMap;
 
-use crate::mock_ollama::MockOllama;
 use anyhow::{Context, Result};
 
-use crate::common::{
-    cluster_file_set, cluster_id, clusters, embeddings::mock_embedding_run, field, fixture,
-    run_report, signals::assert_no_pair_surface_on_cluster,
+use crate::{
+    common::{
+        cluster_file_set, cluster_id, clusters, embeddings::mock_embedding_run, field, fixture,
+        run_report, signals::assert_no_pair_surface_on_cluster,
+    },
+    mock_ollama::MockOllama,
 };
 
 /// Corpora swept, with the node floor each is sized for. C# leads

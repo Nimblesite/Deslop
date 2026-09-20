@@ -193,9 +193,10 @@ fn assert_rendered_surfaces_agree(report: &Value, text: &str, html: &str) -> Res
         1,
         "one duplication percentage, not a companion beside it: {text}"
     );
-    assert!(
-        html.contains(&format!("{percent:.1}% duplicated")),
-        "the HTML report must state the same figure"
+    assert_contains(
+        html,
+        &format!("{percent:.1}% duplicated"),
+        "the HTML report must state the same figure",
     );
     assert_eq!(
         html.matches("% duplicated").count(),
@@ -203,9 +204,10 @@ fn assert_rendered_surfaces_agree(report: &Value, text: &str, html: &str) -> Res
         "the HTML surface carries the one figure too"
     );
     for surface in [text, html] {
-        assert!(
-            !surface.contains(FORBIDDEN_RENDER_MARKER),
-            "no rendered surface may show a weighted companion figure: {surface}"
+        assert_not_contains(
+            surface,
+            FORBIDDEN_RENDER_MARKER,
+            "no rendered surface may show a weighted companion figure",
         );
     }
     Ok(())

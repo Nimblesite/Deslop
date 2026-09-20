@@ -31,7 +31,7 @@ use crate::{
     ast::NormalizedNode,
     buckets::CONTENT_SUPPORT_FLOOR,
     content::ContentEvidence,
-    fingerprint::{collect_fingerprints, Fingerprint},
+    fingerprint::{visit_fingerprints, Fingerprint},
     state::FileId,
     tokens::resolve_range_nodes,
 };
@@ -103,14 +103,15 @@ const EVERY_SUBTREE: usize = 1;
 const KIND_PAIR_WEIGHT: usize = 1;
 
 /// One endpoint resolved for alignment: the nodes its range covers and
-/// every subtree beneath them by byte range, so a sibling's Merkle hash
+/// every subtree beneath them by node identity, so a sibling's Merkle hash
 /// and mass are one lookup.
 #[derive(Debug)]
 pub(super) struct Resolved<'tree> {
     /// The exact node, or the sibling window, the endpoint covers.
     nodes: Vec<&'tree NormalizedNode>,
-    /// Every subtree under `nodes`, keyed by byte range.
-    subtrees: HashMap<(usize, usize), Fingerprint>,
+    /// Every emitted subtree under `nodes`, keyed by its node's address.
+    /// The borrowed tree outlives this index and cannot move or mutate.
+    subtrees: HashMap<usize, Fingerprint>,
 }
 
 /// Resolves `endpoint` in its tree, or `None` when its range covers no
@@ -121,11 +122,12 @@ pub(super) fn resolve<'tree>(
 ) -> Option<Resolved<'tree>> {
     let root = tree_index.get(&endpoint.file_id)?;
     let nodes = resolve_range_nodes(root, endpoint.byte_range.start, endpoint.byte_range.end)?;
-    let subtrees = nodes
-        .iter()
-        .flat_map(|node| collect_fingerprints(node, EVERY_SUBTREE))
-        .map(|subtree| ((subtree.byte_range.start, subtree.byte_range.end), subtree))
-        .collect();
+    let mut subtrees = HashMap::new();
+    for node in &nodes {
+        visit_fingerprints(node, EVERY_SUBTREE, |node, fingerprint| {
+            let _previous = subtrees.insert(node_key(node), fingerprint);
+        });
+    }
     Some(Resolved { nodes, subtrees })
 }
 
@@ -236,8 +238,8 @@ fn fingerprints(
     right: Option<&&NormalizedNode>,
     resolved: (&Resolved<'_>, &Resolved<'_>),
 ) -> Option<(Fingerprint, Fingerprint)> {
-    let ours = resolved.0.subtrees.get(&range_key(left?))?;
-    let theirs = resolved.1.subtrees.get(&range_key(right?))?;
+    let ours = resolved.0.subtrees.get(&node_key(left?))?;
+    let theirs = resolved.1.subtrees.get(&node_key(right?))?;
     Some((ours.clone(), theirs.clone()))
 }
 
@@ -256,7 +258,7 @@ fn digests(nodes: &[&NormalizedNode], resolved: &Resolved<'_>) -> Vec<Digest> {
     nodes
         .iter()
         .map(|node| {
-            let found = resolved.subtrees.get(&range_key(node));
+            let found = resolved.subtrees.get(&node_key(node));
             Digest {
                 hash: found.map(|subtree| subtree.hash),
                 weight: found.map_or(0, |subtree| subtree.node_count),
@@ -307,9 +309,11 @@ fn children(node: &NormalizedNode) -> Vec<&NormalizedNode> {
     node.children.iter().collect()
 }
 
-/// The lookup key of a node's byte range.
-fn range_key(node: &NormalizedNode) -> (usize, usize) {
-    (node.byte_range.start, node.byte_range.end)
+/// Identity inside the immutably borrowed tree, never a persisted key.
+/// A wrapper and its child may share their range and kind; their nodes
+/// remain distinct. The address is only compared, never dereferenced.
+fn node_key(node: &NormalizedNode) -> usize {
+    std::ptr::from_ref(node) as usize
 }
 
 /// The siblings between two positions, empty when the positions meet.

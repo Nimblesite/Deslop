@@ -20,21 +20,6 @@ use serde_json::Value;
 
 use crate::common::*;
 
-/// Collects every visible cluster whose occurrences contain `needle`.
-fn clusters_touching(report: &Value, scan_root: &Path, needle: &str) -> Result<Vec<Vec<String>>> {
-    let mut hits = Vec::new();
-    for cluster in clusters(report) {
-        let texts = occurrence_texts(scan_root, cluster)?;
-        if texts.iter().any(|text| text.contains(needle)) {
-            hits.push(texts);
-        }
-    }
-    Ok(hits)
-}
-
-/// True when some visible cluster carries `needle` in its occurrence texts and
-/// spans both `left_path` and `right_path` — i.e. a surviving clone bridges the
-/// two named files.
 fn clone_spans_both_files(
     report: &Value,
     scan_root: &Path,

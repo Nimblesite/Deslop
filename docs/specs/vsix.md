@@ -19,27 +19,23 @@ Distribution: one platform-specific `.vsix` per VS Code target attached to each 
 
 The bubble reports duplication while the edited code remains under the cursor.
 
-**When it fires.**
-After every coalesced buffer edit ([LIVE-WATCHER] debounce = 250 ms), the VSIX issues `duplicates/findSimilar` on the range the user most recently touched. The bubble appears when the range belongs to a reported duplicate component and shows membership plus mass only. Pair admission has already happened in the engine; the client neither receives nor filters on pair evidence. If nothing matches, no bubble.
+**When it fires.** After every coalesced buffer edit ([LIVE-WATCHER] debounce = 250 ms), the VSIX issues `duplicates/findSimilar` on the range the user most recently touched. The bubble appears when the range belongs to a reported duplicate component and shows membership plus mass only. Pair admission has already happened in the engine; the client neither receives nor filters on pair evidence. If nothing matches, no bubble.
 
-**What it looks like.**
-A compact floating widget (VS Code `InlayHint` + `Webview`-backed overlay, rendered by a single `DecorationType` whose `after.contentText` is an HTML-safe Unicode glyph, with a hover-triggered richer webview for detail). Anatomy, from left to right:
+**What it looks like.** A compact floating widget (VS Code `InlayHint` + `Webview`-backed overlay, rendered by a single `DecorationType` whose `after.contentText` is an HTML-safe Unicode glyph, with a hover-triggered richer webview for detail). Anatomy, from left to right:
 
-- **Band glyph and kind colour** — the glyph (`●●`, `●`, `◐`, `○`) is the cluster's mass rank band per [severity.md §SEVERITY-BAND](severity.md#severity-band); the colour of the whole bubble is the cluster's clone kind per [taxonomy.md §CLONE-KIND-COLOR](taxonomy.md#clone-kind-color). The bubble remains coloured when diagnostics are off; only the dirty projection ([VSIX-STATE-DIRTY]) and silence-when-clean remove it.
-- **Verdict** — the cluster's clone kind title ([CLONE-KIND-LABELS]): `Identical code`, `Nearly identical code`, `Same behavior, different code`, `Same shape, different content`, or `Loosely similar code`. It is the engine's fold over the cluster ([CLONE-KIND-FOLD]), never one pair's evidence.
+- **Kind colour** — the bubble uses the category colour from [CLONE-KIND-COLOR](taxonomy.md#clone-kind-color-colour-describes-the-category). Diagnostic severity is configured separately ([SEVERITY-CONFIG](severity.md#severity-config-configuration)).
+- **Verdict** — use the engine-authored category and shared title from [CLONE-KIND-LABELS](taxonomy.md#clone-kind-labels-use-the-same-names-everywhere), with informational handling from [CLONE-BUCKETS-STRUCTURAL-ONLY](taxonomy.md#clone-buckets-structural-only-shape-only-is-not-duplication).
 - **Count + location** — `× 4 • UserService.cs:230`. The canonical occurrence of the cluster, linkified to jump on click.
 - **Action chevron** — click expands the bubble into a webview-backed card with cluster membership, mass, and all occurrences. The card carries no compare button. The cluster panel offers one-click **Compare with canonical** on each non-canonical occurrence ([webview-runtime.md §VSIX-PAIR-COMPARE](webview-runtime.md#vsix-pair-compare)); the native diff shows the two source ranges.
 
-**How it's rendered.**
-VS Code doesn't give us a true floating tooltip over a specific range, so the bubble uses the layering documented in the VS Code extension cookbook:
+**How it's rendered.** VS Code doesn't give us a true floating tooltip over a specific range, so the bubble uses the layering documented in the VS Code extension cookbook:
 
-- Primary: a `TextEditorDecorationType` with `after.contentText` attached to the end of the duplicated range's last line, carrying the band glyph, the cluster slug, the kind title, and the occurrence count, painted in the kind colour. This is the always-visible indicator.
+- Primary: a `TextEditorDecorationType` with `after.contentText` attached to the end of the duplicated range's last line, carrying the cluster slug, the kind title, and the occurrence count, painted in the kind colour. This is the always-visible indicator.
 - Secondary: hover opens the LSP hover ([LSP-HOVER]) for cluster membership and mass.
 
 No native floating bubble is possible in current VS Code APIs without a custom webview overlay, and a webview overlay would steal focus. The decoration plus hover is the closest legal approximation and never steals the caret.
 
-**Ghost-line mode (opt-in, `deslop.liveBubble.mode = "ghost"`).**
-For users who want a tighter callout, ghost-line mode renders the bubble on a **phantom line inserted below the duplicated range**, using VS Code's `CodeLens` API with a custom-styled title. The phantom line is visually distinct from the real buffer (dimmed background, italic). It never modifies the buffer; scroll behaviour matches code lenses. This is the closest thing to "a speech bubble pointing at the duplicate" that VS Code natively supports.
+**Ghost-line mode (opt-in, `deslop.liveBubble.mode = "ghost"`).** For users who want a tighter callout, ghost-line mode renders the bubble on a **phantom line inserted below the duplicated range**, using VS Code's `CodeLens` API with a custom-styled title. The phantom line is visually distinct from the real buffer (dimmed background, italic). It never modifies the buffer; scroll behaviour matches code lenses. This is the closest thing to "a speech bubble pointing at the duplicate" that VS Code natively supports.
 
 **Cooldown + budget.**
 - Bubbles don't flicker: once shown for a range, the same cluster on the same range stays bubbled until the user moves out, even if debounce re-fires. Cluster stability across re-analyses ([LIVE-DELTA]) makes this trivial — same id, same bubble.
@@ -51,8 +47,7 @@ For users who want a tighter callout, ghost-line mode renders the bubble on a **
 - Clicking a `Dismiss for this cluster` action in the expanded card suppresses that cluster id for the session. Session-scoped, never persisted — the next day, the duplication is real again and we say so.
 - `deslop.liveBubble.enabled = false` turns the bubble off globally for users who want the rest of the VSIX without the in-your-face moment. Off-by-default is **not** a setting we ship — silence-when-clean already gives users a tolerable floor; the bubble is on from the first install.
 
-**Why this is the headline.**
-No competitor ([comparison.md](comparison.md)) tells a developer about duplication at typing time. PMD CPD runs on CI. jscpd runs on CI. SonarLint flags on save, after the thought is already committed. JetBrains' inspection flashes a Problems panel entry you have to look for. Deslop *shows the duplicate to the developer inside the IDE, inline with their cursor, as they type the thing*. First tool to do it. Called out on the Marketplace listing, the README, and every demo GIF.
+**Why this is the headline.** No competitor ([comparison.md](comparison.md)) tells a developer about duplication at typing time. PMD CPD runs on CI. jscpd runs on CI. SonarLint flags on save, after the thought is already committed. JetBrains' inspection flashes a Problems panel entry you have to look for. Deslop *shows the duplicate to the developer inside the IDE, inline with their cursor, as they type the thing*. First tool to do it. Called out on the Marketplace listing, the README, and every demo GIF.
 
 ### [VSIX-BUNDLE] Extension bundle
 
@@ -85,22 +80,9 @@ Activation binaries are resolved once per session; a `Deslop: Reveal Active Bina
 
 #### [VSIX-BUNDLED-BINARY-TESTS] Extension tests use the bundle
 
-VSIX tests must exercise the same binary layout the installed extension uses:
-`${extensionPath}/bin/${platform}/`. Test configuration must not point
-`DESLOP_BINARY_DIR`, `DESLOP_LSP_PATH`, or `DESLOP_MCP_PATH` at
-`target/release`, `~/.cargo/bin`, Homebrew, Scoop, PATH, or any other external
-install. The Makefile stages the release binaries into the extension bundle
-before `vsix-test`, `vsix-coverage`, and `vsix-test-ollama` run, then clears
-the override environment variables in the VS Code test host. Runtime uses the
-absolute bundled paths in `${extensionPath}/bin/${platform}/` and does not
-prepend that directory to PATH.
+VSIX tests must exercise the same binary layout the installed extension uses: `${extensionPath}/bin/${platform}/`. Test configuration must not point `DESLOP_BINARY_DIR`, `DESLOP_LSP_PATH`, or `DESLOP_MCP_PATH` at `target/release`, `~/.cargo/bin`, Homebrew, Scoop, PATH, or any other external install. The Makefile stages the release binaries into the extension bundle before `vsix-test`, `vsix-coverage`, and `vsix-test-ollama` run, then clears the override environment variables in the VS Code test host. Runtime uses the absolute bundled paths in `${extensionPath}/bin/${platform}/` and does not prepend that directory to PATH.
 
-Before test entry points run, installed `deslop`, `deslop-lsp`, and
-`deslop-mcp` binaries are removed from the cargo install path and the build
-fails if any of those commands still resolve on `PATH`. A passing extension
-test must prove `resolvedLsp.source = "bundled"` and
-`resolvedMcp.source = "bundled"` so a stale machine-level install cannot hide a
-broken VSIX package.
+Before test entry points run, installed `deslop`, `deslop-lsp`, and `deslop-mcp` binaries are removed from the cargo install path and the build fails if any of those commands still resolve on `PATH`. A passing extension test must prove `resolvedLsp.source = "bundled"` and `resolvedMcp.source = "bundled"` so a stale machine-level install cannot hide a broken VSIX package.
 
 ### [VSIX-ACTIVATION] Activation
 
@@ -118,7 +100,7 @@ A dedicated activity bar icon (a stylised "dd" mark, the same one used in the Ma
 
 - **Top Offenders** tree — see [VSIX-TOP-OFFENDERS-GROUPING] for the cluster / file / folder grouping modes, [VSIX-TOP-OFFENDERS-SORT] for the impact-vs-path sort axis, and [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] for the optional per-language split. In every mode, cluster rows show:
   - **Cluster slug** as the leading element of the bold label ([VSIX-TOP-OFFENDERS-CLUSTER-ID]) — the first 7 hex chars of `cluster.id`, identical to the slug used by the LSP hover bubble. The slug is stable across runs.
-  - Mass-band glyph ([SEVERITY-BAND]) and the clone kind title ([CLONE-KIND-LABELS]), with the kind's icon and colour ([CLONE-KIND-COLOR]).
+  - The clone kind title ([CLONE-KIND-LABELS]), with the kind's icon and colour ([CLONE-KIND-COLOR]).
   - Grey description tail: `rank #N · N copies · mass M`. The literal word **rank** appears on every surface that shows `#N` so neither humans nor AI agents confuse volatile rank for stable identity ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]).
   - Full 16-hex `cluster.id` is preserved in the tooltip (`cluster id: \`...\``) and in every command argument; only the visible label is shortened.
   - Children: one node per occurrence, shown as `path:line:column` for humans. Clicking opens the file at that occurrence's file, line, and column. Raw byte ranges remain available to AI/report consumers but are not rendered in the normal tree label.
@@ -131,13 +113,13 @@ Tree refresh is driven by `deslop/reportChanged`; the webview uses the same noti
 
 The Top Offenders tree exposes four grouping modes that change the tree shape and what counts as a root. Two orthogonal axes compose on top of every mode: the sort order ([VSIX-TOP-OFFENDERS-SORT]) and the per-language split ([VSIX-TOP-OFFENDERS-LANGUAGE-GROUP]).
 
-The mode is persisted via the `deslop.topOffenders.groupBy` setting (`"cluster"` | `"file"` | `"folder"` | `"kind"`, default `"cluster"`). Kind mode is specified in [facets.md §FACET-GROUP-BY-KIND](facets.md#facet-group-by-kind). VS Code's standard user→workspace precedence applies. Unknown or missing values fall back to `"cluster"`. The language, path, and mass-severity filter axes live in [facets.md §FACET-TOP-OFFENDERS-FILTER](facets.md#facet-top-offenders-filter).
+The mode is persisted via the `deslop.topOffenders.groupBy` setting (`"cluster"` | `"file"` | `"folder"` | `"kind"`, default `"cluster"`). Kind mode is specified in [facets.md §FACET-GROUP-BY-KIND](facets.md#facet-group-by-kind). VS Code's standard user→workspace precedence applies. Unknown or missing values fall back to `"cluster"`. The language, path, and diagnostic-severity filter axes live in [facets.md §FACET-TOP-OFFENDERS-FILTER](facets.md#facet-top-offenders-filter).
 
 A view-title toggle in the Top Offenders header cycles modes. The toggle writes to the workspace configuration target so the choice persists per-repo. Cold-start respects the persisted value — there is no flash-of-default render. The toolbar also carries collapse / expand / refresh actions ([VSIX-TOP-OFFENDERS-TOOLBAR]) because folder mode can nest deeply.
 
 #### [VSIX-TOP-OFFENDERS-CLUSTER-MODE] Cluster mode (default)
 
-Root rows are clusters in the report's worst-first order. No file-keyed reordering. Each root expands directly to its occurrence leaves. The row label is `<slug> <band-glyph> <kind title> · <file>`; the title is the engine's folded kind ([CLONE-KIND-LABELS]), never one pair's classification. The slug is the cluster's stable 7-hex prefix ([VSIX-TOP-OFFENDERS-CLUSTER-ID]); the grey description is `rank #N · N copies · mass M`.
+Clone rows follow the engine's mass rank and expand to their occurrences. The label is `<slug> <kind title> · <file>`; the description is `rank #N · N copies · mass M`. Shape-only information follows all clones and shows its title, locations and match count, without duplicate rank or duplicated-mass claim. The slug is the stable 7-hex prefix ([VSIX-TOP-OFFENDERS-CLUSTER-ID]).
 
 #### [VSIX-TOP-OFFENDERS-FILE-MODE] File mode
 
@@ -163,14 +145,14 @@ The volatile rank (`#N`) is never the leading element of the label. Rendering ra
 
 Rules:
 
-1. The bold label must start with `<slug> <band-glyph> <kind title>` or append `· <file>` in cluster mode. No pair evidence or `#N` prefix appears in the label.
+1. The bold label must start with `<slug> <kind title>` or append `· <file>` in cluster mode. No pair evidence or `#N` prefix appears in the label.
 2. The grey description must carry `rank #N · N copies · mass M`. The literal word `rank` appears before `#N`.
 3. Every other surface that mentions `#N` — tooltip, accessibility label, copy-for-AI payload, occurrence-tooltip parent reference — must use the literal word **rank**. AI consumers parse for the word; bare `#N` is forbidden.
 4. The full 16-hex `cluster.id` is preserved in the tooltip, cluster commands, and AI copy payloads. Pair comparison uses two occurrence identities rather than a cluster id as a substitute for pair selection.
 
 #### [VSIX-TOP-OFFENDERS-RANK-GLOBAL] Global rank #N
 
-The rank #N attached to a cluster row is the `rank` the engine stamped on the cluster ([SEVERITY-BAND](severity.md#severity-band)). It does not change between modes and is not renumbered within a group.
+A clone row shows the engine-stamped rank unchanged across modes. Informational shape-only rows have no duplicate rank ([RANK-MASS-SUM](pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only)).
 
 The tree reads the field; it never numbers rows from their array position. Numbering locally is only correct while the list the client holds is the whole report, and it is not: facet filters and the dirty-file projection both shorten it ([PRINCIPLES-ONE-CALCULATION](principles.md#principles-one-calculation)).
 
@@ -178,7 +160,7 @@ Rank lives in the grey description, not the bold label. The bold label leads wit
 
 #### [VSIX-TOP-OFFENDERS-CATEGORY-COLORS] Top Offenders kind colours
 
-Top Offenders rows expose stable theme-aware colour and an icon from the cluster's clone kind ([CLONE-KIND-COLOR]), through the contributed `deslop.kind.*` theme colours whose defaults equal the one paint table. The visible label carries the kind title; the description and accessibility label state rank, occurrence count, and mass. The rank band shows only as glyph density; it never chooses the colour.
+Use the shared kind colour and icon from [CLONE-KIND-COLOR]. Clone descriptions include rank, count and mass; informational rows follow [CLONE-BUCKETS-STRUCTURAL-ONLY]. Diagnostic levels follow [SEVERITY-CONFIG].
 
 #### [VSIX-TOP-OFFENDERS-SORT] Sort axis (impact vs path)
 
@@ -212,13 +194,13 @@ Expand All and Collapse All are **provider-driven** (`TopOffendersProvider.setBu
 
 #### [VSIX-SEVERITY-CONTROL] Diagnostics toggle + severity configuration
 
-**Status: ⏳ Planned (#177).** The shipped extension renders kind colours and band glyphs on every cluster surface but does not yet expose the diagnostics toggle or mass-percentile floor control.
+**Status: planned.** The diagnostic switch and per-kind severity settings follow [SEVERITY-CONFIG].
 
-Diagnostics are off by default ([severity.md §SEVERITY-DIAGNOSTICS-GATE](severity.md#severity-diagnostics-gate)). A `navigation@0` button bound to `deslop.diagnostics.toggle` flips `deslop.diagnostics.enabled`; the extension forwards the change to the LSP, which republishes diagnostics without re-analysis. A companion control edits the mass-percentile floor. There is no pair-classification or bucket severity control.
+The Top Offenders diagnostic toggle changes `deslop.diagnostics.enabled`. Severity settings edit `deslop.diagnostics.severityByKind` ([SEVERITY-CONFIG]). The LSP refreshes diagnostics without re-analysis; clone weight, percentages and category order do not change.
 
 #### [VSIX-METRICS-PANEL] Duplication panel
 
-The **Duplication** tree (`deslop.metrics`) replaces the former Focused File panel and answers one question at a glance: *how duplicated is this codebase, and where?* It renders from the last analysed snapshot's repo metrics (`Report.metrics`, [METRICS-REPO]) and refreshes on `deslop/reportChanged`.
+The **Duplication** tree (`deslop.metrics`) replaces the former Focused File panel and answers one question at a glance: *how duplicated is this codebase, and where?* It renders from the last analysed snapshot's repo metrics (`Report.metrics`, [METRICS-REPO](pipeline.md#metrics-repo-repo-wide-duplication-metrics)) and refreshes on `deslop/reportChanged`.
 
 - **Headline row** — the overall duplication percentage (`duplication_percent`) as the bold label, with the grey description carrying `analysed_loc`, `duplicated_loc`, `clusters_total`, and `duplicated_files` in plain language. When `metrics.threshold.breached`, the row shows a warning glyph and names the gate it crossed. Activating the row opens the [webview-runtime.md §VSIX-METRICS-REPORT](webview-runtime.md#vsix-metrics-report) webview.
 - **Per-folder → per-file breakdown** — below the headline, a tree of folders expanding to the files within, each row showing its own duplication percentage in the grey description. The tree *structure* is derived from `metrics.per_file` paths; every *figure* — folder and file alike — is read verbatim from the engine's `metrics.folders` / `metrics.per_file` rows ([METRICS-REPO]). The extension performs **no arithmetic**: recomputing a percentage or re-summing LOC in the VSIX is prohibited. Worst-first by percentage, path `localeCompare` tiebreaker; rows with zero duplication are omitted from display. Single-child folder chains are path-compressed, matching folder mode. Activating a file row opens that file in an editor; because `metrics.per_file[].path` is scan-root-relative ([METRICS-REPO]), the row resolves it against the workspace before opening, and its `resourceUri` — which drives the file icon and theme decorations — carries the same resolved URI.
@@ -238,7 +220,7 @@ Each lens has three actions in its command array:
 - **"Compare"** — the cluster panel's one-click canonical comparison opens a native diff of the canonical range and the clicked occurrence; tapping two rows compares those two. The diff title carries the engine's verdict on the pair, including whether it differs only by indentation ([webview-runtime.md §VSIX-PAIR-COMPARE](webview-runtime.md#vsix-pair-compare)).
 - **"Open cluster"** — opens the webview ([webview-runtime.md §VSIX-WEBVIEW](webview-runtime.md#vsix-webview)) pinned to this cluster.
 
-The lens is coloured by the cluster's clone kind ([taxonomy.md §CLONE-KIND-COLOR](taxonomy.md#clone-kind-color)), independent of whether diagnostics are enabled. It is hidden only for clusters below the configured mass-percentile floor ([LSP-SEVERITY-PERCENTILE]); users widen it via `deslop.showAllLenses`.
+The lens uses the category colour from [CLONE-KIND-COLOR], independently of diagnostic settings. Informational shape-only matches are labelled as non-clones.
 
 ### [VSIX-DECORATIONS] Editor decorations
 
@@ -416,9 +398,8 @@ Exposed under `deslop.*` in VS Code settings:
 | `deslop.embedding.endpoint` | `http://127.0.0.1:11434` | Ollama endpoint. Loopback-only by default. |
 | `deslop.embedding.mode` | `off` | Fresh live sessions do not run embeddings until the picker persists `auto` after model selection. |
 | `deslop.incremental` | `true` | Mirrors the CLI's `--no-incremental` opt-out. On everywhere by default ([PIPELINE-INCREMENTAL]). |
-| `deslop.showAllLenses` | `false` | Show code lenses below the 50th-percentile threshold. |
-| `deslop.diagnostics.enabled` | `false` | Master gate — clone diagnostics are **off by default**. Flip via the prominent Top Offenders toggle ([VSIX-SEVERITY-CONTROL]). See [severity.md §SEVERITY-DIAGNOSTICS-GATE](severity.md#severity-diagnostics-gate). |
-| `deslop.diagnostics.massPercentileFloor` | `0` | Suppresses diagnostics below an engine-stamped mass percentile; finite in `[0,100]`. |
+| `deslop.diagnostics.enabled` | `false` | Master gate — clone diagnostics are **off by default**. Flip via the prominent Top Offenders toggle ([VSIX-SEVERITY-CONTROL]). See [severity.md §SEVERITY-DIAGNOSTICS-GATE](severity.md#severity-diagnostics-gate-master-switch). |
+| `deslop.diagnostics.severityByKind` | [SEVERITY-DESLOP-MAP](severity.md#severity-deslop-map-defaults-when-diagnostics-are-enabled) | Per-kind diagnostic settings; defaults, valid values and behaviour are defined in [SEVERITY-CONFIG]. |
 | `deslop.diagnostics.scope` | `"open-files"` | `"open-files"` keeps LSP 3.17 pull behaviour (Problems only populated for tabs the editor has open); `"workspace"` makes the LSP push `publishDiagnostics` for every offender file so Problems mirrors the Top Offenders tree even with no tabs open. See [lsp.md §LSP-DIAGNOSTICS-SCOPE](lsp.md#lsp-diagnostics-scope). |
 | `deslop.configPath` | `""` | Optional override for `.deslop.toml` — mirrors CLI `--config`. |
 | `deslop.topOffenders.filterLanguages` / `.filterPaths` / `.filterSeverities` | `[]` | Presentation-only cluster filters over cluster-owned fields; see [facets.md §FACET-TOP-OFFENDERS-FILTER](facets.md#facet-top-offenders-filter). |
@@ -477,7 +458,7 @@ Users who run an agent *outside* VS Code (e.g. Claude Code CLI in a terminal) ca
 - Tree view populates with clusters ranked worst-first.
 - Clicking a cluster node opens the occurrence.
 - Editing a buffer updates the tree within 1 s.
-- Diagnostics default off: Problems is empty on open while the tree and bubble are populated and coloured; flipping `deslop.diagnostics.toggle` publishes `Identical → Error` and others `→ Warning`, and flipping it back clears them ([VSIX-SEVERITY-CONTROL], [severity.md §SEVERITY-TESTING](severity.md#severity-testing)).
+- Verify [SEVERITY-TESTING](severity.md#severity-testing-required-checks) through the diagnostic toggle and per-kind settings in the installed extension, including reactive clearing and unchanged clone totals.
 - Selected-cluster sync: `deslop.openCluster` selects the cluster's Top Offenders row (in cluster, file, and folder modes); moving the caret into a clone selects the same row without stealing the caret; the tree, webview, and bubble agree on the selected id ([VSIX-CLUSTER-SYNC-TESTS]).
 - Embedding picker shows the `Ollama not detected` empty state — and never a stub row — when Ollama is unreachable.
 - Embedding picker lists Ollama models when a mock Ollama HTTP server is running on `127.0.0.1:11434`.

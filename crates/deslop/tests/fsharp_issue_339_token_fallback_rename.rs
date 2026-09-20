@@ -17,14 +17,17 @@
 //! whose raw content overwhelmingly agrees — reports as an act-now
 //! `nearly_identical` clone.
 
-use serde_json::Value;
-
 use std::path::Path;
 
-use crate::common::signals::{
-    assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
+use serde_json::Value;
+
+use crate::common::{
+    corpora::*,
+    signals::{
+        assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
+    },
+    *,
 };
-use crate::common::{corpora::*, *};
 
 /// The genuine clone with its module renamed one character LONGER, so
 /// every subsequent byte offset shifts — the #339 trigger.

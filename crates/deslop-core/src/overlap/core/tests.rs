@@ -8,6 +8,12 @@ use super::super::{
 };
 use crate::{ast::ByteRange, fingerprint::Fingerprint};
 
+/// One core, one verdict, whichever surface asks
+/// ([FUSED-SHARED-SUBTREE-CORE]).
+mod caller_parity;
+/// The core over spans a grammar spells twice ([FUSED-SHARED-SUBTREE-CORE]).
+mod wrapped_spans;
+
 /// `ACCUMULATE` with `carried` declared after the loop instead of before
 /// it — one statement moved across the loop, nothing else changed.
 const ACCUMULATE_REORDERED: &str = "\

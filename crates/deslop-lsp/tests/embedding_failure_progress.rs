@@ -27,21 +27,23 @@
 //! [`drive_failed_refresh`] holds it once; a test supplies the mock
 //! provider and the behaviour its diagnostics name.
 
-use crate::common;
-
 use std::{
     io::BufReader,
     process::{ChildStdin, ChildStdout},
     time::{Duration, Instant},
 };
 
-use crate::mock_ollama::{MockBehavior, MockOllama};
 use anyhow::{anyhow, Result};
 use common::{
     at, call, call_capturing, handshake, path as json_path, reports::assert_initialize_contract,
     spawn_lsp_guarded, wait_for_report_matching, POLL_INTERVAL,
 };
 use serde_json::{json, Value};
+
+use crate::{
+    common,
+    mock_ollama::{MockBehavior, MockOllama},
+};
 
 const REPORT_TIMEOUT: Duration = Duration::from_secs(20);
 /// How long the refresh may go without emitting a single progress frame

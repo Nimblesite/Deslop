@@ -2,6 +2,8 @@
 
 Turns every compiled accuracy threshold into a configuration item with the current value as its default. Specified by [`fused.md §FUSED-TUNING-LEVERS`](../specs/fused.md#fused-tuning-levers) (the levers and their provenance) and [`exclusion.md §[tuning]`](../specs/exclusion.md) (the file surface, validation, precedence, cache key, and report declaration).
 
+New category thresholds follow [CLONE-BUCKETS-THRESHOLDS](../specs/taxonomy.md#clone-buckets-thresholds-defaults-and-toml-settings): publish every default and TOML key, validate ordering/ranges, and test boundaries and overrides against the corpus. Their provisional defaults are not part of the behaviour-preserving migration of existing settings.
+
 **The whole migration is behaviour-preserving.** Every phase lands with the same reports it started with. No default moves in this work stream; a default change is a separate, test-first change with its own corpus measurement.
 
 **The surface is growing while it is being specified.** The last three merged PRs each added compiled levers — #341 five (`support_floor`, `promote_floor`, `literal_table_min_fraction`, `literal_table_min_literals`, `verbatim_member_share_floor`), #346 two (`rename_consistency_discount`, `rename_evidence_min_literals`), #368 two (`saturating_token_floor`, `max_endpoint_node_ratio`) — nine of the twenty-one Tier A levers in three commits. Calibration work is where levers are born, so Phases 0–2 should land before the next calibration PR, or it adds compiled constants this plan then has to chase.

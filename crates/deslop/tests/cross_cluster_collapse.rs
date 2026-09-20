@@ -10,17 +10,11 @@
 //! Spec: [PIPELINE-CLUSTER-EXACT] commits to one canonical cluster
 //! per duplicated region.
 
-use std::{
-    collections::BTreeSet,
-    fs,
-    ops::RangeInclusive,
-    path::{Path, PathBuf},
-};
+use std::{collections::BTreeSet, fs, ops::RangeInclusive, path::Path};
 
 use anyhow::Result;
 
-use crate::common::signals::assert_no_pair_surface_on_cluster;
-use crate::common::*;
+use crate::common::{scan_dir::report_path, signals::assert_no_pair_surface_on_cluster, *};
 
 /// The bytes of the wider authored view inside `ApplyStandard`.
 const STANDARD_VIEW_BYTES: u64 = 190;
@@ -34,12 +28,6 @@ const PREMIUM_VIEW_LINES: RangeInclusive<u64> = 16..=21;
 const SHARED_PREFIX_RUN: &str = "policy.Stage(ticket);\n        policy.Validate(ticket);\n        policy.Record(ticket);\n        policy.Publish(ticket);";
 /// The 1-based lines `SHARED_LOGIC` occupies in both wrappers.
 const SHARED_LOGIC_LINES: RangeInclusive<u64> = 8..=13;
-
-fn report_path(tmp: &Path) -> PathBuf {
-    let mut path = tmp.join("report");
-    let _replaced = path.set_extension("json");
-    path
-}
 
 fn run_report(tmp: &Path, scan_root: &Path) -> Result<serde_json::Value> {
     report_with(tmp, scan_root, &["--min-nodes", "8", "--embeddings", "off"])
@@ -91,7 +79,7 @@ fn every_occurrence_overlaps_some(inner: &[Occurrence], outer: &[Occurrence]) ->
 }
 
 fn first_subsumed_pair(report: &serde_json::Value) -> Option<String> {
-    let clusters = report.get("clusters")?.as_array()?;
+    let clusters = clone_findings(report);
     let occurrence_sets: Vec<(String, Vec<Occurrence>)> = clusters
         .iter()
         .map(|cluster| (cluster_id(cluster).to_owned(), cluster_occurrences(cluster)))
@@ -196,7 +184,7 @@ fn padded_windows_straddling_a_verbatim_block_publish_the_block() -> Result<()> 
     let scan_root = tmp.path().join("corpus");
     write_content_subsumption_fixture(&scan_root)?;
     let report = run_report(tmp.path(), &scan_root)?;
-    let candidates = clusters(&report);
+    let candidates = clone_findings(&report);
     assert_eq!(
         candidates.len(),
         1,
@@ -362,9 +350,10 @@ fn widest_same_declaration_view_is_the_published_finding() -> Result<()> {
         "the premium method grew an archive branch, so the two methods stay byte-distinct"
     );
     for text in &texts {
-        assert!(
-            text.contains(SHARED_PREFIX_RUN),
-            "each method carries the byte-identical run the near-miss is built on: {text}"
+        assert_contains(
+            text,
+            SHARED_PREFIX_RUN,
+            "each method carries the byte-identical run the near-miss is built on",
         );
     }
     let lines: Vec<(u64, u64)> = occurrences(clone)

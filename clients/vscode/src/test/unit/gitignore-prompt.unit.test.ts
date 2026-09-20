@@ -52,12 +52,15 @@ function fakeContext(seed: Record<string, unknown> = {}): vscode.ExtensionContex
   } as unknown as vscode.ExtensionContext;
 }
 
-/// Replaces `showInformationMessage` with one that returns `answer` and
-/// records the prompts it was given. Restores on dispose.
-function stubPrompt(answer: string | undefined): {
-  prompts: string[];
-  restore: () => void;
-} {
+/// Runs `body` with `showInformationMessage` replaced by one that returns
+/// `answer`, handing over the prompts it was given and a fresh context
+/// seeded with `seed`. The real prompt is always restored, so a failed
+/// assertion cannot leave the stub in place for the next test.
+async function withPrompt(
+  answer: string | undefined,
+  body: (prompts: string[], context: vscode.ExtensionContext) => Promise<void>,
+  seed: Record<string, unknown> = {},
+): Promise<void> {
   const prompts: string[] = [];
   const original = vscode.window.showInformationMessage;
   const replacement = (message: string): Thenable<string | undefined> => {
@@ -66,13 +69,12 @@ function stubPrompt(answer: string | undefined): {
   };
   (vscode.window as { showInformationMessage: unknown }).showInformationMessage =
     replacement;
-  return {
-    prompts,
-    restore: () => {
-      (vscode.window as { showInformationMessage: unknown }).showInformationMessage =
-        original;
-    },
-  };
+  try {
+    await body(prompts, fakeContext(seed));
+  } finally {
+    (vscode.window as { showInformationMessage: unknown }).showInformationMessage =
+      original;
+  }
 }
 
 suite("cache gitignore consent", () => {
@@ -139,9 +141,7 @@ suite("cache gitignore consent", () => {
   test("declining leaves the user's .gitignore byte-for-byte untouched", async () => {
     const original = "# my rules\nnode_modules\n";
     const root = repo(original);
-    const context = fakeContext();
-    const prompt = stubPrompt("No");
-    try {
+    await withPrompt("No", async (prompts, context) => {
       const written = await promptToIgnoreCache(context, root);
       assert.equal(written, false, "No must not write");
       assert.equal(
@@ -149,48 +149,40 @@ suite("cache gitignore consent", () => {
         original,
         "a declined prompt must not modify tracked source",
       );
-      assert.deepEqual(prompt.prompts, ["Ignore deslop files from git?"]);
+      assert.deepEqual(prompts, ["Ignore deslop files from git?"]);
       assert.equal(
         context.workspaceState.get(DECLINED_KEY),
         true,
         "the No must be remembered",
       );
-    } finally {
-      prompt.restore();
-    }
+    });
   });
 
   test("dismissing the prompt is also treated as a No", async () => {
     const root = repo(EXISTING_TARGET_IGNORE);
-    const context = fakeContext();
-    const prompt = stubPrompt(undefined);
-    try {
+    await withPrompt(undefined, async (_prompts, context) => {
       assert.equal(await promptToIgnoreCache(context, root), false);
       assert.equal(readIgnore(root), EXISTING_TARGET_IGNORE, "dismissal must not write");
       assert.equal(context.workspaceState.get(DECLINED_KEY), true);
-    } finally {
-      prompt.restore();
-    }
+    });
   });
 
   test("a remembered No is never re-prompted", async () => {
     const root = repo(EXISTING_TARGET_IGNORE);
-    const context = fakeContext({ [DECLINED_KEY]: true });
-    const prompt = stubPrompt("Yes");
-    try {
-      assert.equal(await promptToIgnoreCache(context, root), false);
-      assert.deepEqual(prompt.prompts, [], "must not ask a second time");
-      assert.equal(readIgnore(root), EXISTING_TARGET_IGNORE);
-    } finally {
-      prompt.restore();
-    }
+    await withPrompt(
+      "Yes",
+      async (prompts, context) => {
+        assert.equal(await promptToIgnoreCache(context, root), false);
+        assert.deepEqual(prompts, [], "must not ask a second time");
+        assert.equal(readIgnore(root), EXISTING_TARGET_IGNORE);
+      },
+      { [DECLINED_KEY]: true },
+    );
   });
 
   test("accepting appends the entry and keeps existing rules", async () => {
     const root = repo("# my rules\nnode_modules\n");
-    const context = fakeContext();
-    const prompt = stubPrompt("Yes");
-    try {
+    await withPrompt("Yes", async (_prompts, context) => {
       assert.equal(await promptToIgnoreCache(context, root), true);
       assert.equal(
         readIgnore(root),
@@ -198,44 +190,30 @@ suite("cache gitignore consent", () => {
         "existing rules must survive",
       );
       assert.equal(needsCacheIgnore(root), false, "the cache is now ignored");
-    } finally {
-      prompt.restore();
-    }
+    });
   });
 
   test("accepting creates .gitignore when the repo has none", async () => {
     const root = repo();
-    const context = fakeContext();
-    const prompt = stubPrompt("Yes");
-    try {
+    await withPrompt("Yes", async (_prompts, context) => {
       assert.equal(await promptToIgnoreCache(context, root), true);
       assert.equal(readIgnore(root), `${CACHE_IGNORE_ENTRY}\n`);
-    } finally {
-      prompt.restore();
-    }
+    });
   });
 
   test("an already-ignored cache never prompts", async () => {
     const root = repo(`${CACHE_IGNORE_ENTRY}\n`);
-    const context = fakeContext();
-    const prompt = stubPrompt("Yes");
-    try {
+    await withPrompt("Yes", async (prompts, context) => {
       assert.equal(await promptToIgnoreCache(context, root), false);
-      assert.deepEqual(prompt.prompts, [], "nothing to ask when already ignored");
-    } finally {
-      prompt.restore();
-    }
+      assert.deepEqual(prompts, [], "nothing to ask when already ignored");
+    });
   });
 
   test("no workspace means no prompt and no write", async () => {
-    const context = fakeContext();
-    const prompt = stubPrompt("Yes");
-    try {
+    await withPrompt("Yes", async (prompts, context) => {
       assert.equal(await promptToIgnoreCache(context, undefined), false);
-      assert.deepEqual(prompt.prompts, []);
-    } finally {
-      prompt.restore();
-    }
+      assert.deepEqual(prompts, []);
+    });
   });
 
   test("writeCacheIgnore reports failure instead of throwing", () => {

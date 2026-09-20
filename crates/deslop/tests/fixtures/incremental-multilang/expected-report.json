@@ -94,6 +94,12 @@
     ],
     "folders": []
   },
+  "routing": {
+    "nearly_identical_min_shape": 0.9,
+    "nearly_identical_min_content": 0.7,
+    "similar_min_content": 0.5,
+    "shape_only_max_content": 0.05
+  },
   "schema_doc": "",
   "boilerplate_hints": [],
   "embedding_provenance": null,
@@ -101,7 +107,7 @@
     {
       "id": "f44d1ebae4c45e3a",
       "rank": 1,
-      "rank_band": "worst",
+      "severity": "warning",
       "kind": "identical",
       "mass": 57,
       "canonical_node_count": 57,
@@ -130,7 +136,7 @@
     {
       "id": "ffa9824eae18b341",
       "rank": 2,
-      "rank_band": "mid",
+      "severity": "warning",
       "kind": "identical",
       "mass": 57,
       "canonical_node_count": 57,
@@ -159,7 +165,7 @@
     {
       "id": "7c61b26360939eaa",
       "rank": 3,
-      "rank_band": "mid",
+      "severity": "warning",
       "kind": "identical",
       "mass": 55,
       "canonical_node_count": 55,
@@ -188,7 +194,7 @@
     {
       "id": "927b05fad1c1cc0f",
       "rank": 4,
-      "rank_band": "faint",
+      "severity": "warning",
       "kind": "identical",
       "mass": 51,
       "canonical_node_count": 51,
@@ -217,7 +223,7 @@
     {
       "id": "dc672f7f39f21ba4",
       "rank": 5,
-      "rank_band": "faint",
+      "severity": "warning",
       "kind": "identical",
       "mass": 51,
       "canonical_node_count": 51,
@@ -246,7 +252,7 @@
     {
       "id": "b63105455a75704b",
       "rank": 6,
-      "rank_band": "faint",
+      "severity": "warning",
       "kind": "identical",
       "mass": 40,
       "canonical_node_count": 40,

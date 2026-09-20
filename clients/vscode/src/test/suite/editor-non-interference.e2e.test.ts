@@ -10,7 +10,7 @@
 
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
-import { activateExtension, sleep } from "./helpers";
+import { activateExtension, fixtureUri, sleep } from "./helpers";
 
 async function codeLenses(uri: vscode.Uri): Promise<vscode.CodeLens[]> {
   return (
@@ -26,9 +26,7 @@ suite("editor non-interference", () => {
 
   suiteSetup(async () => {
     await activateExtension();
-    const fixture = process.env["DESLOP_TEST_FIXTURE"];
-    assert.ok(fixture, "fixture path must be set");
-    alpha = vscode.Uri.file(`${fixture}/Alpha.cs`);
+    alpha = fixtureUri("Alpha.cs");
     const doc = await vscode.workspace.openTextDocument(alpha);
     await vscode.window.showTextDocument(doc);
     // Wait until Deslop's additive code lens appears. This proves the LSP

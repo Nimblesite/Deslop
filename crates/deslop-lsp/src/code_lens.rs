@@ -1,14 +1,14 @@
 //! `textDocument/codeLens` provider ([LSP-CODE-LENS]).
 //!
 //! Emits one code lens per occurrence in the requested file. The lens
-//! title carries only the cluster count, and the attached command jumps
-//! to the next occurrence. Pair evidence belongs exclusively to explicit
-//! two-endpoint comparison ([FUSED-PAIR-SIGNALS]).
+//! title is the shared cluster presentation — category, occurrence count,
+//! and mass for actual clones — followed by the jump action; the attached
+//! command jumps to the next occurrence. Pair evidence belongs exclusively
+//! to explicit two-endpoint comparison ([FUSED-PAIR-SIGNALS]).
 
 use std::path::Path;
 
-use deslop_core::live::FileReport;
-use deslop_core::report::ReportCluster;
+use deslop_core::{live::FileReport, report::ReportCluster};
 use serde_json::json;
 use tower_lsp::lsp_types::{CodeLens, Command, Position, Range};
 
@@ -16,6 +16,9 @@ use crate::diagnostics::occurrence_matches_path;
 
 /// Command id forwarded back to the client for "jump to next occurrence".
 pub const JUMP_COMMAND: &str = "deslop.jumpToNextOccurrence";
+
+/// Trailing action the lens title ends with, naming what a click does.
+const JUMP_ACTION: &str = "— jump to next";
 
 /// Builds the code lenses for one file report.
 #[must_use]
@@ -53,14 +56,24 @@ fn lens_for_occurrence(cluster: &ReportCluster, occurrence_index: usize) -> Code
     }
 }
 
-/// Builds the lens title. Spec-compliant two-dot severity glyph at
-/// the front, cluster count, then the jump action.
+/// Builds the lens title: the shared cluster presentation, then the jump
+/// action ([LSP-CODE-LENS]).
+///
+/// The description comes from [`crate::presentation::diagnostic_message`],
+/// the one renderer the diagnostic uses, so a lens and a diagnostic on the
+/// same cluster never describe it differently. It names the category
+/// ([CLONE-KIND-LABELS]), counts the occurrences, and publishes mass for
+/// actual clones while identifying shape-only as the non-clone it is
+/// ([CLONE-BUCKETS-DUAL-LABEL]).
 ///
 /// [FUSED-PAIR-SIGNALS] The admission signals are pair measurements and
 /// never touch the cluster; a code lens on one occurrence must not render
-/// them. The title states the cluster's copy count only.
+/// them.
 fn title_for(cluster: &ReportCluster) -> String {
-    format!("●● {} copies — jump to next", cluster.occurrence_count)
+    format!(
+        "{description} {JUMP_ACTION}",
+        description = crate::presentation::diagnostic_message(cluster)
+    )
 }
 
 /// Returns a zero-width range at position `(0, 0)` — the lens anchor.
@@ -80,10 +93,15 @@ fn zero_range() -> Range {
 #[cfg(test)]
 #[allow(clippy::missing_docs_in_private_items)]
 mod tests {
-    use super::*;
-    use anyhow::{anyhow, Result};
-    use deslop_core::report::{ReportCluster, ReportOccurrence};
     use std::path::PathBuf;
+
+    use anyhow::{anyhow, Result};
+    use deslop_core::{
+        buckets::ClusterKind,
+        report::{ReportCluster, ReportOccurrence},
+    };
+
+    use super::*;
 
     const ALPHA_FILE: &str = "Alpha.cs";
     const PAIR_SIZE: usize = 2;
@@ -150,8 +168,15 @@ mod tests {
                 "occurrence index is the absolute position in cluster.occurrences"
             );
             assert!(
-                command.title.starts_with("●● 3 copies — "),
-                "title starts with severity glyph + count: {}",
+                command
+                    .title
+                    .starts_with("Nearly identical code × 3 — mass "),
+                "[LSP-CODE-LENS] title leads with the category and the count: {}",
+                command.title
+            );
+            assert!(
+                !command.title.contains(BAND_GLYPH),
+                "the retired band glyph is gone: {}",
                 command.title
             );
             // [FUSED-PAIR-SIGNALS] The lens is a cluster surface and
@@ -227,7 +252,14 @@ mod tests {
         let second_arg = arguments.get(1).ok_or_else(|| anyhow!("second argument"))?;
         assert_eq!(*first_arg, serde_json::json!("xyz-789"));
         assert_eq!(*second_arg, serde_json::json!(4_usize));
-        assert!(command.title.contains("●● 1 copies"), "{}", command.title);
+        assert!(
+            command
+                .title
+                .starts_with("Nearly identical code × 1 — mass "),
+            "a single occurrence is counted without a plural defect: {}",
+            command.title
+        );
+        assert!(!command.title.contains(BAND_GLYPH), "{}", command.title);
         Ok(())
     }
 
@@ -242,14 +274,15 @@ mod tests {
     }
 
     #[test]
-    fn title_for_renders_copy_count_only() {
+    fn title_for_renders_the_category_count_and_mass() {
         let cluster = make_cluster(
             "c",
             vec![occurrence("A.cs", 0, 1), occurrence("B.cs", 0, 1)],
         );
         let title = title_for(&cluster);
-        assert_eq!(title, "●● 2 copies — jump to next");
+        assert_eq!(title, "Nearly identical code × 2 — mass 4 — jump to next");
         assert!(title.ends_with("jump to next"), "{}", title);
+        assert!(!title.contains(BAND_GLYPH), "{title}");
     }
 
     // [FUSED-PAIR-SIGNALS] The admission signals are pair measurements and
@@ -262,7 +295,7 @@ mod tests {
             vec![occurrence("A.cs", 0, 1), occurrence("B.cs", 0, 1)],
         );
         let title = title_for(&cluster);
-        assert_eq!(title, "●● 2 copies — jump to next");
+        assert_eq!(title, "Nearly identical code × 2 — mass 4 — jump to next");
         for (gone, axis) in [
             ("structural", "shape"),
             ("jaccard", "token"),
@@ -287,8 +320,113 @@ mod tests {
     fn title_never_renders_pair_scores() {
         let cluster = make_cluster("unsourced", vec![]);
         let title = title_for(&cluster);
-        assert_eq!(title, "●● 0 copies — jump to next");
+        assert_eq!(title, "Nearly identical code × 0 — mass 0 — jump to next");
         assert!(!title.contains("structural"));
         assert!(!title.contains("agreement"));
+    }
+
+    /// [LSP-CODE-LENS] The category a clone lens must name, and the mass
+    /// and copy count it must carry, as the shared presentation renders
+    /// them.
+    const CLONE_LENS_TITLE: &str =
+        "Identical code \u{d7} 4 \u{2014} mass 142 \u{2014} jump to next";
+    /// [LSP-CODE-LENS] A shape-only lens names the informational
+    /// category and claims neither copies nor mass.
+    const SHAPE_ONLY_LENS_TITLE: &str =
+        "Same shape, different content \u{2014} informational, not a clone \u{2014} jump to next";
+    /// The retired mass-percentile band glyph; [LSP-CODE-LENS] requires
+    /// plain text.
+    const BAND_GLYPH: char = '\u{25cf}';
+    /// Mass of the clone the lens must publish.
+    const CLONE_MASS: u64 = 142;
+    /// Visible copies of the clone the lens must count.
+    const CLONE_COPIES: usize = 4;
+    /// Byte distance between fixture occurrences.
+    const OCCURRENCE_STRIDE: usize = 10;
+    /// Byte width of each fixture occurrence.
+    const OCCURRENCE_WIDTH: usize = 5;
+
+    /// A cluster of `kind` carrying `mass`, occurring `copies` times in
+    /// [`ALPHA_FILE`].
+    fn cluster_of_kind(kind: ClusterKind, mass: u64, copies: usize) -> ReportCluster {
+        let occurrences = (0..copies)
+            .map(|index| {
+                let start = index.saturating_mul(OCCURRENCE_STRIDE);
+                occurrence(ALPHA_FILE, start, start.saturating_add(OCCURRENCE_WIDTH))
+            })
+            .collect();
+        let mut cluster = make_cluster("kinded", occurrences);
+        cluster.kind = kind;
+        cluster.mass = mass;
+        cluster.severity = kind.default_diagnostic_severity().to_owned();
+        cluster
+    }
+
+    // [LSP-CODE-LENS] The lens states the category, the occurrence count
+    // and the mass, in plain text. The retired band glyph quantised mass
+    // rank into dots; mass is now published as the number it is.
+    #[test]
+    fn a_clone_lens_states_its_category_count_and_mass_in_plain_text() {
+        let cluster = cluster_of_kind(ClusterKind::Identical, CLONE_MASS, CLONE_COPIES);
+        let title = title_for(&cluster);
+        assert_eq!(
+            title, CLONE_LENS_TITLE,
+            "lens title follows [LSP-CODE-LENS]"
+        );
+        assert!(
+            title.starts_with(ClusterKind::Identical.labels().title),
+            "the lens leads with the category from the one kind registry \
+             ([CLONE-KIND-LABELS]): {title}"
+        );
+        assert!(
+            title.contains(&CLONE_MASS.to_string()),
+            "a clone lens publishes its mass: {title}"
+        );
+        assert!(
+            title.contains(&CLONE_COPIES.to_string()),
+            "a clone lens counts its occurrences: {title}"
+        );
+        assert!(
+            !title.contains(BAND_GLYPH),
+            "[LSP-CODE-LENS] requires plain text, not a band glyph: {title}"
+        );
+        assert!(
+            title.ends_with(" \u{2014} jump to next"),
+            "the jump action stays last: {title}"
+        );
+    }
+
+    // [CLONE-BUCKETS-DUAL-LABEL] / [CLONE-BUCKETS-STRUCTURAL-ONLY] Shape-only
+    // is not a clone: its lens must say so and must claim neither copies nor
+    // mass, which are duplicate quantities an informational record never owns.
+    #[test]
+    fn a_shape_only_lens_is_named_a_non_clone_and_claims_no_copies_or_mass() {
+        let cluster = cluster_of_kind(ClusterKind::StructuralOnly, 0, CLONE_COPIES);
+        let title = title_for(&cluster);
+        assert_eq!(
+            title, SHAPE_ONLY_LENS_TITLE,
+            "shape-only lens follows [LSP-CODE-LENS]"
+        );
+        assert!(
+            title.starts_with(ClusterKind::StructuralOnly.labels().title),
+            "the informational category is named: {title}"
+        );
+        assert!(
+            title.contains("not a clone"),
+            "[CLONE-BUCKETS-STRUCTURAL-ONLY] shape-only is identified as a \
+             non-clone: {title}"
+        );
+        assert!(
+            !title.contains("copies"),
+            "an informational finding has no copies to count: {title}"
+        );
+        assert!(
+            !title.contains("mass"),
+            "an informational record never claims duplicate mass: {title}"
+        );
+        assert!(
+            !title.contains(BAND_GLYPH),
+            "[LSP-CODE-LENS] requires plain text: {title}"
+        );
     }
 }

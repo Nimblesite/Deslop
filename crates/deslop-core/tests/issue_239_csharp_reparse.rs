@@ -16,13 +16,13 @@
 //! overshoots it by an order of magnitude while the cached path clears it
 //! several times over on debug, release, and coverage builds alike.
 
-use crate::common;
-
 use std::{fmt::Write as _, time::Instant};
 
 use anyhow::{anyhow, Result};
 use common::ReportFixture;
 use deslop_core::{ast::ByteRange, cluster::Cluster};
+
+use crate::common;
 
 /// Methods generated per C# file; the stress cluster carries two files'
 /// worth of members. High enough that a per-member full-file re-parse

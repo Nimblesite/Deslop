@@ -16,8 +16,7 @@ use std::{fs, path::PathBuf, time::Duration};
 use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
 
-use super::super::check_boilerplate_not_ranked_first;
-use super::{FLAT_DECLARATION, STATELESS_WIDGET};
+use super::{super::check_boilerplate_not_ranked_first, FLAT_DECLARATION, STATELESS_WIDGET};
 use crate::corpus::{repo_root, CorpusRun, Failure};
 
 /// Where the scan roots for these tests live: under `target`, the only

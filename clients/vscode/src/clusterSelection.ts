@@ -22,7 +22,7 @@ export interface ClusterAnchor {
 
 /** Snapshot plus selection a cluster detail panel must receive (#173). */
 export interface ClusterPanelFeed {
-  /** Visible projection with the selected cluster's original canonical membership. */
+  /** Visible projection, every cluster carrying its original canonical membership. */
   readonly report: Report;
   /** Current id of the selected cluster, or null when it no longer exists. */
   readonly selectedId: string | null;
@@ -65,6 +65,20 @@ export function resolveAnchoredCluster(
 }
 
 /**
+ * [VSIX-PAIR-COMPARE] A dirty canonical must never promote its first clean
+ * peer. `p` / `n` move the panel's selection inside the webview and the host
+ * keeps no second copy of that selection, so every cluster in the feed is one
+ * the user can detail — and every one of them arrives with the membership the
+ * engine published, not the projection's shorter list. The projection still
+ * decides WHICH clusters the panel lists ([VSIX-STATE-DIRTY]).
+ */
+function originalMembership(canonical: Report, visible: Report): ReportCluster[] {
+  if (visible === canonical) return canonical.clusters;
+  const byId = new Map(canonical.clusters.map((cluster) => [cluster.id, cluster]));
+  return visible.clusters.map((cluster) => byId.get(cluster.id) ?? cluster);
+}
+
+/**
  * Builds the snapshot and selection a cluster detail panel must receive so the
  * opened cluster is ALWAYS resolvable — surviving content-hash id churn
  * ([VSIX-STATE]) and dirty-file elision ([VSIX-STATE-DIRTY], #117). The pinned
@@ -76,14 +90,14 @@ export function clusterPanelFeed(
   visible: Report,
   anchor: ClusterAnchor,
 ): ClusterPanelFeed {
+  const clusters = originalMembership(canonical, visible);
+  const report = { ...visible, clusters };
   const resolved = resolveAnchoredCluster(canonical, anchor);
-  if (!resolved) return { report: visible, selectedId: null };
-  if (visible.clusters.some((cluster) => cluster === resolved)) {
-    return { report: visible, selectedId: resolved.id };
-  }
-  // [VSIX-PAIR-COMPARE] A dirty canonical must never promote its first clean
-  // peer. The anchored detail keeps the engine's original membership and rank.
-  const others = visible.clusters.filter((cluster) => cluster.id !== resolved.id);
-  const clusters = [resolved, ...others].sort((left, right) => left.rank - right.rank);
-  return { report: { ...visible, clusters }, selectedId: resolved.id };
+  if (!resolved) return { report, selectedId: null };
+  if (clusters.includes(resolved)) return { report, selectedId: resolved.id };
+  // The projection elided the opened cluster entirely (it fell below two
+  // visible occurrences): re-inject it, in the engine's rank order.
+  const others = clusters.filter((cluster) => cluster.id !== resolved.id);
+  const restored = [resolved, ...others].sort((left, right) => left.rank - right.rank);
+  return { report: { ...visible, clusters: restored }, selectedId: resolved.id };
 }

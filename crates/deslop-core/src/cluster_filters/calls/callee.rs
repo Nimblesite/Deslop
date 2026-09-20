@@ -65,7 +65,7 @@ fn nested_arguments(
 }
 
 /// Reads syntax without making source whitespace part of the header.
-fn canonical_callee(node: Node<'_>, source: &[u8], language: &str) -> Vec<CalleePart> {
+pub(super) fn canonical_callee(node: Node<'_>, source: &[u8], language: &str) -> Vec<CalleePart> {
     let mut parts = Vec::new();
     append_node(node, source, language, &mut parts);
     parts
@@ -92,7 +92,12 @@ fn append_node(node: Node<'_>, source: &[u8], language: &str, parts: &mut Vec<Ca
 /// Uses the same payload classification as each outer argument slot.
 fn append_argument(node: Node<'_>, source: &[u8], language: &str, parts: &mut Vec<CalleePart>) {
     match arg_shape(node, source, language) {
-        ArgShape::StringLiteral(_, _) => parts.push(CalleePart::Payload),
+        // A wrapper's own callee is compared across members by
+        // [`super::literal_agreement`], which sees every member at once,
+        // so here it needs only the same payload slot a bare string takes.
+        ArgShape::StringLiteral(_, _) | ArgShape::LiteralWrapper(_, _) => {
+            parts.push(CalleePart::Payload);
+        }
         ArgShape::Body => parts.push(CalleePart::Body),
         ArgShape::Other => append_node(node, source, language, parts),
     }
@@ -104,7 +109,7 @@ fn append_terminal(node: Node<'_>, source: &[u8], parts: &mut Vec<CalleePart>) {
         node.kind(),
         "identifier" | "property_identifier" | "field_identifier" | "type_identifier"
     );
-    if !identifier || retained_name(node) {
+    if !identifier || is_called_name(node) {
         if let Some(text) = source.get(node.start_byte()..node.end_byte()) {
             parts.push(CalleePart::Text(text.to_vec()));
         }
@@ -112,12 +117,15 @@ fn append_terminal(node: Node<'_>, source: &[u8], parts: &mut Vec<CalleePart>) {
 }
 
 /// A direct function name or member selector identifies the called code.
-fn retained_name(node: Node<'_>) -> bool {
+/// Shared with [`super::dataflow`], which needs the same distinction from
+/// the other side: what the header keeps is what dataflow must not read
+/// as a consumed value.
+pub(super) fn is_called_name(node: Node<'_>) -> bool {
     let Some(parent) = node.parent() else {
         return true;
     };
     if matches!(parent.kind(), "generic_name" | "generic_function") {
-        return retained_name(parent);
+        return is_called_name(parent);
     }
     ["function", "property", "field", "attribute", "name"]
         .iter()

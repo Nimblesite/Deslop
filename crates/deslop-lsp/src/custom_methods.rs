@@ -16,8 +16,7 @@ use deslop_core::{
 use serde::{Deserialize, Serialize};
 use tower_lsp::jsonrpc::Result as LspResult;
 
-use crate::backend::LspBackend;
-use crate::observability::CpuPhase;
+use crate::{backend::LspBackend, observability::CpuPhase};
 
 /// Method name for `deslop/reportSchemaDoc`. Serves the markdown
 /// `schema_doc` that used to ride every `deslop/reportGet` response;

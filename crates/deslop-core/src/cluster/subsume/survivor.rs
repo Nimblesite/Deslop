@@ -2,8 +2,9 @@
 
 use std::cmp::Ordering;
 
-use super::super::Cluster;
-use super::{all_occurrences_paired, covers_every_file, strictly_encloses, Nesting};
+use super::{
+    super::Cluster, all_occurrences_paired, covers_every_file, strictly_encloses, Nesting,
+};
 
 /// Which physical cluster view survives a subsumption comparison.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

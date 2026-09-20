@@ -4,8 +4,6 @@
 //! may change which thread computes a value but never the value
 //! (`docs/release-audit.md`, "parallel rescue").
 
-use std::path::PathBuf;
-
 use super::super::{
     rescue::{apply_shared_subtree_rescue, measure_chunk, RescueContext, MIN_SHARD_WORK},
     tally::RescueTally,
@@ -18,7 +16,8 @@ use crate::{
         CandidatePair, PairScore, FUSED_THRESHOLD, LSH_ONLY_MIN_JACCARD, LSH_ONLY_MIN_NODE_COUNT,
         SHARED_SUBTREE_MIN_JACCARD,
     },
-    state::{FileId, FileRegistry},
+    registry_fixtures::rust_pair_ids,
+    state::FileId,
 };
 
 /// The scan floor both paths judge every aligned core against: one
@@ -107,9 +106,7 @@ fn eligible_pair(nodes: usize) -> CandidatePair {
 #[test]
 fn sharded_rescue_matches_serial_outcomes() -> Result<(), String> {
     let pair_count = MIN_SHARD_WORK.get().saturating_mul(2);
-    let mut registry = FileRegistry::new();
-    let left_id = registry.register(PathBuf::from("left.rs"));
-    let right_id = registry.register(PathBuf::from("right.rs"));
+    let (left_id, right_id) = rust_pair_ids();
     let left_source = wide_function(120);
     let right_source = wide_function(121);
     let left = parse(&left_source, left_id)?;

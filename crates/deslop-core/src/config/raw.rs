@@ -7,9 +7,8 @@ use std::{collections::HashMap, path::Path};
 
 use serde::Deserialize;
 
-use crate::{error::CoreError, report_metrics::validate_threshold_percent};
-
 use super::{BoilerplateImportsMode, ClonePolicy};
+use crate::{error::CoreError, report_metrics::validate_threshold_percent};
 
 /// Raw on-disk TOML shape.
 #[derive(Debug, Default, Clone, Deserialize)]
@@ -34,6 +33,9 @@ pub(super) struct RawConfig {
     /// Clone-category ranking policy ([RANK-CATEGORY]).
     #[serde(default)]
     pub(super) ranking: RawRanking,
+    /// [CLONE-BUCKETS-THRESHOLDS] Validated category tuning.
+    #[serde(default)]
+    pub(super) tuning: super::tuning::Tuning,
 }
 
 /// Raw on-disk shape of the `[ranking]` section ([RANK-CATEGORY],

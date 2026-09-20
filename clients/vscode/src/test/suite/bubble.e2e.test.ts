@@ -4,7 +4,7 @@
 
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
-import { sleep } from "./helpers";
+import { openFixture, sleep } from "./helpers";
 
 interface BinaryExport {
   readonly source?: string;
@@ -29,11 +29,7 @@ suite("live bubble (real LSP)", () => {
   });
 
   test("editing a duplicated range triggers re-analysis", async () => {
-    const fixture = process.env["DESLOP_TEST_FIXTURE"];
-    assert.ok(fixture, "fixture path must be set");
-    const uri = vscode.Uri.file(`${fixture}/Alpha.cs`);
-    const doc = await vscode.workspace.openTextDocument(uri);
-    const editor = await vscode.window.showTextDocument(doc);
+    const editor = await openFixture("Alpha.cs");
 
     await editor.edit((builder) =>
       builder.insert(new vscode.Position(2, 0), "    var extra = 42;\n"),

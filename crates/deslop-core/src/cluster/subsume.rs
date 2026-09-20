@@ -58,9 +58,8 @@
 
 use std::collections::BTreeMap;
 
-use crate::{fingerprint::Fingerprint, state::FileId};
-
 use super::Cluster;
+use crate::{fingerprint::Fingerprint, state::FileId};
 
 /// Survivor selection inside one file set.
 mod kernel;

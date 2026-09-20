@@ -24,8 +24,9 @@ use deslop_core::{
         candidate_pairs, cluster_by_transitive_closure, FusedCluster, LSH_ONLY_MIN_JACCARD,
         LSH_ONLY_MIN_NODE_COUNT,
     },
+    registry_fixtures::{registry_pair, LSH_LEFT_PY, LSH_RIGHT_PY},
     report_fixtures::{UniformKind, FIXTURE_KIND},
-    state::{FileId, FileRegistry},
+    state::FileId,
 };
 
 #[test]
@@ -159,9 +160,7 @@ fn assert_materialised_clusters_are_mass_only(
 }
 
 fn embedding_roi_fixture() -> (Vec<Fingerprint>, Vec<Signature>) {
-    let mut registry = FileRegistry::new();
-    let lsh_left = registry.register(PathBuf::from("lsh_left.py"));
-    let lsh_right = registry.register(PathBuf::from("lsh_right.py"));
+    let (mut registry, lsh_left, lsh_right) = registry_pair(LSH_LEFT_PY, LSH_RIGHT_PY);
     let semantic_left = registry.register(PathBuf::from("semantic_left.py"));
     let semantic_right = registry.register(PathBuf::from("semantic_right.py"));
     (

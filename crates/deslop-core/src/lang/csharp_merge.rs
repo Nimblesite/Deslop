@@ -4,65 +4,49 @@
 
 use tree_sitter::Node;
 
-use crate::ast::named_children;
-use crate::lang::merge_emit::{
-    emit_merge_helper, BraceStyle, HelperDialect, HelperPlacement, InsertionPoint,
+use crate::{
+    ast::named_children,
+    lang::merge_emit::{
+        emit_merge_helper, BraceStyle, HelperDialect, HelperPlacement, InsertionPoint,
+    },
+    refactor::{
+        emit::line_indent_at,
+        merge::{site_arguments, MergeEmitOutcome, MergeEmitRequest},
+        preconditions::{field_text, node_text},
+        tables::{BoundaryKind, MergeTables},
+    },
+    wire_generated::MergeParameter,
 };
-use crate::refactor::{
-    emit::line_indent_at,
-    merge::{site_arguments, MergeEmitOutcome, MergeEmitRequest},
-    preconditions::{field_text, node_text},
-    tables::{BoundaryKind, MergeTables},
-};
-use crate::wire_generated::MergeParameter;
 
 /// C# merge tables ([AUTOFIX-MERGE-SAFETY] B and D,
 /// [AUTOFIX-MERGE-DEFAULTS]).
 pub(super) const MERGE_TABLES: MergeTables = MergeTables {
     boundary_kinds: &[
-        BoundaryKind {
-            node_kind: "return_statement",
-            allowed_containers: &[],
-        },
-        BoundaryKind {
-            node_kind: "yield_statement",
-            allowed_containers: &[],
-        },
-        BoundaryKind {
-            node_kind: "goto_statement",
-            allowed_containers: &[],
-        },
-        BoundaryKind {
-            node_kind: "await_expression",
-            allowed_containers: &[],
-        },
-        BoundaryKind {
-            node_kind: "break_statement",
-            allowed_containers: &[
+        BoundaryKind::new("return_statement", &[]),
+        BoundaryKind::new("yield_statement", &[]),
+        BoundaryKind::new("goto_statement", &[]),
+        BoundaryKind::new("await_expression", &[]),
+        BoundaryKind::new(
+            "break_statement",
+            &[
                 "for_statement",
                 "foreach_statement",
                 "while_statement",
                 "do_statement",
                 "switch_statement",
             ],
-        },
-        BoundaryKind {
-            node_kind: "continue_statement",
-            allowed_containers: &[
+        ),
+        BoundaryKind::new(
+            "continue_statement",
+            &[
                 "for_statement",
                 "foreach_statement",
                 "while_statement",
                 "do_statement",
             ],
-        },
-        BoundaryKind {
-            node_kind: "throw_statement",
-            allowed_containers: &["try_statement"],
-        },
-        BoundaryKind {
-            node_kind: "throw_expression",
-            allowed_containers: &["try_statement"],
-        },
+        ),
+        BoundaryKind::new("throw_statement", &["try_statement"]),
+        BoundaryKind::new("throw_expression", &["try_statement"]),
     ],
     literal_types: &[
         ("integer_literal", "int"),

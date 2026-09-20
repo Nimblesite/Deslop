@@ -48,6 +48,7 @@ pub(crate) use core::judge_core;
 mod credit;
 /// Rescue application over the candidate set ([FUSED-SHARED-SUBTREE]).
 mod rescue;
+pub(crate) use rescue::RescueContext;
 /// Deterministic tree shapes shared by the measurement tests.
 #[cfg(test)]
 mod shapes;
@@ -63,9 +64,8 @@ mod view;
 #[cfg(test)]
 mod tests;
 
-pub use rescue::apply_shared_subtree_rescue;
-
 use alignment::Aligner;
+pub use rescue::apply_shared_subtree_rescue;
 use view::{build_view, EndpointView};
 
 /// Most endpoint views one measurer retains
@@ -183,16 +183,19 @@ impl MeasureStats {
     /// order, deterministically ([PERF-FLUTTER-TODO-RESCUE]).
     #[must_use]
     pub const fn add(self, other: MeasureStats) -> MeasureStats {
-        MeasureStats {
-            hash_equal: self.hash_equal.saturating_add(other.hash_equal),
-            exact_hits: self.exact_hits.saturating_add(other.exact_hits),
-            bound_hits: self.bound_hits.saturating_add(other.bound_hits),
-            bound_skips: self.bound_skips.saturating_add(other.bound_skips),
-            order_skips: self.order_skips.saturating_add(other.order_skips),
-            alignments: self.alignments.saturating_add(other.alignments),
-            credit_fallbacks: self.credit_fallbacks.saturating_add(other.credit_fallbacks),
-            unresolved: self.unresolved.saturating_add(other.unresolved),
-        }
+        crate::counters::summed_counters!(
+            MeasureStats,
+            self,
+            other,
+            hash_equal,
+            exact_hits,
+            bound_hits,
+            bound_skips,
+            order_skips,
+            alignments,
+            credit_fallbacks,
+            unresolved,
+        )
     }
 }
 

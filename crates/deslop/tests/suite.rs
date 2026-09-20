@@ -281,6 +281,8 @@ mod ts_issue_284_produce_then_assert;
 mod ts_issue_285_diagnostic_scenarios;
 #[path = "type2_rename_anchor_floor.rs"]
 mod type2_rename_anchor_floor;
+#[path = "type2_rename_call_targets.rs"]
+mod type2_rename_call_targets;
 #[path = "type2_rename_literal_drift.rs"]
 mod type2_rename_literal_drift;
 #[path = "type3_enclosing_method.rs"]

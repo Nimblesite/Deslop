@@ -19,14 +19,14 @@ use crate::{
 mod hidden;
 use hidden::{log_hidden_cluster, materialise_with_visibility, NOISE_TOTALS_RUN_STAGE};
 
-pub use crate::wire_generated::{
-    CacheStats, EmbeddingProvenance, PairClassification, PairComparison, PairComparisonParams,
-    PairEndpoint, PairEvidence, PairTextIdentity, Report, ReportCluster, ReportOccurrence,
-};
-
 /// The render-stage parse cache, re-exported where [`ReportInputs`]
 /// carries it ([CLONE-NOISE-REPARSE-CACHE]).
 pub use crate::cluster_filters::ParseCache;
+pub use crate::wire_generated::{
+    CacheStats, ContentMeasurement, EmbeddingProvenance, PairClassification, PairComparison,
+    PairComparisonParams, PairEndpoint, PairEvidence, PairTextIdentity, Report, ReportCluster,
+    ReportOccurrence,
+};
 
 /// Default occurrence cap applied by [`Report::truncate_for_wire`].
 pub const LIVE_WIRE_OCCURRENCE_CAP: usize = 100;
@@ -156,7 +156,10 @@ pub fn render_report<S: BuildHasher + Sync>(inputs: ReportInputs<'_, S>) -> Repo
         .zip(&materialised)
         .filter_map(|(cluster, (_, hidden))| (!hidden).then_some(cluster))
         .collect();
-    let clusters_hidden = materialised.iter().filter(|(_, hidden)| *hidden).count();
+    let clusters_hidden = materialised
+        .iter()
+        .filter(|(cluster, hidden)| *hidden && cluster.kind.is_clone())
+        .count();
     let mut clusters: Vec<ReportCluster> = materialised
         .into_iter()
         .filter_map(|(cluster, hidden)| if hidden { None } else { Some(cluster) })
@@ -200,6 +203,7 @@ pub fn render_report<S: BuildHasher + Sync>(inputs: ReportInputs<'_, S>) -> Repo
         clusters_hidden,
         cache_stats: inputs.cache_stats,
         metrics,
+        routing: inputs.exclusion.routing(),
         schema_doc: SCHEMA_DOC.to_owned(),
         boilerplate_hints,
         embedding_provenance: inputs.embedding_provenance,

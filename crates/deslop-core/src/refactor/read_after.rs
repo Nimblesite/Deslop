@@ -1,5 +1,5 @@
 //! Rule 6's read-after-span dataflow ([AUTOFIX-EXTRACT-PRECONDITIONS],
-//!) — also [AUTOFIX-MERGE-SAFETY] check B's dataflow half.
+//! ) — also [AUTOFIX-MERGE-SAFETY] check B's dataflow half.
 //!
 //! No name bound inside an occurrence's effective span may be read
 //! after that span at *runtime*: positionally within the enclosing

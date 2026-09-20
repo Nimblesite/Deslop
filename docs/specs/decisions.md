@@ -48,7 +48,7 @@ instead of "missing finding family".
 
 **The decision.** Ship the value-level family per [literals.md](literals.md): capture literal
 identity as a side-channel during the existing walk (never weaken the `__literal__` collapse — Type-2
-depends on it), classify **outside** Type-1..4 via the category axis ([CLONE-CATEGORY-REGISTRY]),
+depends on it), classify **outside** Type-1..4 via the category axis ([CLONE-CATEGORY-REGISTRY](taxonomy.md#clone-category-registry-other-finding-kinds)),
 and keep [DECISION-MIN-NODES] intact for fragment clones with this family as the documented
 carve-out (size floors guard structural matching, not value indexing — micro-clone literature shows
 sub-floor fragments carry *more* maintenance burden, not less).
@@ -75,4 +75,4 @@ reproducible.
 
 > **Status: ⏳ Wholesale cutover.** The target contract is the seven-tool core analysis surface in [MCP-TOOLS]. The retired twelve-tool analysis-query surface is not a compatibility mode.
 
-The old surface grew by accretion: overlapping report slicers and duplicate path-scoped calls exposed the same analysis through incompatible shapes. The replacement is exactly `find-similar`, `duplicates`, `compare-pair`, `cluster-by-id`, `rescan`, `session`, and `schema-doc`. `duplicates` owns cluster queries, while `compare-pair` is the only route to exact-endpoint admission evidence. Cluster filters cover cluster-owned language, path, canonical extent, and engine-stamped mass severity only; pair classification and literal finding kind never enter that filter block. Refactor tools specified by [AUTOFIX-MERGE-MCP] and [AUTOFIX-EXTRACT-AI-MCP-TOOLS] remain orthogonal and do not create alternate report or pair-evidence paths. There is no fallback surface.
+The old surface grew by accretion: overlapping report slicers and duplicate path-scoped calls exposed the same analysis through incompatible shapes. The replacement is exactly `find-similar`, `duplicates`, `compare-pair`, `cluster-by-id`, `rescan`, `session`, and `schema-doc`. `duplicates` owns cluster queries, while `compare-pair` is the only route to exact-endpoint admission evidence. Cluster filters cover cluster-owned language, path, canonical extent, and configured diagnostic severity; pair classification and literal finding kind never enter that filter block. Refactor tools specified by [AUTOFIX-MERGE-MCP] and [AUTOFIX-EXTRACT-AI-MCP-TOOLS] remain orthogonal and do not create alternate report or pair-evidence paths. There is no fallback surface.

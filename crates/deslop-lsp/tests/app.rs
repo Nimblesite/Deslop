@@ -7,12 +7,17 @@
 use std::{path::PathBuf, process::ExitCode};
 
 use anyhow::{anyhow, Result};
-use deslop_core::embedding::{EmbeddingMode, DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL};
-use deslop_core::{config::ClonePolicy, live::transport::IpcMode};
-use deslop_lsp::app::{
-    action_from_args, run_process, run_process_result, run_startup_with, LspAction, LspStartup,
+use deslop_core::{
+    config::ClonePolicy,
+    embedding::{EmbeddingMode, DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL},
+    live::transport::IpcMode,
 };
-use deslop_lsp::backend::LspEmbeddingConfig;
+use deslop_lsp::{
+    app::{
+        action_from_args, run_process, run_process_result, run_startup_with, LspAction, LspStartup,
+    },
+    backend::LspEmbeddingConfig,
+};
 use serde_json::Value;
 
 const PROGRAM_NAME: &str = "deslop-lsp";

@@ -4,14 +4,14 @@
 //! and the wire `WorkspaceEdit`. Unknown ids surface the stable
 //! `UnknownCluster` error.
 
-use crate::common;
-
 use anyhow::{anyhow, ensure, Context, Result};
 use common::{
     copied_fixture_named, spawn_lsp_and_wait_for_socket, structured_content,
     wait_for_state_then_init_mcp, ChildKillOnDrop, McpHandle,
 };
 use serde_json::{json, Value};
+
+use crate::common;
 
 /// Brings up one scenario: a private copy of `fixture`, the real LSP
 /// listening on its socket, and an initialised MCP session talking to

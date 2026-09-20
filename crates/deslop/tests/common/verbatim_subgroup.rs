@@ -11,8 +11,8 @@
 use serde_json::Value;
 
 use super::{
-    cluster_file_set, cluster_id, cluster_size, clusters, expect_cluster_spanning, field, fixture,
-    occurrence_files, per_file_metrics, run_report,
+    cluster_file_set, cluster_id, cluster_size, clusters, expect_cluster_spanning, fixture,
+    occurrence_files, run_report,
     signals::{assert_no_pair_surface_on_cluster, signal_dump},
     Result,
 };
@@ -90,21 +90,6 @@ pub(crate) fn rename_consistency_for(anchors: u32) -> f64 {
 /// Renders one `verbatim-subgroup` case.
 pub(crate) fn render(case: &str, min_nodes: u32) -> Result<Value> {
     run_report(&fixture("verbatim-subgroup").join(case), min_nodes)
-}
-
-/// Per-file duplicated LOC as the report renders it, `0` when the file
-/// carries no row at all.
-pub(crate) fn duplicated_loc_for(report: &Value, file: &str) -> u64 {
-    per_file_metrics(report)
-        .iter()
-        .find(|metric| {
-            field(metric, "path")
-                .as_str()
-                .is_some_and(|path| path.ends_with(file))
-        })
-        .map_or(0, |metric| {
-            field(metric, "duplicated_loc").as_u64().unwrap_or_default()
-        })
 }
 
 /// Every visible cluster as `id [bucket] files` — the smallest dump

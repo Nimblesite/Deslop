@@ -564,6 +564,41 @@ pub fn is_unfielded_operator(language: &str, parent_kind: &str) -> bool {
         })
 }
 
+/// Classifies one raw tree-sitter kind for [PIPELINE-NORMALIZE-AST].
+///
+/// Every language collapses the same three classes and differs only in
+/// how each is spelled, so the dispatch lives here once and each grammar
+/// supplies only its own token predicates: trivia leaves the tree,
+/// identifier leaves collapse to [`IDENTIFIER_KIND`] so a rename cannot
+/// perturb a fingerprint (Type-2 detection), literal leaves collapse to
+/// [`LITERAL_KIND`] so a constant edit cannot either, and every other
+/// kind passes through interned so structure is preserved exactly.
+///
+/// Generic rather than `fn`-pointer so each grammar's `matches!` inlines
+/// at its own call site — this runs once per AST node.
+pub fn normalise_kind_with<Trivia, Identifier, Literal>(
+    raw: &str,
+    is_trivia: Trivia,
+    is_identifier: Identifier,
+    is_literal: Literal,
+) -> Option<&'static str>
+where
+    Trivia: Fn(&str) -> bool,
+    Identifier: Fn(&str) -> bool,
+    Literal: Fn(&str) -> bool,
+{
+    if is_trivia(raw) {
+        return None;
+    }
+    if is_identifier(raw) {
+        return Some(IDENTIFIER_KIND);
+    }
+    if is_literal(raw) {
+        return Some(LITERAL_KIND);
+    }
+    Some(intern_kind(raw))
+}
+
 /// Interns `raw` into a `&'static str` backed by a thread-local cache.
 /// Tree-sitter returns grammar kind strings that live for the duration
 /// of the loaded grammar, but we promote them to `&'static` via an

@@ -103,7 +103,7 @@ Deslop 的 MCP 界面按最严重优先的顺序返回重复的簇，并附带�
 
 这份报告以 JSON 为权威格式。人类可读的文本视图和 HTML 视图都由同一套数据结构渲染而来。文档中的[输出格式](/zh/docs/configuration/#report-output)解释了消费方契约，[工作原理](/zh/docs/how-it-works/)则解释了解析、归一化、指纹、聚簇和排名流水线。
 
-MCP 工具还带有一个出现次数预算。真实的仓库里，一个簇可能有几十处位置，把每一次出现都倾倒进智能体的上下文窗口并无益处。诸如 `top-offenders`、`report-for-file`、`report-for-range` 和 `find-similar` 这样的 Deslop 工具都接受一个 `max_occurrences` 预算，好让结果保持有用，而不至于沦为一场刷屏。当智能体确实需要完整的簇时，它可以再用 `cluster-by-id` 跟进。
+MCP 工具还带有一个出现次数预算。真实的仓库里，一个簇可能有几十处位置，把每一次出现都倾倒进智能体的上下文窗口并无益处。诸如 `duplicates` 和 `find-similar` 这样的 Deslop 工具都接受一个 `max_occurrences` 预算，好让结果保持有用，而不至于沦为一场刷屏。当智能体确实需要完整的簇时，它可以再用 `cluster-by-id` 跟进。
 
 这个小小的约束很重要。智能体工具应当为智能体的上下文预算而设计，而不仅仅因为协议允许就把它暴露出来。
 

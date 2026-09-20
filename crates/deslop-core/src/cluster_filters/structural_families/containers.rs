@@ -17,13 +17,14 @@
 
 use std::collections::HashMap;
 
+use super::{
+    super::family::{families_by, restrict},
+    MIN_FAMILY_MEMBERS,
+};
 use crate::{
     cluster::VERBATIM_OVERTURN_MIN_NODES, fingerprint::Fingerprint, pair::FusedCluster,
     state::FileId,
 };
-
-use super::super::family::{families_by, restrict};
-use super::MIN_FAMILY_MEMBERS;
 
 /// Fewest same-family occurrences a member must strictly enclose to be
 /// a concatenation of that family

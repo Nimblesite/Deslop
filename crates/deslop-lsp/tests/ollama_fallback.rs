@@ -11,8 +11,6 @@
 //! unreachable provider must degrade gracefully — a clean JSON-RPC reply and
 //! a live process — never a crash that loops the editor's restart logic.
 
-use crate::common;
-
 use std::{
     thread,
     time::{Duration, Instant},
@@ -21,6 +19,8 @@ use std::{
 use anyhow::{anyhow, Result};
 use common::{call, request, spawn_lsp_on_fixture, write_frame};
 use serde_json::json;
+
+use crate::common;
 
 /// Loopback port nothing should listen on. Connection attempts fail with
 /// ECONNREFUSED instantly, reproducing the unreachable provider scenario

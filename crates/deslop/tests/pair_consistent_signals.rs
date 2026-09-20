@@ -43,26 +43,14 @@ fn cluster_mass(cluster: &Value) -> Result<u64> {
         .ok_or_else(|| anyhow::anyhow!("cluster has no mass: {cluster:#}"))
 }
 
-fn assert_mass_only(cluster: &Value) -> Result<()> {
-    let nodes = field(cluster, "canonical_node_count")
-        .as_u64()
-        .ok_or_else(|| anyhow::anyhow!("cluster has no canonical node count: {cluster:#}"))?;
-    let copies = field(cluster, "occurrence_count")
-        .as_u64()
-        .ok_or_else(|| anyhow::anyhow!("cluster has no occurrence count: {cluster:#}"))?
-        .saturating_sub(1);
-    assert_eq!(
-        cluster_mass(cluster)?,
-        nodes.saturating_mul(copies),
-        "mass must be canonical nodes times additional visible occurrences: {cluster:#}"
-    );
+fn assert_mass_only(cluster: &Value) {
+    signals::assert_structural_only_contract(cluster, "pair-consistent cluster surface");
     for forbidden in FORBIDDEN_CLUSTER_FIELDS {
         assert!(
             cluster.get(forbidden).is_none(),
             "pair-only field {forbidden} leaked onto a cluster: {cluster:#}"
         );
     }
-    Ok(())
 }
 
 /// Seeded `ts-mixed-band` plus the byte-identical copy, run with the
@@ -108,8 +96,8 @@ fn mixed_closure_reports_membership_and_mass_only() -> Result<()> {
         "the mixed cluster must carry more occurrences than the pair: {report:#}"
     );
 
-    assert_mass_only(mixed)?;
-    assert_mass_only(pair)?;
+    assert_mass_only(mixed);
+    assert_mass_only(pair);
 
     let rank_mixed = field(mixed, "rank").as_u64().unwrap_or(u64::MAX);
     let rank_pair = field(pair, "rank").as_u64().unwrap_or(u64::MAX);
@@ -128,7 +116,7 @@ fn mixed_closure_reports_membership_and_mass_only() -> Result<()> {
 fn no_closure_serializes_pair_evidence() -> Result<()> {
     let report = run_pair_mean_report()?;
     for cluster in clusters(&report) {
-        assert_mass_only(cluster)?;
+        assert_mass_only(cluster);
     }
     Ok(())
 }

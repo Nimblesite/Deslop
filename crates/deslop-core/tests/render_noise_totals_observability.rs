@@ -14,6 +14,7 @@ use std::{fs, path::Path};
 
 use anyhow::{anyhow, Context, Result};
 use deslop_core::{
+    buckets::ClusterKind,
     pipeline::{run, EmbeddingSettings, PipelineConfig},
     report::Report,
     EmbeddingMode,
@@ -42,6 +43,12 @@ const MIN_NODES_RENDER_ONLY: u32 = 15;
 const HIDDEN_FIXTURE_CLUSTERS: usize = 1;
 /// Members in that family — one row builder per fixture file.
 const FIXTURE_MEMBERS: u64 = 3;
+/// Each hidden finding carries its kind and membership independently of the clone counter.
+const HIDDEN_FINDING_MESSAGE: &str = "cluster hidden from report";
+const FINDING_KIND: &str = "kind";
+const FINDING_MEMBERS: &str = "occurrences";
+/// One log event records one finding.
+const SINGLE_FINDING: u64 = 1;
 
 #[test]
 fn render_stage_noise_convictions_reach_the_emitted_totals() -> Result<()> {
@@ -54,6 +61,7 @@ fn render_stage_noise_convictions_reach_the_emitted_totals() -> Result<()> {
         both.report.clusters_hidden, HIDDEN_FIXTURE_CLUSTERS,
         "the pytest fixture family must be convicted at render, or this test proves nothing",
     );
+    let information = hidden_information(&both.captured)?;
     let cumulative = totals(&both.captured, RUN_CUMULATIVE_STAGE, FIXTURE_FILTER)?;
     assert_eq!(cumulative.target, "deslop_core::cluster_filters::snippets");
     assert!(
@@ -62,8 +70,14 @@ fn render_stage_noise_convictions_reach_the_emitted_totals() -> Result<()> {
     );
     assert_eq!(
         field(&cumulative, "members")?,
-        FIXTURE_MEMBERS,
-        "the emitted totals must carry the convicted family's member count",
+        FIXTURE_MEMBERS.saturating_add(information.members),
+        "the emitted totals include the clone family and every informational member examined",
+    );
+    assert_eq!(
+        field(&cumulative, "fired")?,
+        information
+            .groups
+            .saturating_add(HIDDEN_FIXTURE_CLUSTERS as u64)
     );
 
     // Interaction 2 — the shape that produced the misdiagnosis. The
@@ -79,15 +93,16 @@ fn render_stage_noise_convictions_reach_the_emitted_totals() -> Result<()> {
         "this run's split pass must run no filter, leaving the render pass the only source",
     );
     let only = totals(&render_only.captured, RUN_CUMULATIVE_STAGE, FIXTURE_FILTER)?;
+    let information = hidden_information(&render_only.captured)?;
     assert_eq!(
         field(&only, "fired")?,
-        HIDDEN_FIXTURE_CLUSTERS as u64,
+        (HIDDEN_FIXTURE_CLUSTERS as u64).saturating_add(information.groups),
         "the conviction that hid the cluster must appear in the emitted totals",
     );
     assert_eq!(
         field(&only, "members")?,
-        FIXTURE_MEMBERS,
-        "the emitted totals must carry the convicted family's member count",
+        FIXTURE_MEMBERS.saturating_add(information.members),
+        "the emitted totals include the clone family and every informational member examined",
     );
 
     // Every filter consulted is reported, not just the one that fired —
@@ -106,6 +121,53 @@ fn render_stage_noise_convictions_reach_the_emitted_totals() -> Result<()> {
         "a filter that examined the cluster and declined must still be reported",
     );
     Ok(())
+}
+
+/// Counts in one hidden-finding population.
+#[derive(Default)]
+struct HiddenPopulation {
+    /// Number of hidden findings.
+    groups: u64,
+    /// Total members the filters examined.
+    members: u64,
+}
+
+/// [CLONE-BUCKETS-STRUCTURAL-ONLY] Keep the original one-clone/three-member contract separate from information.
+fn hidden_information(captured: &CapturedEvents) -> Result<HiddenPopulation> {
+    let mut clones = HiddenPopulation::default();
+    let mut information = HiddenPopulation::default();
+    for event in captured.events(HIDDEN_FINDING_MESSAGE)? {
+        let kind = hidden_kind(&event)?;
+        let population = if kind.is_clone() {
+            &mut clones
+        } else {
+            &mut information
+        };
+        population.groups = population.groups.saturating_add(SINGLE_FINDING);
+        population.members = population
+            .members
+            .saturating_add(field(&event, FINDING_MEMBERS)?);
+    }
+    assert_eq!(
+        clones.groups, HIDDEN_FIXTURE_CLUSTERS as u64,
+        "exactly one clone family is hidden"
+    );
+    assert_eq!(
+        clones.members, FIXTURE_MEMBERS,
+        "the hidden clone family retains all three fixture members"
+    );
+    Ok(information)
+}
+
+/// Unknown or absent kinds cannot silently count as either population.
+fn hidden_kind(event: &CapturedEvent) -> Result<ClusterKind> {
+    let kind = event
+        .values
+        .get(FINDING_KIND)
+        .ok_or_else(|| anyhow!("hidden event has no kind: {event:?}"))?;
+    Ok(serde_json::from_value(serde_json::Value::String(
+        kind.clone(),
+    ))?)
 }
 
 /// One observed pipeline run: the report it produced and every

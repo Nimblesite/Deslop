@@ -12,6 +12,7 @@ import { ReportStore } from "../../reportStore";
 import { Report, ReportCluster } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
 import { occurrence, wireCluster } from "../cluster.helpers";
+import { storeWith } from "./report-store.helpers";
 
 function reportWith(clusters: ReportCluster[]): Report {
   return reportWithClusters(clusters);
@@ -33,8 +34,7 @@ async function openDoc(content: string): Promise<vscode.TextDocument> {
 suite("cluster hover provider", () => {
   test("provideHover renders the shared card for a cluster covering the cursor", async () => {
     const doc = await openDoc("hello world");
-    const store = new ReportStore();
-    store.setSnapshot(reportWith([clusterAt(doc.uri.fsPath, 0, 11)]), 0);
+    const store = storeWith(reportWith([clusterAt(doc.uri.fsPath, 0, 11)]));
     const provider = new ClusterHoverProvider(store);
 
     const hover = provider.provideHover(doc, new vscode.Position(0, 2));
@@ -59,8 +59,7 @@ suite("cluster hover provider", () => {
 
   test("provideHover returns null when a different file holds the only cluster", async () => {
     const doc = await openDoc("hello world");
-    const store = new ReportStore();
-    store.setSnapshot(reportWith([clusterAt("/some/other/file.cs", 0, 11)]), 0);
+    const store = storeWith(reportWith([clusterAt("/some/other/file.cs", 0, 11)]));
     const provider = new ClusterHoverProvider(store);
 
     assert.equal(provider.provideHover(doc, new vscode.Position(0, 2)), null);

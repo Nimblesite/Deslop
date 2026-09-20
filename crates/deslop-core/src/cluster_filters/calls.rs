@@ -109,9 +109,12 @@ impl CallShape {
 
     /// Whether any argument is authored string payload.
     pub(super) fn carries_string_literal(&self) -> bool {
-        self.arguments
-            .iter()
-            .any(|argument| matches!(argument, ArgShape::StringLiteral(_, _)))
+        self.arguments.iter().any(|argument| {
+            matches!(
+                argument,
+                ArgShape::StringLiteral(_, _) | ArgShape::LiteralWrapper(_, _)
+            )
+        })
     }
 }
 
@@ -128,6 +131,19 @@ enum ArgShape {
     /// judged by that body and its literals prove nothing
     /// ([CLONE-NOISE-LITERAL-VARIATION-CALLS]).
     Body,
+    /// A call wrapping only literal payload — `PathBuf::from("x")`. Held
+    /// as two separate facts, because they answer different questions:
+    /// the literal is the data a family varies, and the callee is *which
+    /// code runs*. Folded into one byte string, `Url.parse("x")` against
+    /// `Uri.resolve("x")` reads as a differing literal and the pair is
+    /// suppressed as scaffolding — a false negative on a real
+    /// behavioural difference.
+    ///
+    /// The callee is the *canonical* header, not raw bytes: receiver
+    /// names are normalised away exactly as they are everywhere else, so
+    /// `nav.locator("a")` and `page.locator("b")` remain one shape
+    /// varying its payload, while `parse` against `resolve` does not.
+    LiteralWrapper(Vec<CalleePart>, Vec<u8>),
     /// Anything else — non-string literal, identifier, sub-expression.
     Other,
 }
@@ -357,11 +373,17 @@ enum LiteralAgreement {
 
 /// Compares argument `index` of every member against the first member.
 fn literal_agreement(calls: &[&CallShape], index: usize) -> LiteralAgreement {
-    let Some(Some(ArgShape::StringLiteral(baseline, _))) =
-        calls.first().map(|call| call.arguments.get(index))
-    else {
-        return LiteralAgreement::NotAString;
-    };
+    match calls.first().and_then(|call| call.arguments.get(index)) {
+        Some(ArgShape::StringLiteral(baseline, _)) => string_agreement(calls, index, baseline),
+        Some(ArgShape::LiteralWrapper(callee, baseline)) => {
+            wrapper_agreement(calls, index, callee, baseline)
+        }
+        _ => LiteralAgreement::NotAString,
+    }
+}
+
+/// Bare string payloads agree, differ, or are not comparable at all.
+fn string_agreement(calls: &[&CallShape], index: usize, baseline: &[u8]) -> LiteralAgreement {
     let mut agreement = LiteralAgreement::Same;
     for call in calls.iter().skip(1) {
         match call.arguments.get(index) {
@@ -370,6 +392,32 @@ fn literal_agreement(calls: &[&CallShape], index: usize) -> LiteralAgreement {
             }
             Some(ArgShape::StringLiteral(_, _)) => {}
             _ => return LiteralAgreement::Incomparable,
+        }
+    }
+    agreement
+}
+
+/// A wrapped payload varies only while every member reaches for the
+/// same constructor. A member that wraps its literal in a *different*
+/// callee is running different code, which is a difference to report and
+/// never one family's varying test data, so the position is incomparable
+/// and blocks the suppression outright.
+fn wrapper_agreement(
+    calls: &[&CallShape],
+    index: usize,
+    callee: &[CalleePart],
+    baseline: &[u8],
+) -> LiteralAgreement {
+    let mut agreement = LiteralAgreement::Same;
+    for call in calls.iter().skip(1) {
+        let Some(ArgShape::LiteralWrapper(other_callee, bytes)) = call.arguments.get(index) else {
+            return LiteralAgreement::Incomparable;
+        };
+        if other_callee != callee {
+            return LiteralAgreement::Incomparable;
+        }
+        if bytes != baseline {
+            agreement = LiteralAgreement::Differs;
         }
     }
     agreement

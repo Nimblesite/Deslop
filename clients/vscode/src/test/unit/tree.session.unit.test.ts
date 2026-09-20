@@ -1,31 +1,38 @@
 // Unit: SessionProvider. Drives getChildren() against a seeded store.
 
 import * as assert from "node:assert/strict";
-import { SessionProvider, StatusTicker } from "../../tree/providers";
+import * as vscode from "vscode";
+import type { LanguageClient } from "vscode-languageclient/node";
 import { ReportStore } from "../../reportStore";
-import { cluster, labelText, report } from "./tree.helpers";
+import { cluster, labelText, report, sessionPanel, storeWith, treeStore } from "./tree.helpers";
 
 const STRING_TYPE_NAME = "string";
 const EMBEDDING_MODEL_LABEL = "Embedding model";
+const SESSION_ROW_COUNT = 4;
+
+/** No LSP client resolved — the panel reports a stopped session. */
+const NO_CLIENT = (): LanguageClient | undefined => undefined;
+/** A resolved client: the panel only checks presence, never its methods. */
+const RUNNING_CLIENT = (): LanguageClient => ({}) as never;
+
+/** The one session row carrying `label`, or undefined when absent. */
+function rowNamed(nodes: vscode.TreeItem[], label: string): vscode.TreeItem | undefined {
+  return nodes.find((node) => typeof node.label === STRING_TYPE_NAME && node.label === label);
+}
 
 suite("SessionProvider", () => {
   test("renders four session rows when a report is loaded", () => {
-    const store = new ReportStore();
-    store.setSnapshot(report([cluster("a", 1, "/f")]), 0);
-    const provider = new SessionProvider(store, new StatusTicker(), () => undefined);
+    const provider = sessionPanel(treeStore([cluster("a", 1, "/f")]), NO_CLIENT);
     const nodes = provider.getChildren();
-    assert.equal(nodes.length, 4);
+    assert.equal(nodes.length, SESSION_ROW_COUNT);
     assert.equal(provider.getChildren(nodes[0]).length, 0);
   });
 
   test("omits internal report format fields from the human session panel (#118)", () => {
-    const store = new ReportStore();
-    store.setSnapshot(report([cluster("a", 1, "/f")]), 0);
-    const provider = new SessionProvider(store, new StatusTicker(), () => undefined);
-    const nodes = provider.getChildren();
+    const nodes = sessionPanel(treeStore([cluster("a", 1, "/f")]), NO_CLIENT).getChildren();
     const labels = nodes.map(labelText);
     assert.deepEqual(labels, [EMBEDDING_MODEL_LABEL, "Cache", "Files analysed", "State"]);
-    assert.equal(nodes.length, 4);
+    assert.equal(nodes.length, SESSION_ROW_COUNT);
     assert.ok(labels.includes(EMBEDDING_MODEL_LABEL));
     assert.ok(labels.includes("Files analysed"));
     assert.ok(labels.includes("State"));
@@ -33,25 +40,18 @@ suite("SessionProvider", () => {
   });
 
   test("renders a 'no session' placeholder before a report arrives", () => {
-    const store = new ReportStore();
-    const provider = new SessionProvider(store, new StatusTicker(), () => undefined);
-    const nodes = provider.getChildren();
+    const nodes = sessionPanel(new ReportStore(), NO_CLIENT).getChildren();
     assert.equal(nodes.length, 1);
   });
 
   test("marks state as running when the clientFactory returns a value", () => {
-    const store = new ReportStore();
-    store.setSnapshot(report([]), 0);
-    const provider = new SessionProvider(store, new StatusTicker(), () => ({}) as never);
-    const nodes = provider.getChildren();
-    const state = nodes.find((n) => typeof n.label === STRING_TYPE_NAME && n.label === "State");
-    assert.ok(state);
+    const nodes = sessionPanel(treeStore(), RUNNING_CLIENT).getChildren();
+    assert.ok(rowNamed(nodes, "State"));
   });
 
   test("renders an Embedding progress row while a swap is in flight", () => {
     // [VSIX-SESSION-PROGRESS]
-    const store = new ReportStore();
-    store.setSnapshot(report([]), 0);
+    const store = treeStore();
     store.setEmbeddingProgress({
       phase: "starting",
       provider_id: "ollama",
@@ -61,11 +61,7 @@ suite("SessionProvider", () => {
       percent: 0,
       message: undefined,
     });
-    const provider = new SessionProvider(store, new StatusTicker(), () => ({}) as never);
-    const nodes = provider.getChildren();
-    const progress = nodes.find(
-      (n) => typeof n.label === STRING_TYPE_NAME && n.label === "Embedding",
-    );
+    const progress = rowNamed(sessionPanel(store, RUNNING_CLIENT).getChildren(), "Embedding");
     assert.ok(progress, "Embedding progress row must be present");
     assert.match(
       String(progress.description ?? ""),
@@ -76,14 +72,10 @@ suite("SessionProvider", () => {
 
   test("Embedding model row shows the pending id with a loading suffix while a swap is in flight", () => {
     // [VSIX-SESSION-PROGRESS]
-    const store = new ReportStore();
-    store.setSnapshot(report([]), 0);
+    const store = treeStore();
     store.setPendingEmbeddingModel("nomic-embed-text");
-    const provider = new SessionProvider(store, new StatusTicker(), () => ({}) as never);
-    const nodes = provider.getChildren();
-    const embeddingRow = nodes.find(
-      (n) => typeof n.label === STRING_TYPE_NAME && n.label === EMBEDDING_MODEL_LABEL,
-    );
+    const nodes = sessionPanel(store, RUNNING_CLIENT).getChildren();
+    const embeddingRow = rowNamed(nodes, EMBEDDING_MODEL_LABEL);
     assert.ok(embeddingRow, "Embedding model row must be rendered");
     assert.match(
       String(embeddingRow.description ?? ""),
@@ -94,15 +86,11 @@ suite("SessionProvider", () => {
 
   test("Embedding model row prompts for selection when live embeddings are off", () => {
     // [LIVE-EMBEDDING-CONSENT]
-    const store = new ReportStore();
     const snapshot = report([]);
     snapshot.embedding_provenance = undefined;
-    store.setSnapshot(snapshot, 0);
-    const provider = new SessionProvider(store, new StatusTicker(), () => ({}) as never);
-    const nodes = provider.getChildren();
-    const embeddingRow = nodes.find(
-      (n) => typeof n.label === STRING_TYPE_NAME && n.label === EMBEDDING_MODEL_LABEL,
-    );
+    const store = storeWith(snapshot);
+    const nodes = sessionPanel(store, RUNNING_CLIENT).getChildren();
+    const embeddingRow = rowNamed(nodes, EMBEDDING_MODEL_LABEL);
     assert.ok(embeddingRow, "Embedding model row must be rendered");
     assert.match(
       String(embeddingRow.description ?? ""),
@@ -115,8 +103,7 @@ suite("SessionProvider", () => {
     // Exercises scanStatus's failed branch (StatusNode kind=error).
     const store = new ReportStore();
     store.setLifecycle({ kind: "failed", message: "binary missing" });
-    const provider = new SessionProvider(store, new StatusTicker(), () => undefined);
-    const nodes = provider.getChildren();
+    const nodes = sessionPanel(store, NO_CLIENT).getChildren();
     const errorNode = nodes.find(
       (n) => typeof n.contextValue === STRING_TYPE_NAME && n.contextValue === "deslop.status.error",
     );
@@ -126,12 +113,10 @@ suite("SessionProvider", () => {
   });
 
   test("retains session data during re-analysis — stale > blank ([VSIX-REACTIVITY-TREE])", () => {
-    const store = new ReportStore();
-    store.setSnapshot(report([cluster("a", 1, "/f")]), 0);
+    const store = treeStore([cluster("a", 1, "/f")]);
     store.setLifecycle({ kind: "analysing" });
-    const provider = new SessionProvider(store, new StatusTicker(), () => undefined);
-    const nodes = provider.getChildren();
-    assert.equal(nodes.length, 4, "session rows must remain visible during re-analysis");
+    const nodes = sessionPanel(store, NO_CLIENT).getChildren();
+    assert.equal(nodes.length, SESSION_ROW_COUNT, "session rows must remain visible during re-analysis");
     const labels = nodes.map((n) => (typeof n.label === STRING_TYPE_NAME ? n.label : ""));
     assert.ok(labels.includes(EMBEDDING_MODEL_LABEL), "Embedding model row must stay visible");
     assert.ok(labels.includes("State"), "State row must stay visible");

@@ -2,7 +2,7 @@
 
 Drop the block below into your project's `AGENTS.md` (used by Codex / Continue / Cursor) **and** `CLAUDE.md` (used by Claude Code) so every coding agent in your loop is told to call Deslop's `find-similar` MCP tool **before** writing new code, not afterwards.
 
-The whole point of Deslop is to keep duplicates out of the repo in the first place. If your agents only run `top-offenders` to scrub existing dupes, you've reduced Deslop to a static analyzer. The live MCP loop earns its keep when agents query **during authoring**.
+The whole point of Deslop is to keep duplicates out of the repo in the first place. If your agents only run `duplicates` to scrub existing dupes, you've reduced Deslop to a static analyzer. The live MCP loop earns its keep when agents query **during authoring**.
 
 ---
 
@@ -69,10 +69,10 @@ inspect the response.
 ### When to use the OTHER Deslop tools instead
 
 - **Fixing existing duplicates** (refactor / dedup work) → start with
-  `top-offenders`, then `cluster-by-id` for the cluster you'll merge. Don't
+  `duplicates`, then `cluster-by-id` for the cluster you'll merge. Don't
   use `find-similar` for this — it answers a different question.
-- **Investigating a specific file** → `report-for-file`.
-- **Investigating a specific block before refactor** → `report-for-range`.
+- **Narrowing to one file or one block** → `duplicates` with `path`, plus
+  `start_byte`/`end_byte` for a block.
 - **Schema reference for the JSON shapes** → call `schema-doc` *once* per
   session. Don't bundle it into every response.
 

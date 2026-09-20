@@ -253,9 +253,10 @@ fn derived_text_and_html_carry_the_json_path_spelling() -> Result<()> {
             "{label} report must not spell a nested path with a backslash: {rendered}",
         );
     }
-    assert!(
-        !json.contains(ESCAPED_BACKSLASH),
-        "no JSON string value may carry an escaped backslash: {json}",
+    assert_not_contains(
+        &json,
+        ESCAPED_BACKSLASH,
+        "no JSON string value may carry an escaped backslash",
     );
     Ok(())
 }

@@ -107,7 +107,7 @@ pub fn bytes_hash(bytes: &[u8]) -> String {
     let mut hasher = Hasher::new();
     let _ = hasher.update(bytes);
     let digest = hasher.finalize();
-    hex(digest.as_bytes())
+    digest.to_hex().to_string()
 }
 
 /// Encodes `embedding` as little-endian `f32` bytes.
@@ -135,38 +135,6 @@ fn decode(bytes: &[u8], dimensions: usize) -> Option<Vec<f32>> {
         out.push(f32::from_le_bytes(array));
     }
     Some(out)
-}
-
-/// Lowercase hex encoding without external deps.
-fn hex(bytes: &[u8]) -> String {
-    let mut out = String::with_capacity(bytes.len().saturating_mul(2));
-    for byte in bytes {
-        out.push(nibble((*byte >> 4) & 0x0F));
-        out.push(nibble(*byte & 0x0F));
-    }
-    out
-}
-
-/// Maps a 0..=15 nibble to its lowercase hex character.
-const fn nibble(value: u8) -> char {
-    match value {
-        0 => '0',
-        1 => '1',
-        2 => '2',
-        3 => '3',
-        4 => '4',
-        5 => '5',
-        6 => '6',
-        7 => '7',
-        8 => '8',
-        9 => '9',
-        10 => 'a',
-        11 => 'b',
-        12 => 'c',
-        13 => 'd',
-        14 => 'e',
-        _ => 'f',
-    }
 }
 
 /// Sanitises a path segment so a maliciously-named model cannot

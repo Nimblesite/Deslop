@@ -8,10 +8,13 @@
 
 use deslop_test_support::write_dart_data_table_fixture;
 
-use super::language_sections::{RUST_A, RUST_B};
-use super::support::*;
+use super::{
+    language_sections::{RUST_A, RUST_B},
+    support::*,
+};
 use crate::common::{
-    cluster_kind, IDENTICAL_KIND, IDENTICAL_TITLE, NEARLY_IDENTICAL_KIND, NEARLY_IDENTICAL_TITLE,
+    cluster_kind, clusters, IDENTICAL_KIND, IDENTICAL_TITLE, NEARLY_IDENTICAL_KIND,
+    NEARLY_IDENTICAL_TITLE, STRUCTURAL_ONLY_KIND, STRUCTURAL_ONLY_TITLE,
 };
 
 // Two byte-identical (Type-1) copies of one function — every occurrence
@@ -82,9 +85,7 @@ fn html_report_groups_clusters_by_kind_into_coloured_expanders() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let (html, json) = render_two_kind_report(tmp.path())?;
 
-    // Corpus guard: the exact pair outranks the renamed pair, the engine
-    // stamps every cluster with a mass band, and the fold names each
-    // relation truthfully — byte-identical first, renamed second.
+    // [RANK-MASS-SUM] Exact and renamed clones keep their mass order.
     assert_eq!(
         kinds_in_rank_order(&json),
         vec![IDENTICAL_KIND, NEARLY_IDENTICAL_KIND],
@@ -92,32 +93,30 @@ fn html_report_groups_clusters_by_kind_into_coloured_expanders() -> Result<()> {
          nearly identical, in that rank order: {json:#}"
     );
     for cluster in field(&json, "clusters").as_array().into_iter().flatten() {
-        assert!(
-            field(cluster, "rank_band").as_str().is_some(),
-            "every cluster carries the engine's rank band: {cluster:#}"
+        assert_eq!(
+            field(cluster, "severity").as_str(),
+            Some("warning"),
+            "both clone kinds default to warning independently of rank: {cluster:#}"
         );
     }
 
     // Grouping: one collapsible, kind-coloured expander per kind present,
     // expanded by default so the top offender stays one glance away.
-    assert!(
-        html.contains(&kind_expander(
-            "identical",
-            "Type-1 exact clone",
-            IDENTICAL_TITLE,
-            1
-        )),
-        "the exact pair renders inside the identical expander with its live count: {html}"
+    assert_contains(
+        &html,
+        &kind_expander("identical", "Type-1 exact clone", IDENTICAL_TITLE, 1),
+        "the exact pair renders inside the identical expander with its live count",
     );
-    assert!(
-        html.contains(&kind_expander(
+    assert_contains(
+        &html,
+        &kind_expander(
             "nearly-identical",
-            "Type-2/3 near-copy",
+            "Type-2 / close Type-3 clone",
             NEARLY_IDENTICAL_TITLE,
-            1
-        )),
+            1,
+        ),
         "the renamed pair renders inside the nearly-identical expander with its live \
-         count: {html}"
+         count",
     );
     assert_eq!(
         html.matches("<details class=\"clone-group").count(),
@@ -131,8 +130,11 @@ fn html_report_groups_clusters_by_kind_into_coloured_expanders() -> Result<()> {
         "the exact pair's card carries the identical title"
     );
     assert_eq!(
-        html.matches(&card_title("Type-2/3 near-copy", NEARLY_IDENTICAL_TITLE))
-            .count(),
+        html.matches(&card_title(
+            "Type-2 / close Type-3 clone",
+            NEARLY_IDENTICAL_TITLE
+        ))
+        .count(),
         1,
         "the renamed pair's card carries the nearly-identical title"
     );
@@ -141,9 +143,10 @@ fn html_report_groups_clusters_by_kind_into_coloured_expanders() -> Result<()> {
             && html.contains("cluster-card cluster-card--nearly-identical"),
         "each card is keyed to its kind so the colour rule can find it: {html}"
     );
-    assert!(
-        html.contains("mass "),
-        "each card names the cluster's mass — the ranking metric"
+    assert_contains(
+        &html,
+        "mass ",
+        "each card names the cluster's mass — the ranking metric",
     );
 
     // Retired axes: no bucket facet controls, category classes, or
@@ -163,31 +166,25 @@ fn html_report_groups_clusters_by_kind_into_coloured_expanders() -> Result<()> {
     }
 
     // CSS-only contract stays intact: the report must remain script-free.
-    assert!(
-        !html.contains("<script"),
-        "the report must stay script-free ([OUTPUT-HUMAN-HTML])"
+    assert_not_contains(
+        &html,
+        "<script",
+        "the report must stay script-free ([OUTPUT-HUMAN-HTML])",
     );
     Ok(())
 }
 
-// Implements [FACET-HTML] / [FACET-CLI]: the stderr summary breaks the
-// report down by mass severity band — never by similarity category —
-// and no card carries a category class or a category facet control
-// ([FACET-MODEL]: the category axis is retired). Cards carry the folded
-// kind title. The scorer method is verbatim, but the reported window is
-// the class around it, whose names differ (`ScorerA`/`ScorerB`), so the
-// compared slices are not byte-equal and the fold names the near-copy
-// kind ([CLONE-KIND-FOLD], [CLONE-BUCKETS-IDENTICAL]).
+// [FACET-CLI] Severity is a diagnostic level; each card retains its clone kind and mass.
 #[test]
-fn html_report_summary_breaks_down_by_mass_severity_and_cards_carry_the_kind() -> Result<()> {
+fn html_report_summary_shows_diagnostic_severity_and_cards_carry_the_kind() -> Result<()> {
     let (tmp, scan_root, out) = seeded_scan("src", write_dart_data_table_fixture)?;
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let assertion = cmd.args([MIN_NODES_FLAG, "30"]).assert().success();
-    // [FACET-CLI]: the stderr summary carries the mass-severity breakdown.
     let stderr = String::from_utf8_lossy(&assertion.get_output().stderr).into_owned();
-    assert!(
-        stderr.contains("mass severity:"),
-        "stderr summary must carry the mass-severity breakdown line, got:\n{stderr}"
+    assert_contains(
+        &stderr,
+        "diagnostic severity:",
+        "stderr summary carries diagnostic levels, got",
     );
     for retired in ["data table", "code clones", "category"] {
         assert!(
@@ -198,9 +195,7 @@ fn html_report_summary_breaks_down_by_mass_severity_and_cards_carry_the_kind() -
     let html = fs::read_to_string(&out.html)?;
     let json = read_json_report(&out.json)?;
 
-    // Corpus guard: the engine reports the scorer pair, stamps its band
-    // and folds the class-level window to nearly identical; the data
-    // table no longer survives the noise/collapse rules.
+    // The scorer class differs only by name; the data table is noise.
     let clusters = field(&json, "clusters")
         .as_array()
         .cloned()
@@ -210,9 +205,9 @@ fn html_report_summary_breaks_down_by_mass_severity_and_cards_carry_the_kind() -
         .first()
         .ok_or_else(|| anyhow::anyhow!("one cluster survives: {json:#}"))?;
     assert_eq!(
-        field(surviving, "rank_band").as_str(),
-        Some("worst"),
-        "the surviving pair is the report's worst cluster"
+        field(surviving, "severity").as_str(),
+        Some("warning"),
+        "a nearly identical pair defaults to warning"
     );
     assert_eq!(
         cluster_kind(surviving),
@@ -220,9 +215,10 @@ fn html_report_summary_breaks_down_by_mass_severity_and_cards_carry_the_kind() -
         "the class-level window differs by its class name, so the pair folds to \
          nearly identical ([CLONE-KIND-FOLD]): {surviving:#}"
     );
-    assert!(
-        stderr.contains("1 × worst"),
-        "the breakdown names the surviving band, got:\n{stderr}"
+    assert_contains(
+        &stderr,
+        "1 × warning",
+        "the breakdown names the diagnostic level, got",
     );
 
     for retired in [
@@ -239,10 +235,17 @@ fn html_report_summary_breaks_down_by_mass_severity_and_cards_carry_the_kind() -
         );
     }
     // Every card renders its kind title and a mass figure.
-    assert!(
-        html.contains(&card_title("Type-2/3 near-copy", NEARLY_IDENTICAL_TITLE)),
-        "the card carries the nearly-identical kind title: {html}"
+    assert_contains(
+        &html,
+        &card_title("Type-2 / close Type-3 clone", NEARLY_IDENTICAL_TITLE),
+        "the card carries the nearly-identical kind title",
     );
-    assert!(html.contains("mass "), "mass figures render on every card");
+    assert_contains(&html, "mass ", "mass figures render on every card");
     Ok(())
 }
+
+#[path = "bucket_groups/information.rs"]
+pub(super) mod information;
+
+#[path = "bucket_groups/order.rs"]
+mod order;

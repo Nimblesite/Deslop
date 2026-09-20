@@ -23,6 +23,7 @@ use super::{
         assert_multilang_contract, expect_lang_clone, seed_multilang, MULTILANG_CASES,
         MULTILANG_FILE_COUNT, MULTILANG_MIN_NODES,
     },
+    scan_dir::temp_scan_dir,
     seed, Result,
 };
 
@@ -45,8 +46,7 @@ impl WarmCorpus {
     /// so a scenario can never start from a store that was quietly
     /// empty, and "the edit caused this miss" is provable.
     pub(crate) fn warm() -> Result<Self> {
-        let tmp = tempfile::tempdir()?;
-        let scan_root = tmp.path().join("src");
+        let (tmp, scan_root) = temp_scan_dir("src")?;
         seed_multilang(&scan_root)?;
 
         let cycle = cold_then_warm(&scan_root, tmp.path(), MIN, MULTILANG_FILE_COUNT)?;

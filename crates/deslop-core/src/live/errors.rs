@@ -11,9 +11,8 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
-pub use crate::wire_generated::LiveErrorWire;
-
 use crate::error::CoreError;
+pub use crate::wire_generated::LiveErrorWire;
 
 /// Errors produced by the live module.
 #[derive(Debug, Error)]

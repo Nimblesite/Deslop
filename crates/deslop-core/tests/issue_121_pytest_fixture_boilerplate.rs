@@ -3,10 +3,10 @@
 //!
 //! Tests [CLONE-NOISE-PY-PYTEST-FIXTURE]
 
-use crate::common;
-
 use anyhow::Result;
 use common::ReportFixture;
+
+use crate::common;
 
 #[test]
 fn pytest_fixture_row_builders_stay_out_of_ranked_report() -> Result<()> {

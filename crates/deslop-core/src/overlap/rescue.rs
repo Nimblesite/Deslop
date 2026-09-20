@@ -23,6 +23,11 @@
 
 use std::{collections::HashMap, hash::BuildHasher, num::NonZeroUsize};
 
+use super::{
+    core::{judge_core, CoreVerdict},
+    tally::RescueTally,
+    OverlapMeasurer,
+};
 use crate::{
     ast::NormalizedNode,
     cluster::scope::DeclarationScopes,
@@ -35,15 +40,9 @@ use crate::{
     state::FileId,
 };
 
-use super::{
-    core::{judge_core, CoreVerdict},
-    tally::RescueTally,
-    OverlapMeasurer,
-};
-
 /// Everything a rescue measurement reads besides the pair itself,
 /// resolved once per pass and shared read-only by every shard.
-pub(super) struct RescueContext<'a, S, L: BuildHasher> {
+pub(crate) struct RescueContext<'a, S, L: BuildHasher> {
     /// Every member's normalised tree by file, for content agreement.
     tree_index: HashMap<FileId, &'a NormalizedNode>,
     /// Raw source per file.
@@ -68,7 +67,7 @@ pub(super) struct RescueContext<'a, S, L: BuildHasher> {
 impl<'a, S: BuildHasher, L: BuildHasher> RescueContext<'a, S, L> {
     /// Resolves the pass-wide inputs for `pairs`, judging every aligned
     /// core against `core_floor` nodes.
-    pub(super) fn new(
+    pub(crate) fn new(
         pairs: &[CandidatePair],
         fingerprints: &[Fingerprint],
         trees: &'a [NormalizedNode],
@@ -110,6 +109,16 @@ impl<'a, S: BuildHasher, L: BuildHasher> RescueContext<'a, S, L> {
                 && self.scopes.aligned_function(left).is_some()
                 && self.scopes.aligned_function(right).is_some()
                 && self.shares_a_copied_interior(left, right))
+    }
+
+    /// [FUSED-SHARED-SUBTREE] Shared scope and container checks for admission and comparison.
+    pub(crate) fn allows_rescue(
+        &self,
+        left: &Fingerprint,
+        right: &Fingerprint,
+        overlap: f64,
+    ) -> bool {
+        self.measures(left, right) && !is_container_echo(overlap, left, right, self)
     }
 
     /// [FUSED-SHARED-SUBTREE-SAME-FILE] Whether the two declarations
@@ -288,7 +297,9 @@ fn record_rescue_verdict<S: BuildHasher, L: BuildHasher>(
         tally.content_gate_rejected();
         pair.shared_subtree_overlap = 0.0;
     }
-    let echoes = clears_overlap && clears_content && is_container_echo(pair, left, right, context);
+    let echoes = clears_overlap
+        && clears_content
+        && !context.allows_rescue(left, right, pair.shared_subtree_overlap);
     if echoes {
         tally.container_echo_rejected();
         pair.shared_subtree_overlap = 0.0;
@@ -390,7 +401,7 @@ fn log_core_verdict(
 /// the anchor axis already proved, and admitting it only hands
 /// subsumption a wider, byte-divergent view of that clone.
 fn is_container_echo<S: BuildHasher, L: BuildHasher>(
-    pair: &CandidatePair,
+    overlap: f64,
     left: &Fingerprint,
     right: &Fingerprint,
     context: &RescueContext<'_, S, L>,
@@ -399,7 +410,7 @@ fn is_container_echo<S: BuildHasher, L: BuildHasher>(
         return false;
     };
     let larger = left.node_count.max(right.node_count);
-    let shared = pair.shared_subtree_overlap * usize_to_f64(larger);
+    let shared = overlap * usize_to_f64(larger);
     shared - usize_to_f64(claimed) < usize_to_f64(SHARED_SUBTREE_MIN_NODE_COUNT)
 }
 

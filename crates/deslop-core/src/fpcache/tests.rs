@@ -15,7 +15,12 @@ use super::{
     },
     *,
 };
-use crate::{ast::ByteRange, lsh::SIGNATURE_LEN, state::FileRegistry};
+use crate::{
+    ast::ByteRange,
+    lsh::SIGNATURE_LEN,
+    registry_fixtures::{pair_ids, REQUESTED_RS, STORED_RS},
+    state::FileRegistry,
+};
 
 /// Source bytes every binding in these tests addresses.
 const SOURCE: &[u8] = b"pub fn twice(value: i32) -> i32 { value + value }\n";
@@ -101,9 +106,7 @@ fn assert_rejected(blob: &[u8], binding: &BlobBinding<'_>, file_id: FileId, labe
 // signatures positionally 1:1 with fingerprints.
 #[test]
 fn round_trip_preserves_tree_fingerprints_and_signatures() -> io::Result<()> {
-    let mut registry = FileRegistry::new();
-    let stored_file_id = registry.register(PathBuf::from("stored.rs"));
-    let requested_file_id = registry.register(PathBuf::from("requested.rs"));
+    let (stored_file_id, requested_file_id) = pair_ids(STORED_RS, REQUESTED_RS);
     let hash = bytes_hash(SOURCE);
     let binding = source_binding(&hash);
     let original = sample(stored_file_id);

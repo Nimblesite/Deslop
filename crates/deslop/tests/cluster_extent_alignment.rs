@@ -24,8 +24,7 @@
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::go_scope::*;
-use crate::common::*;
+use crate::common::{go_scope::*, *};
 
 /// Fixture whose two modules are a line-for-line identifier rename.
 const EXTENT_FIXTURE: &str = "python-cluster-extent-alignment";
@@ -321,13 +320,7 @@ fn assert_duplicated_loc_within_honest_ceiling(report: &Value, label: &str) {
 /// [METRICS-REPO] `json_report.go` duplicates its two writers and nothing
 /// else, so its per-file `duplicated_loc` is bounded by that run.
 fn assert_json_file_metric_is_bounded(report: &Value, label: &str) -> Result<()> {
-    let duplicated = per_file_metrics(report)
-        .iter()
-        .find(|row| {
-            field(row, "path")
-                .as_str()
-                .is_some_and(|path| path.ends_with(JSON_REPORT))
-        })
+    let duplicated = row_for_path(per_file_metrics(report), JSON_REPORT)
         .map(|row| field(row, "duplicated_loc").as_u64().unwrap_or_default())
         .ok_or_else(|| anyhow::anyhow!("{label}: {JSON_REPORT} has no per-file metric row"))?;
     assert!(

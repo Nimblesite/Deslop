@@ -9,6 +9,97 @@ use anyhow::{anyhow, Result};
 
 use crate::common::clusters::needle_cluster_plan;
 
+/// Twin members every fixture emits, so the needle span occurs exactly
+/// twice — the fewest occurrences a cluster can have.
+const TWIN_COUNT: usize = 2;
+/// Indent of a member inside a C# class body.
+const CSHARP_MEMBER_INDENT: &str = "    ";
+/// Indent of a statement inside a C# method body.
+const CSHARP_BODY_INDENT: &str = "        ";
+/// Indent of a statement inside a Rust function body.
+const RUST_BODY_INDENT: &str = "    ";
+/// Indent of a statement inside a Python `def` body.
+const PYTHON_BODY_INDENT: &str = "    ";
+/// Python and C# put a blank line between sibling definitions.
+const MEMBER_SEPARATOR: &str = "\n";
+/// PEP 8 separates top-level Python definitions by two blank lines.
+const PYTHON_TOP_LEVEL_SEPARATOR: &str = "\n\n";
+/// The twin Rust function names every twin-function fixture emits.
+const RUST_TWIN_NAMES: [&str; TWIN_COUNT] = ["alpha", "beta"];
+
+/// Renders `body` one statement per line at `indent`, leaving blank
+/// lines bare so no fixture carries trailing whitespace.
+fn indented(indent: &str, body: &[&str]) -> String {
+    body.iter()
+        .map(|line| {
+            if line.is_empty() {
+                "\n".to_owned()
+            } else {
+                format!("{indent}{line}\n")
+            }
+        })
+        .collect()
+}
+
+/// One `public int` method of a twin C# class.
+fn csharp_method(name: &str, signature: &str, body: &[&str]) -> String {
+    format!(
+        "{indent}public int {name}({signature})\n{indent}{{\n{statements}{indent}}}\n",
+        indent = CSHARP_MEMBER_INDENT,
+        statements = indented(CSHARP_BODY_INDENT, body),
+    )
+}
+
+/// A C# class whose `methods` share a byte-identical `body`, so the
+/// needle span occurs exactly `TWIN_COUNT` times.
+fn csharp_twin_methods(
+    class: &str,
+    methods: [&str; TWIN_COUNT],
+    signature: &str,
+    body: &[&str],
+) -> String {
+    let members = methods
+        .iter()
+        .map(|name| csharp_method(name, signature, body))
+        .collect::<Vec<_>>()
+        .join(MEMBER_SEPARATOR);
+    format!("public class {class}\n{{\n{members}}}\n")
+}
+
+/// Twin Rust functions sharing a byte-identical `body`.
+fn rust_twin_fns(signature: &str, body: &[&str]) -> String {
+    RUST_TWIN_NAMES
+        .iter()
+        .map(|name| {
+            format!(
+                "fn {name}{signature} {{\n{statements}}}\n",
+                statements = indented(RUST_BODY_INDENT, body),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(MEMBER_SEPARATOR)
+}
+
+/// Twin top-level Python `def`s sharing a byte-identical `body`.
+fn python_twin_defs(names: [&str; TWIN_COUNT], body: &[&str]) -> String {
+    names
+        .iter()
+        .map(|name| {
+            format!(
+                "def {name}():\n{statements}",
+                statements = indented(PYTHON_BODY_INDENT, body),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(PYTHON_TOP_LEVEL_SEPARATOR)
+}
+
+/// Module-scope Python: `prelude` once, then `body` `TWIN_COUNT` times.
+fn python_twin_statements(prelude: &[&str], body: &[&str]) -> String {
+    let repeated: String = (0..TWIN_COUNT).map(|_| indented("", body)).collect();
+    format!("{prelude}{repeated}", prelude = indented("", prelude))
+}
+
 /// Asserts the span `needle` — present twice in `text`, parsed as
 /// `file_name`'s language — refuses the verbatim extract. `subject`
 /// names the write that trips [AUTOFIX-EXTRACT-PRECONDITIONS] rule 7.
@@ -22,21 +113,20 @@ fn assert_refused(text: &str, needle: &str, file_name: &str, subject: &str) -> R
     Ok(())
 }
 
-/// Asserts the span `needle` still extracts because the name it writes
-/// is span-*bound*, and that `expected` is the one free variable that
-/// flows in.
-fn assert_span_bound_extract(
+/// Asserts the span `needle` still extracts, and that its parameter
+/// list is exactly `expected` — empty when nothing flows in.
+fn assert_extracts_with_free_variables(
     text: &str,
     needle: &str,
     file_name: &str,
-    expected: &str,
+    expected: &[&str],
 ) -> Result<()> {
     let plan = needle_cluster_plan(text, needle, file_name)?
         .ok_or_else(|| anyhow!("a span writing only its own binding must extract"))?;
+    let expected: Vec<String> = expected.iter().map(|name| (*name).to_owned()).collect();
     assert_eq!(
-        plan.free_variables,
-        vec![expected.to_owned()],
-        "only `{expected}` flows in; the written `padded` is span-bound, not free"
+        plan.free_variables, expected,
+        "only {expected:?} flows in; the written name is span-bound, not free"
     );
     Ok(())
 }
@@ -45,33 +135,23 @@ fn assert_span_bound_extract(
 /// via compound assignment — extraction must refuse.
 #[test]
 fn csharp_written_free_variable_refused() -> Result<()> {
-    let text = "public class InvoiceMath\n\
-                {\n\
-                \x20   public int TotalWithTax(int[] amounts, int taxRate)\n\
-                \x20   {\n\
-                \x20       var total = 0;\n\
-                \x20       foreach (var amount in amounts)\n\
-                \x20       {\n\
-                \x20           var taxed = amount * taxRate / 100;\n\
-                \x20           total += amount + taxed;\n\
-                \x20       }\n\
-                \x20       return total;\n\
-                \x20   }\n\
-                \n\
-                \x20   public int TotalWithTaxAgain(int[] amounts, int taxRate)\n\
-                \x20   {\n\
-                \x20       var total = 0;\n\
-                \x20       foreach (var amount in amounts)\n\
-                \x20       {\n\
-                \x20           var taxed = amount * taxRate / 100;\n\
-                \x20           total += amount + taxed;\n\
-                \x20       }\n\
-                \x20       return total;\n\
-                \x20   }\n\
-                }\n";
+    let text = csharp_twin_methods(
+        "InvoiceMath",
+        ["TotalWithTax", "TotalWithTaxAgain"],
+        "int[] amounts, int taxRate",
+        &[
+            "var total = 0;",
+            "foreach (var amount in amounts)",
+            "{",
+            "    var taxed = amount * taxRate / 100;",
+            "    total += amount + taxed;",
+            "}",
+            "return total;",
+        ],
+    );
     let needle = "var taxed = amount * taxRate / 100;\n            total += amount + taxed;";
     assert_refused(
-        text,
+        &text,
         needle,
         "InvoiceMath.cs",
         "a span writing free `total`",
@@ -83,110 +163,81 @@ fn csharp_written_free_variable_refused() -> Result<()> {
 /// and written. Extraction must refuse.
 #[test]
 fn python_augmented_assignment_of_free_name_refused() -> Result<()> {
-    let text = "count = 0\n\
-                step = 1\n\
-                count += step\n\
-                total = count * 2\n\
-                count += step\n\
-                total = count * 2\n";
+    let text = python_twin_statements(
+        &["count = 0", "step = 1"],
+        &["count += step", "total = count * 2"],
+    );
     let needle = "count += step\ntotal = count * 2";
-    assert_refused(text, needle, "gate.py", "a span writing free `count`")
+    assert_refused(&text, needle, "gate.py", "a span writing free `count`")
 }
 
 /// Rust: `counter += 1` is a `compound_assignment_expr` writing the
 /// enclosing function's local — extraction must refuse.
 #[test]
 fn rust_compound_assignment_of_free_name_refused() -> Result<()> {
-    let text = "fn alpha(seed: i64) -> i64 {\n\
-                \x20   let mut counter = seed;\n\
-                \x20   counter += 1;\n\
-                \x20   counter += 2;\n\
-                \x20   counter\n\
-                }\n\
-                \n\
-                fn beta(seed: i64) -> i64 {\n\
-                \x20   let mut counter = seed;\n\
-                \x20   counter += 1;\n\
-                \x20   counter += 2;\n\
-                \x20   counter\n\
-                }\n";
+    let text = rust_twin_fns(
+        "(seed: i64) -> i64",
+        &[
+            "let mut counter = seed;",
+            "counter += 1;",
+            "counter += 2;",
+            "counter",
+        ],
+    );
     let needle = "counter += 1;\n    counter += 2;";
-    assert_refused(text, needle, "gate.rs", "a span writing free `counter`")
+    assert_refused(&text, needle, "gate.rs", "a span writing free `counter`")
 }
 
 /// C#: writes to a span-*bound* name (`padded` is declared inside the
 /// span) do not trip rule 7 — the binding vacates with the span.
 #[test]
 fn csharp_write_of_span_bound_name_still_extracts() -> Result<()> {
-    let text = "public class Padding\n\
-                {\n\
-                \x20   public int PadA(int size)\n\
-                \x20   {\n\
-                \x20       var padded = size;\n\
-                \x20       padded += 4;\n\
-                \x20       return padded * 2;\n\
-                \x20   }\n\
-                \n\
-                \x20   public int PadB(int size)\n\
-                \x20   {\n\
-                \x20       var padded = size;\n\
-                \x20       padded += 4;\n\
-                \x20       return padded * 2;\n\
-                \x20   }\n\
-                }\n";
+    let text = csharp_twin_methods(
+        "Padding",
+        ["PadA", "PadB"],
+        "int size",
+        &["var padded = size;", "padded += 4;", "return padded * 2;"],
+    );
     let needle = "var padded = size;\n        padded += 4;\n        return padded * 2;";
-    assert_span_bound_extract(text, needle, "Padding.cs", "size")
+    assert_extracts_with_free_variables(&text, needle, "Padding.cs", &["size"])
 }
 
 /// C#: `total++` mutates the free `total` with no assignment node at
 /// all (`postfix_unary_expression`) — extraction must refuse.
 #[test]
 fn csharp_increment_of_free_name_refused() -> Result<()> {
-    let text = "public class Bumper\n\
-                {\n\
-                \x20   public int BumpA(int seed)\n\
-                \x20   {\n\
-                \x20       var total = seed;\n\
-                \x20       total++;\n\
-                \x20       var report = total * 2;\n\
-                \x20       return report;\n\
-                \x20   }\n\
-                \n\
-                \x20   public int BumpB(int seed)\n\
-                \x20   {\n\
-                \x20       var total = seed;\n\
-                \x20       total++;\n\
-                \x20       var report = total * 2;\n\
-                \x20       return report;\n\
-                \x20   }\n\
-                }\n";
+    let text = csharp_twin_methods(
+        "Bumper",
+        ["BumpA", "BumpB"],
+        "int seed",
+        &[
+            "var total = seed;",
+            "total++;",
+            "var report = total * 2;",
+            "return report;",
+        ],
+    );
     let needle = "total++;\n        var report = total * 2;\n        return report;";
-    assert_refused(text, needle, "Bumper.cs", "an increment of free `total`")
+    assert_refused(&text, needle, "Bumper.cs", "an increment of free `total`")
 }
 
 /// C#: `out total` mutates the free `total` through the callee — no
 /// assignment node, just an argument modifier. Extraction must refuse.
 #[test]
 fn csharp_out_argument_write_of_free_name_refused() -> Result<()> {
-    let text = "public class Parser\n\
-                {\n\
-                \x20   public int ParseA(string text)\n\
-                \x20   {\n\
-                \x20       var total = 0;\n\
-                \x20       int.TryParse(text, out total);\n\
-                \x20       return total * 2;\n\
-                \x20   }\n\
-                \n\
-                \x20   public int ParseB(string text)\n\
-                \x20   {\n\
-                \x20       var total = 0;\n\
-                \x20       int.TryParse(text, out total);\n\
-                \x20       return total * 2;\n\
-                \x20   }\n\
-                }\n";
+    let text = csharp_twin_methods(
+        "Parser",
+        ["ParseA", "ParseB"],
+        "string text",
+        &[
+            "var total = 0;",
+            "int.TryParse(text, out total);",
+            "return total * 2;",
+        ],
+    );
     let needle = "int.TryParse(text, out total);\n        return total * 2;";
     assert_refused(
-        text,
+        &text,
         needle,
         "Parser.cs",
         "an `out` argument writing free `total`",
@@ -197,23 +248,15 @@ fn csharp_out_argument_write_of_free_name_refused() -> Result<()> {
 /// assignment target is not a bare identifier — extraction must refuse.
 #[test]
 fn csharp_tuple_deconstruction_of_free_names_refused() -> Result<()> {
-    let text = "public class Swapper\n\
-                {\n\
-                \x20   public int SwapA(int min, int max)\n\
-                \x20   {\n\
-                \x20       (min, max) = (max, min);\n\
-                \x20       return min - max;\n\
-                \x20   }\n\
-                \n\
-                \x20   public int SwapB(int min, int max)\n\
-                \x20   {\n\
-                \x20       (min, max) = (max, min);\n\
-                \x20       return min - max;\n\
-                \x20   }\n\
-                }\n";
+    let text = csharp_twin_methods(
+        "Swapper",
+        ["SwapA", "SwapB"],
+        "int min, int max",
+        &["(min, max) = (max, min);", "return min - max;"],
+    );
     let needle = "(min, max) = (max, min);\n        return min - max;";
     assert_refused(
-        text,
+        &text,
         needle,
         "Swapper.cs",
         "tuple deconstruction writing free `min`/`max`",
@@ -226,25 +269,15 @@ fn csharp_tuple_deconstruction_of_free_names_refused() -> Result<()> {
 /// contract depends on.
 #[test]
 fn csharp_plain_write_only_target_refused() -> Result<()> {
-    let text = "public class Resetter\n\
-                {\n\
-                \x20   public int ResetA(int seed)\n\
-                \x20   {\n\
-                \x20       var total = seed;\n\
-                \x20       total = 7;\n\
-                \x20       return total + seed;\n\
-                \x20   }\n\
-                \n\
-                \x20   public int ResetB(int seed)\n\
-                \x20   {\n\
-                \x20       var total = seed;\n\
-                \x20       total = 7;\n\
-                \x20       return total + seed;\n\
-                \x20   }\n\
-                }\n";
+    let text = csharp_twin_methods(
+        "Resetter",
+        ["ResetA", "ResetB"],
+        "int seed",
+        &["var total = seed;", "total = 7;", "return total + seed;"],
+    );
     let needle = "total = 7;\n        return total + seed;";
     assert_refused(
-        text,
+        &text,
         needle,
         "Resetter.cs",
         "a write-only plain assignment to free `total`",
@@ -256,22 +289,18 @@ fn csharp_plain_write_only_target_refused() -> Result<()> {
 /// table entry the compound-only test cannot.
 #[test]
 fn rust_plain_assignment_of_free_name_refused() -> Result<()> {
-    let text = "fn alpha(seed: i64) -> i64 {\n\
-                \x20   let mut counter = seed;\n\
-                \x20   counter = counter + 1;\n\
-                \x20   counter = counter + 2;\n\
-                \x20   counter\n\
-                }\n\
-                \n\
-                fn beta(seed: i64) -> i64 {\n\
-                \x20   let mut counter = seed;\n\
-                \x20   counter = counter + 1;\n\
-                \x20   counter = counter + 2;\n\
-                \x20   counter\n\
-                }\n";
+    let text = rust_twin_fns(
+        "(seed: i64) -> i64",
+        &[
+            "let mut counter = seed;",
+            "counter = counter + 1;",
+            "counter = counter + 2;",
+            "counter",
+        ],
+    );
     let needle = "counter = counter + 1;\n    counter = counter + 2;";
     assert_refused(
-        text,
+        &text,
         needle,
         "gate.rs",
         "a plain assignment to free `counter`",
@@ -283,28 +312,26 @@ fn rust_plain_assignment_of_free_name_refused() -> Result<()> {
 /// dies with `SyntaxError` and the outer mutation is lost. Refuse.
 #[test]
 fn python_nonlocal_write_span_refused() -> Result<()> {
-    let text = "def outer_a():\n\
-                \x20   count = 0\n\
-                \n\
-                \x20   def bump():\n\
-                \x20       nonlocal count\n\
-                \x20       count += 1\n\
-                \n\
-                \x20   bump()\n\
-                \x20   return count\n\
-                \n\
-                \n\
-                def outer_b():\n\
-                \x20   count = 0\n\
-                \n\
-                \x20   def bump():\n\
-                \x20       nonlocal count\n\
-                \x20       count += 1\n\
-                \n\
-                \x20   bump()\n\
-                \x20   return count\n";
+    let text = python_twin_defs(
+        ["outer_a", "outer_b"],
+        &[
+            "count = 0",
+            "",
+            "def bump():",
+            "    nonlocal count",
+            "    count += 1",
+            "",
+            "bump()",
+            "return count",
+        ],
+    );
     let needle = "nonlocal count\n        count += 1";
-    assert_refused(text, needle, "gate.py", "a span declaring `nonlocal count`")
+    assert_refused(
+        &text,
+        needle,
+        "gate.py",
+        "a span declaring `nonlocal count`",
+    )
 }
 
 /// Python: `global` survives relocation — a module-scope helper in the
@@ -312,26 +339,10 @@ fn python_nonlocal_write_span_refused() -> Result<()> {
 /// with an empty parameter list.
 #[test]
 fn python_global_write_span_still_extracts() -> Result<()> {
-    let text = "count = 0\n\
-                \n\
-                \n\
-                def bump_a():\n\
-                \x20   global count\n\
-                \x20   count += 1\n\
-                \n\
-                \n\
-                def bump_b():\n\
-                \x20   global count\n\
-                \x20   count += 1\n";
+    let defs = python_twin_defs(["bump_a", "bump_b"], &["global count", "count += 1"]);
+    let text = format!("count = 0\n{PYTHON_TOP_LEVEL_SEPARATOR}{defs}");
     let needle = "global count\n    count += 1";
-    let plan = needle_cluster_plan(text, needle, "gate.py")?
-        .ok_or_else(|| anyhow!("a `global` span must extract — same module, same binding"))?;
-    assert!(
-        plan.free_variables.is_empty(),
-        "`global count` binds `count`, so nothing flows in: {:?}",
-        plan.free_variables
-    );
-    Ok(())
+    assert_extracts_with_free_variables(&text, needle, "gate.py", &[])
 }
 
 /// Python: augmented assignment of a span-bound name does not trip
@@ -339,13 +350,10 @@ fn python_global_write_span_still_extracts() -> Result<()> {
 /// the span.
 #[test]
 fn python_write_of_span_bound_name_still_extracts() -> Result<()> {
-    let text = "base = 3\n\
-                padded = base\n\
-                padded += 4\n\
-                total = padded * 2\n\
-                padded = base\n\
-                padded += 4\n\
-                total = padded * 2\n";
+    let text = python_twin_statements(
+        &["base = 3"],
+        &["padded = base", "padded += 4", "total = padded * 2"],
+    );
     let needle = "padded = base\npadded += 4\ntotal = padded * 2";
-    assert_span_bound_extract(text, needle, "gate.py", "base")
+    assert_extracts_with_free_variables(&text, needle, "gate.py", &["base"])
 }

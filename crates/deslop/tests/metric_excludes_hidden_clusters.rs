@@ -46,11 +46,8 @@ fn duplication_metric_excludes_hidden_clusters() -> Result<()> {
          covered by visible clusters"
     );
 
-    // `clusters_total` counts every cluster the body carries — the
-    // banner always equals `clusters.len()` ([METRICS-REPO]), so a
-    // hidden cluster is excluded by being dropped from the body, never
-    // by a second, divergent count.
-    let expected_clusters = u64::try_from(clusters(&report).len()).unwrap_or(u64::MAX);
+    // [CLONE-BUCKETS-STRUCTURAL-ONLY] Visible informational matches also count as zero.
+    let expected_clusters = u64::try_from(clone_findings(&report).len()).unwrap_or(u64::MAX);
     let reported_clusters = metric_field(&report, "clusters_total")
         .as_u64()
         .unwrap_or(u64::MAX);

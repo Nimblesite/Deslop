@@ -25,10 +25,9 @@
 //! behaviour-equivalent, which lifts their cosine above the floor while
 //! unrelated snippets keep their honest shingle cosine.
 
-use crate::mock_ollama::MockOllama;
 use anyhow::Result;
 
-use crate::common::role_gate::*;
+use crate::{common::role_gate::*, mock_ollama::MockOllama};
 
 /// Source text unique to the Python helper-class body in the
 /// role-mismatch fixture.

@@ -59,19 +59,12 @@ pub fn spawn_lsp(workspace_root: &Path) -> Result<Child> {
 
 /// Acquires child stdio handles after a successful spawn.
 pub fn take_io(child: &mut Child) -> Result<(ChildStdin, BufReader<ChildStdout>, ChildStderr)> {
-    let stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| anyhow!("child stdin missing"))?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| anyhow!("child stdout missing"))?;
+    let (stdin, stdout) = session::take_stdin_stdout(child)?;
     let stderr = child
         .stderr
         .take()
         .ok_or_else(|| anyhow!("child stderr missing"))?;
-    Ok((stdin, BufReader::new(stdout), stderr))
+    Ok((stdin, stdout, stderr))
 }
 
 /// Copies the named fixture into a temp workspace, spawns the LSP against

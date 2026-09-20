@@ -7,15 +7,18 @@
 //! one invocation via `--rerun-touch <PATH>...`, and assert on the
 //! emitted `<base>.delta.json` alongside the normal report outputs.
 
-use std::{ffi::OsStr, fs, path::Path, path::PathBuf};
+use std::{
+    ffi::OsStr,
+    fs,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Result;
 use assert_cmd::Command;
 use predicates::str::contains;
 use serde_json::Value;
 
-use crate::common::scan_dir::temp_scan_dir;
-use crate::common::{rerun_ops::*, *};
+use crate::common::{rerun_ops::*, scan_dir::temp_scan_dir, *};
 
 /// Config body that excludes the `Beta.cs` half of the seeded clone pair.
 const EXCLUDE_BETA: &str = "[defaults]\nexclude = [\"**/Beta.cs\"]\n";
@@ -36,8 +39,7 @@ fn delta_path(dir: &Path) -> PathBuf {
 /// fixture — the mutable Alpha/Beta clone pair the scenarios below edit.
 /// The [`tempfile::TempDir`] comes back so the caller keeps the tree alive.
 fn seeded_root() -> Result<(tempfile::TempDir, PathBuf)> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     seed(&fixture("csharp-small"), &scan_root)?;
     Ok((tmp, scan_root))
 }
@@ -238,9 +240,10 @@ fn issue_189_new_exclude_pattern_drops_existing_corpus_files() -> Result<()> {
         "excluding Beta.cs must remove the Alpha/Beta clone cluster: {delta:#}"
     );
     let report = fs::read_to_string(tmp.path().join("report.json"))?;
-    assert!(
-        !report.contains("Beta.cs"),
-        "generation 1 report must not mention the excluded file"
+    assert_not_contains(
+        &report,
+        "Beta.cs",
+        "generation 1 report must not mention the excluded file",
     );
     Ok(())
 }
@@ -269,9 +272,10 @@ fn issue_189_removed_exclude_pattern_rediscovers_files() -> Result<()> {
         "dropping the exclude must re-discover Beta.cs and surface its cluster: {delta:#}"
     );
     let report = fs::read_to_string(tmp.path().join("report.json"))?;
-    assert!(
-        report.contains("Beta.cs"),
-        "generation 1 report must include the re-included file"
+    assert_contains(
+        &report,
+        "Beta.cs",
+        "generation 1 report must include the re-included file",
     );
     Ok(())
 }

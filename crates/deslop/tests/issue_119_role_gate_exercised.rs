@@ -25,15 +25,17 @@
 
 use std::path::Path;
 
-use crate::mock_ollama::MockOllama;
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::{
-    embeddings::scan_fixture_copy_with_mock,
-    role_gate::*,
-    signals::{assert_no_pair_surface_on_cluster, assert_structural_only_contract},
-    *,
+use crate::{
+    common::{
+        embeddings::scan_fixture_copy_with_mock,
+        role_gate::*,
+        signals::{assert_no_pair_surface_on_cluster, assert_structural_only_contract},
+        *,
+    },
+    mock_ollama::MockOllama,
 };
 
 const NO_HIDDEN_COMPONENTS: u64 = 0;
@@ -154,14 +156,14 @@ fn same_role_pair_clearing_the_embedding_floor_stays_visible() -> Result<()> {
     let root = fixture("dart-issue-119-same-behavior-reachable");
     let server = MockOllama::spawn()?;
     let report = scan_fixture_copy_with_mock(&root, "5", server.endpoint())?;
-    let surviving = clusters(&report);
+    let surviving = clone_findings(&report);
     assert!(
         !surviving.is_empty(),
         "a same-role Dart pair measuring cosine 0.91 against structural 0.91 must \
          surface: two independent signals agree that these accumulate identically, \
          and hiding it is a false negative. Report: {report:#}"
     );
-    for cluster in surviving {
+    for cluster in &surviving {
         let texts = occurrence_texts(&root, cluster)?;
         assert_eq!(
             texts.len(),

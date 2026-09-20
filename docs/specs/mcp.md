@@ -78,7 +78,7 @@ rule). This is the agent-side spelling of [FACET-MODEL]; same wire vocabulary as
 ```text
 languages?:      [enum]   // the core language registry (the #170/#198 anti-drift fix)
 path_contains?:  string
-severities?:     [enum]   // engine-stamped mass severity only
+severities?:     [enum]   // configured diagnostic severity
 min_size?:       integer
 ```
 
@@ -124,7 +124,7 @@ Output (`DuplicatesPage` — the one page wire type, whatever the scope or detai
 ```
 
 `ClusterSummary` (slim — no `occurrences[]`):
-`{ id, rank, rank_band, kind, mass, size_nodes, occurrence_count, language, first_occurrence: { path, start_byte, end_byte, start_line, end_line } }`. `kind` is the engine's folded clone kind ([CLONE-KIND-FOLD]).
+`{ id, rank, kind, mass, size_nodes, occurrence_count, language, first_occurrence: { path, start_byte, end_byte, start_line, end_line } }`. `kind` is the engine's folded clone kind ([CLONE-KIND-FOLD](taxonomy.md#clone-kind-fold-compare-the-actual-members)).
 Line numbers accompany byte offsets because humans reason in lines. The summary's `language` derives
 from the canonical occurrence path via the **core parser registry's** extension map — the single
 source shared with the HTML renderer, so every registered language (Dart included, #164) reports
@@ -212,7 +212,7 @@ The tool description keeps its prevention framing: **"Call BEFORE writing new co
 
 `find-similar` accepts the [MCP-TOOL-FILTERS] block and the uniform `limit` plus `max_occurrences` params.
 
-Output: top-`limit` clusters in report order by duplicated mass ([RANK-MASS-SUM](pipeline.md#rank-mass-sum)), carrying occurrences, mass, and the filter echo. Pair signals, classifications, and explanations are absent; `compare-pair` owns them.
+Output: top-`limit` clusters in report order by duplicated mass ([RANK-MASS-SUM](pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only)), carrying occurrences, mass, and the filter echo. Pair signals, classifications, and explanations are absent; `compare-pair` owns them.
 
 Edge cases:
 

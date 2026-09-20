@@ -18,8 +18,10 @@ use std::{collections::BTreeSet, fs, path::Path};
 
 use anyhow::{Context, Result};
 
-use crate::common::signals::{assert_no_pair_surface_on_cluster, has_verbatim_pair};
-use crate::common::*;
+use crate::common::{
+    signals::{assert_no_pair_surface_on_cluster, has_verbatim_pair},
+    *,
+};
 
 fn cluster_paths(cluster: &serde_json::Value) -> BTreeSet<String> {
     cluster

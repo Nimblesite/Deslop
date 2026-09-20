@@ -17,6 +17,7 @@ use crate::{
     ast::{ByteRange, NormalizedNode},
     fingerprint::{collect_fingerprints, Fingerprint},
     lang::LanguageParser,
+    registry_fixtures::{pair_ids, rust_pair_ids, ABSENT_RS, LEFT_RS, WIDE_LEFT_RS, WIDE_RIGHT_RS},
     state::{FileId, FileRegistry},
 };
 
@@ -65,9 +66,7 @@ pub(super) fn parse_pair(
     left_source: &str,
     right_source: &str,
 ) -> Result<(Parsed, Parsed), String> {
-    let mut registry = FileRegistry::new();
-    let left_id = registry.register(PathBuf::from("left.rs"));
-    let right_id = registry.register(PathBuf::from("right.rs"));
+    let (left_id, right_id) = rust_pair_ids();
     Ok((parse(left_source, left_id)?, parse(right_source, right_id)?))
 }
 
@@ -202,9 +201,7 @@ fn shared_statement_vocabulary_alone_does_not_reach_the_floor() -> Result<(), St
 
 #[test]
 fn an_unresolvable_endpoint_measures_zero() -> Result<(), String> {
-    let mut registry = FileRegistry::new();
-    let file_id = registry.register(PathBuf::from("left.rs"));
-    let other = registry.register(PathBuf::from("absent.rs"));
+    let (file_id, other) = pair_ids(LEFT_RS, ABSENT_RS);
     let left = parse(ACCUMULATE, file_id)?;
     let trees = vec![left.tree];
     let mut measurer = OverlapMeasurer::new(&trees);
@@ -224,9 +221,7 @@ fn an_unresolvable_endpoint_measures_zero() -> Result<(), String> {
 
 #[test]
 fn repeated_measurement_of_one_pair_is_stable() -> Result<(), String> {
-    let mut registry = FileRegistry::new();
-    let left_id = registry.register(PathBuf::from("left.rs"));
-    let right_id = registry.register(PathBuf::from("right.rs"));
+    let (left_id, right_id) = rust_pair_ids();
     let left = parse(ACCUMULATE, left_id)?;
     let right = parse(AGGREGATE_WITH_INSERTION, right_id)?;
     let trees = vec![left.tree, right.tree];
@@ -417,9 +412,7 @@ fn wide_function(name: &str, statements: usize, extra: &str) -> String {
 // files where duplication costs most.
 #[test]
 fn endpoints_past_the_alignment_cap_still_measure_as_shared() -> Result<(), String> {
-    let mut registry = FileRegistry::new();
-    let left_id = registry.register(PathBuf::from("wide_left.rs"));
-    let right_id = registry.register(PathBuf::from("wide_right.rs"));
+    let (left_id, right_id) = pair_ids(WIDE_LEFT_RS, WIDE_RIGHT_RS);
     let left_source = wide_function("accumulate", 260, "");
     let right_source = wide_function("aggregate", 260, "    total = total + 7;\n");
     let left = parse(&left_source, left_id)?;
@@ -704,9 +697,7 @@ fn the_kind_multiset_bound_never_undercuts_the_alignment() -> Result<(), String>
 // cost from the raw candidate population.
 #[test]
 fn a_pair_the_bound_refuses_never_pays_for_an_alignment() -> Result<(), String> {
-    let mut registry = FileRegistry::new();
-    let left_id = registry.register(PathBuf::from("left.rs"));
-    let right_id = registry.register(PathBuf::from("right.rs"));
+    let (left_id, right_id) = rust_pair_ids();
     let left = parse(ACCUMULATE, left_id)?;
     let right = parse(DISJOINT_KINDS, right_id)?;
     let trees = [left.tree, right.tree];
@@ -745,9 +736,7 @@ fn the_rescue_path_agrees_with_the_exact_measure_on_admission() -> Result<(), St
         (ACCUMULATE, DISJOINT_KINDS),
     ];
     for (left_source, right_source) in cases {
-        let mut registry = FileRegistry::new();
-        let left_id = registry.register(PathBuf::from("left.rs"));
-        let right_id = registry.register(PathBuf::from("right.rs"));
+        let (left_id, right_id) = rust_pair_ids();
         let left = parse(left_source, left_id)?;
         let right = parse(right_source, right_id)?;
         let trees = [left.tree, right.tree];

@@ -19,8 +19,7 @@
 //! and this file is its counterweight.** The pair clears the shared-subtree
 //! rescue with corroborating token evidence and therefore joins the closure.
 
-use std::fs;
-use std::path::Path;
+use std::{fs, path::Path};
 
 use crate::common::{
     cluster_size, expect_cluster_spanning, field,
@@ -29,6 +28,7 @@ use crate::common::{
         edit_preserving_offsets, run_store_on, ColdThenWarm,
     },
     metric_field, run_report,
+    scan_dir::temp_scan_dir,
     verdict::loc_as_f64,
     Result,
 };
@@ -107,8 +107,7 @@ fn seed(scan_root: &Path) -> Result<()> {
 // rescue and the anchor-free near-miss router keeps it visible.
 #[test]
 fn a_python_rescued_type3_pair_is_reported_as_nearly_identical() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
+    let (_tmp, scan_root) = temp_scan_dir("src")?;
     seed(&scan_root)?;
     let report = run_report(&scan_root, MIN_NODES)?;
 
@@ -143,8 +142,7 @@ fn assert_pair_verdict(report: &serde_json::Value, label: &str) -> Result<()> {
 // the other's are served from the store, and a revert that full-hits.
 #[test]
 fn the_rescued_pair_keeps_its_verdict_across_the_persistence_matrix() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     seed(&scan_root)?;
     let right_fingerprints = right_file_fingerprint_count(tmp.path())?;
 

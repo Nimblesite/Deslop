@@ -122,7 +122,7 @@ fn a_computed_value_is_not_a_tautology_and_keeps_its_cluster() -> Result<()> {
          clause eating authored data handling: {report:#}"
     );
     assert_eq!(
-        cluster_count(&report),
+        clone_findings(&report).len(),
         COMPUTED_CLUSTERS,
         "{COMPUTED_LABEL}: the three sibling tests are one published cluster: \
          {report:#}"
@@ -134,10 +134,8 @@ fn a_computed_value_is_not_a_tautology_and_keeps_its_cluster() -> Result<()> {
         "{COMPUTED_LABEL}: every one of the three tests must be shown, not a \
          subset a filter trimmed: {report:#}"
     );
-    // [PIPELINE-CLUSTER-CLOSURE] The structural_only bucket is gone; the
-    // wire facts that hold the acceptance: the family is admitted,
-    // mass-honest and clean-surfaced, and its occurrences are byte-distinct
-    // (shape agreement only — the bodies differ).
+    // [CLONE-BUCKETS-STRUCTURAL-ONLY] Only the real clone carries mass.
+    // [PIPELINE-CLUSTER-CLOSURE] Its complete membership remains byte-distinct.
     assert_structural_only_contract(family, COMPUTED_LABEL);
     assert_no_pair_surface_on_cluster(family, COMPUTED_LABEL);
     assert!(

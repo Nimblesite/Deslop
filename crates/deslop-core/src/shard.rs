@@ -26,8 +26,7 @@
 //! repeated alignment being recomputed — so building one per *chunk*
 //! would trade the balance win straight back for lost reuse.
 
-use std::num::NonZeroUsize;
-use std::sync::Mutex;
+use std::{num::NonZeroUsize, sync::Mutex};
 
 /// How many worker threads a sharded stage runs for `items` units of
 /// work, given the fewest units that make a worker worth spawning.

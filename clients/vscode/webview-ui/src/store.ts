@@ -12,12 +12,10 @@ import {
   type ReportCluster,
   type ReportOccurrence,
   type Severity,
-  clusterBand,
+  clusterSeverity,
 } from "../../src/types/report";
 
-// [FACET-REPORT-WEBVIEW] Filters are the mass severity band, the clone
-// kind the engine stamped on the cluster ([CLONE-KIND-FOLD]), and a path
-// glob. Every axis is read off the wire; the webview re-derives nothing.
+// [FACET-MODEL] Filters select reported severity, category and source path.
 export type Filters = {
   severity: Severity | null;
   kind: ClusterKind | null;
@@ -42,14 +40,11 @@ export const lastUpdatedAt = signal<number>(0);
 
 export const clusters = computed<ReportCluster[]>(() => report.value?.clusters ?? []);
 
-// [SEVERITY-BAND] The band is the engine's: it classifies the cluster's
-// rank percentile, which is a calculation, so it is computed once in
-// `report_weight::rank_band` and carried on the wire. This panel used to
-// re-derive it from array position, which rebanded every cluster the
-// moment the list it saw was filtered or projected.
+
+// [SEVERITY-MODEL] Read diagnostic levels from the host's report projection.
 export const severityByClusterId = computed<Map<string, Severity>>(() => {
   const out = new Map<string, Severity>();
-  for (const cluster of clusters.value) out.set(cluster.id, clusterBand(cluster));
+  for (const cluster of clusters.value) out.set(cluster.id, clusterSeverity(cluster));
   return out;
 });
 

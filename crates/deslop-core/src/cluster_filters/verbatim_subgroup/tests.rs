@@ -302,7 +302,12 @@ fn one_location_seen_twice_is_not_a_splittable_family() {
         "two tables, each fingerprinted twice over its own range"
     );
     assert!(
-        splittable_families(&whole, &corpus.fingerprints, &corpus.sources).is_none(),
+        splittable_families(
+            &whole,
+            &corpus.fingerprints,
+            verbatim_families(&whole.members, &corpus.fingerprints, &corpus.sources)
+        )
+        .is_none(),
         "neither table was copied anywhere: each byte-identical group is one \
          location seen twice, and no split of this component is possible"
     );
@@ -324,7 +329,11 @@ fn a_copy_stays_splittable_and_keeps_both_views_of_its_locations() {
     corpus.duplicate_view_of(0);
     let whole = component(corpus.fingerprints.len());
     assert_eq!(
-        splittable_families(&whole, &corpus.fingerprints, &corpus.sources),
+        splittable_families(
+            &whole,
+            &corpus.fingerprints,
+            verbatim_families(&whole.members, &corpus.fingerprints, &corpus.sources)
+        ),
         Some(vec![vec![0, 1, 3]]),
         "the retry table sits in two files, so it covers two locations and a \
          split can act; the second view of member 0 belongs to the family"

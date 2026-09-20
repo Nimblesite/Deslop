@@ -7,22 +7,15 @@
 //! file must be skipped gracefully while the rest of the corpus is still
 //! analysed.
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::fs;
 
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::scan_dir::temp_scan_dir;
-use crate::common::*;
-
-fn report_path(tmp: &Path) -> PathBuf {
-    let mut path = tmp.join("report");
-    let _replaced = path.set_extension("json");
-    path
-}
+use crate::common::{
+    scan_dir::{report_path, temp_scan_dir},
+    *,
+};
 
 #[test]
 fn deeply_nested_dart_file_is_skipped_not_crashed() -> Result<()> {

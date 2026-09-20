@@ -39,8 +39,9 @@ pub fn byte_for_position(source: &str, position: Position) -> usize {
 #[cfg(test)]
 #[allow(clippy::missing_docs_in_private_items)]
 mod tests {
-    use super::*;
     use anyhow::{anyhow, Result};
+
+    use super::*;
 
     #[test]
     fn byte_for_position_inverts_position_for_byte() {

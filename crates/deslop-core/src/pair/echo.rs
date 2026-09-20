@@ -24,11 +24,10 @@
 
 use std::collections::HashMap;
 
+use super::CandidatePair;
 use crate::{
     ast::ByteRange, cluster::scope::DeclarationScopes, fingerprint::Fingerprint, state::FileId,
 };
-
-use super::CandidatePair;
 
 /// One exact clone: the two ranges it occupies in canonical order, and
 /// the nodes it claims.

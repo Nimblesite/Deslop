@@ -1,5 +1,5 @@
 //! Rendered-cluster fixtures for suites that need a report without
-//! running the pipeline ([PIPELINE-DETERMINISM], [SEVERITY-BAND]).
+//! running the pipeline ([PIPELINE-DETERMINISM], [SEVERITY-MODEL]).
 //!
 //! A hand-built [`ReportCluster`] literal was copied into a dozen suites
 //! across three crates. Every wire field a surface reads has to be
@@ -29,8 +29,8 @@ pub const FIXTURE_KIND: ClusterKind = ClusterKind::NearlyIdentical;
 pub struct UniformKind(pub ClusterKind);
 
 impl ClusterKindJudge for UniformKind {
-    fn kind(&self, _members: &[usize]) -> ClusterKind {
-        self.0
+    fn kind(&self, _members: &[usize]) -> Option<ClusterKind> {
+        Some(self.0)
     }
 }
 
@@ -60,9 +60,9 @@ pub fn fixture_cluster(id: &str, occurrences: Vec<ReportOccurrence>) -> ReportCl
     let mut cluster = ReportCluster {
         id: id.to_owned(),
         rank: 1,
-        rank_band: "worst".to_owned(),
+        severity: FIXTURE_KIND.default_diagnostic_severity().to_owned(),
         kind: FIXTURE_KIND,
-        mass: fixture_mass(canonical_node_count, occurrence_count),
+        mass: crate::cluster::duplicate_mass(FIXTURE_KIND, canonical_node_count, occurrence_count),
         canonical_node_count,
         occurrences_total: occurrences.len(),
         occurrences,
@@ -83,14 +83,11 @@ pub fn restamp_fixture(cluster: &mut ReportCluster) {
         .iter()
         .filter(|occurrence| !occurrence.hidden)
         .count();
-    cluster.mass = fixture_mass(cluster.canonical_node_count, cluster.occurrence_count);
-}
-
-/// Computes the canonical fixture mass formula.
-fn fixture_mass(canonical_node_count: usize, occurrence_count: usize) -> u64 {
-    u64::try_from(canonical_node_count)
-        .unwrap_or(u64::MAX)
-        .saturating_mul(u64::try_from(occurrence_count.saturating_sub(1)).unwrap_or(u64::MAX))
+    cluster.mass = crate::cluster::duplicate_mass(
+        cluster.kind,
+        cluster.canonical_node_count,
+        cluster.occurrence_count,
+    );
 }
 
 /// A complete rendered report carrying `clusters` and nothing else —
@@ -111,6 +108,7 @@ pub fn fixture_report(clusters: Vec<ReportCluster>) -> Report {
         clusters_hidden: 0,
         cache_stats: CacheStats::default(),
         metrics: RepoMetrics::default(),
+        routing: crate::config::RoutingTuning::default(),
         schema_doc: String::new(),
         boilerplate_hints: Vec::new(),
         embedding_provenance: None,

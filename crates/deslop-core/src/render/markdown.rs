@@ -28,6 +28,15 @@ fn write_header(out: &mut String, cluster: &ReportCluster) {
         cluster.kind.labels().title,
         cluster.kind.wire_label()
     );
+    if !cluster.kind.is_clone() {
+        let _ = writeln!(
+            out,
+            "\n{}\n\n- matches: `{}`\n",
+            super::INFORMATIONAL_FINDING_NOTE,
+            cluster.occurrence_count
+        );
+        return;
+    }
     let _ = writeln!(out, "- mass: `{}`", cluster.mass);
     let _ = writeln!(out, "- occurrences: `{}`", cluster.occurrence_count);
     let _ = writeln!(
@@ -125,6 +134,21 @@ mod tests {
         assert!(!out.contains("```\n"));
     }
 
+    // [CLONE-BUCKETS-STRUCTURAL-ONLY] Information keeps locations without duplication claims.
+    #[test]
+    fn shape_only_markdown_identifies_information_and_keeps_locations() {
+        const INFORMATION: &str = "Informational — not a clone.";
+        const WEIGHT_FIELD: &str = "- mass:";
+        const MATCH_COUNT: &str = "- matches: `2`";
+        let mut information = cluster();
+        information.kind = crate::buckets::ClusterKind::StructuralOnly;
+        let out = render_cluster_markdown(&information, |_| None);
+        assert!(out.contains(INFORMATION), "{out}");
+        assert!(out.contains(MATCH_COUNT), "{out}");
+        assert!(out.contains(LEFT_PATH) && out.contains(RIGHT_PATH));
+        assert!(!out.contains(WEIGHT_FIELD), "{out}");
+    }
+
     #[test]
     fn known_source_renders_line_column_and_snippet() {
         let body = "alpha\nbeta\ngamma\n".to_owned();
@@ -145,7 +169,7 @@ mod tests {
         ReportCluster {
             id: CLUSTER_ID.to_owned(),
             rank: 1,
-            rank_band: "worst".to_owned(),
+            severity: "warning".to_owned(),
             kind: crate::buckets::ClusterKind::Identical,
             mass: MASS,
             canonical_node_count: CANONICAL_NODES,

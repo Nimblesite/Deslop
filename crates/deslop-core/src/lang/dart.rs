@@ -28,7 +28,7 @@ use crate::{
             emit_merge_helper, plain_call, BraceStyle, HelperDialect, HelperPlacement,
             InsertionPoint,
         },
-        shared::{build_normalised_root, intern_kind, parse_source, IDENTIFIER_KIND, LITERAL_KIND},
+        shared::{build_normalised_root, normalise_kind_with, parse_source},
         LanguageParser,
     },
     refactor::{
@@ -115,26 +115,10 @@ impl LanguageParser for DartParser {
 /// [AUTOFIX-MERGE-SAFETY]: variable definitions, formal parameters,
 /// and `for`-in bindings.
 const BINDING_KINDS: &[BindingKind] = &[
-    BindingKind {
-        node_kind: "initialized_variable_definition",
-        name_field: Some("name"),
-        late_fields: &[],
-    },
-    BindingKind {
-        node_kind: "initialized_identifier",
-        name_field: None,
-        late_fields: &[],
-    },
-    BindingKind {
-        node_kind: "formal_parameter",
-        name_field: Some("name"),
-        late_fields: &[],
-    },
-    BindingKind {
-        node_kind: "for_statement",
-        name_field: Some("name"),
-        late_fields: &[],
-    },
+    BindingKind::new("initialized_variable_definition", Some("name"), &[]),
+    BindingKind::new("initialized_identifier", None, &[]),
+    BindingKind::new("formal_parameter", Some("name"), &[]),
+    BindingKind::new("for_statement", Some("name"), &[]),
 ];
 
 /// Dart identifier-reference recognition. Member names (`.add`),
@@ -153,12 +137,7 @@ const REFERENCE_TABLE: ReferenceTable = ReferenceTable {
 };
 
 /// Nested Dart scopes that open a frame during walks.
-const FRAME_KINDS: &[FrameKind] = &[FrameKind {
-    node_kind: "function_expression",
-    bind_inside_field: None,
-    bind_outside_field: None,
-    bind_first_kinds: &[],
-}];
+const FRAME_KINDS: &[FrameKind] = &[FrameKind::new("function_expression", None, None, &[])];
 
 /// Dart container kinds: statement runs live in blocks, scopes are
 /// function or method declarations, shared parents are classes or the
@@ -178,30 +157,15 @@ const SCOPE_KINDS: ScopeKinds = ScopeKinds {
     // conservatively matches any named leaf under it — including the
     // right-hand side, an accepted over-refusal.
     write_kinds: &[
-        WriteKind {
-            node_kind: "assignment_expression",
-            target_field: Some("left"),
-            marker_tokens: &[],
-            destructuring_kinds: &[],
-        },
-        WriteKind {
-            node_kind: "postfix_expression",
-            target_field: Some("argument"),
-            marker_tokens: &["++", "--"],
-            destructuring_kinds: &[],
-        },
-        WriteKind {
-            node_kind: "unary_expression",
-            target_field: None,
-            marker_tokens: &["++", "--"],
-            destructuring_kinds: &["unary_expression"],
-        },
-        WriteKind {
-            node_kind: "pattern_assignment",
-            target_field: None,
-            marker_tokens: &[],
-            destructuring_kinds: &["pattern_assignment"],
-        },
+        WriteKind::new("assignment_expression", Some("left"), &[], &[]),
+        WriteKind::new("postfix_expression", Some("argument"), &["++", "--"], &[]),
+        WriteKind::new(
+            "unary_expression",
+            None,
+            &["++", "--"],
+            &["unary_expression"],
+        ),
+        WriteKind::new("pattern_assignment", None, &[], &["pattern_assignment"]),
     ],
     relocation_unsafe_kinds: &[],
 };
@@ -211,35 +175,23 @@ const SCOPE_KINDS: ScopeKinds = ScopeKinds {
 /// readability nicety only ([AUTOFIX-MERGE-DEFAULTS]).
 const MERGE_TABLES: MergeTables = MergeTables {
     boundary_kinds: &[
-        BoundaryKind {
-            node_kind: "return_statement",
-            allowed_containers: &[],
-        },
-        BoundaryKind {
-            node_kind: "yield_statement",
-            allowed_containers: &[],
-        },
-        BoundaryKind {
-            node_kind: "await_expression",
-            allowed_containers: &[],
-        },
-        BoundaryKind {
-            node_kind: "break_statement",
-            allowed_containers: &[
+        BoundaryKind::new("return_statement", &[]),
+        BoundaryKind::new("yield_statement", &[]),
+        BoundaryKind::new("await_expression", &[]),
+        BoundaryKind::new(
+            "break_statement",
+            &[
                 "for_statement",
                 "while_statement",
                 "do_statement",
                 "switch_statement",
             ],
-        },
-        BoundaryKind {
-            node_kind: "continue_statement",
-            allowed_containers: &["for_statement", "while_statement", "do_statement"],
-        },
-        BoundaryKind {
-            node_kind: "throw_expression",
-            allowed_containers: &["try_statement"],
-        },
+        ),
+        BoundaryKind::new(
+            "continue_statement",
+            &["for_statement", "while_statement", "do_statement"],
+        ),
+        BoundaryKind::new("throw_expression", &["try_statement"]),
     ],
     literal_types: &[
         ("decimal_integer_literal", "int"),
@@ -313,12 +265,23 @@ fn merge_signature_text(helper_name: &str, parameters: &str) -> String {
 /// returned `&'static str` comes from a fixed placeholder set or is
 /// interned on first sight so downstream hashing is cheap and stable.
 fn normalise_kind(raw: &str) -> Option<&'static str> {
-    match raw {
-        "comment" | "block_comment" | "documentation_block_comment" => None,
-        "identifier" | "identifier_dollar_escaped" | "type_identifier" => Some(IDENTIFIER_KIND),
-        raw if is_literal_kind(raw) => Some(LITERAL_KIND),
-        other => Some(intern_kind(other)),
-    }
+    normalise_kind_with(raw, is_comment_kind, is_identifier_kind, is_literal_kind)
+}
+
+/// Dart trivia.
+fn is_comment_kind(raw: &str) -> bool {
+    matches!(
+        raw,
+        "comment" | "block_comment" | "documentation_block_comment"
+    )
+}
+
+/// Dart identifier leaves, collapsed for Type-2 renamed-clone detection.
+fn is_identifier_kind(raw: &str) -> bool {
+    matches!(
+        raw,
+        "identifier" | "identifier_dollar_escaped" | "type_identifier"
+    )
 }
 
 /// Returns true when `raw` is a Dart literal node collapsed by

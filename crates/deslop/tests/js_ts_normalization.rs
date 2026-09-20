@@ -9,10 +9,12 @@
 
 use anyhow::Result;
 
-use crate::common::signals::{
-    assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
+use crate::common::{
+    signals::{
+        assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
+    },
+    *,
 };
-use crate::common::*;
 
 #[test]
 fn javascript_clone_is_invariant_to_quotes_comments_literals_and_renames() -> Result<()> {

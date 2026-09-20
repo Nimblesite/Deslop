@@ -16,7 +16,7 @@ import * as path from "node:path";
 
 import { scanWithBundledCli, stagedFixturePath, type ScannedFixture } from "../cli.helpers";
 import { KIND_COLOR, KIND_THEME_COLOR } from "../../design";
-import { CLUSTER_KINDS, kindTaxonomy, kindTitle, type ClusterKind } from "../../types/report";
+import { CLUSTER_KINDS, kindTaxonomy, kindTitle, type ClusterKind, type Severity } from "../../types/report";
 import { extensionPackage } from "./package.helpers";
 
 /** The class suffix the HTML report keys each kind's colour on —
@@ -58,6 +58,24 @@ const TEMP_DIR_PREFIX = "deslop-kind-parity-";
 const THEME_COLOR_PREFIX = "deslop.kind.";
 const CLI_TEXT_KIND_KEY = " kind=";
 const RETIRED_NEUTRAL_TITLE = "Duplicate code";
+
+/** [SEVERITY-DESLOP-MAP] The default diagnostic level for each category,
+ * mirroring `ClusterKind::default_diagnostic_severity` in the engine. The
+ * extension never recomputes severity — it publishes what the wire
+ * carries — so this table is the only place a drift between the engine's
+ * resolver and the settings manifest can be caught from the client side. */
+const DEFAULT_SEVERITY: Record<ClusterKind, Severity> = {
+  identical: "warning",
+  nearly_identical: "warning",
+  same_behavior: "information",
+  loosely_similar: "information",
+  structural_only: "none",
+};
+
+/** [SEVERITY-DIAGNOSTICS-STRUCTURAL-ONLY] The one category that is silent
+ * by default, because it is not a clone. */
+const SILENT_KIND: ClusterKind = "structural_only";
+const SILENT_LEVEL: Severity = "none";
 
 /** The staged fixture plus the byte-identical Rust pair, in a scratch root. */
 function parityCorpus(): string {
@@ -111,6 +129,32 @@ suite("clone kind parity with the engine", () => {
     }
   });
 
+  test("every cluster carries the category's default diagnostic level, whatever its mass or rank", () => {
+    // [SEVERITY-DESLOP-MAP] Severity follows the kind and nothing else.
+    // [SEVERITY-MODEL] Mass and rank never select a diagnostic level, so
+    // the heaviest and the lightest cluster of one kind must agree.
+    const byKind = new Map<ClusterKind, Severity[]>();
+    for (const cluster of scanned.clusters) {
+      assert.equal(
+        cluster.severity,
+        DEFAULT_SEVERITY[cluster.kind],
+        `${cluster.kind} must default to ${DEFAULT_SEVERITY[cluster.kind]}, got ${cluster.severity}`,
+      );
+      byKind.set(cluster.kind, [...(byKind.get(cluster.kind) ?? []), cluster.severity]);
+    }
+    assert.ok(byKind.size > 0, `the corpus must fold clusters: ${JSON.stringify(scanned.clusters)}`);
+    for (const [kind, levels] of byKind) {
+      assert.equal(new Set(levels).size, 1, `${kind} must publish one level across every rank: ${levels.join()}`);
+    }
+    const masses = scanned.clusters.map((cluster) => cluster.mass);
+    assert.ok(Math.max(...masses) > 0, "a clone corpus must carry mass, or the rank-independence claim is vacuous");
+    assert.equal(
+      DEFAULT_SEVERITY[SILENT_KIND],
+      SILENT_LEVEL,
+      "shape-only is silent by default because it is not a clone",
+    );
+  });
+
   test("the text report prints every cluster's wire label", () => {
     for (const cluster of scanned.clusters) {
       const row = textRow(scanned.text, cluster.id);
@@ -152,4 +196,24 @@ suite("clone kind parity with the engine", () => {
       assert.ok(colour.description.startsWith(kindTitle(kind)), `${colour.id} must be described by its title`);
     }
   });
+});
+
+// [CLONE-KIND-LABELS] Human names and category order follow the shared spec.
+const EXPECTED_KIND_LABELS: readonly (readonly [ClusterKind, string, string])[] = [
+  ["identical", "Identical code", "Type-1 exact clone"],
+  ["nearly_identical", "Nearly identical code", "Type-2 / close Type-3 clone"],
+  ["same_behavior", "Same behavior, different code", "Type-4 semantic clone"],
+  ["loosely_similar", "Similar code", "Type-3 clone with larger edits"],
+  ["structural_only", "Same shape, different content", "Informational non-clone"],
+];
+suite("clone category presentation", () => {
+  test("category display order places informational shape matches last", () => {
+    assert.deepEqual(CLUSTER_KINDS, EXPECTED_KIND_LABELS.map(([kind]) => kind));
+  });
+  for (const [kind, title, taxonomy] of EXPECTED_KIND_LABELS) {
+    test(kind, () => {
+      assert.equal(kindTitle(kind), title);
+      assert.equal(kindTaxonomy(kind), taxonomy);
+    });
+  }
 });

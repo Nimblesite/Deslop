@@ -14,8 +14,8 @@ use assert_cmd::Command;
 use serde_json::Value;
 
 use crate::common::{
-    call, copy_fixture, handshake, notification, request, send_and_recv, spawn_lsp,
-    spawn_lsp_on_fixture, take_io, wait_for_exit, write_frame,
+    call, copy_fixture, handshake, notification, request, send_and_recv, session::FixtureSession,
+    spawn_lsp, spawn_lsp_on_fixture, take_io, wait_for_exit, write_frame,
 };
 
 // Implements the Shipwright binary contract: every IDE-launched
@@ -53,6 +53,8 @@ fn prints_json_version_contract() -> Result<()> {
 /// Every flag `deslop-lsp` accepts. [LSP-CLI-HELP] Help has to advertise the
 /// complete configurable surface — the same promise `deslop --help` makes in
 /// cli.md — or an agent reading it configures the server wrongly.
+/// The two-file C# workspace these cases are served from.
+const CSHARP_FIXTURE: &str = "csharp-small";
 const ADVERTISED_FLAGS: &[&str] = &[
     "--worker-threads",
     "--nice",
@@ -193,16 +195,14 @@ fn rootless_launch_fails_loudly_with_usage_on_stderr() -> Result<()> {
 
 #[test]
 fn initialize_reports_server_info_version() -> Result<()> {
-    let (_workspace, mut child, mut stdin, mut stdout, _stderr) =
-        spawn_lsp_on_fixture("csharp-small")?;
-    let init = handshake(&mut stdin, &mut stdout)?;
-    assert_eq!(pointer(&init, "/result/serverInfo/name")?, "deslop-lsp");
+    let mut lsp = FixtureSession::open(CSHARP_FIXTURE)?;
+    assert_eq!(pointer(&lsp.init, "/result/serverInfo/name")?, "deslop-lsp");
     assert_eq!(
-        pointer(&init, "/result/serverInfo/version")?,
+        pointer(&lsp.init, "/result/serverInfo/version")?,
         expected_version()
     );
-    let _shutdown = call(&mut stdin, &mut stdout, "shutdown", &Value::Null)?;
-    let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
+    let _shutdown = lsp.call("shutdown", &Value::Null)?;
+    drop(lsp);
     Ok(())
 }
 

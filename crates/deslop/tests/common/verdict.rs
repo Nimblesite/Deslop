@@ -18,7 +18,7 @@ use serde_json::Value;
 use super::{
     assert_occurrence_extents, cluster_size, clusters, clusters_hidden, expect_cluster_spanning,
     field, line_count, metric_field, occurrence_files, occurrence_texts, per_file_metrics, signals,
-    signals::assert_no_pair_surface_on_cluster, signals::has_verbatim_pair,
+    signals::{assert_no_pair_surface_on_cluster, has_verbatim_pair},
     visible_duplicated_lines, Result,
 };
 
@@ -292,8 +292,8 @@ pub(crate) fn expect_only_finding_is_the_pair(
         "{why} the file's one finding is its worst offender: {report:#}"
     );
     assert_eq!(
-        field(cluster, "rank_band").as_str(),
-        Some("worst"),
+        field(cluster, "severity").as_str(),
+        Some("warning"),
         "{why} the only finding sits in the worst band: {cluster:#}"
     );
     assert_eq!(

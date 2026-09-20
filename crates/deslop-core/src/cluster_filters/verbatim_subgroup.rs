@@ -37,7 +37,8 @@
 //!
 //! [CLONE-NOISE-VERBATIM-SUBGROUP-EXACT-BYTES] "Byte-identical" means
 //! the exact source bytes of a member's range — see
-//! [`verbatim_families`].
+//! [`copy_families::verbatim_families`]. Dart widget layouts also use exact
+//! ordered build-body bytes ([CLONE-NOISE-DART-WIDGET-SCAFFOLD]).
 
 use std::{
     collections::{HashMap, HashSet},
@@ -45,14 +46,15 @@ use std::{
     num::NonZeroUsize,
 };
 
+use super::{
+    family::restrict, is_noise_pattern, snippets::ParseCache, spans_multiple_files, NoiseFilter,
+};
 use crate::{fingerprint::Fingerprint, pair::FusedCluster, state::FileId};
 
-use super::{
-    family::{families_by, restrict},
-    is_noise_pattern,
-    snippets::ParseCache,
-    spans_multiple_files, NoiseFilter,
-};
+mod copy_families;
+#[cfg(test)]
+use copy_families::verbatim_families;
+use copy_families::{copy_keys, families_for};
 
 /// Smallest byte-identical family worth keeping, counted in *distinct
 /// occurrences*: one lone occurrence is not a duplicate of anything.
@@ -309,11 +311,7 @@ impl Progress {
 /// per-run log stays small ([PERF-FLUTTER-TODO-OBSERVABILITY]).
 const NOISE_PROGRESS_INTERVAL: usize = 5_000;
 
-/// The replacement clusters for one component, or `None` to keep it as
-/// it is. `None` covers every cheap case first — a component with no
-/// mixed verbatim family needs no re-parse at all — so the noise
-/// filters only run on the components a split could actually change
-/// ([CLONE-NOISE-REPARSE-CACHE]).
+/// Split a convicted component into its proven copied families, or retain it unchanged.
 fn split_one<S: BuildHasher>(
     fused: &FusedCluster,
     fingerprints: &[Fingerprint],
@@ -321,46 +319,26 @@ fn split_one<S: BuildHasher>(
     file_languages: &HashMap<FileId, &'static str, S>,
     cache: &ParseCache,
 ) -> Option<Vec<FusedCluster>> {
-    let families = splittable_families(fused, fingerprints, sources)?;
+    let keys = families_for(fused, fingerprints, sources, file_languages, cache)?;
+    let families = splittable_families(fused, fingerprints, keys)?;
     let members = resolved_members(fused, fingerprints)?;
-    // [CLONE-NOISE-VERBATIM-SUBGROUP]: a component the noise filters
-    // do not suppress is handed on untouched — no split, no member
-    // dropped, no panic. The pairwise admission that built the
-    // closure decides its fate
-    // ([FUSED-STRATEGY-BOUNDED-MAX] step 4).
     let filter = is_noise_pattern(&members, sources, file_languages, cache)?;
-    let keepable: Vec<&Vec<usize>> = families
+    let keepable: Vec<FusedCluster> = families
         .iter()
         .filter(|family| is_copied_family(family, fingerprints, filter))
+        .map(|family| restrict(fused, family))
         .collect();
-    // No family the hatch protects: the component keeps its own shape and
-    // takes the suppression whole, downstream, exactly as it always did.
-    // Emitting an empty run here would drop it before the report could
-    // count it as hidden.
-    (!keepable.is_empty()).then(|| {
-        keepable
-            .iter()
-            .map(|family| restrict(fused, family))
-            .collect()
-    })
+    // Keep unsplittable noise until reporting can account for its suppression.
+    (!keepable.is_empty()).then_some(keepable)
 }
 
-/// The byte-identical families in `fused` a split could act on, or
-/// `None` when no split could change the component — it holds no family
-/// of two or more *distinct occurrences*, or the one it holds already
-/// *is* the whole component.
-///
-/// Answered from the corpus alone, before any re-parse, so the noise
-/// filters only ever run on a component a split could actually change
-/// ([CLONE-NOISE-REPARSE-CACHE]). Whether a family is a *copy* is a
-/// second question, asked in [`is_copied_family`] once the filter that
-/// recognised the component is known.
+/// Keep families with multiple distinct locations, excluding an already homogeneous component.
 fn splittable_families(
     fused: &FusedCluster,
     fingerprints: &[Fingerprint],
-    sources: &HashMap<FileId, Vec<u8>>,
+    candidate_families: Vec<Vec<usize>>,
 ) -> Option<Vec<Vec<usize>>> {
-    let families: Vec<Vec<usize>> = verbatim_families(&fused.members, fingerprints, sources)
+    let families: Vec<Vec<usize>> = candidate_families
         .into_iter()
         .filter(|family| distinct_locations(family, fingerprints) >= MIN_FAMILY_OCCURRENCES)
         .collect();
@@ -445,58 +423,27 @@ fn distinct_locations(family: &[usize], fingerprints: &[Fingerprint]) -> usize {
         .len()
 }
 
-/// Groups the component's members by the exact source bytes their
-/// fingerprint covers ([CLONE-NOISE-VERBATIM-SUBGROUP-EXACT-BYTES]) —
-/// no normalised comparison and no trivia tolerance, so a family whose
-/// members differ in one byte is not a verbatim family at all.
-fn verbatim_families(
-    member_indices: &[usize],
-    fingerprints: &[Fingerprint],
-    sources: &HashMap<FileId, Vec<u8>>,
-) -> Vec<Vec<usize>> {
-    families_by(member_indices, |index| {
-        member_text(index, fingerprints, sources)
-    })
-}
-
-/// The raw source bytes one member's fingerprint covers.
-fn member_text<'a>(
-    index: usize,
-    fingerprints: &[Fingerprint],
-    sources: &'a HashMap<FileId, Vec<u8>>,
-) -> Option<&'a [u8]> {
-    let member = fingerprints.get(index)?;
-    sources
-        .get(&member.file_id)?
-        .get(member.byte_range.start..member.byte_range.end)
-}
-
 #[cfg(test)]
 mod tests;
 
-/// [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] Whether a reported
-/// cluster is the byte-identical copy the escape hatch protects from
-/// `filter`'s suppression: every occurrence shares exact source bytes,
-/// at two or more distinct locations, spanning two files where the
-/// filter demands a cross-file copy.
-pub(crate) fn escapes_as_copy(
+/// [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] Every member must share the same copy
+/// proof and satisfy the filter's location requirements. Widget layout proof uses
+/// the same exact body keys as partitioning; other families use full source bytes.
+pub(crate) fn escapes_as_copy<S: BuildHasher>(
     members: &[Fingerprint],
     sources: &HashMap<FileId, Vec<u8>>,
     filter: NoiseFilter,
+    file_languages: &HashMap<FileId, &'static str, S>,
+    cache: &ParseCache,
 ) -> bool {
-    let texts: Vec<&[u8]> = members
-        .iter()
-        .filter_map(|member| {
-            sources
-                .get(&member.file_id)?
-                .get(member.byte_range.start..member.byte_range.end)
-        })
-        .collect();
-    let Some(first) = texts.first() else {
+    let Some(keys) = copy_keys(members, sources, file_languages, cache) else {
         return false;
     };
-    texts.len() == members.len()
-        && texts.iter().all(|text| text == first)
+    let Some(first) = keys.first() else {
+        return false;
+    };
+    keys.len() == members.len()
+        && keys.iter().all(|key| key == first)
         && members
             .iter()
             .map(|member| {

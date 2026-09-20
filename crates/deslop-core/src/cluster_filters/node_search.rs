@@ -4,8 +4,28 @@
 
 use tree_sitter::Node;
 
-use super::node_intersects_range;
+use super::{enclosing_kind, node_intersects_range, parse_for, Snippet};
 use crate::ast::{named_children, ByteRange};
+
+/// Requires a nonempty run of covered children satisfying the caller's rule.
+/// Shared traversal for [CLONE-NOISE-DART-DATA-TABLE-LITERAL] and Dart fields.
+pub(super) fn covered_children_satisfy(
+    snippet: &Snippet<'_>,
+    parent_kinds: &[&str],
+    predicate: impl FnMut(Node<'_>) -> bool,
+) -> bool {
+    let Some(tree) = parse_for(snippet) else {
+        return false;
+    };
+    let Some(parent) = enclosing_kind(tree.root_node(), snippet.range, parent_kinds) else {
+        return false;
+    };
+    let mut children = named_children(parent)
+        .into_iter()
+        .filter(|child| node_intersects_range(*child, snippet.range))
+        .peekable();
+    children.peek().is_some() && children.all(predicate)
+}
 
 /// Returns true when `node` lies wholly inside `range`.
 pub(super) fn node_enclosed_by_range(node: Node<'_>, range: ByteRange) -> bool {

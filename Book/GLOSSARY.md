@@ -24,7 +24,7 @@ Code whose structure lines up while textual or semantic support is insufficient.
 
 Wire value: `structural_only`.
 
-### Loosely similar code
+### Similar code
 
 Code with weak textual overlap. The UX guidance is: **“Loose textual overlap. Treat as a hint.”** It can lead to a useful investigation, but it does not justify consolidation by itself.
 

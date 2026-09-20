@@ -6,19 +6,7 @@
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import { LiveBubble } from "../../bubble/live";
-import {
-  DEFAULT_BUBBLE_CLUSTER_MASS,
-  PRIMARY_BUBBLE_CLUSTER_ID,
-  bubbleFixture,
-  openLiveDocument,
-  probeCluster as cluster,
-  probeReport as report,
-  renderFullConfidenceBubble,
-  retractCluster,
-  setBubbleMode as setMode,
-  span,
-  FIXTURE_KIND_TITLE,
-} from "./bubble.helpers";
+import { DEFAULT_BUBBLE_CLUSTER_MASS, FIXTURE_KIND_TITLE, PRIMARY_BUBBLE_CLUSTER_ID, openLiveDocument, probeCluster as cluster, probeReport as report, renderFullConfidenceBubble, retractCluster, setBubbleMode as setMode, span, withBubble } from "./bubble.helpers";
 import { reportWithClusters } from "./report.helpers";
 
 const DISMISSIBLE_CLUSTER_ID = "c-dismiss";
@@ -27,8 +15,7 @@ const FIVE_OCCURRENCE_REPORT = 5;
 
 suite("LiveBubble render", () => {
   test("inline mode renders the bubble decoration", async () => {
-    const { capture, bubble } = await bubbleFixture();
-    try {
+    await withBubble({}, ({ capture, bubble }) => {
       bubble.render(capture.editor, span(0), [
         cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_MASS),
       ]);
@@ -63,18 +50,15 @@ suite("LiveBubble render", () => {
         undefined,
         "an empty probe must clear the bubble",
       );
-    } finally {
-      bubble.dispose();
-    }
+    
+    });
   });
 
   test("inline render uses the authoritative report occurrence count for a probe hit", async () => {
     // [VSIX-LIVE-BUBBLE] Issue #26: probe results can be a filtered or
     // broader query shape, but every user-facing surface for the same
     // cluster id must render the occurrence set from the current report.
-    const { capture, bubble } = await bubbleFixture();
-
-    try {
+    await withBubble({}, ({ capture, bubble }) => {
       bubble.render(capture.editor, span(0), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, 100, FIVE_OCCURRENCE_REPORT)]);
       const visible = capture.visible() ?? "";
 
@@ -90,14 +74,12 @@ suite("LiveBubble render", () => {
         "bubble count must not use the live probe occurrence total",
       );
       assert.match(visible, /A\.cs/, "bubble keeps the authoritative representative");
-    } finally {
-      bubble.dispose();
-    }
+    
+    });
   });
 
   test("ghost mode renders the ghost-line decoration", async () => {
-    const { capture, bubble } = await bubbleFixture({ mode: "ghost" });
-    try {
+    await withBubble({ mode: "ghost" }, async ({ capture, bubble }) => {
       bubble.render(capture.editor, span(0), [
         cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_MASS),
       ]);
@@ -133,15 +115,12 @@ suite("LiveBubble render", () => {
         capture.visibleHover() !== undefined,
         "the inline surface restores the hover card",
       );
-    } finally {
-      await setMode("inline");
-      bubble.dispose();
-    }
+    
+    });
   });
 
   test("render without a report is a no-op", async () => {
-    const { store, capture, bubble } = await bubbleFixture({ snapshot: null });
-    try {
+    await withBubble({ snapshot: null }, ({ store, capture, bubble }) => {
       bubble.render(capture.editor, span(0), [cluster("x", 1)]);
 
       assert.equal(
@@ -155,17 +134,14 @@ suite("LiveBubble render", () => {
       store.setSnapshot(report(), 0);
       const visible = renderFullConfidenceBubble(capture, bubble, 0, "c-a");
       assert.match(visible, /×\s*5/, "the report's count renders");
-    } finally {
-      bubble.dispose();
-    }
+    
+    });
   });
 
   test("store delta removing the active cluster clears the bubble", async () => {
     // [VSIX-LIVE-BUBBLE] A removed cluster must clear its bubble immediately
     // on the delta — the bubble must never outlive the cluster in the report.
-    const { store, capture, bubble } = await bubbleFixture({ generation: 1 });
-
-    try {
+    await withBubble({ generation: 1 }, ({ store, capture, bubble }) => {
       const visible = renderFullConfidenceBubble(capture, bubble, 0, "c-a");
       assert.match(visible, /×\s*5/, "seeded on a reported cluster");
 
@@ -176,9 +152,8 @@ suite("LiveBubble render", () => {
         undefined,
         "reportChanged removal must clear a bubble for a removed cluster",
       );
-    } finally {
-      bubble.dispose();
-    }
+    
+    });
   });
 
   // DEFECT E — restored, with the contract settled first. The
@@ -192,9 +167,7 @@ suite("LiveBubble render", () => {
   // `ReportStore` now records `clusters_removed` instead of dropping it —
   // the discriminator is retraction, not absence ([VSIX-STATE-DIRTY]).
   test("a stale probe cannot resurrect a cluster the visible report dropped", async () => {
-    const { store, capture, bubble } = await bubbleFixture({ generation: 1 });
-
-    try {
+    await withBubble({ generation: 1 }, ({ store, capture, bubble }) => {
       renderFullConfidenceBubble(capture, bubble, 0, PRIMARY_BUBBLE_CLUSTER_ID);
 
       retractCluster(store, PRIMARY_BUBBLE_CLUSTER_ID);
@@ -208,9 +181,8 @@ suite("LiveBubble render", () => {
         undefined,
         "a stale probe must not resurrect a cluster the visible report dropped",
       );
-    } finally {
-      bubble.dispose();
-    }
+    
+    });
   });
 
   // The full stale-probe races — a superseded probe rejecting after a newer
@@ -220,8 +192,7 @@ suite("LiveBubble render", () => {
   test("a probe is also discarded when its document moves under it", async () => {
     // The store revision is not the only thing the answer was scoped to: a
     // `findSimilar` reply describes byte offsets in one version of one file.
-    const { store, capture, bubble } = await bubbleFixture({ generation: 1 });
-    try {
+    await withBubble({ generation: 1 }, ({ store, capture, bubble }) => {
       const base = {
         revision: store.current.revision,
         uri: capture.editor.document.uri.toString(),
@@ -240,9 +211,8 @@ suite("LiveBubble render", () => {
         bubble.hasMovedOn(capture.editor.document, { ...base, revision: base.revision - 1 }),
         "an answer captured at an older store revision describes a dead world",
       );
-    } finally {
-      bubble.dispose();
-    }
+    
+    });
   });
 
   test("deslop.bubble.dismissCluster command hides the dismissed cluster from future renders", async () => {
@@ -250,10 +220,9 @@ suite("LiveBubble render", () => {
     // gate admits reported clusters only, and dismissal is per-cluster.
     const dismissed = cluster(DISMISSIBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_MASS);
     const survivor = cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_MASS, 5);
-    const { capture, bubble } = await bubbleFixture({
+    await withBubble({
       snapshot: reportWithClusters([dismissed, survivor]),
-    });
-    try {
+    }, ({ capture, bubble }) => {
       renderFullConfidenceBubble(capture, bubble, 0, DISMISSIBLE_CLUSTER_ID);
 
       bubble.dismissCluster(DISMISSIBLE_CLUSTER_ID);
@@ -273,17 +242,15 @@ suite("LiveBubble render", () => {
       const visible = renderFullConfidenceBubble(capture, bubble, 12, PRIMARY_BUBBLE_CLUSTER_ID);
       assert.match(visible, new RegExp(FIXTURE_KIND_TITLE), "and the survivor keeps its rendered title");
       assert.match(visible, /×\s*5/, "and the survivor keeps its report count");
-    } finally {
-      bubble.dispose();
-    }
+    
+    });
   });
 
   test("deslop.bubble.dismiss command clears the active bubble", async () => {
     const clearable = cluster("c-clear", DEFAULT_BUBBLE_CLUSTER_MASS);
-    const { capture, bubble } = await bubbleFixture({
+    await withBubble({
       snapshot: reportWithClusters([clearable]),
-    });
-    try {
+    }, ({ capture, bubble }) => {
       renderFullConfidenceBubble(capture, bubble, 0, "c-clear");
 
       bubble.dismiss();
@@ -295,9 +262,8 @@ suite("LiveBubble render", () => {
 
       // Plain dismiss is not sticky — it clears, it does not blacklist.
       renderFullConfidenceBubble(capture, bubble, SHORT_SPAN_LENGTH, "c-clear");
-    } finally {
-      bubble.dispose();
-    }
+    
+    });
   });
 
   test("no inlay hint provider remains after render is populated", async () => {

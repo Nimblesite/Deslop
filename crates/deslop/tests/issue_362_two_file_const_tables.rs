@@ -59,20 +59,6 @@ fn render() -> Result<Value> {
     run_report(&fixture("two-file-const-tables").join("src"), MIN_NODES)
 }
 
-/// Per-file duplicated LOC as the report renders it.
-fn duplicated_loc_for(report: &Value, file: &str) -> u64 {
-    per_file_metrics(report)
-        .iter()
-        .find(|metric| {
-            field(metric, "path")
-                .as_str()
-                .is_some_and(|path| path.ends_with(file))
-        })
-        .map_or(0, |metric| {
-            field(metric, "duplicated_loc").as_u64().unwrap_or_default()
-        })
-}
-
 // [CLONE-NOISE-CONSTANT-TABLE] The suppression itself: two unrelated
 // constant tables produce no visible cluster, and — the half a demotion
 // cannot deliver — contribute nothing to the duplication metric.

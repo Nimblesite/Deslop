@@ -155,7 +155,7 @@ fn filter_min_size(filters: &DuplicatesFilters, cluster: &ReportCluster) -> bool
 /// Applies engine-stamped mass severity bands.
 fn filter_severity(filters: &DuplicatesFilters, cluster: &ReportCluster) -> bool {
     match filters.severities.as_ref() {
-        Some(values) => values.iter().any(|value| value == &cluster.rank_band),
+        Some(values) => values.iter().any(|value| value == &cluster.severity),
         None => true,
     }
 }
@@ -194,7 +194,7 @@ fn cluster_summary(cluster: &ReportCluster) -> ClusterSummary {
     ClusterSummary {
         id: cluster.id.clone(),
         rank: cluster.rank,
-        rank_band: cluster.rank_band.clone(),
+        severity: cluster.severity.clone(),
         kind: cluster.kind,
         mass: cluster.mass,
         size_nodes: cluster.canonical_node_count,

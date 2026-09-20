@@ -20,7 +20,7 @@ The copies are strongly alike, but small differences may matter. Inspect those d
 
 Deslop strongly supports only the code shape in this result. Sibling boilerplate can look like a reusable implementation while carrying unrelated content. Read the occurrences before extracting.
 
-### Loosely similar code
+### Similar code
 
 The text overlaps weakly. Treat the group as a hint that can guide search, not as a consolidation plan.
 

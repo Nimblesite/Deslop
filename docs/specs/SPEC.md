@@ -1,12 +1,14 @@
 # Deslop — Research & Spec
 
-This document indexes Deslop's research and design specs. The primary product is an incremental, byte-range-addressable duplicate-code server for editors and AI agents; the same engine powers the one-shot CLI used by CI and cold-cache audits. Explicit pair classification follows [CLONE-BUCKETS]; clusters contain membership and mass.
+This document indexes Deslop's research and design specs. The primary product is an incremental, byte-range-addressable duplicate-code server for editors and AI agents; the same engine powers the one-shot CLI used by CI and cold-cache audits. Explicit pair classification follows [CLONE-BUCKETS](taxonomy.md#clone-buckets-pair-classifications); clusters contain membership and mass.
 
 **Live = Reactive.** Every long-running surface applies each `deslop/reportChanged` generation in the same microtask; removed clusters must disappear from every reader. The CLI is the sole non-reactive surface. See [PRINCIPLES-LIVE-IS-REACTIVE](principles.md#principles-live-is-reactive), [LIVE-NOTIFICATIONS](live.md#live-notifications), and [VSIX-REACTIVITY-INVARIANT](vsix.md#vsix-reactivity-invariant).
 
 The spec is split into topic files for readability and the 500-line file budget. Hierarchical `[GROUP-TOPIC-DETAIL]` IDs (e.g. `[PIPELINE-RANK-WORST-FIRST]`) are stable across the split — `grep -r '\[PIPELINE-' docs/` still finds every reference.
 
-**Pair evidence and cluster mass are separate.** [taxonomy.md §CLONE-BUCKETS](taxonomy.md#clone-buckets) classifies one explicit pair; no pair score appears on a cluster. Every cluster carries a clone kind — the weakest pair classification against its canonical occurrence ([taxonomy.md §CLONE-KIND-FOLD](taxonomy.md#clone-kind-fold)) — and cluster surfaces render membership, [RANK-MASS-SUM], and that kind, titled and coloured from one registry.
+**Definition owners:** [taxonomy.md](taxonomy.md) owns category meanings, names, research mapping, order and category thresholds. [severity.md](severity.md) owns diagnostic levels, defaults and overrides. [pipeline.md](pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only) owns weight and [duplication calculations](pipeline.md#metrics-repo-repo-wide-duplication-metrics). Other specs reference these definitions rather than restating them.
+
+**Status:** the revised category, diagnostic and non-clone exclusion contracts are specified; implementation and acceptance coverage are pending. The existing AST-node mass formula is retained.
 
 **Architecture at a glance.** Every binary is a **thin shell over one shared library** (`deslop-core`). Live analysis is a feature-gated `live` module inside that crate, owned exclusively by `deslop-lsp`. `deslop-mcp` runs no analysis — it delegates reads and compute calls to the running LSP over the local IPC endpoint. A language is added once, in the core, and every shell inherits it. See [live.md §[LIVE-PACKAGING]](live.md) for the full flow chart.
 
@@ -88,7 +90,7 @@ The hot loop — **Developer → VSIX → LSP → `live` module → `update_file
 - [reading-list.md](reading-list.md) — deduplicated bibliography.
 - [live.md](live.md) — `[LIVE-*]` in-process analysis session inside the LSP: lifecycle, watcher, scheduler, state file, IPC socket, delta protocol, `LiveApi` query surface, push notifications.
 - [lsp.md](lsp.md) — `[LSP-*]` Language Server Protocol shell: capabilities, diagnostics, code lens, hover, virtual docs, custom methods.
-- [severity.md](severity.md) — `[SEVERITY-*]` the mass-rank severity model, diagnostics-off-by-default gate, and engine-stamped rank-band projection consumed by lsp.md and vsix.md.
+- [severity.md](severity.md) — `[SEVERITY-*]` diagnostic defaults by kind, user overrides and the master diagnostics gate.
 - [mcp.md](mcp.md) — `[MCP-*]` Model Context Protocol shell: tools, resources, notifications. `find-similar` is the keystone tool for AI agents.
 - [deployment.md](deployment.md) — `[DEPLOY-*]` Deployment Toolkit manifest, executable version contract, editor-host binary resolvers, VSIX / JetBrains package contents, and release gates.
 - [vsix.md](vsix.md) — `[VSIX-*]` VS Code extension: tree view, decorations, embedding-model picker (Ollama integration), status bar, settings, and the cross-surface state/reactivity invariants.
@@ -120,8 +122,8 @@ The hot loop — **Developer → VSIX → LSP → `live` module → `update_file
 | Built-in exclusion scoped to the scan root ([CONFIG-EXCLUDE-BUILTIN]) | ✅ gh #342 | `crates/deslop-core/src/config.rs::corpus_built_in_excluded` |
 | Dependency analysis opt-in ([CONFIG-EXCLUDE-DEPENDENCIES]) | ✅ `[analysis] include_dependencies` | `crates/deslop-core/src/config.rs::dependency_components` |
 | Transitive-closure clustering | ✅ | `crates/deslop-core/src/cluster.rs` |
-| Worst-offenders ranking ([RANK-MASS-SUM]) | ✅ `canonical_nodes × max(visible_members − 1, 0)`, then mass descending and cluster id ascending; no other term | `crates/deslop-core/src/report_weight.rs::reweigh_by_visible_occurrences` |
-| Repo-wide metrics + fail-over threshold ([METRICS-REPO], [EXIT-CODES]) | ✅ exit 3 on breach | `crates/deslop-core/src/report_metrics.rs`, `crates/deslop/src/main.rs` |
+| Worst-offenders ranking ([RANK-MASS-SUM](pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only)) | AST-node mass formula retained; non-clone zero-weight exclusion and separate informational display pending | `crates/deslop-core/src/report_weight.rs`; required coverage in [CLONE-KIND-TESTING](taxonomy.md#clone-kind-testing-required-examples-and-assertions) |
+| Repo-wide metrics + fail-over threshold ([METRICS-REPO](pipeline.md#metrics-repo-repo-wide-duplication-metrics), [EXIT-CODES]) | Clone-only counting required; shape-only exclusion pending | `crates/deslop-core/src/report_metrics.rs`; required CLI coverage in [METRICS-REPO] |
 | Evidence-weighted cluster metric | ❌ prohibited: pair evidence cannot weight a cluster; repo duplication is mechanical duplicated mass | — |
 | Persisted parse processing ([PIPELINE-INCREMENTAL]) | ✅ on by default, `--no-incremental` / `[analysis] incremental = false` opt out — parse stage plus per-fingerprint MinHash signatures, blobs bound to their address by a binding digest ([PIPELINE-INCREMENTAL-INTEGRITY]), pruned under a 2 GiB budget after every full pass ([PIPELINE-INCREMENTAL-RETENTION]) | `crates/deslop-core/src/fpcache.rs` |
 | Incremental analysis ([PIPELINE-INCREMENTAL-ANALYSIS]) | ⏳ signature reuse ✅ (persisted beside fingerprints, validated on hit, pinned by `signature_reuse.rs`); warm/cold equivalence ✅ on both reuse paths (`incremental_equivalence.rs` across processes, `live_session_equivalence.rs` inside one session); remaining downstream stages per gh #383 | `crates/deslop-core/src/pipeline/corpus.rs`, `crates/deslop-core/src/pipeline/signatures.rs` |
@@ -130,11 +132,11 @@ The hot loop — **Developer → VSIX → LSP → `live` module → `update_file
 | LSP server with diagnostics, hover, code lens, custom `deslop/*` methods ([LSP-*]) | ✅ | `crates/deslop-lsp/src/` |
 | MCP server with seven core analysis tools: `find-similar`, `duplicates`, `compare-pair`, `cluster-by-id`, `rescan`, `session`, and `schema-doc` ([MCP-*]) | ⏳ wholesale cutover in [`plans/literal-constant-plan.md`](../plans/literal-constant-plan.md) | `crates/deslop-mcp/src/` |
 | State-file + IPC architecture | ✅ warm-start `live-report.json`, Unix socket, token-gated TCP | `crates/deslop-lsp/tests/state_file_and_ipc.rs`, `crates/deslop-mcp/tests/lsp_integration.rs`, `crates/deslop-mcp/tests/tcp_transport.rs` |
-| Explicit pair classifications ([CLONE-BUCKETS]) and the folded cluster kind ([CLONE-KIND-FOLD]) | ✅ `Identical` / `NearlyIdentical` / `StructuralOnly` / `LooselySimilar` / `SameBehavior` on pairs; the weakest against the canonical occurrence stamped on every cluster | `crates/deslop-core/src/buckets.rs`, `crates/deslop-core/src/pipeline/session/pair_compare/cluster_kind.rs` |
+| Pair classifications and group kinds ([CLONE-BUCKETS], [CLONE-KIND-FOLD](taxonomy.md#clone-kind-fold-compare-the-actual-members)) | Revised [category contract](taxonomy.md) pending implementation | `buckets.rs`, `pipeline/session/pair_compare/cluster_kind.rs`; [CLONE-KIND-TESTING] |
 | Deployment Toolkit manifest ([DEPLOY-*]) | ✅ | `shipwright.json`, `scripts/deployment/verify-*` |
 | VS Code extension ([VSIX-*]) | ✅ v0.1, signal-driven reactivity | `clients/vscode/` (preact-signals wired through `ReportStore`) |
 | JetBrains plugin ([JETBRAINS-*]) | ⏳ scaffold + LSP support; native UX in [`plans/jetbrains-ux-plan.md`](../plans/jetbrains-ux-plan.md) | `clients/jetbrains/` |
-| Type-1 pair proof (autofix prerequisite) | ✅ byte-equivalence routing ([CLONE-BUCKETS-IDENTICAL]), shipped via [#42](https://github.com/Nimblesite/Deslop/issues/42) / PR #63 | `crates/deslop-core/src/buckets.rs` |
+| Type-1 pair proof (autofix prerequisite) | ✅ byte-equivalence routing ([CLONE-BUCKETS-IDENTICAL](taxonomy.md#clone-buckets-identical-identity-needs-source-text)), shipped via [#42](https://github.com/Nimblesite/Deslop/issues/42) / PR #63 | `crates/deslop-core/src/buckets.rs` |
 | Autofix `refactor.extract` for Type-1 ([AUTOFIX-EXTRACT]) | ✅ C# / Rust / Python | `crates/deslop-core/src/refactor/` |
 | Mechanical call-site merge — anti-unification + default params ([AUTOFIX-MERGE]) | ✅ C# / Rust / Dart; Python refuses pending strict-typing detection | `crates/deslop-core/src/refactor/merge/` |
 | Cross-file identical-definition consolidation ([AUTOFIX-CONSOLIDATE]) | ✅ v1.1 Rust sibling modules incl. definition runs + binding-drift gate; conservative limits tracked in [#281](https://github.com/Nimblesite/Deslop/issues/281) | `crates/deslop-core/src/refactor/consolidate/` |

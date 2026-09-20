@@ -27,6 +27,12 @@ set -euo pipefail
 # Executables the VSIX bundles, and which must not be running during a rebuild.
 PROCESS_NAMES=(deslop deslop-lsp deslop-mcp)
 
+# Tests drive the destructive path against a fixture they own: scrubbing the
+# developer's live editor session to prove a contract is not an option.
+if [ -n "${DESLOP_SCRUB_NAMES:-}" ]; then
+  read -r -a PROCESS_NAMES <<< "$DESLOP_SCRUB_NAMES"
+fi
+
 # How long a terminate request is given before survivors are force-killed.
 GRACE_SECONDS=1
 
@@ -59,13 +65,21 @@ request_exit() {
   fi
 }
 
-# True while PID "$1" is still running.
+# True while PID "$1" is still running. A zombie is not: it has already exited
+# and kept only its table entry, so it holds no image, no socket and no file
+# handle, and no signal can clear it — only its parent calling `wait` can. An
+# editor extension that spawns one of these binaries and forgets to reap leaves
+# one behind on every scrub, and `kill -0` reports it alive, so a kill that
+# worked was read as a holdout and `vsix-rebuild` failed with nothing the
+# developer could do about it.
 is_alive() {
   local pid="$1"
   if [ "$IS_WINDOWS" -eq 1 ]; then
     [ -n "$(tasklist /FI "PID eq $pid" /FO CSV /NH 2>/dev/null | grep '^"' || true)" ]
   else
-    kill -0 "$pid" 2>/dev/null
+    local state
+    state="$(ps -o stat= -p "$pid" 2>/dev/null | tr -d '[:space:]')"
+    [ -n "$state" ] && [ "${state#Z}" = "$state" ]
   fi
 }
 
@@ -79,12 +93,16 @@ force_kill() {
   fi
 }
 
-# Every PID matching any bundled name, deduplicated, one per line.
+# Every PID matching any bundled name, deduplicated, one per line. Filtered by
+# the same liveness test the verdict uses, so a corpse is never named as
+# something blocking the rebuild: `pgrep` lists one on Linux, not on macOS.
 matching_pids() {
   local name
   for name in "${PROCESS_NAMES[@]}"; do
     pids_named "$name"
-  done | sort -u | grep -v '^$' || true
+  done | sort -u | grep -v '^$' | while read -r pid; do
+    if is_alive "$pid"; then printf '%s\n' "$pid"; fi
+  done || true
 }
 
 # Echoes back whichever of the given PIDs are still running.

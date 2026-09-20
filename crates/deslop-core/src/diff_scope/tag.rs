@@ -1,9 +1,8 @@
 //! Wire-tag stamping and `--only-changed` filtering
 //! ([OUTPUT-SCHEMA-DIFF-TAGS], [CLI-ARG-ONLY-CHANGED]).
 
-use crate::wire_generated::{Report, ReportCluster, ReportOccurrence};
-
 use super::DiffScope;
+use crate::wire_generated::{Report, ReportCluster, ReportOccurrence};
 
 /// Stamps `in_diff` / `intersects_diff` / `is_newly_introduced` onto
 /// every cluster ([OUTPUT-SCHEMA-DIFF-TAGS]). Tags describe, never
@@ -54,15 +53,24 @@ fn occurrence_in_diff(occurrence: &ReportOccurrence, scope: &DiffScope) -> bool 
 /// `clusters_total + clusters_outside_diff`, which is what the repo
 /// line renders ([METRICS-DIFF-SCOPE]).
 pub fn apply_only_changed(report: &mut Report) {
-    let before = report.clusters.len();
+    let before = report
+        .clusters
+        .iter()
+        .filter(|cluster| cluster.kind.is_clone())
+        .count();
     report
         .clusters
         .retain(|cluster| cluster.intersects_diff == Some(true));
-    report.clusters_outside_diff = Some(before.saturating_sub(report.clusters.len()));
-    report.metrics.clusters_total = report.clusters.len();
+    let retained = report
+        .clusters
+        .iter()
+        .filter(|cluster| cluster.kind.is_clone())
+        .count();
+    report.clusters_outside_diff = Some(before.saturating_sub(retained));
+    report.metrics.clusters_total = retained;
     // Ranks are 1..n of the list the report actually carries, so the
     // engine restamps them here rather than letting a client renumber
-    // from array position ([PIPELINE-RANK-WORST-FIRST], [SEVERITY-BAND]).
+    // from array position ([PIPELINE-RANK-WORST-FIRST], [SEVERITY-MODEL]).
     crate::report_weight::stamp_ranks(&mut report.clusters);
 }
 
@@ -106,6 +114,46 @@ mod tests {
         let mut scope = DiffScope::default();
         scope.insert_lines(PathBuf::from(path), lines);
         scope
+    }
+
+    // [CLONE-BUCKETS-STRUCTURAL-ONLY] Diff summaries count copies, not shape matches.
+    #[test]
+    fn diff_counts_exclude_visible_and_omitted_information() -> Result<()> {
+        let mut report = information_diff_report();
+        apply_only_changed(&mut report);
+        assert_eq!(
+            report.clusters.len(),
+            2,
+            "both touched findings remain inspectable"
+        );
+        assert_eq!(report.metrics.clusters_total, 1);
+        assert_eq!(report.clusters_outside_diff, Some(1));
+        assert_eq!(crate::report_facts::repo_cluster_count(&report), 2);
+        let delta = crate::report_facts::DiffDelta::of(&report).context("diff summary")?;
+        assert_eq!((delta.newly, delta.cross_file, delta.outside), (1, 0, 1));
+        let ranks: Vec<_> = report.clusters.iter().map(|finding| finding.rank).collect();
+        assert_eq!(ranks, vec![1, 0]);
+        Ok(())
+    }
+
+    fn information_diff_report() -> Report {
+        use crate::{buckets::ClusterKind, report_fixtures::fixture_report};
+        const PATHS: [&str; 2] = ["src/new.rs", "src/old.rs"];
+        let kinds = [ClusterKind::Identical, ClusterKind::StructuralOnly];
+        let findings = kinds
+            .into_iter()
+            .flat_map(|kind| {
+                PATHS.map(|path| {
+                    let mut finding = cluster(vec![occurrence(path, 1, 5, false)]);
+                    finding.kind = kind;
+                    finding
+                })
+            })
+            .collect();
+        let mut report = fixture_report(findings);
+        tag_clusters(&mut report.clusters, &scope_with("src/new.rs", [1, 5]));
+        report.metrics.clusters_total = 2;
+        report
     }
 
     // [OUTPUT-SCHEMA-DIFF-TAGS]: a mixed cluster intersects but is not
@@ -177,6 +225,7 @@ mod tests {
             clusters_hidden: 0,
             cache_stats: crate::wire_generated::CacheStats::default(),
             metrics: crate::report_metrics::RepoMetrics::empty(),
+            routing: crate::config::RoutingTuning::default(),
             schema_doc: String::new(),
             boilerplate_hints: Vec::new(),
             embedding_provenance: None,

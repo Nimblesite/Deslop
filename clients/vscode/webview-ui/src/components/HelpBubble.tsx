@@ -20,8 +20,8 @@ export type HelpTopic =
   | "keyboard-shortcuts";
 
 const PANEL_HELP: Record<HelpTopic, string> = {
-  "cluster-id": "Stable identifier for this duplicate-code cluster.",
-  "clone-kind": "The cluster's clone kind: the weakest relation between its first occurrence and any other member, as an explicit pair comparison would report it. Colour follows the kind; the glyph follows the mass rank band.",
+  "cluster-id": "Stable identifier for this finding.",
+  "clone-kind": "Identical, nearly identical and similar code are clones. Same shape, different content is informational and does not count as duplication. Colour shows the category; the glyph shows diagnostic severity.",
   "ai-match": "The embedding pass found a semantic match, not only a syntactic one.",
   rank: "Worst-first position of this cluster in the current report.",
   mass: "This cluster's duplicated mass — the worst-first ranking metric.",

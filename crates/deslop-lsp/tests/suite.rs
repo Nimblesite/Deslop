@@ -33,6 +33,8 @@ mod code_action_refusal;
 mod cpu_throttle_knob;
 #[path = "dependency_reactivity.rs"]
 mod dependency_reactivity;
+#[path = "diagnostics/settings.rs"]
+mod diagnostic_settings;
 #[path = "editor_non_interference.rs"]
 mod editor_non_interference;
 #[path = "embedding_failure_progress.rs"]

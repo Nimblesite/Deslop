@@ -19,12 +19,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::error::CoreError;
-
 use super::{
     parser::{FilePatch, Hunk, HunkLineKind, ParsedDiff},
     DiffScope,
 };
+use crate::error::CoreError;
 
 /// Verifies `parsed` against the corpus and builds the [`DiffScope`].
 ///

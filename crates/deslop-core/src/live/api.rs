@@ -10,17 +10,16 @@ use std::{collections::BTreeMap, path::Path, sync::Arc};
 use async_trait::async_trait;
 use tokio::sync::Mutex;
 
-use crate::{
-    delta::ReportDelta,
-    embedding::{EmbeddingProvider, ProviderRegistry, RegistryError},
-    report::{EmbeddingProvenance, PairComparison, PairComparisonParams, Report, ReportCluster},
-};
-
 use super::{
     embedding_refresh::{run_embedding_refresh, EmbeddingRefreshJob},
     errors::LiveError,
     session::AnalysisSession,
     wire::{EmbeddingModelInfo, FileReport, FindSimilarRequest, FindSimilarResult, SessionConfig},
+};
+use crate::{
+    delta::ReportDelta,
+    embedding::{EmbeddingProvider, ProviderRegistry, RegistryError},
+    report::{EmbeddingProvenance, PairComparison, PairComparisonParams, Report, ReportCluster},
 };
 
 /// Pseudo-provider accepted by `deslop/embeddingSetModel` to disable embeddings.

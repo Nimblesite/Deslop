@@ -11,8 +11,8 @@ use serde_json::Value;
 
 use super::{
     approx, cluster_id, cluster_size, clusters_hidden, expect_cluster_spanning, field,
-    metric_field, occurrences, per_file_metrics, signals::assert_no_pair_surface_on_cluster,
-    visible_duplicated_loc, Result,
+    metric_field, occurrences, per_file_metrics, row_for_path,
+    signals::assert_no_pair_surface_on_cluster, visible_duplicated_loc, Result,
 };
 
 /// Files the seeded corpus contains, as the `u64` the cache counters use.
@@ -166,13 +166,7 @@ fn assert_clone_identity(clone: &Value, label: &str, report: &Value) {
 /// occurrence order cannot mask a swap.
 fn assert_clone_spans(clone: &Value, label: &str) -> Result<()> {
     for (file, start_line, end_line, start_byte, end_byte) in SEEDED_SPANS {
-        let occurrence = occurrences(clone)
-            .iter()
-            .find(|occurrence| {
-                field(occurrence, "path")
-                    .as_str()
-                    .is_some_and(|path| path.ends_with(file))
-            })
+        let occurrence = row_for_path(occurrences(clone), file)
             .ok_or_else(|| anyhow::anyhow!("{label}: no occurrence for {file}: {clone:#}"))?;
         assert_eq!(
             (
