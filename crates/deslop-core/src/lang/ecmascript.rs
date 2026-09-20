@@ -38,7 +38,7 @@ pub(crate) fn normalise_kind(raw: &str) -> Option<&'static str> {
 }
 
 /// Returns true for trivia nodes emitted by the JS / TS grammars.
-fn is_comment_kind(raw: &str) -> bool {
+pub(super) fn is_comment_kind(raw: &str) -> bool {
     matches!(raw, "comment" | "html_comment" | "hash_bang_line")
 }
 

@@ -32,6 +32,10 @@ use crate::{
 /// Stable language identifier reported by [`PhpParser::id`].
 const LANGUAGE_ID: &str = "php";
 
+/// The `<?php` tag every PHP file opens with. It holds no code, so a
+/// generator's banner may follow it ([EXCLUSION-GENERATED-BANNER]).
+const OPENING_TAG_KIND: &str = "php_tag";
+
 /// PHP implementation of [`LanguageParser`].
 #[derive(Debug, Default)]
 pub struct PhpParser;
@@ -55,6 +59,14 @@ impl LanguageParser for PhpParser {
 
     fn grammar(&self) -> tree_sitter::Language {
         tree_sitter_php::LANGUAGE_PHP.into()
+    }
+
+    fn is_comment_kind(&self, kind: &str) -> bool {
+        is_comment_kind(kind)
+    }
+
+    fn is_prologue_kind(&self, kind: &str) -> bool {
+        kind == OPENING_TAG_KIND
     }
 
     fn parse_and_normalize(

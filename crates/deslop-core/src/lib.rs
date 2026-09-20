@@ -50,6 +50,7 @@ pub mod report_boilerplate;
 pub mod report_facts;
 #[cfg(any(test, feature = "test-support"))]
 pub mod report_fixtures;
+mod report_hide;
 pub mod report_location;
 pub mod report_metrics;
 mod report_render;

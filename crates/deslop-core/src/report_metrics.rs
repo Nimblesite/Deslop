@@ -3,12 +3,12 @@
 //!
 //! Computed deterministically from the same cluster set the rendered
 //! [`crate::report::Report`] carries. Hidden occurrences
-//! ([EXCLUSION-CONFIG] `report_hide`) are excluded from the numerator so
-//! a noisy generated-code tier cannot inflate the metric.
+//! ([EXCLUSION-CONFIG] `report_hide`, [EXCLUSION-GENERATED-BANNER]) are
+//! excluded from the numerator so a noisy generated-code tier cannot
+//! inflate the metric.
 
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
-    hash::BuildHasher,
     path::{Path, PathBuf},
 };
 
@@ -22,7 +22,6 @@ pub use crate::wire_generated::{
 };
 use crate::{
     cluster::Cluster,
-    config::ExclusionConfig,
     diff_scope::DiffScope,
     report_render::{relative_to_scan_root, LineIndex, LineIndices},
     state::{FileId, FileRegistry},
@@ -95,7 +94,7 @@ pub type AnalysedLines = HashMap<FileId, u64>;
 /// sibling function with positional args would push the render entry
 /// point past the 7-argument budget.
 #[derive(Debug)]
-pub struct MetricsInputs<'a, S: BuildHasher> {
+pub struct MetricsInputs<'a> {
     /// The clusters that survive into the rendered report — the visible
     /// set after [`crate::report::render_report`] drops report-hidden and
     /// noise / structural-only clusters. The metric counts the same
@@ -103,19 +102,15 @@ pub struct MetricsInputs<'a, S: BuildHasher> {
     /// per-file and repo percentages stay consistent with the cluster list
     /// every surface renders ([METRICS-REPO]).
     pub clusters: &'a [&'a Cluster],
-    /// Per-file source bytes keyed by [`FileId`]. Used to convert
-    /// `byte_range` to line numbers; only read, never mutated.
-    pub sources: &'a HashMap<FileId, Vec<u8>>,
     /// Shared per-file line indexes built once for report rendering and metrics.
     pub line_indices: &'a LineIndices,
-    /// Per-file language id. Required to evaluate per-language
-    /// `report_hide` patterns.
-    pub file_languages: &'a HashMap<FileId, &'static str, S>,
     /// File registry used to resolve `FileId → absolute path`.
     pub registry: &'a FileRegistry,
-    /// `.deslop.toml` policy. Occurrences whose file matches a
-    /// `report_hide` pattern are excluded from the numerator.
-    pub exclusion: &'a ExclusionConfig,
+    /// The files whose occurrences the report hides — decided once,
+    /// where the occurrence rows are built ([EXCLUSION-CONFIG]
+    /// `report_hide`, [EXCLUSION-GENERATED-BANNER]). Their lines are
+    /// excluded from the numerator.
+    pub hidden_files: &'a HashSet<FileId>,
     /// Per-file analysed-line counts accumulated during the corpus
     /// read-pass.
     pub analysed_lines: &'a AnalysedLines,
@@ -134,7 +129,7 @@ pub struct MetricsInputs<'a, S: BuildHasher> {
 /// resolves the threshold layer afterwards and overwrites
 /// `metrics.threshold` in place.
 #[must_use]
-pub fn compute_repo_metrics<S: BuildHasher>(inputs: &MetricsInputs<'_, S>) -> RepoMetrics {
+pub fn compute_repo_metrics(inputs: &MetricsInputs<'_>) -> RepoMetrics {
     let analysed_loc: u64 = inputs.analysed_lines.values().copied().sum();
     let clones: Vec<_> = inputs
         .clusters
@@ -254,9 +249,9 @@ fn folder_prefixes(path: &Path) -> Vec<String> {
 /// beside it, from the same `per_file_lines` sets, so the two figures
 /// can never diverge in projection. Threshold stays `none()`; the CLI
 /// resolves it only under `--only-changed`.
-fn diff_metrics<S: BuildHasher>(
+fn diff_metrics(
     per_file_lines: &HashMap<FileId, BTreeSet<u64>>,
-    inputs: &MetricsInputs<'_, S>,
+    inputs: &MetricsInputs<'_>,
     scope: &DiffScope,
 ) -> DiffMetrics {
     let added_loc = scope.added_line_total();
@@ -281,9 +276,9 @@ fn diff_metrics<S: BuildHasher>(
 /// with every file carrying duplicated lines, so clean files keep exact
 /// percentage denominators. Sorted worst-first by percentage, path
 /// tiebreaker, so the wire order is deterministic.
-fn per_file_metrics<S: BuildHasher>(
+fn per_file_metrics(
     per_file_lines: &HashMap<FileId, BTreeSet<u64>>,
-    inputs: &MetricsInputs<'_, S>,
+    inputs: &MetricsInputs<'_>,
 ) -> Vec<FileMetric> {
     let mut universe: HashSet<FileId> = inputs.analysed_lines.keys().copied().collect();
     universe.extend(per_file_lines.keys().copied());
@@ -298,10 +293,10 @@ fn per_file_metrics<S: BuildHasher>(
 /// Projects one file's analysed and duplicated line counts into a
 /// [`FileMetric`]. Returns `None` when the registry cannot resolve the
 /// file path — a metric row with no location is useless to consumers.
-fn file_metric<S: BuildHasher>(
+fn file_metric(
     file_id: FileId,
     per_file_lines: &HashMap<FileId, BTreeSet<u64>>,
-    inputs: &MetricsInputs<'_, S>,
+    inputs: &MetricsInputs<'_>,
 ) -> Option<FileMetric> {
     let path = relative_to_scan_root(inputs.registry.path(file_id)?, inputs.scan_root);
     let analysed_loc = inputs.analysed_lines.get(&file_id).copied().unwrap_or(0);
@@ -319,9 +314,9 @@ fn file_metric<S: BuildHasher>(
 /// Projects every non-hidden occurrence of `cluster` onto per-file line
 /// sets. Hidden occurrences contribute nothing, so a generated tier
 /// never inflates `duplicated_loc` ([METRICS-REPO]).
-fn fold_cluster_lines<S: BuildHasher>(
+fn fold_cluster_lines(
     cluster: &Cluster,
-    inputs: &MetricsInputs<'_, S>,
+    inputs: &MetricsInputs<'_>,
     per_file_lines: &mut HashMap<FileId, BTreeSet<u64>>,
 ) {
     for member in &cluster.members {
@@ -332,12 +327,12 @@ fn fold_cluster_lines<S: BuildHasher>(
 /// Adds the line range covered by `member` to `per_file_lines` unless
 /// the file is `report_hide`-suppressed or its source bytes are
 /// unavailable.
-fn add_member_lines<S: BuildHasher>(
+fn add_member_lines(
     member: &crate::fingerprint::Fingerprint,
-    inputs: &MetricsInputs<'_, S>,
+    inputs: &MetricsInputs<'_>,
     per_file_lines: &mut HashMap<FileId, BTreeSet<u64>>,
 ) {
-    if occurrence_is_hidden(member.file_id, inputs) {
+    if inputs.hidden_files.contains(&member.file_id) {
         return;
     }
     let Some(line_index) = inputs.line_indices.get(&member.file_id) else {
@@ -349,22 +344,6 @@ fn add_member_lines<S: BuildHasher>(
     for line in start_line..=end_line {
         let _inserted = entry.insert(line);
     }
-}
-
-/// Returns `true` when the occurrence's file is covered by a
-/// `[EXCLUSION-CONFIG]` `report_hide` pattern.
-fn occurrence_is_hidden<S: BuildHasher>(file_id: FileId, inputs: &MetricsInputs<'_, S>) -> bool {
-    let Some(path) = inputs.registry.path(file_id) else {
-        return false;
-    };
-    let language = inputs.file_languages.get(&file_id).copied().unwrap_or("");
-    if inputs.exclusion.is_report_hidden(path, language) {
-        return true;
-    }
-    inputs
-        .sources
-        .get(&file_id)
-        .is_some_and(|source| crate::config::has_generated_header(source))
 }
 
 /// Converts a half-open `[start, end)` byte range into a closed

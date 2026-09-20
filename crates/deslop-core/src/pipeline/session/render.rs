@@ -15,6 +15,7 @@ use std::time::Instant;
 use super::{
     super::{
         config::PipelineConfig,
+        corpus::parser_for_language,
         embedding_pass::{run_embedding_pass, CorpusView},
         signatures::build_cross_language_signatures,
     },
@@ -125,6 +126,7 @@ impl PipelineSession {
             min_nodes: self.min_nodes,
             scan_root: &self.root,
             exclusion: &self.exclusion,
+            parsers: &self.parsers,
             embedding_provenance: embedding_outcome.provenance,
             cache_stats: last_pass_stats,
             sources: &self.sources,
@@ -321,10 +323,8 @@ impl PipelineSession {
         // `chunks_mut` demands a non-zero size — an empty corpus has no
         // jobs at all, and even one job must yield a whole shard.
         let shard = jobs.len().div_ceil(workers).max(1);
-        let mut slots: Vec<Option<crate::ast::NormalizedNode>> = Vec::with_capacity(jobs.len());
-        for _ in 0..jobs.len() {
-            slots.push(None);
-        }
+        let mut slots: Vec<Option<crate::ast::NormalizedNode>> =
+            std::iter::repeat_with(|| None).take(jobs.len()).collect();
         let join_result = std::thread::scope(|scope| {
             let mut handles = Vec::with_capacity(workers);
             for (slot_base, chunk) in slots.chunks_mut(shard).enumerate() {
@@ -337,8 +337,7 @@ impl PipelineSession {
                         let Some((file_id, language, source)) = jobs.get(index).copied() else {
                             continue;
                         };
-                        let Some(parser) = parsers.iter().find(|parser| parser.id() == language)
-                        else {
+                        let Some(parser) = parser_for_language(parsers, language) else {
                             continue;
                         };
                         *slot = Some(parser.parse_and_normalize(source, file_id)?);

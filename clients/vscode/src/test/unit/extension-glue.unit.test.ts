@@ -22,8 +22,13 @@ import { reportWithClusters } from "./report.helpers";
 import { ResolvedBinary } from "../../binary";
 import { occurrence, wireCluster } from "../cluster.helpers";
 import { storeWith } from "./report-store.helpers";
+import { withSavedSetting } from "./tree.helpers";
+import { PATH_SORT_MODE, SORT_BY_SETTING } from "./tree.topOffenders.fixtures";
 
 const GROUP_BY_SETTING_KEY = "topOffenders.groupBy";
+const FILTER_SEVERITIES_SETTING_KEY = "topOffenders.filterSeverities";
+// [VSIX-TOP-OFFENDERS-SORT] Not a sort mode any version ever offered.
+const UNKNOWN_MODE = "nonsense";
 
 function resolvedLsp(): ResolvedBinary {
   return {
@@ -96,24 +101,30 @@ suite("extension activation glue", () => {
     const read = (): vscode.WorkspaceConfiguration =>
       vscode.workspace.getConfiguration("deslop");
     try {
-      // Explicit known values exercise the folder/path/split-on arms.
+      // Explicit known values exercise the folder/filter arms. The sort
+      // setting is retired ([VSIX-TOP-OFFENDERS-SORT]): VS Code refuses to
+      // write an unregistered key, so a value an older version saved is
+      // seeded straight into the workspace settings file.
       await read().update(GROUP_BY_SETTING_KEY, "folder", vscode.ConfigurationTarget.Workspace);
-      await read().update("topOffenders.sortBy", "path", vscode.ConfigurationTarget.Workspace);
-      await read().update("topOffenders.filterSeverities", ["error"], vscode.ConfigurationTarget.Workspace);
-      assert.equal(read().get<string>(GROUP_BY_SETTING_KEY), "folder");
-      syncTopOffendersContext();
+      await read().update(FILTER_SEVERITIES_SETTING_KEY, ["error"], vscode.ConfigurationTarget.Workspace);
+      await withSavedSetting(SORT_BY_SETTING, PATH_SORT_MODE, () => {
+        assert.equal(read().get<string>(GROUP_BY_SETTING_KEY), "folder");
+        assert.equal(read().get<string>(SORT_BY_SETTING), PATH_SORT_MODE, "the legacy sort value is really present");
+        syncTopOffendersContext();
+      });
 
       // Unknown grouping/sort fall back to the spec defaults — the function
       // must coerce rather than propagate the bad value.
-      await read().update(GROUP_BY_SETTING_KEY, "nonsense", vscode.ConfigurationTarget.Workspace);
-      await read().update("topOffenders.sortBy", "nonsense", vscode.ConfigurationTarget.Workspace);
-      await read().update("topOffenders.filterSeverities", ["banana"], vscode.ConfigurationTarget.Workspace);
-      syncTopOffendersContext();
-      assert.equal(read().get<string>(GROUP_BY_SETTING_KEY), "nonsense", "raw config value is untouched");
+      await read().update(GROUP_BY_SETTING_KEY, UNKNOWN_MODE, vscode.ConfigurationTarget.Workspace);
+      await read().update(FILTER_SEVERITIES_SETTING_KEY, ["banana"], vscode.ConfigurationTarget.Workspace);
+      await withSavedSetting(SORT_BY_SETTING, UNKNOWN_MODE, () => {
+        syncTopOffendersContext();
+        assert.equal(read().get<string>(GROUP_BY_SETTING_KEY), UNKNOWN_MODE, "raw config value is untouched");
+        assert.equal(read().get<string>(SORT_BY_SETTING), UNKNOWN_MODE, "a saved legacy sort value is ignored, never rewritten");
+      });
     } finally {
       await read().update(GROUP_BY_SETTING_KEY, undefined, vscode.ConfigurationTarget.Workspace);
-      await read().update("topOffenders.sortBy", undefined, vscode.ConfigurationTarget.Workspace);
-      await read().update("topOffenders.filterSeverities", undefined, vscode.ConfigurationTarget.Workspace);
+      await read().update(FILTER_SEVERITIES_SETTING_KEY, undefined, vscode.ConfigurationTarget.Workspace);
     }
   });
 

@@ -145,6 +145,7 @@ use std::{
 };
 
 pub(crate) use declaration_family::is_single_file_declaration_family;
+pub(crate) use snippets::locked;
 pub use snippets::ParseCache;
 use snippets::{collect_snippets, parse_for, uniform_language, Snippet};
 pub(crate) use structural_families::split_structural_families;

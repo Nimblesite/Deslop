@@ -73,6 +73,10 @@ impl LanguageParser for FSharpParser {
         tree_sitter_fsharp::LANGUAGE_FSHARP.into()
     }
 
+    fn is_comment_kind(&self, kind: &str) -> bool {
+        is_comment_kind(kind)
+    }
+
     fn parse_and_normalize(
         &self,
         source: &[u8],

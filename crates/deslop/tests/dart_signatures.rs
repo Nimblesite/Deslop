@@ -227,7 +227,7 @@ fn dart_signature_only_match_with_differing_bodies_is_suppressed() -> Result<()>
     Ok(())
 }
 
-// [EXCLUSION-CONFIG] #95 — generators that emit no stable file suffix
+// [EXCLUSION-GENERATED-BANNER] #95 — generators that emit no stable file suffix
 // (ffigen/jnigen name FFI output `*_bindings.dart`) are still recognised by
 // the machine-generated banner in the file head and hidden. Both fixture
 // files are byte-identical generated code carrying `AUTO GENERATED FILE,

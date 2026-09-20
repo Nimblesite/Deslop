@@ -486,6 +486,7 @@ impl ReportFixture {
             min_nodes: 15,
             scan_root: &self.scan_root,
             exclusion: &exclusion,
+            parsers: &deslop_core::pipeline::default_parsers(),
             embedding_provenance: Some(EmbeddingProvenance {
                 provider_id: "stub".to_owned(),
                 model_id: "report-fixture".to_owned(),

@@ -72,6 +72,10 @@ impl LanguageParser for DartParser {
         tree_sitter_dart::LANGUAGE.into()
     }
 
+    fn is_comment_kind(&self, kind: &str) -> bool {
+        is_comment_kind(kind)
+    }
+
     fn parse_and_normalize(
         &self,
         source: &[u8],
