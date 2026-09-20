@@ -42,7 +42,7 @@
 
 set -euo pipefail
 
-# [COMPARE-VERSIONS-CONSTANTS] Default behaviour, overridable by environment;
+# [CORPUS-SCORE-COMPARE] Default behaviour, overridable by environment;
 # positional arguments take precedence over both. With COMPARE_TARGET unset the
 # targets are every judged clone register, so the default run is the one that
 # produces a score rather than a description.

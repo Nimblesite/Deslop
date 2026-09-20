@@ -299,36 +299,12 @@ Apply [CLONE-BUCKETS-STRUCTURAL-ONLY] before clone ranking and counting. Require
 
 The single-file hide in [RANK-STRUCTURAL-ONLY] needs a proof that a member is scaffolding. Two window shapes qualify, and both are AST facts about what the fingerprint window *covers* — never a count of cluster members and never a count of statements:
 
-1. **Plural siblings.** The window intersects two or more named members of one
-   declaration container (`class_body`, `declaration_list`, …). Container members
-   are counted rather than per-language declaration node kinds, because
-   tree-sitter-dart has no `method_declaration` at all: a Dart class member is a
-   generic node identified by the `function_body` it carries.
-2. **One forwarding declaration.** The window covers exactly one member whose
-   body is `return <expr>;`, `<binding> = <expr>; return <reads binding>;`, or a
-   bare arrow expression; consists **only** of nodes from a closed declarative
-   allowlist — calls, member access, awaits, literals, payload collections,
-   casts and adapter lambdas; and in which **every call is transport**.
+1. **Plural siblings.** The window intersects two or more named members of one declaration container (`class_body`, `declaration_list`, …). Container members are counted rather than per-language declaration node kinds, because tree-sitter-dart has no `method_declaration` at all: a Dart class member is a generic node identified by the `function_body` it carries.
+2. **One forwarding declaration.** The window covers exactly one member whose body is `return <expr>;`, `<binding> = <expr>; return <reads binding>;`, or a bare arrow expression; consists **only** of nodes from a closed declarative allowlist — calls, member access, awaits, literals, payload collections, casts and adapter lambdas; and in which **every call is transport**.
 
-   A call is transport when it **delegates to a collaborator** — a member-access
-   call whose receiver identifier names an instance field of the enclosing
-   container (a declared field or a `this.x` constructor parameter) or one of the
-   member's own formal parameters — or when it **only consumes what a delegation
-   produced**: it reaches a delegation at all, and every argument it passes
-   derives from one. Delegated data is the result of a delegating call, a local
-   binding whose initialiser reaches one, and the parameters of any callback
-   declared in the body.
+   A call is transport when it **delegates to a collaborator** — a member-access call whose receiver identifier names an instance field of the enclosing container (a declared field or a `this.x` constructor parameter) or one of the member's own formal parameters — or when it **only consumes what a delegation produced**: it reaches a delegation at all, and every argument it passes derives from one. Delegated data is the result of a delegating call, a local binding whose initialiser reaches one, and the parameters of any callback declared in the body.
 
-   Both halves are load-bearing. Containing a call is not forwarding: a pair of
-   one-line siblings that hand different literals to a *sibling helper on the
-   same class* is parameterisable business logic, and a bare identifier callee, a
-   `this.method(...)` self-call and a static `Type.factory(...)` all fail the
-   receiver resolution. Nor is one delegating call a licence for the rest of the
-   body: `client.fetch(order)` followed by `applyMarkup(gross, "standard", 100)`
-   delegates and still hides a liftable pair, because the literals the sibling
-   helper receives are what parameterising it would absorb. A literal, a member
-   parameter, or a bare sibling reference in argument position is the class
-   computing on its own inputs.
+   Both halves are load-bearing. Containing a call is not forwarding: a pair of one-line siblings that hand different literals to a *sibling helper on the same class* is parameterisable business logic, and a bare identifier callee, a `this.method(...)` self-call and a static `Type.factory(...)` all fail the receiver resolution. Nor is one delegating call a licence for the rest of the body: `client.fetch(order)` followed by `applyMarkup(gross, "standard", 100)` delegates and still hides a liftable pair, because the literals the sibling helper receives are what parameterising it would absorb. A literal, a member parameter, or a bare sibling reference in argument position is the class computing on its own inputs.
 
 Shape 2 is what the real #197 surface is. Its `resetX` wrappers are one statement each, so every window covers one declaration and shape 1 can never reach them. They also show why a **call count** cannot stand in for the transport test: every one of them makes two calls — `_getTask(http.deleteMethod(route))` wraps the client call in a sibling helper, and `IndexSettings.fromMap(response.data!)` decodes what came back. Both consume only the client's response, so both are transport, and requiring a single call per body would convict the family this filter exists for.
 

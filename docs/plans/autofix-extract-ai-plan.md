@@ -27,7 +27,7 @@ Reuses the `refactor` module from the Type-1 work; adds AI-specific entry points
 
 MCP wiring:
 
-- `crates/deslop-mcp/src/tools.rs` — register the two new tools. Tool descriptions are prompt engineering per [MCP-AGENT-PROMPT-GUIDANCE]; co-locate them with the existing `find-similar` description for review parity.
+- `crates/deslop-mcp/src/tools/mod.rs` — register the two new tools. Tool descriptions are prompt engineering per [MCP-AGENT-PROMPT-GUIDANCE]; co-locate them with the existing `find-similar` description for review parity.
 - `crates/deslop-mcp/src/protocol.rs` — extend the request / response shapes for the new tools.
 
 ## Phases
@@ -69,7 +69,7 @@ MCP wiring:
 - [ ] Add `crates/deslop-core/src/refactor/scaffold.rs`. Spec ID comments throughout. E2E asserts JSON scaffold against a C# fixture golden.
 - [ ] Add `crates/deslop-core/src/refactor/slots.rs`. Spec ID comments. E2E covers slot-alignment success + arity-mismatch rejection.
 - [ ] Add `crates/deslop-core/src/refactor/apply.rs`. Spec ID comments. E2E covers every validation branch in [AUTOFIX-EXTRACT-AI-VALIDATION].
-- [ ] Add the two new MCP tools to `crates/deslop-mcp/src/tools.rs` and request/response types to `protocol.rs`. Tool descriptions follow [MCP-AGENT-PROMPT-GUIDANCE]. Spec ID comment: `[AUTOFIX-EXTRACT-AI-MCP-TOOLS]`.
+- [ ] Add the two new MCP tools to `crates/deslop-mcp/src/tools/mod.rs` and request/response types to `protocol.rs`. Tool descriptions follow [MCP-AGENT-PROMPT-GUIDANCE]. Spec ID comment: `[AUTOFIX-EXTRACT-AI-MCP-TOOLS]`.
 - [ ] MCP E2E: real `deslop-mcp` binary, fixture workspace, `extract-method-plan` + `extract-method-apply` round-trip, returned `WorkspaceEdit` matches a golden.
 - [ ] Repeat slot-alignment + scaffold + apply + MCP E2E for Rust.
 - [ ] Repeat for Python.

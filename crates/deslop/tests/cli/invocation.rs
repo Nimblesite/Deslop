@@ -1,29 +1,57 @@
 use std::fmt::Write as _;
 
 use super::support::*;
+use crate::common::clusters;
 
+/// The version request ([CLI-INVOCATION-VERSION]).
+const VERSION_FLAG: &str = "--version";
+/// A scan path that does not exist: the version request must not care.
+const MISSING_SCAN_PATH: &str = "no-such-directory";
+/// Both spellings that select the JSON version manifest.
+const JSON_VERSION_FORMS: [&[&str]; 2] = [&["--json"], &["--format", "json"]];
+/// JSON report member counting the files a run analysed.
+const FILES_ANALYSED_FIELD: &str = "files_analysed";
+/// An empty scan root analyses nothing.
+const NO_FILES: u64 = 0;
+
+// Implements [CLI-INVOCATION-VERSION]: the plain line on stdout, an empty
+// stderr, exit 0 — resolved before argument parsing, so a scan path that
+// does not exist changes nothing.
 #[test]
 fn prints_version_and_exits_zero() -> Result<()> {
-    let mut cmd = Command::cargo_bin("deslop")?;
     let expected = format!("deslop {}\n", expected_version());
-    let _assertion = cmd
-        .arg("--version")
-        .assert()
-        .success()
-        .stdout(expected)
-        .stderr("");
+    for leading in [&[][..], &[MISSING_SCAN_PATH][..]] {
+        let _assertion = Command::cargo_bin("deslop")?
+            .args(leading)
+            .arg(VERSION_FLAG)
+            .assert()
+            .success()
+            .stdout(expected.clone())
+            .stderr("");
+    }
     Ok(())
 }
 
+// Implements [CLI-INVOCATION-VERSION]: `--json` and `--format json` both emit
+// the deployment version manifest ([DEPLOY-VERSION-CONTRACT]) as one line.
 #[test]
 fn prints_json_version_contract() -> Result<()> {
-    let output = Command::cargo_bin("deslop")?
-        .args(["--version", "--json"])
-        .output()?;
-    assert!(output.status.success(), "status was {}", output.status);
-    let value: Value = serde_json::from_slice(&output.stdout)?;
-    assert_version_manifest(&value, "deslop", "cli");
-    assert!(output.stderr.is_empty(), "stderr must stay empty");
+    for form in JSON_VERSION_FORMS {
+        let output = Command::cargo_bin("deslop")?
+            .arg(VERSION_FLAG)
+            .args(form)
+            .output()?;
+        assert!(output.status.success(), "status was {}", output.status);
+        let stdout = String::from_utf8(output.stdout)?;
+        assert_eq!(
+            stdout.trim_end().lines().count(),
+            1,
+            "{form:?} must emit a single-line manifest: {stdout}"
+        );
+        let value: Value = serde_json::from_str(&stdout)?;
+        assert_version_manifest(&value, "deslop", "cli");
+        assert!(output.stderr.is_empty(), "stderr must stay empty");
+    }
     Ok(())
 }
 
@@ -50,6 +78,7 @@ fn prints_help_and_mentions_min_nodes_flag() -> Result<()> {
         .stdout(contains("--nohtml"))
         .stdout(contains("--from-report"))
         .stdout(contains("--config"))
+        .stdout(contains(NO_INCREMENTAL_FLAG))
         .stdout(contains("--embeddings"))
         .stdout(contains("--embedding-provider"))
         .stdout(contains("--embedding-model"))
@@ -115,6 +144,16 @@ fn accepts_path_argument_without_panicking() -> Result<()> {
     assert!(out.json.exists(), "json missing at {}", out.json.display());
     assert!(out.txt.exists(), "txt missing at {}", out.txt.display());
     assert!(out.html.exists(), "html missing at {}", out.html.display());
+    let report = read_json_report(&out.json)?;
+    assert!(
+        clusters(&report).is_empty(),
+        "an empty scan root must render a zero-cluster report: {report:#}"
+    );
+    assert_eq!(
+        field(&report, FILES_ANALYSED_FIELD).as_u64(),
+        Some(NO_FILES),
+        "an empty scan root analyses no file: {report:#}"
+    );
     Ok(())
 }
 

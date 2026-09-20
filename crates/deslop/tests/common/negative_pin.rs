@@ -365,20 +365,10 @@ fn published_summary(report: &Value) -> Vec<(&str, u64, Vec<String>)> {
         .collect()
 }
 
-/// The contract for a family the detector **demotes but does not yet
-/// hide**. Same two sides — the control must still be visible — but the
-/// family half is stated as what is true today rather than what should
-/// be: every cluster over the family is labelled shape-only, none of
-/// none of them makes a duplication claim, and there are exactly
-/// `expected_demoted` of them.
-///
-/// The exact count is what makes this a pin rather than a shrug: a
-/// *new* family cluster fails it, and so does an existing one climbing
-/// into a duplicate bucket. `expected_hidden` holds the same bar for the
-/// suppression counter, for the reason [`assert_family_hidden`] gives.
-/// The residual itself is recorded against its issue in each caller's
-/// module doc, so a reader can tell a known, bounded gap from a passing
-/// test.
+/// The contract for a family the content gate rejects at admission rather
+/// than a filter hiding at render. Same two sides as
+/// [`assert_suppressed_family`]: the family publishes no cluster, and the
+/// control must still be visible.
 pub(crate) fn assert_family_demoted_with_control(
     report: &Value,
     label: &str,
@@ -404,27 +394,4 @@ fn clusters_over_family<'a>(report: &'a Value, family_files: &[&str]) -> Vec<&'a
                 .any(|file| family_files.contains(&file.as_str()))
         })
         .collect()
-}
-
-/// A family the tool cannot act on stays outside every duplication
-/// claim: the mass-only wire gives it no bucket, no verdict, and no
-/// pair-only surface, and the report must carry it untruncated and
-/// unhidden.
-fn assert_each_family_cluster_is_demoted(over_family: &[&Value], label: &str) {
-    for cluster in over_family {
-        assert_no_pair_surface_on_cluster(cluster, label);
-        assert!(
-            !occurrences(cluster).iter().any(occurrence_is_hidden),
-            "{label}: a reported family cluster may not hide an occurrence — {id}: {dump}",
-            id = cluster_id(cluster),
-            dump = signal_dump(cluster),
-        );
-        assert_eq!(
-            field(cluster, "occurrence_count").as_u64().unwrap_or(0),
-            field(cluster, "occurrences_total").as_u64().unwrap_or(0),
-            "{label}: a reported family cluster must be carried untruncated — {id}: {dump}",
-            id = cluster_id(cluster),
-            dump = signal_dump(cluster),
-        );
-    }
 }

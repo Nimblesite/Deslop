@@ -95,7 +95,7 @@ Matching ancestors was gh #342: a checkout at `~/build/myrepo` (or under `dist`,
 
 **Unknown boundary.** When no scan root is bound, or the path lies outside it, the rule does not fire. That direction can only admit a file for analysis; it can never silently discard one. Every discovery path binds its root: batch discovery ([PIPELINE-DISCOVER-FILES]), incremental session updates, and the live watcher ([live.md §LIVE-WATCHER](live.md#live-watcher-file-watcher)). The latter two have neither a hidden-directory filter nor a `.gitignore` pass, so this rule is their only built-in filter and a missing root would silently widen what they analyse.
 
-Code: `crates/deslop-core/src/config.rs::corpus_built_in_excluded`. Tests: `crates/deslop/tests/issue_342_scan_root_under_excluded_ancestor.rs`, `crates/deslop/tests/go_vendor_exclusion.rs`.
+Code: `crates/deslop-core/src/config/builtin.rs::corpus_built_in_excluded`. Tests: `crates/deslop/tests/issue_342_scan_root_under_excluded_ancestor.rs`, `crates/deslop/tests/go_vendor_exclusion.rs`.
 
 ### [CONFIG-EXCLUDE-DEPENDENCIES] Analysing dependencies
 
@@ -110,7 +110,7 @@ Opt-in: `include_dependencies = true` stops the dependency list applying, admitt
 
 The artefact components apply under either setting — "analyse the libraries I depend on" is not "analyse my compiler output". The setting is global for the run and orthogonal to scan-root ancestry: a checkout that merely lives under a directory named `vendor` behaves identically to one that does not, under either value.
 
-Code: `crates/deslop-core/src/config.rs::dependency_components`. Tests: `crates/deslop/tests/config_include_dependencies.rs`.
+Code: `crates/deslop-core/src/config/builtin.rs::dependency_components`. Tests: `crates/deslop/tests/config_include_dependencies.rs`.
 
 ### [CONFIG-CROSS-LANGUAGE] Cross-language comparison
 The same `.deslop.toml` file controls whether clone candidates may span different parser language ids.

@@ -2,27 +2,17 @@
 
 ## Scope
 
-The JetBrains plugin ships as **one LSP4IJ artifact** (`deslop-lsp4ij`) covering
-Android Studio, IntelliJ Community, and — with LSP4IJ installed — Rider / Ultimate.
-It must reach **full feature parity with the VS Code extension** (`clients/vscode`).
-Today it does not: it is a thin LSP bridge plus an HTML-report tool window. This
-file is the authoritative gap list so the next pass has the complete checklist.
+The JetBrains plugin ships as **one LSP4IJ artifact** (`deslop-lsp4ij`) covering Android Studio, IntelliJ Community, and — with LSP4IJ installed — Rider / Ultimate. It must reach **full feature parity with the VS Code extension** (`clients/vscode`). Today it does not: it is a thin LSP bridge plus an HTML-report tool window. This file is the authoritative gap list so the next pass has the complete checklist.
 
 The plugin must stay thin. Kotlin owns editor integration, settings UI, tool windows, and context-menu actions only. Clone detection, mass ranking, report schema, diagnostic severity, exact pair comparison, and embedding-model discovery stay in Rust behind the LSP custom methods (`deslop/reportGet`, `deslop/comparePair`, `deslop/embeddingListModels`, …). Kotlin never infers or selects pair evidence for a cluster. Do not port the VSIX webviews and do not parse hover markdown to recover structured data.
 
 ## Landed
 
 - Single LSP4IJ artifact; the native-LSP (`deslop-ultimate`) build was removed.
-- `since-build = 243` (IntelliJ 2024.3 / Android Studio Meerkat) so the plugin
-  actually loads in shipping Android Studio. Compiled against IDEA Community 2024.3.
-- Editor diagnostics + **Problems** entries (`source = "deslop"`) and the LSP4IJ
-  **Language Servers** status surface, via the LSP — parity with the VSIX
-  diagnostics channel.
-- **Deslop** tool window (right stripe) hosting the engine HTML report in a JCEF
-  browser, with a toolbar **Refresh** and the `Tools → Deslop: Open HTML Report`
-  action, both behind the shared `DeslopReportRenderer` seam.
-- `DeslopPluginDescriptorTest` pins the tool window / service / action / server
-  registrations so the visible surfaces can't silently disappear.
+- `since-build = 243` (IntelliJ 2024.3 / Android Studio Meerkat) so the plugin actually loads in shipping Android Studio. Compiled against IDEA Community 2024.3.
+- Editor diagnostics + **Problems** entries (`source = "deslop"`) and the LSP4IJ **Language Servers** status surface, via the LSP — parity with the VSIX diagnostics channel.
+- **Deslop** tool window (right stripe) hosting the engine HTML report in a JCEF browser, with a toolbar **Refresh** and the `Tools → Deslop: Open HTML Report` action, both behind the shared `DeslopReportRenderer` seam.
+- `DeslopPluginDescriptorTest` pins the tool window / service / action / server registrations so the visible surfaces can't silently disappear.
 
 ## Feature parity matrix (VSIX → IntelliJ)
 
@@ -50,20 +40,13 @@ The plugin must stay thin. Kotlin owns editor integration, settings UI, tool win
 
 ## TODO (priority order)
 
-- [ ] **Copy Context For AI** context-menu action (+ the copy-location/snippet
-      family) on the editor and any tree rows — closes the CLAUDE.md hard-rule gap.
-- [ ] `Duplicate Clusters` tool window (or extra tabs on **Deslop**): Top Offenders
-      tab consuming `deslop/reportGet` order, with grouping / sort / split-by-language
-      / collapse-expand-refresh toolbar parity.
+- [ ] **Copy Context For AI** context-menu action (+ the copy-location/snippet family) on the editor and any tree rows — closes the CLAUDE.md hard-rule gap.
+- [ ] `Duplicate Clusters` tool window (or extra tabs on **Deslop**): Top Offenders tab consuming `deslop/reportGet` order, with grouping / sort / split-by-language / collapse-expand-refresh toolbar parity.
 - [ ] Duplication (metrics) tab and Session tab.
 - [ ] Navigation from rows to source occurrences; neutral cluster detail view containing identity, occurrence membership, canonical extent, mass, and rank only.
 - [ ] Native rich hover fed by a custom LSP method (no markdown parsing).
 - [ ] Explicit two-occurrence compare via the IDE diff viewer; never infer comparison endpoints from a cluster.
-- [ ] Native embedding model picker backed by `deslop/embeddingListModels`;
-      persist via the shared settings contract + `deslop/embeddingSetModel`;
-      surface refresh progress without blocking typing.
+- [ ] Native embedding model picker backed by `deslop/embeddingListModels`; persist via the shared settings contract + `deslop/embeddingSetModel`; surface refresh progress without blocking typing.
 - [ ] IDE settings page exposing the `deslop.*` contract (parity with VSIX config).
 - [ ] Severity colour channel + selected-cluster synchronisation.
-- [ ] Bump the Gradle `jvmToolchain` to 21 to match the 2024.3 platform's preferred
-      Java (currently 17 — builds and runs, but `verifyPluginProjectConfiguration`
-      warns). Requires a JDK 21 on dev machines / CI (CI already uses 21).
+- [ ] Bump the Gradle `jvmToolchain` to 21 to match the 2024.3 platform's preferred Java (currently 17 — builds and runs, but `verifyPluginProjectConfiguration` warns). Requires a JDK 21 on dev machines / CI (CI already uses 21).

@@ -133,11 +133,13 @@ lang: zh
 
 ## Open 操作
 
-Open 会将 VS Code 移动到该出现位置并选中克隆范围。
+点击文件链接即可打开该出现位置并选中代码范围，无需单独的 Open 按钮。
 
 ## Compare 操作
 
-Compare 会打开 VS Code 的差异编辑器，将所选出现位置与规范出现位置进行对比。它在规范行上被禁用，因为将锚点与其自身比较不会显示有用的信息。
+点击 **Compare To Canonical**，左侧显示规范出现位置，右侧显示当前行。规范行会标注 Canonical，且不能与自身比较。
+
+要比较簇内任意两个出现位置，先在一行点击 **Select for Compare**，再在另一行点击 **Compare with Selected**。**Clear Selection** 取消选择。比较完成或切换簇后，选择会清除。
 
 ## 簇导航
 
@@ -153,3 +155,9 @@ Previous cluster 和 Next cluster 会在与 Top Offenders 视图相同的最严�
 | `n` / `p` | 移动到下一个或上一个簇。 |
 | `Enter` | 打开聚焦的出现位置。 |
 | `?` | 切换详细的键盘帮助。 |
+
+## Top Offenders 分组
+
+使用统一的分组按钮选择 **Clone Category**（克隆类别）、**Folder**（文件夹）、**Language**（语言）、**File**（文件）或 **No Grouping**（不分组）。所有模式均按重复权重从高到低显示，不再提供单独的排序或语言分组按钮。
+
+帮助按钮在悬停或键盘聚焦时立即显示带格式的 Markdown 说明。按 **Escape** 关闭帮助。技术细节默认折叠，出现位置列表共用一处帮助说明。

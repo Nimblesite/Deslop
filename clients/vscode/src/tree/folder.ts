@@ -8,7 +8,7 @@ import { FileAgg, fileNodeWithChildren, groupByFile, worstCluster } from "./grou
 import { FolderNode, Node } from "./nodes";
 import { baseName, displayPath } from "./paths";
 import { buildPathTree, countLeaves, PathTree } from "./pathTree";
-import { compareWeightedPath, SortBy, WeightedPath } from "./sort";
+import { compareWeightedPath, WeightedPath } from "./sort";
 
 interface BuiltChild {
   weighted: WeightedPath;
@@ -20,18 +20,18 @@ interface BuiltChild {
 }
 
 /** Roots are top-level folders; each expands into sub-folders and
- * FileNodes. Single-child folder chains are path-compressed. The active
- * sort axis orders every level; global rank is untouched. */
-export function buildFolderMode(clusters: ReportCluster[], sortBy: SortBy): Node[] {
+ * FileNodes. Single-child folder chains are path-compressed. Every level
+ * stays highest weight first; global rank is untouched. */
+export function buildFolderMode(clusters: ReportCluster[]): Node[] {
   const files = groupByFile(clusters);
   const tree = buildPathTree(files, (file) => displayPath(file.path));
-  return childrenOf(tree, sortBy).map((child) => child.node);
+  return childrenOf(tree).map((child) => child.node);
 }
 
 /** Builds and sorts the folder + file children of one trie node,
- * interleaving them by the active sort axis. */
-function childrenOf(tree: PathTree<FileAgg>, sortBy: SortBy): BuiltChild[] {
-  const children: BuiltChild[] = tree.folders.flatMap((folder) => folderChild(folder, sortBy));
+ * interleaving them by descending weight. */
+function childrenOf(tree: PathTree<FileAgg>): BuiltChild[] {
+  const children: BuiltChild[] = tree.folders.flatMap(folderChild);
   for (const file of tree.leaves) {
     children.push({
       weighted: {
@@ -43,7 +43,7 @@ function childrenOf(tree: PathTree<FileAgg>, sortBy: SortBy): BuiltChild[] {
       node: fileNodeWithChildren(file),
     });
   }
-  const compare = compareWeightedPath(sortBy);
+  const compare = compareWeightedPath();
   children.sort((left, right) => compare(left.weighted, right.weighted));
   return children;
 }
@@ -52,8 +52,8 @@ function childrenOf(tree: PathTree<FileAgg>, sortBy: SortBy): BuiltChild[] {
  * descendant weight total. A folder with no cluster beneath it cannot
  * exist — the trie is built from files that carry clusters — so an empty
  * one yields no row rather than an invented zero. */
-function folderChild(folder: PathTree<FileAgg>, sortBy: SortBy): BuiltChild[] {
-  const children = childrenOf(folder, sortBy);
+function folderChild(folder: PathTree<FileAgg>): BuiltChild[] {
+  const children = childrenOf(folder);
   const worst = worstCluster(children.map((child) => child.worst));
   if (!worst) return [];
   const massTotal = children.reduce((sum, child) => sum + child.weighted.massTotal, 0);

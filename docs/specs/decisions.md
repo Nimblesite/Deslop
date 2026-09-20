@@ -32,44 +32,13 @@ Ship both passes. Sibling-extension runs first because it is cheaper and produce
 
 ### [DECISION-LITERALS] Literal & constant duplication is a first-class finding family
 
-**Why it was missing.** The original research grounding sampled one lineage — academic
-fragment-clone detection (Baxter, Chilowicz, SourcererCC, NiCad, Roy/Cordy Type-1..4) — whose unit
-of analysis is the code fragment. Duplicate-literal findings live in a parallel industrial lineage
-(PMD `AvoidDuplicateLiterals`, SonarSource S1192/S109, Checkstyle `MagicNumber`, ESLint
-`no-magic-numbers`, goconst) that the landscape survey in [comparison.md](comparison.md) never sampled. Two
-pipeline mechanisms then made literals structurally undetectable, each sufficient alone:
-[PIPELINE-NORMALIZE-AST] rewrites every literal to `__literal__` before any fingerprint exists, and
-[DECISION-MIN-NODES] floors fingerprinting at 30 nodes while a literal is a 1-node leaf. The
-exclusion was an inherited blind spot, never a recorded decision — this file held exactly three
-decisions and zero mention of literals — and the blind spot was reinforced every time literal-driven
-repetition leaked through and was answered with a suppression (`data` demotion, structural-only
-demotion, the #61→#169 cluster-filter lineage), encoding "literal repetition = false positive"
-instead of "missing finding family".
+**Why it was missing.** The original research grounding sampled one lineage — academic fragment-clone detection (Baxter, Chilowicz, SourcererCC, NiCad, Roy/Cordy Type-1..4) — whose unit of analysis is the code fragment. Duplicate-literal findings live in a parallel industrial lineage (PMD `AvoidDuplicateLiterals`, SonarSource S1192/S109, Checkstyle `MagicNumber`, ESLint `no-magic-numbers`, goconst) that the landscape survey in [comparison.md](comparison.md) never sampled. Two pipeline mechanisms then made literals structurally undetectable, each sufficient alone: [PIPELINE-NORMALIZE-AST] rewrites every literal to `__literal__` before any fingerprint exists, and [DECISION-MIN-NODES] floors fingerprinting at 30 nodes while a literal is a 1-node leaf. The exclusion was an inherited blind spot, never a recorded decision — this file held exactly three decisions and zero mention of literals — and the blind spot was reinforced every time literal-driven repetition leaked through and was answered with a suppression (`data` demotion, structural-only demotion, the #61→#169 cluster-filter lineage), encoding "literal repetition = false positive" instead of "missing finding family".
 
-**The decision.** Ship the value-level family per [literals.md](literals.md): capture literal
-identity as a side-channel during the existing walk (never weaken the `__literal__` collapse — Type-2
-depends on it), classify **outside** Type-1..4 via the category axis ([CLONE-CATEGORY-REGISTRY](taxonomy.md#clone-category-registry-other-finding-kinds)),
-and keep [DECISION-MIN-NODES] intact for fragment clones with this family as the documented
-carve-out (size floors guard structural matching, not value indexing — micro-clone literature shows
-sub-floor fragments carry *more* maintenance burden, not less).
+**The decision.** Ship the value-level family per [literals.md](literals.md): capture literal identity as a side-channel during the existing walk (never weaken the `__literal__` collapse — Type-2 depends on it), classify **outside** Type-1..4 via the category axis ([CLONE-CATEGORY-REGISTRY](taxonomy.md#clone-category-registry-other-finding-kinds)), and keep [DECISION-MIN-NODES] intact for fragment clones with this family as the documented carve-out (size floors guard structural matching, not value indexing — micro-clone literature shows sub-floor fragments carry *more* maintenance burden, not less).
 
-**Evidence-pinned defaults** (sources in [reading-list.md](reading-list.md#read-list-literals)):
-duplicate **strings** ship on by
-default (S1192 is the only literal rule any major vendor enables by default, across four languages
-incl. Dart); magic **numbers** ship opt-in (unanimous vendor verdict: S109 in no default profile,
-ESLint rule frozen, clippy's standing refusal, go-mnd opt-in); string threshold 3 occurrences /
-5 content chars (Sonar + goconst; PMD's 4 is the outlier); numeric ignore set `{-1, 0, 1, 2}` ∪
-`{0.0, 1.0}` (the convergent core of every shipping allowlist); constant-drift ranking grounding is
-**transferred by inference** from Engler SOSP 2001 / CP-Miner / Juergens ICSE 2009 — no direct study
-of named-constant divergence exists. Defaults only ship enabled while the [LITERAL-CENSUS] gate
-holds; the census numbers are recorded here.
+**Evidence-pinned defaults** (sources in [reading-list.md](reading-list.md#read-list-literals)): duplicate **strings** ship on by default (S1192 is the only literal rule any major vendor enables by default, across four languages incl. Dart); magic **numbers** ship opt-in (unanimous vendor verdict: S109 in no default profile, ESLint rule frozen, clippy's standing refusal, go-mnd opt-in); string threshold 3 occurrences / 5 content chars (Sonar + goconst; PMD's 4 is the outlier); numeric ignore set `{-1, 0, 1, 2}` ∪ `{0.0, 1.0}` (the convergent core of every shipping allowlist); constant-drift ranking grounding is **transferred by inference** from Engler SOSP 2001 / CP-Miner / Juergens ICSE 2009 — no direct study of named-constant divergence exists. Defaults only ship enabled while the [LITERAL-CENSUS] gate holds; the census numbers are recorded here.
 
-**Census tuning procedure** (mirrors the [DECISION-MIN-NODES] procedure): run with default config
-over the reference corpora (this repository's crates + the multi-language fixture corpus); classify
-each literal finding kind's top 20 results as signal or noise; adjust the [LITERAL-NOISE] floors and ignore
-sets and re-run until the [LITERAL-CENSUS] bound holds; record the corpus signature (repo, commit,
-LOC, language mix) and per-category counts next to this decision so the calibration is
-reproducible.
+**Census tuning procedure** (mirrors the [DECISION-MIN-NODES] procedure): run with default config over the reference corpora (this repository's crates + the multi-language fixture corpus); classify each literal finding kind's top 20 results as signal or noise; adjust the [LITERAL-NOISE] floors and ignore sets and re-run until the [LITERAL-CENSUS] bound holds; record the corpus signature (repo, commit, LOC, language mix) and per-category counts next to this decision so the calibration is reproducible.
 
 ### [DECISION-MCP-SURFACE] Seven core MCP analysis tools
 

@@ -21,14 +21,15 @@ import {
   Node,
 } from "./nodes";
 import { displayPath, representativePath } from "./paths";
-import { compareWeightedPath, SortBy } from "./sort";
+import { languageForPath, languageDisplayName } from "../types/languages";
+import { compareWeightedPath } from "./sort";
 
-export type GroupBy = "cluster" | "file" | "folder" | "kind";
+export type GroupBy = "cluster" | "file" | "folder" | "kind" | "language";
 
 /** Normalizes a persisted groupBy value. Unknown / missing values fall
  * back to `"cluster"` — never panic ([VSIX-TOP-OFFENDERS-GROUPING]). */
 export function normalizeGroupBy(raw: string | undefined): GroupBy {
-  return raw === "file" || raw === "folder" || raw === "kind" ? raw : "cluster";
+  return raw === "file" || raw === "folder" || raw === "kind" || raw === "language" ? raw : "cluster";
 }
 
 /** A file and the clusters within it, plus the two impact keys its row
@@ -65,48 +66,16 @@ function totalMass(clusters: ReportCluster[]): number {
 // applies between equally weighted clusters.
 const byRank = compareClusterRank;
 
-// Shared display ordering for cluster mode and kind mode: impact
-// keeps the report's worst-first order; path re-orders by representative
-// file path with the engine's rank as the tie-break
-// ([VSIX-TOP-OFFENDERS-SORT]).
-function ordered(clusters: ReportCluster[], sortBy: SortBy): ReportCluster[] {
-  if (sortBy !== "path") return clusters;
-  return clusters
-    .slice()
-    .sort(
-      (left, right) =>
-        representativePath(left).localeCompare(representativePath(right)) || byRank(left, right),
-    );
+// [VSIX-TOP-OFFENDERS-CLUSTER-MODE] Cluster roots keep engine rank.
+export function buildClusterMode(clusters: ReportCluster[]): Node[] {
+  return clusters.map((cluster) => new ClusterNode(cluster, { showFile: true }));
 }
 
-// [VSIX-TOP-OFFENDERS-CLUSTER-MODE] Roots are clusters. The sort axis
-// orders the DISPLAY: impact keeps the report's worst-first order; path
-// orders by representative file path. The global rank #N is the engine's
-// and stays stable regardless of display order
-// ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]). Sorting is presentation-only — it
-// never re-fetches or re-analyses ([VSIX-VIEW-STATE-UI-ONLY]).
-export function buildClusterMode(clusters: ReportCluster[], sortBy: SortBy): Node[] {
-  return ordered(clusters, sortBy).map((cluster) => new ClusterNode(cluster, { showFile: true }));
-}
-
-// [VSIX-TOP-OFFENDERS-SORT] Orders a cluster's occurrences for display
-// under the active sort axis, preserving each occurrence's ORIGINAL index
-// so the canonical badge (index 0) and "occurrence N of M" labels stay
-// identity-stable. impact keeps the report's canonical order; path orders
-// by file path then byte offset.
+// [VSIX-TOP-OFFENDERS-SORT] Keep canonical occurrence order and identity.
 export function orderedOccurrences(
   cluster: ReportCluster,
-  sortBy: SortBy,
 ): { occurrence: ReportOccurrence; index: number }[] {
-  const entries = cluster.occurrences.map((occurrence, index) => ({ occurrence, index }));
-  if (sortBy === "path") {
-    entries.sort(
-      (left, right) =>
-        left.occurrence.path.localeCompare(right.occurrence.path) ||
-        left.occurrence.start_byte - right.occurrence.start_byte,
-    );
-  }
-  return entries;
+  return cluster.occurrences.map((occurrence, index) => ({ occurrence, index }));
 }
 
 /** Buckets clusters by their representative file into {@link FileAgg}
@@ -125,12 +94,10 @@ export function groupByFile(clusters: ReportCluster[]): FileAgg[] {
   });
 }
 
-// [VSIX-TOP-OFFENDERS-FILE-MODE] Roots are files. The sort axis orders
-// them: impact = worst-cluster mass desc (total desc, path); path =
-// relative path localeCompare. Each file expands to KindGroupNodes.
-export function buildFileMode(clusters: ReportCluster[], sortBy: SortBy): Node[] {
+// [VSIX-TOP-OFFENDERS-FILE-MODE] File roots sort by weight descending.
+export function buildFileMode(clusters: ReportCluster[]): Node[] {
   const files = groupByFile(clusters);
-  const compare = compareWeightedPath(sortBy);
+  const compare = compareWeightedPath();
   files.sort((left, right) =>
     compare(
       { path: displayPath(left.path), mass: left.worst.mass, massTotal: left.massTotal },
@@ -154,17 +121,7 @@ export function fileNodeWithChildren(file: FileAgg): FileNode {
 // provider's getChildren impl trivial.
 const fileNodeClusters = new WeakMap<FileNode, ReportCluster[]>();
 
-// [CLONE-KIND-LABELS] Splits clusters into one section per kind present,
-// in the category display order the registry declares — strongest
-// relation first, informational shape matches last. Both grouping axes
-// call this, so a file's sections and the kind-mode roots can never order
-// the same categories differently.
-//
-// Category order is not mass order: [CLONE-BUCKETS-STRUCTURAL-ONLY] puts
-// shape-only "always the last category, below Similar, regardless of its
-// size or number of matches", so a heavy informational finding must not
-// float above the copies it sits beside. Ordering WITHIN each section is
-// the caller's, and stays the engine's worst-first rank ([RANK-MASS-SUM]).
+// [CLONE-KIND-LABELS] Omit empty categories; order groups by their worst engine rank.
 function kindSections(
   clusters: ReportCluster[],
   order: (list: ReportCluster[]) => ReportCluster[],
@@ -172,12 +129,11 @@ function kindSections(
   return CLUSTER_KINDS.map((kind) => ({
     kind,
     list: order(clusters.filter((cluster) => cluster.kind === kind)),
-  })).filter(({ list }) => list.length > 0);
+  })).filter(({ list }) => list.length > 0)
+    .sort((left, right) => compareGroups(left.list, right.list));
 }
 
-// Children of a FileNode: one KindGroupNode per clone kind present, in the
-// category display order, with the clusters inside each group in the
-// engine's worst-first order.
+// File categories share the same weight order as category roots.
 export function getFileNodeChildren(file: FileNode): Node[] {
   const clusters = fileNodeClusters.get(file);
   if (!clusters) return [];
@@ -208,14 +164,30 @@ export function getGroupNodeChildren(group: GroupNode): Node[] {
   );
 }
 
-// [FACET-GROUP-BY-KIND] Roots are one flat group per clone kind present,
-// strongest kind first, empty groups omitted — every identical cluster
-// surfaces together with no file/folder layer in between. Under the
-// impact axis clusters stay worst-first inside each group; the path axis
-// orders them by representative path, exactly like cluster mode. Rank #N
-// stays global.
-export function buildKindMode(clusters: ReportCluster[], sortBy: SortBy): Node[] {
-  return kindSections(ordered(clusters, sortBy), (list) => list).map(({ kind, list }) =>
+// [FACET-GROUP-BY-KIND] Flat category roots, highest weight first.
+export function buildKindMode(clusters: ReportCluster[]): Node[] {
+  return kindSections(clusters, (list) => list).map(({ kind, list }) =>
     registerGroup(new KindGroupNode(kind, list, true), list),
   );
+}
+
+// [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] Language is a grouping choice, not a second axis.
+export function buildLanguageMode(clusters: ReportCluster[]): Node[] {
+  const groups = new Map<string, ReportCluster[]>();
+  for (const cluster of clusters) {
+    const language = languageForPath(representativePath(cluster));
+    const members = groups.get(language) ?? [];
+    members.push(cluster);
+    groups.set(language, members);
+  }
+  return [...groups.entries()]
+    .map(([language, members]) => ({ language, members: members.slice().sort(byRank) }))
+    .sort((left, right) => compareGroups(left.members, right.members))
+    .map(({ language, members }) => registerGroup(new GroupNode(languageDisplayName(language), members, "deslop.languageGroup", true), members));
+}
+
+function compareGroups(left: ReportCluster[], right: ReportCluster[]): number {
+  const leftWorst = worstCluster(left);
+  const rightWorst = worstCluster(right);
+  return leftWorst && rightWorst ? byRank(leftWorst, rightWorst) : left.length - right.length;
 }

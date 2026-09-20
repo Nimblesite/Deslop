@@ -1,15 +1,8 @@
 //! Shared helpers for the standalone (non-`cli`) end-to-end regression
-//! tests. Each `tests/<name>.rs` integration binary is its own crate, so
-//! this module is pulled in with `mod common;` and used through
+//! tests, declared once by `suite.rs` ([TEST-ONE-BINARY]) and used through
 //! `use crate::common::*;`. It centralises the fixture-path lookup, the
 //! `deslop` invocation, and the report-walking helpers that every
 //! per-issue false-positive test would otherwise copy verbatim.
-//!
-//! Each integration binary pulls in only the subset of helpers it needs,
-//! so the unused-symbol lint is silenced for this shared module (matching
-//! the `deslop-core` and `deslop-mcp` test commons).
-
-#![allow(dead_code)]
 
 /// Legacy pair-signal assertion vocabulary pending explicit compare migration.
 /// Suites that assert on reported evidence import it explicitly with

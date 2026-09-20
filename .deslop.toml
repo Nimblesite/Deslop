@@ -169,7 +169,7 @@ exclude = [
 #   does not pass its own gate under the current detector, so this is a
 #   ratchet taken from a number main itself cannot hold.
 #
-#   Re-measure after [FUSION-SHARED-SUBTREE] (#408) landed: making `structural`
+#   Re-measure after [FUSED-SHARED-SUBTREE] (#408) landed: making `structural`
 #   an honest measurement admits whole-method Type-3 clones that were
 #   previously invisible, so the figure moves for the same reason the
 #   2026-08-17 entry records — the measurement got more honest, nothing was

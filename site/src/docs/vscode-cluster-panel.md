@@ -88,19 +88,15 @@ The occurrence location is the file plus line and column that Open will navigate
 
 ## Open Action
 
-Open moves VS Code to the occurrence and selects the clone range.
+Click the file link to open the occurrence and select its code range. There is no separate Open button.
 
 ## Compare Action
 
-Click **Compare** on any non-canonical occurrence to open VS Code's diff editor in one click. The canonical occurrence appears on the left and the occurrence you clicked appears on the right — exactly the clone bytes, even when both live in the same file. Compare is disabled on the canonical row because that would compare a range with itself. The occurrence's context menu offers **Compare With Canonical** too.
+Click **Compare To Canonical** on a non-canonical occurrence. The canonical range opens on the left and the clicked range on the right, including when both ranges are in the same file. The canonical row is labeled and cannot compare with itself.
 
-To compare any other two occurrences, tap one row and then another: the first tap picks a row, the second opens the diff with the first on the left. Tap the picked row again to unpick it.
+For any other pair in the cluster, click **Select for Compare** on the left-hand occurrence, then **Compare with Selected** on the other. **Clear Selection** cancels the choice. Selection clears after comparison or when you navigate to another cluster. Tapping two row backgrounds is an optional shortcut.
 
-The diff's title names both occurrences and the engine's verdict on exactly that pair: **Identical bytes**, **Differs only by indentation** when indentation is the whole difference, or the pair's clone kind. That line is the fastest check that a finding is real: two copies that differ only by indentation are the same code.
-
-To compare any two occurrences, tap one row and then another. The first tap picks the row; the second opens the diff with the first-tapped range on the left. Tap the picked row again to let it go.
-
-The diff's title names both files and states what the engine found for exactly those two ranges: **Identical bytes**, **Differs only by indentation** when the only difference is how the lines are indented, or the pair's clone kind. That title is the quickest way to confirm a reported copy is real.
+The diff title names both ranges and the engine's verdict for that pair: **Identical bytes**, **Differs only by indentation**, or the pair's clone kind.
 
 ## Cluster Navigation
 
@@ -116,3 +112,9 @@ The panel supports keyboard navigation while focus is inside the webview:
 | `n` / `p` | Move to the next or previous cluster. |
 | `Enter` | Open the focused occurrence. |
 | `?` | Toggle detailed keyboard help. |
+
+## Group Top Offenders
+
+Use the single grouping button to choose **Clone Category**, **Folder**, **Language**, **File** or **No Grouping**. Every mode shows the highest-weight findings first. There is no separate sorting or language-split button.
+
+Help buttons show formatted explanations immediately on hover or keyboard focus. Press **Escape** to dismiss help. Technical details are collapsed until you need them, and occurrence rows share one explanation above the list.

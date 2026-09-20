@@ -32,6 +32,7 @@ import {
   buildClusterMode,
   buildFileMode,
   buildKindMode,
+  buildLanguageMode,
   getFileNodeChildren,
   getGroupNodeChildren,
   GroupBy,
@@ -40,7 +41,6 @@ import {
 } from "./grouping";
 import { buildFolderMode } from "./folder";
 import { buildMetricRows } from "./metrics";
-import { normalizeSortBy, SortBy } from "./sort";
 import { thresholdStatus } from "./threshold";
 
 // Re-export node classes so existing call sites
@@ -226,11 +226,6 @@ function readGroupBy(): GroupBy {
   return readAxis("topOffenders.groupBy", "cluster", normalizeGroupBy);
 }
 
-// [VSIX-TOP-OFFENDERS-SORT] Reads `deslop.topOffenders.sortBy`.
-function readSortBy(): SortBy {
-  return readAxis("topOffenders.sortBy", "impact", normalizeSortBy);
-}
-
 export class TopOffendersProvider extends LifecycleAwareProvider {
   getChildren(node?: Node): Node[] {
     if (node instanceof FolderNode) return node.children;
@@ -243,7 +238,7 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
       // a surviving peer into the original canonical occurrence.
       const [canonical] = this.store.current.report?.clusters
         .find((cluster) => cluster.id === node.cluster.id)?.occurrences ?? [];
-      return orderedOccurrences(node.cluster, readSortBy()).map(({ occurrence, index }) =>
+      return orderedOccurrences(node.cluster).map(({ occurrence, index }) =>
         new OccurrenceNode(occurrence, node.cluster, node.rank, index, canonical ?? null),
       );
     }
@@ -277,21 +272,17 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
   }
 }
 
-// [VSIX-TOP-OFFENDERS-GROUPING] Builds the root rows: dispatches on the
-// grouping mode + sort axis, then wraps in per-language groups when the
-// split is on. Global rank is precomputed from the UNFILTERED list
-// before the facet slice, so a filtered view shows stable rank gaps
-// ([FACET-TOP-OFFENDERS-FILTER] extends [VSIX-TOP-OFFENDERS-RANK-GLOBAL]).
+// [VSIX-TOP-OFFENDERS-GROUPING] Group the filtered report without changing engine ranks.
 function buildRoots(clusters: ReportCluster[]): Node[] {
   const groupBy = readGroupBy();
-  const sortBy = readSortBy();
   const filter = readTopOffendersFilter();
   const visible = applyFacetFilter(clusters, filter);
   const build = (subset: ReportCluster[]): Node[] => {
-    if (groupBy === "file") return buildFileMode(subset, sortBy);
-    if (groupBy === "folder") return buildFolderMode(subset, sortBy);
-    if (groupBy === "kind") return buildKindMode(subset, sortBy);
-    return buildClusterMode(subset, sortBy);
+    if (groupBy === "file") return buildFileMode(subset);
+    if (groupBy === "folder") return buildFolderMode(subset);
+    if (groupBy === "kind") return buildKindMode(subset);
+    if (groupBy === "language") return buildLanguageMode(subset);
+    return buildClusterMode(subset);
   };
   return [...filterStatusRow(filter), ...build(visible)];
 }

@@ -16,6 +16,7 @@ use super::{
     manifest::{top_level, RUST_EXTENSION},
     Reached,
 };
+use crate::syntax::{child_of_kind, text};
 
 /// The engine's `'static` id for the grammar this scan parses with.
 const RUST_LANGUAGE_ID: &str = "rust";
@@ -184,18 +185,4 @@ fn bare_module_file(item: Node<'_>, source: &str, tests: &Path) -> Option<String
     let name = text(item.child_by_field_name(NAME_FIELD)?, source);
     let is_directory_module = tests.join(&name).join(DIRECTORY_MODULE).is_file();
     (!is_directory_module).then(|| format!("{name}.{RUST_EXTENSION}"))
-}
-
-/// The first direct named child of `node` with `kind`.
-fn child_of_kind<'tree>(node: Node<'tree>, kind: &str) -> Option<Node<'tree>> {
-    let mut cursor = node.walk();
-    let found = node
-        .named_children(&mut cursor)
-        .find(|child| child.kind() == kind);
-    found
-}
-
-/// The source slice `node` spans.
-fn text(node: Node<'_>, source: &str) -> String {
-    source.get(node.byte_range()).unwrap_or_default().to_owned()
 }

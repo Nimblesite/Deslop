@@ -3,6 +3,10 @@ use std::fmt::Write as _;
 use deslop_core::lang::shared::OPERATOR_KIND_PREFIX;
 
 use super::support::*;
+use crate::common::{
+    incremental::assert_cache_stats,
+    store::{blob_bytes, blob_paths},
+};
 
 /// Runs a default (cache-on, [PIPELINE-INCREMENTAL]) pass over
 /// `scan_root`, writing `<prefix>.json` (and siblings), asserts the
@@ -149,10 +153,58 @@ fn default_run_uses_the_cache() -> Result<()> {
     Ok(())
 }
 
-// Implements [PIPELINE-INCREMENTAL] opt-out: `--no-incremental` leaves
-// the cache neither read nor written. Stats read as a clean no-cache
-// run (both counters zero) and no blobs land on disk, so a caller who
-// must not mutate the tree has an explicit way to say so.
+/// Output stem of the default pass that fills the store.
+const WARMING_STEM: &str = "warming";
+/// Output stem of the opted-out pass run over that filled store.
+const OPTED_OUT_STEM: &str = "opted-out";
+/// Source files in `csharp-small`: a cold default pass misses once per file.
+const SMALL_FIXTURE_FILES: u64 = 2;
+/// The counter value of a pass that never consulted the store.
+const NO_CACHE_ACTIVITY: u64 = 0;
+
+/// [CLI-ARG-NO-INCREMENTAL] "Nothing is read, nothing is written" can only be
+/// refuted by a store that holds something: over a cold tree there is nothing
+/// to read. Fills the store with a default pass, opts out over it, and proves
+/// the opted-out pass consulted no blob and changed none.
+fn assert_opt_out_ignores_a_warm_store(tmp: &Path, scan_root: &Path) -> Result<()> {
+    let warming = tmp.join(WARMING_STEM);
+    run_scan(scan_root, &warming, &[MIN_NODES_FLAG, MIN_NODES_VALUE])?;
+    assert_cache_stats(
+        &read_json_report(&with_ext(&warming, "json"))?,
+        NO_CACHE_ACTIVITY,
+        SMALL_FIXTURE_FILES,
+        "default pass over a cold store",
+    );
+    let (stored_paths, stored_bytes) = (blob_paths(scan_root)?, blob_bytes(scan_root)?);
+    let opted_out = tmp.join(OPTED_OUT_STEM);
+    run_scan(
+        scan_root,
+        &opted_out,
+        &[MIN_NODES_FLAG, MIN_NODES_VALUE, NO_INCREMENTAL_FLAG],
+    )?;
+    assert_cache_stats(
+        &read_json_report(&with_ext(&opted_out, "json"))?,
+        NO_CACHE_ACTIVITY,
+        NO_CACHE_ACTIVITY,
+        "--no-incremental over a warm store must read no blob",
+    );
+    assert_eq!(
+        blob_paths(scan_root)?,
+        stored_paths,
+        "--no-incremental must add and remove no blob"
+    );
+    assert_eq!(
+        blob_bytes(scan_root)?,
+        stored_bytes,
+        "--no-incremental must rewrite no blob"
+    );
+    Ok(())
+}
+
+// Implements [CLI-ARG-NO-INCREMENTAL], the [PIPELINE-INCREMENTAL] opt-out:
+// `--no-incremental` leaves the cache neither read nor written. Stats read
+// as a clean no-cache run (both counters zero) and no blobs land on disk, so
+// a caller who must not mutate the tree has an explicit way to say so.
 #[test]
 fn no_incremental_flag_skips_the_cache() -> Result<()> {
     let (tmp, scan_root, _out) =
@@ -160,7 +212,7 @@ fn no_incremental_flag_skips_the_cache() -> Result<()> {
     run_scan(
         &scan_root,
         &tmp.path().join("report"),
-        &[MIN_NODES_FLAG, MIN_NODES_VALUE, "--no-incremental"],
+        &[MIN_NODES_FLAG, MIN_NODES_VALUE, NO_INCREMENTAL_FLAG],
     )?;
     let json = report_json_text(&tmp)?;
     assert_contains(
@@ -180,7 +232,7 @@ fn no_incremental_flag_skips_the_cache() -> Result<()> {
             .exists(),
         "--no-incremental must not populate the fingerprint cache",
     );
-    Ok(())
+    assert_opt_out_ignores_a_warm_store(tmp.path(), &scan_root)
 }
 
 // Implements [PIPELINE-INCREMENTAL] stale-blob recovery: a corrupt

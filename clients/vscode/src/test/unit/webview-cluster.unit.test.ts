@@ -266,8 +266,7 @@ suite("cluster webview occurrence locations", () => {
     ]) {
       assert.match(corpus, new RegExp(escapeRegExp(phrase)), `missing hover copy: ${phrase}`);
     }
-    // The removed two-step selection and weight/bucket copy must stay gone:
-    // no per-row "Select for comparison" button and no gated compare button.
+    // Old ambiguous captions stay absent; the browser journey pins the explicit actions.
     for (const gone of [
       "Select two occurrences to enable compare",
       "Select for comparison",
@@ -443,4 +442,3 @@ suite("cluster webview occurrence locations", () => {
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-

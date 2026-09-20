@@ -6,11 +6,10 @@
 //! code paths (Ollama provider, registry lookup, `EmbeddingMode::Required`)
 //! get exercised end-to-end.
 //!
-//! This is a shared test module: the happy-path callers
-//! (`MockOllama::spawn`) and the failure-injection caller
-//! (`MockOllama::spawn_with`, issue #5) each use only the subset they need,
-//! so the unused-symbol lint is silenced for this module — matching the
-//! `common` test modules.
+//! This one file is compiled into two crates' suites — `deslop` declares it
+//! directly and `deslop-lsp` reaches it by `#[path]` — and each drives a
+//! different subset of the behaviours below, so the unused-symbol lint is
+//! silenced here. Nothing in it is unused by both.
 
 #![allow(dead_code)]
 

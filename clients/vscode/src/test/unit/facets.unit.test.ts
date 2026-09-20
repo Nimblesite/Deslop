@@ -10,8 +10,8 @@ import {
   kindTitle,
   sanitizeFacetFilter,
 } from "../../types/report";
-import { buildKindMode, getGroupNodeChildren } from "../../tree/grouping";
-import { ClusterNode, KindGroupNode } from "../../tree/nodes";
+import { buildKindMode, buildLanguageMode, getGroupNodeChildren } from "../../tree/grouping";
+import { ClusterNode, GroupNode, KindGroupNode } from "../../tree/nodes";
 import { cluster, labelText, report, storeWith, topOffenders, withSetting } from "./tree.helpers";
 import { stampRanks } from "../cluster.helpers";
 
@@ -74,10 +74,10 @@ suite("clone-kind grouping mode ([FACET-GROUP-BY-KIND])", () => {
   // Kind mode groups by the engine's clone kind — every identical cluster
   // surfaces together in one flat group, strongest kind first, with no
   // file/folder sub-grouping in between ([FACET-GROUP-BY-KIND]).
-  test("roots are one flat group per kind present, strongest first, so all identical clusters sit together", () => {
-    const roots = buildKindMode(KIND_GROUPED, "impact");
+  test("roots are one flat group per kind present, highest weight first, so all identical clusters sit together", () => {
+    const roots = buildKindMode(KIND_GROUPED);
     assert.equal(roots.length, 3, "identical + nearly identical + loosely similar groups; absent kinds omitted");
-    const [identicalGroup, nearGroup, looseGroup] = roots as [KindGroupNode, KindGroupNode, KindGroupNode];
+    const [nearGroup, identicalGroup, looseGroup] = roots as [KindGroupNode, KindGroupNode, KindGroupNode];
     assert.ok(identicalGroup instanceof KindGroupNode);
     assert.equal(identicalGroup.kind, IDENTICAL_KIND);
     assert.equal(nearGroup.kind, NEARLY_IDENTICAL_KIND);
@@ -105,8 +105,10 @@ suite("clone-kind grouping mode ([FACET-GROUP-BY-KIND])", () => {
   });
 
   test("children keep the GLOBAL rank (gaps allowed) and show their file", () => {
-    const roots = buildKindMode(KIND_GROUPED, "impact");
-    const identicalChildren = getGroupNodeChildren(roots[0] as KindGroupNode);
+    const roots = buildKindMode(KIND_GROUPED);
+    const identicalGroup = roots.find((node) => node instanceof KindGroupNode && node.kind === IDENTICAL_KIND);
+    assert.ok(identicalGroup instanceof KindGroupNode);
+    const identicalChildren = getGroupNodeChildren(identicalGroup);
     assert.equal(identicalChildren.length, 2);
     const child = identicalChildren[1] as ClusterNode;
     assert.ok(child instanceof ClusterNode);
@@ -120,9 +122,20 @@ suite("clone-kind grouping mode ([FACET-GROUP-BY-KIND])", () => {
   test("absent kinds never render empty groups", () => {
     const soleNear = KIND_GROUPED[0];
     assert.ok(soleNear, "fixture: the stamped report carries a nearly identical cluster");
-    const roots = buildKindMode([soleNear], "impact");
+    const roots = buildKindMode([soleNear]);
     assert.equal(roots.length, 1);
     assert.equal((roots[0] as KindGroupNode).kind, NEARLY_IDENTICAL_KIND);
+  });
+
+  test("language groups preserve every cluster and engine rank in weight order", () => {
+    // [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] The grouping does not reanalyse or renumber.
+    const expectedLanguages = ["C# (2)", "Dart (1)", "Rust (1)"];
+    const roots = buildLanguageMode(KIND_GROUPED) as GroupNode[];
+    assert.deepEqual(roots.map(labelText), expectedLanguages);
+    const children = roots.flatMap((root) => getGroupNodeChildren(root)) as ClusterNode[];
+    assert.deepEqual(children.map((node) => node.cluster.id), KIND_GROUPED.map((member) => member.id));
+    assert.deepEqual(children.map((node) => node.rank), KIND_GROUPED.map((member) => member.rank));
+    assert.ok(roots.every((root) => root.showFileInChildren));
   });
 });
 

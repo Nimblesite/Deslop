@@ -25,8 +25,7 @@ This document compares Deslop's deterministic hybrid core, LSP daemon, MCP surfa
 
 #### [COMPARISON-FIELD-LITERALS] Literal and constant rules
 
-PMD and Sonar appear above through their CPD-style fragment engines; their literal rules are a
-distinct competitor class ([DECISION-LITERALS] records why this lineage matters):
+PMD and Sonar appear above through their CPD-style fragment engines; their literal rules are a distinct competitor class ([DECISION-LITERALS] records why this lineage matters):
 
 | Rule | Scope | Live? | Weakness |
 |---|---|---|---|
@@ -36,11 +35,7 @@ distinct competitor class ([DECISION-LITERALS] records why this lineage matters)
 | **goconst** | Go: repeated strings + `match-constant` | ❌ CI | Single-language; flat output; no editor surface. |
 | **ReSharper / Rider "Convert to constant"** | IDE quick-fix | In-IDE | A fix without a repo-wide detection pass; IDE-locked. |
 
-**Where Deslop wins:** workspace-wide value clustering (not per-file counting), constants as
-first-class participants (`shadowed_constant` / `constant_duplicate` / `constant_drift` /
-`constant_alias` — no shipping tool detects same-name-different-value drift), one ranked list with
-the fragment clones, live in the agent loop via [MCP-TOOL-FILTERS], and the monorepo
-unused-public-constant marker ([LITERAL-UNUSED-MARKER]) that no linter in this table attempts.
+**Where Deslop wins:** workspace-wide value clustering (not per-file counting), constants as first-class participants (`shadowed_constant` / `constant_duplicate` / `constant_drift` / `constant_alias` — no shipping tool detects same-name-different-value drift), one ranked list with the fragment clones, live in the agent loop via [MCP-TOOL-FILTERS], and the monorepo unused-public-constant marker ([LITERAL-UNUSED-MARKER]) that no linter in this table attempts.
 
 #### [COMPARISON-FIELD-AI] Adjacent and AI-native tools
 

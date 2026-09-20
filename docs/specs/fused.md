@@ -148,8 +148,7 @@ An explicit pair comparison identifies both endpoints and may render that pair's
 3. **Pair routing uses `support = max(agreement, rename_consistency)`** (either population may vouch; never their mean), and a pair whose identifier bijection is contradiction-free is admitted on that ground alone ([FUSED-CONTENT-GATE-RENAME]). Every pair uses `content_gate.support_floor` (0.70), across files and within one file alike: two methods copied inside one file measure no differently from two copied across files, and whether a same-file pair is a sibling family is answered after closure by [RANK-STRUCTURAL-ONLY-FORWARDING], which reads where each call goes — an admission floor cannot, because the REST settings family and a two-literal copy of one method both measure in the same 0.70–0.85 band. An unanchored LSH-only pair pays `content_gate.promote_floor` (0.85) instead: with no structural anchor, no embedding support, and no shared-subtree alignment, the token echo is the pair's whole case, and it must be corroborated more strongly before it may weld two views into one closure — at cross-file support strength this route admits whole-file-against-interior-window pairs and manufactures mixed-extent clusters (#339). A pair is unanchored only once its alignment has been *measured* and failed the shared-subtree overlap floor. A token-carried pair — no structural anchor, no embedding support, Jaccard at the LSH-only floor, the fused floor cleared on that echo alone — has its alignment measured by the rescue pass exactly as a rescue candidate does, and the content guard applies to it either way — at the support floor when the alignment clears the overlap floor, at the promote floor when it does not — because an unmeasured overlap reads as no alignment: it sent a near-identical run of two renamed Go functions to the promote floor, where a swapped literal scores 0.81, while the lopsided pair of one of those functions against the other file's whole run was rescued on measured overlap and admitted with no content check at all — and the cluster published one function against two (`cluster_extent_alignment`). The content guard applies when normalized shape or token evidence saturates, and also to an unanchored LSH-only pair that clears its own Jaccard floor without reaching shared-subtree rescue; no independent semantic route applies in either case. A gate-eligible pair below its content floor is not admitted. `E` is never relabelled as content support: a qualifying embedding route makes the shape-echo guard inapplicable rather than making `content_ok` true. This happens before transitive closure; no content score is stamped onto the resulting cluster.
 4. **Token-signal correction.** A pair whose endpoints share one Merkle hash has equal normalised k-gram sets by construction; a lower `token_jaccard` is a fallback-signature artifact and is corrected to 1.0 for that pair only.
 
-The correction is scoped by that digest equality, tested directly on the members, and by nothing else. No reading of `structural` can stand in for it: since [FUSED-SHARED-SUBTREE] the axis grades subtree *overlap*, so it saturates by ratio as well as by hash equality, and every value below saturation means the subtrees provably differ. Scoping the correction to `content_gate.structural_saturation_floor` — a near-miss **routing** tolerance — published `token_jaccard = 1.0`, and the `shape` reading derived from it, across the whole `[0.99, 1.0)` band on no evidence. Routing tolerance is not proof of identity. Pinned by `crates/deslop/tests/content_gate_signal_honesty.rs`.
-5. **Classification and reporting** follow [CLONE-BUCKETS-ROUTING] and [CLONE-KIND-FOLD]. Only eligible clones contribute weight under [RANK-MASS-SUM](pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only). Do not turn admission failure into a fallback clone label.
+The correction is scoped by that digest equality, tested directly on the members, and by nothing else. No reading of `structural` can stand in for it: since [FUSED-SHARED-SUBTREE] the axis grades subtree *overlap*, so it saturates by ratio as well as by hash equality, and every value below saturation means the subtrees provably differ. Scoping the correction to `content_gate.structural_saturation_floor` — a near-miss **routing** tolerance — published `token_jaccard = 1.0`, and the `shape` reading derived from it, across the whole `[0.99, 1.0)` band on no evidence. Routing tolerance is not proof of identity. Pinned by `crates/deslop/tests/content_gate_signal_honesty.rs`. 5. **Classification and reporting** follow [CLONE-BUCKETS-ROUTING] and [CLONE-KIND-FOLD]. Only eligible clones contribute weight under [RANK-MASS-SUM](pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only). Do not turn admission failure into a fallback clone label.
 
 `token_jaccard` itself stays rename-invariant (normalised k-grams); the gate adds evidence rather than redefining an existing signal.
 
@@ -199,160 +198,83 @@ The whole arithmetic surface in one place — one formula per block, the English
 
 Structural similarity is the shared-node credit of the bigger tree. The aligner uses Zhang–Shasha's tree-edit-distance recurrence (keyroot decomposition over post-order sequences of normalised node kinds, unit insert/delete/relabel costs — Zhang & Shasha 1989). Deslop defines shared credit as `max(nodes) − TED` and normalises it by the larger tree. Baxter et al. 1998 supports subtree hashing and near-miss comparison, but not this TED composition: Baxter used a leaf-ignoring hash and `2S/(2S+L+R)`. Combining exact Merkle hashes with Zhang–Shasha TED is Deslop's design.
 
-$$
-\mathrm{shared}(a,b) = \max\bigl(n(a), n(b)\bigr) - \mathrm{TED}(a,b) \qquad
-S(a,b) = \frac{\mathrm{shared}(a,b)}{\max(n(a),\, n(b))} = 1 - \frac{\mathrm{TED}(a,b)}{\max(n(a),\, n(b))}
-$$
+$$ \mathrm{shared}(a,b) = \max\bigl(n(a), n(b)\bigr) - \mathrm{TED}(a,b) \qquad S(a,b) = \frac{\mathrm{shared}(a,b)}{\max(n(a),\, n(b))} = 1 - \frac{\mathrm{TED}(a,b)}{\max(n(a),\, n(b))} $$
 
 Merkle-equal pairs score 1.0 without paying for the walk; past the alignment cap a credited shared-node count — a sound lower bound on the aligned value — answers instead, and the share clamps to `[0, 1]`.
 
 Merkle equality is the fast path for exact structure, not a separate similarity axis:
 
-$$
-M(a,b) = \mathbf{1}\!\left[\operatorname{merkle}(a)=\operatorname{merkle}(b)\right] \qquad M(a,b)=1 \implies S(a,b)=1
-$$
+$$ M(a,b) = \mathbf{1}\!\left[\operatorname{merkle}(a)=\operatorname{merkle}(b)\right] \qquad M(a,b)=1 \implies S(a,b)=1 $$
 
 Embedding similarity is cosine over the raw vectors, accumulated in `f64` and clamped because negative cosine is treated as no positive clone evidence. A zero-norm vector returns zero; a non-zero vector compared with itself returns exactly one.
 
-$$
-E(a,b) =
-\begin{cases}
-0 & \text{if } \lVert v_a\rVert_2\lVert v_b\rVert_2 = 0 \\
-\operatorname{clamp}\!\left(\dfrac{v_a \cdot v_b}{\lVert v_a\rVert_2\lVert v_b\rVert_2},\ 0,\ 1\right) & \text{otherwise}
-\end{cases}
-$$
+$$ E(a,b) = \begin{cases} 0 & \text{if } \lVert v_a\rVert_2\lVert v_b\rVert_2 = 0 \\ \operatorname{clamp}\!\left(\dfrac{v_a \cdot v_b}{\lVert v_a\rVert_2\lVert v_b\rVert_2},\ 0,\ 1\right) & \text{otherwise} \end{cases} $$
 
 The measured shape/semantic score takes the strongest of the pair's structural, token, and embedding signals and clamps to `[0, 1]`.
 
-$$
-f_{\mathrm{shape}}(p) = \operatorname{clamp}(\max(S(p),\, J(p),\, E(p)),\ 0,\ 1)
-$$
+$$ f_{\mathrm{shape}}(p) = \operatorname{clamp}(\max(S(p),\, J(p),\, E(p)),\ 0,\ 1) $$
 
 #### [FUSED-PRE-RESCUE-SCORE] Keep the initial score separate from measured overlap
 
 Before subtree alignment, discovery knows exact fingerprint equality `M`, token similarity `J`, and embedding similarity `E`. Its initial score is:
 
-$$
-f_{\mathrm{pre}}(p) = \operatorname{clamp}(\max(M(p),\, J(p),\, E(p)),\ 0,\ 1)
-$$
+$$ f_{\mathrm{pre}}(p) = \operatorname{clamp}(\max(M(p),\, J(p),\, E(p)),\ 0,\ 1) $$
 
 Use this score for the initial threshold. A shared-code rescue remains valid whether the initial score lies below or above that threshold; it can also satisfy the stricter token-only guard. Classification must reuse the discovery checks, not reconstruct a different decision from the final similarity score. The displayed pair score remains `f_shape`. Pinned by the Go declaration test in `cli::detection` and the cross-file and same-file C# cases in `type3_enclosing_method`.
 
 The bar a pair must clear depends on the pair. Cross-language pairs without exact Merkle equality use the lower configured cross-language floor. Everything else uses `fused_threshold` (default 0.85), a Deslop operating point derived from its corpus. SourcererCC's 0.70 experiment is directional context only: it uses a different representation and similarity function.
 
-$$
-t(p) = \begin{cases} \text{cross\_language\_fused\_threshold} & \text{if cross-language}(p) \land M(p) = 0 \\ \text{fused\_threshold (default 0.85)} & \text{otherwise} \end{cases}
-$$
+$$ t(p) = \begin{cases} \text{cross\_language\_fused\_threshold} & \text{if cross-language}(p) \land M(p) = 0 \\ \text{fused\_threshold (default 0.85)} & \text{otherwise} \end{cases} $$
 
 `J` estimates the Jaccard of the two k-gram sets of normalised node kinds (Jaccard 1912). Broder's min-wise identity makes that estimable by hashing: for an ideal min-wise independent family, the probability that two minima agree is exactly the Jaccard. Deslop's BLAKE3-XOF slots are a deterministic practical approximation to that family, not a proof of exact min-wise independence.
 
-$$
-J(G_a, G_b) = \frac{|G_a \cap G_b|}{|G_a \cup G_b|} \qquad\qquad
-\Pr_{h \in \mathcal{H}}\!\left[\arg\min_{x \in G_a} h(x) = \arg\min_{y \in G_b} h(y)\right] = J(G_a,G_b)
-$$
+$$ J(G_a, G_b) = \frac{|G_a \cap G_b|}{|G_a \cup G_b|} \qquad\qquad \Pr_{h \in \mathcal{H}}\!\left[\arg\min_{x \in G_a} h(x) = \arg\min_{y \in G_b} h(y)\right] = J(G_a,G_b) $$
 
 The shipped estimator averages agreement over the `m = representation.minhash_signature_len` blake3-hashed slots (`lsh::estimate_jaccard`); LSH banding follows the standard `BANDS × ROWS_PER_BAND` collision curve.
 
-$$
-\hat{J}(G_a, G_b) = \frac{1}{m} \sum_{i=1}^{m} \mathbf{1}\bigl[\sigma_{G_a}(i) = \sigma_{G_b}(i)\bigr]
-$$
+$$ \hat{J}(G_a, G_b) = \frac{1}{m} \sum_{i=1}^{m} \mathbf{1}\bigl[\sigma_{G_a}(i) = \sigma_{G_b}(i)\bigr] $$
 
 With `b` bands and `r` rows per band (`m = br`), the idealised probability that a pair of true Jaccard similarity `s` collides in at least one band is:
 
-$$
-P_{\mathrm{candidate}}(s) = 1 - \left(1-s^r\right)^b
-$$
+$$ P_{\mathrm{candidate}}(s) = 1 - \left(1-s^r\right)^b $$
 
 A pair must clear its initial threshold or qualify through shared copied code, then pass the remaining guards. Below, `scope_ok` includes the scope and container checks in [FUSED-SHARED-SUBTREE-ECHO] and [FUSED-SHARED-SUBTREE-SAME-FILE]; `C_core` includes the copied-code and content checks in [FUSED-SHARED-SUBTREE-CORE].
 
-$$
-\begin{aligned}
-\mathrm{rescue}(p) \iff {}& \operatorname{scope\_ok}(p)
-\land S(p) \ge \text{shared\_subtree\_min\_overlap}
-\land J(p) \ge \text{shared\_subtree\_min\_jaccard} \\
-&\land \min(n_l,n_r) \ge \text{shared\_subtree\_min\_node\_count}
-\land C_{\mathrm{core}}(p)
-\end{aligned}
-$$
+$$ \begin{aligned} \mathrm{rescue}(p) \iff {}& \operatorname{scope\_ok}(p) \land S(p) \ge \text{shared\_subtree\_min\_overlap} \land J(p) \ge \text{shared\_subtree\_min\_jaccard} \\ &\land \min(n_l,n_r) \ge \text{shared\_subtree\_min\_node\_count} \land C_{\mathrm{core}}(p) \end{aligned} $$
 
 When exact structural and embedding evidence are absent, and rescue did not fire, MinHash alone can carry the pair only above its pair-specific LSH-only floors. Explicit cross-language mode waives the ordinary node-count floor by raising the stored guard value to that floor; it does not falsify either endpoint's measured `n`. This is a rejection guard, not a rescue.
 
-$$
-\begin{aligned}
-\mathrm{lsh\_ok}(p) \iff {}&
-\bigl(M(p)=0 \land E(p)=0 \land \neg\mathrm{rescue}(p)\bigr)
-\implies
-\bigl(J(p) \ge \text{lsh\_only\_min\_jaccard}
-\land n_{\mathrm{lsh}}(p) \ge \text{lsh\_only\_min\_node\_count}\bigr), \\
-n_{\mathrm{lsh}}(p) = {}&
-\begin{cases}
-\max\!\bigl(\min(n_l,n_r),\text{lsh\_only\_min\_node\_count}\bigr) & \text{if explicit cross-language}(p)\land M(p)=0 \\
-\min(n_l,n_r) & \text{otherwise}
-\end{cases}
-\end{aligned}
-$$
+$$ \begin{aligned} \mathrm{lsh\_ok}(p) \iff {}& \bigl(M(p)=0 \land E(p)=0 \land \neg\mathrm{rescue}(p)\bigr) \implies \bigl(J(p) \ge \text{lsh\_only\_min\_jaccard} \land n_{\mathrm{lsh}}(p) \ge \text{lsh\_only\_min\_node\_count}\bigr), \\ n_{\mathrm{lsh}}(p) = {}& \begin{cases} \max\!\bigl(\min(n_l,n_r),\text{lsh\_only\_min\_node\_count}\bigr) & \text{if explicit cross-language}(p)\land M(p)=0 \\ \min(n_l,n_r) & \text{otherwise} \end{cases} \end{aligned} $$
 
 Pairs without an exact structural anchor must also have coherent endpoint sizes. `content_ok` means the applicable checks in [FUSED-CONTENT-GATE] pass, including its consistent-rename route. Putting the gates together:
 
-$$
-\begin{aligned}
-\mathrm{size\_ok}(p) &\iff M(p)=1 \lor \max(n_l,n_r) \le
-\text{max\_endpoint\_node\_ratio}\,\min(n_l,n_r) \\
-\mathrm{admit}(p) &\iff \mathrm{size\_ok}(p)
-\land \mathrm{lsh\_ok}(p)
-\land \bigl(f_{\mathrm{pre}}(p) \ge t(p) \lor \mathrm{rescue}(p)\bigr)
-\land \mathrm{content\_ok}(p)
-\end{aligned}
-$$
+$$ \begin{aligned} \mathrm{size\_ok}(p) &\iff M(p)=1 \lor \max(n_l,n_r) \le \text{max\_endpoint\_node\_ratio}\,\min(n_l,n_r) \\ \mathrm{admit}(p) &\iff \mathrm{size\_ok}(p) \land \mathrm{lsh\_ok}(p) \land \bigl(f_{\mathrm{pre}}(p) \ge t(p) \lor \mathrm{rescue}(p)\bigr) \land \mathrm{content\_ok}(p) \end{aligned} $$
 
 **Pair evidence presentation** — [FUSED-PAIR-SIGNALS]
 
 An explicit comparison of pair `p` renders only `p`'s evidence; a cluster renders none of it.
 
-$$
-\mathrm{rendered\_pair}(p) = \bigl(S(p),J(p),E(p),A(p),R(p),\mathrm{literal\_fraction}(p)\bigr) \qquad \mathrm{rendered\_cluster\_evidence}(c) = \varnothing
-$$
+$$ \mathrm{rendered\_pair}(p) = \bigl(S(p),J(p),E(p),A(p),R(p),\mathrm{literal\_fraction}(p)\bigr) \qquad \mathrm{rendered\_cluster\_evidence}(c) = \varnothing $$
 
 **Content evidence** (the exact pair) — [FUSED-CONTENT-GATE]
 
 Agreement compares collapsed-leaf keys. With equal position counts it is a positional match share over authored content plus every disagreement; a matching operator is excluded because the shape axes already counted it. With unequal counts it falls back to set Jaccard after removing shared non-authored keys from both numerator and denominator. The positional branch is an accuracy ratio, not a Jaccard index. In either branch, any disagreement between behaviour-bearing operator positions is a hard contradiction that makes both `A` and `R` zero.
 
-$$
-\begin{aligned}
-M_{ab} &= \{i : k_{a,i}\ne k_{b,i}\ \lor\ k_{a,i}\text{ is authored content}\} \\
-F_{ab} &= \{k\in K_a\cap K_b : k\text{ is non-authored}\} \\
-O_{ab} &= \mathbf{1}\!\left[\exists i:\operatorname{operator}(k_{a,i})\land\operatorname{operator}(k_{b,i})\land k_{a,i}\ne k_{b,i}\right] \\
-m_a &= \text{number of frontier positions in }a, \qquad m_b = \text{number of frontier positions in }b \\
-A(a,b) &=
-\begin{cases}
-0 & \text{if } O_{ab}=1 \\[4pt]
-1 & \text{if } O_{ab}=0 \land m_a=m_b \land |M_{ab}|=0 \\[4pt]
-\dfrac{|\{i\in M_{ab}:k_{a,i}=k_{b,i}\}|}{|M_{ab}|} & \text{if } m_a=m_b \\[10pt]
-1 & \text{if } O_{ab}=0 \land m_a\ne m_b \land |K_a\cup K_b|-|F_{ab}|=0 \\[4pt]
-\dfrac{|K_a\cap K_b|-|F_{ab}|}{|K_a\cup K_b|-|F_{ab}|} & \text{otherwise}
-\end{cases}
-\end{aligned}
-$$
+$$ \begin{aligned} M_{ab} &= \{i : k_{a,i}\ne k_{b,i}\ \lor\ k_{a,i}\text{ is authored content}\} \\ F_{ab} &= \{k\in K_a\cap K_b : k\text{ is non-authored}\} \\ O_{ab} &= \mathbf{1}\!\left[\exists i:\operatorname{operator}(k_{a,i})\land\operatorname{operator}(k_{b,i})\land k_{a,i}\ne k_{b,i}\right] \\ m_a &= \text{number of frontier positions in }a, \qquad m_b = \text{number of frontier positions in }b \\ A(a,b) &= \begin{cases} 0 & \text{if } O_{ab}=1 \\[4pt] 1 & \text{if } O_{ab}=0 \land m_a=m_b \land |M_{ab}|=0 \\[4pt] \dfrac{|\{i\in M_{ab}:k_{a,i}=k_{b,i}\}|}{|M_{ab}|} & \text{if } m_a=m_b \\[10pt] 1 & \text{if } O_{ab}=0 \land m_a\ne m_b \land |K_a\cup K_b|-|F_{ab}|=0 \\[4pt] \dfrac{|K_a\cap K_b|-|F_{ab}|}{|K_a\cup K_b|-|F_{ab}|} & \text{otherwise} \end{cases} \end{aligned} $$
 
 Either zero denominator yields `1.0`: there is no authored content on which the pair disagrees.
 
 The rename-evidence factor discounts anchor-poor evidence smoothly. The configured `rename_evidence_half_anchors` is the anchor count at which this factor equals one half.
 
-$$
-q_{\text{anchors}} = \frac{\text{anchors}}{\text{anchors} + \text{rename\_evidence\_half\_anchors}}
-$$
+$$ q_{\text{anchors}} = \frac{\text{anchors}}{\text{anchors} + \text{rename\_evidence\_half\_anchors}} $$
 
 Evidence is certified only when it is airtight: every aligned literal is preserved or echoes an explained substitution, every constrained identifier position is explained, and the anchor factor clears the support floor.
 
-$$
-\mathrm{certified} \iff \text{coverage} = 1.0 \land q_{\text{anchors}} \ge \text{support\_floor}
-$$
+$$ \mathrm{certified} \iff \text{coverage} = 1.0 \land q_{\text{anchors}} \ge \text{support\_floor} $$
 
 Certified evidence receives full strength; everything else keeps the asymptotic anchor factor. Routing reads `R` exactly as computed below; no later confidence multiplier exists.
 
-$$
-q = \begin{cases} 1.0 & \text{if certified} \\ q_{\text{anchors}} & \text{otherwise} \end{cases}
-$$
+$$ q = \begin{cases} 1.0 & \text{if certified} \\ q_{\text{anchors}} & \text{otherwise} \end{cases} $$
 
 Rename consistency is the pooled coverage scaled by the anchor factor above. Coverage pools the pair's constrained positions: identifier positions the bijection must explain, plus every aligned literal position — $L_{ab}$, the positions where both members carry a literal. Explained identifiers and affirming literals (preserved, or echoing an explained substitution) fill the numerator; a drifted literal and an inconsistent substitution stay in the denominator as constrained positions the evidence cannot explain. A zero denominator is vacuously $1.0$ and leaves the verdict to the anchor factor.
 
@@ -360,38 +282,21 @@ The pool opens only where the literal population affirms at all. When aligned li
 
 The pool is also cross-file only. A same-file pair keeps the stricter form — the lesser of the literal-affirmation share and identifier coverage — because a same-file rename family is the #197 sibling shape this spec spends a dedicated proof suppressing: its literal axis must vouch on its own before a rename alone admits a same-file pair.
 
-$$
-\text{coverage} = \frac{\text{explained identifier positions} + \text{affirming literal positions}}{\text{constrained identifier positions} + |L_{ab}|} \qquad
-R = \begin{cases} 0 & \text{if } O_{ab}=1 \\ 0 & \text{if } |L_{ab}|>0 \land \text{affirming} = 0 \\ \min\bigl(\tfrac{\text{affirming}}{|L_{ab}|},\, \text{coverage}_{\text{id}}\bigr) \times q & \text{same-file} \\ \text{coverage} \times q & \text{otherwise} \end{cases}
-$$
+$$ \text{coverage} = \frac{\text{explained identifier positions} + \text{affirming literal positions}}{\text{constrained identifier positions} + |L_{ab}|} \qquad R = \begin{cases} 0 & \text{if } O_{ab}=1 \\ 0 & \text{if } |L_{ab}|>0 \land \text{affirming} = 0 \\ \min\bigl(\tfrac{\text{affirming}}{|L_{ab}|},\, \text{coverage}_{\text{id}}\bigr) \times q & \text{same-file} \\ \text{coverage} \times q & \text{otherwise} \end{cases} $$
 
 Support is whichever population vouches harder — matched lines or rename consistency. Never a mean, never pooled: averaging would let two lukewarm signals impersonate one strong one.
 
-$$
-\mathrm{support} = \max(A, R) \qquad \text{(either population may vouch; never a mean, never pooled)}
-$$
+$$ \mathrm{support} = \max(A, R) \qquad \text{(either population may vouch; never a mean, never pooled)} $$
 
 **Pair admission** — [FUSED-CONTENT-GATE] [CLONE-BUCKETS-ROUTING]
 
 Content support is evaluated on the candidate pair before closure. The configured floor is 0.70 in every scope; an unanchored LSH-only pair pays 0.85. The guard applies to saturated normalized evidence when no independent semantic route applies. A qualifying semantic route makes that guard inapplicable; it does not impersonate content support. No result is copied to a cluster.
 
-$$
-\begin{aligned}
-u(p) &= \begin{cases}
-\text{support\_floor} & \text{if } p\text{ spans multiple files} \\
-\text{promote\_floor} & \text{otherwise}
-\end{cases} \\
-g(p) &= E(p)<\text{candidates.embedding\_support\_floor}\land\bigl(M(p)=1\lor S(p)\ge\text{routing.shape\_identical\_floor}\lor J(p)\ge\text{content\_gate.saturating\_token\_floor}\bigr) \\
-\mathrm{content\_ok}(p) &\iff \neg g(p)\lor C(p)\ge u(p) \\
-g(p)\land C(p)<u(p) &\implies \neg\mathrm{admit}(p)
-\end{aligned}
-$$
+$$ \begin{aligned} u(p) &= \begin{cases} \text{support\_floor} & \text{if } p\text{ spans multiple files} \\ \text{promote\_floor} & \text{otherwise} \end{cases} \\ g(p) &= E(p)<\text{candidates.embedding\_support\_floor}\land\bigl(M(p)=1\lor S(p)\ge\text{routing.shape\_identical\_floor}\lor J(p)\ge\text{content\_gate.saturating\_token\_floor}\bigr) \\ \mathrm{content\_ok}(p) &\iff \neg g(p)\lor C(p)\ge u(p) \\ g(p)\land C(p)<u(p) &\implies \neg\mathrm{admit}(p) \end{aligned} $$
 
 When the two endpoints share one Merkle hash, their normalised tokens are identical by construction, so that pair's Jaccard is corrected to 1.0.
 
-$$
-M(p)=1 \implies J(p)=1.0 \qquad \text{(token correction)}
-$$
+$$ M(p)=1 \implies J(p)=1.0 \qquad \text{(token correction)} $$
 
 **Mass and order** — [RANK-MASS-SUM]
 
@@ -403,12 +308,7 @@ Weight, the unchanged AST-node mass formula, exclusions and ordering are defined
 
 The headline number is unweighted duplicated-line density. It uses the same ratio form as SonarQube's gate, but the tools' analysed-line and clone projections differ, so the values are not interchangeable measurements.
 
-$$
-\text{duplication\_percent} = \begin{cases}
-0 & \text{if analysed\_loc}=0 \\
-\operatorname{clamp}\!\left(\dfrac{100 \times \text{duplicated\_loc}}{\text{analysed\_loc}},\ 0,\ 100\right) & \text{otherwise}
-\end{cases}
-$$
+$$ \text{duplication\_percent} = \begin{cases} 0 & \text{if analysed\_loc}=0 \\ \operatorname{clamp}\!\left(\dfrac{100 \times \text{duplicated\_loc}}{\text{analysed\_loc}},\ 0,\ 100\right) & \text{otherwise} \end{cases} $$
 
 Every duplicated line counts once regardless of which admitted pair made it reachable. There is no evidence-weighted companion metric because pair evidence cannot be projected onto a cluster or repository line.
 

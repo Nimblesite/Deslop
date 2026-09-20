@@ -1,9 +1,7 @@
 //! Shared report-wire assertions for the `deslop-lsp` integration
 //! binaries. The LSP publishes one slim report shape, so the shell
 //! contract, occurrence-path extraction and signal access belong in one
-//! place rather than being restated per binary.
-
-#![allow(dead_code)]
+//! place rather than being restated per suite.
 
 use std::{
     collections::BTreeSet,

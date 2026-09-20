@@ -51,21 +51,23 @@ Command `deslop.openCluster` opens a webview tab. The tab renders a single clust
 - One collapsible panel per occurrence, each containing:
   - File path plus human position (`line:column`), clickable to open the file at that exact editor position.
   - Line-numbered, syntax-highlighted source snippet (reusing the [OUTPUT-HUMAN-HTML](pipeline.md#output-human-html-human-readable-html-mode) rendering path — the daemon returns the snippet as pre-highlighted HTML so the webview stays dumb).
-  - "Open in editor", "Reveal in Explorer", and "Compare" buttons. Compare opens VS Code's native diff for the canonical occurrence and the clicked occurrence ([VSIX-PAIR-COMPARE]).
+  - A file link and separate canonical and arbitrary-pair comparison buttons ([VSIX-PAIR-COMPARE]).
 
 Navigation is keyboard-first: `j/k` move occurrence focus, `n/p` move cluster focus, `Enter` opens the file at the focused occurrence, `?` shows the shortcut help. The webview is self-contained — no network fetches, no external CDNs, CSP locked to the extension origin.
 
-### [VSIX-WEBVIEW-ACTIONS-CONTEXT] Action wiring and hover context
+### [VSIX-WEBVIEW-ACTIONS-CONTEXT] Clear actions and readable help
 
-Cluster detail controls must either execute a real command or not render. `Open` dispatches `deslop.openOccurrence` for the row's occurrence. `Compare` dispatches `deslop.compareWithCanonical` with the cluster id and the clicked occurrence; it is disabled on the canonical row. A tap on the row itself picks it, and a tap on a second row dispatches `deslop.comparePair` with both ([VSIX-PAIR-COMPARE]). `Previous cluster` and `Next cluster` update the webview's selected cluster through the same signal path as the `p` and `n` keyboard shortcuts; the extension host must not keep a second copy of cluster selection state.
+The cluster panel leads with the category, location count and engine-provided duplicated mass. Full cluster id, rank and canonical syntax-node count live in a collapsed Technical details section. Informational findings make no duplication claim. Navigation sits directly below the occurrences.
 
-Every visible data item and action in the cluster detail webview carries a human-readable hover explanation. Occurrence rows explain the target file, line, column, hidden status, and canonical status. Rank, mass, size, occurrence count, and keyboard shortcut hints explain their purpose without exposing raw byte offsets as the primary user-facing location. No hover synthesizes a cluster verdict from pair evidence.
+The file link opens and selects its exact range; there is no redundant Open button. Occurrence rows have no separate info buttons. Shared section help uses 22-pixel targets and appears immediately on hover or keyboard focus. It renders local Markdown with headings, emphasis, lists and code formatting; raw HTML is disabled. Help remains within the viewport, is scrollable when needed, and Escape dismisses it. Each help topic links to the documentation.
 
-### [VSIX-PAIR-COMPARE] Compare with the canonical occurrence
+`Previous cluster` and `Next cluster` use the same local selected-cluster signal as `p` and `n`. Code: `cluster/main.tsx`, `cluster/OccurrenceList.tsx`, `components/HelpBubble.tsx`, `theme.ts`. Assertions: `playwright-webview-smoke.spec.ts`, `webview-cluster.unit.test.ts`.
 
-One click on a non-canonical occurrence's Compare button opens the canonical range on the left and that exact occurrence on the right. The occurrence context menu exposes the same action. A comparable cluster's context menu compares its first two occurrences. A canonical row cannot compare with itself. Missing clusters, malformed targets, and occurrences outside the named cluster open no diff; they never substitute another peer.
+### [VSIX-PAIR-COMPARE] Explicit canonical and selected comparisons
 
-The rows are the selection for any other pair. Tapping an occurrence row picks it; tapping a second row of the same cluster compares the two, first tap on the left, and clears the pick. Tapping the picked row again unpicks it, and changing the selected cluster clears it. A tap on a row's own buttons or links belongs to that control, never to the pick. No row carries a select button and no separate compare button waits for a selection.
+**Compare To Canonical** always opens the canonical occurrence on the left and that exact row on the right. It is disabled on the canonical row, which has a visible Canonical label. The occurrence context menu offers the same comparison. Missing clusters, malformed targets and occurrences outside the named cluster open no diff; they never substitute another peer.
+
+Every occurrence has **Select for Compare**. Selecting it changes that row's action to **Clear Selection**, and other rows to **Compare with Selected**. Clicking another row's action opens the selected range on the left and the clicked range on the right. This supports any pair within the cluster, including two non-canonical occurrences. Selection clears after comparison, cluster navigation, or a live update that removes the selected range. File links and canonical comparison do not change the selected pair endpoint. Row taps remain a shortcut through the same selection state.
 
 The diff title names both endpoints and the engine's verdict on exactly that pair, read from `pair/compare` and never calculated in the extension: `Identical bytes` when the engine's `text_identity` is `byte_identical`, `Differs only by indentation` when it is `indentation_only` (the same lines once each line's leading whitespace is removed), otherwise the classification's kind title ([CLONE-KIND-LABELS]), or the engine's explanation for a pair it does not classify. Without a connected engine the title names the endpoints alone and claims nothing; the log says why.
 

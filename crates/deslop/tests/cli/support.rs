@@ -27,6 +27,9 @@ pub(crate) const MIN_NODES_FLAG: &str = "--min-nodes";
 pub(crate) const MIN_NODES_VALUE: &str = "8";
 /// Shared CLI flag disabling ANSI colour sequences.
 pub(crate) const NO_COLOR_FLAG: &str = "--no-color";
+/// Shared CLI flag opting one run out of the fingerprint cache
+/// ([CLI-ARG-NO-INCREMENTAL]).
+pub(crate) const NO_INCREMENTAL_FLAG: &str = "--no-incremental";
 /// Shared output stem used by CLI integration tests.
 pub(crate) const REPORT_OUTPUT_STEM: &str = "report";
 /// Canonical small C# fixture name.
@@ -171,7 +174,7 @@ pub(crate) fn deslop_command(scan_root: &Path, output_prefix: &Path) -> Result<C
 /// [`seed_scan_root`] instead of reaching for a fixture directly.
 pub(crate) fn fixture_command(name: &str, output_prefix: &Path) -> Result<Command> {
     let mut cmd = deslop_command(&fixture(name), output_prefix)?;
-    let _cmd = cmd.arg("--no-incremental");
+    let _cmd = cmd.arg(NO_INCREMENTAL_FLAG);
     Ok(cmd)
 }
 

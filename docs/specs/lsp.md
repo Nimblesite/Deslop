@@ -134,15 +134,7 @@ Editors without a Deslop client lose nothing essential: the same clone informati
 
 ### [LSP-EDITOR-SURFACES] Editor-neutral rendered surfaces
 
-Every Deslop surface that returns rendered content (cluster detail, report, schema
-doc) is produced server-side as editor-neutral markdown/text, so any LSP client —
-VS Code, Neovim, Helix, Zed — gets identical output without re-deriving it from
-the report structure. The `deslop/virtualDocument` method ([LSP-VIRTUAL-DOC]) is
-the canonical example: it resolves each `deslop://` URI into a string the client
-opens in a read-only buffer. Rendering is pure and lives in `deslop-core::render`
-(e.g. `render_cluster_markdown`, `render_text`); the LSP only supplies a
-filesystem source lookup. No surface ships a client-specific shape — the client
-chooses presentation (syntax highlighting, theming), never content.
+Every Deslop surface that returns rendered content (cluster detail, report, schema doc) is produced server-side as editor-neutral markdown/text, so any LSP client — VS Code, Neovim, Helix, Zed — gets identical output without re-deriving it from the report structure. The `deslop/virtualDocument` method ([LSP-VIRTUAL-DOC]) is the canonical example: it resolves each `deslop://` URI into a string the client opens in a read-only buffer. Rendering is pure and lives in `deslop-core::render` (e.g. `render_cluster_markdown`, `render_text`); the LSP only supplies a filesystem source lookup. No surface ships a client-specific shape — the client chooses presentation (syntax highlighting, theming), never content.
 
 ### [LSP-VIRTUAL-DOC] Virtual document scheme
 
@@ -201,14 +193,7 @@ The `LspBackend` struct owns `_watcher: LiveWatcher` and `_scheduler: Scheduler`
 
 ### [LSP-PUSH-NOTIFICATIONS] Server-initiated notifications
 
-Beyond responding to requests, the LSP pushes unsolicited JSON-RPC notifications
-the moment server-side state changes: `deslop/reportChanged` (a new analysis
-generation is ready) and `deslop/analysisState` (running/idle lifecycle). A
-background task drains the scheduler's broadcast channels and forwards each event
-to the client ([LSP-PUSH]), so editor surfaces stay live regardless of which actor
-mutated a file. Notifications are namespaced `deslop/*` ([LSP-CUSTOM-METHODS]);
-clients must never poll in their place, and a stale UI after an external mutation
-is a push-path bug, not a refresh issue ([vsix.md §VSIX-REACTIVITY-INVARIANT](vsix.md#vsix-reactivity-invariant)).
+Beyond responding to requests, the LSP pushes unsolicited JSON-RPC notifications the moment server-side state changes: `deslop/reportChanged` (a new analysis generation is ready) and `deslop/analysisState` (running/idle lifecycle). A background task drains the scheduler's broadcast channels and forwards each event to the client ([LSP-PUSH]), so editor surfaces stay live regardless of which actor mutated a file. Notifications are namespaced `deslop/*` ([LSP-CUSTOM-METHODS]); clients must never poll in their place, and a stale UI after an external mutation is a push-path bug, not a refresh issue ([vsix.md §VSIX-REACTIVITY-INVARIANT](vsix.md#vsix-reactivity-invariant)).
 
 ### [LSP-EMBEDDING-CONSENT] Startup embedding behaviour
 

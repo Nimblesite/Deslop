@@ -192,7 +192,13 @@ A register with no entries scores **nothing**, never 100%. Being asked no questi
 
 **Two entry points, one code path.** `scripts/corpus/score-gate.sh` scans the register-backed targets with the current build and gates on the thresholds — this is what CI runs, on a small slice. `scripts/compare-versions.sh` scans the same targets with two engines and additionally reports whether the second lost ground against the first. Both write the same run manifest and call the same scorer.
 
+### [CORPUS-SCORE-COMPARE] Comparing two engines
+
 **Degradation has a hard definition.** Version B degraded against version A only if B misses a CLEARLY IN that A found, or reports a CLEARLY OUT that A stayed silent on. A defect both engines share is a **standing defect** — real, and reported as such, but not slippage.
+
+**The default run produces a score.** With no target named, `scripts/compare-versions.sh` compares the two engines over every judged register. Environment variables override its defaults, and positional arguments override both.
+
+**Every comparison states its provenance.** The report carries both Deslop commit ids in full, each target repository's exact commit, and the sha256 of each binary that produced the figures. `scripts/compare-versions-summary.mjs` lifts every figure verbatim from the engine's report JSON or from the scorecard; the only thing it works out itself is which published cluster ids the two engines share.
 
 ### [CORPUS-BASELINE] The known-failures ratchet
 

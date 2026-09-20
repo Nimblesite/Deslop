@@ -1,15 +1,7 @@
-//! Shared fixture-copy helpers for the live-feature E2E suites.
-//!
-//! Each integration test file is a separate binary, so cross-file reuse
-//! is wired via `mod common;` declarations rather than `pub use`. This
-//! keeps the per-test files small and prevents byte-identical fixture
-//! plumbing from being duplicated across the `live`-gated suites
-//! (`live.rs`, `issue_117.rs`).
-//!
-//! A test binary that pulls in only a subset of these helpers is fine,
-//! so the unused-symbol lint is silenced for this module.
-
-#![allow(dead_code)]
+//! Shared fixture-copy helpers for the live-feature E2E suites, declared
+//! once by `suite.rs` ([TEST-ONE-BINARY]). This keeps the per-test files
+//! small and prevents byte-identical fixture plumbing from being duplicated
+//! across the `live`-gated suites (`live.rs`, `issue_117.rs`).
 
 pub(crate) mod census;
 pub(crate) mod clusters;

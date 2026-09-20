@@ -42,8 +42,7 @@ const WEIGHT_LABEL = "weight";
 const CANONICAL_COMPARE_LABEL = "Compare is disabled on the canonical occurrence because it would compare the same range with itself.";
 const PEER_COMPARE_LABEL = "Compare this occurrence with the canonical occurrence in VS Code's diff editor.";
 const CANONICAL_COMPARE_MESSAGE = "compare/canonical";
-// [VSIX-PAIR-COMPARE] Two row taps compare exactly those two occurrences;
-// the retired per-row and gated buttons never render.
+// [VSIX-PAIR-COMPARE] Row taps remain a shortcut alongside explicit buttons.
 const PAIR_COMPARE_MESSAGE = "compare/pair";
 const OCCURRENCE_ROW = "article";
 const PICKED_ATTRIBUTE = "data-picked";
@@ -64,6 +63,41 @@ const PREVIOUS_CLUSTER_KEY = "p";
 const INFORMATIONAL_FINDING = "Informational — not a clone.";
 const SHAPE_CLUSTER_INDEX = 2;
 const DESKTOP_VIEWPORT_INDEX = 0;
+const SELECT_COMPARE_LABEL = "Select for Compare";
+const COMPARE_SELECTED_LABEL = "Compare with Selected";
+const COMPARE_CANONICAL_LABEL = "Compare To Canonical";
+const CLEAR_COMPARE_LABEL = "Clear Selection";
+const OCCURRENCE_HELP_SELECTOR = '[data-doc-topic="occurrences"]';
+const HELP_HEADING = "Open and compare code";
+const HELP_TARGET_SIZE = 22;
+const HELP_ITEM_COUNT = 4;
+
+// [VSIX-PAIR-COMPARE] Each comparison action names its endpoints explicitly.
+test("cluster comparison controls distinguish canonical and selected endpoints", async ({ page }) => {
+  await loadView(page, "cluster", viewports[DESKTOP_VIEWPORT_INDEX]);
+  await postHostMessage(page, { kind: "report/snapshot", report: sampleReport });
+  await postHostMessage(page, { kind: "select/cluster", id: sampleReport.clusters[SECOND_CLUSTER_INDEX].id });
+  const rows = page.locator(OCCURRENCE_ROW);
+  await expect(rows.nth(FIRST_PEER_INDEX).getByRole("button", { name: COMPARE_CANONICAL_LABEL, exact: true })).toBeVisible();
+  await rows.nth(FIRST_PEER_INDEX).getByRole("button", { name: SELECT_COMPARE_LABEL, exact: true }).click();
+  await expect(rows.nth(FIRST_PEER_INDEX).getByRole("button", { name: CLEAR_COMPARE_LABEL, exact: true })).toBeVisible();
+  await clearPostedMessages(page);
+  await rows.nth(SECOND_PEER_INDEX).getByRole("button", { name: COMPARE_SELECTED_LABEL, exact: true }).click();
+  await expectPostedPair(page, SECOND_CLUSTER_INDEX, FIRST_PEER_INDEX, SECOND_PEER_INDEX);
+  await expect(rows.nth(FIRST_PEER_INDEX).getByRole("button", { name: SELECT_COMPARE_LABEL, exact: true })).toBeVisible();
+});
+
+test("live updates release a comparison selection whose range disappeared", async ({ page }) => {
+  // [VSIX-PAIR-COMPARE] A refreshed report must not offer a stale endpoint.
+  await loadView(page, "cluster", viewports[DESKTOP_VIEWPORT_INDEX]);
+  await postHostMessage(page, { kind: "report/snapshot", report: sampleReport });
+  await postHostMessage(page, { kind: "select/cluster", id: sampleReport.clusters[SECOND_CLUSTER_INDEX].id });
+  await page.locator(OCCURRENCE_ROW).first().getByRole("button", { name: SELECT_COMPARE_LABEL, exact: true }).click();
+  await expect(page.getByRole("button", { name: CLEAR_COMPARE_LABEL, exact: true })).toBeVisible();
+  await postHostMessage(page, { kind: "report/delta", report: withCanonicalUnsaved(sampleReport, SECOND_CLUSTER_INDEX) });
+  await expect(page.getByRole("button", { name: SELECT_COMPARE_LABEL, exact: true })).toHaveCount(NAVIGATED_PEER_COUNT);
+  await expect(page.getByRole("button", { name: COMPARE_SELECTED_LABEL, exact: true })).toHaveCount(0);
+});
 
 const viewports: readonly ViewportCase[] = [
   { name: "desktop", width: 1280, height: 900 },
@@ -89,6 +123,24 @@ test.describe("VSIX webview bundles", () => {
     await expect(page.locator("header")).not.toContainText("Rank");
   });
   for (const viewport of viewports) {
+    test(`cluster help is formatted, immediate and keyboard accessible on ${viewport.name}`, async ({ page }) => {
+      const errors = await loadView(page, "cluster", viewport);
+      await postHostMessage(page, { kind: "report/snapshot", report: sampleReport });
+      await postHostMessage(page, { kind: "select/cluster", id: sampleReport.clusters[FIRST_CLUSTER_INDEX].id });
+      const help = page.locator(OCCURRENCE_HELP_SELECTOR);
+      await expect(page.locator(OCCURRENCE_ROW).locator(".help-bubble")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Open", exact: true })).toHaveCount(0);
+      await expect(help).toHaveCSS("width", `${HELP_TARGET_SIZE}px`);
+      await help.hover();
+      await expect(page.getByRole("tooltip").locator("strong").first()).toHaveText(HELP_HEADING);
+      await expect(page.getByRole("tooltip").locator("li")).toHaveCount(HELP_ITEM_COUNT);
+      await expectHealthyRender(page, errors, `help-${viewport.name}`);
+      await help.focus();
+      await expect(page.getByRole("tooltip")).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("tooltip")).toHaveCount(0);
+    });
+
     test(`report view renders and posts commands on ${viewport.name}`, async ({ page }) => {
       const errors = await loadView(page, "report", viewport);
 
@@ -143,21 +195,21 @@ test.describe("VSIX webview bundles", () => {
       await expect(page.getByRole("heading", { name: IDENTICAL_TITLE })).toBeVisible();
 
       await clearPostedMessages(page);
-      await page.locator("button", { hasText: "Open" }).first().click();
+      await page.locator(OCCURRENCE_ROW).first().getByRole("button", { name: /^Open this occurrence/ }).click();
       await expectPosted(page, "open/occurrence");
 
       await clearPostedMessages(page);
       // [VSIX-PAIR-COMPARE] A peer opens the canonical diff in one click.
-      await expect(page.getByRole("button", { name: CANONICAL_COMPARE_LABEL })).toBeDisabled();
-      const comparePeer = page.getByRole("button", { name: PEER_COMPARE_LABEL });
+      await expect(page.getByTitle(CANONICAL_COMPARE_LABEL, { exact: true })).toBeDisabled();
+      const comparePeer = page.getByTitle(PEER_COMPARE_LABEL, { exact: true });
       await expect(comparePeer).toBeEnabled();
       await comparePeer.click();
       await expectPostedCanonical(page, FIRST_CLUSTER_INDEX, FIRST_PEER_INDEX);
       await page.getByRole("button", { name: NEXT_CLUSTER_LABEL, exact: true }).click();
       await clearPostedMessages(page);
-      await page.getByRole("button", { name: PEER_COMPARE_LABEL }).nth(FIRST_PEER_INDEX).click();
+      await page.getByTitle(PEER_COMPARE_LABEL, { exact: true }).nth(FIRST_PEER_INDEX).click();
       await expectPostedCanonical(page, SECOND_CLUSTER_INDEX, SECOND_PEER_INDEX);
-      await expect(page.getByRole("button", { name: CANONICAL_COMPARE_LABEL })).toBeDisabled();
+      await expect(page.getByTitle(CANONICAL_COMPARE_LABEL, { exact: true })).toBeDisabled();
 
       // [VSIX-PAIR-COMPARE] Tapping one row picks it, tapping a second row
       // hands both endpoints to the host, and the pick is released.
@@ -244,13 +296,13 @@ test.describe("VSIX webview bundles", () => {
     expect(canonicalRows[CANONICAL_OCCURRENCE_INDEX]).toContain(
       navigated.occurrences[CANONICAL_OCCURRENCE_INDEX].path,
     );
-    const canonicalCompare = page.getByRole("button", { name: CANONICAL_COMPARE_LABEL });
+    const canonicalCompare = page.getByTitle(CANONICAL_COMPARE_LABEL, { exact: true });
     await expect(canonicalCompare).toHaveCount(CANONICAL_ROW_COUNT);
     await expect(canonicalCompare).toBeDisabled();
     await expect(page.locator(OCCURRENCE_ROW)).toHaveCount(NAVIGATED_ROW_COUNT);
 
     // Every surviving peer keeps its Compare action ...
-    const peers = page.getByRole("button", { name: PEER_COMPARE_LABEL });
+    const peers = page.getByTitle(PEER_COMPARE_LABEL, { exact: true });
     await expect(peers).toHaveCount(NAVIGATED_PEER_COUNT);
     for (const peer of await peers.all()) {
       await expect(peer).toBeEnabled();
