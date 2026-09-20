@@ -7,12 +7,11 @@
 //! exposed here as borrows — **never serialised to the wire**
 //! ([AUTOFIX-MERGE-CODE-ACTION] in-process rule).
 
+use super::PipelineSession;
 use crate::{
     ast::{ByteRange, NormalizedNode},
     state::FileId,
 };
-
-use super::PipelineSession;
 
 impl PipelineSession {
     /// Raw source bytes of `file_id` as held by the current

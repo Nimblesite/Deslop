@@ -56,12 +56,12 @@ suite("top offenders view-axis toggles", () => {
 
     await cfg().update(
       "topOffenders.filterSeverities",
-      ["worst", "not_a_severity"],
+      ["error", "not_a_severity"],
       vscode.ConfigurationTarget.Workspace,
     );
     assert.deepEqual(
       readTopOffendersFilter(),
-      { severities: ["worst"] },
+      { severities: ["error"] },
       "unknown values are dropped on read — a typo never empties the tree",
     );
     assert.equal(isTopOffendersFilterActive(), true);
@@ -92,18 +92,18 @@ suite("top offenders facet filter persistence", () => {
   test("a persisted typo severity is dropped while known ones survive", async () => {
     await cfg().update(
       "topOffenders.filterSeverities",
-      ["worst", "top-severity-typo", "mid"],
+      ["error", "top-severity-typo", "information"],
       vscode.ConfigurationTarget.Workspace,
     );
     const filter = readTopOffendersFilter();
-    assert.deepEqual(filter.severities, ["worst", "mid"]);
+    assert.deepEqual(filter.severities, ["error", "information"]);
     assert.equal(isTopOffendersFilterActive(), true);
   });
 
   test("clearing the filter deactivates the active flag", async () => {
     await cfg().update(
       "topOffenders.filterSeverities",
-      ["faint"],
+      ["hint"],
       vscode.ConfigurationTarget.Workspace,
     );
     assert.equal(isTopOffendersFilterActive(), true);
@@ -114,7 +114,7 @@ suite("top offenders facet filter persistence", () => {
 
   test("choosing a filter on an empty report informs instead of opening a picker", async () => {
     const store = seededStore([]);
-    const sentinel = ["mid"];
+    const sentinel = ["information"];
     await cfg().update(
       "topOffenders.filterSeverities",
       sentinel,

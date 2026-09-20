@@ -7,8 +7,8 @@ Specs (read first, in this order): [literals.md](../specs/literals.md)
 `[LITERAL-CATEGORY-CONST-ALIAS]`, `[LITERAL-NOISE]`, `[LITERAL-CANONICAL]`,
 `[LITERAL-WIRE]`, `[LITERAL-CACHE]`, `[LITERAL-UNUSED-MARKER]`,
 `[LITERAL-CONFIG]`, `[LITERAL-CENSUS]`, `[LITERAL-TESTING]`),
-[taxonomy.md §CLONE-CATEGORY-REGISTRY](../specs/taxonomy.md#clone-category-registry),
-[pipeline.md §RANK-LITERAL-FAMILY / §RANK-UNUSED-PUBLIC](../specs/pipeline.md#rank-literal-family),
+[taxonomy.md §CLONE-CATEGORY-REGISTRY](../specs/taxonomy.md#clone-category-registry-other-finding-kinds),
+[pipeline.md §RANK-LITERAL-FAMILY / §RANK-UNUSED-PUBLIC](../specs/pipeline.md#rank-literal-family-literal-families-use-the-same-mass-formula),
 [facets.md](../specs/facets.md)
 (`[FACET-MODEL]`, `[FACET-TOP-OFFENDERS-FILTER]`,
 `[FACET-TOP-OFFENDERS-FILTER-EMPTY]`, `[FACET-GROUP-BY-TYPE]`,
@@ -63,8 +63,8 @@ Steps:
    config-independent — `enabled = false` skips the join, never the capture.
 2. Cache: extend the per-file cached entry with the two site vectors (byte ranges only) +
    encode/decode; decode failure = cache miss, never an error. Round-trip E2E proves it.
-3. Add `LiteralFindingKind` with the five wire labels from [CLONE-CATEGORY-REGISTRY]. It belongs only to `LiteralFinding`; clone clusters, pair classifications, cluster facets, and cluster severity never consume it.
-4. Join hook: call `build_literal_findings` beside clone materialisation and return a separate mass-ranked `literal_findings` collection. [RANK-LITERAL-FAMILY] owns its unmodified mass; [METRICS-REPO] excludes it from clone line metrics and `clusters_total`.
+3. Add `LiteralFindingKind` with the five wire labels from [CLONE-CATEGORY-REGISTRY](../specs/taxonomy.md#clone-category-registry-other-finding-kinds). It belongs only to `LiteralFinding`; clone clusters, pair classifications, cluster facets, and cluster severity never consume it.
+4. Join hook: call `build_literal_findings` beside clone materialisation and return a separate mass-ranked `literal_findings` collection. [RANK-LITERAL-FAMILY] owns its unmodified mass; [METRICS-REPO](../specs/pipeline.md#metrics-repo-repo-wide-duplication-metrics) excludes it from clone line metrics and `clusters_total`.
 5. Wire: `live-ipc.td` adds `LiteralFinding`, `LiteralOccurrence`, `LiteralFindingKind`, and `CanonicalTarget`; regenerate Rust and TypeScript. Do not add literal fields to `ReportCluster` or `ReportOccurrence`.
 6. Flags: LSP `--literals-enabled` plus the CLI `--no-literals` mirror and VS Code setting per [LITERAL-CONFIG]. Delete literal ranking flags, multipliers, and boosts.
 7. REPORTING-CONTEXT.md documents the separate literal-finding record, canonical target, mass, and count fields. It does not tell consumers to read literal kind from a cluster.
@@ -91,7 +91,7 @@ entry (mergeable counts, incremental per file change); suppression cascade exact
 no codegen):
 
 1. Wire: in `live-ipc.td`, replace the four page/report payload models with one `DuplicatesPage`; slim `RescanPayload` to `generation` plus the page; keep `ClusterSummary` limited to identity, canonical extent, occurrence count, language/path projection, mass, and rank; add an endpoint-keyed `compare-pair` request/response; and keep literal findings in their own payload rather than adding a cluster category.
-2. Schemas: one shared cluster filter builder for language, path, canonical extent, and mass severity; one matching implementation shared by every cluster consumer. Pair classification and literal finding kind are not cluster filters.
+2. Schemas: one shared cluster filter builder for language, path, canonical extent, and diagnostic severity; one matching implementation shared by every cluster consumer. Pair classification and literal finding kind are not cluster filters.
 3. `ClusterSummary.language` derives from the **core parser registry's** extension map — delete the
    hand-maintained path→language copies in the MCP page builder and the HTML renderer in favour of
    one core helper (fixes Dart `language: "unknown"`; unblocks #164; verify-and-close #170/#198).
@@ -134,11 +134,11 @@ no codegen):
 
 ### B2 — VSIX cluster and literal-finding filters (M)
 
-[FACET-TOP-OFFENDERS-FILTER], [FACET-TOP-OFFENDERS-FILTER-EMPTY], [FACET-GROUP-BY-TYPE], and [FACET-REPORT-WEBVIEW]: cluster views filter only by language, path, and mass severity and group only by cluster, file, folder, or language. Delete `filterBuckets`, `filterCategories`, `groupBy: "type"`, bucket/category selectors, category chips, and per-bucket severity. Dedicated literal-finding views may filter by literal finding kind without projecting that kind onto a clone cluster. Coarse E2E per [FACET-TESTING] proves the two record families remain separate.
+Use [FACET-GROUP-BY-KIND] and [SEVERITY-CONFIG](../specs/severity.md#severity-config-configuration) for category grouping and diagnostic-severity filtering. Keep shape-only information last and outside clone counts. Dedicated literal views may filter their own finding kinds. Required coverage: [FACET-TESTING].
 
 ### B3 — HTML + CLI facets (S)
 
-[FACET-HTML] and [FACET-CLI] render clone clusters neutrally from membership and mass, while a separate literal-finding section may show literal kind and drift values. No `cat-*` class, pair classification, or literal kind appears on a clone cluster. E2E uses rendered-output assertions per [FACET-TESTING].
+[FACET-HTML] and [FACET-CLI] use the shared category names and show mass only for actual clones. Shape-only information appears last; literal findings remain separate. Raw pair evidence requires explicit endpoints. Verify rendered output under [FACET-TESTING].
 
 ## Follow-ups (specced as future work, not scheduled)
 

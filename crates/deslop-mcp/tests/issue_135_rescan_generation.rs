@@ -9,13 +9,13 @@
 #![cfg(unix)]
 
 use anyhow::{anyhow, ensure, Result};
-use serde_json::{json, Value};
-
-use crate::common;
 use common::{
     call_tool, copied_fixture, spawn_lsp_and_wait_for_socket, structured_content,
     wait_for_state_then_init_mcp, McpHandle,
 };
+use serde_json::{json, Value};
+
+use crate::common;
 
 /// Issue #135: `rescan`, `session`, and `duplicates` must all
 /// report the same `generation` for the same report state.

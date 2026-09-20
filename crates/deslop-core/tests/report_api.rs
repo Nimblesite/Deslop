@@ -7,8 +7,8 @@ use deslop_core::{
     boilerplate::BoilerplateRange,
     config::ExclusionConfig,
     report::{
-        PairClassification, PairComparison, PairEndpoint, PairEvidence, PairTextIdentity,
-        ReportOccurrence,
+        ContentMeasurement, PairClassification, PairComparison, PairEndpoint, PairEvidence,
+        PairTextIdentity, ReportOccurrence,
     },
     report_boilerplate::build_boilerplate_hints,
     report_fixtures::{fixture_cluster, fixture_report},
@@ -101,6 +101,7 @@ fn explicit_pair_comparison_round_trips_both_exact_endpoints_and_evidence() -> a
             structural: 0.8,
             token_jaccard: 0.9,
             embedding_cos: 0.7,
+            content_measurement: ContentMeasurement::Measured,
             agreement: 0.75,
             rename_consistency: 0.6,
             literal_fraction: 0.1,
@@ -119,6 +120,10 @@ fn explicit_pair_comparison_round_trips_both_exact_endpoints_and_evidence() -> a
     assert_ne!(decoded.left, decoded.right);
     assert!(decoded.evidence.admitted);
     assert!(decoded.evidence.content_ok);
+    assert_eq!(
+        decoded.evidence.content_measurement,
+        ContentMeasurement::Measured
+    );
     Ok(())
 }
 

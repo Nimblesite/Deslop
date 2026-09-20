@@ -4,8 +4,10 @@
 use anyhow::{anyhow, Result};
 use serde_json::Value;
 
-use crate::common::signals::{assert_structural_only_contract, has_verbatim_pair};
-use crate::common::*;
+use crate::common::{
+    signals::{assert_structural_only_contract, has_verbatim_pair},
+    *,
+};
 
 /// The node floor this fixture is judged at: large enough that only a
 /// whole route-handler body can clear it.

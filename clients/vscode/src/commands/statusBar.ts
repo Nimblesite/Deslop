@@ -9,7 +9,7 @@ import { signal, effect } from "@preact/signals-core";
 import { sameFile, shortPath } from "../pathUtils";
 import { ReportStore } from "../reportStore";
 import { formatPercent } from "../types/format";
-import { applyFacetFilter } from "../types/report";
+import { applyFacetFilter, isClone } from "../types/report";
 
 export { sameFile, shortPath } from "../pathUtils";
 
@@ -61,15 +61,15 @@ export class StatusBar implements vscode.Disposable {
       : visibleClusters;
     const n = clustersInFile.length;
     const worst = visibleClusters[0];
-    const worstLabel = worst
-      ? ` · #1=${shortPath(worst.occurrences[0]?.path ?? "?")}`
+    const worstLabel = worst && isClone(worst)
+      ? ` · #${worst.rank}=${shortPath(worst.occurrences[0]?.path ?? "?")}`
       : "";
     const embed = report.embedding_provenance?.model_id ?? "off";
     const analysingSuffix = analysing ? " (analysing…)" : "";
-    this.item.text = `dedup · ${n}${worstLabel} · embed=${embed}${analysingSuffix}`;
+    this.item.text = `dedup · ${n} findings${worstLabel} · embed=${embed}${analysingSuffix}`;
     this.item.tooltip = new vscode.MarkdownString(
       `**Deslop**\n\n` +
-        `${visibleClusters.length} clusters total, ${n} in this file\n\n` +
+        `${visibleClusters.length} findings shown, ${n} in this file\n\n` +
         `duplication: \`${formatPercent(report.metrics.duplication_percent)}\` ` +
         `(${report.metrics.duplicated_loc}/${report.metrics.analysed_loc} LOC)\n\n` +
         `Click to jump to the worst offender.`,

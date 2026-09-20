@@ -1,8 +1,6 @@
 //! Real-LSP regression for [PIPELINE-DETERMINISM]. Returning to identical
 //! source and config bytes must return the identical ordered report.
 
-use crate::common;
-
 use std::{collections::BTreeMap, fs, path::Path, time::Duration};
 
 use anyhow::{anyhow, Result};
@@ -11,6 +9,8 @@ use common::{
     spawn_lsp_guarded, wait_for_report_matching, watched_file_changed, write_frame,
 };
 use serde_json::Value;
+
+use crate::common;
 
 const REPORT_TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -143,7 +143,7 @@ fn assert_clean_control(report: &Value) -> Result<()> {
     );
     assert_eq!(at(cluster, "occurrences_truncated"), false, "{cluster:#}");
     assert_eq!(at(cluster, "rank"), 1, "{cluster:#}");
-    assert_eq!(at(cluster, "rank_band"), "worst", "{cluster:#}");
+    assert_eq!(at(cluster, "severity"), "warning", "{cluster:#}");
     let canonical_nodes = at(cluster, "canonical_node_count")
         .as_u64()
         .ok_or_else(|| anyhow!("cluster has no canonical node count: {cluster:#}"))?;

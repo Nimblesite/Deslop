@@ -28,6 +28,10 @@ const DELTA_FILE = "Delta.cs";
 const DIFFERENT_TEXT = "different";
 const INDENTATION_ONLY_TEXT = "indentation_only";
 const NEARLY_IDENTICAL_KIND = "nearly_identical";
+// [CLONE-BUCKETS-IDENTICAL] Identity is equal source content after
+// ASCII-whitespace folding, so a re-indented copy is Identical even
+// though its bytes differ.
+const IDENTICAL_KIND = "identical";
 const CLOSE_ALL_EDITORS = "workbench.action.closeAllEditors";
 const COMPARE_WITH_CANONICAL = "deslop.compareWithCanonical";
 const LINE_BREAK = "\n";
@@ -172,6 +176,9 @@ suite("cluster navigation", () => {
     const cluster = await waitForClusterHolding(api.client, ALPHA_FILE);
     const { diff, evidence } = await compareWithCanonicalOneClick(api.client, cluster);
     assert.equal(evidence.text_identity, DIFFERENT_TEXT, "renamed copies do not differ only by indentation");
+    // [CLONE-BUCKETS-ROUTING] A consistent rename is a Type-2 near-copy, never
+    // shape-only and never a weaker relation.
+    assert.equal(cluster.kind, NEARLY_IDENTICAL_KIND, "a consistent rename is a near-copy");
     assert.ok(!diff.label.includes(INDENTATION_ONLY_VERDICT), `no indentation claim for a rename: ${diff.label}`);
     assert.ok(diff.label.endsWith(kindTitle(cluster.kind)), `title ends with the pair's kind: ${diff.label}`);
     assert.ok(diff.label.includes(ALPHA_FILE) && diff.label.includes(BETA_FILE), `title names Alpha and Beta: ${diff.label}`);
@@ -187,7 +194,12 @@ suite("cluster navigation", () => {
   test("a copy that differs only by indentation is titled that way and the diff shows nothing else", async () => {
     assert.ok(api.client, "extension must expose the real LanguageClient");
     const cluster = await waitForClusterHolding(api.client, GAMMA_FILE);
-    assert.equal(cluster.kind, NEARLY_IDENTICAL_KIND, "a re-indented copy is not byte-identical");
+    // [CLONE-BUCKETS-IDENTICAL] `Identical` requires equal source content after
+    // ASCII-whitespace folding — not equal bytes. Re-indentation is whitespace
+    // outside any literal, so it folds away and the copy stays Identical. The
+    // byte inequality asserted below is what makes this a folding result rather
+    // than a byte-equality one.
+    assert.equal(cluster.kind, IDENTICAL_KIND, "re-indentation folds away, leaving identical source content");
     const { diff, evidence } = await compareWithCanonicalOneClick(api.client, cluster);
     assert.equal(evidence.text_identity, INDENTATION_ONLY_TEXT, "the engine sees indentation as the whole difference");
     assert.ok(diff.label.endsWith(INDENTATION_ONLY_VERDICT), `title says indentation only: ${diff.label}`);

@@ -71,6 +71,7 @@ fn report_with_cluster(path: &Path, spans: OccurrenceSpans) -> Report {
         clusters_hidden: 0,
         cache_stats: CacheStats::default(),
         metrics: RepoMetrics::default(),
+        routing: deslop_core::config::RoutingTuning::default(),
         schema_doc: String::new(),
         boilerplate_hints: Vec::new(),
         embedding_provenance: None,

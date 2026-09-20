@@ -21,8 +21,7 @@
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::signals::assert_no_pair_surface_on_cluster;
-use crate::common::*;
+use crate::common::{signals::assert_no_pair_surface_on_cluster, *};
 
 /// Finds a rendered cluster by its stable id.
 fn cluster_by_id<'a>(report: &'a Value, id: &str) -> Option<&'a Value> {

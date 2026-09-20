@@ -6,33 +6,25 @@ use crate::report::ReportCluster;
 pub(crate) fn rank_by_mass(clusters: &mut [ReportCluster]) {
     clusters.sort_by(|left, right| {
         right
-            .mass
-            .cmp(&left.mass)
+            .kind
+            .is_clone()
+            .cmp(&left.kind.is_clone())
+            .then_with(|| right.mass.cmp(&left.mass))
             .then_with(|| left.id.cmp(&right.id))
     });
     stamp_ranks(clusters);
 }
 
-/// Stamps repository-global rank and its engine-authored visual band.
+/// Stamps clone ranks; informational findings have no clone rank.
 pub(crate) fn stamp_ranks(clusters: &mut [ReportCluster]) {
-    let total = clusters.len();
-    for (index, cluster) in clusters.iter_mut().enumerate() {
-        let rank = index.saturating_add(1);
+    let mut rank: usize = 0;
+    for cluster in clusters.iter_mut() {
+        if !cluster.kind.is_clone() {
+            cluster.rank = 0;
+            continue;
+        }
+        rank = rank.saturating_add(1);
         cluster.rank = rank;
-        rank_band(rank, total).clone_into(&mut cluster.rank_band);
-    }
-}
-
-/// Returns the band for a one-based repository-global rank.
-fn rank_band(rank: usize, total: usize) -> &'static str {
-    if rank <= total.div_ceil(100) {
-        "worst"
-    } else if rank <= total.div_ceil(10) {
-        "top10"
-    } else if rank <= total.div_ceil(2) {
-        "mid"
-    } else {
-        "faint"
     }
 }
 
@@ -67,7 +59,7 @@ mod tests {
         ReportCluster {
             id: id.to_owned(),
             rank: 0,
-            rank_band: String::new(),
+            severity: String::new(),
             kind: crate::buckets::ClusterKind::Identical,
             mass,
             canonical_node_count: 1,

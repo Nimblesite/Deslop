@@ -295,7 +295,7 @@ fn duplicate_file_edits(
 
 /// Insertion offset for the `use` item: after leading inner attributes
 /// and inner doc comments, which must stay first in the file
-///.
+/// .
 fn import_offset(root: Node<'_>, source: &[u8]) -> usize {
     let mut offset = 0;
     for child in named_children(root) {

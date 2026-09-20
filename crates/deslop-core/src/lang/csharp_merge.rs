@@ -4,17 +4,19 @@
 
 use tree_sitter::Node;
 
-use crate::ast::named_children;
-use crate::lang::merge_emit::{
-    emit_merge_helper, BraceStyle, HelperDialect, HelperPlacement, InsertionPoint,
+use crate::{
+    ast::named_children,
+    lang::merge_emit::{
+        emit_merge_helper, BraceStyle, HelperDialect, HelperPlacement, InsertionPoint,
+    },
+    refactor::{
+        emit::line_indent_at,
+        merge::{site_arguments, MergeEmitOutcome, MergeEmitRequest},
+        preconditions::{field_text, node_text},
+        tables::{BoundaryKind, MergeTables},
+    },
+    wire_generated::MergeParameter,
 };
-use crate::refactor::{
-    emit::line_indent_at,
-    merge::{site_arguments, MergeEmitOutcome, MergeEmitRequest},
-    preconditions::{field_text, node_text},
-    tables::{BoundaryKind, MergeTables},
-};
-use crate::wire_generated::MergeParameter;
 
 /// C# merge tables ([AUTOFIX-MERGE-SAFETY] B and D,
 /// [AUTOFIX-MERGE-DEFAULTS]).

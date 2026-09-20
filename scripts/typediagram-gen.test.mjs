@@ -38,13 +38,14 @@ const MASS_ONLY_CLUSTER_FIELDS = [
   "id",
   "intersects_diff",
   "is_newly_introduced",
+  "kind",
   "mass",
   "occurrence_count",
   "occurrences",
   "occurrences_total",
   "occurrences_truncated",
   "rank",
-  "rank_band",
+  "severity",
 ];
 const PAIR_ENDPOINT_FIELDS = ["end_byte", "path", "start_byte"];
 

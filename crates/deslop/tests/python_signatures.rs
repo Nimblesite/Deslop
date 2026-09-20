@@ -13,10 +13,10 @@
 
 use anyhow::Result;
 
-use crate::common::signals::{
-    assert_structural_only_contract, has_verbatim_pair, top_visible_cluster,
+use crate::common::{
+    signals::{assert_structural_only_contract, has_verbatim_pair, top_visible_cluster},
+    *,
 };
-use crate::common::*;
 
 // [FUSED-SIGNALS-THREE-LAYER] Type-2 Python clones (identical after
 // normalisation) must be detected — proves the signature pipeline maps

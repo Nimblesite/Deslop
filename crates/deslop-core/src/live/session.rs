@@ -11,15 +11,6 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use crate::{
-    config::ExclusionConfig,
-    delta::ReportDelta,
-    embedding::{EmbeddingMode, EmbeddingProvider},
-    lang::LanguageParser,
-    pipeline::{language_for_path, EmbeddingSettings, PipelineSession},
-    report::{Report, ReportCluster},
-};
-
 use super::{
     cache_seed_key::CacheSeedKey,
     cluster_lookup::resolve_cluster_by_id_prefix,
@@ -37,6 +28,14 @@ use super::{
         EmbeddingModelInfo, EmbeddingProgress, FileReport, FindSimilarInput, FindSimilarRequest,
         FindSimilarResult, SessionConfig,
     },
+};
+use crate::{
+    config::ExclusionConfig,
+    delta::ReportDelta,
+    embedding::{EmbeddingMode, EmbeddingProvider},
+    lang::LanguageParser,
+    pipeline::{language_for_path, EmbeddingSettings, PipelineSession},
+    report::{Report, ReportCluster},
 };
 
 /// Sink invoked around a `set_embedding_model` swap so transports can
@@ -945,7 +944,7 @@ pub fn read_report_snapshot(handle: &RwLock<Arc<Report>>) -> Arc<Report> {
 /// cache-seed window before the background pipeline installs. Deriving from
 /// the parser registry (not a hand-maintained extension map) keeps the seeded
 /// language set from drifting when a language is added ([PIPELINE-LANG-TRAIT],
-///).
+/// ).
 fn languages_from_report_occurrences(report: &Report) -> Vec<String> {
     let mut seen: std::collections::BTreeSet<&'static str> = std::collections::BTreeSet::new();
     for cluster in &report.clusters {

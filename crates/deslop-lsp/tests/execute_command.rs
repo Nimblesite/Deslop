@@ -298,7 +298,7 @@ fn assert_report_json_shape(report: &Value) -> Result<()> {
     // clone-type bucket ([MCP-TOOLS]). Pin rank presence and bucket
     // absence so the fat surface cannot leak back into the wire.
     assert!(
-        first.get("rank").is_some() && first.get("rank_band").is_some(),
+        first.get("rank").is_some() && first.get("severity").is_some(),
         "cluster needs its mass-ranked surface: {first}"
     );
     assert!(

@@ -46,11 +46,11 @@ The host pushes the **visible projection** for the report and duplication webvie
 
 Command `deslop.openCluster` opens a webview tab. The tab renders a single cluster with:
 
-- Header: the clone kind title ([CLONE-KIND-LABELS]), cluster id, rank, mass, occurrence count, a badge coloured by the kind and glyphed by the mass band ([CLONE-KIND-COLOR]), and jump-to-next-cluster / jump-to-prev-cluster arrows.
+- Header: the clone kind title ([CLONE-KIND-LABELS](taxonomy.md#clone-kind-labels-use-the-same-names-everywhere)), cluster id, rank, mass, occurrence count, a badge coloured by the kind ([CLONE-KIND-COLOR](taxonomy.md#clone-kind-color-colour-describes-the-category)), and jump-to-next-cluster / jump-to-prev-cluster arrows.
 - Cluster membership and mass only. The panel carries no pair evidence, pair classification, interpretation derived from pair evidence, or source-pair selection.
 - One collapsible panel per occurrence, each containing:
   - File path plus human position (`line:column`), clickable to open the file at that exact editor position.
-  - Line-numbered, syntax-highlighted source snippet (reusing the [OUTPUT-HUMAN-HTML](pipeline.md#output-human-html) rendering path — the daemon returns the snippet as pre-highlighted HTML so the webview stays dumb).
+  - Line-numbered, syntax-highlighted source snippet (reusing the [OUTPUT-HUMAN-HTML](pipeline.md#output-human-html-human-readable-html-mode) rendering path — the daemon returns the snippet as pre-highlighted HTML so the webview stays dumb).
   - "Open in editor", "Reveal in Explorer", and "Compare" buttons. Compare opens VS Code's native diff for the canonical occurrence and the clicked occurrence ([VSIX-PAIR-COMPARE]).
 
 Navigation is keyboard-first: `j/k` move occurrence focus, `n/p` move cluster focus, `Enter` opens the file at the focused occurrence, `?` shows the shortcut help. The webview is self-contained — no network fetches, no external CDNs, CSP locked to the extension origin.
@@ -87,11 +87,11 @@ Every cluster surface (Top Offenders tree, hover bubble, cluster webview, report
 
 ## [VSIX-REPORT-WEBVIEW] Full report webview
 
-Command `deslop.openReport` opens a second webview with the full ranked list — essentially a live-refreshing version of the HTML renderer from [OUTPUT-SCHEMA-JSON](pipeline.md#output-schema-json), but wired to the daemon's notification stream so it stays current as the user types. Filters: by mass severity band, by clone kind, by file-path glob. Sort is fixed (worst-first) because the whole product premise is worst-first.
+Command `deslop.openReport` opens the live report view and refreshes on report notifications. Grouping, filtering and ordering follow [FACET-REPORT-WEBVIEW]; category definitions come from [CLONE-KIND-LABELS].
 
 ## [VSIX-METRICS-REPORT] Duplication report webview
 
-Activating the headline opens a webview (`deslop.openDuplicationReport`) styled like the existing report webview ([VSIX-REPORT-WEBVIEW]). It presents the same data with more room: the headline totals and threshold verdict, then a sortable per-folder / per-file table of duplication percentages. It renders from the `report/snapshot` the panel host already pushes — carrying `metrics.per_file` and the engine-computed `metrics.folders` rollup ([METRICS-REPO]), which the webview nests and renders verbatim, never recomputing a figure — so the webview stays dumb and the extension host owns all data shaping ([vsix.md §VSIX-PRINCIPLES](vsix.md#vsix-principles) principle 4).
+Activating the headline opens a webview (`deslop.openDuplicationReport`) styled like the existing report webview ([VSIX-REPORT-WEBVIEW]). It presents the same data with more room: the headline totals and threshold verdict, then a sortable per-folder / per-file table of duplication percentages. It renders from the `report/snapshot` the panel host already pushes — carrying `metrics.per_file` and the engine-computed `metrics.folders` rollup ([METRICS-REPO](pipeline.md#metrics-repo-repo-wide-duplication-metrics)), which the webview nests and renders verbatim, never recomputing a figure — so the webview stays dumb and the extension host owns all data shaping ([vsix.md §VSIX-PRINCIPLES](vsix.md#vsix-principles) principle 4).
 
 ## [VSIX-WEBVIEW-COVERAGE] Webview coverage gate
 

@@ -3,7 +3,8 @@
 use std::{collections::HashMap, fmt::Write as _, hash::Hash};
 
 use crate::{
-    render::html::{write_cluster_card, SnippetLoader},
+    buckets::ClusterKind,
+    render::{html::write_cluster_card, html_snippets::SnippetLoader},
     report::ReportCluster,
 };
 
@@ -33,25 +34,41 @@ where
         .collect()
 }
 
-/// Writes one collapsible expander per clone kind present, in the order
-/// the kinds first appear down the worst-first list, each card in mass
-/// order ([FACET-HTML], [CLONE-KIND-LABELS]).
+/// Opens one kind's collapsible expander: the CSS suffix the colour rule
+/// keys on, the taxonomy tooltip, the title and the live group count.
+fn write_group_header(out: &mut String, kind: ClusterKind, groups: usize) {
+    let labels = kind.labels();
+    let _ = write!(
+        out,
+        "<details class=\"clone-group clone-group--{suffix}\" open>\
+         <summary title=\"{taxonomy}\">{title} — {groups} group(s)</summary>",
+        suffix = labels.css_suffix,
+        taxonomy = labels.taxonomy,
+        title = labels.title,
+    );
+}
+
+/// Writes one collapsible expander per clone kind present, in the
+/// category display order — the order `ClusterKind::all()` lists them in,
+/// which is the kind table in the taxonomy spec ([CLONE-KIND-LABELS]).
+///
+/// Categories are ordered by the strength of the relation, never by mass:
+/// byte-identical code leads the report however light it is, and
+/// shape-only information is always last, "below Similar, regardless of
+/// its size or number of matches" ([CLONE-BUCKETS-STRUCTURAL-ONLY]).
+/// Cards *within* a group keep their worst-first mass order
+/// ([RANK-MASS-SUM]).
 pub(super) fn write_bucket_groups<'c>(
     out: &mut String,
     clusters: impl IntoIterator<Item = &'c ReportCluster>,
     snippets: &mut SnippetLoader<'_>,
 ) {
-    for (kind, clusters) in group_by_first_seen(clusters, |cluster| cluster.kind) {
-        let labels = kind.labels();
-        let _ = write!(
-            out,
-            "<details class=\"clone-group clone-group--{suffix}\" open>\
-             <summary title=\"{taxonomy}\">{title} — {count} group(s)</summary>",
-            suffix = labels.css_suffix,
-            taxonomy = labels.taxonomy,
-            title = labels.title,
-            count = clusters.len(),
-        );
+    let grouped = group_by_first_seen(clusters, |cluster| cluster.kind);
+    for kind in ClusterKind::all() {
+        let Some((_, clusters)) = grouped.iter().find(|(present, _)| *present == kind) else {
+            continue;
+        };
+        write_group_header(out, kind, clusters.len());
         for cluster in clusters {
             write_cluster_card(out, cluster, snippets);
         }

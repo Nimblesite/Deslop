@@ -329,17 +329,22 @@ pub(crate) fn assert_other_languages_unchanged(
     Ok(())
 }
 
+/// [SEVERITY-DIAGNOSTICS] The only diagnostic levels a published cluster
+/// may carry. `none` is the shape-only default and is a level, not an
+/// absent value.
+const DIAGNOSTIC_LEVELS: [&str; 5] = ["none", "hint", "information", "warning", "error"];
+
 /// The analysis half of a rendered cluster: everything except the two
 /// fields that state a position in the *report* rather than a fact about
 /// the code. Deleting another language's file legitimately renumbers the
-/// report ([SEVERITY-BAND]), so `rank` and `rank_band` are asserted
+/// report ([SEVERITY-MODEL]), so `rank` and `severity` are asserted
 /// separately — against the report the cluster is actually published in,
 /// which is a stronger claim than "unchanged".
 fn analysis_fields(cluster: &Value) -> Value {
     let mut copy = cluster.clone();
     if let Some(object) = copy.as_object_mut() {
         let _rank = object.remove("rank");
-        let _band = object.remove("rank_band");
+        let _severity = object.remove("severity");
     }
     copy
 }
@@ -367,11 +372,13 @@ fn assert_rank_states_report_position(
         "{label}: the {language} cluster's rank must be its position in the \
          report it is published in, not one carried from an earlier generation"
     );
+    let severity = field(cluster, "severity")
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
     assert!(
-        !field(cluster, "rank_band")
-            .as_str()
-            .unwrap_or_default()
-            .is_empty(),
-        "{label}: every published cluster carries a severity band ([SEVERITY-BAND])"
+        DIAGNOSTIC_LEVELS.contains(&severity.as_str()),
+        "{label}: every published cluster carries one of the documented \
+         diagnostic levels ([SEVERITY-DIAGNOSTICS]), got {severity:?}"
     );
 }

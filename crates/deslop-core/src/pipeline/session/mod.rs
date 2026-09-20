@@ -21,6 +21,13 @@ use std::{
     sync::Arc,
 };
 
+use change::CorpusEffect;
+use store::CorpusStore;
+
+use super::{
+    config::{EmbeddingSettings, PipelineConfig},
+    corpus::{build_extension_map, default_parsers, fingerprint_corpus, FingerprintCorpus},
+};
 use crate::{
     ast::ByteRange,
     boilerplate::BoilerplateRange,
@@ -34,14 +41,6 @@ use crate::{
     report_metrics::AnalysedLines,
     state::{FileId, FileRegistry},
 };
-
-use super::{
-    config::{EmbeddingSettings, PipelineConfig},
-    corpus::{build_extension_map, default_parsers, fingerprint_corpus, FingerprintCorpus},
-};
-
-use change::CorpusEffect;
-use store::CorpusStore;
 
 /// A long-running analysis context owned by the daemon ([LIVE-LIFECYCLE]).
 ///

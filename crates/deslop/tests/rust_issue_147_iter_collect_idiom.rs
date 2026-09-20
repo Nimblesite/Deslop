@@ -64,7 +64,7 @@ fn rust_iter_map_collect_idiom_does_not_cluster_across_unrelated_types() -> Resu
 
 fn assert_real_rust_clone() -> Result<()> {
     let report = run_report(&fixture(CONTROL_FIXTURE), ITER_COLLECT_MIN_NODES)?;
-    let found = clusters(&report);
+    let found = clone_findings(&report);
     assert_eq!(found.len(), CONTROL_CLUSTER_COUNT, "{report:#}");
     let cluster = found
         .first()

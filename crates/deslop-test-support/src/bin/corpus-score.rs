@@ -14,16 +14,18 @@ use std::{collections::BTreeMap, ffi::OsString, fs, path::PathBuf};
 
 use anyhow::{anyhow, Result};
 use clap::{Parser, Subcommand};
-use deslop_test_support::corpus::{measured_run, repo_root};
-use deslop_test_support::corpus_score::{
-    gate::{
-        add_costs, breaches, corpus_change, degradation, load_thresholds, totals, CorpusChange,
-        CorpusTotals, Thresholds,
+use deslop_test_support::{
+    corpus::{measured_run, repo_root},
+    corpus_score::{
+        gate::{
+            add_costs, breaches, corpus_change, degradation, load_thresholds, totals, CorpusChange,
+            CorpusTotals, Thresholds,
+        },
+        render::{scorecard, Engine, Scorecard, TargetScore},
+        score_repo, RepoScore, RunCost,
     },
-    render::{scorecard, Engine, Scorecard, TargetScore},
-    score_repo, RepoScore, RunCost,
+    read_json,
 };
-use deslop_test_support::read_json;
 use serde_json::Value;
 
 /// A degradation verdict needs exactly two engines to compare.

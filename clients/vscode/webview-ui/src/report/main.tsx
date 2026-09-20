@@ -18,6 +18,8 @@ import {
   CLUSTER_KINDS,
   clusterSlug,
   kindTitle,
+  isClone,
+  INFORMATIONAL_FINDING,
   occurrenceCount,
   SEVERITIES,
   severityLabel,
@@ -136,7 +138,7 @@ function ReportApp() {
 
       <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
         {rows.map((cluster, i) => {
-          const severity = severityByClusterId.value.get(cluster.id) ?? "faint";
+          const severity = severityByClusterId.value.get(cluster.id) ?? "hint";
           const slug = clusterSlug(cluster);
           return (
             <li
@@ -188,10 +190,10 @@ function ReportApp() {
                 </div>
               </div>
               <div class={MONOSPACE_CLASS} style={{ fontSize: TWELVE_PIXEL_SIZE, textAlign: RIGHT_ALIGNMENT }}>
-                × {occurrenceCount(cluster)}
+                {isClone(cluster) ? `× ${occurrenceCount(cluster)}` : INFORMATIONAL_FINDING}
               </div>
               <div class={MONOSPACE_CLASS} style={{ fontSize: TWELVE_PIXEL_SIZE, textAlign: RIGHT_ALIGNMENT }}>
-                mass {cluster.mass}
+                {isClone(cluster) ? `mass ${cluster.mass}` : ""}
               </div>
             </li>
           );

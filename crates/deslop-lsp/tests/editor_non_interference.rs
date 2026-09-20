@@ -18,7 +18,8 @@ use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 
 use crate::common::{
-    call, handshake, session::FixtureSession, spawn_lsp_on_fixture_guarded, LspGuard,
+    call, handshake, notification, session::FixtureSession, spawn_lsp_on_fixture_guarded,
+    write_frame, LspGuard,
 };
 
 const DEFINITION: &str = "textDocument/definition";
@@ -137,6 +138,12 @@ fn canonical_navigation_survives_via_additive_clone_diagnostics() -> Result<()> 
     // canonical occurrence in the sibling file via `relatedInformation`.
     let (_workspace, _guard, mut stdin, mut stdout, alpha) = lsp_alpha_session()?;
     let _report = wait_for_clusters(&mut stdin, &mut stdout)?;
+    // [SEVERITY-DIAGNOSTICS-GATE] Navigation diagnostics are explicitly enabled.
+    let settings = json!({"settings": {"deslop": {"diagnostics": {"enabled": true}}}});
+    write_frame(
+        &mut stdin,
+        &notification("workspace/didChangeConfiguration", &settings)?,
+    )?;
 
     let response = call(
         &mut stdin,
@@ -228,8 +235,19 @@ fn additive_code_lens_carries_deslops_own_jump_command_not_definition() -> Resul
         .and_then(Value::as_str)
         .ok_or_else(|| anyhow!("lens carries a title: {first_lens}"))?;
     assert!(
-        title.starts_with("●● ") && title.ends_with(" — jump to next"),
-        "the pre-existing glyph, count and action survive: {title}"
+        title.ends_with(" — jump to next"),
+        "the jump action stays last: {title}"
+    );
+    // [LSP-CODE-LENS] The lens names the category and count in plain text.
+    // The retired band glyph quantised mass rank into dots; mass is now
+    // published as the number it is.
+    assert!(
+        title.starts_with("Nearly identical code × ") && title.contains(" — mass "),
+        "the lens leads with the clone kind and publishes mass: {title}"
+    );
+    assert!(
+        !title.contains('●'),
+        "[LSP-CODE-LENS] requires plain text, not a band glyph: {title}"
     );
     assert!(
         !title.contains('`'),

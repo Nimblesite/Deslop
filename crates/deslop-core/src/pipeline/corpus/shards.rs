@@ -7,6 +7,10 @@
 
 use std::{collections::HashMap, time::Instant};
 
+use super::{
+    fingerprint_cache_for, load_or_parse_file, log_corpus_progress, log_skip_too_deep,
+    parser_for_language, read_source, CorpusBuildState, FingerprintCorpus,
+};
 use crate::{
     boilerplate::collect_import_boilerplate_ranges,
     discover::DiscoveredFile,
@@ -14,16 +18,11 @@ use crate::{
     fingerprint::Fingerprint,
     fpcache::{FingerprintCache, LiveBlobs},
     lang::LanguageParser,
+    pipeline::config::PipelineConfig,
     report::CacheStats,
     report_metrics::count_analysed_lines,
     state::FileId,
 };
-
-use super::{
-    fingerprint_cache_for, load_or_parse_file, log_corpus_progress, log_skip_too_deep,
-    parser_for_language, read_source, CorpusBuildState, FingerprintCorpus,
-};
-use crate::pipeline::config::PipelineConfig;
 
 /// The serial (incremental) path: cache reads and writes share mutable
 /// state, so one file at a time.

@@ -1,12 +1,9 @@
 use super::support::*;
 
-// Two Rust files that are renamed (Type-2) clones of one function: the
-// copy renames the function and its parameter but keeps the body's
-// locals, so most collapsed-leaf content still agrees and the pair
-// routes to `nearly_identical` under [FUSED-CONTENT-GATE]. A fully
-// renamed copy carries no content evidence and honestly routes to
-// `structural_only` instead. Shared with `bucket_groups` as its
-// nearly-identical seed pair.
+/// The flat list includes clones and informational findings.
+const FLAT_FINDINGS_HEADING: &str = "<h2>Findings</h2>";
+
+// [CLONE-BUCKETS-ROUTING] A renamed Type-2 clone, shared with the bucket grouping tests.
 pub(crate) const RUST_A: &str = "pub fn accumulate(limit: i64) -> i64 {\n\
                       let mut total = 0;\n\
                       let mut index = 0;\n\
@@ -77,14 +74,14 @@ fn render_polyglot_html(tmp: &Path, extra: &[&str]) -> Result<String> {
 }
 
 // Implements [OUTPUT-HUMAN-HTML]: without the flag the report body is a
-// single ranked "Duplicate groups" list with no per-language sections.
+// single ranked findings list with no per-language sections.
 #[test]
 fn html_report_is_one_ranked_list_by_default() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let html = render_polyglot_html(tmp.path(), &[])?;
     assert_contains(
         &html,
-        "<h2>Duplicate groups</h2>",
+        FLAT_FINDINGS_HEADING,
         "default report keeps the single ranked list",
     );
     assert_not_contains(
@@ -111,7 +108,7 @@ fn html_report_splits_into_language_sections_via_flag() -> Result<()> {
     assert_contains(&html, "<h2>Dart — ", "a Dart section heading is rendered");
     assert_not_contains(
         &html,
-        "<h2>Duplicate groups</h2>",
+        FLAT_FINDINGS_HEADING,
         "the flat heading is replaced by per-language sections",
     );
     assert_contains(

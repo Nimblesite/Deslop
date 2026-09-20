@@ -334,7 +334,7 @@ fn technical_mode_surfaces_embedding_provenance_line() -> Result<()> {
 // friendly wording; this test guards the technical branch's wire facts
 // — the folded clone kind, cluster id, mass, occurrence count,
 // canonical node count and files ([CLONE-KIND-LABELS],
-// [RANK-MASS-SUM], [SEVERITY-BAND]). Pair-only values
+// [RANK-MASS-SUM], [SEVERITY-MODEL]). Pair-only values
 // (structural/Jaccard/embedding/content) appear only under an explicit
 // endpoint comparison. The renamed C# pair folds to the near-copy
 // kind, so its row must name it.

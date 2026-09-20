@@ -1,3 +1,4 @@
+import { FIXTURE_ROUTING } from "../cluster.helpers";
 // Unit: ReportStore snapshot + delta wiring. Runs under vscode-test so the
 // transitive `vscode` EventEmitter resolves.
 
@@ -67,6 +68,7 @@ suite("ReportStore", () => {
     assert.equal(store.current.report?.clusters[0]?.id, "b");
 
     const applied = store.applyDelta({
+      routing: FIXTURE_ROUTING,
       from_generation: 3,
       to_generation: 4,
       clusters_added: [cluster("c", 2)],
@@ -126,6 +128,7 @@ suite("ReportStore", () => {
     });
     store.applyDelta(
       delta({
+      routing: FIXTURE_ROUTING,
         from_generation: 0,
         to_generation: 1,
         tool_version: "v",
@@ -277,6 +280,7 @@ suite("ReportStore", () => {
     const churn = 2_000;
     for (let index = 0; index < churn; index += 1) {
       store.applyDelta({
+      routing: FIXTURE_ROUTING,
         from_generation: index + 1,
         to_generation: index + 2,
         clusters_added: [cluster(`c-${index}`, 1)],

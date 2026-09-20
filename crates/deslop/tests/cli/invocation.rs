@@ -1,5 +1,6 @@
-use super::support::*;
 use std::fmt::Write as _;
+
+use super::support::*;
 
 #[test]
 fn prints_version_and_exits_zero() -> Result<()> {
@@ -133,11 +134,7 @@ fn default_run_emits_all_three_formats() -> Result<()> {
     let html = &reports.html;
     assert_contains(html, "<!doctype html>", "html doctype missing");
     assert_contains(html, "Deslop report", "html human intro missing");
-    assert_contains(
-        html,
-        "Duplicate groups",
-        "html cluster section heading missing",
-    );
+    assert_contains(html, "Findings", "html cluster section heading missing");
     assert_contains(html, "class=\"cluster-card", "html cluster card missing");
     assert_contains(html, "class=\"snippet\"", "html snippet body missing");
     assert_contains(html, "class=\"ln\"", "html line-number gutter missing");

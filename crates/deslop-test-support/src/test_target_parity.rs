@@ -49,9 +49,9 @@ mod suite_scan;
 use std::{collections::BTreeSet, fs, path::Path};
 
 use anyhow::{Context, Result};
+use manifest::{RUST_EXTENSION, SUITE_FILE, TESTS_DIR};
 
 use crate::corpus::repo_root;
-use manifest::{RUST_EXTENSION, SUITE_FILE, TESTS_DIR};
 
 /// Cargo's manifest file name.
 const MANIFEST_FILE: &str = "Cargo.toml";

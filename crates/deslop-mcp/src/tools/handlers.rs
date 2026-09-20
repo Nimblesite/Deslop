@@ -12,13 +12,12 @@ use deslop_core::{
 };
 use serde_json::{json, Value};
 
+use super::backend_to_rpc;
 use crate::{
     backend::{FindSimilarInput, McpBackend},
     page::{build_page, Detail, PageShape, Pagination},
     protocol::{jsonrpc_error, ErrorCode, JsonRpcError},
 };
-
-use super::backend_to_rpc;
 
 /// Default total-occurrence budget for full cluster responses.
 const DEFAULT_MAX_OCCURRENCES: usize = 15;

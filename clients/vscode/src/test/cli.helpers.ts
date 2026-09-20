@@ -13,7 +13,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { loadDeploymentManifest, resolveBinary } from "../binary";
-import type { ClusterKind } from "../types/report";
+import type { ClusterKind, Severity } from "../types/report";
 
 /** The bundle is resolved through the manifest by its LSP; the CLI is
  * staged beside it by `_vsix-stage-bundled-binaries`, never resolved on its
@@ -27,17 +27,34 @@ const CLI_OUTPUT_PREFIX = "report";
 const TEMP_DIR_PREFIX = "deslop-cli-oracle-";
 const UTF8 = "utf8";
 
-/** The cluster facts a parity suite reads back from the JSON report. */
+/** The cluster facts a parity suite reads back from the JSON report.
+ * `severity` is the engine's resolved diagnostic level
+ * ([SEVERITY-DESLOP-MAP]) — the extension never recomputes it, so a
+ * parity suite reads it here to hold the two registries together. */
 export interface ScannedCluster {
   id: string;
   mass: number;
+  rank: number;
   kind: ClusterKind;
+  severity: Severity;
 }
 
-/** One CLI scan of the staged fixture: its clusters beside the rendered
- * text and HTML reports. */
+/** The repository-wide duplication figures the engine calculates
+ * ([METRICS-REPO]). Every percentage lives in Rust; a suite reads these
+ * to assert that a presentation change moved none of them. */
+export interface ScannedMetrics {
+  duplicated_loc: number;
+  analysed_loc: number;
+  duplication_percent: number;
+  clusters_total: number;
+  duplicated_files: number;
+}
+
+/** One CLI scan of the staged fixture: its clusters and repository
+ * metrics beside the rendered text and HTML reports. */
 export interface ScannedFixture {
   clusters: ScannedCluster[];
+  metrics: ScannedMetrics;
   text: string;
   html: string;
 }
@@ -78,9 +95,13 @@ export function scanWithBundledCli(root: string, extraArgs: readonly string[] = 
     prefix,
     ...extraArgs,
   ]);
-  const report = JSON.parse(fs.readFileSync(`${prefix}.json`, UTF8)) as { clusters: ScannedCluster[] };
+  const report = JSON.parse(fs.readFileSync(`${prefix}.json`, UTF8)) as {
+    clusters: ScannedCluster[];
+    metrics: ScannedMetrics;
+  };
   return {
     clusters: report.clusters,
+    metrics: report.metrics,
     text: fs.readFileSync(`${prefix}.txt`, UTF8),
     html: fs.readFileSync(`${prefix}.html`, UTF8),
   };

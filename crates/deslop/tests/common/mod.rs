@@ -21,6 +21,9 @@ pub(crate) mod negative_pin;
 
 pub(crate) mod signals;
 
+pub(crate) mod findings;
+pub(crate) use findings::clone_findings;
+
 /// The deterministic mock-embedder runner. Imported explicitly with
 /// `use crate::common::embeddings::*;`, for the same reason as
 /// `signals`.
@@ -119,12 +122,11 @@ use std::{
 use anyhow::anyhow;
 pub(crate) use anyhow::Result;
 use assert_cmd::Command;
-use serde_json::Value;
-
 /// Appends `.<ext>` to a path's file name. The suite's single spelling of
 /// "the sibling output the run wrote"; four suites carried their own
 /// three-line delegate to it ([CI-DESLOP] ledger).
 pub(crate) use deslop_test_support::with_ext;
+use serde_json::Value;
 
 /// Absolute path to the named directory under `tests/fixtures`, falling
 /// back to the `deslop-mcp` crate's fixture tree.
@@ -310,6 +312,22 @@ pub(crate) const IDENTICAL_TITLE: &str = "Identical code";
 pub(crate) const NEARLY_IDENTICAL_KIND: &str = "nearly_identical";
 /// [CLONE-KIND-LABELS] The title every surface renders for that kind.
 pub(crate) const NEARLY_IDENTICAL_TITLE: &str = "Nearly identical code";
+/// [CLONE-KIND-LABELS] The wire spelling of the equivalent-behaviour kind:
+/// the same work implemented with different code (Type-4).
+pub(crate) const SAME_BEHAVIOR_KIND: &str = "same_behavior";
+/// [CLONE-KIND-LABELS] The title every surface renders for that kind.
+pub(crate) const SAME_BEHAVIOR_TITLE: &str = "Same behavior, different code";
+/// [CLONE-KIND-LABELS] The wire spelling of the informational non-clone
+/// kind: matching shape carrying no or negligible shared content.
+pub(crate) const STRUCTURAL_ONLY_KIND: &str = "structural_only";
+/// [CLONE-KIND-LABELS] The title every surface renders for that kind.
+pub(crate) const STRUCTURAL_ONLY_TITLE: &str = "Same shape, different content";
+/// [CLONE-KIND-LABELS] The wire spelling of the more heavily edited
+/// established-copy kind. The machine key keeps the legacy spelling; the
+/// human title is "Similar code".
+pub(crate) const LOOSELY_SIMILAR_KIND: &str = "loosely_similar";
+/// [CLONE-KIND-LABELS] The title every surface renders for that kind.
+pub(crate) const LOOSELY_SIMILAR_TITLE: &str = "Similar code";
 
 /// [CLONE-KIND-FOLD] The kind the engine folded for `cluster`, or `""`
 /// when the report omits it so the assertion trips with the JSON printed.
@@ -704,14 +722,11 @@ pub(crate) fn line_count(lines: &BTreeSet<u64>) -> u64 {
     u64::try_from(lines.len()).unwrap_or(u64::MAX)
 }
 
-/// Per-file set of line numbers covered by the non-hidden occurrences of the
-/// report's *visible* clusters — the exact line set [METRICS-REPO] requires
-/// the duplication metric to count. Keyed by the relative occurrence path so
-/// callers match it against the absolute metric path with `ends_with`.
+/// [METRICS-REPO] Source lines covered by visible clones, excluding informational matches.
 pub(crate) fn visible_duplicated_lines(report: &Value) -> BTreeMap<String, BTreeSet<u64>> {
     let mut per_file: BTreeMap<String, BTreeSet<u64>> = BTreeMap::new();
-    for cluster in clusters(report) {
-        for occurrence in occurrences(cluster) {
+    for cluster in clone_findings(report) {
+        for occurrence in occurrences(&cluster) {
             if occurrence_is_hidden(occurrence) {
                 continue;
             }

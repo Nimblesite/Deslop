@@ -6,11 +6,9 @@
 //! refactor. Split out of `mod.rs` to keep every file under the 500-LOC
 //! budget and to house the widened member resolution.
 
-use std::{collections::HashMap, hash::BuildHasher};
+use std::{collections::HashMap, hash::BuildHasher, sync::Arc};
 
 use tree_sitter::Node;
-
-use std::sync::Arc;
 
 use super::{
     body_shape::{body_kind_stream, ShapeToken},

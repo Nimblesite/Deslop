@@ -299,8 +299,8 @@ Each cluster is a numbered block — `#1` is the worst offender — with its wei
 The HTML renderer uses the same ranking and the same cluster summaries as JSON and TXT. It adds:
 
 - syntax-highlighted example snippets, with long snippets and extra locations folded into collapsible toggles
-- an "AI match" badge and an impact chip on each duplicate group
-- a per-group signals table (structural / token / embedding) in a collapsible "Run details" footer
+- one collapsible group per clone kind, each card titled with that kind and carrying the group's mass
+- run metadata — tool version, group counts, embedding provenance and the schema reference — in a collapsible "Run details" footer
 
 It does not add: scores not in the JSON, commentary beyond the `summary` field, or links to external services.
 

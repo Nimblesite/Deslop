@@ -11,10 +11,10 @@
 #![cfg(unix)]
 
 use anyhow::{ensure, Result};
+use common::{call_tool, copied_fixture_named, initialized_mcp, spawn_lsp_and_wait_for_socket};
 use serde_json::{json, Value};
 
 use crate::common;
-use common::{call_tool, copied_fixture_named, initialized_mcp, spawn_lsp_and_wait_for_socket};
 
 /// File names of every occurrence across all returned clusters.
 fn occurrence_file_names(payload: &Value) -> Vec<String> {

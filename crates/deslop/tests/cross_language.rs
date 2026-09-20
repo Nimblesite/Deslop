@@ -1,4 +1,4 @@
-//! Cross-language comparison configuration E2E coverage.
+//! [CONFIG-CROSS-LANGUAGE] Cross-language comparison configuration E2E coverage.
 //!
 //! Drives the CLI against the mixed-language fixture so the public
 //! `.deslop.toml` contract is tested through the same path users run.

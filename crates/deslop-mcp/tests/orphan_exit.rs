@@ -10,14 +10,14 @@ use std::{
 };
 
 use anyhow::{ensure, Context, Result};
-use serde_json::{json, Value};
-
-use crate::common;
 use common::{
     fixture_root, pid_exists, read_mcp_pid,
     rpc::{StdioRpc, MCP_PROTOCOL_VERSION},
     terminate_pid, value_get, wait_for_pid_exit, KILLABLE_PARENT_SCRIPT,
 };
+use serde_json::{json, Value};
+
+use crate::common;
 
 /// How long an orphaned `deslop-mcp` may take to notice and exit.
 const ORPHAN_EXIT_TIMEOUT: Duration = Duration::from_secs(5);

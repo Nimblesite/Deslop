@@ -1,28 +1,10 @@
-//! End-to-end regression coverage for the F# data-table false positive
-//! ([CLONE-NOISE-LITERAL-TABLE],
-//! [FUSED-CONTENT-GATE], [RANK-MASS-SUM]).
+//! F# data tables must not outrank genuine clones merely because their shapes match.
+//! [CLONE-NOISE-LITERAL-TABLE] [FUSED-CONTENT-GATE] [RANK-MASS-SUM]
 //!
-//! The defect was a false positive: an F# integer array literal family —
-//! same 24-slot shape, different values in every file — ranked #1 on
-//! `dotnet/fsharp`, above every genuine clone. [CLONE-NOISE-LITERAL-TABLE]
-//! names that report as the defect, and [FUSED-CONTENT-GATE] states the
-//! rule that closes it: a data table's literals all differ, so a
-//! shape-saturated table pair "falls low" on content and is not admitted.
-//! [RANK-MASS-SUM] then orders whatever *is* admitted by mass alone.
-//!
-//! What this suite pins on the mass-only wire:
-//! - the genuine byte-identical clone is the report's first cluster,
-//!   byte-proven, spanning exactly its two files;
-//! - no cluster touching a distinct-value table ranks at or above it —
-//!   the original report, asserted as the bug it is;
-//! - two tables that share no literal value never weld: with zero
-//!   agreement and nothing to rename, no admission route can carry them;
-//! - any table cluster that does publish is byte-distinct, and every
-//!   cluster keeps the structural-only contract;
-//! - the retired `data_clones` / `data_clone_weight` knobs still parse
-//!   (backwards compatibility) but must not change the report;
-//! - the #190 verbatim escape hatch: a byte-for-byte copied table is
-//!   proven duplication and is byte-proven like any copy.
+//! The byte-identical clone leads the report. Tables with disjoint values cannot
+//! form a clone; any shape-only findings have zero mass and no rank. Tables
+//! admitted as clones must have content support and rank below the genuine copy.
+//! Retired data-clone settings do not change the report. Copied tables remain clones.
 
 use std::path::{Path, PathBuf};
 
@@ -80,14 +62,17 @@ fn tables_report(config: Option<&str>) -> Result<(tempfile::TempDir, PathBuf, Va
     report_for_with_root(&files, 20)
 }
 
-/// [CLONE-NOISE-LITERAL-TABLE] / [RANK-MASS-SUM]: the genuine
-/// clone is the first cluster and no distinct-value table outranks it.
-/// [FUSED-CONTENT-GATE]: tables sharing no literal never weld. Each
-/// cluster is byte-honest on the wire.
+/// [CLONE-NOISE-LITERAL-TABLE] [RANK-MASS-SUM] The genuine clone leads the report.
+/// [FUSED-CONTENT-GATE] Tables sharing no literal cannot form a clone.
 #[test]
 fn fsharp_numeric_tables_and_clone_publish_ranked_by_mass() -> Result<()> {
     let (_workspace, root, report) = tables_report(None)?;
     let clone = expect_cluster_spanning(&report, &CLONE_FILES)?;
+    assert_eq!(
+        clusters(&report).first(),
+        Some(clone),
+        "the genuine clone precedes every informational finding"
+    );
     assert_eq!(
         field(clone, "rank").as_u64(),
         Some(CLONE_RANK),
@@ -108,18 +93,22 @@ fn fsharp_numeric_tables_and_clone_publish_ranked_by_mass() -> Result<()> {
     Ok(())
 }
 
-/// One published table cluster: it ranks below the clone, it is
-/// byte-distinct, and it never welds two tables that share no value.
+/// Tables are byte-distinct. Informational findings have zero weight; table clones
+/// rank below the genuine copy and never join tables that share no value.
 fn assert_table_cluster_is_honest(root: &Path, cluster: &Value) -> Result<()> {
-    assert!(
-        field(cluster, "rank").as_u64() > Some(CLONE_RANK),
-        "[CLONE-NOISE-LITERAL-TABLE]: a distinct-value table family \
-         ranking at or above the genuine clone is the reported defect: {cluster:#}"
-    );
+    let is_clone = crate::common::findings::is_clone_finding(cluster);
     assert!(
         !has_verbatim_pair(root, cluster)?,
         "the table family is byte-distinct — same shape, different values — \
          and must not read as a copy: {cluster:#}"
+    );
+    if !is_clone {
+        return Ok(());
+    }
+    assert!(
+        field(cluster, "rank").as_u64() > Some(CLONE_RANK),
+        "[CLONE-NOISE-LITERAL-TABLE]: a distinct-value table family \
+         ranking at or above the genuine clone is the reported defect: {cluster:#}"
     );
     let files = cluster_file_set(cluster);
     for (left, right) in DISJOINT_TABLE_PAIRS {

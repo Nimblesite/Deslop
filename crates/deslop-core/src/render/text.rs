@@ -123,7 +123,7 @@ fn write_header(out: &mut String, report: &Report) {
         "deslop {tool} -- {files} file(s), {clusters} cluster(s), {hidden} hidden",
         tool = report.tool_version,
         files = report.files_analysed,
-        clusters = report.clusters.len(),
+        clusters = report.metrics.clusters_total,
         hidden = report.clusters_hidden,
     );
 }
@@ -165,6 +165,18 @@ fn write_boilerplate_hints(out: &mut String, report: &Report) {
 /// Writes one cluster block: rank, id, mass, membership, extent, and
 /// the folded clone kind ([CLONE-KIND-FOLD]).
 fn write_cluster(out: &mut String, cluster: &ReportCluster) {
+    if !cluster.kind.is_clone() {
+        let _ = writeln!(
+            out,
+            "[{}] {} matches={} kind={}",
+            cluster.id,
+            super::INFORMATIONAL_FINDING_NOTE,
+            cluster.occurrence_count,
+            cluster.kind.wire_label()
+        );
+        write_cluster_occurrences(out, cluster);
+        return;
+    }
     let _ = writeln!(
         out,
         "#{rank} [{id}] mass={mass} occurrences={occurrences} canonical_nodes={nodes} kind={kind}",

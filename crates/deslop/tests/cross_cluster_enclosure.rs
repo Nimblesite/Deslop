@@ -18,14 +18,16 @@
 use anyhow::Result;
 use deslop_test_support::enclosure::{first_nested_view as first_nested, spans_of as spans, Span};
 
-use crate::common::signals::{assert_no_pair_surface_on_cluster, has_verbatim_pair};
-use crate::common::verdict::duplicated_loc_for_path;
-use crate::common::*;
+use crate::common::{
+    signals::{assert_no_pair_surface_on_cluster, has_verbatim_pair},
+    verdict::duplicated_loc_for_path,
+    *,
+};
 
 /// The published clusters as `(id, spans)`, the shape the shared
 /// enclosure predicate consumes.
 fn cluster_spans(report: &serde_json::Value) -> Vec<(String, Vec<Span>)> {
-    clusters(report)
+    clone_findings(report)
         .iter()
         .map(|cluster| (cluster_id(cluster).to_owned(), spans(cluster)))
         .collect()
@@ -121,7 +123,7 @@ fn subsumption_keeps_every_admitted_file_without_reviving_a_shape_only_rewrite()
         expected,
         "the wider admitted view must retain every admitted file: {report:#}"
     );
-    let named: std::collections::BTreeSet<String> = clusters(&report)
+    let named: std::collections::BTreeSet<String> = clone_findings(&report)
         .iter()
         .flat_map(occurrences)
         .filter_map(|occurrence| Some(occurrence.get("path")?.as_str()?.to_owned()))
@@ -153,7 +155,7 @@ fn subsumption_keeps_every_admitted_file_without_reviving_a_shape_only_rewrite()
 #[test]
 fn ts_mixed_band_keeps_nonredundant_admitted_views() -> Result<()> {
     let report = run_report(&fixture("ts-mixed-band"), 12)?;
-    let published = clusters(&report);
+    let published = clone_findings(&report);
     assert!(
         published.len() >= 2,
         "one visible cluster cannot express three degrees of duplication: \
@@ -161,7 +163,7 @@ fn ts_mixed_band_keeps_nonredundant_admitted_views() -> Result<()> {
     );
     // [PIPELINE-CLUSTER-CLOSURE] The byte-proven family must reach the
     // report, and every cluster carries a clean cluster-only surface.
-    for cluster in published {
+    for cluster in &published {
         assert_no_pair_surface_on_cluster(cluster, "ts-mixed-band");
     }
     assert!(
@@ -180,7 +182,7 @@ fn ts_mixed_band_keeps_nonredundant_admitted_views() -> Result<()> {
 fn enclosure_collapse_preserves_every_duplicated_file() -> Result<()> {
     let report = enclosing_clone_report()?;
     assert_eq!(
-        cluster_count(&report),
+        clone_findings(&report).len(),
         1,
         "the corpus holds exactly one duplicated region: {report:#}"
     );

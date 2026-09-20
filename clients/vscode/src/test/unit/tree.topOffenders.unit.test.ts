@@ -1,3 +1,4 @@
+import { FIXTURE_ROUTING } from "../cluster.helpers";
 // Unit: TopOffendersProvider. Drives getChildren() against a seeded
 // store. Spec coverage:
 //   [VSIX-TOP-OFFENDERS-GROUPING]
@@ -19,7 +20,7 @@ import {
 } from "../../tree/providers";
 import { openOccurrence } from "../../commands/register";
 import { ReportStore } from "../../reportStore";
-import { kindTitle, ReportCluster, ReportOccurrence } from "../../types/report";
+import { CLUSTER_KINDS, INFORMATIONAL_FINDING, kindTitle, ReportCluster, ReportOccurrence } from "../../types/report";
 import {
   cluster,
   iconColorId,
@@ -396,7 +397,7 @@ suite("TopOffendersProvider", () => {
     // in the grey description so the bold label is free for the stable id.
     const store = storeWith(
       report([
-        cluster("worst", HIGHEST_CLUSTER_MASS, REPO_A_PATH),
+        cluster("error", HIGHEST_CLUSTER_MASS, REPO_A_PATH),
         cluster("middle", HIGH_CLUSTER_MASS, REPO_B_PATH),
         cluster("least", MEDIUM_CLUSTER_MASS, REPO_A_PATH),
       ]),
@@ -468,9 +469,9 @@ suite("TopOffendersProvider", () => {
     // [VSIX-TOP-OFFENDERS-FILE-MODE] / [FACET-GROUP-BY-KIND]
     const store = storeWith(
       report([
-        cluster(FIRST_CLUSTER_ID, HIGHEST_CLUSTER_MASS, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, "worst", 1, STRUCTURAL_ONLY_KIND),
-        cluster(SECOND_CLUSTER_ID, HIGH_CLUSTER_MASS, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, "top10", 2, IDENTICAL_KIND),
-        cluster("c3", MEDIUM_CLUSTER_MASS, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, "worst", 3, IDENTICAL_KIND),
+        cluster(FIRST_CLUSTER_ID, HIGHEST_CLUSTER_MASS, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, "error", 1, STRUCTURAL_ONLY_KIND),
+        cluster(SECOND_CLUSTER_ID, HIGH_CLUSTER_MASS, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, "warning", 2, IDENTICAL_KIND),
+        cluster("c3", MEDIUM_CLUSTER_MASS, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, "error", 3, IDENTICAL_KIND),
       ]),
     );
     const provider = topOffenders(store);
@@ -480,24 +481,48 @@ suite("TopOffendersProvider", () => {
       assert.ok(fileRoot instanceof FileNode, "single root must be a FileNode");
       const groups = provider.getChildren(fileRoot);
       // [CLONE-KIND-FOLD] The engine stamps each cluster's kind, so the
-      // groups are exactly the distinct stamped kinds, ordered by each
-      // group's worst cluster — one group per present kind, never a kind
-      // no cluster holds.
+      // groups are exactly the distinct stamped kinds — one group per
+      // present kind, never a kind no cluster holds.
+      //
+      // [CLONE-KIND-LABELS] Sections follow the category display order,
+      // not the mass ranking. The shape-only cluster here is deliberately
+      // the heaviest in the file: [CLONE-BUCKETS-STRUCTURAL-ONLY] puts
+      // shape-only "always the last category, below Similar, regardless of
+      // its size or number of matches", so weight must not lift it above
+      // the byte-identical copies. Kind mode orders its roots the same
+      // way, so one file cannot contradict the tree beside it.
       const groupLabels = groups.map(labelText);
       assert.equal(groups.length, 2, "one group per present kind");
-      assert.ok(
-        groupLabels[0]?.startsWith(kindTitle(STRUCTURAL_ONLY_KIND)),
-        `the group holding the heaviest cluster leads: ${groupLabels.join(" | ")}`,
+      assert.deepEqual(
+        groupLabels.map((label) => label.split(" (")[0]),
+        [kindTitle(IDENTICAL_KIND), kindTitle(STRUCTURAL_ONLY_KIND)],
+        `sections follow the category display order: ${groupLabels.join(" | ")}`,
       );
       assert.ok(
-        groupLabels[1]?.startsWith(kindTitle(IDENTICAL_KIND)),
-        `the identical group follows: ${groupLabels.join(" | ")}`,
+        groupLabels[0]?.startsWith(kindTitle(IDENTICAL_KIND)),
+        `byte-identical code leads the file, however light it is: ${groupLabels.join(" | ")}`,
       );
-      assert.match(groupLabels[1] ?? "", /\(2\)$/, "the identical group counts both identical clusters");
-      const [structuralGroup, identicalGroup] = groups;
+      assert.ok(
+        groupLabels.at(-1)?.startsWith(kindTitle(STRUCTURAL_ONLY_KIND)),
+        `information is last even holding the file's heaviest cluster: ${groupLabels.join(" | ")}`,
+      );
+      assert.match(groupLabels[0] ?? "", /\(2\)$/, "the identical group counts both identical clusters");
+      assert.match(groupLabels[1] ?? "", /\(1\)$/, "the shape-only group counts its one finding");
+      const [identicalGroup, structuralGroup] = groups;
       assert.ok(structuralGroup && identicalGroup);
-      assert.equal(iconColorId(structuralGroup), KIND_THEME_COLOR[STRUCTURAL_ONLY_KIND]);
       assert.equal(iconColorId(identicalGroup), KIND_THEME_COLOR[IDENTICAL_KIND]);
+      assert.equal(iconColorId(structuralGroup), KIND_THEME_COLOR[STRUCTURAL_ONLY_KIND]);
+
+      // Both grouping axes read the one registry, so the same repository
+      // cannot order its categories differently depending on which axis
+      // is active ([CLONE-KIND-LABELS]).
+      assert.deepEqual(
+        groupLabels.map((label) => label.split(" (")[0]),
+        CLUSTER_KINDS.map(kindTitle).filter((title) =>
+          groupLabels.some((label) => label.startsWith(title)),
+        ),
+        "file-mode sections follow the same registry order kind mode does",
+      );
     });
   });
 
@@ -505,8 +530,8 @@ suite("TopOffendersProvider", () => {
     // [VSIX-TOP-OFFENDERS-FILE-MODE]
     const store = storeWith(
       report([
-        cluster("hi", HIGHEST_CLUSTER_MASS, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, "worst"),
-        cluster("lo", MEDIUM_CLUSTER_MASS, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, "worst"),
+        cluster("hi", HIGHEST_CLUSTER_MASS, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, "error"),
+        cluster("lo", MEDIUM_CLUSTER_MASS, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, "error"),
       ]),
     );
     const provider = topOffenders(store);
@@ -532,7 +557,7 @@ suite("TopOffendersProvider", () => {
 
   test("tooltip preserves the full file path in both grouping modes", async () => {
     // [VSIX-TOP-OFFENDERS-FILE-MODE] Tooltip is mode-invariant.
-    const store = storeWith(report([cluster("only", HIGHEST_CLUSTER_MASS, "/repo/src/Mixed.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, "worst")]));
+    const store = storeWith(report([cluster("only", HIGHEST_CLUSTER_MASS, "/repo/src/Mixed.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, "error")]));
     const provider = topOffenders(store);
 
     const [clusterMode] = provider.getChildren();
@@ -553,7 +578,7 @@ suite("TopOffendersProvider", () => {
   test("file mode occurrence leaves match cluster mode byte-for-byte", async () => {
     // [VSIX-TOP-OFFENDERS-FILE-MODE] No special-case rendering for leaves.
     const store = new ReportStore();
-    const c = cluster("only", 100, "/repo/src/Mixed.cs", 7, 14, "worst");
+    const c = cluster("only", 100, "/repo/src/Mixed.cs", 7, 14, "error");
     store.setSnapshot(report([c]), 0);
     const provider = topOffenders(store);
 
@@ -607,8 +632,8 @@ suite("TopOffendersProvider", () => {
     // title names it. Rank chooses neither.
     const store = storeWith(
       report([
-        cluster("exact", HIGHEST_CLUSTER_MASS, "/repo/src/a/Exact.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, "worst", 1, IDENTICAL_KIND),
-        cluster("near", 90, "/repo/src/b/Near.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, "top10", 2),
+        cluster("exact", HIGHEST_CLUSTER_MASS, "/repo/src/a/Exact.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, "error", 1, IDENTICAL_KIND),
+        cluster("near", 90, "/repo/src/b/Near.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, "warning", 2),
       ]),
     );
     const provider = topOffenders(store);
@@ -635,14 +660,14 @@ suite("TopOffendersProvider", () => {
     assert.match(tooltipText(exact), /Type-1 exact clone/, "the tooltip names the taxonomy");
   });
 
-  test("a rank-1 shape-only family is never painted crimson; the smaller byte-identical cluster is", () => {
+  test("shape-only findings stay informational regardless of supplied rank", () => {
     // [CLONE-KIND-COLOR] The predicted failure of colouring by rank: a
     // family that only shares shape ranks first by mass, and a genuinely
     // identical cluster sits below it. Colour must follow the evidence.
     const store = storeWith(
       report([
-        cluster("shape-giant", HIGHEST_CLUSTER_MASS, "/repo/src/Shape.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, "worst", 1, STRUCTURAL_ONLY_KIND),
-        cluster("proven", LOW_CLUSTER_WEIGHT, "/repo/src/Proven.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, "faint", 2, IDENTICAL_KIND),
+        cluster("shape-giant", HIGHEST_CLUSTER_MASS, "/repo/src/Shape.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, "error", 1, STRUCTURAL_ONLY_KIND),
+        cluster("proven", LOW_CLUSTER_WEIGHT, "/repo/src/Proven.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, "hint", 2, IDENTICAL_KIND),
       ]),
     );
     const provider = topOffenders(store);
@@ -661,7 +686,8 @@ suite("TopOffendersProvider", () => {
     assert.notEqual(iconColorId(shapeGiant), iconColorId(proven));
     assert.match(labelText(shapeGiant), new RegExp(kindTitle(STRUCTURAL_ONLY_KIND)));
     assert.match(labelText(proven), new RegExp(kindTitle(IDENTICAL_KIND)));
-    assert.match(String(shapeGiant.description), /rank #1/, "rank still shows, in the description");
+    assert.equal(shapeGiant.description, INFORMATIONAL_FINDING);
+    assert.equal(String(shapeGiant.description).includes("rank #1"), false, "shape-only findings claim no duplication rank");
   });
 
   test("every clone kind paints a distinct icon and a distinct colour, and none is green", () => {
@@ -816,6 +842,7 @@ suite("TopOffendersProvider", () => {
       );
 
       store.applyDelta({
+      routing: FIXTURE_ROUTING,
         from_generation: 1,
         to_generation: SECOND_GENERATION,
         clusters_added: [cluster("fresh", TIED_CLUSTER_MASS, "/fresh.cs")],
@@ -854,6 +881,7 @@ suite("TopOffendersProvider", () => {
     const provider = topOffenders(store);
 
     store.applyDelta({
+      routing: FIXTURE_ROUTING,
       from_generation: 1,
       to_generation: SECOND_GENERATION,
       clusters_added: [],
@@ -935,7 +963,7 @@ suite("TopOffendersProvider", () => {
       // Inverted deliberately. This row used to read `rank #1` because the
       // tree numbered its own array, so hiding two stale rows promoted the
       // third cluster to "the repository's worst" — a figure the engine
-      // never published. Rank is the engine's ([SEVERITY-BAND],
+      
       // [PRINCIPLES-ONE-CALCULATION]); the dirty projection hides rows, it
       // does not re-rank the repository.
       assert.match(
@@ -1004,8 +1032,8 @@ suite("TopOffendersProvider", () => {
   test("folder mode builds a folder tree, impact-sorted, with global ranks", async () => {
     const store = storeWith(
       report([
-        cluster("worst", HIGHEST_CLUSTER_MASS, ALPHA_FILE_PATH),
-        cluster("mid", HIGH_CLUSTER_MASS, BETA_FILE_PATH),
+        cluster("error", HIGHEST_CLUSTER_MASS, ALPHA_FILE_PATH),
+        cluster("information", HIGH_CLUSTER_MASS, BETA_FILE_PATH),
         cluster("least", MEDIUM_CLUSTER_MASS, "/repo/src/a/Gamma.cs"),
       ]),
     );

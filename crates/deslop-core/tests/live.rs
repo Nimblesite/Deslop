@@ -8,11 +8,12 @@
 use std::{
     fs,
     path::{Path, PathBuf},
-    sync::{mpsc, Arc, Mutex as StdMutex},
+    sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        mpsc, Arc, Mutex as StdMutex,
+    },
     time::Duration,
 };
-
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use anyhow::{anyhow, bail, Context, Result};
 use deslop_core::{
@@ -24,7 +25,6 @@ use deslop_core::{
     pipeline::{run, EmbeddingSettings, PipelineConfig},
     EmbeddingProvider, EmbeddingSpec, ExclusionConfig, ProviderError,
 };
-
 use tokio::sync::{Semaphore, SemaphorePermit};
 
 use crate::common::*;

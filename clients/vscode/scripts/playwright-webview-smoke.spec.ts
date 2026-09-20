@@ -61,6 +61,8 @@ const NAVIGATED_ROW_COUNT = 3;
 const NAVIGATED_PEER_COUNT = 2;
 const NEXT_CLUSTER_KEY = "n";
 const PREVIOUS_CLUSTER_KEY = "p";
+const INFORMATIONAL_FINDING = "Informational — not a clone.";
+const SHAPE_CLUSTER_INDEX = 2;
 const DESKTOP_VIEWPORT_INDEX = 0;
 
 const viewports: readonly ViewportCase[] = [
@@ -69,6 +71,23 @@ const viewports: readonly ViewportCase[] = [
 ];
 
 test.describe("VSIX webview bundles", () => {
+  test("shape-only findings show information without duplication claims", async ({ page }) => {
+    const viewport = viewports[DESKTOP_VIEWPORT_INDEX];
+    if (!viewport) throw new Error("Missing desktop viewport");
+    await loadView(page, "report", viewport);
+    await postHostMessage(page, { kind: "report/snapshot", report: sampleReport });
+    const shapeRow = page.locator("li").filter({ hasText: STRUCTURAL_ONLY_TITLE });
+    await expect(shapeRow.getByText(INFORMATIONAL_FINDING)).toBeVisible();
+    await expect(shapeRow).not.toContainText("mass");
+    await expect(shapeRow).not.toContainText("×");
+    await loadView(page, "cluster", viewport);
+    await postHostMessage(page, { kind: "report/snapshot", report: sampleReport });
+    await postHostMessage(page, { kind: "select/cluster", id: sampleReport.clusters[SHAPE_CLUSTER_INDEX].id });
+    await expect(page.getByText(INFORMATIONAL_FINDING, { exact: true })).toBeVisible();
+    await expect(page.locator("header")).not.toContainText("mass");
+    await expect(page.locator("header")).not.toContainText("×");
+    await expect(page.locator("header")).not.toContainText("Rank");
+  });
   for (const viewport of viewports) {
     test(`report view renders and posts commands on ${viewport.name}`, async ({ page }) => {
       const errors = await loadView(page, "report", viewport);

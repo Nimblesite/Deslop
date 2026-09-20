@@ -7,15 +7,18 @@
 //! one invocation via `--rerun-touch <PATH>...`, and assert on the
 //! emitted `<base>.delta.json` alongside the normal report outputs.
 
-use std::{ffi::OsStr, fs, path::Path, path::PathBuf};
+use std::{
+    ffi::OsStr,
+    fs,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Result;
 use assert_cmd::Command;
 use predicates::str::contains;
 use serde_json::Value;
 
-use crate::common::scan_dir::temp_scan_dir;
-use crate::common::{rerun_ops::*, *};
+use crate::common::{rerun_ops::*, scan_dir::temp_scan_dir, *};
 
 /// Config body that excludes the `Beta.cs` half of the seeded clone pair.
 const EXCLUDE_BETA: &str = "[defaults]\nexclude = [\"**/Beta.cs\"]\n";

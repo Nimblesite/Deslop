@@ -80,13 +80,13 @@ Candidate generation may propose a pair through exact fingerprints, token LSH, o
 
 Clusters are formed as the connected components of the admitted-pair graph. No component-level average, edge selection, family score, label, or post-admission similarity judgement may add, remove, or redirect an admission edge. A bridge that passes admission legitimately connects its endpoints; a bridge that should not connect them must fail the pair admission rule. Tests pin the admitted edges and their closure.
 
-Two post-closure partitions follow, and neither revises admission, manufactures pair evidence, or classifies a component. [PIPELINE-CLUSTER-ELECT] splits a component that a token bridge welded out of two structural families, one cluster per region. Under [CLONE-NOISE-VERBATIM-SUBGROUP], a component that a noise filter convicts is replaced by its qualifying byte-identical families and members outside those families are dropped; a component no filter convicts is handed on untouched. Each rendered survivor receives mass from its own canonical extent and visible membership under [RANK-MASS-SUM].
+Post-closure processing preserves admission decisions. [PIPELINE-CLUSTER-ELECT] separates structural families joined by a token bridge; [CLONE-NOISE-VERBATIM-SUBGROUP] preserves qualifying identical families when removing noise. Final group membership, labels and any further separation follow [CLONE-KIND-FOLD](taxonomy.md#clone-kind-fold-compare-the-actual-members). Calculate each surviving clone's mass under [RANK-MASS-SUM].
 
-Pair evidence remains attached to the admitted edge. The resulting component owns identity, canonical extent, occurrence membership, mass, and mass-derived rank only.
+Pair evidence remains attached to the admitted edge. Published group fields follow [CLONE-BUCKETS-DUAL-LABEL](taxonomy.md#clone-buckets-dual-label-label-ownership).
 
 ### [PIPELINE-CLUSTER-CANDIDATE-CONTAINER] Container candidates obey the same pair admission rule
 
-A class or sliding window is an ordinary candidate endpoint: it enters a component only through admitted pairs, and admission is never revised for it. Inside the component it meets one measured election — a container that merely concatenates a family the component already holds is elected out under [PIPELINE-CLUSTER-ELECT-CONTAINER], so the family publishes at its own extent — and the two post-closure partitions of [PIPELINE-CLUSTER-CLOSURE].
+A class or sliding window is an ordinary candidate endpoint: it enters a component only through admitted pairs, and admission is never revised for it. A container that merely concatenates an existing family is removed under [PIPELINE-CLUSTER-ELECT-CONTAINER], so the family publishes at its own extent. It then follows [PIPELINE-CLUSTER-CLOSURE].
 
 ### [PIPELINE-CLUSTER-ELECT] A token bridge may not weld two structural families into one cluster
 
@@ -277,23 +277,23 @@ Signature construction — ~69% of the LSH block before this work — is gone fr
 ### [PIPELINE-RANK-WORST-FIRST] Ranking: worst offenders first
 Before ranking, each cluster's occurrences are reduced to one member per **transitively overlapping run** per file. Fingerprinting emits one subtree per AST node, so a duplicated region yields a nest of overlapping windows over the same bytes; publishing more than one inflates the occurrence count, the cluster size, and the duplication percentage. Overlap is transitive, so the run's frontier is tracked separately from its representative: for `[0,100]`, `[90,110]`, `[105,200]` the bridging window is the narrowest and loses the width contest, and a sweep that tests the next window against the representative alone reports one region as two. The widest window of each run is the reported location; a cluster left with one location is not a duplicate and is dropped. Pinned by `crates/deslop-core/tests/cluster_overlap_collapse.rs`.
 
-Ranking uses the duplicated-mass formula owned by [RANK-MASS-SUM] below. Clusters sort by mass descending and cluster id ascending. Visible member count excludes [EXCLUSION-CONFIG] `report_hide` occurrences. No similarity evidence, pair classification, finding kind, confidence, policy multiplier, or spanned-LOC term changes mass.
+Apply the eligibility rules in [CLONE-BUCKETS-STRUCTURAL-ONLY](taxonomy.md#clone-buckets-structural-only-shape-only-is-not-duplication), then rank eligible clones by [RANK-MASS-SUM]. Hidden occurrences follow [EXCLUSION-CONFIG].
 
-The sort ends by stamping the ranking onto the report: `rank` (one-based, worst first) and `rank_band` ([severity.md §SEVERITY-BAND](severity.md#severity-band)) ride on every rendered cluster, so every consumer displays the repository's ranking rather than numbering rows from its own array position.
+The engine assigns each eligible clone a one-based `rank`. Every consumer displays that rank rather than numbering its filtered rows. Informational findings have no clone rank.
 
 ### [RANK-MASS-SUM] Rank by duplicated mass only
 
-Duplicated mass is canonical nodes × additional visible occurrences. This formula is a Deslop product definition, not a result borrowed from the literature. Juergens et al. (ICSE 2009) establishes the fault risk of inconsistent clone changes, and Islam, Mondal, and Roy (SANER 2019) establishes that even micro-clones can be bug-prone; neither paper proposes this ranking equation. SonarQube's duplicated-line density is likewise a separate repository metric, not evidence for AST-node mass. Pair evidence already did its job at admission: an admitted edge either contributes to the closure or it does not. Once the cluster exists, only its extent and repeated membership determine mass. At equal mass, cluster id makes the order total and reproducible. Mass is a whole number, and every surface prints it as one — the CLI text report writes `mass=527` and the extension writes `mass 527` — never `527.00`: a decimal point would claim a precision a count cannot have, and the extension and the CLI must print the identical string for the same cluster.
+Weight describes how much duplication an actual clone adds to the codebase. Keep the existing mass formula: canonical AST nodes × additional visible copies. AST node count measures code size; it does not prove duplication. Non-clones have zero duplication weight, however large their matching structure. Rank eligible clones by mass descending, then stable id. Print mass as a whole number.
 
-**For AI.** `mass = canonical_node_count × max(visible_members − 1, 0)`. `weight` has no independent definition: where the legacy word appears in an external explanation it means this exact mass. Sort by mass descending, then cluster id ascending. No other term is legal.
+**For AI.** For eligible clones, `weight = mass = canonical_node_count × max(visible_members − 1, 0)`. Non-clones have zero duplication weight and are excluded from clone ranking and percentages. No confidence multiplier or evidence tie-break is added. Informational records may carry AST size for inspection, but must not claim positive duplicated mass.
 
 ### [RANK-CATEGORY] Category never changes mass
 
 A detection-time finding kind may drive an explicit exclusion before ranking. It is not carried as clone-cluster similarity metadata and never multiplies, discounts, boosts, or tie-breaks cluster mass. Every surviving cluster is ranked by [RANK-MASS-SUM].
 
-### [RANK-STRUCTURAL-ONLY] Pair evidence never changes mass
+### [RANK-STRUCTURAL-ONLY] Shape-only information is outside duplicate ranking
 
-`StructuralOnly` is a pair classification for a candidate whose normalized AST shape is strong but required content support is absent. It explains why that pair is rejected; it is not a cluster score and cannot be an edge in a closure. The retired `structural_only_weight`, `data_clone_weight`, and `demote` modes must never affect mass or ranking. Existing configuration keys and the LSP's `--ranking-structural-only` argument still parse for compatibility; `demote`, `ignore`, and `keep` cannot change the mass-only report. `crates/deslop/tests/rank_structural_only_policy.rs::retired_structural_only_knobs_do_not_change_the_ranking` asserts invariant membership, mass, and order; `crates/deslop-lsp/tests/app.rs::ranking_structural_only_flag_parses_applies_and_rejects` pins argument parsing and the recorded override. This compatibility parser does not reinstate a public editor ranking setting.
+Apply [CLONE-BUCKETS-STRUCTURAL-ONLY] before clone ranking and counting. Required CLI coverage belongs with `rank_structural_only_policy.rs` and `cli/bucket_groups.rs` under [CLONE-KIND-TESTING](taxonomy.md#clone-kind-testing-required-examples-and-assertions).
 
 ### [RANK-STRUCTURAL-ONLY-FORWARDING] Proving a declaration is family noise
 
@@ -334,12 +334,7 @@ Shape 2 is what the real #197 surface is. Its `resetX` wrappers are one statemen
 
 Branches, loops, arithmetic, comparisons, mutation and every node kind outside the allowlist — including a parse `ERROR` — disprove forwarding. The predicate therefore fails open: a body the walk does not fully understand keeps its cluster visible. That direction is mandatory for a filter that deletes output.
 
-**A statement count may not stand in for this.** "One or two statements means
-scaffolding" convicts a short body carrying a loop and an accumulator, and acquits
-a wrapper that spends two statements on a temporary response. The proof matches
-the data-flow shape instead, which is what separates a REST wrapper from a
-parameterisable method whose body binds locals, calls several collaborators and
-branches.
+**A statement count may not stand in for this.** "One or two statements means scaffolding" convicts a short body carrying a loop and an accumulator, and acquits a wrapper that spends two statements on a temporary response. The proof matches the data-flow shape instead, which is what separates a REST wrapper from a parameterisable method whose body binds locals, calls several collaborators and branches.
 
 One further guard bounds the hide: **no two proven wrappers may share a body**. Two sibling wrappers forwarding to the same route are a copy-paste bug — one of those calls is dead or misaimed — and one shared body disqualifies the suppression for the whole family. The comparison is on bodies, not on pair evidence or reported cluster scores. Pair content evidence has already been consumed by admission and is unavailable to this post-closure filter.
 
@@ -347,7 +342,7 @@ Languages without a wired grammar table return false for shape 2, so their singl
 
 ### [RANK-LITERAL-FAMILY] Literal families use the same mass formula
 
-Literal-family findings ([CLONE-CATEGORY-REGISTRY] kinds `magic_literal`, `shadowed_constant`, `constant_duplicate`, `constant_drift`, and `constant_alias`) use the same mass definition without becoming clone closure components. A literal is one canonical node, so its mass is `visible_occurrences - 1`. A literal finding with fewer than two visible occurrences is dropped and counted in `literal_findings_hidden`. Length, file spread, kind, and policy never multiply, discount, boost, or tie-break its mass.
+Literal-family findings ([CLONE-CATEGORY-REGISTRY](taxonomy.md#clone-category-registry-other-finding-kinds) kinds `magic_literal`, `shadowed_constant`, `constant_duplicate`, `constant_drift`, and `constant_alias`) use the same mass definition without becoming clone closure components. A literal is one canonical node, so its mass is `visible_occurrences - 1`. A literal finding with fewer than two visible occurrences is dropped and counted in `literal_findings_hidden`. Length, file spread, kind, and policy never multiply, discount, boost, or tie-break its mass.
 
 Detection-time noise rules and explicit pre-ranking exclusion may decide whether a literal finding is visible. The retired `demote`, `magic_literal_weight`, and `constant_findings_weight` settings are forbidden because a surviving finding keeps its mass without modification.
 
@@ -371,15 +366,15 @@ Top level:
 - `metrics: RepoMetrics` — repo-wide duplication totals per [METRICS-REPO]. Always populated; zero when no duplication exists.
 - `schema_doc: String` — markdown explaining every field, signal, threshold, ranking formula, byte-range convention, and clone taxonomy, sourced via `include_str!` from `REPORTING-CONTEXT.md` so it cannot drift from the schema. The CLI ships the field **present but empty** in every rendered report (#110/#111) — inlining ~13 KB into each report drowns the actual content — and the document is served on demand instead (`schema-doc` tool, `deslop://schema` resource per [MCP-*]). Pinned by the committed report golden.
 - `embedding_provenance: Option<EmbeddingProvenance>` — provider/model identity plus `attempted_subtrees`, `succeeded_subtrees`, `indexed_subtrees`, and `failed_subtrees` so embedding coverage is visible. The first, second and fourth count **occurrences** and satisfy `attempted = succeeded + failed`; `indexed_subtrees` counts **distinct index points** and satisfies `indexed <= succeeded`. Mixing the two units is how a collapsed pass comes to look like a lossy one — `indexed/attempted` is not a coverage ratio. Duplicate successful snippets collapse before ANN indexing, and provider-rejected subtrees are omitted from the embedding ANN input; they are never represented as zero vectors.
-- `clusters: Vec<ReportCluster>` — ranked worst-offenders-first per [PIPELINE-RANK-WORST-FIRST].
+- `clusters: Vec<ReportCluster>` — eligible clones ranked by [PIPELINE-RANK-WORST-FIRST], with any informational shape-only entries clearly distinguished and placed last. Informational entries are excluded from clone counts and receive no duplicate rank; any retained duplicate-mass field is zero.
 - `literal_findings: Vec<LiteralFinding>` — dedicated literal and constant findings per [LITERAL-WIRE], separate from clone clusters.
 - `literal_findings_total: usize` and `literal_findings_hidden: usize` — visible and omitted literal-finding counts; neither contributes to `clusters_total`.
 - `literal_findings_capped: bool` and `literal_max_findings: usize` — whether [LITERAL-NOISE]'s per-kind cap omitted findings and the configured cap that produced the report; `literal_max_findings == 0` means unlimited.
 
 `ReportCluster`:
 
-- `id`, `mass`, `canonical_node_count`, `rank`, `rank_band` — cluster identity, canonical extent, duplicated mass, and mass-derived order metadata.
-- `kind` — the clone kind folded from the cluster's pairs ([CLONE-KIND-FOLD]): `identical`, `nearly_identical`, `same_behavior`, `structural_only`, or `loosely_similar`. Never an input to mass or order.
+- `id`, `mass`, `canonical_node_count`, `rank` — identity, duplicated mass, AST size, and clone ranking metadata. AST size may describe an informational finding; positive duplicated mass and clone ranking may not.
+- `kind` — engine-authored category from [CLONE-KIND-LABELS](taxonomy.md#clone-kind-labels-use-the-same-names-everywhere); eligibility and informational handling follow [CLONE-BUCKETS-STRUCTURAL-ONLY].
 - `occurrences: Vec<ReportOccurrence>` — each with `path`, `start_byte`, `end_byte`, and `hidden: bool` (true when the occurrence matched a `report_hide` pattern per [EXCLUSION-CONFIG]).
 
 `ReportCluster` carries identity, canonical extent, occurrence membership, mass, rank, and the folded clone kind. Pair evidence values are returned only by an explicit comparison of two occurrences.
@@ -447,21 +442,21 @@ The default HTML renderer embeds, for each occurrence, the source bytes covered 
 
 ### [METRICS-REPO] Repo-wide duplication metrics
 
-One repository duplication percentage is computed deterministically from the visible cluster set and carried at `Report.metrics`. It is pure line coverage and drives the single fail-over gate in [EXIT-CODES]. Pair evidence never changes it.
+One repository duplication percentage is computed deterministically from visible, established clone occurrences and carried at `Report.metrics`. It is pure line coverage and drives the single fail-over gate in [EXIT-CODES]. Shape-only information is excluded before counting, even when visible or enabled as diagnostics ([CLONE-BUCKETS-STRUCTURAL-ONLY]). Any relation with no or negligible content similarity and no independent clone proof contributes nothing, regardless of its display label. Admitted clone lines count equally; evidence never scales them.
 
 `RepoMetrics` fields:
 
 - `analysed_loc: u64` — physical lines across every file in `files_analysed`. Counted once per file, regardless of clustering. Lines are `\n`-terminated plus the trailing partial line if any; empty files contribute zero.
-- `duplicated_loc: u64` — lines covered by **≥ 2 clone occurrences across the whole corpus**, deduplicated per file so overlapping sibling-extension ranges do not double-count. Computed by projecting every `ReportOccurrence` from every non-hidden clone cluster onto a per-file `BTreeSet<line>`, unioning, and summing set sizes. Hidden occurrences (`[EXCLUSION-CONFIG]` `report_hide`) are excluded. Dedicated literal findings ([RANK-LITERAL-FAMILY]) are not clone clusters and never enter `duplicated_loc`, `duplication_percent`, or `clusters_total`. Every visible fragment-clone line counts equally. Pair classification and pair evidence are unavailable to this calculation.
+- `duplicated_loc: u64` — lines covered by **≥ 2 established clone occurrences across the whole corpus**, deduplicated per file through a `BTreeSet<line>`. Exclude shape-only/non-clone relations before projecting occurrences; visibility alone is not eligibility. Hidden occurrences (`[EXCLUSION-CONFIG]` `report_hide`) and dedicated literal findings ([RANK-LITERAL-FAMILY]) are also excluded. Preserve independently established clone subsets in mixed groups; a line supported by a real clone counts once even if an informational finding overlaps it. Shape-only source lines remain in `analysed_loc`. Required black-box CLI assertions under [CLONE-KIND-TESTING] cover a shape-only-only corpus with zero duplication, a mixed corpus with unchanged true-clone coverage, exact per-file/folder/diff values, clone counts, paths, ordering and threshold verdicts.
 - `duplication_percent: f64` — `100.0 × duplicated_loc / analysed_loc`, clamped into `[0.0, 100.0]`. Zero when `analysed_loc == 0`. Rounded to two decimals in text + HTML; carried at full `f64` precision in JSON.
-- `clusters_total: usize` — count of non-hidden clone clusters carried in `clusters`; always equals `clusters.len()` — including after `--only-changed` filtering, where the repo-wide count is recovered as `clusters_total + clusters_outside_diff` ([METRICS-DIFF-SCOPE]) — but is carried explicitly so downstream consumers do not re-derive it. Dedicated literal findings have their own count under [RANK-LITERAL-FAMILY].
-- `duplicated_files: usize` — count of files containing at least one non-hidden clone occurrence. Upper-bounded by `files_analysed`.
+- `clusters_total: usize` — count of non-hidden clone clusters, excluding all informational shape-only groups. It must not be obtained by counting a mixed list of clones and non-clones. Under `--only-changed`, the repo-wide clone count is recovered as `clusters_total + clusters_outside_diff` ([METRICS-DIFF-SCOPE]); both counts exclude informational findings. Any informational group count is labelled separately and never called a clone count.
+- `duplicated_files: usize` — count of files with nonzero eligible `duplicated_loc`; a file containing only shape-only information is not duplicated. Upper-bounded by `files_analysed`.
 - `per_file: Vec<FileMetric>` — per-file breakdown, one `FileMetric { path, analysed_loc, duplicated_loc, duplication_percent }` per analysed file (clean files included with `duplicated_loc == 0` so percentage denominators stay exact). Same per-file line-set computation as the repo aggregate, scoped to one file; `duplication_percent` uses that file's own `analysed_loc` as the denominator. Sorted by `duplication_percent` desc, path tiebreaker. **`path` is rendered relative to the scan root**, the same form `ReportOccurrence.path` carries, so a consumer that opens a `FileMetric` must resolve it against the workspace exactly as it resolves an occurrence — treating it as absolute names a file that does not exist. Powers the per-file rows in [VSIX-METRICS-PANEL].
 - `folders: Vec<FileMetric>` — engine-computed per-folder rollup, one row per folder prefix containing at least one duplicated line. Each row sums the `analysed_loc` and `duplicated_loc` of every `per_file` row under the prefix — clean files included, keeping the denominator exact — and derives `duplication_percent` through the **same single `percent` function** as the repo and per-file figures. Consumers render these rows verbatim; recomputing a folder percentage (or re-summing folder LOC) outside the engine is prohibited — every duplication percentage on every surface traces back to this one function. Paths are scan-root-relative folder prefixes joined with `/` on every platform; sorted `duplication_percent` desc, path tiebreaker, exactly as `per_file`. Zero-duplication folders are omitted. `#[serde(default)]` on the wire so reports written before the field parse as empty. Powers the folder rows in [VSIX-METRICS-PANEL].
 
 #### [METRICS-REPO-WEIGHTED] Evidence weighting is prohibited
 
-There is no evidence-weighted duplication percentage. Structural, Jaccard, embedding, and content evidence belong to pairs and decide admission; projecting any of them onto a closure component invents a cluster score. `bucket_weights`, `category_weights`, `WeightedMetrics`, `weighted_duplicated_loc`, `weighted_duplication_percent`, and a `[metrics]` weight table are forbidden wire and configuration fields.
+There is no evidence-weighted duplication percentage. Evidence decides whether a relation is a clone; shape-only non-clones are excluded before line counting, not discounted by a small weight. Every eligible clone line counts equally. `bucket_weights`, `category_weights`, `WeightedMetrics`, `weighted_duplicated_loc`, `weighted_duplication_percent`, and a `[metrics]` weight table are forbidden wire and configuration fields.
 
 The text renderer prints one line: `repo: 12.4% duplicated (1 843 / 14 876 LOC, 27 clusters across 11 files)`. HTML renders the same engine-computed metric and colours it by the one fail-over threshold. JSON carries the same canonical value. No surface computes a companion figure.
 
@@ -469,11 +464,11 @@ The text renderer prints one line: `repo: 12.4% duplicated (1 843 / 14 876 LOC, 
 
 > **Status: shipped.** Pinned by `crates/deslop/tests/diff_scoped_reporting.rs`.
 
-Under `--diff`, `RepoMetrics` gains `diff: DiffMetrics { added_loc: u64, duplicated_added_loc: u64, duplication_percent: f64, threshold: ThresholdSummary }` — absent without the flag. Numerator: added lines covered by the same non-hidden, non-literal-family occurrence projection as `duplicated_loc`. Denominator: added lines in analysed files. The same clamp, rounding, and zero-denominator rules apply. The repository-wide fields are byte-identical with and without `--diff`; no knob may change `duplication_percent`.
+Under `--diff`, `RepoMetrics` gains `diff: DiffMetrics { added_loc: u64, duplicated_added_loc: u64, duplication_percent: f64, threshold: ThresholdSummary }` — absent without the flag. Numerator: added lines covered by the same eligible clone occurrences as `duplicated_loc`; shape-only information, hidden occurrences and literal families are excluded. Denominator: all added lines in analysed files, including shape-only source. The same clamp, rounding, and zero-denominator rules apply. The repository-wide fields are byte-identical with and without `--diff`; informational display and diagnostic settings cannot change `duplication_percent`.
 
 Under `--only-changed` the [EXIT-CODES] mechanical gate reads `diff.duplication_percent` against the same threshold sources, and the report header names the scope (`threshold: 10.00% of added lines (ok)`). Without `--only-changed` the gate is untouched even when `--diff` is present — tagging alone must not move a CI verdict.
 
-`--only-changed` filtering never touches the repo-wide **line** metrics (`analysed_loc`, `duplicated_loc`, `duplication_percent`, `duplicated_files`, `per_file`, `threshold`), but `clusters_total` follows the filtered body so the [METRICS-REPO] invariant — the banner counts the list it sits above — survives filtering. The repo-wide cluster count stays recoverable as `clusters_total + clusters_outside_diff`, and that sum is what the repo-scoped line in text and HTML renders. Every surface derives its verdicts from the **governing** gate: the HTML banner's colour class and named threshold verdict come from `diff.threshold` whenever the CLI resolved one (its `source` is non-`none` only under `--only-changed`), so the page can never render green while the run exited `3`. The `--only-changed` delta summary (text, stderr, HTML banner tail) carries four reconciling figures — intersecting = newly introduced + cross-file-with-untouched-code, plus the omitted count — and a filtered-empty run says "no diff-affected duplication" with the omitted count, never that the codebase is clean.
+`--only-changed` leaves repository line metrics unchanged. `clusters_total` counts eligible clones in the filtered list; `clusters_outside_diff` counts omitted eligible clones. Both exclude informational findings. Their sum is the repository clone count. Under `--only-changed`, the diff threshold controls the exit code and every displayed verdict. The summary shows intersecting clones = newly introduced + cross-file-with-untouched-code, plus omitted clones. An empty filtered view says "no diff-affected duplication", not that the repository is clean.
 
 ### [EXIT-CODES] CLI exit codes and fail-over threshold
 
@@ -496,6 +491,6 @@ A `--no-fail-over` flag (mutually exclusive with `--fail-over`) overrides a conf
 
 #### [EXIT-CODES-WEIGHTED] Evidence-weighted gates are prohibited
 
-There is no `--fail-over-weighted`, `max_weighted_duplication_percent`, or weighted threshold on the wire. [EXIT-CODES] owns the one duplication-percentage gate. Pair evidence cannot alter a cluster metric or a repository gate.
+There is no `--fail-over-weighted`, `max_weighted_duplication_percent`, or weighted threshold on the wire. [EXIT-CODES] owns the one duplication-percentage gate, calculated from eligible clone lines only. Shape-only information cannot cause a threshold breach; no evidence multiplier alters the gate.
 
 The renderer always states the active threshold in the report header (`threshold: 10.00% (breached)` / `threshold: 10.00% (ok)` / `threshold: none`) so the report is self-explanatory when read out of context. The threshold value and breach flag are carried on `Report.metrics.threshold { percent: f64, breached: bool, source: "cli" | "config" | "none" }` so downstream tools do not re-derive the verdict.

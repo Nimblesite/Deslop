@@ -7,6 +7,7 @@
 
 use std::{collections::HashMap, fs, path::Path, time::Instant};
 
+use super::{config::PipelineConfig, signatures::signatures_for_file};
 use crate::{
     ast::NormalizedNode,
     boilerplate::BoilerplateRange,
@@ -20,8 +21,6 @@ use crate::{
     sibling::collect_non_boilerplate_sibling_fingerprints,
     state::FileId,
 };
-
-use super::{config::PipelineConfig, signatures::signatures_for_file};
 
 /// The language-parser registry and its derived lookups
 /// ([PIPELINE-LANG-TRAIT]).
@@ -39,9 +38,8 @@ pub use registry::{
     build_extension_map, default_parsers, language_for_path, language_ids, parser_for_language,
     watched_source_extensions,
 };
-pub use stats::{CorpusBuildState, CorpusBuildStats};
-
 use shards::{absorb_file_work, parallel_file_work, serial_file_work, AbsorbTarget, PassState};
+pub use stats::{CorpusBuildState, CorpusBuildStats};
 
 /// Files between corpus-build progress records
 /// ([PIPELINE-OBSERVABILITY-STAGES]). Count-based so the cadence is

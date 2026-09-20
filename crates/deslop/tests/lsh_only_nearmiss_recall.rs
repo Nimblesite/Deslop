@@ -19,10 +19,8 @@
 //! and this file is its counterweight.** The pair clears the shared-subtree
 //! rescue with corroborating token evidence and therefore joins the closure.
 
-use std::fs;
-use std::path::Path;
+use std::{fs, path::Path};
 
-use crate::common::scan_dir::temp_scan_dir;
 use crate::common::{
     cluster_size, expect_cluster_spanning, field,
     incremental::{
@@ -30,6 +28,7 @@ use crate::common::{
         edit_preserving_offsets, run_store_on, ColdThenWarm,
     },
     metric_field, run_report,
+    scan_dir::temp_scan_dir,
     verdict::loc_as_f64,
     Result,
 };

@@ -12,6 +12,7 @@ mod html_buckets;
 mod html_css;
 mod html_escape;
 mod html_footer;
+mod html_snippets;
 pub mod markdown;
 pub mod text;
 
@@ -19,3 +20,6 @@ pub use ast::render_ast_dump;
 pub use html::render_html;
 pub use markdown::render_cluster_markdown;
 pub use text::render_text;
+
+/// [CLONE-BUCKETS-STRUCTURAL-ONLY] Shared wording for informational findings.
+pub const INFORMATIONAL_FINDING_NOTE: &str = "Informational — not a clone.";

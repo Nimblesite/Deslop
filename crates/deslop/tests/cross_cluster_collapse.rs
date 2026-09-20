@@ -14,9 +14,7 @@ use std::{collections::BTreeSet, fs, ops::RangeInclusive, path::Path};
 
 use anyhow::Result;
 
-use crate::common::scan_dir::report_path;
-use crate::common::signals::assert_no_pair_surface_on_cluster;
-use crate::common::*;
+use crate::common::{scan_dir::report_path, signals::assert_no_pair_surface_on_cluster, *};
 
 /// The bytes of the wider authored view inside `ApplyStandard`.
 const STANDARD_VIEW_BYTES: u64 = 190;
@@ -81,7 +79,7 @@ fn every_occurrence_overlaps_some(inner: &[Occurrence], outer: &[Occurrence]) ->
 }
 
 fn first_subsumed_pair(report: &serde_json::Value) -> Option<String> {
-    let clusters = report.get("clusters")?.as_array()?;
+    let clusters = clone_findings(report);
     let occurrence_sets: Vec<(String, Vec<Occurrence>)> = clusters
         .iter()
         .map(|cluster| (cluster_id(cluster).to_owned(), cluster_occurrences(cluster)))
@@ -186,7 +184,7 @@ fn padded_windows_straddling_a_verbatim_block_publish_the_block() -> Result<()> 
     let scan_root = tmp.path().join("corpus");
     write_content_subsumption_fixture(&scan_root)?;
     let report = run_report(tmp.path(), &scan_root)?;
-    let candidates = clusters(&report);
+    let candidates = clone_findings(&report);
     assert_eq!(
         candidates.len(),
         1,

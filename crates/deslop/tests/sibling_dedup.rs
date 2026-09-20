@@ -23,116 +23,16 @@
 //! same file. Each assertion maps to a specific claim in NAP's bug
 //! report.
 
-use std::{collections::BTreeMap, fs, path::Path, path::PathBuf};
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::{Path, PathBuf},
+};
 
-use crate::common::scan_dir::temp_scan_dir;
 use anyhow::Result;
 use assert_cmd::Command;
 
-/// Writes two C# files that each contain three near-identical `for`
-/// loops nested inside a single method. The sibling pass emits window
-/// widths 2, 3, … over those three contiguous loops and — without
-/// dedup — every window survives as a separate member of the same
-/// cluster.
-fn write_nested_clone_fixture(dir: &Path) -> Result<()> {
-    fs::create_dir_all(dir)?;
-    let alpha = "namespace Alpha\n\
-                 {\n\
-                 public class Runner\n\
-                 {\n\
-                 public int Run(int input)\n\
-                 {\n\
-                 if (input < 0) { return 0; }\n\
-                 int total = 0;\n\
-                 for (int i = 0; i < input; i = i + 1) { total = total + i; }\n\
-                 int doubled = 0;\n\
-                 for (int j = 0; j < input; j = j + 1) { doubled = doubled + j; }\n\
-                 int tripled = 0;\n\
-                 for (int k = 0; k < input; k = k + 1) { tripled = tripled + k; }\n\
-                 return total + doubled + tripled;\n\
-                 }\n\
-                 }\n\
-                 }\n";
-    let beta = "namespace Beta\n\
-                {\n\
-                public class Worker\n\
-                {\n\
-                public int Work(int limit)\n\
-                {\n\
-                if (limit < 0) { return 0; }\n\
-                int sum = 0;\n\
-                for (int a = 0; a < limit; a = a + 1) { sum = sum + a; }\n\
-                int twice = 0;\n\
-                for (int b = 0; b < limit; b = b + 1) { twice = twice + b; }\n\
-                int thrice = 0;\n\
-                for (int c = 0; c < limit; c = c + 1) { thrice = thrice + c; }\n\
-                return sum + twice + thrice;\n\
-                }\n\
-                }\n\
-                }\n";
-    fs::write(dir.join("Alpha.cs"), alpha)?;
-    fs::write(dir.join("Beta.cs"), beta)?;
-    Ok(())
-}
-
-/// Writes a Python fixture under the same path family as the reported
-/// NAP runaway (`alembic/versions/003_cascade_delete_config.py`). The
-/// two files contain equivalent migration-shaped code, which exercises
-/// the sibling-window path without depending on a private checkout.
-fn write_phantom_occurrence_fixture(dir: &Path) -> Result<()> {
-    let alembic_dir = dir.join("alembic").join("versions");
-    let tests_dir = dir.join("tests");
-    fs::create_dir_all(&alembic_dir)?;
-    fs::create_dir_all(&tests_dir)?;
-    fs::write(
-        alembic_dir.join("003_cascade_delete_config.py"),
-        phantom_occurrence_body("upgrade", "rules", "configs"),
-    )?;
-    fs::write(
-        tests_dir.join("test_sandbox_coverage.py"),
-        phantom_occurrence_body("exercise", "jobs", "agents"),
-    )?;
-    Ok(())
-}
-
-fn phantom_occurrence_body(function: &str, child: &str, parent: &str) -> String {
-    format!(
-        "\"\"\"Synthetic cascade-delete migration fixture.\"\"\"\n\
-         from alembic import op\n\
-         import sqlalchemy as sa\n\
-         \n\
-         revision = \"003\"\n\
-         down_revision = \"002\"\n\
-         branch_labels = None\n\
-         depends_on = None\n\
-         \n\
-         \n\
-         def {function}():\n\
-             config_id = sa.Column(\"config_id\", sa.Integer(), nullable=False)\n\
-             op.add_column(\"{child}\", config_id)\n\
-             op.create_index(\"ix_{child}_config_id\", \"{child}\", [\"config_id\"])\n\
-             op.create_foreign_key(\n\
-                 \"fk_{child}_config_id\",\n\
-                 \"{child}\",\n\
-                 \"{parent}\",\n\
-                 [\"config_id\"],\n\
-                 [\"id\"],\n\
-                 ondelete=\"CASCADE\",\n\
-             )\n\
-             op.execute(\"UPDATE {child} SET config_id = 1 WHERE config_id IS NULL\")\n\
-             op.alter_column(\"{child}\", \"config_id\", nullable=False)\n\
-             op.drop_constraint(\"old_{child}_config_id_fkey\", \"{child}\", type_=\"foreignkey\")\n\
-             op.create_foreign_key(\n\
-                 \"fk_{child}_config_id_strict\",\n\
-                 \"{child}\",\n\
-                 \"{parent}\",\n\
-                 [\"config_id\"],\n\
-                 [\"id\"],\n\
-                 ondelete=\"CASCADE\",\n\
-             )\n\
-             op.drop_index(\"ix_{child}_legacy_config\", table_name=\"{child}\")\n"
-    )
-}
+use crate::common::scan_dir::temp_scan_dir;
 
 /// Runs the CLI against `scan_root`, writing reports under
 /// `<tmp>/report.*`, and returns the parsed JSON report.
@@ -344,13 +244,18 @@ fn first_cluster_count_mismatch(report: &serde_json::Value) -> Option<String> {
     })
 }
 
+// [RANK-MASS-SUM] [CLONE-BUCKETS-STRUCTURAL-ONLY] Clone mass counts copies; informational mass is zero.
 fn first_bad_mass(report: &serde_json::Value) -> Option<String> {
     first_cluster_finding(report, |cluster| {
         let id = cluster_id(cluster);
         let nodes = cluster.get("canonical_node_count")?.as_u64()?;
         let count = cluster.get("occurrence_count")?.as_u64()?;
         let mass = cluster.get("mass")?.as_u64()?;
-        let expected = nodes.saturating_mul(count.saturating_sub(1));
+        let expected = if crate::common::findings::is_clone_finding(cluster) {
+            nodes.saturating_mul(count.saturating_sub(1))
+        } else {
+            0
+        };
         (mass != expected).then(|| format!("cluster {id} mass={mass} expected={expected}"))
     })
 }
@@ -516,7 +421,7 @@ fn sibling_window_cluster_has_one_occurrence_per_file() -> Result<()> {
 #[test]
 fn phantom_occurrence_fixture_respects_report_invariants() -> Result<()> {
     let (_tmp, scan_root, report) = prepared_report(write_phantom_occurrence_fixture)?;
-    let clusters = clusters_array(&report);
+    let clusters = crate::common::clone_findings(&report);
     assert!(
         !clusters.is_empty(),
         "phantom-occurrence fixture must produce clone clusters: {report:#}"
@@ -538,7 +443,7 @@ fn phantom_occurrence_fixture_respects_report_invariants() -> Result<()> {
     );
     assert!(
         first_bad_mass(&report).is_none(),
-        "every cluster mass must be canonical_node_count × (occurrence_count − 1): {}",
+        "clone mass must follow the AST formula and informational mass must be zero: {}",
         first_bad_mass(&report).unwrap_or_default()
     );
     let duplication = duplication_percent(&report);
@@ -570,3 +475,7 @@ fn max_span_bytes(cluster: &serde_json::Value) -> u64 {
         .max()
         .unwrap_or_default()
 }
+
+#[path = "sibling_dedup/fixtures.rs"]
+mod fixtures;
+use fixtures::{write_nested_clone_fixture, write_phantom_occurrence_fixture};

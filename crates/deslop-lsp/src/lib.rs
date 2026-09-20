@@ -13,6 +13,8 @@ pub mod code_action;
 pub mod code_lens;
 pub mod commands;
 pub mod custom_methods;
+mod diagnostic_session;
+pub mod diagnostic_settings;
 pub mod diagnostics;
 pub mod file_watch;
 mod help;

@@ -253,8 +253,10 @@ mod streaming_tests {
     //! documented contract
     //! (`docs/release-audit.md`, "streamed LSH construction").
 
-    use super::super::{Signature, SignatureIndex, BANDS, SIGNATURE_LEN};
-    use super::for_each_band_collision;
+    use super::{
+        super::{Signature, SignatureIndex, BANDS, SIGNATURE_LEN},
+        for_each_band_collision,
+    };
 
     /// A signature whose band `band` is filled with `filler` and every
     /// other band with a value unique to `seed`.
@@ -360,8 +362,10 @@ mod streaming_tests {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{Signature, ROWS_PER_BAND, SIGNATURE_LEN};
-    use super::band_key;
+    use super::{
+        super::{Signature, ROWS_PER_BAND, SIGNATURE_LEN},
+        band_key,
+    };
 
     /// Low byte of `index`. Total where a fallible conversion is not,
     /// and exact over this test's domain — the signature is 32 rows of

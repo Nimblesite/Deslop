@@ -18,7 +18,6 @@ use std::{
 
 #[cfg(all(feature = "profiling", unix))]
 use anyhow::Result;
-
 #[cfg(all(feature = "profiling", unix))]
 use fxprof_processed_profile::{
     CategoryHandle, CpuDelta, Frame, FrameFlags, FrameInfo, ProcessHandle, Profile,

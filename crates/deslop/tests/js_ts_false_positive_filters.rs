@@ -9,8 +9,7 @@
 
 use anyhow::Result;
 
-use crate::common::signals::has_verbatim_pair;
-use crate::common::*;
+use crate::common::{signals::has_verbatim_pair, *};
 
 #[test]
 fn typescript_signature_only_match_with_divergent_bodies_is_suppressed() -> Result<()> {

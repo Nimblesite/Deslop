@@ -12,14 +12,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{
-    cluster::Cluster,
-    config::ExclusionConfig,
-    diff_scope::DiffScope,
-    report_render::{relative_to_scan_root, LineIndex, LineIndices},
-    state::{FileId, FileRegistry},
-};
-
 // `RepoMetrics`, `DiffMetrics`, `ThresholdSummary`, and
 // `ThresholdSource` are generated from `docs/models/live-ipc.td` by
 // `scripts/typediagram/generate.mjs`. The data shapes live in
@@ -27,6 +19,13 @@ use crate::{
 // stay here.
 pub use crate::wire_generated::{
     DiffMetrics, FileMetric, RepoMetrics, ThresholdSource, ThresholdSummary,
+};
+use crate::{
+    cluster::Cluster,
+    config::ExclusionConfig,
+    diff_scope::DiffScope,
+    report_render::{relative_to_scan_root, LineIndex, LineIndices},
+    state::{FileId, FileRegistry},
 };
 
 impl RepoMetrics {
@@ -122,7 +121,7 @@ pub struct MetricsInputs<'a, S: BuildHasher> {
     pub analysed_lines: &'a AnalysedLines,
     /// Scan root every `per_file` path is rendered relative to, so the
     /// metrics rows carry the same path form as occurrence rows
-    ///.
+    /// .
     pub scan_root: &'a Path,
     /// Verified diff scope when the run carried `--diff`. Drives the
     /// [METRICS-DIFF-SCOPE] added-line block; `None` leaves
@@ -137,8 +136,14 @@ pub struct MetricsInputs<'a, S: BuildHasher> {
 #[must_use]
 pub fn compute_repo_metrics<S: BuildHasher>(inputs: &MetricsInputs<'_, S>) -> RepoMetrics {
     let analysed_loc: u64 = inputs.analysed_lines.values().copied().sum();
+    let clones: Vec<_> = inputs
+        .clusters
+        .iter()
+        .copied()
+        .filter(|cluster| cluster.kind.is_clone())
+        .collect();
     let mut per_file_lines: HashMap<FileId, BTreeSet<u64>> = HashMap::new();
-    for &cluster in inputs.clusters {
+    for &cluster in &clones {
         fold_cluster_lines(cluster, inputs, &mut per_file_lines);
     }
     let duplicated_loc: u64 = per_file_lines
@@ -156,13 +161,8 @@ pub fn compute_repo_metrics<S: BuildHasher>(inputs: &MetricsInputs<'_, S>) -> Re
         analysed_loc,
         duplicated_loc,
         duplication_percent,
-        // [METRICS-REPO] The banner equals the body by construction:
-        // `inputs.clusters` is the exact post-hide list the report
-        // carries, and a mixed cluster (one visible occurrence beside
-        // hidden ones) is kept in it per [EXCLUSION-CONFIG], so it must
-        // be counted here too. The old `>= 2 visible members` gate said
-        // "0 clusters" above a body listing one.
-        clusters_total: inputs.clusters.len(),
+        // [CLONE-BUCKETS-STRUCTURAL-ONLY] Informational findings are never clones.
+        clusters_total: clones.len(),
         duplicated_files,
         threshold: ThresholdSummary::none(),
         per_file,
@@ -446,3 +446,7 @@ pub fn validate_threshold_percent(value: f64) -> Result<f64, String> {
     }
     Ok(value)
 }
+
+#[cfg(test)]
+#[path = "report_metrics_tests.rs"]
+mod tests;

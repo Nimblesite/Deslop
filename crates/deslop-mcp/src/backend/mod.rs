@@ -9,18 +9,15 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::NotificationSender;
-
 use deslop_core::{
-    live::wire::ChangeSummary,
-    live::wire::EmbeddingModelInfo,
+    live::wire::{ChangeSummary, EmbeddingModelInfo},
     report::{CacheStats, ReportCluster},
     wire_generated::{PairComparison, PairComparisonParams},
     CoreError, EmbeddingProvenance, EmbeddingSpec, Report,
 };
 use thiserror::Error;
 
-use crate::safety::PathResolutionError;
+use crate::{safety::PathResolutionError, NotificationSender};
 
 mod ipc;
 mod state;

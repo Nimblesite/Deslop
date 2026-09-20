@@ -197,8 +197,9 @@ fn profile_dir_writes_non_empty_firefox_profile_on_shutdown() -> Result<()> {
     assert_eq!(
         entries.len(),
         1,
-        "profiling should write exactly one profile into {}",
-        profile_dir.path().display()
+        "profiling should write exactly one profile into {}; stderr:\n{}",
+        profile_dir.path().display(),
+        String::from_utf8_lossy(&output.stderr)
     );
     let profile_path = entries
         .first()

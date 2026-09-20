@@ -10,6 +10,7 @@
 
 use std::io::{self, Cursor, Read};
 
+use super::CachedFile;
 use crate::{
     ast::{ByteRange, NormalizedNode},
     fingerprint::Fingerprint,
@@ -17,8 +18,6 @@ use crate::{
     lsh::{Signature, SIGNATURE_LEN},
     state::FileId,
 };
-
-use super::CachedFile;
 
 mod bounds;
 

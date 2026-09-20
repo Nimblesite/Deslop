@@ -1,3 +1,4 @@
+import { FIXTURE_ROUTING } from "../cluster.helpers";
 // Shared live-surface test scaffolding: a decoration-capturing editor and
 // a signal-explicit cluster builder. Every bubble suite asserts against
 // the same rendered strings instead of restating the harness.
@@ -370,6 +371,7 @@ export function renderFullConfidenceBubble(
 
 export function retractCluster(store: ReportStore, clusterId: string): void {
   store.applyDelta({
+      routing: FIXTURE_ROUTING,
     from_generation: 1,
     to_generation: 2,
     clusters_added: [],

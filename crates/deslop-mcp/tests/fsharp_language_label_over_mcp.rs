@@ -13,9 +13,9 @@
 #![cfg(unix)]
 
 use anyhow::Result;
+use common::language_label::assert_language_label_over_mcp;
 
 use crate::common;
-use common::language_label::assert_language_label_over_mcp;
 
 #[test]
 fn fsharp_clusters_report_fsharp_language_over_mcp() -> Result<()> {

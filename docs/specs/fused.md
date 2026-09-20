@@ -31,21 +31,19 @@ The structural and token layers always run. The embedding layer is opt-in: `--em
 
 ### [FUSED-STRATEGY-BOUNDED-MAX] Pair admission combines structure, tokens, embeddings, and content
 
-The shape and semantic axes are correlated views of the same two occurrences, so their sum or average is meaningless. Pair admission uses the strongest of the measured structural overlap, token Jaccard, and embedding cosine, then applies the independent pair-content gate. Every input and result belongs to that pair only.
+Pair evidence belongs to the two occurrences being compared. Use the strongest shape or semantic signal, then check content separately. Never add or average these signals: they are not independent probabilities.
 
 1. Compute a candidate set of clone pairs as the **union** of: structural-hash matches, LSH bucket collisions, and top-k embedding neighbors per subtree.
 2. For each candidate pair, compute measured structural overlap `S`, `token_jaccard` `J`, embedding cosine `E`, content agreement `A`, and rename consistency `R`, all in `[0,1]`. Exact Merkle equality is the fast path that makes `S = 1.0`; it is not a separate cluster score.
 3. The shape/semantic pair score is `max(S,J,E)`, bounded to `[0,1]`. Never sum or average the axes. Pair content support is `max(A,R)`, also bounded to `[0,1]`; it remains a separate corroboration because normalised shape and token evidence cannot describe the raw content that normalisation erased.
-4. **Admission is decided pair by pair.** A pair must pass the size-coherence and applicable LSH-only guards, clear its pair-specific shape/semantic threshold or the cross-file rescue, and pass every applicable pair-content guard. Group-level similarity judgement and averaging are forbidden. Clusters are the transitive closure of admitted pairs before the separate convicted-noise rule in [CLONE-NOISE-VERBATIM-SUBGROUP].
-5. Rank clusters by duplicated mass alone ([pipeline.md §RANK-MASS-SUM](pipeline.md#rank-mass-sum)). No pair evidence participates in mass or order.
+4. **Admission is decided pair by pair.** A pair must pass the size and token-only guards, clear its initial threshold or qualify through the shared-subtree rescue, and pass the applicable content checks. The initial score is defined in [FUSED-PRE-RESCUE-SCORE]. Group-level similarity judgement and averaging are forbidden. Clusters join admitted pairs before the separate noise rule in [CLONE-NOISE-VERBATIM-SUBGROUP].
+5. Rank clusters by duplicated mass alone ([pipeline.md §RANK-MASS-SUM](pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only)). No pair evidence participates in mass or order.
 
 #### [FUSED-CANDIDATE-BUCKET-STAR] A structural-hash bucket pairs every member across files, and every pair of members inside one file
 
 Members of one structural-hash bucket are Merkle-equal, so a pair between any two of them scores `S = 1.0` and only the pair-content gate decides it. The candidate generator therefore does not emit every pair of a bucket: each member is paired with the bucket's first member, and closure carries the rest.
 
-That star is only sound when the pair each member is judged on can pass. The content gate's within-file floor is higher than its cross-file floor ([FUSED-CONTENT-GATE]), so a member that shares the first member's file must not be judged on that within-file pair alone when the bucket reaches another file. Such a member is also paired with the bucket's first member in another file. Every member of a bucket that spans files then has a cross-file candidate, and a consistently renamed copy in the first member's file is admitted on the same evidence as the copies in the other files.
-
-Without this, the second and third copies in the first file are compared only with the first copy — a within-file pair the floor refuses — and drop out of the family even though byte-for-byte the same comparison admits the copies in every other file.
+Every member of a bucket spanning files gets a cross-file candidate. An unrelated first member must not hide copies among the remaining members: compare their content, recover missing pairs within each copied subset, then apply the same admission checks. Recovery adds only structurally identical pairs; it does not lower any threshold. Pinned by `cli::category_members`.
 
 Inside one file there is no other scope to borrow that soundness from, and which member sorts first is an accident of write order. So **members of a bucket that share a file are paired with each other, all of them.** A bucket holding one member that *differs* ahead of a byte-identical copy otherwise judged the copy only against the member that differs, and one unrelated sibling deleted an exact duplicate from the report — recall may not depend on what else happens to share the shape. No member can tell in advance which partner its content will vouch for, so within a file the bucket is completely paired. Pinned by `same_file_rescue::a_shape_sibling_may_not_hide_an_exact_same_file_copy`.
 
@@ -55,11 +53,11 @@ This way, a Type-1 pair scores 1.0 on exact structure, a Type-2 pair normally sc
 
 **`fused` never refers to the whole cluster. It exists at the level of the pair only.** A cluster-wide fused is impossible by construction: averaging one across the member pairs is the mean that mispriced proven copies, and summing ratios in `[0,1]` is meaningless.
 
-`fused` is the pair's bounded shape/semantic admission score `max(S,J,E)` ([FUSED-STRATEGY-BOUNDED-MAX]). The independent content support `max(A,R)` participates in the same pair's applicable admission gate without being averaged into `fused`. A cluster contains no `fused`, `S`, `J`, `E`, `A`, `R`, content support, evidence verdict, or pair-source field. Pair evidence values are available only for an explicit comparison of those two occurrences. A cluster carries duplicated mass, mass-derived rank, and the clone kind folded from its canonical pairs ([CLONE-KIND-FOLD]) — a fold of classifications, never of values.
+`fused` is the pair's measured shape/semantic score `max(S,J,E)` ([FUSED-STRATEGY-BOUNDED-MAX]). It is distinct from the initial admission score in [FUSED-PRE-RESCUE-SCORE]. Content support `max(A,R)` stays separate. A cluster contains none of these measurements: it carries its kind, membership, and the mass and rank defined in [RANK-MASS-SUM](pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only). Pair evidence is available only when comparing those two occurrences.
 
 #### [FUSED-THRESHOLD] The pair admission bar
 
-`admission.fused_threshold` (default 0.85) is the ordinary pair admission bar; provenance in [FUSED-TUNING-LEVERS]. A cross-language candidate without exact Merkle equality uses `admission.cross_language_fused_threshold` instead. Both values bound the same pair quantity, `max(S,J,E)`; a key named `min_jaccard` is forbidden here because the threshold is not applied to `J` alone. Every threshold in these specs is a configurable default, never a hard-coded constant; the config surface lives in [exclusion.md](exclusion.md) and the migration in `unhardcode-tuning-plan.md`.
+`admission.fused_threshold` (default 0.85) is the ordinary pair admission bar; provenance in [FUSED-TUNING-LEVERS]. A cross-language candidate without exact Merkle equality uses `admission.cross_language_fused_threshold` instead. Both apply to the initial score in [FUSED-PRE-RESCUE-SCORE]. Threshold configuration lives in [exclusion.md](exclusion.md); the remaining migration is tracked in `unhardcode-tuning-plan.md`.
 
 ### [FUSED-SHARED-SUBTREE] `structural` is measured subtree overlap, not Merkle equality
 
@@ -76,9 +74,9 @@ Forward-only pairing prevents nested double-counting (`the_fallback_never_credit
 
 The cap counts normalised-tree nodes, including operator leaves from [PIPELINE-NORMALIZE-AST-OPERATOR](pipeline.md). It is set above the 558-node `ts-mixed-band` recall fixture; lowering it is a performance change pinned by `the_alignment_cap_is_the_documented_operating_point`.
 
-**Rescue is a cross-file, pairwise compound gate.** A below-threshold pair requires the configured overlap, token Jaccard, endpoint node-count and endpoint-size-ratio floors, and its aligned core must clear the content gate ([FUSED-SHARED-SUBTREE-CORE]); no axis admits alone, and rescue does not change the pre-rescue fused score. Measure overlap only for otherwise-dropped pairs already carrying token and node-count corroboration.
+**Rescue requires shared copied code.** Check overlap, tokens, size, the aligned core's content and the scope rules below. This proof can satisfy the ordinary or token-only admission guard. It applies across files and to the qualifying declarations in [FUSED-SHARED-SUBTREE-SAME-FILE]. Discovery and classification must reuse the same scope and copied-code checks in `overlap/rescue.rs::RescueContext`, including [FUSED-SHARED-SUBTREE-ECHO].
 
-**Routing.** [CLONE-BUCKETS-ROUTING] row 4b classifies an explicit pair whose overlap is corroborated by token or embedding evidence as `NearlyIdentical` using the admission floors. The obsolete `structural ≤ 0.01` comparison is removed; pairs below the overlap floor retain the anchor-free rejection guard.
+**Category labels and their separate thresholds** come from [CLONE-BUCKETS-ROUTING](taxonomy.md#clone-buckets-routing-classification-must-match-the-definitions).
 
 [PIPELINE-CLUSTER-SUBSUME] never compares pair grades. It selects between duplicate component views only by file coverage, physical enclosure, occurrence coverage, duplicated mass, and stable cluster id; structural, Jaccard, embedding, content, rename, literal, and pair classification evidence are forbidden inputs. `type3_enclosing_method.rs` pins the enclosing authored view in all five languages without attaching pair evidence to a cluster.
 
@@ -104,7 +102,7 @@ Each indexed fingerprint belongs to its exact normalised node. Byte ranges are n
 
 **The core must itself be a clone the scan would report.** Before it is measured, the core's paired spans must carry at least `min_nodes` nodes — the scan's own floor, below which it reports no subtree at all — and a core below it admits nothing. The floor is the scan's rather than the rescue's endpoint floor because a near-miss is by construction smaller than its endpoints: `python-type3`'s methods clear the endpoint floor with cores of 22 to 25 nodes, and at `--min-nodes 8` those are clones the scan reports (`type3_enclosing_method`). Three `site/tests` scenarios open with the two Playwright lines every browser test starts with, a viewport and a `goto`, and two of them go on to copy a third statement; the third shares that preamble and nothing else, yet its core — the two lines and one identifier, twenty nodes — measured exactly the content floor and rode the rescue onto the copy, one row wider than the members it joined. Two lines of framework preamble are not duplication the scan reports on their own, and a pair cannot be admitted on what the scan would never report (`a_shared_preamble_never_rescues_a_stranger_onto_a_copied_run`).
 
-Two things about the core follow from what it is. A **contradiction** — a changed operator, a changed call target — is read over the whole endpoints before the core is measured, because the core holds only what the two share and a changed computation is exactly what they do not: `credit`'s `+` against `debit`'s `-` lives outside every Merkle-equal span, and the operator-drift pair may not become a near-miss by having its difference cut out of the evidence (`operator_drift_is_not_duplication`). And the rename test's **vocabulary clause** — that a copy keeps at least as many names as it renames — is not asked of the core: it separates a Type-2 clone from a different vocabulary over one shape, which is a question the rescue's ordered-overlap and token floors have already answered for this pair, and a near-miss method that renames every local keeps nothing by that count. `python-type3`'s core renames `bound`, `running` and `step` throughout and keeps only `range`; asked to keep as many as it renamed, the canonical near-miss would be refused (`type3_enclosing_method`). Every other clause holds: no substituted position may contradict the bijection, and at least one substitution must be corroborated — which is what still refuses the welded tail, whose two substitutions are each seen once.
+Three things about the core follow from what it is. A changed **operator** is read over the whole endpoints before the core is measured, because the core holds only what the two share and a changed computation is exactly what they do not: `credit`'s `+` against `debit`'s `-` lives outside every Merkle-equal span, and the operator-drift pair may not become a near-miss by having its difference cut out of the evidence (`operator_drift_is_not_duplication`). A changed **call target** is read over the core itself: telling a renamed collaborator's method from a changed operation needs positions ([FUSED-CONTENT-GATE-CALL-TARGET]), near-miss endpoints have none, and the core lines up by construction (`type2_rename_call_targets`). And the rename test's **vocabulary clause** — that a copy keeps at least as many names as it renames — is not asked of the core: it separates a Type-2 clone from a different vocabulary over one shape, which is a question the rescue's ordered-overlap and token floors have already answered for this pair, and a near-miss method that renames every local keeps nothing by that count. `python-type3`'s core renames `bound`, `running` and `step` throughout and keeps only `range`; asked to keep as many as it renamed, the canonical near-miss would be refused (`type3_enclosing_method`). Every other clause holds: no substituted position may contradict the bijection, and at least one substitution must be corroborated — which is what still refuses the welded tail, whose two substitutions are each seen once.
 
 This makes admission monotone in extent — no pair can be admitted by widening a pair the gate refused — and it retires the whole-endpoint floor that sat beneath a whole-endpoint gate. Implemented in `overlap/core.rs` (`OverlapMeasurer::aligned_core`, and `judge_core` — the one verdict both readers share) and `content::measure_aligned_core`; applied in `overlap/rescue.rs` and, for an explicit comparison, in `pipeline/session/pair_compare`; pinned by `cluster_extent_statement_runs::a_scenario_tail_is_never_welded_onto_a_copied_scenario` and `a_shared_preamble_never_rescues_a_stranger_onto_a_copied_run`, `type3_enclosing_method` across every language, `lsh_only_nearmiss_recall` (the reordered pair), `rank_mass` (the `verbatim-plus-stranger` stranger), and `overlap::tests::the_aligned_core_pairs_the_shared_subtrees_in_order` and `the_aligned_core_keeps_the_loop_a_moved_statement_crossed`.
 
@@ -136,7 +134,7 @@ Baker's p-match is a pair predicate. Deslop stores and evaluates evidence on the
 
 For a pair `p`, `structural` is its measured shared-subtree overlap ([FUSED-SHARED-SUBTREE]), `token_jaccard` is the MinHash Jaccard estimate between its two signatures, and `embedding_cos` is the cosine of its two vectors under [FUSED-EMBED-PROVIDER]. Missing input is `0.0` on that pair's axis. The same pair owns `agreement`, `rename_consistency`, and literal fraction under [FUSED-CONTENT-GATE], and `text_identity`: whether its two raw ranges are the same bytes (`byte_identical`), the same lines once each line's leading whitespace is removed (`indentation_only`, so a reader can confirm at a glance that a diff of them shows indentation and nothing else; line endings and a missing final line break are not compared), or `different`. Text identity never changes admission or classification.
 
-An explicit pair comparison identifies both endpoints and may render that pair's `S`, `J`, `E`, `A`, `R`, literal fraction, and admission explanation in one compact secondary row. Cluster JSON, text, HTML, LSP, MCP, editor, and AI-context surfaces render none of those values. A cluster contains its occurrence membership, duplicated mass, and clone kind; closure does not inherit evidence from any edge, and the kind is folded after ranking from the classification of each member's pair with the canonical occurrence ([CLONE-KIND-FOLD]).
+An explicit pair comparison identifies both endpoints and may render that pair's `S`, `J`, `E`, `A`, `R`, literal fraction, and admission explanation in one compact secondary row. Cluster JSON, text, HTML, LSP, MCP, editor, and AI-context surfaces render none of those values. A cluster contains its occurrence membership, duplicated mass, and clone kind; closure does not inherit evidence from any edge, and the kind is established before clone-only counting and ranking ([CLONE-KIND-FOLD]). Rejected comparisons are not a fallback clone category; preserve genuine clone subsets separately from informational matches.
 
 ### [FUSED-CONTENT-GATE] Content agreement gates pair admission
 
@@ -151,9 +149,15 @@ An explicit pair comparison identifies both endpoints and may render that pair's
 4. **Token-signal correction.** A pair whose endpoints share one Merkle hash has equal normalised k-gram sets by construction; a lower `token_jaccard` is a fallback-signature artifact and is corrected to 1.0 for that pair only.
 
 The correction is scoped by that digest equality, tested directly on the members, and by nothing else. No reading of `structural` can stand in for it: since [FUSED-SHARED-SUBTREE] the axis grades subtree *overlap*, so it saturates by ratio as well as by hash equality, and every value below saturation means the subtrees provably differ. Scoping the correction to `content_gate.structural_saturation_floor` — a near-miss **routing** tolerance — published `token_jaccard = 1.0`, and the `shape` reading derived from it, across the whole `[0.99, 1.0)` band on no evidence. Routing tolerance is not proof of identity. Pinned by `crates/deslop/tests/content_gate_signal_honesty.rs`.
-5. **Clustering and ranking read none of this after admission.** Admitted pairs form connected components. The report mass is `canonical_node_count × max(visible_occurrences − 1, 0)` exactly — see [pipeline.md §RANK-MASS-SUM](pipeline.md#rank-mass-sum) — with no evidence factor, policy multiplier, or evidence tie-break. Content evidence answers whether this pair is admitted; it never becomes cluster data.
+5. **Classification and reporting** follow [CLONE-BUCKETS-ROUTING] and [CLONE-KIND-FOLD]. Only eligible clones contribute weight under [RANK-MASS-SUM](pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only). Do not turn admission failure into a fallback clone label.
 
 `token_jaccard` itself stays rename-invariant (normalised k-grams); the gate adds evidence rather than redefining an existing signal.
+
+#### [FUSED-CONTENT-GATE-CALL-TARGET] Changing an external operation is not a local rename
+
+Calls such as `toHaveCount` and `toContainText` perform different operations. A method declared outside the copied region is a fixed name the copy did not author, so changing one contradicts the copy; a method declared inside the region may be renamed with its callers. But a systematic rename is still a copy ([CLONE-BUCKETS-NORTH-STAR](taxonomy.md#clone-buckets-north-star-what-the-four-categories-mean)), and Deslop tells a rename from a changed operation by the receiver — the name the call is made on, whether a plain handle (`ledger` in `ledger.postEntry(..)`) or a property (`b` in `a.b.c()`). A changed selector is excused when that receiver is itself a corroborated rename: the same name mapped the same way more than once, inside a mapping nothing contradicts ([TECH-PMATCH-BAKER]), at the same frontier position in both occurrences. `ledger.postEntry` against `journal.writeRecord`, in a function whose receiver, parameters, locals and types all rename together, is one function written twice; `client.startJob` against `client.cancelJob` renames nothing else and asks one collaborator for two different things, however many times the swap repeats. The selector's own repetition is not required — `self.order_repo.fetch` against `self.user_store.load` renames each method once on a collaborator renamed throughout (`python_inherited_contract_boundary`) — and a call made on something that is not a name, `expect(page.locator(..)).toHaveText(..)`, has no receiver to corroborate and is never excused. The rule reads positions, so it applies only where the two occurrences line up: across a same-shape pair, and across the shared code of a near-miss pair ([FUSED-SHARED-SUBTREE-CORE]). Implemented in `content/call_targets.rs`; pinned by `type2_rename_call_targets`, `js_literal_variation_calls::member_targets` and `cluster_extent_statement_runs`.
+
+Keep the actual content measurements even when a contradiction rejects the pair. Rejection does not mean zero similarity. Truly unavailable measurements are unknown under [REPORT-CONTEXT-PAIR](REPORTING-CONTEXT.md#report-context-pair-comparing-two-occurrences).
 
 #### [FUSED-CONTENT-GATE-PARAMETER] Where nothing was renamed, a consistent literal substitution is a parameter
 
@@ -218,11 +222,21 @@ E(a,b) =
 \end{cases}
 $$
 
-The shape/semantic admission score takes the strongest of the pair's measured structural, token, and embedding axes and clamps to `[0, 1]`. Max is a Deslop design choice; sum and average are forbidden because the axes are not calibrated probabilities.
+The measured shape/semantic score takes the strongest of the pair's structural, token, and embedding signals and clamps to `[0, 1]`.
 
 $$
 f_{\mathrm{shape}}(p) = \operatorname{clamp}(\max(S(p),\, J(p),\, E(p)),\ 0,\ 1)
 $$
+
+#### [FUSED-PRE-RESCUE-SCORE] Keep the initial score separate from measured overlap
+
+Before subtree alignment, discovery knows exact fingerprint equality `M`, token similarity `J`, and embedding similarity `E`. Its initial score is:
+
+$$
+f_{\mathrm{pre}}(p) = \operatorname{clamp}(\max(M(p),\, J(p),\, E(p)),\ 0,\ 1)
+$$
+
+Use this score for the initial threshold. A shared-code rescue remains valid whether the initial score lies below or above that threshold; it can also satisfy the stricter token-only guard. Classification must reuse the discovery checks, not reconstruct a different decision from the final similarity score. The displayed pair score remains `f_shape`. Pinned by the Go declaration test in `cli::detection` and the cross-file and same-file C# cases in `type3_enclosing_method`.
 
 The bar a pair must clear depends on the pair. Cross-language pairs without exact Merkle equality use the lower configured cross-language floor. Everything else uses `fused_threshold` (default 0.85), a Deslop operating point derived from its corpus. SourcererCC's 0.70 experiment is directional context only: it uses a different representation and similarity function.
 
@@ -249,13 +263,12 @@ $$
 P_{\mathrm{candidate}}(s) = 1 - \left(1-s^r\right)^b
 $$
 
-A pair is admitted when its pre-rescue score clears its threshold or the shared-subtree rescue fires, subject to the size-coherence and LSH-only guards. The rescue requires its aligned core to clear the content gate — $C_{\mathrm{core}}$ below, [FUSED-SHARED-SUBTREE-CORE] — and inside one file it additionally requires the copied interior of [FUSED-SHARED-SUBTREE-SAME-FILE]; those conditions are load-bearing parts of the implementation, not optional prose.
+A pair must clear its initial threshold or qualify through shared copied code, then pass the remaining guards. Below, `scope_ok` includes the scope and container checks in [FUSED-SHARED-SUBTREE-ECHO] and [FUSED-SHARED-SUBTREE-SAME-FILE]; `C_core` includes the copied-code and content checks in [FUSED-SHARED-SUBTREE-CORE].
 
 $$
 \begin{aligned}
-\mathrm{rescue}(p) \iff {}& \operatorname{cross\_file}(p)
-\land f_{\mathrm{shape}}(p) < t(p) \\
-&\land S(p) \ge \text{shared\_subtree\_min\_overlap}
+\mathrm{rescue}(p) \iff {}& \operatorname{scope\_ok}(p)
+\land S(p) \ge \text{shared\_subtree\_min\_overlap}
 \land J(p) \ge \text{shared\_subtree\_min\_jaccard} \\
 &\land \min(n_l,n_r) \ge \text{shared\_subtree\_min\_node\_count}
 \land C_{\mathrm{core}}(p)
@@ -279,18 +292,15 @@ n_{\mathrm{lsh}}(p) = {}&
 \end{aligned}
 $$
 
-Pairs without an exact structural anchor must also have coherent endpoint sizes. Putting all gates together:
+Pairs without an exact structural anchor must also have coherent endpoint sizes. `content_ok` means the applicable checks in [FUSED-CONTENT-GATE] pass, including its consistent-rename route. Putting the gates together:
 
 $$
 \begin{aligned}
 \mathrm{size\_ok}(p) &\iff M(p)=1 \lor \max(n_l,n_r) \le
 \text{max\_endpoint\_node\_ratio}\,\min(n_l,n_r) \\
-\mathrm{content\_floor}(p) & = \begin{cases} \text{support\_floor} & \text{if cross-file}(p) \land \neg\mathrm{lsh\_only}(p) \\ \text{promote\_floor} & \text{otherwise} \end{cases} \\
-\mathrm{content\_required}(p) &\iff E(p)<\text{candidates.embedding\_support\_floor}\land\bigl(M(p)=1\lor S(p)\ge\text{routing.shape\_identical\_floor}\lor J(p)\ge\text{content\_gate.saturating\_token\_floor}\bigr) \\
-\mathrm{content\_ok}(p) &\iff \neg\mathrm{content\_required}(p) \lor C(p) \ge \mathrm{content\_floor}(p) \\
 \mathrm{admit}(p) &\iff \mathrm{size\_ok}(p)
 \land \mathrm{lsh\_ok}(p)
-\land \bigl(f_{\mathrm{shape}}(p) \ge t(p) \lor \mathrm{rescue}(p)\bigr)
+\land \bigl(f_{\mathrm{pre}}(p) \ge t(p) \lor \mathrm{rescue}(p)\bigr)
 \land \mathrm{content\_ok}(p)
 \end{aligned}
 $$
@@ -385,21 +395,11 @@ $$
 
 **Mass and order** — [RANK-MASS-SUM]
 
-More canonical nodes contribute more mass and each extra visible occurrence adds that extent again. A cluster with fewer than two visible occurrences has zero mass. No pair evidence or policy multiplier changes mass.
-
-$$
-\mathrm{mass}(c) = \text{canonical\_nodes}(c) \times \max(\mathrm{visible}(c) - 1, 0)
-$$
-
-Clusters sort heaviest first; the governing [RANK-MASS-SUM] specification says ties break by cluster id ascending so the report order is stable.
-
-$$
-\text{order} = \text{mass descending, then cluster id ascending}
-$$
+Weight, the unchanged AST-node mass formula, exclusions and ordering are defined once in [RANK-MASS-SUM](pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only).
 
 *Pair evidence decides pair admission. Closure forms the cluster. Mass alone weighs it.*
 
-**Repo metrics** — [METRICS-REPO]
+**Repo metrics** — [METRICS-REPO](pipeline.md#metrics-repo-repo-wide-duplication-metrics)
 
 The headline number is unweighted duplicated-line density. It uses the same ratio form as SonarQube's gate, but the tools' analysed-line and clone projections differ, so the values are not interchangeable measurements.
 
@@ -432,7 +432,7 @@ Every numeric constant above is a configurable default, never a hard-coded value
 
 ### [FUSED-TUNING-LEVERS] Every threshold is a configuration item with a recorded provenance
 
-A number is a **lever** when changing it changes candidate generation, pair admission, pair classification, or suppression. Cluster ranking has no numeric lever because mass is mechanical. Every lever is named, defaulted to the value compiled today, range- and invariant-validated at load ([EXCLUSION-CONFIG] `[tuning]`), and declared in the report that its value produced ([CONFIG-TUNING-DECLARED]).
+Every numeric cutoff for detection, admission, classification or suppression must have a named default and a `.deslop.toml` setting. Validate it at load and record its effective value in the report ([EXCLUSION-CONFIG], [CONFIG-TUNING-DECLARED]). Existing defaults are listed here; new classification defaults are listed separately in [CLONE-BUCKETS-THRESHOLDS](taxonomy.md#clone-buckets-thresholds-defaults-and-toml-settings) and require corpus validation. Rank actual clones using the unchanged mass formula.
 
 **Unhardcoding is behaviour-preserving.** A run with no `[tuning]` section, no `--tune` flag, and no editor override produces a byte-identical report to the pre-migration build on every fixture and every corpus repository. Changing a *default* is a separate change with its own failing test, its own provenance entry, and its own corpus measurement — widening one during the migration is how an unhardcoding refactor becomes an undetected recall loss.
 
@@ -453,7 +453,7 @@ A number is a **lever** when changing it changes candidate generation, pair admi
 | `candidates.embedding_exact_pair_limit` | `embedding/pairs.rs:22` | 256 | **Unrecorded.** |
 | `content_gate.support_floor` | `buckets.rs:237` | 0.7 | **Derived** (provenance audit). SourcererCC's 0.7 is token overlap similarity; here it prices raw-byte agreement. Value kept; literature label dropped. |
 | `content_gate.promote_floor` | `buckets.rs` | 0.85 | **Derived**. The floor an unanchored LSH-only pair pays in every scope; bounded below by the #339 whole-file-against-interior-window pairs, which ride that route at cross-file support strength. It is not a within-file floor: the single-file REST settings family (0.72–0.80) is convicted by [RANK-STRUCTURAL-ONLY-FORWARDING] after closure, and a same-file copy varying only its literals (0.73) is a finding. |
-| `content_gate.structural_only_max_support` | `buckets.rs:215` | 0.05 | **Defect.** The structural-only acceptance criterion (`token_jaccard = 0.00`, `embedding_cos = 0.00`) plus tolerance for MinHash collision noise. It is a ceiling below which a signal counts as *absent*, and is never a support floor — `route_shape_identical` read it as one, so a cosine of 0.05 overruled the measured content evidence and the gate's verdict followed whether the embedding pass ran. |
+| `content_gate.structural_only_max_support` | `buckets.rs` | 0.05 | Noise ceiling for token/embedding signals. It is not a measurement of content similarity and must not define shape-only or override a content rejection ([CLONE-BUCKETS-STRUCTURAL-ONLY](taxonomy.md#clone-buckets-structural-only-shape-only-is-not-duplication)). |
 | `candidates.embedding_support_floor` | `pair.rs:91` | 0.80 | **Derived**. The cosine at which a pair's measured `embedding_cos` supplies semantic admission support rather than merely recording a measurement. The ANN candidate gate and [CLONE-BUCKETS-ROUTING] use the same operating point. |
 | `content_gate.saturating_token_floor` | pair admission | 0.95 | **Defect**. A false flutter/flutter edge measured `S = 0.62, J = 0.98` — the token layer echoing shape, not reporting content. |
 | `content_gate.rename_corroboration_min` | `content.rs` | 2 | **Literature.** [TECH-PMATCH-BAKER] prev-encoding: a parameter symbol's first occurrence matches anything and constrains nothing; only repetition carries binding proof. |

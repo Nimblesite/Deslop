@@ -9,13 +9,12 @@
 
 use std::{collections::BTreeMap, path::PathBuf};
 
+use super::PipelineSession;
 use crate::{
     diff_scope::{build_diff_scope, ParsedDiff},
     error::CoreError,
     report_render::relative_to_scan_root,
 };
-
-use super::PipelineSession;
 
 impl PipelineSession {
     /// Verifies `parsed` against the freshly analysed corpus and

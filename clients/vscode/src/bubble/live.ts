@@ -13,7 +13,7 @@ import type { LanguageClient } from "vscode-languageclient/node";
 
 import { COLOR, KIND_COLOR } from "../design";
 import { ReportStore } from "../reportStore";
-import { ReportCluster, clusterBand } from "../types/report";
+import { ReportCluster, clusterSeverity, compareClusterRank, type Severity } from "../types/report";
 import { bubbleHover, ghostText, inlineText } from "./renderParts";
 
 export { shortPath } from "../pathUtils";
@@ -28,6 +28,7 @@ interface ActiveBubble {
   editor: vscode.TextEditor;
   clusterId: string;
   range: vscode.Range;
+  severity: Severity;
 }
 
 // [VSIX-STATE-DIRTY] Everything a `findSimilar` answer is only valid *for*,
@@ -290,10 +291,9 @@ export class LiveBubble implements vscode.Disposable {
       this.clearBubble();
       return;
     }
-    if (this.active?.clusterId === best.id && this.active.range.isEqual(range))
+    const severity = clusterSeverity(best);
+    if (this.active?.clusterId === best.id && this.active.range.isEqual(range) && this.active.severity === severity)
       return;
-
-    const severity = clusterBand(best);
     const mode = vscode.workspace
       .getConfiguration("deslop")
       .get<string>("liveBubble.mode", "inline");
@@ -328,7 +328,7 @@ export class LiveBubble implements vscode.Disposable {
       ]);
     }
 
-    this.active = { editor, clusterId: best.id, range };
+    this.active = { editor, clusterId: best.id, range, severity };
   }
 
   private clearBubble(): void {
@@ -348,10 +348,11 @@ export class LiveBubble implements vscode.Disposable {
     const report = this.store.current.visibleReport;
     const active = this.active;
     if (!active || !report) return;
-    const stillPresent = report.clusters.some(
+    const current = report.clusters.find(
       (cluster) => cluster.id === active.clusterId,
     );
-    if (!stillPresent) this.clearBubble();
+    if (!current) this.clearBubble();
+    else if (active.severity !== clusterSeverity(current)) this.render(active.editor, active.range, [current]);
   }
 }
 
@@ -372,7 +373,7 @@ function bestBubbleCluster(
     .filter((cluster) => !retractedClusters.has(cluster.id))
     .filter((cluster) => !dismissedClusters.has(cluster.id))
     // Worst first is the engine's ranking, tie-break included.
-    .sort((a, b) => a.rank - b.rank)[0];
+    .sort(compareClusterRank)[0];
 }
 
 // The probe's budget deadline fired: record the expiry so the completion

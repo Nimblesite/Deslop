@@ -1,6 +1,8 @@
 use super::support::*;
-use crate::common::signals::assert_no_pair_surface_on_cluster;
-use crate::mock_ollama::{MockOllama, MOCK_CONTEXT_TOKENS};
+use crate::{
+    common::signals::assert_no_pair_surface_on_cluster,
+    mock_ollama::{MockOllama, MOCK_CONTEXT_TOKENS},
+};
 
 // different default. Reports are parsed via `serde_json` so the
 // assertions are schema-aware rather than substring-guessing.

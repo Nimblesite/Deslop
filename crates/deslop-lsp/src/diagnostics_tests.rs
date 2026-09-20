@@ -1,7 +1,8 @@
-use super::*;
 use anyhow::{anyhow, Result};
 use deslop_core::report::ReportCluster;
 use tempfile::TempDir;
+
+use super::*;
 
 const ALPHA_FILE: &str = "Alpha.cs";
 const A_CAPITAL_FILE: &str = "A.cs";
@@ -12,26 +13,33 @@ const LIGHT_CLUSTER_MASS: u64 = 1;
 const HEAVY_CLUSTER_MASS: u64 = 100;
 const FIXTURE_END_BYTE: usize = 5;
 
-// [LSP-SEVERITY-BUCKET] Every mass rank band, the severity it must publish,
-// and the rationale that mapping pins. Severity is a function of the
-// mass-derived rank band, never of pair measurements.
-const RANK_BAND_SEVERITIES: [(&str, DiagnosticSeverity, &str); 4] = [
+/// [CLONE-KIND-LABELS] The fixture kind's wire spelling and title, spelled
+/// out so a registry drift shows up here as words, not as a pass.
+const FIXTURE_KIND_WIRE: &str = "nearly_identical";
+const FIXTURE_KIND_TITLE: &str = "Nearly identical code";
+
+// [SEVERITY-DESLOP-MAP] A near-copy remains Warning at every mass rank.
+const SAMPLE_RANK_SEVERITIES: [(usize, DiagnosticSeverity, &str); 4] = [
     (
-        "worst",
-        DiagnosticSeverity::ERROR,
-        "Worst band → Error (highest duplicated mass in the report)",
-    ),
-    (
-        "top10",
+        1,
         DiagnosticSeverity::WARNING,
-        "Top-10 band → Warning",
+        "Highest mass near-copy remains Warning",
     ),
     (
-        "mid",
-        DiagnosticSeverity::INFORMATION,
-        "Mid band → Information",
+        10,
+        DiagnosticSeverity::WARNING,
+        "Tenth near-copy remains Warning",
     ),
-    ("faint", DiagnosticSeverity::HINT, "Tail band → Hint"),
+    (
+        50,
+        DiagnosticSeverity::WARNING,
+        "Middle near-copy remains Warning",
+    ),
+    (
+        100,
+        DiagnosticSeverity::WARNING,
+        "Tail near-copy remains Warning",
+    ),
 ];
 
 fn write_source(dir: &Path, name: &str, body: &str) -> Result<PathBuf> {
@@ -102,7 +110,14 @@ fn diagnostics_for(cluster: ReportCluster, path: &str, workspace: &Path) -> Vec<
         clusters: vec![cluster],
         total_occurrences,
     };
-    build_for_file(&file_report, workspace)
+    build_for_file(
+        &file_report,
+        workspace,
+        &DiagnosticSettings {
+            enabled: true,
+            ..DiagnosticSettings::default()
+        },
+    )
 }
 
 /// Reads the machine-readable cluster id out of a diagnostic's `data` payload.
@@ -134,15 +149,32 @@ fn assert_single_canonical_link(diagnostic: &Diagnostic, context: &str) -> Resul
     Ok(())
 }
 
-// [LSP-SEVERITY-BUCKET] Rank band → severity mapping.
+// [SEVERITY-DESLOP-MAP] Rank cannot select diagnostic severity.
 #[test]
-fn severity_for_maps_rank_band_to_lsp_level() {
-    for (band, expected_severity, rationale) in RANK_BAND_SEVERITIES {
-        let mut cluster = sample_cluster(band, LIGHT_CLUSTER_MASS, vec![occurrence(A_FILE, 0, 1)]);
-        cluster.rank_band = band.to_owned();
-        assert_eq!(severity_for(&cluster), expected_severity, "{rationale}");
+fn severity_for_preserves_kind_level_at_every_rank() {
+    for (rank, expected_severity, rationale) in SAMPLE_RANK_SEVERITIES {
+        let mut cluster = sample_cluster(
+            "near-copy",
+            LIGHT_CLUSTER_MASS,
+            vec![occurrence(A_FILE, 0, 1)],
+        );
+        cluster.rank = rank;
+        assert_eq!(
+            severity_for(
+                &cluster,
+                &DiagnosticSettings {
+                    enabled: true,
+                    ..DiagnosticSettings::default()
+                }
+            ),
+            Some(expected_severity),
+            "{rationale}"
+        );
     }
 }
+
+#[path = "diagnostics_message_tests.rs"]
+mod message;
 
 #[test]
 fn absolute_path_leaves_absolute_untouched_and_joins_relative() {
@@ -213,8 +245,8 @@ fn diagnostic_data_stores_cluster_id_and_mass_for_machine_readers() -> Result<()
         Some(LIGHT_CLUSTER_MASS)
     );
     assert_eq!(
-        data.get("rank_band").and_then(serde_json::Value::as_str),
-        Some("worst")
+        data.get("rank").and_then(serde_json::Value::as_u64),
+        Some(cluster.rank as u64)
     );
     // [CLONE-KIND-LABELS] The diagnostic data carries the folded kind so
     // the extension colours the squiggle by kind without re-deriving it.
@@ -225,123 +257,9 @@ fn diagnostic_data_stores_cluster_id_and_mass_for_machine_readers() -> Result<()
     Ok(())
 }
 
-/// [CLONE-KIND-LABELS] The fixture kind's wire spelling and title, spelled
-/// out so a registry drift shows up here as words, not as a pass.
-const FIXTURE_KIND_WIRE: &str = "nearly_identical";
-const FIXTURE_KIND_TITLE: &str = "Nearly identical code";
-
+// [SEVERITY-DESLOP-MAP] Near-copy Warning with its canonical link.
 #[test]
-fn fixture_kind_labels_are_the_registry_labels() {
-    let fixture = deslop_core::report_fixtures::FIXTURE_KIND;
-    assert_eq!(fixture.wire_label(), FIXTURE_KIND_WIRE);
-    assert_eq!(fixture.labels().title, FIXTURE_KIND_TITLE);
-}
-
-#[test]
-fn diagnostic_message_shows_kind_count_and_mass() {
-    let message = diagnostic_message(&two_file_cluster());
-    assert!(message.contains(" — "), "joined with em dash: {message}");
-    assert!(
-        message.starts_with(&format!("{FIXTURE_KIND_TITLE} × 2")),
-        "kind title and instance count first: {message}"
-    );
-    assert!(
-        message.contains(&format!("mass {HEAVY_CLUSTER_MASS}")),
-        "message carries the duplicated mass: {message}"
-    );
-    assert!(
-        !message.contains("Type-"),
-        "diagnostic message must not expose clone taxonomy labels: {message}"
-    );
-}
-
-// [FUSED-PAIR-SIGNALS] The admission signals are pair measurements and
-// never touch the cluster. An LSP diagnostic on one occurrence must not
-// render them: the message quotes the folded kind, the count and the
-// duplicated mass, and nothing else.
-#[test]
-fn diagnostic_message_renders_no_pair_evidence() {
-    let cluster = two_file_cluster();
-    let message = diagnostic_message(&cluster);
-    assert!(
-        message.contains(&format!("{FIXTURE_KIND_TITLE} × 2")),
-        "the kind title and count survive: {message}"
-    );
-    assert!(
-        !message.contains("fused"),
-        "no cluster fused score on any surface: {message}"
-    );
-    for axis in [
-        "structural",
-        "jaccard",
-        "embedding",
-        "agreement",
-        "rename",
-        "literal",
-    ] {
-        assert!(
-            !message.contains(axis),
-            "pair evidence must not reach the diagnostic ({axis}): {message}"
-        );
-    }
-    assert!(
-        !message.contains("measured pair") && !message.contains("occurrences 1 and 2"),
-        "no pair attribution on a cluster surface: {message}"
-    );
-}
-
-// The message is a pure function of count and duplicated mass: two
-// clusters with the same membership shape and mass quote the same text
-// regardless of any pair measurements, and a mass difference shows.
-#[test]
-fn diagnostic_message_depends_on_count_and_mass_only() {
-    let same_mass = sample_cluster(
-        "twin",
-        HEAVY_CLUSTER_MASS,
-        vec![occurrence(A_FILE, 0, 1), occurrence("b.cs", 0, 1)],
-    );
-    assert_eq!(
-        diagnostic_message(&same_mass),
-        diagnostic_message(&two_file_cluster()),
-        "same count and mass → same message: {}",
-        diagnostic_message(&same_mass)
-    );
-    let heavier = sample_cluster(
-        "heavy",
-        HEAVY_CLUSTER_MASS * 2,
-        vec![occurrence(A_FILE, 0, 1), occurrence("b.cs", 0, 1)],
-    );
-    assert_ne!(
-        diagnostic_message(&heavier),
-        diagnostic_message(&two_file_cluster()),
-        "mass must show in the message: {} vs {}",
-        diagnostic_message(&heavier),
-        diagnostic_message(&two_file_cluster())
-    );
-}
-
-#[test]
-fn diagnostic_never_renders_pair_scores() {
-    let cluster = sample_cluster(
-        "unsourced",
-        HEAVY_CLUSTER_MASS,
-        vec![occurrence(A_FILE, 0, 1)],
-    );
-    let message = diagnostic_message(&cluster);
-    assert!(message.contains(&format!("{FIXTURE_KIND_TITLE} × 1")));
-    assert!(
-        !message.contains("structural"),
-        "unsourced structural score leaked: {message}"
-    );
-    assert!(
-        !message.contains("agreement"),
-        "unsourced content score leaked: {message}"
-    );
-}
-
-// [LSP-SEVERITY-BUCKET] Worst band → Error; canonical link present.
-#[test]
-fn build_for_file_emits_error_for_worst_band_cluster_with_canonical_link() -> Result<()> {
+fn build_for_file_emits_warning_for_near_copy_with_canonical_link() -> Result<()> {
     let workspace = TempDir::new()?;
     let _primary = write_source(workspace.path(), ALPHA_FILE, "alpha\nbeta\ngamma\n")?;
     let _secondary = write_source(workspace.path(), "Beta.cs", "a\nbb\nccc\ndddd\n")?;
@@ -376,8 +294,8 @@ fn build_for_file_emits_error_for_worst_band_cluster_with_canonical_link() -> Re
     );
     assert_eq!(
         diagnostic.severity,
-        Some(DiagnosticSeverity::ERROR),
-        "worst rank band → Error per [LSP-SEVERITY-BUCKET]"
+        Some(DiagnosticSeverity::WARNING),
+        "near-copy → Warning per [SEVERITY-DESLOP-MAP]"
     );
     assert!(
         diagnostic.code.is_none(),
@@ -392,31 +310,31 @@ fn build_for_file_emits_error_for_worst_band_cluster_with_canonical_link() -> Re
     Ok(())
 }
 
-// [LSP-SEVERITY-BUCKET] All rank bands publish diagnostics — none are suppressed by default.
+// [LSP-SEVERITY-BUCKET] Once enabled, every rank publishes at its kind's level; rank selects nothing.
 #[test]
-fn build_for_file_publishes_all_rank_bands_with_correct_severity() -> Result<()> {
+fn build_for_file_publishes_every_rank_with_kind_severity() -> Result<()> {
     let workspace = TempDir::new()?;
     let _primary = write_source(workspace.path(), A_CAPITAL_FILE, "abc\n")?;
-    for (band, expected_severity, rationale) in RANK_BAND_SEVERITIES {
+    for (rank, expected_severity, rationale) in SAMPLE_RANK_SEVERITIES {
         let mut cluster = sample_cluster(
             "c",
             LIGHT_CLUSTER_MASS,
             vec![occurrence(A_CAPITAL_FILE, 0, 2)],
         );
-        cluster.rank_band = band.to_owned();
+        cluster.rank = rank;
         let diagnostics = diagnostics_for(cluster, A_CAPITAL_FILE, workspace.path());
         assert_eq!(
             diagnostics.len(),
             1,
-            "band '{band}' must always produce a diagnostic (no mass-percentile suppression)"
+            "rank {rank} must produce a diagnostic"
         );
         let diag = diagnostics
             .first()
-            .ok_or_else(|| anyhow!("no diagnostic for band '{band}'"))?;
+            .ok_or_else(|| anyhow!("no diagnostic for rank {rank}"))?;
         assert_eq!(
             diag.severity,
             Some(expected_severity),
-            "band '{band}' → {expected_severity:?} ({rationale})"
+            "rank {rank}: {rationale}"
         );
     }
     Ok(())

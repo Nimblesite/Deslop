@@ -20,16 +20,16 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use assert_cmd::cargo::cargo_bin;
-use serde_json::{json, Value};
-use tempfile::TempDir;
-
-use crate::common;
 use common::{
     assert_production_embedding_models, copied_fixture, fixture_root,
     rpc::{StdioRpc, MCP_PROTOCOL_VERSION},
     spawn_lsp_and_wait_for_socket, str_field, value_array, value_get, ChildKillOnDrop, NAME_FIELD,
     PROVIDER_ID_FIELD, STUB_PROVIDER,
 };
+use serde_json::{json, Value};
+use tempfile::TempDir;
+
+use crate::common;
 
 const REPORT_GET_TOOL: &str = "report-get";
 const DUPLICATES_TOOL: &str = "duplicates";
@@ -39,7 +39,7 @@ const MERGE_PLAN_TOOL: &str = "merge-plan";
 const REPORT_QUERY_TOOL: &str = "report-query";
 const ACTION_FIELD: &str = "action";
 const MASS_FIELD: &str = "mass";
-const RANK_BAND_FIELD: &str = "rank_band";
+const SEVERITY_FIELD: &str = "severity";
 const DETAIL_FIELD: &str = "detail";
 const DETAIL_SUMMARY: &str = "summary";
 const SEVERITIES_FIELD: &str = "severities";
@@ -862,7 +862,7 @@ fn duplicates_returns_full_clusters_ranked_by_mass() -> Result<()> {
     );
     assert!(
         first
-            .get(RANK_BAND_FIELD)
+            .get(SEVERITY_FIELD)
             .and_then(Value::as_str)
             .is_some_and(|band| !band.is_empty()),
         "duplicates must return the mass-derived rank band: {first}"
@@ -1173,7 +1173,7 @@ fn issue_110_duplicates_pages_omit_schema_doc_and_schema_doc_tool_serves_it() ->
         &json!({
             (OFFSET_PARAM): 0,
             (LIMIT_PARAM): SCHEMA_TEST_PAGE_LIMIT,
-            (SEVERITIES_FIELD): ["worst"],
+            (SEVERITIES_FIELD): ["warning"],
         }),
     )?)?;
     assert!(
@@ -1299,7 +1299,7 @@ fn duplicates_clusters_are_slim_summaries_only() -> Result<()> {
         for required in [
             ID_FIELD,
             MASS_FIELD,
-            RANK_BAND_FIELD,
+            SEVERITY_FIELD,
             "size_nodes",
             "occurrence_count",
             LANGUAGE_FIELD,
@@ -1639,7 +1639,7 @@ fn duplicates_filters_by_matching_severity_includes_clusters() -> Result<()> {
         &json!({
             (OFFSET_PARAM): 0,
             (LIMIT_PARAM): QUERY_PAGE_LIMIT,
-            (SEVERITIES_FIELD): ["worst"],
+            (SEVERITIES_FIELD): ["warning"],
             (DETAIL_FIELD): DETAIL_SUMMARY,
         }),
     )?;
@@ -1650,8 +1650,8 @@ fn duplicates_filters_by_matching_severity_includes_clusters() -> Result<()> {
     );
     for cluster in &clusters {
         assert_eq!(
-            cluster.get(RANK_BAND_FIELD).and_then(Value::as_str),
-            Some("worst"),
+            cluster.get(SEVERITY_FIELD).and_then(Value::as_str),
+            Some("warning"),
             "severity filter not applied: {cluster}"
         );
     }

@@ -1,4 +1,5 @@
-//! [FUSED-CONTENT-GATE] and [CLONE-NOISE-VERBATIM-SUBGROUP] E2E coverage. The four byte-identical TypeScript copies are admitted and remain one mass-only cluster. Their shape-identical stranger fails pair content before closure, so it can never be rendered as a copy.
+//! [FUSED-CONTENT-GATE] and [CLONE-NOISE-VERBATIM-SUBGROUP] keep the four copies together.
+//! [CLONE-BUCKETS-STRUCTURAL-ONLY] The informational stranger carries no clone weight.
 
 use anyhow::Result;
 use serde_json::Value;
@@ -36,7 +37,7 @@ fn verbatim_copies_survive_and_content_rejected_stranger_never_closes() -> Resul
     let scan_root = fixture("verbatim-plus-stranger");
     let report = run_family_report()?;
     assert_eq!(
-        clusters(&report).len(),
+        clone_findings(&report).len(),
         EXPECTED_CLUSTER_COUNT,
         "the four copies form one admitted family: {report:#}"
     );
@@ -63,7 +64,7 @@ fn verbatim_copies_survive_and_content_rejected_stranger_never_closes() -> Resul
     assert_structural_only_contract(copies, "verbatim copy family");
     assert_no_pair_surface_on_cluster(copies, "verbatim copy family");
     assert!(
-        clusters(&report)
+        clone_findings(&report)
             .iter()
             .all(|cluster| !cluster_file_set(cluster).contains(STRANGER_FILE)),
         "the content-rejected stranger never enters a transitive closure: {report:#}"

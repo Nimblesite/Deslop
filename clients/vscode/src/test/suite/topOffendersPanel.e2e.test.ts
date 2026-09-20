@@ -95,7 +95,7 @@ suite("top offenders panel and node commands", () => {
   test("clearFilter empties the persisted severity facet", async () => {
     await vscode.workspace
       .getConfiguration(DESLOP_CONFIGURATION_NAMESPACE)
-      .update(FILTER_SEVERITIES_SETTING, ["worst"], vscode.ConfigurationTarget.Workspace);
+      .update(FILTER_SEVERITIES_SETTING, ["error"], vscode.ConfigurationTarget.Workspace);
     await vscode.commands.executeCommand("deslop.topOffenders.clearFilter");
     assert.deepEqual(
       await readConfig(FILTER_SEVERITIES_SETTING),

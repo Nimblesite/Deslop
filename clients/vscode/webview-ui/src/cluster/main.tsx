@@ -26,6 +26,8 @@ import {
   kindTaxonomy,
   kindTitle,
   occurrenceCount,
+  isClone,
+  INFORMATIONAL_FINDING,
 } from "../../../src/types/report";
 import { formatMass } from "../../../src/types/format";
 import type { ReportCluster, ReportOccurrence } from "../../../src/types/report";
@@ -47,7 +49,7 @@ const CENTER_ALIGNMENT = "center";
 const ANYWHERE_WRAP = "anywhere";
 const OPEN_OCCURRENCE_MESSAGE = "open/occurrence";
 const UNKNOWN_RANK = "unknown";
-const FAINT_SEVERITY = "faint";
+const FAINT_SEVERITY = "hint";
 const KEYDOWN_EVENT = "keydown";
 const LABEL_CLASS = "label";
 const WITH_HELP_CLASS = "with-help";
@@ -156,9 +158,9 @@ function ClusterApp() {
               minWidth: 0,
             }}
           >
-            <HelpedText topic={CLUSTER_ID_TOPIC} title={clusterIdTitle(cluster.id, rank, list.length)}>
+            <HelpedText topic={CLUSTER_ID_TOPIC} title={clusterIdTitle(cluster)}>
               CLUSTER ·{SPACE_TEXT}
-              <DocTextLink topic={CLUSTER_ID_TOPIC} title={clusterIdTitle(cluster.id, rank, list.length)}>
+              <DocTextLink topic={CLUSTER_ID_TOPIC} title={clusterIdTitle(cluster)}>
                 {cluster.id}
               </DocTextLink>
             </HelpedText>
@@ -184,11 +186,10 @@ function ClusterApp() {
               fontFamily: FONT.ui,
               fontSize: "15px",
             }}
-            title={`Mass ${formatMass(cluster.mass)} across ${occurrenceCount(cluster)} occurrences in this report.`}
+            title={isClone(cluster) ? `Mass ${formatMass(cluster.mass)} across ${occurrenceCount(cluster)} occurrences in this report.` : INFORMATIONAL_FINDING}
           >
             <HelpedText topic={KIND_TOPIC}>
-              {kindTaxonomy(cluster.kind)} · this cluster repeats code across the report with mass{" "}
-              {formatMass(cluster.mass)}.
+              {isClone(cluster) ? `${kindTaxonomy(cluster.kind)} · duplicated mass ${formatMass(cluster.mass)}.` : INFORMATIONAL_FINDING}
             </HelpedText>
           </p>
         </div>
@@ -198,11 +199,11 @@ function ClusterApp() {
               kind={cluster.kind}
               severity={severity}
               label={`${slug}`}
-              title={rankTitle(rank, list.length, severity)}
+              title={clusterIdTitle(cluster)}
             />
-            <HelpBubble topic="rank" />
+            {isClone(cluster) ? <HelpBubble topic="rank" /> : null}
           </span>
-          <div
+          {isClone(cluster) ? <div
             style={{
               fontFamily: FONT.mono,
               color: COLOR.onSurfaceMuted,
@@ -218,7 +219,7 @@ function ClusterApp() {
             <StatItem topic={MASS_TOPIC} label={MASS_TOPIC} value={formatMass(cluster.mass)} />
             <StatItem topic="canonical" label={NODES_TOPIC} value={String(cluster.canonical_node_count)} />
             <StatItem topic="occurrence-count" label={OCCURRENCES_TOPIC} value={`× ${occurrenceCount(cluster)}`} />
-          </div>
+          </div> : null}
           {canonical ? (
             <div
               style={{
@@ -372,16 +373,12 @@ function isEditableTarget(target: EventTarget | null): boolean {
     ["BUTTON", "INPUT", "SELECT", "TEXTAREA"].includes(target.tagName);
 }
 
-function clusterIdTitle(id: string, rank: number, total: number): string {
-  return `Cluster ${id}. Ranked ${rank || UNKNOWN_RANK} of ${total} by Deslop's worst-first duplicated mass.`;
+function clusterIdTitle(cluster: ReportCluster): string {
+  return `Cluster ${cluster.id}. ${isClone(cluster) ? `Rank ${cluster.rank || UNKNOWN_RANK} by duplicated mass.` : INFORMATIONAL_FINDING}`;
 }
 
 function kindHeadingTitle(cluster: ReportCluster): string {
   return `${kindTitle(cluster.kind)}: ${kindTaxonomy(cluster.kind)}. The weakest relation between this cluster's first occurrence and any other member, as an explicit pair comparison would report it.`;
-}
-
-function rankTitle(rank: number, total: number, severity: string): string {
-  return `Rank ${rank || UNKNOWN_RANK} of ${total}. Severity band ${severity} is based on this cluster's relative mass in the current report.`;
 }
 
 function clusterStatsTitle(cluster: ReportCluster): string {

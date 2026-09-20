@@ -18,19 +18,21 @@
 //! against noise, the defect class of GH #366. The arithmetic itself is
 //! pinned by the unit tests in `deslop-core/src/embedding/pairs.rs`.
 
-use crate::mock_ollama::MockOllama;
 use anyhow::Result;
 use deslop_core::report::PairClassification;
 
-use crate::common::{
-    clusters,
-    embeddings::run_mock_embedding_report,
-    expect_cluster_spanning, occurrence_files,
-    signals::{
-        assert_no_pair_surface_on_cluster, assert_pair_metric, compare_pair_with_embeddings,
-        has_verbatim_pair, occurrence_for_file,
+use crate::{
+    common::{
+        clusters,
+        embeddings::run_mock_embedding_report,
+        expect_cluster_spanning, occurrence_files,
+        signals::{
+            assert_no_pair_surface_on_cluster, assert_pair_metric, compare_pair_with_embeddings,
+            has_verbatim_pair, occurrence_for_file,
+        },
+        write_identical_pair,
     },
-    write_identical_pair,
+    mock_ollama::MockOllama,
 };
 
 const MIN_NODES: u32 = 10;

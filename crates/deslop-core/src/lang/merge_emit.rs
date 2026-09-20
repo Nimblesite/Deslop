@@ -8,11 +8,13 @@
 //! of declaration + body + blank line — is identical across C#, Dart and
 //! Rust, so it lives here once.
 
-use crate::refactor::{
-    emit::cluster_id_prefix,
-    merge::{plain_call_text, MergeEmitOutcome, MergeEmitRequest},
+use crate::{
+    refactor::{
+        emit::cluster_id_prefix,
+        merge::{plain_call_text, MergeEmitOutcome, MergeEmitRequest},
+    },
+    wire_generated::MergeParameter,
 };
-use crate::wire_generated::MergeParameter;
 
 /// Where a language wants its merged helper written.
 pub(super) struct HelperPlacement {

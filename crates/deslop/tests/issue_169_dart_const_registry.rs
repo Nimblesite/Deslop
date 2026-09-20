@@ -12,8 +12,10 @@ use std::{fmt::Write as _, fs};
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::scan_dir::{report_path, temp_scan_dir};
-use crate::common::*;
+use crate::common::{
+    scan_dir::{report_path, temp_scan_dir},
+    *,
+};
 
 #[test]
 fn dart_const_constructor_registry_is_hidden() -> Result<()> {

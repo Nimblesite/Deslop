@@ -117,7 +117,7 @@ fn filter_properties() -> Map<String, Value> {
         "severities".to_owned(),
         json!({
             "type": "array",
-            "items": {"type": "string", "enum": ["worst", "top10", "mid", "faint"]}
+            "items": {"type": "string", "enum": ["error", "warning", "information", "hint", "none"]}
         }),
     );
     let _old = properties.insert(

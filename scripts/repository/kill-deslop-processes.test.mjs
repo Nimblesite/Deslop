@@ -130,6 +130,88 @@ function readScriptLine(prefix) {
   return found[0];
 }
 
+// --- Unreaped children ---------------------------------------------------
+// A parent that spawns one of these binaries and never calls `wait` leaves a
+// corpse in the process table the moment the scrub kills it. It holds no
+// image, no socket and no file handle, and no signal can clear it — only the
+// parent reaping it can. Counting one as a survivor failed `vsix-rebuild`
+// outright, and nothing the developer could do would ever make it pass.
+
+/** Overrides the kill list, so the destructive path can be driven against a
+ *  fixture this test owns instead of the developer's editor session. */
+const SCRUB_NAMES_VAR = "DESLOP_SCRUB_NAMES";
+
+/** Short enough to survive the kernel's accounting-name truncation, and named
+ *  after nothing a developer runs. */
+const FIXTURE_ONLY_NAME = "deslop-zfix";
+
+/** The `ps` state of a process that has exited and awaits its parent's wait(). */
+const ZOMBIE_STATE = "Z";
+
+/** How long the fixture's non-reaping parent outlives it, in seconds. */
+const HOLDER_LIFETIME_SECONDS = 120;
+
+/** The failure banner the scrub prints when it believes a kill did not take. */
+const SURVIVOR_BANNER = "FAIL:";
+
+/** The `ps` state letter for `pid`, or "" once the entry is gone entirely. */
+function stateOf(pid) {
+  const shown = spawnSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" });
+  return shown.stdout.trim().charAt(0);
+}
+
+/** Resolves with the holder and the PID it reported, once the child is running. */
+function reportedChildOf(holder) {
+  let pid = 0;
+  let printed = "";
+  return new Promise((resolvePromise, rejectPromise) => {
+    holder.on("error", rejectPromise);
+    holder.stdout.on("data", (chunk) => {
+      printed += String(chunk);
+      pid = pid || Number(printed.split("\n")[0]);
+      if (pid > 0 && printed.includes(READY)) resolvePromise({ holder, pid });
+    });
+  });
+}
+
+/**
+ * Starts a process named `name` under a parent that never reaps, so killing it
+ * leaves exactly the corpse an editor extension leaves behind. The parent
+ * `exec`s `sleep`, which cannot call `wait` even in principle.
+ */
+function startUnreapedChild(name) {
+  const binDir = mkdtempSync(join(tmpdir(), "deslop-zombie-"));
+  const executable = join(binDir, `${name}${EXECUTABLE_SUFFIX}`);
+  copyFileSync(process.execPath, executable);
+  const launch = `"${executable}" -e '${FIXTURE_PROGRAM}' & echo $!; exec sleep ${HOLDER_LIFETIME_SECONDS}`;
+  const holder = spawn("/bin/sh", ["-c", launch], { stdio: ["ignore", "pipe", "ignore"] });
+  return reportedChildOf(holder);
+}
+
+test("a killed process whose parent never reaped it does not fail the scrub", async (t) => {
+  const { holder, pid } = await startUnreapedChild(FIXTURE_ONLY_NAME);
+  t.after(() => holder.kill("SIGKILL"));
+  const scrub = spawnSync("bash", [SCRIPT], {
+    encoding: "utf8",
+    env: { ...process.env, [SCRUB_NAMES_VAR]: FIXTURE_ONLY_NAME },
+  });
+  const report = `${scrub.stdout}${scrub.stderr}`;
+  assert.equal(
+    stateOf(pid),
+    ZOMBIE_STATE,
+    `the fixture (pid ${pid}) must be left unreaped or this contract proves nothing: ${report}`,
+  );
+  assert.ok(
+    !report.includes(SURVIVOR_BANNER),
+    `a corpse awaiting wait() is not a survivor; reporting one accuses a kill that worked: ${report}`,
+  );
+  assert.equal(
+    scrub.status,
+    0,
+    `an unreapable corpse blocks no rebuild, so it must not fail the scrub: ${report}`,
+  );
+});
+
 // --- Host shell contract -------------------------------------------------
 // Recipes here are POSIX shell. Windows must run them under Git Bash, found by
 // absolute path: `bash.exe` resolved by name finds WSL's bash in System32,

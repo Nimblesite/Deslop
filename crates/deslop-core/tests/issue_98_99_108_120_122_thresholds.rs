@@ -5,11 +5,11 @@
 //! [FUSED-CONTENT-GATE] and [CLONE-NOISE-EMBEDDING-ROLE-MISMATCH]. This file
 //! proves the remaining convicted-noise cases at their render-stage boundary.
 
-use crate::common;
-
 use anyhow::Result;
 use common::ReportFixture;
 use deslop_core::cluster::Cluster;
+
+use crate::common;
 
 const EXPECTED_CONVICTED_CLUSTERS: usize = 2;
 const EXPECTED_HIDDEN_CLUSTERS: usize = 2;

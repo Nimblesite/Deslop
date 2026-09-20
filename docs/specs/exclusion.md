@@ -31,26 +31,17 @@ report_hide = ["**/target/**"]
 data_clones = "keep"        # "keep" (default) | "ignore"
 ```
 
-`data_clones = "ignore"` removes a proven data-table finding before ranking; `keep` leaves it visible at its full [RANK-MASS-SUM] mass. `demote`, `data_clone_weight`, and every evidence-weighted `[metrics]` table are invalid because ranking uses mass alone and the repository duplication percentage is unweighted.
+`data_clones = "ignore"` removes a proven data-table finding before ranking; `keep` leaves it visible at its full [RANK-MASS-SUM](pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only) mass. `demote`, `data_clone_weight`, and every evidence-weighted `[metrics]` table are invalid because ranking uses mass alone and the repository duplication percentage is unweighted.
 
-**`[tuning]` section.** Every accuracy lever of the detector, one sub-table per pipeline stage. The levers, their defaults, and the provenance of each default are specified in [fused.md §FUSED-TUNING-LEVERS](fused.md#fused-tuning-levers); this section defines only the file surface. Migration is planned in [`plans/unhardcode-tuning-plan.md`](../plans/unhardcode-tuning-plan.md).
+**`[tuning]` section.** Every detection, admission, category and suppression threshold is configurable here. Existing defaults are listed in [FUSED-TUNING-LEVERS]; the new category defaults are in [CLONE-BUCKETS-THRESHOLDS](taxonomy.md#clone-buckets-thresholds-defaults-and-toml-settings). No unnamed or hard-coded category cutoff is permitted. Omitted keys use their named defaults; all surfaces receive the same resolved settings.
 
-```toml
-[tuning.admission]            # every key optional; absence inherits the default
-fused_threshold = 0.85
-lsh_only_min_jaccard = 0.90
-
-[tuning.content_gate]
-support_floor = 0.7
-promote_floor = 0.85
-
-[tuning.representation]       # cache-keyed — see [CONFIG-TUNING-CACHE]
-kgram_width = 5
-```
+Use `[tuning.<group>]` tables in `.deslop.toml`, for example `[tuning.routing]`. Key names and defaults come from [CLONE-BUCKETS-THRESHOLDS] and [FUSED-TUNING-LEVERS]; omitted values inherit those defaults.
 
 Similarity, agreement, and cosine keys must be finite and in `[0.0, 1.0]`; count keys must be `≥ 1`. Ranking multipliers do not exist. Violations are rejected with a named configuration error that identifies the key and invariant. Clamping a bad value is prohibited — it would produce a report the config does not describe.
 
-**Cross-key invariants**, each rejected at load because violating it makes a downstream stage unreachable: `content_gate.support_floor ≤ content_gate.promote_floor` (or an unanchored LSH-only pair of [FUSED-CONTENT-GATE] is asked for less than an anchored one); `content_gate.structural_only_max_support < content_gate.support_floor` (or the two routes into `structural_only` stop being distinguishable); `admission.lsh_only_min_jaccard ≥ admission.fused_threshold` (or the unanchored-pair guard is dead code); `candidates.embedding_min_cosine ≤ admission.fused_threshold` (or embedding candidates are filtered by a bar admission never applies); `content_gate.saturating_token_floor ≤ routing.identical_token_floor` (or a shape match routes `identical` without the gate firing); `representation.minhash_signature_len % representation.lsh_bands == 0`.
+Validate category ordering as specified in [CLONE-BUCKETS-THRESHOLDS].
+
+**Cross-key invariants**, each rejected at load because violating it makes a downstream stage unreachable: `content_gate.support_floor ≤ content_gate.promote_floor` (or an unanchored LSH-only pair of [FUSED-CONTENT-GATE] is asked for less than an anchored one); `admission.lsh_only_min_jaccard ≥ admission.fused_threshold` (or the unanchored-pair guard is dead code); `candidates.embedding_min_cosine ≤ admission.fused_threshold` (or embedding candidates are filtered by a bar admission never applies); `content_gate.saturating_token_floor ≤ routing.identical_token_floor` (or a shape match routes `identical` without the gate firing); `representation.minhash_signature_len % representation.lsh_bands == 0`.
 
 **Precedence**, highest first: `--tune <table>.<key>=<value>` CLI flag, then the editor settings channel in `crate::state`, then `[tuning]`, then the compiled default. Resolution happens once at config load into one immutable value; no stage reads a global at comparison time.
 
@@ -76,7 +67,7 @@ The corpus gate and its known-failures ratchet ([CORPUS-*]) run at defaults, alw
 
 ### [CLONE-NOISE-DART-DATA-TABLE-LITERAL] Dart collection-literal data tables
 
-A top-level Dart collection literal whose elements are repeated near-identical data — `List<Highlight> highlights = [ Highlight(title: …, wonder: …), Highlight(title: …, wonder: …), … ]`, a `Set` of constructor calls, or a `Map` of literal entries — clusters via the sibling-window pass because Type-2 normalisation collapses every field value to the same shape. This is real repetition, but it is *data*, not extractable logic: the constructor's purpose is to enumerate per-row fields. The class-field registry filter (#169, [pipeline.md §PIPELINE-RANK-WORST-FIRST](pipeline.md#pipeline-rank-worst-first)) only covers runs of declarations inside a `class_body`; a top-level `List`/`Set`/`Map` literal has no enclosing `class_body`, so those tables previously fell through at full mass and dominated the ranking.
+A top-level Dart collection literal whose elements are repeated near-identical data — `List<Highlight> highlights = [ Highlight(title: …, wonder: …), Highlight(title: …, wonder: …), … ]`, a `Set` of constructor calls, or a `Map` of literal entries — clusters via the sibling-window pass because Type-2 normalisation collapses every field value to the same shape. This is real repetition, but it is *data*, not extractable logic: the constructor's purpose is to enumerate per-row fields. The class-field registry filter (#169, [pipeline.md §PIPELINE-RANK-WORST-FIRST](pipeline.md#pipeline-rank-worst-first-ranking-worst-offenders-first)) only covers runs of declarations inside a `class_body`; a top-level `List`/`Set`/`Map` literal has no enclosing `class_body`, so those tables previously fell through at full mass and dominated the ranking.
 
 **Predicate.** A finding is recognized as a data table for detection-time visibility when every member's reported range covers one or more sibling elements inside a `list_literal` or `set_or_map_literal`, every covered element is a pure data shape, and no covered element contains a function body or expression. This predicate is not carried on a visible cluster and never changes mass.
 
@@ -135,7 +126,7 @@ Opt-in: set `allow_cross_language_comparison = true` to preserve the full langua
 
 ### [CONFIG-INCREMENTAL-OPTOUT] Opting out of persisted processing
 
-The parse store ([pipeline.md §PIPELINE-INCREMENTAL](pipeline.md#pipeline-incremental)) is on by default on every surface. The `[analysis]` section is the workspace-level escape hatch:
+The parse store ([pipeline.md §PIPELINE-INCREMENTAL](pipeline.md#pipeline-incremental-persisted-processing--the-parse-store)) is on by default on every surface. The `[analysis]` section is the workspace-level escape hatch:
 
 ```toml
 [analysis]
@@ -144,4 +135,4 @@ incremental = false
 
 Default: `true`. Set to `false`, the store is never consulted and never created — every pass parses from source and builds every signature, `cache_stats` reads `{0, 0}`, and no `.deslop/cache/fingerprints/` directory appears on disk. The opt-out gates every surface that loads the config — CLI batch, rerun, LSP, MCP — and it always wins: a session whose invocation requested incremental processing still runs uncached under it, and a live `.deslop.toml` edit setting the key applies from the next change pass without a restart. Opting back *in* live applies from the next session. `deslop --no-incremental` remains the per-invocation spelling of the same thing.
 
-The equivalence contract ([pipeline.md §PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE](pipeline.md#pipeline-incremental-analysis)) makes the opt-out purely economic: outside `cache_stats`, an opted-out report is byte-for-byte the report the store-backed pass renders. Pinned by `crates/deslop/tests/signature_reuse.rs::config_file_opt_out_disables_persisted_processing`.
+The equivalence contract ([pipeline.md §PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE](pipeline.md#pipeline-incremental-analysis-incremental-analysis)) makes the opt-out purely economic: outside `cache_stats`, an opted-out report is byte-for-byte the report the store-backed pass renders. Pinned by `crates/deslop/tests/signature_reuse.rs::config_file_opt_out_disables_persisted_processing`.

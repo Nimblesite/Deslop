@@ -7,8 +7,7 @@
 //! split: a component the split convicted and split apart reaches this
 //! pass as its surviving byte-identical families, and a component the
 //! split could not change is convicted here or survives. Every hidden
-//! cluster is counted in `clusters_hidden`, so a suppression is
-//! observable telemetry, never a silent disappearance.
+//! clone is counted in `clusters_hidden`; informational suppressions appear only in detailed telemetry.
 //!
 //! The mass-only wire carries no bucket and no cluster signal, so the
 //! rules are keyed on facts the report still exposes: report-hide
@@ -17,14 +16,13 @@
 
 use std::hash::BuildHasher;
 
+use super::{ReportCluster, ReportInputs};
 use crate::{
     cluster_filters::{
         escapes_as_copy, is_noise_pattern, is_single_file_declaration_family, ParseCache,
     },
     report_render::{cluster_to_report, ReportSources},
 };
-
-use super::{ReportCluster, ReportInputs};
 
 /// Decides whether one cluster must be dropped from the ranked report.
 ///
@@ -99,7 +97,15 @@ fn shape_family_convicts<S: BuildHasher>(
         inputs.file_languages,
         parse_cache,
     )
-    .is_some_and(|filter| !escapes_as_copy(&cluster.members, inputs.sources, filter))
+    .is_some_and(|filter| {
+        !escapes_as_copy(
+            &cluster.members,
+            inputs.sources,
+            filter,
+            inputs.file_languages,
+            parse_cache,
+        )
+    })
 }
 
 /// The members of a pre-gate family that share a shape with the admitted
@@ -150,6 +156,7 @@ pub(crate) const NOISE_TOTALS_RUN_STAGE: &str = "run_cumulative_after_report_ren
 pub(crate) fn log_hidden_cluster(cluster: &ReportCluster, why: &str) {
     tracing::debug!(
         cluster = cluster.id.as_str(),
+        kind = cluster.kind.wire_label(),
         occurrences = cluster.occurrences.len(),
         why,
         "cluster hidden from report",

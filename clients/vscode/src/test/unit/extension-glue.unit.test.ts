@@ -99,7 +99,7 @@ suite("extension activation glue", () => {
       // Explicit known values exercise the folder/path/split-on arms.
       await read().update(GROUP_BY_SETTING_KEY, "folder", vscode.ConfigurationTarget.Workspace);
       await read().update("topOffenders.sortBy", "path", vscode.ConfigurationTarget.Workspace);
-      await read().update("topOffenders.filterSeverities", ["worst"], vscode.ConfigurationTarget.Workspace);
+      await read().update("topOffenders.filterSeverities", ["error"], vscode.ConfigurationTarget.Workspace);
       assert.equal(read().get<string>(GROUP_BY_SETTING_KEY), "folder");
       syncTopOffendersContext();
 

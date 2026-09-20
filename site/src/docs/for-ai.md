@@ -15,15 +15,21 @@ This page gives coding agents direct operating instructions. Humans configuring 
 
 ## Check before you write
 
-Before you author any new code unit — function, method, class, helper, fixture, test setup, parser branch, error type, route handler, view model — call `find-similar` with the proposed snippet (or a `path` + `start_byte` + `end_byte` range) and read the returned cluster's `rank_band`:
+Before you author any new code unit — function, method, class, helper, fixture, test setup, parser branch, error type, route handler, view model — call `find-similar` with the proposed snippet (or a `path` + `start_byte` + `end_byte` range) and read the returned cluster's `kind`:
 
-| `rank_band` | What you do |
-| --- | --- |
-| worst / top10 | **Do not write the copy.** Reuse the canonical occurrence the tool returns. Extract a shared helper if neither call site fits as-is. Read the occurrences first: the band ranks impact, it does not prove the copies are interchangeable. |
-| mid | Likely a real duplicate. Read both occurrences and the mass before deciding. |
-| faint | A weak tail finding. Bias toward reading, not acting. |
+| `kind` | Display title | What you do |
+| --- | --- | --- |
+| `identical` | Identical code | **Do not write the copy.** Reuse the canonical occurrence the tool returns. |
+| `nearly_identical` | Nearly identical code | **Do not write the copy.** Reuse the canonical occurrence, or extract a shared helper if neither call site fits as-is. A systematic rename or a changed argument is still a copy. |
+| `loosely_similar` | Similar code | Substantial copied work with larger edits. Read both occurrences and decide; often a helper is still the right answer. |
+| `same_behavior` | Same behavior, different code | The same work written differently, found by embedding evidence. That evidence is not proof the two are interchangeable — read both before you act. |
+| `structural_only` | Same shape, different content | **Not a clone.** The layout matches and the content does not. Informational only: it counts toward no duplication figure, and it is not a reason to change your code. |
 
-Every cluster carries a `kind` — `identical`, `nearly_identical`, `same_behavior`, `structural_only`, or `loosely_similar` — the weakest relation between its first occurrence and any other member, measured exactly as an explicit pair comparison would. `identical` means every copy is byte-for-byte the first; anything else means at least one copy differs, so read the occurrences. The engine carries no cluster-level signal scores. To see what differs between two locations, request an explicit pair comparison with both endpoints; pair evidence values never attach to a cluster.
+The `kind` is the weakest relation between the cluster's first occurrence and any other member, measured exactly as an explicit pair comparison would. `identical` means every copy is byte-for-byte the first; anything else means at least one copy differs, so read the occurrences.
+
+`mass` ranks impact, not interchangeability: it orders which duplicates are worth your attention first, and it never tells you the copies can be merged. Clone kinds carry mass; `structural_only` does not.
+
+The engine carries no cluster-level signal scores. To see what differs between two locations, request an explicit pair comparison with both endpoints; pair evidence values never attach to a cluster.
 
 `find-similar` is the **authoring** tool. When you are cleaning up duplication that already exists, start at `duplicates` and then pull `cluster-by-id` for the cluster you are about to merge.
 
@@ -78,7 +84,9 @@ If neither MCP nor the CLI is available, say so and stop. Do not guess.
 | `metrics.duplication_percent` | The repo-wide headline number a CI gate compares against. |
 | `metrics.threshold.breached` | `true` → the run exited `3` and the gate failed. `source` is `cli`, `config`, or `none`. |
 | `clusters` | Sorted by `mass` **descending** — `clusters[0]` is always the worst offender. Work top-down; do not start in the middle. |
-| `cluster.rank_band` | The engine's mass-percentile band (`worst` / `top10` / `mid` / `faint`): how much attention the cluster deserves, not what kind of clone it is. |
+| `cluster.kind` | What relation the cluster holds: `identical`, `nearly_identical`, `loosely_similar`, `same_behavior`, or `structural_only`. `structural_only` is informational and is not a clone. |
+| `cluster.mass` | How much attention the cluster deserves, not what kind of clone it is. Clone kinds carry mass; informational findings do not. |
+| `cluster.severity` | The editor diagnostic level (`none`, `hint`, `information`, `warning`, `error`) this kind resolves to. It never changes any duplication figure. |
 | `occurrences[].hidden` | `true` marks a `report_hide` match — usually a hand-written clone of generated code. |
 
 ### Byte ranges, not line numbers

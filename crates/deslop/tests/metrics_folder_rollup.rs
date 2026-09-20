@@ -9,8 +9,7 @@
 
 use std::{fs, path::Path};
 
-use crate::common::signals::assert_no_pair_surface_on_cluster;
-use crate::common::*;
+use crate::common::{signals::assert_no_pair_surface_on_cluster, *};
 
 /// The clone body shared verbatim by `src/a/alpha.rs` and
 /// `src/b/beta.rs`: seven lines, byte-identical, guaranteed to cluster

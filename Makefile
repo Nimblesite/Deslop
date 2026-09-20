@@ -235,6 +235,8 @@ _ci-contract-tests: _vsix-node-modules
 	@node --test scripts/repository/test-selection.test.mjs
 	@echo "==> Coverage-isolation gate ([CI-COVERAGE-ISOLATION])..."
 	@node --test scripts/repository/coverage-isolation.test.mjs
+	@echo "==> Wire-model generator idempotence gate ([BUILD-GEN-IDEMPOTENT])..."
+	@node --test scripts/typediagram-gen.test.mjs
 
 ## fmt: Format all code in-place. Pass CHECK=1 for read-only check (CI use).
 ##      Depends on typediagram-gen because rustfmt walks the module tree

@@ -18,6 +18,8 @@ import {
   ReportCluster,
   Severity,
   kindTitle,
+  isClone,
+  INFORMATIONAL_FINDING,
   occurrenceCount,
 } from "../types/report";
 
@@ -33,14 +35,14 @@ export function renderBubbleParts(
 ): BubbleRenderParts {
   const canonical = cluster.occurrences[0];
   const count = occurrenceCount(cluster);
-  // [VSIX-LIVE-BUBBLE] The verdict is the cluster's clone kind
-  // ([CLONE-KIND-LABELS]); the dot is the mass rank band's glyph.
+  // [VSIX-LIVE-BUBBLE] Informational findings make no duplication claim.
   const title = kindTitle(cluster.kind);
   const slug = clusterSlug(cluster);
   const location = canonical ? ` · ${shortPath(canonical.path)}` : "";
+  const detail = isClone(cluster) ? `× ${count}` : INFORMATIONAL_FINDING;
   return {
-    inline: `  ${SEVERITY_DOT[severity]} ${slug} ${title} × ${count}${location}`,
-    ghost: `  └─ ${SEVERITY_DOT[severity]} ${slug} ${title} × ${count}`,
+    inline: `  ${SEVERITY_DOT[severity]} ${slug} ${title} ${detail}${location}`,
+    ghost: `  └─ ${SEVERITY_DOT[severity]} ${slug} ${title} ${detail}`,
     hover: clusterHoverMarkdown(cluster, { showDismiss: true }),
   };
 }
@@ -63,5 +65,5 @@ export function ghostText(
 export function bubbleHover(
   cluster: ReportCluster,
 ): vscode.MarkdownString {
-  return renderBubbleParts(cluster, "faint").hover;
+  return renderBubbleParts(cluster, "hint").hover;
 }

@@ -70,11 +70,11 @@ impl DiffDelta {
         let newly = report
             .clusters
             .iter()
-            .filter(|cluster| cluster.is_newly_introduced == Some(true))
+            .filter(|cluster| cluster.kind.is_clone() && cluster.is_newly_introduced == Some(true))
             .count();
         Some(Self {
             newly,
-            cross_file: report.clusters.len().saturating_sub(newly),
+            cross_file: report.metrics.clusters_total.saturating_sub(newly),
             outside,
         })
     }

@@ -11,9 +11,8 @@
 
 use std::time::Instant;
 
-use crate::observe::{bump, elapsed_ms};
-
 use super::MeasureStats;
+use crate::observe::{bump, elapsed_ms};
 
 /// How often the rescue loop reports progress, counted in pairs measured.
 ///

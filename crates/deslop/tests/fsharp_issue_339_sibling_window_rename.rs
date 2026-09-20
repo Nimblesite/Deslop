@@ -32,10 +32,12 @@
 use anyhow::{anyhow, Context};
 use serde_json::Value;
 
-use crate::common::signals::{
-    assert_no_pair_surface_on_cluster, assert_proven_rename_contract, has_verbatim_pair,
+use crate::common::{
+    signals::{
+        assert_no_pair_surface_on_cluster, assert_proven_rename_contract, has_verbatim_pair,
+    },
+    *,
 };
-use crate::common::*;
 
 /// The duplicated region: two consecutive top-level bindings, verbatim in
 /// both files.

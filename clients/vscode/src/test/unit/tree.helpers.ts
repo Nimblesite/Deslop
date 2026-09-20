@@ -60,14 +60,14 @@ export function cluster(
   occurrencePath: string,
   startByte = 0,
   endByte = 20,
-  rankBand: Severity = "mid",
+  severity: Severity = "information",
   rank = 1,
   kind: ClusterKind = FIXTURE_KIND,
 ): ReportCluster {
   return wireCluster({
     id,
     rank,
-    rank_band: rankBand,
+    severity: severity,
     kind,
     mass,
     occurrences: [
@@ -142,7 +142,7 @@ export function report(
       failed_subtrees: 0,
     },
     // The engine stamps the ranking onto the report it publishes, so a
-    // fixture report carries it too ([SEVERITY-BAND]).
+    
     clusters: stampRanks(clusters),
   });
 }

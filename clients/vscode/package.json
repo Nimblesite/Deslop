@@ -1,24 +1,14 @@
 {
   "name": "deslop-live",
   "displayName": "Deslop.live",
-  "description": "Live duplicate-code analysis inside VS Code \u2014 the reference client for the Deslop LSP server. Inline warnings as you type, worst-offender view, and a live channel your AI agent can consult before it copy-pastes.",
+  "description": "Live duplicate-code analysis inside VS Code — the reference client for the Deslop LSP server. Inline warnings as you type, worst-offender view, and a live channel your AI agent can consult before it copy-pastes.",
   "version": "0.0.0-dev",
   "publisher": "nimblesite",
   "license": "MIT",
   "icon": "media/logo.png",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/Nimblesite/Deslop.git",
-    "directory": "clients/vscode"
-  },
-  "engines": {
-    "vscode": "^1.134.0"
-  },
-  "categories": [
-    "Linters",
-    "Programming Languages",
-    "Other"
-  ],
+  "repository": {"type":"git","url":"https://github.com/Nimblesite/Deslop.git","directory":"clients/vscode"},
+  "engines": {"vscode":"^1.134.0"},
+  "categories": ["Linters","Programming Languages","Other"],
   "keywords": [
     "duplication",
     "clone detection",
@@ -68,399 +58,112 @@
   ],
   "contributes": {
     "commands": [
-      {
-        "command": "deslop.openReport",
-        "title": "Deslop: Open Report"
-      },
-      {
-        "command": "deslop.openWorstCluster",
-        "title": "Deslop: Open Worst Cluster"
-      },
-      {
-        "command": "deslop.jumpToNextOccurrence",
-        "title": "Deslop: Jump to Next Occurrence in Cluster"
-      },
-      {
-        "command": "deslop.comparePair",
-        "title": "Deslop: Compare Selected Occurrences"
-      },
-      {
-        "command": "deslop.pickEmbeddingModel",
-        "title": "Deslop: Pick Embedding Model"
-      },
-      {
-        "command": "deslop.refreshReport",
-        "title": "Deslop: Refresh Report (force full re-analysis)"
-      },
-      {
-        "command": "deslop.toggleShowAllLenses",
-        "title": "Deslop: Toggle Show All Code Lenses"
-      },
-      {
-        "command": "deslop.showSchemaDoc",
-        "title": "Deslop: Show Schema Documentation"
-      },
-      {
-        "command": "deslop.revealCpuReport",
-        "title": "Deslop: Reveal CPU Report"
-      },
-      {
-        "command": "deslop.openCluster",
-        "title": "Deslop: Open Cluster"
-      },
-      {
-        "command": "deslop.openOccurrence",
-        "title": "Deslop: Go to Occurrence"
-      },
-      {
-        "command": "deslop.openCanonicalFile",
-        "title": "Open Canonical File"
-      },
-      {
-        "command": "deslop.revealActiveBinary",
-        "title": "Deslop: Reveal Active Binary"
-      },
-      {
-        "command": "deslop.copyContextForAI",
-        "title": "Copy Context For AI"
-      },
-      {
-        "command": "deslop.copyClusterContextById",
-        "title": "Copy Context For AI"
-      },
-      {
-        "command": "deslop.copyHumanLocation",
-        "title": "Copy Human Location"
-      },
-      {
-        "command": "deslop.copyClusterLocations",
-        "title": "Copy Cluster Locations"
-      },
-      {
-        "command": "deslop.copySourceSnippet",
-        "title": "Copy Source Snippet"
-      },
-      {
-        "command": "deslop.revealOccurrenceInExplorer",
-        "title": "Reveal Occurrence In Explorer"
-      },
-      {
-        "command": "deslop.openAllOccurrences",
-        "title": "Open All Occurrences"
-      },
-      {
-        "command": "deslop.openClusterDetails",
-        "title": "Open Cluster Details"
-      },
-      {
-        "command": "deslop.topOffenders.showByCluster",
-        "title": "Deslop: Group Top Offenders by Cluster",
-        "icon": "$(list-tree)"
-      },
-      {
-        "command": "deslop.topOffenders.showByFile",
-        "title": "Deslop: Group Top Offenders by File",
-        "icon": "$(list-flat)"
-      },
-      {
-        "command": "deslop.topOffenders.showByFolder",
-        "title": "Deslop: Group Top Offenders by Folder",
-        "icon": "$(folder)"
-      },
-      {
-        "command": "deslop.topOffenders.showByKind",
-        "title": "Deslop: Group Top Offenders by Clone Kind",
-        "icon": "$(list-ordered)"
-      },
-      {
-        "command": "deslop.topOffenders.chooseFilter",
-        "title": "Deslop: Filter Top Offenders by Clone Type",
-        "icon": "$(filter)"
-      },
+      {"command":"deslop.openReport","title":"Deslop: Open Report"},
+      {"command":"deslop.openWorstCluster","title":"Deslop: Open Worst Cluster"},
+      {"command":"deslop.jumpToNextOccurrence","title":"Deslop: Jump to Next Occurrence in Cluster"},
+      {"command":"deslop.comparePair","title":"Deslop: Compare Selected Occurrences"},
+      {"command":"deslop.pickEmbeddingModel","title":"Deslop: Pick Embedding Model"},
+      {"command":"deslop.refreshReport","title":"Deslop: Refresh Report (force full re-analysis)"},
+      {"command":"deslop.toggleShowAllLenses","title":"Deslop: Toggle Show All Code Lenses"},
+      {"command":"deslop.showSchemaDoc","title":"Deslop: Show Schema Documentation"},
+      {"command":"deslop.revealCpuReport","title":"Deslop: Reveal CPU Report"},
+      {"command":"deslop.openCluster","title":"Deslop: Open Cluster"},
+      {"command":"deslop.openOccurrence","title":"Deslop: Go to Occurrence"},
+      {"command":"deslop.openCanonicalFile","title":"Open Canonical File"},
+      {"command":"deslop.revealActiveBinary","title":"Deslop: Reveal Active Binary"},
+      {"command":"deslop.copyContextForAI","title":"Copy Context For AI"},
+      {"command":"deslop.copyClusterContextById","title":"Copy Context For AI"},
+      {"command":"deslop.copyHumanLocation","title":"Copy Human Location"},
+      {"command":"deslop.copyClusterLocations","title":"Copy Cluster Locations"},
+      {"command":"deslop.copySourceSnippet","title":"Copy Source Snippet"},
+      {"command":"deslop.revealOccurrenceInExplorer","title":"Reveal Occurrence In Explorer"},
+      {"command":"deslop.openAllOccurrences","title":"Open All Occurrences"},
+      {"command":"deslop.openClusterDetails","title":"Open Cluster Details"},
+      {"command":"deslop.topOffenders.showByCluster","title":"Deslop: Group Top Offenders by Cluster","icon":"$(list-tree)"},
+      {"command":"deslop.topOffenders.showByFile","title":"Deslop: Group Top Offenders by File","icon":"$(list-flat)"},
+      {"command":"deslop.topOffenders.showByFolder","title":"Deslop: Group Top Offenders by Folder","icon":"$(folder)"},
+      {"command":"deslop.topOffenders.showByKind","title":"Deslop: Group Top Offenders by Clone Kind","icon":"$(list-ordered)"},
+      {"command":"deslop.topOffenders.chooseFilter","title":"Deslop: Filter Top Offenders by Diagnostic Severity","icon":"$(filter)"},
       {
         "command": "deslop.topOffenders.chooseFilterActive",
-        "title": "Deslop: Filter Top Offenders by Clone Type (filter active)",
+        "title": "Deslop: Filter Top Offenders by Diagnostic Severity (filter active)",
         "icon": "$(filter-filled)"
       },
-      {
-        "command": "deslop.topOffenders.clearFilter",
-        "title": "Deslop: Clear Top Offenders Filter",
-        "icon": "$(filter-filled)"
-      },
-      {
-        "command": "deslop.topOffenders.sortByImpact",
-        "title": "Deslop: Sort Top Offenders by Impact",
-        "icon": "$(arrow-down)"
-      },
-      {
-        "command": "deslop.topOffenders.sortByPath",
-        "title": "Deslop: Sort Top Offenders by Path",
-        "icon": "$(list-ordered)"
-      },
-      {
-        "command": "deslop.topOffenders.toggleSplitByLanguage",
-        "title": "Deslop: Toggle Split Top Offenders by Language",
-        "icon": "$(symbol-namespace)"
-      },
-      {
-        "command": "deslop.topOffenders.expandAll",
-        "title": "Deslop: Expand All Top Offenders",
-        "icon": "$(expand-all)"
-      },
-      {
-        "command": "deslop.topOffenders.collapseAll",
-        "title": "Deslop: Collapse All Top Offenders",
-        "icon": "$(collapse-all)"
-      },
-      {
-        "command": "deslop.refresh",
-        "title": "Deslop: Refresh",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "deslop.openDuplicationReport",
-        "title": "Deslop: Open Duplication Report"
-      },
-      {
-        "command": "deslop.openHtmlReport",
-        "title": "Deslop: Open HTML Report",
-        "icon": "$(globe)"
-      },
-      {
-        "command": "deslop.compareWithCanonical",
-        "title": "Compare With Canonical"
-      },
-      {
-        "command": "deslop.compareOccurrenceWithCanonical",
-        "title": "Compare With Canonical"
-      }
+      {"command":"deslop.topOffenders.clearFilter","title":"Deslop: Clear Top Offenders Filter","icon":"$(filter-filled)"},
+      {"command":"deslop.topOffenders.sortByImpact","title":"Deslop: Sort Top Offenders by Impact","icon":"$(arrow-down)"},
+      {"command":"deslop.topOffenders.sortByPath","title":"Deslop: Sort Top Offenders by Path","icon":"$(list-ordered)"},
+      {"command":"deslop.topOffenders.toggleSplitByLanguage","title":"Deslop: Toggle Split Top Offenders by Language","icon":"$(symbol-namespace)"},
+      {"command":"deslop.topOffenders.expandAll","title":"Deslop: Expand All Top Offenders","icon":"$(expand-all)"},
+      {"command":"deslop.topOffenders.collapseAll","title":"Deslop: Collapse All Top Offenders","icon":"$(collapse-all)"},
+      {"command":"deslop.refresh","title":"Deslop: Refresh","icon":"$(refresh)"},
+      {"command":"deslop.openDuplicationReport","title":"Deslop: Open Duplication Report"},
+      {"command":"deslop.openHtmlReport","title":"Deslop: Open HTML Report","icon":"$(globe)"},
+      {"command":"deslop.compareWithCanonical","title":"Compare With Canonical"},
+      {"command":"deslop.compareOccurrenceWithCanonical","title":"Compare With Canonical"}
     ],
     "menus": {
-      "commandPalette": [
-        {
-          "command": "deslop.comparePair",
-          "when": "false"
-        },
-        {
-          "command": "deslop.compareOccurrenceWithCanonical",
-          "when": "false"
-        }
-      ],
+      "commandPalette": [{"command":"deslop.comparePair","when":"false"},{"command":"deslop.compareOccurrenceWithCanonical","when":"false"}],
       "view/title": [
-        {
-          "command": "deslop.topOffenders.showByFile",
-          "when": "view == deslop.topOffenders && deslop.topOffendersGroupBy == 'cluster'",
-          "group": "navigation@1"
-        },
-        {
-          "command": "deslop.topOffenders.showByFolder",
-          "when": "view == deslop.topOffenders && deslop.topOffendersGroupBy == 'file'",
-          "group": "navigation@1"
-        },
-        {
-          "command": "deslop.topOffenders.showByKind",
-          "when": "view == deslop.topOffenders && deslop.topOffendersGroupBy == 'folder'",
-          "group": "navigation@1"
-        },
-        {
-          "command": "deslop.topOffenders.showByCluster",
-          "when": "view == deslop.topOffenders && deslop.topOffendersGroupBy == 'kind'",
-          "group": "navigation@1"
-        },
-        {
-          "command": "deslop.topOffenders.sortByPath",
-          "when": "view == deslop.topOffenders && deslop.topOffendersSortBy == 'impact'",
-          "group": "navigation@2"
-        },
-        {
-          "command": "deslop.topOffenders.sortByImpact",
-          "when": "view == deslop.topOffenders && deslop.topOffendersSortBy == 'path'",
-          "group": "navigation@2"
-        },
-        {
-          "command": "deslop.topOffenders.toggleSplitByLanguage",
-          "when": "view == deslop.topOffenders",
-          "group": "navigation@3"
-        },
-        {
-          "command": "deslop.topOffenders.chooseFilter",
-          "when": "view == deslop.topOffenders && !deslop.topOffendersFiltered",
-          "group": "navigation@4"
-        },
-        {
-          "command": "deslop.topOffenders.chooseFilterActive",
-          "when": "view == deslop.topOffenders && deslop.topOffendersFiltered",
-          "group": "navigation@4"
-        },
-        {
-          "command": "deslop.topOffenders.expandAll",
-          "when": "view == deslop.topOffenders",
-          "group": "navigation@5"
-        },
-        {
-          "command": "deslop.topOffenders.collapseAll",
-          "when": "view == deslop.topOffenders",
-          "group": "navigation@6"
-        },
-        {
-          "command": "deslop.refresh",
-          "when": "view == deslop.topOffenders",
-          "group": "navigation@7"
-        },
-        {
-          "command": "deslop.openHtmlReport",
-          "when": "view == deslop.topOffenders && deslop.reportReady",
-          "group": "navigation@8"
-        },
-        {
-          "command": "deslop.refresh",
-          "when": "view == deslop.metrics",
-          "group": "navigation@1"
-        },
-        {
-          "command": "deslop.refresh",
-          "when": "view == deslop.session",
-          "group": "navigation@1"
-        }
+        {"command":"deslop.topOffenders.showByFile","when":"view == deslop.topOffenders && deslop.topOffendersGroupBy == 'cluster'","group":"navigation@1"},
+        {"command":"deslop.topOffenders.showByFolder","when":"view == deslop.topOffenders && deslop.topOffendersGroupBy == 'file'","group":"navigation@1"},
+        {"command":"deslop.topOffenders.showByKind","when":"view == deslop.topOffenders && deslop.topOffendersGroupBy == 'folder'","group":"navigation@1"},
+        {"command":"deslop.topOffenders.showByCluster","when":"view == deslop.topOffenders && deslop.topOffendersGroupBy == 'kind'","group":"navigation@1"},
+        {"command":"deslop.topOffenders.sortByPath","when":"view == deslop.topOffenders && deslop.topOffendersSortBy == 'impact'","group":"navigation@2"},
+        {"command":"deslop.topOffenders.sortByImpact","when":"view == deslop.topOffenders && deslop.topOffendersSortBy == 'path'","group":"navigation@2"},
+        {"command":"deslop.topOffenders.toggleSplitByLanguage","when":"view == deslop.topOffenders","group":"navigation@3"},
+        {"command":"deslop.topOffenders.chooseFilter","when":"view == deslop.topOffenders && !deslop.topOffendersFiltered","group":"navigation@4"},
+        {"command":"deslop.topOffenders.chooseFilterActive","when":"view == deslop.topOffenders && deslop.topOffendersFiltered","group":"navigation@4"},
+        {"command":"deslop.topOffenders.expandAll","when":"view == deslop.topOffenders","group":"navigation@5"},
+        {"command":"deslop.topOffenders.collapseAll","when":"view == deslop.topOffenders","group":"navigation@6"},
+        {"command":"deslop.refresh","when":"view == deslop.topOffenders","group":"navigation@7"},
+        {"command":"deslop.openHtmlReport","when":"view == deslop.topOffenders && deslop.reportReady","group":"navigation@8"},
+        {"command":"deslop.refresh","when":"view == deslop.metrics","group":"navigation@1"},
+        {"command":"deslop.refresh","when":"view == deslop.session","group":"navigation@1"}
       ],
       "view/item/context": [
-        {
-          "command": "deslop.openClusterDetails",
-          "when": "viewItem =~ /deslop\\.cluster/",
-          "group": "navigation@1"
-        },
-        {
-          "command": "deslop.openCanonicalFile",
-          "when": "viewItem =~ /deslop\\.cluster/",
-          "group": "navigation@2"
-        },
-        {
-          "command": "deslop.openAllOccurrences",
-          "when": "viewItem == deslop.clusterComparable",
-          "group": "navigation@3"
-        },
-        {
-          "command": "deslop.openClusterDetails",
-          "when": "viewItem =~ /deslop\\.occurrence/",
-          "group": "navigation@2"
-        },
-        {
-          "command": "deslop.revealOccurrenceInExplorer",
-          "when": "viewItem =~ /deslop\\.occurrence/",
-          "group": "navigation@3"
-        },
-        {
-          "command": "deslop.copyContextForAI",
-          "when": "viewItem =~ /deslop\\.cluster/",
-          "group": "1_copy@1"
-        },
-        {
-          "command": "deslop.copyContextForAI",
-          "when": "viewItem =~ /deslop\\.occurrence/",
-          "group": "1_copy@1"
-        },
-        {
-          "command": "deslop.copyClusterLocations",
-          "when": "viewItem =~ /deslop\\.cluster/",
-          "group": "1_copy@2"
-        },
-        {
-          "command": "deslop.copyHumanLocation",
-          "when": "viewItem =~ /deslop\\.occurrence/",
-          "group": "1_copy@2"
-        },
-        {
-          "command": "deslop.copySourceSnippet",
-          "when": "viewItem =~ /deslop\\.occurrence/",
-          "group": "1_copy@3"
-        },
-        {
-          "command": "deslop.compareOccurrenceWithCanonical",
-          "when": "viewItem == deslop.occurrence",
-          "group": "navigation@1"
-        },
-        {
-          "command": "deslop.compareWithCanonical",
-          "when": "viewItem == deslop.clusterComparable",
-          "group": "navigation@4"
-        }
+        {"command":"deslop.openClusterDetails","when":"viewItem =~ /deslop\\.cluster/","group":"navigation@1"},
+        {"command":"deslop.openCanonicalFile","when":"viewItem =~ /deslop\\.cluster/","group":"navigation@2"},
+        {"command":"deslop.openAllOccurrences","when":"viewItem == deslop.clusterComparable","group":"navigation@3"},
+        {"command":"deslop.openClusterDetails","when":"viewItem =~ /deslop\\.occurrence/","group":"navigation@2"},
+        {"command":"deslop.revealOccurrenceInExplorer","when":"viewItem =~ /deslop\\.occurrence/","group":"navigation@3"},
+        {"command":"deslop.copyContextForAI","when":"viewItem =~ /deslop\\.cluster/","group":"1_copy@1"},
+        {"command":"deslop.copyContextForAI","when":"viewItem =~ /deslop\\.occurrence/","group":"1_copy@1"},
+        {"command":"deslop.copyClusterLocations","when":"viewItem =~ /deslop\\.cluster/","group":"1_copy@2"},
+        {"command":"deslop.copyHumanLocation","when":"viewItem =~ /deslop\\.occurrence/","group":"1_copy@2"},
+        {"command":"deslop.copySourceSnippet","when":"viewItem =~ /deslop\\.occurrence/","group":"1_copy@3"},
+        {"command":"deslop.compareOccurrenceWithCanonical","when":"viewItem == deslop.occurrence","group":"navigation@1"},
+        {"command":"deslop.compareWithCanonical","when":"viewItem == deslop.clusterComparable","group":"navigation@4"}
       ]
     },
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "deslop",
-          "title": "Deslop",
-          "icon": "media/activity-bar.svg"
-        }
-      ]
-    },
+    "viewsContainers": {"activitybar":[{"id":"deslop","title":"Deslop","icon":"media/activity-bar.svg"}]},
     "views": {
-      "deslop": [
-        {
-          "id": "deslop.topOffenders",
-          "name": "Top Offenders"
-        },
-        {
-          "id": "deslop.metrics",
-          "name": "Duplication"
-        },
-        {
-          "id": "deslop.session",
-          "name": "Session"
-        }
-      ]
+      "deslop": [{"id":"deslop.topOffenders","name":"Top Offenders"},{"id":"deslop.metrics","name":"Duplication"},{"id":"deslop.session","name":"Session"}]
     },
     "colors": [
       {
         "id": "deslop.kind.identical",
-        "description": "Identical code \u2014 every copy is byte-identical to the canonical occurrence (Type-1). [CLONE-KIND-COLOR]",
-        "defaults": {
-          "dark": "#b3261e",
-          "light": "#b3261e",
-          "highContrast": "#b3261e",
-          "highContrastLight": "#b3261e"
-        }
+        "description": "Identical code — every copy is byte-identical to the canonical occurrence (Type-1). [CLONE-KIND-COLOR]",
+        "defaults": {"dark":"#b3261e","light":"#b3261e","highContrast":"#b3261e","highContrastLight":"#b3261e"}
       },
       {
         "id": "deslop.kind.nearlyIdentical",
-        "description": "Nearly identical code \u2014 admitted near-copies of the canonical occurrence (Type-2/3). [CLONE-KIND-COLOR]",
-        "defaults": {
-          "dark": "#e8912d",
-          "light": "#e8912d",
-          "highContrast": "#e8912d",
-          "highContrastLight": "#e8912d"
-        }
+        "description": "Nearly identical code — admitted near-copies of the canonical occurrence (Type-2/3). [CLONE-KIND-COLOR]",
+        "defaults": {"dark":"#e8912d","light":"#e8912d","highContrast":"#e8912d","highContrastLight":"#e8912d"}
       },
       {
         "id": "deslop.kind.sameBehavior",
-        "description": "Same behavior, different code \u2014 matched on embedding evidence (Type-4). [CLONE-KIND-COLOR]",
-        "defaults": {
-          "dark": "#a98cff",
-          "light": "#a98cff",
-          "highContrast": "#a98cff",
-          "highContrastLight": "#a98cff"
-        }
+        "description": "Same behavior, different code — matched on embedding evidence (Type-4). [CLONE-KIND-COLOR]",
+        "defaults": {"dark":"#a98cff","light":"#a98cff","highContrast":"#a98cff","highContrastLight":"#a98cff"}
       },
       {
         "id": "deslop.kind.structuralOnly",
-        "description": "Same shape, different content \u2014 normalised shape agrees, content does not. [CLONE-KIND-COLOR]",
-        "defaults": {
-          "dark": "#a9a2a0",
-          "light": "#a9a2a0",
-          "highContrast": "#a9a2a0",
-          "highContrastLight": "#a9a2a0"
-        }
+        "description": "Same shape, different content — the layout matches but almost none of the content is shared. Informational, not a clone. [CLONE-KIND-COLOR]",
+        "defaults": {"dark":"#a9a2a0","light":"#a9a2a0","highContrast":"#a9a2a0","highContrastLight":"#a9a2a0"}
       },
       {
         "id": "deslop.kind.looselySimilar",
-        "description": "Loosely similar code \u2014 a looser relation, or copies welded only through other members. [CLONE-KIND-COLOR]",
-        "defaults": {
-          "dark": "#00619e",
-          "light": "#00619e",
-          "highContrast": "#00619e",
-          "highContrastLight": "#00619e"
-        }
+        "description": "Similar code — substantial copied work, with statements or control flow changed enough that it is no longer a near-copy (Type-3). [CLONE-KIND-COLOR]",
+        "defaults": {"dark":"#00619e","light":"#00619e","highContrast":"#00619e","highContrastLight":"#00619e"}
       }
     ],
     "configuration": {
@@ -474,106 +177,45 @@
         },
         "deslop.ranking.structuralOnly": {
           "type": "string",
-          "enum": [
-            "default",
-            "demote",
-            "ignore",
-            "keep"
-          ],
-          "enumDescriptions": [
-            "Use the .deslop.toml [ranking] structural_only setting (or the engine default, demote).",
-            "Down-weight structural-only clusters so they rank below clones with token or semantic evidence.",
-            "Hide structural-only clusters from the report entirely.",
-            "Rank structural-only clusters at full weight."
-          ],
-          "default": "default",
-          "description": "How clusters whose only evidence is code shape (bucket structural_only \u2014 e.g. sibling REST/settings method families) are ranked. Overrides .deslop.toml when not set to default. Takes effect after the language server restarts."
+          "enum": ["keep","ignore"],
+          "enumDescriptions": ["Show shape-only findings last, for information.","Hide shape-only findings."],
+          "default": "keep",
+          "description": "Shape-only findings are not clones and always have zero duplication weight. Choose whether to show them. Overrides the TOML visibility setting after the language server restarts."
         },
-        "deslop.embedding.provider": {
-          "type": "string",
-          "enum": [
-            "ollama"
-          ],
-          "default": "ollama",
-          "description": "Embedding provider id used after the user enables live embeddings."
-        },
-        "deslop.embedding.model": {
-          "type": "string",
-          "default": "nomic-embed-text",
-          "description": "Embedding model id. Change via the picker; this value is persisted."
-        },
-        "deslop.embedding.endpoint": {
-          "type": "string",
-          "default": "http://127.0.0.1:11434",
-          "description": "Ollama HTTP endpoint. Loopback-only by default."
-        },
+        "deslop.embedding.provider": {"type":"string","enum":["ollama"],"default":"ollama","description":"Embedding provider id used after the user enables live embeddings."},
+        "deslop.embedding.model": {"type":"string","default":"nomic-embed-text","description":"Embedding model id. Change via the picker; this value is persisted."},
+        "deslop.embedding.endpoint": {"type":"string","default":"http://127.0.0.1:11434","description":"Ollama HTTP endpoint. Loopback-only by default."},
         "deslop.embedding.mode": {
           "type": "string",
-          "enum": [
-            "auto",
-            "required",
-            "off"
-          ],
+          "enum": ["auto","required","off"],
           "default": "off",
           "description": "Live embeddings stay off until a model is selected. The picker persists auto after selection."
         },
-        "deslop.incremental": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable on-disk fingerprint cache (.deslop/cache)."
-        },
-        "deslop.showAllLenses": {
-          "type": "boolean",
-          "default": false,
-          "description": "Show code lenses below the 50th-percentile weight threshold."
-        },
+        "deslop.incremental": {"type":"boolean","default":true,"description":"Enable on-disk fingerprint cache (.deslop/cache)."},
+        "deslop.showAllLenses": {"type":"boolean","default":false,"description":"Show code lenses below the 50th-percentile weight threshold."},
         "deslop.topOffenders.groupBy": {
           "type": "string",
-          "enum": [
-            "cluster",
-            "file",
-            "folder",
-            "kind"
-          ],
+          "enum": ["cluster","file","folder","kind"],
           "default": "cluster",
           "scope": "window",
           "description": "Top Offenders grouping. 'cluster' shows worst clusters as roots; 'file' groups by file then by clone kind; 'folder' is a folder tree; 'kind' groups flat by clone kind (identical, nearly identical, same behavior, same shape, loosely similar). Workspace settings override the user-level default. See [VSIX-TOP-OFFENDERS-GROUPING] in docs/specs/vsix.md."
         },
         "deslop.topOffenders.filterSeverities": {
           "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "worst",
-              "top10",
-              "mid",
-              "faint"
-            ]
-          },
+          "items": {"type":"string","enum":["error","warning","information","hint","none"]},
           "default": [],
           "scope": "window",
-          "description": "Show only clusters in these mass severity bands (the engine's rank percentile: 'worst', 'top10', 'mid', 'faint'). Empty shows all; unknown values are ignored. See [FACET-TOP-OFFENDERS-FILTER] in docs/specs/facets.md."
+          "description": "Show findings with these diagnostic levels. Empty shows all. Per-kind diagnostic overrides apply even when diagnostics are disabled."
         },
         "deslop.topOffenders.sortBy": {
           "type": "string",
-          "enum": [
-            "impact",
-            "path"
-          ],
+          "enum": ["impact","path"],
           "default": "impact",
           "scope": "window",
           "description": "Top Offenders sort order in file and folder modes. 'impact' is worst-first; 'path' is alphabetical by file/folder path. See [VSIX-TOP-OFFENDERS-SORT] in docs/specs/vsix.md."
         },
-        "deslop.configPath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional path to .deslop.toml. Mirrors CLI --config."
-        },
-        "deslop.lspPath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional absolute path to deslop-lsp. The binary must match shipwright.json before activation."
-        },
+        "deslop.configPath": {"type":"string","default":"","description":"Optional path to .deslop.toml. Mirrors CLI --config."},
+        "deslop.lspPath": {"type":"string","default":"","description":"Optional absolute path to deslop-lsp. The binary must match shipwright.json before activation."},
         "deslop.lsp.workerThreads": {
           "type": "integer",
           "default": 0,
@@ -589,33 +231,39 @@
           "scope": "window",
           "description": "macOS/Linux nice value for deslop-lsp. Use positive values to lower analyser CPU priority; 0 leaves priority unchanged."
         },
-        "deslop.mcpPath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional absolute path to deslop-mcp. The binary must match shipwright.json before activation."
-        },
-        "deslop.liveBubble.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show the live duplication bubble as you type."
-        },
+        "deslop.mcpPath": {"type":"string","default":"","description":"Optional absolute path to deslop-mcp. The binary must match shipwright.json before activation."},
+        "deslop.liveBubble.enabled": {"type":"boolean","default":true,"description":"Show the live duplication bubble as you type."},
         "deslop.liveBubble.mode": {
           "type": "string",
-          "enum": [
-            "inline",
-            "ghost"
-          ],
+          "enum": ["inline","ghost"],
           "default": "inline",
           "description": "Bubble layout: inline decoration + inlay hint, or a phantom ghost line below the range."
+        },
+        "deslop.diagnostics.enabled": {"type":"boolean","default":false,"scope":"window","description":"Publish Deslop diagnostics in the Problems panel. Disabled by default."},
+        "deslop.diagnostics.scope": {
+          "type": "string",
+          "enum": ["open-files","workspace"],
+          "default": "open-files",
+          "scope": "window",
+          "description": "Publish for open files, or every affected workspace file."
+        },
+        "deslop.diagnostics.severityByKind": {
+          "type": "object",
+          "default": {},
+          "scope": "window",
+          "additionalProperties": false,
+          "description": "Override diagnostic severity by category. Defaults: Identical and Nearly identical Warning; Similar and Same behavior Information; shape-only None. Overrides never change duplication metrics.",
+          "properties": {
+            "identical": {"type":"string","enum":["none","hint","information","warning","error"]},
+            "nearly_identical": {"type":"string","enum":["none","hint","information","warning","error"]},
+            "same_behavior": {"type":"string","enum":["none","hint","information","warning","error"]},
+            "loosely_similar": {"type":"string","enum":["none","hint","information","warning","error"]},
+            "structural_only": {"type":"string","enum":["none","hint","information","warning","error"]}
+          }
         }
       }
     },
-    "mcpServerDefinitionProviders": [
-      {
-        "id": "deslop",
-        "label": "Deslop"
-      }
-    ]
+    "mcpServerDefinitionProviders": [{"id":"deslop","label":"Deslop"}]
   },
   "scripts": {
     "build": "node ./scripts/copy-schema-doc.mjs && node esbuild.mjs",
@@ -641,11 +289,7 @@
     "verify:package": "node ./scripts/verify-vsix-package.mjs",
     "package": "node ./scripts/package-vsix.mjs"
   },
-  "dependencies": {
-    "@preact/signals-core": "^1.14.4",
-    "pino": "^10.3.1",
-    "vscode-languageclient": "^10.1.0"
-  },
+  "dependencies": {"@preact/signals-core":"^1.14.4","pino":"^10.3.1","vscode-languageclient":"^10.1.0"},
   "devDependencies": {
     "@playwright/test": "^1.62.1",
     "@types/mocha": "^10.0.9",

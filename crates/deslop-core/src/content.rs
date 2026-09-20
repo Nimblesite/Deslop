@@ -18,7 +18,7 @@ use crate::{ast::NormalizedNode, fingerprint::Fingerprint, state::FileId};
 /// Minimum combined literal count before literal share is meaningful.
 const LITERAL_TABLE_MIN_LITERALS: usize = 8;
 
-/// Semantic contradiction that prevents pair-content support.
+/// Semantic contradiction that blocks clone admission.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ContentContradiction {
     /// The endpoints carry no known contradiction.
@@ -44,7 +44,7 @@ pub struct ContentEvidence {
     pub consistent_rename: bool,
     /// Symmetric literal share across both endpoint frontiers.
     pub literal_fraction: f64,
-    /// Whether both endpoints resolved to authored content.
+    /// Whether authored content similarity was measured.
     pub measured: bool,
     /// Semantic contradiction found on these endpoints.
     pub contradiction: ContentContradiction,
@@ -64,7 +64,9 @@ impl ContentEvidence {
     /// pre-closure gate and by the rescue's core measurement alike.
     #[must_use]
     pub fn clears(self, floor: f64) -> bool {
-        self.measured && (self.consistent_rename || self.support() >= floor)
+        self.measured
+            && self.contradiction == ContentContradiction::None
+            && (self.consistent_rename || self.support() >= floor)
     }
 
     /// Returns explicit evidence for an unresolved pair.
@@ -129,10 +131,12 @@ pub(crate) fn measure_pair_content_indexed<S: BuildHasher, L: BuildHasher>(
 /// or unresolvable core is unmeasured, and an unmeasured pair is never
 /// admitted.
 ///
-/// A contradiction is read over the whole endpoints first: the core
-/// holds only what the two share, and a changed operator or call target
-/// is exactly what they do not ([FUSED-CONTENT-GATE],
-/// [FUSED-CONTENT-GATE-CALL-TARGET]).
+/// A changed operator is read over the whole endpoints first: the core
+/// holds only what the two share, and a changed computation is exactly
+/// what they do not ([FUSED-CONTENT-GATE]). A changed call target needs
+/// positions to be told from a renamed collaborator's method, so on
+/// endpoints that do not line up it is read over the core
+/// ([FUSED-CONTENT-GATE-CALL-TARGET]).
 pub(crate) fn measure_aligned_core<S: BuildHasher, L: BuildHasher>(
     endpoints: (&Fingerprint, &Fingerprint),
     core: &[(Fingerprint, Fingerprint)],
@@ -145,12 +149,8 @@ pub(crate) fn measure_aligned_core<S: BuildHasher, L: BuildHasher>(
     else {
         return ContentEvidence::unmeasured();
     };
-    if let Some(contradiction) = pair_contradiction(&whole_left, &whole_right) {
-        return ContentEvidence {
-            measured: true,
-            contradiction,
-            ..ContentEvidence::unmeasured()
-        };
+    if pair_contradiction(&whole_left, &whole_right).is_some() {
+        return pair_evidence(Some((&whole_left, &whole_right)), sources, scope);
     }
     let joined = joined_content(core, (&whole_left, &whole_right));
     pair_evidence(
@@ -203,13 +203,7 @@ fn pair_evidence<S: BuildHasher>(
     let Some((left, right)) = pair else {
         return ContentEvidence::unmeasured();
     };
-    if let Some(contradiction) = pair_contradiction(left, right) {
-        return ContentEvidence {
-            measured: true,
-            contradiction,
-            ..ContentEvidence::unmeasured()
-        };
-    }
+
     ContentEvidence {
         agreement: pair_agreement(Some(left), Some(right)),
         rename_consistency: rename::pair_rename_consistency(
@@ -221,7 +215,7 @@ fn pair_evidence<S: BuildHasher>(
         consistent_rename: rename::pair_rename_is_consistent(left, right, sources, scope),
         literal_fraction: pair_literal_fraction(left, right),
         measured: true,
-        contradiction: ContentContradiction::None,
+        contradiction: pair_contradiction(left, right).unwrap_or(ContentContradiction::None),
     }
 }
 
@@ -250,9 +244,7 @@ fn pair_agreement(left: Option<&MemberContent>, right: Option<&MemberContent>) -
     let (Some(left), Some(right)) = (left, right) else {
         return 0.0;
     };
-    if pair_contradiction(left, right).is_some() {
-        return 0.0;
-    }
+
     if left.keys.is_empty() && right.keys.is_empty() {
         return 1.0;
     }

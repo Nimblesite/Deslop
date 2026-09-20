@@ -17,10 +17,9 @@ use std::fs;
 use anyhow::Context as _;
 use serde_json::Value;
 
-use crate::common::signals::has_verbatim_pair;
 use crate::common::{
     assert_contains, assert_not_contains, clusters, diff_scope::*, field, fixture, load_json,
-    occurrences, Result,
+    occurrences, signals::has_verbatim_pair, Result,
 };
 
 // [OUTPUT-SCHEMA-DIFF-TAGS] Without --diff, no diff field may appear —

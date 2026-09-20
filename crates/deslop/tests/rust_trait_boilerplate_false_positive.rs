@@ -12,8 +12,7 @@ use std::{
 use anyhow::{Context, Result};
 use serde_json::Value;
 
-use crate::common::scan_dir::run_report_min_nodes;
-use crate::common::*;
+use crate::common::{scan_dir::run_report_min_nodes, *};
 
 fn deslop_core_lang_dir() -> Result<PathBuf> {
     let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));

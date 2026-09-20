@@ -10,10 +10,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::common::scan_dir::temp_scan_dir;
 use anyhow::{anyhow, Result};
 use assert_cmd::Command;
 use serde_json::Value;
+
+use crate::common::scan_dir::temp_scan_dir;
 
 struct SourceSpec {
     name: &'static str,
