@@ -160,13 +160,43 @@ fn describe(flag: u32) -> u32 {
 }
 ";
 
+const EXACT_OVERLAP: f64 = 1.0;
+const NO_OVERLAP: f64 = 0.0;
+const NO_ALIGNMENTS: u64 = 0;
+const UNRESOLVABLE_OFFSET: usize = usize::MAX;
+
 #[test]
 fn merkle_equal_endpoints_short_circuit_to_one() -> Result<(), String> {
-    let overlap = overlap_of(ACCUMULATE, ACCUMULATE)?;
-    assert!(
-        (overlap - 1.0).abs() < f64::EPSILON,
-        "two copies of one file must measure exactly 1.0, got {overlap}"
+    let (left, right) = parse_pair(ACCUMULATE, ACCUMULATE)?;
+    let trees = [left.tree, right.tree];
+    let mut measurer = OverlapMeasurer::new(&trees);
+    let overlap = measurer.overlap(&left.whole, &right.whole);
+    assert_eq!(overlap.to_bits(), EXACT_OVERLAP.to_bits());
+    assert_eq!(measurer.stats().alignments, NO_ALIGNMENTS);
+    Ok(())
+}
+
+// [FUSED-SHARED-SUBTREE] Equal hashes prove an exact overlap only after
+// each byte range resolves, even when a valid copy was measured first.
+#[test]
+fn merkle_equal_unresolvable_range_still_measures_zero() -> Result<(), String> {
+    let (left, right) = parse_pair(ACCUMULATE, ACCUMULATE)?;
+    let mut missing = right.whole.clone();
+    missing.byte_range = ByteRange {
+        start: UNRESOLVABLE_OFFSET,
+        end: UNRESOLVABLE_OFFSET,
+    };
+    let trees = [left.tree, right.tree];
+    let mut measurer = OverlapMeasurer::new(&trees);
+    assert_eq!(
+        measurer.overlap(&left.whole, &right.whole).to_bits(),
+        EXACT_OVERLAP.to_bits()
     );
+    assert_eq!(
+        measurer.overlap(&left.whole, &missing).to_bits(),
+        NO_OVERLAP.to_bits()
+    );
+    assert_eq!(measurer.stats().alignments, NO_ALIGNMENTS);
     Ok(())
 }
 

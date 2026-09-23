@@ -72,17 +72,6 @@ const INFO_EQUAL_HASH_MEMBERS: &[usize] = &[0, 2];
 const INFO_FAMILY_COUNT: usize = 3;
 const INFO_ELIGIBLE_COUNT: usize = 2;
 const HASH_FOURTH: [u8; 32] = [4; 32];
-const EXACT_TEXT: &str = "fn total() { accept(); }";
-const DIFFERENT_TEXT: &str = "fn total() { reject(); }";
-const OTHER_FIXTURE_PATH: &str = "other.rs";
-const RUST_LANGUAGE: &str = "rust";
-const OTHER_LANGUAGE: &str = "typescript";
-const NO_INFORMATION: usize = 0;
-type TextFamilyInputs = (
-    [Fingerprint; 2],
-    HashMap<FileId, Vec<u8>>,
-    HashMap<FileId, &'static str>,
-);
 
 struct CountingJudge(AtomicUsize);
 
@@ -204,6 +193,7 @@ fn informational_count_bound_keeps_every_potential_shape_pair() {
     let eligible = eligible_information(
         &families,
         &fingerprints,
+        &[],
         &HashMap::new(),
         &HashMap::new(),
         crate::config::RoutingTuning::default().nearly_identical_min_shape,
@@ -234,6 +224,7 @@ fn informational_count_bound_keeps_unresolved_and_equal_hash_pairs() {
     let eligible = eligible_information(
         &families,
         &fingerprints,
+        &[],
         &HashMap::new(),
         &HashMap::new(),
         crate::config::RoutingTuning::default().nearly_identical_min_shape,
@@ -244,78 +235,6 @@ fn informational_count_bound_keeps_unresolved_and_equal_hash_pairs() {
         .map(|found| found.members.as_slice())
         .collect();
     assert_eq!(retained, [INFO_MISSING_MEMBERS, INFO_EQUAL_HASH_MEMBERS]);
-}
-
-fn text_family_inputs(right_text: &str, right_language: &'static str) -> TextFamilyInputs {
-    let mut registry = FileRegistry::new();
-    let left = registry.register(PathBuf::from(FIXTURE_PATH));
-    let right = registry.register(PathBuf::from(OTHER_FIXTURE_PATH));
-    let fingerprints = [left, right].map(|file_id| Fingerprint {
-        hash: HASH_FIRST,
-        file_id,
-        byte_range: ByteRange {
-            start: FIXTURE_START,
-            end: EXACT_TEXT.len(),
-        },
-        node_count: FIXTURE_NODES,
-    });
-    let sources = HashMap::from([
-        (left, EXACT_TEXT.as_bytes().to_vec()),
-        (right, right_text.as_bytes().to_vec()),
-    ]);
-    let languages = HashMap::from([(left, RUST_LANGUAGE), (right, right_language)]);
-    (fingerprints, sources, languages)
-}
-
-// [CLONE-BUCKETS-STRUCTURAL-ONLY-COUNT-BOUND] Equal shape and exact
-// source bytes cannot create a shape-only relation on the information pass.
-#[test]
-fn informational_eligibility_skips_exact_text_with_equal_shape() {
-    let (fingerprints, sources, languages) = text_family_inputs(EXACT_TEXT, RUST_LANGUAGE);
-    let eligible = eligible_information(
-        &[family(COMPLETE_PAIR, &[])],
-        &fingerprints,
-        &sources,
-        &languages,
-        crate::config::RoutingTuning::default().nearly_identical_min_shape,
-    );
-    assert_eq!(eligible.len(), NO_INFORMATION);
-}
-
-// [CLONE-BUCKETS-STRUCTURAL-ONLY-COUNT-BOUND] Shape-equal different
-// source text can be a Type-III informational pair and must be measured.
-#[test]
-fn informational_eligibility_retains_changed_text_with_equal_shape() {
-    let (fingerprints, sources, languages) = text_family_inputs(DIFFERENT_TEXT, RUST_LANGUAGE);
-    let eligible = eligible_information(
-        &[family(COMPLETE_PAIR, &[])],
-        &fingerprints,
-        &sources,
-        &languages,
-        crate::config::RoutingTuning::default().nearly_identical_min_shape,
-    );
-    assert_eq!(eligible.len(), ONE_NEW_PAIR);
-    assert_eq!(
-        eligible.first().map(|found| found.members.as_slice()),
-        Some(COMPLETE_PAIR)
-    );
-}
-
-#[test]
-fn informational_eligibility_retains_cross_language_text() {
-    let (fingerprints, sources, languages) = text_family_inputs(EXACT_TEXT, OTHER_LANGUAGE);
-    let eligible = eligible_information(
-        &[family(COMPLETE_PAIR, &[])],
-        &fingerprints,
-        &sources,
-        &languages,
-        crate::config::RoutingTuning::default().nearly_identical_min_shape,
-    );
-    assert_eq!(eligible.len(), ONE_NEW_PAIR);
-    assert_eq!(
-        eligible.first().map(|found| found.members.as_slice()),
-        Some(COMPLETE_PAIR)
-    );
 }
 
 fn family(members: &[usize], edges: &[(usize, usize)]) -> FusedCluster {

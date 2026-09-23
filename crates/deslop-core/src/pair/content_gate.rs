@@ -20,6 +20,8 @@ use crate::{
 const SHAPE_IDENTICAL_FLOOR: f64 = 0.99;
 /// Token overlap at which `MinHash` is echoing saturated normalised shape.
 const SATURATING_TOKEN_FLOOR: f64 = 0.95;
+/// Exact authored-content agreement for identical resolved frontiers.
+const EXACT_CONTENT_AGREEMENT: f64 = 1.0;
 /// The content guard applies at shape saturation ([FUSED-CONTENT-GATE]
 /// step 3), so the gate floor stays at `SHAPE_IDENTICAL_FLOOR`.
 ///
@@ -129,6 +131,12 @@ enum GateVerdict {
     /// Admitted without measurement: no route saturated, so the pair's
     /// own shape or semantic evidence is not an echo of normalisation.
     NotRequired,
+    /// Admitted from ordered frontier identity and no semantic contradiction;
+    /// the full rename and literal axes are unnecessary for this gate.
+    ExactFrontier {
+        /// The applicable pair-content floor.
+        floor: f64,
+    },
     /// Measured against the scope-specific floor.
     Measured {
         /// The pair's content evidence.
@@ -147,6 +155,7 @@ impl GateVerdict {
         match self {
             Self::RoleMismatch | Self::ContainerEcho => false,
             Self::NotRequired => true,
+            Self::ExactFrontier { floor } => EXACT_CONTENT_AGREEMENT >= *floor,
             Self::Measured {
                 evidence,
                 floor,
@@ -161,6 +170,7 @@ impl GateVerdict {
             Self::RoleMismatch => "role_mismatch",
             Self::ContainerEcho => "container_echo",
             Self::NotRequired => "not_required",
+            Self::ExactFrontier { .. } => "exact_frontier",
             Self::Measured { .. } => "measured",
         }
     }
@@ -196,24 +206,29 @@ fn gate_verdict<L: BuildHasher>(
     if !content_is_required(pair, left, right) {
         return GateVerdict::NotRequired;
     }
+    let content_pair = context.content.pair(
+        (left, right),
+        context.tree_index,
+        context.sources,
+        context.languages,
+    );
+    let floor = content_floor(pair, left, right);
+    if left.hash == right.hash
+        && content_pair.exact_frontier_match(context.sources)
+        && EXACT_CONTENT_AGREEMENT >= floor
+    {
+        return GateVerdict::ExactFrontier { floor };
+    }
     let interior =
         context.scopes.enclosing(left).is_some() && context.scopes.enclosing(right).is_some();
-    let evidence = context
-        .content
-        .pair(
-            (left, right),
-            context.tree_index,
-            context.sources,
-            context.languages,
-        )
-        .whole(
-            context.sources,
-            PairScope {
-                same_file: left.file_id == right.file_id,
-                interior,
-                core: false,
-            },
-        );
+    let evidence = content_pair.whole(
+        context.sources,
+        PairScope {
+            same_file: left.file_id == right.file_id,
+            interior,
+            core: false,
+        },
+    );
     GateVerdict::Measured {
         verified_async_core: async_core_satisfies_content(
             pair.shared_subtree_overlap,
@@ -222,7 +237,7 @@ fn gate_verdict<L: BuildHasher>(
             &evidence,
         ),
         evidence,
-        floor: content_floor(pair, left, right),
+        floor,
     }
 }
 
@@ -252,12 +267,15 @@ fn log_gate_verdict(left: &Fingerprint, right: &Fingerprint, verdict: &GateVerdi
         GateVerdict::Measured {
             evidence, floor, ..
         } => (
-            evidence.agreement,
-            evidence.rename_consistency,
-            evidence.consistent_rename,
-            *floor,
+            Some(evidence.agreement),
+            Some(evidence.rename_consistency),
+            Some(evidence.consistent_rename),
+            Some(*floor),
         ),
-        _ => (0.0, 0.0, false, 0.0),
+        GateVerdict::ExactFrontier { floor } => {
+            (Some(EXACT_CONTENT_AGREEMENT), None, None, Some(*floor))
+        }
+        _ => (None, None, None, None),
     };
     tracing::trace!(
         route = verdict.route(),
@@ -269,10 +287,10 @@ fn log_gate_verdict(left: &Fingerprint, right: &Fingerprint, verdict: &GateVerdi
         right_start = right.byte_range.start,
         right_end = right.byte_range.end,
         right_nodes = right.node_count,
-        agreement,
-        rename,
-        consistent_rename,
-        floor,
+        agreement = ?agreement,
+        rename = ?rename,
+        consistent_rename = ?consistent_rename,
+        floor = ?floor,
         admitted = verdict.admitted(),
         "content gate verdict",
     );

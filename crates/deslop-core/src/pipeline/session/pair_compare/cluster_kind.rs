@@ -81,17 +81,17 @@ impl PairKindMemo {
     }
 }
 
-/// A byte-proven identical clone, when both content frontiers resolve.
+/// A byte-proven identical clone when its authored frontiers also match.
 fn exact_text_kind(
     left: &Fingerprint,
     right: &Fingerprint,
     sources: &HashMap<crate::state::FileId, Vec<u8>>,
     languages: &HashMap<crate::state::FileId, &'static str>,
-    resolved: impl FnOnce() -> bool,
+    same_frontier: impl FnOnce() -> bool,
 ) -> Option<ClusterKind> {
     (left.hash == right.hash
         && same_source_bytes_and_language(left, right, sources, languages)
-        && resolved())
+        && same_frontier())
     .then_some(ClusterKind::Identical)
 }
 
@@ -195,7 +195,7 @@ impl<'corpus> ClusterKindMeasurer<'corpus> {
         ClusterKind::from_pair(facts.classification(measured))
     }
 
-    /// Proves a byte-identical kind only when the content frontiers resolve.
+    /// Equal whole bytes still require equal authored leaf boundaries.
     fn exact_kind(&self, pair: &ResolvedPair<'corpus>) -> Option<ClusterKind> {
         exact_text_kind(
             pair.left.fingerprint,
@@ -212,7 +212,7 @@ impl<'corpus> ClusterKindMeasurer<'corpus> {
                         &self.session.sources,
                         &self.session.file_languages,
                     )
-                    .resolved()
+                    .exact_frontier_match(&self.session.sources)
             },
         )
     }

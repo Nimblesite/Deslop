@@ -3,8 +3,8 @@
 use std::{collections::HashMap, hash::BuildHasher, sync::Arc};
 
 use super::{
-    frontier::member_content, has_hard_contradiction, measure_core_contents, pair_evidence,
-    ContentEvidence, MemberContent, PairScope,
+    frontier::member_content, has_hard_contradiction, measure_core_contents, pair_contradiction,
+    pair_evidence, ContentEvidence, MemberContent, PairScope,
 };
 use crate::{ast::NormalizedNode, fingerprint::Fingerprint, state::FileId};
 
@@ -75,6 +75,28 @@ pub(crate) struct ContentPair {
 }
 
 impl ContentPair {
+    /// [FUSED-CONTENT-GATE-EXACT-FRONTIER] Both resolved endpoints carry
+    /// identical ordered authored keys. Raw byte or Merkle equality alone
+    /// cannot establish this when collapsed leaves partition differently.
+    pub(crate) fn same_frontier_keys(&self) -> bool {
+        self.resolved()
+            && self
+                .whole_refs()
+                .is_some_and(|(left, right)| left.keys == right.keys)
+    }
+
+    /// Identical authored keys and no canonical semantic contradiction
+    /// prove whole agreement without rename or literal measurement.
+    pub(crate) fn exact_frontier_match<S: BuildHasher>(
+        &self,
+        sources: &HashMap<FileId, Vec<u8>, S>,
+    ) -> bool {
+        self.same_frontier_keys()
+            && self
+                .whole_refs()
+                .is_some_and(|(left, right)| pair_contradiction(left, right, sources).is_none())
+    }
+
     /// Whether both endpoint frontiers resolved. This is the same
     /// measured bit whole-pair evidence would report, without running
     /// agreement, rename, or contradiction calculations
@@ -160,6 +182,11 @@ mod tests {
         };
         let resolved = measurer.pair((endpoint, endpoint), &trees, &sources, &languages);
         assert!(resolved.resolved(), "a present endpoint resolves");
+        assert!(
+            resolved.same_frontier_keys(),
+            "the same authored frontier matches itself"
+        );
+        assert!(resolved.exact_frontier_match(&sources));
         assert_eq!(
             resolved.resolved(),
             resolved.whole(&sources, scope).measured
@@ -174,6 +201,8 @@ mod tests {
             !unresolved.resolved(),
             "an invalid byte range cannot resolve"
         );
+        assert!(!unresolved.same_frontier_keys());
+        assert!(!unresolved.exact_frontier_match(&sources));
         assert_eq!(
             unresolved.resolved(),
             unresolved.whole(&sources, scope).measured

@@ -201,19 +201,18 @@ impl<'corpus> OverlapMeasurer<'corpus> {
     /// window in its tree — exactly the pairs the old literal `0.0`
     /// described honestly.
     pub fn overlap(&mut self, left: &Fingerprint, right: &Fingerprint) -> f64 {
+        // Views before either shortcut, always: Merkle identity proves
+        // overlap only for actual endpoint views, while resolvability
+        // belongs to each byte range rather than its structural hash.
+        // An unresolvable copy must answer zero even after a valid copy
+        // of that hash pair was measured.
+        let Some((left_view, right_view)) = self.view_pair(left, right) else {
+            return 0.0;
+        };
         if left.hash == right.hash {
             bump(&mut self.stats.hash_equal);
             return 1.0;
         }
-        // Views before the memo, always: the memo key is the hash pair,
-        // but resolvability is a property of each byte range in its own
-        // tree, so an unresolvable pair must answer `0.0` whether or
-        // not a resolvable copy of the same structural pair was
-        // measured first
-        // (`an_unresolvable_copy_still_scores_its_unequal_pairs_zero`).
-        let Some((left_view, right_view)) = self.view_pair(left, right) else {
-            return 0.0;
-        };
         let key = pair_key(left, right);
         if let Some(&cached) = self.exact_results.get(&key) {
             bump(&mut self.stats.exact_hits);
