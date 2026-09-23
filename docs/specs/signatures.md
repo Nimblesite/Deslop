@@ -2,7 +2,7 @@
 
 ## [PIPELINE-SIGNATURE-FOLD] Construct signatures once per parsed tree
 
-The token signature pass folds each normalized tree from its leaves upward. A parent combines its children's MinHash slots and the k-grams crossing their boundaries; sibling windows use the same composition. The result must match the reference top-down token construction byte for byte. Parsed-file signatures are persisted with the fingerprints and consumed by the render pass. Explicit cross-language signatures remain a separate render-time projection under [CONFIG-CROSS-LANGUAGE].
+The token signature pass folds each normalized tree from its leaves upward. A parent combines its children's MinHash slots and the k-grams crossing their boundaries; sibling windows use the same composition. A grammar wrapper and its child can have the same byte range, so the fold also matches each fingerprint's structural node count; a rare same-range, same-count ambiguity is resolved by the fingerprint hash. The result must match the reference top-down token construction byte for byte. Parsed-file signatures are persisted with the fingerprints and consumed by the render pass; a change to their meaning invalidates old cache entries. Explicit cross-language signatures remain a separate render-time projection under [CONFIG-CROSS-LANGUAGE].
 
 `crates/deslop-core/src/pipeline/signatures.rs` and its `fold` module implement the fold. `fold_signatures_match_the_top_down_construction` checks equivalence to the reference construction.
 

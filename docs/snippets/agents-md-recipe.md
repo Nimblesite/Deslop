@@ -56,7 +56,9 @@ inspect the response.
   or semantic evidence) — read the match before deciding; it is often
   sibling boilerplate rather than a reusable implementation.
   Reuse the canonical occurrence the tool returns. Extract a helper if needed.
-- If the response is empty, proceed with authoring.
+- If `clusters` is empty but `existing` lists a place, the code already exists
+  there once. Reuse it — call it, or extract it — instead of writing a copy.
+- If both `clusters` and `existing` are empty, proceed with authoring.
 - If the bucket is `loosely_similar` or `same_behavior`, read the canonical
   occurrence and decide whether the new code is genuinely different. Bias
   toward reuse.

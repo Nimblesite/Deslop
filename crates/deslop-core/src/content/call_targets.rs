@@ -1,15 +1,31 @@
 //! [FUSED-CONTENT-GATE-CALL-TARGET] Member-call selectors name behavior, not local variables.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
+    hash::BuildHasher,
+};
 
 use super::{
-    frontier::{frontiers_aligned, population, MemberContent, Population},
+    frontier::{frontiers_aligned, leaf_bytes, population, MemberContent, Population},
     rename::Corroboration,
 };
 use crate::{
     ast::{ByteRange, NormalizedNode},
     lang::shared::IDENTIFIER_KIND,
+    state::FileId,
 };
+
+/// The prefix or suffix carried by a sync/async twin's external call selector.
+const ASYNC_AFFIX: &[u8] = b"Async";
+
+/// A changed external call is either a bounded async edit or a changed operation.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum CallTargetChange {
+    /// The changed selector adds or removes only an async prefix or suffix.
+    AsyncEdit,
+    /// An unrelated external operation replaced the original.
+    Other,
+}
 
 /// A callable name and its following parameter node.
 const DECLARATION_NEIGHBORS: usize = 2;
@@ -120,9 +136,10 @@ fn external_call_target(
 /// partner says `toContainText` is a changed operation, not a copy, and
 /// it contradicts the pair's content.
 ///
-/// [`selector_renames`] is the one reading that excuses a changed
-/// selector: evidence that the *name* changed rather than the behaviour
-/// ([CLONE-BUCKETS-NORTH-STAR], [TECH-PMATCH-BAKER]).
+/// [`selector_renames`] excuses a changed selector when its receiver
+/// renamed too. An exact `Async` prefix or suffix edit remains a measured Type-3
+/// edit; it is neither a free rename nor an unrelated-operation veto
+/// ([CLONE-BUCKETS-NORTH-STAR], [ACCURACY-RECOVERY-TWIN-FN]).
 ///
 /// The rule reads positions, so frontiers that do not align carry no
 /// verdict here. A near-miss pair is read over its aligned core instead
@@ -133,9 +150,29 @@ fn external_call_target(
 /// Pinned by `type2_rename_call_targets`,
 /// `js_literal_variation_calls::member_targets` and
 /// `cluster_extent_statement_runs`.
-pub(super) fn contradicts(left: &MemberContent, right: &MemberContent) -> bool {
+pub(super) fn changed<S: BuildHasher>(
+    left: &MemberContent,
+    right: &MemberContent,
+    sources: &HashMap<FileId, Vec<u8>, S>,
+) -> Option<CallTargetChange> {
+    let changed = unexcused_positions(left, right);
+    if changed.is_empty() {
+        return None;
+    }
+    if changed
+        .iter()
+        .all(|index| async_affix_edit(left, right, *index, sources))
+    {
+        Some(CallTargetChange::AsyncEdit)
+    } else {
+        Some(CallTargetChange::Other)
+    }
+}
+
+/// Positions whose changed selectors have no corroborated receiver rename.
+fn unexcused_positions(left: &MemberContent, right: &MemberContent) -> Vec<usize> {
     if !frontiers_aligned(left, right) {
-        return false;
+        return Vec::new();
     }
     let corroboration =
         Corroboration::over(&population(&left.keys, &right.keys, Population::Identifier));
@@ -143,13 +180,47 @@ pub(super) fn contradicts(left: &MemberContent, right: &MemberContent) -> bool {
         .iter()
         .zip(&right.keys)
         .zip(left.external_calls.iter().zip(&right.external_calls))
-        .any(|((left_key, right_key), (left_target, right_target))| {
-            left_key.key != right_key.key
-                && left_target
-                    .as_ref()
-                    .zip(right_target.as_ref())
-                    .is_some_and(|targets| !selector_renames(left, right, targets, &corroboration))
+        .enumerate()
+        .filter_map(|(index, (keys, targets))| {
+            unexcused_selector((left, right), keys, targets, &corroboration).then_some(index)
         })
+        .collect()
+}
+
+/// Whether one changed external selector lacks a corroborated receiver rename.
+fn unexcused_selector(
+    members: (&MemberContent, &MemberContent),
+    keys: (&super::frontier::LeafKey, &super::frontier::LeafKey),
+    targets: (&Option<CallTarget>, &Option<CallTarget>),
+    corroboration: &Corroboration,
+) -> bool {
+    keys.0.key != keys.1.key
+        && targets
+            .0
+            .as_ref()
+            .zip(targets.1.as_ref())
+            .is_some_and(|targets| !selector_renames(members.0, members.1, targets, corroboration))
+}
+
+/// An external selector changed by exactly the conventional async affix.
+fn async_affix_edit<S: BuildHasher>(
+    left: &MemberContent,
+    right: &MemberContent,
+    index: usize,
+    sources: &HashMap<FileId, Vec<u8>, S>,
+) -> bool {
+    let Some((left_name, right_name)) =
+        leaf_bytes(left, index, sources).zip(leaf_bytes(right, index, sources))
+    else {
+        return false;
+    };
+    has_async_affix(left_name, right_name) || has_async_affix(right_name, left_name)
+}
+
+/// A selector with one leading or trailing `Async`, and no other edit.
+fn has_async_affix(longer: &[u8], shorter: &[u8]) -> bool {
+    longer.strip_prefix(ASYNC_AFFIX) == Some(shorter)
+        || longer.strip_suffix(ASYNC_AFFIX) == Some(shorter)
 }
 
 /// Whether a changed external selector is a rename rather than a
@@ -295,3 +366,7 @@ fn parameter_list(kind: &str) -> bool {
             | "type_arguments"
     )
 }
+
+#[cfg(test)]
+#[path = "call_targets/tests.rs"]
+mod tests;

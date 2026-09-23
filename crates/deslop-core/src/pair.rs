@@ -22,7 +22,7 @@ pub use candidates::{candidate_pairs, candidate_pairs_for_language_policy, LshPa
 /// Pair-content admission guard applied before transitive closure.
 mod content_gate;
 mod echo;
-pub(crate) use content_gate::apply_pair_content_gate;
+pub(crate) use content_gate::{apply_pair_content_gate, async_core_satisfies_content};
 pub(crate) use echo::ExactClones;
 
 /// Transitive-closure clustering over surviving pairs.
@@ -209,6 +209,9 @@ pub struct CandidatePair {
     /// subtrees per pair across every candidate would repeat the
     /// admission-cost mistake [FUSED-CONTENT-GATE] deliberately avoids.
     pub shared_subtree_overlap: f64,
+    /// Rescue proved an aligned core with only Async-suffix call edits.
+    /// The post-rescue content gate may use that measured evidence.
+    pub verified_async_core: bool,
     /// Computed signal breakdown.
     pub score: PairScore,
 }

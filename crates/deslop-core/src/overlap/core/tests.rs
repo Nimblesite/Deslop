@@ -6,7 +6,10 @@ use super::super::{
     tests::{parse_pair, ACCUMULATE, AGGREGATE_WITH_INSERTION},
     OverlapMeasurer,
 };
-use crate::{ast::ByteRange, fingerprint::Fingerprint};
+use crate::{
+    ast::ByteRange,
+    fingerprint::{collect_fingerprints, Fingerprint},
+};
 
 /// One core, one verdict, whichever surface asks
 /// ([FUSED-SHARED-SUBTREE-CORE]).
@@ -77,6 +80,57 @@ fn the_aligned_core_pairs_the_shared_subtrees_in_order() -> Result<(), String> {
         &core,
         tail_of(ACCUMULATE, "running"),
         tail_of(AGGREGATE_WITH_INSERTION, "total"),
+    );
+    Ok(())
+}
+
+// [FUSED-SHARED-SUBTREE-CORE] Equal-Merkle single subtrees are the entire
+// core; indexing their every descendant before returning that pair wastes
+// recovery work without adding evidence.
+#[test]
+fn equal_single_subtrees_are_the_whole_core_without_descendant_indexing() -> Result<(), String> {
+    const EVERY_SUBTREE: usize = 1;
+    let (left, right) = parse_pair(ACCUMULATE, ACCUMULATE)?;
+    let widest = |tree| {
+        collect_fingerprints(tree, EVERY_SUBTREE)
+            .into_iter()
+            .max_by_key(|fingerprint| fingerprint.node_count)
+            .ok_or("fixture must emit a subtree")
+    };
+    let pair = (widest(&left.tree)?, widest(&right.tree)?);
+    let trees = [left.tree, right.tree];
+    let mut measurer = OverlapMeasurer::new(&trees);
+    let core = measurer.aligned_core(&pair.0, &pair.1);
+    assert_eq!(
+        core,
+        vec![pair],
+        "equal subtrees share their whole authored code"
+    );
+    assert!(
+        measurer.cores.is_empty(),
+        "the whole core needs no descendant index"
+    );
+    Ok(())
+}
+
+// [FUSED-SHARED-SUBTREE-CORE] The file wrapper has a valid digest, but
+// fingerprint emission suppresses it when it only repeats its child.
+#[test]
+fn viewless_wrapper_keeps_its_child_as_the_core() -> Result<(), String> {
+    const ONE_SPAN: usize = 1;
+    const WRAPPER_NODE: usize = 1;
+    let (left, right) = parse_pair(ACCUMULATE, ACCUMULATE)?;
+    let trees = [left.tree, right.tree];
+    let core = OverlapMeasurer::new(&trees).aligned_core(&left.whole, &right.whole);
+    assert_eq!(core.len(), ONE_SPAN);
+    let pair = core.first().ok_or("wrapper keeps one child core")?;
+    assert_eq!(
+        pair.0.node_count.saturating_add(WRAPPER_NODE),
+        left.whole.node_count
+    );
+    assert_eq!(
+        pair.1.node_count.saturating_add(WRAPPER_NODE),
+        right.whole.node_count
     );
     Ok(())
 }

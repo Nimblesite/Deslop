@@ -34,6 +34,7 @@ fn pair(
         lsh_only_min_jaccard: min_jaccard,
         fused_min_score: fused_min,
         shared_subtree_overlap: 0.0,
+        verified_async_core: false,
         score: PairScore {
             structural,
             token_jaccard,

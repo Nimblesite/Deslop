@@ -24,7 +24,7 @@
 //! `fold_signatures_match_the_top_down_construction`), at `O(nodes)`
 //! per file.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use fold::{join_states, TokenState};
 
@@ -55,7 +55,17 @@ struct FoldFrame<'tree> {
     /// Index of the next child to fold into `children`.
     next_child: usize,
     /// Finished child states, in source order.
-    children: Vec<TokenState>,
+    children: Vec<FoldedChild>,
+    /// Structural mass, including the current node and finished children.
+    node_count: usize,
+}
+
+/// A finished child contributes both token evidence and structural mass.
+struct FoldedChild {
+    /// Token signature and boundary state of this child.
+    tokens: TokenState,
+    /// Structural mass independent of language-aware token skipping.
+    node_count: usize,
 }
 
 impl<'tree> FoldFrame<'tree> {
@@ -65,46 +75,53 @@ impl<'tree> FoldFrame<'tree> {
             node,
             next_child: 0,
             children: Vec::new(),
+            node_count: 1,
         }
     }
 }
 
-/// Output positions of every fingerprint whose byte range is `(start, end)`.
-/// A range can index several fingerprints (an exact node and a window that
-/// cover the same bytes resolve to the same token stream), so the value is
-/// a list.
-type Positions = HashMap<(usize, usize), Vec<usize>>;
+/// A byte span and structural mass identify a candidate without conflating
+/// a grammar wrapper with its same-range child.
+type MemberKey = (usize, usize, usize);
+
+/// Output positions indexed by span and structural mass.
+type Positions = HashMap<MemberKey, Vec<usize>>;
 
 /// Builds the range → output-positions index for `fingerprints`.
 fn positions_for(fingerprints: &[Fingerprint]) -> Positions {
     let mut positions: Positions = HashMap::with_capacity(fingerprints.len());
     for (index, fingerprint) in fingerprints.iter().enumerate() {
-        let key = (fingerprint.byte_range.start, fingerprint.byte_range.end);
+        let key = (
+            fingerprint.byte_range.start,
+            fingerprint.byte_range.end,
+            fingerprint.node_count,
+        );
         positions.entry(key).or_default().push(index);
     }
     positions
 }
 
-/// Which output positions the exact-node pass has already filled. The
-/// top-down resolver answers a range that is both an exact node's and a
-/// sibling window's — a tight wrapper covering exactly the window's
-/// children — with the **node** (it checks node ranges before windows on
-/// the way down), so the exact emission must win and the window emission
-/// must leave those positions alone.
+/// Which positions are filled, and which keys have multiple same-mass
+/// candidates that require exact hash-aware resolution after the fold.
 #[derive(Debug, Default)]
-struct Filled(Vec<bool>);
+struct Filled {
+    /// Which fingerprint positions received a folded signature.
+    positions: Vec<bool>,
+    /// Spans with more than one same-mass candidate in the tree.
+    ambiguous: HashSet<MemberKey>,
+}
 
 impl Filled {
     /// Marks `index` filled.
     fn mark(&mut self, index: usize) {
-        if let Some(slot) = self.0.get_mut(index) {
+        if let Some(slot) = self.positions.get_mut(index) {
             *slot = true;
         }
     }
 
     /// True when `index` was marked.
     fn is_marked(&self, index: usize) -> bool {
-        self.0.get(index).copied().unwrap_or(false)
+        self.positions.get(index).copied().unwrap_or(false)
     }
 }
 
@@ -128,6 +145,27 @@ fn close_fold_frame(
     let Some(frame) = stack.pop() else {
         return;
     };
+    let state = frame_token_state(&frame, language);
+    emit_member(
+        &state,
+        frame.node.byte_range,
+        frame.node_count,
+        positions,
+        filled,
+        out,
+    );
+    emit_window_members(&frame, positions, filled, out);
+    if let Some(parent) = stack.last_mut() {
+        parent.node_count = parent.node_count.saturating_add(frame.node_count);
+        parent.children.push(FoldedChild {
+            tokens: state,
+            node_count: frame.node_count,
+        });
+    }
+}
+
+/// Joins the node token with its children, except a skipped prologue.
+fn frame_token_state(frame: &FoldFrame<'_>, language: Option<&str>) -> TokenState {
     let skipped = token_skipped(frame.node, language);
     let mut state = if skipped {
         TokenState::empty()
@@ -136,47 +174,17 @@ fn close_fold_frame(
     };
     if !skipped {
         for child in &frame.children {
-            state = join_states(&state, child);
+            state = join_states(&state, &child.tokens);
         }
     }
-    emit_exact_member(&frame, stack, &state, positions, filled, out);
-    if language.is_some() {
-        emit_window_members(&frame, positions, filled, out);
-    }
-    if let Some(parent) = stack.last_mut() {
-        parent.children.push(state);
-    }
-}
-
-/// Emits the signature for the node's own range when a fingerprint covers
-/// it. Deferred to the parent when the parent owns the identical range:
-/// the top-down resolver returns the shallowest matching node, so a
-/// wrapper chain must answer from its outermost member.
-fn emit_exact_member(
-    frame: &FoldFrame<'_>,
-    stack: &[FoldFrame<'_>],
-    state: &TokenState,
-    positions: &Positions,
-    filled: &mut Filled,
-    out: &mut [Signature],
-) {
-    let Some(parent) = stack.last() else {
-        emit_member(state, frame.node.byte_range, positions, filled, out);
-        return;
-    };
-    if parent.node.byte_range == frame.node.byte_range {
-        return;
-    }
-    emit_member(state, frame.node.byte_range, positions, filled, out);
+    state
 }
 
 /// Emits signatures for the sibling-window ranges of `frame`'s children
 /// that fingerprints cover. Windows of width 2..=[`MAX_WINDOW_WIDTH`] are
 /// enumerated exactly as [`crate::sibling`] enumerates the fingerprints
 /// themselves; membership in `positions` is the fingerprint gate, so no
-/// window that was never fingerprinted costs a fold. Only called on the
-/// language-aware path: the language-agnostic resolver (`locate`) answers
-/// exact nodes only, so window fingerprints there keep their fallback.
+/// window that was never fingerprinted costs a fold.
 fn emit_window_members(
     frame: &FoldFrame<'_>,
     positions: &Positions,
@@ -190,44 +198,60 @@ fn emit_window_members(
             if end > child_count {
                 break;
             }
-            let Some(first) = frame.node.children.get(start) else {
-                break;
-            };
-            let Some(last) = frame.node.children.get(end.saturating_sub(1)) else {
-                break;
-            };
-            let range = (first.byte_range.start, last.byte_range.end);
-            // A well-formed window spans bytes forward. Positionally
-            // unordered children (impossible in a real parse) produce
-            // inverted ranges the top-down resolver can never resolve —
-            // those fingerprints keep their fallback, and the fold must
-            // agree.
-            if first.byte_range.start >= last.byte_range.end {
-                continue;
-            }
-            if !positions.contains_key(&range) {
-                continue;
-            }
-            fold_window_state(&frame.children, start, end, range, positions, filled, out);
+            emit_window_from(frame, start, end, positions, filled, out);
         }
     }
 }
 
-/// Folds the member states of one window and emits its signature.
-fn fold_window_state(
-    children: &[TokenState],
+/// Emits one well-formed child run when a fingerprint names its span/mass.
+fn emit_window_from(
+    frame: &FoldFrame<'_>,
     start: usize,
     end: usize,
-    range: (usize, usize),
+    positions: &Positions,
+    filled: &mut Filled,
+    out: &mut [Signature],
+) {
+    let (Some(first), Some(last)) = (
+        frame.node.children.get(start),
+        frame.node.children.get(end.saturating_sub(1)),
+    ) else {
+        return;
+    };
+    if first.byte_range.start >= last.byte_range.end {
+        return;
+    }
+    let mass = window_node_count(&frame.children, start, end);
+    let key = (first.byte_range.start, last.byte_range.end, mass);
+    if positions.contains_key(&key) {
+        fold_window_state(&frame.children, start, end, key, positions, filled, out);
+    }
+}
+
+/// Structural mass of the child run being folded.
+fn window_node_count(children: &[FoldedChild], start: usize, end: usize) -> usize {
+    children
+        .get(start..end)
+        .unwrap_or(&[])
+        .iter()
+        .fold(0, |sum, child| sum.saturating_add(child.node_count))
+}
+
+/// Folds the member states of one window and emits its signature.
+fn fold_window_state(
+    children: &[FoldedChild],
+    start: usize,
+    end: usize,
+    key: MemberKey,
     positions: &Positions,
     filled: &mut Filled,
     out: &mut [Signature],
 ) {
     let mut state = TokenState::empty();
     for member in children.get(start..end).unwrap_or(&[]) {
-        state = join_states(&state, member);
+        state = join_states(&state, &member.tokens);
     }
-    emit_member_range(&state, range, positions, filled, out);
+    emit_member_range(&state, key, positions, filled, out);
 }
 
 /// Emits `state`'s signature for every fingerprint position covering
@@ -236,13 +260,14 @@ fn fold_window_state(
 fn emit_member(
     state: &TokenState,
     byte_range: crate::ast::ByteRange,
+    node_count: usize,
     positions: &Positions,
     filled: &mut Filled,
     out: &mut [Signature],
 ) {
     emit_member_range(
         state,
-        (byte_range.start, byte_range.end),
+        (byte_range.start, byte_range.end, node_count),
         positions,
         filled,
         out,
@@ -252,7 +277,7 @@ fn emit_member(
 /// Range-keyed emission half of [`emit_member`].
 fn emit_member_range(
     state: &TokenState,
-    range: (usize, usize),
+    key: MemberKey,
     positions: &Positions,
     filled: &mut Filled,
     out: &mut [Signature],
@@ -260,9 +285,10 @@ fn emit_member_range(
     if state.count < KGRAM_WIDTH {
         return;
     }
-    if let Some(indexes) = positions.get(&range) {
+    if let Some(indexes) = positions.get(&key) {
         for &index in indexes {
             if filled.is_marked(index) {
+                let _inserted = filled.ambiguous.insert(key);
                 continue;
             }
             filled.mark(index);
@@ -282,10 +308,9 @@ fn emit_member_range(
 /// Every fingerprint starts at its fingerprint-scoped
 /// [`fallback_signature`] — the correct signature for a stream too short
 /// to hold a k-gram, and the only signature an unresolvable range can
-/// have — and the fold overwrites exactly the positions whose ranges
-/// resolve to a token stream with k-grams in it. The output therefore
-/// matches the historical per-fingerprint construction for every input,
-/// including hand-built fingerprint lists the corpus never produces.
+/// have — and the fold overwrites positions whose range and structural
+/// mass identify a token stream with k-grams in it. Same-span/same-mass
+/// ambiguities take the hash-aware resolver to preserve exact identity.
 #[must_use]
 pub fn signatures_for_file(
     tree: &NormalizedNode,
@@ -293,8 +318,24 @@ pub fn signatures_for_file(
     language: Option<&str>,
 ) -> Vec<Signature> {
     let mut out: Vec<Signature> = fingerprints.iter().map(fallback_signature).collect();
-    let mut filled = Filled(vec![false; fingerprints.len()]);
+    let mut filled = Filled {
+        positions: vec![false; fingerprints.len()],
+        ..Filled::default()
+    };
     let positions = positions_for(fingerprints);
+    fold_file(tree, language, &positions, &mut filled, &mut out);
+    resolve_ambiguous_signatures(tree, fingerprints, language, &positions, &filled, &mut out);
+    out
+}
+
+/// Walks one tree bottom-up and emits its folded token signatures.
+fn fold_file(
+    tree: &NormalizedNode,
+    language: Option<&str>,
+    positions: &Positions,
+    filled: &mut Filled,
+    out: &mut [Signature],
+) {
     let mut stack = vec![FoldFrame::new(tree)];
     while let Some(frame) = stack.last_mut() {
         if let Some(child) = frame.node.children.get(frame.next_child) {
@@ -302,15 +343,33 @@ pub fn signatures_for_file(
             stack.push(FoldFrame::new(child));
             continue;
         }
-        close_fold_frame(&mut stack, language, &positions, &mut filled, &mut out);
+        close_fold_frame(&mut stack, language, positions, filled, out);
     }
-    out
 }
 
-/// The historical top-down construction of one fingerprint's signature,
-/// kept as the reference the fold must reproduce byte-for-byte
-/// (`fold_signatures_match_the_top_down_construction`).
-#[cfg(test)]
+/// Rechecks rare same-span/same-mass candidates by hash, keeping the
+/// ordinary unambiguous population on the linear fold.
+fn resolve_ambiguous_signatures(
+    tree: &NormalizedNode,
+    fingerprints: &[Fingerprint],
+    language: Option<&str>,
+    positions: &Positions,
+    filled: &Filled,
+    out: &mut [Signature],
+) {
+    for (key, indexes) in positions {
+        if indexes.len() < 2 && !filled.ambiguous.contains(key) {
+            continue;
+        }
+        for &index in indexes {
+            if let (Some(fingerprint), Some(slot)) = (fingerprints.get(index), out.get_mut(index)) {
+                *slot = top_down_signature(tree, fingerprint, language);
+            }
+        }
+    }
+}
+
+/// Exact construction for ambiguous spans, also the fold's test reference.
 fn top_down_signature(
     root: &NormalizedNode,
     fingerprint: &Fingerprint,

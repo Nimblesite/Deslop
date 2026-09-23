@@ -16,7 +16,7 @@ import * as path from "node:path";
 
 import { scanWithBundledCli, stagedFixturePath, type ScannedFixture } from "../cli.helpers";
 import { KIND_COLOR, KIND_THEME_COLOR } from "../../design";
-import { CLUSTER_KINDS, kindTaxonomy, kindTitle, type ClusterKind, type Severity } from "../../types/report";
+import { CLUSTER_KINDS, kindChip, kindTaxonomy, kindTitle, type ClusterKind, type Severity } from "../../types/report";
 import { extensionPackage } from "./package.helpers";
 
 /** The class suffix the HTML report keys each kind's colour on —
@@ -199,21 +199,27 @@ suite("clone kind parity with the engine", () => {
 });
 
 // [CLONE-KIND-LABELS] Human names and category order follow the shared spec.
-const EXPECTED_KIND_LABELS: readonly (readonly [ClusterKind, string, string])[] = [
-  ["identical", "Identical code", "Type-1 exact clone"],
-  ["nearly_identical", "Nearly identical code", "Type-2 / close Type-3 clone"],
-  ["same_behavior", "Same behavior, different code", "Type-4 semantic clone"],
-  ["loosely_similar", "Similar code", "Type-3 clone with larger edits"],
-  ["structural_only", "Same shape, different content", "Informational non-clone"],
+const TYPE_I_CHIP = "Type I";
+const TYPE_II_III_CHIP = "Type II / III";
+const TYPE_III_CHIP = "Type III";
+const TYPE_IV_CHIP = "Type IV";
+const SHAPE_CHIP = "Shape";
+const EXPECTED_KIND_LABELS: readonly (readonly [ClusterKind, string, string, string])[] = [
+  ["identical", "Identical code", "Type-1 exact clone", TYPE_I_CHIP],
+  ["nearly_identical", "Nearly identical code", "Type-2 / close Type-3 clone", TYPE_II_III_CHIP],
+  ["same_behavior", "Same behavior, different code", "Type-4 semantic clone", TYPE_IV_CHIP],
+  ["loosely_similar", "Similar code", "Type-3 clone with larger edits", TYPE_III_CHIP],
+  ["structural_only", "Same shape, different content", "Informational non-clone", SHAPE_CHIP],
 ];
 suite("clone category presentation", () => {
   test("category display order places informational shape matches last", () => {
     assert.deepEqual(CLUSTER_KINDS, EXPECTED_KIND_LABELS.map(([kind]) => kind));
   });
-  for (const [kind, title, taxonomy] of EXPECTED_KIND_LABELS) {
+  for (const [kind, title, taxonomy, chip] of EXPECTED_KIND_LABELS) {
     test(kind, () => {
       assert.equal(kindTitle(kind), title);
       assert.equal(kindTaxonomy(kind), taxonomy);
+      assert.equal(kindChip(kind), chip);
     });
   }
 });

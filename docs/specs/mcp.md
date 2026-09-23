@@ -143,6 +143,14 @@ The tool description keeps its prevention framing: **"Call BEFORE writing new co
 
 Output: top-`limit` clusters in report order by duplicated mass ([RANK-MASS-SUM](pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only)), carrying occurrences, mass, and the filter echo. Pair signals, classifications, and explanations are absent; `compare-pair` owns them.
 
+#### [MCP-TOOL-FINDSIMILAR-EXISTING] A snippet that copies code found only once still gets an answer
+
+A cluster needs two copies. Code that exists exactly once in the workspace is in no cluster, so a snippet that is a verbatim copy of it used to come back empty — and an empty answer is the one an agent reads as "nothing like this exists, go ahead". The most common way a new duplicate gets written is by copying code that exists once.
+
+So a snippet answer also carries `existing`: every place in the workspace whose normalised code equals part of the snippet (a subtree of at least `min_nodes` nodes, the same unit a scan fingerprints), reported as ordinary occurrences with path, bytes, lines and the report's `hidden` flag. Only the outermost match in each region is listed, and a place that a returned cluster already lists is not repeated. `existing` is empty for a range query, whose range is already part of the workspace. `total_occurrences` still counts cluster occurrences only.
+
+Pinned by `crates/deslop-core/tests/live_find_similar.rs` and, over MCP → IPC → LSP, by `lsp_integration::find_similar_reports_the_only_existing_copy_of_code_found_once`.
+
 Edge cases:
 
 - Empty snippet → empty result.

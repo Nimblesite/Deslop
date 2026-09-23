@@ -39,7 +39,7 @@ const NO_VISIBLE_CLUSTERS: usize = 0;
 /// Every same-shape sibling family the closure forms at this floor —
 /// the issue's 7- and 8-member settings families among them — is
 /// convicted by [RANK-STRUCTURAL-ONLY-FORWARDING] and counted here.
-const CONVICTED_FAMILIES: u64 = 5;
+const CONVICTED_FAMILIES: u64 = 6;
 const NO_DUPLICATED_LINES: u64 = 0;
 const NO_DUPLICATION_PERCENT: f64 = 0.0;
 

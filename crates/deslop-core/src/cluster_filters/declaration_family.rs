@@ -1,8 +1,8 @@
 //! Single-file sibling-declaration family filter
 //! ([RANK-STRUCTURAL-ONLY]).
 //!
-//! Suppresses a single-file `structural_only` *family* of sibling
-//! declarations: the in-class REST/CRUD, settings, builder or visitor
+//! Suppresses a single-file *family* of sibling declarations: the
+//! in-class REST/CRUD, settings, builder or visitor
 //! idiom, where each window covers a run of members that share a
 //! skeleton but target a different endpoint literal and return type, so
 //! the family fuses at `structural = 1.00` with no token or embedding
@@ -13,6 +13,8 @@
 //! **Is this window a family view?** Two shapes qualify, and both are
 //! AST facts about what the window *covers*, never about how many
 //! members the cluster has:
+//! Every window must belong to the same enclosing declaration container;
+//! two classes in one file are copies to judge, not siblings of one family.
 //!
 //! - a run of **two or more sibling declarations** — the plural
 //!   settings/CRUD window; or
@@ -105,8 +107,7 @@ use crate::{ast::named_children, cluster::Cluster, state::FileId};
 /// they differ in substance, and every window is a family view — two or
 /// more sibling declarations, or one declaration proven to forward, no
 /// two wrappers sharing a body. A cluster that fails any of them
-/// is not proven to be scaffolding and stays visible, demoted by the
-/// `structural_only` policy.
+/// is not proven to be scaffolding and stays visible under its measured kind.
 pub(crate) fn is_single_file_declaration_family<S: BuildHasher>(
     cluster: &Cluster,
     sources: &HashMap<FileId, Vec<u8>>,
@@ -131,8 +132,8 @@ pub(crate) fn is_single_file_declaration_family<S: BuildHasher>(
         .is_some_and(|snippets| every_window_is_family_noise(&snippets))
 }
 
-/// Returns true when every window is a family view and no two proven
-/// wrappers share a body.
+/// Returns true when every window belongs to one declaration container and
+/// no two proven wrappers share a body. Separate classes are not siblings.
 ///
 /// The distinctness check is what keeps a copy-paste bug visible. Two
 /// sibling wrappers that forward to the *same* route are real
@@ -141,10 +142,22 @@ pub(crate) fn is_single_file_declaration_family<S: BuildHasher>(
 /// equal. Comparing the proven bodies is the only view that sees it.
 fn every_window_is_family_noise(snippets: &[Snippet<'_>]) -> bool {
     let mut wrapper_bodies = HashSet::new();
-    snippets.iter().all(|snippet| match family_window(snippet) {
-        None => false,
-        Some(FamilyWindow::SiblingRun) => true,
-        Some(FamilyWindow::Wrapper(body)) => wrapper_bodies.insert(body),
+    let mut shared_container = None;
+    snippets.iter().all(|snippet| {
+        let Some((container, window)) = family_window(snippet) else {
+            return false;
+        };
+        if shared_container
+            .as_ref()
+            .is_some_and(|first| *first != container)
+        {
+            return false;
+        }
+        shared_container = Some(container);
+        match window {
+            FamilyWindow::SiblingRun => true,
+            FamilyWindow::Wrapper(body) => wrapper_bodies.insert(body),
+        }
     })
 }
 
@@ -168,7 +181,7 @@ enum FamilyWindow<'a> {
 /// `function_body` it carries — so a kind list is both grammar-specific
 /// and wrong on the very language this filter exists for. The children
 /// of one class body are siblings by construction.
-fn family_window<'a>(snippet: &Snippet<'a>) -> Option<FamilyWindow<'a>> {
+fn family_window<'a>(snippet: &Snippet<'a>) -> Option<(std::ops::Range<usize>, FamilyWindow<'a>)> {
     let tree = parse_for(snippet)?;
     let container = enclosing_kind(
         tree.root_node(),
@@ -176,12 +189,13 @@ fn family_window<'a>(snippet: &Snippet<'a>) -> Option<FamilyWindow<'a>> {
         container_kinds(snippet.language),
     )
     .filter(|container| is_declaration_container(*container))?;
-    match covered_members(container, snippet).as_slice() {
+    let window = match covered_members(container, snippet).as_slice() {
         [] => None,
         [member] => forwarding_body(*member, container, snippet.language, snippet.source)
             .map(FamilyWindow::Wrapper),
         _ => Some(FamilyWindow::SiblingRun),
-    }
+    }?;
+    Some((container.byte_range(), window))
 }
 
 /// The container's named children that the snippet's window touches.

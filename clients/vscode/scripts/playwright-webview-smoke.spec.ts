@@ -36,6 +36,9 @@ const CONTENT_EVIDENCE_LABELS = ["AGREEMENT", "RENAME", "LITERAL"] as const;
 const IDENTICAL_TITLE = "Identical code";
 const NEARLY_IDENTICAL_TITLE = "Nearly identical code";
 const STRUCTURAL_ONLY_TITLE = "Same shape, different content";
+const TYPE_I_CHIP = "Type I";
+const TYPE_II_III_CHIP = "Type II / III";
+const SHAPE_CHIP = "Shape";
 const RETIRED_NEUTRAL_TITLE = "Duplicate code";
 const MASS_LABEL = "mass";
 const WEIGHT_LABEL = "weight";
@@ -118,6 +121,7 @@ test.describe("VSIX webview bundles", () => {
     await postHostMessage(page, { kind: "report/snapshot", report: sampleReport });
     await postHostMessage(page, { kind: "select/cluster", id: sampleReport.clusters[SHAPE_CLUSTER_INDEX].id });
     await expect(page.getByText(INFORMATIONAL_FINDING, { exact: true })).toBeVisible();
+    await expect(page.getByText(SHAPE_CHIP, { exact: true })).toBeVisible();
     await expect(page.locator("header")).not.toContainText("mass");
     await expect(page.locator("header")).not.toContainText("×");
     await expect(page.locator("header")).not.toContainText("Rank");
@@ -172,6 +176,8 @@ test.describe("VSIX webview bundles", () => {
 
       await expect(page.getByText("CLUSTER").first()).toBeVisible();
       await expect(page.getByRole("heading", { name: IDENTICAL_TITLE })).toBeVisible();
+      // [VSIX-CLONE-TYPE-CHIP] The compact chip follows the selected cluster.
+      await expect(page.getByText(TYPE_I_CHIP, { exact: true })).toBeVisible();
       await expect(page.getByText(MASS_LABEL, { exact: true })).toBeVisible();
       await expect(page.getByText(WEIGHT_LABEL, { exact: true })).toHaveCount(0);
       await expect(page.getByText(RETIRED_NEUTRAL_TITLE, { exact: true })).toHaveCount(0);
@@ -191,6 +197,7 @@ test.describe("VSIX webview bundles", () => {
 
       await page.keyboard.press("n");
       await expect(page.getByRole("heading", { name: NEARLY_IDENTICAL_TITLE })).toBeVisible();
+      await expect(page.getByText(TYPE_II_III_CHIP, { exact: true })).toBeVisible();
       await page.keyboard.press("p");
       await expect(page.getByRole("heading", { name: IDENTICAL_TITLE })).toBeVisible();
 

@@ -31,6 +31,9 @@ const PATH_FIELD: &str = "path";
 const START_BYTE_FIELD: &str = "start_byte";
 /// Tool-argument field carrying an exclusive byte end.
 const END_BYTE_FIELD: &str = "end_byte";
+/// The snippet answer's matches outside any cluster
+/// ([MCP-TOOL-FINDSIMILAR-EXISTING]).
+const EXISTING_FIELD: &str = "existing";
 
 /// Serialises one generated wire payload.
 fn to_value<T: serde::Serialize>(value: &T) -> Result<Value, JsonRpcError> {
@@ -123,6 +126,7 @@ pub(super) fn call_find_similar(
     let mut value = duplicates_page_value(backend, args, &report, &output.clusters)?;
     if let Some(object) = value.as_object_mut() {
         let _old = object.insert("below_min_nodes".to_owned(), json!(output.below_min_nodes));
+        let _old = object.insert(EXISTING_FIELD.to_owned(), json!(output.existing));
     }
     Ok(value)
 }

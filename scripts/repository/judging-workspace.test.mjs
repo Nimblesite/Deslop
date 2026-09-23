@@ -6,7 +6,7 @@
 // script actually writes to disk. So these tests build a real folder from a
 // throwaway source tree and two throwaway reports, then assert what a judge
 // would find in it: the repositories, the reports, and the judging skill
-// installed at the root so an agent can run the protocol by name.
+// at the root without any extra entries that make the protocol refuse the pass.
 //
 // They also assert the two things that would silently void a pass — the A/B key
 // landing inside the folder, and this project's name appearing anywhere in it.
@@ -34,19 +34,13 @@ const read = (path) => readFileSync(resolve(repoRoot, path), "utf8");
 const BUILDER = "scripts/corpus/register-workspace.mjs";
 const PREPARER = "scripts/corpus/prepare-judging.sh";
 const JUDGE_SKILL = ".agents/skills/judge-clone-pairs/SKILL.md";
-/// The protocol lives under `.agents/` and `.claude/` links to it, the way this
-/// repository lays out its own skills — one file, two names, no drift.
-const SKILL_NAME = "judge-clone-pairs";
-const PROTOCOL_IN_ROOT = `.agents/skills/${SKILL_NAME}/SKILL.md`;
-const PROTOCOL_LINKED = `.claude/skills/${SKILL_NAME}/SKILL.md`;
+const PROTOCOL_IN_ROOT = "JUDGING.md";
 /// Every word a judge reads that is not source, a report or a candidate is a
 /// file in this repository, copied across unchanged. Prose composed at build
 /// time is prose nobody reviewed, and two runs would hand two different folders
 /// to two judges.
 const HANDOVER_DIR = ".agents/skills/judge-clone-pairs/handover";
-const ROOT_GUIDE = "AGENTS.md";
-const ROOT_IMPORT = "CLAUDE.md";
-const WORKSPACE_GUIDE = "README.md";
+const ROOT_GUIDE = "README.md";
 const LINKED_PROTOCOL = "JUDGING.md";
 const KEY_SUFFIX = ".key.json";
 /// Naming this project anywhere in the folder tells the judge what produced the
@@ -117,11 +111,21 @@ const everyFile = (directory) =>
     .filter((entry) => entry.isFile())
     .map((entry) => join(entry.parentPath ?? entry.path, entry.name));
 
-test("[CORPUS-REGISTER-WORKSPACE] the folder holds the repository, the reports and the skill", () => {
+test("[CORPUS-REGISTER-WORKSPACE] the folder has exactly the layout its protocol requires", () => {
   const files = fixture();
   build(files);
   const root = join(files.base, "folder");
   const workspace = join(root, REPO);
+  assert.deepEqual(
+    readdirSync(root).sort(),
+    [REPO, ROOT_GUIDE, PROTOCOL_IN_ROOT].sort(),
+    "extra root entries make a blind judge abort before the first verdict",
+  );
+  assert.deepEqual(
+    readdirSync(workspace).sort(),
+    ["source", "report-a.json", "report-b.json", "candidates", "PINNED.txt", LINKED_PROTOCOL, "verdicts.json"].sort(),
+    "extra repository entries make a blind judge abort before the first verdict",
+  );
 
   assert.equal(
     readFileSync(join(root, PROTOCOL_IN_ROOT), "utf8"),
@@ -129,28 +133,15 @@ test("[CORPUS-REGISTER-WORKSPACE] the folder holds the repository, the reports a
     `${PROTOCOL_IN_ROOT} must be the judging protocol itself, or the judge has no protocol to run`,
   );
   assert.equal(
-    readFileSync(join(root, PROTOCOL_LINKED), "utf8"),
-    read(JUDGE_SKILL),
-    `${PROTOCOL_LINKED} must reach the same file — that is the path a skill is loaded from`,
-  );
-  assert.ok(
-    lstatSync(join(root, ".claude/skills", SKILL_NAME)).isSymbolicLink(),
-    "the second name must be a link, not a second copy; two copies drift and one goes stale",
-  );
-  assert.equal(
     readFileSync(join(workspace, LINKED_PROTOCOL), "utf8"),
     read(JUDGE_SKILL),
-    `${LINKED_PROTOCOL} must resolve to the installed protocol from inside a repository directory`,
+    `${LINKED_PROTOCOL} must resolve to the sole protocol from inside a repository directory`,
   );
+  assert.ok(lstatSync(join(workspace, LINKED_PROTOCOL)).isSymbolicLink());
   assert.ok(
     read(JUDGE_SKILL).includes("name: judge-clone-pairs"),
     "the installed file must be a skill an agent can run by name, not loose prose",
   );
-  assert.ok(
-    readFileSync(join(root, ROOT_IMPORT), "utf8").includes(`@${ROOT_GUIDE}`),
-    `${ROOT_IMPORT} must pull in ${ROOT_GUIDE}, so the blind is stated before the first candidate`,
-  );
-
   assert.equal(
     readFileSync(join(workspace, "source", SOURCE_FILE), "utf8").split("\n").length,
     SOURCE_LINES,
@@ -256,8 +247,6 @@ test("[CORPUS-REGISTER-WORKSPACE] every word the judge reads is copied, never co
   const root = join(files.base, "folder");
   const copied = [
     [join(root, ROOT_GUIDE), `${HANDOVER_DIR}/root/${ROOT_GUIDE}`],
-    [join(root, ROOT_IMPORT), `${HANDOVER_DIR}/root/${ROOT_IMPORT}`],
-    [join(root, REPO, WORKSPACE_GUIDE), `${HANDOVER_DIR}/workspace/${WORKSPACE_GUIDE}`],
     [join(root, PROTOCOL_IN_ROOT), JUDGE_SKILL],
   ];
   for (const [written, source] of copied) {

@@ -31,6 +31,24 @@ const RESCAN_TOOL: &str = "rescan";
 const REPORT_GET_TOOL: &str = "duplicates";
 const SESSION_TOOL: &str = "session";
 const ACTION_FIELD: &str = "action";
+const FIND_SIMILAR_TOOL: &str = "find-similar";
+/// Places a snippet's code already occupies outside any returned cluster
+/// ([MCP-TOOL-FINDSIMILAR-EXISTING]).
+const EXISTING_FIELD: &str = "existing";
+/// A file whose one class exists nowhere else in the workspace.
+const LEDGER: &str = "Ledger.cs";
+/// Rows of the `Ledger` class — the outermost match for the snippet below.
+const LEDGER_CLASS_ROWS: (u64, u64) = (3, 21);
+const LEDGER_SOURCE: &str = "namespace Books\n{\n    public static class Ledger\n    {\n        \
+public static int Settle(int[] entries, int opening)\n        {\n            var balance = opening;\n            \
+foreach (var entry in entries)\n            {\n                if (entry < 0)\n                {\n                    \
+balance = balance + entry * 2;\n                }\n                else\n                {\n                    \
+balance = balance + entry;\n                }\n            }\n            return balance;\n        }\n    }\n}\n";
+/// What an agent is about to write: the ledger's method, in a new class.
+const COPY_OF_SETTLE: &str = "class Draft\n{\n    public static int Settle(int[] entries, int opening)\n    {\n        \
+var balance = opening;\n        foreach (var entry in entries)\n        {\n            if (entry < 0)\n            {\n                \
+balance = balance + entry * 2;\n            }\n            else\n            {\n                balance = balance + entry;\n            }\n        }\n        \
+return balance;\n    }\n}\n";
 
 /// [MCP-IPC-CLIENT] When the LSP is running, MCP must delegate
 /// `find-similar` to the LSP IPC socket and return real cluster data
@@ -44,7 +62,7 @@ fn find_similar_via_mcp_delegates_to_running_lsp() -> Result<()> {
     let response = mcp.request(
         TOOLS_CALL_METHOD,
         &json!({
-            (NAME_FIELD): "find-similar",
+            (NAME_FIELD): FIND_SIMILAR_TOOL,
             (ARGUMENTS_FIELD): {
                 "snippet": include_str!("fixtures/csharp-mcp/Alpha.cs"),
                 "language": "csharp",
@@ -53,7 +71,7 @@ fn find_similar_via_mcp_delegates_to_running_lsp() -> Result<()> {
         }),
     )?;
 
-    let structured = structured_content(&response, "find-similar")?;
+    let structured = structured_content(&response, FIND_SIMILAR_TOOL)?;
     let clusters = array_field(&structured, "clusters")?;
     ensure!(
         !clusters.is_empty(),
@@ -62,6 +80,62 @@ fn find_similar_via_mcp_delegates_to_running_lsp() -> Result<()> {
     ensure!(
         structured.get("below_min_nodes") == Some(&Value::Bool(false)),
         "fixture snippet must be large enough to fingerprint: {response}"
+    );
+    // [MCP-TOOL-FINDSIMILAR-EXISTING] Every place the snippet matches is
+    // already listed by a returned cluster, so nothing is repeated.
+    ensure!(
+        array_field(&structured, EXISTING_FIELD)?.is_empty(),
+        "a clustered snippet's places are answered by the cluster alone: {response}"
+    );
+    Ok(())
+}
+
+/// [MCP-TOOL-FINDSIMILAR-EXISTING] #309 — a verbatim copy of code that
+/// exists once is in no cluster, and used to come back empty: the answer
+/// an agent reads as "nothing like this exists". Over MCP → IPC → LSP the
+/// snippet answer names the one place the code already lives.
+#[test]
+fn find_similar_reports_the_only_existing_copy_of_code_found_once() -> Result<()> {
+    let workspace = copied_fixture()?;
+    fs::write(workspace.path().join(LEDGER), LEDGER_SOURCE)?;
+    let _lsp_guard = spawn_lsp_and_wait_for_socket(workspace.path())?;
+    let mut mcp = wait_for_state_then_init_mcp(workspace.path())?;
+    let response = mcp.request(
+        TOOLS_CALL_METHOD,
+        &json!({
+            (NAME_FIELD): FIND_SIMILAR_TOOL,
+            (ARGUMENTS_FIELD): { "snippet": COPY_OF_SETTLE, "language": "csharp" }
+        }),
+    )?;
+    let structured = structured_content(&response, FIND_SIMILAR_TOOL)?;
+    ensure!(
+        structured.get("below_min_nodes") == Some(&Value::Bool(false)),
+        "the copy is large enough to fingerprint: {response}"
+    );
+    ensure!(
+        array_field(&structured, "clusters")?.is_empty(),
+        "the ledger is duplicated nowhere, so no cluster answers: {response}"
+    );
+    let existing = array_field(&structured, EXISTING_FIELD)?;
+    let [found] = existing.as_slice() else {
+        return Err(anyhow!(
+            "exactly one existing place, outermost only: {response}"
+        ));
+    };
+    ensure!(
+        found.get("path").and_then(Value::as_str) == Some(LEDGER),
+        "the match names the ledger: {response}"
+    );
+    ensure!(
+        (
+            u64_field(found, "start_line")?,
+            u64_field(found, "end_line")?
+        ) == LEDGER_CLASS_ROWS,
+        "the match spans the ledger class: {response}"
+    );
+    ensure!(
+        found.get("hidden") == Some(&Value::Bool(false)),
+        "an ordinary source file is not hidden: {response}"
     );
     Ok(())
 }

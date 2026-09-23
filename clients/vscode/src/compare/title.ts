@@ -7,7 +7,7 @@ import * as path from "node:path";
 import type { LanguageClient } from "vscode-languageclient/node";
 
 import { logError, logWarn } from "../logging";
-import { kindTitle, type PairComparison, type PairEndpoint, type PairEvidence } from "../types/report";
+import { kindChip, kindTitle, type PairComparison, type PairEndpoint, type PairEvidence } from "../types/report";
 
 /** The LSP request that measures one explicit pair. */
 export const PAIR_COMPARE_METHOD = "deslop/pairCompare";
@@ -30,10 +30,16 @@ export function pairVerdict(evidence: PairEvidence): string {
   return evidence.classification ? kindTitle(evidence.classification) : evidence.explanation;
 }
 
-/** `Alpha.cs vs Beta.cs: Nearly identical code`; with no evidence, only the names. */
+/** [VSIX-CLONE-TYPE-CHIP] A pair title uses that pair's measured evidence. */
+function pairTypeChip(evidence: PairEvidence): string {
+  if (evidence.text_identity !== "different") return `[${kindChip("identical")}] `;
+  return evidence.classification ? `[${kindChip(evidence.classification)}] ` : "";
+}
+
+/** `Alpha.cs vs Beta.cs: [Type II / III] Nearly identical code`; with no evidence, only the names. */
 export function compareTitle(left: PairEndpoint, right: PairEndpoint, evidence: PairEvidence | undefined): string {
   const names = `${path.basename(left.path)}${ENDPOINT_SEPARATOR}${path.basename(right.path)}`;
-  return evidence ? `${names}${VERDICT_SEPARATOR}${pairVerdict(evidence)}` : names;
+  return evidence ? `${names}${VERDICT_SEPARATOR}${pairTypeChip(evidence)}${pairVerdict(evidence)}` : names;
 }
 
 /** Asks the engine for the exact pair's evidence. A missing or failing engine yields no verdict, logged, and the diff still opens on the saved bytes. */

@@ -3,15 +3,15 @@
 use std::{collections::HashMap, hash::BuildHasher};
 
 use super::{
-    token_carried, CandidatePair, ExactClones, EMBEDDING_SUPPORT_FLOOR, LSH_ONLY_MIN_JACCARD,
-    SHARED_SUBTREE_MIN_NODE_COUNT, SHARED_SUBTREE_MIN_OVERLAP,
+    token_carried, CandidatePair, ExactClones, EMBEDDING_SUPPORT_FLOOR, FUSED_THRESHOLD,
+    LSH_ONLY_MIN_JACCARD, SHARED_SUBTREE_MIN_NODE_COUNT, SHARED_SUBTREE_MIN_OVERLAP,
 };
 use crate::{
     ast::NormalizedNode,
     buckets::{CONTENT_PROMOTE_FLOOR, CONTENT_SUPPORT_FLOOR},
     cluster::scope::DeclarationScopes,
     cluster_filters::{is_embedding_role_mismatch, ParseCache},
-    content::{measure_pair_content_indexed, ContentEvidence},
+    content::{ContentContradiction, ContentEvidence, ContentMeasurer, PairScope},
     fingerprint::Fingerprint,
     state::FileId,
 };
@@ -38,25 +38,49 @@ pub(crate) fn apply_pair_content_gate<L>(
 ) where
     L: BuildHasher,
 {
+    let mut content = ContentMeasurer::default();
+    apply_pair_content_gate_with_content(
+        pairs,
+        fingerprints,
+        trees,
+        sources,
+        languages,
+        cache,
+        &mut content,
+    );
+}
+
+/// Uses one content measurer across every edge in this admission pass.
+fn apply_pair_content_gate_with_content<L>(
+    pairs: &mut Vec<CandidatePair>,
+    fingerprints: &[Fingerprint],
+    trees: &[NormalizedNode],
+    sources: &HashMap<FileId, Vec<u8>>,
+    languages: &HashMap<FileId, &'static str, L>,
+    cache: &ParseCache,
+    content: &mut ContentMeasurer,
+) where
+    L: BuildHasher,
+{
     let tree_index: HashMap<FileId, &NormalizedNode> =
         trees.iter().map(|tree| (tree.file_id, tree)).collect();
     let scopes = DeclarationScopes::new(trees, languages);
     let anchors = ExactClones::whole_functions_across_files(pairs, fingerprints, &scopes);
-    pairs.retain(|pair| {
-        pair_passes_content_gate(
-            pair,
-            fingerprints,
-            &GateContext {
-                tree_index: &tree_index,
-                anchors: &anchors,
-                scopes: &scopes,
-                sources,
-                languages,
-                cache,
-            },
-        )
-    });
+    let mut gate = GateContext {
+        tree_index: &tree_index,
+        anchors: &anchors,
+        scopes: &scopes,
+        sources,
+        languages,
+        cache,
+        content,
+    };
+    pairs.retain(|pair| pair_passes_content_gate(pair, fingerprints, &mut gate));
 }
+
+#[cfg(test)]
+#[path = "content_gate/memo_tests.rs"]
+mod memo_tests;
 
 /// Pass-wide inputs every gate verdict reads.
 struct GateContext<'a, L: BuildHasher> {
@@ -74,13 +98,15 @@ struct GateContext<'a, L: BuildHasher> {
     languages: &'a HashMap<FileId, &'static str, L>,
     /// Parse cache for the role guard.
     cache: &'a ParseCache,
+    /// Pass-wide exact-fingerprint frontier reuse.
+    content: &'a mut ContentMeasurer,
 }
 
 /// Applies the content guard to one candidate edge.
 fn pair_passes_content_gate<L: BuildHasher>(
     pair: &CandidatePair,
     fingerprints: &[Fingerprint],
-    context: &GateContext<'_, L>,
+    context: &mut GateContext<'_, L>,
 ) -> bool {
     let (Some(left), Some(right)) = (fingerprints.get(pair.left), fingerprints.get(pair.right))
     else {
@@ -109,6 +135,9 @@ enum GateVerdict {
         evidence: ContentEvidence,
         /// The floor the evidence had to clear.
         floor: f64,
+        /// A strongly aligned core already passed the same content floor
+        /// with only Async-suffix call edits.
+        verified_async_core: bool,
     },
 }
 
@@ -118,7 +147,11 @@ impl GateVerdict {
         match self {
             Self::RoleMismatch | Self::ContainerEcho => false,
             Self::NotRequired => true,
-            Self::Measured { evidence, floor } => evidence.clears(*floor),
+            Self::Measured {
+                evidence,
+                floor,
+                verified_async_core,
+            } => evidence.clears(*floor) || *verified_async_core,
         }
     }
 
@@ -138,7 +171,7 @@ fn gate_verdict<L: BuildHasher>(
     pair: &CandidatePair,
     left: &Fingerprint,
     right: &Fingerprint,
-    context: &GateContext<'_, L>,
+    context: &mut GateContext<'_, L>,
 ) -> GateVerdict {
     if embedding_needs_role_guard(pair)
         && is_embedding_role_mismatch(
@@ -165,18 +198,50 @@ fn gate_verdict<L: BuildHasher>(
     }
     let interior =
         context.scopes.enclosing(left).is_some() && context.scopes.enclosing(right).is_some();
-    let evidence = measure_pair_content_indexed(
-        left,
-        right,
-        context.tree_index,
-        context.sources,
-        context.languages,
-        interior,
-    );
+    let evidence = context
+        .content
+        .pair(
+            (left, right),
+            context.tree_index,
+            context.sources,
+            context.languages,
+        )
+        .whole(
+            context.sources,
+            PairScope {
+                same_file: left.file_id == right.file_id,
+                interior,
+                core: false,
+            },
+        );
     GateVerdict::Measured {
+        verified_async_core: async_core_satisfies_content(
+            pair.shared_subtree_overlap,
+            pair.score.token_jaccard,
+            pair.verified_async_core,
+            &evidence,
+        ),
         evidence,
         floor: content_floor(pair, left, right),
     }
+}
+
+/// A measured near-miss with an Async call edit may use its proven aligned
+/// core when an inserted argument dilutes whole-endpoint key-set agreement.
+pub(crate) fn async_core_satisfies_content(
+    overlap: f64,
+    token_jaccard: f64,
+    verified_async_core: bool,
+    whole: &ContentEvidence,
+) -> bool {
+    verified_async_core
+        && whole.measured
+        && overlap >= FUSED_THRESHOLD
+        && token_jaccard >= SATURATING_TOKEN_FLOOR
+        && matches!(
+            whole.contradiction,
+            ContentContradiction::None | ContentContradiction::CallTargetAsyncEdit
+        )
 }
 
 /// Records one content verdict so a surprising admission or refusal is
@@ -184,7 +249,9 @@ fn gate_verdict<L: BuildHasher>(
 /// only — never source text ([PRINCIPLES-LOGGING]).
 fn log_gate_verdict(left: &Fingerprint, right: &Fingerprint, verdict: &GateVerdict) {
     let (agreement, rename, consistent_rename, floor) = match verdict {
-        GateVerdict::Measured { evidence, floor } => (
+        GateVerdict::Measured {
+            evidence, floor, ..
+        } => (
             evidence.agreement,
             evidence.rename_consistency,
             evidence.consistent_rename,
@@ -395,6 +462,7 @@ mod tests {
             lsh_only_min_jaccard: 0.0,
             fused_min_score: 0.85,
             shared_subtree_overlap: 0.0,
+            verified_async_core: false,
             score: PairScore {
                 structural: 0.0,
                 token_jaccard: 0.0,

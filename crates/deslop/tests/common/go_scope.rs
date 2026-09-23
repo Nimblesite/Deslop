@@ -241,27 +241,37 @@ pub(crate) fn assert_symmetric_rows_everywhere(report: &Value, label: &str) {
     }
 }
 
-/// Every Go clone occurrence in `report` opens an authored declaration. Stronger
+/// Every Go occurrence of `cluster` opens an authored declaration. Stronger
 /// than [`assert_declaration_alignment`], which permits a cluster in which
 /// *no* occurrence opens one: fixtures whose clones are whole functions
 /// assert this instead.
+pub(crate) fn assert_cluster_opens_declarations(
+    scan_root: &Path,
+    cluster: &Value,
+    label: &str,
+) -> Result<()> {
+    for occurrence in go_occurrences(cluster) {
+        let text = occurrence_text(scan_root, occurrence)?;
+        assert!(
+            opens_authored_declaration(&text),
+            "[PIPELINE-CLUSTER-EXACT-SCOPE] {label}: an occurrence opens \
+             with something other than a Go declaration keyword \
+             {GO_DECLARATION_KEYWORDS:?}, so the published window is not \
+             an authored view: {:?}",
+            go_spans(cluster)
+        );
+    }
+    Ok(())
+}
+
+/// Every Go clone occurrence in `report` opens an authored declaration
+/// ([`assert_cluster_opens_declarations`] over every clone finding).
 pub(crate) fn assert_every_occurrence_opens_a_declaration(
     scan_root: &Path,
     report: &Value,
     label: &str,
 ) -> Result<()> {
-    for cluster in crate::common::clone_findings(report) {
-        for occurrence in go_occurrences(&cluster) {
-            let text = occurrence_text(scan_root, occurrence)?;
-            assert!(
-                opens_authored_declaration(&text),
-                "[PIPELINE-CLUSTER-EXACT-SCOPE] {label}: an occurrence opens \
-                 with something other than a Go declaration keyword \
-                 {GO_DECLARATION_KEYWORDS:?}, so the published window is not \
-                 an authored view: {:?}",
-                go_spans(&cluster)
-            );
-        }
-    }
-    Ok(())
+    crate::common::clone_findings(report)
+        .iter()
+        .try_for_each(|cluster| assert_cluster_opens_declarations(scan_root, cluster, label))
 }

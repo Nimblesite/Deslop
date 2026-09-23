@@ -53,8 +53,12 @@ mod issue_98_99_108_120_122_thresholds;
 mod lang_registry_vsix_parity;
 #[path = "live.rs"]
 mod live;
+#[path = "live_cache_seed.rs"]
+mod live_cache_seed;
 #[path = "live_delta_field_coverage.rs"]
 mod live_delta_field_coverage;
+#[path = "live_find_similar.rs"]
+mod live_find_similar;
 #[path = "live_merge_plan.rs"]
 mod live_merge_plan;
 #[path = "live_session_status.rs"]

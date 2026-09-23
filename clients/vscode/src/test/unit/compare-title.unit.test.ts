@@ -21,6 +21,11 @@ const LEFT_NAME = "Alpha.cs";
 const RIGHT_NAME = "Beta.cs";
 const NAMES = `${LEFT_NAME}${ENDPOINT_SEPARATOR}${RIGHT_NAME}`;
 const REJECTION = "rejected: pair fails content corroboration";
+const TYPE_I_PREFIX = "[Type I] ";
+const TYPE_II_III_PREFIX = "[Type II / III] ";
+const TYPE_III_PREFIX = "[Type III] ";
+const TYPE_IV_PREFIX = "[Type IV] ";
+const SHAPE_PREFIX = "[Shape] ";
 
 function evidence(overrides: Partial<PairEvidence>): PairEvidence {
   return {
@@ -76,9 +81,25 @@ suite("compare diff title", () => {
 
   test("the title names both endpoints by file and ends with the verdict", () => {
     const title = compareTitle(LEFT, RIGHT, evidence({ classification: "identical", text_identity: "byte_identical" }));
-    assert.equal(title, `${NAMES}${VERDICT_SEPARATOR}${IDENTICAL_BYTES_VERDICT}`);
+    assert.equal(title, `${NAMES}${VERDICT_SEPARATOR}${TYPE_I_PREFIX}${IDENTICAL_BYTES_VERDICT}`);
     assert.ok(title.startsWith(LEFT_NAME), "the left endpoint is named first");
     assert.ok(title.includes(RIGHT_NAME), "the right endpoint is named");
+  });
+
+  test("every measured pair shows its own taxonomy beside the verdict", () => {
+    // [VSIX-CLONE-TYPE-CHIP] A cluster's folded kind cannot label an arbitrary pair.
+    const pairKinds = [
+      ["nearly_identical", TYPE_II_III_PREFIX],
+      ["loosely_similar", TYPE_III_PREFIX],
+      ["same_behavior", TYPE_IV_PREFIX],
+      ["structural_only", SHAPE_PREFIX],
+    ] as const;
+    for (const [classification, chip] of pairKinds) {
+      const title = compareTitle(LEFT, RIGHT, evidence({ classification }));
+      assert.equal(title, `${NAMES}${VERDICT_SEPARATOR}${chip}${kindTitle(classification)}`);
+    }
+    const indentation = compareTitle(LEFT, RIGHT, evidence({ text_identity: "indentation_only" }));
+    assert.equal(indentation, `${NAMES}${VERDICT_SEPARATOR}${TYPE_I_PREFIX}${INDENTATION_ONLY_VERDICT}`);
   });
 
   test("without evidence the title carries the two names and no verdict", () => {

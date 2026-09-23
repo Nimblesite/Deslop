@@ -26,8 +26,18 @@ const REPO: &str = "fixture";
 const PATH: &str = "src/one.rs";
 const OTHER: &str = "src/two.rs";
 const CLUSTER_ID: &str = "abc123";
+const FULL_COVERAGE_CLUSTER_ID: &str = "full123";
 const FIRST_RANGE: &str = "src/one.rs:10-20";
 const SECOND_RANGE: &str = "src/two.rs:30-40";
+const SAME_FILE_SECOND_RANGE: &str = "src/one.rs:30-40";
+const BROAD_START: u64 = 8;
+const BROAD_END: u64 = 44;
+const FIRST_END: u64 = 20;
+const SAME_FILE_SECOND_START: u64 = 30;
+const SAME_FILE_SECOND_END: u64 = 40;
+const JUDGED_PAIR_LINES: u64 = 22;
+const COVERED_PAIR_LINES: u64 = 11;
+const COVERED_PAIR_PERCENT: &str = "50.0";
 /// A sha is forty characters; the value itself is irrelevant to scoring.
 const PINNED_SHA_LENGTH: usize = 40;
 fn occurrence(path: &str, start: u64, end: u64, hidden: bool) -> Value {
@@ -117,6 +127,116 @@ fn overlap_matches_a_clearly_in_that_exact_line_equality_would_miss() -> Result<
     );
     assert_eq!(partial.clearly_in_found, 0);
     assert_eq!(rendered_score(&partial), "0.0");
+    Ok(())
+}
+
+#[test]
+fn one_occurrence_cannot_satisfy_two_judged_ranges_in_the_same_file() -> Result<()> {
+    let judged = [SAME_FILE_SECOND_RANGE, FIRST_RANGE];
+    let broad = occurrence(PATH, BROAD_START, BROAD_END, false);
+    let one = report(std::slice::from_ref(&broad));
+    let recall = score_repo(REPO, &register(CLEARLY_IN, &judged), &one)?;
+    assert_eq!(recall.false_negatives, 1, "one location is not a pair");
+    assert_eq!(recall.clearly_in_found, 0);
+    assert_eq!(first_entry(&recall)?.cluster, None);
+
+    let precision = score_repo(REPO, &register(CLEARLY_OUT, &judged), &one)?;
+    assert_eq!(precision.false_positives, 0);
+    assert_eq!(precision.clearly_out_absent, 1);
+
+    let two = report(&[
+        broad,
+        occurrence(PATH, SAME_FILE_SECOND_START, SAME_FILE_SECOND_END, false),
+    ]);
+    let found = score_repo(REPO, &register(CLEARLY_IN, &judged), &two)?;
+    assert_eq!(
+        found.clearly_in_found, 1,
+        "two distinct locations show the pair"
+    );
+    assert_eq!(found.false_negatives, 0);
+    assert_eq!(first_entry(&found)?.cluster.as_deref(), Some(CLUSTER_ID));
+    Ok(())
+}
+
+#[test]
+fn incomplete_report_coordinates_cannot_claim_a_judged_pair() -> Result<()> {
+    let missing_start = json!({ "path": PATH, "end_line": FIRST_END, "hidden": false });
+    let paired = report(&[
+        missing_start,
+        occurrence(OTHER, SAME_FILE_SECOND_START, SAME_FILE_SECOND_END, false),
+    ]);
+    let score = score_repo(
+        REPO,
+        &register(CLEARLY_IN, &[FIRST_RANGE, SECOND_RANGE]),
+        &paired,
+    )?;
+    assert_eq!(
+        score.false_negatives, 1,
+        "a missing start line is not a match"
+    );
+    assert_eq!(first_entry(&score)?.cluster, None);
+    Ok(())
+}
+
+#[test]
+fn duplicate_records_of_one_source_location_do_not_form_a_pair() -> Result<()> {
+    let broad = occurrence(PATH, BROAD_START, BROAD_END, false);
+    let repeated = report(&[broad.clone(), broad]);
+    let score = score_repo(
+        REPO,
+        &register(CLEARLY_IN, &[FIRST_RANGE, SAME_FILE_SECOND_RANGE]),
+        &repeated,
+    )?;
+    assert_eq!(score.false_negatives, 1, "one source location is not two");
+    assert_eq!(first_entry(&score)?.cluster, None);
+    Ok(())
+}
+
+#[test]
+fn matched_range_coverage_counts_distinct_judged_lines() -> Result<()> {
+    let judged = register(CLEARLY_IN, &[FIRST_RANGE, SECOND_RANGE]);
+    let fragments = report(&[
+        occurrence(PATH, 10, 14, false),
+        occurrence(PATH, 14, 18, false),
+        occurrence(OTHER, 30, 31, false),
+    ]);
+    let score = score_repo(REPO, &judged, &fragments)?;
+    assert_eq!(score.clearly_in_found, 1);
+    let coverage = first_entry(&score)?
+        .coverage
+        .as_ref()
+        .ok_or_else(|| anyhow!("matched entry has no coverage"))?;
+    assert_eq!(coverage.judged_lines, JUDGED_PAIR_LINES);
+    assert_eq!(coverage.covered_lines, COVERED_PAIR_LINES);
+    assert_eq!(
+        coverage.percent.map(|value| format!("{value:.1}")),
+        Some(COVERED_PAIR_PERCENT.to_owned())
+    );
+    Ok(())
+}
+
+#[test]
+fn coverage_uses_the_best_reported_pair_not_a_shorter_earlier_match() -> Result<()> {
+    let shorter = json!({
+        "id": CLUSTER_ID,
+        "occurrences": [occurrence(PATH, 10, 11, false), occurrence(OTHER, 30, 31, false)]
+    });
+    let full = json!({ "id": FULL_COVERAGE_CLUSTER_ID, "occurrences": the_pair() });
+    let report = json!({ "clusters": [shorter, full] });
+    let score = score_repo(
+        REPO,
+        &register(CLEARLY_IN, &[FIRST_RANGE, SECOND_RANGE]),
+        &report,
+    )?;
+    let entry = first_entry(&score)?;
+    assert_eq!(entry.cluster.as_deref(), Some(FULL_COVERAGE_CLUSTER_ID));
+    assert_eq!(
+        entry
+            .coverage
+            .as_ref()
+            .map(|coverage| coverage.covered_lines),
+        Some(JUDGED_PAIR_LINES)
+    );
     Ok(())
 }
 

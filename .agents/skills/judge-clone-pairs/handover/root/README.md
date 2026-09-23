@@ -4,7 +4,7 @@ Every directory beside this file is one repository to rule on. Each holds that
 repository's source at a fixed commit, two lists of candidate duplicate pairs labelled
 A and B, and the pairs drawn from those lists for you to judge.
 
-Run the `judge-clone-pairs` skill, then take one directory at a time:
+Read `JUDGING.md`, then take one directory at a time:
 `<directory>/candidates/index.md` is the checklist, and your verdicts go in
 `<directory>/verdicts.json`. Finish a repository before opening the next one.
 

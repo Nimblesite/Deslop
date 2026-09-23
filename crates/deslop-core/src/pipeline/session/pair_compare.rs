@@ -8,12 +8,12 @@ use std::{
 use super::PipelineSession;
 use crate::{
     ast::NormalizedNode,
-    content::{measure_aligned_core, measure_pair_content_indexed, tree_index_of, PairScope},
+    content::{tree_index_of, ContentContradiction, ContentMeasurer, PairScope},
     embedding::{cosine_similarity, EmbeddingProvider},
     error::CoreError,
     fingerprint::Fingerprint,
     lsh::{estimate_jaccard, SignatureLookup},
-    overlap::{judge_core, OverlapMeasurer, RescueContext},
+    overlap::{OverlapMeasurer, RescueContext},
     pair::{CandidatePair, PairScore},
     report::{
         ContentMeasurement, PairComparison, PairComparisonParams, PairEndpoint, PairEvidence,
@@ -26,6 +26,10 @@ mod admission;
 use admission::AdmissionFacts;
 mod cluster_kind;
 pub(crate) use cluster_kind::ClusterKindMeasurer;
+mod core_need;
+mod text_identity;
+pub(super) use text_identity::same_source_bytes_and_language;
+use text_identity::SourceIdentity;
 
 impl PipelineSession {
     /// Recomputes evidence for exactly the two requested occurrences.
@@ -131,22 +135,28 @@ impl PipelineSession {
             .overlap
             .overlap(pair.left.fingerprint, pair.right.fingerprint);
         let token_jaccard = self.token_jaccard(pair, merkle_equal, &axes.trees);
-        let content = measure_pair_content_indexed(
-            pair.left.fingerprint,
-            pair.right.fingerprint,
+        let content_pair = axes.content.pair(
+            (pair.left.fingerprint, pair.right.fingerprint),
             &axes.trees,
             &self.sources,
             &self.file_languages,
-            false,
         );
-        Measurements {
+        let content = content_pair.whole(
+            &self.sources,
+            PairScope {
+                same_file: !pair.cross_file(),
+                interior: false,
+                core: false,
+            },
+        );
+        let mut measured = Measurements {
             score: PairScore {
                 structural,
                 token_jaccard,
                 embedding_cos,
             },
             content,
-            core_is_copy: self.core_is_copy(pair, axes),
+            core: CoreCopy::Absent,
             rescue_scope: axes.rescue.allows_rescue(
                 pair.left.fingerprint,
                 pair.right.fingerprint,
@@ -154,33 +164,23 @@ impl PipelineSession {
             ),
             merkle_equal,
             text,
-        }
-    }
-
-    /// [FUSED-SHARED-SUBTREE-CORE] Whether the code the endpoints share
-    /// is a copy by the content gate's own measure — the rescue's
-    /// content term, read here exactly as the pipeline reads it.
-    fn core_is_copy(&self, pair: &ResolvedPair<'_>, axes: &mut PairAxes<'_>) -> bool {
-        let core = axes
-            .overlap
-            .aligned_core(pair.left.fingerprint, pair.right.fingerprint);
-        let scope = PairScope {
-            same_file: !pair.cross_file(),
-            interior: false,
-            core: true,
         };
-        let floor = usize::try_from(self.min_nodes).unwrap_or(usize::MAX);
-        judge_core(&core, floor, || {
-            measure_aligned_core(
-                (pair.left.fingerprint, pair.right.fingerprint),
-                &core,
-                &axes.trees,
-                &self.sources,
-                &self.file_languages,
-                scope,
-            )
-        })
-        .copy
+        let smaller_nodes = pair
+            .left
+            .fingerprint
+            .node_count
+            .min(pair.right.fingerprint.node_count);
+        let preliminary = AdmissionFacts::from(self, pair, measured);
+        let category_without_core = preliminary.classification(measured);
+        if core_need::required(
+            measured,
+            smaller_nodes,
+            preliminary.admitted,
+            category_without_core,
+        ) {
+            measured.core = core_need::verdict(self, pair, axes, &content_pair);
+        }
+        measured
     }
 
     /// Estimates token Jaccard, applying the pair-local Merkle correction.
@@ -309,6 +309,8 @@ impl PipelineSession {
 struct PairAxes<'corpus> {
     /// Structural overlap, memoised per structural pair.
     overlap: OverlapMeasurer<'corpus>,
+    /// Exact-fingerprint frontiers reused across pair comparisons.
+    content: ContentMeasurer,
     /// `FileId → normalised root` for the content axes.
     trees: HashMap<FileId, &'corpus NormalizedNode>,
     /// Original candidate anchors preserve rescue scope and container checks.
@@ -324,6 +326,7 @@ impl<'corpus> PairAxes<'corpus> {
     ) -> Self {
         Self {
             overlap: OverlapMeasurer::new(trees),
+            content: ContentMeasurer::default(),
             trees: tree_index_of(trees),
             rescue: RescueContext::new(
                 pairs,
@@ -402,43 +405,6 @@ impl ResolvedPair<'_> {
     }
 }
 
-/// Raw identity stays precise for refactoring; classification folds whitespace.
-#[derive(Clone, Copy)]
-struct SourceIdentity {
-    /// Whether an edit can preserve the exact source representation.
-    raw: PairTextIdentity,
-    /// [CLONE-BUCKETS-IDENTICAL] Equality after the shared ASCII-whitespace fold.
-    identical: bool,
-}
-
-impl SourceIdentity {
-    /// Measures both forms from the same source slices.
-    fn measure(left: &str, right: &str) -> Self {
-        let raw = if left == right {
-            PairTextIdentity::ByteIdentical
-        } else if same_lines_ignoring_indentation(left, right) {
-            PairTextIdentity::IndentationOnly
-        } else {
-            PairTextIdentity::Different
-        };
-        let fold = crate::report_render::canonicalise_whitespace;
-        Self {
-            raw,
-            identical: left == right || fold(left.as_bytes()) == fold(right.as_bytes()),
-        }
-    }
-}
-
-/// Whether two snippets hold the same lines once each line's leading
-/// whitespace is dropped. Line endings are consumed with the line and a
-/// missing final line break adds no line, so neither counts as a
-/// difference.
-fn same_lines_ignoring_indentation(left: &str, right: &str) -> bool {
-    left.lines()
-        .map(str::trim_start)
-        .eq(right.lines().map(str::trim_start))
-}
-
 /// Pair axes and raw-content populations before admission gates.
 #[derive(Clone, Copy)]
 struct Measurements {
@@ -446,15 +412,47 @@ struct Measurements {
     score: PairScore,
     /// Keep the complete measured content, including rename proof and missing evidence.
     content: crate::content::ContentEvidence,
-    /// [FUSED-SHARED-SUBTREE-CORE] Whether the pair's aligned core clears
-    /// the content gate — the rescue's content term.
-    core_is_copy: bool,
+    /// [FUSED-SHARED-SUBTREE-CORE] Whether the aligned core is a copy,
+    /// including the bounded Async-suffix call-edit case.
+    core: CoreCopy,
     /// Scope and container checks measured by the original rescue implementation.
     rescue_scope: bool,
     /// Exact Merkle identity.
     merkle_equal: bool,
     /// How far the two raw source ranges are the same text.
     text: SourceIdentity,
+}
+
+/// A copied core may additionally prove a bounded async call-selector edit.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CoreCopy {
+    /// No copied aligned core was measured.
+    Absent,
+    /// The core is a copy without an async selector edit.
+    Copied,
+    /// The copied core contains a measured async selector edit.
+    AsyncEdited,
+}
+
+impl CoreCopy {
+    /// Builds only valid states from the shared core verdict.
+    fn from(copy: bool, contradiction: ContentContradiction) -> Self {
+        match (copy, contradiction) {
+            (false, _) => Self::Absent,
+            (true, ContentContradiction::CallTargetAsyncEdit) => Self::AsyncEdited,
+            (true, _) => Self::Copied,
+        }
+    }
+
+    /// Whether the aligned core passed the shared content rule.
+    fn is_copy(self) -> bool {
+        self != Self::Absent
+    }
+
+    /// Whether that passing core also proved the bounded async edit.
+    fn has_async_edit(self) -> bool {
+        self == Self::AsyncEdited
+    }
 }
 
 /// Validates two provider vectors and measures their canonical cosine.

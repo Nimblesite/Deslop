@@ -125,6 +125,7 @@ mod tests {
             lsh_only_min_jaccard: 0.0,
             fused_min_score: FUSED_FLOOR,
             shared_subtree_overlap: 0.0,
+            verified_async_core: false,
             score: PairScore {
                 structural: ADMITTED_SCORE,
                 token_jaccard: 0.0,

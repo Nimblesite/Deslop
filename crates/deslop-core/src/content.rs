@@ -2,11 +2,14 @@
 
 use std::{collections::HashMap, hash::BuildHasher};
 
+/// Bounded endpoint-frontier reuse ([FUSED-CONTENT-GATE-MEMO]).
+mod cache;
 mod call_targets;
 mod core_frontier;
 mod frontier;
 mod rename;
 
+pub(crate) use cache::{ContentMeasurer, ContentPair};
 use core_frontier::joined_content;
 use frontier::{
     frontiers_aligned, key_set_jaccard, member_content, member_count, operator_contradiction,
@@ -18,15 +21,18 @@ use crate::{ast::NormalizedNode, fingerprint::Fingerprint, state::FileId};
 /// Minimum combined literal count before literal share is meaningful.
 const LITERAL_TABLE_MIN_LITERALS: usize = 8;
 
-/// Semantic contradiction that blocks clone admission.
+/// Behavioural difference that changes how content evidence is admitted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ContentContradiction {
     /// The endpoints carry no known contradiction.
     None,
     /// A behaviour-bearing operator changed.
     OperatorSubstitution,
-    /// An external member-call selector changed ([FUSED-CONTENT-GATE-CALL-TARGET]).
+    /// An unrelated external member-call selector changed.
     CallTargetSubstitution,
+    /// An external selector gained or lost an async prefix or suffix; rename proof
+    /// is invalid, but raw agreement may prove an edited copy.
+    CallTargetAsyncEdit,
 }
 
 /// Raw-content evidence measured on exactly two endpoints.
@@ -60,12 +66,17 @@ impl ContentEvidence {
     /// Whether the evidence admits the pair at `floor`
     /// ([FUSED-CONTENT-GATE]): it was measured, and either the pair is a
     /// contradiction-free rename ([FUSED-CONTENT-GATE-RENAME]) or its
-    /// pooled support clears the floor. One verdict, read by the
-    /// pre-closure gate and by the rescue's core measurement alike.
+    /// pooled support clears the floor. A changed operator still vetoes
+    /// admission; an async call-selector edit must earn admission through
+    /// measured content rather than automatic rename certification. One
+    /// verdict is read by the pre-closure gate and rescue core alike.
     #[must_use]
     pub fn clears(self, floor: f64) -> bool {
         self.measured
-            && self.contradiction == ContentContradiction::None
+            && matches!(
+                self.contradiction,
+                ContentContradiction::None | ContentContradiction::CallTargetAsyncEdit
+            )
             && (self.consistent_rename || self.support() >= floor)
     }
 
@@ -137,6 +148,7 @@ pub(crate) fn measure_pair_content_indexed<S: BuildHasher, L: BuildHasher>(
 /// positions to be told from a renamed collaborator's method, so on
 /// endpoints that do not line up it is read over the core
 /// ([FUSED-CONTENT-GATE-CALL-TARGET]).
+#[cfg(test)]
 pub(crate) fn measure_aligned_core<S: BuildHasher, L: BuildHasher>(
     endpoints: (&Fingerprint, &Fingerprint),
     core: &[(Fingerprint, Fingerprint)],
@@ -145,14 +157,47 @@ pub(crate) fn measure_aligned_core<S: BuildHasher, L: BuildHasher>(
     languages: &HashMap<FileId, &'static str, L>,
     scope: PairScope,
 ) -> ContentEvidence {
-    let Some((whole_left, whole_right)) = whole_contents(endpoints, tree_index, sources, languages)
-    else {
+    let Some(whole) = whole_contents(endpoints, tree_index, sources, languages) else {
         return ContentEvidence::unmeasured();
     };
-    if pair_contradiction(&whole_left, &whole_right).is_some() {
-        return pair_evidence(Some((&whole_left, &whole_right)), sources, scope);
+    measure_core_contents(core, (&whole.0, &whole.1), sources, scope)
+}
+
+/// Reads one aligned core against already resolved whole endpoints.
+fn measure_core_contents<S: BuildHasher>(
+    core: &[(Fingerprint, Fingerprint)],
+    whole: (&MemberContent, &MemberContent),
+    sources: &HashMap<FileId, Vec<u8>, S>,
+    scope: PairScope,
+) -> ContentEvidence {
+    if has_hard_contradiction(whole, sources) {
+        return pair_evidence(Some(whole), sources, scope);
     }
-    let joined = joined_content(core, (&whole_left, &whole_right));
+    joined_core_evidence(core, whole, sources, scope)
+}
+
+/// Whether the whole pair changes an operator or an unrelated call target.
+fn has_hard_contradiction<S: BuildHasher>(
+    whole: (&MemberContent, &MemberContent),
+    sources: &HashMap<FileId, Vec<u8>, S>,
+) -> bool {
+    matches!(
+        pair_contradiction(whole.0, whole.1, sources),
+        Some(
+            ContentContradiction::OperatorSubstitution
+                | ContentContradiction::CallTargetSubstitution
+        )
+    )
+}
+
+/// Measures a resolved core after whole-endpoint hard contradictions are ruled out.
+fn joined_core_evidence<S: BuildHasher>(
+    core: &[(Fingerprint, Fingerprint)],
+    whole: (&MemberContent, &MemberContent),
+    sources: &HashMap<FileId, Vec<u8>, S>,
+    scope: PairScope,
+) -> ContentEvidence {
+    let joined = joined_content(core, whole);
     pair_evidence(
         joined.as_ref().map(|(left, right)| (left, right)),
         sources,
@@ -161,6 +206,7 @@ pub(crate) fn measure_aligned_core<S: BuildHasher, L: BuildHasher>(
 }
 
 /// Both endpoints' whole frontiers, or `None` when either does not resolve.
+#[cfg(test)]
 fn whole_contents<S: BuildHasher, L: BuildHasher>(
     endpoints: (&Fingerprint, &Fingerprint),
     tree_index: &HashMap<FileId, &NormalizedNode>,
@@ -204,6 +250,8 @@ fn pair_evidence<S: BuildHasher>(
         return ContentEvidence::unmeasured();
     };
 
+    let contradiction =
+        pair_contradiction(left, right, sources).unwrap_or(ContentContradiction::None);
     ContentEvidence {
         agreement: pair_agreement(Some(left), Some(right)),
         rename_consistency: rename::pair_rename_consistency(
@@ -212,10 +260,11 @@ fn pair_evidence<S: BuildHasher>(
             sources,
             scope,
         ),
-        consistent_rename: rename::pair_rename_is_consistent(left, right, sources, scope),
+        consistent_rename: contradiction == ContentContradiction::None
+            && rename::pair_rename_is_consistent(left, right, sources, scope),
         literal_fraction: pair_literal_fraction(left, right),
         measured: true,
-        contradiction: pair_contradiction(left, right).unwrap_or(ContentContradiction::None),
+        contradiction,
     }
 }
 
@@ -255,13 +304,18 @@ fn pair_agreement(left: Option<&MemberContent>, right: Option<&MemberContent>) -
 }
 
 /// Semantic contradictions share one verdict across pair admission and explicit comparison.
-fn pair_contradiction(left: &MemberContent, right: &MemberContent) -> Option<ContentContradiction> {
+fn pair_contradiction<S: BuildHasher>(
+    left: &MemberContent,
+    right: &MemberContent,
+    sources: &HashMap<FileId, Vec<u8>, S>,
+) -> Option<ContentContradiction> {
     if operator_contradiction(left, right) {
         Some(ContentContradiction::OperatorSubstitution)
-    } else if call_targets::contradicts(left, right) {
-        Some(ContentContradiction::CallTargetSubstitution)
     } else {
-        None
+        call_targets::changed(left, right, sources).map(|change| match change {
+            call_targets::CallTargetChange::AsyncEdit => ContentContradiction::CallTargetAsyncEdit,
+            call_targets::CallTargetChange::Other => ContentContradiction::CallTargetSubstitution,
+        })
     }
 }
 

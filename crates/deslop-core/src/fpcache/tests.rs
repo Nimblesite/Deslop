@@ -423,11 +423,11 @@ fn the_blob_format_revisions_are_pinned() {
          superseded values must stay rejected, never reused"
     );
     assert_eq!(
-        SEMANTIC_EPOCH, 5,
+        SEMANTIC_EPOCH, 6,
         "the semantic epoch changes when parse/normalise/fingerprint/signature \
          *meaning* changes without moving a byte — the case the `0.0.0-dev` \
-         directory partition cannot invalidate. 5 is the mandated-prologue \
-         root drop ([PIPELINE-FINGERPRINT-MERKLE-ROOT]); bumping past it \
+         directory partition cannot invalidate. 6 is the fingerprint-aware \
+         signature fold ([PIPELINE-SIGNATURE-FOLD]); bumping past it \
          requires a new dated entry on the constant's doc, then this pin"
     );
     assert_eq!(

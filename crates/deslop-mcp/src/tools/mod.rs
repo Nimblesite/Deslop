@@ -49,7 +49,7 @@ pub struct ToolDefinition {
 const TOOLS: [ToolDefinition; 8] = [
     ToolDefinition {
         name: "find-similar",
-        description: "Call before writing code to prevent duplication. Returns mass-ranked clusters only; use compare-pair for pair evidence.",
+        description: "Call before writing code to prevent duplication. Returns mass-ranked clusters, plus `existing`: places a snippet's code already occupies outside any cluster. Use compare-pair for pair evidence.",
         input_schema: schema_find_similar,
     },
     ToolDefinition {

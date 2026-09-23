@@ -19,7 +19,7 @@ use deslop_test_support::{
     corpus_score::{
         gate::{
             add_costs, breaches, corpus_change, degradation, load_thresholds, totals, CorpusChange,
-            CorpusTotals, Thresholds,
+            CorpusTotals, Degradation, Thresholds,
         },
         render::{scorecard, Engine, Scorecard, TargetScore},
         score_repo, RepoScore, RunCost,
@@ -136,29 +136,77 @@ fn register_for(target: &Value, root: &std::path::Path) -> Result<Option<Value>>
     Ok(Some(register))
 }
 
-/// Scores one target across every engine that ran it.
-fn score_target(
+/// [CORPUS-SCORE-COST-COMPLETE] A strict gate needs each judged run's timing.
+fn run_cost(
+    timing: Option<&std::path::Path>,
+    engine_id: &str,
+    name: &str,
+    require_timing: bool,
+) -> Result<Option<RunCost>> {
+    if let Some(path) = timing.filter(|path| path.exists()) {
+        return read_json(path).map(Some);
+    }
+    if require_timing {
+        return Err(anyhow!(
+            "missing timing for judged run {engine_id} in {name}: {}",
+            timing.map_or_else(
+                || "<not specified>".to_owned(),
+                |path| path.display().to_string()
+            )
+        ));
+    }
+    Ok(None)
+}
+
+/// Score one engine run and read its measurement when present.
+fn scored_run(
+    run: &Value,
+    register: &Value,
+    root: &std::path::Path,
+    engine_id: &str,
+    name: &str,
+    require_timing: bool,
+) -> Result<(RepoScore, Option<RunCost>)> {
+    let report = read_json(&root.join(text(run, "report")))?;
+    let score = score_repo(name, register, &report)?;
+    let timing = run
+        .get("timing")
+        .and_then(Value::as_str)
+        .filter(|path| !path.is_empty())
+        .map(|path| root.join(path));
+    Ok((
+        score,
+        run_cost(timing.as_deref(), engine_id, name, require_timing)?,
+    ))
+}
+
+/// Score and measure the engines present for one judged repository.
+fn scored_runs(
     target: &Value,
     register: &Value,
     root: &std::path::Path,
-    engine_order: &[String],
-) -> Result<TargetScore> {
-    let name = text(target, "name");
+    require_timing: bool,
+) -> Result<(BTreeMap<String, RepoScore>, BTreeMap<String, RunCost>)> {
     let mut scores = BTreeMap::new();
     let mut costs = BTreeMap::new();
+    let name = text(target, "name");
     let runs = target.get("runs").and_then(Value::as_object);
     for (engine_id, run) in runs.into_iter().flatten() {
-        let report = read_json(&root.join(text(run, "report")))?;
-        let _previous = scores.insert(engine_id.clone(), score_repo(&name, register, &report)?);
-        let timing = root.join(text(run, "timing"));
-        if timing.exists() {
-            let _previous = costs.insert(
-                engine_id.clone(),
-                serde_json::from_value(read_json(&timing)?)?,
-            );
+        let (score, cost) = scored_run(run, register, root, engine_id, &name, require_timing)?;
+        let _previous = scores.insert(engine_id.clone(), score);
+        if let Some(cost) = cost {
+            let _previous = costs.insert(engine_id.clone(), cost);
         }
     }
-    let compared = (scores.len() == COMPARED_ENGINES)
+    Ok((scores, costs))
+}
+
+/// Compare the two scored engines in manifest order, if both exist.
+fn compared_scores(
+    scores: &BTreeMap<String, RepoScore>,
+    engine_order: &[String],
+) -> Option<Degradation> {
+    (scores.len() == COMPARED_ENGINES)
         .then(|| {
             let ordered: Vec<&RepoScore> = engine_order
                 .iter()
@@ -169,14 +217,25 @@ fn score_target(
                 _ => None,
             }
         })
-        .flatten();
+        .flatten()
+}
+
+/// Scores one target across every engine that ran it.
+fn score_target(
+    target: &Value,
+    register: &Value,
+    root: &std::path::Path,
+    engine_order: &[String],
+    require_timing: bool,
+) -> Result<TargetScore> {
+    let (scores, costs) = scored_runs(target, register, root, require_timing)?;
     Ok(TargetScore {
-        name,
+        name: text(target, "name"),
         language: text(target, "language"),
         sha: text(target, "sha"),
+        degradation: compared_scores(&scores, engine_order),
         scores,
         costs,
-        degradation: compared,
     })
 }
 
@@ -200,6 +259,7 @@ fn score_targets(
     run: &Value,
     root: &std::path::Path,
     engine_order: &[String],
+    require_timing: bool,
 ) -> Result<Vec<TargetScore>> {
     let mut scored = Vec::new();
     for target in run
@@ -208,7 +268,13 @@ fn score_targets(
         .unwrap_or(&vec![])
     {
         match register_for(target, root)? {
-            Some(register) => scored.push(score_target(target, &register, root, engine_order)?),
+            Some(register) => scored.push(score_target(
+                target,
+                &register,
+                root,
+                engine_order,
+                require_timing,
+            )?),
             None => eprintln!("==> no register for {}, not scored", text(target, "name")),
         }
     }
@@ -281,7 +347,7 @@ fn score(run_path: &std::path::Path, out: &std::path::Path, gate: bool) -> Resul
     let run = read_json(run_path)?;
     let engines = engines(&run);
     let order: Vec<String> = engines.iter().map(|engine| engine.id.clone()).collect();
-    let targets = score_targets(&run, &root, &order)?;
+    let targets = score_targets(&run, &root, &order, gate)?;
     let totals = engines
         .iter()
         .map(|engine| (engine.id.clone(), engine_totals(engine, &targets)))
@@ -324,5 +390,47 @@ fn main() -> Result<()> {
             command_line,
         } => measure(&timing, &binary_sha, &command_line),
         Command::Score { run, out, gate } => score(&run, &out, gate),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    const TEST_REPORT: &str = "target/.corpus/corpus-score-missing-timing/report.json";
+    const TEST_TIMING: &str = "target/.corpus/corpus-score-missing-timing/absent-timing.json";
+    const ENGINE_ID: &str = "current";
+
+    /// [CORPUS-SCORE-COST-COMPLETE] Missing required cost fails the strict gate.
+    #[test]
+    fn registered_run_with_missing_timing_fails_scoring() -> Result<()> {
+        let root = repo_root();
+        let report = root.join(TEST_REPORT);
+        fs::create_dir_all(root.join("target/.corpus/corpus-score-missing-timing"))?;
+        fs::write(report, "{\"clusters\":[]}")?;
+        let target = json!({"name":"fixture","runs":{ENGINE_ID:{"report":TEST_REPORT,"timing":TEST_TIMING}}});
+        let register = json!({"clearly_in":[],"clearly_out":[]});
+        let result = score_target(&target, &register, &root, &[ENGINE_ID.to_owned()], true);
+        assert!(
+            result.is_err(),
+            "a missing timing file must never yield a green scorecard"
+        );
+        Ok(())
+    }
+
+    /// [CORPUS-SCORE-COST-COMPLETE] Accuracy-only scoring accepts an unmeasured run.
+    #[test]
+    fn unmeasured_run_keeps_accuracy_score_without_a_timing_field() -> Result<()> {
+        let root = repo_root();
+        let report = root.join(TEST_REPORT);
+        fs::create_dir_all(root.join("target/.corpus/corpus-score-missing-timing"))?;
+        fs::write(report, "{\"clusters\":[]}")?;
+        let run = json!({"report":TEST_REPORT});
+        let register = json!({"clearly_in":[],"clearly_out":[]});
+        let result = scored_run(&run, &register, &root, ENGINE_ID, "fixture", false)?;
+        assert_eq!(result.0.correct, 0, "empty register has no judged pairs");
+        assert!(result.1.is_none(), "unmeasured run has no timing cost");
+        Ok(())
     }
 }

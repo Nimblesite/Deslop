@@ -15,7 +15,7 @@ use crate::{
 };
 
 /// A hashed subtree ready for clustering.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Fingerprint {
     /// `blake3` digest of the normalised subtree.
     pub hash: [u8; 32],
@@ -321,7 +321,7 @@ pub(crate) fn subtree_hash<'tree>(
 ///   counterpart. The root's children and the sibling pass carry the copy
 ///   instead. Pinned by the Go scope contract every Go suite calls
 ///   (`deslop::common::go_scope`) and `cluster_extent_alignment`.
-fn is_viewless_root(language: Option<&str>, node: &NormalizedNode) -> bool {
+pub(crate) fn is_viewless_root(language: Option<&str>, node: &NormalizedNode) -> bool {
     node.kind == FILE_KIND
         && (re_describes_only_child(node) || opens_with_mandated_prologue(language, node))
 }

@@ -10,7 +10,8 @@ use super::super::{
 };
 use crate::{
     ast::NormalizedNode,
-    fingerprint::Fingerprint,
+    content::ContentMeasurer,
+    fingerprint::{subtree_hash, Fingerprint, HashScratch},
     lang::LanguageParser,
     pair::{
         CandidatePair, PairScore, FUSED_THRESHOLD, LSH_ONLY_MIN_JACCARD, LSH_ONLY_MIN_NODE_COUNT,
@@ -25,11 +26,25 @@ use crate::{
 /// the content judgement as well as the overlap
 /// ([FUSED-SHARED-SUBTREE-CORE]).
 const CORE_FLOOR: usize = 1;
+/// A real multi-statement near-copy above the LSH and overlap floors.
+const SHARD_STATEMENTS: usize = 8;
+/// One unique pair is aligned once per independent measurer.
+const SERIAL_ALIGNMENTS: u64 = 1;
+/// The head and tail shards each own an independent measurer.
+const SPLIT_ALIGNMENTS: u64 = 2;
+
+fn assert_pre_alignment_tallies(merged: &RescueTally, serial: &RescueTally) {
+    assert_eq!(
+        (merged.echo_bound_skipped, merged.hard_content_skipped),
+        (serial.echo_bound_skipped, serial.hard_content_skipped),
+        "merged shard tallies must count both pre-alignment refusal routes"
+    );
+}
 
 /// One serial shard over `chunk`: the reference a single worker
 /// computes, assembled from the very `measure_chunk` the workers
 /// run so the reference can never drift from the live path.
-fn run_shard<S: std::hash::BuildHasher, L: std::hash::BuildHasher>(
+pub(super) fn run_shard<S: std::hash::BuildHasher, L: std::hash::BuildHasher>(
     chunk: &mut [CandidatePair],
     fingerprints: &[Fingerprint],
     trees: &[NormalizedNode],
@@ -37,33 +52,36 @@ fn run_shard<S: std::hash::BuildHasher, L: std::hash::BuildHasher>(
     languages: &std::collections::HashMap<crate::state::FileId, &'static str, L>,
 ) -> (RescueTally, crate::overlap::MeasureStats) {
     let mut measurer = crate::overlap::OverlapMeasurer::new(trees);
+    let mut contents = ContentMeasurer::default();
     let mut tally = RescueTally::new();
     let context = RescueContext::new(chunk, fingerprints, trees, sources, languages, CORE_FLOOR);
-    measure_chunk(chunk, fingerprints, &context, &mut measurer, &mut tally);
+    measure_chunk(
+        chunk,
+        fingerprints,
+        &context,
+        &mut measurer,
+        &mut contents,
+        &mut tally,
+    );
     let stats = measurer.stats();
     (tally, stats)
 }
 
 /// Parses `source` as Rust and fingerprints its root.
-fn parse(source: &str, file_id: FileId) -> Result<(NormalizedNode, Fingerprint), String> {
+pub(super) fn parse(
+    source: &str,
+    file_id: FileId,
+) -> Result<(NormalizedNode, Fingerprint), String> {
     let tree = crate::lang::rust_lang::RustParser
         .parse_and_normalize(source.as_bytes(), file_id)
         .map_err(|error| format!("the Rust fixture must parse: {error}"))?;
     let whole = Fingerprint {
-        hash: [0_u8; 32],
+        hash: subtree_hash(&tree, &mut HashScratch::default()),
         file_id,
         byte_range: tree.byte_range,
-        node_count: count_nodes(&tree),
+        node_count: tree.subtree_node_count(),
     };
     Ok((tree, whole))
-}
-
-/// Total nodes in a subtree, including the root.
-fn count_nodes(node: &NormalizedNode) -> usize {
-    node.children
-        .iter()
-        .map(count_nodes)
-        .fold(1, usize::saturating_add)
 }
 
 /// A wide function past every gate: well over the LSH-only floor
@@ -78,7 +96,7 @@ fn wide_function(statements: usize) -> String {
 }
 
 /// A rescue-eligible cross-file pair over two whole-file endpoints.
-fn eligible_pair(nodes: usize) -> CandidatePair {
+pub(super) fn eligible_pair(nodes: usize) -> CandidatePair {
     CandidatePair {
         left: 0,
         right: 1,
@@ -87,6 +105,7 @@ fn eligible_pair(nodes: usize) -> CandidatePair {
         lsh_only_min_jaccard: LSH_ONLY_MIN_JACCARD,
         fused_min_score: FUSED_THRESHOLD,
         shared_subtree_overlap: 0.0,
+        verified_async_core: false,
         score: PairScore {
             structural: 0.0,
             token_jaccard: SHARED_SUBTREE_MIN_JACCARD,
@@ -107,8 +126,8 @@ fn eligible_pair(nodes: usize) -> CandidatePair {
 fn sharded_rescue_matches_serial_outcomes() -> Result<(), String> {
     let pair_count = MIN_SHARD_WORK.get().saturating_mul(2);
     let (left_id, right_id) = rust_pair_ids();
-    let left_source = wide_function(120);
-    let right_source = wide_function(121);
+    let left_source = wide_function(SHARD_STATEMENTS);
+    let right_source = wide_function(SHARD_STATEMENTS.saturating_add(1));
     let left = parse(&left_source, left_id)?;
     let right = parse(&right_source, right_id)?;
     let nodes = left.1.node_count;
@@ -195,6 +214,7 @@ fn sharded_rescue_matches_serial_outcomes() -> Result<(), String> {
         merged.measured, serial_tally.measured,
         "merged shard tallies must count every measured pair"
     );
+    assert_pre_alignment_tallies(&merged, &serial_tally);
     let u64_count = u64::try_from(pair_count).unwrap_or(u64::MAX);
     assert_eq!(
         merged.measured, u64_count,
@@ -204,8 +224,12 @@ fn sharded_rescue_matches_serial_outcomes() -> Result<(), String> {
     );
     let folded_stats = head_stats.add(tail_stats);
     assert_eq!(
-        folded_stats.alignments, serial_stats.alignments,
-        "merged measurement stats must fold to the whole-list stats"
+        serial_stats.alignments, SERIAL_ALIGNMENTS,
+        "the serial measurer must memoise the repeated pair after one alignment"
+    );
+    assert_eq!(
+        folded_stats.alignments, SPLIT_ALIGNMENTS,
+        "each independent half-shard measurer must align the pair once"
     );
     Ok(())
 }

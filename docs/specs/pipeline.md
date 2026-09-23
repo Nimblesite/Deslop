@@ -62,7 +62,7 @@ Group `NormalizedNode` fingerprints by `hash` to propose exact candidate pairs. 
 
 ### [PIPELINE-CLUSTER-EXACT-SCOPE] Inside one declaration the widest view is the finding
 
-One duplication is fingerprinted at many depths, so several candidate views can cover the same region. Before pair admission, a same-file overlap run selects its physical view by authored scope and width only. When one view encloses another inside the same authored declaration, the enclosing view is proposed; otherwise the wider view is proposed, with stable byte-range ordering as the tie-breaker — except where two views straddle each other and one of them is a declaration ([PIPELINE-CLUSTER-EXACT-SCOPE-STRADDLE]). Pair scores cannot choose a view because no pair has been admitted yet.
+One duplication is fingerprinted at many depths, so several candidate views can cover the same region. Before pair admission, a same-file overlap run selects its physical view by authored scope and width only. When one view encloses another inside the same authored declaration, the enclosing view is proposed; otherwise the wider view is proposed when another copy matches its width ([PIPELINE-CLUSTER-EXACT-SCOPE-MATCHED]), with stable byte-range ordering as the tie-breaker — except where two views straddle each other and one of them is a declaration ([PIPELINE-CLUSTER-EXACT-SCOPE-STRADDLE]). Pair scores cannot choose a view because no pair has been admitted yet.
 
 Declarations are read from the normalised tree and keyed by language. A view that is the declaration is treated as the enclosing authored scope. Pinned by the TypeScript, JavaScript, and F# scope fixtures, which assert proposed ranges and eventual admitted pairs without attaching a grade to a cluster.
 
@@ -73,6 +73,14 @@ Two views can overlap without either containing the other: one starts at a `name
 #### [PIPELINE-CLUSTER-EXACT-SCOPE-SCRAPS] A view that is the function beats a window that merely wraps it
 
 A same-file window can enclose an authored function whole while adding only scraps around it — the two field declarations above a Dart accessor, a constructor line. Such a window is a view Deslop cut over a run of siblings, not something the author wrote, and it shares almost nothing beyond the function it wraps. When a window that is not itself a node of the tree encloses an authored function-like declaration and holds fewer than `admission.shared_subtree_min_node_count` nodes beyond it, the function is the finding, whatever the window's width. A node the author wrote — a class body, a module, a whole file holding the function — keeps the width rule of [PIPELINE-CLUSTER-EXACT-SCOPE] ([PIPELINE-FINGERPRINT-MERKLE-ROOT] says when the file root is such a view). Without this, one method of a seven-member family published as "fields plus method" while its six siblings published as methods. Pinned by `rename_needs_an_anchor` (Dart: every accessor publishes at its own extent).
+
+#### [PIPELINE-CLUSTER-EXACT-SCOPE-MATCHED] A wider view is the finding only when another copy matches it
+
+Width is evidence only when a copy has the same width. A view is **matched** when one of its copies — a view it is paired with in another file, or in the same file without overlapping it — holds, among its own top-level nodes, the kind of the view's first node and the kind of its last. A window that opens on a type declared just above a copied function, against copies that are only the function, opens on a kind no copy has: the extra rows are whatever the author wrote next to the duplication, not part of it.
+
+A view with copies of which none holds both kinds is **unmatched**. A view with no copy of its own — it joined the cluster only through another view of the same region — is unproven: nothing speaks for or against its width. Between two views of one overlapping run, a matched view beats an unmatched one; in every other case the width rule of [PIPELINE-CLUSTER-EXACT-SCOPE] stands. A run of nodes of one kind — statements, dictionary entries, functions — is always matched, so the rule never decides between two readings of a homogeneous run. [PIPELINE-CLUSTER-EXACT-SCOPE-STRADDLE], [PIPELINE-CLUSTER-EXACT-SCOPE-SCRAPS] and the enclosing rule inside one declaration decide first.
+
+Without this, cobra's yaml page generator published two option types and its pair of page-writing functions as one copy of the markdown generator's bare pair, and the types' rows counted as duplicated. Pinned by `cluster_extent_alignment::unmatched_width` (Go: two and three generators; the type never reaches an occurrence or `duplicated_loc`).
 
 ### [PIPELINE-CLUSTER-CLOSURE] Clusters are exactly the transitive closure of admitted pairs
 
@@ -134,9 +142,11 @@ Pinned by `crates/deslop-core/tests/cluster_subsumption/region.rs` and end-to-en
 
 Two admitted windows can overlap without either containing the other: a byte-identical block with one differing statement kept on its left in one view and one differing statement kept on its right in the other. Each window clears the content floor on the strength of the block it shares, and their union does not, so neither can absorb the other and both would reach the report — the same block published twice, under two extents that each count a line the other refuses.
 
-When two components name the same files, every occurrence of each overlaps an occurrence of the other in its file, and a third component lies strictly inside both in every file, the two straddling views are dropped and the nested view is the finding. Straddles are looked for among the published views; the two are removed for good and their file set is resolved again without them, so whatever either had absorbed — through any verdict — is judged again and the nested view collects its own nested rivals. Two overlapping regions with no admitted view nested in both stay two findings, exactly as before: a shared byte, a half overlap, or an overhang is never enough on its own.
+When two components name the same files, each view has one occurrence per file, every occurrence of each overlaps its same-file counterpart, and a third component lies strictly inside both in every file, an unsupported straddling view is dropped. A separately admitted clone wholly within the view's exclusive overhang in every file proves that the overhang is copied code rather than padding, so that view stays. If neither view has such evidence, both are dropped and the nested view is the finding. Straddles are looked for among the published views; their file set is resolved again without the removed views, so whatever either had absorbed is judged again. Two overlapping regions with no admitted view nested in both stay two findings: a shared byte, a half overlap, or an overhang is never enough on its own.
 
-Implemented in `cluster/subsume/kernel.rs`; pinned by `two_windows_straddling_one_nested_view_publish_that_view`, `a_view_that_yielded_to_a_straddler_is_released_when_it_dies` and `a_view_nested_in_only_one_straddler_leaves_both_published` in `crates/deslop-core/tests/cluster_subsumption/straddle.rs`, and by `cross_cluster_collapse::padded_windows_straddling_a_verbatim_block_publish_the_block` end to end.
+The one-occurrence-per-file condition matters when a file contains repeated, shifted copies. In that case a geometric overlap may pair different occurrences, and a nested fragment cannot establish that two complete admitted windows are merely padding around one clone. Keep both windows unless ordinary same-region subsumption can identify one as the redundant view. This preserves the full copied extension-method families in `FSharp.Data.Html.Core/HtmlOperations.fs` (`fsharp_call_target_families`) while the cross-file padded-window controls still publish only their common block.
+
+Implemented in `cluster/subsume/kernel.rs`; pinned by `copied_overhang_keeps_its_full_window`, `two_windows_straddling_one_nested_view_publish_that_view`, `a_view_that_yielded_to_a_straddler_is_released_when_it_dies` and `a_view_nested_in_only_one_straddler_leaves_both_published` in `crates/deslop-core/tests/cluster_subsumption/straddle.rs`, and by `cross_cluster_collapse::padded_windows_straddling_a_verbatim_block_publish_the_block` end to end.
 
 #### [PIPELINE-CLUSTER-SUBSUME-KERNEL] Survivors are a property of the published set, not of scan order
 
@@ -294,6 +304,10 @@ A detection-time finding kind may drive an explicit exclusion before ranking. It
 ### [RANK-STRUCTURAL-ONLY] Shape-only information is outside duplicate ranking
 
 Apply [CLONE-BUCKETS-STRUCTURAL-ONLY] before clone ranking and counting. Required CLI coverage belongs with `rank_structural_only_policy.rs` and `cli/bucket_groups.rs` under [CLONE-KIND-TESTING](taxonomy.md#clone-kind-testing-required-examples-and-assertions).
+
+#### [RANK-STRUCTURAL-ONLY-CLONE-GUARD] A proven copy stays visible
+
+The single-file sibling-declaration hide applies only to shape-only findings. A cluster already classified as a clone stays visible even when its occurrences span sibling declarations in one file. A wider cross-file clone does not erase the separate, authored same-file pair. The two-provider CLI fixture in `same_file_rescue.rs` checks both findings and the resulting duplicated lines.
 
 ### [RANK-STRUCTURAL-ONLY-FORWARDING] Proving a declaration is family noise
 

@@ -21,12 +21,10 @@ built outside this repository, holding exactly:
 1. **The repositories** — each checked out at its pinned commit, source only.
 2. **The reports** — two pair lists per repository, stripped to `groups`/`regions` and
    labelled A and B by a sealed coin flip.
-3. **The judge's skill** — installed at the root of that folder as
-   `.agents/skills/judge-clone-pairs/SKILL.md`, with `.claude/skills/judge-clone-pairs`
-   symlinked to it, exactly as this repository lays out its own skills. An agent opening
-   the folder runs the protocol by name instead of reaching back in here for it, and
-   there is one file behind both paths rather than two copies that drift. The guides
-   beside it are copied from `.agents/skills/judge-clone-pairs/handover/` byte for byte.
+3. **The judging protocol** — copied to the root of that folder as `JUDGING.md`,
+   beside a `README.md`. Each repository directory links to that one protocol.
+   These are the only entries beside the repository directories: extra agent or
+   skill folders make the judge abort under the protocol's layout check.
 
 **Nothing in that folder is written by you.** Not the guides, not the protocol, not a
 note explaining what you did. Every word the judge reads is a file in this repository,
@@ -75,9 +73,8 @@ project:
 
 ```
 ~/clone-judging/                      ← hand over exactly this
-  .agents/skills/judge-clone-pairs/SKILL.md   the judge's skill
-  .claude/skills/judge-clone-pairs   → symlink to it, so it loads by name
-  AGENTS.md  CLAUDE.md                what the folder is; read on open
+  JUDGING.md  the judging protocol, copied from the skill
+  README.md   what the folder is; copied from the handover guide
   click/                              one directory per repository
     JUDGING.md    → the protocol above
     PINNED.txt    source url + commit sha, so the register can cite it

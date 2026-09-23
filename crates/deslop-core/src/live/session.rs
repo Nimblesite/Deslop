@@ -20,7 +20,7 @@ use super::{
     session_helpers::{
         append_ollama_models, cluster_overlaps_range, cluster_touches_path,
         collapse_overlapping_clusters_for_range, earliest_byte_for_path, initialise_pipeline,
-        live_batch_yield, parse_and_hash_snippet, persist_state_file, truncate,
+        live_batch_yield, not_listed_by, parse_and_hash_snippet, persist_state_file, truncate,
         try_load_cached_report,
     },
     watcher::{live_exclusion, publish_exclusion, LiveExclusion},
@@ -753,6 +753,7 @@ impl AnalysisSession {
         let total_occurrences: usize = clusters.iter().map(crate::report::occurrence_count).sum();
         Ok(FindSimilarResult {
             clusters,
+            existing: Vec::new(),
             below_min_nodes: false,
             total_occurrences,
         })
@@ -770,15 +771,20 @@ impl AnalysisSession {
         if snippet_hashes.is_empty() {
             return Ok(FindSimilarResult {
                 clusters: Vec::new(),
+                existing: Vec::new(),
                 below_min_nodes: true,
                 total_occurrences: 0,
             });
         }
         let mut clusters = self.clusters_at_subtree_hashes(&snippet_hashes);
         truncate(&mut clusters, max_results);
+        let existing = self.pipeline.as_ref().map_or_else(Vec::new, |pipeline| {
+            not_listed_by(pipeline.existing_occurrences(&snippet_hashes), &clusters)
+        });
         let total_occurrences: usize = clusters.iter().map(crate::report::occurrence_count).sum();
         Ok(FindSimilarResult {
             clusters,
+            existing,
             below_min_nodes: false,
             total_occurrences,
         })

@@ -41,6 +41,8 @@ mod alignment;
 /// Deterministic exact-alignment benchmark workloads.
 #[cfg(feature = "benchmark")]
 pub mod benchmark;
+/// Sound count and kind upper bounds.
+mod bounds;
 /// The aligned core two endpoints share ([FUSED-SHARED-SUBTREE-CORE]).
 mod core;
 pub(crate) use core::judge_core;
@@ -52,9 +54,12 @@ pub(crate) use rescue::RescueContext;
 /// Deterministic tree shapes shared by the measurement tests.
 #[cfg(test)]
 mod shapes;
+/// Aggregate measurement counters.
+mod stats;
 /// Ordered-subsequence admission bound
 /// ([FUSED-SHARED-SUBTREE-BOUND-ORDER]).
 mod subsequence;
+pub use stats::MeasureStats;
 /// Rescue-pass gate counters ([PERF-FLUTTER-TODO-OBSERVABILITY]).
 mod tally;
 /// Endpoint view construction ([FUSED-SHARED-SUBTREE]).
@@ -65,6 +70,10 @@ mod view;
 mod tests;
 
 use alignment::Aligner;
+pub(crate) use bounds::endpoint_count_bound;
+#[cfg(test)]
+use bounds::kind_shared_upper_bound;
+use bounds::{kind_bound_ratio, lossless_count};
 pub use rescue::apply_shared_subtree_rescue;
 use view::{build_view, EndpointView};
 
@@ -72,14 +81,15 @@ use view::{build_view, EndpointView};
 /// ([PERF-FLUTTER-TODO-MEMORY]). Star-shaped bucket members reuse one
 /// endpoint across many pairs, which is what the memo buys; a corpus-scale
 /// rescue population holds millions of *distinct* endpoints, and retaining
-/// every view was a large share of the stage's memory. Past the cap the
-/// view is rebuilt per use — identical values, bounded residence.
+/// every view was a large share of the stage's memory. At the cap a new
+/// generation replaces the old one, retaining locality without unbounded
+/// residence.
 const ENDPOINT_VIEW_MEMO_MAX: usize = 1_024;
 
 /// Most exact-overlap results one measurer retains. The memo exists so a
 /// structural pair appearing at many byte offsets costs one alignment;
-/// past the cap a repeat pair re-measures — identical value, bounded
-/// residence.
+/// a new generation replaces a full cache so later pairs can also be
+/// reused with bounded residence.
 const EXACT_RESULT_MEMO_MAX: usize = 16_384;
 
 /// Most below-floor bounds one measurer retains, for the same reason as
@@ -116,36 +126,6 @@ pub const ALIGNMENT_MAX_NODES: usize = 768;
 /// measure the language's grammar, not the code.
 pub const SHARED_SUBTREE_MIN_CREDIT_NODES: usize = 3;
 
-/// Aggregate measurement counters for one [`OverlapMeasurer`]
-/// ([FUSED-SHARED-SUBTREE-MEMO], [PIPELINE-OBSERVABILITY-STAGES]).
-/// Snapshot via [`OverlapMeasurer::stats`]; the rescue and cluster
-/// stages log them so cache effectiveness and alignment volume are
-/// readable from any run.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct MeasureStats {
-    /// Pairs answered `1.0` by Merkle equality of the endpoints.
-    pub hash_equal: u64,
-    /// Pairs answered from the exact-overlap memo.
-    pub exact_hits: u64,
-    /// Rescue queries answered from the below-floor bound memo.
-    pub bound_hits: u64,
-    /// Rescue queries whose freshly computed kind-multiset bound proved
-    /// the pair cannot clear the floor, skipping the alignment
-    /// ([FUSED-SHARED-SUBTREE-BOUND]).
-    pub bound_skips: u64,
-    /// Rescue queries the multiset bound admitted but the ordered
-    /// subsequence bound then proved cannot clear the floor
-    /// ([FUSED-SHARED-SUBTREE-BOUND-ORDER]) — the alignments saved by
-    /// respecting post-order rather than kind counts alone.
-    pub order_skips: u64,
-    /// Exact Zhang–Shasha alignments computed.
-    pub alignments: u64,
-    /// Greedy large-tree credit fallbacks computed.
-    pub credit_fallbacks: u64,
-    /// Pairs with an unresolvable endpoint, reported `0.0` uncached.
-    pub unresolved: u64,
-}
-
 /// Measures shared-subtree overlap between fingerprint endpoints over
 /// one corpus, memoising per-endpoint views and per-structural-pair
 /// results so an endpoint appearing in many pairs is walked once and a
@@ -178,29 +158,8 @@ pub struct OverlapMeasurer<'corpus> {
     order_row: subsequence::Row,
 }
 
-impl MeasureStats {
-    /// Sums two counter snapshots — shard results merging in shard
-    /// order, deterministically ([PERF-FLUTTER-TODO-RESCUE]).
-    #[must_use]
-    pub const fn add(self, other: MeasureStats) -> MeasureStats {
-        crate::counters::summed_counters!(
-            MeasureStats,
-            self,
-            other,
-            hash_equal,
-            exact_hits,
-            bound_hits,
-            bound_skips,
-            order_skips,
-            alignments,
-            credit_fallbacks,
-            unresolved,
-        )
-    }
-}
-
 /// Identity of one endpoint's resolved range, for the view memo.
-type EndpointKey = (FileId, usize, usize);
+type EndpointKey = (FileId, usize, usize, [u8; 32], usize);
 
 /// Memo key for a measured pair: the ordered Merkle hashes of the two
 /// endpoints ([FUSED-SHARED-SUBTREE-MEMO]). Hash equality pins the
@@ -261,9 +220,7 @@ impl<'corpus> OverlapMeasurer<'corpus> {
             return cached;
         }
         let result = self.measure_views(&left_view, &right_view);
-        if self.exact_results.len() < EXACT_RESULT_MEMO_MAX {
-            let _previous = self.exact_results.insert(key, result);
-        }
+        self.remember_exact(key, result);
         result
     }
 
@@ -276,55 +233,117 @@ impl<'corpus> OverlapMeasurer<'corpus> {
     /// the value differs only on pairs the rescue then drops, where it
     /// is never rendered.
     pub fn rescue_overlap(&mut self, left: &Fingerprint, right: &Fingerprint) -> f64 {
-        if left.hash == right.hash {
-            bump(&mut self.stats.hash_equal);
-            return 1.0;
+        self.bounded_overlap(left, right, SHARED_SUBTREE_MIN_OVERLAP)
+    }
+
+    /// A sound upper bound below `floor`, and the exact overlap otherwise.
+    /// Below the rescue floor an exact answer is required because cached
+    /// rescue bounds are only reusable at or above that floor.
+    pub fn bounded_overlap(&mut self, left: &Fingerprint, right: &Fingerprint, floor: f64) -> f64 {
+        if floor < SHARED_SUBTREE_MIN_OVERLAP {
+            return self.overlap(left, right);
         }
-        // Views before either memo, for the same reason as
-        // [`Self::overlap`]: an unresolvable pair answers `0.0`
-        // whatever a resolvable copy of its structural pair measured.
+        if let Some(result) = self.trivial_bounded_overlap(left, right, floor) {
+            return result;
+        }
+        // Bounds that need node kinds still resolve views before their
+        // memo, so an unresolvable range cannot inherit a view result.
         let Some((left_view, right_view)) = self.view_pair(left, right) else {
             return 0.0;
         };
         let key = pair_key(left, right);
+        if let Some(cached) = self.cached_bounded_overlap(key) {
+            return cached;
+        }
+        self.measure_bounded_views(&left_view, &right_view, key, floor)
+    }
+
+    /// Merkle equality or a node-count bound can answer without a view.
+    fn trivial_bounded_overlap(
+        &mut self,
+        left: &Fingerprint,
+        right: &Fingerprint,
+        floor: f64,
+    ) -> Option<f64> {
+        if left.hash == right.hash {
+            bump(&mut self.stats.hash_equal);
+            return Some(1.0);
+        }
+        let bound = endpoint_count_bound(left, right);
+        if bound < floor {
+            let key = pair_key(left, right);
+            if let Some(&cached) = self.bound_results.get(&key) {
+                bump(&mut self.stats.bound_hits);
+                return Some(cached);
+            }
+            bump(&mut self.stats.bound_skips);
+            return Some(self.remember_bound(key, bound));
+        }
+        None
+    }
+
+    /// Exact results and reusable below-rescue bounds share one lookup.
+    fn cached_bounded_overlap(&mut self, key: PairKey) -> Option<f64> {
         if let Some(&cached) = self.exact_results.get(&key) {
             bump(&mut self.stats.exact_hits);
-            return cached;
+            return Some(cached);
         }
         if let Some(&bound) = self.bound_results.get(&key) {
             bump(&mut self.stats.bound_hits);
-            return bound;
+            return Some(bound);
         }
-        let bound = kind_bound_ratio(&left_view, &right_view);
-        if bound < SHARED_SUBTREE_MIN_OVERLAP {
+        None
+    }
+
+    /// Applies two sound bounds before paying for an exact alignment.
+    fn measure_bounded_views(
+        &mut self,
+        left_view: &EndpointView,
+        right_view: &EndpointView,
+        key: PairKey,
+        floor: f64,
+    ) -> f64 {
+        let bound = kind_bound_ratio(left_view, right_view);
+        if bound < floor {
             bump(&mut self.stats.bound_skips);
             return self.remember_bound(key, bound);
         }
-        // The multiset bound admitted the pair; the ordered one is
-        // strictly tighter and still sound, and costs microseconds
-        // against the alignment's milliseconds
-        // ([FUSED-SHARED-SUBTREE-BOUND-ORDER]). Computed second
-        // because the cheaper test already answers most pairs. It
-        // covers endpoints past `ALIGNMENT_MAX_NODES` too: the credit
-        // fallback that answers those is itself a lower bound on the
-        // alignment, so the same upper bound dominates it.
-        let ordered = self.order_bound_ratio(&left_view, &right_view);
-        if ordered < SHARED_SUBTREE_MIN_OVERLAP {
+        self.measure_ordered_views(left_view, right_view, key, floor)
+    }
+
+    /// [FUSED-SHARED-SUBTREE-BOUND-ORDER] The ordered bound is tighter
+    /// than the kind multiset and still bounds large-tree credit fallback.
+    fn measure_ordered_views(
+        &mut self,
+        left_view: &EndpointView,
+        right_view: &EndpointView,
+        key: PairKey,
+        floor: f64,
+    ) -> f64 {
+        let ordered = self.order_bound_ratio(left_view, right_view);
+        if ordered < floor {
             bump(&mut self.stats.order_skips);
             return self.remember_bound(key, ordered);
         }
-        let result = self.measure_views(&left_view, &right_view);
-        if self.exact_results.len() < EXACT_RESULT_MEMO_MAX {
-            let _previous = self.exact_results.insert(key, result);
-        }
+        let result = self.measure_views(left_view, right_view);
+        self.remember_exact(key, result);
         result
+    }
+
+    /// Rotates a bounded exact-result memo so later structural pairs
+    /// still reuse their alignments ([FUSED-SHARED-SUBTREE-MEMO]).
+    fn remember_exact(&mut self, key: PairKey, result: f64) {
+        if self.exact_results.len() == EXACT_RESULT_MEMO_MAX {
+            self.exact_results.clear();
+        }
+        let _previous = self.exact_results.insert(key, result);
     }
 
     /// Records a below-floor bound under `key` (within the memo cap)
     /// and returns it. Every caller returns the value it just proved,
     /// so the memo write and the answer never drift apart.
     fn remember_bound(&mut self, key: PairKey, bound: f64) -> f64 {
-        if self.bound_results.len() < BOUND_RESULT_MEMO_MAX {
+        if bound < SHARED_SUBTREE_MIN_OVERLAP && self.bound_results.len() < BOUND_RESULT_MEMO_MAX {
             let _previous = self.bound_results.insert(key, bound);
         }
         bound
@@ -390,27 +409,41 @@ impl<'corpus> OverlapMeasurer<'corpus> {
     }
 
     /// Returns (building on first use) the endpoint's resolved view.
-    /// Retention is bounded by [`ENDPOINT_VIEW_MEMO_MAX`]; a view built
-    /// past the cap is returned without being retained.
+    /// Retention is bounded by [`ENDPOINT_VIEW_MEMO_MAX`]; a full cache
+    /// rotates before admitting a later endpoint.
     fn view(&mut self, endpoint: &Fingerprint) -> Option<Arc<EndpointView>> {
         let key = endpoint_key(endpoint);
         if let Some(cached) = self.endpoints.get(&key) {
             return cached.clone();
         }
         let built = build_view(&self.tree_index, endpoint).map(Arc::new);
-        if self.endpoints.len() < ENDPOINT_VIEW_MEMO_MAX {
-            let _previous = self.endpoints.insert(key, built.clone());
-        }
-        built
+        retain_endpoint(&mut self.endpoints, key, built)
     }
 }
 
-/// The endpoint's view-memo identity.
+/// Keeps one generation of endpoint state bounded while allowing later
+/// recovery families to reuse their own views ([FUSED-SHARED-SUBTREE-MEMO]).
+fn retain_endpoint<T>(
+    memo: &mut HashMap<EndpointKey, Option<Arc<T>>>,
+    key: EndpointKey,
+    built: Option<Arc<T>>,
+) -> Option<Arc<T>> {
+    if memo.len() == ENDPOINT_VIEW_MEMO_MAX {
+        memo.clear();
+    }
+    let _previous = memo.insert(key, built.clone());
+    built
+}
+
+/// The endpoint's full identity. A wrapper and its child can have the same
+/// file and byte range but different structures and node counts.
 fn endpoint_key(endpoint: &Fingerprint) -> EndpointKey {
     (
         endpoint.file_id,
         endpoint.byte_range.start,
         endpoint.byte_range.end,
+        endpoint.hash,
+        endpoint.node_count,
     )
 }
 
@@ -422,49 +455,4 @@ fn pair_key(left: &Fingerprint, right: &Fingerprint) -> PairKey {
     } else {
         (right.hash, left.hash)
     }
-}
-
-/// Sound upper bound on the alignment's shared-node count
-/// ([FUSED-SHARED-SUBTREE-BOUND]). Any edit script maps some set `M`
-/// of node pairs; its cost is `deletes + inserts + relabels =
-/// larger + smaller − 2|M| + relabels`, so the shared mass
-/// `larger − TED` never exceeds the kind-preserving part of `M` — which
-/// is bounded by the smaller endpoint and by the kind-multiset
-/// intersection. Both bounds are constant per node, so refusing an
-/// alignment here can never refuse a pair the alignment would admit.
-fn kind_shared_upper_bound(left: &EndpointView, right: &EndpointView) -> usize {
-    let smaller = left.total.min(right.total);
-    smaller.min(kind_intersection(&left.kind_counts, &right.kind_counts))
-}
-
-/// Multiset-intersection cardinality of two kind-count maps.
-fn kind_intersection(
-    left: &HashMap<&'static str, usize>,
-    right: &HashMap<&'static str, usize>,
-) -> usize {
-    let (small, large) = if left.len() <= right.len() {
-        (left, right)
-    } else {
-        (right, left)
-    };
-    small
-        .iter()
-        .map(|(kind, count)| (*count).min(large.get(kind).copied().unwrap_or(0)))
-        .fold(0_usize, usize::saturating_add)
-}
-
-/// The upper bound as an overlap ratio against the larger endpoint —
-/// directly comparable to `SHARED_SUBTREE_MIN_OVERLAP`
-/// ([FUSED-SHARED-SUBTREE-BOUND]).
-fn kind_bound_ratio(left: &EndpointView, right: &EndpointView) -> f64 {
-    let larger = left.total.max(right.total);
-    if larger == 0 {
-        return 0.0;
-    }
-    lossless_count(kind_shared_upper_bound(left, right)) / lossless_count(larger)
-}
-
-/// Lossless small-count conversion for the coverage divisor.
-fn lossless_count(count: usize) -> f64 {
-    f64::from(u32::try_from(count).unwrap_or(u32::MAX))
 }

@@ -26,14 +26,14 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use super::{endpoint_key, OverlapMeasurer, ENDPOINT_VIEW_MEMO_MAX};
+use super::{endpoint_key, retain_endpoint, OverlapMeasurer};
 use crate::{
     ast::NormalizedNode,
     buckets::CONTENT_SUPPORT_FLOOR,
     content::ContentEvidence,
-    fingerprint::{visit_fingerprints, Fingerprint},
+    fingerprint::{is_literal_data_subtree, is_viewless_root, visit_fingerprints, Fingerprint},
     state::FileId,
-    tokens::resolve_range_nodes,
+    tokens::resolve_fingerprint_nodes,
 };
 
 /// Core pairing unit tests ([FUSED-SHARED-SUBTREE-CORE]).
@@ -121,7 +121,7 @@ pub(super) fn resolve<'tree>(
     endpoint: &Fingerprint,
 ) -> Option<Resolved<'tree>> {
     let root = tree_index.get(&endpoint.file_id)?;
-    let nodes = resolve_range_nodes(root, endpoint.byte_range.start, endpoint.byte_range.end)?;
+    let nodes = resolve_fingerprint_nodes(root, endpoint)?;
     let mut subtrees = HashMap::new();
     for node in &nodes {
         visit_fingerprints(node, EVERY_SUBTREE, |node, fingerprint| {
@@ -418,8 +418,26 @@ impl<'corpus> OverlapMeasurer<'corpus> {
         left: &Fingerprint,
         right: &Fingerprint,
     ) -> Vec<(Fingerprint, Fingerprint)> {
+        if left.hash == right.hash
+            && self.emitted_single_endpoint(left)
+            && self.emitted_single_endpoint(right)
+        {
+            return vec![(left.clone(), right.clone())];
+        }
         let resolved = self.resolved(left).zip(self.resolved(right));
         resolved.map_or_else(Vec::new, |(left, right)| aligned_core(&left, &right))
+    }
+
+    /// A Merkle-equal emitted node is the entire core. The emission check
+    /// preserves wrappers that carry a hash but deliberately have no view.
+    fn emitted_single_endpoint(&self, endpoint: &Fingerprint) -> bool {
+        self.tree_index
+            .get(&endpoint.file_id)
+            .and_then(|root| resolve_fingerprint_nodes(root, endpoint))
+            .is_some_and(|nodes| {
+                matches!(nodes.as_slice(), [node] if !is_viewless_root(None, node)
+                    && !is_literal_data_subtree(node))
+            })
     }
 
     /// Returns (resolving on first use) the endpoint's subtrees for the
@@ -433,9 +451,6 @@ impl<'corpus> OverlapMeasurer<'corpus> {
             return cached.clone();
         }
         let built = resolve(&self.tree_index, endpoint).map(Arc::new);
-        if self.cores.len() < ENDPOINT_VIEW_MEMO_MAX {
-            let _previous = self.cores.insert(key, built.clone());
-        }
-        built
+        retain_endpoint(&mut self.cores, key, built)
     }
 }
