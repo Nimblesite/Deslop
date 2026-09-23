@@ -98,7 +98,7 @@ On activation: load `shipwright.json`, verify all required VS Code activation co
 
 A dedicated activity bar icon (a stylised "dd" mark, the same one used in the Marketplace listing) opens the **Duplicate Clusters** view container. Inside:
 
-- **Top Offenders** tree — see [VSIX-TOP-OFFENDERS-GROUPING] for the cluster / file / folder grouping modes, [VSIX-TOP-OFFENDERS-SORT] for the impact-vs-path sort axis, and [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] for the optional per-language split. In every mode, cluster rows show:
+- **Top Offenders** tree — see [VSIX-TOP-OFFENDERS-GROUPING] for the cluster / file / folder grouping modes, [VSIX-TOP-OFFENDERS-SORT] for fixed highest-weight-first ordering, and [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] for language grouping. In every mode, cluster rows show:
   - **Cluster slug** as the leading element of the bold label ([VSIX-TOP-OFFENDERS-CLUSTER-ID]) — the first 7 hex chars of `cluster.id`, identical to the slug used by the LSP hover bubble. The slug is stable across runs.
   - The clone kind title ([CLONE-KIND-LABELS]), with the kind's icon and colour ([CLONE-KIND-COLOR]).
   - Grey description tail: `rank #N · N copies · mass M`. The literal word **rank** appears on every surface that shows `#N` so neither humans nor AI agents confuse volatile rank for stable identity ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]).
@@ -109,13 +109,11 @@ A dedicated activity bar icon (a stylised "dd" mark, the same one used in the Ma
 
 Tree refresh is driven by `deslop/reportChanged`; the webview uses the same notification to bump its own state.
 
-#### [VSIX-TOP-OFFENDERS-GROUPING] Cluster / File / Folder / Kind grouping modes
+#### [VSIX-TOP-OFFENDERS-GROUPING] One grouping picker
 
-The Top Offenders tree exposes four grouping modes that change the tree shape and what counts as a root. Two orthogonal axes compose on top of every mode: the sort order ([VSIX-TOP-OFFENDERS-SORT]) and the per-language split ([VSIX-TOP-OFFENDERS-LANGUAGE-GROUP]).
+The Top Offenders header has one **Group Top Offenders** picker with **Clone Category**, **Folder**, **Language**, **File** and **No Grouping**. It marks the current selection and persists `deslop.topOffenders.groupBy` to workspace settings (`kind`, `folder`, `language`, `file`, `cluster`). Canceling leaves the setting unchanged. Unknown values fall back to `cluster`. Changing grouping is a local presentation operation.
 
-The mode is persisted via the `deslop.topOffenders.groupBy` setting (`"cluster"` | `"file"` | `"folder"` | `"kind"`, default `"cluster"`). Kind mode is specified in [facets.md §FACET-GROUP-BY-KIND](facets.md#facet-group-by-kind). VS Code's standard user→workspace precedence applies. Unknown or missing values fall back to `"cluster"`. The language, path, and diagnostic-severity filter axes live in [facets.md §FACET-TOP-OFFENDERS-FILTER](facets.md#facet-top-offenders-filter).
-
-A view-title toggle in the Top Offenders header cycles modes. The toggle writes to the workspace configuration target so the choice persists per-repo. Cold-start respects the persisted value — there is no flash-of-default render. The toolbar also carries collapse / expand / refresh actions ([VSIX-TOP-OFFENDERS-TOOLBAR]) because folder mode can nest deeply.
+Code: `commands/topOffendersView.ts`, `commands/register.ts`, `tree/grouping.ts`, `tree/providers.ts`, `package.json`. Assertions: `package-menus.unit.test.ts`, `topOffendersView.unit.test.ts`, `facets.unit.test.ts`, `topOffendersPanel.e2e.test.ts`.
 
 #### [VSIX-TOP-OFFENDERS-CLUSTER-MODE] Cluster mode (default)
 
@@ -162,33 +160,28 @@ Rank lives in the grey description, not the bold label. The bold label leads wit
 
 Use the shared kind colour and icon from [CLONE-KIND-COLOR]. Clone descriptions include rank, count and mass; informational rows follow [CLONE-BUCKETS-STRUCTURAL-ONLY]. Diagnostic levels follow [SEVERITY-CONFIG].
 
-#### [VSIX-TOP-OFFENDERS-SORT] Sort axis (impact vs path)
+#### [VSIX-TOP-OFFENDERS-SORT] Highest weight first
 
-Sibling order is an axis orthogonal to the grouping mode, persisted via `deslop.topOffenders.sortBy` (`"impact"` | `"path"`, default `"impact"`). A view-title toggle flips it, writing to the workspace target like the grouping toggle; unknown / missing values fall back to `"impact"`.
+Every grouping uses descending duplication weight. Cluster rows preserve the engine's rank and tie breaks; category and language groups follow their worst member's rank. Files and folders use their worst member's mass, then total contained mass, then path. These ordering keys never become displayed calculations. Informational findings follow ranked clones. Occurrences keep canonical order.
 
-- **impact** (default) — worst-offender first: clusters by mass descending; files and folders by maximum contained cluster mass, then sum of contained cluster mass, then path. This is the product's "worst first" promise ([VSIX-PRINCIPLES] principle 3). Within a cluster, occurrences keep the report's canonical order (canonical occurrence first).
-- **path** — alphabetical by path (`localeCompare`), so a flat file list, a folder tree, or the occurrences inside a cluster read in filesystem order for navigation.
+There is no sort toolbar button, sort command or configurable sort setting. A previously saved `topOffenders.sortBy` value cannot change the order. Sorting never renumbers engine ranks or requests analysis. Code: `tree/grouping.ts`, `tree/folder.ts`, `tree/sort.ts`, `tree/providers.ts`. Assertions: `tree.topOffenders.ordering.unit.test.ts`, `tree.topOffenders.groups.unit.test.ts`, `facets.unit.test.ts`, `package-menus.unit.test.ts`.
 
-The sort axis reorders the **display order in every grouping mode** — cluster, file, and folder roots and their descendants, **plus the occurrences inside a cluster**. The global rank #N is read from the report's worst-first order and is never renumbered ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]), so a path-sorted cluster row still shows its true `rank #N`. Sorting is presentation-only — it never re-fetches or re-analyses ([VSIX-VIEW-STATE-UI-ONLY]).
+#### [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] Language in the grouping picker
 
-#### [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] Per-language split
-
-`deslop.topOffenders.splitByLanguage` (boolean, default `false`) adds an orthogonal outer grouping dimension. When on, top-level rows are one language group per language present, each containing the full cluster / file / folder subtree for that language; when off, languages interleave in one worst-first list (today's behaviour). Folder mode already separates most languages structurally, so the split is most useful with cluster or flat-file grouping in a polyglot tree where one directory mixes languages.
-
-Language is derived from each cluster's stable first occurrence path via the shared `languageForPath()` helper, which mirrors the core `language_for_path()` ([OUTPUT-HUMAN-HTML]). A single-language workspace renders exactly one group, so the split adds no noise. Global rank is preserved across and within groups ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]); a language group's description carries its highest contained mass and cluster count. The setting persists to the workspace target and exposes a view-title toggle like the other two axes.
+Language is one choice in the grouping picker, with no separate language toggle. Each root contains the clusters whose canonical path resolves to that language through `languageForPath()`, and uses `languageDisplayName()` for its title. Empty groups are omitted. Groups and their children preserve worst-first order and global ranks. Code: `tree/grouping.ts`; assertions: `facets.unit.test.ts`, `topOffendersView.unit.test.ts`.
 
 #### [VSIX-VIEW-STATE-UI-ONLY] Grouping, sorting, and filtering are UI-only
 
-Grouping ([VSIX-TOP-OFFENDERS-GROUPING]), sorting ([VSIX-TOP-OFFENDERS-SORT]), the per-language split ([VSIX-TOP-OFFENDERS-LANGUAGE-GROUP]), Expand All / Collapse All ([VSIX-TOP-OFFENDERS-TOOLBAR]), and the dirty-file projection ([VSIX-STATE-DIRTY]) are **pure presentation transforms over the report already held in the [VSIX-STATE] store**. This is non-negotiable:
+Grouping ([VSIX-TOP-OFFENDERS-GROUPING]), sorting ([VSIX-TOP-OFFENDERS-SORT]), language grouping ([VSIX-TOP-OFFENDERS-LANGUAGE-GROUP]), Expand All / Collapse All ([VSIX-TOP-OFFENDERS-TOOLBAR]), and the dirty-file projection ([VSIX-STATE-DIRTY]) are **pure presentation transforms over the report already held in the [VSIX-STATE] store**. This is non-negotiable:
 
-- **They never reach the engine.** Flipping a sort axis, changing the grouping mode, expanding the tree, or toggling the language split does **not** send an LSP request, trigger a re-scan, or invalidate the on-disk cache. The provider re-reads the persisted view-state and rebuilds its rows from `store.current.visibleReport` on the next `onDidChangeTreeData` fire. No round-trip means no spinner and no latency — the reorder is instant and synchronous.
+- **They never reach the engine.** Changing the grouping mode or expanding the tree does **not** send an LSP request, trigger a re-scan, or invalidate the on-disk cache. The provider re-reads the persisted view-state and rebuilds its rows from `store.current.visibleReport` on the next `onDidChangeTreeData` fire. No round-trip means no spinner and no latency — the reorder is instant and synchronous.
 - **They never mutate the canonical report.** The only writers of the canonical report are `setSnapshot` / `applyDelta`, driven by `deslop/reportChanged` — i.e. an actual **file change** picked up by the file watcher, never a view toggle.
 
 The single deliberate exception is the **Refresh** button (`deslop.refresh` → `deslop/refreshReport`): an explicit, user-initiated force of a full re-analysis. Everything else in the toolbar is local. A view toggle that triggers a re-analysis is a correctness bug, not a feature.
 
 #### [VSIX-TOP-OFFENDERS-TOOLBAR] Collapse / expand / refresh actions
 
-The **Diagnostics toggle** ([VSIX-SEVERITY-CONTROL]) leads the title bar at `navigation@0`, ahead of everything else, because it is the control the user reaches for most. After it come the grouping/sort/split toggles (`navigation@1`–`@3`), then **Choose Filter** (`deslop.topOffenders.chooseFilter`, `navigation@4`, [facets.md §FACET-TOP-OFFENDERS-FILTER](facets.md#facet-top-offenders-filter)), then three icon actions, **adjacent and in order**: **Expand All** (`$(expand-all)`, `deslop.topOffenders.expandAll`, `navigation@5`), **Collapse All** (`$(collapse-all)`, `deslop.topOffenders.collapseAll`, `navigation@6`), and **Refresh** (`$(refresh)`, `deslop.refresh`, `navigation@7`).
+The **Diagnostics toggle** ([VSIX-SEVERITY-CONTROL]) leads the title bar at `navigation@0`, ahead of everything else, because it is the control the user reaches for most. After it come the single grouping picker (`navigation@1`), then **Choose Filter** (`deslop.topOffenders.chooseFilter`, `navigation@4`, [facets.md §FACET-TOP-OFFENDERS-FILTER](facets.md#facet-top-offenders-filter)), then three icon actions, **adjacent and in order**: **Expand All** (`$(expand-all)`, `deslop.topOffenders.expandAll`, `navigation@5`), **Collapse All** (`$(collapse-all)`, `deslop.topOffenders.collapseAll`, `navigation@6`), and **Refresh** (`$(refresh)`, `deslop.refresh`, `navigation@7`).
 
 Expand All and Collapse All are **provider-driven** (`TopOffendersProvider.setBulkExpansion`): the provider rewrites the collapsible state it returns from `getTreeItem` and fires `onDidChangeTreeData`, so the whole tree expands or collapses **in one shot at every level** — reliable in cluster, file, and folder mode, not just the first level (which is why we do not use the one-level `TreeView.reveal({ expand: true })` or rely on the built-in `showCollapseAll` button, which would render a second, detached collapse action). The override is presentation-only ([VSIX-VIEW-STATE-UI-ONLY]) and is released on the next data change. **Refresh** is the one toolbar action that reaches the engine — it forces a full workspace re-scan. The Session and Duplication panels keep VS Code's built-in Collapse All for consistency.
 
@@ -284,7 +277,7 @@ Webviews are reactive too: they mirror the extension-host signal graph through `
 
 #### [VSIX-REACTIVITY-INVARIANT] Staleness is a correctness bug
 
-**Stale UI is a correctness bug, not a polish bug** — showing a cluster that was refuted 300 ms ago breaks the brand promise. Concrete E2E (real LSP binary): open a fixture with N clusters; assert tree, decorations, and bubble all show N; delete one duplicate; after the [LIVE-WATCHER] debounce plus one scheduler pass, assert all three show N − 1 **without any user-initiated refresh** and that no surface still references the removed cluster id. Enforced by that E2E plus lint rules in `clients/vscode/eslint.config.mjs` that ban `setTimeout`-driven UI refresh, ad-hoc `reportGet` outside bootstrap, and `TreeDataProvider`s that don't subscribe to a store signal.
+**Stale UI is a correctness bug, not a polish bug** — showing a cluster that was refuted 300 ms ago breaks the brand promise. Concrete E2E (real LSP binary): open a fixture with N clusters; assert tree, decorations, and bubble all show N; delete one duplicate; after the [LIVE-WATCHER] debounce plus one scheduler pass, assert all three show N − 1 **without any user-initiated refresh** and that no surface still references the removed cluster id. Enforced by that E2E plus lint rules in `clients/vscode/eslint.config.js` that ban `setTimeout`-driven UI refresh, ad-hoc `reportGet` outside bootstrap, and `TreeDataProvider`s that don't subscribe to a store signal.
 
 ### [VSIX-CLUSTER-SYNC] Selected-cluster synchronisation
 
@@ -418,31 +411,16 @@ The extension posts VS Code notifications sparingly:
 
 ### [VSIX-CACHE-IGNORE] Keeping the analysis cache out of the user's repository
 
-Deslop writes its cache into `<workspace>/.deslop/cache/` — fingerprints, one
-blob per embedded subtree, the live report, and the IPC endpoint records. On a
-large workspace that is hundreds of thousands of files: gh #286 reported 700 MB
-across 150,000+ files, "95% of the files in the repo by count". Deslop's own
-`.gitignore` has carried `.deslop/cache/` since day one, which is precisely why
-the pollution was invisible to this project.
+Deslop writes its cache into `<workspace>/.deslop/cache/` — fingerprints, one blob per embedded subtree, the live report, and the IPC endpoint records. On a large workspace that is hundreds of thousands of files: gh #286 reported 700 MB across 150,000+ files, "95% of the files in the repo by count". Deslop's own `.gitignore` has carried `.deslop/cache/` since day one, which is precisely why the pollution was invisible to this project.
 
 On activation the extension offers to fix it, and the consent rule is absolute:
 
 - The prompt is `Ignore deslop files from git?` with `Yes` / `No`.
-- On `Yes`, and only on `Yes`, `.deslop/cache/` is appended to the `.gitignore`
-  beside the cache, creating the file when absent and preserving every existing
-  rule.
-- On `No` — or on dismissal — nothing is written and the answer is recorded in
-  workspace state, so the question is never asked again.
-- Nothing is asked when the workspace is outside a git working tree, when the
-  entry is already present, or when no folder is open.
+- On `Yes`, and only on `Yes`, `.deslop/cache/` is appended to the `.gitignore` beside the cache, creating the file when absent and preserving every existing rule.
+- On `No` — or on dismissal — nothing is written and the answer is recorded in workspace state, so the question is never asked again.
+- Nothing is asked when the workspace is outside a git working tree, when the entry is already present, or when no folder is open.
 
-A user's `.gitignore` is tracked source: it lands in their next commit and
-changes what their whole team sees. The cache directory is Deslop's to write;
-that file is not. Writing it unprompted would be the extension committing on the
-user's behalf, so the write is gated on an explicit answer and never inferred.
-The repository is located by walking up from the workspace root, because a
-workspace is frequently a subfolder of the repository (a monorepo package, or
-`src/` opened directly) and those users are polluted just the same.
+A user's `.gitignore` is tracked source: it lands in their next commit and changes what their whole team sees. The cache directory is Deslop's to write; that file is not. Writing it unprompted would be the extension committing on the user's behalf, so the write is gated on an explicit answer and never inferred. The repository is located by walking up from the workspace root, because a workspace is frequently a subfolder of the repository (a monorepo package, or `src/` opened directly) and those users are polluted just the same.
 
 ### [VSIX-MCP-INTEGRATION] MCP integration for in-VS-Code agents
 
@@ -452,7 +430,7 @@ Users who run an agent *outside* VS Code (e.g. Claude Code CLI in a terminal) ca
 
 ### [VSIX-TESTING] Extension tests
 
-`clients/vscode/test/` runs the VS Code extension test harness against fixture workspaces:
+`clients/vscode/src/test/` runs the VS Code extension test harness against fixture workspaces:
 
 - Extension activates on `.cs` file open; daemon spawns; activity bar badge appears.
 - Tree view populates with clusters ranked worst-first.

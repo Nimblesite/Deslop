@@ -1,392 +1,139 @@
 import { render } from "preact";
 import { useEffect } from "preact/hooks";
-import { signal } from "@preact/signals";
-
 import {
-  analysisState,
-  clusters,
-  post,
-  selectedCluster,
-  selectedClusterId,
-  severityByClusterId,
-  wireMessagePump,
+  analysisState, clusters, focusedOccurrenceIndex, pickedOccurrence, post,
+  selectedCluster, selectedClusterId, severityByClusterId, shortcutHelpExpanded, wireMessagePump,
 } from "../store";
-import { COLOR, FONT, GLOBAL_CSS, KIND_COLOR } from "../theme";
-import { HelpAction } from "../components/HelpAction";
+import { GLOBAL_CSS, KIND_COLOR } from "../theme";
 import { ClusterBadge } from "../components/ClusterBadge";
-import {
-  DocTextLink,
-  HelpBubble,
-  HelpedText,
-  helpCopy,
-  type HelpTopic,
-} from "../components/HelpBubble";
-import {
-  clusterSlug,
-  kindTaxonomy,
-  kindTitle,
-  occurrenceCount,
-  isClone,
-  INFORMATIONAL_FINDING,
-} from "../../../src/types/report";
+import { DocTextLink, HelpBubble } from "../components/HelpBubble";
+import { clusterSlug, kindTitle, occurrenceCount, isClone, INFORMATIONAL_FINDING } from "../../../src/types/report";
 import { formatMass } from "../../../src/types/format";
-import type { ReportCluster, ReportOccurrence } from "../../../src/types/report";
+import type { ReportCluster } from "../../../src/types/report";
 import { OccurrenceList } from "./OccurrenceList";
 
-const focusedOccurrenceIndex = signal(0);
-const shortcutHelpExpanded = signal(false);
-const TWELVE_PIXEL_SIZE = "12px";
-const ELEVEN_PIXEL_FONT_SIZE = "11px";
-const TEN_PIXEL_SIZE = "10px";
-const LARGE_SPACING = "24px";
-const SMALL_SPACING = "8px";
-const FLEX_DISPLAY = "flex";
-const SPACE_TEXT = " ";
-const GRID_DISPLAY = "grid";
-const WRAP_LAYOUT = "wrap";
-const END_ALIGNMENT = "flex-end";
-const CENTER_ALIGNMENT = "center";
-const ANYWHERE_WRAP = "anywhere";
-const OPEN_OCCURRENCE_MESSAGE = "open/occurrence";
-const UNKNOWN_RANK = "unknown";
-const FAINT_SEVERITY = "hint";
-const KEYDOWN_EVENT = "keydown";
-const LABEL_CLASS = "label";
-const WITH_HELP_CLASS = "with-help";
-const KIND_TOPIC = "clone-kind";
 const CLUSTER_ID_TOPIC = "cluster-id";
-const CLUSTER_NAVIGATION_TOPIC = "cluster-navigation";
-const CANONICAL_TOPIC = "canonical";
-const OCCURRENCES_TOPIC = "occurrences";
-const MASS_TOPIC = "mass";
-const NODES_TOPIC = "nodes";
-const BADGE_PADDING = "2px 6px";
-const BOLD_FONT_WEIGHT = 700;
+const OPEN_OCCURRENCE_MESSAGE = "open/occurrence";
+const KEYDOWN_EVENT = "keydown";
+const FAINT_SEVERITY = "hint";
+const UNKNOWN_RANK = "unknown";
+const INITIAL_INDEX = 0;
+const NEXT_OFFSET = 1;
+const PREVIOUS_OFFSET = -1;
 
+// [VSIX-WEBVIEW-ACTIONS-CONTEXT] A compact summary; technical detail is opt-in.
 function ClusterApp() {
   const cluster = selectedCluster.value;
-  const list = clusters.value;
-  const rank = cluster ? list.findIndex((c) => c.id === cluster.id) + 1 : 0;
-  const severity = cluster
-    ? severityByClusterId.value.get(cluster.id) ?? FAINT_SEVERITY
-    : FAINT_SEVERITY;
-  const slug = cluster ? clusterSlug(cluster) : "";
-
   useEffect(() => {
-    focusedOccurrenceIndex.value = 0;
+    focusedOccurrenceIndex.value = INITIAL_INDEX;
+    pickedOccurrence.value = null;
   }, [cluster?.id]);
-
   useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if (isEditableTarget(event.target)) return;
-      const currentList = clusters.value;
-      const currentCluster = selectedCluster.value;
-      const currentRank = currentCluster
-        ? currentList.findIndex((c) => c.id === currentCluster.id) + 1
-        : 0;
-      if (event.key === "n" && currentList.length > 0) {
-        event.preventDefault();
-        selectNextCluster(currentList, currentRank);
-      }
-      if (event.key === "p" && currentList.length > 0) {
-        event.preventDefault();
-        selectPreviousCluster(currentList, currentRank);
-      }
-      if (event.key === "j" && currentCluster) {
-        event.preventDefault();
-        moveFocusedOccurrence(currentCluster, 1);
-      }
-      if (event.key === "k" && currentCluster) {
-        event.preventDefault();
-        moveFocusedOccurrence(currentCluster, -1);
-      }
-      if (event.key === "Enter" && currentCluster) {
-        event.preventDefault();
-        openFocusedOccurrence(currentCluster);
-      }
-      if (event.key === "?") {
-        event.preventDefault();
-        shortcutHelpExpanded.value = !shortcutHelpExpanded.value;
-      }
-    };
-    window.addEventListener(KEYDOWN_EVENT, handler);
-    return () => window.removeEventListener(KEYDOWN_EVENT, handler);
+    window.addEventListener(KEYDOWN_EVENT, handleShortcut);
+    return () => window.removeEventListener(KEYDOWN_EVENT, handleShortcut);
   }, []);
-
-  if (!cluster) {
-    return (
-      <main style={{ padding: "24px" }}>
-        <p>No cluster selected.</p>
-      </main>
-    );
-  }
-
-  const canonical = cluster.occurrences[0];
-  const focusedIndex = focusedIndexFor(cluster);
-
-  return (
-    <main
-      style={{
-        padding: "24px clamp(16px, 6vw, 32px)",
-        minHeight: "100vh",
-        display: FLEX_DISPLAY,
-        flexDirection: "column",
-        opacity: analysisState.value.state === "errored" ? 0.5 : 1,
-        transition: "opacity 120ms",
-      }}
-    >
-      <header
-        style={{
-          display: GRID_DISPLAY,
-          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
-          gap: LARGE_SPACING,
-          alignItems: "start",
-          paddingBottom: LARGE_SPACING,
-        }}
-      >
-        <div>
-          <div
-            class={LABEL_CLASS}
-            style={{
-              color: COLOR.onSurfaceMuted,
-              marginBottom: SMALL_SPACING,
-              fontFamily: FONT.mono,
-              display: FLEX_DISPLAY,
-              alignItems: CENTER_ALIGNMENT,
-              gap: SMALL_SPACING,
-              flexWrap: WRAP_LAYOUT,
-              minWidth: 0,
-            }}
-          >
-            <HelpedText topic={CLUSTER_ID_TOPIC} title={clusterIdTitle(cluster)}>
-              CLUSTER ·{SPACE_TEXT}
-              <DocTextLink topic={CLUSTER_ID_TOPIC} title={clusterIdTitle(cluster)}>
-                {cluster.id}
-              </DocTextLink>
-            </HelpedText>
-          </div>
-          <h1
-            style={{
-              margin: 0,
-              fontFamily: FONT.ui,
-              fontSize: "2.25rem",
-              fontWeight: BOLD_FONT_WEIGHT,
-              letterSpacing: "-0.02em",
-            }}
-            title={kindHeadingTitle(cluster)}
-          >
-            <HelpedText topic={KIND_TOPIC} title={kindHeadingTitle(cluster)}>
-              <DocTextLink topic={KIND_TOPIC}>{kindTitle(cluster.kind)}</DocTextLink>
-            </HelpedText>
-          </h1>
-          <p
-            style={{
-              margin: "12px 0 0",
-              color: COLOR.onSurfaceMuted,
-              fontFamily: FONT.ui,
-              fontSize: "15px",
-            }}
-            title={isClone(cluster) ? `Mass ${formatMass(cluster.mass)} across ${occurrenceCount(cluster)} occurrences in this report.` : INFORMATIONAL_FINDING}
-          >
-            <HelpedText topic={KIND_TOPIC}>
-              {isClone(cluster) ? `${kindTaxonomy(cluster.kind)} · duplicated mass ${formatMass(cluster.mass)}.` : INFORMATIONAL_FINDING}
-            </HelpedText>
-          </p>
-        </div>
-        <div style={{ textAlign: "right", minWidth: 0, overflowWrap: ANYWHERE_WRAP }}>
-          <span class={WITH_HELP_CLASS} style={{ justifyContent: END_ALIGNMENT }}>
-            <ClusterBadge
-              kind={cluster.kind}
-              severity={severity}
-              label={`${slug}`}
-              title={clusterIdTitle(cluster)}
-            />
-            {isClone(cluster) ? <HelpBubble topic="rank" /> : null}
-          </span>
-          {isClone(cluster) ? <div
-            style={{
-              fontFamily: FONT.mono,
-              color: COLOR.onSurfaceMuted,
-              marginTop: TWELVE_PIXEL_SIZE,
-              fontSize: TWELVE_PIXEL_SIZE,
-              display: FLEX_DISPLAY,
-              justifyContent: END_ALIGNMENT,
-              gap: TEN_PIXEL_SIZE,
-              flexWrap: WRAP_LAYOUT,
-            }}
-            title={clusterStatsTitle(cluster)}
-          >
-            <StatItem topic={MASS_TOPIC} label={MASS_TOPIC} value={formatMass(cluster.mass)} />
-            <StatItem topic="canonical" label={NODES_TOPIC} value={String(cluster.canonical_node_count)} />
-            <StatItem topic="occurrence-count" label={OCCURRENCES_TOPIC} value={`× ${occurrenceCount(cluster)}`} />
-          </div> : null}
-          {canonical ? (
-            <div
-              style={{
-                fontFamily: FONT.mono,
-                fontSize: TWELVE_PIXEL_SIZE,
-                marginTop: "4px",
-                overflowWrap: ANYWHERE_WRAP,
-              }}
-              title={canonicalTitle(canonical)}
-            >
-              <HelpedText topic={CANONICAL_TOPIC} title={canonicalTitle(canonical)}>
-                <DocTextLink topic={CANONICAL_TOPIC}>{CANONICAL_TOPIC}</DocTextLink>: {canonical.path}
-              </HelpedText>
-            </div>
-          ) : null}
-        </div>
-      </header>
-
-      <OccurrenceList
-        cluster={cluster}
-        focusedIndex={focusedIndex}
-        accent={KIND_COLOR[cluster.kind]}
-      />
-
-      <div style={{ marginTop: "auto", paddingTop: LARGE_SPACING }}>
-        <footer
-          style={{
-            display: FLEX_DISPLAY,
-            gap: "12px",
-            justifyContent: END_ALIGNMENT,
-            flexWrap: WRAP_LAYOUT,
-          }}
-        >
-          <HelpAction topic={CLUSTER_NAVIGATION_TOPIC}>
-            <button
-              onClick={() => selectPreviousCluster(list, rank)}
-              title="Previous cluster: move to the cluster ranked immediately before this one. Same behavior as the p keyboard shortcut."
-              aria-label="Previous cluster"
-            >
-              ← prev cluster (p)
-            </button>
-          </HelpAction>
-          <HelpAction topic={CLUSTER_NAVIGATION_TOPIC}>
-            <button
-              onClick={() => selectNextCluster(list, rank)}
-              title="Next cluster: move to the cluster ranked immediately after this one. Same behavior as the n keyboard shortcut."
-              aria-label="Next cluster"
-            >
-              next cluster (n) →
-            </button>
-          </HelpAction>
-        </footer>
-        <HotkeyHelp accent={KIND_COLOR[cluster.kind]} />
-      </div>
-    </main>
-  );
+  if (!cluster) return <main class="cluster-panel"><p>No cluster selected.</p></main>;
+  return <main class="cluster-panel" style={{ opacity: analysisState.value.state === "errored" ? 0.5 : 1 }}>
+    <ClusterHeader cluster={cluster} />
+    <OccurrenceList cluster={cluster} focusedIndex={focusedIndexFor(cluster)} accent={KIND_COLOR[cluster.kind]} />
+    <ClusterNavigation /><HotkeyHelp />
+  </main>;
 }
 
-function HotkeyHelp({ accent }: { accent: string }) {
-  return (
-    <div
-      class="mono"
-      style={{
-        marginTop: "32px",
-        fontSize: ELEVEN_PIXEL_FONT_SIZE,
-        color: COLOR.onSurfaceMuted,
-      }}
-      title="Keyboard help for this cluster panel. These shortcuts work while focus is in the webview but not inside a button or input."
-    >
-      <span style={{ color: accent }} title="j moves the focused occurrence down; k moves it up.">
-        j/k
-      </span>{SPACE_TEXT}
-      next/prev occurrence ·{SPACE_TEXT}
-      <span style={{ color: accent }} title="n moves to the next cluster; p moves to the previous cluster.">
-        n/p
-      </span>{SPACE_TEXT}
-      next/prev cluster ·{SPACE_TEXT}
-      <span style={{ color: accent }} title="Enter opens the currently focused occurrence in the editor.">
-        Enter
-      </span>{SPACE_TEXT}
-      open ·{SPACE_TEXT}
-      <button
-        onClick={() => {
-          shortcutHelpExpanded.value = !shortcutHelpExpanded.value;
-        }}
-        title="Show or hide detailed keyboard shortcut help for this cluster panel."
-        aria-label="Toggle keyboard shortcut help"
-        style={{ padding: BADGE_PADDING, color: accent }}
-      >
-        ?
-      </button>{SPACE_TEXT}
-      help <HelpBubble topic="keyboard-shortcuts" />
-      {shortcutHelpExpanded.value ? (
-        <div
-          style={{ marginTop: SMALL_SPACING, maxWidth: "760px" }}
-          title="Detailed keyboard help: occurrence movement changes the highlighted occurrence row; cluster movement changes the selected cluster; Enter opens the focused occurrence."
-        >
-          j/k changes the highlighted occurrence row. n/p changes the selected cluster. Enter opens the highlighted occurrence in VS Code. ? toggles this help text.
-        </div>
-      ) : null}
+function ClusterHeader({ cluster }: { cluster: ReportCluster }) {
+  const slug = clusterSlug(cluster);
+  const severity = severityByClusterId.value.get(cluster.id) ?? FAINT_SEVERITY;
+  return <header class="cluster-header">
+    <div class="cluster-eyebrow"><span class="label">CLUSTER</span>
+      <ClusterBadge kind={cluster.kind} severity={severity} label={`${slug}`} title={clusterIdTitle(cluster)} />
     </div>
-  );
+    <div class="cluster-heading"><h1>{kindTitle(cluster.kind)}</h1><HelpBubble topic="clone-kind" /></div>
+    <p class="cluster-summary">{isClone(cluster) ? `${occurrenceCount(cluster)} locations with repeated code` : INFORMATIONAL_FINDING}</p>
+    {isClone(cluster) ? <div class="cluster-weight"><span>Duplicated <span>mass</span> <strong>{formatMass(cluster.mass)}</strong></span><HelpBubble topic="mass" /></div> : null}
+    <details class="cluster-details"><summary>Technical details</summary>
+      <div>Cluster <DocTextLink topic={CLUSTER_ID_TOPIC} title={clusterIdTitle(cluster)}>{cluster.id}</DocTextLink></div>
+      {isClone(cluster) ? <div>Rank {cluster.rank || UNKNOWN_RANK} · Canonical syntax nodes: {cluster.canonical_node_count}</div> : null}
+    </details>
+  </header>;
 }
 
-function StatItem({ topic, label, value }: { topic: HelpTopic; label: string; value: string }) {
-  const title = `${helpCopy(topic)} (${value})`;
-  return (
-    <span class={WITH_HELP_CLASS} title={title}>
-      <span>
-        <DocTextLink topic={topic} title={title}>{label}</DocTextLink> {value}
-      </span>
-      <HelpBubble topic={topic} />
-    </span>
-  );
+function ClusterNavigation() {
+  const list = clusters.value;
+  const rank = list.findIndex((cluster) => cluster.id === selectedClusterId.value) + NEXT_OFFSET;
+  return <footer class="cluster-navigation">
+    <button onClick={() => selectPreviousCluster(list, rank)} title="Previous cluster (p)" aria-label="Previous cluster">← Previous</button>
+    <span class="cluster-position">{rank} of {list.length}</span>
+    <button onClick={() => selectNextCluster(list, rank)} title="Next cluster (n)" aria-label="Next cluster">Next →</button>
+  </footer>;
+}
+
+function HotkeyHelp() {
+  return <div class="cluster-shortcuts">
+    <button class="text-action" onClick={() => { shortcutHelpExpanded.value = !shortcutHelpExpanded.value; }}
+      title="Show or hide keyboard shortcuts" aria-label="Toggle keyboard shortcut help">Keyboard shortcuts</button>
+    <HelpBubble topic="keyboard-shortcuts" />
+    {shortcutHelpExpanded.value ? <p title="Detailed keyboard help">
+      <kbd>j</kbd> / <kbd>k</kbd> next / previous occurrence · <kbd>n</kbd> / <kbd>p</kbd> next / previous cluster · <kbd>Enter</kbd> open focused occurrence · <kbd>?</kbd> toggle help
+    </p> : null}
+  </div>;
+}
+
+function handleShortcut(event: KeyboardEvent): void {
+  if (isEditableTarget(event.target)) return;
+  const cluster = selectedCluster.value;
+  const list = clusters.value;
+  const rank = list.findIndex((item) => item.id === cluster?.id) + NEXT_OFFSET;
+  const actions: Record<string, () => void> = {
+    n: () => selectNextCluster(list, rank), p: () => selectPreviousCluster(list, rank),
+    j: () => { if (cluster) moveFocusedOccurrence(cluster, NEXT_OFFSET); },
+    k: () => { if (cluster) moveFocusedOccurrence(cluster, PREVIOUS_OFFSET); },
+    Enter: () => { if (cluster) openFocusedOccurrence(cluster); },
+    "?": () => { shortcutHelpExpanded.value = !shortcutHelpExpanded.value; },
+  };
+  const action = actions[event.key];
+  if (action) { event.preventDefault(); action(); }
 }
 
 function selectNextCluster(list: ReportCluster[], rank: number): void {
-  selectClusterByOffset(list, rank, 1);
+  selectClusterByOffset(list, rank, NEXT_OFFSET);
 }
 
 function selectPreviousCluster(list: ReportCluster[], rank: number): void {
-  selectClusterByOffset(list, rank, -1);
+  selectClusterByOffset(list, rank, PREVIOUS_OFFSET);
 }
 
 function selectClusterByOffset(list: ReportCluster[], rank: number, offset: number): void {
-  if (list.length === 0) return;
-  const current = rank > 0 ? rank - 1 : 0;
+  if (list.length === INITIAL_INDEX) return;
+  const current = rank > INITIAL_INDEX ? rank - NEXT_OFFSET : INITIAL_INDEX;
   const next = (current + offset + list.length) % list.length;
   selectedClusterId.value = list[next]?.id ?? null;
-  focusedOccurrenceIndex.value = 0;
+  focusedOccurrenceIndex.value = INITIAL_INDEX;
+  pickedOccurrence.value = null;
 }
 
 function moveFocusedOccurrence(cluster: ReportCluster, offset: number): void {
   const total = cluster.occurrences.length;
-  if (total === 0) return;
+  if (total === INITIAL_INDEX) return;
   focusedOccurrenceIndex.value = (focusedIndexFor(cluster) + offset + total) % total;
 }
 
 function openFocusedOccurrence(cluster: ReportCluster): void {
-  const occurrence = cluster.occurrences[focusedIndexFor(cluster)] ?? cluster.occurrences[0];
+  const occurrence = cluster.occurrences[focusedIndexFor(cluster)] ?? cluster.occurrences[INITIAL_INDEX];
   if (occurrence) post({ kind: OPEN_OCCURRENCE_MESSAGE, occurrence });
 }
 
 function focusedIndexFor(cluster: ReportCluster): number {
-  const max = Math.max(0, cluster.occurrences.length - 1);
-  return Math.min(Math.max(0, focusedOccurrenceIndex.value), max);
+  const max = Math.max(INITIAL_INDEX, cluster.occurrences.length - NEXT_OFFSET);
+  return Math.min(Math.max(INITIAL_INDEX, focusedOccurrenceIndex.value), max);
 }
 
 function isEditableTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLElement &&
-    ["BUTTON", "INPUT", "SELECT", "TEXTAREA"].includes(target.tagName);
+    ["BUTTON", "A", "INPUT", "SELECT", "TEXTAREA", "SUMMARY"].includes(target.tagName);
 }
 
 function clusterIdTitle(cluster: ReportCluster): string {
   return `Cluster ${cluster.id}. ${isClone(cluster) ? `Rank ${cluster.rank || UNKNOWN_RANK} by duplicated mass.` : INFORMATIONAL_FINDING}`;
-}
-
-function kindHeadingTitle(cluster: ReportCluster): string {
-  return `${kindTitle(cluster.kind)}: ${kindTaxonomy(cluster.kind)}. The weakest relation between this cluster's first occurrence and any other member, as an explicit pair comparison would report it.`;
-}
-
-function clusterStatsTitle(cluster: ReportCluster): string {
-  return `Mass is this cluster's duplicated mass, the worst-first ranking metric. Nodes is the number of cloned AST members in the canonical occurrence. Occurrences is the number of editor locations in this cluster: mass ${formatMass(cluster.mass)}, nodes ${cluster.canonical_node_count}, occurrences ${occurrenceCount(cluster)}.`;
-}
-
-function canonicalTitle(occurrence: ReportOccurrence): string {
-  return `Canonical occurrence: the first occurrence of the cluster, the canonical extent its mass is measured over. Location: ${occurrence.displayLocation?.label ?? occurrence.path}.`;
 }
 
 wireMessagePump();

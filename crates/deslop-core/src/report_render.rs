@@ -9,9 +9,9 @@ use std::{
 use crate::{
     ast::ByteRange,
     cluster::{duplicate_mass, Cluster},
-    config::ExclusionConfig,
     fingerprint::Fingerprint,
     report::{ReportCluster, ReportOccurrence},
+    report_hide::{MemberFile, ReportHide},
     state::{FileId, FileRegistry},
 };
 
@@ -105,7 +105,7 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
     registry: &FileRegistry,
     file_languages: &HashMap<FileId, &'static str, S>,
     scan_root: &Path,
-    exclusion: &ExclusionConfig,
+    hide: &ReportHide<'_>,
     sources: &ReportSources<'_>,
 ) -> ReportCluster {
     let canonical_node_count = cluster
@@ -117,16 +117,7 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
     let occurrences: Vec<ReportOccurrence> = cluster
         .members
         .iter()
-        .map(|member| {
-            occurrence(
-                member,
-                registry,
-                file_languages,
-                scan_root,
-                exclusion,
-                sources,
-            )
-        })
+        .map(|member| occurrence(member, registry, file_languages, scan_root, hide, sources))
         .collect();
     let occurrences_total = occurrences.len();
     let occurrence_count = occurrences
@@ -155,17 +146,19 @@ fn occurrence<S: BuildHasher>(
     registry: &FileRegistry,
     file_languages: &HashMap<FileId, &'static str, S>,
     scan_root: &Path,
-    exclusion: &ExclusionConfig,
+    hide: &ReportHide<'_>,
     sources: &ReportSources<'_>,
 ) -> ReportOccurrence {
     let file_id = member.file_id;
     let absolute = registry.path(file_id).map(Path::to_path_buf);
     let language = file_languages.get(&file_id).copied().unwrap_or("");
     let source = sources.source(file_id);
-    let hidden = absolute
-        .as_deref()
-        .is_some_and(|path| exclusion.is_report_hidden(path, language))
-        || source.is_some_and(|item| crate::config::has_generated_header(item.bytes));
+    let hidden = hide.hides(&MemberFile {
+        id: file_id,
+        path: absolute.as_deref(),
+        language,
+        source: source.map(|item| item.bytes),
+    });
     let (start_line, end_line) = source.map_or((0, 0), |item| {
         byte_range_to_line_range(item.line_index, member.byte_range)
     });

@@ -66,13 +66,7 @@ flowchart LR
 ```
 
 ### [LIVE-BINARY] The live binary
-`deslop-lsp` is the single executable that links the `live` feature of
-`deslop-core` and owns the running `AnalysisSession`, file watcher, and scheduler
-([LIVE-PACKAGING]). It is the only process that performs live analysis: the LSP
-client (VSIX, JetBrains, any editor) and the agent-facing MCP both delegate to it,
-the MCP over the IPC socket ([LIVE-IPC-SOCKET]) and the editor over LSP stdio.
-"The live binary" elsewhere in the specs (e.g. [lsp.md](lsp.md)) names this
-process.
+`deslop-lsp` is the single executable that links the `live` feature of `deslop-core` and owns the running `AnalysisSession`, file watcher, and scheduler ([LIVE-PACKAGING]). It is the only process that performs live analysis: the LSP client (VSIX, JetBrains, any editor) and the agent-facing MCP both delegate to it, the MCP over the IPC socket ([LIVE-IPC-SOCKET]) and the editor over LSP stdio. "The live binary" elsewhere in the specs (e.g. [lsp.md](lsp.md)) names this process.
 
 ### [LIVE-LIFECYCLE] Session lifecycle
 
@@ -158,13 +152,7 @@ Ordering is deliberate: the report is written first and the key second. A crash 
 **Not written on:** per-keystroke incremental updates ([LIVE-SCHEDULER]) and embedding refresh commits — those used to spam the disk and contributed nothing to startup latency. The MCP no longer reads this file ([MCP-IPC-CLIENT]); it gets live state via the IPC socket. Stale-cache reads cannot leak hidden clusters because no one reads the cache except the LSP itself, post-restart, before its first cold pass overwrites it.
 
 ### [LIVE-STATE-FILE] State file (alias)
-`[LIVE-STATE-FILE]` is an alias for the `.deslop/cache/live-report.json`
-warm-start cache specified in full by [LIVE-SEED-CACHE]: written atomically on
-the initial full pass and on each cold-pass install, holding canonical `Report`
-JSON. It is the LSP's private startup cache and the on-disk path named in the
-MCP's `LspNotRunning` recovery payload ([MCP-IPC-DISCOVERY]); it is not an IPC
-channel and is not rewritten on incremental passes. Prefer the [LIVE-SEED-CACHE]
-tag for new references.
+`[LIVE-STATE-FILE]` is an alias for the `.deslop/cache/live-report.json` warm-start cache specified in full by [LIVE-SEED-CACHE]: written atomically on the initial full pass and on each cold-pass install, holding canonical `Report` JSON. It is the LSP's private startup cache and the on-disk path named in the MCP's `LspNotRunning` recovery payload ([MCP-IPC-DISCOVERY]); it is not an IPC channel and is not rewritten on incremental passes. Prefer the [LIVE-SEED-CACHE] tag for new references.
 
 ### [LIVE-IPC-SOCKET] IPC endpoint
 
@@ -212,69 +200,28 @@ Budget: ≤ 10 changed files, warm cache, 100 K-LOC → **< 500 ms**. Miss the b
 
 ### [LIVE-SCHEDULER-NOOP] No-op pass early-out
 
-A changeset whose every path is rejected before it can touch the corpus — an
-unsupported extension, an `exclude` match, an ignore-rule match
-([LIVE-WATCHER]), a removal naming a file the corpus never held, or **an
-analysed file whose bytes on disk are identical to the bytes already
-ingested** — leaves the fingerprint set byte-identical. The report is therefore
-provably identical too, so `update_files` returns `None` and the scheduler:
+A changeset whose every path is rejected before it can touch the corpus — an unsupported extension, an `exclude` match, an ignore-rule match ([LIVE-WATCHER]), a removal naming a file the corpus never held, or **an analysed file whose bytes on disk are identical to the bytes already ingested** — leaves the fingerprint set byte-identical. The report is therefore provably identical too, so `update_files` returns `None` and the scheduler:
 
 - does **not** run LSH, embedding, candidate-pair, clustering, or ranking;
 - does **not** swap `latest_report`;
 - does **not** bump `generation` or broadcast `report_changed`.
 
-The last point is a correctness requirement, not just an optimisation: a
-generation bump is a promise to every subscriber that the report changed, and
-honouring it forces the panel, the diagnostics, and every MCP client to re-fetch
-an identical snapshot.
+The last point is a correctness requirement, not just an optimisation: a generation bump is a promise to every subscriber that the report changed, and honouring it forces the panel, the diagnostics, and every MCP client to re-fetch an identical snapshot.
 
-Only a mutation to an analysed file re-renders. A watched config or ignore-rule
-path always counts as a mutation ([LIVE-CONFIG-LIVE]) because it re-scopes
-rendering itself — hide patterns and thresholds — not merely the file set.
+Only a mutation to an analysed file re-renders. A watched config or ignore-rule path always counts as a mutation ([LIVE-CONFIG-LIVE]) because it re-scopes rendering itself — hide patterns and thresholds — not merely the file set.
 
-Suppression of step 6 keys off the **generation**, never off which paths the
-changeset held: no filter over paths can be wrong about a generation, and an
-unannounced generation is exactly what a subscriber does not have.
+Suppression of step 6 keys off the **generation**, never off which paths the changeset held: no filter over paths can be wrong about a generation, and an unannounced generation is exactly what a subscriber does not have.
 
-The scheduler therefore remembers the generation it last announced — seeded at
-startup from the session, because `initialize` and `reportGet` have already
-handed subscribers that one — and broadcasts only when the current generation
-differs from it. Comparing the generation across the pass instead would be a
-bug: every read calls `refresh_if_stale` ([LIVE-CLUSTER-OFFSET-FRESHNESS]), which ingests
-pending edits and advances the generation *without* broadcasting, and on a busy
-editor that read path routinely beats the watcher to the same edit. The pass
-that follows then finds nothing left to do, and a scheduler asking "did *I*
-change anything" would go silent on a generation nobody had heard about —
-freezing the panel on a stale report. Asking "have subscribers heard this
-generation" covers both origins.
+The scheduler therefore remembers the generation it last announced — seeded at startup from the session, because `initialize` and `reportGet` have already handed subscribers that one — and broadcasts only when the current generation differs from it. Comparing the generation across the pass instead would be a bug: every read calls `refresh_if_stale` ([LIVE-CLUSTER-OFFSET-FRESHNESS]), which ingests pending edits and advances the generation *without* broadcasting, and on a busy editor that read path routinely beats the watcher to the same edit. The pass that follows then finds nothing left to do, and a scheduler asking "did *I* change anything" would go silent on a generation nobody had heard about — freezing the panel on a stale report. Asking "have subscribers heard this generation" covers both origins.
 
-`analysis/state` (`Running` → `Idle`) is still broadcast for every pass — it
-drives the panel's progress indicator and costs one enum on the wire.
+`analysis/state` (`Running` → `Idle`) is still broadcast for every pass — it drives the panel's progress indicator and costs one enum on the wire.
 
-Without this early-out, steps 4-6 ran on every filesystem event the watcher
-delivered. One production LSP session spent **11h17m of CPU across 1086 passes**
-on a 172-file workspace, re-deriving 4,972 clusters from 422,711 fingerprints
-and 366,765 candidate pairs roughly every 30 seconds; 139 of 157 logged passes
-published a byte-identical report (#299).
+Without this early-out, steps 4-6 ran on every filesystem event the watcher delivered. One production LSP session spent **11h17m of CPU across 1086 passes** on a 172-file workspace, re-deriving 4,972 clusters from 422,711 fingerprints and 366,765 candidate pairs roughly every 30 seconds; 139 of 157 logged passes published a byte-identical report (#299).
 
-Editors re-deliver the same buffer constantly — `textDocument/didChange` fires
-per keystroke, atomic saves emit write-then-rename pairs, and a build rewriting
-ignored output trees floods the watcher — so the unchanged-bytes gate carries
-most of the traffic in practice. A second production session ran **53
-whole-corpus renders in two hours**, 24 of them back-to-back at an 11-second
-cadence over ~262,000 fingerprints, holding `deslop-lsp` at 99.9% CPU and
-2.35 GiB RSS; the announcements those passes emitted drew 281 `reportGet`
-round-trips for a report that never changed (#314).
+Editors re-deliver the same buffer constantly — `textDocument/didChange` fires per keystroke, atomic saves emit write-then-rename pairs, and a build rewriting ignored output trees floods the watcher — so the unchanged-bytes gate carries most of the traffic in practice. A second production session ran **53 whole-corpus renders in two hours**, 24 of them back-to-back at an 11-second cadence over ~262,000 fingerprints, holding `deslop-lsp` at 99.9% CPU and 2.35 GiB RSS; the announcements those passes emitted drew 281 `reportGet` round-trips for a report that never changed (#314).
 
 ### [LIVE-CONFIG-LIVE] Live `.deslop.toml` reload
-Editing `<root>/.deslop.toml` (or the explicit `--config` override) is a watched
-change ([LIVE-WATCHER]): the watch set always includes the canonical and
-as-given config paths. When such a file lands in a changeset, the scheduler
-reloads the exclusion config and re-evaluates the whole live corpus against it —
-dropping files the new `exclude` patterns now match and re-discovering files a
-removed pattern re-admits — then bumps the generation like any other pass
-([LIVE-SCHEDULER]). A malformed config is logged at `warn` and the previous
-exclusion is kept; a typo never bricks the daemon or empties the report.
+Editing `<root>/.deslop.toml` (or the explicit `--config` override) is a watched change ([LIVE-WATCHER]): the watch set always includes the canonical and as-given config paths. When such a file lands in a changeset, the scheduler reloads the exclusion config and re-evaluates the whole live corpus against it — dropping files the new `exclude` patterns now match and re-discovering files a removed pattern re-admits — then bumps the generation like any other pass ([LIVE-SCHEDULER]). A malformed config is logged at `warn` and the previous exclusion is kept; a typo never bricks the daemon or empties the report.
 
 ### [LIVE-DELTA] Report deltas
 
@@ -323,23 +270,10 @@ The `live` module exposes the `LiveApi` trait. The LSP holds a `LiveApi` impl an
 | `session/config` | `{}` | `SessionConfig` | min-nodes, languages, embedding provenance, exclusion config, cache dir. |
 
 ### [LIVE-RESCAN-FRESHNESS] Single-call rescan freshness
-`rescan` (the `deslop.lsp.refreshReport` IPC method) blocks until a fresh full
-pass completes and returns that pass's report — never one from before the
-refresh. The `paths` argument is informational; the LSP always runs a full
-`refresh_full` under the session lock. The response's `generation` and `clusters`
-fields are drawn from the same post-refresh generation, so one call surfaces the
-post-edit state — eliminated clusters disappear and surviving clusters carry
-post-edit offsets without a second call.
+`rescan` (the `deslop.lsp.refreshReport` IPC method) blocks until a fresh full pass completes and returns that pass's report — never one from before the refresh. The `paths` argument is informational; the LSP always runs a full `refresh_full` under the session lock. The response's `generation` and `clusters` fields are drawn from the same post-refresh generation, so one call surfaces the post-edit state — eliminated clusters disappear and surviving clusters carry post-edit offsets without a second call.
 
 ### [LIVE-CLUSTER-OFFSET-FRESHNESS] Cluster offset freshness on read
-A `cluster/byId` read (and `report/forFile` / `report/forRange` /
-`duplicates/findSimilar`) returns occurrence byte and line ranges that map onto
-the current on-disk file, even when the agent has edited files without an explicit
-`rescan` between reads. The session re-stats every occurrence path on each IPC
-read ([LIVE-CLUSTER-OFFSET-FRESHNESS]) and synchronously re-analyses any file whose mtime is
-newer than last observed, before resolving the cluster. A stale offset that
-overshoots the post-edit file length would corrupt agent context, so this gate is
-mandatory on every agent-facing read path, not just `rescan`.
+A `cluster/byId` read (and `report/forFile` / `report/forRange` / `duplicates/findSimilar`) returns occurrence byte and line ranges that map onto the current on-disk file, even when the agent has edited files without an explicit `rescan` between reads. The session re-stats every occurrence path on each IPC read ([LIVE-CLUSTER-OFFSET-FRESHNESS]) and synchronously re-analyses any file whose mtime is newer than last observed, before resolving the cluster. A stale offset that overshoots the post-edit file length would corrupt agent context, so this gate is mandatory on every agent-facing read path, not just `rescan`.
 
 ### [LIVE-NOTIFICATIONS] Push notifications
 
@@ -352,13 +286,7 @@ The LSP pushes three notification types to LSP clients (VSIX, other editors):
 The MCP **is** an IPC subscriber. It opens one long-lived `report/subscribe` connection over the socket and re-emits each `report/changed` notification to its own client as `notifications/deslop/reportChanged` ([MCP-NOTIFICATIONS]). It never reads `.deslop/cache/live-report.json` and never watches the workspace.
 
 ### [LIVE-REPORT-DISPLAY] Human-readable report display
-On-screen cluster views (LSP cluster virtual documents, hover bubbles, tree rows)
-are for humans, not AI: they render `line:column` locations and source snippets,
-never raw byte offsets. The cluster markdown renderer takes a source lookup and,
-when source is unavailable, prints the occurrence path alone and omits the snippet
-block rather than leaking offset internals. The raw JSON report retains byte
-offsets for AI consumers ([REPORTING-CONTEXT.md](REPORTING-CONTEXT.md)); the
-display layer translates them.
+On-screen cluster views (LSP cluster virtual documents, hover bubbles, tree rows) are for humans, not AI: they render `line:column` locations and source snippets, never raw byte offsets. The cluster markdown renderer takes a source lookup and, when source is unavailable, prints the occurrence path alone and omits the snippet block rather than leaking offset internals. The raw JSON report retains byte offsets for AI consumers ([REPORTING-CONTEXT.md](REPORTING-CONTEXT.md)); the display layer translates them.
 
 ### [LIVE-PERF-BUDGETS] Performance budgets
 
@@ -404,11 +332,4 @@ The MCP resolves the endpoint per call: try the Unix socket where the platform h
 If no endpoint is live ([MCP-IPC-DISCOVERY]), every IPC call returns `LspNotRunning` immediately. The MCP exposes that variant to its own client with an actionable message; it does **not** fall back to a second pipeline. CI / one-shot audits use the `deslop` CLI instead.
 
 ### [PERF-BUDGET-TYPE12] Batch CLI cold-pass budget (Type-1/2, no embeddings)
-A cold-cache `deslop` batch run over a 100 K-LOC C# corpus with embeddings
-disabled (structural + token LSH passes only) completes in **< 30 s** on a release
-binary. This is the CLI counterpart to the daemon budgets above; the embedding
-pass is excluded because Ollama latency dominates and is bounded separately
-([FUSED-EMBED-PROVIDER]). The budget is validated **manually** against a release
-build on a real corpus — coverage-instrumented `cargo test` triples runtime, so
-the E2E suite carries only a lax anti-quadratic regression guard plus correctness
-assertions (every file analysed, ≥ 1 ranked cluster). Ratchet only.
+A cold-cache `deslop` batch run over a 100 K-LOC C# corpus with embeddings disabled (structural + token LSH passes only) completes in **< 30 s** on a release binary. This is the CLI counterpart to the daemon budgets above; the embedding pass is excluded because Ollama latency dominates and is bounded separately ([FUSED-EMBED-PROVIDER]). The budget is validated **manually** against a release build on a real corpus — coverage-instrumented `cargo test` triples runtime, so the E2E suite carries only a lax anti-quadratic regression guard plus correctness assertions (every file analysed, ≥ 1 ranked cluster). Ratchet only.

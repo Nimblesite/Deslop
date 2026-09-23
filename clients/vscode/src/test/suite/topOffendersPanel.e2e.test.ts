@@ -18,11 +18,12 @@ const GROUP_BY_SETTING = "topOffenders.groupBy";
 const SORT_BY_SETTING = "topOffenders.sortBy";
 const FILTER_SEVERITIES_SETTING = "topOffenders.filterSeverities";
 
-const GROUP_BY_AXES: Array<"cluster" | "file" | "folder" | "kind"> = [
+const GROUP_BY_AXES = [
   "cluster",
   "file",
   "folder",
   "kind",
+  "language",
 ];
 
 function readConfig<T>(key: string): T | undefined {
@@ -85,11 +86,12 @@ suite("top offenders panel and node commands", () => {
     }
   });
 
-  test("both sort axes persist their workspace value", async () => {
-    await vscode.commands.executeCommand("deslop.topOffenders.sortByImpact");
-    assert.equal(await readConfig(SORT_BY_SETTING), "impact", "impact sort must persist");
-    await vscode.commands.executeCommand("deslop.topOffenders.sortByPath");
-    assert.equal(await readConfig(SORT_BY_SETTING), "path", "path sort must persist");
+  test("the grouping picker replaces the retired sort commands", async () => {
+    const commands = await vscode.commands.getCommands();
+    const groupingCommand = "deslop.topOffenders.chooseGrouping";
+    const retiredSortCommands = ["deslop.topOffenders.sortByImpact", "deslop.topOffenders.sortByPath"];
+    assert.ok(commands.includes(groupingCommand));
+    assert.deepEqual(commands.filter((command) => retiredSortCommands.includes(command)), []);
   });
 
   test("clearFilter empties the persisted severity facet", async () => {

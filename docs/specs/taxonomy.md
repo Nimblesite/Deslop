@@ -115,14 +115,16 @@ All values must be finite and within `[0, 1]`; require `shape_only_max_content <
 
 These describe dedicated findings rather than research clone types. They never turn an informational finding into a clone or alter the clone mass formula.
 
-| Finding kind | Wire label | Purpose |
-|---|---|---|
-| `Logic` | `logic` | Ordinary code repetition. |
-| `DataTable` | `data` | Repeated data-table shape. |
-| `MagicLiteral` | `magic_literal` | Repeated inline literal. |
-| `ShadowedConstant` | `shadowed_constant` | Inline value already named by a constant. |
-| `ConstantDuplicate` | `constant_duplicate` | Same constant declared repeatedly. |
-| `ConstantDrift` | `constant_drift` | Same constant name resolves to conflicting values. |
-| `ConstantAlias` | `constant_alias` | One value has several constant names. |
+| Finding kind | Wire label | Purpose | Status |
+|---|---|---|---|
+| `Logic` | `logic` | Ordinary code repetition. | Shipped |
+| `DataTable` | `data` | Repeated data-table shape. | Shipped |
+| `MagicLiteral` | `magic_literal` | Repeated inline literal. | Planned |
+| `ShadowedConstant` | `shadowed_constant` | Inline value already named by a constant. | Planned |
+| `ConstantDuplicate` | `constant_duplicate` | Same constant declared repeatedly. | Planned |
+| `ConstantDrift` | `constant_drift` | Same constant name resolves to conflicting values. | Planned |
+| `ConstantAlias` | `constant_alias` | One value has several constant names. | Planned |
+
+Only the shipped kinds exist in code: `CloneCategory::all()` lists `Logic` and `DataTable`, and every report carries one of those two wire labels. The five planned kinds arrive with the literal finding family ([LITERAL-CATEGORY](literals.md), [literal-constant-plan.md](../plans/literal-constant-plan.md)) and join the registry then.
 
 Dedicated literal records follow [LITERAL-WIRE]. Generated wire models must keep informational findings distinct from clone counts and ranking; update `docs/models/live-ipc.td`, never hand-written wire types.

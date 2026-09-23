@@ -197,8 +197,8 @@ function pathRollupTooltip(
 // sections and kind roots render through this one base.
 // Display-only: clusters carry the navigation command; the group row
 // carries the shared label and live count.
-export abstract class GroupNode extends vscode.TreeItem {
-  protected constructor(
+export class GroupNode extends vscode.TreeItem {
+  constructor(
     title: string,
     readonly clusters: ReportCluster[],
     contextValue: string,

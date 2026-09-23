@@ -55,6 +55,10 @@ impl LanguageParser for PythonParser {
         tree_sitter_python::LANGUAGE.into()
     }
 
+    fn is_comment_kind(&self, kind: &str) -> bool {
+        is_comment_kind(kind)
+    }
+
     fn parse_and_normalize(
         &self,
         source: &[u8],

@@ -26,7 +26,7 @@ When a filter is active, the first root row states the active filter and offers 
 
 ### [FACET-GROUP-BY-KIND] Clone kind is a cluster grouping mode
 
-Top Offenders supports cluster, file, folder and kind grouping. Use the names and order in [CLONE-KIND-LABELS](taxonomy.md#clone-kind-labels-use-the-same-names-everywhere) and the informational handling in [CLONE-BUCKETS-STRUCTURAL-ONLY] in every mode. Omit empty groups. Preserve engine rank for clone rows; show informational match counts separately from clone counts.
+Top Offenders offers Clone Category, Folder, Language, File and No Grouping in one picker. Groups follow their worst member’s engine rank ([VSIX-TOP-OFFENDERS-SORT]); use the names in [CLONE-KIND-LABELS](taxonomy.md#clone-kind-labels-use-the-same-names-everywhere) and the informational handling in [CLONE-BUCKETS-STRUCTURAL-ONLY] in every mode. Omit empty groups. Preserve engine rank for clone rows; show informational match counts separately from clone counts.
 
 ### [FACET-GROUP-BY-TYPE] Every clone category has a plain group title
 

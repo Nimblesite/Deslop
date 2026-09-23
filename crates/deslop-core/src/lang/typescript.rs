@@ -9,7 +9,10 @@
 use crate::{
     ast::NormalizedNode,
     error::CoreError,
-    lang::{ecmascript::parse_and_normalise, LanguageParser},
+    lang::{
+        ecmascript::{is_comment_kind, parse_and_normalise},
+        LanguageParser,
+    },
     state::FileId,
 };
 
@@ -41,6 +44,10 @@ impl LanguageParser for TypeScriptParser {
 
     fn grammar(&self) -> tree_sitter::Language {
         tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()
+    }
+
+    fn is_comment_kind(&self, kind: &str) -> bool {
+        is_comment_kind(kind)
     }
 
     fn parse_and_normalize(
@@ -75,6 +82,10 @@ impl LanguageParser for TsxParser {
 
     fn grammar(&self) -> tree_sitter::Language {
         tree_sitter_typescript::LANGUAGE_TSX.into()
+    }
+
+    fn is_comment_kind(&self, kind: &str) -> bool {
+        is_comment_kind(kind)
     }
 
     fn parse_and_normalize(

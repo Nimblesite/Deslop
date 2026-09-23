@@ -6,7 +6,10 @@ use super::*;
 use crate::{
     ast::ByteRange,
     buckets::ClusterKind,
+    cluster_filters::ParseCache,
+    config::ExclusionConfig,
     fingerprint::Fingerprint,
+    report_hide::ReportHide,
     report_render::{cluster_to_report, ReportSources},
     report_weight::rank_by_mass,
 };
@@ -63,11 +66,9 @@ impl Corpus {
             .collect();
         compute_repo_metrics(&MetricsInputs {
             clusters,
-            sources: &self.sources,
             line_indices: indexed.line_indices(),
-            file_languages: &HashMap::new(),
             registry: &self.registry,
-            exclusion: &ExclusionConfig::empty(),
+            hidden_files: &HashSet::new(),
             analysed_lines: &analysed_lines,
             scan_root: Path::new("."),
             diff: None,
@@ -148,6 +149,8 @@ fn information_visibility_cannot_hide_or_inflate_overlapping_clones() -> anyhow:
 fn shape_only_has_zero_weight_and_no_clone_rank() -> Result<()> {
     let corpus = Corpus::new();
     let sources = ReportSources::new(&corpus.sources);
+    let (exclusion, parse_cache) = (ExclusionConfig::empty(), ParseCache::new());
+    let hide = ReportHide::new(&exclusion, &[], &parse_cache);
     let mut clusters: Vec<_> = corpus
         .clusters
         .iter()
@@ -158,7 +161,7 @@ fn shape_only_has_zero_weight_and_no_clone_rank() -> Result<()> {
                 &corpus.registry,
                 &HashMap::new(),
                 Path::new("."),
-                &ExclusionConfig::empty(),
+                &hide,
                 &sources,
             )
         })

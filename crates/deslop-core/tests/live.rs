@@ -885,11 +885,14 @@ async fn record_embedding_progress(
     let completed = Arc::new(tokio::sync::Notify::new());
     let completed_clone = Arc::clone(&completed);
     let reporter: deslop_core::live::EmbeddingProgressReporter = Arc::new(move |event| {
-        if event.phase == deslop_core::live::EmbeddingPhase::Complete {
-            completed_clone.notify_one();
-        }
+        // Record, then release the waiter: a test woken first can read the
+        // phase list before `Complete` has been pushed onto it.
+        let finished = event.phase == deslop_core::live::EmbeddingPhase::Complete;
         if let Ok(mut lock) = events_clone.lock() {
             lock.push(event);
+        }
+        if finished {
+            completed_clone.notify_one();
         }
     });
     {

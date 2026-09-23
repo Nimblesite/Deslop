@@ -6,7 +6,9 @@
 //!   entirely. Never parsed, never fingerprinted.
 //! - **`report_hide`** — pattern matches analyse the file normally but
 //!   mark every occurrence `hidden = true` at render time; a cluster whose
-//!   members are *all* hidden is dropped from the rendered output.
+//!   members are *all* hidden is dropped from the rendered output. A file
+//!   that opens with a generator's banner is hidden the same way
+//!   ([EXCLUSION-GENERATED-BANNER]).
 //!
 //! The split makes "regular code duplicates generated code" visible (the
 //! cluster has at least one non-hidden occurrence so it survives) while
@@ -23,8 +25,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub(crate) use builtin::has_generated_header;
 use builtin::{built_in_report_hidden, corpus_built_in_excluded};
+pub(crate) use generated_banner::opens_with_generated_banner;
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
 use ranking::resolve_ranking_policy;
 pub use ranking::{
@@ -39,6 +41,7 @@ use crate::{
 };
 
 mod builtin;
+mod generated_banner;
 mod ranking;
 mod raw;
 mod tuning;

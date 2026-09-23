@@ -375,34 +375,39 @@ fn context_tokens(endpoint: &str, model: &str) -> Option<usize> {
     usize::try_from(show.model_info.get(&key)?.as_u64()?).ok()
 }
 
+/// Endpoint name [`fetch_show`] reports in a failed-status diagnostic.
+const SHOW_ENDPOINT_NAME: &str = "show";
+/// Endpoint name [`fetch_tags`] reports in a failed-status diagnostic.
+const TAGS_ENDPOINT_NAME: &str = "tags";
+
 /// Fetches the `POST /api/show` payload for `model`.
 fn fetch_show(endpoint: &str, model: &str) -> Result<ShowResponse, ProviderError> {
     let url = format!("{endpoint}/api/show");
     let body = ShowRequest { model };
-    let mut response = call_with_transport_retry(|| ollama_agent().post(&url).send_json(&body))?;
-    if !response.status().is_success() {
-        return Err(ProviderError::ProviderFailed {
-            provider_id: PROVIDER_ID.to_owned(),
-            message: format!("show endpoint failed (status {})", response.status()),
-        });
-    }
-    response
-        .body_mut()
-        .read_json()
-        .map_err(|err| ProviderError::Malformed {
-            provider_id: PROVIDER_ID.to_owned(),
-            message: err.to_string(),
-        })
+    let response = call_with_transport_retry(|| ollama_agent().post(&url).send_json(&body))?;
+    decode_success(response, SHOW_ENDPOINT_NAME)
 }
 
 /// Fetches the `GET /api/tags` payload.
 fn fetch_tags(endpoint: &str) -> Result<TagsResponse, ProviderError> {
     let url = format!("{endpoint}/api/tags");
-    let mut response = call_with_transport_retry(|| ollama_agent().get(&url).call())?;
+    let response = call_with_transport_retry(|| ollama_agent().get(&url).call())?;
+    decode_success(response, TAGS_ENDPOINT_NAME)
+}
+
+/// Decodes a 2xx response body as JSON. Any other status fails naming
+/// `endpoint_name`, so each caller keeps its own diagnostic.
+fn decode_success<T: serde::de::DeserializeOwned>(
+    mut response: ureq::http::Response<ureq::Body>,
+    endpoint_name: &str,
+) -> Result<T, ProviderError> {
     if !response.status().is_success() {
         return Err(ProviderError::ProviderFailed {
             provider_id: PROVIDER_ID.to_owned(),
-            message: format!("tags endpoint failed (status {})", response.status()),
+            message: format!(
+                "{endpoint_name} endpoint failed (status {})",
+                response.status()
+            ),
         });
     }
     response

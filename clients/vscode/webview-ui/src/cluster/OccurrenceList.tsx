@@ -1,35 +1,14 @@
-import { HelpAction } from "../components/HelpAction";
-import { HelpBubble, HelpedText } from "../components/HelpBubble";
-import { isPicked, post, tapOccurrenceRow } from "../store";
-import { COLOR, FONT } from "../theme";
+import { HelpedText } from "../components/HelpBubble";
+import { isPicked, pickedOccurrence, post, tapOccurrenceRow } from "../store";
 import type { ReportCluster, ReportOccurrence } from "../../../src/types/report";
 
-const TWELVE_PIXEL_SIZE = "12px";
-const ELEVEN_PIXEL_FONT_SIZE = "11px";
-const LARGE_SPACING = "24px";
-const SMALL_SPACING = "8px";
-const FLEX_DISPLAY = "flex";
-const GRID_DISPLAY = "grid";
-const WRAP_LAYOUT = "wrap";
-const END_ALIGNMENT = "flex-end";
-const CENTER_ALIGNMENT = "center";
-const ANYWHERE_WRAP = "anywhere";
-const FULL_WIDTH = "100%";
-const LABEL_CLASS = "label";
-const WITH_HELP_CLASS = "with-help";
 const OCCURRENCES_TOPIC = "occurrences";
-const OCCURRENCE_LOCATION_TOPIC = "occurrence-location";
 const OPEN_OCCURRENCE_MESSAGE = "open/occurrence";
-// [VSIX-PAIR-COMPARE] One click compares this exact occurrence with its canonical.
 const COMPARE_CANONICAL_MESSAGE = "compare/canonical";
 const CANONICAL_OCCURRENCE_INDEX = 0;
-// [VSIX-PAIR-COMPARE] Rows are the selection: tap one, then another, to
-// compare the two. No row carries a select button.
 const ROW_TAP_HINT = "Tap this row to pick it, then tap a second row to compare the two.";
-const PICKED_ROW_HINT =
-  "Picked for comparison. Tap another row to compare it with this one, or tap this row again to unpick it.";
+const PICKED_ROW_HINT = "Picked for comparison. Tap another row to compare it with this one, or tap this row again to unpick it.";
 const ROW_INTERACTIVE_SELECTOR = "button, a";
-const POINTER_CURSOR = "pointer";
 
 interface OccurrenceListProps {
   cluster: ReportCluster;
@@ -37,128 +16,70 @@ interface OccurrenceListProps {
   accent: string;
 }
 
-export function OccurrenceList({ cluster, focusedIndex, accent }: OccurrenceListProps) {
-  return (
-    <section style={{ marginTop: LARGE_SPACING }}>
-      <div
-        class={LABEL_CLASS}
-        style={{ color: COLOR.onSurfaceMuted, marginBottom: TWELVE_PIXEL_SIZE, fontFamily: FONT.mono, display: FLEX_DISPLAY, alignItems: CENTER_ALIGNMENT, gap: SMALL_SPACING }}
-      >
-        <HelpedText topic={OCCURRENCES_TOPIC}>OCCURRENCES</HelpedText>
-      </div>
-      {cluster.occurrences.map((occurrence, index) => (
-        <article
-          key={`${occurrence.path}-${occurrence.start_byte}`}
-          title={occurrenceTitle(occurrence, index, isPicked(occurrence))}
-          data-picked={isPicked(occurrence)}
-          onClick={(event) => tapRow(event, cluster, occurrence)}
-          style={{
-            background: index % 2 === 0 ? COLOR.surfaceContainerLow : COLOR.surface,
-            padding: "14px 20px",
-            display: GRID_DISPLAY,
-            gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
-            gap: "16px",
-            alignItems: CENTER_ALIGNMENT,
-            cursor: POINTER_CURSOR,
-            outline: rowOutline(isPicked(occurrence), index === focusedIndex, accent),
-          }}
-        >
-          <OccurrenceLocation occurrence={occurrence} />
-          <OccurrenceActions cluster={cluster} occurrence={occurrence} index={index} />
-        </article>
-      ))}
-    </section>
-  );
-}
-
-function OccurrenceLocation({ occurrence }: { occurrence: ReportOccurrence }) {
-  return (
-    <div style={{ minWidth: 0 }}>
-      <div
-        class={WITH_HELP_CLASS}
-        style={{ fontFamily: FONT.mono, fontSize: TWELVE_PIXEL_SIZE, maxWidth: FULL_WIDTH }}
-        title={locationTitle(occurrence)}
-      >
-        <button
-          class="text-action"
-          onClick={() => openOccurrence(occurrence)}
-          title={openTitle(occurrence)}
-          aria-label={openTitle(occurrence)}
-          style={{ maxWidth: FULL_WIDTH, overflowWrap: ANYWHERE_WRAP }}
-        >
-          {occurrence.displayLocation?.label ?? occurrence.path}
-        </button>
-        <HelpBubble topic={OCCURRENCE_LOCATION_TOPIC} />
-      </div>
-      <div
-        style={{
-          fontFamily: FONT.mono,
-          color: COLOR.onSurfaceMuted,
-          fontSize: ELEVEN_PIXEL_FONT_SIZE,
-          marginTop: "2px",
-        }}
-        title={locationDescriptionTitle(occurrence)}
-      >
-        <HelpedText
-          topic={occurrence.hidden ? "hidden-occurrence" : OCCURRENCE_LOCATION_TOPIC}
-          title={locationDescriptionTitle(occurrence)}
-        >
-          {occurrence.displayLocation?.description ??
-            "line and column unavailable until the file is loaded"}
-          {occurrence.hidden ? " · hidden" : ""}
-        </HelpedText>
-      </div>
-    </div>
-  );
-}
-
-function OccurrenceActions({
-  cluster,
-  occurrence,
-  index,
-}: {
+interface OccurrenceActionsProps {
   cluster: ReportCluster;
   occurrence: ReportOccurrence;
   index: number;
-}) {
-  return (
-    <div
-      style={{
-        display: FLEX_DISPLAY,
-        gap: SMALL_SPACING,
-        flexWrap: WRAP_LAYOUT,
-        justifyContent: END_ALIGNMENT,
-      }}
-    >
-      <HelpAction topic="open-action">
-        <button
-          onClick={() => openOccurrence(occurrence)}
-          title={openTitle(occurrence)}
-          aria-label={openTitle(occurrence)}
-        >
-          Open
-        </button>
-      </HelpAction>
-      <HelpAction topic="compare-action">
-        <button
-          disabled={index === CANONICAL_OCCURRENCE_INDEX}
-          onClick={() => compareWithCanonical(cluster.id, occurrence, index)}
-          title={compareTitle(index)}
-          aria-label={compareTitle(index)}
-        >
-          Compare
-        </button>
-      </HelpAction>
+}
+
+// [VSIX-PAIR-COMPARE] Explicit controls and row taps share one selection.
+export function OccurrenceList({ cluster, focusedIndex, accent }: OccurrenceListProps) {
+  return <section class="occurrence-list">
+    <div class="label occurrence-heading"><HelpedText topic={OCCURRENCES_TOPIC}>OCCURRENCES</HelpedText></div>
+    {cluster.occurrences.map((occurrence, index) => <article
+      key={`${occurrence.path}-${occurrence.start_byte}`} class="occurrence-row"
+      title={occurrenceTitle(occurrence, index, isPicked(occurrence))} data-picked={isPicked(occurrence)}
+      onClick={(event) => tapRow(event, cluster, occurrence)}
+      style={{ outline: rowOutline(isPicked(occurrence), index === focusedIndex, accent) }}>
+      <OccurrenceLocation occurrence={occurrence} />
+      <OccurrenceActions cluster={cluster} occurrence={occurrence} index={index} />
+    </article>)}
+  </section>;
+}
+
+function OccurrenceLocation({ occurrence }: { occurrence: ReportOccurrence }) {
+  return <div class="occurrence-location">
+    <button class="text-action" onClick={() => openOccurrence(occurrence)}
+      title={openTitle(occurrence)} aria-label={openTitle(occurrence)}>
+      {occurrence.displayLocation?.label ?? occurrence.path}
+    </button>
+    <div class="occurrence-position" title={locationDescriptionTitle(occurrence)}>
+      {occurrence.displayLocation?.description ?? "line and column unavailable until the file is loaded"}
+      {occurrence.hidden ? " · hidden" : ""}
     </div>
-  );
+  </div>;
+}
+
+function OccurrenceActions({ cluster, occurrence, index }: OccurrenceActionsProps) {
+  return <div class="occurrence-actions">
+    {index === CANONICAL_OCCURRENCE_INDEX ? <span class="canonical-label">Canonical</span> : null}
+    <button disabled={index === CANONICAL_OCCURRENCE_INDEX}
+      onClick={() => compareWithCanonical(cluster.id, occurrence, index)}
+      title={compareTitle(index)} aria-label="Compare To Canonical">Compare To Canonical</button>
+    <button class="secondary" onClick={() => tapOccurrenceRow(cluster, occurrence)}
+      title={selectionTitle(occurrence)}
+      aria-label={selectionLabel(occurrence)} aria-pressed={isPicked(occurrence)}>
+      {selectionLabel(occurrence)}
+    </button>
+  </div>;
+}
+
+function selectionLabel(occurrence: ReportOccurrence): string {
+  if (isPicked(occurrence)) return "Clear Selection";
+  return pickedOccurrence.value ? "Compare with Selected" : "Select for Compare";
+}
+
+function selectionTitle(occurrence: ReportOccurrence): string {
+  if (isPicked(occurrence)) return "Clear this selection to choose a different left side.";
+  return pickedOccurrence.value
+    ? "Open the selected occurrence on the left and this occurrence on the right."
+    : "Choose this occurrence as the left side, then use Compare with Selected on another row.";
 }
 
 function openOccurrence(occurrence: ReportOccurrence): void {
   post({ kind: OPEN_OCCURRENCE_MESSAGE, occurrence });
 }
 
-// A tap on the row's own buttons and links belongs to them; only the row
-// body picks.
 function tapRow(event: MouseEvent, cluster: ReportCluster, occurrence: ReportOccurrence): void {
   if (event.target instanceof Element && event.target.closest(ROW_INTERACTIVE_SELECTOR)) return;
   tapOccurrenceRow(cluster, occurrence);
@@ -170,9 +91,7 @@ function rowOutline(picked: boolean, focused: boolean, accent: string): string {
 }
 
 function compareWithCanonical(clusterId: string, occurrence: ReportOccurrence, index: number): void {
-  if (index !== CANONICAL_OCCURRENCE_INDEX) {
-    post({ kind: COMPARE_CANONICAL_MESSAGE, clusterId, occurrence });
-  }
+  if (index !== CANONICAL_OCCURRENCE_INDEX) post({ kind: COMPARE_CANONICAL_MESSAGE, clusterId, occurrence });
 }
 
 function compareTitle(index: number): string {
@@ -182,16 +101,9 @@ function compareTitle(index: number): string {
 }
 
 function occurrenceTitle(occurrence: ReportOccurrence, index: number, picked: boolean): string {
-  const role = index === 0 ? "Canonical occurrence" : `Occurrence ${index + 1}`;
-  const hidden = occurrence.hidden
-    ? " This occurrence is hidden by report_hide configuration but shown because the cluster also contains visible code."
-    : "";
-  const tap = picked ? PICKED_ROW_HINT : ROW_TAP_HINT;
-  return `${role}: ${occurrence.displayLocation?.label ?? occurrence.path}. ${occurrence.displayLocation?.description ?? "Line and column are unavailable until the file can be read."}${hidden} ${tap}`;
-}
-
-function locationTitle(occurrence: ReportOccurrence): string {
-  return `Editor target: ${occurrence.displayLocation?.label ?? occurrence.path}. This is the file and human line/column that Open will navigate to.`;
+  const role = index === CANONICAL_OCCURRENCE_INDEX ? "Canonical occurrence" : `Occurrence ${index + 1}`;
+  const hidden = occurrence.hidden ? " This occurrence is hidden by report_hide configuration." : "";
+  return `${role}: ${occurrence.displayLocation?.label ?? occurrence.path}. ${locationDescriptionTitle(occurrence)}${hidden} ${picked ? PICKED_ROW_HINT : ROW_TAP_HINT}`;
 }
 
 function locationDescriptionTitle(occurrence: ReportOccurrence): string {

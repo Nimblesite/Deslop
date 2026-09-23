@@ -8,8 +8,10 @@ use crate::{
     cluster_filters::{noise_workers, NOISE_CHUNK_CLUSTERS},
     config::ExclusionConfig,
     fingerprint::Fingerprint,
+    lang::LanguageParser,
     observe::elapsed_ms,
     report_boilerplate::build_boilerplate_hints,
+    report_hide::ReportHide,
     report_metrics::{compute_repo_metrics, AnalysedLines, MetricsInputs},
     report_render::ReportSources,
     report_weight::rank_by_mass,
@@ -90,6 +92,9 @@ pub struct ReportInputs<'a, S: BuildHasher> {
     pub scan_root: &'a Path,
     /// Exclusion and report-hide policy.
     pub exclusion: &'a ExclusionConfig,
+    /// The session's language plugins, which say what a comment is when a
+    /// file's opening comments are read ([EXCLUSION-GENERATED-BANNER]).
+    pub parsers: &'a [Box<dyn LanguageParser>],
     /// Embedding provider provenance.
     pub embedding_provenance: Option<EmbeddingProvenance>,
     /// Incremental-cache telemetry.
@@ -116,6 +121,7 @@ pub struct ReportInputs<'a, S: BuildHasher> {
 fn materialise_all<'a, S: BuildHasher + Sync>(
     inputs: &ReportInputs<'a, S>,
     report_sources: &ReportSources<'a>,
+    hide: &ReportHide<'_>,
 ) -> Vec<(ReportCluster, bool)> {
     let (chunks, _states) = crate::shard::map_chunks(
         inputs.clusters.chunks(NOISE_CHUNK_CLUSTERS),
@@ -124,9 +130,7 @@ fn materialise_all<'a, S: BuildHasher + Sync>(
         |(), chunk: &[Cluster]| {
             chunk
                 .iter()
-                .map(|cluster| {
-                    materialise_with_visibility(cluster, inputs, report_sources, inputs.parse_cache)
-                })
+                .map(|cluster| materialise_with_visibility(cluster, inputs, report_sources, hide))
                 .collect::<Vec<(ReportCluster, bool)>>()
         },
     );
@@ -138,7 +142,8 @@ fn materialise_all<'a, S: BuildHasher + Sync>(
 pub fn render_report<S: BuildHasher + Sync>(inputs: ReportInputs<'_, S>) -> Report {
     let started = Instant::now();
     let report_sources = ReportSources::new(inputs.sources);
-    let materialised = materialise_all(&inputs, &report_sources);
+    let hide = ReportHide::new(inputs.exclusion, inputs.parsers, inputs.parse_cache);
+    let materialised = materialise_all(&inputs, &report_sources, &hide);
     // Every render-stage noise check has now run: `cluster_is_hidden` is
     // the only render-stage caller of the noise filters, and it is
     // reached solely from the loop above. Without this the render
@@ -167,11 +172,9 @@ pub fn render_report<S: BuildHasher + Sync>(inputs: ReportInputs<'_, S>) -> Repo
     rank_by_mass(&mut clusters);
     let mut metrics = compute_repo_metrics(&MetricsInputs {
         clusters: &visible_internal,
-        sources: inputs.sources,
         line_indices: report_sources.line_indices(),
-        file_languages: inputs.file_languages,
         registry: inputs.registry,
-        exclusion: inputs.exclusion,
+        hidden_files: &hide.hidden_files(),
         analysed_lines: inputs.analysed_lines,
         scan_root: inputs.scan_root,
         diff: inputs.diff,

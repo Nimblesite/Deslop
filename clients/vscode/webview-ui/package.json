@@ -10,10 +10,12 @@
     "watch": "node build.mjs --watch"
   },
   "dependencies": {
-    "preact": "^10.29.8",
-    "@preact/signals": "^2.11.1"
+    "@preact/signals": "^2.11.1",
+    "markdown-it": "^14.2.0",
+    "preact": "^10.29.8"
   },
   "devDependencies": {
+    "@types/markdown-it": "^14.2.0",
     "esbuild": "^0.28.2",
     "typescript": "^6.0.3"
   }

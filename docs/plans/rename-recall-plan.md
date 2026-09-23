@@ -25,7 +25,7 @@ Supersedes `docs/plans/embedding-accuracy-plan.md`, which covered only the embed
 
 ## Fix 3 — [FUSED-EMBED-PROVIDER] (#369a)
 
-`crates/deslop/tests/cli/mock_ollama.rs::embed_vector` returns `[sin(len), cos(first_byte), 0.5, -0.5]`: two constant lanes floor every cosine and `sin` aliases over length — a 67-byte and an 865-byte text score 0.99997. That manufactures the two embedding-only false positives #369 names.
+`crates/deslop/tests/cli/mock_embedding_vector.rs::embed_vector` returns `[sin(len), cos(first_byte), 0.5, -0.5]`: two constant lanes floor every cosine and `sin` aliases over length — a 67-byte and an 865-byte text score 0.99997. That manufactures the two embedding-only false positives #369 names.
 
 **Delete** `embed_vector`. **Replace** with a 128-lane signed shingle signature (L2-normalised indicator of distinct 5-char shingles, sign-folded to 128 lanes — measured separations 0.954 real pair / 0.782 whole-fn vs chunk / 0.107 params vs chunk / 1.0 identical). 4096 lanes is not landable: `exact_embedding_pairs` is O(N²·D) and blew past ten minutes. Keep `CosinePoint`'s precomputed per-point norm; never recompute norms inside the pair loop. Recalibrate the ~88 dependent `embedding_cos` assertions against the honest instrument — equal or stronger discrimination, none deleted or loosened.
 
@@ -49,9 +49,7 @@ On the rejected-refresh path the server emits no terminal `deslop/embeddingProgr
 
 ## Fix 2 — [CLONE-NOISE-COPY-PROOF] (#373)
 
-> Placed last so the `FUSED` sections sit adjacent, as the spec-ID rule
-> requires. Position is not order here — `Order and gates` below is, and it
-> says this fix is independent and may land first.
+> Placed last so the `FUSED` sections sit adjacent, as the spec-ID rule requires. Position is not order here — `Order and gates` below is, and it says this fix is independent and may land first.
 
 Every noise filter's generic raw-byte-divergence shortcut risks convicting a genuine consistently renamed clone. The module header at `cluster_filters/mod.rs:88` claims "a verbatim/renamed copy survives," but post-closure filters cannot inspect pair content evidence and a cluster owns no `ContentEvidence`.
 

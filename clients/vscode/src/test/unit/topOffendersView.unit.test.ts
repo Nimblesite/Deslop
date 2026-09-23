@@ -13,7 +13,7 @@ import {
   isTopOffendersFilterActive,
   readTopOffendersFilter,
   setTopOffendersGroupBy,
-  setTopOffendersSortBy,
+  GROUPING_OPTIONS,
 } from "../../commands/topOffendersView";
 import { seededStore } from "./report-store.helpers";
 
@@ -37,8 +37,8 @@ suite("top offenders view-axis toggles", () => {
     await resetViewAxes();
   });
 
-  test("setTopOffendersGroupBy persists each of the four grouping modes", async () => {
-    for (const mode of ["cluster", "file", "folder", "kind"] as const) {
+  test("setTopOffendersGroupBy persists every grouping mode", async () => {
+    for (const { value: mode } of GROUPING_OPTIONS) {
       await setTopOffendersGroupBy(mode);
       assert.equal(
         cfg().get<string>("topOffenders.groupBy"),
@@ -71,12 +71,10 @@ suite("top offenders view-axis toggles", () => {
     assert.equal(isTopOffendersFilterActive(), false, "clear resets both axes");
   });
 
-  test("setTopOffendersSortBy persists impact and path", async () => {
-    await setTopOffendersSortBy("path");
-    assert.equal(cfg().get<string>("topOffenders.sortBy"), "path");
-
-    await setTopOffendersSortBy("impact");
-    assert.equal(cfg().get<string>("topOffenders.sortBy"), "impact");
+  test("grouping picker includes all named choices and no configurable sort", () => {
+    const expectedLabels = ["Clone Category", "Folder", "Language", "File", "No Grouping"];
+    assert.deepEqual(GROUPING_OPTIONS.map((item) => item.label), expectedLabels);
+    assert.equal(cfg().inspect("topOffenders.sortBy")?.defaultValue, undefined);
   });
 
 });

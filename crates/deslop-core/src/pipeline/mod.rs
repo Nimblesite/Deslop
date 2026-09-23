@@ -20,6 +20,7 @@ mod session;
 mod signatures;
 
 pub use config::{EmbeddingSettings, PipelineConfig};
+pub(crate) use corpus::parser_for_language;
 pub use corpus::{default_parsers, language_for_path, language_ids, watched_source_extensions};
 pub use run::{debug_ast_dump, run};
 pub use session::PipelineSession;

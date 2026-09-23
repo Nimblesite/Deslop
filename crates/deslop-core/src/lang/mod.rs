@@ -65,6 +65,19 @@ pub trait LanguageParser: std::fmt::Debug + Send + Sync {
     /// Returns the tree-sitter grammar used by [`Self::parse_and_normalize`].
     fn grammar(&self) -> Language;
 
+    /// Whether `kind` names one of this grammar's comment nodes — the
+    /// trivia [`Self::parse_and_normalize`] drops. The report reads a
+    /// file's opening comments through it ([EXCLUSION-GENERATED-BANNER]).
+    fn is_comment_kind(&self, kind: &str) -> bool;
+
+    /// Whether `kind` names a node that may sit above a file's opening
+    /// comments without being code ([EXCLUSION-GENERATED-BANNER]). The
+    /// default names none; PHP names its `<?php` tag.
+    fn is_prologue_kind(&self, kind: &str) -> bool {
+        let _ = kind;
+        false
+    }
+
     /// Parses `source` and returns a normalised AST rooted at the file. All
     /// subtrees carry `file_id`.
     ///

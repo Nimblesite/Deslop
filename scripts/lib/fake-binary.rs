@@ -23,7 +23,7 @@ use std::fs;
 const MARKER: &[u8] = b"\n@@DESLOP-FAKE-BINARY-PAYLOAD@@\n";
 
 /// Prints the JSON answer for `--version --json` and the plain one otherwise,
-/// matching the two shapes `[DEPLOY-BINARY-VERSION]` requires of a real binary.
+/// matching the two shapes `[DEPLOY-VERSION-CONTRACT]` requires of a real binary.
 fn main() -> Result<(), Box<dyn Error>> {
     let image = fs::read(std::env::current_exe()?)?;
     let start = last_offset(&image, MARKER).ok_or("this copy carries no appended answers")?;

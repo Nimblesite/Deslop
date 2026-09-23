@@ -342,7 +342,7 @@ impl ParseCache {
 /// can leave an entry missing, never wrong — the values are computed
 /// outside the lock — so refusing to read it afterwards would turn one
 /// worker's failure into a second, unrelated one.
-pub(super) fn locked<T>(memo: &Mutex<T>) -> MutexGuard<'_, T> {
+pub(crate) fn locked<T>(memo: &Mutex<T>) -> MutexGuard<'_, T> {
     memo.lock().unwrap_or_else(PoisonError::into_inner)
 }
 

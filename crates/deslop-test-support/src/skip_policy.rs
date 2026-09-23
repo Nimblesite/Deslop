@@ -24,7 +24,10 @@ use anyhow::{bail, Context, Result};
 use deslop_core::lang::{rust_lang::RustParser, shared::parse_source, LanguageParser};
 use tree_sitter::Node;
 
-use crate::corpus::repo_root;
+use crate::{
+    corpus::repo_root,
+    syntax::{child_of_kind, text},
+};
 
 /// The engine's `'static` id for the grammar this scan parses with.
 const RUST_LANGUAGE_ID: &str = "rust";
@@ -388,23 +391,6 @@ fn named_child_text(function: Node<'_>, source: &str, file: &str) -> Result<Stri
         .child_by_field_name(NAME_FIELD)
         .map(|name| text(name, source))
         .ok_or_else(|| anyhow::anyhow!("{file}: an ignored function declares no name"))
-}
-
-/// The first child of `node` with the given kind.
-fn child_of_kind<'tree>(node: Node<'tree>, kind: &str) -> Option<Node<'tree>> {
-    let mut cursor = node.walk();
-    let found = node
-        .named_children(&mut cursor)
-        .find(|child| child.kind() == kind);
-    found
-}
-
-/// The source text a node spans.
-fn text(node: Node<'_>, source: &str) -> String {
-    source
-        .get(node.start_byte()..node.end_byte())
-        .unwrap_or_default()
-        .to_owned()
 }
 
 /// The value of a Rust string literal, as the compiler sees it.

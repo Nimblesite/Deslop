@@ -8,7 +8,7 @@ Deslop ships with conservative built-in defaults, and a `.deslop.toml` in the sc
 - `exclude` — matching files are dropped in [PIPELINE-DISCOVER-FILES] before parsing. They are not counted in `files_analysed`, never fingerprinted, never embedded, and cannot appear in any cluster. Use for third-party vendored code you do not want analysed at all.
 - `report_hide` — matching files **are analysed** and can contribute to clustering, but each occurrence is flagged `hidden = true` at render time. A cluster where **every** occurrence is hidden is dropped from the rendered `clusters` list and counted under `clusters_hidden`. A cluster with at least one non-hidden occurrence is kept intact so the user sees "regular code duplicates generated code." This is the default tier for generated output like `*.g.cs`, `*.generated.cs`, OpenAPI clients, protobuf output.
 
-**Built-in defaults.** Without a config file, Deslop excludes dependency and build directories per [CONFIG-EXCLUDE-BUILTIN] and report-hides generated output (`generated` path components, Alembic migration files under `alembic/versions`, plus suffixes such as `.g.cs`, `.generated.cs`, `.designer.cs`, `.pb.cs`, `.openapi.cs`, `.generated.py`, `_generated.py`, `_pb2.py`, `_pb2_grpc.py`). Project config adds to these defaults.
+**Built-in defaults.** Without a config file, Deslop excludes dependency and build directories per [CONFIG-EXCLUDE-BUILTIN] and report-hides generated output (`generated` path components, Alembic migration files under `alembic/versions`, plus suffixes such as `.g.cs`, `.generated.cs`, `.designer.cs`, `.pb.cs`, `.openapi.cs`, `.generated.py`, `_generated.py`, `_pb2.py`, `_pb2_grpc.py`), and any file that opens with a generator's banner ([EXCLUSION-GENERATED-BANNER]). Project config adds to these defaults.
 
 **File format.** TOML. Parsed via the `toml` crate. Minimal, familiar, diffable:
 
@@ -23,6 +23,14 @@ report_hide = ["**/Migrations/**/*.cs"]
 [language.rust]
 report_hide = ["**/target/**"]
 ```
+
+**Pattern semantics.** `ignore::gitignore` syntax. Same engine as [PIPELINE-DISCOVER-FILES] so patterns behave identically to `.gitignore`. Paths are matched relative to the scan root.
+
+**Merge rule.** Per-language sections **extend** `[defaults]`, they do not replace it. A `.rs` file is checked against `defaults.report_hide ∪ language.rust.report_hide`. Keeps the config declarative — you never have to repeat shared patterns in every language block.
+
+**No config is valid.** Absence of `.deslop.toml` is not an error and is not warned on; Deslop still applies the built-in generated/build filters above.
+
+**`report_hide` membership is a rendering decision, not an analysis one.** Hidden files still participate in fingerprinting, LSH, and (later) embedding. The `hidden: bool` per occurrence is the only surface-level signal of the policy, so downstream consumers that want the unfiltered view can ignore `clusters_hidden` and inspect `occurrences[].hidden` directly.
 
 **`[visibility]` section.** Controls explicit pre-ranking exclusion without changing the mass of anything that survives:
 
@@ -45,6 +53,51 @@ Validate category ordering as specified in [CLONE-BUCKETS-THRESHOLDS].
 
 **Precedence**, highest first: `--tune <table>.<key>=<value>` CLI flag, then the editor settings channel in `crate::state`, then `[tuning]`, then the compiled default. Resolution happens once at config load into one immutable value; no stage reads a global at comparison time.
 
+### [EXCLUSION-GENERATED-BANNER] Generated files that only say so in a comment
+
+Some generators give their output an ordinary name. Dart's `ffigen` writes `*_bindings.dart`, the Flutter framework writes `generated_material_localizations.dart`, and every Go generator writes a plain `.go` file. No path pattern can catch these: the only thing that marks the file as generated is the banner its generator writes at the top. A file that opens with such a banner is treated exactly like a `report_hide` match ([EXCLUSION-CONFIG]): it is still analysed, its occurrences are flagged `hidden = true`, and its lines stay out of `duplicated_loc` ([METRICS-REPO]).
+
+**A banner is a whole comment line, never a phrase.** Hand-written files often *talk about* generators in their header: "the bundles this helper feeds are automatically generated and must not be edited by hand". That sentence describes other files. Hiding a file because its comments mention generation removes real duplicates from the report and from the headline percentage, so wording inside a sentence never counts. A line counts only when the line itself, with its comment marker removed, *is* one of the banners in the table below. A banner quoted as an example — a comment marker inside the comment — is a quotation, not a banner.
+
+**Only the opening comments count.** Deslop reads the comments that sit above the first piece of code. A comment further down, a string, or a docstring never counts, however it is worded. PHP's `<?php` tag may come first, because a PHP file cannot start any other way.
+
+**The parser decides what is a comment.** Whether text is a comment comes from the language's grammar ([PIPELINE-LANG-TRAIT]), never from scanning the file's text, so a banner quoted inside a string literal is not a banner.
+
+**When in doubt, the file stays visible.** A file that cannot be parsed, a language with no parser, or a banner missing from the table leaves the file in the report. Generated code that shows up is noise the user can remove with one `report_hide` pattern. Hand-written code that is hidden is a duplicate the user never hears about.
+
+**One decision per file.** The report rows and the duplication percentage read the same per-file answer, so they cannot disagree about which files are hidden.
+
+**Known banners.** Letter case and runs of spaces are ignored. `…` stands for whatever the generator adds: its name, its version, or the source file.
+
+| Banner line | Written by |
+|---|---|
+| `GENERATED CODE - DO NOT MODIFY BY HAND` | Dart `build_runner` / `source_gen` (`json_serializable`, `freezed`, …) |
+| `AUTO GENERATED FILE, DO NOT EDIT.` | Dart `ffigen` |
+| `Autogenerated by jnigen. DO NOT EDIT!` and `AUTO GENERATED BY JNIGEN … DO NOT EDIT!` | Dart `jnigen` |
+| `AUTO-GENERATED FILE, DO NOT MODIFY!` | OpenAPI Generator's Dart client |
+| `This file has been automatically generated. Please do not edit it manually.` | The Flutter framework's localisation generators |
+| `DO NOT EDIT. This is code generated via package:intl/generate_localized.dart` | Dart `intl_translation` |
+| `Generated code. Do not modify.` and `This is a generated file - do not edit.` | Dart `protoc_plugin` |
+| `Autogenerated from Pigeon … do not edit directly.` | Flutter `pigeon` |
+| `Code generated … DO NOT EDIT.` | The Go convention: `protoc-gen-go`, `sqlc`, `mockgen`, `stringer`, … |
+| `Generated by the protocol buffer compiler. DO NOT EDIT!` | `protoc`, in every language it targets |
+| `Generated by the gRPC Python protocol compiler plugin. DO NOT EDIT!` | `grpcio-tools` |
+| `<auto-generated…>` and `<autogenerated…>` | The .NET convention: source generators, designers, EF Core, NSwag, Kiota |
+| `@generated`, `@generated by …`, `@generated from …`, `@generated SignedSource<<…` | The `@generated` convention: `protobuf-es`, `protobuf-ts`, Relay, … |
+| `This file is @generated by prost-build.` | Rust `prost` / `tonic` |
+| `automatically generated by rust-bindgen …` | Rust `bindgen` |
+| `NOTE: This class is auto generated by …` | OpenAPI Generator, Swagger Codegen |
+
+A generator missing from the table is added here first, together with a test that fails without it. A project can always hide its own generated files by path with `report_hide`.
+
+#### For AI
+
+- **Opening comments** are the root node's leading children for which `LanguageParser::is_comment_kind` holds, after any leading children for which `LanguageParser::is_prologue_kind` holds (PHP's `php_tag`). The walk stops at the first other node.
+- **A comment line** is one line of a comment node's text with its own marker removed: leading whitespace, then one unbroken run of marker punctuation (`/`, `*`, `#`, `!`, `(`), one trailing block terminator (`*/` or `*)`), then whitespace runs collapsed and ASCII lower-cased. A second marker after the first (`//     // AUTO GENERATED FILE…`) is left in place, so a quoted banner matches nothing. A multi-line block comment contributes one comment line per line.
+- **Matching** is against `GENERATED_BANNERS` in `crates/deslop-core/src/config/generated_banner.rs`: a `Line` entry equals the comment line; a `Framed` entry is a prefix and a suffix that must both fit without overlapping, with anything between them.
+- **The decision** is made by `ReportHide::hides` (`crates/deslop-core/src/report/hide.rs`), memoised per file for one render, and is `report_hide` path match **or** banner. `render_report` hands the resulting hidden-file set to `compute_repo_metrics`; metrics never re-derive it.
+- The tree comes from the render-stage `ParseCache` when it holds one ([CLONE-NOISE-REPARSE-CACHE]), otherwise from one parse with the plugin's own grammar. A parse failure means "not generated".
+
 ### [CONFIG-TUNING-CACHE] Representation keys are cache-keyed
 
 `[tuning.representation]` keys change what is hashed or what is dispatched to the embedding provider, so a cached artefact written under one value describes nothing under another. `min_nodes` is already in the fingerprint cache key ([PIPELINE-INCREMENTAL]); the rest are not, because they could not previously vary. The key extends to the whole sub-table in the same change that makes any of them configurable — serving stale fingerprints as fresh is a false negative manufactured by the cache. `rows_per_band` is derived as `minhash_signature_len / lsh_bands` and is never a key.
@@ -56,14 +109,6 @@ Every other `[tuning]` sub-table applies downstream of both caches and never inv
 A percentage or a cluster count is only meaningful alongside the thresholds that produced it. Every report carries the effective value and source (`default` | `config` | `cli` | `editor`) of each lever: in full in the JSON report ([PRINCIPLES-AUDIENCE-AGENT]), and as a one-line statement — `tuning: defaults`, or `tuning: N overridden` naming them — in the human HTML and text summaries, because a reader comparing two reports must know whether the levers moved before concluding the code did.
 
 The corpus gate and its known-failures ratchet ([CORPUS-*]) run at defaults, always. Figures from a tuned run are not comparable to a default run's, and a corpus baseline recorded under non-default tuning is invalid.
-
-**Pattern semantics.** `ignore::gitignore` syntax. Same engine as [PIPELINE-DISCOVER-FILES] so patterns behave identically to `.gitignore`. Paths are matched relative to the scan root.
-
-**Merge rule.** Per-language sections **extend** `[defaults]`, they do not replace it. A `.rs` file is checked against `defaults.report_hide ∪ language.rust.report_hide`. Keeps the config declarative — you never have to repeat shared patterns in every language block.
-
-**No config is valid.** Absence of `.deslop.toml` is not an error and is not warned on; Deslop still applies the built-in generated/build filters above.
-
-**`report_hide` membership is a rendering decision, not an analysis one.** Hidden files still participate in fingerprinting, LSH, and (later) embedding. The `hidden: bool` per occurrence is the only surface-level signal of the policy, so downstream consumers that want the unfiltered view can ignore `clusters_hidden` and inspect `occurrences[].hidden` directly.
 
 ### [CLONE-NOISE-DART-DATA-TABLE-LITERAL] Dart collection-literal data tables
 
@@ -95,7 +140,7 @@ Matching ancestors was gh #342: a checkout at `~/build/myrepo` (or under `dist`,
 
 **Unknown boundary.** When no scan root is bound, or the path lies outside it, the rule does not fire. That direction can only admit a file for analysis; it can never silently discard one. Every discovery path binds its root: batch discovery ([PIPELINE-DISCOVER-FILES]), incremental session updates, and the live watcher ([live.md §LIVE-WATCHER](live.md#live-watcher-file-watcher)). The latter two have neither a hidden-directory filter nor a `.gitignore` pass, so this rule is their only built-in filter and a missing root would silently widen what they analyse.
 
-Code: `crates/deslop-core/src/config.rs::corpus_built_in_excluded`. Tests: `crates/deslop/tests/issue_342_scan_root_under_excluded_ancestor.rs`, `crates/deslop/tests/go_vendor_exclusion.rs`.
+Code: `crates/deslop-core/src/config/builtin.rs::corpus_built_in_excluded`. Tests: `crates/deslop/tests/issue_342_scan_root_under_excluded_ancestor.rs`, `crates/deslop/tests/go_vendor_exclusion.rs`.
 
 ### [CONFIG-EXCLUDE-DEPENDENCIES] Analysing dependencies
 
@@ -110,7 +155,7 @@ Opt-in: `include_dependencies = true` stops the dependency list applying, admitt
 
 The artefact components apply under either setting — "analyse the libraries I depend on" is not "analyse my compiler output". The setting is global for the run and orthogonal to scan-root ancestry: a checkout that merely lives under a directory named `vendor` behaves identically to one that does not, under either value.
 
-Code: `crates/deslop-core/src/config.rs::dependency_components`. Tests: `crates/deslop/tests/config_include_dependencies.rs`.
+Code: `crates/deslop-core/src/config/builtin.rs::dependency_components`. Tests: `crates/deslop/tests/config_include_dependencies.rs`.
 
 ### [CONFIG-CROSS-LANGUAGE] Cross-language comparison
 The same `.deslop.toml` file controls whether clone candidates may span different parser language ids.

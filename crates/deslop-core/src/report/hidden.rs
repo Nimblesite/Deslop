@@ -21,6 +21,7 @@ use crate::{
     cluster_filters::{
         escapes_as_copy, is_noise_pattern, is_single_file_declaration_family, ParseCache,
     },
+    report_hide::ReportHide,
     report_render::{cluster_to_report, ReportSources},
 };
 
@@ -133,17 +134,17 @@ pub(crate) fn materialise_with_visibility<'a, S: BuildHasher>(
     cluster: &'a crate::cluster::Cluster,
     inputs: &ReportInputs<'_, S>,
     report_sources: &ReportSources<'a>,
-    parse_cache: &ParseCache,
+    hide: &ReportHide<'_>,
 ) -> (ReportCluster, bool) {
     let report_cluster = cluster_to_report(
         cluster,
         inputs.registry,
         inputs.file_languages,
         inputs.scan_root,
-        inputs.exclusion,
+        hide,
         report_sources,
     );
-    let hidden = cluster_is_hidden(cluster, &report_cluster, inputs, parse_cache);
+    let hidden = cluster_is_hidden(cluster, &report_cluster, inputs, inputs.parse_cache);
     (report_cluster, hidden)
 }
 

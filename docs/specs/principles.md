@@ -63,24 +63,10 @@ Every duplication count, percentage, weight, rank and category is computed once 
 
 What a client may do:
 
-- **Render one wire value.** Choosing decimal places, truncating a percentage to a
-  whole number for a narrow row, quantising one value to a glyph or a CSS width,
-  thousands separators. One value in, one presentation out.
+- **Render one wire value.** Choosing decimal places, truncating a percentage to a whole number for a narrow row, quantising one value to a glyph or a CSS width, thousands separators. One value in, one presentation out.
 - **Look up a static label.** Language id to display name, or pair classification to a title inside an explicit pair view. A lookup table is not a calculation.
-- **Run view mechanics.** Loop indices, spinner frames, path-segment splitting for a
-  tree, byte offsets to editor coordinates, and comparators or aggregates over a
-  *client-filtered* subset — the engine cannot see the user's active facet filter, so
-  ordering that subset is the client's job. Such keys must be built from engine values
-  and must never surface as a displayed figure: a displayed group figure is the
-  engine's value on the group's worst member, selected by the engine's rank, never a
-  maximum or a sum recomputed here.
+- **Run view mechanics.** Loop indices, spinner frames, path-segment splitting for a tree, byte offsets to editor coordinates, and comparators or aggregates over a *client-filtered* subset — the engine cannot see the user's active facet filter, so ordering that subset is the client's job. Such keys must be built from engine values and must never surface as a displayed figure: a displayed group figure is the engine's value on the group's worst member, selected by the engine's rank, never a maximum or a sum recomputed here.
 
-One named exception, so it cannot grow quietly: the Duplication webview tints a
-per-file / per-folder percentage on a three-step heat scale (`percentColor` in
-`webview-ui/src/duplication/main.tsx`). It classifies a wire value against UI-owned
-cut points, which the rule above otherwise forbids. It is allowed because it produces
-a colour and no figure, the engine has no duplication heat band to carry, and the row
-prints the exact percentage beside the tint. It is the only such site; a second one is
-a defect, and if the engine ever gains a heat band this moves onto it.
+One named exception, so it cannot grow quietly: the Duplication webview tints a per-file / per-folder percentage on a three-step heat scale (`percentColor` in `webview-ui/src/duplication/main.tsx`). It classifies a wire value against UI-owned cut points, which the rule above otherwise forbids. It is allowed because it produces a colour and no figure, the engine has no duplication heat band to carry, and the row prints the exact percentage beside the tint. It is the only such site; a second one is a defect, and if the engine ever gains a heat band this moves onto it.
 
 What a client may never do: apply another threshold constant, combine two wire values into a third visible figure, or word its own verdict. Cluster identity, canonical extent, occurrence membership, `mass` and `rank` arrive stamped. Pair fields such as structural, Jaccard, embedding, content, admission result, and classification arrive only in an explicit two-endpoint response. Each is rendered in its own surface without crossing the boundary.

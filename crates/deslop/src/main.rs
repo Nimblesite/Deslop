@@ -384,19 +384,27 @@ fn resolve_split_by_language(args: &Cli) -> Result<bool> {
 /// (as some agent recipes wrongly suggest), clap parses the word as
 /// the positional `PATH`, the path resolves to a non-existent directory,
 /// and the pipeline cheerfully reports zero clones.
+///
+/// Holds every tool the MCP server registers today ([MCP-TOOLS],
+/// [AUTOFIX-MERGE-MCP]) and then the retired names, which published agent
+/// recipes still carry.
 const KNOWN_NON_CLI_TOOL_NAMES: &[&str] = &[
     "top-offenders",
     "find-similar",
+    "duplicates",
+    "compare-pair",
+    "cluster-by-id",
     "rescan",
+    "session",
+    "schema-doc",
+    "merge-plan",
     "report-get",
     "report-query",
     "report-for-file",
     "report-for-range",
-    "cluster-by-id",
     "list-embedding-models",
     "set-embedding-model",
     "session-config",
-    "schema-doc",
 ];
 
 /// Refuses to scan a path that does not exist or matches a known MCP

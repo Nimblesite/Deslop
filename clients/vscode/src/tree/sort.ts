@@ -1,46 +1,17 @@
-// Sort axis for the Top Offenders tree ([VSIX-TOP-OFFENDERS-SORT]).
-// Orthogonal to the grouping mode: it reorders the DISPLAY order in every
-// mode — cluster, file, and folder roots, plus the occurrences inside a
-// cluster. impact is worst-first; path is alphabetical. Sorting is
-// presentation-only ([VSIX-VIEW-STATE-UI-ONLY]): it never re-fetches or
-// re-analyses, and it never changes a cluster's global rank #N
-// ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]).
+// [VSIX-TOP-OFFENDERS-SORT] Fixed highest-weight-first ordering.
+// Display ordering never changes a cluster's engine-provided rank.
 
-export type SortBy = "impact" | "path";
-
-const PATH_SORT_MODE = "path";
-
-/** A row keyed by a representative name plus the two impact keys it
- * sorts on — the comparable shape shared by file rows and folder rows.
- * `path` is the local sort key (a folder label or a file/folder name),
- * so path-order reads alphabetically within each parent. */
+/** Ordering keys shared by file and folder rows. */
 export interface WeightedPath {
   path: string;
-  /** Mass of the row's worst cluster, read verbatim off that cluster.
-   * The engine ranks clusters worst-first, so the row's minimum-rank
-   * member *is* its heaviest one and no maximum is recomputed here. */
+  /** The row's worst cluster mass, read from the engine. */
   mass: number;
-  /** Summed mass of every cluster beneath the row. Never displayed:
-   * it exists only to order two rows whose worst clusters weigh the
-   * same, putting the file carrying more duplication first. An ordering
-   * key over engine values, not a reported figure. */
+  /** A tie break over engine values; never displayed as a duplication figure. */
   massTotal: number;
 }
 
-/** Reads the persisted sort axis, falling back to `"impact"` for
- * unknown / missing values — never throws. */
-export function normalizeSortBy(raw: string | undefined): SortBy {
-  return raw === PATH_SORT_MODE ? PATH_SORT_MODE : "impact";
-}
-
-/** Comparator for {@link WeightedPath} rows under the active sort axis.
- * `impact` is worst-first (worst-cluster mass desc, total desc, name);
- * `path` is alphabetical. Both end on `localeCompare` so the order is
- * total and stable. */
-export function compareWeightedPath(sortBy: SortBy): (left: WeightedPath, right: WeightedPath) => number {
-  if (sortBy === PATH_SORT_MODE) {
-    return (left, right) => left.path.localeCompare(right.path);
-  }
+/** Descending worst mass, then total mass, with a deterministic path tie break. */
+export function compareWeightedPath(): (left: WeightedPath, right: WeightedPath) => number {
   return (left, right) =>
     right.mass - left.mass ||
     right.massTotal - left.massTotal ||

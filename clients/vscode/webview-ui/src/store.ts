@@ -30,6 +30,8 @@ export const EMPTY_FILTERS: Filters = {
 
 export const report = signal<Report | null>(null);
 export const selectedClusterId = signal<string | null>(null);
+export const focusedOccurrenceIndex = signal(0);
+export const shortcutHelpExpanded = signal(false);
 
 export const analysisState = signal<AnalysisState>({ state: "idle" });
 export const filters = signal<Filters>(EMPTY_FILTERS);
@@ -123,6 +125,7 @@ export function applyHostMessage(message: HostMessage): void {
       case "report/snapshot":
       case "report/delta":
         report.value = message.report;
+        releaseMissingSelection();
         lastUpdatedAt.value = Date.now();
         break;
       case "analysis/state":
@@ -140,6 +143,14 @@ export function applyHostMessage(message: HostMessage): void {
         break;
     }
   });
+}
+
+// [VSIX-PAIR-COMPARE] Live updates cannot leave a selected endpoint outside the cluster.
+function releaseMissingSelection(): void {
+  const picked = pickedOccurrence.value;
+  if (picked && !selectedCluster.value?.occurrences.some((member) => sameOccurrence(member, picked))) {
+    pickedOccurrence.value = null;
+  }
 }
 
 declare global {

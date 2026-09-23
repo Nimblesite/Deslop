@@ -1,7 +1,6 @@
 //! Authoring a corpus in code: sibling clone files, the F#
 //! literal-table generator, and the "build these files, then report on
-//! them" shortcut, plus the rank/category lookups those suites read
-//! their verdict from.
+//! them" shortcut.
 //!
 //! Split from `common` proper, which walks a report the tool already
 //! rendered. These helpers run before the tool does.
@@ -10,7 +9,7 @@ use std::fs;
 
 use serde_json::Value;
 
-use super::{cluster_file_set, clusters, field, run_report, scan_dir::temp_scan_dir, Result};
+use super::{run_report, scan_dir::temp_scan_dir, Result};
 
 /// A genuine copy-pasted F# function — byte-identical across two files.
 /// Shared recall-guard source for the #331/#336 shape-only fixtures.
@@ -73,17 +72,10 @@ pub(crate) fn genuine_pair(first: &str, second: &str, source: &str) -> [(String,
 }
 
 /// Writes `(file_name, source)` pairs into a temp scan root and returns
-/// the rendered report at `min_nodes`. Config rides along as an ordinary
-/// `.deslop.toml` entry in `files` when a test needs a policy override.
-pub(crate) fn report_for(files: &[(String, String)], min_nodes: u32) -> Result<Value> {
-    let (_tmp, root) = temp_scan_dir("src")?;
-    for (file_name, source) in files {
-        fs::write(root.join(file_name), source)?;
-    }
-    run_report(&root, min_nodes)
-}
-
-/// [`report_for`] plus the temporary owner and scan root, for suites that need to prove byte-level facts against the fixture source.
+/// the rendered report at `min_nodes`, with the temporary owner and scan
+/// root so a suite can prove byte-level facts against the fixture source.
+/// Config rides along as an ordinary `.deslop.toml` entry in `files` when a
+/// test needs a policy override.
 pub(crate) fn report_for_with_root(
     files: &[(String, String)],
     min_nodes: u32,
@@ -94,23 +86,4 @@ pub(crate) fn report_for_with_root(
     }
     let report = run_report(&root, min_nodes)?;
     Ok((tmp, root, report))
-}
-
-/// Zero-based rank of the first cluster whose occurrences include a file
-/// whose name satisfies `matches`, or `None` when no visible cluster does.
-pub(crate) fn rank_where(report: &Value, matches: impl Fn(&str) -> bool) -> Option<usize> {
-    clusters(report)
-        .iter()
-        .position(|cluster| cluster_file_set(cluster).iter().any(|name| matches(name)))
-}
-
-/// The `category` wire label of the first cluster touching a matching
-/// file name, or `""` when no visible cluster does. Resolves the cluster
-/// through [`rank_where`] so the two lookups can never disagree.
-pub(crate) fn category_where(report: &Value, matches: impl Fn(&str) -> bool) -> String {
-    rank_where(report, matches)
-        .and_then(|rank| clusters(report).get(rank))
-        .and_then(|cluster| field(cluster, "category").as_str())
-        .unwrap_or_default()
-        .to_owned()
 }

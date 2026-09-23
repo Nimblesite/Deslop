@@ -1,14 +1,9 @@
-// View-axis toggles for the Top Offenders panel
-// ([VSIX-TOP-OFFENDERS-GROUPING], [VSIX-TOP-OFFENDERS-SORT],
-// [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP]) and the facet filter
-// ([FACET-TOP-OFFENDERS-FILTER]). Each writes to the workspace
-// configuration target so the choice persists per-repo; the title-bar
-// toggles and settings stay in sync via the context keys seeded in
-// extension.ts.
+// [VSIX-TOP-OFFENDERS-GROUPING] One grouping picker and severity filter, persisted per workspace.
 
 import * as vscode from "vscode";
 
 import { ReportStore } from "../reportStore";
+import { GroupBy, normalizeGroupBy } from "../tree/grouping";
 import {
   FacetFilter,
   ReportCluster,
@@ -29,13 +24,27 @@ async function updateWorkspace(key: string, value: unknown): Promise<void> {
 }
 
 export async function setTopOffendersGroupBy(
-  value: "cluster" | "file" | "folder" | "kind",
+  value: GroupBy,
 ): Promise<void> {
   await updateWorkspace("topOffenders.groupBy", value);
 }
 
-export async function setTopOffendersSortBy(value: "impact" | "path"): Promise<void> {
-  await updateWorkspace("topOffenders.sortBy", value);
+// [VSIX-TOP-OFFENDERS-GROUPING] All grouping choices share one discoverable menu.
+export const GROUPING_OPTIONS: readonly { label: string; value: GroupBy }[] = [
+  { label: "Clone Category", value: "kind" },
+  { label: "Folder", value: "folder" },
+  { label: "Language", value: "language" },
+  { label: "File", value: "file" },
+  { label: "No Grouping", value: "cluster" },
+];
+
+export async function chooseTopOffendersGrouping(): Promise<void> {
+  const current = normalizeGroupBy(vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE).get<string>("topOffenders.groupBy"));
+  const picked = await vscode.window.showQuickPick(
+    GROUPING_OPTIONS.map((item) => ({ ...item, description: item.value === current ? "Current grouping" : "" })),
+    { title: "Group Top Offenders", placeHolder: "Choose a grouping — highest weight first" },
+  );
+  if (picked) await setTopOffendersGroupBy(picked.value);
 }
 
 // [FACET-TOP-OFFENDERS-FILTER] Reads the persisted severity facet array,

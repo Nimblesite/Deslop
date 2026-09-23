@@ -99,6 +99,8 @@ mod fsharp_issue_336_data_table_category;
 mod fsharp_issue_339_sibling_window_rename;
 #[path = "fsharp_issue_339_token_fallback_rename.rs"]
 mod fsharp_issue_339_token_fallback_rename;
+#[path = "generated_banner.rs"]
+mod generated_banner;
 #[path = "go_vendor_exclusion.rs"]
 mod go_vendor_exclusion;
 #[path = "incremental_equivalence.rs"]
@@ -113,8 +115,6 @@ mod issue_119_role_gate_exercised;
 mod issue_132_subcommand_lookalike_path;
 #[path = "issue_134_structural_only_not_nearly_identical.rs"]
 mod issue_134_structural_only_not_nearly_identical;
-#[path = "issue_165_dart_generated_header.rs"]
-mod issue_165_dart_generated_header;
 #[path = "issue_168_deep_nesting_no_crash.rs"]
 mod issue_168_deep_nesting_no_crash;
 #[path = "issue_169_dart_const_registry.rs"]

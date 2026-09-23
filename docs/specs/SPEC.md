@@ -79,8 +79,10 @@ The hot loop — **Developer → VSIX → LSP → `live` module → `update_file
 - [signatures.md](signatures.md) — `[PIPELINE-SIGNATURE-FOLD]` and `[PIPELINE-SIGNATURE-FALLBACK]` token composition and fingerprint-scoped fallback.
 - [testing.md](testing.md) — `[TEST-ONE-BINARY]` integration-suite registration and linkage.
 - [noise-dart.md](noise-dart.md) — `[CLONE-NOISE-DART-WIDGET-SCAFFOLD]` Flutter declaration scaffolding and the boundary protecting copied bodies.
+- [admission.md](admission.md) — `[ADMISSION-GUIDE]` the five-step plain-language account of how a pair becomes a clone, linking to the rules that own each step.
 - [taxonomy.md](taxonomy.md) — `[CLONE-BUCKETS]` explicit-pair classifications, pair-only labelling, evidence routing, the `[CLONE-BUCKETS-IDENTICAL]` byte-equivalence proof, and academic `[CLONE-TYPE-TAXONOMY]` reference.
 - [noise.md](noise.md) — `[CLONE-NOISE-*]` false-positive suppression filters: shape-identical-but-not-extractable patterns (language scaffolding, framework mirrors, schema/data tables, test idioms) hidden after clustering and before ranking, each with a verbatim escape hatch.
+- [literals.md](literals.md) — `[LITERAL-*]` the planned literal and constant finding family: magic literals, shadowed constants, and constant duplicates, drift and aliases. Not yet implemented; work is tracked in [`plans/literal-constant-plan.md`](../plans/literal-constant-plan.md).
 - [landscape.md](landscape.md) — `[TECH-*]` survey of token / AST / hashing / neural / LLM techniques (2009 → 2026).
 - [fused.md](fused.md) — `[FUSED-*]` pair-only structural, token, embedding, and content evidence; pair admission and shared-subtree rescue; transitive closure; pure-mass cluster ranking; complete algebra; and `[FUSED-TUNING-LEVERS]`.
 - [pipeline.md](pipeline.md) — `[PIPELINE-*]`, `[STATE-*]`, `[OUTPUT-*]`, `[METRICS-*]`, `[EXIT-CODES]` per-stage design: language plugin trait, discovery, normalization, Merkle fingerprint, clustering, ranking, `[PIPELINE-INCREMENTAL]` persisted parse processing (content-addressed on-disk store), `[PIPELINE-INCREMENTAL-INTEGRITY]` blob binding digest and bounded decode, `[PIPELINE-INCREMENTAL-RETENTION]` store pruning and size budget, `[PIPELINE-INCREMENTAL-ANALYSIS]` reuse contract for incremental passes, `[PIPELINE-DETERMINISM]` cross-run reproducibility, JSON / text / HTML output, human-readable HTML mode, repo-wide duplication metric + fail-over threshold.
@@ -91,8 +93,10 @@ The hot loop — **Developer → VSIX → LSP → `live` module → `update_file
 - [live.md](live.md) — `[LIVE-*]` in-process analysis session inside the LSP: lifecycle, watcher, scheduler, state file, IPC socket, delta protocol, `LiveApi` query surface, push notifications.
 - [lsp.md](lsp.md) — `[LSP-*]` Language Server Protocol shell: capabilities, diagnostics, code lens, hover, virtual docs, custom methods.
 - [severity.md](severity.md) — `[SEVERITY-*]` diagnostic defaults by kind, user overrides and the master diagnostics gate.
+- [facets.md](facets.md) — `[FACET-*]` the axes a cluster list may be grouped or filtered by, on every surface, and the pair measurements that are forbidden as cluster facets.
 - [mcp.md](mcp.md) — `[MCP-*]` Model Context Protocol shell: tools, resources, notifications. `find-similar` is the keystone tool for AI agents.
 - [deployment.md](deployment.md) — `[DEPLOY-*]` Deployment Toolkit manifest, executable version contract, editor-host binary resolvers, VSIX / JetBrains package contents, and release gates.
+- [release.md](release.md) — `[CI-*]`, `[BUILD-*]`, `[LINT-*]`, `[TEST-SELECTION*]`, `[GITHUB-*]`, `[ACTION-*]` CI and supply-chain gates, distribution channels, and the GitHub Marketplace action.
 - [vsix.md](vsix.md) — `[VSIX-*]` VS Code extension: tree view, decorations, embedding-model picker (Ollama integration), status bar, settings, and the cross-surface state/reactivity invariants.
 - [webview-runtime.md](webview-runtime.md) — `[VSIX-WEBVIEW-*]` / `[VSIX-REACTIVITY-WEBVIEW]` / `[VSIX-METRICS-REPORT]` the VSIX Preact webview runtime: cluster / report / duplication webviews, the signal store, the host↔webview message protocol (`[VSIX-WEBVIEW-PROTOCOL]`), cluster link documents, and the `[VSIX-WEBVIEW-COVERAGE]` coverage gate.
 - [jetbrains.md](jetbrains.md) — `[JETBRAINS-*]` IntelliJ Platform plugin: Rider-first LSP client, binary resolution, native IDE surfaces, packaging, and testing.
@@ -109,18 +113,18 @@ The hot loop — **Developer → VSIX → LSP → `live` module → `update_file
 | Boilerplate-only filter ([PIPELINE-BOILERPLATE-FILTER]) | ✅ | `crates/deslop-core/src/boilerplate.rs` (called from `fingerprint.rs` + `sibling.rs`) |
 | Chilowicz Merkle subtree fingerprints ([PIPELINE-FINGERPRINT-MERKLE]) | ✅ BLAKE3 | `crates/deslop-core/src/fingerprint.rs::collect_non_boilerplate_fingerprints` |
 | Sibling-window extension (Type-3 recall) | ✅ widths 2–8 | `crates/deslop-core/src/sibling.rs::collect_non_boilerplate_sibling_fingerprints` |
-| Exact-clone clustering ([PIPELINE-CLUSTER-EXACT]) | ✅ | `crates/deslop-core/src/pair.rs::collect_structural_pairs` |
+| Exact-clone clustering ([PIPELINE-CLUSTER-EXACT]) | ✅ | `crates/deslop-core/src/pair/candidates/builder.rs::add_structural_pairs` |
 | SourcererCC token k-grams + Jaccard | ✅ | `crates/deslop-core/src/tokens.rs` |
 | MinHash signatures (Broder 1997) | ✅ 128 hashes | `crates/deslop-core/src/lsh.rs::minhash_signature` |
-| LSH banding (Indyk & Motwani) | ✅ 32 bands × 4 rows | `crates/deslop-core/src/lsh.rs::band_collisions` |
+| LSH banding (Indyk & Motwani) | ✅ 32 bands × 4 rows | `crates/deslop-core/src/lsh/banding.rs::for_each_band_collision` |
 | Embedding pass — local-by-default | ✅ Ollama provider | `crates/deslop-core/src/embedding/ollama.rs`, `crates/deslop-core/src/embedding/provider.rs` |
 | HNSW ANN index ([FUSED-EMBED-PROVIDER]) | ✅ `instant-distance` | `crates/deslop-core/src/embedding/pairs.rs` |
 | Embedding cache keyed by `(content, provider, model, version)` | ✅ | `crates/deslop-core/src/embedding/cache.rs` |
 | Pair admission ([FUSED-STRATEGY-BOUNDED-MAX]) | ✅ `max(S,J,E)` plus applicable pair-content support; all values pair-only | `crates/deslop-core/src/pair.rs` |
-| Cross-language opt-in ([CONFIG-CROSS-LANGUAGE]) | ✅ | `crates/deslop-core/src/pair.rs::candidate_pairs_for_language_policy` |
+| Cross-language opt-in ([CONFIG-CROSS-LANGUAGE]) | ✅ | `crates/deslop-core/src/pair/candidates.rs::candidate_pairs_for_language_policy` |
 | Accuracy levers as configuration ([FUSED-TUNING-LEVERS]) | ⏳ compiled `const` today; migration in [`plans/unhardcode-tuning-plan.md`](../plans/unhardcode-tuning-plan.md) | `pair.rs`, `buckets.rs`, `content.rs`, `cluster.rs`, `embedding/pairs.rs`, `report.rs` |
-| Built-in exclusion scoped to the scan root ([CONFIG-EXCLUDE-BUILTIN]) | ✅ gh #342 | `crates/deslop-core/src/config.rs::corpus_built_in_excluded` |
-| Dependency analysis opt-in ([CONFIG-EXCLUDE-DEPENDENCIES]) | ✅ `[analysis] include_dependencies` | `crates/deslop-core/src/config.rs::dependency_components` |
+| Built-in exclusion scoped to the scan root ([CONFIG-EXCLUDE-BUILTIN]) | ✅ gh #342 | `crates/deslop-core/src/config/builtin.rs::corpus_built_in_excluded` |
+| Dependency analysis opt-in ([CONFIG-EXCLUDE-DEPENDENCIES]) | ✅ `[analysis] include_dependencies` | `crates/deslop-core/src/config/builtin.rs::dependency_components` |
 | Transitive-closure clustering | ✅ | `crates/deslop-core/src/cluster.rs` |
 | Worst-offenders ranking ([RANK-MASS-SUM](pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only)) | AST-node mass formula retained; non-clone zero-weight exclusion and separate informational display pending | `crates/deslop-core/src/report_weight.rs`; required coverage in [CLONE-KIND-TESTING](taxonomy.md#clone-kind-testing-required-examples-and-assertions) |
 | Repo-wide metrics + fail-over threshold ([METRICS-REPO](pipeline.md#metrics-repo-repo-wide-duplication-metrics), [EXIT-CODES]) | Clone-only counting required; shape-only exclusion pending | `crates/deslop-core/src/report_metrics.rs`; required CLI coverage in [METRICS-REPO] |

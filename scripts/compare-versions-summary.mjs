@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// [COMPARE-VERSIONS-SUMMARY] Renders the comparison reports for
+// [CORPUS-SCORE-COMPARE] Renders the comparison reports for
 // scripts/compare-versions.sh. Every figure here is lifted verbatim from the
 // engine's own report JSON, or from the scorecard `corpus-score` already
 // computed ([CORPUS-SCORE]); this renderer derives nothing except which
@@ -35,7 +35,7 @@ const readTiming = (path) => {
   return timing;
 };
 
-// [COMPARE-VERSIONS-SUMMARY] Every stat is a field the engine published, or a
+// [CORPUS-SCORE-COMPARE] Every stat is a field the engine published, or a
 // fingerprint of the binary that published it. Nothing is recomputed here.
 const statsOf = (report, timing) => [
   ["binary_sha256", timing.binary_sha256],
@@ -117,7 +117,7 @@ const listOrNone = (values) => (values.length ? values.join(", ") : "none");
 const schemaLine = (label, report, other) =>
   `- ${label} — top level: ${listOrNone(topLevelOnlyIn(report, other))}; per cluster: ${listOrNone(clusterOnlyIn(report, other))}`;
 
-// [COMPARE-VERSIONS-SUMMARY] The provenance stamp. Both deslop commit ids in
+// [CORPUS-SCORE-COMPARE] The provenance stamp. Both deslop commit ids in
 // full, the target repository's exact commit in full, and the sha256 of each
 // binary that produced the numbers below it. Without all four a figure in this
 // document cannot be traced back to what produced it.

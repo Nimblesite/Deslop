@@ -35,8 +35,7 @@ Surveys:
 
 **Micro-clones, magic values, and constant drift.**
 
-Grounds [literals.md](literals.md), [RANK-LITERAL-FAMILY], and [DECISION-LITERALS] — the
-value-level lineage the canonical fragment-clone list above does not cover.
+Grounds [literals.md](literals.md), [RANK-LITERAL-FAMILY], and [DECISION-LITERALS] — the value-level lineage the canonical fragment-clone list above does not cover.
 
 Micro-clones (why the size floor must not be lowered, and why sub-floor findings still matter):
 - [Mondal, Roy & Schneider 2018 — Micro-clones in evolving software (SANER)](https://doi.org/10.1109/SANER.2018.8330196)

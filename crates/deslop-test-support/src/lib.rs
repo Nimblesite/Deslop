@@ -21,6 +21,7 @@ pub mod enclosure;
 pub mod reap;
 pub mod skip_contract;
 pub mod skip_policy;
+mod syntax;
 pub mod test_target_parity;
 
 use std::{

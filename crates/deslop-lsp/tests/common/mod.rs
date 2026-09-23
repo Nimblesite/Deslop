@@ -1,12 +1,6 @@
-//! Shared E2E helpers for the `deslop-lsp` integration tests. Drives the
-//! real binary over stdio with LSP framing — no mocked transport, no
-//! fake service.
-//!
-//! Each integration binary pulls in only the subset of helpers it needs,
-//! so the unused-symbol lint is silenced for this shared module (matching
-//! the `deslop-core` and `deslop-mcp` test commons).
-
-#![allow(dead_code)]
+//! Shared E2E helpers for the `deslop-lsp` integration tests, declared once
+//! by `suite.rs` ([TEST-ONE-BINARY]). Drives the real binary over stdio with
+//! LSP framing — no mocked transport, no fake service.
 
 pub mod reports;
 pub mod session;
@@ -207,21 +201,9 @@ pub fn call_capturing(
     recv_response(stdout, id)
 }
 
-/// RAII guard that closes the spawned LSP child's stdin and reaps it when it
-/// drops, so a failing assertion never leaks the process — and never signals
-/// one, which would discard everything the child executed
-/// (`deslop_test_support::reap`).
-pub struct ReapOnDrop<'a>(pub &'a mut Child);
-
-impl Drop for ReapOnDrop<'_> {
-    fn drop(&mut self) {
-        let _status = deslop_test_support::reap::reap(self.0);
-    }
-}
-
-/// Owning RAII guard: holds the spawned LSP child and reaps it on drop. Unlike
-/// [`ReapOnDrop`] it owns the process, so a helper can return the guard already
-/// armed — any later failure (handshake, request) still reaps the child.
+/// Owning RAII guard: holds the spawned LSP child and reaps it on drop, so a
+/// helper can return the guard already armed — any later failure (handshake,
+/// request) still reaps the child and a failing assertion never leaks it.
 ///
 /// Reaping means closing stdin and waiting, never signalling: a signalled
 /// child writes no coverage profile, so a `kill` here silently deletes every
@@ -485,12 +467,4 @@ pub fn at<'a>(value: &'a Value, key: &str) -> &'a Value {
 /// Reads a nested path, one key per element.
 pub fn path<'a>(value: &'a Value, keys: &[&str]) -> &'a Value {
     keys.iter().fold(value, |current, key| at(current, key))
-}
-
-/// Reads the `index`th element of a JSON array field.
-pub fn nth<'a>(value: &'a Value, key: &str, index: usize) -> &'a Value {
-    at(value, key)
-        .as_array()
-        .and_then(|items| items.get(index))
-        .unwrap_or(&Value::Null)
 }

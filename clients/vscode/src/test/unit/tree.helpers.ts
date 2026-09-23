@@ -2,6 +2,9 @@
 // Non-`.test.ts` so the Mocha glob does not load this as a suite.
 
 import * as vscode from "vscode";
+import * as assert from "node:assert/strict";
+import * as fs from "node:fs";
+import * as nodePath from "node:path";
 import type { LanguageClient } from "vscode-languageclient/node";
 import {
   ClusterKind,
@@ -167,8 +170,38 @@ export async function withSetting<T>(
 }
 
 export function withGroupBy(
-  value: "cluster" | "file" | "folder" | "kind",
+  value: "cluster" | "file" | "folder" | "kind" | "language",
   body: () => Promise<void> | void,
 ): Promise<void> {
   return withSetting("topOffenders.groupBy", value, body);
+}
+
+/** Load a retired setting as an existing workspace file would, without registering it again. */
+export async function withSavedSetting(key: string, value: unknown, body: () => Promise<void> | void): Promise<void> {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  assert.ok(folder, "saved-setting tests require a fixture workspace");
+  const settingsPath = nodePath.join(folder.uri.fsPath, ".vscode", "settings.json");
+  const original = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath, "utf8") : "{}";
+  const settings = JSON.parse(original) as Record<string, unknown>;
+  settings[`deslop.${key}`] = value;
+  await writeSavedSettings(settingsPath, JSON.stringify(settings), key);
+  try {
+    assert.deepEqual(vscode.workspace.getConfiguration("deslop").get(key), value);
+    await body();
+  } finally {
+    await writeSavedSettings(settingsPath, original, key);
+  }
+}
+
+function writeSavedSettings(settingsPath: string, contents: string, key: string): Promise<void> {
+  fs.mkdirSync(nodePath.dirname(settingsPath), { recursive: true });
+  return new Promise((resolve) => {
+    const subscription = vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration(`deslop.${key}`)) {
+        subscription.dispose();
+        resolve();
+      }
+    });
+    fs.writeFileSync(settingsPath, contents);
+  });
 }

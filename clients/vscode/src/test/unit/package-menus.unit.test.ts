@@ -21,8 +21,20 @@ const CANONICAL_COMPARE_COMMANDS = [
 ] as const;
 
 const COMPARE_PAIR_COMMAND = "deslop.comparePair";
+const CHOOSE_GROUPING_COMMAND = "deslop.topOffenders.chooseGrouping";
+const TOP_OFFENDERS_VIEW = "view == deslop.topOffenders";
+const GROUPING_SLOT = "navigation@1";
 
 suite("package menu contributions", () => {
+  test("one grouping picker replaces the sort and language toolbar controls", () => {
+    // [VSIX-TOP-OFFENDERS-GROUPING] / [VSIX-TOP-OFFENDERS-SORT]
+    const pkg = extensionPackage();
+    const controls = pkg.contributes.menus["view/title"] ?? [];
+    const grouping = controls.filter((item) => item.when === TOP_OFFENDERS_VIEW && item.group === GROUPING_SLOT);
+    assert.deepEqual(grouping.map((item) => item.command), [CHOOSE_GROUPING_COMMAND]);
+    const removed = ["deslop.topOffenders.sortByImpact", "deslop.topOffenders.sortByPath", "deslop.topOffenders.toggleSplitByLanguage"];
+    assert.deepEqual(controls.filter((item) => removed.includes(item.command)), []);
+  });
   test("extension id stays aligned with the released VSIX id", () => {
     const pkg = extensionPackage();
     assert.equal(pkg.publisher, "nimblesite");
@@ -159,23 +171,20 @@ suite("package menu contributions", () => {
     );
   });
 
-  // [FACET-GROUP-BY-KIND] The grouping toggle cycles all four modes:
-  // cluster → file → folder → kind → cluster.
-  test("grouping cycle includes the clone-kind mode", () => {
+  // [FACET-GROUP-BY-KIND] All modes are discoverable in one picker.
+  test("grouping picker includes clone category and language modes", () => {
     const pkg = extensionPackage();
     const titleItems = (pkg.contributes.menus["view/title"] ?? []).filter(
       (item) =>
         item.when?.includes("view == deslop.topOffenders") && item.group === "navigation@1",
     );
-    const whenOf = (command: string): string =>
-      titleItems.find((item) => item.command === command)?.when ?? "";
-    assert.ok(whenOf("deslop.topOffenders.showByFile").includes("== 'cluster'"));
-    assert.ok(whenOf("deslop.topOffenders.showByFolder").includes("== 'file'"));
-    assert.ok(whenOf("deslop.topOffenders.showByKind").includes("== 'folder'"));
-    assert.ok(whenOf("deslop.topOffenders.showByCluster").includes("== 'kind'"));
+    assert.deepEqual(titleItems.map((item) => item.command), [CHOOSE_GROUPING_COMMAND]);
+    assert.equal(titleItems[0]?.when, TOP_OFFENDERS_VIEW);
+    assert.equal(commandTitle(pkg, "deslop.topOffenders.showByLanguage"), "Deslop: Group Top Offenders by Language");
+    assert.deepEqual(pkg.contributes.configuration.properties["deslop.topOffenders.groupBy"]?.enum, ["cluster", "file", "folder", "kind", "language"]);
     assert.equal(
       commandTitle(pkg, "deslop.topOffenders.showByKind"),
-      "Deslop: Group Top Offenders by Clone Kind",
+      "Deslop: Group Top Offenders by Clone Category",
     );
     // The clone-type axis is retired: no type-mode toggle may exist.
     assert.equal(

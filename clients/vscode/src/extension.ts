@@ -155,7 +155,6 @@ export async function activate(
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (
         !event.affectsConfiguration("deslop.topOffenders.groupBy") &&
-        !event.affectsConfiguration("deslop.topOffenders.sortBy") &&
         !event.affectsConfiguration("deslop.topOffenders.filterSeverities")
       ) {
         return;
@@ -295,18 +294,11 @@ export function currentApi(): ExtensionApi {
   };
 }
 
-// [VSIX-TOP-OFFENDERS-GROUPING] / [VSIX-TOP-OFFENDERS-SORT] /
-// [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] / [FACET-TOP-OFFENDERS-FILTER]
-// Mirror the persisted view axes onto context keys so the title-bar
-// toggles' mutually exclusive `when` clauses can render the right
-// buttons, and the filter button its active-filter icon state. Unknown
-// / missing values fall back to the spec defaults — never throws.
+// [VSIX-TOP-OFFENDERS-GROUPING] Mirror grouping and filter state for view commands.
 export function syncTopOffendersContext(): void {
   const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE);
   const groupBy = normalizeGroupBy(cfg.get<string>("topOffenders.groupBy", "cluster"));
-  const sortBy = cfg.get<string>("topOffenders.sortBy", "impact") === "path" ? "path" : "impact";
   void vscode.commands.executeCommand(SET_CONTEXT_COMMAND, "deslop.topOffendersGroupBy", groupBy);
-  void vscode.commands.executeCommand(SET_CONTEXT_COMMAND, "deslop.topOffendersSortBy", sortBy);
   void vscode.commands.executeCommand(
     SET_CONTEXT_COMMAND,
     "deslop.topOffendersFiltered",
