@@ -273,7 +273,7 @@ fn gate(name: &str) -> Result<()> {
     check_curated_recall(&manifest, &run.report, &mut failures);
     check_curated_precision(&manifest, &run.report, &mut failures);
     check_boilerplate_not_ranked_first(&manifest, &root, &run, &mut failures)?;
-    check_data_tables_not_ranked_as_logic(&root, &run, &mut failures)?;
+    check_data_tables_not_ranked_as_logic(&manifest, &root, &run, &mut failures)?;
     // [CORPUS-BASELINE] The confidence checks. The first reads no
     // manifest — it judges the *shape* of the rendered report, so it runs
     // on every repository including the ones whose recall is not yet
@@ -341,25 +341,27 @@ fn warn_when_accuracy_unasserted(name: &str, manifest: &Value) {
     }
 }
 
-/// [CORPUS-PRECISION] Language-agnostic: a top-ranked cluster that is
-/// essentially a numeric table must not rank at full logic weight.
+/// [CORPUS-PRECISION] Language-agnostic: a top-ranked cluster whose first
+/// occurrence is a table of literals must not rank at full logic weight.
 ///
 /// This reads the clone on disk; the judging lives in
 /// `deslop_test_support::corpus_data_table`, where it is under test. A check
 /// nothing asserts is a check that can be wrong for as long as nobody looks
 /// (gh #540).
 fn check_data_tables_not_ranked_as_logic(
+    manifest: &Value,
     root: &Path,
     run: &CorpusRun,
     failures: &mut Vec<Failure>,
 ) -> Result<()> {
+    let language = string_field(manifest, "language")?;
     for (position, cluster) in array(&run.report, "clusters")
         .iter()
         .take(RANKED_HEAD)
         .enumerate()
     {
         let text = first_occurrence_text(root, cluster)?;
-        failures.extend(data_table_failure(position, cluster, &text));
+        failures.extend(data_table_failure(language, position, cluster, &text)?);
     }
     Ok(())
 }
