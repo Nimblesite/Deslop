@@ -89,7 +89,9 @@ fn identical_adjacent_calls_keep_their_full_extent() -> Result<()> {
         Some(ANALYSED_FILES)
     );
     assert_eq!(exact.len(), 1, "complete call run missing: {report:#}");
-    let cluster = exact.first().expect("one full exact call-run cluster");
+    let cluster = exact
+        .first()
+        .ok_or_else(|| anyhow::anyhow!("one full exact call-run cluster: {report:#}"))?;
     assert_eq!(cluster_size(cluster), COPIES);
     assert_eq!(field(cluster, "rank").as_u64(), Some(FIRST_RANK));
     assert!(crate::common::signals::has_verbatim_pair(&root, cluster)?);

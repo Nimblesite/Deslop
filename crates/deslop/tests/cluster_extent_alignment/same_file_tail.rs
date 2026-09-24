@@ -68,7 +68,7 @@ fn assert_complete_setup(scan_root: &std::path::Path, cluster: &Value) -> Result
 
 /// [PIPELINE-CLUSTER-SUBSUME-KIND] The edited methods and their exact
 /// copied setup are both real, distinct findings.
-fn assert_broad_method_clone(report: &Value) {
+fn assert_broad_method_clone(report: &Value) -> Result<()> {
     let broad: Vec<_> = clusters(report)
         .iter()
         .filter(|cluster| {
@@ -80,9 +80,10 @@ fn assert_broad_method_clone(report: &Value) {
     assert_eq!(broad.len(), 1, "the three edited methods are one clone");
     let cluster = broad
         .first()
-        .expect("three edited methods have one cluster");
+        .ok_or_else(|| anyhow::anyhow!("three edited methods have one cluster: {report:#}"))?;
     assert_eq!(field(cluster, "kind").as_str(), Some(LOOSELY_SIMILAR));
     assert_eq!(field(cluster, "rank").as_u64(), Some(BROAD_RANK));
+    Ok(())
 }
 
 /// [FUSED-CONTENT-GATE-AUTHORED-RUN] A clone occurrence cannot join two authored tests.
@@ -108,7 +109,7 @@ fn same_file_setup_keeps_every_fault_assertion_tail() -> Result<()> {
     let scan_root = fixture(FIXTURE);
     let report = run_report(&scan_root, NODE_FLOOR)?;
     assert_complete_setup(&scan_root, copied_setup_cluster(&report)?)?;
-    assert_broad_method_clone(&report);
+    assert_broad_method_clone(&report)?;
     assert_clones_stay_within_one_method(&report);
     Ok(())
 }
