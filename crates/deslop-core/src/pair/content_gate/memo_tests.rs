@@ -191,6 +191,7 @@ fn verdict_for(
             tree_index: &tree_index,
             anchors: &anchors,
             scopes: &scopes,
+            authored_scope: AuthoredScopeMemo::new(fingerprints.len()),
             sources,
             languages,
             cache: &ParseCache::new(),

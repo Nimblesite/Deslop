@@ -235,6 +235,19 @@ impl<'corpus> OverlapMeasurer<'corpus> {
         self.bounded_overlap(left, right, SHARED_SUBTREE_MIN_OVERLAP)
     }
 
+    /// [FUSED-SHARED-SUBTREE-MEMO] Rescue scores at or above its floor
+    /// are exact alignments unless equal hashes took the trivial path.
+    pub(crate) fn remember_rescued_exact(
+        &mut self,
+        left: &Fingerprint,
+        right: &Fingerprint,
+        score: f64,
+    ) {
+        if left.hash != right.hash && (SHARED_SUBTREE_MIN_OVERLAP..=1.0).contains(&score) {
+            self.remember_exact(pair_key(left, right), score);
+        }
+    }
+
     /// A sound upper bound below `floor`, and the exact overlap otherwise.
     /// Below the rescue floor an exact answer is required because cached
     /// rescue bounds are only reusable at or above that floor.
@@ -319,12 +332,20 @@ impl<'corpus> OverlapMeasurer<'corpus> {
         key: PairKey,
         floor: f64,
     ) -> f64 {
-        let ordered = self.order_bound_ratio(left_view, right_view);
+        let (ordered_shared, ordered) = self.order_bound(left_view, right_view);
         if ordered < floor {
             bump(&mut self.stats.order_skips);
             return self.remember_bound(key, ordered);
         }
-        let result = self.measure_views(left_view, right_view);
+        // [FUSED-SHARED-SUBTREE-BOUND-EXACT] An ordered upper bound equal
+        // to the disjoint-subtree lower bound proves the exact count.
+        let certified = left_view.total.max(right_view.total) <= ALIGNMENT_MAX_NODES
+            && credit::credit_shared_nodes(left_view, right_view) == ordered_shared;
+        let result = if certified {
+            ordered
+        } else {
+            self.measure_views(left_view, right_view)
+        };
         self.remember_exact(key, result);
         result
     }
@@ -332,7 +353,9 @@ impl<'corpus> OverlapMeasurer<'corpus> {
     /// Rotates a bounded exact-result memo so later structural pairs
     /// still reuse their alignments ([FUSED-SHARED-SUBTREE-MEMO]).
     fn remember_exact(&mut self, key: PairKey, result: f64) {
-        if self.exact_results.len() == EXACT_RESULT_MEMO_MAX {
+        if self.exact_results.len() == EXACT_RESULT_MEMO_MAX
+            && !self.exact_results.contains_key(&key)
+        {
             self.exact_results.clear();
         }
         let _previous = self.exact_results.insert(key, result);
@@ -348,12 +371,12 @@ impl<'corpus> OverlapMeasurer<'corpus> {
         bound
     }
 
-    /// The ordered-subsequence upper bound as an overlap ratio against
+    /// The ordered-subsequence upper bound as a count and ratio against
     /// the larger endpoint ([FUSED-SHARED-SUBTREE-BOUND-ORDER]).
-    fn order_bound_ratio(&mut self, left: &EndpointView, right: &EndpointView) -> f64 {
+    fn order_bound(&mut self, left: &EndpointView, right: &EndpointView) -> (usize, f64) {
         let larger = left.total.max(right.total);
         if larger == 0 {
-            return 0.0;
+            return (0, 0.0);
         }
         let shared = subsequence::common_subsequence_len(
             left.postorder(),
@@ -361,7 +384,7 @@ impl<'corpus> OverlapMeasurer<'corpus> {
             &right.kind_positions,
             &mut self.order_row,
         );
-        lossless_count(shared) / lossless_count(larger)
+        (shared, lossless_count(shared) / lossless_count(larger))
     }
 
     /// Whether this endpoint's byte range resolves to a measurable

@@ -3,8 +3,10 @@
 use std::cmp::Ordering;
 
 use super::{
-    super::Cluster, all_occurrences_paired, covers_every_file, strictly_encloses, Nesting,
+    super::Cluster, covers_every_file, occurrences_describe_one_location, strictly_encloses,
+    Nesting,
 };
+use crate::buckets::ClusterKind;
 
 /// Which physical cluster view survives a subsumption comparison.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -28,10 +30,20 @@ impl Preference {
     }
 }
 
-/// Returns `true` when both components cover the same physical regions.
+/// [PIPELINE-CLUSTER-SUBSUME] One distinct copy must pair with one distinct copy.
+/// Election has already removed overlapping members within each file, so
+/// containment pairs preserve file-and-start order.
 pub(super) fn covers_same_region(first: &Cluster, second: &Cluster) -> bool {
-    all_occurrences_paired(&first.members, &second.members)
-        && all_occurrences_paired(&second.members, &first.members)
+    if first.members.is_empty() || first.members.len() != second.members.len() {
+        return false;
+    }
+    let mut left: Vec<_> = first.members.iter().collect();
+    let mut right: Vec<_> = second.members.iter().collect();
+    left.sort_unstable_by_key(|member| (member.file_id, member.byte_range.start));
+    right.sort_unstable_by_key(|member| (member.file_id, member.byte_range.start));
+    left.into_iter()
+        .zip(right)
+        .all(|(mine, theirs)| occurrences_describe_one_location(mine, theirs))
 }
 
 /// Which of two views survives when they describe the same duplication,
@@ -39,6 +51,9 @@ pub(super) fn covers_same_region(first: &Cluster, second: &Cluster) -> bool {
 /// in both directions: neither argument is a nesting role, so either may
 /// be the physical encloser.
 pub(super) fn same_region_survivor(first: &Cluster, second: &Cluster) -> Preference {
+    if distinct_exact_core(first, second) {
+        return Preference::Neither;
+    }
     if !covers_same_region(first, second) {
         return Preference::Neither;
     }
@@ -51,6 +66,20 @@ pub(super) fn same_region_survivor(first: &Cluster, second: &Cluster) -> Prefere
         Nesting::Neither
     };
     preferred_view(first, second, nesting)
+}
+
+/// [PIPELINE-CLUSTER-SUBSUME-KIND] An edited copy cannot report its
+/// enclosed byte-identical copy's Type I extent or classification.
+fn distinct_exact_core(first: &Cluster, second: &Cluster) -> bool {
+    match (first.kind, second.kind) {
+        (ClusterKind::Identical, kind) if kind != ClusterKind::Identical => {
+            strictly_encloses(&second.members, &first.members)
+        }
+        (kind, ClusterKind::Identical) if kind != ClusterKind::Identical => {
+            strictly_encloses(&first.members, &second.members)
+        }
+        _ => false,
+    }
 }
 
 /// Applies the exact survivor order from [PIPELINE-CLUSTER-SUBSUME].

@@ -1,12 +1,44 @@
 //! [CORPUS-SCORE] The judged-line extent of a matched cluster.
 
+use deslop_core::buckets::ClusterKind;
 use serde_json::Value;
 
 use super::{
     clusters, has_distinct_matches, occurrence_key, overlaps, visible, Range, RangeCoverage,
 };
 
-/// Of the matching clusters, keep the one showing the most judged lines.
+/// Both serialized report spellings of the cluster classification.
+const TAXONOMY_FIELDS: &[&str] = &["kind", "bucket"];
+
+/// Old reports call the cluster taxonomy `bucket`; current ones call it `kind`.
+/// Either field can disprove a clone, and an absent or unknown taxonomy cannot
+/// certify one ([CORPUS-SCORE]).
+fn is_clone_label(label: &Value) -> bool {
+    label
+        .as_str()
+        .and_then(|label| {
+            ClusterKind::all()
+                .into_iter()
+                .find(|kind| kind.wire_label() == label)
+        })
+        .is_some_and(ClusterKind::is_clone)
+}
+
+/// Both report schemas must certify a clone when both fields are present.
+fn is_clone_finding(cluster: &Value) -> bool {
+    let mut classified = false;
+    for field in TAXONOMY_FIELDS {
+        if let Some(label) = cluster.get(*field) {
+            classified = true;
+            if !is_clone_label(label) {
+                return false;
+            }
+        }
+    }
+    classified
+}
+
+/// Of the matching clone clusters, keep the one showing the most judged lines.
 pub(super) fn matching_cluster<'a>(
     report: &'a Value,
     ranges: &[Range],
@@ -14,7 +46,8 @@ pub(super) fn matching_cluster<'a>(
     clusters(report)
         .iter()
         .filter(|cluster| {
-            cluster.get("id").and_then(Value::as_str).is_some()
+            is_clone_finding(cluster)
+                && cluster.get("id").and_then(Value::as_str).is_some()
                 && has_distinct_matches(&visible(cluster), ranges)
         })
         .map(|cluster| (cluster, range_coverage(cluster, ranges)))

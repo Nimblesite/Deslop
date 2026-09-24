@@ -45,6 +45,10 @@ struct PairKindMemo {
 #[path = "cluster_kind/tests.rs"]
 mod partition_tests;
 
+#[cfg(test)]
+#[path = "cluster_kind/rescue_cache_tests.rs"]
+mod rescue_cache_tests;
+
 /// A memo miss is distinct from a measured pair without a clone kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PairKindLookup {
@@ -127,7 +131,7 @@ impl<'corpus> ClusterKindMeasurer<'corpus> {
         Self {
             session,
             fingerprints,
-            axes: Mutex::new(PairAxes::new(trees, session, pairs)),
+            axes: Mutex::new(rank_axes(trees, session, fingerprints, pairs)),
             kinds: Mutex::new(PairKindMemo::default()),
             embedding_cosines: embedding_pairs
                 .iter()
@@ -282,6 +286,27 @@ impl<'corpus> ClusterKindMeasurer<'corpus> {
             FUSED_THRESHOLD
         }
     }
+}
+
+/// Seeds only rescue alignments that cleared the floor; lower scores may
+/// be bounds and are never valid answers for ranked classification.
+fn rank_axes<'corpus>(
+    trees: &'corpus [NormalizedNode],
+    session: &'corpus PipelineSession,
+    fingerprints: &[Fingerprint],
+    pairs: &[CandidatePair],
+) -> PairAxes<'corpus> {
+    let mut axes = PairAxes::new(trees, session, pairs);
+    for pair in pairs {
+        if let Some((left, right)) = fingerprints
+            .get(pair.left)
+            .zip(fingerprints.get(pair.right))
+        {
+            axes.overlap
+                .remember_rescued_exact(left, right, pair.shared_subtree_overlap);
+        }
+    }
+    axes
 }
 
 impl ClusterKindJudge for ClusterKindMeasurer<'_> {

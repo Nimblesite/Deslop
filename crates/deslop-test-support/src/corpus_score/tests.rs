@@ -21,12 +21,14 @@ use super::{
 };
 
 mod render;
+mod taxonomy;
 
 const REPO: &str = "fixture";
 const PATH: &str = "src/one.rs";
 const OTHER: &str = "src/two.rs";
 const CLUSTER_ID: &str = "abc123";
 const FULL_COVERAGE_CLUSTER_ID: &str = "full123";
+const IDENTICAL_KIND: &str = "identical";
 const FIRST_RANGE: &str = "src/one.rs:10-20";
 const SECOND_RANGE: &str = "src/two.rs:30-40";
 const SAME_FILE_SECOND_RANGE: &str = "src/one.rs:30-40";
@@ -45,7 +47,7 @@ fn occurrence(path: &str, start: u64, end: u64, hidden: bool) -> Value {
 }
 
 fn report(occurrences: &[Value]) -> Value {
-    json!({ "clusters": [ { "id": CLUSTER_ID, "occurrences": occurrences } ] })
+    json!({ "clusters": [ { "id": CLUSTER_ID, "kind": IDENTICAL_KIND, "occurrences": occurrences } ] })
 }
 
 fn pinned_sha() -> String {
@@ -219,9 +221,10 @@ fn matched_range_coverage_counts_distinct_judged_lines() -> Result<()> {
 fn coverage_uses_the_best_reported_pair_not_a_shorter_earlier_match() -> Result<()> {
     let shorter = json!({
         "id": CLUSTER_ID,
+        "kind": IDENTICAL_KIND,
         "occurrences": [occurrence(PATH, 10, 11, false), occurrence(OTHER, 30, 31, false)]
     });
-    let full = json!({ "id": FULL_COVERAGE_CLUSTER_ID, "occurrences": the_pair() });
+    let full = json!({ "id": FULL_COVERAGE_CLUSTER_ID, "kind": IDENTICAL_KIND, "occurrences": the_pair() });
     let report = json!({ "clusters": [shorter, full] });
     let score = score_repo(
         REPO,

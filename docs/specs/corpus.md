@@ -176,6 +176,8 @@ The register says which pairs are real. The score says how the engine is doing a
 
 **The number.** `score = 100 × correct / judged`, where `judged` is every CLEARLY IN and CLEARLY OUT entry and `correct` is the ones the engine answered right. A CLEARLY IN it reports is correct; one it misses is a **false negative**. A CLEARLY OUT it stays silent on is correct; one it reports is a **false positive**. Both wrong answers are bugs, and each costs exactly one judged pair — no weighting, no partial credit.
 
+**A report answers a clone verdict only through a clone finding.** Each judged range must overlap a different visible occurrence in the same cluster. The old report schema calls the cluster classification `bucket`; the current schema calls it `kind`. The scorer reads both through the shared clone-kind registry. `structural_only` means matching shape without verified copied content, so its occurrences cannot satisfy CLEARLY IN or breach CLEARLY OUT. Missing or unknown classification cannot certify a clone either. If an informational family also contains a real clone pair, a separately published clone cluster must show that pair; the informational family alone is not proof. Asserted by `informational_findings_cannot_satisfy_either_verdict` and `only_a_clone_finding_certifies_a_pair_inside_a_mixed_family` under [CORPUS-SCORE].
+
 A register with no entries scores **nothing**, never 100%. Being asked no questions is not the same as answering them all correctly, which is why the denominator is printed beside every figure.
 
 **The corpus score is `correct / judged` over every judged pair**, not the mean of the per-repository scores. Averaging percentages would let a repository with two judged pairs outvote one with two hundred.

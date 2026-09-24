@@ -4,8 +4,9 @@
 //! A register is independent ground truth: pairs a judge classified CLEARLY IN
 //! or CLEARLY OUT while isolated from this codebase (`docs/specs/corpus.md`
 //! [CORPUS-REGISTER]). Both verdicts read **one predicate in opposite
-//! directions**: an entry is *matched* when some published cluster shows
-//! visible occurrences overlapping every listed range. A matched CLEARLY IN is
+//! directions**: an entry is *matched* when a published clone cluster shows
+//! distinct visible occurrences overlapping every listed range. Structural-only
+//! findings are informational and cannot answer a clone verdict. A matched CLEARLY IN is
 //! correct and an unmatched one is a **false negative**; a matched CLEARLY OUT
 //! is a **false positive** and an unmatched one is correct.
 //!
@@ -103,7 +104,7 @@ pub struct ScoredEntry {
     pub why: String,
     /// The ranges as the register wrote them.
     pub occurrences: Vec<String>,
-    /// Whether a published cluster showed every range together.
+    /// Whether a published clone cluster showed every range together.
     pub matched: bool,
     /// The cluster that matched, when one did.
     pub cluster: Option<String>,

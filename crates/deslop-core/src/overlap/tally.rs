@@ -81,6 +81,9 @@ pub(super) struct RescueTally {
     /// content or a hard whole-endpoint contradiction, before alignment
     /// ([FUSED-SHARED-SUBTREE-HARD-CONTENT]).
     pub(super) hard_content_skipped: u64,
+    /// Pairs whose canonical aligned-core verdict refused a copy before
+    /// exact tree alignment ([FUSED-SHARED-SUBTREE-CORE-PREFLIGHT]).
+    pub(super) core_preflight_skipped: u64,
     /// Stage start, for the throughput a reader needs to tell slow from
     /// stuck.
     started: Instant,
@@ -100,6 +103,7 @@ impl RescueTally {
             container_echo_rejected: 0,
             echo_bound_skipped: 0,
             hard_content_skipped: 0,
+            core_preflight_skipped: 0,
             started: Instant::now(),
         }
     }
@@ -155,6 +159,11 @@ impl RescueTally {
         bump(&mut self.hard_content_skipped);
     }
 
+    /// Records one canonical core refusal before tree alignment.
+    pub(super) fn core_preflight_skipped(&mut self) {
+        bump(&mut self.core_preflight_skipped);
+    }
+
     /// Folds another tally's counts into this one. The stage clock stays
     /// this tally's own — shard tallies share the pass start, so the
     /// merged elapsed time is the pass's ([PERF-FLUTTER-TODO-RESCUE]).
@@ -172,6 +181,7 @@ impl RescueTally {
             container_echo_rejected,
             echo_bound_skipped,
             hard_content_skipped,
+            core_preflight_skipped,
         );
     }
 
@@ -198,6 +208,7 @@ impl RescueTally {
             container_echo_rejected = self.container_echo_rejected,
             echo_bound_skipped = self.echo_bound_skipped,
             hard_content_skipped = self.hard_content_skipped,
+            core_preflight_skipped = self.core_preflight_skipped,
             alignments = measure.alignments,
             credit_fallbacks = measure.credit_fallbacks,
             hash_equal = measure.hash_equal,

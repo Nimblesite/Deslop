@@ -16,6 +16,11 @@ use crate::{
     state::FileId,
 };
 
+mod authored_scope;
+mod verdict;
+use authored_scope::AuthoredScopeMemo;
+use verdict::GateVerdict;
+
 /// Structural overlap at which normalised shape saturates the content guard.
 const SHAPE_IDENTICAL_FLOOR: f64 = 0.99;
 /// Token overlap at which `MinHash` is echoing saturated normalised shape.
@@ -72,6 +77,7 @@ fn apply_pair_content_gate_with_content<L>(
         tree_index: &tree_index,
         anchors: &anchors,
         scopes: &scopes,
+        authored_scope: AuthoredScopeMemo::new(fingerprints.len()),
         sources,
         languages,
         cache,
@@ -94,6 +100,8 @@ struct GateContext<'a, L: BuildHasher> {
     /// Authored declarations per file, for the interior-window rule
     /// ([FUSED-CONTENT-GATE-INTERIOR]).
     scopes: &'a DeclarationScopes<'a, L>,
+    /// Cached authored-declaration roles for the one-vs-many guard.
+    authored_scope: AuthoredScopeMemo,
     /// Raw source per file.
     sources: &'a HashMap<FileId, Vec<u8>>,
     /// Language per file.
@@ -119,63 +127,6 @@ fn pair_passes_content_gate<L: BuildHasher>(
     verdict.admitted()
 }
 
-/// The route one candidate edge took through the content guard and the
-/// decision that route produced.
-enum GateVerdict {
-    /// Refused: the endpoints play different roles under embedding
-    /// support ([CLONE-NOISE-EMBEDDING-ROLE-MISMATCH]).
-    RoleMismatch,
-    /// Refused: a token-only pair that merely wraps an exact
-    /// whole-function clone ([FUSED-SHARED-SUBTREE-ECHO]).
-    ContainerEcho,
-    /// Admitted without measurement: no route saturated, so the pair's
-    /// own shape or semantic evidence is not an echo of normalisation.
-    NotRequired,
-    /// Admitted from ordered frontier identity and no semantic contradiction;
-    /// the full rename and literal axes are unnecessary for this gate.
-    ExactFrontier {
-        /// The applicable pair-content floor.
-        floor: f64,
-    },
-    /// Measured against the scope-specific floor.
-    Measured {
-        /// The pair's content evidence.
-        evidence: ContentEvidence,
-        /// The floor the evidence had to clear.
-        floor: f64,
-        /// A strongly aligned core already passed the same content floor
-        /// with only Async-suffix call edits.
-        verified_async_core: bool,
-    },
-}
-
-impl GateVerdict {
-    /// Whether the edge survives the guard.
-    fn admitted(&self) -> bool {
-        match self {
-            Self::RoleMismatch | Self::ContainerEcho => false,
-            Self::NotRequired => true,
-            Self::ExactFrontier { floor } => EXACT_CONTENT_AGREEMENT >= *floor,
-            Self::Measured {
-                evidence,
-                floor,
-                verified_async_core,
-            } => evidence.clears(*floor) || *verified_async_core,
-        }
-    }
-
-    /// The route's name for the trace.
-    fn route(&self) -> &'static str {
-        match self {
-            Self::RoleMismatch => "role_mismatch",
-            Self::ContainerEcho => "container_echo",
-            Self::NotRequired => "not_required",
-            Self::ExactFrontier { .. } => "exact_frontier",
-            Self::Measured { .. } => "measured",
-        }
-    }
-}
-
 /// Decides one candidate edge's route through the content guard.
 fn gate_verdict<L: BuildHasher>(
     pair: &CandidatePair,
@@ -193,6 +144,12 @@ fn gate_verdict<L: BuildHasher>(
         )
     {
         return GateVerdict::RoleMismatch;
+    }
+    if context
+        .authored_scope
+        .one_to_many(pair, left, right, context.scopes)
+    {
+        return GateVerdict::AuthoredScopeMismatch;
     }
     // [FUSED-SHARED-SUBTREE-ECHO] A token echo of an exact function plus
     // scraps is a wider view of that function, not a second clone.

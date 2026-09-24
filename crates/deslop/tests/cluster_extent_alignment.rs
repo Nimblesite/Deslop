@@ -24,6 +24,9 @@
 #[path = "cluster_extent_alignment/unmatched_width.rs"]
 mod unmatched_width;
 
+#[path = "cluster_extent_alignment/same_file_tail.rs"]
+mod same_file_tail;
+
 use anyhow::Result;
 use serde_json::Value;
 

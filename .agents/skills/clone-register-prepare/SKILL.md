@@ -168,8 +168,14 @@ Enforced by `crates/deslop/tests/corpus_register_contract.rs` in `make test`.
 
 Both verdicts use **one predicate, read in opposite directions**:
 
-> An entry is *matched* when some published cluster shows visible occurrences that
-> **overlap every listed range**.
+> An entry is *matched* when a published clone cluster shows distinct visible
+> occurrences that **overlap every listed range**.
+
+The old report calls the classification `bucket`; the current report calls it
+`kind`. Both must identify a clone. `structural_only` is informational, so it
+neither finds a CLEARLY IN nor breaches a CLEARLY OUT. A missing or unknown
+classification is not proof of a clone. A broad informational family cannot
+stand in for a separately published clone pair inside it.
 
 - **CLEARLY IN matched** → correct. Unmatched → **false negative**.
 - **CLEARLY OUT matched** → **false positive**. Unmatched → correct.

@@ -18,6 +18,7 @@ use crate::{
 const LEFT_SOURCE: &str = "fn compute(seed: i32) -> i32 { let mut total = seed; total = total + 1; total = total + 2; total = total + 3; total = total + 4; total = total + 5; total = total + 6; total = total + 7; total = total + 8; total }";
 const OPERATOR_DRIFT_SOURCE: &str = "fn compute(seed: i32) -> i32 { let mut total = seed; total = total + 1; total = total + 2; total = total + 3; total = total - 4; total = total + 5; total = total + 6; total = total + 7; total = total + 8; total }";
 const COPIED_EXTENSION_SOURCE: &str = "fn compute(seed: i32) -> i32 { let mut total = seed; total = total + 1; total = total + 2; total = total + 3; total = total + 4; total = total + 5; total = total + 6; total = total + 7; total = total + 8; total = total + 9; total }";
+const SOFT_REFUSAL_SOURCE: &str = "fn collect(base: i32) -> i32 { let mut result = base; result = base + 11; result = result + 12; result = base + 13; result = result + 14; result = base + 15; result = result + 16; result = base + 17; result = result + 18; result = base + 19; result }";
 const NO_ALIGNMENTS: u64 = 0;
 const ONE_ALIGNMENT: u64 = 1;
 const NO_RESCUES: u64 = 0;
@@ -131,5 +132,29 @@ fn copied_extension_still_aligns_and_survives() -> Result<(), String> {
         tally.hard_content_skipped, NO_RESCUES,
         "no copied core may be preflight-refused"
     );
+    assert_eq!(tally.core_preflight_skipped, NO_RESCUES);
+    Ok(())
+}
+
+// [FUSED-SHARED-SUBTREE-CORE-PREFLIGHT] An aligned core that fails the
+// canonical content verdict cannot be rescued even by high tree overlap.
+#[test]
+fn soft_core_refusal_skips_exact_alignment() -> Result<(), String> {
+    let (pair, tally, stats, core) = measure_pair(SOFT_REFUSAL_SOURCE)?;
+    assert!(
+        !core.copy,
+        "changed authored values are not a copied core: {core:?}"
+    );
+    assert_eq!(core.evidence.contradiction, ContentContradiction::None);
+    assert_eq!(
+        stats.alignments, NO_ALIGNMENTS,
+        "refused core avoids the tree DP"
+    );
+    assert_eq!(
+        pair.shared_subtree_overlap.to_bits(),
+        ZERO_OVERLAP.to_bits()
+    );
+    assert_eq!(tally.rescued, NO_RESCUES);
+    assert_eq!(tally.core_preflight_skipped, ONE_SKIP);
     Ok(())
 }

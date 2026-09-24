@@ -102,6 +102,9 @@ The shared mass of two endpoints cannot exceed the larger endpoint's node count.
 #### [FUSED-SHARED-SUBTREE-HARD-CONTENT] Refuse terminal content before alignment
 The aligned-core gate cannot accept an endpoint whose authored content cannot be resolved. It also always rejects a changed operator, or an unexcused external call target where the whole endpoints' positions align: those contradictions survive every choice of shared core. For unequal Merkle hashes whose node counts could still clear the overlap floor, test only these terminal conditions before paying for exact tree alignment. Leave overlap unset and count the skipped pair separately. A low whole-endpoint agreement or an ordinary edit is **not** terminal; its aligned core still needs measurement. Implemented in `content::ContentPair::rejects_every_core` and `overlap/rescue.rs`, with direct core-verdict parity and work-count controls in `overlap/rescue/hard_content.rs`.
 
+#### [FUSED-SHARED-SUBTREE-CORE-PREFLIGHT] Refuse a non-copy core before tree alignment
+The rescue always refuses a pair whose canonical aligned-core verdict says the shared authored code is not a copy, even when the tree overlap clears its floor. For unequal endpoint hashes whose node counts could clear that floor, judge the same core before paying for exact tree alignment. If it fails, leave rescue overlap unset and count the skipped alignment; if it passes, reuse that verdict after the overlap measurement. This changes no admission or reported range: a real copied extension still aligns, while the soft content refusal in `overlap/rescue/hard_content.rs` does not.
+
 ### [FUSED-SHARED-SUBTREE-CORE] A rescued pair is judged on the code it shares
 
 The rescue's population is, by construction, pairs whose shapes differ — that is what made them need rescuing. Over such a pair every content measure of [FUSED-CONTENT-GATE] loses its footing: positional agreement, rename evidence and the contradiction-free rename test all need index `i` to name the same authored slot on both sides, and a single inserted statement shifts every slot after it. What was left was a bag-of-keys similarity over the whole endpoints, and that number cannot tell a near-miss from a stranger: `csharp-type3`, a consistently renamed method with one inserted statement, reads 0.19 on it, while two browser-test lines on other selectors, welded to a proven copy through an unrelated `goto`, read about 0.23. The floor that stood between them, 0.10, refused a stranger sharing nothing and admitted every stranger sharing an idiom — and the same two lines, offered *without* the `goto`, had already been refused at the gate's own floor with agreement 0.6. Adding a statement that is not shared turned a refused pair into an admitted one.
@@ -136,6 +139,14 @@ Admitting *every* otherwise-valid same-file candidate was tried and reverted: wi
 
 Memoise pair results by endpoint Merkle hashes, not by byte ranges; equal hashes pin equal normalised structures, so this changes cost but not values or admission. `a_fleet_of_identical_windows_costs_one_alignment` pins 36 byte-range pairs to one alignment. Memoise exact and bound results separately because bounds answer only rescue admission. Cache each resolved endpoint by its complete fingerprint identity, including its hash and node count: a grammar wrapper and its child can share a byte range but represent different trees. `same_range_fingerprints_keep_distinct_overlap_views` pins both visit orders. Keep endpoint views and exact pair results bounded, rotating each memo when full so later families can reuse their own work; `endpoint_views_remain_reusable_after_the_memo_fills` and `exact_results_remain_cached_after_the_memo_fills` pin that behavior.
 
+At capacity, updating an existing exact key keeps the other cached results; only a new key rotates the memo. `repeated_rescue_seed_at_capacity_keeps_other_exact_hit` pins the avoided second alignment.
+
+The rank pass may seed its exact-result memo from a rescued pair only when the pair has different hashes and its measured score clears the rescue overlap floor. At that point rescue has completed the full alignment. A below-floor score may be only an upper bound and must never answer ranking's exact query. Ranking still resolves both endpoint views before accepting a memo hit, so a stale or invalid byte range cannot inherit a measured score. `ranked_fold_reuses_exact_rescue_alignment`, `ranked_fold_does_not_promote_rescue_bound`, and `seeded_score_does_not_answer_unresolved_endpoint` pin these boundaries.
+
+### [FUSED-SHARED-SUBTREE-CREDIT-DISJOINT] Large-tree credit counts each node once
+
+The large-tree shortcut credits identical subtrees only when their source spans prove they do not overlap. Nested grammar wrappers can share an empty byte span: advancing a cursor past one such wrapper does not move it, so crediting the next wrapper would count the same nodes twice. Empty spans provide no proof of separation and earn no credit. `zero_width_nested_subtrees_are_not_credited_twice` pins a case where the former shortcut claimed nine shared nodes although exact alignment found four; ordinary large-copy and swapped-order controls remain in force.
+
 ### [FUSED-SHARED-SUBTREE-BOUND] The kind-multiset bound refuses hopeless alignments
 
 Shared mass is at most `min(smaller_total, kind-multiset intersection)`. `rescue_overlap` skips quadratic alignment when `bound/larger` is below `admission.shared_subtree_min_overlap`; the bound never undercuts exact overlap, so admission is unchanged. Pins: `the_kind_multiset_bound_never_undercuts_the_alignment`, `the_rescue_path_agrees_with_the_exact_measure_on_admission`, and `a_pair_the_bound_refuses_never_pays_for_an_alignment`. Reports always use exact overlap.
@@ -143,6 +154,10 @@ Shared mass is at most `min(smaller_total, kind-multiset intersection)`. `rescue
 ### [FUSED-SHARED-SUBTREE-BOUND-ORDER] The order bound refuses alignments the multiset bound would allow
 
 The multiset bound cannot see scrambled order. A bit-parallel Allison–Dix longest-common-subsequence calculation over post-order kind sequences supplies a never-looser upper bound at every endpoint size, including above the alignment cap, and runs whenever the multiset bound cannot refuse the pair. It removes 22% of rescue alignments on the Flutter slice without changing admissions. Pins cover machine-word boundaries (`the_bit_parallel_row_matches_the_textbook_table`), 3,600 generated pairs against Zhang–Shasha (`the_bound_never_understates_what_the_alignment_measures`), and scrambled order (`scrambled_order_is_bounded_far_below_the_shared_multiset`).
+
+### [FUSED-SHARED-SUBTREE-BOUND-EXACT] Equal bounds certify an exact overlap
+
+For endpoints below the alignment cap, the ordered kind bound is an upper bound on shared nodes and disjoint identical-subtree credit is a lower bound. If their **integer node counts are equal**, the overlap is that count and no tree alignment is needed. The comparison uses counts before division, so rounded ratios cannot manufacture equality. If the counts differ, the exact aligner still runs. `matching_overlap_bounds_skip_exact_alignment` and `differing_overlap_bounds_keep_exact_alignment` pin both routes; the zero-width disjointness test guards the lower-bound premise.
 
 ### [FUSED-PAIR-SIGNALS] Evidence belongs to the exact pair
 
@@ -167,6 +182,10 @@ An explicit pair comparison identifies both endpoints and may render that pair's
 The correction is scoped by that digest equality, tested directly on the members, and by nothing else. No reading of `structural` can stand in for it: since [FUSED-SHARED-SUBTREE] the axis grades subtree *overlap*, so it saturates by ratio as well as by hash equality, and every value below saturation means the subtrees provably differ. Scoping the correction to `content_gate.structural_saturation_floor` — a near-miss **routing** tolerance — published `token_jaccard = 1.0`, and the `shape` reading derived from it, across the whole `[0.99, 1.0)` band on no evidence. Routing tolerance is not proof of identity. Pinned by `crates/deslop/tests/content_gate_signal_honesty.rs`. 5. **Classification and reporting** follow [CLONE-BUCKETS-ROUTING] and [CLONE-KIND-FOLD]. Only eligible clones contribute weight under [RANK-MASS-SUM](pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only). Do not turn admission failure into a fallback clone label.
 
 `token_jaccard` itself stays rename-invariant (normalised k-grams); the gate adds evidence rather than redefining an existing signal.
+
+### [FUSED-CONTENT-GATE-AUTHORED-RUN] One method cannot stand in for two
+
+Before joining a pair into a cluster, reject an edge that compares one complete authored method with a window from the start of one method to the end of another. Repeated setup inside those methods can make the window pass content agreement even though it includes two separate operations. This guard reads method boundaries from the parsed AST. It does not reject windows inside one method or a run of methods compared with another run. The three C# circuit transitions in `same_file_setup_keeps_every_fault_assertion_tail` pin the rejected one-to-two edge and the copied code that must remain.
 
 ### [FUSED-CONTENT-GATE-MEMO] Reuse resolved content only for the same fingerprint
 

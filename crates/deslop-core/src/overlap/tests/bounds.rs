@@ -389,6 +389,9 @@ fn fill_exact_memo(measurer: &mut OverlapMeasurer<'_>) {
     const DUMMY_OVERLAP: f64 = 0.0;
     const DUMMY_PARTNER: [u8; 32] = [0; 32];
     for index in 0..EXACT_RESULT_MEMO_MAX {
+        if measurer.exact_results.len() == EXACT_RESULT_MEMO_MAX {
+            break;
+        }
         let hash = blake3::hash(&index.to_le_bytes()).into();
         let _previous = measurer
             .exact_results
@@ -417,6 +420,8 @@ fn exact_results_remain_cached_after_the_memo_fills() -> Result<(), String> {
     assert_eq!(measurer.stats().exact_hits, ONE_HIT);
     Ok(())
 }
+
+mod rotation;
 
 // [FUSED-SHARED-SUBTREE] Mixed-size boundary: the fallback is selected
 // by the LARGER endpoint's node count, but its credit walk reads BOTH

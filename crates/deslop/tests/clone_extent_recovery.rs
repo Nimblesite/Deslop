@@ -7,6 +7,9 @@ use serde_json::Value;
 
 use crate::common::*;
 
+#[path = "clone_extent_recovery/adjacent_calls.rs"]
+mod adjacent_calls;
+
 const FIXTURE: &str = "csharp-constructor-check-family";
 const SIDES: [&str; 2] = ["Sync.cs", "Async.cs"];
 const MIN_NODES: u32 = 30;

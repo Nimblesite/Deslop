@@ -23,16 +23,11 @@
 
 use std::{collections::HashMap, hash::BuildHasher, num::NonZeroUsize};
 
-use super::{
-    bounds::endpoint_count_bound,
-    core::{judge_core, CoreVerdict},
-    tally::RescueTally,
-    OverlapMeasurer,
-};
+use super::{bounds::endpoint_count_bound, core::CoreVerdict, tally::RescueTally, OverlapMeasurer};
 use crate::{
     ast::NormalizedNode,
     cluster::scope::DeclarationScopes,
-    content::{ContentContradiction, ContentMeasurer, PairScope},
+    content::{ContentContradiction, ContentMeasurer},
     fingerprint::{ranges_overlap, Fingerprint},
     pair::{
         alignment_required, crosses_files, CandidatePair, ExactClones,
@@ -40,6 +35,10 @@ use crate::{
     },
     state::FileId,
 };
+
+/// Canonical aligned-core measurement shared by rescue's early and late gates.
+mod core_verdict;
+use core_verdict::core_verdict;
 
 /// Everything a rescue measurement reads besides the pair itself,
 /// resolved once per pass and shared read-only by every shard.
@@ -327,22 +326,55 @@ fn measure_one<S: BuildHasher, L: BuildHasher>(
         tally.hard_content_skipped();
         return;
     }
+    // [FUSED-SHARED-SUBTREE-CORE-PREFLIGHT] The same canonical core
+    // verdict will reject this pair after alignment regardless of its
+    // structural overlap. Reuse a passing verdict below.
+    let preflight = preflight_core(left, right, context, measurer, contents);
+    if preflight.is_some_and(|verdict| !verdict.copy) {
+        pair.shared_subtree_overlap = 0.0;
+        pair.verified_async_core = false;
+        tally.core_preflight_skipped();
+        return;
+    }
     pair.shared_subtree_overlap = measurer.rescue_overlap(left, right);
-    record_rescue_verdict(pair, left, right, context, measurer, contents, tally);
+    record_rescue_verdict(
+        pair,
+        (left, right),
+        context,
+        measurer,
+        contents,
+        preflight,
+        tally,
+    );
 }
 
-/// Applies content and echo guards to one measured rescue candidate.
-fn record_rescue_verdict<S: BuildHasher, L: BuildHasher>(
-    pair: &mut CandidatePair,
+/// Only preflight pairs that could otherwise pay for exact alignment.
+fn preflight_core<S: BuildHasher, L: BuildHasher>(
     left: &Fingerprint,
     right: &Fingerprint,
     context: &RescueContext<'_, S, L>,
     measurer: &mut OverlapMeasurer<'_>,
     contents: &mut ContentMeasurer,
+) -> Option<CoreVerdict> {
+    (left.hash != right.hash && endpoint_count_bound(left, right) >= SHARED_SUBTREE_MIN_OVERLAP)
+        .then(|| core_verdict(left, right, context, measurer, contents))
+}
+
+/// Applies content and echo guards to one measured rescue candidate.
+fn record_rescue_verdict<S: BuildHasher, L: BuildHasher>(
+    pair: &mut CandidatePair,
+    endpoints: (&Fingerprint, &Fingerprint),
+    context: &RescueContext<'_, S, L>,
+    measurer: &mut OverlapMeasurer<'_>,
+    contents: &mut ContentMeasurer,
+    preflight: Option<CoreVerdict>,
     tally: &mut RescueTally,
 ) {
+    let (left, right) = endpoints;
     let clears_overlap = pair.shared_subtree_overlap >= SHARED_SUBTREE_MIN_OVERLAP;
-    let core = clears_overlap.then(|| core_verdict(left, right, context, measurer, contents));
+    let core = clears_overlap.then(|| {
+        preflight.unwrap_or_else(|| core_verdict(left, right, context, measurer, contents))
+    });
     let clears_content = match core {
         Some(verdict) => verdict.copy,
         None => true,
@@ -366,86 +398,6 @@ fn record_rescue_verdict<S: BuildHasher, L: BuildHasher>(
     tally.measure(
         clears_overlap && clears_content && !echoes,
         measurer.stats(),
-    );
-}
-
-/// [FUSED-SHARED-SUBTREE-CORE] Whether the code the two endpoints share
-/// is a copy: the Merkle-equal subtrees the alignment pairs, judged by
-/// [`judge_core`] — a clone the scan would report on its own, measured
-/// with the content gate's own axes. A Type-3 near-miss is a Type-1 or
-/// Type-2 clone with an edit, and the core is that clone; if the core is
-/// not a copy the wider view cannot be one, so no pair can be admitted
-/// by widening a pair the gate refused. A pair with no shared code to
-/// judge is refused — nothing measured vouches for nothing.
-fn core_verdict<S: BuildHasher, L: BuildHasher>(
-    left: &Fingerprint,
-    right: &Fingerprint,
-    context: &RescueContext<'_, S, L>,
-    measurer: &mut OverlapMeasurer<'_>,
-    contents: &mut ContentMeasurer,
-) -> CoreVerdict {
-    let core = measurer.aligned_core(left, right);
-    let scope = PairScope {
-        same_file: !crosses_files(left, right),
-        interior: context.scopes.enclosing(left).is_some()
-            && context.scopes.enclosing(right).is_some(),
-        core: true,
-    };
-    let verdict = judge_core(&core, context.core_floor, || {
-        contents
-            .pair(
-                (left, right),
-                &context.tree_index,
-                context.sources,
-                context.languages,
-            )
-            .core(&core, context.sources, scope)
-    });
-    log_core_verdict(left, right, &core, verdict);
-    verdict
-}
-
-/// Records one core verdict so a surprising rescue or refusal is
-/// traceable without re-running the pipeline. Byte offsets, counts and
-/// scores only — never source text ([PRINCIPLES-LOGGING]).
-fn log_core_verdict(
-    left: &Fingerprint,
-    right: &Fingerprint,
-    core: &[(Fingerprint, Fingerprint)],
-    verdict: CoreVerdict,
-) {
-    if !tracing::enabled!(tracing::Level::TRACE) {
-        return;
-    }
-    let evidence = verdict.evidence;
-    let spans: Vec<String> = core
-        .iter()
-        .map(|(span, partner)| {
-            format!(
-                "{}..{}={}..{}",
-                span.byte_range.start,
-                span.byte_range.end,
-                partner.byte_range.start,
-                partner.byte_range.end
-            )
-        })
-        .collect();
-    tracing::trace!(
-        left_file = ?left.file_id,
-        left_start = left.byte_range.start,
-        left_end = left.byte_range.end,
-        right_file = ?right.file_id,
-        right_start = right.byte_range.start,
-        right_end = right.byte_range.end,
-        spans = spans.join(","),
-        core_nodes = verdict.nodes,
-        measured = evidence.measured,
-        contradiction = ?evidence.contradiction,
-        agreement = evidence.agreement,
-        rename = evidence.rename_consistency,
-        consistent_rename = evidence.consistent_rename,
-        copy = verdict.copy,
-        "rescue core verdict",
     );
 }
 

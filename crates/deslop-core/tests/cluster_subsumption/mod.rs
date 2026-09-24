@@ -243,19 +243,19 @@ fn contains(outer: &(FileId, (usize, usize)), inner: &(FileId, (usize, usize))) 
     outer.0 == inner.0 && outer.1 .0 <= inner.1 .0 && inner.1 .1 <= outer.1 .1
 }
 
-/// Every occurrence of `view` contains, or is contained by, an
-/// occurrence of `other` in its file.
-fn paired(view: &View, other: &View) -> bool {
-    view.iter().all(|occurrence| {
-        other
-            .iter()
-            .any(|rival| contains(rival, occurrence) || contains(occurrence, rival))
-    })
-}
-
-/// Two views describe one duplication when each pairs with the other.
+/// Two views describe one duplication when their ordered, distinct
+/// occurrences pair by containment ([PIPELINE-CLUSTER-SUBSUME]).
 fn one_duplication(left: &View, right: &View) -> bool {
-    paired(left, right) && paired(right, left)
+    if left.is_empty() || left.len() != right.len() {
+        return false;
+    }
+    let mut left = left.clone();
+    let mut right = right.clone();
+    left.sort_unstable();
+    right.sort_unstable();
+    left.iter()
+        .zip(right.iter())
+        .all(|(mine, theirs)| contains(mine, theirs) || contains(theirs, mine))
 }
 
 /// Every occurrence of `inner` lies inside an occurrence of `outer`, and

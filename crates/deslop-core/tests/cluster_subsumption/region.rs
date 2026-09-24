@@ -1,7 +1,54 @@
 //! [PIPELINE-CLUSTER-SUBSUME] The region predicate: the two shapes that
 //! collapse, and every shape that must not.
 
-use super::{published, spans};
+use super::{published, published_across, spans, Cluster};
+use deslop_core::state::FileRegistry;
+
+const REPEATED_FILE: &str = "circuit.cs";
+const BROAD_PAIR: [(usize, usize); 2] = [(0, 100), (120, 300)];
+const THREE_COPIES: [(usize, usize); 3] = [(10, 50), (130, 170), (230, 270)];
+const SPLIT_PAIR: [(usize, usize); 3] = [(0, 100), (150, 180), (200, 230)];
+const MERGED_PAIR: [(usize, usize); 3] = [(10, 40), (50, 90), (140, 240)];
+const NESTING_PAIR: [(usize, usize); 2] = [(0, 100), (120, 220)];
+const REVERSED_NESTED_PAIR: [(usize, usize); 2] = [(130, 170), (10, 50)];
+const DISTINCT_VIEWS: usize = 2;
+
+fn published_same_file(first: &[(usize, usize)], second: &[(usize, usize)]) -> Vec<Cluster> {
+    let mut registry = FileRegistry::new();
+    let file = registry.register(REPEATED_FILE.into());
+    let views = [first, second].map(|spans| spans.iter().map(|span| (file, *span)).collect());
+    published_across(&views)
+}
+
+/// [PIPELINE-CLUSTER-SUBSUME] One broad occurrence cannot stand in for two copies.
+#[test]
+fn one_enclosing_window_does_not_erase_two_distinct_copies() {
+    let clusters = published_same_file(&BROAD_PAIR, &THREE_COPIES);
+    assert_eq!(clusters.len(), DISTINCT_VIEWS);
+    assert_eq!(
+        spans(&clusters),
+        vec![THREE_COPIES.to_vec(), BROAD_PAIR.to_vec()]
+    );
+}
+
+/// [PIPELINE-CLUSTER-SUBSUME] Equal counts still need a one-to-one pairing.
+#[test]
+fn equal_counts_do_not_hide_a_split_and_merge() {
+    let clusters = published_same_file(&SPLIT_PAIR, &MERGED_PAIR);
+    assert_eq!(clusters.len(), DISTINCT_VIEWS);
+    assert_eq!(
+        spans(&clusters),
+        vec![MERGED_PAIR.to_vec(), SPLIT_PAIR.to_vec()]
+    );
+}
+
+/// [PIPELINE-CLUSTER-SUBSUME] Reordered nested copies are still one finding.
+#[test]
+fn distinct_nested_same_file_copies_collapse_in_position_order() {
+    let clusters = published_same_file(&NESTING_PAIR, &REVERSED_NESTED_PAIR);
+    assert_eq!(clusters.len(), 1);
+    assert_eq!(spans(&clusters), vec![NESTING_PAIR.to_vec()]);
+}
 
 /// [PIPELINE-CLUSTER-SUBSUME] Strict enclosure collapses. The nested
 /// view re-describes the enclosing duplication; publishing both shows
