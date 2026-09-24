@@ -52,8 +52,14 @@ axios.post<Partial<UserCreationDef>, string>('/user', { name: 'foo' }, { headers
 
 fn write_fixture(root: &Path) -> Result<()> {
     assert_eq!(SHARED_CALLS.lines().count(), SHARED_LINES);
-    fs::write(root.join(LEFT_FILE), format!("{LEFT_PREFIX}{SHARED_CALLS}{LEFT_SUFFIX}"))?;
-    fs::write(root.join(RIGHT_FILE), format!("{RIGHT_PREFIX}{SHARED_CALLS}{RIGHT_SUFFIX}"))?;
+    fs::write(
+        root.join(LEFT_FILE),
+        format!("{LEFT_PREFIX}{SHARED_CALLS}{LEFT_SUFFIX}"),
+    )?;
+    fs::write(
+        root.join(RIGHT_FILE),
+        format!("{RIGHT_PREFIX}{SHARED_CALLS}{RIGHT_SUFFIX}"),
+    )?;
     Ok(())
 }
 
@@ -78,7 +84,10 @@ fn identical_adjacent_calls_keep_their_full_extent() -> Result<()> {
                     .all(|file| has_full_side(cluster, file))
         })
         .collect();
-    assert_eq!(field(&report, "files_analysed").as_u64(), Some(ANALYSED_FILES));
+    assert_eq!(
+        field(&report, "files_analysed").as_u64(),
+        Some(ANALYSED_FILES)
+    );
     assert_eq!(exact.len(), 1, "complete call run missing: {report:#}");
     let cluster = exact.first().expect("one full exact call-run cluster");
     assert_eq!(cluster_size(cluster), COPIES);
