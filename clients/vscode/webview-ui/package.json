@@ -10,7 +10,7 @@
     "watch": "node build.mjs --watch"
   },
   "dependencies": {
-    "@preact/signals": "^2.11.1",
+    "@preact/signals": "^2.11.2",
     "markdown-it": "^14.2.0",
     "preact": "^10.29.8"
   },
