@@ -96,6 +96,14 @@ The anchor is an authored **function** or a run of them, never a sub-block: a Ty
 
 Implemented in `pair/echo.rs`, applied in `overlap/rescue.rs` and `pair/content_gate.rs`; pinned by `issue_389_subsumption_modifier_straddle`, the `incremental-multilang` golden across all six languages, `fsharp_issue_339_sibling_window_rename` (an F# module wrapping an exact two-binding window), and `js_ts_extensions::javascript_family_clusters_across_js_mjs_and_cjs_extensions` (three whole files that may not widen past the declaration they share).
 
+#### [FUSED-SHARED-SUBTREE-INDEX] Exact clones are answered by range, never by reading the file's whole list
+
+A file of a few hundred look-alike functions holds a few hundred thousand Merkle-equal pairs, and every same-file rescue question ([FUSED-SHARED-SUBTREE-SAME-FILE]) and every echo question above asks only which of those clones sit inside the two endpoints or wrap them. Reading the file's whole list for each question multiplied two quadratic counts together: `ledger.js` in the `javascript-minified-bundle` fixture, 400 functions and 798,000 exact pairs, spent 93 s of a 99 s scan answering questions whose every answer was then discarded (gh #565).
+
+So the clones of a file pair are ordered by the lower endpoint's start byte, and under each lower endpoint its partners are ordered by the higher endpoint's start byte. A question walks the run of ranges that begin inside the endpoint and the earlier ranges that still reach its end — a running maximum of the ends says when no earlier range can — and nothing else. The set it visits is exactly the set the full scan kept, because `enclosed_nodes` and `claimed_nodes` are defined by containment alone and the order only decides which entries are looked at, so no verdict moves.
+
+Implemented in `pair/echo.rs` and `pair/echo/range_index.rs`; pinned by the unit tests in `pair/echo/tests.rs`, which cover a wide early range reached past many short ones, a wider range sharing the query's start, insertion-order independence, and a family of look-alike functions answered pair by pair.
+
 #### [FUSED-SHARED-SUBTREE-ECHO-BOUND] Refuse an inevitable echo before alignment
 The shared mass of two endpoints cannot exceed the larger endpoint's node count. If even that maximum leaves fewer than `admission.shared_subtree_min_node_count` nodes beyond an exact clone the endpoints wrap, the existing echo rule must refuse the pair whatever the tree alignment finds. Use `ExactClones::wraps_within` before alignment, leave its overlap unset, and count the avoided measurement separately. A container with enough room for an additional copied near-miss must still align and may be rescued. `overlap::rescue::early_echo_tests::{exact_clone_shell_skips_alignment, copied_extension_still_measures}` pins both cases.
 
