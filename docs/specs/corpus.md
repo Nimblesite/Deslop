@@ -10,6 +10,8 @@ A moved or re-cut upstream tag is a **hard error that deletes the clone**, never
 
 Clones live in git-ignored `.corpus/`. A missing clone is a hard error naming `make test-corpus`, never a skipped test.
 
+Not every file under `corpus/` and `corpus/register/` names a repository — a few hold settings. `corpus/not-a-repository.json` is the one place that distinction is written down, and it names itself, because it is one of them. The fetch and the Rust harness both read it; neither keeps a copy. A copy is what breaks: the fetch's own stale copy sent it to clone the judging queue, which pins no repository, and it aborted before a single accuracy check ran (gh #530). Everything not on that list is held to the full manifest contract — a missing `url` or `sha` is an error where it is read, never a file quietly treated as settings.
+
 ### [CORPUS-CEILINGS] Resource budget
 
 Every manifest carries `ceilings.max_wall_seconds` and `ceilings.max_peak_rss_mb`, measured by running the release binary under the platform's peak-RSS measurement.

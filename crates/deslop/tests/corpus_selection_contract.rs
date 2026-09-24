@@ -31,7 +31,7 @@ use std::{collections::BTreeSet, ffi::OsStr, fs};
 
 use anyhow::{anyhow, ensure, Context, Result};
 use deslop_test_support::{
-    corpus::{repo_root, NOT_A_REPOSITORY},
+    corpus::{describes_a_repository, repo_root},
     skip_policy::ignored_tests,
 };
 
@@ -185,9 +185,8 @@ fn pinned_repositories() -> Result<BTreeSet<String>> {
     let mut found = BTreeSet::new();
     for entry in entries {
         let path = entry?.path();
-        let is_manifest = path.extension().and_then(OsStr::to_str) == Some(MANIFEST_EXTENSION);
         let stem = path.file_stem().and_then(OsStr::to_str).unwrap_or_default();
-        if is_manifest && !NOT_A_REPOSITORY.contains(&stem) {
+        if describes_a_repository(&path)? {
             let _inserted = found.insert(stem.to_owned());
         }
     }
