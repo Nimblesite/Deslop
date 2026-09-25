@@ -12,5 +12,5 @@ dependencies {
     // (PrepareSandboxTask, BuildPluginTask) onto the convention plugin's compile
     // classpath so the shared LSP-bundling logic can reference them. Version is
     // locked to the settings plugin in settings.gradle.kts.
-    implementation("org.jetbrains.intellij.platform:org.jetbrains.intellij.platform.gradle.plugin:2.14.0")
+    implementation("org.jetbrains.intellij.platform:org.jetbrains.intellij.platform.gradle.plugin:2.19.0")
 }
