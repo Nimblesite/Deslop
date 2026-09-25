@@ -74,24 +74,28 @@ fn pair_one_to_one(first: &[Fingerprint], second: &[Fingerprint]) -> bool {
 /// `inner` copy lies in exactly one `outer` copy. A window that holds two
 /// copies where another holds one cannot stand in for them.
 fn holds_evenly(outer: &[Fingerprint], inner: &[Fingerprint]) -> bool {
-    let held = |copy: &Fingerprint| {
-        inner
-            .iter()
-            .filter(|member| occurrence_contains(copy, member))
-            .count()
-    };
-    let holders = |member: &Fingerprint| {
-        outer
-            .iter()
-            .filter(|copy| occurrence_contains(copy, member))
-            .count()
-    };
-    let mut counts = outer.iter().map(held);
+    let mut counts = outer.iter().map(|copy| held_by(copy, inner));
     counts.next().is_some_and(|first| {
         first > 0
             && counts.all(|count| count == first)
-            && inner.iter().all(|member| holders(member) == 1)
+            && inner.iter().all(|member| holders_of(member, outer) == 1)
     })
+}
+
+/// How many of `members` lie inside `copy`.
+fn held_by(copy: &Fingerprint, members: &[Fingerprint]) -> usize {
+    members
+        .iter()
+        .filter(|member| occurrence_contains(copy, member))
+        .count()
+}
+
+/// How many of `copies` hold `member`.
+fn holders_of(member: &Fingerprint, copies: &[Fingerprint]) -> usize {
+    copies
+        .iter()
+        .filter(|copy| occurrence_contains(copy, member))
+        .count()
 }
 
 /// Which of two views survives when they describe the same duplication,

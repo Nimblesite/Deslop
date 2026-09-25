@@ -122,6 +122,19 @@ fn refused_pairs_reenter_only_through_the_rescue_route() {
     );
 }
 
+/// A token-only pair at the default floors, with the given evidence.
+fn token_only(token_jaccard: f64, embedding_cos: f64) -> CandidatePair {
+    pair(
+        0.0,
+        token_jaccard,
+        embedding_cos,
+        true,
+        LSH_ONLY_MIN_NODE_COUNT,
+        LSH_ONLY_MIN_JACCARD,
+        FUSED_THRESHOLD,
+    )
+}
+
 /// A token-only pair between the fused floor and the stricter LSH-only
 /// floor is refused at construction. It must still be measured, or a
 /// weaker pair below the fused floor is measured while a stronger one is
@@ -130,34 +143,20 @@ fn refused_pairs_reenter_only_through_the_rescue_route() {
 fn lsh_only_pairs_below_their_jaccard_floor_reenter_through_the_rescue_route() {
     const BETWEEN_FLOORS: f64 = 0.875;
     const EMBEDDING_SUPPORT: f64 = 0.5;
-
-    let mut candidate = pair(
-        0.0,
-        BETWEEN_FLOORS,
-        0.0,
-        true,
-        LSH_ONLY_MIN_NODE_COUNT,
-        LSH_ONLY_MIN_JACCARD,
-        FUSED_THRESHOLD,
-    );
-    assert!(
-        !construction_survives(&candidate) && super::rescue_eligible(&candidate),
-        "a token-only pair between the floors must be refused at construction \
-         and admitted to measurement"
-    );
-
-    candidate.score.token_jaccard = LSH_ONLY_MIN_JACCARD;
-    assert!(
-        construction_survives(&candidate) && !super::rescue_eligible(&candidate),
-        "a token-only pair at the LSH-only floor is kept and needs no rescue"
-    );
-
-    candidate.score.token_jaccard = BETWEEN_FLOORS;
-    candidate.score.embedding_cos = EMBEDDING_SUPPORT;
-    assert!(
-        construction_survives(&candidate) && !super::rescue_eligible(&candidate),
-        "embedding support keeps the pair, so the rescue route stays closed"
-    );
+    // (token Jaccard, embedding cosine, kept at construction, measured by the rescue)
+    let cases = [
+        (BETWEEN_FLOORS, 0.0, false, true),
+        (LSH_ONLY_MIN_JACCARD, 0.0, true, false),
+        (BETWEEN_FLOORS, EMBEDDING_SUPPORT, true, false),
+    ];
+    for (jaccard, embedding, kept, measured) in cases {
+        let candidate = token_only(jaccard, embedding);
+        assert_eq!(
+            (construction_survives(&candidate), super::rescue_eligible(&candidate)),
+            (kept, measured),
+            "jaccard={jaccard} embedding={embedding}: construction keeps a pair or the rescue measures it, never neither"
+        );
+    }
 }
 
 /// Shared-subtree overlap cannot exceed the smaller endpoint's share of
