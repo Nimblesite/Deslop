@@ -387,19 +387,30 @@ pub(crate) fn construction_survives(pair: &CandidatePair) -> bool {
     true
 }
 
-/// True for a pair worth measuring: dropped below its fused floor on a
-/// zero structural anchor, yet carrying the token corroboration and
-/// endpoint substance the rescue route requires
-/// ([FUSED-SHARED-SUBTREE]). Shared with the rescue pass so the
-/// construction gate and the measurer can never disagree about which
-/// pairs are rescue candidates.
+/// True for a pair worth measuring: dropped below its fused floor, or
+/// below its LSH-only Jaccard floor, on a zero structural anchor, yet
+/// carrying the token corroboration and endpoint substance the rescue
+/// route requires ([FUSED-SHARED-SUBTREE]). Shared with the rescue pass
+/// so the construction gate and the measurer can never disagree about
+/// which pairs are rescue candidates.
 pub(crate) fn rescue_eligible(pair: &CandidatePair) -> bool {
     let score = pair.score.finite();
     score.structural <= 0.0
-        && score.bounded_fused() < pair.fused_min_score
+        && (score.bounded_fused() < pair.fused_min_score || below_lsh_only_floor(pair))
         && score.token_jaccard >= SHARED_SUBTREE_MIN_JACCARD
         && pair.endpoint_node_counts.0 >= SHARED_SUBTREE_MIN_NODE_COUNT
         && shared_subtree_can_reach_floor(pair.endpoint_node_counts)
+}
+
+/// True for a token-only pair that clears the fused floor but not the
+/// stricter LSH-only Jaccard floor. Construction refuses it, so without
+/// the rescue it would be dropped unmeasured while a weaker pair below
+/// the fused floor is measured.
+fn below_lsh_only_floor(pair: &CandidatePair) -> bool {
+    let score = pair.score.finite();
+    score.structural <= 0.0
+        && score.embedding_cos <= 0.0
+        && score.token_jaccard < pair.lsh_only_min_jaccard
 }
 
 /// True for a pair the token axis carries on its own: no structural

@@ -9,9 +9,7 @@ const IDENTICAL: &str = "identical";
 const LOOSELY_SIMILAR: &str = "loosely_similar";
 const COPIES: usize = 3;
 const BROAD_RANK: u64 = 1;
-const EXPECTED_RANK: u64 = 5;
 const COPIED_WINDOWS: [(u64, u64); COPIES] = [(8, 26), (41, 59), (80, 98)];
-const DISTINCT_SUFFIX_LINES: [u64; 2] = [68, 106];
 const METHOD_WINDOWS: [(u64, u64); COPIES] = [(4, 35), (37, 74), (76, 122)];
 const SHAPE_ONLY: &str = "structural_only";
 
@@ -26,49 +24,20 @@ fn includes_all_fault_assertions(cluster: &Value) -> bool {
         })
 }
 
-fn assert_exact_copied_extent(cluster: &Value) {
+/// Whether the cluster's copies sit one inside each edited method.
+fn one_copy_per_method(cluster: &Value) -> bool {
     let mut spans = occurrence_line_spans(cluster);
     spans.sort_unstable();
-    assert_eq!(spans, COPIED_WINDOWS);
-    for suffix in DISTINCT_SUFFIX_LINES {
-        assert!(spans
+    spans.len() == COPIES
+        && spans
             .iter()
-            .all(|(start, end)| !(*start..=*end).contains(&suffix)));
-    }
+            .zip(METHOD_WINDOWS)
+            .all(|((start, end), (first, last))| first <= *start && *end <= last)
 }
 
-fn copied_setup_cluster(report: &Value) -> Result<&Value> {
-    let full = clusters(report)
-        .iter()
-        .filter(|cluster| {
-            field(cluster, "kind").as_str() == Some(IDENTICAL)
-                && includes_all_fault_assertions(cluster)
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(
-        full.len(),
-        1,
-        "three copied setups and fault assertions stay one clone: {report:#}"
-    );
-    full.first()
-        .copied()
-        .ok_or_else(|| anyhow::anyhow!("missing copied C# cluster"))
-}
-
-fn assert_complete_setup(scan_root: &std::path::Path, cluster: &Value) -> Result<()> {
-    assert_eq!(occurrences(cluster).len(), COPIES);
-    assert_eq!(field(cluster, "kind").as_str(), Some(IDENTICAL));
-    assert_eq!(field(cluster, "rank").as_u64(), Some(EXPECTED_RANK));
-    assert_exact_copied_extent(cluster);
-    assert!(crate::common::signals::has_verbatim_pair(
-        scan_root, cluster
-    )?);
-    Ok(())
-}
-
-/// [PIPELINE-CLUSTER-SUBSUME-KIND] The edited methods and their exact
-/// copied setup are both real, distinct findings.
-fn assert_broad_method_clone(report: &Value) -> Result<()> {
+/// The three edited methods are one clone, and it holds every copied
+/// setup: one per method.
+fn broad_method_clone(report: &Value) -> Result<&Value> {
     let broad: Vec<_> = clusters(report)
         .iter()
         .filter(|cluster| {
@@ -80,10 +49,29 @@ fn assert_broad_method_clone(report: &Value) -> Result<()> {
     assert_eq!(broad.len(), 1, "the three edited methods are one clone");
     let cluster = broad
         .first()
+        .copied()
         .ok_or_else(|| anyhow::anyhow!("three edited methods have one cluster: {report:#}"))?;
     assert_eq!(field(cluster, "kind").as_str(), Some(LOOSELY_SIMILAR));
     assert_eq!(field(cluster, "rank").as_u64(), Some(BROAD_RANK));
-    Ok(())
+    assert!(
+        includes_all_fault_assertions(cluster),
+        "each method copy holds its copied setup and fault assertions: {cluster:#}"
+    );
+    Ok(cluster)
+}
+
+/// [PIPELINE-CLUSTER-SUBSUME] The exact setup copied once into each
+/// method is the method clone read narrower, so it is absorbed.
+fn assert_setup_absorbed(report: &Value, broad: &Value) {
+    for cluster in clusters(report) {
+        if field(cluster, "id") == field(broad, "id") {
+            continue;
+        }
+        assert!(
+            !(field(cluster, "kind").as_str() == Some(IDENTICAL) && one_copy_per_method(cluster)),
+            "the copied setup re-describes the method clone beside it: {cluster:#}"
+        );
+    }
 }
 
 /// [FUSED-CONTENT-GATE-AUTHORED-RUN] A clone occurrence cannot join two authored tests.
@@ -106,10 +94,9 @@ fn assert_clones_stay_within_one_method(report: &Value) {
 
 #[test]
 fn same_file_setup_keeps_every_fault_assertion_tail() -> Result<()> {
-    let scan_root = fixture(FIXTURE);
-    let report = run_report(&scan_root, NODE_FLOOR)?;
-    assert_complete_setup(&scan_root, copied_setup_cluster(&report)?)?;
-    assert_broad_method_clone(&report)?;
+    let report = run_report(&fixture(FIXTURE), NODE_FLOOR)?;
+    let broad = broad_method_clone(&report)?;
+    assert_setup_absorbed(&report, broad);
     assert_clones_stay_within_one_method(&report);
     Ok(())
 }

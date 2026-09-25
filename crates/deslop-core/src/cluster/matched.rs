@@ -11,7 +11,9 @@
 //! width is whatever the author wrote next to the duplication. A run of
 //! same-kind nodes — statements, dictionary entries, functions — is
 //! always matched, so the rule never decides between two readings of a
-//! homogeneous run.
+//! homogeneous run. The synthetic file root is read like a window over
+//! its children: its extent is theirs, so its first and last top-level
+//! nodes are the file's first and last declarations.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -19,7 +21,9 @@ use std::{
 };
 
 use super::scope::DeclarationScopes;
-use crate::{fingerprint::Fingerprint, pair::FusedCluster};
+use crate::{
+    ast::NormalizedNode, fingerprint::Fingerprint, lang::shared::FILE_KIND, pair::FusedCluster,
+};
 
 /// What a view's copies say about its width.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -87,14 +91,23 @@ impl<'run, 'corpus, L: BuildHasher> WidthEvidence<'run, 'corpus, L> {
 
     /// The kinds of `view`'s first and last top-level node.
     fn end_kinds(&self, view: usize) -> Option<[&'static str; 2]> {
-        let nodes = self.scopes.top_nodes(self.fingerprints.get(view)?)?;
+        let nodes = self.top_level(view)?;
         Some([nodes.first()?.kind, nodes.last()?.kind])
     }
 
     /// The kinds of every top-level node `view` covers.
     fn top_kinds(&self, view: usize) -> Option<HashSet<&'static str>> {
+        Some(self.top_level(view)?.iter().map(|node| node.kind).collect())
+    }
+
+    /// The nodes `view` covers, with the file root read as its children
+    /// ([PIPELINE-CLUSTER-EXACT-ADJACENT]).
+    fn top_level(&self, view: usize) -> Option<Vec<&'corpus NormalizedNode>> {
         let nodes = self.scopes.top_nodes(self.fingerprints.get(view)?)?;
-        Some(nodes.iter().map(|node| node.kind).collect())
+        match nodes.as_slice() {
+            [root] if root.kind == FILE_KIND => Some(root.children.iter().collect()),
+            _ => Some(nodes),
+        }
     }
 }
 

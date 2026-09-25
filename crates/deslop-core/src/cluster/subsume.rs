@@ -12,8 +12,11 @@
 //! *Are these one duplication?* One-to-one containment: each occurrence
 //! of one cluster contains — or is contained by — a distinct occurrence
 //! of the other in the same file. The same-file election removes
-//! overlapping members, so pairing in file-and-start order is exact.
-//! Four weaker predicates were each wrong in a different direction.
+//! overlapping members, so pairing in file-and-start order is exact. A
+//! coarser reading of the same duplication also qualifies: every
+//! occurrence of the wider view holds the same number of the other's
+//! occurrences, and each of those sits in exactly one of them. Four
+//! weaker predicates were each wrong in a different direction.
 //!
 //! Requiring the whole occurrence *set* to nest misses the *crossed*
 //! case, where the depth difference falls on opposite sides in each
@@ -34,18 +37,15 @@
 //! file the functions never mention.
 //!
 //! Bidirectional coverage without distinct pairing is wrong a fourth
-//! way. One broad window over two adjacent methods can claim both copies
-//! of an exact repeated setup, then delete the three-occurrence finding.
+//! way. One broad window over two adjacent methods can claim two copies
+//! of an exact repeated setup while the other window holds one, then
+//! delete the three-occurrence finding. Uneven holding is refused.
 //!
 //! *Which view survives?* File coverage, physical enclosure,
 //! occurrence coverage, duplicated mass, then stable cluster id, in
 //! that order. Pair evidence is forbidden because the component owns
 //! none. A nested fragment cannot displace an enclosing authored view
 //! merely because the fragment's pair happened to score more highly.
-//! A nested exact Type I copy and its enclosing edited clone instead
-//! remain distinct findings: the enclosing view cannot report the
-//! exact copy's extent or classification
-//! ([PIPELINE-CLUSTER-SUBSUME-KIND]).
 //!
 //! *Before either question, file coverage.* A view that names a file
 //! the survivor does not name is never dropped, however deeply it nests

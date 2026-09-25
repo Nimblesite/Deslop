@@ -244,8 +244,28 @@ fn contains(outer: &(FileId, (usize, usize)), inner: &(FileId, (usize, usize))) 
 }
 
 /// Two views describe one duplication when their ordered, distinct
-/// occurrences pair by containment ([PIPELINE-CLUSTER-SUBSUME]).
+/// occurrences pair by containment, or when one holds the other evenly
+/// ([PIPELINE-CLUSTER-SUBSUME]).
 fn one_duplication(left: &View, right: &View) -> bool {
+    pairs_one_to_one(left, right) || holds_evenly(left, right) || holds_evenly(right, left)
+}
+
+/// Every `outer` occurrence holds the same number of `inner`
+/// occurrences, and each `inner` occurrence sits in exactly one of them.
+fn holds_evenly(outer: &View, inner: &View) -> bool {
+    let held: Vec<usize> = outer
+        .iter()
+        .map(|wide| inner.iter().filter(|narrow| contains(wide, narrow)).count())
+        .collect();
+    held.first()
+        .is_some_and(|first| *first > 0 && held.iter().all(|count| count == first))
+        && inner
+            .iter()
+            .all(|narrow| outer.iter().filter(|wide| contains(wide, narrow)).count() == 1)
+}
+
+/// Each distinct occurrence of one view pairs with one of the other.
+fn pairs_one_to_one(left: &View, right: &View) -> bool {
     if left.is_empty() || left.len() != right.len() {
         return false;
     }

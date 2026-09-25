@@ -1,7 +1,7 @@
 //! [PIPELINE-CLUSTER-SUBSUME] The region predicate: the two shapes that
 //! collapse, and every shape that must not.
 
-use super::{published, published_across, spans, Cluster};
+use super::{published, published_across, spans, Cluster, View};
 use deslop_core::state::FileRegistry;
 
 const REPEATED_FILE: &str = "circuit.cs";
@@ -12,6 +12,9 @@ const MERGED_PAIR: [(usize, usize); 3] = [(10, 40), (50, 90), (140, 240)];
 const NESTING_PAIR: [(usize, usize); 2] = [(0, 100), (120, 220)];
 const REVERSED_NESTED_PAIR: [(usize, usize); 2] = [(130, 170), (10, 50)];
 const DISTINCT_VIEWS: usize = 2;
+const WIDE_FILES: [&str; 2] = ["alpha.rs", "beta.rs"];
+const WIDE_SPAN: (usize, usize) = (0, 100);
+const TWO_FUNCTIONS: [(usize, usize); 2] = [(10, 40), (50, 90)];
 
 fn published_same_file(first: &[(usize, usize)], second: &[(usize, usize)]) -> Vec<Cluster> {
     let mut registry = FileRegistry::new();
@@ -40,6 +43,22 @@ fn equal_counts_do_not_hide_a_split_and_merge() {
         spans(&clusters),
         vec![MERGED_PAIR.to_vec(), SPLIT_PAIR.to_vec()]
     );
+}
+
+/// [PIPELINE-CLUSTER-SUBSUME] A window that holds the same two copies in
+/// every file is that duplication read at a coarser grain (gh #232).
+#[test]
+fn a_window_holding_two_copies_in_every_file_absorbs_them() {
+    let mut registry = FileRegistry::new();
+    let files = WIDE_FILES.map(|name| registry.register(name.into()));
+    let wide: View = files.iter().map(|file| (*file, WIDE_SPAN)).collect();
+    let narrow: View = files
+        .iter()
+        .flat_map(|file| TWO_FUNCTIONS.map(|span| (*file, span)))
+        .collect();
+    let clusters = published_across(&[wide, narrow]);
+    assert_eq!(clusters.len(), 1);
+    assert_eq!(spans(&clusters), vec![vec![WIDE_SPAN; WIDE_FILES.len()]]);
 }
 
 /// [PIPELINE-CLUSTER-SUBSUME] Reordered nested copies are still one finding.

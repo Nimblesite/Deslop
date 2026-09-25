@@ -122,6 +122,44 @@ fn refused_pairs_reenter_only_through_the_rescue_route() {
     );
 }
 
+/// A token-only pair between the fused floor and the stricter LSH-only
+/// floor is refused at construction. It must still be measured, or a
+/// weaker pair below the fused floor is measured while a stronger one is
+/// dropped unmeasured (#408: the C# namespace pair of `csharp-type3`).
+#[test]
+fn lsh_only_pairs_below_their_jaccard_floor_reenter_through_the_rescue_route() {
+    const BETWEEN_FLOORS: f64 = 0.875;
+    const EMBEDDING_SUPPORT: f64 = 0.5;
+
+    let mut candidate = pair(
+        0.0,
+        BETWEEN_FLOORS,
+        0.0,
+        true,
+        LSH_ONLY_MIN_NODE_COUNT,
+        LSH_ONLY_MIN_JACCARD,
+        FUSED_THRESHOLD,
+    );
+    assert!(
+        !construction_survives(&candidate) && super::rescue_eligible(&candidate),
+        "a token-only pair between the floors must be refused at construction \
+         and admitted to measurement"
+    );
+
+    candidate.score.token_jaccard = LSH_ONLY_MIN_JACCARD;
+    assert!(
+        construction_survives(&candidate) && !super::rescue_eligible(&candidate),
+        "a token-only pair at the LSH-only floor is kept and needs no rescue"
+    );
+
+    candidate.score.token_jaccard = BETWEEN_FLOORS;
+    candidate.score.embedding_cos = EMBEDDING_SUPPORT;
+    assert!(
+        construction_survives(&candidate) && !super::rescue_eligible(&candidate),
+        "embedding support keeps the pair, so the rescue route stays closed"
+    );
+}
+
 /// Shared-subtree overlap cannot exceed the smaller endpoint's share of
 /// the larger endpoint, so the rescue must refuse an impossible pair
 /// before retaining it for alignment. The exact admission boundary is
