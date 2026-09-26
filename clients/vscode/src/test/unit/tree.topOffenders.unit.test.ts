@@ -10,6 +10,9 @@ import { FIXTURE_KIND } from "../cluster.helpers";
 import { KIND_COLOR, KIND_ICON, KIND_THEME_COLOR } from "../../design";
 import { DEFAULT_OCCURRENCE_END_BYTE, FIXTURE_KIND_TITLE, IDENTICAL_KIND, STRUCTURAL_ONLY_KIND, HIGHEST_CLUSTER_MASS, HIGH_CLUSTER_MASS, MEDIUM_CLUSTER_MASS, MISSING_LABEL, ALPHA_FILE_PATH, BETA_FILE_PATH, FIRST_FIXTURE_PATH, CLUSTER_ROOT_REQUIRED, CANONICAL_OCCURRENCE_CONTEXT, THIRD_ITEM_INDEX, FOURTH_ITEM_INDEX, PAIR_COUNT, ZERO_BASED_FOURTH_LINE, LOW_CLUSTER_WEIGHT, reportOccurrence, withOccurrences } from "./tree.topOffenders.fixtures";
 
+const TYPE_I_TAG = "[Type I]";
+const TYPE_II_III_TAG = "[Type II / III]";
+
 suite("TopOffendersProvider", () => {
   test("cluster mode (default) lists clusters worst-first with global ranks", () => {
     // [VSIX-TOP-OFFENDERS-CLUSTER-MODE] No file-keyed reordering.
@@ -193,6 +196,8 @@ suite("TopOffendersProvider", () => {
     assert.equal(near.iconPath.id, KIND_ICON[FIXTURE_KIND]);
     assert.match(labelText(exact), new RegExp(kindTitle(IDENTICAL_KIND)));
     assert.match(labelText(near), new RegExp(FIXTURE_KIND_TITLE));
+    assert.ok(labelText(exact).includes(TYPE_I_TAG), "the exact cluster has a visible Type I tag");
+    assert.ok(labelText(near).includes(TYPE_II_III_TAG), "the near cluster has an honest mixed-type tag");
     assert.match(labelText(exact), /Exact\.cs/);
     assert.match(labelText(near), /Near\.cs/);
     assert.match(exact.accessibilityInformation?.label ?? "", new RegExp(kindTitle(IDENTICAL_KIND)));

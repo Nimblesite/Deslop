@@ -26,6 +26,7 @@ fn candidate(exact_merkle: bool, token_jaccard: f64, embedding_cos: f64) -> Cand
         lsh_only_min_jaccard: LSH_ONLY_MIN_JACCARD,
         fused_min_score: FUSED_THRESHOLD,
         shared_subtree_overlap: 0.0,
+        verified_async_core: false,
         score: PairScore {
             structural: if exact_merkle { 1.0 } else { 0.0 },
             token_jaccard,

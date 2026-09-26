@@ -21,7 +21,7 @@ use tree_sitter::Node;
 use crate::state::FileId;
 
 /// Half-open byte range `[start, end)` into a source file.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ByteRange {
     /// Inclusive start offset in bytes.
     pub start: usize,
@@ -53,14 +53,17 @@ impl ByteRange {
         self.start <= inner.start && inner.end <= self.end
     }
 
+    /// True when the two ranges share at least one byte.
+    #[must_use]
+    pub const fn overlaps(self, other: Self) -> bool {
+        self.start < other.end && other.start < self.end
+    }
+
     /// True when the two ranges share bytes but neither covers the
     /// other — each one starts or ends inside the other.
     #[must_use]
     pub const fn partially_overlaps(self, other: Self) -> bool {
-        self.start < other.end
-            && other.start < self.end
-            && !self.covers(other)
-            && !other.covers(self)
+        self.overlaps(other) && !self.covers(other) && !other.covers(self)
     }
 
     /// Returns `true` when this range spans no bytes. Paired with

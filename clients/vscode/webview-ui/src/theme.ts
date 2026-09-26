@@ -8,6 +8,8 @@ import { COLOR, FONT } from "../../src/design";
 
 export { COLOR, FONT, KIND_COLOR, SEVERITY_DOT } from "../../src/design";
 
+const REPORT_STACK_WIDTH = "600px";
+
 export const GLOBAL_CSS = `
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -134,4 +136,14 @@ export const GLOBAL_CSS = `
   .cluster-position, .cluster-shortcuts { color: ${COLOR.onSurfaceMuted}; font-size: 12px; }
   .cluster-shortcuts { margin-top: 20px; }
   .cluster-shortcuts p { flex-basis: 100%; margin: 0; }
+  .report-cluster-row {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto;
+    gap: 16px; align-items: center;
+  }
+  .report-cluster-row .mono { overflow-wrap: anywhere; }
+  @media (max-width: ${REPORT_STACK_WIDTH}) {
+    .report-cluster-row { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; }
+    .report-cluster-row > :first-child,
+    .report-cluster-row > :nth-child(2) { grid-column: 1 / -1; }
+  }
 `;

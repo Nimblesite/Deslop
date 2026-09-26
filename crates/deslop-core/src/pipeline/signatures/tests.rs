@@ -132,12 +132,12 @@ fn window_fingerprint(
             "fixture: {start}..{end} must be a sibling window, not an exact node"
         ));
     }
-    Ok(Fingerprint {
-        hash: [7; 32],
-        file_id,
-        byte_range: ByteRange { start, end },
-        node_count: 40,
-    })
+    collect_non_boilerplate_sibling_fingerprints(root, 1, "fsharp")
+        .into_iter()
+        .find(|fingerprint| {
+            fingerprint.file_id == file_id && fingerprint.byte_range == (ByteRange { start, end })
+        })
+        .ok_or_else(|| format!("fixture: {start}..{end} must be an emitted sibling window"))
 }
 
 /// The fingerprint population the corpus build produces for `tree`:

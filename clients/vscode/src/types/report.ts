@@ -176,14 +176,16 @@ interface KindLabels {
   title: string;
   /** The clone-taxonomy name, for tooltips and agent context. */
   taxonomy: string;
+  /** Compact visible taxonomy tag. */
+  chip: string;
 }
 
 const KIND_LABELS: Record<ClusterKind, KindLabels> = {
-  identical: { title: "Identical code", taxonomy: "Type-1 exact clone" },
-  nearly_identical: { title: "Nearly identical code", taxonomy: "Type-2 / close Type-3 clone" },
-  same_behavior: { title: "Same behavior, different code", taxonomy: "Type-4 semantic clone" },
-  structural_only: { title: "Same shape, different content", taxonomy: "Informational non-clone" },
-  loosely_similar: { title: "Similar code", taxonomy: "Type-3 clone with larger edits" },
+  identical: { title: "Identical code", taxonomy: "Type-1 exact clone", chip: "Type I" },
+  nearly_identical: { title: "Nearly identical code", taxonomy: "Type-2 / close Type-3 clone", chip: "Type II / III" },
+  same_behavior: { title: "Same behavior, different code", taxonomy: "Type-4 semantic clone", chip: "Type IV" },
+  structural_only: { title: "Same shape, different content", taxonomy: "Informational non-clone", chip: "Shape" },
+  loosely_similar: { title: "Similar code", taxonomy: "Type-3 clone with larger edits", chip: "Type III" },
 };
 
 /** The title every cluster surface shows for a kind ([CLONE-KIND-LABELS]). */
@@ -194,6 +196,11 @@ export function kindTitle(kind: ClusterKind): string {
 /** The clone-taxonomy name of a kind ([CLONE-TYPE-TAXONOMY]). */
 export function kindTaxonomy(kind: ClusterKind): string {
   return KIND_LABELS[kind].taxonomy;
+}
+
+/** [VSIX-CLONE-TYPE-CHIP] Compact label shared by cluster and pair surfaces. */
+export function kindChip(kind: ClusterKind): string {
+  return KIND_LABELS[kind].chip;
 }
 
 // [FACET-TOP-OFFENDERS-FILTER] Every listing shares this diagnostic filter.

@@ -239,3 +239,19 @@ fn hash_window(child_hashes: &[[u8; 32]], start: usize, end: usize) -> [u8; 32] 
     }
     hasher.finalize().into()
 }
+
+/// Confirms that resolved children are the emitted synthetic window, not a
+/// same-range grammar wrapper ([FUSED-SHARED-SUBTREE-BOUND]).
+pub(crate) fn window_matches_hash(nodes: &[&NormalizedNode], hash: [u8; 32]) -> bool {
+    window_hash_for_nodes(nodes) == hash
+}
+
+/// Synthetic hash of an already-resolved sibling run.
+pub(crate) fn window_hash_for_nodes(nodes: &[&NormalizedNode]) -> [u8; 32] {
+    let mut scratch = HashScratch::default();
+    let child_hashes: Vec<_> = nodes
+        .iter()
+        .map(|node| subtree_hash(node, &mut scratch))
+        .collect();
+    hash_window(&child_hashes, 0, child_hashes.len())
+}

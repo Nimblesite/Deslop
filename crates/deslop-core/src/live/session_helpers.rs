@@ -21,7 +21,7 @@ use crate::{
     fingerprint::collect_fingerprints,
     lang::LanguageParser,
     pipeline::{EmbeddingSettings, PipelineSession},
-    report::{Report, ReportCluster},
+    report::{Report, ReportCluster, ReportOccurrence},
     sibling::collect_sibling_fingerprints,
     state::FileRegistry,
 };
@@ -231,6 +231,28 @@ pub(super) fn parse_and_hash_snippet(
             .map(|fingerprint| fingerprint.hash),
     );
     Ok(hashes)
+}
+
+/// [MCP-TOOL-FINDSIMILAR-EXISTING] The matches no returned cluster
+/// already lists: a place inside one of a cluster's occurrences is that
+/// cluster's answer, not a second one.
+pub(super) fn not_listed_by(
+    existing: Vec<ReportOccurrence>,
+    clusters: &[ReportCluster],
+) -> Vec<ReportOccurrence> {
+    existing
+        .into_iter()
+        .filter(|found| {
+            !clusters
+                .iter()
+                .flat_map(|cluster| &cluster.occurrences)
+                .any(|listed| {
+                    listed.path == found.path
+                        && listed.start_byte <= found.start_byte
+                        && found.end_byte <= listed.end_byte
+                })
+        })
+        .collect()
 }
 
 /// [LIVE-CACHE-SEED] Default name of the cache file the LSP writes

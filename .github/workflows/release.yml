@@ -8,6 +8,16 @@ on:
       # ref Marketplace consumers conventionally pin an action to — must never
       # re-fire this pipeline and publish a release named "1". [ACTION-VERSION]
       - 'v[0-9]+.[0-9]+.[0-9]+*'
+  # Re-release an existing tag on demand. A bad release is rolled back by
+  # tagging the last known-good commit and dispatching it here: the tag push
+  # itself runs the workflow file stored AT that old commit, so a fix to this
+  # file can only take effect through a dispatch from main. [RELEASE-DISPATCH]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing tag to release (e.g. v0.34.0). Its commit must already be on main."
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -19,9 +29,11 @@ jobs:
     timeout-minutes: 10
     outputs:
       version: ${{ steps.extract.outputs.version }}
+      tag: ${{ steps.extract.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ inputs.release_tag || github.ref_name }}
           fetch-depth: 0
 
       - uses: actions/setup-node@v7
@@ -30,13 +42,52 @@ jobs:
 
       - name: Extract version from tag
         id: extract
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
-      - name: Ensure tagged commit is on main
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
           set -euo pipefail
-          git fetch origin main --depth=1
-          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          echo "tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
+
+      # [RELEASE-ONMAIN] Only code that reached main may be released.
+      # Fetch main WITHOUT --depth: a shallow fetch writes a graft that hides
+      # main's parents, so ancestry is invisible and the check passes only when
+      # the tag IS main's current tip. That made a rollback — releasing a
+      # known-good commit further back on main — impossible.
+      - name: Ensure released commit is on main
+        env:
+          RELEASE_TAG: ${{ steps.extract.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          release_sha="$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
+          echo "Releasing ${RELEASE_TAG} (${release_sha})"
+          if git merge-base --is-ancestor "$release_sha" origin/main; then
+            echo "Released commit is on main."
+            exit 0
+          fi
+          # A tag push runs the workflow stored AT the tagged commit, so a
+          # broken gate can only be repaired at the tag itself. Allow a release
+          # to sit one commit above main when that commit changes release
+          # workflows and nothing else; shipped code must still be on main.
+          # Fail closed at every step. Do not lean on `set -e`: it is ignored
+          # inside a command that is part of an && / || list, so an unchecked
+          # failure here could wave through a commit that is not on main.
+          if ! parent="$(git rev-parse --verify --quiet "${release_sha}^")"; then
+            echo "::error::${release_sha} is not on main and has no parent to check."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$parent" origin/main; then
+            echo "::error::Neither ${release_sha} nor its parent ${parent} is on main."
+            exit 1
+          fi
+          shipped="$(git diff --name-only "$parent" "$release_sha" \
+            | { grep -v '^\.github/workflows/' || true; })"
+          if [ -n "$shipped" ]; then
+            echo "::error::Release commit changes shipped code: $shipped"
+            exit 1
+          fi
+          echo "Release commit sits on ${parent} (on main); changes release workflow only."
 
       # Shipwright manifest gate (DTK-MIG-DESLOP-CI-GATES, #41).
       # The manifest is the source of truth for activation checks and
@@ -69,11 +120,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ inputs.release_tag || github.ref_name }}
           # Full history + tags so the classifier can diff against the prior release.
           fetch-depth: 0
       - name: Classify changed surfaces vs prior release
         id: classify
-        run: python3 scripts/release/release-changes.py --head "${{ github.ref_name }}"
+        run: python3 scripts/release/release-changes.py --head "${{ inputs.release_tag || github.ref_name }}"
 
   build:
     name: Build (${{ matrix.artifact_name }})
@@ -117,6 +169,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.tag }}
 
       - uses: actions/setup-node@v7
         with:
@@ -316,6 +370,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.tag }}
 
       - uses: actions/setup-node@v7
         with:
@@ -415,7 +471,7 @@ jobs:
       - name: Create GitHub release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ needs.version.outputs.tag }}
           name: deslop ${{ needs.version.outputs.version }}
           files: release-files/*
           generate_release_notes: true
@@ -432,7 +488,7 @@ jobs:
     # prerelease never overwrites the live site. Deploy when the website changed or
     # on any full release (the site embeds version-derived content). Triggered by the
     # v* tag — never by a push to main.
-    if: ${{ !cancelled() && !contains(github.ref_name, '-') && (needs.changes.outputs.website == 'true' || needs.changes.outputs.full == 'true') && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
+    if: ${{ !cancelled() && !contains(needs.version.outputs.tag, '-') && (needs.changes.outputs.website == 'true' || needs.changes.outputs.full == 'true') && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
     permissions:
       actions: write
       contents: read
@@ -440,6 +496,8 @@ jobs:
       pages: write
       id-token: write
     uses: ./.github/workflows/deploy-pages.yml
+    with:
+      ref: ${{ needs.version.outputs.tag }}
 
   publish-homebrew:
     name: Publish Homebrew formula
@@ -646,6 +704,8 @@ jobs:
       # publish-vsixes.mjs needs the tagged source. Must stay ahead of
       # download-artifact, which checkout would otherwise wipe.
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.tag }}
 
       - uses: actions/setup-node@v7
         with:
@@ -695,6 +755,8 @@ jobs:
       # publish-vsixes.mjs needs the tagged source. Must stay ahead of
       # download-artifact, which checkout would otherwise wipe.
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.tag }}
 
       - uses: actions/setup-node@v7
         with:

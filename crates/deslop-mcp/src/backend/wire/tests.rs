@@ -138,6 +138,7 @@ fn a_report_from_this_version_decodes() -> Result<()> {
 fn incomplete_find_similar_reply(field: &str) -> Result<Value> {
     let mut reply = serde_json::to_value(FindSimilarResult {
         clusters: Vec::new(),
+        existing: Vec::new(),
         below_min_nodes: BELOW_MIN_NODES,
         total_occurrences: EMPTY_OCCURRENCES,
     })?;

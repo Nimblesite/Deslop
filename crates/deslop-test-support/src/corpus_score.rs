@@ -4,8 +4,9 @@
 //! A register is independent ground truth: pairs a judge classified CLEARLY IN
 //! or CLEARLY OUT while isolated from this codebase (`docs/specs/corpus.md`
 //! [CORPUS-REGISTER]). Both verdicts read **one predicate in opposite
-//! directions**: an entry is *matched* when some published cluster shows
-//! visible occurrences overlapping every listed range. A matched CLEARLY IN is
+//! directions**: an entry is *matched* when a published clone cluster shows
+//! distinct visible occurrences overlapping every listed range. Structural-only
+//! findings are informational and cannot answer a clone verdict. A matched CLEARLY IN is
 //! correct and an unmatched one is a **false negative**; a matched CLEARLY OUT
 //! is a **false positive** and an unmatched one is correct.
 //!
@@ -19,8 +20,11 @@ use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+mod coverage;
 pub mod gate;
 pub mod render;
+
+use coverage::matching_cluster;
 
 /// The two judged verdicts. NOT CLEAR is recorded in a register and scores
 /// nothing, by design.
@@ -100,12 +104,39 @@ pub struct ScoredEntry {
     pub why: String,
     /// The ranges as the register wrote them.
     pub occurrences: Vec<String>,
-    /// Whether a published cluster showed every range together.
+    /// Whether a published clone cluster showed every range together.
     pub matched: bool,
     /// The cluster that matched, when one did.
     pub cluster: Option<String>,
+    /// Visible judged-line coverage by that cluster; description, never score.
+    pub coverage: Option<RangeCoverage>,
     /// Whether the engine got this entry right.
     pub correct: bool,
+}
+
+/// How much of a judged pair's source the matching cluster actually shows.
+#[derive(Debug, Clone, Serialize)]
+pub struct RangeCoverage {
+    /// Distinct judged lines overlapped by visible occurrences.
+    pub covered_lines: u64,
+    /// Inclusive lines across all judged ranges.
+    pub judged_lines: u64,
+    /// `100 * covered_lines / judged_lines`, absent for an empty entry.
+    pub percent: Option<f64>,
+}
+
+impl RangeCoverage {
+    /// Keep line coverage arithmetic in one place for pairs and aggregates.
+    fn new(covered_lines: u64, judged_lines: u64) -> Self {
+        Self {
+            covered_lines,
+            judged_lines,
+            percent: percent(
+                usize::try_from(covered_lines).unwrap_or(usize::MAX),
+                usize::try_from(judged_lines).unwrap_or(usize::MAX),
+            ),
+        }
+    }
 }
 
 impl ScoredEntry {
@@ -166,18 +197,53 @@ fn is_visible(occurrence: &Value) -> bool {
 
 /// Whether a published occurrence covers any line of a judged range.
 fn overlaps(occurrence: &Value, range: &Range) -> bool {
-    let line = |field: &str| occurrence.get(field).and_then(Value::as_u64).unwrap_or(0);
-    occurrence.get("path").and_then(Value::as_str) == Some(range.path.as_str())
-        && line("start_line") <= u64::from(range.end)
-        && line("end_line") >= u64::from(range.start)
+    let Some((path, start, end, _, _)) = occurrence_key(occurrence) else {
+        return false;
+    };
+    path == range.path && start <= u64::from(range.end) && end >= u64::from(range.start)
 }
 
-/// The visible occurrences of one cluster.
+/// The report's full source location, retaining byte offsets when available.
+type OccurrenceKey<'a> = (&'a str, u64, u64, Option<u64>, Option<u64>);
+
+/// A source location, including byte offsets when the report provides them.
+fn occurrence_key(occurrence: &Value) -> Option<OccurrenceKey<'_>> {
+    let path = occurrence.get("path")?.as_str()?;
+    let start = occurrence.get("start_line")?.as_u64()?;
+    let end = occurrence.get("end_line")?.as_u64()?;
+    (start > 0 && end >= start).then_some((
+        path,
+        start,
+        end,
+        occurrence.get("start_byte").and_then(Value::as_u64),
+        occurrence.get("end_byte").and_then(Value::as_u64),
+    ))
+}
+
+/// Records a valid location once, even if report JSON repeats its row.
+fn record_once<'a>(seen: &mut Vec<OccurrenceKey<'a>>, occurrence: &'a Value) -> bool {
+    let Some(key) = occurrence_key(occurrence) else {
+        return false;
+    };
+    if seen.contains(&key) {
+        return false;
+    }
+    seen.push(key);
+    true
+}
+
+/// The unique visible source locations of one cluster.
 fn visible(cluster: &Value) -> Vec<&Value> {
+    let mut seen = Vec::new();
     cluster
         .get("occurrences")
         .and_then(Value::as_array)
-        .map(|list| list.iter().filter(|o| is_visible(o)).collect())
+        .map(|list| {
+            list.iter()
+                .filter(|occurrence| is_visible(occurrence))
+                .filter(|occurrence| record_once(&mut seen, occurrence))
+                .collect()
+        })
         .unwrap_or_default()
 }
 
@@ -189,18 +255,93 @@ fn clusters(report: &Value) -> &[Value] {
         .map_or(&[][..], Vec::as_slice)
 }
 
-/// The id of the cluster that shows every range of one entry together, if any.
-fn matching_cluster(report: &Value, ranges: &[Range]) -> Option<String> {
-    clusters(report)
-        .iter()
-        .find(|cluster| {
-            let shown = visible(cluster);
-            ranges
-                .iter()
-                .all(|range| shown.iter().any(|o| overlaps(o, range)))
+/// Mark a candidate only once during this search for a range.
+fn visit_candidate(
+    index: usize,
+    occurrence: &Value,
+    range_index: usize,
+    ranges: &[Range],
+    visited: &mut [bool],
+) -> bool {
+    let Some(range) = ranges.get(range_index) else {
+        return false;
+    };
+    let Some(seen) = visited.get_mut(index) else {
+        return false;
+    };
+    if *seen || !overlaps(occurrence, range) {
+        return false;
+    }
+    *seen = true;
+    true
+}
+
+/// A previous owner may move to another occurrence to free this one.
+fn can_reassign(
+    index: usize,
+    ranges: &[Range],
+    shown: &[&Value],
+    visited: &mut [bool],
+    assigned: &mut [Option<usize>],
+) -> bool {
+    assigned
+        .get(index)
+        .copied()
+        .flatten()
+        .map_or(true, |previous| {
+            assign_range(previous, ranges, shown, visited, assigned)
         })
-        .and_then(|cluster| cluster.get("id").and_then(Value::as_str))
-        .map(ToOwned::to_owned)
+}
+
+/// Try one candidate, reassigning its previous range when necessary.
+fn assign_candidate(
+    index: usize,
+    occurrence: &Value,
+    range_index: usize,
+    ranges: &[Range],
+    shown: &[&Value],
+    visited: &mut [bool],
+    assigned: &mut [Option<usize>],
+) -> bool {
+    if !visit_candidate(index, occurrence, range_index, ranges, visited)
+        || !can_reassign(index, ranges, shown, visited, assigned)
+    {
+        return false;
+    }
+    assigned.get_mut(index).is_some_and(|slot| {
+        *slot = Some(range_index);
+        true
+    })
+}
+
+/// Assigns one judged range to a different visible source location.
+fn assign_range(
+    range_index: usize,
+    ranges: &[Range],
+    shown: &[&Value],
+    visited: &mut [bool],
+    assigned: &mut [Option<usize>],
+) -> bool {
+    shown.iter().enumerate().any(|(index, occurrence)| {
+        assign_candidate(
+            index,
+            occurrence,
+            range_index,
+            ranges,
+            shown,
+            visited,
+            assigned,
+        )
+    })
+}
+
+/// One occurrence must never stand in for two locations in a judged pair.
+fn has_distinct_matches(shown: &[&Value], ranges: &[Range]) -> bool {
+    let mut assigned = vec![None; shown.len()];
+    ranges.iter().enumerate().all(|(range_index, _)| {
+        let mut visited = vec![false; shown.len()];
+        assign_range(range_index, ranges, shown, &mut visited, &mut assigned)
+    })
 }
 
 /// The entries of one verdict list, empty when the key is absent.
@@ -244,14 +385,18 @@ fn score_entry(report: &Value, entry: &Value, verdict: &str) -> Result<ScoredEnt
         .iter()
         .map(|range| Range::parse(range))
         .collect::<Result<Vec<_>>>()?;
-    let cluster = matching_cluster(report, &ranges);
-    let matched = cluster.is_some();
+    let matched_cluster = matching_cluster(report, &ranges);
+    let matched = matched_cluster.is_some();
     Ok(ScoredEntry {
         verdict: verdict.to_owned(),
         why: text(entry, "why"),
         occurrences: written,
         matched,
-        cluster,
+        cluster: matched_cluster
+            .as_ref()
+            .and_then(|(cluster, _)| cluster.get("id").and_then(Value::as_str))
+            .map(ToOwned::to_owned),
+        coverage: matched_cluster.map(|(_, coverage)| coverage),
         correct: if verdict == CLEARLY_IN {
             matched
         } else {

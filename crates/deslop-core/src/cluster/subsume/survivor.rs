@@ -3,8 +3,10 @@
 use std::cmp::Ordering;
 
 use super::{
-    super::Cluster, all_occurrences_paired, covers_every_file, strictly_encloses, Nesting,
+    super::Cluster, covers_every_file, occurrence_contains, occurrences_describe_one_location,
+    strictly_encloses, Nesting,
 };
+use crate::fingerprint::Fingerprint;
 
 /// Which physical cluster view survives a subsumption comparison.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -28,10 +30,72 @@ impl Preference {
     }
 }
 
-/// Returns `true` when both components cover the same physical regions.
+/// [PIPELINE-CLUSTER-SUBSUME] Two views are one duplication when their
+/// copies pair one to one, or when one reads the other at a coarser grain.
 pub(super) fn covers_same_region(first: &Cluster, second: &Cluster) -> bool {
-    all_occurrences_paired(&first.members, &second.members)
-        && all_occurrences_paired(&second.members, &first.members)
+    pair_one_to_one(&first.members, &second.members)
+        || holds_evenly(&first.members, &second.members)
+        || holds_evenly(&second.members, &first.members)
+        || holds_shape_only(first, second)
+        || holds_shape_only(second, first)
+}
+
+/// A shape-only view reports no duplication, so a wider view that holds
+/// all of it, with some of it in each of its own copies, re-describes it
+/// however unevenly ([CLONE-BUCKETS-STRUCTURAL-ONLY]).
+fn holds_shape_only(outer: &Cluster, inner: &Cluster) -> bool {
+    !inner.kind.is_clone()
+        && strictly_encloses(&outer.members, &inner.members)
+        && outer.members.iter().all(|copy| {
+            inner
+                .members
+                .iter()
+                .any(|member| occurrence_contains(copy, member))
+        })
+}
+
+/// One distinct copy pairs with one distinct copy by containment.
+/// Election has already removed overlapping members within each file, so
+/// containment pairs preserve file-and-start order.
+fn pair_one_to_one(first: &[Fingerprint], second: &[Fingerprint]) -> bool {
+    if first.is_empty() || first.len() != second.len() {
+        return false;
+    }
+    let mut left: Vec<_> = first.iter().collect();
+    let mut right: Vec<_> = second.iter().collect();
+    left.sort_unstable_by_key(|member| (member.file_id, member.byte_range.start));
+    right.sort_unstable_by_key(|member| (member.file_id, member.byte_range.start));
+    left.into_iter()
+        .zip(right)
+        .all(|(mine, theirs)| occurrences_describe_one_location(mine, theirs))
+}
+
+/// Every `outer` copy holds the same number of `inner` copies, and each
+/// `inner` copy lies in exactly one `outer` copy. A window that holds two
+/// copies where another holds one cannot stand in for them.
+fn holds_evenly(outer: &[Fingerprint], inner: &[Fingerprint]) -> bool {
+    let mut counts = outer.iter().map(|copy| held_by(copy, inner));
+    counts.next().is_some_and(|first| {
+        first > 0
+            && counts.all(|count| count == first)
+            && inner.iter().all(|member| holders_of(member, outer) == 1)
+    })
+}
+
+/// How many of `members` lie inside `copy`.
+fn held_by(copy: &Fingerprint, members: &[Fingerprint]) -> usize {
+    members
+        .iter()
+        .filter(|member| occurrence_contains(copy, member))
+        .count()
+}
+
+/// How many of `copies` hold `member`.
+fn holders_of(member: &Fingerprint, copies: &[Fingerprint]) -> usize {
+    copies
+        .iter()
+        .filter(|copy| occurrence_contains(copy, member))
+        .count()
 }
 
 /// Which of two views survives when they describe the same duplication,

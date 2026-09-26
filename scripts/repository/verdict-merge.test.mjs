@@ -30,6 +30,7 @@ const URL = "https://example.invalid/widgets.git";
 const SHA = "0123456789abcdef0123456789abcdef01234567";
 const FIRST_JUDGE = "judge-one";
 const SECOND_JUDGE = "judge-two";
+const THIRD_JUDGE = "judge-three";
 
 /// A repository that already has a register, so a standing verdict can be
 /// contradicted by a later pass.
@@ -165,6 +166,17 @@ const AGREED = {
   clearly_in: [scored(1)],
   clearly_out: [],
   not_clear: [noted(2)],
+};
+const EMPTY_VERDICTS = { clearly_in: [], clearly_out: [], not_clear: [] };
+const RULING_WITHOUT_RANGES = { candidate: 1, why: WHY, verified: VERIFIED };
+
+const runPasses = (verdicts) => {
+  const root = mkdtempSync(join(tmpdir(), "verdict-merge-independent-"));
+  fixtureRoot(root);
+  const folders = Object.entries(verdicts).map(([judge, pass]) =>
+    judgingFolder(root, judge, { [REPO]: pass }),
+  );
+  return run(root, folders);
 };
 
 const runAgreed = (extra = []) => {
@@ -324,6 +336,18 @@ test("judges shown different candidate lists are refused outright", () => {
   rmSync(root, { recursive: true, force: true });
 });
 
+test("a repository absent from one judging folder cannot gain an empty register", () => {
+  const root = mkdtempSync(join(tmpdir(), "verdict-merge-missing-repo-"));
+  fixtureRoot(root);
+  const first = judgingFolder(root, FIRST_JUDGE, { [REPO]: AGREED, [JUDGED]: AGREED });
+  const second = judgingFolder(root, SECOND_JUDGE, { [JUDGED]: AGREED });
+  const { status, stderr, read, json } = run(root, [first, second]);
+  assert.notEqual(status, 0, "all supplied readers must judge the same repository set");
+  assert.match(stderr, /same repositories/);
+  assert.throws(() => read(join(REGISTER_DIR, REGISTER)));
+  assert.equal(json(QUEUE).repositories.length, 1, "the unjudged repository stays queued");
+});
+
 test("one judging pass is never enough to record a verdict", () => {
   const root = mkdtempSync(join(tmpdir(), "verdict-merge-lonely-"));
   fixtureRoot(root);
@@ -334,4 +358,74 @@ test("one judging pass is never enough to record a verdict", () => {
     "one reader having a firm opinion is an opinion; two arriving at it separately is evidence",
   );
   rmSync(root, { recursive: true, force: true });
+});
+
+test("one judging folder supplied twice cannot impersonate two independent readers", () => {
+  const root = mkdtempSync(join(tmpdir(), "verdict-merge-same-reader-"));
+  fixtureRoot(root);
+  const folder = judgingFolder(root, FIRST_JUDGE, { [REPO]: AGREED });
+  const result = run(root, [folder, folder]);
+  assert.notEqual(result.status, 0, "one reader must not satisfy the two-reader floor");
+  assert.match(result.stderr, /independent judging folders/);
+  assert.throws(() => result.read(join(REGISTER_DIR, REGISTER)));
+});
+
+test("duplicate rulings from one reader cannot replace a missing second reader", () => {
+  const duplicate = { ...EMPTY_VERDICTS, clearly_in: [scored(1), scored(1)] };
+  const { status, json, read } = runPasses({
+    [FIRST_JUDGE]: duplicate,
+    [SECOND_JUDGE]: EMPTY_VERDICTS,
+  });
+  assert.equal(status, 0);
+  const register = json(join(REGISTER_DIR, REGISTER));
+  assert.deepEqual(register.clearly_in, [], "the pair has only one independent ruling");
+  assert.deepEqual(register.not_clear, [], "the missing reader made no judgement");
+  assert.match(read(REPORT), /incomplete_independent_passes/);
+});
+
+test("two agreeing readers cannot replace a missing third reader", () => {
+  const { status, json, read } = runPasses({
+    [FIRST_JUDGE]: AGREED,
+    [SECOND_JUDGE]: AGREED,
+    [THIRD_JUDGE]: EMPTY_VERDICTS,
+  });
+  assert.equal(status, 0);
+  const register = json(join(REGISTER_DIR, REGISTER));
+  assert.deepEqual(register.clearly_in, [], "agreement must include every supplied reader");
+  assert.deepEqual(register.not_clear, [], "a partial candidate cannot enter as NOT CLEAR either");
+  assert.match(read(REPORT), /incomplete_independent_passes/);
+});
+
+test("a firm verdict without the source ranges its reader saw is refused", () => {
+  const noRanges = { ...EMPTY_VERDICTS, clearly_in: [RULING_WITHOUT_RANGES] };
+  const { status, json, read } = runPasses({
+    [FIRST_JUDGE]: noRanges,
+    [SECOND_JUDGE]: noRanges,
+  });
+  assert.equal(status, 0);
+  assert.deepEqual(json(join(REGISTER_DIR, REGISTER)).clearly_in, []);
+  assert.match(read(REPORT), /occurrences_mismatch/);
+});
+
+test("opposed verdicts on the same pair in one pass leave neither verdict in the register", () => {
+  const root = mkdtempSync(join(tmpdir(), "verdict-merge-repeated-pair-"));
+  fixtureRoot(root);
+  const repeated = { ...PAIRS, pairs: PAIRS.pairs.map((pair) =>
+    pair.number === 2 ? { ...pair, occurrences: at(1) } : pair,
+  ) };
+  const opposed = {
+    clearly_in: [scored(1)],
+    clearly_out: [{ ...scored(2), occurrences: at(1) }],
+    not_clear: [],
+  };
+  const folders = [FIRST_JUDGE, SECOND_JUDGE].map((judge) =>
+    judgingFolder(root, judge, { [REPO]: opposed }),
+  );
+  for (const folder of folders) write(join(folder, REPO, "candidates", "pairs.json"), repeated);
+  const { status, json, read } = run(root, folders);
+  assert.equal(status, 0);
+  const register = json(join(REGISTER_DIR, REGISTER));
+  assert.deepEqual(register.clearly_in, [], "the earlier verdict is disputed in this same pass");
+  assert.deepEqual(register.clearly_out, [], "the later verdict is disputed too");
+  assert.match(read(REPORT), /duplicate_pair/);
 });

@@ -228,6 +228,7 @@ fn add_cross_language_signature_pairs<S: BuildHasher>(
                 lsh_only_min_jaccard: CROSS_LANGUAGE_MIN_JACCARD,
                 fused_min_score: CROSS_LANGUAGE_MIN_JACCARD,
                 shared_subtree_overlap: 0.0,
+                verified_async_core: false,
                 score: PairScore {
                     structural: 0.0,
                     token_jaccard,

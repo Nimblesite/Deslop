@@ -23,6 +23,8 @@
 //! each sub-problem and every interior cell is written before it is
 //! read, so the distance is identical to the freshly-allocated form.
 
+use std::collections::HashSet;
+
 /// One forest-grid row's hot cell recurrence.
 mod row;
 /// Exact constant-time paths for one-node keyroot spans.
@@ -51,7 +53,7 @@ pub(super) struct Aligner {
     /// Subtree-distance grid, row stride `right.len() + 1`.
     tree_dist: Vec<u32>,
     /// Forest-distance grid for one keyroot pair, row stride
-    /// `right.len() + 2` — one allocation for every sub-problem.
+    /// `right.len() + 2`; one allocation is reused across sub-problems.
     forest: Vec<u32>,
     /// Left keyroots, ascending, 1-based.
     left_keyroots: Vec<usize>,
@@ -81,6 +83,9 @@ impl Aligner {
     /// Zhang–Shasha tree edit distance over post-order sequences with
     /// unit insert/delete/relabel costs. Standard keyroot decomposition.
     pub(super) fn distance(&mut self, left: &[PostNode], right: &[PostNode]) -> usize {
+        if let Some(distance) = disjoint_relabel_distance(left, right) {
+            return distance;
+        }
         self.reset(left, right);
         self.fill_distances(left, right);
         self.result(left.len(), right.len())
@@ -140,7 +145,9 @@ impl Aligner {
         keyroots(right, latest, right_keyroots);
     }
 
-    /// Clears and sizes the two reusable grids for one endpoint pair.
+    /// Sizes both grids, zeroing only subtree distances. Each keyroot
+    /// span seeds the forest borders and overwrites its interior cells
+    /// before reading them ([PERF-FLUTTER-TODO-RESCUE]).
     fn reset_grids(&mut self, left_nodes: usize, right_nodes: usize) {
         let tree_cells = left_nodes
             .saturating_add(1)
@@ -151,7 +158,6 @@ impl Aligner {
             .saturating_add(1)
             .saturating_add(1)
             .saturating_mul(right_nodes.saturating_add(2));
-        self.forest.clear();
         self.forest.resize(forest_cells, 0);
     }
 
@@ -176,6 +182,44 @@ impl Aligner {
             tree_stride: right.len().saturating_add(1),
         })
     }
+}
+
+/// [FUSED-SHARED-SUBTREE] When topology is identical, relabelling each
+/// mismatched position is a valid edit script. If no changed kind on the
+/// left occurs among changed kinds on the right, no cross-position match
+/// can improve that script: the kind-multiset lower bound equals its cost.
+fn disjoint_relabel_distance(left: &[PostNode], right: &[PostNode]) -> Option<usize> {
+    if !same_topology(left, right) {
+        return None;
+    }
+    let (mismatches, changed_left) = changed_left_kinds(left, right);
+    let shared_changed_kind = left
+        .iter()
+        .zip(right)
+        .any(|(first, second)| first.kind != second.kind && changed_left.contains(second.kind));
+    (!shared_changed_kind).then_some(mismatches)
+}
+
+/// Equal leftmost-leaf indices encode the same ordered tree shape.
+fn same_topology(left: &[PostNode], right: &[PostNode]) -> bool {
+    left.len() == right.len()
+        && left
+            .iter()
+            .zip(right)
+            .all(|(first, second)| first.leftmost == second.leftmost)
+}
+
+/// Changed positions and the kinds removed by their positional edits.
+fn changed_left_kinds(left: &[PostNode], right: &[PostNode]) -> (usize, HashSet<&'static str>) {
+    let mut changed_left = HashSet::new();
+    let mut mismatches = 0_usize;
+    for (first, second) in left.iter().zip(right) {
+        if first.kind != second.kind {
+            let _inserted = changed_left.insert(first.kind);
+            mismatches = mismatches.saturating_add(1);
+        }
+    }
+    (mismatches, changed_left)
 }
 
 /// Shared node count under the optimal ordered alignment, with scratch

@@ -22,7 +22,7 @@ pub use candidates::{candidate_pairs, candidate_pairs_for_language_policy, LshPa
 /// Pair-content admission guard applied before transitive closure.
 mod content_gate;
 mod echo;
-pub(crate) use content_gate::apply_pair_content_gate;
+pub(crate) use content_gate::{apply_pair_content_gate, async_core_satisfies_content};
 pub(crate) use echo::ExactClones;
 
 /// Transitive-closure clustering over surviving pairs.
@@ -209,6 +209,9 @@ pub struct CandidatePair {
     /// subtrees per pair across every candidate would repeat the
     /// admission-cost mistake [FUSED-CONTENT-GATE] deliberately avoids.
     pub shared_subtree_overlap: f64,
+    /// Rescue proved an aligned core with only Async-suffix call edits.
+    /// The post-rescue content gate may use that measured evidence.
+    pub verified_async_core: bool,
     /// Computed signal breakdown.
     pub score: PairScore,
 }
@@ -384,19 +387,30 @@ pub(crate) fn construction_survives(pair: &CandidatePair) -> bool {
     true
 }
 
-/// True for a pair worth measuring: dropped below its fused floor on a
-/// zero structural anchor, yet carrying the token corroboration and
-/// endpoint substance the rescue route requires
-/// ([FUSED-SHARED-SUBTREE]). Shared with the rescue pass so the
-/// construction gate and the measurer can never disagree about which
-/// pairs are rescue candidates.
+/// True for a pair worth measuring: dropped below its fused floor, or
+/// below its LSH-only Jaccard floor, on a zero structural anchor, yet
+/// carrying the token corroboration and endpoint substance the rescue
+/// route requires ([FUSED-SHARED-SUBTREE]). Shared with the rescue pass
+/// so the construction gate and the measurer can never disagree about
+/// which pairs are rescue candidates.
 pub(crate) fn rescue_eligible(pair: &CandidatePair) -> bool {
     let score = pair.score.finite();
     score.structural <= 0.0
-        && score.bounded_fused() < pair.fused_min_score
+        && (score.bounded_fused() < pair.fused_min_score || below_lsh_only_floor(pair))
         && score.token_jaccard >= SHARED_SUBTREE_MIN_JACCARD
         && pair.endpoint_node_counts.0 >= SHARED_SUBTREE_MIN_NODE_COUNT
         && shared_subtree_can_reach_floor(pair.endpoint_node_counts)
+}
+
+/// True for a token-only pair that clears the fused floor but not the
+/// stricter LSH-only Jaccard floor. Construction refuses it, so without
+/// the rescue it would be dropped unmeasured while a weaker pair below
+/// the fused floor is measured.
+fn below_lsh_only_floor(pair: &CandidatePair) -> bool {
+    let score = pair.score.finite();
+    score.structural <= 0.0
+        && score.embedding_cos <= 0.0
+        && score.token_jaccard < pair.lsh_only_min_jaccard
 }
 
 /// True for a pair the token axis carries on its own: no structural

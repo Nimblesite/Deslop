@@ -73,7 +73,7 @@ impl<'a> ReportSources<'a> {
 
 impl LineIndex {
     /// Builds one index with a single pass over the source bytes.
-    fn new(source: &[u8]) -> Self {
+    pub(crate) fn new(source: &[u8]) -> Self {
         let newline_offsets = source
             .iter()
             .enumerate()
@@ -159,17 +159,45 @@ fn occurrence<S: BuildHasher>(
         language,
         source: source.map(|item| item.bytes),
     });
-    let (start_line, end_line) = source.map_or((0, 0), |item| {
-        byte_range_to_line_range(item.line_index, member.byte_range)
+    located_occurrence(
+        &Located {
+            absolute: absolute.as_deref(),
+            range: member.byte_range,
+            line_index: source.map(|item| item.line_index),
+            hidden,
+        },
+        scan_root,
+    )
+}
+
+/// One place in one file, with everything a published occurrence states.
+pub(crate) struct Located<'a> {
+    /// Absolute path, when the registry still knows the file.
+    pub(crate) absolute: Option<&'a Path>,
+    /// Byte range of the view.
+    pub(crate) range: ByteRange,
+    /// Line index of the file's bytes, when the render holds them.
+    pub(crate) line_index: Option<&'a LineIndex>,
+    /// The file's report-hide decision ([`crate::report_hide`]).
+    pub(crate) hidden: bool,
+}
+
+/// Builds the published occurrence for `located` — the one construction
+/// every surface shares, so a report row and a `find-similar` match spell
+/// path and lines the same way.
+pub(crate) fn located_occurrence(located: &Located<'_>, scan_root: &Path) -> ReportOccurrence {
+    let (start_line, end_line) = located.line_index.map_or((0, 0), |index| {
+        byte_range_to_line_range(index, located.range)
     });
-    let path = absolute.map_or_else(PathBuf::new, |path| relative_to_scan_root(&path, scan_root));
     ReportOccurrence {
-        path,
-        start_byte: member.byte_range.start,
-        end_byte: member.byte_range.end,
+        path: located
+            .absolute
+            .map_or_else(PathBuf::new, |path| relative_to_scan_root(path, scan_root)),
+        start_byte: located.range.start,
+        end_byte: located.range.end,
         start_line,
         end_line,
-        hidden,
+        hidden: located.hidden,
         in_diff: None,
     }
 }

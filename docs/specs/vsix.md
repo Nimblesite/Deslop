@@ -109,6 +109,12 @@ A dedicated activity bar icon (a stylised "dd" mark, the same one used in the Ma
 
 Tree refresh is driven by `deslop/reportChanged`; the webview uses the same notification to bump its own state.
 
+#### [VSIX-CLONE-TYPE-CHIP] Visible clone types
+
+Every cluster badge shows a compact type chip beside its name. The native tree uses the same label in brackets after the cluster slug. Exact clones read **Type I**, nearly identical clones **Type II / III** because that engine category includes renamed copies and lightly edited copies, similar clones **Type III**, and same-behavior clones **Type IV**. Shape-only findings read **Shape** and never claim a clone type. The tooltip retains the fuller taxonomy name. The comparison editor uses the exact pair's engine evidence to label its title; it never borrows a folded cluster label. Byte-identical and indentation-only pairs read **Type I**. Unclassified pairs show only the engine's explanation.
+
+Code: `types/report.ts`, `tree/nodes.ts`, `compare/title.ts`, `webview-ui/src/components/ClusterBadge.tsx`. Assertions: `kind.unit.test.ts`, `tree.topOffenders.unit.test.ts`, `compare-title.unit.test.ts`.
+
 #### [VSIX-TOP-OFFENDERS-GROUPING] One grouping picker
 
 The Top Offenders header has one **Group Top Offenders** picker with **Clone Category**, **Folder**, **Language**, **File** and **No Grouping**. It marks the current selection and persists `deslop.topOffenders.groupBy` to workspace settings (`kind`, `folder`, `language`, `file`, `cluster`). Canceling leaves the setting unchanged. Unknown values fall back to `cluster`. Changing grouping is a local presentation operation.

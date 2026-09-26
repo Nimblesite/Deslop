@@ -9,11 +9,14 @@
 //!
 //! **Two questions, two predicates.**
 //!
-//! *Are these one duplication?* Bidirectional coverage by
-//! per-occurrence containment: every occurrence of each cluster
-//! contains — or is contained by — an occurrence of the other, in the
-//! same file. Three weaker predicates were each wrong in a different
-//! direction.
+//! *Are these one duplication?* One-to-one containment: each occurrence
+//! of one cluster contains — or is contained by — a distinct occurrence
+//! of the other in the same file. The same-file election removes
+//! overlapping members, so pairing in file-and-start order is exact. A
+//! coarser reading of the same duplication also qualifies: every
+//! occurrence of the wider view holds the same number of the other's
+//! occurrences, and each of those sits in exactly one of them. Four
+//! weaker predicates were each wrong in a different direction.
 //!
 //! Requiring the whole occurrence *set* to nest misses the *crossed*
 //! case, where the depth difference falls on opposite sides in each
@@ -32,6 +35,11 @@
 //! byte-identical generated functions is deleted in favour of the
 //! one-line statement family nested inside them, which also reaches a
 //! file the functions never mention.
+//!
+//! Bidirectional coverage without distinct pairing is wrong a fourth
+//! way. One broad window over two adjacent methods can claim two copies
+//! of an exact repeated setup while the other window holds one, then
+//! delete the three-occurrence finding. Uneven holding is refused.
 //!
 //! *Which view survives?* File coverage, physical enclosure,
 //! occurrence coverage, duplicated mass, then stable cluster id, in
@@ -207,18 +215,6 @@ pub(super) enum Nesting {
 /// contained by its counterpart even though neither *set* nests.
 fn occurrences_describe_one_location(left: &Fingerprint, right: &Fingerprint) -> bool {
     occurrence_contains(left, right) || occurrence_contains(right, left)
-}
-
-/// Returns `true` when every occurrence in `covered` is paired by
-/// containment with an occurrence in `cover` — the "same physical
-/// bytes" test.
-pub(super) fn all_occurrences_paired(covered: &[Fingerprint], cover: &[Fingerprint]) -> bool {
-    !covered.is_empty()
-        && covered.iter().all(|candidate| {
-            cover
-                .iter()
-                .any(|other| occurrences_describe_one_location(other, candidate))
-        })
 }
 
 /// Returns `true` when one occurrence wholly contains another in the

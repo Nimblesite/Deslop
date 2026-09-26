@@ -6,9 +6,8 @@
 //
 // What they enforce, and will not be talked out of:
 //
-//   * Agreement. Every judge who ruled on a candidate must have given the SAME
-//     verdict, and at least MINIMUM_JUDGES must have ruled. A split is reported
-//     and recorded as nothing — never resolved as the majority view.
+//   * Agreement. Every supplied judge must have ruled on a candidate exactly
+//     once with the SAME verdict. A split or incomplete pass records nothing.
 //   * The ranges come from the workspace's own pair list, not from what a judge
 //     retyped. A judge whose ranges disagree with the candidate read something
 //     other than the candidate, so that verdict is refused and named.
@@ -49,6 +48,7 @@ export const CONFIDENCE = "confidence";
 /// a candidate number, and the ranges the judge filed against that same
 /// number. Nothing is inferred about why they differ; the report prints both.
 export const MISCITED = "occurrences_mismatch";
+export const INCOMPLETE = "incomplete_independent_passes";
 export const THIN = "thin";
 /// Where a standing verdict came from. A clash with the register is one pass
 /// contradicting an earlier one; a clash with this same run is the same two
@@ -110,7 +110,7 @@ const bestStated = (rulings) =>
 /// Whether a ruling names the candidate it claims to. A judge who wrote ranges
 /// the candidate never showed read something else, and the verdict is void.
 const namesTheCandidate = (ruling, occurrences) =>
-  !ruling.occurrences || key(ruling.occurrences) === key(occurrences);
+  Array.isArray(ruling.occurrences) && key(ruling.occurrences) === key(occurrences);
 
 /// What every judge said about one candidate, for the report.
 const stated = (rulings) =>
@@ -132,19 +132,16 @@ const entryFor = (verdict, prose, occurrences) =>
     ? { why: prose.why, occurrences }
     : { why: prose.why, verified: prose.verified, occurrences };
 
-/// Rules on one candidate, pushing to whichever of the outcome lists applies.
-const rule = (candidate, rulings, pairs, standing, out) => {
-  const occurrences = pairs.get(candidate);
-  if (!occurrences) {
-    out.refused.push({
-      candidate,
-      judge: "",
-      kind: MISCITED,
-      shown: [],
-      filed: rulings.flatMap((ruling) => ruling.occurrences ?? []),
-    });
-    return;
-  }
+/// A candidate absent from the list shown to judges cannot name any pair.
+const refuseUnknown = (candidate, rulings, out) => {
+  out.refused.push({
+    candidate, judge: "", kind: MISCITED, shown: [],
+    filed: rulings.flatMap((ruling) => ruling.occurrences ?? []),
+  });
+};
+
+/// A ruling without the displayed ranges is not evidence for this candidate.
+const refuseMisread = (candidate, rulings, occurrences, out) => {
   const misread = rulings.filter((ruling) => !namesTheCandidate(ruling, occurrences));
   for (const ruling of misread) {
     out.refused.push({
@@ -155,20 +152,32 @@ const rule = (candidate, rulings, pairs, standing, out) => {
       filed: ruling.occurrences ?? [],
     });
   }
-  const honest = rulings.filter((ruling) => !misread.includes(ruling));
-  const verdict = agreed(honest);
+  return misread.length > 0;
+};
+
+/// One folder cannot stand in for another by repeating its own ruling.
+const refuseIncomplete = (candidate, rulings, occurrences, expectedJudges, out) => {
+  const unique = new Set(rulings.map((ruling) => ruling.judge)).size;
+  if (rulings.length === expectedJudges && unique === expectedJudges) return false;
+  out.refused.push({
+    candidate, judge: "", kind: INCOMPLETE, shown: occurrences,
+    filed: rulings.map((ruling) => ruling.judge),
+  });
+  return true;
+};
+
+/// Rules on one candidate, pushing to whichever of the outcome lists applies.
+const rule = (candidate, rulings, pairs, standing, out, expectedJudges) => {
+  const occurrences = pairs.get(candidate);
+  if (!occurrences) return refuseUnknown(candidate, rulings, out);
+  if (refuseMisread(candidate, rulings, occurrences, out)) return;
+  if (refuseIncomplete(candidate, rulings, occurrences, expectedJudges, out)) return;
+  const verdict = agreed(rulings);
   if (!verdict) {
-    if (honest.length >= MINIMUM_JUDGES) {
-      out.disagreements.push({
-        candidate,
-        kind: splitKind(honest),
-        occurrences,
-        rulings: stated(honest),
-      });
-    }
+    out.disagreements.push({ candidate, kind: splitKind(rulings), occurrences, rulings: stated(rulings) });
     return;
   }
-  record(candidate, honest, verdict, occurrences, standing, out);
+  record(candidate, rulings, verdict, occurrences, standing, out);
 };
 
 /// Applies an agreed verdict, or reports why it cannot be applied.
@@ -234,7 +243,7 @@ const rewrite = (register, added) => {
 /// Folds `passes` into `register`, returning the rewritten register and
 /// everything that could not be merged. Nothing is written here: the caller
 /// decides whether this run applies its result.
-export const mergePass = ({ register, pairs, passes }) => {
+export const mergePass = ({ register, pairs, passes, expectedJudges = passes.length }) => {
   const out = {
     added: Object.fromEntries(VERDICTS.map((verdict) => [verdict, []])),
     refused: [],
@@ -244,6 +253,10 @@ export const mergePass = ({ register, pairs, passes }) => {
   };
   const standing = standingVerdicts(register);
   const ordered = [...byCandidate(passes)].sort((left, right) => left[0] - right[0]);
-  for (const [candidate, rulings] of ordered) rule(candidate, rulings, pairs, standing, out);
+  for (const [candidate, rulings] of ordered) rule(candidate, rulings, pairs, standing, out, expectedJudges);
+  const disputed = new Set(out.restated.map((entry) => key(entry.occurrences)));
+  for (const verdict of VERDICTS) {
+    out.added[verdict] = out.added[verdict].filter((entry) => !disputed.has(key(entry.occurrences)));
+  }
   return { ...out, merged: rewrite(register, out.added), judges: passes.length };
 };

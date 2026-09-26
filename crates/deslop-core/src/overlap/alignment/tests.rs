@@ -16,7 +16,10 @@
 //! algorithm confirming itself.
 
 use super::{Aligner, PostNode};
-use crate::overlap::shapes::{forest_nodes, generate, postorder, Lcg, RefTree, SEED};
+use crate::overlap::{
+    shapes::{forest_nodes, generate, postorder, Lcg, RefTree, SEED},
+    view::EndpointView,
+};
 
 /// Trees compared per generated case: every pair drawn from this many
 /// shapes, so the corpus is quadratic in it.
@@ -29,6 +32,9 @@ const MAX_GENERATED_NODES: usize = 9;
 
 /// Nodes in the wide-tree regression fixture.
 const WIDE_TREE_NODES: usize = 128;
+
+/// A one-node deletion keeps the singleton fixture outside the equal-shape shortcut.
+const SHORT_WIDE_TREE_NODES: usize = WIDE_TREE_NODES - 1;
 
 /// Every node differs, so each exact relabel contributes one edit.
 const EXPECTED_WIDE_TREE_DISTANCE: usize = WIDE_TREE_NODES;
@@ -45,9 +51,78 @@ const WIDE_RIGHT_KIND: &str = "beta";
 /// Third kind used to pin matching and non-matching singleton paths.
 const OTHER_KIND: &str = "gamma";
 
+/// Reused forest sizes exercised by the scratch-write contract.
+const FOREST_GRID_SIDE: usize = 8;
+const SMALLER_FOREST_GRID_SIDE: usize = 4;
+
+/// A nonzero value that reveals an unnecessary full-grid clear.
+const FOREST_SENTINEL: u32 = u32::MAX;
+
+/// A shifted run costs one deletion plus one insertion, below three relabels.
+const SHIFTED_RUN_DISTANCE: usize = 2;
+
+/// One changed kind amid unchanged positions is still exact by relabelling.
+const SINGLE_RELABEL_DISTANCE: usize = 1;
+
+/// Leaves of a small branching tree used for the exact relabel bound.
+const BRANCHING_CHILDREN: usize = 2;
+
+/// One branching tree whose node kinds are all the same.
+fn uniform_branch(kind: &'static str) -> RefTree {
+    RefTree {
+        kind,
+        children: (0..BRANCHING_CHILDREN)
+            .map(|_| RefTree {
+                kind,
+                children: Vec::new(),
+            })
+            .collect(),
+    }
+}
+
+/// [FUSED-SHARED-SUBTREE] Identical topology plus disjoint changed kinds
+/// makes positional relabelling both an upper and lower bound, so exact DP
+/// has no work left to do.
+#[test]
+fn disjoint_relabels_on_one_tree_shape_need_no_forest_dp() {
+    let left = postorder(&uniform_branch(WIDE_LEFT_KIND));
+    let right = postorder(&uniform_branch(WIDE_RIGHT_KIND));
+    let mut aligner = Aligner::default();
+    assert_eq!(aligner.distance(&left, &right), left.len());
+    assert_eq!(aligner.forest_runs, 0);
+}
+
+/// Unchanged nodes may use the same kind as a changed left node; only
+/// kinds at changed positions matter to the multiset lower bound.
+#[test]
+fn one_changed_kind_amid_equal_nodes_needs_no_forest_dp() {
+    let left = EndpointView::from_flat_leaves(&[WIDE_LEFT_KIND, WIDE_LEFT_KIND, OTHER_KIND]);
+    let right = EndpointView::from_flat_leaves(&[WIDE_LEFT_KIND, WIDE_RIGHT_KIND, OTHER_KIND]);
+    let mut aligner = Aligner::default();
+    assert_eq!(
+        aligner.distance(left.postorder(), right.postorder()),
+        SINGLE_RELABEL_DISTANCE
+    );
+    assert_eq!(aligner.forest_runs, 0);
+}
+
+/// The same topology is not enough when changed kinds can match after a
+/// shift; the exact DP must find the cheaper delete-and-insert path.
+#[test]
+fn shifted_kinds_still_take_the_forest_dp() {
+    let left = EndpointView::from_flat_leaves(&[WIDE_LEFT_KIND, WIDE_RIGHT_KIND, OTHER_KIND]);
+    let right = EndpointView::from_flat_leaves(&[WIDE_RIGHT_KIND, OTHER_KIND, WIDE_LEFT_KIND]);
+    let mut aligner = Aligner::default();
+    assert_eq!(
+        aligner.distance(left.postorder(), right.postorder()),
+        SHIFTED_RUN_DISTANCE
+    );
+    assert!(aligner.forest_runs > 0);
+}
+
 /// Flat tree postorder: leaves followed by their common root.
-fn wide_sequence(kind: &'static str) -> Vec<PostNode> {
-    let mut nodes = (1..WIDE_TREE_NODES)
+fn wide_sequence(kind: &'static str, size: usize) -> Vec<PostNode> {
+    let mut nodes = (1..size)
         .map(|position| PostNode {
             kind,
             leftmost: position,
@@ -63,8 +138,8 @@ fn wide_sequence(kind: &'static str) -> Vec<PostNode> {
 /// the dominant stack in the ten-second Flutter-rescue profile.
 #[test]
 fn singleton_keyroot_pairs_skip_full_forest_dp() {
-    let left = wide_sequence(WIDE_LEFT_KIND);
-    let right = wide_sequence(WIDE_RIGHT_KIND);
+    let left = wide_sequence(WIDE_LEFT_KIND, WIDE_TREE_NODES);
+    let right = wide_sequence(WIDE_RIGHT_KIND, SHORT_WIDE_TREE_NODES);
     let mut aligner = Aligner::default();
 
     let distance = aligner.distance(&left, &right);
@@ -278,6 +353,7 @@ fn a_reused_aligner_measures_what_a_fresh_one_does() {
     for (left_index, left) in sequences.iter().enumerate() {
         for right in sequences.iter().skip(left_index) {
             let fresh = Aligner::default().distance(left, right);
+            reused.forest.fill(FOREST_SENTINEL);
             let carried = reused.distance(left, right);
             assert_eq!(
                 carried, fresh,
@@ -297,4 +373,18 @@ fn a_reused_aligner_measures_what_a_fresh_one_does() {
         "every pair was the same width, so no grid was ever reused at a smaller size \
          and this proves nothing — saw widths {widths:?}"
     );
+}
+
+/// [PERF-FLUTTER-TODO-RESCUE] The forest grid is fully seeded and filled
+/// by each DP span. Resizing reused scratch must leave its prior interior
+/// untouched; clearing all cells imposes quadratic memory writes per pair.
+#[test]
+fn forest_scratch_reuse_skips_full_grid_zeroing() {
+    let mut aligner = Aligner::default();
+    aligner.reset_grids(FOREST_GRID_SIDE, FOREST_GRID_SIDE);
+    aligner.forest.fill(FOREST_SENTINEL);
+    aligner.reset_grids(FOREST_GRID_SIDE, FOREST_GRID_SIDE);
+    assert!(aligner.forest.iter().all(|&cell| cell == FOREST_SENTINEL));
+    aligner.reset_grids(SMALLER_FOREST_GRID_SIDE, SMALLER_FOREST_GRID_SIDE);
+    assert!(aligner.forest.iter().all(|&cell| cell == FOREST_SENTINEL));
 }

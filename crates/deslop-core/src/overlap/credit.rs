@@ -74,7 +74,10 @@ fn matched_node_pairs(left: &EndpointView, right: &EndpointView) -> usize {
     let mut right_cursor = 0_usize;
     let mut matched = 0_usize;
     for entry in &left.entries {
-        if entry.byte_range.start < left_cursor {
+        // [FUSED-SHARED-SUBTREE-CREDIT-DISJOINT] Equal zero-width spans
+        // cannot prove distinct node mass: advancing to their end would
+        // leave the cursor in place and credit nested wrappers twice.
+        if entry.byte_range.is_empty() || entry.byte_range.start < left_cursor {
             continue;
         }
         let Some(claimed_end) = first_at_or_after(&occurrences, entry.hash, right_cursor) else {
@@ -93,6 +96,9 @@ fn matched_node_pairs(left: &EndpointView, right: &EndpointView) -> usize {
 fn occurrences_by_hash(right: &EndpointView) -> HashMap<[u8; 32], Vec<Span>> {
     let mut occurrences: HashMap<[u8; 32], Vec<Span>> = HashMap::new();
     for entry in &right.entries {
+        if entry.byte_range.is_empty() {
+            continue;
+        }
         occurrences
             .entry(entry.hash)
             .or_default()

@@ -16,6 +16,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { execFileSync } from "node:child_process";
 
 import { repoRoot } from "../lib/repo-root.mjs";
 import { recipeBlocks } from "../lib/makefile.mjs";
@@ -33,6 +34,8 @@ const COMPARE = "scripts/compare-versions.sh";
 const JOB = "corpus-score";
 const THRESHOLDS = "corpus/register/score-thresholds.json";
 const REGISTER_DIR = "corpus/register";
+const POLLY_REGISTER = `${REGISTER_DIR}/polly.json`;
+const FSHARP_REGISTER = `${REGISTER_DIR}/fsharp.data.json`;
 /// Repositories queued for a first judging pass: scanned by the wide
 /// comparison so they can be judged, never by the gate, which can only score
 /// what a judge has already ruled on.
@@ -121,6 +124,27 @@ const ciSlice = () => {
   assert.ok(declared, "score-gate.sh declares no DEFAULT_SLICE");
   return declared[1].split(/\s+/).filter(Boolean);
 };
+
+const assertDefaultTargetMatchesRegister = (registerPath, repository) => {
+  const targets = execFileSync("bash", [SCRIPT, "--list-default-targets"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  }).trim().split("\n").map((line) => line.split("#"));
+  const judged = JSON.parse(read(registerPath));
+  assert.ok(
+    targets.some(([url, sha, language]) =>
+      url === judged.url && sha === judged.sha && language === judged.language),
+    `the default gate must scan ${repository} at the exact commit and language its register judged`,
+  );
+};
+
+test("[CORPUS-SCORE-GATE-SLICE] the default gate scans pinned C# pairs in Polly", () => {
+  assertDefaultTargetMatchesRegister(POLLY_REGISTER, "Polly");
+});
+
+test("[CORPUS-SCORE-GATE-SLICE] the default gate scans pinned F# pairs in FSharp.Data", () => {
+  assertDefaultTargetMatchesRegister(FSHARP_REGISTER, "FSharp.Data");
+});
 
 test("[CORPUS-SCORE] the CI slice is pinned by its registers, not by a repeated commit", () => {
   assert.ok(

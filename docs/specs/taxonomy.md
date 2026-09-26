@@ -25,6 +25,10 @@ Keep genuine clones inside a mixed group. An unrelated member must neither make 
 
 Shape-only publishes no diagnostic by default, even when clone diagnostics are enabled. The user can explicitly choose another severity; it remains a non-clone ([SEVERITY-DIAGNOSTICS-STRUCTURAL-ONLY](severity.md#severity-diagnostics-structural-only-shape-only-is-silent-by-default)).
 
+#### [CLONE-BUCKETS-STRUCTURAL-ONLY-COUNT-BOUND] Skip impossible informational families
+
+A shape-only pair must clear the configured structural similarity floor. Its shared nodes cannot exceed the smaller occurrence's node count, so a family with no pair whose node-count ratio reaches that floor cannot produce shape-only information. Apply this bound only to informational ranking, before measuring kinds. Keep families with missing member data or equal structural hashes for the ordinary verdict; never use this shortcut to discard clones. The `informational_count_bound` tests pin far, near, mixed, unresolved, and equal-hash families.
+
 ## [CLONE-TYPE-TAXONOMY] How this relates to the research
 
 The standard taxonomy describes pairs of code fragments:

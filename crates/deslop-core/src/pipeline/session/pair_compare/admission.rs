@@ -4,9 +4,10 @@ use super::{Measurements, ResolvedPair};
 use crate::{
     buckets::{content_support, CONTENT_PROMOTE_FLOOR, CONTENT_SUPPORT_FLOOR},
     pair::{
-        PairScore, CROSS_LANGUAGE_MIN_JACCARD, EMBEDDING_SUPPORT_FLOOR, FUSED_THRESHOLD,
-        LSH_ONLY_MIN_JACCARD, LSH_ONLY_MIN_NODE_COUNT, MAX_ENDPOINT_NODE_RATIO,
-        SHARED_SUBTREE_MIN_JACCARD, SHARED_SUBTREE_MIN_NODE_COUNT, SHARED_SUBTREE_MIN_OVERLAP,
+        async_core_satisfies_content, PairScore, CROSS_LANGUAGE_MIN_JACCARD,
+        EMBEDDING_SUPPORT_FLOOR, FUSED_THRESHOLD, LSH_ONLY_MIN_JACCARD, LSH_ONLY_MIN_NODE_COUNT,
+        MAX_ENDPOINT_NODE_RATIO, SHARED_SUBTREE_MIN_JACCARD, SHARED_SUBTREE_MIN_NODE_COUNT,
+        SHARED_SUBTREE_MIN_OVERLAP,
     },
     pipeline::PipelineSession,
     report::{PairClassification, PairTextIdentity},
@@ -59,7 +60,15 @@ impl AdmissionFacts {
     ) -> Self {
         let policy = PairPolicy::from(session, pair, measured);
         let content_required = content_required(measured);
-        let content_ok = !content_required || measured.content.clears(policy.content_floor);
+        let content_ok = !content_required
+            || measured.content.clears(policy.content_floor)
+            || (policy.rescue
+                && async_core_satisfies_content(
+                    measured.score.structural,
+                    measured.score.token_jaccard,
+                    measured.core.has_async_edit(),
+                    &measured.content,
+                ));
         let failure = policy
             .failure
             .or((!content_ok).then_some(AdmissionFailure::Content));
@@ -83,8 +92,8 @@ impl AdmissionFacts {
         (negligible
             && matching_shape
             && !measured.content.consistent_rename
-            && !measured.core_is_copy)
-            .then_some(PairClassification::StructuralOnly)
+            && !measured.core.is_copy())
+        .then_some(PairClassification::StructuralOnly)
     }
 
     /// Human-readable result derived from the same predicates as `admitted`.
@@ -139,6 +148,8 @@ struct PairPolicy {
     failure: Option<AdmissionFailure>,
     /// Content floor for this scope.
     content_floor: f64,
+    /// The aligned core has already cleared the same content guard and rescue floors.
+    rescue: bool,
 }
 
 impl PairPolicy {
@@ -179,6 +190,7 @@ impl PairPolicy {
             } else {
                 CONTENT_SUPPORT_FLOOR
             },
+            rescue,
         }
     }
 }
@@ -224,7 +236,7 @@ fn rescue_applies(pair: &ResolvedPair<'_>, measured: Measurements) -> bool {
         && measured.score.structural >= SHARED_SUBTREE_MIN_OVERLAP
         && measured.score.token_jaccard >= SHARED_SUBTREE_MIN_JACCARD
         && smaller_node_count(pair) >= SHARED_SUBTREE_MIN_NODE_COUNT
-        && measured.core_is_copy
+        && measured.core.is_copy()
 }
 
 /// Size coherence for pairs without an exact Merkle anchor.
@@ -268,7 +280,7 @@ fn smaller_node_count(pair: &ResolvedPair<'_>) -> usize {
 }
 
 /// Category thresholds describe admitted pairs; they never lower admission floors.
-fn classify_admitted(
+pub(super) fn classify_admitted(
     measured: Measurements,
     routing: crate::config::RoutingTuning,
 ) -> Option<PairClassification> {
@@ -290,6 +302,7 @@ fn classify_admitted(
     if measured.score.embedding_cos >= EMBEDDING_SUPPORT_FLOOR {
         return Some(PairClassification::SameBehavior);
     }
-    (measured.core_is_copy || (measured.content.measured && support >= routing.similar_min_content))
+    (measured.core.is_copy()
+        || (measured.content.measured && support >= routing.similar_min_content))
         .then_some(PairClassification::LooselySimilar)
 }

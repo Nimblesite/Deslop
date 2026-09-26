@@ -50,6 +50,11 @@ updates:
     groups:
       github-actions:
         patterns: ["*"]
+    # action-selftest.yml's derived-version job pins Deslop's own action to a
+    # fixture tag and asserts the CLI it installs; a bump breaks that
+    # assertion without proving anything new ([ACTION-VERSION]).
+    ignore:
+      - dependency-name: "Nimblesite/Deslop"
 
   # Cargo / Rust — workspace Cargo.toml (the shipped deslop-* binaries).
   - package-ecosystem: cargo

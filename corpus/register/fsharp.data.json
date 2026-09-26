@@ -97,6 +97,22 @@
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:620-652",
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:769-801"
       ]
+    },
+    {
+      "why": "The complete schema-inference helper is written twice with the same pipeline; only its name and the final boolean switch change.",
+      "verified": "Python difflib.unified_diff on source ranges, retaining line endings: --- tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:449-454\n+++ tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:442-447\n@@ -1,6 +1,6 @@\n-let internal getInferedTypeFromSchemaWithTypeNames xsd =\n+let internal getInferedTypeFromSchema xsd =\n     xsd\n     |> XmlSchema.parseSchema \"\"\n     |> XsdParsing.getElements\n     |> List.ofSeq\n-    |> XsdInference.inferElements true\n+    |> XsdInference.inferElements false\n",
+      "occurrences": [
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:449-454",
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:442-447"
+      ]
+    },
+    {
+      "why": "The complete minimum/maximum validation match repeats with identical guards and outcomes, changing only indentation and Integer/Number error labels.",
+      "verified": "Extracted the inclusive source ranges as raw bytes; ran diff -U0 on the two extracts. Exit 1. --- src/FSharp.Data.Json.Core/JsonSchema.fs:420-425\n+++ src/FSharp.Data.Json.Core/JsonSchema.fs:404-409\n@@ -1,6 +1,6 @@\n-                        match schema.Minimum, schema.Maximum with\n-                        | Some min, Some max when num < min || num > max ->\n-                            Invalid $\"Integer must be between {min} and {max}\"\n-                        | Some min, None when num < min -> Invalid $\"Integer must be at least {min}\"\n-                        | None, Some max when num > max -> Invalid $\"Integer must be at most {max}\"\n-                        | _ -> Valid\n+                    match schema.Minimum, schema.Maximum with\n+                    | Some min, Some max when num < min || num > max ->\n+                        Invalid $\"Number must be between {min} and {max}\"\n+                    | Some min, None when num < min -> Invalid $\"Number must be at least {min}\"\n+                    | None, Some max when num > max -> Invalid $\"Number must be at most {max}\"\n+                    | _ -> Valid\n",
+      "occurrences": [
+        "src/FSharp.Data.Json.Core/JsonSchema.fs:420-425",
+        "src/FSharp.Data.Json.Core/JsonSchema.fs:404-409"
+      ]
     }
   ],
   "clearly_out": [
@@ -106,6 +122,110 @@
       "occurrences": [
         "src/FSharp.Data.Http/Http.fs:57-73",
         "tests/FSharp.Data.Core.Tests/WorldBankRuntime.fs:23-173"
+      ]
+    },
+    {
+      "why": "These are import lists for different dependencies, not duplicated implementation.",
+      "verified": "Python difflib.unified_diff on source ranges, retaining line endings: --- src/FSharp.Data.DesignTime/CommonProviderImplementation/Helpers.fs:12-17\n+++ src/FSharp.Data.DesignTime/Xml/XmlGenerator.fs:7-12\n@@ -1,6 +1,6 @@\n-open System.Runtime.CompilerServices\n-open FSharp.Core.CompilerServices\n+open System.Collections.Generic\n+open System.Xml.Linq\n open FSharp.Quotations\n open FSharp.Data.Runtime\n-open FSharp.Data.Runtime.IO\n+open FSharp.Data.Runtime.BaseTypes\n open FSharp.Data.Runtime.StructuralTypes\n",
+      "occurrences": [
+        "src/FSharp.Data.DesignTime/CommonProviderImplementation/Helpers.fs:12-17",
+        "src/FSharp.Data.DesignTime/Xml/XmlGenerator.fs:7-12"
+      ]
+    },
+    {
+      "why": "HTTP status numbers and MIME strings share only the literal-declaration syntax; their values and meanings are unrelated.",
+      "verified": "Extracted the inclusive source ranges as raw bytes; ran diff -U0 on the two extracts. Exit 1. --- src/FSharp.Data.Http/Http.fs:418-445\n+++ src/FSharp.Data.Http/Http.fs:697-724\n@@ -2 +2 @@\n-    let Accepted = 202\n+    let Text = \"text/plain\"\n@@ -4 +4 @@\n-    /// The server is a transforming proxy (e.g. a Web accelerator) that received a 200 OK from its origin, but is returning a modified version of the origin's response.\n+    /// application/octet-stream\n@@ -6 +6 @@\n-    let NonAuthoritativeInformation = 203\n+    let Binary = \"application/octet-stream\"\n@@ -8 +8 @@\n-    /// The server successfully processed the request and is not returning any content.\n+    /// application/octet-stream\n@@ -10 +10 @@\n-    let NoContent = 204\n+    let Zip = \"application/zip\"\n@@ -12 +12 @@\n-    /// The server successfully processed the request, but is not returning any content.\n+    /// application/octet-stream\n@@ -14 +14 @@\n-    let ResetContent = 205\n+    let GZip = \"application/gzip\"\n@@ -16 +16 @@\n-    /// The server is delivering only part of the resource (byte serving) due to a range header sent by the client.\n+    /// application/x-www-form-urlencoded\n@@ -18 +18 @@\n-    let PartialContent = 206\n+    let FormValues = \"application/x-www-form-urlencoded\"\n@@ -20 +20 @@\n-    /// The message body that follows is by default an XML message and can contain a number of separate response codes, depending on how many sub-requests were made.\n+    /// application/json\n@@ -22 +22 @@\n-    let MultiStatus = 207\n+    let Json = \"application/json\"\n@@ -24 +24 @@\n-    /// The members of a DAV binding have already been enumerated in a preceding part of the (multistatus) response, and are not being included again.\n+    /// application/javascript\n@@ -26 +26 @@\n-    let AlreadyReported = 208\n+    let JavaScript = \"application/javascript\"\n@@ -28 +28 @@\n-    /// The server has fulfilled a request for the resource, and the response is a representation of the result of one or more instance-manipulations applied to the current instance.\n+    /// application/xml\n",
+      "occurrences": [
+        "src/FSharp.Data.Http/Http.fs:418-445",
+        "src/FSharp.Data.Http/Http.fs:697-724"
+      ]
+    },
+    {
+      "why": "Content types and response headers are different lists of constants sharing only declaration syntax.",
+      "verified": "Extracted the inclusive source ranges as raw bytes; ran diff -U0 on the two extracts. Exit 1. --- src/FSharp.Data.Http/Http.fs:690-720\n+++ src/FSharp.Data.Http/Http.fs:248-278\n@@ -1 +1 @@\n-module HttpContentTypes =\n+module HttpResponseHeaders =\n@@ -3 +3 @@\n-    /// */*\n+    /// Specifying which web sites can participate in cross-origin resource sharing\n@@ -5 +5 @@\n-    let Any = \"*/*\"\n+    let AccessControlAllowOrigin = \"Access-Control-Allow-Origin\"\n@@ -7 +7 @@\n-    /// plain/text\n+    /// What partial content range types this server supports\n@@ -9 +9 @@\n-    let Text = \"text/plain\"\n+    let AcceptRanges = \"Accept-Ranges\"\n@@ -11 +11 @@\n-    /// application/octet-stream\n+    /// The age the object has been in a proxy cache in seconds\n@@ -13 +13 @@\n-    let Binary = \"application/octet-stream\"\n+    let Age = \"Age\"\n@@ -15 +15 @@\n-    /// application/octet-stream\n+    /// Valid actions for a specified resource. To be used for a 405 Method not allowed\n@@ -17 +17 @@\n-    let Zip = \"application/zip\"\n+    let Allow = \"Allow\"\n@@ -19 +19 @@\n-    /// application/octet-stream\n+    /// Tells all caching mechanisms from server to client whether they may cache this object. It is measured in seconds\n@@ -21 +21 @@\n-    let GZip = \"application/gzip\"\n+    let CacheControl = \"Cache-Control\"\n@@ -23 +23 @@\n-    /// application/x-www-form-urlencoded\n+    /// Options that are desired for the connection\n@@ -25 +25 @@\n-    let FormValues = \"application/x-www-form-urlencoded\"\n+    let Connection = \"Connection\"\n@@ -27 +27 @@\n-    /// application/json\n+    /// The type of encoding used on the data. See HTTP compression.\n@@ -29 +29 @@\n-    let Json = \"application/json\"\n+    let ContentEncoding = \"Content-Encoding\"\n@@ -31 +31 @@\n-    /// application/javascript\n+    /// The language the content is in\n",
+      "occurrences": [
+        "src/FSharp.Data.Http/Http.fs:690-720",
+        "src/FSharp.Data.Http/Http.fs:248-278"
+      ]
+    },
+    {
+      "why": "These are dependency imports for a generator and a test module, not copied implementation.",
+      "verified": "Python difflib.unified_diff on source ranges, retaining line endings: --- src/FSharp.Data.DesignTime/Json/JsonGenerator.fs:7-12\n+++ tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:8-13\n@@ -1,6 +1,6 @@\n-open System.Collections.Generic\n-open FSharp.Quotations\n+open System.Xml.Schema\n+open NUnit.Framework\n open FSharp.Data\n open FSharp.Data.Runtime\n-open FSharp.Data.Runtime.BaseTypes\n+open FSharp.Data.Runtime.CsvInference\n open FSharp.Data.Runtime.StructuralTypes\n",
+      "occurrences": [
+        "src/FSharp.Data.DesignTime/Json/JsonGenerator.fs:7-12",
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:8-13"
+      ]
+    },
+    {
+      "why": "A short URL/provider example is paired with a substantial inline JSON-LD document; only the provider declaration skeleton matches.",
+      "verified": "Extracted the inclusive source ranges as raw bytes; ran diff -U0 on the two extracts. Exit 1. --- docs/library/HtmlProvider.fsx:105-113\n+++ docs/library/HtmlProvider.fsx:370-404\n@@ -2,2 +2,28 @@\n-let SP500_URL =\n-    \"https://en.wikipedia.org/wiki/List_of_S%26P_500_companies\"\n+let WikipediaWithWebPageSample =\n+    \"\"\"<html>\n+<head>\n+  <script type=\"application/ld+json\">\n+  {\n+    \"@context\": \"https://schema.org\",\n+    \"@type\": \"WebPage\",\n+    \"name\": \"F Sharp — Wikipedia\",\n+    \"url\": \"https://en.wikipedia.org/wiki/F_Sharp_(programming_language)\",\n+    \"inLanguage\": \"en\",\n+    \"isPartOf\": \"https://en.wikipedia.org/\"\n+  }\n+  </script>\n+  <script type=\"application/ld+json\">\n+  {\n+    \"@context\": \"https://schema.org\",\n+    \"@type\": \"Article\",\n+    \"name\": \"F Sharp (programming language)\",\n+    \"headline\": \"Functional-first programming language for .NET\",\n+    \"description\": \"F# is a strongly typed, multi-paradigm programming language.\",\n+    \"url\": \"https://en.wikipedia.org/wiki/F_Sharp_(programming_language)\",\n+    \"datePublished\": \"2003-01-01\",\n+    \"dateModified\": \"2024-06-15\"\n+  }\n+  </script>\n+</head>\n+<body></body>\n+</html>\"\"\"\n@@ -5 +31 @@\n-type SP500 = HtmlProvider<SP500_URL>\n+type WikipediaWithWebPage = HtmlProvider<WikipediaWithWebPageSample>\n@@ -7 +33 @@\n-let sp500 = SP500.Load(SP500_URL)\n+let wikiMulti = WikipediaWithWebPage.Parse(WikipediaWithWebPageSample)\n@@ -9 +35 @@\n-// Table1 is the main constituents table (no caption on the Wikipedia page)\n+// Both JsonLd types are available as separate typed properties\n",
+      "occurrences": [
+        "docs/library/HtmlProvider.fsx:105-113",
+        "docs/library/HtmlProvider.fsx:370-404"
+      ]
+    },
+    {
+      "why": "These are different optional parameters in the same signature; only parameter declaration syntax matches.",
+      "verified": "Extracted the inclusive source ranges as raw bytes; ran diff -U0 on the two extracts. Exit 1. --- src/FSharp.Data.Http/Http.fs:2046-2048\n+++ src/FSharp.Data.Http/Http.fs:2043-2045\n@@ -1,3 +1,3 @@\n-            [<Optional>] ?body,\n-            [<Optional>] ?cookies: seq<_>,\n-            [<Optional>] ?cookieContainer,\n+            [<Optional>] ?query,\n+            [<Optional>] ?headers: seq<_>,\n+            [<Optional>] ?httpMethod,\n",
+      "occurrences": [
+        "src/FSharp.Data.Http/Http.fs:2046-2048",
+        "src/FSharp.Data.Http/Http.fs:2043-2045"
+      ]
+    },
+    {
+      "why": "Imports, a warning directive, and type documentation are file scaffolding rather than copied implementation.",
+      "verified": "Python difflib.unified_diff on source ranges, retaining line endings: --- src/FSharp.Data.DesignTime/Xml/XmlGenerator.fs:10-22\n+++ src/FSharp.Data.DesignTime/Json/JsonGenerator.fs:10-20\n@@ -2,12 +2,10 @@\n open FSharp.Data.Runtime.BaseTypes\n open FSharp.Data.Runtime.StructuralTypes\n open ProviderImplementation\n+open ProviderImplementation.JsonConversionsGenerator\n open ProviderImplementation.ProvidedTypes\n-open ProviderImplementation.QuotationBuilder\n open FSharp.Data.Runtime.StructuralInference\n-\n-// --------------------------------------------------------------------------------------\n \n #nowarn \"10001\"\n \n-/// Context that is used to generate the XML types.\n+/// Context that is used to generate the JSON types.\n",
+      "occurrences": [
+        "src/FSharp.Data.DesignTime/Xml/XmlGenerator.fs:10-22",
+        "src/FSharp.Data.DesignTime/Json/JsonGenerator.fs:10-20"
+      ]
+    },
+    {
+      "why": "These are different optional parameters within one method signature, sharing only declaration syntax.",
+      "verified": "Extracted the inclusive source ranges as raw bytes; ran diff -U0 on the two extracts. Exit 1. --- src/FSharp.Data.Http/Http.fs:2044-2046\n+++ src/FSharp.Data.Http/Http.fs:2047-2049\n@@ -1,3 +1,3 @@\n-            [<Optional>] ?headers: seq<_>,\n-            [<Optional>] ?httpMethod,\n-            [<Optional>] ?body,\n+            [<Optional>] ?cookies: seq<_>,\n+            [<Optional>] ?cookieContainer,\n+            [<Optional>] ?silentHttpErrors,\n",
+      "occurrences": [
+        "src/FSharp.Data.Http/Http.fs:2044-2046",
+        "src/FSharp.Data.Http/Http.fs:2047-2049"
+      ]
+    },
+    {
+      "why": "Status-code numbers and response-header names share only literal-declaration syntax and have unrelated contents.",
+      "verified": "Extracted the inclusive source ranges as raw bytes; ran diff -U0 on the two extracts. Exit 1. --- src/FSharp.Data.Http/Http.fs:418-449\n+++ src/FSharp.Data.Http/Http.fs:359-390\n@@ -2 +2 @@\n-    let Accepted = 202\n+    let Status = \"Status\"\n@@ -4 +4 @@\n-    /// The server is a transforming proxy (e.g. a Web accelerator) that received a 200 OK from its origin, but is returning a modified version of the origin's response.\n+    /// A HSTS Policy informing the HTTP client how long to cache the HTTPS only policy and whether this applies to subdomains.\n@@ -6 +6 @@\n-    let NonAuthoritativeInformation = 203\n+    let StrictTransportSecurity = \"Strict-Transport-Security\"\n@@ -8 +8 @@\n-    /// The server successfully processed the request and is not returning any content.\n+    /// The Trailer general field value indicates that the given set of header fields is present in the trailer of a message encoded with chunked transfer-coding.\n@@ -10 +10 @@\n-    let NoContent = 204\n+    let Trailer = \"Trailer\"\n@@ -12 +12 @@\n-    /// The server successfully processed the request, but is not returning any content.\n+    /// The form of encoding used to safely transfer the entity to the user. Currently defined methods are: chunked, compress, deflate, gzip, identity.\n@@ -14 +14 @@\n-    let ResetContent = 205\n+    let TransferEncoding = \"Transfer-Encoding\"\n@@ -16 +16 @@\n-    /// The server is delivering only part of the resource (byte serving) due to a range header sent by the client.\n+    /// Tells downstream proxies how to match future request headers to decide whether the cached response can be used rather than requesting a fresh one from the origin server.\n@@ -18 +18 @@\n-    let PartialContent = 206\n+    let Vary = \"Vary\"\n@@ -20 +20 @@\n-    /// The message body that follows is by default an XML message and can contain a number of separate response codes, depending on how many sub-requests were made.\n+    /// Informs the client of proxies through which the response was sent.\n@@ -22 +22 @@\n-    let MultiStatus = 207\n+    let Via = \"Via\"\n@@ -24 +24 @@\n-    /// The members of a DAV binding have already been enumerated in a preceding part of the (multistatus) response, and are not being included again.\n+    /// A general warning about possible problems with the entity body.\n@@ -26 +26 @@\n-    let AlreadyReported = 208\n+    let Warning = \"Warning\"\n@@ -28 +28 @@\n-    /// The server has fulfilled a request for the resource, and the response is a representation of the result of one or more instance-manipulations applied to the current instance.\n+    /// Indicates the authentication scheme that should be used to access the requested entity.\n@@ -30 +30 @@\n-    let IMUsed = 226\n+    let WWWAuthenticate = \"WWW-Authenticate\"\n@@ -32 +32 @@\n-    /// Indicates multiple options for the resource from which the client may choose (via agent-driven content negotiation).\n+/// Status codes that can be received in an HTTP response\n",
+      "occurrences": [
+        "src/FSharp.Data.Http/Http.fs:418-449",
+        "src/FSharp.Data.Http/Http.fs:359-390"
+      ]
+    },
+    {
+      "why": "The identical lines are namespace imports needed by both providers, not copied implementation.",
+      "verified": "Extracted the inclusive source ranges as raw bytes; ran diff -U0 on the two extracts. Exit 0. Byte-identical over 8 lines.",
+      "occurrences": [
+        "src/FSharp.Data.DesignTime/Json/JsonProvider.fs:6-13",
+        "src/FSharp.Data.DesignTime/Xml/XmlProvider.fs:7-14"
+      ]
+    },
+    {
+      "why": "Only imports, a separator comment and a warning directive repeat; there is no implementation here.",
+      "verified": "Extracted the inclusive source ranges as raw bytes; ran diff -U0 on the two extracts. Exit 0. Byte-identical over 11 lines.",
+      "occurrences": [
+        "src/FSharp.Data.DesignTime/Xml/XmlProvider.fs:9-19",
+        "src/FSharp.Data.DesignTime/Json/JsonProvider.fs:8-18"
+      ]
+    },
+    {
+      "why": "These are test-module declarations and import lists, not copied implementation.",
+      "verified": "Python difflib.unified_diff on source ranges, retaining line endings: --- tests/FSharp.Data.Tests/JsonProvider.fs:1-9\n+++ tests/FSharp.Data.Core.Tests/HtmlRuntimeTypes.fs:1-9\n@@ -1,9 +1,9 @@\n-module FSharp.Data.Tests.JsonProvider\n+module FSharp.Data.Tests.HtmlRuntimeTypes\n \n open NUnit.Framework\n open FsUnit\n open System\n-open System.Globalization\n+open System.Reflection\n open FSharp.Data\n open FSharp.Data.Runtime\n open FSharp.Data.Runtime.BaseTypes\n",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/JsonProvider.fs:1-9",
+        "tests/FSharp.Data.Core.Tests/HtmlRuntimeTypes.fs:1-9"
+      ]
+    },
+    {
+      "why": "JSON response fixtures are paired with CSV/XML documentation examples; only type-provider declaration syntax is shared.",
+      "verified": "Extracted the inclusive source ranges as raw bytes; ran diff -U0 on the two extracts. Exit 1. --- tests/FSharp.Data.Tests/JsonProvider.fs:832-839\n+++ docs/library/TypeInference.fsx:185-210\n@@ -1,6 +1 @@\n-type ServiceResponse = JsonProvider<\"\"\"[\n-{ \"code\": 0, \"value\": {\"generic payload\": \"yes\"}, \"message\": null},\n-{ \"code\": 1, \"value\": null, \"message\": \"Warning\"},\n-{ \"code\": 2, \"value\": [], \"message\": \"Exception\"}\n-]\n-\"\"\", SampleIsList = true>\n+type OptionalsCsv = CsvProvider<\"A,B\\n1,2\\n3,4\", PreferOptionals=true>\n@@ -8 +3,24 @@\n-type FirstPayload = JsonProvider<\"\"\"{ \"x\" : 0.500, \"y\" : 0.000 }\"\"\">\n+(*** include-fsi-merged-output ***)\n+\n+(**\n+\n+### XML Provider\n+\n+In XML, values can be missing at the attribute or element level:\n+\n+- If an **attribute** is present in some sample elements but absent in others, it is\n+  inferred as `option<T>`.\n+- If a **child element** is present in some samples but not all, it is inferred as optional.\n+- If an attribute or element is **never present** in the sample, it cannot be accessed via the\n+  generated type at all (use `XElement.Attribute(...)` dynamically in that case).\n+\n+*)\n+\n+// 'born' attribute missing from one author → option<int>\n+type Authors =\n+    XmlProvider<\"\"\"\n+  <authors>\n+    <author name=\"Karl Popper\" born=\"1902\" />\n+    <author name=\"Thomas Kuhn\" />\n+  </authors>\n+  \"\"\">\n",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/JsonProvider.fs:832-839",
+        "docs/library/TypeInference.fsx:185-210"
       ]
     }
   ],
@@ -1785,6 +1905,902 @@
       "occurrences": [
         "tests/FSharp.Data.DesignTime.Tests/TypeProviderInstantiation.fs:121-139",
         "tests/FSharp.Data.DesignTime.Tests/TypeProviderInstantiation.fs:140-158"
+      ]
+    },
+    {
+      "why": "The table fixture and assertions repeat, but closed and unclosed markup are deliberate parser test variants.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HtmlParser.fs:372-404",
+        "tests/FSharp.Data.Core.Tests/HtmlParser.fs:407-439"
+      ]
+    },
+    {
+      "why": "These are short constructor tests with different inputs; one range includes the next test section's comment.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/WorldBankRuntime.fs:233-236",
+        "tests/FSharp.Data.Core.Tests/WorldBankRuntime.fs:238-243"
+      ]
+    },
+    {
+      "why": "The CSV reader harness repeats for different quoting cases and expected data.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/CsvReader.fs:309-314",
+        "tests/FSharp.Data.Core.Tests/CsvReader.fs:316-321"
+      ]
+    },
+    {
+      "why": "Single-line date test cases differ in timezone spelling and expected DateTime kind.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/TextConversions.fs:149-149",
+        "tests/FSharp.Data.Core.Tests/TextConversions.fs:150-150"
+      ]
+    },
+    {
+      "why": "Short property-name tests repeat scaffolding, and one span includes an unrelated following comment.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/JsonProvider.fs:966-972",
+        "tests/FSharp.Data.Tests/JsonProvider.fs:960-964"
+      ]
+    },
+    {
+      "why": "These are single-line boundary assertions for opposite integer limits.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonConversions.fs:211-211",
+        "tests/FSharp.Data.Core.Tests/JsonConversions.fs:210-210"
+      ]
+    },
+    {
+      "why": "Country and topic type generation share provider scaffolding but use different indicator types and getters.",
+      "occurrences": [
+        "src/FSharp.Data.DesignTime/WorldBank/WorldBankProvider.fs:252-268",
+        "src/FSharp.Data.DesignTime/WorldBank/WorldBankProvider.fs:131-153"
+      ]
+    },
+    {
+      "why": "Related descendant wrappers repeat, but differ in receiver and traversal and end in another overload's documentation.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:713-735",
+        "src/FSharp.Data.Html.Core/HtmlDocumentOperations.fs:171-192"
+      ]
+    },
+    {
+      "why": "The identical two lines are the standard validate-and-assert idiom.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonSchema.fs:221-222",
+        "tests/FSharp.Data.Core.Tests/JsonSchema.fs:228-229"
+      ]
+    },
+    {
+      "why": "These short None-conversion tests use the same ordinary test harness.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonRuntime.fs:125-128",
+        "tests/FSharp.Data.Core.Tests/JsonRuntime.fs:36-39"
+      ]
+    },
+    {
+      "why": "Simple property forwarding and interface scaffolding repeat, with a trailing comment belonging to the next type.",
+      "occurrences": [
+        "src/FSharp.Data.WorldBank.Core/WorldBankRuntime.fs:433-441",
+        "src/FSharp.Data.WorldBank.Core/WorldBankRuntime.fs:522-530"
+      ]
+    },
+    {
+      "why": "Formatting optional name and filename parameters is a short option-match idiom.",
+      "occurrences": [
+        "src/FSharp.Data.Http/Http.fs:119-122",
+        "src/FSharp.Data.Http/Http.fs:124-127"
+      ]
+    },
+    {
+      "why": "The identical two-line optionality adjustment and tuple return is too small for certainty.",
+      "occurrences": [
+        "src/FSharp.Data.Runtime.Utilities/StructuralInference.fs:339-340",
+        "src/FSharp.Data.Runtime.Utilities/StructuralInference.fs:351-352"
+      ]
+    },
+    {
+      "why": "Body and html lookup routines repeat, but the body range includes documentation belonging to html.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlDocumentOperations.fs:87-105",
+        "src/FSharp.Data.Html.Core/HtmlDocumentOperations.fs:106-118"
+      ]
+    },
+    {
+      "why": "Optional and ordinary JSON array wrappers repeat, but both ranges include the next conversion member's documentation.",
+      "occurrences": [
+        "src/FSharp.Data.Json.Core/JsonExtensions.fs:318-327",
+        "src/FSharp.Data.Json.Core/JsonExtensions.fs:58-67"
+      ]
+    },
+    {
+      "why": "Different JSON parser test cases share scaffolding, and each span includes the next test attribute.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonValue.fs:634-653",
+        "tests/FSharp.Data.Core.Tests/JsonValue.fs:585-605"
+      ]
+    },
+    {
+      "why": "These short exception tests vary decimal input and its expected error message.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/JsonProvider.fs:809-812",
+        "tests/FSharp.Data.Tests/JsonProvider.fs:794-797"
+      ]
+    },
+    {
+      "why": "Conversion wrappers repeat the same pattern, but the regions combine different conversions and include following-member documentation.",
+      "occurrences": [
+        "src/FSharp.Data.Json.Core/JsonExtensions.fs:77-103",
+        "src/FSharp.Data.Json.Core/JsonExtensions.fs:122-152"
+      ]
+    },
+    {
+      "why": "The identical three lines are ordinary array-value assertions in separate parser tests.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonValue.fs:208-210",
+        "tests/FSharp.Data.Core.Tests/JsonValue.fs:201-203"
+      ]
+    },
+    {
+      "why": "A single non-null string-generator expression is a property-testing idiom.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/NameUtilsProperties.fs:135-135",
+        "tests/FSharp.Data.Core.Tests/CsvParserProperties.fs:41-41"
+      ]
+    },
+    {
+      "why": "Short parser tests differ in fixtures and assertions and include the next test attribute.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonValue.fs:647-653",
+        "tests/FSharp.Data.Core.Tests/JsonValue.fs:627-633"
+      ]
+    },
+    {
+      "why": "Selector fixtures share an HTML harness but differ in markup, operators, and expected attributes.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HtmlCssSelectors.fs:100-122",
+        "tests/FSharp.Data.Core.Tests/HtmlCssSelectors.fs:164-195"
+      ]
+    },
+    {
+      "why": "Printing a name and matching an optional field is a small documentation idiom.",
+      "occurrences": [
+        "docs/library/TypeInference.fsx:215-219",
+        "docs/library/TypeInference.fsx:126-130"
+      ]
+    },
+    {
+      "why": "Two ordinary CSV field assertions are too short to establish copying.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/CsvReader.fs:132-133",
+        "tests/FSharp.Data.Core.Tests/CsvFile.fs:180-181"
+      ]
+    },
+    {
+      "why": "Checked and disabled selectors repeat a three-line dispatch idiom.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:447-449",
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:426-428"
+      ]
+    },
+    {
+      "why": "Four identical default constructor arguments are test data, not a substantial copied routine.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/XmlProvider.fs:1204-1207",
+        "tests/FSharp.Data.Tests/XmlProvider.fs:1165-1168"
+      ]
+    },
+    {
+      "why": "Empty-array and empty-record tests repeat a short test pattern and include the next test attribute.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonValue.fs:681-688",
+        "tests/FSharp.Data.Core.Tests/JsonValue.fs:674-681"
+      ]
+    },
+    {
+      "why": "Both helpers are three-line conversion-and-assert test idioms.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/TextConversions.fs:176-178",
+        "tests/FSharp.Data.Core.Tests/TextConversions.fs:145-147"
+      ]
+    },
+    {
+      "why": "The selector examples share HTML and assertion scaffolding but use substantially different fixtures.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HtmlCssSelectors.fs:72-95",
+        "tests/FSharp.Data.Core.Tests/HtmlCssSelectors.fs:126-160"
+      ]
+    },
+    {
+      "why": "Parallel XML and JSON inference fixtures share data and setup but differ in representation and nesting.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/JsonProvider.fs:880-896",
+        "tests/FSharp.Data.Tests/XmlProvider.fs:1251-1267"
+      ]
+    },
+    {
+      "why": "Both CSV tests retrieve a row and assert properties, using different providers, fields and expectations.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/CsvProvider.fs:342-347",
+        "tests/FSharp.Data.Tests/CsvProvider.fs:729-733"
+      ]
+    },
+    {
+      "why": "Short Guid and Boolean None tests share ordinary invocation/assertion scaffolding.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonRuntime.fs:137-140",
+        "tests/FSharp.Data.Core.Tests/JsonRuntime.fs:92-95"
+      ]
+    },
+    {
+      "why": "Selector tests share a harness but vary both document structure and selected nodes.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HtmlCssSelectors.fs:480-489",
+        "tests/FSharp.Data.Core.Tests/HtmlCssSelectors.fs:447-460"
+      ]
+    },
+    {
+      "why": "The identical two-line test body is too small to distinguish copied code from routine scaffolding.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/HtmlProvider.fs:30-32",
+        "tests/FSharp.Data.Tests/HtmlProvider.fs:50-52"
+      ]
+    },
+    {
+      "why": "These groups repeat straightforward header-format assertions with different header data.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HttpRequestHeaders.fs:218-233",
+        "tests/FSharp.Data.Core.Tests/HttpRequestHeaders.fs:96-111"
+      ]
+    },
+    {
+      "why": "Numeric inference tests share a harness with different samples and expected types.",
+      "occurrences": [
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:85-90",
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:48-53"
+      ]
+    },
+    {
+      "why": "These are single-line uppercase and lowercase hexadecimal conversion cases.",
+      "occurrences": [
+        "src/FSharp.Data.Json.Core/JsonValue.fs:359-359",
+        "src/FSharp.Data.Json.Core/JsonValue.fs:358-358"
+      ]
+    },
+    {
+      "why": "Setting and retrieving a cache entry is a two-line testing idiom.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/Caching.fs:107-108",
+        "tests/FSharp.Data.Core.Tests/Caching.fs:33-34"
+      ]
+    },
+    {
+      "why": "The header tests repeat standard formatting assertions for different headers and values.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HttpRequestHeaders.fs:173-181",
+        "tests/FSharp.Data.Core.Tests/HttpRequestHeaders.fs:150-158"
+      ]
+    },
+    {
+      "why": "Two decimal conversion assertions are short data-driven test idioms.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/StringExtensions.fs:45-46",
+        "tests/FSharp.Data.Core.Tests/CsvFile.fs:222-223"
+      ]
+    },
+    {
+      "why": "The same CSV assertions test different filenames; the short body is test scaffolding.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/CsvProvider.fs:163-169",
+        "tests/FSharp.Data.Tests/CsvProvider.fs:149-155"
+      ]
+    },
+    {
+      "why": "Two naming-function assertions repeat with different input strings.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/NameUtils.fs:39-40",
+        "tests/FSharp.Data.Core.Tests/NameUtils.fs:34-35"
+      ]
+    },
+    {
+      "why": "Related descendant wrappers repeat but differ in traversal and receiver, with trailing documentation for excluded members.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlDocumentOperations.fs:225-241",
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:526-547"
+      ]
+    },
+    {
+      "why": "Resolver tests repeat a short harness while changing the trailing slash in the input.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/XmlSchema.fs:17-21",
+        "tests/FSharp.Data.Core.Tests/XmlSchema.fs:30-34"
+      ]
+    },
+    {
+      "why": "The header tests are runs of ordinary formatting assertions with different data.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HttpRequestHeaders.fs:91-103",
+        "tests/FSharp.Data.Core.Tests/HttpRequestHeaders.fs:178-190"
+      ]
+    },
+    {
+      "why": "These are two schema-property assertions, only one of which is identical.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonSchema.fs:198-199",
+        "tests/FSharp.Data.Core.Tests/JsonSchema.fs:419-420"
+      ]
+    },
+    {
+      "why": "Conversion wrappers repeat but the ranges extend into documentation for different following methods.",
+      "occurrences": [
+        "src/FSharp.Data.Csv.Core/CsvExtensions.fs:41-52",
+        "src/FSharp.Data.Csv.Core/CsvExtensions.fs:73-83"
+      ]
+    },
+    {
+      "why": "Inference pipelines share calls, but one range stops inside the mapping lambda.",
+      "occurrences": [
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:393-395",
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:345-347"
+      ]
+    },
+    {
+      "why": "Table parser tests share assertions but have different markup, data, and header scenarios.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HtmlParser.fs:200-221",
+        "tests/FSharp.Data.Core.Tests/HtmlParser.fs:505-532"
+      ]
+    },
+    {
+      "why": "CSV roundtrip tests use the same harness for different separator and quoting cases.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/CsvParserProperties.fs:99-104",
+        "tests/FSharp.Data.Core.Tests/CsvParserProperties.fs:75-80"
+      ]
+    },
+    {
+      "why": "WithPath and ordinary overloads repeat, but both ranges include documentation for a following excluded member.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:685-768",
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:536-619"
+      ]
+    },
+    {
+      "why": "These are simple inference assertions with different numeric samples and expected types.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HtmlInference.fs:43-51",
+        "tests/FSharp.Data.Core.Tests/HtmlInference.fs:68-76"
+      ]
+    },
+    {
+      "why": "Benchmark setup and parse methods repeat conventional framework scaffolding, with different datasets and partial field lists.",
+      "occurrences": [
+        "tests/FSharp.Data.Benchmarks/JsonBenchmarks.fs:13-38",
+        "tests/FSharp.Data.Benchmarks/HtmlBenchmarks.fs:13-39"
+      ]
+    },
+    {
+      "why": "These groups of schema tests share fixture scaffolding but cover different schema constructs.",
+      "occurrences": [
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:712-768",
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:563-618"
+      ]
+    },
+    {
+      "why": "WithPath traversal wrappers repeat, but the selected ranges include documentation for different subsequent functions.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlDocumentOperations.fs:44-65",
+        "src/FSharp.Data.Html.Core/HtmlDocumentOperations.fs:66-86"
+      ]
+    },
+    {
+      "why": "Header-format tests repeat ordinary setup and assertions with different dates and header values.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HttpRequestHeaders.fs:123-135",
+        "tests/FSharp.Data.Core.Tests/HttpRequestHeaders.fs:164-176"
+      ]
+    },
+    {
+      "why": "XML inference tests share collection-check scaffolding with different fixtures and expected records.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/XmlInference.fs:278-298",
+        "tests/FSharp.Data.Core.Tests/XmlInference.fs:178-190"
+      ]
+    },
+    {
+      "why": "Comment-state logic repeats, but both spans omit their own declaration and include the next state's declaration.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlParser.fs:720-731",
+        "src/FSharp.Data.Html.Core/HtmlParser.fs:708-719"
+      ]
+    },
+    {
+      "why": "A short write-to-string-and-assert harness repeats with different expected JSON.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonValue.fs:878-881",
+        "tests/FSharp.Data.Core.Tests/JsonValue.fs:857-860"
+      ]
+    },
+    {
+      "why": "These are paired minimum/maximum constructor fixtures, consisting of test data rather than substantial copied logic.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/XmlProvider.fs:1170-1178",
+        "tests/FSharp.Data.Tests/XmlProvider.fs:1180-1188"
+      ]
+    },
+    {
+      "why": "Single-line integer boundary checks differ in type and limit.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonConversions.fs:206-206",
+        "tests/FSharp.Data.Core.Tests/JsonConversions.fs:215-215"
+      ]
+    },
+    {
+      "why": "The tests repeat some MIME assertions, but the groups reorder and replace cases and consist of test scaffolding.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HttpContentTypes.fs:15-45",
+        "tests/FSharp.Data.Core.Tests/Http.fs:434-464"
+      ]
+    },
+    {
+      "why": "Two optional-property assertions are a short testing idiom across XML and JSON.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/XmlProvider.fs:118-119",
+        "tests/FSharp.Data.Tests/JsonProvider.fs:220-221"
+      ]
+    },
+    {
+      "why": "Single-line overflow assertions differ only in the sign of a date value.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/TextConversions.fs:167-167",
+        "tests/FSharp.Data.Core.Tests/TextConversions.fs:168-168"
+      ]
+    },
+    {
+      "why": "Benchmark parse/iterate wrappers repeat conventional harness code for different CSV inputs.",
+      "occurrences": [
+        "tests/FSharp.Data.Benchmarks/CsvBenchmarks.fs:49-55",
+        "tests/FSharp.Data.Benchmarks/CsvBenchmarks.fs:33-39"
+      ]
+    },
+    {
+      "why": "Single-line TimeSpan assertions exercise positive and negative values.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/JsonProvider.fs:609-609",
+        "tests/FSharp.Data.Tests/JsonProvider.fs:619-619"
+      ]
+    },
+    {
+      "why": "Schema tests share the check harness but use different constructs and sample documents.",
+      "occurrences": [
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:786-813",
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:712-730"
+      ]
+    },
+    {
+      "why": "The documentation examples share small printing loops, but one span includes a large intervening prose section.",
+      "occurrences": [
+        "docs/library/HtmlProvider.fsx:339-358",
+        "docs/library/HtmlProvider.fsx:458-462"
+      ]
+    },
+    {
+      "why": "Single-line conversion assertions test opposite infinities.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/TextConversions.fs:129-129",
+        "tests/FSharp.Data.Core.Tests/TextConversions.fs:130-130"
+      ]
+    },
+    {
+      "why": "Related descendant wrappers repeat, but have different receivers and trailing documentation for excluded members.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:736-757",
+        "src/FSharp.Data.Html.Core/HtmlDocumentOperations.fs:183-203"
+      ]
+    },
+    {
+      "why": "Only two lines of name selection and record update repeat, at different indentation levels.",
+      "occurrences": [
+        "src/FSharp.Data.Csv.Core/CsvInference.fs:272-273",
+        "src/FSharp.Data.Csv.Core/CsvInference.fs:253-254"
+      ]
+    },
+    {
+      "why": "The identical generic and nongeneric enumerator implementations are standard IEnumerable forwarding boilerplate.",
+      "occurrences": [
+        "src/FSharp.Data.WorldBank.Core/WorldBankRuntime.fs:459-463",
+        "src/FSharp.Data.WorldBank.Core/WorldBankRuntime.fs:539-543"
+      ]
+    },
+    {
+      "why": "Single record-literal entries in a test expectation are too small and have incomplete list boundaries.",
+      "occurrences": [
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:123-123",
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:121-121"
+      ]
+    },
+    {
+      "why": "These are runs of ordinary pluralization assertions with different word/expected-value pairs.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/Pluralizer.fs:76-83",
+        "tests/FSharp.Data.Core.Tests/Pluralizer.fs:65-73"
+      ]
+    },
+    {
+      "why": "Single-line expected type records differ in date type and optionality.",
+      "occurrences": [
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:267-267",
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:220-220"
+      ]
+    },
+    {
+      "why": "Each region is a single standard header-format assertion in a test member.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HttpRequestHeaders.fs:109-111",
+        "tests/FSharp.Data.Core.Tests/HttpRequestHeaders.fs:210-212"
+      ]
+    },
+    {
+      "why": "Single-line date expectations share constructor syntax; one span is only the tail of an assertion.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonConversions.fs:145-145",
+        "tests/FSharp.Data.Core.Tests/TextConversions.fs:186-186"
+      ]
+    },
+    {
+      "why": "Short sample/map/partition pipelines vary the fixture, selected property and partition condition.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/JsonProvider.fs:175-178",
+        "tests/FSharp.Data.Tests/JsonProvider.fs:226-229"
+      ]
+    },
+    {
+      "why": "Table parsing tests share HTML and assertion scaffolding but use empty and populated fixtures.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HtmlParser.fs:223-236",
+        "tests/FSharp.Data.Core.Tests/HtmlParser.fs:354-369"
+      ]
+    },
+    {
+      "why": "The files are identical, but consist entirely of assembly visibility attributes and required F# boilerplate.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/InternalsVisibleTo.fs:1-9",
+        "src/FSharp.Data.Xml.Core/InternalsVisibleTo.fs:1-9"
+      ]
+    },
+    {
+      "why": "Documentation runtime setup repeats with different assembly references; this is framework scaffolding.",
+      "occurrences": [
+        "docs/tutorials/JsonToXml.fsx:9-24",
+        "docs/library/TypeInference.fsx:9-24"
+      ]
+    },
+    {
+      "why": "String and boolean schema-validation tests share the ordinary arrange-validate-assert harness.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonSchema.fs:201-206",
+        "tests/FSharp.Data.Core.Tests/JsonSchema.fs:240-245"
+      ]
+    },
+    {
+      "why": "These are short quoted getter expressions for different provider collections.",
+      "occurrences": [
+        "src/FSharp.Data.DesignTime/WorldBank/WorldBankProvider.fs:290-295",
+        "src/FSharp.Data.DesignTime/WorldBank/WorldBankProvider.fs:238-243"
+      ]
+    },
+    {
+      "why": "HTML provider setup repeats but the definition-list and unordered-list fixtures are substantially different.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/HtmlProviderList.fs:130-147",
+        "tests/FSharp.Data.Tests/HtmlProviderList.fs:68-76"
+      ]
+    },
+    {
+      "why": "Short descendant wrappers share defaulting logic but include documentation for different following members.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlDocumentOperations.fs:235-241",
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:536-547"
+      ]
+    },
+    {
+      "why": "Each span is a single exception assertion for invalid conversion.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/StringExtensions.fs:30-30",
+        "tests/FSharp.Data.Core.Tests/StringExtensions.fs:54-54"
+      ]
+    },
+    {
+      "why": "Small header constructors use the same tuple/date-formatting idiom, and both spans include the next header's comment.",
+      "occurrences": [
+        "src/FSharp.Data.Http/Http.fs:180-189",
+        "src/FSharp.Data.Http/Http.fs:79-88"
+      ]
+    },
+    {
+      "why": "Selector fixtures share an HTML harness but differ in input and expected results; the ranges include following-test comments.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HtmlCssSelectors.fs:44-70",
+        "tests/FSharp.Data.Core.Tests/HtmlCssSelectors.fs:99-124"
+      ]
+    },
+    {
+      "why": "Microdata and JSON-LD tests share container-check scaffolding but use different fixtures and expected counts.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/HtmlProvider.fs:380-405",
+        "tests/FSharp.Data.Tests/HtmlProvider.fs:420-452"
+      ]
+    },
+    {
+      "why": "The identical span is only forwarded optional arguments, excluding both call targets and surrounding behavior.",
+      "occurrences": [
+        "src/FSharp.Data.Http/Http.fs:2218-2228",
+        "src/FSharp.Data.Http/Http.fs:2386-2396"
+      ]
+    },
+    {
+      "why": "Two-line boolean conversion assertions are a short test idiom.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/CsvFile.fs:244-245",
+        "tests/FSharp.Data.Core.Tests/StringExtensions.fs:83-84"
+      ]
+    },
+    {
+      "why": "Node and document descendant wrappers repeat, but differ in self traversal and include excluded-member documentation.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlDocumentOperations.fs:193-213",
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:609-630"
+      ]
+    },
+    {
+      "why": "Single-line record construction differs in language and text fixture values.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/XmlProvider.fs:527-527",
+        "tests/FSharp.Data.Tests/XmlProvider.fs:526-526"
+      ]
+    },
+    {
+      "why": "The identical two lines are the standard infer-and-assert test idiom.",
+      "occurrences": [
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:163-164",
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:70-71"
+      ]
+    },
+    {
+      "why": "The documentation example is closely parallel, but translating the XML fixtures to JSON goes beyond a systematic code rename.",
+      "occurrences": [
+        "docs/library/XmlProvider.fsx:149-183",
+        "docs/library/JsonProvider.fsx:226-260"
+      ]
+    },
+    {
+      "why": "Two short invalid-or-missing conversion assertions repeat for Boolean and Guid.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/TextRuntime.fs:89-90",
+        "tests/FSharp.Data.Core.Tests/TextRuntime.fs:130-131"
+      ]
+    },
+    {
+      "why": "The ToString implementation repeats, but the paired spans also contain different record structures and following-type documentation.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlRuntime.fs:141-172",
+        "src/FSharp.Data.Html.Core/HtmlRuntime.fs:113-140"
+      ]
+    },
+    {
+      "why": "CSV reader tests share a short harness for quoted and embedded-newline inputs.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/CsvReader.fs:13-17",
+        "tests/FSharp.Data.Core.Tests/CsvReader.fs:41-45"
+      ]
+    },
+    {
+      "why": "Comment parser states share control flow, but both ranges include the next state's declaration.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlParser.fs:393-403",
+        "src/FSharp.Data.Html.Core/HtmlParser.fs:375-385"
+      ]
+    },
+    {
+      "why": "These are single entries in inferred-type expectations, with different tags, multiplicities and types.",
+      "occurrences": [
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:407-407",
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:80-80"
+      ]
+    },
+    {
+      "why": "These are small groups of invalid-date assertions for different conversion APIs and inputs.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/TextConversions.fs:198-202",
+        "tests/FSharp.Data.Core.Tests/TextConversions.fs:168-172"
+      ]
+    },
+    {
+      "why": "A single newline-normalization expression repeats, and one range includes the following assertion's comment.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HtmlNodeSerialization.fs:131-132",
+        "tests/FSharp.Data.Core.Tests/HtmlNodeSerialization.fs:100-100"
+      ]
+    },
+    {
+      "why": "The header test groups repeat ordinary formatting assertions using different headers and values.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HttpRequestHeaders.fs:24-37",
+        "tests/FSharp.Data.Core.Tests/HttpRequestHeaders.fs:173-186"
+      ]
+    },
+    {
+      "why": "Missing-field exception tests share scaffolding, but the paired type declarations cover different fixtures and do not align with the JSON test's type.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/XmlProvider.fs:1424-1430",
+        "tests/FSharp.Data.Tests/JsonProvider.fs:1048-1054"
+      ]
+    },
+    {
+      "why": "Each small test is a pair of conventional invalid-conversion exception assertions.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/StringExtensions.fs:137-139",
+        "tests/FSharp.Data.Core.Tests/StringExtensions.fs:87-89"
+      ]
+    },
+    {
+      "why": "Formatting roundtrip properties share conventional registration/check scaffolding while testing different save modes.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonParserProperties.fs:132-140",
+        "tests/FSharp.Data.Core.Tests/JsonParserProperties.fs:142-150"
+      ]
+    },
+    {
+      "why": "Single-line assertions test just outside opposite integer boundaries.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonConversions.fs:227-227",
+        "tests/FSharp.Data.Core.Tests/JsonConversions.fs:228-228"
+      ]
+    },
+    {
+      "why": "These three-line tests each contain one Boolean string-conversion assertion.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonValueOptionExtensions.fs:23-25",
+        "tests/FSharp.Data.Core.Tests/JsonValueOptionExtensions.fs:27-29"
+      ]
+    },
+    {
+      "why": "Control-character encoding tests share a short writer/assertion harness with different inputs and outputs.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonValue.fs:740-746",
+        "tests/FSharp.Data.Core.Tests/JsonValue.fs:732-738"
+      ]
+    },
+    {
+      "why": "Comment and CData handling repeat a three-line construction-and-recurse idiom.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlParser.fs:1165-1167",
+        "src/FSharp.Data.Html.Core/HtmlParser.fs:1162-1164"
+      ]
+    },
+    {
+      "why": "Sequence schema tests share fixture scaffolding but change occurrence constraints and sample multiplicities.",
+      "occurrences": [
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:620-641",
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:603-618"
+      ]
+    },
+    {
+      "why": "A single CSV parsing pipeline differs in quote character and spacing.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/CsvReader.fs:29-29",
+        "tests/FSharp.Data.Core.Tests/CsvReader.fs:319-319"
+      ]
+    },
+    {
+      "why": "Selector tests share a parse/select/assert harness but substantially different HTML fixtures and selectors.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HtmlCssSelectors.fs:266-285",
+        "tests/FSharp.Data.Core.Tests/HtmlCssSelectors.fs:45-68"
+      ]
+    },
+    {
+      "why": "Two equality assertions repeat with different expected results.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/StructuralTypes.fs:236-237",
+        "tests/FSharp.Data.Core.Tests/StructuralTypes.fs:227-228"
+      ]
+    },
+    {
+      "why": "Selector test groups share scaffolding but differ in fixtures and cases, with a following-test comment on one boundary.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HtmlCssSelectors.fs:258-285",
+        "tests/FSharp.Data.Core.Tests/HtmlCssSelectors.fs:300-327"
+      ]
+    },
+    {
+      "why": "Attribute tests repeat small constructor/accessor/assert scaffolds with different names and values.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HtmlAttributeExtensions.fs:55-68",
+        "tests/FSharp.Data.Core.Tests/HtmlAttributeExtensions.fs:22-36"
+      ]
+    },
+    {
+      "why": "Related quotation-generating branches repeat, but use different runtime methods and one range includes enclosing closing parentheses.",
+      "occurrences": [
+        "src/FSharp.Data.DesignTime/Json/JsonGenerator.fs:754-763",
+        "src/FSharp.Data.DesignTime/Json/JsonGenerator.fs:765-772"
+      ]
+    },
+    {
+      "why": "Schema-validation tests share valid/invalid assertion scaffolding but test different constraints and value shapes.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonSchema.fs:329-344",
+        "tests/FSharp.Data.Core.Tests/JsonSchema.fs:288-299"
+      ]
+    },
+    {
+      "why": "The same build-path pattern appears in single expressions, with different base variables and filenames.",
+      "occurrences": [
+        "tests/FSharp.Data.DesignTime.Tests/SignatureTests.fs:29-29",
+        "tests/FSharp.Data.DesignTime.Tests/TypeProviderInstantiation.fs:360-360"
+      ]
+    },
+    {
+      "why": "Three record fields are repeated fixture data with different numbered names, inside larger records.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/CsvProvider.fs:617-619",
+        "tests/FSharp.Data.Tests/CsvProvider.fs:603-605"
+      ]
+    },
+    {
+      "why": "These are three-line runs of conventional token-dispatch entries for different selectors.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlCssSelectors.fs:170-172",
+        "src/FSharp.Data.Html.Core/HtmlCssSelectors.fs:184-186"
+      ]
+    },
+    {
+      "why": "Default descendant wrappers repeat short setup logic but include following-overload documentation and differ in traversal.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlDocumentOperations.fs:171-182",
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:713-724"
+      ]
+    },
+    {
+      "why": "Short conversion tests repeat call-and-assert scaffolding, and the float span includes a following section comment.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/CsvReader.fs:234-238",
+        "tests/FSharp.Data.Core.Tests/CsvReader.fs:224-226"
+      ]
+    },
+    {
+      "why": "Header tests repeat standard formatting assertions with different header data.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HttpRequestHeaders.fs:214-225",
+        "tests/FSharp.Data.Core.Tests/HttpRequestHeaders.fs:188-199"
+      ]
+    },
+    {
+      "why": "The identical lines are only the beginning of an inference call, stopping before its differing value argument.",
+      "occurrences": [
+        "docs/tutorials/JsonAnonymizer.fsx:86-89",
+        "docs/tutorials/JsonAnonymizer.fsx:115-118"
+      ]
+    },
+    {
+      "why": "Take and Skip wrappers use small forwarding idioms, and both spans include the next member's documentation.",
+      "occurrences": [
+        "src/FSharp.Data.Csv.Core/CsvRuntime.fs:557-564",
+        "src/FSharp.Data.Csv.Core/CsvRuntime.fs:565-572"
+      ]
+    },
+    {
+      "why": "These are short runs of inference assertions with different strings and expected types.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/StructuralInference.fs:299-302",
+        "tests/FSharp.Data.Core.Tests/StructuralInference.fs:283-286"
+      ]
+    },
+    {
+      "why": "Table naming tests share an HTML fixture and assertion harness while varying identifying attributes and expected names.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HtmlParser.fs:318-334",
+        "tests/FSharp.Data.Core.Tests/HtmlParser.fs:282-298"
       ]
     }
   ]
