@@ -71,6 +71,7 @@ fn issue_91_embedding_only_pair_survives_when_lsh_misses_match() -> Result<()> {
         fingerprints: &fingerprints,
         fused_clusters: &clusters,
         trees: &[],
+        sources: &std::collections::HashMap::new(),
         file_languages: &HashMap::new(),
         file_paths: &HashMap::new(),
         kinds: &UniformKind(FIXTURE_KIND),

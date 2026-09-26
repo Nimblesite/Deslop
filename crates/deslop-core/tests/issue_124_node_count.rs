@@ -43,6 +43,7 @@ fn rank_mass_orders_by_extent_times_additional_occurrences() -> Result<(), &'sta
         fingerprints: &fingerprints,
         fused_clusters: &fused,
         trees: &[],
+        sources: &std::collections::HashMap::new(),
         file_languages: &HashMap::new(),
         file_paths: &HashMap::new(),
         kinds: &UniformKind(FIXTURE_KIND),

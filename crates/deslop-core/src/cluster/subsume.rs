@@ -56,7 +56,7 @@
 //! so each file set is resolved on its own
 //! ([PIPELINE-CLUSTER-SUBSUME-FILESET]).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use super::Cluster;
 use crate::{fingerprint::Fingerprint, state::FileId};
@@ -74,12 +74,15 @@ use tally::SubsumeTally;
 ///
 /// Runs after mass ranking; [PIPELINE-CLUSTER-SUBSUME] decides which
 /// physical view survives, one file set at a time.
-pub(super) fn collapse_cross_cluster_overlap(clusters: Vec<Cluster>) -> Vec<Cluster> {
+pub(super) fn collapse_cross_cluster_overlap(
+    clusters: Vec<Cluster>,
+    sources: &HashMap<FileId, Vec<u8>>,
+) -> Vec<Cluster> {
     let groups = file_set_groups(&clusters);
     let mut tally = SubsumeTally::new(clusters.len(), groups.len());
     let mut published = vec![false; clusters.len()];
     for group in groups.values() {
-        publish_group(&clusters, group, &mut published, &mut tally);
+        publish_group(&clusters, group, &mut published, &mut tally, sources);
     }
     let survivors: Vec<Cluster> = clusters
         .into_iter()
@@ -120,12 +123,17 @@ fn publish_group(
     group: &[usize],
     published: &mut [bool],
     tally: &mut SubsumeTally,
+    sources: &HashMap<FileId, Vec<u8>>,
 ) {
     let members: Vec<(usize, &Cluster)> = group
         .iter()
         .filter_map(|index| clusters.get(*index).map(|cluster| (*index, cluster)))
         .collect();
-    let region = Region::new(members.iter().map(|(_, cluster)| *cluster).collect(), tally);
+    let region = Region::new(
+        members.iter().map(|(_, cluster)| *cluster).collect(),
+        tally,
+        sources,
+    );
     for local in resolve(&region, tally) {
         let slot = members
             .get(local)

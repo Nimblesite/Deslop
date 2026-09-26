@@ -25,7 +25,10 @@
 //! the published views, removed for good, and the kernel is found again
 //! without them.
 
-use std::{cmp::Ordering, collections::BTreeSet};
+use std::{
+    cmp::Ordering,
+    collections::{BTreeSet, HashMap},
+};
 
 use super::{
     all_occurrences_overlap, log_subsumption, strictly_encloses,
@@ -33,12 +36,15 @@ use super::{
     tally::SubsumeTally,
     Cluster,
 };
+use crate::{cluster::exact_runs::copied_union, state::FileId};
 
 /// The views over one file set, in rank order, with the same-region
 /// preference between every pair that has one.
 pub(super) struct Region<'a> {
     /// Views in rank order.
     views: Vec<&'a Cluster>,
+    /// Source bytes that can prove a straddled union was copied whole.
+    sources: &'a HashMap<FileId, Vec<u8>>,
     /// `beaters[view]`: views that re-describe `view` and outrank it.
     beaters: Vec<Vec<usize>>,
     /// `beaten[view]`: views that `view` re-describes and outranks.
@@ -47,10 +53,15 @@ pub(super) struct Region<'a> {
 
 impl<'a> Region<'a> {
     /// Evaluates every pair of `views` once and records who outranks whom.
-    pub(super) fn new(views: Vec<&'a Cluster>, tally: &mut SubsumeTally) -> Self {
+    pub(super) fn new(
+        views: Vec<&'a Cluster>,
+        tally: &mut SubsumeTally,
+        sources: &'a HashMap<FileId, Vec<u8>>,
+    ) -> Self {
         let count = views.len();
         let mut region = Self {
             views,
+            sources,
             beaters: vec![Vec::new(); count],
             beaten: vec![Vec::new(); count],
         };
@@ -116,6 +127,9 @@ impl<'a> Region<'a> {
         let Some((left, right)) = self.pair(first, second) else {
             return false;
         };
+        if copied_union(&left.members, &right.members, self.sources) {
+            return false;
+        }
         all_occurrences_overlap(&left.members, &right.members)
             && all_occurrences_overlap(&right.members, &left.members)
             && self.views.iter().enumerate().any(|(index, core)| {
