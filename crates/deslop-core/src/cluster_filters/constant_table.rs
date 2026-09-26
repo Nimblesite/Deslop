@@ -22,11 +22,14 @@
 //! would then be free to eat a real two-file clone — but to recognise
 //! the table for what it is, in whatever language it is written.
 //!
-//! Suppressed **only** when the members differ in raw bytes, so a
-//! constants module copied verbatim into two files still surfaces as
-//! genuine duplication. Any right-hand side that is not a plain literal
+//! Suppressed **only** when the members differ in declaration bytes, so
+//! copied bindings stay visible even when their enclosing module names
+//! differ. Other languages compare the whole matched range. Any right-hand
+//! side that is not a plain literal
 //! — a call, a name, an attribute, an interpolated string — takes the
 //! member out of the shape and keeps the cluster visible.
+//! F# module and namespace bindings use the same rule, with XML docs and
+//! comments treated as trivia ([ACCURACY-RECOVERY-PLAN-LITERAL-TABLE]).
 
 use tree_sitter::Node;
 
@@ -35,14 +38,24 @@ use super::{
 };
 use crate::ast::named_children;
 
+/// Compare each table with its immediate neighbour.
+const ADJACENT_TABLE_SIZE: usize = 2;
+
 /// Returns true when every cluster member's matched range covers a run
 /// of module-level constant declarations and at least two members
-/// differ in raw bytes. Returning true drops the cluster — unrelated
+/// differ in their declaration bytes. Returning true drops the cluster — unrelated
 /// data tables are not duplication.
 pub(super) fn is_constant_table_cluster(snippets: &[Snippet<'_>]) -> bool {
-    snippets.len() >= 2
-        && snippets.iter().all(covers_only_constants)
-        && raw_snippet_texts_differ(snippets)
+    let Some((first, rest)) = snippets.split_first() else {
+        return false;
+    };
+    if rest.is_empty() {
+        return false;
+    }
+    if first.language == "fsharp" {
+        return fsharp_table_cells_differ(snippets);
+    }
+    snippets.iter().all(covers_only_constants) && raw_snippet_texts_differ(snippets)
 }
 
 /// Returns true when the member's range lies at module top level and
@@ -73,6 +86,114 @@ fn covers_only_constants(snippet: &Snippet<'_>) -> bool {
         }
     }
     saw_constant
+}
+
+/// F# puts module-level `let` bindings under a named module/namespace,
+/// and may nest consecutive bindings inside `declaration_expression`.
+/// Walk only those containers; a function or any nonliteral body rejects
+/// the whole range, even when literal bindings surround it. Only binding
+/// names and values are compared, so renaming the module does not erase a copy.
+fn fsharp_table_cells<'a>(snippet: &'a Snippet<'_>) -> Option<Vec<(&'a [u8], &'a [u8])>> {
+    let tree = parse_for(snippet)?;
+    let root = tree.root_node();
+    if root.kind() != "file" {
+        return None;
+    }
+    let range = trimmed_snippet_range(snippet).unwrap_or(snippet.range);
+    fsharp_collect_cells(root, range, snippet.source)
+}
+
+/// Iterative because F# chains long runs of `declaration_expression`
+/// nodes; recursive descent would exhaust the stack on large data files.
+fn fsharp_collect_cells<'a>(
+    root: Node<'_>,
+    range: crate::ast::ByteRange,
+    source: &'a [u8],
+) -> Option<Vec<(&'a [u8], &'a [u8])>> {
+    let mut pending = vec![root];
+    let mut cells = Vec::new();
+    while let Some(node) = pending.pop() {
+        if fsharp_is_container(node.kind()) {
+            pending.extend(named_children(node).into_iter().filter(|child| {
+                node_intersects_range(*child, range) && !fsharp_module_name(node, *child)
+            }));
+        } else if node.kind() == "function_or_value_defn" {
+            cells.push(fsharp_declaration_cell(node, source)?);
+        } else if !fsharp_is_trivia(node.kind()) {
+            return None;
+        }
+    }
+    (!cells.is_empty()).then_some(cells)
+}
+
+/// Different module headers cannot turn the same copied bindings into
+/// unrelated data; compare the AST-delimited names and values only.
+fn fsharp_table_cells_differ(snippets: &[Snippet<'_>]) -> bool {
+    let tables: Option<Vec<_>> = snippets.iter().map(fsharp_table_cells).collect();
+    tables.is_some_and(|tables| {
+        tables.windows(ADJACENT_TABLE_SIZE).any(|pair| {
+            let [left, right] = pair else {
+                return false;
+            };
+            left != right
+        })
+    })
+}
+
+/// Containers where a declaration may sit at module level.
+pub(super) fn fsharp_is_container(kind: &str) -> bool {
+    matches!(
+        kind,
+        "file" | "named_module" | "namespace" | "module_defn" | "declaration_expression"
+    )
+}
+
+/// A module header names a container; it is not one of its data entries.
+pub(super) fn fsharp_module_name(parent: Node<'_>, child: Node<'_>) -> bool {
+    matches!(parent.kind(), "named_module" | "namespace" | "module_defn")
+        && matches!(child.kind(), "long_identifier" | "identifier")
+}
+
+/// Only `let NAME = <constant>` is data. The returned source slices exclude
+/// comments and module headers while preserving exact binding content.
+fn fsharp_declaration_cell<'a>(node: Node<'_>, source: &'a [u8]) -> Option<(&'a [u8], &'a [u8])> {
+    let mut content = named_children(node)
+        .into_iter()
+        .filter(|child| !fsharp_is_trivia(child.kind()));
+    let (Some(left), Some(right), None) = (content.next(), content.next(), content.next()) else {
+        return None;
+    };
+    if left.kind() != "value_declaration_left"
+        || !sole_named_child(left).is_some_and(|pattern| pattern.kind() == "identifier_pattern")
+        || right.kind() != "const"
+        || !fsharp_const_has_no_interpolation(right)
+    {
+        return None;
+    }
+    Some((
+        source.get(left.start_byte()..left.end_byte())?,
+        source.get(right.start_byte()..right.end_byte())?,
+    ))
+}
+
+/// The F# grammar attaches documentation for the next binding to the
+/// preceding definition, so comments inside a definition are trivia.
+pub(super) fn fsharp_is_trivia(kind: &str) -> bool {
+    matches!(kind, "line_comment" | "block_comment" | "xml_doc")
+}
+
+/// Interpolated F# strings parse as `const > string > format_string`
+/// despite containing evaluated expressions, so a `const` alone is not
+/// enough proof that the binding contains only data.
+fn fsharp_const_has_no_interpolation(value: Node<'_>) -> bool {
+    let mut pending = vec![value];
+    while let Some(node) = pending.pop() {
+        if node.kind() == "format_string_eval" {
+            return false;
+        }
+        pending.extend(named_children(node));
+    }
+    true
 }
 
 /// How one top-level item contributes to the constant-table shape.

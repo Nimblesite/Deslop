@@ -10,26 +10,25 @@
 ##
 ## Usage:   scripts/corpus/score-gate.sh [url#commit#language ...]
 ## Example: scripts/corpus/score-gate.sh
+## Inspect: scripts/corpus/score-gate.sh --list-default-targets
 ##
-## With no targets it scans the default slice: the smallest repositories that
-## carry a register, each pinned to the exact commit its register was judged at,
+## With no targets it scans the default slice: judged repositories across the
+## core languages, each pinned to the exact commit its register was judged at,
 ## which is what CI runs. Checkouts live under `.corpus/score-gate/`
 ## (git-ignored); the scorecard is written to `.corpus/score-gate/SCORE.md` and
 ## `score.json`.
 
 set -euo pipefail
 
-# [CORPUS-SCORE] The CI slice, named by register. Deliberately the smallest
-# register-backed repositories in the corpus: every one of them clones and scans
-# in seconds on a hosted runner, and every one carries judged pairs. The rest of
-# the corpus is scored by `make compare`, which nobody waits on. Widening this
-# list is a deliberate change, and it costs CI minutes on every push.
+# [CORPUS-SCORE-GATE-SLICE] The CI slice, named by register. Each repository carries a
+# substantive judged body of pairs. The rest of the corpus is scored by
+# `make compare`. Widening this list is deliberate and costs CI time.
 #
 # [CORPUS-PIN] The url and the COMMIT are read from each register rather than
 # repeated here: a register is judged at one commit, and a slice pinned anywhere
 # else — a tag above all, which upstream can re-cut — would score the engine
 # against source the judge never read. The scorer refuses that outright.
-DEFAULT_SLICE=(click cobra axios deslop)
+DEFAULT_SLICE=(click cobra axios deslop polly fsharp.data)
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 WORK_DIR="${SCORE_GATE_WORK_DIR:-$REPO_ROOT/.corpus/score-gate}"
@@ -99,7 +98,10 @@ write_run() {
 }
 
 main() {
-  case "${1:-}" in -h | --help) usage; exit 0 ;; esac
+  case "${1:-}" in
+    -h | --help) usage; exit 0 ;;
+    --list-default-targets) register_targets "$REPO_ROOT" "${DEFAULT_SLICE[@]}"; exit 0 ;;
+  esac
   command -v cargo >/dev/null || die "cargo not on PATH"
   command -v node >/dev/null || die "node not on PATH"
   if [ $# -eq 0 ]; then

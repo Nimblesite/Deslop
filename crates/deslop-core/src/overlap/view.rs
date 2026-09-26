@@ -13,7 +13,7 @@ use crate::{
     ast::NormalizedNode,
     fingerprint::{collect_fingerprints, Fingerprint},
     state::FileId,
-    tokens::resolve_range_nodes,
+    tokens::resolve_fingerprint_nodes,
 };
 
 /// One endpoint's resolved measurement state.
@@ -82,7 +82,7 @@ impl EndpointView {
 }
 
 /// Resolves the endpoint's nodes and builds every measurement input.
-/// Resolution reuses [`resolve_range_nodes`] — the same resolver the
+/// Resolution reuses [`resolve_fingerprint_nodes`] — the same resolver the
 /// token stream and content walks use — so every signal sees the same
 /// code, including synthetic sibling windows.
 pub(super) fn build_view(
@@ -90,7 +90,7 @@ pub(super) fn build_view(
     endpoint: &Fingerprint,
 ) -> Option<EndpointView> {
     let root = tree_index.get(&endpoint.file_id)?;
-    let members = resolve_range_nodes(root, endpoint.byte_range.start, endpoint.byte_range.end)?;
+    let members = resolve_fingerprint_nodes(root, endpoint)?;
     let mut postorder: Vec<PostNode> = Vec::new();
     for member in &members {
         push_postorder(member, &mut postorder);

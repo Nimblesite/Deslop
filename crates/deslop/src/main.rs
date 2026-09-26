@@ -7,6 +7,7 @@
 //! (`--from-report`). Always emits the canonical JSON plus derived
 //! text and HTML views unless suppressed ([OUTPUT-SCHEMA-JSON]).
 
+mod compare;
 mod diff_input;
 mod logging;
 mod output;
@@ -56,6 +57,14 @@ struct Cli {
     /// the scan root; logs follow the reports into `<dir>/logs/`.
     #[arg(long, value_name = "PATH_PREFIX")]
     output: Option<PathBuf>,
+
+    /// Print the engine's verdict on exactly two occurrences instead of
+    /// rendering a report. Pass twice, each as
+    /// `<path>:<start_byte>:<end_byte>` — the triple every rendered
+    /// occurrence already carries. A cluster id is not valid input
+    /// ([PAIR-COMPARE-CLI]).
+    #[arg(long, value_name = "PATH:START:END", action = clap::ArgAction::Append)]
+    compare: Vec<String>,
 
     /// Skip analysis and re-render the canonical JSON report at this
     /// path into `.txt` and `.html` (and, unless `--nojson` is set,
@@ -282,6 +291,9 @@ fn run_cli() -> Result<()> {
         return run_debug_ast(file);
     }
     validate_scan_path(&args.path)?;
+    if !args.compare.is_empty() {
+        return run_compare(&args);
+    }
     let formats = FormatSelection::from_args(&args)?;
     let output = OutputPaths::new(args.output.as_deref(), &args.path);
     let mode: EmbeddingMode = parse_embedding_mode(&args.embeddings)?;
@@ -428,6 +440,20 @@ fn validate_scan_path(path: &std::path::Path) -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// [PAIR-COMPARE-CLI] Answers `--compare` with the engine's verdict on the
+/// two named occurrences, then exits without rendering a report.
+fn run_compare(args: &Cli) -> Result<()> {
+    let mode = parse_embedding_mode(&args.embeddings)?;
+    let provider = configured_provider(args, mode)?;
+    let scan = compare::ScanRequest {
+        root: args.path.clone(),
+        min_nodes: args.min_nodes,
+        incremental: args.behaviour.incremental(),
+        config: args.config.clone(),
+    };
+    compare::run(scan, mode, provider.as_deref(), &args.compare)
 }
 
 /// Parses `file` and writes the normalised AST dump to stdout.

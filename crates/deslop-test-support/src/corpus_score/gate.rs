@@ -15,7 +15,7 @@ use anyhow::Result;
 use serde::Serialize;
 use serde_json::Value;
 
-use super::{percent, RepoScore, DEFAULT_MAXIMUM_DEFECTS};
+use super::{percent, RangeCoverage, RepoScore, CLEARLY_IN, DEFAULT_MAXIMUM_DEFECTS};
 
 /// Where the gate reads its thresholds.
 pub const THRESHOLDS_PATH: &str = "corpus/register/score-thresholds.json";
@@ -214,16 +214,35 @@ pub struct CorpusTotals {
     pub false_positives: usize,
     /// Clusters published across the corpus. Description, never scored.
     pub clusters_total: usize,
-    /// Wall milliseconds summed across the scored repositories.
-    pub elapsed_ms: u64,
+    /// Covered / judged lines among reported CLEARLY IN pairs only. Extent,
+    /// never a verdict: missed pairs and CLEARLY OUT pairs are excluded.
+    pub matched_in_coverage: Option<RangeCoverage>,
+    /// Wall milliseconds summed only when every scored repository was measured.
+    pub elapsed_ms: Option<u64>,
     /// Highest peak resident set any one scan reached, in mebibytes. The runs
     /// are sequential, so the corpus peak is the largest of them, not the sum.
-    /// Absent when the platform measured none — never printed as zero.
+    /// Absent if any scored repository lacked a peak measurement.
     pub peak_rss_mb: Option<u64>,
-    /// CPU seconds summed across the scored repositories, when measured.
+    /// CPU seconds summed only when every scored repository was measured.
     pub cpu_seconds: Option<f64>,
     /// `100 * correct / judged` across every judged entry in the corpus.
     pub score_percent: Option<f64>,
+}
+
+/// Sum the extent of the positive pairs an engine actually reported.
+fn matched_in_coverage(scores: &[RepoScore]) -> Option<RangeCoverage> {
+    let (covered_lines, judged_lines) = scores
+        .iter()
+        .flat_map(|score| &score.entries)
+        .filter(|entry| entry.verdict == CLEARLY_IN)
+        .filter_map(|entry| entry.coverage.as_ref())
+        .fold((0_u64, 0_u64), |(covered, judged), coverage| {
+            (
+                covered.saturating_add(coverage.covered_lines),
+                judged.saturating_add(coverage.judged_lines),
+            )
+        });
+    (judged_lines > 0).then(|| RangeCoverage::new(covered_lines, judged_lines))
 }
 
 /// Sums one engine's scores into the corpus standing.
@@ -243,17 +262,26 @@ pub fn totals(scores: &[RepoScore]) -> CorpusTotals {
         false_negatives: sum(|score| score.false_negatives),
         false_positives: sum(|score| score.false_positives),
         clusters_total: sum(|score| score.clusters_total),
+        matched_in_coverage: matched_in_coverage(scores),
         score_percent: percent(correct, judged),
         ..CorpusTotals::default()
     }
 }
 
-/// Adds the measured cost of every run to an engine's totals.
+/// [CORPUS-SCORE-COST-COMPLETE] Adds cost only when every scored run was measured.
 pub fn add_costs(totals: &mut CorpusTotals, costs: &BTreeMap<String, super::RunCost>) {
-    totals.elapsed_ms = costs.values().map(|cost| cost.elapsed_ms).sum();
-    totals.peak_rss_mb = costs.values().filter_map(|cost| cost.peak_rss_mb).max();
-    let cpu: Vec<f64> = costs.values().filter_map(|cost| cost.cpu_seconds).collect();
-    totals.cpu_seconds = (!cpu.is_empty()).then(|| cpu.iter().sum());
+    if totals.repos == 0 || costs.len() != totals.repos {
+        totals.elapsed_ms = None;
+        totals.peak_rss_mb = None;
+        totals.cpu_seconds = None;
+        return;
+    }
+    totals.elapsed_ms = Some(costs.values().map(|cost| cost.elapsed_ms).sum());
+    totals.peak_rss_mb = costs
+        .values()
+        .map(|cost| cost.peak_rss_mb)
+        .try_fold(0, |peak, rss| Some(peak.max(rss?)));
+    totals.cpu_seconds = costs.values().map(|cost| cost.cpu_seconds).sum();
 }
 
 /// The movement from one engine's corpus standing to another's.
@@ -274,8 +302,8 @@ pub struct CorpusChange {
     pub false_positives: i64,
     /// Clusters published. Description, never scored.
     pub clusters_total: i64,
-    /// Wall milliseconds.
-    pub elapsed_ms: i64,
+    /// Wall milliseconds, absent when either engine lacked a measurement.
+    pub elapsed_ms: Option<i64>,
     /// CPU seconds, absent when either side went unmeasured.
     pub cpu_seconds: Option<f64>,
     /// Peak resident mebibytes, absent when either side went unmeasured.
@@ -303,7 +331,10 @@ pub fn corpus_change(before: &CorpusTotals, after: &CorpusTotals) -> CorpusChang
         false_negatives: moved(before.false_negatives, after.false_negatives),
         false_positives: moved(before.false_positives, after.false_positives),
         clusters_total: moved(before.clusters_total, after.clusters_total),
-        elapsed_ms: moved(before.elapsed_ms, after.elapsed_ms),
+        elapsed_ms: before
+            .elapsed_ms
+            .zip(after.elapsed_ms)
+            .map(|(before, after)| moved(before, after)),
         cpu_seconds: moved_measured(before.cpu_seconds, after.cpu_seconds),
         peak_rss_mb: before
             .peak_rss_mb

@@ -262,3 +262,59 @@ fn a_literal_only_copy_inside_one_file_is_a_finding() -> Result<()> {
     assert_reported(&texts, &MANY_HOLES_METHOD_NAMES, MANY_HOLES_WHY);
     Ok(())
 }
+
+/// [RANK-STRUCTURAL-ONLY-CLONE-GUARD] Two generic variants in one file are
+/// separate authored copies even when a wider sync/async pair also exists.
+const PROVIDER_FIXTURE: &str = "csharp-same-file-provider-with-sibling";
+const PROVIDER_SYNC_FILE: &str = "Providers.cs";
+const PROVIDER_ASYNC_FILE: &str = "ProvidersAsync.cs";
+const FIRST_PROVIDER_LINES: RangeInclusive<u64> = 4..=25;
+const SECOND_PROVIDER_LINES: RangeInclusive<u64> = 28..=49;
+const PROVIDER_MIN_NODES: u32 = 30;
+const PROVIDER_FILE_COUNT: u64 = 2;
+const PROVIDER_PAIR_SIZE: u64 = 2;
+const PROVIDER_FINDING_COUNT: u64 = 2;
+const PROVIDER_DUPLICATED_LINES: u64 = 46;
+
+#[test]
+fn same_file_generic_variants_survive_a_wider_cross_file_clone() -> Result<()> {
+    let report = run_report(&fixture(PROVIDER_FIXTURE), PROVIDER_MIN_NODES)?;
+    assert_eq!(
+        field(&report, "files_analysed").as_u64(),
+        Some(PROVIDER_FILE_COUNT)
+    );
+    let cross_file = expect_cluster_spanning(&report, &[PROVIDER_SYNC_FILE, PROVIDER_ASYNC_FILE])?;
+    assert_eq!(cluster_size(cross_file), PROVIDER_PAIR_SIZE);
+    let within_file = clusters(&report)
+        .iter()
+        .find(|cluster| has_distinct_provider_occurrences(cluster))
+        .ok_or_else(|| anyhow::anyhow!("generic variants in one file disappeared: {report:#}"))?;
+    assert_eq!(cluster_size(within_file), PROVIDER_PAIR_SIZE);
+    assert_ne!(field(within_file, "kind").as_str(), Some("structural_only"));
+    assert!(field(within_file, "mass")
+        .as_u64()
+        .is_some_and(|mass| mass > 0));
+    assert!(field(field(&report, "metrics"), "clusters_total")
+        .as_u64()
+        .is_some_and(|count| count >= PROVIDER_FINDING_COUNT));
+    assert!(duplicated_loc_for(&report, PROVIDER_SYNC_FILE) >= PROVIDER_DUPLICATED_LINES);
+    Ok(())
+}
+
+fn has_distinct_provider_occurrences(cluster: &serde_json::Value) -> bool {
+    let in_file: Vec<_> = occurrences(cluster)
+        .iter()
+        .filter(|occurrence| {
+            occurrence_path(occurrence).is_ok_and(|path| path.ends_with(PROVIDER_SYNC_FILE))
+        })
+        .collect();
+    in_file.len() == usize::try_from(PROVIDER_PAIR_SIZE).unwrap_or_default()
+        && in_file.iter().any(|occurrence| {
+            occurrence_line_span(occurrence)
+                == (*FIRST_PROVIDER_LINES.start(), *FIRST_PROVIDER_LINES.end())
+        })
+        && in_file.iter().any(|occurrence| {
+            occurrence_line_span(occurrence)
+                == (*SECOND_PROVIDER_LINES.start(), *SECOND_PROVIDER_LINES.end())
+        })
+}

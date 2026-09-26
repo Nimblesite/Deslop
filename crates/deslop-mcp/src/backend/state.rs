@@ -279,6 +279,7 @@ impl McpBackend for LiveBackend {
         let reply: FindSimilarResult = wire::decode(FIND_SIMILAR, &self.ipc_socket, result)?;
         Ok(FindSimilarOutput {
             clusters: reply.clusters,
+            existing: reply.existing,
             below_min_nodes: reply.below_min_nodes,
         })
     }

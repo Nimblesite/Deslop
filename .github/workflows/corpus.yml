@@ -65,7 +65,7 @@ jobs:
       # Clones are pinned by SHA, so the cache key only has to track the
       # manifests. A moved upstream tag is caught by fetch-corpus.mjs anyway.
       - name: Cache corpus clones
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .corpus
           key: corpus-${{ hashFiles('corpus/*.json') }}

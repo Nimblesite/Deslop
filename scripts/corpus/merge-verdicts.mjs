@@ -26,7 +26,7 @@
 // Usage: merge-verdicts.mjs [--dry-run] [--report <path>] <judged-folder>...
 //   e.g. merge-verdicts.mjs ~/clone-judging-codex ~/clone-judging-glm5.3
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -56,6 +56,13 @@ const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
 const writeJson = (path, value) => writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 const isDirectory = (path) => existsSync(path) && statSync(path).isDirectory();
 
+/// Symlinks and repeated arguments cannot turn one pass into independent evidence.
+const assertIndependentFolders = (folders) => {
+  if (new Set(folders.map((folder) => realpathSync(folder))).size !== folders.length) {
+    throw new Error("independent judging folders are required; one folder was supplied more than once");
+  }
+};
+
 /// The command line, as flags and judged folders.
 const parseArguments = (argv) => {
   const folders = [];
@@ -79,6 +86,18 @@ const parseArguments = (argv) => {
 /// The repository directories one judged folder holds, by workspace name.
 const workspacesIn = (folder) =>
   readdirSync(folder).filter((name) => existsSync(join(folder, name, VERDICTS_FILE)));
+
+/// An omitted repository is an unfinished pass, not an empty verdict.
+const assertOneRepositorySet = (folders) => {
+  const sets = folders.map((folder) => [folder, workspacesIn(folder).sort()]);
+  const [[first, expected]] = sets;
+  for (const [judge, names] of sets) {
+    if (JSON.stringify(names) !== JSON.stringify(expected)) {
+      throw new Error(`${judge} and ${first} must judge the same repositories`);
+    }
+  }
+  return expected;
+};
 
 /// The url and commit a workspace was built at.
 const pinned = (workspace) => {
@@ -181,7 +200,7 @@ const mergeRepository = (root, folders, slug) => {
     judge,
     readJson(join(workspace, VERDICTS_FILE)),
   ]);
-  const result = mergePass({ register, pairs, passes });
+  const result = mergePass({ register, pairs, passes, expectedJudges: folders.length });
   if (result.merged.clearly_out.length === 0 && !result.merged.clearly_out_status) {
     result.merged.clearly_out_status = clearlyOutStatus(result, pairs.size);
   }
@@ -225,7 +244,8 @@ const main = () => {
   for (const folder of folders) {
     if (!isDirectory(folder)) throw new Error(`not a judging folder: ${folder}`);
   }
-  const slugs = [...new Set(folders.flatMap(workspacesIn))].sort();
+  assertIndependentFolders(folders);
+  const slugs = assertOneRepositorySet(folders);
   if (slugs.length === 0) throw new Error(`no ${VERDICTS_FILE} under any of ${folders.join(", ")}`);
   const repos = slugs.map((slug) => mergeRepository(options.root, folders, slug));
 

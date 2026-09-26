@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 use deslop_core::{
     live::wire::{ChangeSummary, EmbeddingModelInfo},
-    report::{CacheStats, ReportCluster},
+    report::{CacheStats, ReportCluster, ReportOccurrence},
     wire_generated::{PairComparison, PairComparisonParams},
     CoreError, EmbeddingProvenance, EmbeddingSpec, Report,
 };
@@ -257,6 +257,9 @@ pub enum FindSimilarInput<'a> {
 pub struct FindSimilarOutput {
     /// Matching clusters, worst-first.
     pub clusters: Vec<ReportCluster>,
+    /// Places whose normalised code equals part of a snippet and that no
+    /// returned cluster lists ([MCP-TOOL-FINDSIMILAR-EXISTING]).
+    pub existing: Vec<ReportOccurrence>,
     /// True when the snippet / range produced no fingerprint because
     /// it was smaller than `min_nodes`.
     pub below_min_nodes: bool,

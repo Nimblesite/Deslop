@@ -31,6 +31,8 @@ mod cache_key_lossy_utf8_collision;
 mod cache_retention;
 #[path = "cli.rs"]
 mod cli;
+#[path = "clone_extent_recovery.rs"]
+mod clone_extent_recovery;
 #[path = "cluster_extent_alignment.rs"]
 mod cluster_extent_alignment;
 #[path = "cluster_extent_statement_runs.rs"]
@@ -59,6 +61,8 @@ mod cross_language;
 mod csharp_issue_66_route_mapping;
 #[path = "csharp_merged_clone_families.rs"]
 mod csharp_merged_clone_families;
+#[path = "csharp_sync_async_call_targets.rs"]
+mod csharp_sync_async_call_targets;
 #[path = "csharp_type1_type2_byte_truth.rs"]
 mod csharp_type1_type2_byte_truth;
 #[path = "csharp_unrelated_xunit_classes.rs"]
@@ -91,6 +95,8 @@ mod embedding_non_finite;
 mod embedding_perf;
 #[path = "embedding_route_invariance.rs"]
 mod embedding_route_invariance;
+#[path = "fsharp_call_target_families.rs"]
+mod fsharp_call_target_families;
 #[path = "fsharp_deep_match_stack_overflow.rs"]
 mod fsharp_deep_match_stack_overflow;
 #[path = "fsharp_issue_336_data_table_category.rs"]
@@ -99,6 +105,8 @@ mod fsharp_issue_336_data_table_category;
 mod fsharp_issue_339_sibling_window_rename;
 #[path = "fsharp_issue_339_token_fallback_rename.rs"]
 mod fsharp_issue_339_token_fallback_rename;
+#[path = "fsharp_scaffolding.rs"]
+mod fsharp_scaffolding;
 #[path = "generated_banner.rs"]
 mod generated_banner;
 #[path = "go_vendor_exclusion.rs"]
@@ -168,6 +176,8 @@ mod metric_language_agnostic;
 #[path = "metrics_folder_rollup.rs"]
 mod metrics_folder_rollup;
 mod metrics_weighted_wire_refusal;
+#[path = "minified_artifact_exclusion.rs"]
+mod minified_artifact_exclusion;
 #[path = "ollama_failures.rs"]
 mod ollama_failures;
 #[path = "operator_drift_is_not_duplication.rs"]

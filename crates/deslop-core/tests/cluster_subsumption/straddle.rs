@@ -4,11 +4,22 @@
 use deslop_core::{cluster::Cluster, state::FileRegistry};
 
 use super::{
-    in_rank_order, occurrences, published_views, published_weighted, ranked_with_sources, spans,
-    HEAVY_NODES, LIGHTEST_NODES, LIGHT_NODES, MEMBER_NODES,
+    in_rank_order, occurrences, published_across, published_views, published_weighted,
+    ranked_with_sources, spans, HEAVY_NODES, LIGHTEST_NODES, LIGHT_NODES, MEMBER_NODES,
 };
 
-/// Source length and copied byte for the two unmergeable exact windows.
+const SAME_FILE_SOURCE: &str = "HtmlOperations.fs";
+const FIRST_COPY: (usize, usize) = (0, 200);
+const SECOND_COPY: (usize, usize) = (300, 500);
+const SHIFTED_FIRST_COPY: (usize, usize) = (50, 250);
+const SHIFTED_SECOND_COPY: (usize, usize) = (350, 550);
+const NESTED_FIRST_COPY: (usize, usize) = (50, 200);
+const NESTED_SECOND_COPY: (usize, usize) = (350, 500);
+const SHARED_LEFT_OVERHANG: (usize, usize) = (0, 40);
+const SHARED_RIGHT_OVERHANG: (usize, usize) = (210, 250);
+const SHARED_CORE: (usize, usize) = (50, 200);
+const SHARED_LEFT_WINDOW: (usize, usize) = (0, 200);
+const SHIFTED_RIGHT_WINDOW: (usize, usize) = (50, 250);
 const COPIED_SOURCE_LEN: usize = 250;
 const COPIED_BYTE: u8 = b'x';
 const COPIED_MEMBER_COUNT: usize = 2;
@@ -17,8 +28,8 @@ const LEFT_WINDOW_RANGE: (usize, usize) = (0, 200);
 const RIGHT_WINDOW_RANGE: (usize, usize) = (50, COPIED_SOURCE_LEN);
 const COPIED_CORE_RANGE: (usize, usize) = (50, 200);
 
-/// [PIPELINE-CLUSTER-SUBSUME-STRADDLE] If source bytes prove the union is
-/// copied but there is no AST sibling run to join, neither window is padding.
+/// If the whole source union is copied but cannot form an AST sibling run,
+/// neither window is discarded as padding.
 fn copied_windows() -> Vec<Cluster> {
     let mut registry = FileRegistry::new();
     let alpha = registry.register(COPIED_PATHS[0].into());
@@ -49,6 +60,55 @@ fn copied_straddling_windows_are_not_discarded_without_a_join() {
             vec![RIGHT_WINDOW_RANGE; COPIED_MEMBER_COUNT]
         ]
     );
+}
+
+/// [PIPELINE-CLUSTER-SUBSUME-STRADDLE] A separately admitted copy in a
+/// window's exclusive overhang proves that end is duplicated content.
+/// The shifted window lacks such evidence and must not erase the full copy.
+#[test]
+fn copied_overhang_keeps_its_full_window() {
+    let full = [SHARED_LEFT_WINDOW; 2];
+    let shifted = [SHIFTED_RIGHT_WINDOW; 2];
+    let core = [SHARED_CORE; 2];
+    let left_copy = [SHARED_LEFT_OVERHANG; 2];
+    let right_copy = [SHARED_RIGHT_OVERHANG; 2];
+    assert_eq!(
+        sorted_spans(&[full, shifted, core, left_copy]),
+        vec![full.to_vec()]
+    );
+    assert_eq!(
+        sorted_spans(&[full, shifted, core, right_copy]),
+        vec![shifted.to_vec()]
+    );
+    assert_eq!(
+        sorted_spans(&[full, shifted, core, left_copy, right_copy]),
+        vec![full.to_vec(), shifted.to_vec()]
+    );
+}
+
+/// Published occurrence spans in stable order for both supported ends.
+fn sorted_spans(views: &[[(usize, usize); 2]]) -> Vec<Vec<(usize, usize)>> {
+    let mut actual = spans(&published_views(views));
+    actual.sort_unstable();
+    actual
+}
+
+/// [PIPELINE-CLUSTER-SUBSUME-STRADDLE] Multiple occurrences in one file
+/// make geometric overlap ambiguous: two shifted, copied member runs are
+/// distinct findings even when a shorter pair sits inside both.
+#[test]
+fn same_file_shifted_copies_keep_both_full_windows() {
+    let mut registry = FileRegistry::new();
+    let file = registry.register(SAME_FILE_SOURCE.into());
+    let first = vec![(file, FIRST_COPY), (file, SECOND_COPY)];
+    let second = vec![(file, SHIFTED_FIRST_COPY), (file, SHIFTED_SECOND_COPY)];
+    let nested = vec![(file, NESTED_FIRST_COPY), (file, NESTED_SECOND_COPY)];
+    let clusters = published_across(&[first.clone(), second.clone(), nested]);
+    let mut actual = occurrences(&clusters);
+    actual.sort_unstable();
+    let mut expected = vec![first, second];
+    expected.sort_unstable();
+    assert_eq!(actual, expected, "both copied runs keep their full extent");
 }
 
 /// [PIPELINE-CLUSTER-SUBSUME-STRADDLE] Two windows that overhang one

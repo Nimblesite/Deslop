@@ -17,7 +17,7 @@ use std::{fs, path::Path};
 
 use anyhow::{Context, Result};
 use deslop_test_support::{
-    corpus::{repo_root, NOT_A_REPOSITORY},
+    corpus::{describes_a_repository, repo_root},
     read_json,
 };
 use serde_json::Value;
@@ -30,11 +30,7 @@ fn manifests() -> Result<Vec<(String, Value)>> {
     let mut found = Vec::new();
     for entry in fs::read_dir(&directory).context("corpus/ must be readable")? {
         let path = entry?.path();
-        if path
-            .extension()
-            .is_some_and(|extension| extension == "json")
-            && !NOT_A_REPOSITORY.contains(&stem(&path).as_str())
-        {
+        if describes_a_repository(&path)? {
             let manifest: Value = read_json(&path)?;
             found.push((stem(&path), manifest));
         }

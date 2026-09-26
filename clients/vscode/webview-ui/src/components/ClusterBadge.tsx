@@ -1,7 +1,8 @@
 import { KIND_COLOR, SEVERITY_DOT, FONT } from "../theme";
-import { kindTitle, severityLabel, type ClusterKind, type Severity } from "../../../src/types/report";
+import { kindChip, kindTaxonomy, kindTitle, severityLabel, type ClusterKind, type Severity } from "../../../src/types/report";
 
 // [CLONE-KIND-COLOR] Colour shows the category; the glyph shows diagnostic severity.
+// [VSIX-CLONE-TYPE-CHIP] The same compact taxonomy appears on every cluster badge.
 export function ClusterBadge({
   kind,
   severity,
@@ -32,13 +33,23 @@ export function ClusterBadge({
       }}
     >
       <span aria-hidden>{dot}</span>
-      {label ?? kindTitle(kind)}
+      <span
+        style={{
+          border: `1px solid ${colour}`,
+          borderRadius: "3px",
+          padding: "1px 4px",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {kindChip(kind)}
+      </span>
+      <span>{label ?? kindTitle(kind)}</span>
     </span>
   );
 }
 
 function badgeTitle(kind: ClusterKind, severity: Severity): string {
-  return `${kindTitle(kind)}. ${severityTitle(severity)}`;
+  return `${kindTitle(kind)} (${kindTaxonomy(kind)}). ${severityTitle(severity)}`;
 }
 
 function severityTitle(severity: Severity): string {

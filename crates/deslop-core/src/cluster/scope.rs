@@ -19,6 +19,7 @@ use crate::{
     cluster_filters::function_kinds,
     fingerprint::Fingerprint,
     state::FileId,
+    tokens::resolve_fingerprint_nodes,
 };
 
 /// The authored declaration enclosing an occurrence, resolved against
@@ -83,6 +84,14 @@ impl<'trees, L: BuildHasher> DeclarationScopes<'trees, L> {
         self.trees
             .get(&member.file_id)
             .is_some_and(|tree| node_aligned_at(tree, member.byte_range))
+    }
+
+    /// The nodes the occurrence covers — one node, or the siblings of a
+    /// window — or `None` when its range resolves to neither
+    /// ([PIPELINE-CLUSTER-EXACT-SCOPE-MATCHED]).
+    pub(crate) fn top_nodes(&self, member: &Fingerprint) -> Option<Vec<&'trees NormalizedNode>> {
+        let tree = self.trees.get(&member.file_id)?;
+        resolve_fingerprint_nodes(tree, member)
     }
 
     /// Whether the occurrence is a run of whole authored functions: its

@@ -72,7 +72,7 @@ impl PipelineSession {
         // rescue below.
         let PairingOutcome {
             trees,
-            pairs,
+            mut pairs,
             embedding_outcome,
         } = self.build_candidate_pairs(config, fingerprints, &signatures, &lsh_source)?;
         ledger.record(
@@ -88,6 +88,24 @@ impl PipelineSession {
             Some(already) => already,
             None => self.materialize_trees()?,
         };
+        // Rescue annotates exact high-overlap candidates before ranking
+        // builds its memoising pair measurer.
+        let rescue_input = pairs.len();
+        let stage_started = Instant::now();
+        apply_shared_subtree_rescue(
+            &mut pairs,
+            fingerprints,
+            &trees,
+            &self.sources,
+            &self.file_languages,
+            usize::try_from(self.min_nodes).unwrap_or(usize::MAX),
+        );
+        ledger.record(
+            "shared_subtree_rescue",
+            rescue_input,
+            pairs.len(),
+            stage_started,
+        );
         let judge = super::pair_compare::ClusterKindMeasurer::new(
             self,
             fingerprints,
@@ -137,8 +155,8 @@ impl PipelineSession {
         }))
     }
 
-    /// Runs the shared-subtree rescue, the per-edge content gate, the
-    /// transitive closure and the verbatim-subgroup split — the middle of
+    /// Runs the per-edge content gate, transitive closure and
+    /// verbatim-subgroup split after shared-subtree rescue — the middle of
     /// the render pipeline, extracted so [`PipelineSession::render`]
     /// stays under the size bar.
     fn partition_and_split(
@@ -154,28 +172,6 @@ impl PipelineSession {
         Vec<Vec<crate::fingerprint::Fingerprint>>,
         Vec<crate::pair::FusedCluster>,
     ) {
-        // [FUSED-SHARED-SUBTREE] (gh #408): measure the structural
-        // overlap the anchor axis discards before survival drops the
-        // enclosing Type-3 pair and leaves only its fragment views. The
-        // content gate runs inside the pass, over each pair's aligned
-        // core ([FUSED-SHARED-SUBTREE-CORE]): a rescue-admitted pair must
-        // be a copy in the code it shares, not merely share a shape.
-        let rescue_input = pairs.len();
-        let stage_started = Instant::now();
-        apply_shared_subtree_rescue(
-            &mut pairs,
-            fingerprints,
-            trees,
-            &self.sources,
-            &self.file_languages,
-            usize::try_from(self.min_nodes).unwrap_or(usize::MAX),
-        );
-        ledger.record(
-            "shared_subtree_rescue",
-            rescue_input,
-            pairs.len(),
-            stage_started,
-        );
         // [CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY] The shape family: every
         // member the saturated candidates connect *before* the content
         // gate decides which edges weld. Noise conviction reads this

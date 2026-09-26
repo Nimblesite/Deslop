@@ -104,9 +104,10 @@
 //!   stripping, so two unrelated tables cluster at `structural=1.00`. A
 //!   table of distinct named constants is data, not extractable logic.
 //!   One rule, per-language only in the grammar of "a top-level constant
-//!   declaration": Python `NAME = <literal>` (#133) and Rust `const` /
-//!   `static` items (#362). Suppressed only when the members differ in raw
-//!   bytes (a verbatim copy survives).
+//!   declaration": Python `NAME = <literal>` (#133), Rust `const` /
+//!   `static` items (#362), ECMAScript `const`/`let`/`var`, and F#
+//!   module-level `let NAME = <literal>` bindings. Suppressed only when
+//!   the members differ in raw bytes (a verbatim copy survives).
 //!
 //! The filter is purely additive: it never re-routes a `nearly_identical`
 //! cluster as `identical`, only suppresses noise. Any cluster whose
@@ -122,6 +123,7 @@ mod declaration_family;
 mod ecmascript;
 mod family;
 mod forwarding;
+mod fsharp_scaffolding;
 mod node_search;
 mod override_marker;
 mod polymorphic;
@@ -341,6 +343,7 @@ fn language_specific_noise(
         "dart" => (dart::is_dart_class_field_declaration_cluster(snippets, cache)
             || dart::is_dart_widget_scaffold_cluster(snippets))
         .then_some(generic),
+        "fsharp" => fsharp_scaffolding::is_import_scaffolding_cluster(snippets).then_some(generic),
         "python" => python_noise(snippets),
         "rust" => rust_noise(snippets).then_some(generic),
         "javascript" | "typescript" | "tsx" => {

@@ -33,6 +33,7 @@ const LARGE_SPACING = "24px";
 const MEDIUM_SPACING = "16px";
 const RIGHT_ALIGNMENT = "right";
 const MONOSPACE_CLASS = "mono";
+const CLUSTER_ROW_CLASS = "report-cluster-row";
 
 // [FACET-REPORT-WEBVIEW] Every option list derives from the shared
 // registries (the #170/#198 anti-drift rule): severities from SEVERITIES,
@@ -142,16 +143,13 @@ function ReportApp() {
           const slug = clusterSlug(cluster);
           return (
             <li
+              class={CLUSTER_ROW_CLASS}
               key={cluster.id}
               onClick={() => {
                 selectedClusterId.value = cluster.id;
                 post({ kind: "open/cluster", id: cluster.id });
               }}
               style={{
-                display: GRID_DISPLAY,
-                gridTemplateColumns: "auto minmax(0,1fr) auto auto",
-                gap: MEDIUM_SPACING,
-                alignItems: "center",
                 padding: "12px 20px",
                 background: i % 2 === 0 ? COLOR.surfaceContainerLow : COLOR.surface,
                 cursor: "pointer",

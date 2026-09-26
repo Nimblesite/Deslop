@@ -21,6 +21,10 @@ const CANARY_SAMPLE_STRIDE: usize = 7_919;
 
 /// Stride between synthetic two-statement sibling-window fingerprints.
 const CANARY_WINDOW_STRIDE: usize = 997;
+/// Structural mass of one statement in this fixed synthetic tree.
+const CANARY_STATEMENT_NODES: usize = 6;
+/// Structural mass of a two-statement window.
+const CANARY_WINDOW_NODES: usize = CANARY_STATEMENT_NODES * 2;
 
 /// Byte offsets inside one canary statement, relative to its start. The
 /// statement's shape is fixed, so every node boundary is a named offset
@@ -116,13 +120,21 @@ fn canary_statement(file_id: FileId, index: usize) -> NormalizedNode {
 /// reversion to per-fingerprint root resolution multiplies its work by
 /// the statement count and is unmissable in the suite's wall time.
 #[test]
-fn fold_scales_to_a_corpus_shaped_population_and_stays_byte_faithful() {
+fn fold_scales_to_a_corpus_shaped_population_and_stays_byte_faithful() -> Result<(), String> {
     let mut registry = FileRegistry::new();
     let file_id = registry.register(PathBuf::from("canary.py"));
     let statements: Vec<NormalizedNode> = (0..CANARY_STATEMENTS)
         .map(|index| canary_statement(file_id, index))
         .collect();
     let tree = file_root(file_id, statements);
+    let [first_statement, second_statement, ..] = tree.children.as_slice() else {
+        return Err("the canary must have two statements".into());
+    };
+    let exact_hash = crate::fingerprint::subtree_hash(
+        first_statement,
+        &mut crate::fingerprint::HashScratch::default(),
+    );
+    let window_hash = crate::sibling::window_hash_for_nodes(&[first_statement, second_statement]);
 
     // One exact-node fingerprint per statement, plus a sparse set of
     // two-statement sibling windows — the range shape no exact node owns.
@@ -130,13 +142,13 @@ fn fold_scales_to_a_corpus_shaped_population_and_stays_byte_faithful() {
         .map(|index| {
             let start = index.saturating_mul(CANARY_STATEMENT_SPAN);
             Fingerprint {
-                hash: [1; 32],
+                hash: exact_hash,
                 file_id,
                 byte_range: ByteRange {
                     start,
                     end: start.saturating_add(STATEMENT_END),
                 },
-                node_count: 6,
+                node_count: CANARY_STATEMENT_NODES,
             }
         })
         .collect();
@@ -148,10 +160,10 @@ fn fold_scales_to_a_corpus_shaped_population_and_stays_byte_faithful() {
             .saturating_mul(CANARY_STATEMENT_SPAN)
             .saturating_add(STATEMENT_END);
         fingerprints.push(Fingerprint {
-            hash: [2; 32],
+            hash: window_hash,
             file_id,
             byte_range: ByteRange { start, end },
-            node_count: 12,
+            node_count: CANARY_WINDOW_NODES,
         });
     }
 
@@ -210,4 +222,5 @@ fn fold_scales_to_a_corpus_shaped_population_and_stays_byte_faithful() {
         "a two-statement window carries a longer kind stream than one \
          statement, so its signature must differ"
     );
+    Ok(())
 }

@@ -45,8 +45,13 @@ type FindSimilarRequest {
   max_results: Option<Int>
 }
 
+# [MCP-TOOL-FINDSIMILAR-EXISTING] `existing` lists the corpus locations
+# whose normalised code equals part of a snippet and that no returned
+# cluster already lists — how a copy of code that exists once is found.
+# Always empty for a range query.
 type FindSimilarResult {
   clusters: List<ReportCluster>
+  existing: List<ReportOccurrence>
   below_min_nodes: Bool
   total_occurrences: Int
 }

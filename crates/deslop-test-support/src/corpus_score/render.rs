@@ -11,6 +11,7 @@
 //! reader has to reassemble by eye.
 
 mod cells;
+mod coverage;
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -18,6 +19,7 @@ use cells::{
     counted, cpu, header, megabytes, row, score_cell, seconds, signed, signed_amount,
     signed_fraction, ABSENT,
 };
+use coverage::{coverage_section, coverage_value};
 use serde::Serialize;
 
 use super::{
@@ -149,8 +151,8 @@ fn standing_cost(card: &Scorecard) -> Vec<String> {
         standing_row(
             card,
             "wall",
-            &|totals| seconds(totals.elapsed_ms),
-            moved.map(|moved| signed_amount(Some(moved.elapsed_ms), "ms")),
+            &|totals| totals.elapsed_ms.map_or_else(|| ABSENT.to_owned(), seconds),
+            moved.map(|moved| signed_amount(moved.elapsed_ms, "ms")),
         ),
         standing_row(
             card,
@@ -165,6 +167,16 @@ fn standing_cost(card: &Scorecard) -> Vec<String> {
             moved.map(|moved| signed_amount(moved.peak_rss_mb, "MB")),
         ),
     ]
+}
+
+/// Found positive pairs' line extent is visible but never changes the score.
+fn standing_coverage(card: &Scorecard) -> String {
+    standing_row(
+        card,
+        "matched IN coverage",
+        &|totals| coverage_value(totals.matched_in_coverage.as_ref()),
+        card.change.as_ref().map(|_| ABSENT.to_owned()),
+    )
 }
 
 /// The corpus standing: one measure per row, one column per engine.
@@ -182,14 +194,16 @@ fn totals_section(card: &Scorecard) -> Vec<String> {
         "## Corpus standing".to_owned(),
         String::new(),
         "Score is `correct / judged` over every judged pair in the corpus. Each engine \
-         has its own column, so every measure reads across one row. Clusters, wall time \
-         and memory are description — they are reported beside the score and never \
-         folded into it."
+         has its own column, so every measure reads across one row. Matched IN coverage \
+         is covered / judged lines among reported CLEARLY IN pairs; missed and CLEARLY OUT \
+         pairs are excluded. Coverage, clusters, wall time and memory are description — \
+         reported beside the score and never folded into it or its gate."
             .to_owned(),
         String::new(),
     ];
     lines.extend(header(&columns));
     lines.extend(standing_accuracy(card));
+    lines.push(standing_coverage(card));
     lines.extend(standing_cost(card));
     lines.push(String::new());
     lines
@@ -438,6 +452,7 @@ pub fn scorecard(card: &Scorecard) -> String {
     ];
     lines.extend(totals_section(card));
     lines.extend(accuracy_section(card));
+    lines.extend(coverage_section(card));
     lines.extend(cost_section(card));
     lines.extend(gate_section(card));
     lines.extend(defects_section(card));

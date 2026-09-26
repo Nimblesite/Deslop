@@ -5,7 +5,7 @@
 // commentary: a reader must be able to reproduce the document by re-running the
 // script, and prose written here could not be reproduced or diffed.
 
-import { MISCITED, VERDICTS } from "./pass.mjs";
+import { INCOMPLETE, MISCITED, VERDICTS } from "./pass.mjs";
 
 /// Labels for the disagreements that are not simply two verdicts differing.
 /// Each names the comparison that produced the row, never a diagnosis of it.
@@ -48,6 +48,16 @@ const rowsFor = (repo) => [
       kind: MISCITED_KIND,
       occurrences: entry.shown,
       verdicts: [`${entry.judge} filed=${entry.filed.join(", ")}`],
+      reasons: [],
+    })),
+  ...repo.result.refused
+    .filter((entry) => entry.kind === INCOMPLETE)
+    .map((entry) => ({
+      repository: repo.name,
+      candidate: String(entry.candidate),
+      kind: INCOMPLETE,
+      occurrences: entry.shown,
+      verdicts: entry.filed,
       reasons: [],
     })),
   ...repo.result.contradicted.map((entry) => ({

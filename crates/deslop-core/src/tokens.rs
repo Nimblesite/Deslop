@@ -7,7 +7,12 @@
 //! parser, so two Type-2 clones produce identical token streams and Type-3
 //! near-misses produce streams with high k-gram Jaccard.
 
-use crate::{ast::NormalizedNode, boilerplate::is_boilerplate, fingerprint::Fingerprint};
+use crate::{
+    ast::NormalizedNode,
+    boilerplate::is_boilerplate,
+    fingerprint::{subtree_hash, Fingerprint, HashScratch},
+    sibling::window_matches_hash,
+};
 
 /// k-gram width used by the token LSH pass. Matches the value recommended by
 /// the [TECH-TOKEN-SOURCERERCC] literature: short enough to keep Jaccard
@@ -32,12 +37,8 @@ pub fn token_stream_for_fingerprint(
     root: &NormalizedNode,
     fingerprint: &Fingerprint,
 ) -> Option<Vec<&'static str>> {
-    let node = locate(
-        root,
-        fingerprint.byte_range.start,
-        fingerprint.byte_range.end,
-    )?;
-    Some(token_stream(node))
+    let nodes = resolve_fingerprint_nodes(root, fingerprint)?;
+    Some(nodes.into_iter().flat_map(token_stream).collect())
 }
 
 /// Like [`token_stream_for_fingerprint`], but skips kinds that are
@@ -54,13 +55,9 @@ pub fn token_stream_for_fingerprint_with_language(
     language: &str,
 ) -> Option<Vec<&'static str>> {
     let mut out = Vec::new();
-    collect_tokens_in_range(
-        root,
-        fingerprint.byte_range.start,
-        fingerprint.byte_range.end,
-        &mut out,
-        Some(language),
-    )?;
+    for node in resolve_fingerprint_nodes(root, fingerprint)? {
+        emit_node_tokens(node, &mut out, Some(language));
+    }
     Some(out)
 }
 
@@ -149,62 +146,33 @@ fn walk_skipping_boilerplate(node: &NormalizedNode, out: &mut Vec<&'static str>,
     }
 }
 
-/// Returns the subtree of `node` whose byte range exactly matches
-/// `[start, end)`, searching depth-first. Returns `None` when no such subtree
-/// exists (e.g. because the fingerprint belongs to a synthetic sibling range).
-fn locate(node: &NormalizedNode, start: usize, end: usize) -> Option<&NormalizedNode> {
-    if node.byte_range.start == start && node.byte_range.end == end {
-        return Some(node);
-    }
-    if node.byte_range.start > start || node.byte_range.end < end {
+/// Resolves the exact hashed subtree or synthetic sibling window behind a
+/// fingerprint. Grammar wrappers may share a byte span with their child;
+/// range alone would make token, content and overlap signals inspect the
+/// wrong node ([FUSED-SHARED-SUBTREE-BOUND]).
+pub(crate) fn resolve_fingerprint_nodes<'tree>(
+    node: &'tree NormalizedNode,
+    fingerprint: &Fingerprint,
+) -> Option<Vec<&'tree NormalizedNode>> {
+    let range = fingerprint.byte_range;
+    if node.byte_range.start > range.start || node.byte_range.end < range.end {
         return None;
     }
-    for child in &node.children {
-        if let Some(found) = locate(child, start, end) {
-            return Some(found);
-        }
-    }
-    None
-}
-
-/// Emits tokens for an exact node or synthetic sibling window range.
-fn collect_tokens_in_range(
-    node: &NormalizedNode,
-    start: usize,
-    end: usize,
-    out: &mut Vec<&'static str>,
-    language: Option<&str>,
-) -> Option<()> {
-    let resolved = resolve_range_nodes(node, start, end)?;
-    for member in resolved {
-        emit_node_tokens(member, out, language);
-    }
-    Some(())
-}
-
-/// Resolves a fingerprint byte range to the nodes it spans: the exact
-/// node when one exists, else the contiguous child window a synthetic
-/// sibling range covers. Shared by the token stream extraction, the
-/// content-agreement walk ([FUSED-CONTENT-GATE]) and the shared-subtree
-/// overlap ([FUSED-SHARED-SUBTREE]) so all three signals always see
-/// the same code.
-pub(crate) fn resolve_range_nodes(
-    node: &NormalizedNode,
-    start: usize,
-    end: usize,
-) -> Option<Vec<&NormalizedNode>> {
-    if node.byte_range.start == start && node.byte_range.end == end {
+    if exact_fingerprint_node(node, fingerprint) {
         return Some(vec![node]);
     }
-    if node.byte_range.start > start || node.byte_range.end < end {
-        return None;
-    }
-    if let Some(window) = matching_child_window(node, start, end) {
-        return Some(window);
-    }
-    node.children
-        .iter()
-        .find_map(|child| resolve_range_nodes(child, start, end))
+    matching_fingerprint_window(node, fingerprint).or_else(|| {
+        node.children
+            .iter()
+            .find_map(|child| resolve_fingerprint_nodes(child, fingerprint))
+    })
+}
+
+/// Checks both mass and Merkle identity before choosing an exact node.
+fn exact_fingerprint_node(node: &NormalizedNode, fingerprint: &Fingerprint) -> bool {
+    node.byte_range == fingerprint.byte_range
+        && node.subtree_node_count() == fingerprint.node_count
+        && subtree_hash(node, &mut HashScratch::default()) == fingerprint.hash
 }
 
 /// Normalisation-collapsed content frontier covered by `fingerprint`,
@@ -227,11 +195,7 @@ pub(crate) fn collapsed_leaves(
     fingerprint: &Fingerprint,
     language: Option<&str>,
 ) -> Option<Vec<CollapsedLeaf>> {
-    let resolved = resolve_range_nodes(
-        root,
-        fingerprint.byte_range.start,
-        fingerprint.byte_range.end,
-    )?;
+    let resolved = resolve_fingerprint_nodes(root, fingerprint)?;
     let mut out = Vec::new();
     let mut groups = 0_u32;
     for member in resolved {
@@ -319,37 +283,46 @@ fn tag_composite_literal(
     }
 }
 
-/// Returns the contiguous children spanned by `[start, end)`.
-fn matching_child_window(
-    node: &NormalizedNode,
-    start: usize,
-    end: usize,
-) -> Option<Vec<&NormalizedNode>> {
-    for (first_index, child) in node.children.iter().enumerate() {
-        if child.byte_range.start == start {
-            return window_from(&node.children, first_index, end);
+/// Finds a sibling run whose count and synthetic hash match the fingerprint.
+fn matching_fingerprint_window<'tree>(
+    node: &'tree NormalizedNode,
+    fingerprint: &Fingerprint,
+) -> Option<Vec<&'tree NormalizedNode>> {
+    node.children
+        .iter()
+        .enumerate()
+        .filter(|(_, child)| child.byte_range.start == fingerprint.byte_range.start)
+        .find_map(|(first_index, _)| window_from(&node.children, first_index, fingerprint))
+}
+
+/// Builds the exact matching child window, including zero-width siblings.
+fn window_from<'tree>(
+    children: &'tree [NormalizedNode],
+    first_index: usize,
+    fingerprint: &Fingerprint,
+) -> Option<Vec<&'tree NormalizedNode>> {
+    let mut window = Vec::new();
+    for child in children.iter().skip(first_index) {
+        if child.byte_range.end > fingerprint.byte_range.end {
+            return None;
+        }
+        window.push(child);
+        if child.byte_range.end == fingerprint.byte_range.end
+            && window.len() > 1
+            && window_mass(&window) == fingerprint.node_count
+            && window_matches_hash(&window, fingerprint.hash)
+        {
+            return Some(window);
         }
     }
     None
 }
 
-/// Builds a child window starting at `first_index` when it ends at `end`.
-fn window_from(
-    children: &[NormalizedNode],
-    first_index: usize,
-    end: usize,
-) -> Option<Vec<&NormalizedNode>> {
-    let mut window = Vec::new();
-    for child in children.iter().skip(first_index) {
-        if child.byte_range.end > end {
-            return None;
-        }
-        window.push(child);
-        if child.byte_range.end == end {
-            return Some(window);
-        }
-    }
-    None
+/// Counts nodes by the same saturating rule as sibling fingerprinting.
+fn window_mass(nodes: &[&NormalizedNode]) -> usize {
+    nodes.iter().fold(0_usize, |sum, node| {
+        sum.saturating_add(node.subtree_node_count())
+    })
 }
 
 /// Emits one node with the optional language-aware boilerplate filter.

@@ -314,7 +314,7 @@ jobs:
         run: npm install -g typediagram@0.11.0
 
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@v2.86.5
+        uses: taiki-e/install-action@v2.87.14
         with:
           tool: cargo-llvm-cov
 
@@ -514,7 +514,7 @@ jobs:
         run: npm install -g typediagram@0.11.0
 
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@v2.86.4
+        uses: taiki-e/install-action@v2.87.14
         with:
           tool: cargo-llvm-cov
 
@@ -622,7 +622,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@v2.86.4
+        uses: taiki-e/install-action@v2.87.14
         with:
           tool: cargo-llvm-cov
 

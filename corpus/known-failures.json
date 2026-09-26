@@ -12,7 +12,7 @@
     "recall_quality": "[CORPUS-RECALL] A hand-verified byte-identical duplicate in `must_find` was reported, but not as what it is: demoted below the `identical` bucket, missing a shown occurrence, or ranked past the entry's `max_rank` ceiling. `recall` sees only whether some cluster spans the paths.",
     "precision": "[CORPUS-PRECISION-CURATED] A pair a human confirmed is NOT duplication was shown as one cluster - a false positive on curated ground truth. Hidden clusters do not breach an entry: precision is what the report shows.",
     "boilerplate_rank": "Framework-mandated scaffolding ranked in the top N.",
-    "data_table_rank": "A numeric data table ranked in the top N categorised as `logic`.",
+    "data_table_rank": "[CORPUS-PRECISION] A table of literals is visible in the ranked head. A repeated data structure is not extractable logic \u2014 no shared control flow, nothing to hoist \u2014 so the noise filters ([CLONE-NOISE-CONSTANT-TABLE], [CLONE-NOISE-DART-DATA-TABLE-LITERAL]) drop it; one still in the head means a filter missed it and it outranks real clones. The verdict is read from the occurrence's parse tree \u2014 a collection whose every element is a literal, or a run of declarations whose every value is one \u2014 never from characters of raw source text, and a span that calls anything is code however many literals it holds (gh #452).",
     "memory": "Peak RSS exceeded the runner budget.",
     "wall": "Scan exceeded the wall-clock ceiling.",
     "determinism": "Two identical scans disagreed.",

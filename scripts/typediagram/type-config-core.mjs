@@ -71,6 +71,8 @@ export const CORE_TYPE_CONFIG = {
     fieldOverrides: { total_occurrences: "usize" },
     fieldDocs: {
       clusters: "Top-N clusters covering the input, worst-first, post-budget.",
+      existing:
+        "Places whose normalised code equals part of a snippet and that no returned cluster lists; empty for a range query ([MCP-TOOL-FINDSIMILAR-EXISTING]).",
       below_min_nodes:
         "True when every subtree fell below the session's `min_nodes` floor.",
       total_occurrences:

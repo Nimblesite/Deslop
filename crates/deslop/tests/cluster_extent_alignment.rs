@@ -21,6 +21,12 @@
 //! admitted. Both files are the same shape at the same depth: any
 //! honest view of them covers the same authored declaration in both.
 
+#[path = "cluster_extent_alignment/unmatched_width.rs"]
+mod unmatched_width;
+
+#[path = "cluster_extent_alignment/same_file_tail.rs"]
+mod same_file_tail;
+
 use anyhow::Result;
 use serde_json::Value;
 

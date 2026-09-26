@@ -31,7 +31,7 @@ use std::{
 };
 
 use super::{
-    all_occurrences_overlap, log_subsumption, strictly_encloses,
+    all_occurrences_overlap, log_subsumption, occurrences_overlap, strictly_encloses,
     survivor::{outranks, same_region_survivor, Preference},
     tally::SubsumeTally,
     Cluster,
@@ -43,8 +43,11 @@ use crate::{cluster::exact_runs::copied_union, state::FileId};
 pub(super) struct Region<'a> {
     /// Views in rank order.
     views: Vec<&'a Cluster>,
-    /// Source bytes that can prove a straddled union was copied whole.
+    /// Source bytes that prove a straddled union was copied whole.
     sources: &'a HashMap<FileId, Vec<u8>>,
+    /// Whether each view names every file once, so geometric straddles
+    /// have an unambiguous occurrence pairing.
+    unique_files: Vec<bool>,
     /// `beaters[view]`: views that re-describe `view` and outrank it.
     beaters: Vec<Vec<usize>>,
     /// `beaten[view]`: views that `view` re-describes and outranks.
@@ -59,9 +62,14 @@ impl<'a> Region<'a> {
         sources: &'a HashMap<FileId, Vec<u8>>,
     ) -> Self {
         let count = views.len();
+        let unique_files = views
+            .iter()
+            .map(|view| one_occurrence_per_file(&view.members))
+            .collect();
         let mut region = Self {
             views,
             sources,
+            unique_files,
             beaters: vec![Vec::new(); count],
             beaten: vec![Vec::new(); count],
         };
@@ -118,27 +126,133 @@ impl<'a> Region<'a> {
         Some((*self.views.get(first)?, *self.views.get(second)?))
     }
 
-    /// [PIPELINE-CLUSTER-SUBSUME-STRADDLE] Whether `first` and `second`
-    /// are two padded readings of a third view of the region: every
-    /// occurrence of each overlaps an occurrence of the other in its
-    /// file, and some other view lies strictly inside both. File coverage
-    /// holds by construction — the region is one file set.
-    fn straddle(&self, first: usize, second: usize) -> bool {
-        let Some((left, right)) = self.pair(first, second) else {
-            return false;
-        };
-        if copied_union(&left.members, &right.members, self.sources) {
-            return false;
-        }
-        all_occurrences_overlap(&left.members, &right.members)
-            && all_occurrences_overlap(&right.members, &left.members)
-            && self.views.iter().enumerate().any(|(index, core)| {
-                index != first
-                    && index != second
-                    && strictly_encloses(&left.members, &core.members)
-                    && strictly_encloses(&right.members, &core.members)
-            })
+    /// Whether each occurrence of this view has a distinct file identity.
+    fn unambiguous(&self, view: usize) -> bool {
+        self.unique_files.get(view).copied().unwrap_or(false)
     }
+
+    /// [PIPELINE-CLUSTER-SUBSUME-STRADDLE] Which overlapping window lacks
+    /// copied-overhang evidence when a third view lies inside both.
+    /// Same-file repeated members have no unambiguous geometric pairing.
+    fn straddle(&self, first: usize, second: usize) -> Option<Straddle> {
+        let (left, right) = self.pair(first, second)?;
+        if copied_union(&left.members, &right.members, self.sources) {
+            return None;
+        }
+        if !self.has_straddle_core(first, second, left, right) {
+            return None;
+        }
+        Straddle::from_support(
+            self.has_exclusive_copy(first, second, left, right),
+            self.has_exclusive_copy(second, first, right, left),
+        )
+    }
+
+    /// Geometric overlap plus an admitted copy strictly inside both windows.
+    fn has_straddle_core(
+        &self,
+        first: usize,
+        second: usize,
+        left: &Cluster,
+        right: &Cluster,
+    ) -> bool {
+        self.unambiguous(first)
+            && self.unambiguous(second)
+            && all_occurrences_overlap(&left.members, &right.members)
+            && all_occurrences_overlap(&right.members, &left.members)
+            && self.has_nested_core(first, second, left, right)
+    }
+
+    /// Whether a third view is nested in both candidate windows.
+    fn has_nested_core(
+        &self,
+        first: usize,
+        second: usize,
+        left: &Cluster,
+        right: &Cluster,
+    ) -> bool {
+        self.views.iter().enumerate().any(|(index, core)| {
+            index != first
+                && index != second
+                && self.unambiguous(index)
+                && strictly_encloses(&left.members, &core.members)
+                && strictly_encloses(&right.members, &core.members)
+        })
+    }
+
+    /// Whether a clone proves copied content outside the rival window.
+    fn has_exclusive_copy(
+        &self,
+        outer_index: usize,
+        rival_index: usize,
+        outer: &Cluster,
+        rival: &Cluster,
+    ) -> bool {
+        self.views.iter().enumerate().any(|(index, witness)| {
+            index != outer_index
+                && index != rival_index
+                && self.unambiguous(index)
+                && exclusive_clone(outer, rival, witness)
+        })
+    }
+}
+
+/// A real clone covers only bytes the rival window does not include.
+fn exclusive_clone(outer: &Cluster, rival: &Cluster, witness: &Cluster) -> bool {
+    witness.kind.is_clone()
+        && strictly_encloses(&outer.members, &witness.members)
+        && witness.members.iter().all(|member| {
+            rival
+                .members
+                .iter()
+                .all(|other| !occurrences_overlap(member, other))
+        })
+}
+
+/// Which straddling window lacks independently copied overhang content.
+#[derive(Clone, Copy)]
+enum Straddle {
+    /// Only the first window lacks copied-overhang evidence.
+    First,
+    /// Only the second window lacks copied-overhang evidence.
+    Second,
+    /// Neither window has copied-overhang evidence.
+    Both,
+}
+
+impl Straddle {
+    /// Converts the two copied-overhang verdicts into removals.
+    fn from_support(first: bool, second: bool) -> Option<Self> {
+        match (first, second) {
+            (true, true) => None,
+            (true, false) => Some(Self::Second),
+            (false, true) => Some(Self::First),
+            (false, false) => Some(Self::Both),
+        }
+    }
+
+    /// Returns the positions that must leave the published set.
+    fn removed(self, first: usize, second: usize) -> [Option<usize>; 2] {
+        match self {
+            Self::First => [Some(first), None],
+            Self::Second => [Some(second), None],
+            Self::Both => [Some(first), Some(second)],
+        }
+    }
+
+    /// Names the trace decision for the removal.
+    fn decision(self) -> &'static str {
+        match self {
+            Self::Both => "drop_both_straddle",
+            Self::First | Self::Second => "drop_unsupported_straddle",
+        }
+    }
+}
+
+/// One member per file makes overlap map each occurrence to one counterpart.
+fn one_occurrence_per_file(members: &[crate::fingerprint::Fingerprint]) -> bool {
+    let mut files = BTreeSet::new();
+    members.iter().all(|member| files.insert(member.file_id))
 }
 
 /// Resolves one region: the positions of its published views, in rank
@@ -152,35 +266,45 @@ pub(super) fn resolve(region: &Region<'_>, tally: &mut SubsumeTally) -> Vec<usiz
             return published;
         }
         tally.straddle_round(pairs.len());
-        for (first, second) in pairs {
-            remove_straddlers(region, &mut straddled, first, second);
+        for (first, second, verdict) in pairs {
+            remove_straddlers(region, &mut straddled, first, second, verdict);
         }
     }
 }
 
 /// Every pair of published views that straddles a third view, in rank
 /// order.
-fn straddling_pairs(region: &Region<'_>, published: &[usize]) -> Vec<(usize, usize)> {
+fn straddling_pairs(region: &Region<'_>, published: &[usize]) -> Vec<(usize, usize, Straddle)> {
     let mut pairs = Vec::new();
     for (position, first) in published.iter().enumerate() {
         let later = published
             .get(position.saturating_add(1)..)
             .unwrap_or_default();
         for second in later {
-            if region.straddle(*first, *second) {
-                pairs.push((*first, *second));
+            if let Some(verdict) = region.straddle(*first, *second) {
+                pairs.push((*first, *second, verdict));
             }
         }
     }
     pairs
 }
 
-/// Removes both straddlers for good; the nested view is the finding.
-fn remove_straddlers(region: &Region<'_>, straddled: &mut [bool], first: usize, second: usize) {
+/// Removes unsupported straddlers; a supported complete copy remains.
+fn remove_straddlers(
+    region: &Region<'_>,
+    straddled: &mut [bool],
+    first: usize,
+    second: usize,
+    verdict: Straddle,
+) {
     if let Some((left, right)) = region.pair(first, second) {
-        log_subsumption(right, left, "drop_both_straddle");
+        let (survivor, discarded) = match verdict {
+            Straddle::Second => (left, right),
+            Straddle::First | Straddle::Both => (right, left),
+        };
+        log_subsumption(survivor, discarded, verdict.decision());
     }
-    for index in [first, second] {
+    for index in verdict.removed(first, second).into_iter().flatten() {
         if let Some(slot) = straddled.get_mut(index) {
             *slot = true;
         }

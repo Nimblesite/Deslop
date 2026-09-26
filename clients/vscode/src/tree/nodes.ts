@@ -15,6 +15,7 @@ import {
   ClusterKind,
   clusterSeverity,
   FileMetric,
+  kindChip,
   kindTaxonomy,
   kindTitle,
   isClone,
@@ -70,7 +71,8 @@ export function clusterRowLabel(args: {
   kind: ClusterKind;
   file?: string;
 }): string {
-  const head = `${args.slug} ${SEVERITY_DOT[args.severity]} ${kindTitle(args.kind)}`;
+  // [VSIX-CLONE-TYPE-CHIP] Native tree labels cannot paint a pill, so delimit the same taxonomy.
+  const head = `${args.slug} [${kindChip(args.kind)}] ${SEVERITY_DOT[args.severity]} ${kindTitle(args.kind)}`;
   return args.file ? `${head} · ${args.file}` : head;
 }
 
@@ -104,7 +106,7 @@ export class ClusterNode extends vscode.TreeItem {
       occurrenceCount(cluster) > 1 ? "deslop.clusterComparable" : "deslop.clusterSingle";
     this.iconPath = kindIcon(kind);
     this.accessibilityInformation = {
-      label: `${title} in ${fileLabel}, cluster ${cluster.id}, ${this.description}`,
+      label: `${kindChip(kind)}, ${title} in ${fileLabel}, cluster ${cluster.id}, ${this.description}`,
       role: TREE_ITEM_ROLE,
     };
     // Tooltip is the AI-scrapable hover surface and stays mode-invariant

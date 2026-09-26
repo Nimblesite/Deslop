@@ -328,6 +328,7 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
             lsh_only_min_jaccard: LSH_ONLY_MIN_JACCARD,
             fused_min_score: FUSED_THRESHOLD,
             shared_subtree_overlap: 0.0,
+            verified_async_core: false,
             score: PairScore {
                 structural,
                 token_jaccard: jaccard_for(self.signatures, left, right),

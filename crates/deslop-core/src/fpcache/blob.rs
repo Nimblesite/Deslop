@@ -78,7 +78,12 @@ pub(super) const MAGIC: u32 = 0xC0DE_D180;
 /// 4 holds a whole-file fingerprint for every Go file, so a warm run would
 /// keep publishing `alpha.go:1-13` against `beta.go:1-13`, `package`
 /// clause included, after the cold run had stopped.
-pub(super) const SEMANTIC_EPOCH: u32 = 5;
+///
+/// Epoch 6: [PIPELINE-SIGNATURE-FOLD] identifies same-range grammar
+/// wrappers and sibling windows by their structural mass before building
+/// token signatures. An epoch-5 blob holds range-only signatures for
+/// those fingerprints, so a warm scan could disagree with a cold scan.
+pub(super) const SEMANTIC_EPOCH: u32 = 6;
 
 /// Bytes of blob header preceding the payload: the magic plus the
 /// 32-byte binding digest.

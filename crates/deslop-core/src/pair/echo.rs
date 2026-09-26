@@ -21,6 +21,14 @@
 //! accessors that merely share a skeleton shares none.
 //! [`ExactClones::within_one_file`] records the Merkle-equal pairs of one
 //! file so the same-file rescue can measure that interior.
+//!
+//! **Answered by range, never by scanning the list.** A file of hundreds
+//! of look-alike functions holds hundreds of thousands of Merkle-equal
+//! pairs, and both questions ask only which of them sit inside the two
+//! endpoints or wrap them. The clones of a file pair are therefore
+//! ordered by the lower endpoint's range, and under each lower endpoint
+//! by the higher endpoint's, so a question walks the few that can
+//! relate to it ([FUSED-SHARED-SUBTREE-INDEX]).
 
 use std::collections::HashMap;
 
@@ -28,6 +36,9 @@ use super::CandidatePair;
 use crate::{
     ast::ByteRange, cluster::scope::DeclarationScopes, fingerprint::Fingerprint, state::FileId,
 };
+
+mod range_index;
+use range_index::RangeIndex;
 
 /// One exact clone: the two ranges it occupies in canonical order, and
 /// the nodes it claims.
@@ -42,10 +53,13 @@ struct ExactClone {
 }
 
 /// The Merkle-equal candidate pairs of a corpus, indexed by ordered file
-/// pair so a rescue candidate's own file pair is one map hit.
+/// pair so a rescue candidate's own file pair is one map hit, then by
+/// range so its question reads only the clones that can relate to it
+/// ([FUSED-SHARED-SUBTREE-INDEX]).
 pub(crate) struct ExactClones {
-    /// Exact pairs by ordered file pair.
-    by_files: HashMap<(FileId, FileId), Vec<ExactClone>>,
+    /// Exact pairs by ordered file pair: each lower-side range carries
+    /// its higher-side ranges and the nodes each clone claims.
+    by_files: HashMap<(FileId, FileId), RangeIndex<RangeIndex<usize>>>,
 }
 
 impl ExactClones {
@@ -55,24 +69,12 @@ impl ExactClones {
         fingerprints: &[Fingerprint],
         admits: impl Fn(&Fingerprint, &Fingerprint) -> bool,
     ) -> Self {
-        let mut by_files: HashMap<(FileId, FileId), Vec<ExactClone>> = HashMap::new();
-        for pair in pairs {
-            let (Some(left), Some(right)) =
-                (fingerprints.get(pair.left), fingerprints.get(pair.right))
-            else {
-                continue;
-            };
-            if left.hash != right.hash || !admits(left, right) {
-                continue;
-            }
-            let (key, first, second) = ordered(left, right);
-            by_files.entry(key).or_default().push(ExactClone {
-                first,
-                second,
-                nodes: left.node_count,
-            });
+        Self {
+            by_files: exact_clones_by_files(pairs, fingerprints, admits)
+                .into_iter()
+                .map(|(key, clones)| (key, nested(clones)))
+                .collect(),
         }
-        Self { by_files }
     }
 
     /// The cross-file, function-aligned exact clones a container may
@@ -126,8 +128,8 @@ impl ExactClones {
             left.node_count.min(right.node_count),
             left.node_count.max(right.node_count),
         );
-        self.others(key, first, second)?
-            .filter_map(|exact| claimed_by(exact, first, second, sizes))
+        self.others(key, first, second)
+            .filter_map(|exact| claimed_by(&exact, first, second, sizes))
             .max()
     }
 
@@ -137,28 +139,92 @@ impl ExactClones {
     pub(crate) fn enclosed_nodes(&self, left: &Fingerprint, right: &Fingerprint) -> usize {
         let (key, first, second) = ordered(left, right);
         self.others(key, first, second)
-            .into_iter()
-            .flatten()
             .filter(|exact| first.covers(exact.first) && second.covers(exact.second))
             .map(|exact| exact.nodes)
             .max()
             .unwrap_or(0)
     }
 
-    /// The file pair's exact clones other than the pair itself.
+    /// The file pair's exact clones whose ranges lie inside the pair's
+    /// or around them — the only ones that can be enclosed or claim
+    /// anything — other than the pair itself.
     fn others(
         &self,
         key: (FileId, FileId),
         first: ByteRange,
         second: ByteRange,
-    ) -> Option<impl Iterator<Item = &ExactClone>> {
-        Some(
-            self.by_files
-                .get(&key)?
-                .iter()
-                .filter(move |exact| first != exact.first || second != exact.second),
-        )
+    ) -> impl Iterator<Item = ExactClone> + '_ {
+        self.by_files
+            .get(&key)
+            .into_iter()
+            .flat_map(move |lower| lower.related(first))
+            .flat_map(move |(exact_first, higher)| partners(*exact_first, higher, second))
+            .filter(move |exact| first != exact.first || second != exact.second)
     }
+}
+
+/// The clones under one lower-side range whose higher-side range can
+/// relate to `second`.
+fn partners(
+    first: ByteRange,
+    higher: &RangeIndex<usize>,
+    second: ByteRange,
+) -> impl Iterator<Item = ExactClone> + '_ {
+    higher
+        .related(second)
+        .map(move |(exact_second, nodes)| ExactClone {
+            first,
+            second: *exact_second,
+            nodes: *nodes,
+        })
+}
+
+/// Every Merkle-equal pair of `pairs` that `admits` accepts, by ordered
+/// file pair, in the order the pairs were enumerated.
+fn exact_clones_by_files(
+    pairs: &[CandidatePair],
+    fingerprints: &[Fingerprint],
+    admits: impl Fn(&Fingerprint, &Fingerprint) -> bool,
+) -> HashMap<(FileId, FileId), Vec<ExactClone>> {
+    let mut by_files: HashMap<(FileId, FileId), Vec<ExactClone>> = HashMap::new();
+    for (left, right) in admitted_endpoints(pairs, fingerprints, &admits) {
+        let (key, first, second) = ordered(left, right);
+        by_files.entry(key).or_default().push(ExactClone {
+            first,
+            second,
+            nodes: left.node_count,
+        });
+    }
+    by_files
+}
+
+/// The endpoints of every Merkle-equal pair that `admits` accepts.
+fn admitted_endpoints<'a>(
+    pairs: &'a [CandidatePair],
+    fingerprints: &'a [Fingerprint],
+    admits: &'a impl Fn(&Fingerprint, &Fingerprint) -> bool,
+) -> impl Iterator<Item = (&'a Fingerprint, &'a Fingerprint)> + 'a {
+    pairs.iter().filter_map(move |pair| {
+        let left = fingerprints.get(pair.left)?;
+        let right = fingerprints.get(pair.right)?;
+        (left.hash == right.hash && admits(left, right)).then_some((left, right))
+    })
+}
+
+/// Nests one file pair's exact clones by lower-side range, then by
+/// higher-side range ([FUSED-SHARED-SUBTREE-INDEX]).
+fn nested(mut clones: Vec<ExactClone>) -> RangeIndex<RangeIndex<usize>> {
+    clones.sort_by_key(|clone| (clone.first.start, clone.first.end));
+    RangeIndex::new(
+        clones
+            .chunk_by(|left, right| left.first == right.first)
+            .filter_map(|group| {
+                let lead = group.first()?;
+                let partners = group.iter().map(|clone| (clone.second, clone.nodes));
+                Some((lead.first, RangeIndex::new(partners.collect())))
+            })
+            .collect(),
+    )
 }
 
 /// The nodes one exact clone claims of a pair's shared mass. A container
@@ -213,3 +279,6 @@ fn ordered(left: &Fingerprint, right: &Fingerprint) -> ((FileId, FileId), ByteRa
         )
     }
 }
+
+#[cfg(test)]
+mod tests;
