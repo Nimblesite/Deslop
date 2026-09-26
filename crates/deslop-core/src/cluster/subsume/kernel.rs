@@ -25,7 +25,10 @@
 //! the published views, removed for good, and the kernel is found again
 //! without them.
 
-use std::{cmp::Ordering, collections::BTreeSet};
+use std::{
+    cmp::Ordering,
+    collections::{BTreeSet, HashMap},
+};
 
 use super::{
     all_occurrences_overlap, log_subsumption, occurrences_overlap, strictly_encloses,
@@ -33,12 +36,15 @@ use super::{
     tally::SubsumeTally,
     Cluster,
 };
+use crate::{cluster::exact_runs::copied_union, state::FileId};
 
 /// The views over one file set, in rank order, with the same-region
 /// preference between every pair that has one.
 pub(super) struct Region<'a> {
     /// Views in rank order.
     views: Vec<&'a Cluster>,
+    /// Source bytes that prove a straddled union was copied whole.
+    sources: &'a HashMap<FileId, Vec<u8>>,
     /// Whether each view names every file once, so geometric straddles
     /// have an unambiguous occurrence pairing.
     unique_files: Vec<bool>,
@@ -50,7 +56,11 @@ pub(super) struct Region<'a> {
 
 impl<'a> Region<'a> {
     /// Evaluates every pair of `views` once and records who outranks whom.
-    pub(super) fn new(views: Vec<&'a Cluster>, tally: &mut SubsumeTally) -> Self {
+    pub(super) fn new(
+        views: Vec<&'a Cluster>,
+        tally: &mut SubsumeTally,
+        sources: &'a HashMap<FileId, Vec<u8>>,
+    ) -> Self {
         let count = views.len();
         let unique_files = views
             .iter()
@@ -58,6 +68,7 @@ impl<'a> Region<'a> {
             .collect();
         let mut region = Self {
             views,
+            sources,
             unique_files,
             beaters: vec![Vec::new(); count],
             beaten: vec![Vec::new(); count],
@@ -125,6 +136,9 @@ impl<'a> Region<'a> {
     /// Same-file repeated members have no unambiguous geometric pairing.
     fn straddle(&self, first: usize, second: usize) -> Option<Straddle> {
         let (left, right) = self.pair(first, second)?;
+        if copied_union(&left.members, &right.members, self.sources) {
+            return None;
+        }
         if !self.has_straddle_core(first, second, left, right) {
             return None;
         }
