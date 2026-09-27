@@ -233,6 +233,89 @@ fn padded_windows_straddling_a_verbatim_block_publish_the_block() -> Result<()> 
     Ok(())
 }
 
+/// [PIPELINE-CLUSTER-SUBSUME-STRADDLE] A copied run longer than a sibling
+/// window remains one finding even when its neighbouring statements differ.
+const LONG_RUN: &str = "    client.get<Response>('/one').then(onOne).catch(onError);\n\n    client.get<Response>('/two').then(onTwo).catch(onError);\n\n    client.get<Response>('/three').then(onThree).catch(onError);\n\n    client.get<Response>('/four').then(onFour).catch(onError);\n\n    client.get<Response>('/five').then(onFive).catch(onError);\n\n    client.get<Response>('/six').then(onSix).catch(onError);\n\n    client.get<Response>('/seven').then(onSeven).catch(onError);\n\n    client.get<Response>('/eight').then(onEight).catch(onError);\n\n    client.get<Response>('/nine').then(onNine).catch(onError);\n\n    client.get<Response>('/ten').then(onTen).catch(onError);\n\n    client.get<Response>('/eleven').then(onEleven).catch(onError);\n\n    client.get<Response>('/twelve').then(onTwelve).catch(onError);\n\n";
+const LEFT_PREFIX: &str = "type Left = { value: number };\ninterface LeftMeta { label: string }\nconst leftWeights = [11, 12, 13];\nconst leftRegistry = new Map<string, number>();\nfunction leftOnly() { if (leftWeights.length) leftRegistry.set('left', 14); }\nclass LeftSide { value = leftWeights.length; }\nleftOnly();\n\n";
+const RIGHT_PREFIX: &str = "import { rightSide } from './right-side';\nexport enum RightMode { Open, Closed }\nconst rightOptions = { enabled: true, mode: RightMode.Open };\nasync function rightOnly() { try { await rightSide(); } catch { return false; } }\nrightOnly();\nconst rightFactory = () => ({ option: rightOptions });\ninterface RightMeta { done(): Promise<void> }\n\n";
+const LEFT_SUFFIX: &str = "const leftTotals = leftWeights.reduce((sum, value) => sum + value, 0);\nfor (const weight of leftWeights) { leftRegistry.set(String(weight), weight); }\nif (leftTotals > 20) { leftOnly(); }\nconst leftReady = new LeftSide();\nleftRegistry.delete('left');\nleftReady.value += leftTotals;\n";
+const RIGHT_SUFFIX: &str = "type RightResult = Promise<RightMode>;\nconst rightSelection = rightFactory();\nasync function rightFinish(): RightResult { await rightOnly(); return RightMode.Closed; }\nrightFinish();\nexport { rightSelection };\nconst rightComplete = Boolean(rightOptions.enabled);\n";
+const LONG_RUN_FIRST_LINE: u64 = 9;
+const LONG_RUN_LAST_LINE: u64 = 31;
+const LONG_RUN_MEMBERS: usize = 2;
+const LONG_RUN_RANK: u64 = 1;
+const LONG_RUN_PATHS: [&str; LONG_RUN_MEMBERS] = ["left.ts", "right.ts"];
+const LONG_RUN_ROOT: &str = "corpus";
+const LONG_RUN_KIND: &str = "identical";
+const LONG_RUN_CLUSTER_COUNT: usize = 1;
+const LONG_RUN_RANK_FIELD: &str = "rank";
+
+/// One authored run, with unrelated code on both sides in each file.
+fn write_long_run_fixture(root: &Path) -> Result<()> {
+    fs::create_dir_all(root)?;
+    for (path, prefix, suffix) in [
+        (LONG_RUN_PATHS[0], LEFT_PREFIX, LEFT_SUFFIX),
+        (LONG_RUN_PATHS[1], RIGHT_PREFIX, RIGHT_SUFFIX),
+    ] {
+        fs::write(root.join(path), format!("{prefix}{LONG_RUN}{suffix}"))?;
+    }
+    Ok(())
+}
+
+/// Pins the visible report, so fragments cannot satisfy the assertion.
+fn assert_long_run_report(root: &Path, report: &serde_json::Value) -> Result<()> {
+    let findings = clone_findings(report);
+    assert_eq!(
+        findings.len(),
+        LONG_RUN_CLUSTER_COUNT,
+        "one copied run must publish once: {report:#}"
+    );
+    let clone = findings
+        .first()
+        .ok_or_else(|| anyhow::anyhow!("the copied run must be reported"))?;
+    assert_long_run_identity(clone)?;
+    assert_long_run_locations(root, clone)
+}
+
+/// The finding has one rank, two members, and a byte-proven kind.
+fn assert_long_run_identity(clone: &serde_json::Value) -> Result<()> {
+    assert_eq!(
+        cluster_kind(clone),
+        LONG_RUN_KIND,
+        "the run is verbatim: {clone:#}"
+    );
+    assert_eq!(
+        field(clone, LONG_RUN_RANK_FIELD).as_u64(),
+        Some(LONG_RUN_RANK)
+    );
+    assert_eq!(cluster_size(clone), u64::try_from(LONG_RUN_MEMBERS)?);
+    assert_eq!(occurrences(clone).len(), LONG_RUN_MEMBERS);
+    Ok(())
+}
+
+/// Both files publish the entire authored run at the same line extent.
+fn assert_long_run_locations(root: &Path, clone: &serde_json::Value) -> Result<()> {
+    assert_eq!(occurrence_paths(clone), LONG_RUN_PATHS);
+    assert_eq!(
+        cluster_line_spans(clone),
+        vec![(LONG_RUN_FIRST_LINE, LONG_RUN_LAST_LINE); LONG_RUN_MEMBERS]
+    );
+    assert_eq!(
+        occurrence_texts(root, clone)?,
+        vec![LONG_RUN.trim().to_owned(); LONG_RUN_MEMBERS]
+    );
+    Ok(())
+}
+
+#[test]
+fn long_verbatim_statement_run_is_one_complete_clone() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let root = tmp.path().join(LONG_RUN_ROOT);
+    write_long_run_fixture(&root)?;
+    let report = run_report(tmp.path(), &root)?;
+    assert_long_run_report(&root, &report)
+}
+
 // Issue #50 acceptance: a small C# file with two [Fact]-decorated
 // near-identical test methods must produce exactly one cluster covering
 // the test-method region. Pre-fix, the `attribute_list +

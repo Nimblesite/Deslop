@@ -53,6 +53,7 @@ fn ranked_with_edges(members: &[Fingerprint], edges: Vec<FusedEdge>) -> Vec<Clus
         fingerprints: members,
         fused_clusters: &fused,
         trees: &[],
+        sources: &std::collections::HashMap::new(),
         file_languages: &std::collections::HashMap::new(),
         file_paths: &std::collections::HashMap::new(),
         kinds: &UniformKind(FIXTURE_KIND),

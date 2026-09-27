@@ -1,11 +1,11 @@
 //! [PIPELINE-CLUSTER-SUBSUME-STRADDLE] Two views that overhang one
 //! nested view on different sides are padded readings of it.
 
-use deslop_core::state::FileRegistry;
+use deslop_core::{cluster::Cluster, state::FileRegistry};
 
 use super::{
-    in_rank_order, occurrences, published_across, published_views, published_weighted, spans,
-    HEAVY_NODES, LIGHTEST_NODES, LIGHT_NODES, MEMBER_NODES,
+    in_rank_order, occurrences, published_across, published_views, published_weighted,
+    ranked_with_sources, spans, HEAVY_NODES, LIGHTEST_NODES, LIGHT_NODES, MEMBER_NODES,
 };
 
 const SAME_FILE_SOURCE: &str = "HtmlOperations.fs";
@@ -20,6 +20,47 @@ const SHARED_RIGHT_OVERHANG: (usize, usize) = (210, 250);
 const SHARED_CORE: (usize, usize) = (50, 200);
 const SHARED_LEFT_WINDOW: (usize, usize) = (0, 200);
 const SHIFTED_RIGHT_WINDOW: (usize, usize) = (50, 250);
+const COPIED_SOURCE_LEN: usize = 250;
+const COPIED_BYTE: u8 = b'x';
+const COPIED_MEMBER_COUNT: usize = 2;
+const COPIED_PATHS: [&str; COPIED_MEMBER_COUNT] = ["alpha.ts", "beta.ts"];
+const LEFT_WINDOW_RANGE: (usize, usize) = (0, 200);
+const RIGHT_WINDOW_RANGE: (usize, usize) = (50, COPIED_SOURCE_LEN);
+const COPIED_CORE_RANGE: (usize, usize) = (50, 200);
+
+/// If the whole source union is copied but cannot form an AST sibling run,
+/// neither window is discarded as padding.
+fn copied_windows() -> Vec<Cluster> {
+    let mut registry = FileRegistry::new();
+    let alpha = registry.register(COPIED_PATHS[0].into());
+    let beta = registry.register(COPIED_PATHS[1].into());
+    let pair = |span: (usize, usize)| vec![(alpha, span), (beta, span)];
+    let views = [
+        (MEMBER_NODES, pair(LEFT_WINDOW_RANGE)),
+        (MEMBER_NODES, pair(RIGHT_WINDOW_RANGE)),
+        (LIGHT_NODES, pair(COPIED_CORE_RANGE)),
+    ];
+    let sources = [
+        (alpha, vec![COPIED_BYTE; COPIED_SOURCE_LEN]),
+        (beta, vec![COPIED_BYTE; COPIED_SOURCE_LEN]),
+    ]
+    .into();
+    ranked_with_sources(&views, &sources)
+}
+
+#[test]
+fn copied_straddling_windows_are_not_discarded_without_a_join() {
+    let clusters = copied_windows();
+    let mut actual = spans(&clusters);
+    actual.sort_unstable();
+    assert_eq!(
+        actual,
+        vec![
+            vec![LEFT_WINDOW_RANGE; COPIED_MEMBER_COUNT],
+            vec![RIGHT_WINDOW_RANGE; COPIED_MEMBER_COUNT]
+        ]
+    );
+}
 
 /// [PIPELINE-CLUSTER-SUBSUME-STRADDLE] A separately admitted copy in a
 /// window's exclusive overhang proves that end is duplicated content.

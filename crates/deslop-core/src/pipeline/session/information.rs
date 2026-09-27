@@ -373,6 +373,7 @@ impl PipelineSession {
                 fingerprints,
                 fused_clusters,
                 trees,
+                sources: &self.sources,
                 file_languages: &self.file_languages,
                 file_paths: &paths,
                 kinds: &kinds,

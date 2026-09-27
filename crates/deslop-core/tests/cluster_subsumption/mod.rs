@@ -22,7 +22,7 @@ mod release;
 /// Straddles: two padded readings of one nested view.
 mod straddle;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use deslop_core::{
     ast::ByteRange,
@@ -123,6 +123,11 @@ fn published_weighted(views: &[WeightedView]) -> Vec<Cluster> {
 
 /// Ranks and subsumes `views` once, one fused cluster each.
 fn ranked(views: &[WeightedView]) -> Vec<Cluster> {
+    ranked_with_sources(views, &HashMap::new())
+}
+
+/// Runs a view set with source bytes available to the straddle decision.
+fn ranked_with_sources(views: &[WeightedView], sources: &HashMap<FileId, Vec<u8>>) -> Vec<Cluster> {
     let members: Vec<Fingerprint> = views
         .iter()
         .zip(1_usize..)
@@ -148,6 +153,7 @@ fn ranked(views: &[WeightedView]) -> Vec<Cluster> {
         fingerprints: &members,
         fused_clusters: &fused,
         trees: &[],
+        sources,
         file_languages: &std::collections::HashMap::new(),
         file_paths: &std::collections::HashMap::new(),
         kinds: &UniformKind(FIXTURE_KIND),

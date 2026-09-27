@@ -15,7 +15,7 @@ use super::Cluster;
 use crate::{buckets::ClusterKind, fingerprint::Fingerprint, state::FileId};
 
 /// A reportable cluster before it is named.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(super) struct Unnamed {
     /// Members of the cluster, in corpus order.
     pub(super) members: Vec<Fingerprint>,

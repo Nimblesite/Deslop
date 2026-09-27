@@ -10,6 +10,8 @@ use crate::{
 /// The one view each file publishes for an overlapping run
 /// ([PIPELINE-CLUSTER-EXACT-SCOPE]).
 mod election;
+/// Extends overlapping byte-identical sibling views into their copied run.
+mod exact_runs;
 /// Public cluster ids ([PIPELINE-DETERMINISM]).
 mod identity;
 /// Whether a view's width is matched by a copy
@@ -21,6 +23,7 @@ pub(crate) mod scope;
 /// Cross-cluster subsumption ([PIPELINE-CLUSTER-SUBSUME]).
 mod subsume;
 use election::collapse_overlapping_per_file;
+use exact_runs::coalesce_exact_runs;
 pub use identity::encode_short_id;
 use identity::{name_clusters, Unnamed};
 use scope::DeclarationScopes;
@@ -83,6 +86,8 @@ pub struct ClusterBuildInputs<'a, L: BuildHasher> {
     pub fused_clusters: &'a [FusedCluster],
     /// Normalised trees the fingerprints walk.
     pub trees: &'a [NormalizedNode],
+    /// Source bytes used to verify the complete extent of joined exact windows.
+    pub sources: &'a HashMap<FileId, Vec<u8>>,
     /// `FileId → language_id` for declaration-scope matching.
     pub file_languages: &'a HashMap<FileId, &'static str, L>,
     /// `FileId → workspace-relative path` — the second input of the
@@ -111,7 +116,7 @@ pub fn build_ranked_fused_clusters<L: BuildHasher + Sync>(
             .cmp(&left.mass)
             .then_with(|| left.id.cmp(&right.id))
     });
-    let collapsed = collapse_cross_cluster_overlap(clusters);
+    let collapsed = collapse_cross_cluster_overlap(clusters, inputs.sources);
     log_ranked_cluster_distribution(
         &collapsed,
         inputs.fused_clusters.len(),
@@ -133,7 +138,10 @@ fn reportable_clusters<L: BuildHasher + Sync>(
         .iter()
         .flat_map(|fused| build_fused_cluster(inputs, fused, scopes))
         .collect();
-    name_clusters(drafts, inputs.file_paths)
+    name_clusters(
+        coalesce_exact_runs(drafts, inputs.trees, inputs.sources),
+        inputs.file_paths,
+    )
 }
 
 /// Emits the structured GH#45 ranked-cluster distribution summary.

@@ -137,6 +137,7 @@ fn assert_materialised_clusters_are_mass_only(
         fingerprints,
         fused_clusters: clusters,
         trees: &[],
+        sources: &std::collections::HashMap::new(),
         file_languages: &HashMap::new(),
         file_paths: &HashMap::new(),
         kinds: &UniformKind(FIXTURE_KIND),
