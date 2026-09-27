@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
-title: VS Code — Reading a duplicate-code cluster in the editor
-description: Use the Deslop VS Code extension to review Top Offenders, inspect live duplicate warnings and cluster signals, and compare canonical occurrences.
+title: VS Code — Inspect and Compare Duplicate Code
+description: Read clone categories and mass, compare canonical or arbitrary occurrences, and group Deslop findings in VS Code.
 eleventyNavigation:
   key: VS Code
   order: 5
@@ -11,110 +11,40 @@ docsGroup: guides
 
 # VS Code Cluster Panel
 
-The cluster panel is the detailed view behind a Deslop duplicate-code finding. It shows one cluster, the reason Deslop grouped the locations, and the editor actions available for inspecting or comparing the copies.
+The panel shows a group of code occurrences and lets you inspect the actual copies. This guide covers [0.35.0](/releases/).
 
-## What you're looking at
+## Open and compare
 
-<figure>
-  <a href="/assets/img/screenshot.webp">
-    <img src="/assets/img/screenshot.webp"
-         alt="The Deslop VS Code extension analysing a live workspace: a worst-first Top Offenders tree and a per-directory Duplication breakdown in the sidebar, a live clone warning in the editor naming the canonical copy with Compare, View cluster and Copy for AI actions, and a side-by-side Compare diff against the canonical occurrence."
-         width="2560" height="1492" loading="lazy" decoding="async">
-  </a>
-  <figcaption>The Deslop VS Code extension on a live workspace — the sidebar (left), the live clone warning in the editor (centre), and the Compare diff against the canonical occurrence (right). Every panel refreshes as you type.</figcaption>
-</figure>
+- Click a **file link** to open and select its code range. There is no separate Open button.
+- **Compare To Canonical** opens the group's reference occurrence on the left and the clicked occurrence on the right. The canonical row is labelled and cannot compare with itself.
+- For another pair, choose **Select for Compare** on the left-hand occurrence, then **Compare with Selected** on the other. **Clear Selection** cancels the choice. Selection clears after comparison or when you change clusters.
+- **Copy Context For AI** supplies the finding's context for an agent.
 
-Three surfaces are visible, and all of them read the same live report:
+Canonical means the reference used for navigation, not the best implementation. The diff title identifies both ranges and the engine's verdict for that pair, including exact-byte or indentation-only matches. Two ranges can be in the same file.
 
-- **The sidebar (left)** stacks three views. **Top Offenders** is the worst-first ranked list of every clone cluster in the workspace — each row shows the cluster id, the cluster's **clone kind** (*Identical code*, *Nearly identical code*, *Similar code*, *Same behavior, different code*, or *Same shape, different content*) with a colour and icon of its own, and the cluster's mass — and expands to its occurrences; cluster `#1` is the single highest-impact offender, always one click away. **Duplication** drills the tree workspace → folder → file with a duplication percentage on every node — the same repo-wide number a [CI gate](/docs/configuration/#exit-codes) fails on. **Session** shows the running server: the embedding-model picker (the semantic *same behavior, different code* pass, off until you choose a model), the cache size, the file count, and the live analysis State.
-- **The editor (centre)** is where the LSP draws the finding inline. The duplicated span is underlined in the cluster's kind colour as you type, and a message names the kind, the **canonical** occurrence and the copy count — *"Identical code × 3"* — with **View cluster** and **Copy for AI** actions (the AI-ready context block, available on every Deslop surface).
-- **The Compare diff (right)** is VS Code's native side-by-side editor, opened by **Compare** on an occurrence row. It shows the canonical occurrence on the left and the clicked occurrence on the right so you can inspect exactly those two ranges before extracting a shared helper.
+## Read the finding
 
-Everything here is reactive. Edit the code and the tree, the percentages, the inline warning, and the diff all refresh as you type. The same live report backs the MCP tools (`find-similar`, `duplicates`, `cluster-by-id`), so the agent driving your editor sees the duplicate *before* it writes the copy. The rest of this page is a field guide to each label, score, and action in that view.
+The **clone kind** distinguishes Identical code, Nearly identical code, Similar code, optional Same behavior, different code, and informational Same shape, different content. [How It Works](/docs/how-it-works/#read-the-categories) explains the Type I–IV mapping.
 
-## Cluster Id
+**Mass** is copied syntax-tree size multiplied by additional visible copies. **Rank** orders clones by mass, largest first. Neither is a confidence score. **Occurrence count** is the total number of locations, which can exceed the rows displayed in a large group. **Cluster ID** identifies the finding across surfaces.
 
-The cluster id is the stable handle for this duplicate-code group. It is derived from the cluster content, so the same clone keeps the same id across refreshes unless the underlying code changes enough to form a different cluster.
+**Severity** is the configured diagnostic level for the kind, not its mass rank. Identical and Nearly identical default to warning; Similar and Same behavior default to information. Shape-only has no diagnostic by default and never counts as duplication. Colour identifies kind.
 
-Use the id when you need to reference the finding in an issue, an agent prompt, or the MCP `cluster-by-id` flow.
+Structural, token, content and embedding measurements describe a pair. They appear in an explicit comparison, not as a score for the entire cluster.
 
-## Clone Kind
+## Use the sidebar
 
-The heading is the cluster's clone kind: the weakest relation between the cluster's first occurrence and any other member, exactly as comparing that member against the first would report it. **Identical code** means every copy is byte-for-byte the first one. **Nearly identical code** means every copy is an admitted near-copy and at least one differs. **Same behavior, different code** means at least one copy matched on the embedding pass alone. **Similar code** means substantial copied work remains, but statements or control flow have changed enough that it is no longer a near-copy. **Same shape, different content** means the layout matches and almost none of the content is shared — informational, not a clone, and counted toward no duplication figure. Colour follows the kind everywhere: crimson is identical, amber nearly identical, blue similar, violet same behavior, muted grey same shape.
+**Top Offenders** groups findings by **Clone Category**, **Folder**, **Language**, **File** or **No Grouping**. Clones stay in descending mass order. One grouping menu replaces separate language and sorting controls.
 
-## Severity
+**Duplication** shows workspace, folder and file percentages from the same engine calculation used in reports. **Session** shows analysis state and embedding settings. The views refresh with the live analysis.
 
-The badge's glyph is the cluster's mass rank band in the current report: `●●` for the worst, `●` for the top tenth, `◐` for the upper half, `○` for the faint tail. Severity is a prioritisation signal, not a verdict, and it never chooses the colour — read the occurrences before you merge or extract anything.
+Help buttons open formatted explanations on hover or keyboard focus. **Escape** dismisses help; technical details stay collapsed until needed.
 
-## Rank
-
-The rank badge shows where this cluster sits in the current report. `#1` is the worst offender by duplication impact.
-
-## Mass
-
-Mass is Deslop's duplication impact measure: how much source the cluster's canonical extent covers, weighted by membership. Higher mass means a bigger, more widespread duplication. Use it to decide what to inspect first.
-
-Mass is not a percentage and it is not a CI gate. Use repository duplication percent and thresholds for pass or fail decisions.
-
-## Node Count
-
-The node count is the number of raw clone members combined into the cluster before overlapping same-file members are collapsed. It does not measure fragment length.
-
-## Occurrence Count
-
-Occurrence count is the authoritative number of editor locations after overlapping same-file members are collapsed. It can exceed the rows shown when a large cluster is truncated for display.
-
-## Canonical
-
-The canonical occurrence is the first occurrence of the cluster — a stable anchor for navigation and a stable id input. Compare uses it as the left side of the diff and places the occurrence you clicked on the right.
-
-Canonical does not mean "best" or "source of truth."
-
-## Pair evidence is explicit and two-sided
-
-The panel renders cluster facts: rank, band, mass, and occurrences. Similarity measurements — structural shape, token overlap, embedding similarity, content agreement — describe one pair of locations, not a group, so they appear only in an explicit pair comparison you request by selecting both endpoints. No score is pooled, averaged, or attributed to the cluster.
-
-## Occurrences
-
-Occurrences are the concrete file locations where the clone appears. Each row shows a human editor target, not raw byte offsets.
-
-## Occurrence Location
-
-The occurrence location is the file plus line and column that Open will navigate to. When line and column are unavailable, the panel falls back to the path and tells you the source file could not be read by the extension host.
-
-## Hidden Occurrence
-
-`hidden` means the path matched `report_hide` configuration. Deslop still knows about the range, but hidden rows do not inflate the visible report ranking.
-
-## Open Action
-
-Click the file link to open the occurrence and select its code range. There is no separate Open button.
-
-## Compare Action
-
-Click **Compare To Canonical** on a non-canonical occurrence. The canonical range opens on the left and the clicked range on the right, including when both ranges are in the same file. The canonical row is labeled and cannot compare with itself.
-
-For any other pair in the cluster, click **Select for Compare** on the left-hand occurrence, then **Compare with Selected** on the other. **Clear Selection** cancels the choice. Selection clears after comparison or when you navigate to another cluster. Tapping two row backgrounds is an optional shortcut.
-
-The diff title names both ranges and the engine's verdict for that pair: **Identical bytes**, **Differs only by indentation**, or the pair's clone kind.
-
-## Cluster Navigation
-
-Previous cluster and Next cluster move through the same worst-first list as the Top Offenders view. They update the selected cluster locally inside the webview.
-
-## Keyboard Shortcuts
-
-The panel supports keyboard navigation while focus is inside the webview:
+## Keyboard shortcuts
 
 | Shortcut | Action |
 | --- | --- |
-| `j` / `k` | Move the focused occurrence row. |
-| `n` / `p` | Move to the next or previous cluster. |
+| `j` / `k` | Focus the next / previous occurrence. |
+| `n` / `p` | Move to the next / previous cluster. |
 | `Enter` | Open the focused occurrence. |
-| `?` | Toggle detailed keyboard help. |
-
-## Group Top Offenders
-
-Use the single grouping button to choose **Clone Category**, **Folder**, **Language**, **File** or **No Grouping**. Every mode shows the highest-weight findings first. There is no separate sorting or language-split button.
-
-Help buttons show formatted explanations immediately on hover or keyboard focus. Press **Escape** to dismiss help. Technical details are collapsed until you need them, and occurrence rows share one explanation above the list.
+| `?` | Toggle keyboard help. |

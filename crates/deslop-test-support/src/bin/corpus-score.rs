@@ -399,6 +399,7 @@ mod tests {
     use serde_json::json;
 
     const TEST_REPORT: &str = "target/.corpus/corpus-score-missing-timing/report.json";
+    const UNMEASURED_REPORT: &str = "target/.corpus/corpus-score-missing-timing/unmeasured.json";
     const TEST_TIMING: &str = "target/.corpus/corpus-score-missing-timing/absent-timing.json";
     const ENGINE_ID: &str = "current";
 
@@ -423,10 +424,10 @@ mod tests {
     #[test]
     fn unmeasured_run_keeps_accuracy_score_without_a_timing_field() -> Result<()> {
         let root = repo_root();
-        let report = root.join(TEST_REPORT);
+        let report = root.join(UNMEASURED_REPORT);
         fs::create_dir_all(root.join("target/.corpus/corpus-score-missing-timing"))?;
         fs::write(report, "{\"clusters\":[]}")?;
-        let run = json!({"report":TEST_REPORT});
+        let run = json!({"report":UNMEASURED_REPORT});
         let register = json!({"clearly_in":[],"clearly_out":[]});
         let result = scored_run(&run, &register, &root, ENGINE_ID, "fixture", false)?;
         assert_eq!(result.0.correct, 0, "empty register has no judged pairs");
