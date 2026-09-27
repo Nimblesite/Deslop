@@ -46,6 +46,13 @@ pub(super) fn cpu(value: Option<f64>) -> String {
     value.map_or_else(|| ABSENT.to_owned(), |secs| format!("{secs:.2} s"))
 }
 
+/// A CPU rate in percent of one core, or an explicit absence. Whole percents:
+/// the figure is an average over a sampling window, and a decimal would claim
+/// a precision the window does not have.
+pub(super) fn cpu_rate(value: Option<f64>) -> String {
+    value.map_or_else(|| ABSENT.to_owned(), |percent| format!("{percent:.0}%"))
+}
+
 /// Widening that keeps the lossy cast in one reviewed place.
 fn as_f64(value: u64) -> f64 {
     u32::try_from(value).map_or(f64::from(u32::MAX), f64::from)

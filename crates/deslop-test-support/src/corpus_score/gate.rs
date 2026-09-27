@@ -212,19 +212,31 @@ pub struct CorpusTotals {
     pub false_negatives: usize,
     /// See [`Self::false_negatives`].
     pub false_positives: usize,
-    /// Clusters published across the corpus. Description, never scored.
-    pub clusters_total: usize,
+    /// Clusters published across every repository scanned. Description, never
+    /// scored. Absent when any scan left no report to count — a crash never
+    /// reads as a repository with no duplication.
+    pub clusters_total: Option<usize>,
     /// Covered / judged lines among reported CLEARLY IN pairs only. Extent,
     /// never a verdict: missed pairs and CLEARLY OUT pairs are excluded.
     pub matched_in_coverage: Option<RangeCoverage>,
-    /// Wall milliseconds summed only when every scored repository was measured.
+    /// Wall milliseconds summed only when every scanned repository was measured.
     pub elapsed_ms: Option<u64>,
     /// Highest peak resident set any one scan reached, in mebibytes. The runs
     /// are sequential, so the corpus peak is the largest of them, not the sum.
-    /// Absent if any scored repository lacked a peak measurement.
+    /// Absent if any scanned repository lacked a peak measurement.
     pub peak_rss_mb: Option<u64>,
-    /// CPU seconds summed only when every scored repository was measured.
+    /// CPU seconds summed only when every scanned repository was measured.
     pub cpu_seconds: Option<f64>,
+    /// The busiest sampling window any one scan reached, in percent of one
+    /// core. The runs are sequential, so the corpus peak is the largest of
+    /// them. Absent if any scanned repository lacked a peak.
+    pub peak_cpu_percent: Option<f64>,
+    /// Curated checks evaluated across every repository a corpus test ran.
+    pub checks_evaluated: usize,
+    /// See [`Self::checks_evaluated`]: the ones that produced no failure.
+    pub checks_passed: usize,
+    /// Failures `corpus/known-failures.json` does not track.
+    pub checks_new_failures: usize,
     /// `100 * correct / judged` across every judged entry in the corpus.
     pub score_percent: Option<f64>,
 }
@@ -261,33 +273,57 @@ pub fn totals(scores: &[RepoScore]) -> CorpusTotals {
         correct,
         false_negatives: sum(|score| score.false_negatives),
         false_positives: sum(|score| score.false_positives),
-        clusters_total: sum(|score| score.clusters_total),
+        clusters_total: Some(sum(|score| score.clusters_total)),
         matched_in_coverage: matched_in_coverage(scores),
         score_percent: percent(correct, judged),
         ..CorpusTotals::default()
     }
 }
 
-/// [CORPUS-SCORE-COST-COMPLETE] Adds cost only when every scored run was measured.
-pub fn add_costs(totals: &mut CorpusTotals, costs: &BTreeMap<String, super::RunCost>) {
-    if totals.repos == 0 || costs.len() != totals.repos {
+/// [CORPUS-SCORE-COST-COMPLETE] Adds cost only when every one of the `scanned`
+/// repositories was measured. Cost covers every repository the engine scanned,
+/// judged or not: an unjudged scan still took the time and memory it took.
+pub fn add_costs(
+    totals: &mut CorpusTotals,
+    costs: &BTreeMap<String, super::RunCost>,
+    scanned: usize,
+) {
+    if scanned == 0 || costs.len() != scanned {
         totals.elapsed_ms = None;
         totals.peak_rss_mb = None;
         totals.cpu_seconds = None;
+        totals.peak_cpu_percent = None;
         return;
     }
     totals.elapsed_ms = Some(costs.values().map(|cost| cost.elapsed_ms).sum());
+    totals.cpu_seconds = costs.values().map(|cost| cost.cpu_seconds).sum();
+    add_peaks(totals, costs);
+}
+
+/// The largest single scan's peaks. The runs are sequential, so the corpus
+/// peak is the largest of them, never a sum; one unmeasured run leaves it absent.
+fn add_peaks(totals: &mut CorpusTotals, costs: &BTreeMap<String, super::RunCost>) {
     totals.peak_rss_mb = costs
         .values()
         .map(|cost| cost.peak_rss_mb)
         .try_fold(0, |peak, rss| Some(peak.max(rss?)));
-    totals.cpu_seconds = costs.values().map(|cost| cost.cpu_seconds).sum();
+    totals.peak_cpu_percent = costs
+        .values()
+        .map(|cost| cost.peak_cpu_percent)
+        .try_fold(0.0, |peak: f64, busiest| Some(peak.max(busiest?)));
+}
+
+/// [CORPUS-REPORT-CHECKS] Adds the curated checks every corpus test evaluated.
+pub fn add_checks(totals: &mut CorpusTotals, checks: &[&super::checks::CheckOutcome]) {
+    totals.checks_evaluated = checks.iter().map(|outcome| outcome.evaluated.len()).sum();
+    totals.checks_passed = checks.iter().map(|outcome| outcome.passed()).sum();
+    totals.checks_new_failures = checks.iter().map(|outcome| outcome.new_failures()).sum();
 }
 
 /// The movement from one engine's corpus standing to another's.
 ///
 /// Every figure the scorecard's change column prints is derived here, so the
-/// renderer only ever formats a number somebody else computed, and `score.json`
+/// renderer only ever formats a number somebody else computed, and the JSON scorecard
 /// carries the same deltas the markdown shows.
 #[derive(Debug, Clone, Serialize)]
 pub struct CorpusChange {
@@ -300,12 +336,15 @@ pub struct CorpusChange {
     pub false_negatives: i64,
     /// See [`Self::false_negatives`].
     pub false_positives: i64,
-    /// Clusters published. Description, never scored.
-    pub clusters_total: i64,
+    /// Clusters published, absent when either side went uncounted.
+    pub clusters_total: Option<i64>,
     /// Wall milliseconds, absent when either engine lacked a measurement.
     pub elapsed_ms: Option<i64>,
     /// CPU seconds, absent when either side went unmeasured.
     pub cpu_seconds: Option<f64>,
+    /// Peak CPU in percentage points of one core, absent when either side went
+    /// unmeasured.
+    pub peak_cpu_percent: Option<f64>,
     /// Peak resident mebibytes, absent when either side went unmeasured.
     pub peak_rss_mb: Option<i64>,
 }
@@ -330,12 +369,16 @@ pub fn corpus_change(before: &CorpusTotals, after: &CorpusTotals) -> CorpusChang
         correct: moved(before.correct, after.correct),
         false_negatives: moved(before.false_negatives, after.false_negatives),
         false_positives: moved(before.false_positives, after.false_positives),
-        clusters_total: moved(before.clusters_total, after.clusters_total),
+        clusters_total: before
+            .clusters_total
+            .zip(after.clusters_total)
+            .map(|(before, after)| moved(before, after)),
         elapsed_ms: before
             .elapsed_ms
             .zip(after.elapsed_ms)
             .map(|(before, after)| moved(before, after)),
         cpu_seconds: moved_measured(before.cpu_seconds, after.cpu_seconds),
+        peak_cpu_percent: moved_measured(before.peak_cpu_percent, after.peak_cpu_percent),
         peak_rss_mb: before
             .peak_rss_mb
             .zip(after.peak_rss_mb)

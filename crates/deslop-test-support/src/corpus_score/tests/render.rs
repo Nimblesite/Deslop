@@ -26,6 +26,11 @@ const NEW_ELAPSED_MS: u64 = 2500;
 const OLD_PEAK_MB: u64 = 100;
 const NEW_PEAK_MB: u64 = 140;
 const CPU_SECONDS: f64 = 1.5;
+/// Each engine's busiest sampling window, in percent of one core.
+const OLD_PEAK_CPU: f64 = 250.0;
+const NEW_PEAK_CPU: f64 = 380.0;
+/// Clusters each engine's report published.
+const CLUSTERS_PUBLISHED: usize = 1;
 /// Engine labels, and the language the fixture repository is filed under.
 const OLD_LABEL: &str = "engine-old";
 const NEW_LABEL: &str = "engine-new";
@@ -33,18 +38,26 @@ const LANGUAGE: &str = "Rust";
 /// The opening cell of every per-repository row. Each per-repository table
 /// carries exactly one such row — one row per repository, never one per engine.
 const REPO_ROW: &str = "| fixture (Rust) |";
-/// The tables that carry one row per repository: accuracy, then cost.
-const REPO_TABLES: usize = 2;
+/// The tables that carry one row per repository: accuracy, curated checks, then
+/// cost.
+const REPO_TABLES: usize = 3;
 /// The rendered rows the layout tests pin, each one a whole comparison read
 /// across a single line rather than reassembled from two.
 const SCORE_ROW: &str = "| score | 100.0% | 0.0% | -100.0 pts |";
 const CORRECT_ROW: &str = "| correct / judged | 1/1 | 0/1 | -1 correct |";
 const WALL_ROW: &str = "| wall | 2.00 s | 2.50 s | +500 ms |";
-const PEAK_ROW: &str = "| peak RSS | 100 MB | 140 MB | +40 MB |";
-const UNMEASURED_PEAK_ROW: &str = "| peak RSS | — | — | — |";
+const PEAK_ROW: &str = "| peak memory | 100 MB | 140 MB | +40 MB |";
+const UNMEASURED_PEAK_ROW: &str = "| peak memory | — | — | — |";
+const CPU_TIME_ROW: &str = "| CPU time | 1.50 s | 1.50 s | +0.0 s |";
+const PEAK_CPU_ROW: &str = "| peak CPU | 250% | 380% | +130.0 pts |";
+const UNMEASURED_PEAK_CPU_ROW: &str = "| peak CPU | — | — | — |";
+/// A run no corpus test checked states that, in the standing and per repository.
+const UNCHECKED_STANDING_ROW: &str = "| curated checks passed | 0/0 | 0/0 | — |";
+const UNCHECKED_REPO_ROW: &str = "| fixture (Rust) | — | — | — |";
 const UNMEASURED_WALL_ROW: &str = "| wall | — | — | — |";
 const BOTH_ELAPSED_MS: u64 = OLD_ELAPSED_MS + NEW_ELAPSED_MS;
 const BOTH_CPU_SECONDS: f64 = CPU_SECONDS + CPU_SECONDS;
+const ONE_REPO: usize = 1;
 const TWO_REPOS: usize = 2;
 const TOTALS_FIELD: &str = "totals";
 const CHANGE_FIELD: &str = "change";
@@ -52,6 +65,7 @@ const REPOS_FIELD: &str = "repos";
 const ELAPSED_FIELD: &str = "elapsed_ms";
 const CPU_FIELD: &str = "cpu_seconds";
 const PEAK_FIELD: &str = "peak_rss_mb";
+const PEAK_CPU_FIELD: &str = "peak_cpu_percent";
 const COVERAGE_FIELD: &str = "matched_in_coverage";
 const COVERED_FIELD: &str = "covered_lines";
 const JUDGED_FIELD: &str = "judged_lines";
@@ -66,7 +80,7 @@ const SECOND_LANGUAGE: &str = "Python";
 const WIDE_SCOPE_LINE: &str = "Scope: **3 repositories** across **2 languages** — Python, Rust.";
 const SINGLE_SCOPE_LINE: &str = "Scope: **1 repository** across **1 language** — Rust.";
 const COST_ROW: &str =
-    "| fixture (Rust) | 1 | 1 | 2.00 s | 2.50 s | 100 MB | 140 MB | 1.50 s | 1.50 s |";
+    "| fixture (Rust) | 1 | 1 | 2.00 s | 2.50 s | 1.50 s | 1.50 s | 250% | 380% | 100 MB | 140 MB |";
 const COVERAGE_ROW: &str =
     "| fixture | IN | `src/one.rs:10-20` + `src/two.rs:30-40` | 22/22 (100.0%) | 7/22 (31.8%) |";
 const AGGREGATE_COVERAGE_ROW: &str = "| matched IN coverage | 22/22 (100.0%) | 7/22 (31.8%) | — |";
@@ -84,13 +98,24 @@ fn field<'a>(document: &'a Value, path: &[&str]) -> Option<&'a Value> {
 }
 
 /// A measured cost for the rendering tests.
-fn cost(elapsed_ms: u64, peak_rss_mb: u64) -> RunCost {
+fn cost(elapsed_ms: u64, peak_rss_mb: u64, peak_cpu_percent: f64) -> RunCost {
     RunCost {
         elapsed_ms,
         peak_rss_mb: Some(peak_rss_mb),
         cpu_seconds: Some(CPU_SECONDS),
+        peak_cpu_percent: Some(peak_cpu_percent),
         binary_sha256: "deadbeef".to_owned(),
     }
+}
+
+/// The old engine's measured cost.
+fn old_cost() -> RunCost {
+    cost(OLD_ELAPSED_MS, OLD_PEAK_MB, OLD_PEAK_CPU)
+}
+
+/// The new engine's measured cost.
+fn new_cost() -> RunCost {
+    cost(NEW_ELAPSED_MS, NEW_PEAK_MB, NEW_PEAK_CPU)
 }
 
 /// Two judged repositories isolate incomplete aggregate measurements.
@@ -102,23 +127,24 @@ fn paired_totals() -> Result<CorpusTotals> {
 /// A fully measured pair that each partial-cost test can change one field in.
 fn paired_costs() -> BTreeMap<String, RunCost> {
     BTreeMap::from([
-        (REPO.to_owned(), cost(OLD_ELAPSED_MS, OLD_PEAK_MB)),
-        (SECOND_REPO.to_owned(), cost(NEW_ELAPSED_MS, NEW_PEAK_MB)),
+        (REPO.to_owned(), old_cost()),
+        (SECOND_REPO.to_owned(), new_cost()),
     ])
 }
 
 /// A two-engine scorecard over one repository.
 fn card(before: &RepoScore, after: &RepoScore) -> Scorecard {
-    let engine_totals = |score: &RepoScore, elapsed, peak| {
+    let engine_totals = |score: &RepoScore, measured: RunCost| {
         let mut summed = totals(std::slice::from_ref(score));
         add_costs(
             &mut summed,
-            &BTreeMap::from([(REPO.to_owned(), cost(elapsed, peak))]),
+            &BTreeMap::from([(REPO.to_owned(), measured)]),
+            ONE_REPO,
         );
         summed
     };
-    let before_totals = engine_totals(before, OLD_ELAPSED_MS, OLD_PEAK_MB);
-    let after_totals = engine_totals(after, NEW_ELAPSED_MS, NEW_PEAK_MB);
+    let before_totals = engine_totals(before, old_cost());
+    let after_totals = engine_totals(after, new_cost());
     Scorecard {
         generated_at: "2026-09-04T00:00:00Z".to_owned(),
         engines: vec![
@@ -135,14 +161,20 @@ fn card(before: &RepoScore, after: &RepoScore) -> Scorecard {
             name: REPO.to_owned(),
             language: LANGUAGE.to_owned(),
             sha: pinned_sha(),
+            registered: true,
             scores: BTreeMap::from([
                 (OLD_ENGINE.to_owned(), before.clone()),
                 (NEW_ENGINE.to_owned(), after.clone()),
             ]),
-            costs: BTreeMap::from([
-                (OLD_ENGINE.to_owned(), cost(OLD_ELAPSED_MS, OLD_PEAK_MB)),
-                (NEW_ENGINE.to_owned(), cost(NEW_ELAPSED_MS, NEW_PEAK_MB)),
+            clusters: BTreeMap::from([
+                (OLD_ENGINE.to_owned(), CLUSTERS_PUBLISHED),
+                (NEW_ENGINE.to_owned(), CLUSTERS_PUBLISHED),
             ]),
+            costs: BTreeMap::from([
+                (OLD_ENGINE.to_owned(), old_cost()),
+                (NEW_ENGINE.to_owned(), new_cost()),
+            ]),
+            checks: BTreeMap::new(),
             degradation: Some(degradation(before, after)),
         }],
         change: Some(corpus_change(&before_totals, &after_totals)),
@@ -173,8 +205,20 @@ fn the_scorecard_reports_cost_beside_the_score_and_never_folds_it_in() -> Result
         "wall time and its change are reported: {rendered}"
     );
     assert!(
-        rendered.contains("| CPU | 1.50 s | 1.50 s |"),
+        rendered.contains(CPU_TIME_ROW),
         "CPU seconds are reported per engine: {rendered}"
+    );
+    assert!(
+        rendered.contains(PEAK_CPU_ROW),
+        "peak CPU and its change are reported per engine: {rendered}"
+    );
+    assert!(
+        rendered.contains(UNCHECKED_STANDING_ROW),
+        "a run no corpus test checked says it passed nothing of nothing: {rendered}"
+    );
+    assert!(
+        rendered.contains(UNCHECKED_REPO_ROW),
+        "each engine's curated checks read as absent, never as passing: {rendered}"
     );
     assert!(
         rendered.contains(PEAK_ROW),
@@ -214,7 +258,7 @@ fn the_scorecard_describes_how_much_of_each_pair_was_reported() -> Result<()> {
             &[TOTALS_FIELD, NEW_ENGINE, COVERAGE_FIELD, COVERED_FIELD]
         ),
         Some(&Value::from(PARTIAL_COVERED_LINES)),
-        "score.json must carry the same aggregate covered-line count as SCORE.md"
+        "the JSON scorecard must carry the same aggregate covered-line count as the markdown"
     );
     assert_eq!(
         field(
@@ -244,7 +288,7 @@ fn an_unmeasured_run_renders_as_absent_rather_than_as_zero() -> Result<()> {
         target.costs = BTreeMap::new();
     }
     for engine in unmeasured.totals.values_mut() {
-        add_costs(engine, &BTreeMap::new());
+        add_costs(engine, &BTreeMap::new(), ONE_REPO);
     }
     let standing = |id: &str| {
         unmeasured
@@ -270,6 +314,10 @@ fn an_unmeasured_run_renders_as_absent_rather_than_as_zero() -> Result<()> {
         rendered.contains(UNMEASURED_PEAK_ROW),
         "an unmeasured peak reads as absent in every column, change included: {rendered}"
     );
+    assert!(
+        rendered.contains(UNMEASURED_PEAK_CPU_ROW),
+        "an unmeasured peak CPU reads as absent, never as an idle scan: {rendered}"
+    );
     let serialized = serde_json::to_value(&unmeasured)?;
     assert_eq!(
         field(&serialized, &[TOTALS_FIELD, OLD_ENGINE, ELAPSED_FIELD]),
@@ -288,7 +336,8 @@ fn missing_repository_timing_does_not_publish_partial_aggregate_costs() -> Resul
     let mut standing = paired_totals()?;
     add_costs(
         &mut standing,
-        &BTreeMap::from([(REPO.to_owned(), cost(OLD_ELAPSED_MS, OLD_PEAK_MB))]),
+        &BTreeMap::from([(REPO.to_owned(), old_cost())]),
+        TWO_REPOS,
     );
     let serialized = serde_json::to_value(&standing)?;
     assert_eq!(
@@ -298,6 +347,7 @@ fn missing_repository_timing_does_not_publish_partial_aggregate_costs() -> Resul
     assert_eq!(field(&serialized, &[ELAPSED_FIELD]), Some(&Value::Null));
     assert_eq!(field(&serialized, &[CPU_FIELD]), Some(&Value::Null));
     assert_eq!(field(&serialized, &[PEAK_FIELD]), Some(&Value::Null));
+    assert_eq!(field(&serialized, &[PEAK_CPU_FIELD]), Some(&Value::Null));
     Ok(())
 }
 
@@ -309,7 +359,7 @@ fn partial_cpu_timing_keeps_complete_wall_and_peak_without_inventing_cpu() -> Re
         .get_mut(SECOND_REPO)
         .ok_or_else(|| anyhow!("second run absent"))?
         .cpu_seconds = None;
-    add_costs(&mut standing, &costs);
+    add_costs(&mut standing, &costs, TWO_REPOS);
     let serialized = serde_json::to_value(&standing)?;
     assert_eq!(
         field(&serialized, &[ELAPSED_FIELD]),
@@ -331,7 +381,7 @@ fn partial_peak_timing_keeps_complete_wall_and_cpu_without_inventing_peak() -> R
         .get_mut(SECOND_REPO)
         .ok_or_else(|| anyhow!("second run absent"))?
         .peak_rss_mb = None;
-    add_costs(&mut standing, &costs);
+    add_costs(&mut standing, &costs, TWO_REPOS);
     let serialized = serde_json::to_value(&standing)?;
     assert_eq!(
         field(&serialized, &[ELAPSED_FIELD]),

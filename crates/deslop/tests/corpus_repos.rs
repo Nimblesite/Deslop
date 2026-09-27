@@ -54,14 +54,15 @@ use std::{path::Path, time::Duration};
 use anyhow::{anyhow, Result};
 use deslop_test_support::{
     corpus::{
-        array, baseline_mode, classify, clone_dir, cluster_paths, field_u64, first_occurrence_text,
-        manifest, scan, string_field, u64_field, Baseline, CorpusRun, Failure,
+        array, clone_dir, cluster_paths, field_u64, first_occurrence_text, manifest, scan,
+        string_field, u64_field, CorpusRun, Failure,
     },
     corpus_confidence::{
         check_cluster_mass_contract, check_curated_recall, check_type2_curated_recall,
     },
     corpus_data_table::{data_table_failure, RANKED_HEAD},
     corpus_determinism::check_reports_agree,
+    corpus_judge::{accuracy_curated, publish_crash, publish_then_judge, Judged, Scan},
     corpus_precision::{check_boilerplate_not_ranked_first, check_curated_precision},
     corpus_scope::check_scan_scope,
 };
@@ -198,16 +199,12 @@ fn determinism_gate(name: &str) -> Result<()> {
     let root = clone_dir(&manifest)?;
     let tmp = tempfile::tempdir()?;
 
-    let first = scan(&root, &tmp.path().join("first"))?;
-    let second = scan(&root, &tmp.path().join("second"))?;
-
-    println!(
-        "{name}: run1 clusters={} dup={:.4}%  run2 clusters={} dup={:.4}%",
-        rendered_cluster_count(&first.report),
-        duplication_percent(&first.report),
-        rendered_cluster_count(&second.report),
-        duplication_percent(&second.report),
-    );
+    let (first, second) = match scan_twice(&root, tmp.path()) {
+        Ok(both) => both,
+        Err(error) => return publish_crash(error, Scan::Rescan, name, &manifest),
+    };
+    report_measurements(name, &manifest, &first);
+    print_rerun(name, &first, &second);
 
     // [PIPELINE-DETERMINISM] The whole rendered payload, not the ordered
     // cluster ids: ids come from the smallest member's hash and survive
@@ -216,7 +213,27 @@ fn determinism_gate(name: &str) -> Result<()> {
     // each of those as its own unit case.
     let mut failures = Vec::new();
     check_reports_agree(&first.report, &second.report, &mut failures);
-    fail_on(name, &["determinism"], &failures)
+    let judged = Judged::new(Scan::Rescan, name, &manifest, &first.cost);
+    publish_then_judge(&judged.with_report(&first.report_path), &failures)
+}
+
+/// Two identical scans of `root`, each writing under `work`.
+fn scan_twice(root: &Path, work: &Path) -> Result<(CorpusRun, CorpusRun)> {
+    Ok((
+        scan(root, &work.join("first"))?,
+        scan(root, &work.join("second"))?,
+    ))
+}
+
+/// Prints both scans' headline figures side by side.
+fn print_rerun(name: &str, first: &CorpusRun, second: &CorpusRun) {
+    println!(
+        "{name}: run1 clusters={} dup={:.4}%  run2 clusters={} dup={:.4}%",
+        rendered_cluster_count(&first.report),
+        duplication_percent(&first.report),
+        rendered_cluster_count(&second.report),
+        duplication_percent(&second.report),
+    );
 }
 
 /// How many clusters a report rendered.
@@ -235,25 +252,6 @@ fn duplication_percent(report: &Value) -> f64 {
         .unwrap_or_default()
 }
 
-/// Checks the main gate evaluates. Used to scope baseline reconciliation so
-/// it never reports the determinism gate's entries as fixed.
-const GATE_CHECKS: &[&str] = &[
-    "files_analysed",
-    "cluster_count_band",
-    "recall",
-    "recall_quality",
-    "precision",
-    "boilerplate_rank",
-    "data_table_rank",
-    "fused_bounded_max",
-    "cluster_contract",
-    "cluster_mass",
-    "cluster_rank",
-    "type2_recall",
-    "wall",
-    "memory",
-];
-
 /// Scans one pinned repository and asserts every curated property of the
 /// resulting report.
 fn gate(name: &str) -> Result<()> {
@@ -261,57 +259,43 @@ fn gate(name: &str) -> Result<()> {
     let root = clone_dir(&manifest)?;
     let tmp = tempfile::tempdir()?;
 
-    let run = scan(&root, &tmp.path().join(name))?;
+    let run = match scan(&root, &tmp.path().join(name)) {
+        Ok(run) => run,
+        Err(error) => return publish_crash(error, Scan::Main, name, &manifest),
+    };
     report_measurements(name, &manifest, &run);
     warn_when_accuracy_unasserted(name, &manifest);
 
+    let failures = gate_failures(&manifest, &root, &run)?;
+    let judged = Judged::new(Scan::Main, name, &manifest, &run.cost);
+    publish_then_judge(&judged.with_report(&run.report_path), &failures)
+}
+
+/// Every curated check the main gate evaluates, and what each observed.
+fn gate_failures(manifest: &Value, root: &Path, run: &CorpusRun) -> Result<Vec<Failure>> {
     let mut failures = Vec::new();
     // [CORPUS-SCOPE] First, because every check below iterates a set an
     // empty report leaves empty: a scan that reached nothing satisfies all
     // of them at once (gh #342).
-    check_scan_scope(&manifest, &run.report, &mut failures);
-    check_curated_recall(&manifest, &run.report, &mut failures);
-    check_curated_precision(&manifest, &run.report, &mut failures);
-    check_boilerplate_not_ranked_first(&manifest, &root, &run, &mut failures)?;
-    check_data_tables_not_ranked_as_logic(&manifest, &root, &run, &mut failures)?;
-    // [CORPUS-BASELINE] The confidence checks. The first reads no
-    // manifest — it judges the *shape* of the rendered report, so it runs
-    // on every repository including the ones whose recall is not yet
-    // curated. The third is the curated Type-2 recall assertion
-    // ([CORPUS-RECALL]): it reads `must_find_type2` and asserts nothing
-    // where the manifest curates nothing.
+    check_scan_scope(manifest, &run.report, &mut failures);
+    check_curated_recall(manifest, &run.report, &mut failures);
+    check_curated_precision(manifest, &run.report, &mut failures);
+    check_boilerplate_not_ranked_first(manifest, root, run, &mut failures)?;
+    check_data_tables_not_ranked_as_logic(manifest, root, run, &mut failures)?;
+    // [CORPUS-BASELINE] The mass contract judges the report's shape, so it runs
+    // on every repository; curated Type-2 recall ([CORPUS-RECALL]) asserts
+    // nothing where the manifest curates nothing.
     check_cluster_mass_contract(&run.report, &mut failures);
-    check_type2_curated_recall(&manifest, &run.report, &mut failures);
-    check_ceilings(&manifest, &run, &mut failures)?;
-
-    fail_on(name, GATE_CHECKS, &failures)
+    check_type2_curated_recall(manifest, &run.report, &mut failures);
+    check_ceilings(manifest, run, &mut failures)?;
+    Ok(failures)
 }
 
-/// [CORPUS-BASELINE] Classifies observed failures against `corpus/known-failures.json` and fails
-/// the test on whatever survives. Strict mode fails on everything; baseline
-/// mode fails only on checks that are not already tracked, so CI reports the
-/// known defect list without blocking on it.
-fn fail_on(name: &str, evaluated: &[&str], failures: &[Failure]) -> Result<()> {
-    let baseline = Baseline::load()?;
-    let fatal = classify(name, evaluated, failures, &baseline);
-    assert!(
-        fatal.is_empty(),
-        "{name} corpus gate failed {} {}check(s):\n  - {}",
-        fatal.len(),
-        if baseline_mode() { "NEW " } else { "" },
-        fatal
-            .iter()
-            .map(|failure| format!("{}: {}", failure.check, failure.detail))
-            .collect::<Vec<_>>()
-            .join("\n  - ")
-    );
-    Ok(())
-}
-
-/// Prints the measured cost so a passing run still records the numbers.
+/// Prints the measured cost as the scan finishes. The record of it is the
+/// scorecard [`publish`] writes; this is the progress line beside it.
 fn report_measurements(name: &str, manifest: &Value, run: &CorpusRun) {
     println!(
-        "{name} [{}]: files={} loc={} clusters={} dup={:.1}% wall={:.1}s peak_rss={}MB",
+        "{name} [{}]: files={} loc={} clusters={} dup={:.1}% wall={:.1}s cpu={:.1}s peak_cpu={} peak_rss={}MB",
         string_field(manifest, "language").unwrap_or("?"),
         field_u64(&run.report, "files_analysed"),
         pointer_u64(&run.report, "/metrics/analysed_loc"),
@@ -320,8 +304,12 @@ fn report_measurements(name: &str, manifest: &Value, run: &CorpusRun) {
             .pointer("/metrics/duplication_percent")
             .and_then(Value::as_f64)
             .unwrap_or_default(),
-        run.wall.as_secs_f64(),
-        run.peak_rss_mb,
+        run.cost.wall.as_secs_f64(),
+        run.cost.cpu_seconds,
+        run.cost
+            .peak_cpu_percent
+            .map_or_else(|| "-".to_owned(), |percent| format!("{percent:.0}%")),
+        run.cost.peak_rss_mb,
     );
 }
 
@@ -329,10 +317,7 @@ fn report_measurements(name: &str, manifest: &Value, run: &CorpusRun) {
 /// green result is never mistaken for evidence that Deslop is accurate on it.
 /// Such a run has proven only that the scan fit inside its resource budget.
 fn warn_when_accuracy_unasserted(name: &str, manifest: &Value) {
-    let no_recall =
-        array(manifest, "must_find").is_empty() && array(manifest, "must_find_type2").is_empty();
-    let no_precision = manifest.get("must_not_rank_first").is_none();
-    if no_recall && no_precision {
+    if !accuracy_curated(manifest) {
         println!(
             "  !! {name}: ACCURACY UNASSERTED — no curated duplicates and no ranking rule. \
              This run checked resource ceilings ONLY. A pass here is NOT evidence that \
@@ -376,24 +361,24 @@ fn check_ceilings(manifest: &Value, run: &CorpusRun, failures: &mut Vec<Failure>
         .ok_or_else(|| anyhow!("manifest has no `ceilings`"))?;
 
     let max_wall = Duration::from_secs(u64_field(ceilings, "max_wall_seconds")?);
-    if run.wall > max_wall {
+    if run.cost.wall > max_wall {
         failures.push(Failure::new(
             "wall",
             format!(
                 "scan took {:.1}s, ceiling is {}s",
-                run.wall.as_secs_f64(),
+                run.cost.wall.as_secs_f64(),
                 max_wall.as_secs()
             ),
         ));
     }
 
     let max_rss = u64_field(ceilings, "max_peak_rss_mb")?;
-    if run.peak_rss_mb > max_rss {
+    if run.cost.peak_rss_mb > max_rss {
         failures.push(Failure::new(
             "memory",
             format!(
                 "peak RSS {}MB exceeds the {max_rss}MB ceiling",
-                run.peak_rss_mb
+                run.cost.peak_rss_mb
             ),
         ));
     }
