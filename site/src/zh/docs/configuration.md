@@ -12,7 +12,7 @@ lang: zh
 
 # 配置与报告
 
-本页介绍当前源码，包括 `0.34.0` 之后的改动。可用安装包见[版本发布](/zh/releases/)。
+本页适用于 [0.35.0](/zh/releases/)。
 
 Deslop 从两处读取设置：
 
@@ -230,7 +230,7 @@ structural_only = "ignore"
 
 ### 比较两个出现位置
 
-`--compare` 已加入 `0.34.0` 之后的当前源码。传入两个 `<path>:<start_byte>:<end_byte>` 端点，使用 JSON 报告中的确切字节范围：
+`--compare` 在 **0.35.0** 中加入。传入两个 `<path>:<start_byte>:<end_byte>` 端点，使用 JSON 报告中的确切字节范围：
 
 ```text
 deslop . --compare "<left-path>:<start-byte>:<end-byte>" "<right-path>:<start-byte>:<end-byte>"

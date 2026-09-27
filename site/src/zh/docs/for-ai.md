@@ -12,7 +12,7 @@ lang: zh
 
 # 面向 AI
 
-使用与编辑器相同的引擎结果。本页介绍 `0.34.0` 之后的当前源码；安装包见[版本发布](/zh/releases/)，连接设置见[AI 智能体](/zh/docs/ai-integration/)。
+使用与编辑器相同的引擎结果。本页适用于 [0.35.0](/zh/releases/)。连接设置见[AI 智能体](/zh/docs/ai-integration/)。
 
 ## 动手写之前先检查
 

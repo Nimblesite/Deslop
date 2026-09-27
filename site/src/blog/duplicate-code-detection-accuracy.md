@@ -1,6 +1,6 @@
 ---
 layout: layouts/blog.njk
-title: "Duplicate Code Detection: Accuracy Changes Since 0.34.0"
+title: "Deslop 0.35.0: Accuracy in Duplicate Code Detection"
 date: 2026-09-27
 author: Christian Findlay
 tags:
@@ -9,7 +9,7 @@ tags:
   - code-quality
   - technical-debt
 category: engineering
-description: "Deslop's next release targets false matches, missed copies and incomplete clone ranges, with clearer comparisons and duplication metrics."
+description: "Deslop 0.35.0 targets false matches, missed copies and incomplete clone ranges, with clearer comparisons and duplication metrics."
 excerpt: "Finding a pair is only part of accuracy. Deslop also needs to report the complete copied code, reject unrelated lookalikes and count the right lines."
 heroImage: "/assets/img/blog/towards-100-percent-accuracy-header.webp"
 heroImageWidth: "1600"
@@ -22,7 +22,7 @@ ogImageHeight: "630"
 
 A duplicate code detector earns its place in code review by finding copies worth inspecting. False positives waste review time. False negatives leave the same bug waiting to be fixed in another location. Incomplete findings can identify a copy while hiding most of it.
 
-The changes on Deslop's `main` branch since **0.34.0** target all three problems. They are preparation for the next packaged release, not a claim that the existing 0.34.0 download includes them. [Releases](/releases/) lists the available packages.
+Deslop **0.35.0** addresses these problems through clone classification, complete-range recovery and clearer comparison evidence. [Download the release](/releases/).
 
 ## Find the whole copy
 

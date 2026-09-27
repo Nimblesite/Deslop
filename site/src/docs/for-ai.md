@@ -11,7 +11,7 @@ docsGroup: reference
 
 # For AI
 
-Use the same engine findings as the editor. This reference describes current source after `0.34.0`; check [Releases](/releases/) for packaged versions and [AI Agents](/docs/ai-integration/) for connection setup.
+Use the same engine findings as the editor. This reference covers [0.35.0](/releases/). For connection setup, see [AI Agents](/docs/ai-integration/).
 
 ## Check before you write
 

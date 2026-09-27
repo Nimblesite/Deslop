@@ -11,7 +11,7 @@ docsGroup: trust
 
 # Accuracy Transparency
 
-Duplication percentage measures the code covered by reported clones. It does not measure how accurate the detector is. This page describes the current source, including changes since `0.34.0`; packaged versions are listed under [Releases](/releases/).
+Duplication percentage measures the code covered by reported clones. It does not measure how accurate the detector is. This page covers [0.35.0](/releases/).
 
 ## How the percentage is calculated
 

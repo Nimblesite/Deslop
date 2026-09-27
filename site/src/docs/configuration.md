@@ -11,7 +11,7 @@ docsGroup: reference
 
 # Configuration and Reports
 
-This reference describes the current source, including changes since `0.34.0`. See [Releases](/releases/) for packaged versions.
+This reference covers [0.35.0](/releases/).
 
 - **`.deslop.toml`** — a committed file next to your code. This is where project-wide policy lives: what to skip, what to hide, and when to fail CI.
 - **CLI flags** — per-run overrides. A flag always wins over the matching config key.
@@ -221,7 +221,7 @@ Every run also takes flags. A flag overrides the matching `.deslop.toml` key for
 
 ### Compare two occurrences
 
-`--compare` is available in the current source after `0.34.0`. Pass two endpoints as `<path>:<start_byte>:<end_byte>`, using exact byte ranges from the JSON report:
+`--compare` was added in **0.35.0**. Pass two endpoints as `<path>:<start_byte>:<end_byte>`, using exact byte ranges from the JSON report:
 
 ```text
 deslop . --compare "<left-path>:<start-byte>:<end-byte>" "<right-path>:<start-byte>:<end-byte>"

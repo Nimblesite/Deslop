@@ -1,6 +1,6 @@
 ---
 layout: layouts/blog.njk
-title: "重复代码检测：0.34.0 之后的准确性改进"
+title: "Deslop 0.35.0：重复代码检测的准确性改进"
 date: 2026-09-27
 author: Christian Findlay
 lang: zh
@@ -10,7 +10,7 @@ tags:
   - code-quality
   - technical-debt
 category: engineering
-description: "Deslop 下一版本聚焦误报、漏报与不完整的克隆范围，并提供更清晰的比较和重复度指标。"
+description: "Deslop 0.35.0 聚焦误报、漏报与不完整的克隆范围，并提供更清晰的比较和重复度指标。"
 excerpt: "找到配对只是准确性的一部分。检测器还需要报告完整副本，排除无关的相似外形，并统计正确的源代码行。"
 heroImage: "/assets/img/blog/towards-100-percent-accuracy-header.webp"
 heroImageWidth: "1600"
@@ -23,7 +23,7 @@ ogImageHeight: "630"
 
 重复代码检测器的价值在于找到值得检查的副本。误报浪费审查时间；漏报让同一个缺陷留在另一处；不完整的结果则可能认出了副本，却隐藏了大部分复制内容。
 
-Deslop 的 `main` 分支在 **0.34.0** 之后针对这三类问题做了改动。这些是下一次安装包发布的准备工作，不表示现有 0.34.0 下载已包含它们。可用安装包见[版本发布](/zh/releases/)。
+Deslop **0.35.0** 通过克隆分类、完整范围恢复和更清晰的比较证据处理这些问题。[下载此版本](/zh/releases/)。
 
 ## 找到完整副本
 

@@ -16,7 +16,7 @@ ogImageHeight: '630'
 updated: '2026-09-27'
 ---
 
-Updated for the source changes since `0.34.0`. The earlier ranking multiplied by a logarithmic byte-span term; current ranking uses duplicated mass alone.
+Updated for **0.35.0**. The earlier ranking multiplied by a logarithmic byte-span term; current ranking uses duplicated mass alone.
 
 ## The formula
 

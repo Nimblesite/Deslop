@@ -13,7 +13,7 @@ docsGroup: trust
 
 Deslop parses source code with tree-sitter, finds candidate copies, checks their content, and groups the surviving findings. The CLI, editor and MCP tools share the same Rust engine.
 
-This page describes the current source, including changes since `0.34.0`. Check [Releases](/releases/) for packaged versions.
+This guide covers [0.35.0](/releases/).
 
 ## Find candidate copies
 

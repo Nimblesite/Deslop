@@ -11,7 +11,7 @@ docsGroup: guides
 
 # VS Code Cluster Panel
 
-The panel shows a group of code occurrences and lets you inspect the actual copies. These controls describe the current source, including changes since `0.34.0`; see [Releases](/releases/) for packaged versions.
+The panel shows a group of code occurrences and lets you inspect the actual copies. This guide covers [0.35.0](/releases/).
 
 ## Open and compare
 
