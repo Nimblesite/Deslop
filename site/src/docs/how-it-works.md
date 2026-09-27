@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
-title: How It Works — Tree-sitter ASTs, MinHash LSH, HNSW embeddings
-description: How Deslop detects duplicate code with tree-sitter ASTs, Merkle fingerprints, MinHash LSH, optional HNSW embeddings, and worst-first ranking.
+title: How It Works — Finding and Comparing Duplicate Code
+description: How Deslop finds exact, renamed and edited copies, separates shape-only matches, and ranks duplicate code by mass.
 eleventyNavigation:
   key: How It Works
   order: 2
@@ -11,106 +11,52 @@ docsGroup: trust
 
 # How It Works
 
-Deslop is a fixed, deterministic pipeline. No step uses regex on source code. Every step is cache-keyed so an unchanged file is skipped. The output of each stage is small, structured, and auditable.
+Deslop parses source code with tree-sitter, finds candidate copies, checks their content, and groups the surviving findings. The CLI, editor and MCP tools share the same Rust engine.
 
-```
-discover → parse → normalize → fingerprint → cluster
-           → LSH → embed → fuse → rank → render
-```
+This page describes the current source, including changes since `0.34.0`. Check [Releases](/releases/) for packaged versions.
 
-Every stage maps to a research line; the file pointers are in [Research Background](/docs/research-background/) and the spec's [implementation-status table](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/SPEC.md#algorithm-implementation-status).
+## Find candidate copies
 
-## Discover
+Deslop supports C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F# and Go. It respects `.gitignore` and excludes dependency trees and build artifacts by default. See [Configuration](/docs/configuration/#built-in-rules-always-on) for exclusions.
 
-`.gitignore` is honoured. Only files whose extension maps to a supported-language grammar are analysed — everything else, binaries included, is skipped. Symlinks are not followed. Each candidate file's content is hashed with BLAKE3, and that hash is one component of the composite cache key each stage uses, so an unchanged file is skipped.
+The engine normalizes syntax trees so changes to names, literals and formatting do not hide candidates. It fingerprints both subtrees and consecutive statement runs, including copies inside a single file. Structural overlap and MinHash similarity help recover edited copies whose enclosing methods differ.
 
-## Parse
+Normalization alone cannot establish a clone. The engine also checks source content, consistent renaming and the operations being performed. Changing a collaborator's name differs from changing which operation it calls.
 
-Each language ships a grammar via tree-sitter:
+## Read the categories
 
-| Language | Status |
+| Report label | Meaning |
 | --- | --- |
-| [C#](https://learn.microsoft.com/en-us/dotnet/csharp/) | v1 |
-| [Rust](https://www.rust-lang.org/) | v1 |
-| [Python](https://www.python.org/) | v1 |
-| [Dart](https://dart.dev/) | v1 |
-| [JavaScript](https://developer.mozilla.org/en-US/docs/Web/JavaScript) | v1 |
-| [TypeScript](https://www.typescriptlang.org/) / TSX | v1 |
-| [PHP](https://www.php.net/) | v1 |
-| [F#](https://fsharp.org/) | v1 |
-| [Go](https://go.dev/) | v1 |
+| **Identical code** | Source text matches apart from permitted whitespace differences. Corresponds to Type I; Deslop's identity rule is stricter than the research definition, which also permits comment changes. |
+| **Nearly identical code** | Renamed or parameterized copies, or copies with small edits: Type II and close Type III. |
+| **Similar code** | Substantial copied work with larger statement or control-flow edits: Type III. |
+| **Same behavior, different code** | Optional embedding-based candidates for Type IV. Review both implementations; this is not proof that they are interchangeable. |
+| **Same shape, different content** | Matching layout with negligible shared content. Informational, not a clone. |
 
-A parser produces an AST. No source-level regex touches this pipeline — ever.
+Shape-only findings contribute nothing to clone counts, duplicated mass or duplication percentages. They appear after clones and have no diagnostic by default. A group label describes its established member relations; a chain of matches does not prove every possible pair matches.
 
-## Normalize
+## Compare two occurrences
 
-Identical code can differ only in identifiers and literals (Type-2 renaming). Deslop strips:
+Similarity evidence belongs to two explicit source ranges. A cluster carries its kind, occurrences, mass and rank; it does not carry one pair's similarity score as a group-wide confidence value.
 
-- identifier names (rewritten to `__ident__`)
-- string / number / char literals (rewritten to `__literal__`)
-- comments, whitespace, trivia
+In VS Code, use **Compare To Canonical**, or **Select for Compare** followed by **Compare with Selected**. The CLI also supports [`--compare`](/docs/configuration/#compare-two-occurrences). The engine recomputes the verdict for the chosen endpoints.
 
-Per-language normalization rules, identical output format across languages. A renamed copy of a method hashes to the same fingerprint as the original.
+## Rank by duplicated mass
 
-## Fingerprint
-
-Every subtree with ≥ `--min-nodes` nodes gets a **bottom-up BLAKE3 Merkle hash** combining its node kind with the ordered hashes of its children. This is Chilowicz 2009's syntax-tree fingerprinting, applied to tree-sitter ASTs. A second pass — sibling-window fingerprints of width 2 to 8 — extends **nearly identical code** [Type-3] recall by hashing contiguous statement runs whose parent doesn't share structure (`crates/deslop-core/src/sibling.rs`). Subtrees are emitted with byte ranges — line numbers are a render-time concern. The on-disk cache is keyed by `(content_hash, language, tool_version, min_nodes)`.
-
-## Cluster
-
-Identical Merkle hashes across files or within the same file form an **identical code** cluster (Type-1 / Type-2) immediately. This pass is O(n) and finds the most expensive duplication without any approximate matching. Surviving pairs from the LSH and embedding passes are unioned in and clustered by **transitive closure** ([`crates/deslop-core/src/cluster.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/cluster.rs)) — A↔B and B↔C produce one cluster even when A and C never paired directly.
-
-## LSH (near-miss)
-
-For **nearly identical code** (Type-3, structurally similar but not identical), Deslop builds a 5-wide k-gram stream of normalized AST kinds per subtree, computes a **128-value MinHash signature** (Broder 1997), and groups them into **32 bands of 4 rows** for [Indyk-Motwani locality-sensitive hashing](https://en.wikipedia.org/wiki/Locality-sensitive_hashing). Subtree pairs that collide in a band become candidates; Jaccard is then estimated from full-signature agreement. SourcererCC's bag-of-tokens design is the inspiration, but Deslop runs its k-grams over normalized AST kinds rather than raw source tokens. Implementation lives in [`crates/deslop-core/src/lsh.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/lsh.rs) and [`crates/deslop-core/src/tokens.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/tokens.rs).
-
-## Embed (semantic)
-
-Optional, **off by default** — opt in with `--embeddings auto` (probe and fall back with a warning) or `--embeddings required` (hard-fail if the provider is unreachable). When enabled, each subtree is run through a code-embedding model (local Ollama by default — `nomic-embed-text` out of the box, any Ollama embedding model selectable via `--embedding-model`). Nearest-neighbour search runs over an **HNSW** index (`instant-distance`, pure Rust, deterministic seed) at the cosine threshold defined in [`crates/deslop-core/src/embedding/pairs.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/embedding/pairs.rs). This produces **same behavior, different code** candidates (Type-4) — semantically equivalent but syntactically different code, such as an imperative loop versus a LINQ expression. SSCD (Wiley 2024) validated HNSW + ANN as the right recall layer at scale; Deslop adopts the same shape and pairs it with the structural and LSH passes per [`fused.md`](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/fused.md).
-
-The embedding cache is keyed by `(content_hash, provider_id, model_id, model_version)` so switching models invalidates only the embedding layer — structural and LSH caches survive.
-
-## Fuse
-
-Each candidate pair gets three independent scores:
-
-| Signal | Range | Detects | Source |
-| --- | --- | --- | --- |
-| `structural` | 0 / 1 | Identical code [Type-1/2] — exact Merkle bucket | `pair.rs::collect_structural_pairs` |
-| `token_jaccard` | 0..1 | Nearly identical code [Type-3] — MinHash band collisions | `lsh.rs::band_collisions` + `tokens.rs` |
-| `embedding_cos` | 0..1 | Same behavior, different code [Type-3/4] — HNSW top-k | `embedding/pairs.rs` |
-
-Candidate admission starts with the **bounded max** — `max(structural, token_jaccard, embedding_cos)` in `[0,1]` ([`pair.rs::PairScore::bounded_fused`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/pair.rs)). Pairs survive when that value crosses `FUSED_THRESHOLD = 0.85`. LSH-only pairs also require `token_jaccard ≥ 0.90` and at least 40 AST nodes at both endpoints.
-
-Before rendering, a non-identical cluster with saturated shape evidence is content-gated as `max(embedding_cos, shape × content_confidence)`, where content confidence is the stronger of raw agreement and discounted rename consistency ([`buckets/gate.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/buckets/gate.rs)). This prevents a perfect normalized shape from rendering as perfect confidence when the underlying code differs. Byte-identical and non-saturating clusters keep their candidate score.
-
-Cross-language pairs are dropped unless `.deslop.toml` opts in. With that option enabled, a cross-language pair with no structural anchor is admitted at a `0.10` floor; structurally anchored pairs keep the `0.85` threshold.
-
-## Rank
-
-The ranking score is the entire user-visible product. The implementation in [`crates/deslop-core/src/cluster.rs::rank_weight`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/cluster.rs) is:
-
-```
-weight = clone_node_count × (cluster_size − 1) × log2(1 + spanned_bytes)
+```text
+mass = canonical_node_count × max(visible_members − 1, 0)
 ```
 
-Bigger fragments count more (`clone_node_count`). More copies count more (`cluster_size − 1`, so a single-member cluster scores zero). The `log2(1 + spanned_bytes)` term grows with payoff but flattens for very large spans, so a 50-line method copied four times outranks a 5000-line file copied once. The top of the report is always the largest payoff — not the first cluster found.
+Mass measures the size of a copied syntax tree multiplied by its additional visible copies. Clones are sorted by mass descending, with stable IDs breaking ties. Shape-only findings have zero duplicated mass and no clone rank.
 
-## Render
+Mass is neither confidence nor a percentage. The [duplication percentage](/docs/accuracy-transparency/) counts covered source lines, with overlapping ranges counted once.
 
-Three renderers read the same materialized view: canonical **JSON** for agents, line-oriented **TXT** for terminals, and standalone **HTML** for humans. Agents consume the JSON; humans read the TXT in the terminal or open the HTML in a browser. Every claim the TXT or HTML makes is also present in the JSON.
+## Optional embeddings
 
-The shape of each, and the exit codes a run returns, are in [Report output](/docs/configuration/#report-output).
+Embeddings are off by default. `--embeddings auto` uses the configured provider if available; `--embeddings required` fails if it cannot be reached. The Ollama provider defaults to `nomic-embed-text`, with a configurable model and endpoint. Embedding similarity adds candidates; it does not prove equivalent behaviour or a safe extraction.
 
-## Live = reactive
+## Keep the report current
 
-Everything above also runs incrementally inside the LSP server (`crates/deslop-core/src/live/`).
+Cached parse and signature work can be reused for unchanged files. A live session watches edits, updates the analysis and broadcasts the fresh report to the editor. MCP queries consult that session; the CLI performs a separate scan for CI or a one-off review.
 
-A file watcher batches edits (debounced, with a hard cap so a formatter burst can't starve the scheduler) and re-runs the pipeline through `PipelineSession::update_files`. The fresh report is held in memory, and the LSP then:
-
-- broadcasts `deslop/reportChanged` over the LSP wire, and
-- serves the running corpus over a local IPC endpoint, so the bundled MCP server answers `find-similar` without re-parsing. macOS and Linux use `.deslop/cache/deslop.sock`; Windows uses token-gated TCP loopback discovered through `.deslop/cache/deslop.port`.
-
-`.deslop/cache/live-report.json` is written only as a cold-start seed — so a freshly launched LSP can answer queries while its first pass runs — not on every edit.
-
-Every VS Code surface — bubble, Top Offenders tree, status bar, hover, code lens — and every agent MCP query reads from that same in-memory report. The CLI is the cold-cache fallback for CI gates.
+JSON, text and HTML expose the same report. See [Report output](/docs/configuration/#report-output), [Accuracy Transparency](/docs/accuracy-transparency/) and [Research Background](/docs/research-background/) for the contracts and evidence.

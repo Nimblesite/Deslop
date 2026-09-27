@@ -71,9 +71,9 @@ Deslop occupies a different part of the workflow. It combines normalized structu
 
 A useful Go duplicate-code check needs more than exact copy-paste:
 
-1. **Identical code (Type-1)** — the same Go structure with only layout or comment differences.
-2. **Nearly identical code (Type-2)** — the same structure with identifiers or literals changed, such as `CustomerHandler` becoming `AccountHandler`.
-3. **Similar code (Type-3)** — mostly the same control flow with a statement inserted, removed, or moved.
+1. **Identical code (Type I)** — matching Go source text apart from permitted whitespace differences.
+2. **Nearly identical code (Type II / close Type III)** — renamed or lightly edited copies, such as `CustomerHandler` becoming `AccountHandler`.
+3. **Similar code (Type III)** — substantial copied work with larger statement or control-flow edits.
 4. **Same behavior, different code (Type-4)** — two implementations solving the same problem with substantially different syntax; this optional layer uses embeddings.
 
 The first two are where Go's new parser matters most. Once names, constants, and comments stop dominating the comparison, a copied function cannot disappear merely because an agent renamed every local variable.

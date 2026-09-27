@@ -12,7 +12,9 @@ lang: zh
 
 # 配置与报告
 
-Deslop 从两处读取设置，并在每次运行中写出三份报告：
+本页介绍当前源码，包括 `0.34.0` 之后的改动。可用安装包见[版本发布](/zh/releases/)。
+
+Deslop 从两处读取设置：
 
 - **`.deslop.toml`** — 与代码放在一起、并纳入版本管理的文件。项目级策略写在这里：跳过什么、隐藏什么、何时让 CI 失败。
 - **命令行参数** — 单次运行的覆盖项。参数始终优先于对应的配置键。
@@ -120,6 +122,7 @@ incremental = true
 | `allow_cross_language_comparison` | 布尔 | `false` | 为 `true` 时，候选克隆对可以跨越不同语言。默认关闭，使报告聚焦于同语言重构。 |
 | `include_dependencies` | 布尔 | `false` | 连依赖树一起分析。默认关闭：否则最严重者优先的排序会把你无法修改的重复排在自己的代码之上。 |
 | `incremental` | 布尔 | `true` | 复用磁盘上的解析缓存。设为 `false` 则每次运行都完整重新解析，且对所有入口生效 —— CLI、编辑器与智能体皆然。 |
+| `max_average_line_bytes` | 整数 | `200` | 用于识别大型压缩构建产物的平均行字节数上限。 |
 
 ## `[report]`
 
@@ -134,30 +137,22 @@ split_by_language = false
 
 ## `[ranking]`
 
-控制两类可降权克隆的评分方式。**数据克隆**是近乎逐字的数据块（长字面量表、夹具）。**仅结构**簇仅在形状上匹配，没有词法或语义支撑。两者都默认 `demote`，从而沉到真正的全证据克隆之下，但不消失。
+克隆按重复质量排名：参考语法树节点数 × 额外可见副本数。类别和置信度不会乘入质量。
+
+隐藏仅供参考的形状匹配：
 
 ```toml
 [ranking]
-data_clones = "demote"
-data_clone_weight = 0.15
-structural_only = "demote"
-structural_only_weight = 0.15
+structural_only = "ignore"
 ```
 
-| 键 | 类型 | 默认值 | 含义 |
-| --- | --- | --- | --- |
-| `data_clones` | `"demote"` \| `"ignore"` \| `"keep"` | `"demote"` | 数据类簇的策略。`demote` 降权，`ignore` 从报告中丢弃，`keep` 以全权重排名。 |
-| `data_clone_weight` | 浮点数 | `0.15` | `data_clones = "demote"` 时所乘的系数。必须在 `(0.0, 1.0]` 内。 |
-| `structural_only` | `"demote"` \| `"ignore"` \| `"keep"` | `"demote"` | 对仅结构簇的同一套三选一策略。 |
-| `structural_only_weight` | 浮点数 | `0.15` | `structural_only = "demote"` 时所乘的系数。必须在 `(0.0, 1.0]` 内。 |
-
-系数 `0.0` 会被拒绝（被降权的簇绝不能被静默抹除），大于 `1.0` 的值同样被拒绝（那会*提升*被降权的类别）。VS Code 扩展可以从其设置覆盖 `structural_only`；编辑器设置优先于文件。
-
-<span id="built-in-rules"></span>
+`structural_only` 接受 `demote`（默认）、`ignore` 或 `keep`。可见的仅形状匹配仍排在克隆之后，重复质量为零；任何设置都不会让它计入重复率。VS Code 设置优先于此文件。`data_clones = "ignore"` 会在排名前排除数据类发现。
 
 ## 内置规则（始终生效）
 
-这些规则无需任何配置即会运行 — 它们让依赖树和机器生成代码远离每一份报告。
+压缩和打包产物还会根据已识别的文件后缀及可配置的平均行长度检查被排除。体积大但可读的源码仍可分析。生成文件标记从解析后的注释中读取，字符串中的标记不算文件头。
+
+这些规则先于用户模式生效。排除规则移除待分析文件；报告隐藏规则保留分析，但隐藏出现位置。
 
 **构建产物与工具缓存**，一律排除且无法重新纳入 —— 它们都不是你写的源码：
 
@@ -208,7 +203,7 @@ max_duplication_percent = 20
 [report]
 split_by_language = true
 
-# 直接丢弃纯仅结构匹配，而不是降权。
+# 隐藏仅供参考的形状匹配。
 [ranking]
 structural_only = "ignore"
 ```
@@ -230,6 +225,18 @@ structural_only = "ignore"
 | `--technical` | 关 | 在 stderr 上显示研究者视图（分类 id、信号字母、节点数）。 |
 | `--diff <FILE>` | — | 将报告限定到统一 diff 的新增行；`-` 表示从 stdin 读取。扫描仍覆盖整棵树。与该树不匹配的 diff 会被拒绝。 |
 | `--only-changed` | 关 | 丢弃未命中 diff 的簇，并让 `--fail-over` 按 diff 范围内的占比判定，使历史欠债无法让合并前检查失败。需要 `--diff`。 |
+
+<span id="compare-two-occurrences"></span>
+
+### 比较两个出现位置
+
+`--compare` 已加入 `0.34.0` 之后的当前源码。传入两个 `<path>:<start_byte>:<end_byte>` 端点，使用 JSON 报告中的确切字节范围：
+
+```text
+deslop . --compare "<left-path>:<start-byte>:<end-byte>" "<right-path>:<start-byte>:<end-byte>"
+```
+
+命令先扫描根目录，重新计算配对证据，再向 stdout 输出 JSON 判定。偏移量按字节而非行计，结束位置不包含在范围内。范围必须对应已生成指纹的出现位置；簇 ID 不能用作端点。
 
 ### 嵌入
 
@@ -272,7 +279,7 @@ structural_only = "ignore"
 
 ## 报告输出
 
-每次运行都会生成三种报告。JSON 才是产品本身；文本和 HTML 是基于同一份数据的渲染器。TXT 或 HTML 中不会出现任何 JSON 里没有的结论。
+普通扫描默认生成 JSON、文本和 HTML，除非禁用了某种格式。JSON 才是产品本身；文本和 HTML 是基于同一份数据的渲染器。TXT 或 HTML 中不会出现任何 JSON 里没有的结论。
 
 ### JSON — 规范格式
 
@@ -281,25 +288,12 @@ structural_only = "ignore"
 保证：
 
 - schema 中标记为 `optional` 的字段可能缺失。标记为 `required` 的字段始终存在。
-- 簇按 `weight` 降序排序。`clusters[0]` 始终是最严重的重复。
+- 克隆按 `mass` 降序排列，相同时用稳定 ID 排序。参考信息排在克隆之后，没有克隆排名。
 - UTF-8。无 BOM。LF 行尾。
 
 ### TXT — 终端格式
 
-`deslop-report.txt` 是 ASCII、按行组织、刻意保持朴素的格式。没有 ANSI 颜色，没有 Unicode 框线字符，没有分页转义码。可以无意外地通过管道送入 `head`、`grep`、`awk`。
-
-```
-deslop 0.0.0-dev -- 840 file(s), 142 cluster(s), 0 hidden
-repo: 2.6% duplicated (48120 / 1832044 LOC, 142 clusters across 318 files)
-embeddings: off
--- action hints --
-  [identical] Extract the shared code into one definition and call it from every duplicate site.
-#1 [0362505641efe3c7] weight=1252.80 size=3 nodes=58
-  3 near-identical copies — safe to extract.
-  :: Nearly identical across UserRepository.cs, ProductRepository.cs, OrderRepository.cs.
-```
-
-每个簇都是一个带编号的代码块 — `#1` 是最严重的重复 — 包含其权重、大小和节点数，随后是一段通俗易懂的摘要和一行解读。簇按最严重者优先列出。这种格式可以在每一种终端、每一次 SSH 会话和每一份 CI 日志中保持完好。
+`deslop-report.txt` 是供终端和 CI 日志读取的逐行报告。克隆条目按排名显示类型、整数质量、出现次数和源位置。配对相似度需要单独请求；报告不会声称提取必然安全。
 
 ### HTML — 可移植格式
 
