@@ -29,6 +29,8 @@ mod cli;
 mod code_action;
 #[path = "code_action_refusal.rs"]
 mod code_action_refusal;
+#[path = "code_lens.rs"]
+mod code_lens;
 #[path = "cpu_throttle_knob.rs"]
 mod cpu_throttle_knob;
 #[path = "dependency_reactivity.rs"]

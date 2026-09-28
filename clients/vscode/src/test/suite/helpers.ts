@@ -1,4 +1,5 @@
 import * as assert from "node:assert/strict";
+import * as path from "node:path";
 import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 import type { ExtensionApi } from "../../extension";
@@ -13,6 +14,7 @@ const MULTI_OCCURRENCE_MINIMUM = 2;
 const POLL_INTERVAL_MS = 250;
 const ACTIVATION_POLL_ATTEMPTS = 20;
 const REPORT_POLL_ATTEMPTS = 40;
+const EXECUTE_CODE_LENS_PROVIDER = "vscode.executeCodeLensProvider";
 
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -68,6 +70,21 @@ export async function waitForCluster(
     await sleep(POLL_INTERVAL_MS);
   }
   throw new Error(`${failure}; last cluster count ${last?.clusters.length ?? 0}`);
+}
+
+// The first multi-occurrence cluster with an occurrence in `fileName`.
+export function waitForClusterHolding(client: LanguageClient, fileName: string): Promise<ReportCluster> {
+  return waitForCluster(
+    client,
+    (candidate) => candidate.occurrences.some((occurrence) => path.basename(occurrence.path) === fileName),
+    `no cluster holding ${fileName} in LSP report`,
+  );
+}
+
+// The code lenses VS Code itself would paint on `uri` — what the LSP's
+// provider answered, exactly as the editor sees it ([LSP-CODE-LENS]).
+export async function codeLenses(uri: vscode.Uri): Promise<vscode.CodeLens[]> {
+  return (await vscode.commands.executeCommand<vscode.CodeLens[]>(EXECUTE_CODE_LENS_PROVIDER, uri)) ?? [];
 }
 
 // Every E2E suite must await activation before executing deslop.* commands.

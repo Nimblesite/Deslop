@@ -17,6 +17,7 @@ import {
   openFixture,
   sleep,
   waitForCluster,
+  waitForClusterHolding,
   waitForReport,
 } from "./helpers";
 
@@ -41,14 +42,6 @@ function waitForRelativePathCluster(client: LanguageClient): Promise<ReportClust
     client,
     (candidate) => candidate.occurrences.some((occurrence) => !path.isAbsolute(occurrence.path)),
     "no relative-path cluster in LSP report",
-  );
-}
-
-function waitForClusterHolding(client: LanguageClient, fileName: string): Promise<ReportCluster> {
-  return waitForCluster(
-    client,
-    (candidate) => candidate.occurrences.some((occurrence) => path.basename(occurrence.path) === fileName),
-    `no cluster holding ${fileName} in LSP report`,
   );
 }
 

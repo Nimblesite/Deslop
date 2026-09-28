@@ -10,16 +10,7 @@
 
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
-import { activateExtension, fixtureUri, sleep } from "./helpers";
-
-async function codeLenses(uri: vscode.Uri): Promise<vscode.CodeLens[]> {
-  return (
-    (await vscode.commands.executeCommand<vscode.CodeLens[]>(
-      "vscode.executeCodeLensProvider",
-      uri,
-    )) ?? []
-  );
-}
+import { activateExtension, codeLenses, fixtureUri, sleep } from "./helpers";
 
 suite("editor non-interference", () => {
   let alpha: vscode.Uri;
