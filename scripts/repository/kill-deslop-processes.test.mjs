@@ -44,7 +44,23 @@ const PROCESS_NAMES = ["deslop", "deslop-lsp", "deslop-mcp"];
 
 /** What the fixture process prints once it is unmistakably running. */
 const READY = "ready";
-const FIXTURE_PROGRAM = `console.log("${READY}"); setInterval(() => {}, 1000);`;
+
+/** How long a fixture lives when nothing kills it. One the scrub missed holds
+ *  its parent's stdout pipe open, and an immortal one would hang the test file
+ *  instead of failing it. */
+const FIXTURE_LIFETIME_MS = 120_000;
+
+/**
+ * The fixture's program, run by a copy of `node` saved under `name`. It names
+ * itself first: Node 24 names its main thread `MainThread`, and on Linux the
+ * main thread's name is the process name the kernel reports and `pgrep -x`
+ * matches, so the copy no longer runs under its file name. `process.title`
+ * writes the name back — cut to the kernel's fifteen characters, exactly as an
+ * `exec` would cut it — so the scrub sees the fixture as it sees a real binary.
+ */
+function fixtureProgram(name) {
+  return `process.title = "${name}"; console.log("${READY}"); setTimeout(() => {}, ${FIXTURE_LIFETIME_MS});`;
+}
 
 /** Runs the scrub in query mode and returns the PIDs it named. */
 function listedPids(args = [LIST_FLAG]) {
@@ -63,7 +79,7 @@ function startNamed(name) {
   mkdirSync(binDir, { recursive: true });
   const executable = join(binDir, `${name}${EXECUTABLE_SUFFIX}`);
   copyFileSync(process.execPath, executable);
-  const child = spawn(executable, ["-e", FIXTURE_PROGRAM], { stdio: ["ignore", "pipe", "ignore"] });
+  const child = spawn(executable, ["-e", fixtureProgram(name)], { stdio: ["ignore", "pipe", "ignore"] });
   return new Promise((resolvePromise, rejectPromise) => {
     child.on("error", rejectPromise);
     child.stdout.on("data", (chunk) => {
@@ -183,7 +199,7 @@ function startUnreapedChild(name) {
   const binDir = mkdtempSync(join(tmpdir(), "deslop-zombie-"));
   const executable = join(binDir, `${name}${EXECUTABLE_SUFFIX}`);
   copyFileSync(process.execPath, executable);
-  const launch = `"${executable}" -e '${FIXTURE_PROGRAM}' & echo $!; exec sleep ${HOLDER_LIFETIME_SECONDS}`;
+  const launch = `"${executable}" -e '${fixtureProgram(name)}' & echo $!; exec sleep ${HOLDER_LIFETIME_SECONDS}`;
   const holder = spawn("/bin/sh", ["-c", launch], { stdio: ["ignore", "pipe", "ignore"] });
   return reportedChildOf(holder);
 }

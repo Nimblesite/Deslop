@@ -3,7 +3,7 @@
 //! Rejected comparisons do not become Similar, and unrelated members cannot hide copies.
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{hash_map::RandomState, HashMap, HashSet},
     sync::{Mutex, PoisonError},
 };
 
@@ -14,7 +14,7 @@ use super::{
 use crate::{
     ast::NormalizedNode,
     buckets::ClusterKind,
-    cluster::ClusterKindJudge,
+    cluster::{scope::DeclarationScopes, ClusterKindJudge},
     embedding::pairs::EmbeddingPair,
     fingerprint::Fingerprint,
     pair::{
@@ -48,6 +48,10 @@ mod partition_tests;
 #[cfg(test)]
 #[path = "cluster_kind/rescue_cache_tests.rs"]
 mod rescue_cache_tests;
+
+#[cfg(test)]
+#[path = "cluster_kind/verdict_tests.rs"]
+mod verdict_tests;
 
 /// A memo miss is distinct from a measured pair without a clone kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -117,6 +121,10 @@ pub(crate) struct ClusterKindMeasurer<'corpus> {
     /// flat index, so the fold reads the same embedding evidence the
     /// admission did instead of re-embedding every member.
     embedding_cosines: HashMap<(usize, usize), f64>,
+    /// Authored declarations per file: the interior-window content scope
+    /// a span the corpus never fingerprinted is admitted under
+    /// ([FUSED-CONTENT-GATE-INTERIOR]).
+    scopes: DeclarationScopes<'corpus, RandomState>,
 }
 
 impl<'corpus> ClusterKindMeasurer<'corpus> {
@@ -142,7 +150,20 @@ impl<'corpus> ClusterKindMeasurer<'corpus> {
                     )
                 })
                 .collect(),
+            scopes: DeclarationScopes::new(trees, &session.file_languages),
         }
+    }
+
+    /// The content scope a pair is measured under. A member pair was
+    /// admitted at discovery and is only classified here, over its whole
+    /// endpoints; a span the corpus never fingerprinted is admitted here,
+    /// so it pays the interior-window scope discovery applies to two
+    /// windows strictly inside a function ([FUSED-CONTENT-GATE-INTERIOR]).
+    fn interior(&self, pair: &ResolvedPair<'_>) -> bool {
+        pair.left.index.is_none()
+            && pair.right.index.is_none()
+            && self.scopes.enclosing(pair.left.fingerprint).is_some()
+            && self.scopes.enclosing(pair.right.fingerprint).is_some()
     }
 
     /// The flat-corpus endpoint at `index`, or `None` when the build
@@ -153,17 +174,24 @@ impl<'corpus> ClusterKindMeasurer<'corpus> {
         if fingerprint.is_none() {
             tracing::error!(index, "cluster member index outside the corpus");
         }
-        fingerprint.map(|fingerprint| ResolvedEndpoint { index, fingerprint })
+        fingerprint.map(|fingerprint| ResolvedEndpoint {
+            index: Some(index),
+            fingerprint,
+        })
     }
 
     /// Classifies one `(canonical, member)` pair with the shared pair
-    /// algebra and the embedding cosine recorded during the scan.
+    /// algebra and the embedding cosine recorded during the scan. Only an
+    /// indexed pair has a verdict worth remembering: a span the corpus
+    /// never fingerprinted is measured once and forgotten.
     fn pair_kind(
         &self,
-        canonical: ResolvedEndpoint<'corpus>,
-        member: ResolvedEndpoint<'corpus>,
+        canonical: ResolvedEndpoint<'_>,
+        member: ResolvedEndpoint<'_>,
     ) -> Option<ClusterKind> {
-        let key = (canonical.index, member.index);
+        let Some(key) = canonical.index.zip(member.index) else {
+            return self.classify_pair(canonical, member);
+        };
         if let PairKindLookup::Seen(known) = self
             .kinds
             .lock()
@@ -183,8 +211,8 @@ impl<'corpus> ClusterKindMeasurer<'corpus> {
     /// Classifies a cache miss through the shared pair algebra.
     fn classify_pair(
         &self,
-        canonical: ResolvedEndpoint<'corpus>,
-        member: ResolvedEndpoint<'corpus>,
+        canonical: ResolvedEndpoint<'_>,
+        member: ResolvedEndpoint<'_>,
     ) -> Option<ClusterKind> {
         let pair = ResolvedPair {
             left: canonical,
@@ -194,13 +222,13 @@ impl<'corpus> ClusterKindMeasurer<'corpus> {
             return Some(kind);
         }
         let embedding_cos = self.embedding_cos(canonical.index, member.index);
-        let measured = self.measured_kind_pair(&pair, embedding_cos)?;
+        let measured = self.measured_kind_pair(&pair, embedding_cos, self.interior(&pair))?;
         let facts = AdmissionFacts::from(self.session, &pair, measured);
         ClusterKind::from_pair(facts.classification(measured))
     }
 
     /// Equal whole bytes still require equal authored leaf boundaries.
-    fn exact_kind(&self, pair: &ResolvedPair<'corpus>) -> Option<ClusterKind> {
+    fn exact_kind(&self, pair: &ResolvedPair<'_>) -> Option<ClusterKind> {
         exact_text_kind(
             pair.left.fingerprint,
             pair.right.fingerprint,
@@ -221,11 +249,15 @@ impl<'corpus> ClusterKindMeasurer<'corpus> {
         )
     }
 
-    /// Reads the cosine already measured by the embedding pass.
-    fn embedding_cos(&self, left: usize, right: usize) -> f64 {
-        self.embedding_cosines
-            .get(&(left.min(right), left.max(right)))
-            .copied()
+    /// Reads the cosine already measured by the embedding pass; a span the
+    /// pass never saw has none.
+    fn embedding_cos(&self, left: Option<usize>, right: Option<usize>) -> f64 {
+        left.zip(right)
+            .and_then(|(left, right)| {
+                self.embedding_cosines
+                    .get(&(left.min(right), left.max(right)))
+                    .copied()
+            })
             .unwrap_or(UNMEASURED_COSINE)
     }
 
@@ -233,21 +265,22 @@ impl<'corpus> ClusterKindMeasurer<'corpus> {
     /// sound upper bound rules out both clone admission and information.
     fn measured_kind_pair(
         &self,
-        pair: &ResolvedPair<'corpus>,
+        pair: &ResolvedPair<'_>,
         cosine: f64,
+        interior: bool,
     ) -> Option<Measurements> {
         let mut axes = self.axes.lock().unwrap_or_else(PoisonError::into_inner);
         if self.ruled_out_by_overlap_bound(pair, &mut axes, cosine) {
             return None;
         }
-        Some(self.session.measure_axes(pair, &mut axes, cosine))
+        Some(self.session.measure_axes(pair, &mut axes, cosine, interior))
     }
 
     /// A below-floor bound cannot rescue the pair or meet the configured
     /// shape-only floor. Only a token or embedding axis could still admit it.
     fn ruled_out_by_overlap_bound(
         &self,
-        pair: &ResolvedPair<'corpus>,
+        pair: &ResolvedPair<'_>,
         axes: &mut PairAxes<'corpus>,
         cosine: f64,
     ) -> bool {
@@ -327,166 +360,12 @@ impl ClusterKindJudge for ClusterKindMeasurer<'_> {
             self.pair_kind(self.endpoint(left)?, self.endpoint(right)?)
         })
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{
-        ast::ByteRange,
-        state::{FileId, FileRegistry},
-    };
-
-    const LEFT: usize = 7;
-    const RIGHT: usize = 11;
-    const COLD_LEFT: usize = 8;
-    const RETAINED_AFTER_ROTATION: usize = 2;
-    const EXACT_SOURCE: &[u8] = b"fn total() { accept(); }";
-    const CHANGED_SOURCE: &[u8] = b"fn total() { reject(); }";
-    const LEFT_PATH: &str = "left.rs";
-    const RIGHT_PATH: &str = "right.rs";
-    const LANGUAGE: &str = "rust";
-    const OTHER_LANGUAGE: &str = "typescript";
-    const EXACT_HASH: [u8; 32] = [1; 32];
-    const DIFFERENT_HASH: [u8; 32] = [2; 32];
-    const RANGE_START: usize = 0;
-    const NODE_COUNT: usize = 40;
-
-    struct ExactFixture {
-        left: Fingerprint,
-        right: Fingerprint,
-        sources: HashMap<FileId, Vec<u8>>,
-        languages: HashMap<FileId, &'static str>,
-    }
-
-    fn exact_fingerprint(file_id: FileId) -> Fingerprint {
-        Fingerprint {
-            hash: EXACT_HASH,
-            file_id,
-            byte_range: ByteRange {
-                start: RANGE_START,
-                end: EXACT_SOURCE.len(),
-            },
-            node_count: NODE_COUNT,
-        }
-    }
-
-    impl ExactFixture {
-        fn new() -> Self {
-            let mut registry = FileRegistry::new();
-            let left_id = registry.register(LEFT_PATH.into());
-            let right_id = registry.register(RIGHT_PATH.into());
-            Self {
-                left: exact_fingerprint(left_id),
-                right: exact_fingerprint(right_id),
-                sources: HashMap::from([
-                    (left_id, EXACT_SOURCE.to_vec()),
-                    (right_id, EXACT_SOURCE.to_vec()),
-                ]),
-                languages: HashMap::from([(left_id, LANGUAGE), (right_id, LANGUAGE)]),
-            }
-        }
-    }
-
-    /// [CLONE-KIND-FOLD] Matching bytes and Merkle shape need no pair algebra.
-    #[test]
-    fn exact_text_verdict_requires_resolved_content() {
-        let fixture = ExactFixture::new();
-        let classify = |resolved| {
-            exact_text_kind(
-                &fixture.left,
-                &fixture.right,
-                &fixture.sources,
-                &fixture.languages,
-                || resolved,
-            )
-        };
-        assert_eq!(classify(true), Some(ClusterKind::Identical));
-        assert_eq!(classify(false), None);
-    }
-
-    #[test]
-    fn exact_text_verdict_ignores_changed_bytes_shape_and_language() {
-        let mut fixture = ExactFixture::new();
-        let classify = |fixture: &ExactFixture| {
-            exact_text_kind(
-                &fixture.left,
-                &fixture.right,
-                &fixture.sources,
-                &fixture.languages,
-                || true,
-            )
-        };
-        let _previous = fixture
-            .sources
-            .insert(fixture.right.file_id, CHANGED_SOURCE.to_vec());
-        assert_eq!(classify(&fixture), None);
-        let _previous = fixture
-            .sources
-            .insert(fixture.right.file_id, EXACT_SOURCE.to_vec());
-        fixture.right.hash = DIFFERENT_HASH;
-        assert_eq!(classify(&fixture), None);
-        fixture.right.hash = EXACT_HASH;
-        let _previous = fixture
-            .languages
-            .insert(fixture.right.file_id, OTHER_LANGUAGE);
-        assert_eq!(classify(&fixture), None);
-    }
-
-    /// [CLONE-KIND-FOLD] Repeated pair grading reuses the exact ordered verdict.
-    #[test]
-    fn ordered_pair_verdicts_include_rejection_and_do_not_flip_direction() {
-        let mut cache = PairKindMemo::default();
-        assert_eq!(cache.get((LEFT, RIGHT)), PairKindLookup::Unseen);
-        cache.remember((LEFT, RIGHT), Some(ClusterKind::NearlyIdentical));
-        assert_eq!(
-            cache.get((LEFT, RIGHT)),
-            PairKindLookup::Seen(Some(ClusterKind::NearlyIdentical))
-        );
-        assert_eq!(cache.get((RIGHT, LEFT)), PairKindLookup::Unseen);
-        cache.remember((RIGHT, LEFT), None);
-        assert_eq!(cache.get((RIGHT, LEFT)), PairKindLookup::Seen(None));
-    }
-
-    /// [CLONE-KIND-FOLD] A full memo admits later keys without growing forever.
-    #[test]
-    fn pair_kind_memo_rotates_after_capacity() {
-        let mut cache = PairKindMemo::default();
-        for left in 0..PAIR_KIND_MEMO_MAX {
-            cache.remember((left, RIGHT), Some(ClusterKind::Identical));
-        }
-        cache.remember(
-            (PAIR_KIND_MEMO_MAX, RIGHT),
-            Some(ClusterKind::NearlyIdentical),
-        );
-        assert_eq!(cache.len(), 1);
-        assert_eq!(cache.get((LEFT, RIGHT)), PairKindLookup::Unseen);
-        assert_eq!(
-            cache.get((PAIR_KIND_MEMO_MAX, RIGHT)),
-            PairKindLookup::Seen(Some(ClusterKind::NearlyIdentical))
-        );
-    }
-
-    /// [CLONE-KIND-FOLD] A reused verdict survives rotation without retaining cold pairs.
-    #[test]
-    fn pair_kind_memo_keeps_reused_verdicts_across_rotation() {
-        let mut cache = PairKindMemo::default();
-        for left in 0..PAIR_KIND_MEMO_MAX {
-            cache.remember((left, RIGHT), Some(ClusterKind::Identical));
-        }
-        assert_eq!(
-            cache.get((LEFT, RIGHT)),
-            PairKindLookup::Seen(Some(ClusterKind::Identical))
-        );
-        cache.remember(
-            (PAIR_KIND_MEMO_MAX, RIGHT),
-            Some(ClusterKind::NearlyIdentical),
-        );
-        assert_eq!(
-            cache.get((LEFT, RIGHT)),
-            PairKindLookup::Seen(Some(ClusterKind::Identical))
-        );
-        assert_eq!(cache.get((COLD_LEFT, RIGHT)), PairKindLookup::Unseen);
-        assert_eq!(cache.len(), RETAINED_AFTER_ROTATION);
+    /// The same pair algebra over two spans the scan never indexed.
+    fn span_kind(&self, left: &Fingerprint, right: &Fingerprint) -> Option<ClusterKind> {
+        self.pair_kind(
+            ResolvedEndpoint::unindexed(left),
+            ResolvedEndpoint::unindexed(right),
+        )
     }
 }

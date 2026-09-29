@@ -7,11 +7,12 @@ use crate::{
     state::FileId,
 };
 
+/// Extends overlapping identical or nearly identical sibling views into
+/// their copied run ([PIPELINE-CLUSTER-SUBSUME-STRADDLE]).
+mod copied_runs;
 /// The one view each file publishes for an overlapping run
 /// ([PIPELINE-CLUSTER-EXACT-SCOPE]).
 mod election;
-/// Extends overlapping byte-identical sibling views into their copied run.
-mod exact_runs;
 /// Public cluster ids ([PIPELINE-DETERMINISM]).
 mod identity;
 /// Whether a view's width is matched by a copy
@@ -22,8 +23,8 @@ mod matched;
 pub(crate) mod scope;
 /// Cross-cluster subsumption ([PIPELINE-CLUSTER-SUBSUME]).
 mod subsume;
+use copied_runs::coalesce_copied_runs;
 use election::collapse_overlapping_per_file;
-use exact_runs::coalesce_exact_runs;
 pub use identity::encode_short_id;
 use identity::{name_clusters, Unnamed};
 use scope::DeclarationScopes;
@@ -65,6 +66,14 @@ pub trait ClusterKindJudge: Sync {
             .into_iter()
             .collect()
     }
+
+    /// [PIPELINE-CLUSTER-SUBSUME-STRADDLE] The kind of a view the corpus
+    /// never fingerprinted — two spans resolved against the trees —
+    /// admitted as discovery would admit a window at that span, the
+    /// interior-window content scope included, and classified as a
+    /// member pair is, so a joined copied run is admitted by nothing
+    /// weaker than every other view.
+    fn span_kind(&self, left: &Fingerprint, right: &Fingerprint) -> Option<ClusterKind>;
 }
 
 impl std::fmt::Debug for dyn ClusterKindJudge + '_ {
@@ -86,7 +95,9 @@ pub struct ClusterBuildInputs<'a, L: BuildHasher> {
     pub fused_clusters: &'a [FusedCluster],
     /// Normalised trees the fingerprints walk.
     pub trees: &'a [NormalizedNode],
-    /// Source bytes used to verify the complete extent of joined exact windows.
+    /// Source bytes the straddle rule reads when two views' complete
+    /// union is copied byte for byte but no sibling run joined them
+    /// ([PIPELINE-CLUSTER-SUBSUME-STRADDLE]).
     pub sources: &'a HashMap<FileId, Vec<u8>>,
     /// `FileId → language_id` for declaration-scope matching.
     pub file_languages: &'a HashMap<FileId, &'static str, L>,
@@ -139,7 +150,7 @@ fn reportable_clusters<L: BuildHasher + Sync>(
         .flat_map(|fused| build_fused_cluster(inputs, fused, scopes))
         .collect();
     name_clusters(
-        coalesce_exact_runs(drafts, inputs.trees, inputs.sources),
+        coalesce_copied_runs(drafts, inputs.trees, inputs.kinds),
         inputs.file_paths,
     )
 }

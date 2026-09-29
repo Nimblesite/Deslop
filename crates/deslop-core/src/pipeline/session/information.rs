@@ -310,6 +310,12 @@ impl ClusterKindJudge for KindFilter<'_> {
             .filter(|(_, kind)| kind.is_clone() == self.clones)
             .collect()
     }
+
+    fn span_kind(&self, left: &Fingerprint, right: &Fingerprint) -> Option<ClusterKind> {
+        self.judge
+            .span_kind(left, right)
+            .filter(|kind| kind.is_clone() == self.clones)
+    }
 }
 
 impl PipelineSession {
