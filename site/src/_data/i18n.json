@@ -66,6 +66,12 @@
       "install": "Install",
       "review": "Rate & review"
     },
+    "reel": {
+      "eyebrow": "Deslop 0.35.0 · 21 seconds",
+      "title": "Now it finds the whole copy.",
+      "lede": "We found the copy and missed 8 lines of it. 0.35.0 reports the complete copy, tells a lookalike from a clone, and shows its verdict when you ask.",
+      "post": "How we measure accuracy"
+    },
     "testimonials": {
       "eyebrow": "Field report",
       "title": "Findings that ship.",
@@ -157,6 +163,12 @@
       "lede": "从 Visual Studio Marketplace 或 Open VSX 安装同一个扩展。",
       "install": "安装",
       "review": "评分与评论"
+    },
+    "reel": {
+      "eyebrow": "Deslop 0.35.0 · 21 秒",
+      "title": "现在它能找到完整副本。",
+      "lede": "我们找到了那段副本，却漏掉了其中 8 行。0.35.0 会报告完整副本，分得清外形相似和真正的克隆，并在你询问时展示它的判定。",
+      "post": "我们如何衡量准确性"
     },
     "testimonials": {
       "eyebrow": "实地反馈",

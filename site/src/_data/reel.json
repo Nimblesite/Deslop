@@ -1,0 +1,27 @@
+{
+  "name": "Deslop 0.35.0: now it finds the whole copy",
+  "description": "Deslop 0.35.0 reports the complete copy, tells a lookalike from a clone, and shows its verdict when you ask.",
+  "post": "/blog/duplicate-code-detection-accuracy/",
+  "uploadDate": "2026-09-29",
+  "duration": "PT21S",
+  "av1Type": "video/mp4; codecs=av01.0.08M.08",
+  "h264Type": "video/mp4",
+  "cuts": [
+    {
+      "device": "desktop",
+      "width": 1280,
+      "height": 720,
+      "av1": "/assets/video/whole-copy-desktop-av1.mp4",
+      "h264": "/assets/video/whole-copy-desktop.mp4",
+      "poster": "/assets/video/whole-copy-desktop-poster.jpg"
+    },
+    {
+      "device": "mobile",
+      "width": 720,
+      "height": 1280,
+      "av1": "/assets/video/whole-copy-mobile-av1.mp4",
+      "h264": "/assets/video/whole-copy-mobile.mp4",
+      "poster": "/assets/video/whole-copy-mobile-poster.jpg"
+    }
+  ]
+}
