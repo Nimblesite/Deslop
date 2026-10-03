@@ -202,6 +202,16 @@ When the watcher closes its sender, the scheduler drains accepted paths and disp
 
 The real LSP fixture in `crates/deslop-lsp/tests/live/bursts.rs` checks the complete watcher-to-report loop: a burst of new source files, clone removal and restoration, and directory deletion. Its assertions preserve file counts, cluster kind and rank, occurrence paths, and complete cluster and metric equality.
 
+### [LIVE-WATCHER-DIRECTORIES] New and renamed directories retain their contents
+
+A directory creation or rename can arrive after its first children were written but before the operating system installed recursive watches. Admit the structural directory event and reconcile its current source files through the existing discovery and incremental analysis paths. Renames must also evict membership and cached ignore rules under the old path. Resolve changed-path aliases before applying workspace boundaries: a source target outside the workspace must not enter its report. Watched configuration aliases retain their separate policy-refresh route. The resulting report includes every admitted file, including empty source files, without relying on another child event.
+
+Keep the original workspace's configuration and ancestor ignore rules, including new rules inside the changed subtree. Reconcile only the affected subtree; do not traverse unrelated sibling subtrees or perform discovery in the watcher callback. Excluded build and dependency directories must remain excluded before traversal. Discovery must complete successfully before its results can justify deleting corpus membership; an unreadable subtree is not an empty subtree. Preserve ordinary non-source file filtering and no-op report behavior. The real LSP burst test in `crates/deslop-lsp/tests/live/bursts.rs` and deterministic directory-event tests cover the watcher and session implementations.
+
+### [LIVE-WATCHER-RESCAN] Recover when the operating system loses events
+
+A notification marked as requiring rescan must schedule workspace reconciliation even when it has no paths or an otherwise irrelevant event kind. Reload configuration and ignore rules because their changes may also have been lost. Reuse directory reconciliation to add or update discovered files and evict previously tracked files that are absent or no longer admitted. This full traversal is recovery from an explicit lost-event notification, not a periodic task. After reconciliation, the scheduler returns to its ordinary idle wait.
+
 ### [LIVE-WATCHER-REMOVAL] Known non-source file removals need no analysis
 
 A removal explicitly identified as a file must match a supported source extension to enter the scheduler. Watched configurations and ignore-rule files always bypass that filter. Source-file removals bypass current exclusions so a formerly admitted file can still leave the corpus. Directory removals and removals with an unknown or other kind keep every path, regardless of extension, because they may invalidate source descendants or aliases. `live/watcher.rs` implements the policy; `live/watcher/tests/delivery/removals.rs` pins every event class and exclusion bypass.

@@ -15,7 +15,7 @@ use std::{
 };
 
 use notify::{
-    event::{EventKind, RemoveKind},
+    event::{CreateKind, EventKind, ModifyKind, RemoveKind, RenameMode},
     recommended_watcher, EventHandler, RecommendedWatcher, RecursiveMode, Watcher as NotifyWatcher,
 };
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
@@ -90,6 +90,7 @@ impl LiveWatcher {
             .map(|path| std::fs::canonicalize(&path).unwrap_or(path))
             .collect();
         let handler = WatcherHandler {
+            root: root.to_path_buf(),
             sender: tx,
             allowed,
             exclusion,
@@ -105,6 +106,8 @@ impl LiveWatcher {
 /// async channel. Implements [`EventHandler`] (the `notify` callback
 /// trait) so it can be installed in [`recommended_watcher`].
 struct WatcherHandler {
+    /// Scope restored when the backend reports lost events ([LIVE-WATCHER-RESCAN]).
+    root: PathBuf,
     /// FIFO delivery retains bursts while analysis is busy ([LIVE-WATCHER-DELIVERY]).
     sender: UnboundedSender<PathBuf>,
     /// Allowed lowercase extensions (no leading `.`).
@@ -134,9 +137,19 @@ impl EventHandler for WatcherHandler {
         let Ok(event) = event else {
             return;
         };
-        if !is_relevant_event(event.kind) {
+        if event.need_rescan() {
+            deliver(&self.sender, self.root.clone());
             return;
         }
+        if is_relevant_event(event.kind) {
+            self.forward_paths(event);
+        }
+    }
+}
+
+impl WatcherHandler {
+    /// Coalesces callback-local paths without suppressing later edits.
+    fn forward_paths(&self, event: notify::Event) {
         // [LIVE-WATCHER] Dedup paths within this callback only; later callbacks
         // forward the same path again so every subsequent edit is delivered.
         let mut seen_in_batch: HashSet<PathBuf> = HashSet::new();
@@ -147,9 +160,6 @@ impl EventHandler for WatcherHandler {
             self.forward_one(path, event.kind);
         }
     }
-}
-
-impl WatcherHandler {
     /// Forwards one path if it passes the filter set.
     ///
     /// [LIVE-WATCHER-REMOVAL] Known files retain extension admission;
@@ -161,12 +171,13 @@ impl WatcherHandler {
             deliver(&self.sender, path);
             return;
         }
-        if !may_remove_subtree(kind) && !path_matches_filter(&path, &self.allowed) {
+        if !path_matches_filter(&path, &self.allowed)
+            && !may_remove_subtree(&path, kind)
+            && !may_create_subtree(&path, kind)
+        {
             return;
         }
-        if !matches!(kind, EventKind::Remove(_))
-            && self.current_exclusion().is_excluded(&path, None)
-        {
+        if !may_remove_members(kind) && self.current_exclusion().is_excluded(&path, None) {
             return;
         }
         deliver(&self.sender, path);
@@ -183,8 +194,27 @@ impl WatcherHandler {
 }
 
 /// Untyped and non-file removals may invalidate a directory or an alias.
-fn may_remove_subtree(kind: EventKind) -> bool {
-    matches!(kind, EventKind::Remove(removal) if removal != RemoveKind::File)
+/// Existing regular rename targets still use ordinary source extension admission.
+fn may_remove_subtree(path: &Path, kind: EventKind) -> bool {
+    match kind {
+        EventKind::Remove(removal) => removal != RemoveKind::File,
+        EventKind::Modify(ModifyKind::Name(_)) => {
+            !std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.is_file())
+        }
+        _ => false,
+    }
+}
+
+/// [LIVE-WATCHER-DIRECTORIES] Untyped creates need directory metadata, never traversal.
+fn may_create_subtree(path: &Path, kind: EventKind) -> bool {
+    matches!(kind, EventKind::Create(CreateKind::Folder))
+        || (matches!(kind, EventKind::Create(CreateKind::Any | CreateKind::Other)) && path.is_dir())
+}
+
+/// Old rename paths must remain evictable even if current rules exclude them.
+fn may_remove_members(kind: EventKind) -> bool {
+    matches!(kind, EventKind::Remove(_))
+        || matches!(kind, EventKind::Modify(ModifyKind::Name(mode)) if mode != RenameMode::To)
 }
 
 /// [LIVE-WATCHER-DELIVERY] Enqueues synchronously without blocking or dropping bursts.

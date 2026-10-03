@@ -1,5 +1,6 @@
 //! Source-event delivery stays complete and ordered ([LIVE-WATCHER-DELIVERY]).
 
+mod directories;
 mod removals;
 
 use std::{collections::HashSet, path::PathBuf, sync::Arc};
@@ -44,6 +45,7 @@ fn source_paths() -> Vec<PathBuf> {
 /// Installs the actual watcher admission policy with an observable receiver.
 fn handler(sender: mpsc::UnboundedSender<PathBuf>) -> WatcherHandler {
     WatcherHandler {
+        root: PathBuf::from(directories::WATCH_ROOT),
         sender,
         allowed: HashSet::from([SOURCE_EXTENSION.to_owned()]),
         exclusion: live_exclusion(Arc::new(ExclusionConfig::empty())),

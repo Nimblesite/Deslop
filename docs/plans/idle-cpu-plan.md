@@ -12,6 +12,14 @@ Replace the watcher bridge's capacity-limited, unchecked sends with one queue th
 
 The contract is in [live.md](../specs/live.md). `crates/deslop-core/src/live/watcher/tests/delivery.rs` checks bursts beyond the former capacity, repeated edits, admitted event classes, and channel closure. `crates/deslop-core/src/live/scheduler/tests.rs` proves the final analysis pass completes with virtual time. Preserve every assertion in the failing burst test. Run `crates/deslop-lsp/tests/live/bursts.rs` against the real LSP to verify source bursts, clone removal and restoration, and directory deletion against full report assertions before the final native CPU comparison.
 
+## [LIVE-WATCHER-DIRECTORIES] Reconcile structural directory events
+
+Keep the real LSP burst test and all its assertions unchanged. Its Linux failure omitted the first files written into a newly created directory. Add deterministic watcher-admission and session-reconciliation tests, then reuse canonical discovery to reconcile the affected subtree. Preserve the original workspace root for exclusion and ancestor ignore rules, skip unrelated sibling traversal, and retain excluded-directory and unchanged-report controls. Require complete discovery before removing membership. A rename reconciles the new subtree and removes old-path membership and cached ignore rules; use one ordered directory index for bounded cleanup and ancestor lookups. Reject changed-path aliases resolving outside the workspace while preserving watched configuration aliases. Validate the complete loop on Linux as well as macOS, then repeat native CPU measurement to detect resource regressions.
+
+## [LIVE-WATCHER-RESCAN] Reconcile after an explicit lost-event notification
+
+Pin a pathless `need_rescan()` notification before changing admission. Queue the workspace root through the existing scheduler and scoped reconciliation path. Verify discovery of missed creations, eviction of missed deletions, and recovery of missed configuration and ignore-rule changes with complete report assertions. Add no polling loop, retry thread, separate discovery implementation, or weakened accuracy assertion.
+
 ## [LIVE-SCHEDULER-REMOVAL-COST] Look up deleted paths in an index
 
 Keep live-file membership indexed by path as well as file identifier in `crates/deslop-core/src/state.rs`. Update both views through one wrapper so subtree removal in `pipeline/session/change.rs` visits matching paths instead of scanning the workspace. Include empty and skipped files in live membership; fingerprint storage is not a complete file index.

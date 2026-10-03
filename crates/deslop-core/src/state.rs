@@ -17,6 +17,9 @@ use crate::config::ClonePolicy;
 #[cfg(test)]
 mod tests;
 
+/// Each yielded range entry contributes one candidate, including the stopping boundary.
+const ONE_CANDIDATE: usize = 1;
+
 /// Opaque handle assigned by the [`FileRegistry`] to a discovered file.
 ///
 /// `FileId` values are dense, monotonically increasing, and valid only within
@@ -112,16 +115,7 @@ impl LivePaths {
     /// Finds only matching descendants and the first boundary candidate.
     /// The trace counts visited paths, excluding the tree's key comparisons.
     pub(crate) fn descendants(&self, prefix: &Path) -> Vec<PathBuf> {
-        let mut removal_paths_examined = usize::default();
-        let matched: Vec<PathBuf> = self
-            .by_path
-            .range(prefix.to_path_buf()..)
-            .take_while(|(path, _)| {
-                removal_paths_examined = removal_paths_examined.saturating_add(1);
-                path.starts_with(prefix)
-            })
-            .map(|(path, _)| path.clone())
-            .collect();
+        let (matched, removal_paths_examined) = indexed_subtree_paths(&self.by_path, prefix);
         tracing::debug!(
             removal_paths_examined,
             matched_files = matched.len(),
@@ -129,6 +123,24 @@ impl LivePaths {
         );
         matched
     }
+}
+
+/// [LIVE-SCHEDULER-REMOVAL-COST] Selects indexed descendants and counts visited candidates.
+/// [LIVE-WATCHER-DIRECTORIES] Ignore-rule eviction uses the same component boundary.
+pub(crate) fn indexed_subtree_paths<Value>(
+    index: &BTreeMap<PathBuf, Value>,
+    prefix: &Path,
+) -> (Vec<PathBuf>, usize) {
+    let mut candidates_visited = usize::default();
+    let paths = index
+        .range(prefix.to_path_buf()..)
+        .take_while(|(path, _)| {
+            candidates_visited = candidates_visited.saturating_add(ONE_CANDIDATE);
+            path.starts_with(prefix)
+        })
+        .map(|(path, _)| path.clone())
+        .collect();
+    (paths, candidates_visited)
 }
 
 /// Process-wide override of the `[ranking] structural_only` policy

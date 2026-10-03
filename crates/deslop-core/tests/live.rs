@@ -29,6 +29,13 @@ use tokio::sync::{Semaphore, SemaphorePermit};
 
 use crate::common::*;
 
+#[path = "live/directories.rs"]
+mod directories;
+
+#[cfg(unix)]
+#[path = "live/aliases.rs"]
+mod aliases;
+
 /// Bounds how many of this file's live-loop tests run at once ([GH #361]).
 ///
 /// Every test drives a whole session: a multi-threaded runtime, a

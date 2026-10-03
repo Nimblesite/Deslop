@@ -30,3 +30,14 @@ After executable SHA-256: `bf43f96e8adb451d86bfd432219485526ba8926a9f0085f7f52fe
 - `crates/deslop-core/src/process.rs`: `024200f291fc9be618e37d95a9b4f82066b4b64f89c78f4a26340000d1f75893`
 - `crates/deslop-core/src/process/tests.rs`: `1a26e2655489a377414c8c0363e075d4d2c756a27be90c830b98e7a794917dab`
 - `scripts/lib/windows_job_probe.py`: `01676ab8bb022f07674adc18f3c386b67c8791a5a3326cc427f2c487248de149`
+
+## Native Windows CI confirmation
+
+Generated from GitHub Actions job JSON and its unmodified log with `gh api`.
+
+- Job: [Windows tests + coverage collection](https://github.com/Nimblesite/Deslop/actions/runs/37157427837/job/111303866631)
+- Conclusion: `success`
+- Completed: `2026-10-03T22:25:07Z`
+- Passing native test: `2026-10-03T22:22:27.5356939Z test process::tests::parent_probe_uses_no_child_processes ... ok`
+- Raw log SHA-256: `1f3c700406f80156288fcd5a9d5e64e5c9718addab1931ecbb2fdc9cb5c5fa36`
+- Metadata: `target/idle-cpu-native-windows.json`; log: `target/idle-cpu-native-windows.log`.

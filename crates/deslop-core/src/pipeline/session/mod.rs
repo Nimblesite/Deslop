@@ -407,8 +407,10 @@ impl PipelineSession {
     /// when the new config is malformed. The session keeps the old
     /// config on failure so a bad edit does not brick the daemon.
     fn reload_exclusion(&mut self) -> Result<(), CoreError> {
-        self.exclusion = Arc::new(load_exclusion(&self.root, self.config_path.as_deref())?);
-        self.ignore_matcher = IgnoreMatcher::build(&self.root);
+        let exclusion = Arc::new(load_exclusion(&self.root, self.config_path.as_deref())?);
+        let ignore_matcher = IgnoreMatcher::build_configured(&self.root, &exclusion)?;
+        self.exclusion = exclusion;
+        self.ignore_matcher = ignore_matcher;
         Ok(())
     }
 }
