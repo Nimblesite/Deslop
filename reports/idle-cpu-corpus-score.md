@@ -269,4 +269,3 @@ Description, never scored. Reported beside the accuracy table so a change in cos
 ## Judged pairs `deslop (binary 07b97833a871)` gets wrong
 
 None. Every judged pair is answered correctly.
-
