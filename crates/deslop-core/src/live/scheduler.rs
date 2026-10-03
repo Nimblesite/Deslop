@@ -29,6 +29,9 @@ use super::{
 /// trade memory for tolerance to slow subscribers ([LIVE-PERF-BUDGETS]).
 const BROADCAST_CAPACITY: usize = 64;
 
+/// Debounce checks run only while file changes are pending.
+const PENDING_TICK_INTERVAL: Duration = Duration::from_millis(50);
+
 /// Background scheduler handle.
 #[derive(Debug)]
 pub struct Scheduler {
@@ -147,22 +150,22 @@ impl SchedulerTaskState {
         }
     }
 
-    /// Top-level event loop.
+    /// Top-level event loop. `initialize` / `reportGet` already supplied
+    /// the baseline generation, so it must not be re-announced
+    /// ([LIVE-SCHEDULER-NOOP]).
     async fn run(mut self) {
-        // `initialize` / `reportGet` hand every subscriber this
-        // generation before the first watcher event can land, so it is
-        // not news and must not be re-announced ([LIVE-SCHEDULER-NOOP]).
         self.last_announced_generation = Some(self.session.lock().await.generation());
-        let mut tick = time::interval(Duration::from_millis(50));
+        let mut tick = time::interval(PENDING_TICK_INTERVAL);
+        tick.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
         loop {
             tokio::select! {
                 maybe_path = self.watcher_rx.recv() => {
-                    match maybe_path {
-                        Some(path) => self.debouncer.push(path),
-                        None => break,
-                    }
+                    let Some(path) = maybe_path else { break };
+                    self.debouncer.push(path);
                 }
-                _ = tick.tick() => {
+                // [LIVE-SCHEDULER-IDLE] With no pending changes, only a
+                // watcher event can wake us. Missed idle ticks never replay.
+                _ = tick.tick(), if self.debouncer.has_pending() => {
                     self.maybe_dispatch().await;
                 }
             }
@@ -235,3 +238,6 @@ impl SchedulerTaskState {
         }))
     }
 }
+
+#[cfg(test)]
+mod tests;

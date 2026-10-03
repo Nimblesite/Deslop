@@ -395,8 +395,9 @@ fn main() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use serde_json::json;
+
+    use super::*;
 
     const TEST_REPORT: &str = "target/.corpus/corpus-score-missing-timing/report.json";
     const UNMEASURED_REPORT: &str = "target/.corpus/corpus-score-missing-timing/unmeasured.json";

@@ -182,6 +182,10 @@ Events matching `[EXCLUSION-CONFIG]` `exclude` patterns are dropped before debou
 
 The LSP supplements the watcher with `textDocument/didChange` and `workspace/didChangeWatchedFiles` from the editor — belt-and-suspenders for in-buffer edits where the OS watcher may lag. Both paths converge on the same `AnalysisSession`.
 
+### [LIVE-WATCHER-CONFIG-COST] Unrelated file events avoid config resolution
+
+Checking whether an event names a watched configuration must not canonicalise every unrelated build file. Exact registered paths match directly. Config filenames reached through parent-directory aliases and differently named leaf symlinks still resolve normally; uncertain Unicode, case, and platform filename aliases retain the conservative filesystem lookup. Missing unrelated paths need no canonical lookup. This changes lookup cost only, preserving event admission and configuration reload behavior. Resolver-call assertions in `live/watcher/tests.rs` pin the contract implemented by `live/watcher.rs`.
+
 ### [LIVE-SCHEDULER] Re-analysis scheduler
 
 After the watcher emits a coalesced changeset:
@@ -197,6 +201,14 @@ After the watcher emits a coalesced changeset:
 Single-threaded per session. Consecutive queued changesets merge before dispatch.
 
 Budget: ≤ 10 changed files, warm cache, 100 K-LOC → **< 500 ms**. Miss the budget → `tracing::warn!` with timing breakdown.
+
+### [LIVE-SCHEDULER-IDLE] Quiet workspaces stay asleep
+
+The scheduler waits for a watcher event while no file changes are pending, including after a completed pass. Debounce timers run only while changes are queued. Time spent idle never becomes a burst of overdue timer ticks when the next change arrives. Closing the watcher channel stops the scheduler.
+
+### [LIVE-SCHEDULER-REMOVAL-COST] Removed paths use the corpus index
+
+A removed path that matches no analysed file must be rejected through the corpus path index without scanning every analysed path. Matching leaves and whole subtrees are still evicted, while a component-prefix sibling such as `pkg_twin` survives removal of `pkg`. Lookup work grows with the matching files plus the logarithm of the analysed file count.
 
 ### [LIVE-SCHEDULER-NOOP] No-op pass early-out
 

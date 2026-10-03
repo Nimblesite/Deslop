@@ -6,9 +6,16 @@
 //! Per the project charter (see `CLAUDE.md`), this is the **only** module
 //! permitted to hold mutable state shared across pipeline stages.
 
-use std::{path::PathBuf, sync::OnceLock};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::{Path, PathBuf},
+    sync::OnceLock,
+};
 
 use crate::config::ClonePolicy;
+
+#[cfg(test)]
+mod tests;
 
 /// Opaque handle assigned by the [`FileRegistry`] to a discovered file.
 ///
@@ -46,6 +53,81 @@ impl FileRegistry {
     pub fn path(&self, id: FileId) -> Option<&std::path::Path> {
         let index = usize::try_from(id.0).ok()?;
         self.paths.get(index).map(PathBuf::as_path)
+    }
+}
+
+/// Current file membership, including files with no fingerprints.
+/// Both indexes change together ([LIVE-SCHEDULER-REMOVAL-COST]).
+#[derive(Debug, Default)]
+pub(crate) struct LivePaths {
+    /// Stable handles used by the analysis stages.
+    by_id: HashMap<FileId, PathBuf>,
+    /// Component-ordered paths for exact and subtree lookup.
+    by_path: BTreeMap<PathBuf, FileId>,
+}
+
+impl LivePaths {
+    /// Registers or replaces one live path in both indexes.
+    pub(crate) fn insert(&mut self, id: FileId, path: PathBuf) -> Option<PathBuf> {
+        let previous = self.remove(id);
+        if let Some(previous_id) = self.by_path.insert(path.clone(), id) {
+            let _previous_path = self.by_id.remove(&previous_id);
+        }
+        let _previous_path = self.by_id.insert(id, path);
+        previous
+    }
+
+    /// Removes an identity and its matching ordered entry.
+    pub(crate) fn remove(&mut self, id: FileId) -> Option<PathBuf> {
+        let path = self.by_id.remove(&id)?;
+        let _previous_id = self.by_path.remove(&path);
+        Some(path)
+    }
+
+    /// Returns the live path assigned to a handle.
+    pub(crate) fn get(&self, id: FileId) -> Option<&PathBuf> {
+        self.by_id.get(&id)
+    }
+
+    /// Returns the live handle assigned to an exact path.
+    pub(crate) fn file_id(&self, path: &Path) -> Option<FileId> {
+        self.by_path.get(path).copied()
+    }
+
+    /// Visits identities and paths without exposing mutable index access.
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (&FileId, &PathBuf)> {
+        self.by_id.iter()
+    }
+
+    /// Visits every current path, including files without fingerprints.
+    pub(crate) fn values(&self) -> impl Iterator<Item = &PathBuf> {
+        self.by_id.values()
+    }
+
+    /// Returns the analysed-file denominator's current membership count.
+    pub(crate) fn len(&self) -> usize {
+        self.by_id.len()
+    }
+
+    /// Finds only matching descendants and the first boundary candidate.
+    /// The trace counts visited paths, excluding the tree's key comparisons.
+    pub(crate) fn descendants(&self, prefix: &Path) -> Vec<PathBuf> {
+        let mut removal_paths_examined = usize::default();
+        let matched: Vec<PathBuf> = self
+            .by_path
+            .range(prefix.to_path_buf()..)
+            .take_while(|(path, _)| {
+                removal_paths_examined = removal_paths_examined.saturating_add(1);
+                path.starts_with(prefix)
+            })
+            .map(|(path, _)| path.clone())
+            .collect();
+        tracing::debug!(
+            removal_paths_examined,
+            matched_files = matched.len(),
+            "live removal lookup"
+        );
+        matched
     }
 }
 

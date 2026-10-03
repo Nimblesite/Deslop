@@ -40,7 +40,7 @@ use crate::{
     lang::LanguageParser,
     report::{CacheStats, Report},
     report_metrics::AnalysedLines,
-    state::{FileId, FileRegistry},
+    state::{FileId, FileRegistry, LivePaths},
 };
 
 /// A long-running analysis context owned by the daemon ([LIVE-LIFECYCLE]).
@@ -98,7 +98,7 @@ pub struct PipelineSession {
     /// Per-`FileId` absolute path. Kept separately from the registry
     /// because the registry is append-only — we also need to know
     /// which ids are *currently* part of the corpus.
-    pub(super) live_paths: HashMap<FileId, PathBuf>,
+    pub(super) live_paths: LivePaths,
     /// Per-`FileId` language id, mirrored into render inputs.
     pub(super) file_languages: HashMap<FileId, &'static str>,
     /// Running cache-hit telemetry. Accumulates across updates so
@@ -199,7 +199,7 @@ impl PipelineSession {
         };
         let mut corpus = fingerprint_corpus(&discovery.files, &parsers, &config)?;
         let store = build_store(&mut corpus, &discovery.files, &root);
-        let mut live_paths: HashMap<FileId, PathBuf> = HashMap::new();
+        let mut live_paths = LivePaths::default();
         let mut file_languages: HashMap<FileId, &'static str> = HashMap::new();
         for discovered in &discovery.files {
             let _prev = live_paths.insert(discovered.file_id, discovered.path.clone());
@@ -336,7 +336,7 @@ impl PipelineSession {
     /// seen it.
     #[must_use]
     pub fn path_for(&self, file_id: FileId) -> Option<&Path> {
-        self.live_paths.get(&file_id).map(PathBuf::as_path)
+        self.live_paths.get(file_id).map(PathBuf::as_path)
     }
 
     /// Resolves an absolute or workspace-relative path to a live
@@ -346,10 +346,7 @@ impl PipelineSession {
     #[must_use]
     pub fn file_id_for(&self, path: &Path) -> Option<FileId> {
         let target = self.canonicalise_reference(path);
-        self.live_paths
-            .iter()
-            .find(|(_, registered)| **registered == target)
-            .map(|(id, _)| *id)
+        self.live_paths.file_id(&target)
     }
 
     /// Returns a reference to the session's file registry. Exposed so

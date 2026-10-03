@@ -5,6 +5,9 @@
 //! happens before paths reach the channel — the scheduler downstream
 //! never re-parses an excluded file.
 
+#[cfg(test)]
+mod tests;
+
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},
@@ -163,7 +166,7 @@ impl WatcherHandler {
     /// map, so forwarding a removal it does not track is a cheap no-op.
     fn forward_one(&self, path: PathBuf, is_removal: bool) {
         if self.is_watched_config_path(&path) {
-            let _result = self.sender.try_send(path);
+            quarantined_delivery(&self.sender, path);
             return;
         }
         // Ignore-rule files bypass the extension and exclusion filters
@@ -171,11 +174,11 @@ impl WatcherHandler {
         // live ingest gate, so the session must see it to rebuild its
         // matcher and re-evaluate the corpus (ignore-rule parity #287).
         if is_ignore_rule_path(&path) {
-            let _result = self.sender.try_send(path);
+            quarantined_delivery(&self.sender, path);
             return;
         }
         if is_removal {
-            let _result = self.sender.try_send(path);
+            quarantined_delivery(&self.sender, path);
             return;
         }
         if !path_matches_filter(&path, &self.allowed) {
@@ -184,7 +187,7 @@ impl WatcherHandler {
         if self.current_exclusion().is_excluded(&path, None) {
             return;
         }
-        let _result = self.sender.try_send(path);
+        quarantined_delivery(&self.sender, path);
     }
 
     /// Reads the currently-published exclusion policy.
@@ -200,11 +203,69 @@ impl WatcherHandler {
     /// watched config path. Used to bypass the extension filter for
     /// `.deslop.toml` ([LIVE-WATCHER]).
     fn is_watched_config_path(&self, path: &Path) -> bool {
-        if self.watched_config_paths.contains(path) {
-            return true;
+        watched_config_path(path, &self.watched_config_paths, |candidate| {
+            std::fs::canonicalize(candidate)
+        })
+    }
+}
+
+/// [LIVE-WATCHER] Accuracy quarantine: all four former `try_send` sites
+/// ignored queue errors, silently losing source changes and leaving reports stale.
+/// Those sends were deleted after `source_burst_preserves_every_changed_path`
+/// delivered only 256 of 257 paths. Live delivery must fail visibly until repaired.
+#[expect(
+    clippy::panic,
+    reason = "Mandatory accuracy quarantine for lost watcher events"
+)]
+fn quarantined_delivery(_sender: &Sender<PathBuf>, _path: PathBuf) {
+    panic!("[LIVE-WATCHER] accuracy quarantine: source_burst_preserves_every_changed_path pins lost source edits");
+}
+
+/// Resolves config aliases through the same path used by the live watcher.
+/// [LIVE-WATCHER-CONFIG-COST] The resolver seam measures filesystem work.
+fn watched_config_path(
+    path: &Path,
+    watched: &HashSet<PathBuf>,
+    resolve: impl FnOnce(&Path) -> std::io::Result<PathBuf>,
+) -> bool {
+    if watched.contains(path) {
+        return true;
+    }
+    if !needs_config_resolution(path, watched) {
+        return false;
+    }
+    let canonical = resolve(path).unwrap_or_else(|_| path.to_path_buf());
+    watched.contains(&canonical)
+}
+
+/// [LIVE-WATCHER-CONFIG-COST] Avoids realpath for unrelated build events.
+/// Windows retains native resolution for existing paths because DOS names,
+/// trailing dots, and case aliases cannot be reproduced by filename equality.
+fn needs_config_resolution(path: &Path, watched: &HashSet<PathBuf>) -> bool {
+    if watched.is_empty() {
+        return false;
+    }
+    if watched
+        .iter()
+        .any(|config| config_name_may_match(path, config))
+    {
+        return true;
+    }
+    match std::fs::symlink_metadata(path) {
+        Ok(metadata) => cfg!(windows) || metadata.file_type().is_symlink(),
+        Err(error) => error.kind() != std::io::ErrorKind::NotFound,
+    }
+}
+
+/// Keeps ambiguous Unicode and case comparisons on the native resolver path.
+fn config_name_may_match(path: &Path, config: &Path) -> bool {
+    let candidate = path.file_name().and_then(std::ffi::OsStr::to_str);
+    let configured = config.file_name().and_then(std::ffi::OsStr::to_str);
+    match (candidate, configured) {
+        (Some(candidate), Some(configured)) if candidate.is_ascii() && configured.is_ascii() => {
+            candidate.eq_ignore_ascii_case(configured)
         }
-        let canonical = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
-        self.watched_config_paths.contains(&canonical)
+        _ => true,
     }
 }
 

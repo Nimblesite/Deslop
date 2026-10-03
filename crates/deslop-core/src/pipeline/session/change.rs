@@ -212,12 +212,7 @@ impl PipelineSession {
     /// removal event for a path the corpus never held leaves it
     /// [`CorpusEffect::Untouched`].
     pub(super) fn drop_subtree(&mut self, prefix: &Path) -> CorpusEffect {
-        let doomed: Vec<PathBuf> = self
-            .live_paths
-            .values()
-            .filter(|registered| registered.starts_with(prefix))
-            .cloned()
-            .collect();
+        let doomed = self.live_paths.descendants(prefix);
         doomed.iter().fold(CorpusEffect::Untouched, |effect, path| {
             effect.merge(self.drop_path(path))
         })
@@ -226,15 +221,10 @@ impl PipelineSession {
     /// Removes a path from every in-memory map, reporting whether it was
     /// present to begin with.
     pub(super) fn drop_path(&mut self, absolute: &Path) -> CorpusEffect {
-        let Some((file_id, _)) = self
-            .live_paths
-            .iter()
-            .find(|(_, registered)| registered.as_path() == absolute)
-            .map(|(id, path)| (*id, path.clone()))
-        else {
+        let Some(file_id) = self.live_paths.file_id(absolute) else {
             return CorpusEffect::Untouched;
         };
-        let _removed_path = self.live_paths.remove(&file_id);
+        let _removed_path = self.live_paths.remove(file_id);
         let _removed_records = self.store.remove(file_id);
         let _removed_source = self.sources.remove(&file_id);
         let _removed_lang = self.file_languages.remove(&file_id);
