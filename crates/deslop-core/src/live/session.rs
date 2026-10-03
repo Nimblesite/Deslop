@@ -34,7 +34,7 @@ use crate::{
     delta::ReportDelta,
     embedding::{EmbeddingMode, EmbeddingProvider},
     lang::LanguageParser,
-    pipeline::{language_for_path, EmbeddingSettings, PipelineSession},
+    pipeline::{language_for_path, EmbeddingSettings, OpenBuffers, PipelineSession},
     report::{Report, ReportCluster},
 };
 
@@ -113,6 +113,11 @@ pub struct AnalysisSession {
     /// after every analysis pass so a stale-mtime read forces a
     /// synchronous `apply_changes` ahead of serving the response.
     freshness: FreshnessTracker,
+    /// Text of every file an editor holds open ([LIVE-OPEN-BUFFERS]).
+    /// A change pass reads these instead of the disk, so the report
+    /// describes what the user sees, saved or not. Maintained by the
+    /// `*_buffer` methods in `session_buffers.rs`.
+    pub(super) buffers: OpenBuffers,
 }
 
 impl std::fmt::Debug for AnalysisSession {
@@ -246,9 +251,14 @@ impl AnalysisSession {
         // read does not falsely refire a refresh.
         self.freshness
             .record_from_report(&self.root, &self.latest_report);
-        let pending = std::mem::take(&mut self.pending_changes);
-        if !pending.is_empty() {
-            let _delta = self.apply_changes(&pending)?;
+        // [LIVE-OPEN-BUFFERS] The full pass read every file from disk,
+        // so re-apply the open buffers alongside the queued changes:
+        // the editor's text must win again before this report is
+        // served as the answer.
+        let mut replay = std::mem::take(&mut self.pending_changes);
+        replay.extend(self.buffers.paths().map(Path::to_path_buf));
+        if !replay.is_empty() {
+            let _delta = self.apply_changes(&replay)?;
         }
         // The seed cache is written by the cold-pass install path
         // ([LIVE-SEED-CACHE]) — `cache_seed::commit_refresh` calls
@@ -336,6 +346,7 @@ impl AnalysisSession {
             embedding_refresh_revision: 0,
             exclusion,
             freshness,
+            buffers: OpenBuffers::default(),
         }
     }
 
@@ -736,7 +747,7 @@ impl AnalysisSession {
             batch_yield: live_batch_yield(self.embedding_mode),
             progress: None,
         };
-        Ok(pipeline.update_files(changed, embedding)?)
+        Ok(pipeline.update_files(changed, embedding, &self.buffers)?)
     }
 
     /// Resolves the open-buffer-range variant of `find_similar`.

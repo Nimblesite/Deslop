@@ -29,6 +29,7 @@ use store::CorpusStore;
 use super::{
     config::{EmbeddingSettings, PipelineConfig},
     corpus::{build_extension_map, default_parsers, fingerprint_corpus, FingerprintCorpus},
+    open_buffers::OpenBuffers,
 };
 use crate::{
     boilerplate::BoilerplateRange,
@@ -237,7 +238,9 @@ impl PipelineSession {
     /// refreshed [`Report`]. A `changed` entry that no longer exists
     /// on disk is treated as a deletion. Paths outside the workspace
     /// root or with unsupported extensions are silently skipped — a
-    /// watcher can fire on any file, not only interesting ones.
+    /// watcher can fire on any file, not only interesting ones. A path
+    /// an editor holds open is re-parsed from its buffer in `buffers`,
+    /// not from disk ([LIVE-OPEN-BUFFERS]).
     ///
     /// A `changed` entry naming a watched config file
     /// (`<root>/.deslop.toml` or the explicit override) or an
@@ -262,6 +265,7 @@ impl PipelineSession {
         &mut self,
         changed: &[PathBuf],
         embedding: EmbeddingSettings<'_>,
+        buffers: &OpenBuffers,
     ) -> Result<Option<Report>, CoreError> {
         let mut stats = CacheStats::default();
         let watched = watched_config_paths(&self.root, self.config_path.as_deref());
@@ -271,13 +275,13 @@ impl PipelineSession {
         let mut effect =
             CorpusEffect::from_touched(changed.iter().any(|path| reshapes_corpus(path, &watched)));
         if effect == CorpusEffect::Mutated {
-            self.refresh_exclusion(&mut stats, &embedding)?;
+            self.refresh_exclusion(&mut stats, &embedding, buffers)?;
         }
         for path in changed
             .iter()
             .filter(|path| !reshapes_corpus(path, &watched))
         {
-            effect = effect.merge(self.apply_one_change(path, &mut stats, &embedding)?);
+            effect = effect.merge(self.apply_one_change(path, &mut stats, &embedding, buffers)?);
         }
         if effect == CorpusEffect::Untouched {
             tracing::debug!(

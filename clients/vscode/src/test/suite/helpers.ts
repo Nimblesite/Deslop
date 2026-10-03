@@ -26,12 +26,12 @@ export function sleep(ms: number): Promise<void> {
 // condition (a report landing, a generation advancing) rather than a fixed
 // delay. Shared by every suite that needs the live pipeline to settle.
 export async function waitFor<T>(
-  predicate: () => T | undefined,
+  predicate: () => T | Promise<T | undefined> | undefined,
   timeoutMs: number,
 ): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const value = predicate();
+    const value = await predicate();
     if (value !== undefined) return value;
     await sleep(100);
   }

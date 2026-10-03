@@ -188,7 +188,7 @@ export interface DeferredProbeRequest {
   reject(error: Error): void;
 }
 
-// A fake LSP client whose findSimilar responses are deferred promises the
+// A fake LSP client whose reportForRange responses are deferred promises the
 // test settles by hand — the deterministic way to stage out-of-order probe
 // completions. No timers, no sleeps: the test holds each probe() promise
 // and awaits it only after settling that probe's deferred response.

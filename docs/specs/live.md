@@ -273,7 +273,20 @@ The `live` module exposes the `LiveApi` trait. The LSP holds a `LiveApi` impl an
 `rescan` (the `deslop.lsp.refreshReport` IPC method) blocks until a fresh full pass completes and returns that pass's report — never one from before the refresh. The `paths` argument is informational; the LSP always runs a full `refresh_full` under the session lock. The response's `generation` and `clusters` fields are drawn from the same post-refresh generation, so one call surfaces the post-edit state — eliminated clusters disappear and surviving clusters carry post-edit offsets without a second call.
 
 ### [LIVE-CLUSTER-OFFSET-FRESHNESS] Cluster offset freshness on read
-A `cluster/byId` read (and `report/forFile` / `report/forRange` / `duplicates/findSimilar`) returns occurrence byte and line ranges that map onto the current on-disk file, even when the agent has edited files without an explicit `rescan` between reads. The session re-stats every occurrence path on each IPC read ([LIVE-CLUSTER-OFFSET-FRESHNESS]) and synchronously re-analyses any file whose mtime is newer than last observed, before resolving the cluster. A stale offset that overshoots the post-edit file length would corrupt agent context, so this gate is mandatory on every agent-facing read path, not just `rescan`.
+A `cluster/byId` read (and `report/forFile` / `report/forRange` / `duplicates/findSimilar`) returns occurrence byte and line ranges that map onto the current on-disk file — or, for a file an editor holds open, onto its current buffer ([LIVE-OPEN-BUFFERS]) — even when the agent has edited files without an explicit `rescan` between reads. The session re-stats every occurrence path on each IPC read ([LIVE-CLUSTER-OFFSET-FRESHNESS]) and synchronously re-analyses any file whose mtime is newer than last observed, before resolving the cluster. A stale offset that overshoots the post-edit file length would corrupt agent context, so this gate is mandatory on every agent-facing read path, not just `rescan`.
+
+### [LIVE-OPEN-BUFFERS] Open editor buffers shadow the file on disk
+What the editor shows is what gets analysed. From the moment an editor opens a file until it closes it, the session analyses that file from the editor's text, not from the bytes on disk. Every edit the editor reports is applied to that text and re-analysed at once, so a clone the user deletes in an unsaved buffer leaves the report, the diagnostics, the code lenses, the live bubble and every `report/forRange` answer before the file is saved. Restoring the text brings the clone back. Closing the buffer without saving makes the disk the truth again and the report returns to what the saved bytes say.
+
+The rules:
+
+- An opened buffer whose text equals the disk changes nothing ([LIVE-SCHEDULER-NOOP]).
+- An edit to a file the editor never opened is refused (`buffer_not_open`) and changes nothing — there is no text to apply it to.
+- Unsaved text is never written to the on-disk fingerprint cache ([PIPELINE-INCREMENTAL]). A keystroke is not a file state worth persisting.
+- A full pass (`refresh_full`, the cold start) reads disk, then re-applies every open buffer before its report is served, so a full refresh never silently reverts to saved bytes behind the user's back.
+- When a file is open in an editor and also edited on disk by another actor, the editor's buffer wins until it is closed. The editor shows one text and reports a conflict on save; the report describes that text.
+
+Code: `OpenBuffers` (`crates/deslop-core/src/pipeline/open_buffers.rs`), `AnalysisSession::open_buffer` / `edit_buffer` / `close_buffer` (`crates/deslop-core/src/live/session_buffers.rs`), the `didOpen` / `didChange` / `didClose` handlers in `crates/deslop-lsp/src/backend.rs`. Tests: `crates/deslop-core/tests/live_open_buffers.rs`, `crates/deslop-lsp/tests/open_buffers.rs`, `an unsaved deleted clone is absent from reportForRange` in `clients/vscode/src/test/suite/live-refresh.e2e.test.ts`.
 
 ### [LIVE-NOTIFICATIONS] Push notifications
 
