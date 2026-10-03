@@ -141,7 +141,7 @@ fn canonical_temp_root() -> Result<(tempfile::TempDir, PathBuf)> {
 async fn watch_root(
     root: &Path,
     extensions: &[&str],
-) -> Result<(LiveWatcher, tokio::sync::mpsc::Receiver<PathBuf>)> {
+) -> Result<(LiveWatcher, tokio::sync::mpsc::UnboundedReceiver<PathBuf>)> {
     let owned_extensions = extensions.iter().map(|ext| (*ext).to_owned()).collect();
     let exclusion = live_exclusion(Arc::new(ExclusionConfig::empty()));
     let started = LiveWatcher::start(root, owned_extensions, exclusion, Vec::new())
@@ -664,7 +664,7 @@ async fn watcher_forwards_directory_removal_without_a_source_extension() -> Resu
 /// or the deadline elapses. Skips unrelated paths (sibling files,
 /// directory entries) that may slip through on noisy filesystems.
 async fn wait_for_event(
-    rx: &mut tokio::sync::mpsc::Receiver<PathBuf>,
+    rx: &mut tokio::sync::mpsc::UnboundedReceiver<PathBuf>,
     target: &Path,
     timeout: Duration,
 ) -> Result<PathBuf> {
@@ -782,7 +782,10 @@ async fn exercise_snapshot_lookups(service: &LiveService, root: &Path) -> Result
     let range_clusters = service
         .report_for_range(&resolved, occurrence.start_byte, occurrence.end_byte)
         .await;
-    assert!(!range_clusters.is_empty());
+    assert_ne!(
+        range_clusters,
+        Vec::<deslop_core::report::ReportCluster>::new()
+    );
     Ok(first.id.clone())
 }
 
@@ -794,7 +797,7 @@ async fn exercise_session_config(
 ) -> Result<u64> {
     let config = service.session_config().await;
     assert_eq!(config.workspace_root, root);
-    assert!(!config.languages.is_empty());
+    assert_ne!(config.languages, Vec::<String>::new());
     let request = FindSimilarRequest {
         input: FindSimilarInput::Snippet {
             // The corpus's own `Alpha.cs` — a snippet whose subtree

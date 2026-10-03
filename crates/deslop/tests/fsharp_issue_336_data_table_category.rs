@@ -313,7 +313,7 @@ fn retired_data_clone_knobs_do_not_change_the_report() -> Result<()> {
             "{label}: the retired knob must not hide the table family: {report:#}"
         );
     }
-    assert!(!ranked_baseline.is_empty());
+    assert_ne!(ranked_baseline, Vec::new());
     Ok(())
 }
 

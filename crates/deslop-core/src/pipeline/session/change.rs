@@ -4,6 +4,9 @@
 //! resolution, path canonicalisation, and pipeline config construction.
 //! All methods are `pub(super)` — they are called only from `session/mod.rs`.
 
+#[cfg(test)]
+mod tests;
+
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},
@@ -51,6 +54,33 @@ impl CorpusEffect {
         } else {
             Self::Untouched
         }
+    }
+}
+
+/// [LIVE-SCHEDULER-REMOVAL-COST] Resolves a path or its surviving parent.
+fn canonicalise_path(
+    path: &Path,
+    mut resolve: impl FnMut(&Path) -> std::io::Result<PathBuf>,
+) -> PathBuf {
+    match std::fs::symlink_metadata(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            canonicalise_parent(path, resolve)
+        }
+        _ => resolve(path).unwrap_or_else(|_| canonicalise_parent(path, resolve)),
+    }
+}
+
+/// Preserves native parent aliases when a removed leaf cannot be resolved.
+fn canonicalise_parent(
+    path: &Path,
+    mut resolve: impl FnMut(&Path) -> std::io::Result<PathBuf>,
+) -> PathBuf {
+    match (path.parent(), path.file_name()) {
+        (Some(parent), Some(leaf)) => match resolve(parent) {
+            Ok(canonical_parent) => canonical_parent.join(leaf),
+            Err(_) => path.to_path_buf(),
+        },
+        _ => path.to_path_buf(),
     }
 }
 
@@ -270,16 +300,7 @@ impl PipelineSession {
         } else {
             self.root.join(path)
         };
-        if let Ok(resolved) = std::fs::canonicalize(&joined) {
-            return resolved;
-        }
-        match (joined.parent(), joined.file_name()) {
-            (Some(parent), Some(leaf)) => match std::fs::canonicalize(parent) {
-                Ok(canonical_parent) => canonical_parent.join(leaf),
-                Err(_) => joined,
-            },
-            _ => joined,
-        }
+        canonicalise_path(&joined, |candidate| std::fs::canonicalize(candidate))
     }
 
     /// Builds a [`PipelineConfig`] snapshot for a pass that does not

@@ -1,12 +1,12 @@
 //! `tower-lsp` backend wiring `Deslop` into LSP ([LSP-CAPABILITIES]).
 use std::{
     path::{Path, PathBuf},
-    sync::{atomic::AtomicBool, Arc, RwLock},
+    sync::{Arc, RwLock},
 };
 
 use deslop_core::{
     live::{
-        read_report_snapshot, report_for_file_in, ChangeSummary, EmbeddingProgress,
+        read_report_snapshot, report_for_file_in, AnalysisState, ChangeSummary, EmbeddingProgress,
         EmbeddingProgressReporter, LiveApi, LiveError, LiveService, ReportChangedNotification,
     },
     report::Report,
@@ -79,12 +79,9 @@ pub struct LspBackend {
     /// held by an in-flight `apply_changes` pass, so Deslop can never
     /// freeze the editor ([LSP-NON-INTERFERENCE]).
     report_snapshot: Arc<RwLock<Arc<Report>>>,
-    /// True while the cache-seed cold pass is still running. Read in
-    /// `initialized()` to push the correct startup analysis state to a
-    /// late-connecting editor, closing the race where the cold pass's
-    /// `running`/`idle` broadcasts predate the VSIX notification
-    /// handlers ([VSIX reactivity]).
-    cold_pass_active: Arc<AtomicBool>,
+    /// Retains the cold pass state for `initialized()`, including refresh errors
+    /// that predate the editor's notification handlers ([LIVE-CACHE-SEED-READINESS]).
+    startup_state: Arc<Mutex<AnalysisState>>,
     /// Shared pull/push diagnostic configuration and publication state.
     diagnostics: Arc<DiagnosticSession>,
 }
@@ -162,7 +159,7 @@ impl LspBackend {
         // pass runs; a fresh session has already finished its blocking
         // scan. `initialized()` reads this to report the right startup
         // state to the editor ([VSIX reactivity]).
-        let cold_pass_active = Arc::new(AtomicBool::new(seeded_from_cache));
+        let startup_state = crate::cache_seed::new_startup_state(seeded_from_cache);
         if seeded_from_cache {
             crate::cache_seed::spawn_refresh(crate::cache_seed::RefreshTask {
                 session: Arc::clone(&session),
@@ -175,7 +172,7 @@ impl LspBackend {
                 provider,
                 mode: resolved_mode,
                 report_changed,
-                cold_pass_active: Arc::clone(&cold_pass_active),
+                startup_state: Arc::clone(&startup_state),
             });
         }
         Ok(Self {
@@ -187,7 +184,7 @@ impl LspBackend {
             observability,
             workspace_root: root,
             report_snapshot,
-            cold_pass_active,
+            startup_state,
             diagnostics,
         })
     }
@@ -327,7 +324,7 @@ impl LanguageServer for LspBackend {
         // notification handlers are registered, so the panel reflects an
         // in-flight cold pass (or a settled scan) without a window reload
         // ([VSIX reactivity]).
-        crate::cache_seed::push_initial_state(&self.client, &self.cold_pass_active).await;
+        crate::cache_seed::push_initial_state(&self.client, &self.startup_state).await;
         // [CI-DESLOP]: the threshold is a CLI-only gate; its sole
         // live-surface effect is one non-blocking warning when the budget
         // is smashed. Nothing else in the editor changes.

@@ -15,12 +15,15 @@ use std::{
 };
 
 use notify::{
-    event::EventKind, recommended_watcher, EventHandler, RecommendedWatcher, RecursiveMode,
-    Watcher as NotifyWatcher,
+    event::{EventKind, RemoveKind},
+    recommended_watcher, EventHandler, RecommendedWatcher, RecursiveMode, Watcher as NotifyWatcher,
 };
-use tokio::sync::mpsc::{self, Receiver, Sender};
+use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
-use crate::{config::ExclusionConfig, discover::is_ignore_rule_path};
+use crate::{
+    config::{is_config_path, ExclusionConfig},
+    discover::is_ignore_rule_path,
+};
 
 /// Exclusion policy shared between the analysis session and the live
 /// watcher ([CONFIG-EXCLUDE-DEPENDENCIES], [LIVE-CONFIG-LIVE]).
@@ -49,11 +52,6 @@ pub fn publish_exclusion(handle: &LiveExclusion, exclusion: Arc<ExclusionConfig>
     *guard = exclusion;
 }
 
-/// Default channel capacity for the watcher → scheduler bridge.
-/// Sized for short bursts of saves; the scheduler's debouncer
-/// coalesces anything beyond.
-const CHANNEL_CAPACITY: usize = 256;
-
 /// Async-friendly file watcher handle. Drop the value to stop watching.
 #[derive(Debug)]
 pub struct LiveWatcher {
@@ -81,13 +79,13 @@ impl LiveWatcher {
         extensions: Vec<String>,
         exclusion: LiveExclusion,
         config_paths: Vec<PathBuf>,
-    ) -> Result<(Self, Receiver<PathBuf>), notify::Error> {
-        let (tx, rx) = mpsc::channel::<PathBuf>(CHANNEL_CAPACITY);
+    ) -> Result<(Self, UnboundedReceiver<PathBuf>), notify::Error> {
+        let (tx, rx) = mpsc::unbounded_channel::<PathBuf>();
         let allowed: HashSet<String> = extensions
             .into_iter()
             .map(|ext| ext.to_lowercase())
             .collect();
-        let watched_config_paths: HashSet<PathBuf> = config_paths
+        let watched_config_paths: Vec<PathBuf> = config_paths
             .into_iter()
             .map(|path| std::fs::canonicalize(&path).unwrap_or(path))
             .collect();
@@ -107,8 +105,8 @@ impl LiveWatcher {
 /// async channel. Implements [`EventHandler`] (the `notify` callback
 /// trait) so it can be installed in [`recommended_watcher`].
 struct WatcherHandler {
-    /// Async outbound channel.
-    sender: Sender<PathBuf>,
+    /// FIFO delivery retains bursts while analysis is busy ([LIVE-WATCHER-DELIVERY]).
+    sender: UnboundedSender<PathBuf>,
     /// Allowed lowercase extensions (no leading `.`).
     allowed: HashSet<String>,
     /// Exclusion policy consulted before forwarding. Shared with the
@@ -119,7 +117,7 @@ struct WatcherHandler {
     /// Canonical paths that bypass the extension/exclusion filter and
     /// reach the scheduler directly — `.deslop.toml` plus any explicit
     /// override path ([LIVE-WATCHER]).
-    watched_config_paths: HashSet<PathBuf>,
+    watched_config_paths: Vec<PathBuf>,
 }
 
 impl std::fmt::Debug for WatcherHandler {
@@ -139,18 +137,14 @@ impl EventHandler for WatcherHandler {
         if !is_relevant_event(event.kind) {
             return;
         }
-        let is_removal = matches!(event.kind, EventKind::Remove(_));
-        // Dedup paths within this single callback batch so a
-        // `Modify(Metadata) + Modify(Data)` pair only fires once. The
-        // set is stack-local — every new callback starts fresh, so a
-        // path seen in an earlier batch is forwarded again on the next
-        // edit ([LIVE-WATCHER]).
+        // [LIVE-WATCHER] Dedup paths within this callback only; later callbacks
+        // forward the same path again so every subsequent edit is delivered.
         let mut seen_in_batch: HashSet<PathBuf> = HashSet::new();
         for path in event.paths {
             if !seen_in_batch.insert(path.clone()) {
                 continue;
             }
-            self.forward_one(path, is_removal);
+            self.forward_one(path, event.kind);
         }
     }
 }
@@ -158,36 +152,24 @@ impl EventHandler for WatcherHandler {
 impl WatcherHandler {
     /// Forwards one path if it passes the filter set.
     ///
-    /// Removals bypass the extension and exclusion filters: a removed
-    /// directory has no source extension yet may be an ancestor of live
-    /// files, and a previously-admitted path that an exclusion now
-    /// matches must still be evictable ([LIVE-WATCHER]). The
-    /// session re-checks existence and ownership before mutating any
-    /// map, so forwarding a removal it does not track is a cheap no-op.
-    fn forward_one(&self, path: PathBuf, is_removal: bool) {
-        if self.is_watched_config_path(&path) {
-            quarantined_delivery(&self.sender, path);
+    /// [LIVE-WATCHER-REMOVAL] Known files retain extension admission;
+    /// directories and uncertain removals may own source descendants.
+    /// Source removals bypass exclusions so former members remain evictable.
+    /// Configurations and ignore rules always reach the session to rescope it.
+    fn forward_one(&self, path: PathBuf, kind: EventKind) {
+        if is_config_path(&path, &self.watched_config_paths) || is_ignore_rule_path(&path) {
+            deliver(&self.sender, path);
             return;
         }
-        // Ignore-rule files bypass the extension and exclusion filters
-        // the same way `.deslop.toml` does: editing one re-scopes the
-        // live ingest gate, so the session must see it to rebuild its
-        // matcher and re-evaluate the corpus (ignore-rule parity #287).
-        if is_ignore_rule_path(&path) {
-            quarantined_delivery(&self.sender, path);
+        if !may_remove_subtree(kind) && !path_matches_filter(&path, &self.allowed) {
             return;
         }
-        if is_removal {
-            quarantined_delivery(&self.sender, path);
+        if !matches!(kind, EventKind::Remove(_))
+            && self.current_exclusion().is_excluded(&path, None)
+        {
             return;
         }
-        if !path_matches_filter(&path, &self.allowed) {
-            return;
-        }
-        if self.current_exclusion().is_excluded(&path, None) {
-            return;
-        }
-        quarantined_delivery(&self.sender, path);
+        deliver(&self.sender, path);
     }
 
     /// Reads the currently-published exclusion policy.
@@ -198,74 +180,18 @@ impl WatcherHandler {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         Arc::clone(&guard)
     }
-
-    /// Returns `true` when `path` (or its canonical form) matches a
-    /// watched config path. Used to bypass the extension filter for
-    /// `.deslop.toml` ([LIVE-WATCHER]).
-    fn is_watched_config_path(&self, path: &Path) -> bool {
-        watched_config_path(path, &self.watched_config_paths, |candidate| {
-            std::fs::canonicalize(candidate)
-        })
-    }
 }
 
-/// [LIVE-WATCHER] Accuracy quarantine: all four former `try_send` sites
-/// ignored queue errors, silently losing source changes and leaving reports stale.
-/// Those sends were deleted after `source_burst_preserves_every_changed_path`
-/// delivered only 256 of 257 paths. Live delivery must fail visibly until repaired.
-#[expect(
-    clippy::panic,
-    reason = "Mandatory accuracy quarantine for lost watcher events"
-)]
-fn quarantined_delivery(_sender: &Sender<PathBuf>, _path: PathBuf) {
-    panic!("[LIVE-WATCHER] accuracy quarantine: source_burst_preserves_every_changed_path pins lost source edits");
+/// Untyped and non-file removals may invalidate a directory or an alias.
+fn may_remove_subtree(kind: EventKind) -> bool {
+    matches!(kind, EventKind::Remove(removal) if removal != RemoveKind::File)
 }
 
-/// Resolves config aliases through the same path used by the live watcher.
-/// [LIVE-WATCHER-CONFIG-COST] The resolver seam measures filesystem work.
-fn watched_config_path(
-    path: &Path,
-    watched: &HashSet<PathBuf>,
-    resolve: impl FnOnce(&Path) -> std::io::Result<PathBuf>,
-) -> bool {
-    if watched.contains(path) {
-        return true;
-    }
-    if !needs_config_resolution(path, watched) {
-        return false;
-    }
-    let canonical = resolve(path).unwrap_or_else(|_| path.to_path_buf());
-    watched.contains(&canonical)
-}
-
-/// [LIVE-WATCHER-CONFIG-COST] Avoids realpath for unrelated build events.
-/// Windows retains native resolution for existing paths because DOS names,
-/// trailing dots, and case aliases cannot be reproduced by filename equality.
-fn needs_config_resolution(path: &Path, watched: &HashSet<PathBuf>) -> bool {
-    if watched.is_empty() {
-        return false;
-    }
-    if watched
-        .iter()
-        .any(|config| config_name_may_match(path, config))
-    {
-        return true;
-    }
-    match std::fs::symlink_metadata(path) {
-        Ok(metadata) => cfg!(windows) || metadata.file_type().is_symlink(),
-        Err(error) => error.kind() != std::io::ErrorKind::NotFound,
-    }
-}
-
-/// Keeps ambiguous Unicode and case comparisons on the native resolver path.
-fn config_name_may_match(path: &Path, config: &Path) -> bool {
-    let candidate = path.file_name().and_then(std::ffi::OsStr::to_str);
-    let configured = config.file_name().and_then(std::ffi::OsStr::to_str);
-    match (candidate, configured) {
-        (Some(candidate), Some(configured)) if candidate.is_ascii() && configured.is_ascii() => {
-            candidate.eq_ignore_ascii_case(configured)
-        }
-        _ => true,
+/// [LIVE-WATCHER-DELIVERY] Enqueues synchronously without blocking or dropping bursts.
+/// A failed send means the scheduler has closed, so there is no live consumer.
+fn deliver(sender: &UnboundedSender<PathBuf>, path: PathBuf) {
+    if sender.send(path).is_err() {
+        tracing::debug!("watcher scheduler receiver closed; event delivery stopped");
     }
 }
 

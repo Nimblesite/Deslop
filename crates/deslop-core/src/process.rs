@@ -13,6 +13,10 @@
 //! a candidate to migrate into the shared `lspkit` toolkit once it matures
 //! (see the repo migration note in `CLAUDE.md`).
 
+#[cfg(all(test, windows))]
+#[path = "process/tests.rs"]
+mod tests;
+
 /// Returns whether `process_id` currently resolves to a live process.
 ///
 /// Issues `kill(pid, None)` (signal 0): the kernel performs the existence
@@ -33,21 +37,24 @@ pub fn process_is_alive(process_id: u32) -> bool {
 
 /// Returns whether `process_id` currently resolves to a live process.
 ///
-/// Queries `tasklist` filtered to the pid; a successful, non-empty match
-/// means the process is still running.
+/// [LIVE-PARENT-LIVENESS] Checks a kernel process handle without launching
+/// children. An exited process signals its handle; access-denied and unknown
+/// errors conservatively preserve the server, matching the Unix probe.
 #[cfg(windows)]
 #[must_use]
 pub fn process_is_alive(process_id: u32) -> bool {
-    let filter = format!("PID eq {process_id}");
-    std::process::Command::new("tasklist")
-        .args(["/FI", &filter, "/FO", "CSV", "/NH"])
-        .output()
-        .is_ok_and(|output| {
-            output.status.success()
-                && String::from_utf8_lossy(&output.stdout)
-                    .lines()
-                    .any(|line| line.contains(&process_id.to_string()))
-        })
+    use winsafe::{co, HPROCESS};
+
+    const NO_WAIT_MILLISECONDS: u32 = 0;
+    let process = match HPROCESS::OpenProcess(co::PROCESS::SYNCHRONIZE, false, process_id) {
+        Ok(process) => process,
+        Err(co::ERROR::INVALID_PARAMETER) => return false,
+        Err(_) => return true,
+    };
+    !matches!(
+        process.WaitForSingleObject(Some(NO_WAIT_MILLISECONDS)),
+        Ok(co::WAIT::OBJECT_0)
+    )
 }
 
 /// Conservatively reports the process as alive on platforms without a

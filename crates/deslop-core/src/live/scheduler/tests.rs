@@ -7,11 +7,14 @@ use std::{
     task::{Context, Wake, Waker},
 };
 
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use tokio::sync::{broadcast::error::TryRecvError, mpsc};
 
 use super::*;
-use crate::{embedding::NoopProvider, live::CAP_MS};
+use crate::{
+    embedding::{EmbeddingMode, NoopProvider},
+    live::CAP_MS,
+};
 
 const CHANNEL_SIZE: usize = 4;
 const MIN_NODES: u32 = 30;
@@ -85,7 +88,7 @@ struct SchedulerInputs {
     /// Workspace retained until the scheduler finishes.
     root: tempfile::TempDir,
     /// An open channel keeps the quiet scheduler alive.
-    events: mpsc::Sender<PathBuf>,
+    events: mpsc::UnboundedSender<PathBuf>,
     /// Report publications must remain absent for an untracked path.
     reports: broadcast::Receiver<ReportChangedNotification>,
     /// Analysis lifecycle proves queued events still dispatch.
@@ -94,7 +97,7 @@ struct SchedulerInputs {
 
 /// Builds the real scheduler future without spawning it, exposing its waker.
 fn scheduler_fixture(root: tempfile::TempDir) -> Result<(SchedulerTaskState, SchedulerInputs)> {
-    let (events, receiver) = mpsc::channel(CHANNEL_SIZE);
+    let (events, receiver) = mpsc::unbounded_channel();
     let (report_sender, reports) = broadcast::channel(CHANNEL_SIZE);
     let (state_sender, states) = broadcast::channel(CHANNEL_SIZE);
     let task = SchedulerTaskState::new(
@@ -121,26 +124,24 @@ impl SchedulerInputs {
         context: &mut Context<'_>,
         wakes: &WakeCounter,
     ) -> Result<()> {
-        self.events
-            .send(self.root.path().join(UNTRACKED_PATH))
-            .await?;
+        self.events.send(self.root.path().join(UNTRACKED_PATH))?;
         assert_eq!(wakes.0.load(Ordering::SeqCst), SINGLE_WAKEUP);
         assert_pending(future.as_mut(), context);
         time::advance(DEBOUNCE_WINDOW).await;
         assert_pending(future, context);
-        self.assert_completed_pass()
+        assert_completed_pass(&mut self.states, &mut self.reports)
     }
+}
 
-    /// Pins both state transitions and the absence of a changed report.
-    fn assert_completed_pass(&mut self) -> Result<()> {
-        assert!(matches!(
-            self.states.try_recv()?,
-            AnalysisState::Running { .. }
-        ));
-        assert!(matches!(self.states.try_recv()?, AnalysisState::Idle));
-        assert!(matches!(self.reports.try_recv(), Err(TryRecvError::Empty)));
-        Ok(())
-    }
+/// Pins both state transitions and the absence of a changed report.
+fn assert_completed_pass(
+    states: &mut broadcast::Receiver<AnalysisState>,
+    reports: &mut broadcast::Receiver<ReportChangedNotification>,
+) -> Result<()> {
+    assert!(matches!(states.try_recv()?, AnalysisState::Running { .. }));
+    assert!(matches!(states.try_recv()?, AnalysisState::Idle));
+    assert!(matches!(reports.try_recv(), Err(TryRecvError::Empty)));
+    Ok(())
 }
 
 /// An event followed by channel closure must end the task without a timer.
@@ -165,5 +166,72 @@ async fn empty_scheduler_sleeps_before_and_after_a_pass() -> Result<()> {
     assert_dormant(future.as_mut(), &mut context, &wakes).await;
     drop(inputs);
     assert_stopped(future.as_mut(), &mut context);
+    Ok(())
+}
+
+/// [LIVE-WATCHER-DELIVERY] Already accepted changes finish when inputs close.
+#[tokio::test(start_paused = true)]
+async fn closed_watcher_flushes_queued_changes_before_scheduler_stops() -> Result<()> {
+    let (task, inputs) = scheduler_fixture(tempfile::tempdir()?)?;
+    inputs
+        .events
+        .send(inputs.root.path().join(UNTRACKED_PATH))?;
+    let SchedulerInputs {
+        root: _root,
+        events,
+        mut states,
+        mut reports,
+    } = inputs;
+    let _report_sender = task.report_changed.clone();
+    drop(events);
+    let stopped_at = time::Instant::now();
+    task.run().await;
+    assert_eq!(stopped_at.elapsed(), Duration::ZERO);
+    assert_completed_pass(&mut states, &mut reports)
+}
+
+/// Reopens the fixture's persisted report before its real pipeline is installed.
+async fn use_cached_seed(task: &mut SchedulerTaskState, root: &std::path::Path) -> Result<()> {
+    let seeded = AnalysisSession::try_seeded_from_cache(
+        root.to_path_buf(),
+        MIN_NODES,
+        false,
+        None,
+        Arc::new(NoopProvider::new()),
+        EmbeddingMode::Off,
+    )
+    .context("fixture must persist a usable report seed")?;
+    assert!(seeded.is_seed_only());
+    task.last_announced_generation = Some(seeded.generation());
+    *task.session.lock().await = seeded;
+    Ok(())
+}
+
+/// Queued seed changes expose Running without announcing completion or a report.
+fn assert_deferred_pass(inputs: &mut SchedulerInputs) -> Result<()> {
+    assert!(matches!(
+        inputs.states.try_recv()?,
+        AnalysisState::Running { .. }
+    ));
+    assert!(
+        matches!(inputs.states.try_recv(), Err(TryRecvError::Empty)),
+        "queued seed-only work must not publish Idle before the pipeline exists"
+    );
+    assert!(matches!(
+        inputs.reports.try_recv(),
+        Err(TryRecvError::Empty)
+    ));
+    Ok(())
+}
+
+/// [LIVE-CACHE-SEED-READINESS] Queuing work cannot finish an outstanding cold scan.
+#[tokio::test]
+async fn seed_only_scheduler_stays_running_after_queuing_changes() -> Result<()> {
+    let (mut task, mut inputs) = scheduler_fixture(tempfile::tempdir()?)?;
+    use_cached_seed(&mut task, inputs.root.path()).await?;
+    task.debouncer.push(inputs.root.path().join(UNTRACKED_PATH));
+    task.dispatch_pending().await;
+    assert_deferred_pass(&mut inputs)?;
+    assert!(task.session.lock().await.is_seed_only());
     Ok(())
 }
