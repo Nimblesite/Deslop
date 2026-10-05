@@ -211,7 +211,7 @@ Both are reported as standing defects, never as slippage.
 
 ## The report
 
-`corpus-score` writes `SCORE.md` and `score.json` beside the reports. **That is the report.**
+`corpus-score` writes one scorecard per run, named for the run and the moment it ran: `compare-<UTC timestamp>.md` or `score-gate-<UTC timestamp>.md`, each with a `.json` twin. See `docs/specs/corpus.md` §[CORPUS-REPORT]. **That is the report.**
 
 - It is **mechanical**: every count, percentage, delta and cost figure is emitted by the code that took the measurement.
 - It is **in the repository**, at a path you can hand to anyone.

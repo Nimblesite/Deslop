@@ -444,8 +444,8 @@ jobs:
         with:
           name: corpus-scorecard
           path: |
-            .corpus/score-gate/SCORE.md
-            .corpus/score-gate/score.json
+            .corpus/score-gate/score-gate-*.md
+            .corpus/score-gate/score-gate-*.json
           retention-days: 14
 
   # [CI-COVERAGE-ONCE] Stage 4: this is the only job allowed to calculate

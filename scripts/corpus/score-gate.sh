@@ -15,8 +15,9 @@
 ## With no targets it scans the default slice: judged repositories across the
 ## core languages, each pinned to the exact commit its register was judged at,
 ## which is what CI runs. Checkouts live under `.corpus/score-gate/`
-## (git-ignored); the scorecard is written to `.corpus/score-gate/SCORE.md` and
-## `score.json`.
+## (git-ignored); every run writes its own scorecard,
+## `.corpus/score-gate/score-gate-<UTC timestamp>.md` and `.json`, so no run
+## overwrites another ([CORPUS-REPORT]).
 
 set -euo pipefail
 
@@ -54,8 +55,9 @@ build() {
 }
 
 # ---------------------------------------------------------------------------
-# scan: run the engine over $1 under peak-RSS measurement, writing the report
-# and the measured cost under $2.
+# scan: run the engine over $1 under the corpus measurement ([CORPUS-MEASURE]),
+# writing the report and its wall time, CPU time, peak CPU and peak memory
+# under $2.
 scan() {
   local scan_root="$1" report_dir="$2"
   rm -rf "$scan_root/.deslop" "$report_dir"
@@ -128,7 +130,7 @@ main() {
   mkdir -p "$REPORTS_ROOT"
   write_run "$REPORTS_ROOT/run.json"
   echo
-  "$SCORER" score "$REPORTS_ROOT/run.json" --out "$WORK_DIR" --gate
+  "$SCORER" score "$REPORTS_ROOT/run.json" --out "$WORK_DIR" --name score-gate --gate
 }
 
 main "$@"

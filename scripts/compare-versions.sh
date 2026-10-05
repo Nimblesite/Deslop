@@ -12,11 +12,13 @@
 ## regression this guard exists for). Every document it writes is stamped with
 ## both deslop commit ids in full and the target repository's exact commit.
 ##
-## Every scan runs under peak-RSS measurement, so the scorecard reports wall
-## time, peak memory and CPU seconds beside the accuracy figures. The scorer is
+## Every scan runs under the corpus measurement ([CORPUS-MEASURE]), so the
+## scorecard reports wall time, CPU time, peak CPU and peak memory beside the
+## accuracy figures. The scorer is
 ## built from the WORKING TREE, never from either compared commit: two engines
 ## must be scored by one identical scorer ([CORPUS-SCORE]). The run ends with
-## SCORE.md, and exits non-zero when a target breaches
+## its own scorecard, `compare-<UTC timestamp>.md` and `.json` under the reports
+## directory, and exits non-zero when a target breaches
 ## `corpus/register/score-thresholds.json` — the documents are written first, so
 ## a failing gate still leaves a readable report.
 ##
@@ -292,20 +294,23 @@ main() {
 
   mkdir -p "$REPORTS_ROOT"
   write_meta "$REPORTS_ROOT/meta.json" "$commit_a" "$commit_b"
-  # [CORPUS-SCORE] Score first: the summary renderer reads score.json rather
-  # than recomputing anything, so the two documents cannot disagree.
-  local gate_status=0
-  "$SCORER" score "$REPORTS_ROOT/run.json" --out "$REPORTS_ROOT" --gate >/dev/null ||
-    gate_status=$?
+  # [CORPUS-SCORE] Score first: the summary renderer reads this run's JSON
+  # scorecard rather than recomputing anything, so the documents cannot
+  # disagree. [CORPUS-REPORT] Each run's scorecard is named for the run and the
+  # moment it ran, and the scorer prints the JSON one's path for the renderer.
+  local gate_status=0 scorecard_json
+  scorecard_json="$("$SCORER" score "$REPORTS_ROOT/run.json" --out "$REPORTS_ROOT" \
+    --name compare --gate --print-json-path)" || gate_status=$?
+  [ -n "$scorecard_json" ] || die "the scorer wrote no scorecard"
   echo
-  node "$SUMMARY_RENDERER" "$REPORTS_ROOT/meta.json"
+  node "$SUMMARY_RENDERER" "$REPORTS_ROOT/meta.json" "$scorecard_json"
   echo
   log "index:      $REPORTS_ROOT/INDEX.md"
-  log "scorecard:  $REPORTS_ROOT/SCORE.md"
+  log "scorecard:  ${scorecard_json%.json}.md"
   for index in "${!TARGET_SLUGS[@]}"; do
     log "summary:    $REPORTS_ROOT/${TARGET_SLUGS[$index]}/SUMMARY.md"
   done
-  [ "$gate_status" -eq 0 ] || die "the corpus score gate failed — see $REPORTS_ROOT/SCORE.md"
+  [ "$gate_status" -eq 0 ] || die "the corpus score gate failed — see ${scorecard_json%.json}.md"
 }
 
 main "$@"
