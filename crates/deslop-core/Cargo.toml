@@ -52,6 +52,9 @@ async-trait = { workspace = true, optional = true }
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.31", default-features = false, features = ["signal"] }
 
+[target.'cfg(windows)'.dependencies]
+winsafe = { version = "=0.0.29", features = ["kernel"] }
+
 [dev-dependencies]
 anyhow.workspace = true
 # Self-dependency so this crate's own integration tests see the
@@ -60,7 +63,7 @@ anyhow.workspace = true
 # this very crate; it adds no build unit.
 deslop-core = { path = ".", features = ["test-support"] }
 deslop-test-support = { path = "../deslop-test-support" }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }
 tempfile.workspace = true
 
 [lints]

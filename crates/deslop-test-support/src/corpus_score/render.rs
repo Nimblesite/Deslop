@@ -22,8 +22,8 @@ use cells::{counted, header, row, score_cell, signed, signed_fraction, ABSENT};
 use checks::checks_section;
 use cost::{cost_section, standing_cost};
 use coverage::{coverage_section, coverage_value};
-use verdict::verdict_banner;
 use serde::Serialize;
+use verdict::verdict_banner;
 
 use super::{
     checks::CheckOutcome,

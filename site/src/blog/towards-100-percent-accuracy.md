@@ -85,12 +85,12 @@ That distinction has practical consequences. If a false positive survives the de
 
 The accuracy push did not start from a blank page. Deslop combines several established lines of code clone detection research, each aimed at a different part of the precision–recall problem.
 
-- **Type-1** — copied code with layout or comment changes. Deslop reports it as **Identical code**.
-- **Type-2** — the same structure with identifiers renamed or literals changed. Also **Identical code**.
-- **Type-3** — statements inserted, removed, or altered. Reported as **Nearly identical code**.
+- **Type-1** — copied code with layout or comment changes. Deslop's **Identical code** uses a stricter source-text identity rule.
+- **Type-2** — the same structure with identifiers renamed or literals changed. **Nearly identical code**.
+- **Type-3** — statements inserted, removed, or altered. Reported as **Nearly identical code** for small edits, or **Similar code** for larger edits.
 - **Type-4** — similar behaviour expressed through different syntax or structure. Reported as **Same behavior, different code**.
 
-The bold names are what a Deslop report prints; the types are the research vocabulary the rest of this section uses.
+Category labels updated September 2026: these are the current source labels. **Same shape, different content** is informational and excluded from duplication figures. See [How It Works](/docs/how-it-works/) for the current definitions; the issue counts above remain a historical snapshot.
 
 [Baxter and colleagues' AST research](https://leodemoura.github.io/files/ICSM98.pdf) showed why parsed program structure can find exact and near-miss clones that line comparison misses. Deslop follows that foundation with tree-sitter syntax trees, identifier and literal normalization, and bottom-up Merkle fingerprints.
 

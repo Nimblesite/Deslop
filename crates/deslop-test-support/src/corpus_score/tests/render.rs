@@ -11,8 +11,8 @@ use std::collections::BTreeMap;
 use anyhow::{anyhow, Result};
 use serde_json::Value;
 
-use super::super::{gate::CorpusTotals, CLEARLY_IN};
 use super::{
+    super::{gate::CorpusTotals, verdict::Verdict, CLEARLY_IN},
     add_costs, breaches, corpus_change, degradation, found_and_missed, occurrence, pinned_sha,
     register, report, score_repo, scorecard, totals, Engine, RepoScore, RunCost, Scorecard,
     TargetScore, Thresholds, FIRST_RANGE, OTHER, PATH, REPO, SECOND_RANGE,
@@ -184,6 +184,7 @@ fn card(before: &RepoScore, after: &RepoScore) -> Scorecard {
         ]),
         thresholds: BTreeMap::from([(REPO.to_owned(), Thresholds::default())]),
         breaches: Vec::new(),
+        verdict: Verdict::default(),
     }
 }
 

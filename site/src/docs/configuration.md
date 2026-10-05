@@ -11,7 +11,7 @@ docsGroup: reference
 
 # Configuration and Reports
 
-What goes in, and what comes out. Deslop takes its settings from two places and writes three reports from every run.
+This reference covers [0.35.0](/releases/).
 
 - **`.deslop.toml`** — a committed file next to your code. This is where project-wide policy lives: what to skip, what to hide, and when to fail CI.
 - **CLI flags** — per-run overrides. A flag always wins over the matching config key.
@@ -115,6 +115,7 @@ incremental = true
 | `allow_cross_language_comparison` | bool | `false` | When `true`, candidate clone pairs may span different languages. Off by default, so reports stay focused on same-language refactoring. |
 | `include_dependencies` | bool | `false` | Analyse dependency trees too. Off by default: worst-first ranking would otherwise put duplication you cannot edit above your own. |
 | `incremental` | bool | `true` | Reuse the on-disk parse cache. Set `false` to force a full re-parse on every run, on every surface — CLI, editor, and agent alike. |
+| `max_average_line_bytes` | integer | `200` | Average-line-length ceiling used to identify large minified build artifacts. |
 
 ## `[report]`
 
@@ -129,28 +130,22 @@ split_by_language = false
 
 ## `[ranking]`
 
-Controls how two demotable clone classes are scored. **Data clones** are near-verbatim data blobs (long literal tables, fixtures). **Structural-only** clusters match on shape alone, with no token or semantic support. Both default to `demote`, so they sink below real, full-evidence clones without vanishing.
+Clones are ranked by duplicated mass: canonical AST nodes × additional visible copies. Category and confidence do not multiply that mass.
+
+To hide informational shape-only findings:
 
 ```toml
 [ranking]
-data_clones = "demote"
-data_clone_weight = 0.15
-structural_only = "demote"
-structural_only_weight = 0.15
+structural_only = "ignore"
 ```
 
-| Key | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| `data_clones` | `"demote"` \| `"ignore"` \| `"keep"` | `"demote"` | Policy for data-category clusters. `demote` down-weights, `ignore` drops them from the report, `keep` ranks at full weight. |
-| `data_clone_weight` | float | `0.15` | Multiplier applied when `data_clones = "demote"`. Must be in `(0.0, 1.0]`. |
-| `structural_only` | `"demote"` \| `"ignore"` \| `"keep"` | `"demote"` | Same three-way policy for shape-only clusters. |
-| `structural_only_weight` | float | `0.15` | Multiplier applied when `structural_only = "demote"`. Must be in `(0.0, 1.0]`. |
-
-A weight of `0.0` is rejected (a demoted cluster must never be silently erased), and so is anything above `1.0` (that would *promote* the demoted class). The VS Code extension can override `structural_only` from its settings; the editor setting wins over the file.
+`structural_only` accepts `demote` (default), `ignore` or `keep`. Visible shape-only findings remain after clones, with zero duplicated mass; none of these settings makes them count as duplication. The VS Code setting overrides this file setting. `data_clones = "ignore"` excludes data-category findings before ranking.
 
 ## Built-in rules (always on)
 
-These run without any config — they keep dependency trees and machine-generated code out of every report.
+Minified and bundled files are also excluded by recognized filename suffixes and a configurable average-line-length check. Large readable source files remain eligible. Generated-file banners are read from parsed comments, so a marker inside a string is not a banner.
+
+These rules apply before user patterns. Exclusions remove files from analysis; report-hide rules retain analysis but hide occurrences.
 
 **Build output and tool caches**, excluded with no way to opt back in — none of it is source you wrote:
 
@@ -201,7 +196,7 @@ max_duplication_percent = 20
 [report]
 split_by_language = true
 
-# Drop pure shape-only matches entirely instead of demoting them.
+# Hide informational shape-only matches.
 [ranking]
 structural_only = "ignore"
 ```
@@ -223,6 +218,16 @@ Every run also takes flags. A flag overrides the matching `.deslop.toml` key for
 | `--technical` | off | Show the researcher view (taxonomy IDs, signal letters, node counts) on stderr. |
 | `--diff <FILE>` | — | Scope the report to a unified diff's added lines; `-` reads stdin. The scan still covers the whole tree. A diff that does not match the tree is refused. |
 | `--only-changed` | off | Drop clusters that miss the diff, and gate `--fail-over` on the diff-scoped percentage so old debt cannot fail a pre-merge check. Requires `--diff`. |
+
+### Compare two occurrences
+
+`--compare` was added in **0.35.0**. Pass two endpoints as `<path>:<start_byte>:<end_byte>`, using exact byte ranges from the JSON report:
+
+```text
+deslop . --compare "<left-path>:<start-byte>:<end-byte>" "<right-path>:<start-byte>:<end-byte>"
+```
+
+The command scans the root, recomputes the pair's evidence, and prints a JSON verdict to stdout. Offsets are bytes, not lines, and the end is exclusive. A range must resolve to a fingerprinted occurrence; a cluster ID is not an endpoint.
 
 ### Embeddings
 
@@ -263,7 +268,7 @@ Two environment variables also apply:
 
 ## Report output
 
-Every run emits three reports. The JSON is the product; the text and HTML are renderers over the same data. No claim appears in TXT or HTML that is not also present in the JSON.
+A normal scan emits JSON, text and HTML unless a format is disabled. The JSON is the product; the text and HTML are renderers over the same data. No claim appears in TXT or HTML that is not also present in the JSON.
 
 ### JSON — canonical
 
@@ -272,25 +277,12 @@ Every run emits three reports. The JSON is the product; the text and HTML are re
 Guarantees:
 
 - Fields marked `optional` in the schema may be absent. Fields marked `required` are always present.
-- Clusters are sorted by `weight` descending. `clusters[0]` is always the worst offender.
+- Clones are sorted by `mass` descending, with stable IDs breaking ties. Informational findings follow clones and have no clone rank.
 - UTF-8. No BOM. LF line endings.
 
 ### TXT — terminal
 
-`deslop-report.txt` is ASCII, line-oriented, and deliberately boring. No ANSI colours, no unicode box-drawing, no paging escape codes. Pipeable into `head`, `grep`, `awk` without surprises.
-
-```
-deslop 0.0.0-dev -- 840 file(s), 142 cluster(s), 0 hidden
-repo: 2.6% duplicated (48120 / 1832044 LOC, 142 clusters across 318 files)
-embeddings: off
--- action hints --
-  [identical] Extract the shared code into one definition and call it from every duplicate site.
-#1 [0362505641efe3c7] weight=1252.80 size=3 nodes=58
-  3 near-identical copies — safe to extract.
-  :: Nearly identical across UserRepository.cs, ProductRepository.cs, OrderRepository.cs.
-```
-
-Each cluster is a numbered block — `#1` is the worst offender — with its weight, size, and node count, followed by a plain-English summary and a one-line interpretation. Clusters are listed worst-first. This format survives every terminal, every SSH session, and every CI log.
+`deslop-report.txt` is a line-oriented report for terminals and CI logs. Clone entries show kind, whole-number mass, occurrence count and source locations in rank order. Pair similarity measurements are requested separately; the report does not claim an extraction is safe.
 
 ### HTML — portable
 

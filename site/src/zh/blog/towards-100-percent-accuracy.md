@@ -86,10 +86,12 @@ Deslop 的仓库重复率，是对单份报告中可见发现执行的精确算�
 
 准确率推进并非从零开始。Deslop 组合了多条既有的代码克隆检测研究路线，每一条都面向精确率与召回率问题的不同部分。
 
-- **Type-1 克隆**是只改变排版或注释的复制代码。
-- **Type-2 克隆**保留结构，但重命名标识符或改变字面量。
-- **Type-3 克隆**插入、删除或修改语句。
-- **Type-4 克隆**用不同语法或结构表达相似行为。
+- **Type-1** — 除布局和注释外的精确副本。Deslop 的 **Identical code** 使用更严格的文本一致性规则。
+- **Type-2** — 重命名标识符或改变字面量后的副本：**Nearly identical code**。
+- **Type-3** — 增删或修改语句。小改动为 **Nearly identical code**，较大改动为 **Similar code**。
+- **Type-4** — 不同实现中的相似行为：**Same behavior, different code**。
+
+分类标签于 2026 年 9 月更新，对应当前源码。**Same shape, different content** 仅供参考，不计入重复度指标。当前定义见[工作原理](/zh/docs/how-it-works/)；上文的问题数量仍是历史快照。
 
 [Baxter 等人的 AST 研究](https://leodemoura.github.io/files/ICSM98.pdf)说明了为什么解析后的程序结构可以找到行比较会漏掉的精确和近似克隆。Deslop 沿着这一基础使用 tree-sitter 语法树、标识符与字面量归一化，以及自底向上的 Merkle 指纹。
 

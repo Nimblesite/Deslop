@@ -1,13 +1,6 @@
 //! Cache-seeded LSP startup for.
 
-use std::{
-    path::PathBuf,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use deslop_core::{
     embedding::{EmbeddingMode, EmbeddingProvider},
@@ -25,6 +18,18 @@ use crate::notifications::{AnalysisStateLspNotification, ReportChangedLspNotific
 /// Yield delay between embedding batches during the cold refresh.
 /// Keeps the live editor responsive while the deferred pass runs.
 const LIVE_EMBEDDING_BATCH_SLEEP: Duration = Duration::from_millis(10);
+
+/// [LIVE-CACHE-SEED-READINESS] Retains the cold pass state for late connections.
+pub(crate) fn new_startup_state(seeded: bool) -> Arc<Mutex<AnalysisState>> {
+    let state = if seeded {
+        AnalysisState::Running {
+            started_at_ms: now_ms(),
+        }
+    } else {
+        AnalysisState::Idle
+    };
+    Arc::new(Mutex::new(state))
+}
 
 /// Opens a live session, preferring `.deslop/cache/live-report.json`
 /// when it is present and valid.
@@ -54,24 +59,21 @@ pub(crate) fn open_session(
 /// Starts the cold analysis pass without blocking cache-backed queries.
 pub(crate) fn spawn_refresh(task: RefreshTask) {
     let _join = tokio::spawn(async move {
-        push_state(
-            &task.client,
-            AnalysisState::Running {
-                started_at_ms: now_ms(),
-            },
-        )
-        .await;
+        push_initial_state(&task.client, &task.startup_state).await;
         let result = initialise_in_background(&task).await;
-        // The cold pass is about to commit or error. Clear the in-flight
-        // flag before the terminal idle/errored push so a freshly
-        // connected editor reading it in `initialized()` sees the settled
-        // state instead of a phantom Running ([VSIX reactivity]).
-        task.cold_pass_active.store(false, Ordering::SeqCst);
-        match result {
-            Ok((pipeline, report)) => commit_refresh(task, pipeline, report).await,
-            Err(error) => report_refresh_error(&task.client, &error).await,
-        }
+        finish_refresh(task, result).await;
     });
+}
+
+/// Publishes the cold pass result after background initialization returns.
+async fn finish_refresh(
+    task: RefreshTask,
+    result: Result<(PipelineSession, deslop_core::Report), LiveError>,
+) {
+    match result {
+        Ok((pipeline, report)) => commit_refresh(task, pipeline, report).await,
+        Err(error) => report_refresh_error(&task.client, &task.startup_state, &error).await,
+    }
 }
 
 /// Inputs required to run and commit the deferred cold pass.
@@ -98,10 +100,8 @@ pub(crate) struct RefreshTask {
     /// subscribers see the cache-seed cold-pass commit alongside
     /// scheduler-driven passes.
     pub(crate) report_changed: ReportChangedSender,
-    /// Shared "cold pass still running" flag. Set true while this pass
-    /// is in flight and cleared as it commits, so `initialized()` can
-    /// report the correct startup state to a late-connecting editor.
-    pub(crate) cold_pass_active: Arc<AtomicBool>,
+    /// Retained startup state, including the original error when refresh fails.
+    pub(crate) startup_state: Arc<Mutex<AnalysisState>>,
 }
 
 /// Runs `PipelineSession::initialise` on a blocking thread so the
@@ -163,7 +163,7 @@ async fn commit_refresh(task: RefreshTask, pipeline: PipelineSession, report: de
     let (previous_generation, previous_report, generation, delta) = match installed {
         Ok(installed) => installed,
         Err(error) => {
-            report_refresh_error(&task.client, &error).await;
+            report_refresh_error(&task.client, &task.startup_state, &error).await;
             return;
         }
     };
@@ -178,15 +178,21 @@ async fn commit_refresh(task: RefreshTask, pipeline: PipelineSession, report: de
     task.client
         .send_notification::<ReportChangedLspNotification>(notification)
         .await;
-    push_state(&task.client, AnalysisState::Idle).await;
+    // [LIVE-CACHE-SEED-READINESS] Installation and deferred replay are complete.
+    publish_state(&task.client, &task.startup_state, AnalysisState::Idle).await;
 }
 
 /// Logs the refresh failure and pushes an `errored` analysis-state
 /// notification so the editor surfaces the failure.
-async fn report_refresh_error(client: &Client, error: &LiveError) {
+async fn report_refresh_error(
+    client: &Client,
+    startup_state: &Mutex<AnalysisState>,
+    error: &LiveError,
+) {
     tracing::error!(%error, "cache_seed_refresh_failed");
-    push_state(
+    publish_state(
         client,
+        startup_state,
         AnalysisState::Errored {
             message: error.to_string(),
         },
@@ -199,15 +205,20 @@ async fn report_refresh_error(client: &Client, error: &LiveError) {
 /// `running`/`idle` broadcasts predate the VSIX notification handlers:
 /// a fresh (non-seeded) session has already finished its blocking scan,
 /// so it reports `Idle`; a seeded session still running its cold pass
-/// reports `Running` ([VSIX reactivity]).
-pub(crate) async fn push_initial_state(client: &Client, cold_pass_active: &AtomicBool) {
-    let state = if cold_pass_active.load(Ordering::SeqCst) {
-        AnalysisState::Running {
-            started_at_ms: now_ms(),
-        }
-    } else {
-        AnalysisState::Idle
-    };
+/// reports `Running`; a failed cold pass retains `Errored` and its message.
+pub(crate) async fn push_initial_state(client: &Client, startup_state: &Mutex<AnalysisState>) {
+    let state = startup_state.lock().await;
+    push_state(client, state.clone()).await;
+}
+
+/// Serializes retained state and notification delivery with late initialization.
+async fn publish_state(
+    client: &Client,
+    startup_state: &Mutex<AnalysisState>,
+    state: AnalysisState,
+) {
+    let mut current = startup_state.lock().await;
+    *current = state.clone();
     push_state(client, state).await;
 }
 
@@ -236,359 +247,4 @@ fn live_batch_yield(mode: EmbeddingMode) -> Option<Duration> {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::{path::Path, sync::Arc};
-
-    use deslop_core::{embedding::test_support::StubProvider, live::LiveService};
-    use futures::StreamExt as _;
-    use serde_json::{json, Value};
-    use tower::Service as _;
-    use tower_lsp::{
-        async_trait,
-        jsonrpc::{Request, Response},
-        lsp_types::{InitializeParams, InitializeResult, ServerCapabilities},
-        Client, ClientSocket, LanguageServer, LspService,
-    };
-
-    use super::*;
-    use crate::notifications::{ANALYSIS_STATE, REPORT_CHANGED};
-
-    const METHOD_POINTER: &str = "/method";
-    const STATE_POINTER: &str = "/params/state";
-    const IDLE_STATE: &str = "idle";
-
-    #[test]
-    fn open_session_reports_cache_seed_status() -> Result<(), Box<dyn std::error::Error>> {
-        let temp = tempfile::tempdir()?;
-        write_fixture(temp.path())?;
-
-        let (_fresh, _provider, seeded) = open_fixture_session(temp.path())?;
-        assert!(
-            !seeded,
-            "first open must run a fresh analysis when no state file exists"
-        );
-
-        let (_cached, _provider, seeded) = open_fixture_session(temp.path())?;
-        assert!(
-            seeded,
-            "second open must load the valid state file written by the first session"
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn live_batch_yield_tracks_embedding_mode() {
-        assert_eq!(live_batch_yield(EmbeddingMode::Off), None);
-        assert_eq!(
-            live_batch_yield(EmbeddingMode::Auto),
-            Some(LIVE_EMBEDDING_BATCH_SLEEP)
-        );
-        assert_eq!(
-            live_batch_yield(EmbeddingMode::Required),
-            Some(LIVE_EMBEDDING_BATCH_SLEEP)
-        );
-    }
-
-    #[tokio::test]
-    async fn background_initialise_and_commit_pushes_report_and_idle_state(
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let temp = tempfile::tempdir()?;
-        let mut fixture = refresh_fixture(temp.path(), Arc::new(AtomicBool::new(true))).await?;
-        assert!(
-            !fixture.seeded,
-            "test setup should start with a fresh session"
-        );
-
-        let (pipeline, report) = initialise_in_background(&fixture.task).await?;
-
-        let join = tokio::spawn(commit_refresh(fixture.task, pipeline, report));
-        let first = next_client_frame(&mut fixture.socket).await?;
-        let second = next_client_frame(&mut fixture.socket).await?;
-        join.await?;
-
-        assert_eq!(
-            first.pointer(METHOD_POINTER).and_then(Value::as_str),
-            Some(REPORT_CHANGED),
-            "commit must publish a reportChanged notification first: {first}"
-        );
-        assert!(
-            first
-                .pointer("/params/summary")
-                .is_some_and(serde_json::Value::is_object),
-            "reportChanged must include a delta summary: {first}"
-        );
-        assert_eq!(
-            second.pointer(METHOD_POINTER).and_then(Value::as_str),
-            Some(ANALYSIS_STATE),
-            "commit must publish the idle analysis state after the report: {second}"
-        );
-        assert!(
-            second.pointer("/params").is_some_and(Value::is_object),
-            "analysisState params must be the tagged AnalysisState object, not a bare \
-             string the VSIX reads as `state.state === undefined`: {second}"
-        );
-        assert_eq!(
-            second.pointer(STATE_POINTER).and_then(Value::as_str),
-            Some(IDLE_STATE),
-            "the tagged object must carry state=idle so the editor settles to ready: {second}"
-        );
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn spawn_refresh_pushes_running_then_report_then_idle(
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        // Drives the detached deferred-refresh task end-to-end (the test
-        // above only exercises the inner `initialise_in_background` /
-        // `commit_refresh` helpers directly). Asserts the full
-        // running → reportChanged → idle sequence the editor relies on
-        // and that the cold-pass flag clears once the pass commits.
-        let temp = tempfile::tempdir()?;
-        let cold_pass_active = Arc::new(AtomicBool::new(true));
-        let mut fixture = refresh_fixture(temp.path(), Arc::clone(&cold_pass_active)).await?;
-
-        spawn_refresh(fixture.task);
-
-        let running = next_client_frame(&mut fixture.socket).await?;
-        assert_eq!(
-            running.pointer(STATE_POINTER).and_then(Value::as_str),
-            Some("running"),
-            "spawn_refresh must push the Running state first: {running}"
-        );
-        let changed = next_client_frame(&mut fixture.socket).await?;
-        assert_eq!(
-            changed.pointer(METHOD_POINTER).and_then(Value::as_str),
-            Some(REPORT_CHANGED),
-            "the committed cold pass must publish reportChanged: {changed}"
-        );
-        let idle = next_client_frame(&mut fixture.socket).await?;
-        assert_eq!(
-            idle.pointer(STATE_POINTER).and_then(Value::as_str),
-            Some(IDLE_STATE),
-            "the cold pass must settle to idle once committed: {idle}"
-        );
-        assert!(
-            !cold_pass_active.load(Ordering::SeqCst),
-            "spawn_refresh must clear the cold-pass-active flag once the pass commits"
-        );
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn refresh_error_pushes_errored_state() -> Result<(), Box<dyn std::error::Error>> {
-        let (client, mut socket) = initialized_loopback_client().await?;
-        report_refresh_error(
-            &client,
-            &LiveError::SchedulerBusy {
-                message: "fixture".to_owned(),
-            },
-        )
-        .await;
-
-        let frame = next_client_frame(&mut socket).await?;
-        assert_eq!(
-            frame.pointer(METHOD_POINTER).and_then(Value::as_str),
-            Some(ANALYSIS_STATE),
-            "refresh errors must publish analysis-state changes: {frame}"
-        );
-        assert_eq!(
-            frame.pointer(STATE_POINTER).and_then(Value::as_str),
-            Some("errored"),
-            "refresh errors must surface the errored state as a tagged object: {frame}"
-        );
-        assert!(
-            frame
-                .pointer("/params/message")
-                .and_then(Value::as_str)
-                .is_some(),
-            "the errored analysis state must carry a human-readable message: {frame}"
-        );
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn initial_state_is_running_while_cold_pass_active(
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let (client, mut socket) = initialized_loopback_client().await?;
-        push_initial_state(&client, &AtomicBool::new(true)).await;
-
-        let frame = next_client_frame(&mut socket).await?;
-        assert_eq!(
-            frame.pointer(METHOD_POINTER).and_then(Value::as_str),
-            Some(ANALYSIS_STATE),
-            "initialized() must publish the startup analysis state: {frame}"
-        );
-        assert_eq!(
-            frame.pointer(STATE_POINTER).and_then(Value::as_str),
-            Some("running"),
-            "a late-connecting editor must see Running while the cold pass is still in flight: {frame}"
-        );
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn initial_state_is_idle_once_the_scan_has_settled(
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let (client, mut socket) = initialized_loopback_client().await?;
-        push_initial_state(&client, &AtomicBool::new(false)).await;
-
-        let frame = next_client_frame(&mut socket).await?;
-        assert_eq!(
-            frame.pointer(STATE_POINTER).and_then(Value::as_str),
-            Some(IDLE_STATE),
-            "a settled (fresh or committed) session must report Idle so the panel can reach ready: {frame}"
-        );
-        Ok(())
-    }
-
-    /// Minimum subtree size every cache-seed test analyses the fixture with.
-    const FIXTURE_MIN_NODES: u32 = 30;
-
-    /// A deferred-refresh task wired to a loopback LSP client, plus the socket
-    /// its push notifications land on. Every cold-pass input the refresh tests
-    /// share is fixed here; only `cold_pass_active` varies between them.
-    struct RefreshFixture {
-        task: RefreshTask,
-        socket: ClientSocket,
-        seeded: bool,
-        /// Held so the broadcast channel keeps a subscriber for the test.
-        _report_changed_rx: tokio::sync::broadcast::Receiver<ReportChangedNotification>,
-    }
-
-    /// Writes the two-duplicate fixture under `root`, opens a live session over
-    /// it, and assembles the cold-pass task against a loopback LSP client.
-    async fn refresh_fixture(
-        root: &Path,
-        cold_pass_active: Arc<AtomicBool>,
-    ) -> Result<RefreshFixture, Box<dyn std::error::Error>> {
-        write_fixture(root)?;
-        let (session, provider, seeded) = open_fixture_session(root)?;
-        let session = Arc::new(Mutex::new(session));
-        let (client, socket) = initialized_loopback_client().await?;
-        let (report_changed, report_changed_rx) = tokio::sync::broadcast::channel(8);
-        let task = RefreshTask {
-            service: Arc::new(LiveService::new(Arc::clone(&session))),
-            session,
-            client,
-            root: root.to_path_buf(),
-            min_nodes: FIXTURE_MIN_NODES,
-            incremental: true,
-            config_path: None,
-            provider,
-            mode: EmbeddingMode::Off,
-            report_changed,
-            cold_pass_active,
-        };
-        Ok(RefreshFixture {
-            task,
-            socket,
-            seeded,
-            _report_changed_rx: report_changed_rx,
-        })
-    }
-
-    /// Opens a live session over the fixture repo at `root` with the settings
-    /// every cache-seed test shares — min-nodes 30, fingerprint cache on, no
-    /// explicit config, embeddings off — plus its provider and seeded flag.
-    fn open_fixture_session(
-        root: &Path,
-    ) -> Result<(AnalysisSession, Arc<dyn EmbeddingProvider>, bool), LiveError> {
-        let provider: Arc<dyn EmbeddingProvider> = Arc::new(StubProvider::new());
-        let (session, seeded) = open_session(
-            root.to_path_buf(),
-            FIXTURE_MIN_NODES,
-            true,
-            None,
-            Arc::clone(&provider),
-            EmbeddingMode::Off,
-        )?;
-        Ok((session, provider, seeded))
-    }
-
-    fn write_fixture(root: &Path) -> std::io::Result<()> {
-        std::fs::write(
-            root.join("Alpha.cs"),
-            "class Alpha { int Add(int a, int b) { return a + b; } }\n",
-        )?;
-        std::fs::write(
-            root.join("Beta.cs"),
-            "class Beta { int Add(int a, int b) { return a + b; } }\n",
-        )
-    }
-
-    async fn initialized_loopback_client(
-    ) -> Result<(Client, ClientSocket), Box<dyn std::error::Error>> {
-        let captured = Arc::new(std::sync::Mutex::new(None));
-        let captured_client = Arc::clone(&captured);
-        let (mut service, socket) = LspService::build(move |client| {
-            if let Ok(mut captured) = captured_client.lock() {
-                *captured = Some(client.clone());
-            }
-            DummyBackend
-        })
-        .finish();
-        let request = Request::build("initialize")
-            .params(json!({ "capabilities": {} }))
-            .id(1_i64)
-            .finish();
-        futures::future::poll_fn(|cx| service.poll_ready(cx)).await?;
-        let response = service.call(request).await?;
-        assert_initialize_ok(response)?;
-        let client = captured_client_from(&captured)?;
-        Ok((client, socket))
-    }
-
-    fn captured_client_from(
-        captured: &Arc<std::sync::Mutex<Option<Client>>>,
-    ) -> Result<Client, Box<dyn std::error::Error>> {
-        let guard = captured
-            .lock()
-            .map_err(|_| std::io::Error::other("capture client lock poisoned"))?;
-        guard
-            .clone()
-            .ok_or_else(|| std::io::Error::other("loopback client was not captured").into())
-    }
-
-    async fn next_client_frame(
-        socket: &mut ClientSocket,
-    ) -> Result<Value, Box<dyn std::error::Error>> {
-        let request = socket
-            .next()
-            .await
-            .ok_or_else(|| std::io::Error::other("client socket closed before notification"))?;
-        let (method, id, params) = request.into_parts();
-        assert!(id.is_none(), "expected notification without request id");
-        Ok(json!({
-            "method": method,
-            "params": params.unwrap_or(Value::Null),
-        }))
-    }
-
-    fn assert_initialize_ok(response: Option<Response>) -> Result<(), Box<dyn std::error::Error>> {
-        let response =
-            response.ok_or_else(|| std::io::Error::other("initialize response missing"))?;
-        let (_id, body) = response.into_parts();
-        let _result = body.map_err(|_| std::io::Error::other("initialize returned an error"))?;
-        Ok(())
-    }
-
-    #[derive(Debug)]
-    struct DummyBackend;
-
-    #[async_trait]
-    impl LanguageServer for DummyBackend {
-        async fn initialize(
-            &self,
-            _: InitializeParams,
-        ) -> tower_lsp::jsonrpc::Result<InitializeResult> {
-            Ok(InitializeResult {
-                capabilities: ServerCapabilities::default(),
-                server_info: None,
-            })
-        }
-
-        async fn shutdown(&self) -> tower_lsp::jsonrpc::Result<()> {
-            Ok(())
-        }
-    }
-}
+mod tests;

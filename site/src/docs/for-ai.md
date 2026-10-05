@@ -11,106 +11,64 @@ docsGroup: reference
 
 # For AI
 
-This page gives coding agents direct operating instructions. Humans configuring an MCP client should use [AI Agents](/docs/ai-integration/).
+Use the same engine findings as the editor. This reference covers [0.35.0](/releases/). For connection setup, see [AI Agents](/docs/ai-integration/).
 
 ## Check before you write
 
-Before you author any new code unit — function, method, class, helper, fixture, test setup, parser branch, error type, route handler, view model — call `find-similar` with the proposed snippet (or a `path` + `start_byte` + `end_byte` range) and read the returned cluster's `kind`:
+Call `find-similar` with a proposed snippet, or a `path`, `start_byte` and `end_byte`. It can find an existing implementation even when that implementation appears only once in the repository. For existing duplication, use `duplicates`, then `cluster-by-id` to inspect the finding.
 
-| `kind` | Display title | What you do |
-| --- | --- | --- |
-| `identical` | Identical code | **Do not write the copy.** Reuse the canonical occurrence the tool returns. |
-| `nearly_identical` | Nearly identical code | **Do not write the copy.** Reuse the canonical occurrence, or extract a shared helper if neither call site fits as-is. A systematic rename or a changed argument is still a copy. |
-| `loosely_similar` | Similar code | Substantial copied work with larger edits. Read both occurrences and decide; often a helper is still the right answer. |
-| `same_behavior` | Same behavior, different code | The same work written differently, found by embedding evidence. That evidence is not proof the two are interchangeable — read both before you act. |
-| `structural_only` | Same shape, different content | **Not a clone.** The layout matches and the content does not. Informational only: it counts toward no duplication figure, and it is not a reason to change your code. |
+Read the returned `kind` and source ranges:
 
-The `kind` is the weakest relation between the cluster's first occurrence and any other member, measured exactly as an explicit pair comparison would. `identical` means every copy is byte-for-byte the first; anything else means at least one copy differs, so read the occurrences.
+| `kind` | Meaning and action |
+| --- | --- |
+| `identical` | Source text matches apart from permitted whitespace differences. Reuse the existing implementation where appropriate. |
+| `nearly_identical` | Renamed, parameterized or lightly edited copies. Inspect differences before extracting shared code. |
+| `loosely_similar` | Substantial copied work with larger edits. Read both ranges. |
+| `same_behavior` | Optional embedding-based match. Similarity does not prove interchangeability. |
+| `structural_only` | Informational shape match, not a clone. It contributes nothing to duplication figures. |
 
-`mass` ranks impact, not interchangeability: it orders which duplicates are worth your attention first, and it never tells you the copies can be merged. Clone kinds carry mass; `structural_only` does not.
-
-The engine carries no cluster-level signal scores. To see what differs between two locations, request an explicit pair comparison with both endpoints; pair evidence values never attach to a cluster.
-
-`find-similar` is the **authoring** tool. When you are cleaning up duplication that already exists, start at `duplicates` and then pull `cluster-by-id` for the cluster you are about to merge.
-
-The paste-ready rule block for a project's `AGENTS.md` / `CLAUDE.md` is in the [agent recipe](https://github.com/Nimblesite/Deslop/blob/main/docs/snippets/agents-md-recipe.md).
+A cluster's `mass` ranks impact, not confidence or extraction safety. A cluster carries no pair similarity measurements. Request an explicit comparison with both endpoints when you need evidence about a particular pair.
 
 ## If the MCP server is unavailable, use the CLI
 
-**Do not skip the check because a tool call failed, and do not fall back to memory.** A duplicate that lands because the gate was down is the exact failure Deslop exists to prevent. Work down this ladder.
+Check that the editor's LSP server is running and that MCP uses the same workspace root. A not-ready response or a connection error is not evidence that no similar code exists. A build mismatch must be resolved by using matching bundled binaries.
 
-### 1. Diagnose which failure you have
-
-| What you see | What it means |
-| --- | --- |
-| `LSP is not running — start deslop-lsp to enable this tool.` | The MCP server is wired correctly, but the editor server that holds the live analysis is not up. The error names the absolute socket path it tried. |
-| The same error, and a `deslop-lsp` **is** running | MCP was launched against a different `--root` than the LSP. Compare the socket path in the error against the workspace you are editing. |
-| No `find-similar` tool exists at all | No MCP server is configured for this session. |
-| The tool call times out or the transport errors | Treat it as unavailable and drop to the CLI. |
-
-### 2. Try to restore the live path
-
-If the workspace is open in an editor with the Deslop extension, the editor server starts on its own — open a supported source file and retry the tool call. If MCP and the LSP disagree about the root, the fix is the MCP client's `--root` argument, not a workaround.
-
-### 3. Otherwise, drop to the CLI
-
-The `deslop` CLI runs the identical pipeline and emits the identical JSON schema. Run it from the repository root:
+For a separate scan:
 
 ```bash
 deslop . --notext --nohtml --no-color
 ```
 
-That writes the canonical report to `.deslop/deslop-report.json` — the only file you should parse. `--notext --nohtml` skips the two human renderers you do not need; `--no-color` keeps the stderr summary clean for a log.
+Read `.deslop/deslop-report.json`. The CLI cannot query an unwritten snippet: inspect the baseline report before a change, scan again afterwards, and check the changed paths in `clusters[].occurrences[]`. Reuse or consolidate confirmed copies, then rescan. Unchanged files can reuse cached parse work, but analysis still considers repository-wide relationships.
 
-The CLI has no snippet query: `find-similar` is an MCP tool, and the CLI cannot evaluate code you have not written yet. The fallback loop catches a duplicate immediately after it is written:
-
-1. Run `deslop .` once before you start, so you have a baseline.
-2. Before authoring, scan the baseline `clusters[]` for the file and the neighbouring files you are about to touch. If a cluster already covers the pattern you were going to add, reuse its canonical occurrence — that is the CLI's version of prevention, and it catches the common case.
-3. Write the change.
-4. Re-run `deslop . --notext --nohtml`. The fingerprint cache is on by default, so this re-parses only the files you actually touched — the cost is proportional to your change, not to the repository. Run it per change, not per session.
-5. Search `clusters[].occurrences[]` for the path you just wrote. If your new code appears in a cluster whose `bucket` is `identical` or `nearly_identical`, you just wrote a duplicate. Collapse it now, while the change is still in your working set.
-6. Re-run and confirm the cluster is gone or smaller.
-
-A run exits `3` when repo-wide duplication crosses a configured ceiling; the report is still written on a breach, so parse it either way. Full table in [Exit codes](/docs/configuration/#exit-codes).
-
-If neither MCP nor the CLI is available, say so and stop. Do not guess.
+The CLI can also [compare two existing occurrences](/docs/configuration/#compare-two-occurrences). If neither surface is available, report that limitation rather than guessing.
 
 ## Read the JSON
 
-`deslop-report.json` is canonical and the **only** file you should parse — `.txt` and `.html` are renderers over it. Every report begins with an embedded `schema_doc` describing its own shape, so you do not need a separate reference to read the payload. Over MCP, call `schema-doc` **once** per session, never per response.
+Use the report's embedded `schema_doc`; over MCP, request `schema-doc` once per session. Parse JSON rather than text or HTML.
 
-| Field | How to act on it |
+| Field | Meaning |
 | --- | --- |
-| `metrics.duplication_percent` | The repo-wide headline number a CI gate compares against. |
-| `metrics.threshold.breached` | `true` → the run exited `3` and the gate failed. `source` is `cli`, `config`, or `none`. |
-| `clusters` | Sorted by `mass` **descending** — `clusters[0]` is always the worst offender. Work top-down; do not start in the middle. |
-| `cluster.kind` | What relation the cluster holds: `identical`, `nearly_identical`, `loosely_similar`, `same_behavior`, or `structural_only`. `structural_only` is informational and is not a clone. |
-| `cluster.mass` | How much attention the cluster deserves, not what kind of clone it is. Clone kinds carry mass; informational findings do not. |
-| `cluster.severity` | The editor diagnostic level (`none`, `hint`, `information`, `warning`, `error`) this kind resolves to. It never changes any duplication figure. |
-| `occurrences[].hidden` | `true` marks a `report_hide` match — usually a hand-written clone of generated code. |
+| `metrics.duplication_percent` | Covered clone lines divided by analysed lines. Not detector accuracy. |
+| `metrics.threshold.breached` | Whether the configured duplication ceiling was exceeded. The CLI writes reports before exiting `3`. |
+| `clusters` | Clones in descending mass order, then informational findings. |
+| `cluster.kind` | The classification above; current reports use `kind`, not the older `bucket` field. |
+| `cluster.mass` / `cluster.rank` | Clone impact and position. Informational findings have zero mass and no clone rank. |
+| `cluster.severity` | Diagnostic level, independent of mass and duplication percentage. |
+| `occurrences[].hidden` | An occurrence hidden by report policy; it does not contribute duplicated lines. |
 
 ### Byte ranges, not line numbers
 
-Deslop's authoritative range is `[start_byte, end_byte)`. Line numbers are derived at render time for humans. Slice by byte range when you edit — line-based edits drift as soon as surrounding code moves.
+Ranges are `[start_byte, end_byte)`, with the end excluded. They refer to the scanned source version. Refresh the analysis after edits before reusing offsets.
 
 ### Cluster IDs are stable
 
-A cluster ID is the first 8 bytes of the cluster's smallest-member BLAKE3 hash, rendered as 16 hex characters (e.g. `0362505641efe3c7`). It carries no timestamp, so the same repository analysed by the same binary twice produces the same IDs. Reference a cluster by ID across runs, in issues, and in your own notes — not by rank, which is a render-time position and moves as the repository changes.
+Use the cluster ID to identify a finding across surfaces. Rank changes with the report order; IDs can change when the underlying clone content changes.
 
 ## Configuring a repository
 
-If you are setting Deslop up rather than consuming it, three things decide almost everything, and all are in the [Configuration reference](/docs/configuration/):
-
-- **[`exclude` vs `report_hide`](/docs/configuration/#exclude-vs-report_hide--the-core-idea)** — `exclude` drops a file before analysis; `report_hide` analyses it but keeps it out of the headline, so "hand-written code duplicates generated code" still surfaces.
-- **[Built-in rules](/docs/configuration/#built-in-rules-always-on)** — `node_modules`, `target`, `dist`, generated-code suffixes and banners are already covered. Do not re-add them.
-- **[`[threshold]`](/docs/configuration/#threshold--the-ci-gate)** — the opt-in CI gate. Commit the ceiling so local runs, CI, and agents share one number.
-
-To gate a build, use the [GitHub Action](/docs/github-action/); it wraps the same exit-code contract.
+[`exclude`](/docs/configuration/) removes a file before analysis. `report_hide` retains analysis but hides its occurrences. Built-in rules already cover dependency directories, build artifacts and common generated files. Thresholds opt into failing CI; they do not change what constitutes a clone.
 
 ## Operating rules
 
-- **Do not silence a finding to make it go away.** Widening the threshold, adding a `report_hide` pattern to bury your own code, or splitting a duplicate into trivially different shapes are all failures, not fixes.
-- **Do not treat a flag as noise until you have shown it is noise.** If Deslop reports it, read both occurrences first.
-- **Do not merge a `same_behavior` match blindly.** That bucket comes from semantic embeddings. Read both locations; the code looks different for a reason often enough to matter.
-- **Some duplication is deliberate.** Test fixtures and bootstrapping code are the usual honest exceptions. Accepting a duplicate is a legitimate outcome — accepting it silently is not. Say which cluster you accepted and why.
-- **Deslop does not rewrite your code.** It finds, ranks, compares, and prevents. The extraction is yours to write, and yours to get right.
+Read the actual occurrences before editing. Do not treat a label as proof that a refactor preserves behaviour, or weaken thresholds to conceal a finding. If duplication is deliberate, record why. See [Accuracy Transparency](/docs/accuracy-transparency/) for measurement limits and the [agent recipe](https://github.com/Nimblesite/Deslop/blob/main/docs/snippets/agents-md-recipe.md) for a reusable project rule.

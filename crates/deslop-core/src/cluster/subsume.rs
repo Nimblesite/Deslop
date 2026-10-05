@@ -18,11 +18,7 @@
 //! occurrences, and each of those sits in exactly one of them. Four
 //! weaker predicates were each wrong in a different direction.
 //!
-//! Requiring the whole occurrence *set* to nest misses the *crossed*
-//! case, where the depth difference falls on opposite sides in each
-//! file: `ledger_c[0..1238] + ledger_a[0..1234]` and `ledger_c[0..1237]
-//! + ledger_a[0..1235]` are two views of one whole-file duplicate, yet
-//! neither set nests inside the other.
+//! Requiring the whole occurrence *set* to nest misses the *crossed* case, where the depth difference falls on opposite sides in each file: `ledger_c[0..1238] + ledger_a[0..1234]` and `ledger_c[0..1237] + ledger_a[0..1235]` are two views of one whole-file duplicate, yet neither set nests inside the other.
 //!
 //! Accepting bare *intersection* goes wrong the other way: two
 //! duplicated regions that share a single byte, where one ends and the
