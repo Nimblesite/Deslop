@@ -1,8 +1,11 @@
 //! [LIVE-SCHEDULER-REMOVAL-COST] Isolated membership and prefix-index contracts.
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
-use super::{FileId, FileRegistry, LivePaths};
+use super::{indexed_subtree_paths, FileId, FileRegistry, LivePaths};
 
 /// A removed directory and its similarly named surviving sibling.
 const DIRECTORY: &str = "pkg";
@@ -22,6 +25,40 @@ const INITIAL_FILES: usize = 3;
 const SINGLE_FILE: usize = 1;
 /// An empty index after its last identity is removed.
 const NO_FILES: usize = 0;
+/// A prefix beyond the last indexed path yields no candidate.
+const AFTER_LAST: &str = "zz/absent";
+/// One matched leaf and the following stopping boundary.
+const LEAF_AND_BOUNDARY: usize = 2;
+
+#[test]
+fn indexed_selection_counts_matches_and_the_stopping_boundary() {
+    let index = [LEAF, EMPTY_LEAF, SIBLING]
+        .into_iter()
+        .enumerate()
+        .map(|(index, path)| (PathBuf::from(path), index))
+        .collect();
+    assert_selection(&index, DIRECTORY, &[LEAF, EMPTY_LEAF], INITIAL_FILES);
+    assert_selection(&index, LEAF, &[LEAF], LEAF_AND_BOUNDARY);
+    assert_selection(&index, SIBLING, &[SIBLING], SINGLE_FILE);
+    assert_selection(&index, UNKNOWN, &[], SINGLE_FILE);
+    assert_selection(&index, AFTER_LAST, &[], NO_FILES);
+    assert_selection(&BTreeMap::new(), DIRECTORY, &[], NO_FILES);
+}
+
+/// Pins the complete selected paths and exact iterator cost independently.
+fn assert_selection(
+    index: &BTreeMap<PathBuf, usize>,
+    prefix: &str,
+    expected: &[&str],
+    probes: usize,
+) {
+    let (paths, candidates_visited) = indexed_subtree_paths(index, Path::new(prefix));
+    assert_eq!(
+        paths,
+        expected.iter().map(PathBuf::from).collect::<Vec<_>>()
+    );
+    assert_eq!(candidates_visited, probes);
+}
 
 /// Register one path through the same registry and index used by sessions.
 fn register(registry: &mut FileRegistry, paths: &mut LivePaths, path: &str) -> FileId {

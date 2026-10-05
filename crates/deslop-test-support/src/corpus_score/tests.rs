@@ -467,7 +467,7 @@ fn degradation_separates_a_new_defect_from_one_both_engines_share() -> Result<()
         !standing.degraded,
         "a defect both engines share is standing, not slippage"
     );
-    assert!(standing.new_false_negatives.is_empty());
+    assert_eq!(standing.new_false_negatives, Vec::<String>::new());
     assert_eq!(standing.standing_false_negatives, 1);
 
     let fixed = degradation(&missed, &found);

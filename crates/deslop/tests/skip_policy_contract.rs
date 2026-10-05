@@ -522,11 +522,27 @@ fn assert_slice_resolves(slice: &[String], suite: &[String]) {
 /// the test's *compilation* as well as its execution — the exact failure
 /// `77bcbaed5` caused and the spec cites.
 ///
-/// The seven `unix` entries are platform scope: they compile and run on the
-/// platform CI uses, and the Windows job covers the other side. The
+/// The ten `unix` entries and one `windows` entry are platform scope:
+/// they compile and run on their matching CI platform. The
 /// `profiling` entry is different in kind and is tracked, not blessed —
 /// see [`FEATURE_GATED_TEST`].
-const CONDITIONAL_TESTS: [(&str, &str); 8] = [
+const CONDITIONAL_TESTS: [(&str, &str); 12] = [
+    (
+        "crates/deslop-core/src/config/paths/tests.rs",
+        "config_symlinks_keep_both_leaf_and_parent_aliases",
+    ),
+    (
+        "crates/deslop-core/src/process/tests.rs",
+        "parent_probe_uses_no_child_processes",
+    ),
+    (
+        "crates/deslop-core/src/live/watcher/tests/delivery/directories.rs",
+        "rename_events_keep_leaf_and_directory_symlink_aliases",
+    ),
+    (
+        "crates/deslop-core/tests/live/aliases.rs",
+        "renamed_external_source_alias_preserves_the_complete_cold_report",
+    ),
     (
         "crates/deslop-lsp/tests/observability_heartbeat.rs",
         "profile_dir_writes_non_empty_firefox_profile_on_shutdown",
