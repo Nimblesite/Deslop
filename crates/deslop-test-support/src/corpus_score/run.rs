@@ -29,8 +29,9 @@ use super::{
         add_checks, add_costs, breaches, corpus_change, degradation, load_thresholds, totals,
         Breach, CorpusChange, CorpusTotals, Degradation, Thresholds,
     },
+    list,
     render::{scorecard, Engine, Scorecard, TargetScore},
-    score_repo,
+    score_repo, text,
     verdict::verdict,
     RepoScore, RunCost,
 };
@@ -69,15 +70,6 @@ pub fn report_stem(run_name: &str, moment: SystemTime) -> String {
         .to_string()
         .replace(':', FILE_NAME_TIME_SEPARATOR);
     format!("{run_name}-{stamp}")
-}
-
-/// A string field, blank when absent.
-fn text(value: &Value, field: &str) -> String {
-    value
-        .get(field)
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_owned()
 }
 
 /// A path field resolved against `root`, absent when missing or blank.
@@ -289,17 +281,13 @@ fn score_target(
 
 /// The engines a run manifest describes, in run order.
 fn engines(run: &Value) -> Vec<Engine> {
-    run.get("engines")
-        .and_then(Value::as_array)
-        .map(|list| {
-            list.iter()
-                .map(|engine| Engine {
-                    id: text(engine, "id"),
-                    label: text(engine, "label"),
-                })
-                .collect()
+    list(run, "engines")
+        .iter()
+        .map(|engine| Engine {
+            id: text(engine, "id"),
+            label: text(engine, "label"),
         })
-        .unwrap_or_default()
+        .collect()
 }
 
 /// Every target in the manifest, registered or not, in run order.
@@ -309,10 +297,7 @@ fn score_targets(
     engine_order: &[String],
     require_timing: bool,
 ) -> Result<Vec<TargetScore>> {
-    run.get("targets")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
+    list(run, "targets")
         .iter()
         .map(|target| score_target(target, root, engine_order, require_timing))
         .collect()

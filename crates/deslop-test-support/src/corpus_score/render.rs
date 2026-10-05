@@ -188,6 +188,37 @@ fn standing_coverage(card: &Scorecard) -> String {
     )
 }
 
+/// One titled table: the heading, what the table means, its header and its
+/// rows. Every section of the scorecard that is a single table is built here,
+/// so no two sections can lay out a heading, an intro or a header differently.
+fn table_section(
+    title: &str,
+    intro: &str,
+    columns: &[String],
+    rows: impl IntoIterator<Item = String>,
+) -> Vec<String> {
+    let mut lines = vec![
+        title.to_owned(),
+        String::new(),
+        intro.to_owned(),
+        String::new(),
+    ];
+    lines.extend(header(columns));
+    lines.extend(rows);
+    lines.push(String::new());
+    lines
+}
+
+/// What the corpus standing means, stated above it.
+const TOTALS_INTRO: &str = "Score is `correct / judged` over every judged pair in the corpus. \
+     Curated checks are the `corpus/<name>.json` assertions a corpus test evaluated. Each \
+     engine has its own column, so every measure reads across one row. Matched IN coverage \
+     is covered / judged lines among reported CLEARLY IN pairs; missed and CLEARLY OUT pairs \
+     are excluded. Coverage, clusters, wall time, CPU and memory are description — reported \
+     beside the score and never folded into it or its gate. Cost totals cover every \
+     repository scanned: wall and CPU time are summed, and each peak is the largest single \
+     scan's.";
+
 /// The corpus standing: one measure per row, one column per engine.
 fn totals_section(card: &Scorecard) -> Vec<String> {
     let mut columns = vec!["measure".to_owned()];
@@ -199,26 +230,10 @@ fn totals_section(card: &Scorecard) -> Vec<String> {
     if card.change.is_some() {
         columns.push("change".to_owned());
     }
-    let mut lines = vec![
-        "## Corpus standing".to_owned(),
-        String::new(),
-        "Score is `correct / judged` over every judged pair in the corpus. Curated checks \
-         are the `corpus/<name>.json` assertions a corpus test evaluated. Each engine has \
-         its own column, so every measure reads across one row. Matched IN coverage is \
-         covered / judged lines among reported CLEARLY IN pairs; missed and CLEARLY OUT \
-         pairs are excluded. Coverage, clusters, wall time, CPU and memory are description \
-         — reported beside the score and never folded into it or its gate. Cost totals \
-         cover every repository scanned: wall and CPU time are summed, and each peak is \
-         the largest single scan's."
-            .to_owned(),
-        String::new(),
-    ];
-    lines.extend(header(&columns));
-    lines.extend(standing_accuracy(card));
-    lines.push(standing_coverage(card));
-    lines.extend(standing_cost(card));
-    lines.push(String::new());
-    lines
+    let mut rows = standing_accuracy(card);
+    rows.push(standing_coverage(card));
+    rows.extend(standing_cost(card));
+    table_section("## Corpus standing", TOTALS_INTRO, &columns, rows)
 }
 
 /// One header cell per engine for a measure: the measure, then the engine id.
@@ -291,6 +306,12 @@ fn accuracy_row(card: &Scorecard, target: &TargetScore) -> String {
     row(&cells)
 }
 
+/// What the per-repository accuracy table means, stated above it.
+const ACCURACY_INTRO: &str = "One row per repository, one column per engine, so the two runs \
+     sit beside each other. `IN found` is the CLEARLY IN pairs the engine reported; `OUT \
+     absent` the CLEARLY OUT pairs it correctly stayed silent on. The last column says \
+     whether a defect is **new** against the first engine or **standing** in both.";
+
 /// The per-repository accuracy table.
 fn accuracy_section(card: &Scorecard) -> Vec<String> {
     let mut columns = vec!["repository".to_owned(), "judged".to_owned()];
@@ -298,20 +319,13 @@ fn accuracy_section(card: &Scorecard) -> Vec<String> {
         columns.extend(measure_headers(card, measure));
     }
     columns.push("defects".to_owned());
-    let mut lines = vec![
-        "## Per repository — accuracy".to_owned(),
-        String::new(),
-        "One row per repository, one column per engine, so the two runs sit beside each \
-         other. `IN found` is the CLEARLY IN pairs the engine reported; `OUT absent` the \
-         CLEARLY OUT pairs it correctly stayed silent on. The last column says whether a \
-         defect is **new** against the first engine or **standing** in both."
-            .to_owned(),
-        String::new(),
-    ];
-    lines.extend(header(&columns));
-    lines.extend(card.targets.iter().map(|target| accuracy_row(card, target)));
-    lines.push(String::new());
-    lines
+    let rows = card.targets.iter().map(|target| accuracy_row(card, target));
+    table_section(
+        "## Per repository — accuracy",
+        ACCURACY_INTRO,
+        &columns,
+        rows,
+    )
 }
 
 /// The gate: what each repository must clear, and anything it did not.

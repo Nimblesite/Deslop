@@ -361,6 +361,14 @@ fn moved_measured(before: Option<f64>, after: Option<f64>) -> Option<f64> {
     before.zip(after).map(|(before, after)| after - before)
 }
 
+/// The signed difference between two counts, or nothing when either side went
+/// uncounted — an unmeasured run must never read as no change.
+fn moved_counted<T: TryInto<i64>>(before: Option<T>, after: Option<T>) -> Option<i64> {
+    before
+        .zip(after)
+        .map(|(before, after)| moved(before, after))
+}
+
 /// Compares two engines' corpus standing, measure by measure.
 #[must_use]
 pub fn corpus_change(before: &CorpusTotals, after: &CorpusTotals) -> CorpusChange {
@@ -369,19 +377,10 @@ pub fn corpus_change(before: &CorpusTotals, after: &CorpusTotals) -> CorpusChang
         correct: moved(before.correct, after.correct),
         false_negatives: moved(before.false_negatives, after.false_negatives),
         false_positives: moved(before.false_positives, after.false_positives),
-        clusters_total: before
-            .clusters_total
-            .zip(after.clusters_total)
-            .map(|(before, after)| moved(before, after)),
-        elapsed_ms: before
-            .elapsed_ms
-            .zip(after.elapsed_ms)
-            .map(|(before, after)| moved(before, after)),
+        clusters_total: moved_counted(before.clusters_total, after.clusters_total),
+        elapsed_ms: moved_counted(before.elapsed_ms, after.elapsed_ms),
         cpu_seconds: moved_measured(before.cpu_seconds, after.cpu_seconds),
         peak_cpu_percent: moved_measured(before.peak_cpu_percent, after.peak_cpu_percent),
-        peak_rss_mb: before
-            .peak_rss_mb
-            .zip(after.peak_rss_mb)
-            .map(|(before, after)| moved(before, after)),
+        peak_rss_mb: moved_counted(before.peak_rss_mb, after.peak_rss_mb),
     }
 }
