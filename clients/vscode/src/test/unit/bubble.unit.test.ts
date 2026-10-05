@@ -98,15 +98,27 @@ suite("bubble rendering helpers", () => {
     assert.equal(shortPath("no-separator"), "no-separator");
   });
 
-  test("bubbleHover links open and dismiss, never an implicit compare", () => {
-    const md = bubbleHover(cluster());
+  test("bubbleHover compares only the occurrence the user chooses", () => {
+    const candidate = cluster();
+    const md = bubbleHover(candidate);
     const text = md.value;
     assert.match(text, /command:deslop.openCluster/);
     assert.match(text, /command:deslop.bubble.dismissCluster/);
-    // [VSIX-PAIR-COMPARE] A bubble hover names one cluster — it can never
-    // supply both pair endpoints, so no compare link may render here.
-    assert.doesNotMatch(text, /command:deslop\.compareWithCanonical/);
+    const compare = text.match(/command:deslop\.compareWithCanonical\?([^)]*)/);
+    assert.ok(compare, "a non-canonical occurrence offers an explicit comparison");
+    const args = JSON.parse(decodeURIComponent(compare[1] ?? "")) as unknown[];
+    assert.equal(args[0], candidate.id, "the comparison keeps the cluster identity");
+    assert.deepEqual(args[1], candidate.occurrences[1], "the comparison names the selected peer range");
     assert.doesNotMatch(text, /command:deslop\.comparePair/);
+  });
+
+  test("compact bubble reuses the 0.36.0 hover layout", () => {
+    const text = bubbleHover(cluster(), "compact").value;
+    assert.match(text, /^\*\*abcdef0 Nearly identical code\*\* × 4/, "the short headline stays visible");
+    assert.match(text, /Canonical: `.*Alpha\.cs`/, "the short card retains the canonical path");
+    assert.match(text, /command:deslop\.openCluster/, "the cluster action stays available");
+    assert.match(text, /command:deslop\.bubble\.dismissCluster/, "dismiss stays available");
+    assert.doesNotMatch(text, /Mass:|Occurrences:|Compare/, "the extra detail stays out of Compact");
   });
 
   // Audience: HUMAN. Issue #30. The plain human clone-kind title
@@ -132,8 +144,9 @@ suite("bubble rendering helpers", () => {
   });
 
   // Audience: HUMAN. Issues #31/#32. Card layout matches the design:
-  // (1) slug + category + count, (2) canonical path, (3) action links.
-  test("bubbleHover body shows slug, canonical, count, and three action links (#31/#32)", () => {
+  // (1) slug + category + count, (2) mass, (3) canonical path,
+  // (4) all occurrence locations, (5) action links.
+  test("bubbleHover body shows the 0.32.0 identity and richer locations (#31/#32)", () => {
     const c = cluster();
     const text = bubbleHover(c).value;
     assert.match(text, /\babcdef0\b/, `slug must appear in the body: ${text}`);
@@ -148,6 +161,9 @@ suite("bubble rendering helpers", () => {
       `canonical section must be present: ${text}`,
     );
     assert.match(text, /Alpha\.cs/, `canonical file must be visible: ${text}`);
+    assert.match(text, /Mass: 3/, `engine-stamped duplicated mass must be visible: ${text}`);
+    assert.match(text, /Alpha\.cs:1/, `canonical line must be visible: ${text}`);
+    assert.match(text, /Beta\.cs:1/, `other occurrence line must be visible: ${text}`);
     assert.doesNotMatch(
       text,
       /Safe to extract|interpretation/i,
@@ -159,8 +175,8 @@ suite("bubble rendering helpers", () => {
       .filter((p) => p.length > 0);
     assert.equal(
       paragraphs.length,
-      3,
-      `body must be three paragraphs (header, canonical, links); got ${paragraphs.length} in: ${text}`,
+      6,
+      `body must contain heading, mass, canonical, occurrence heading, locations, actions; got ${paragraphs.length} in: ${text}`,
     );
   });
 
@@ -188,10 +204,10 @@ suite("bubble rendering helpers", () => {
       "bubble must not rebuild cluster markdown separately",
     );
     assert.match(bubble.value, /^\*\*abcdef0 [A-Z][A-Za-z, ]+\*\* × 4/);
-    assert.match(bubble.value, /Canonical: `.*Alpha\.cs`/);
+    assert.match(bubble.value, /Canonical: .*Alpha\.cs:1/);
     assert.match(bubble.value, /command:deslop\.openCluster/);
     assert.match(bubble.value, /command:deslop\.bubble\.dismissCluster/);
-    assert.doesNotMatch(bubble.value, /command:deslop\.compareWithCanonical/);
+    assert.match(bubble.value, /command:deslop\.compareWithCanonical/);
   });
 
   test("renderBubbleParts is the single rebuild path for live bubble text (#46)", () => {
@@ -238,7 +254,7 @@ suite("bubble rendering helpers", () => {
   test("compact hover uses stable slug, not rank, and closes bold cleanly", () => {
     const c = cluster();
     c.id = "ab3f9c2def012345";
-    const md = clusterHoverMarkdown(c, { showVerdict: false });
+    const md = clusterHoverMarkdown(c, { showVerdict: false, presentation: "compact" });
     const firstLine = md.value.split("\n")[0] ?? "";
 
     assert.doesNotMatch(
@@ -289,7 +305,7 @@ const DUPLICATION_RANK_LABEL = "rank";
 const COPY_COUNT_MARKER = "×";
 const SHAPE_HOVER_OPTIONS = [
   { showVerdict: true, showDismiss: true },
-  { showVerdict: false, count: COMPACT_HOVER_COUNT },
+  { showVerdict: false, count: COMPACT_HOVER_COUNT, presentation: "compact" },
 ] as const;
 suite("shape-only hover presentation", () => {
   for (const options of SHAPE_HOVER_OPTIONS) {

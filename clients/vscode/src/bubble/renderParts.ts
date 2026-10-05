@@ -12,6 +12,7 @@
 import * as vscode from "vscode";
 
 import { clusterHoverMarkdown, clusterSlug } from "../clusterHover";
+import { DEFAULT_BUBBLE_PRESENTATION, type BubblePresentation } from "./presentation";
 import { SEVERITY_DOT } from "../design";
 import { shortPath } from "../pathUtils";
 import {
@@ -32,6 +33,7 @@ export interface BubbleRenderParts {
 export function renderBubbleParts(
   cluster: ReportCluster,
   severity: Severity,
+  presentation: BubblePresentation = DEFAULT_BUBBLE_PRESENTATION,
 ): BubbleRenderParts {
   const canonical = cluster.occurrences[0];
   const count = occurrenceCount(cluster);
@@ -43,7 +45,7 @@ export function renderBubbleParts(
   return {
     inline: `  ${SEVERITY_DOT[severity]} ${slug} ${title} ${detail}${location}`,
     ghost: `  └─ ${SEVERITY_DOT[severity]} ${slug} ${title} ${detail}`,
-    hover: clusterHoverMarkdown(cluster, { showDismiss: true }),
+    hover: clusterHoverMarkdown(cluster, { showDismiss: true, presentation }),
   };
 }
 
@@ -64,6 +66,7 @@ export function ghostText(
 // Bubble hover: full card with slug, canonical, and dismiss link.
 export function bubbleHover(
   cluster: ReportCluster,
+  presentation: BubblePresentation = DEFAULT_BUBBLE_PRESENTATION,
 ): vscode.MarkdownString {
-  return renderBubbleParts(cluster, "hint").hover;
+  return renderBubbleParts(cluster, "hint", presentation).hover;
 }

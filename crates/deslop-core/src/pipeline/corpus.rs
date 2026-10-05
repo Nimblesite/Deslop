@@ -7,7 +7,11 @@
 
 use std::{collections::HashMap, fs, path::Path, time::Instant};
 
-use super::{config::PipelineConfig, signatures::signatures_for_file};
+use super::{
+    config::PipelineConfig,
+    open_buffers::{OpenBuffers, SourceBytes},
+    signatures::signatures_for_file,
+};
 use crate::{
     ast::NormalizedNode,
     boilerplate::BoilerplateRange,
@@ -279,6 +283,12 @@ fn log_corpus_built(
 /// an updated file into an existing corpus. The batch entry point
 /// calls [`fingerprint_corpus`] instead.
 ///
+/// [LIVE-OPEN-BUFFERS] The bytes come from `buffers` when an editor
+/// holds the file open, so the splice analyses what the user sees.
+/// Unsaved text bypasses the fingerprint cache entirely: a keystroke is
+/// not a file state worth persisting, and reading the cache for it
+/// would only ever miss.
+///
 /// # Errors
 ///
 /// Propagates [`CoreError::Io`] and parser errors from
@@ -290,11 +300,15 @@ pub fn parse_one_file(
     config: &PipelineConfig<'_>,
     stats: &mut CacheStats,
     build: &mut CorpusBuildState,
+    buffers: &OpenBuffers,
 ) -> Result<(CachedFile, Vec<u8>, u64), CoreError> {
-    let source = read_source(path)?;
+    let SourceBytes {
+        bytes: source,
+        unsaved,
+    } = buffers.read(path)?;
     let cache_base = crate::paths::cache_dir(&config.root);
     let mut caches: HashMap<&'static str, FingerprintCache> = HashMap::new();
-    let cache = if config.incremental {
+    let cache = if config.incremental && !unsaved {
         fingerprint_cache_for(&mut caches, &cache_base, parser.id(), config.min_nodes)
     } else {
         None

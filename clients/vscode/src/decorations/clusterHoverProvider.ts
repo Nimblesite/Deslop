@@ -5,6 +5,7 @@
 
 import * as vscode from "vscode";
 
+import { bubblePresentation } from "../bubble/presentation";
 import { clusterHoverMarkdown } from "../clusterHover";
 import { ReportStore } from "../reportStore";
 import { byteRangeToRange, sameFile } from "./manager";
@@ -20,9 +21,13 @@ export class ClusterHoverProvider implements vscode.HoverProvider {
         sameFile(item.path, activePath) &&
         byteRangeToRange(document, item)?.contains(position),
       );
-      if (occurrence) return new vscode.Hover(
-        clusterHoverMarkdown(cluster, { showVerdict: false }),
-      );
+      if (occurrence) {
+        const presentation = bubblePresentation();
+        return new vscode.Hover(clusterHoverMarkdown(cluster, {
+          presentation,
+          showVerdict: presentation === "classic",
+        }));
+      }
     }
     return null;
   }

@@ -6,8 +6,8 @@ use std::{
 
 use deslop_core::{
     live::{
-        read_report_snapshot, report_for_file_in, ChangeSummary, EmbeddingProgress,
-        EmbeddingProgressReporter, LiveApi, LiveError, LiveService, ReportChangedNotification,
+        read_report_snapshot, report_for_file_in, EmbeddingProgress, EmbeddingProgressReporter,
+        LiveApi, LiveService,
     },
     report::Report,
 };
@@ -29,10 +29,8 @@ use tower_lsp::{
 };
 
 use crate::{
-    code_action, code_lens, commands,
-    diagnostic_session::DiagnosticSession,
-    notifications::{EmbeddingProgressNotification, ReportChangedLspNotification},
-    observability::Observability,
+    code_action, code_lens, commands, diagnostic_session::DiagnosticSession,
+    notifications::EmbeddingProgressNotification, observability::Observability,
 };
 
 /// User-visible server name advertised in `initialize`.
@@ -41,6 +39,8 @@ pub const SERVER_NAME: &str = "deslop-lsp";
 /// Diagnostic `source` + provider `identifier` surfaced to clients.
 pub const DIAGNOSTIC_SOURCE: &str = "deslop";
 
+#[path = "backend_changes.rs"]
+mod changes;
 #[path = "backend_embedding.rs"]
 mod embedding;
 use embedding::resolve_startup_provider;
@@ -218,49 +218,6 @@ impl LspBackend {
     pub fn workspace_root(&self) -> &Path {
         &self.workspace_root
     }
-
-    /// Re-runs analysis for changed paths when VS Code sends file
-    /// lifecycle notifications.
-    async fn apply_changed_paths(&self, paths: &[PathBuf]) {
-        if paths.is_empty() {
-            return;
-        }
-        match self.changed_paths_notification(paths).await {
-            Ok(Some(notification)) => {
-                self.client
-                    .send_notification::<ReportChangedLspNotification>(notification)
-                    .await;
-                self.diagnostics.refresh(&self.client).await;
-            }
-            Ok(None) => {}
-            Err(error) => tracing::error!(%error, "failed to apply changed paths"),
-        }
-    }
-
-    /// Applies paths and converts a non-empty delta into an LSP notification.
-    async fn changed_paths_notification(
-        &self,
-        paths: &[PathBuf],
-    ) -> Result<Option<ReportChangedNotification>, LiveError> {
-        let session = self.service.session();
-        let (previous_generation, previous_report, delta) = {
-            let mut guard = session.lock().await;
-            let previous_generation = guard.generation();
-            let previous_report = guard.report();
-            let delta = guard.apply_changes(paths)?;
-            (previous_generation, previous_report, delta)
-        };
-        self.service
-            .remember_snapshot(previous_generation, previous_report)
-            .await;
-        if delta.is_empty() {
-            return Ok(None);
-        }
-        Ok(Some(ReportChangedNotification {
-            generation: delta.to_generation,
-            summary: ChangeSummary::from_delta(&delta),
-        }))
-    }
 }
 
 #[tower_lsp::async_trait]
@@ -352,21 +309,38 @@ impl LanguageServer for LspBackend {
         self.apply_changed_paths(&paths).await;
     }
 
+    // [LIVE-OPEN-BUFFERS] From `didOpen` until `didClose` the editor's
+    // text, not the file on disk, is what the session analyses for this
+    // path. Every edit is applied to that text and re-analysed at once,
+    // so the report never claims a clone the user has already deleted in
+    // an unsaved buffer.
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
         self.observability.record_handler("did_open");
-        if let Some(path) = url_to_path(&params.text_document.uri) {
-            self.apply_changed_paths(&[path]).await;
-        }
+        let Some(path) = url_to_path(&params.text_document.uri) else {
+            return;
+        };
+        let text = params.text_document.text;
+        self.apply_session_change(|session| session.open_buffer(&path, text))
+            .await;
     }
-
-    async fn did_close(&self, _params: DidCloseTextDocumentParams) {}
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
         self.observability.record_handler("did_change");
         let Some(path) = url_to_path(&params.text_document.uri) else {
             return;
         };
-        self.apply_changed_paths(&[path]).await;
+        let edits = crate::position::buffer_edits(params.content_changes);
+        self.apply_session_change(|session| session.edit_buffer(&path, &edits))
+            .await;
+    }
+
+    async fn did_close(&self, params: DidCloseTextDocumentParams) {
+        self.observability.record_handler("did_close");
+        let Some(path) = url_to_path(&params.text_document.uri) else {
+            return;
+        };
+        self.apply_session_change(|session| session.close_buffer(&path))
+            .await;
     }
 
     async fn diagnostic(

@@ -38,9 +38,13 @@ suite("decorations helpers", () => {
     assert.match(text, /Canonical/, "canonical section must be shown");
     // Action links present.
     assert.match(text, /command:deslop.openCluster/);
-    // [VSIX-PAIR-COMPARE] Decorations cannot supply two endpoints, so no
-    // compare link may render on a decoration.
-    assert.doesNotMatch(text, /command:deslop\.compareWithCanonical/);
+    // [VSIX-PAIR-COMPARE] A link must identify the chosen peer range; the
+    // canonical endpoint is resolved from the same current cluster.
+    const compare = text.match(/command:deslop\.compareWithCanonical\?([^)]*)/);
+    assert.ok(compare, "the non-canonical row offers an explicit comparison");
+    const args = JSON.parse(decodeURIComponent(compare[1] ?? "")) as unknown[];
+    assert.equal(args[0], cluster().id, "the link retains the cluster identity");
+    assert.deepEqual(args[1], cluster().occurrences[1], "the link selects the exact peer range");
     assert.doesNotMatch(text, /command:deslop\.comparePair/);
     // No raw AI data.
     assert.doesNotMatch(text, /Type-/);

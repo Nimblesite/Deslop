@@ -80,7 +80,10 @@ pub use embedding::{
     NOOP_PROVIDER_ID,
 };
 pub use error::CoreError;
-pub use pipeline::{debug_ast_dump, run, EmbeddingSettings, PipelineConfig, PipelineSession};
+pub use pipeline::{
+    debug_ast_dump, run, BufferEdit, EmbeddingSettings, OpenBuffers, PipelineConfig,
+    PipelineSession,
+};
 pub use report::{render_report, EmbeddingProvenance, Report, ReportInputs};
 pub use report_boilerplate::{ReportBoilerplateHint, ReportBoilerplateOccurrence};
 pub use report_metrics::{

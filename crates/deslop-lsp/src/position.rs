@@ -5,8 +5,11 @@
 //! this module only projects [`LineCol`] onto
 //! `tower_lsp::lsp_types::Position` for the editor surfaces.
 
-use deslop_core::refactor::position::{byte_for_line_col, line_col_for_byte, LineCol};
-use tower_lsp::lsp_types::Position;
+use deslop_core::{
+    refactor::position::{byte_for_line_col, line_col_for_byte, LineCol},
+    BufferEdit,
+};
+use tower_lsp::lsp_types::{Position, TextDocumentContentChangeEvent};
 
 /// Returns the zero-indexed `Position` corresponding to `byte_offset`
 /// in `source`. Offsets past the end of `source` clamp to the last
@@ -27,13 +30,36 @@ pub fn position_for_byte(source: &str, byte_offset: usize) -> Position {
 /// `source.len()`.
 #[must_use]
 pub fn byte_for_position(source: &str, position: Position) -> usize {
-    byte_for_line_col(
-        source,
-        LineCol {
-            line: position.line,
-            character: position.character,
-        },
-    )
+    byte_for_line_col(source, line_col_for_position(position))
+}
+
+/// Projects an LSP `Position` onto the core [`LineCol`] it mirrors.
+#[must_use]
+pub const fn line_col_for_position(position: Position) -> LineCol {
+    LineCol {
+        line: position.line,
+        character: position.character,
+    }
+}
+
+/// Converts the content changes of one `textDocument/didChange` into
+/// the core's buffer edits, preserving order ([LIVE-OPEN-BUFFERS]). A
+/// change without a range replaces the whole buffer, as the LSP
+/// defines it.
+#[must_use]
+pub fn buffer_edits(changes: Vec<TextDocumentContentChangeEvent>) -> Vec<BufferEdit> {
+    changes
+        .into_iter()
+        .map(|change| BufferEdit {
+            range: change.range.map(|range| {
+                (
+                    line_col_for_position(range.start),
+                    line_col_for_position(range.end),
+                )
+            }),
+            text: change.text,
+        })
+        .collect()
 }
 
 #[cfg(test)]
