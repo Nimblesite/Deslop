@@ -636,6 +636,11 @@ jobs:
       - name: Install typediagram
         run: npm install -g typediagram@0.11.0
 
+      # [LIVE-PARENT-LIVENESS] The native process-job accounting driver uses Python.
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
       - name: Cache cargo registry and target
         uses: actions/cache@v6
         with:
@@ -689,6 +694,8 @@ jobs:
           cargo test --release -p deslop-mcp --test tcp_transport --features deslop-core/live
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo test --release -p deslop-core --lib paths::
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --release -p deslop-core --lib process::
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo test --release -p deslop --test suite -- $env:WINDOWS_SUITE_FILTERS.Split(" ")
 

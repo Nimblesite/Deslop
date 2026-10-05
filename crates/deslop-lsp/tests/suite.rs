@@ -47,6 +47,8 @@ mod execute_command;
 mod history_determinism;
 #[path = "lifecycle.rs"]
 mod lifecycle;
+#[path = "live/bursts.rs"]
+mod live_bursts;
 #[path = "lsp_embedding_determinism.rs"]
 mod lsp_embedding_determinism;
 #[path = "lsp_workspace_scoping.rs"]

@@ -58,11 +58,7 @@ fn assert_mass_only(cluster: &Value) {
 fn run_pair_mean_report() -> Result<Value> {
     let tmp = tempfile::tempdir()?;
     let fixtures = fixture("ts-mixed-band");
-    for entry in std::fs::read_dir(&fixtures)? {
-        let entry = entry?;
-        let target = tmp.path().join(entry.file_name());
-        let _bytes = std::fs::copy(entry.path(), target)?;
-    }
+    seed(&fixtures, tmp.path())?;
     let _bytes = std::fs::copy(fixtures.join("ledger_a.ts"), tmp.path().join(COPY_STEM))?;
     run_report_args(tmp.path(), &["--min-nodes", "15", "--embeddings", "off"])
 }

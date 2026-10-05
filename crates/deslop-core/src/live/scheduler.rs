@@ -11,7 +11,7 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 use tokio::{
     sync::{
         broadcast::{self, Sender as BroadcastSender},
-        mpsc::Receiver,
+        mpsc::UnboundedReceiver,
         Mutex,
     },
     time,
@@ -29,6 +29,17 @@ use super::{
 /// trade memory for tolerance to slow subscribers ([LIVE-PERF-BUDGETS]).
 const BROADCAST_CAPACITY: usize = 64;
 
+/// Debounce checks run only while file changes are pending.
+const PENDING_TICK_INTERVAL: Duration = Duration::from_millis(50);
+
+/// Distinguishes queued seed changes from a completed analysis pass.
+enum PassOutcome {
+    /// [LIVE-CACHE-SEED-READINESS] The cold pipeline still owns unfinished work.
+    Deferred,
+    /// A ready pipeline completed, with a notification only for new generations.
+    Completed(Option<ReportChangedNotification>),
+}
+
 /// Background scheduler handle.
 #[derive(Debug)]
 pub struct Scheduler {
@@ -44,7 +55,7 @@ impl Scheduler {
     #[must_use]
     pub fn start(
         session: Arc<Mutex<AnalysisSession>>,
-        watcher_rx: Receiver<PathBuf>,
+        watcher_rx: UnboundedReceiver<PathBuf>,
         clock: Arc<dyn Clock>,
     ) -> Self {
         let (report_changed, _) =
@@ -94,7 +105,7 @@ impl Scheduler {
     #[must_use]
     pub fn with_system_clock(
         session: Arc<Mutex<AnalysisSession>>,
-        watcher_rx: Receiver<PathBuf>,
+        watcher_rx: UnboundedReceiver<PathBuf>,
     ) -> Self {
         Self::start(session, watcher_rx, Arc::new(SystemClock::new()))
     }
@@ -107,7 +118,7 @@ struct SchedulerTaskState {
     /// Shared session lock.
     session: Arc<Mutex<AnalysisSession>>,
     /// Watcher channel.
-    watcher_rx: Receiver<PathBuf>,
+    watcher_rx: UnboundedReceiver<PathBuf>,
     /// Debouncer instance, keyed off `clock`.
     debouncer: Debouncer,
     /// `report/changed` broadcaster.
@@ -130,7 +141,7 @@ impl SchedulerTaskState {
     /// Constructs a fresh task state.
     fn new(
         session: Arc<Mutex<AnalysisSession>>,
-        watcher_rx: Receiver<PathBuf>,
+        watcher_rx: UnboundedReceiver<PathBuf>,
         clock: Arc<dyn Clock>,
         report_changed: BroadcastSender<ReportChangedNotification>,
         analysis_state: BroadcastSender<AnalysisState>,
@@ -147,31 +158,40 @@ impl SchedulerTaskState {
         }
     }
 
-    /// Top-level event loop.
+    /// Top-level event loop. `initialize` / `reportGet` already supplied
+    /// the baseline generation, so it must not be re-announced
+    /// ([LIVE-SCHEDULER-NOOP]).
     async fn run(mut self) {
-        // `initialize` / `reportGet` hand every subscriber this
-        // generation before the first watcher event can land, so it is
-        // not news and must not be re-announced ([LIVE-SCHEDULER-NOOP]).
         self.last_announced_generation = Some(self.session.lock().await.generation());
-        let mut tick = time::interval(Duration::from_millis(50));
+        let mut tick = time::interval(PENDING_TICK_INTERVAL);
+        tick.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
         loop {
             tokio::select! {
                 maybe_path = self.watcher_rx.recv() => {
-                    match maybe_path {
-                        Some(path) => self.debouncer.push(path),
-                        None => break,
-                    }
+                    let Some(path) = maybe_path else { break };
+                    self.debouncer.push(path);
                 }
-                _ = tick.tick() => {
+                // [LIVE-SCHEDULER-IDLE] With no pending changes, only a
+                // watcher event can wake us. Missed idle ticks never replay.
+                _ = tick.tick(), if self.debouncer.has_pending() => {
                     self.maybe_dispatch().await;
                 }
             }
         }
+        self.dispatch_pending().await;
     }
 
     /// Drains the debouncer and runs a re-analysis pass when due.
     async fn maybe_dispatch(&mut self) {
         if !self.debouncer.has_pending() || !self.debouncer.ready_to_flush() {
+            return;
+        }
+        self.dispatch_pending().await;
+    }
+
+    /// [LIVE-WATCHER-DELIVERY] Finishes accepted work before a closed input stops us.
+    async fn dispatch_pending(&mut self) {
+        if !self.debouncer.has_pending() {
             return;
         }
         let changed = self.debouncer.flush();
@@ -183,8 +203,14 @@ impl SchedulerTaskState {
             },
         );
         let outcome = self.run_pass(&changed).await;
+        self.broadcast_outcome(outcome);
+    }
+
+    /// Completes the observable lifecycle of the dispatched pass.
+    fn broadcast_outcome(&self, outcome: Result<PassOutcome, String>) {
         match outcome {
-            Ok(notification) => {
+            Ok(PassOutcome::Deferred) => {}
+            Ok(PassOutcome::Completed(notification)) => {
                 if let Some(notification) = notification {
                     broadcast_report_changed(&self.report_changed, notification);
                 }
@@ -199,7 +225,7 @@ impl SchedulerTaskState {
     /// Runs a single `apply_changes` pass and translates the result
     /// into a wire notification.
     ///
-    /// Returns `None` when subscribers already hold this generation
+    /// Completes without a notification when subscribers already hold this generation
     /// ([LIVE-SCHEDULER-NOOP]) — announcing it only makes the panel,
     /// the diagnostics publisher and the MCP round-trip `reportDelta`
     /// → `reportGet` to re-fetch identical bytes. One production LSP
@@ -210,28 +236,37 @@ impl SchedulerTaskState {
     /// this pass happened to start from, so a generation an
     /// out-of-band read published silently still reaches subscribers
     /// here rather than being mistaken for a no-op.
-    async fn run_pass(
-        &mut self,
-        changed: &[PathBuf],
-    ) -> Result<Option<ReportChangedNotification>, String> {
+    async fn run_pass(&mut self, changed: &[PathBuf]) -> Result<PassOutcome, String> {
         let mut guard = self.session.lock().await;
         let delta = guard
             .apply_changes(changed)
             .map_err(|err| err.to_string())?;
+        if guard.is_seed_only() {
+            return Ok(PassOutcome::Deferred);
+        }
         let generation = guard.generation();
         drop(guard);
+        Ok(self.completed_pass(generation, &delta, changed.len()))
+    }
+
+    /// Announces a completed generation only when subscribers have not seen it.
+    fn completed_pass(
+        &mut self,
+        generation: u64,
+        delta: &crate::ReportDelta,
+        paths: usize,
+    ) -> PassOutcome {
         if self.last_announced_generation == Some(generation) {
-            tracing::debug!(
-                generation,
-                paths = changed.len(),
-                "no-op pass; nothing broadcast"
-            );
-            return Ok(None);
+            tracing::debug!(generation, paths, "no-op pass; nothing broadcast");
+            return PassOutcome::Completed(None);
         }
         self.last_announced_generation = Some(generation);
-        Ok(Some(ReportChangedNotification {
+        PassOutcome::Completed(Some(ReportChangedNotification {
             generation,
-            summary: ChangeSummary::from_delta(&delta),
+            summary: ChangeSummary::from_delta(delta),
         }))
     }
 }
+
+#[cfg(test)]
+mod tests;
