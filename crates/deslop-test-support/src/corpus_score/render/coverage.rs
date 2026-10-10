@@ -1,6 +1,6 @@
 //! [CORPUS-SCORE-RENDER] The judged-line coverage beside each pair's verdict.
 
-use super::{header, row, score_cell, Scorecard, TargetScore, ABSENT};
+use super::{row, score_cell, table_section, Scorecard, TargetScore, ABSENT};
 use crate::corpus_score::{RangeCoverage, ScoredEntry, CLEARLY_IN};
 
 /// Render coverage already calculated by the scorer.
@@ -90,14 +90,14 @@ fn coverage_rows(card: &Scorecard) -> Vec<String> {
 
 /// Description of report extent; no coverage figure changes the score or gate.
 pub(super) fn coverage_section(card: &Scorecard) -> Vec<String> {
-    let mut lines = vec![
-        "## Judged-range coverage".to_owned(),
-        String::new(),
-        "Each cell shows covered / judged lines across the pair's ranges. Overlapping occurrences count each line once within a range. A dash means no pair was reported. Coverage describes extent and never changes the verdict.".to_owned(),
-        String::new(),
-    ];
-    lines.extend(header(&coverage_columns(card)));
-    lines.extend(coverage_rows(card));
-    lines.push(String::new());
-    lines
+    let title = "## Judged-range coverage";
+    table_section(
+        title,
+        COVERAGE_INTRO,
+        &coverage_columns(card),
+        coverage_rows(card),
+    )
 }
+
+/// What the coverage table means, stated above it.
+const COVERAGE_INTRO: &str = "Each cell shows covered / judged lines across the pair's ranges. Overlapping occurrences count each line once within a range. A dash means no pair was reported. Coverage describes extent and never changes the verdict.";

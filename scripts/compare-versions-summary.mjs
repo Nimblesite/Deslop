@@ -5,21 +5,19 @@
 // computed ([CORPUS-SCORE]); this renderer derives nothing except which
 // published cluster ids the two engines share.
 //
-// Usage: node scripts/compare-versions-summary.mjs <meta.json>
+// Usage: node scripts/compare-versions-summary.mjs <meta.json> <scorecard.json>
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { existsSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const TOP_CLUSTER_ROWS = 5;
 const SHORT_SHA_LENGTH = 12;
 const BINARY_SHA_PREVIEW = 16;
 const ABSENT = "n/a";
-// [CORPUS-SCORE] The scorecard `corpus-score` writes beside the reports. Every
-// register figure in this document is read from it; none is recomputed here,
-// so the scorecard and these summaries can never disagree.
-const SCORECARD = "score.json";
+// [CORPUS-SCORE] Every register figure in this document is read from the JSON
+// scorecard `corpus-score` wrote for this run; none is recomputed here, so the
+// scorecard and these summaries can never disagree.
 const NO_REGISTER = "no register for this target";
 
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
@@ -147,9 +145,10 @@ const provenance = (meta, target, sides) => [
 ];
 
 // [CORPUS-SCORE] One target's scored standing, or undefined when no register
-// is judged for it yet.
+// is judged for it yet. The scorecard lists unjudged targets too — their cost
+// is still reported — so `registered` is what says a register score exists.
 const targetScore = (scorecard, target) =>
-  scorecard.targets.find((scored) => scored.name === target.slug);
+  scorecard.targets.find((scored) => scored.name === target.slug && scored.registered);
 
 // [CORPUS-SCORE] One scored line per judged entry, for one engine.
 const registerLines = (scored, engineId) =>
@@ -332,16 +331,15 @@ const indexDocument = (meta, scorecard) => {
   ].join("\n");
 };
 
-const [metaPath] = process.argv.slice(2);
-if (!metaPath) {
-  process.stderr.write("usage: compare-versions-summary.mjs <meta.json>\n");
+const [metaPath, scorecardPath] = process.argv.slice(2);
+if (!metaPath || !scorecardPath) {
+  process.stderr.write("usage: compare-versions-summary.mjs <meta.json> <scorecard.json>\n");
   process.exit(2);
 }
 const meta = readJson(metaPath);
-// [CORPUS-SCORE] `corpus-score` runs first and writes this beside the reports.
+// [CORPUS-SCORE] `corpus-score` runs first and names the scorecard it wrote.
 // Without it there is no accuracy verdict to render, so a missing scorecard
 // fails the render rather than quietly dropping the only column that matters.
-const scorecardPath = join(dirname(resolve(metaPath)), SCORECARD);
 if (!existsSync(scorecardPath)) {
   throw new Error(`${scorecardPath} is missing — run \`corpus-score score\` before rendering`);
 }
