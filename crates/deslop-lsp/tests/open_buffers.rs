@@ -26,6 +26,8 @@ use crate::common::{
     spawn_lsp_on_fixture_guarded, wait_for_report_matching, workspace_file_uri, write_frame,
 };
 
+#[path = "open_buffers/deletion.rs"]
+mod deletion;
 #[path = "open_buffers/embedding.rs"]
 mod embedding;
 
@@ -43,6 +45,9 @@ const REPORT_FOR_RANGE: &str = "deslop/reportForRange";
 const DELETED: &str = "";
 /// One byte inside the deleted clone, used to query the range it covered.
 const INSIDE_OCCURRENCE_BYTE: u64 = 1;
+/// [LIVE-OPEN-BUFFERS] The complete clone must survive disk removal until the buffer closes.
+const OPEN_BUFFER_SURVIVES_DISK_REMOVAL: &str =
+    "[LIVE-OPEN-BUFFERS] deleting the disk file must preserve the open editor's clone, occurrences, kind and rank";
 
 #[test]
 fn unsaved_buffer_edits_drive_the_report_and_range_queries() -> Result<()> {
@@ -102,6 +107,14 @@ fn unsaved_buffer_edits_drive_the_report_and_range_queries() -> Result<()> {
         hits.iter().any(|hit| at(hit, "id") == cluster_id.as_str()),
         "the restored clone answers the range query again: {hits:?}"
     );
+
+    fs::remove_file(&file)?;
+    assert_eq!(
+        report_for_range(&mut stdin, &mut stdout, &file, start_byte)?,
+        hits,
+        "{OPEN_BUFFER_SURVIVES_DISK_REMOVAL}"
+    );
+    fs::write(&file, &disk_text)?;
 
     write_frame(&mut stdin, &deletion)?;
     let _without_again =

@@ -8,7 +8,7 @@
 mod tests;
 
 use std::{
-    collections::HashSet,
+    collections::{BTreeSet, HashSet},
     path::{Path, PathBuf},
 };
 
@@ -88,6 +88,16 @@ fn canonicalise_parent(
     }
 }
 
+/// [LIVE-OPEN-BUFFERS] Disk and editor sources form one inventory in stable path order.
+fn source_paths(files: &[DiscoveredFile], buffers: &OpenBuffers) -> BTreeSet<PathBuf> {
+    files
+        .iter()
+        .map(|file| file.path.as_path())
+        .chain(buffers.paths())
+        .map(Path::to_path_buf)
+        .collect()
+}
+
 impl PipelineSession {
     /// Applies one changed path: delete, update, or add. Reports whether
     /// the corpus actually moved, so a pass made entirely of paths the
@@ -101,8 +111,11 @@ impl PipelineSession {
         buffers: &OpenBuffers,
     ) -> Result<CorpusEffect, CoreError> {
         let absolute = self.canonicalise_reference(path);
-        if !absolute.exists() {
-            return Ok(self.drop_subtree(&absolute));
+        if !absolute.exists() && !buffers.contains(&absolute) {
+            // [LIVE-OPEN-BUFFERS] A removed directory can still contain open editor sources.
+            self.ignore_matcher.remove_subtree(&absolute);
+            let present = source_paths(&[], buffers);
+            return Ok(self.drop_absent_descendants(&absolute, &present));
         }
         // [LIVE-WATCHER-DIRECTORIES] Alias notifications cannot widen the workspace corpus.
         if !absolute.starts_with(&self.root) {
@@ -226,12 +239,15 @@ impl PipelineSession {
         embedding: &EmbeddingSettings<'_>,
         buffers: &OpenBuffers,
     ) -> Result<CorpusEffect, CoreError> {
-        let present = files.iter().map(|file| file.path.clone()).collect();
+        let present = source_paths(files, buffers)
+            .into_iter()
+            .filter(|path| path.starts_with(directory))
+            .collect();
         let initial = self
             .drop_absent_descendants(directory, &present)
             .merge(CorpusEffect::from_touched(directory == self.root));
-        files.iter().try_fold(initial, |effect, file| {
-            self.apply_one_change(&file.path, stats, embedding, buffers)
+        present.iter().try_fold(initial, |effect, path| {
+            self.apply_one_change(path, stats, embedding, buffers)
                 .map(|changed| effect.merge(changed))
         })
     }
@@ -240,7 +256,7 @@ impl PipelineSession {
     fn drop_absent_descendants(
         &mut self,
         directory: &Path,
-        present: &HashSet<PathBuf>,
+        present: &BTreeSet<PathBuf>,
     ) -> CorpusEffect {
         self.live_paths
             .descendants(directory)
@@ -308,10 +324,8 @@ impl PipelineSession {
     ) -> Result<usize, CoreError> {
         let discovery = discover_files(&self.root, &self.extension_to_language, &self.exclusion);
         let known: HashSet<PathBuf> = self.live_paths.values().cloned().collect();
-        let fresh: Vec<PathBuf> = discovery
-            .files
+        let fresh: Vec<PathBuf> = source_paths(&discovery.files, buffers)
             .into_iter()
-            .map(|file| file.path)
             .filter(|path| !known.contains(path))
             .collect();
         for path in &fresh {

@@ -81,6 +81,12 @@ impl OpenBuffers {
         self.buffers.keys().map(PathBuf::as_path)
     }
 
+    /// [LIVE-OPEN-BUFFERS] Whether editor text remains authoritative for `path`.
+    #[must_use]
+    pub fn contains(&self, path: &Path) -> bool {
+        self.buffers.contains_key(&canonical_key(path))
+    }
+
     /// The bytes a change pass must analyse for `path`: the open buffer
     /// when the editor holds one, otherwise the file on disk.
     ///

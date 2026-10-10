@@ -334,6 +334,7 @@ The rules:
 - Unsaved text is never written to the on-disk fingerprint cache ([PIPELINE-INCREMENTAL]). A keystroke is not a file state worth persisting.
 - A full pass (`refresh_full`, the cold start) reads disk, then re-applies every open buffer before its report is served, so a full refresh never silently reverts to saved bytes behind the user's back.
 - When a file is open in an editor and also edited on disk by another actor, the editor's buffer wins until it is closed. The editor shows one text and reports a conflict on save; the report describes that text.
+- Removing the disk file or its parent directory preserves any open editor source, including during directory reconciliation and full refresh. Closing that buffer removes the source if no disk file remains. Code: `pipeline/session/change.rs`; tests: `deslop-lsp/tests/open_buffers.rs` and `deslop-lsp/tests/open_buffers/deletion.rs`.
 
 Code: `OpenBuffers` (`crates/deslop-core/src/pipeline/open_buffers.rs`), `AnalysisSession::open_buffer` / `edit_buffer` / `close_buffer` (`crates/deslop-core/src/live/session_buffers.rs`), the `didOpen` / `didChange` / `didClose` handlers in `crates/deslop-lsp/src/backend.rs`. Tests: `crates/deslop-core/tests/live_open_buffers.rs`, `crates/deslop-lsp/tests/open_buffers.rs`, `an unsaved deleted clone is absent from reportForRange` in `clients/vscode/src/test/suite/live-refresh.e2e.test.ts`.
 
