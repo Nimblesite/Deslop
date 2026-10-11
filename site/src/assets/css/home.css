@@ -83,7 +83,8 @@
   max-width: 40rem;
 }
 
-.hero__sublede a {
+.hero__sublede a,
+.showcase__lede a {
   color: var(--on-surface);
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -181,7 +182,13 @@
   overflow: hidden;
   box-shadow: 0 20px 40px rgba(14, 14, 14, 0.6);
 }
-.showcase__figure img { display: block; width: 100%; height: auto; }
+.showcase__figure img,
+.showcase__figure video { display: block; width: 100%; height: auto; }
+/* The 0.35.0 reel: the wide cut on a desktop, the tall cut on a phone. */
+.reel { margin-bottom: 0; }
+.reel--mobile { max-width: 22rem; margin-inline: auto; }
+@media (min-width: 768px) { .reel--mobile { display: none; } }
+@media (max-width: 767.98px) { .reel--desktop { display: none; } }
 .showcase__legend {
   display: grid;
   grid-template-columns: 1fr;

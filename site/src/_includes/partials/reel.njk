@@ -1,0 +1,21 @@
+{#- The 0.35.0 reel — shared by the en (/) and zh (/zh/) home pages so the
+    markup lives in exactly one place. The files come from _data/reel.json and
+    the section copy from i18n.json (reel.*); the film itself is in English.
+    One reel in two cuts: wide for a desktop, tall for a phone. The page shows
+    the one that fits and fetches nothing until the visitor presses play. -#}
+{% set currentLang = lang | default('en') %}
+<section class="showcase" aria-labelledby="reel-title">
+  <div class="showcase__head">
+    <div class="eyebrow-chip"><span>{{ "reel.eyebrow" | t(currentLang) }}</span></div>
+    <h2 class="showcase__title" id="reel-title">{{ "reel.title" | t(currentLang) }}</h2>
+    <p class="showcase__lede">{{ "reel.lede" | t(currentLang) }} <a href="{{ reel.post | altLangUrl('en', currentLang) }}">{{ "reel.post" | t(currentLang) }}</a></p>
+  </div>
+  {% for cut in reel.cuts %}
+  <figure class="showcase__figure reel reel--{{ cut.device }}">
+    <video controls playsinline preload="none" width="{{ cut.width }}" height="{{ cut.height }}" poster="{{ cut.poster }}" aria-label="{{ reel.name }}">
+      <source src="{{ cut.av1 }}" type="{{ reel.av1Type }}">
+      <source src="{{ cut.h264 }}" type="{{ reel.h264Type }}">
+    </video>
+  </figure>
+  {% endfor %}
+</section>
