@@ -29,6 +29,12 @@ export const PRIMARY_BUBBLE_CLUSTER_ID = "c-a";
 const FIXTURE_OCCURRENCE_END_BYTE = FIXTURE_TEN;
 const FIXTURE_ANALYSED_LOC = FIXTURE_TEN;
 const FIXTURE_LINE_LENGTH = FIXTURE_TEN;
+const EXECUTE_INLAY_HINT_PROVIDER = "vscode.executeInlayHintProvider";
+
+/** Query the real editor surface through one shared command boundary. */
+export async function queryBubbleInlayHints(doc: vscode.TextDocument, range: vscode.Range) {
+  return await vscode.commands.executeCommand<vscode.InlayHint[]>(EXECUTE_INLAY_HINT_PROVIDER, doc.uri, range);
+}
 
 // Builds a two-occurrence cluster carrying only cluster-owned facts:
 // rank, mass, and the occurrence count. Admission is the engine's

@@ -179,14 +179,14 @@ pub(super) fn run_embedding_refresh(
         batch_yield: live_batch_yield(EmbeddingMode::Auto),
         progress: Some(&progress),
     };
-    let outcome = PipelineSession::initialise_with_buffers(
-        job.root.clone(),
-        job.min_nodes,
-        job.incremental,
-        job.config_path.clone(),
+    let config = crate::PipelineConfig {
+        root: job.root.clone(),
+        min_nodes: job.min_nodes,
+        config_path: job.config_path.clone(),
         embedding,
-        &job.buffers,
-    );
+        incremental: job.incremental,
+    };
+    let outcome = PipelineSession::initialise_with_buffers(config, &job.buffers);
     match outcome {
         Ok((_, report)) => admit_refresh_report(job, report),
         Err(error) => Err(FailedEmbeddingRefresh {

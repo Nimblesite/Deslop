@@ -48,6 +48,11 @@ const INSIDE_OCCURRENCE_BYTE: u64 = 1;
 /// [LIVE-OPEN-BUFFERS] The complete clone must survive disk removal until the buffer closes.
 const OPEN_BUFFER_SURVIVES_DISK_REMOVAL: &str =
     "[LIVE-OPEN-BUFFERS] deleting the disk file must preserve the open editor's clone, occurrences, kind and rank";
+/// The complete report must return when editor text is restored.
+const RESTORE_BUFFER_REPORT: &str =
+    "restoring the buffer text reproduces the initial clusters exactly";
+/// Closing discards the edited buffer and restores the saved source.
+const CLOSE_BUFFER_REPORT: &str = "closing an unsaved buffer makes the disk the truth again";
 
 #[test]
 fn unsaved_buffer_edits_drive_the_report_and_range_queries() -> Result<()> {
@@ -69,10 +74,7 @@ fn unsaved_buffer_edits_drive_the_report_and_range_queries() -> Result<()> {
 
     write_frame(&mut stdin, &did_open(&uri, &disk_text)?)?;
     let deletion = ranged_change(&uri, &disk_text, start_byte, end_byte, DELETED)?;
-    write_frame(&mut stdin, &deletion)?;
-    let without = wait_for_report_matching(&mut stdin, &mut stdout, REPORT_TIMEOUT, |report| {
-        !has_cluster(report, &cluster_id)
-    })?;
+    let without = delete_buffer_clone(&mut stdin, &mut stdout, &deletion, &cluster_id)?;
     assert!(
         !has_suffix(&occurrence_paths(&without)?, EDITED_FILE),
         "no clone may be reported in the file whose copy was deleted: {without}"
@@ -94,14 +96,13 @@ fn unsaved_buffer_edits_drive_the_report_and_range_queries() -> Result<()> {
     );
 
     write_frame(&mut stdin, &whole_change(&uri, &disk_text)?)?;
-    let restored = wait_for_report_matching(&mut stdin, &mut stdout, REPORT_TIMEOUT, |report| {
-        has_cluster(report, &cluster_id)
-    })?;
-    assert_eq!(
-        at(&restored, "clusters"),
-        at(&initial, "clusters"),
-        "restoring the buffer text reproduces the initial clusters exactly"
-    );
+    assert_restored_report(
+        &mut stdin,
+        &mut stdout,
+        &initial,
+        &cluster_id,
+        RESTORE_BUFFER_REPORT,
+    )?;
     let hits = report_for_range(&mut stdin, &mut stdout, &file, start_byte)?;
     assert!(
         hits.iter().any(|hit| at(hit, "id") == cluster_id.as_str()),
@@ -116,20 +117,46 @@ fn unsaved_buffer_edits_drive_the_report_and_range_queries() -> Result<()> {
     );
     fs::write(&file, &disk_text)?;
 
-    write_frame(&mut stdin, &deletion)?;
-    let _without_again =
-        wait_for_report_matching(&mut stdin, &mut stdout, REPORT_TIMEOUT, |report| {
-            !has_cluster(report, &cluster_id)
-        })?;
+    let _without_again = delete_buffer_clone(&mut stdin, &mut stdout, &deletion, &cluster_id)?;
     write_frame(&mut stdin, &did_close(&uri)?)?;
-    let after_close =
-        wait_for_report_matching(&mut stdin, &mut stdout, REPORT_TIMEOUT, |report| {
-            has_cluster(report, &cluster_id)
-        })?;
+    assert_restored_report(
+        &mut stdin,
+        &mut stdout,
+        &initial,
+        &cluster_id,
+        CLOSE_BUFFER_REPORT,
+    )?;
+    Ok(())
+}
+
+/// Apply the editor deletion and observe the clone's actual withdrawal.
+fn delete_buffer_clone(
+    stdin: &mut ChildStdin,
+    stdout: &mut BufReader<ChildStdout>,
+    deletion: &str,
+    cluster_id: &str,
+) -> Result<Value> {
+    write_frame(stdin, deletion)?;
+    wait_for_report_matching(stdin, stdout, REPORT_TIMEOUT, |report| {
+        !has_cluster(report, cluster_id)
+    })
+}
+
+/// Assert the complete ordered membership after a buffer restoration.
+fn assert_restored_report(
+    stdin: &mut ChildStdin,
+    stdout: &mut BufReader<ChildStdout>,
+    initial: &Value,
+    cluster_id: &str,
+    context: &str,
+) -> Result<()> {
+    let report = wait_for_report_matching(stdin, stdout, REPORT_TIMEOUT, |report| {
+        has_cluster(report, cluster_id)
+    })?;
     assert_eq!(
-        at(&after_close, "clusters"),
-        at(&initial, "clusters"),
-        "closing an unsaved buffer makes the disk the truth again"
+        at(&report, "clusters"),
+        at(initial, "clusters"),
+        "{context}"
     );
     Ok(())
 }

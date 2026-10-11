@@ -27,7 +27,11 @@ use std::{
 use change::CorpusEffect;
 use store::CorpusStore;
 
-use super::{config::EmbeddingSettings, corpus::FingerprintCorpus, open_buffers::OpenBuffers};
+use super::{
+    config::{EmbeddingSettings, PipelineConfig},
+    corpus::FingerprintCorpus,
+    open_buffers::OpenBuffers,
+};
 use crate::{
     boilerplate::BoilerplateRange,
     config::{is_config_path, watched_config_paths, ExclusionConfig},
@@ -153,15 +157,14 @@ impl PipelineSession {
         embedding: EmbeddingSettings<'_>,
         diff: Option<&crate::diff_scope::ParsedDiff>,
     ) -> Result<(Self, Report), CoreError> {
-        Self::initialise_from_sources(
+        let config = PipelineConfig {
             root,
             min_nodes,
-            incremental,
             config_path,
             embedding,
-            diff,
-            &OpenBuffers::default(),
-        )
+            incremental,
+        };
+        Self::initialise_from_sources(config, diff, &OpenBuffers::default())
     }
 
     /// Re-parses (or drops) each path in `changed` and returns the

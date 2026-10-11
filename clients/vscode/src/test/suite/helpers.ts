@@ -116,6 +116,20 @@ export async function openFixture(name: string): Promise<vscode.TextEditor> {
   return await vscode.window.showTextDocument(doc);
 }
 
+/** Opens a real fixture clone only after its visible report is ready. */
+export async function openVisibleCloneFixture(api: ExtensionApi, name: string, timeoutMs: number) {
+  const editor = await openFixture(name);
+  const cluster = await waitFor(() => clusterForFile(api.reportStore?.current.visibleReport, name), timeoutMs);
+  return { editor, cluster };
+}
+
+/** Finds the first reported cluster containing a fixture file. */
+export function clusterForFile(report: Report | null | undefined, name: string): ReportCluster | undefined {
+  return report?.clusters.find((candidate) =>
+    candidate.occurrences.some((occurrence) => path.basename(occurrence.path) === name),
+  );
+}
+
 /** Deletes a range from `editor` — the undo half of every "edit, then put the
  * buffer back" step, so a suite cannot leak a dirty file into the next one. */
 export function deleteRange(

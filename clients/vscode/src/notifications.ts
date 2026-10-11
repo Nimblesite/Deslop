@@ -119,12 +119,12 @@ export async function refreshAfterChange(
   // applyDelta rejects (returns false) when no report is seeded yet or the
   // delta's baseline does not match the store's generation. Either way fall
   // back to the full snapshot so the store converges to the live engine.
-  if (delta && store.applyDelta(delta)) return;
+  if (delta && delta.to_generation >= payload.generation && store.applyDelta(delta, payload.analysed_buffer)) return;
   const snapshot = await c.sendRequest<Report>("deslop/reportGet");
   if (store.current.sessionEpoch !== epoch) return;
   // The store refuses a generation rollback: a newer snapshot has already
   // landed, so this completion is stale and the store is already converged.
-  if (!store.setSnapshot(snapshot, payload.generation)) {
+  if (!store.setSnapshot(snapshot, payload.generation, payload.analysed_buffer)) {
     log("discarded stale report snapshot", { generation: payload.generation });
   }
 }

@@ -173,6 +173,7 @@ async fn commit_refresh(task: RefreshTask, pipeline: PipelineSession, report: de
     let notification = ReportChangedNotification {
         generation,
         summary: ChangeSummary::from_delta(&delta),
+        analysed_buffer: None,
     };
     broadcast_report_changed(&task.report_changed, notification.clone());
     task.client

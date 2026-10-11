@@ -131,13 +131,25 @@ export const CORE_TYPE_CONFIG = {
       worst_mass: "Highest cluster mass in the latest generation, zero when empty.",
     },
   },
+  AnalysedBuffer: {
+    docs: "Editor source version incorporated into a report ([LIVE-OPEN-BUFFERS]).",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldOverrides: { path: "PathBuf", version: "i32" },
+    fieldDocs: {
+      path: "Absolute source path received from the editor.",
+      version: "LSP document version incorporated into the analysis.",
+    },
+  },
   ReportChangedNotification: {
     docs: "Wire payload for the `report/changed` notification.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
     fieldOverrides: { generation: "u64" },
+    fieldSerdeAttrs: { analysed_buffer: ["default", 'skip_serializing_if = "Option::is_none"'] },
+    tsOptional: ["analysed_buffer"],
     fieldDocs: {
       generation: "New generation that produced the change.",
       summary: "Compact summary suitable for status indicators.",
+      analysed_buffer: "Editor version analysed by this generation, absent for disk changes.",
     },
   },
   EmbeddingPhase: {

@@ -6,44 +6,36 @@ use crate::{
     error::CoreError,
     pipeline::{
         corpus::{build_extension_map, default_parsers, fingerprint_corpus},
-        EmbeddingSettings, OpenBuffers, PipelineConfig,
+        OpenBuffers, PipelineConfig,
     },
     report::Report,
     state::{FileId, LivePaths},
 };
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 impl PipelineSession {
     /// Builds one report from a stable editor-buffer snapshot, before embedding.
+    #[cfg(feature = "live")]
     pub(crate) fn initialise_with_buffers(
-        root: PathBuf,
-        min_nodes: u32,
-        incremental: bool,
-        config_path: Option<PathBuf>,
-        embedding: EmbeddingSettings<'_>,
+        config: PipelineConfig<'_>,
         buffers: &OpenBuffers,
     ) -> Result<(Self, Report), CoreError> {
-        Self::initialise_from_sources(
-            root,
-            min_nodes,
-            incremental,
-            config_path,
-            embedding,
-            None,
-            buffers,
-        )
+        Self::initialise_from_sources(config, None, buffers)
     }
 
     /// Shared cold pass; editor sources are installed before any report is rendered.
     pub(super) fn initialise_from_sources(
-        root: PathBuf,
-        min_nodes: u32,
-        incremental: bool,
-        config_path: Option<PathBuf>,
-        embedding: EmbeddingSettings<'_>,
+        config: PipelineConfig<'_>,
         diff: Option<&crate::diff_scope::ParsedDiff>,
         buffers: &OpenBuffers,
     ) -> Result<(Self, Report), CoreError> {
+        let PipelineConfig {
+            root,
+            min_nodes,
+            config_path,
+            embedding,
+            incremental,
+        } = config;
         let parsers = default_parsers();
         let extension_to_language = build_extension_map(&parsers);
         // [#141 MCP-SAFETY] Canonicalise the root so the registry,

@@ -6,16 +6,17 @@
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import { bubbleHover, LiveBubble } from "../../bubble/live";
-import { DEFAULT_BUBBLE_CLUSTER_MASS, FIXTURE_KIND_TITLE, PRIMARY_BUBBLE_CLUSTER_ID, openLiveDocument, probeCluster as cluster, probeReport as report, renderFullConfidenceBubble, retractCluster, setBubbleMode as setMode, span, withBubble } from "./bubble.helpers";
+import { DEFAULT_BUBBLE_CLUSTER_MASS, FIXTURE_KIND_TITLE, PRIMARY_BUBBLE_CLUSTER_ID, openLiveDocument, probeCluster as cluster, probeReport as report, queryBubbleInlayHints, renderFullConfidenceBubble, retractCluster, setBubbleMode as setMode, span, withBubble } from "./bubble.helpers";
 import { reportWithClusters } from "./report.helpers";
 
 const DISMISSIBLE_CLUSTER_ID = "c-dismiss";
 const SHORT_SPAN_LENGTH = 6;
 const FIVE_OCCURRENCE_REPORT = 5;
 const HOVERABLE_DETAIL_LABEL = "ⓘ Details";
-const EXECUTE_INLAY_HINT_PROVIDER = "vscode.executeInlayHintProvider";
 const BUBBLE_PRESENTATION_SETTING = "liveBubble.presentation";
 const COMPACT_PRESENTATION = "compact";
+const DETAIL_EDIT_END_COLUMN = 4;
+const DETAIL_QUERY_END_COLUMN = 8;
 
 suite("LiveBubble render", () => {
   test("inline mode renders the bubble decoration", async () => {
@@ -277,13 +278,10 @@ suite("LiveBubble render", () => {
     const { doc, editor, store } = await openLiveDocument("line one\nline two\n");
     const bubble = new LiveBubble(store, () => undefined);
     try {
-      const range = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 4));
+      const range = span(DETAIL_EDIT_END_COLUMN);
+      const queryRange = span(DETAIL_QUERY_END_COLUMN);
       bubble.render(editor, range, [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_MASS)]);
-      const hints = await vscode.commands.executeCommand<vscode.InlayHint[]>(
-        EXECUTE_INLAY_HINT_PROVIDER,
-        doc.uri,
-        new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 8)),
-      );
+      const hints = await queryBubbleInlayHints(doc, queryRange);
       assert.ok(Array.isArray(hints), "inlay hint query must return an array");
       assert.equal(hints.length, 1, "the edited clone has one hoverable detail cue");
       const hint = hints[0];
@@ -304,11 +302,7 @@ suite("LiveBubble render", () => {
       assert.match(hint.tooltip.value, /command:deslop\.bubble\.dismissCluster/, "the card can be dismissed");
       assert.doesNotMatch(hint.tooltip.value, /structural|jaccard|embedding|pair 1/u, "cluster hover reveals no pair-only evidence");
       bubble.dismiss();
-      const cleared = await vscode.commands.executeCommand<vscode.InlayHint[]>(
-        EXECUTE_INLAY_HINT_PROVIDER,
-        doc.uri,
-        new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 8)),
-      );
+      const cleared = await queryBubbleInlayHints(doc, queryRange);
       assert.deepEqual(cleared, [], "dismissing the bubble removes its hoverable cue");
     } finally {
       bubble.dispose();
@@ -321,11 +315,9 @@ suite("LiveBubble render", () => {
     const { doc, editor, store } = await openLiveDocument("line one\nline two\n");
     const bubble = new LiveBubble(store, () => undefined);
     try {
-      const range = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 4));
-      const queryRange = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 8));
-      const queryHints = () => vscode.commands.executeCommand<vscode.InlayHint[]>(
-        EXECUTE_INLAY_HINT_PROVIDER, doc.uri, queryRange,
-      );
+      const range = span(DETAIL_EDIT_END_COLUMN);
+      const queryRange = span(DETAIL_QUERY_END_COLUMN);
+      const queryHints = () => queryBubbleInlayHints(doc, queryRange);
       bubble.render(editor, range, [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_MASS)]);
       assert.equal((await queryHints())?.length, 1, "Classic starts with the hoverable cue");
       await config.update(BUBBLE_PRESENTATION_SETTING, COMPACT_PRESENTATION, vscode.ConfigurationTarget.Workspace);

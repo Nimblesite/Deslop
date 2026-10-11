@@ -12,6 +12,7 @@ import * as liveBubble from "../../bubble/live";
 import { clusterHoverMarkdown } from "../../clusterHover";
 import { kindTitle, ReportCluster } from "../../types/report";
 import { FIXTURE_KIND, occurrence, wireCluster } from "../cluster.helpers";
+import { assertCanonicalComparison } from "./comparison.helpers";
 
 const IDENTICAL_KIND = "identical";
 
@@ -104,11 +105,7 @@ suite("bubble rendering helpers", () => {
     const text = md.value;
     assert.match(text, /command:deslop.openCluster/);
     assert.match(text, /command:deslop.bubble.dismissCluster/);
-    const compare = text.match(/command:deslop\.compareWithCanonical\?([^)]*)/);
-    assert.ok(compare, "a non-canonical occurrence offers an explicit comparison");
-    const args = JSON.parse(decodeURIComponent(compare[1] ?? "")) as unknown[];
-    assert.equal(args[0], candidate.id, "the comparison keeps the cluster identity");
-    assert.deepEqual(args[1], candidate.occurrences[1], "the comparison names the selected peer range");
+    assertCanonicalComparison(text, candidate);
     assert.doesNotMatch(text, /command:deslop\.comparePair/);
   });
 

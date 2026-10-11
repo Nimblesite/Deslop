@@ -6,6 +6,7 @@ import * as vscode from "vscode";
 import { hoverFor, byteRangeToRange } from "../../decorations/manager";
 import { kindTitle, ReportCluster, ReportOccurrence } from "../../types/report";
 import { FIXTURE_KIND, occurrence, wireCluster } from "../cluster.helpers";
+import { assertCanonicalComparison } from "./comparison.helpers";
 
 function cluster(): ReportCluster {
   return wireCluster({
@@ -40,11 +41,7 @@ suite("decorations helpers", () => {
     assert.match(text, /command:deslop.openCluster/);
     // [VSIX-PAIR-COMPARE] A link must identify the chosen peer range; the
     // canonical endpoint is resolved from the same current cluster.
-    const compare = text.match(/command:deslop\.compareWithCanonical\?([^)]*)/);
-    assert.ok(compare, "the non-canonical row offers an explicit comparison");
-    const args = JSON.parse(decodeURIComponent(compare[1] ?? "")) as unknown[];
-    assert.equal(args[0], cluster().id, "the link retains the cluster identity");
-    assert.deepEqual(args[1], cluster().occurrences[1], "the link selects the exact peer range");
+    assertCanonicalComparison(text, cluster());
     assert.doesNotMatch(text, /command:deslop\.comparePair/);
     // No raw AI data.
     assert.doesNotMatch(text, /Type-/);

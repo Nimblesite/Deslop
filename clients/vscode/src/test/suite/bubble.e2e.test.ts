@@ -4,7 +4,7 @@
 import * as assert from "node:assert/strict";
 import * as path from "node:path";
 import * as vscode from "vscode";
-import { openFixture, sleep, waitFor, activateExtension, deleteRange } from "./helpers";
+import { openFixture, openVisibleCloneFixture, sleep, waitFor, activateExtension, deleteRange } from "./helpers";
 
 const SHIPPING_FILE = "Shipping.cs";
 const SHIPPING_KIND_TITLE = "Nearly identical code";
@@ -43,14 +43,25 @@ interface ExtensionExports {
 suite("live bubble (real LSP)", () => {
   test("editing a real duplicate shows a hoverable classic bubble", async () => {
     const api = await activateExtension();
-    const editor = await openFixture(SHIPPING_FILE);
-    await waitFor(() => api.reportStore?.current.visibleReport?.clusters.find((item) =>
-      item.occurrences.some((occurrence) => path.basename(occurrence.path) === SHIPPING_FILE),
-    ), HOVER_REPORT_TIMEOUT_MS);
+    const { editor, cluster: originalCluster } = await openVisibleCloneFixture(api, SHIPPING_FILE, HOVER_REPORT_TIMEOUT_MS);
     const editAt = new vscode.Position(EDIT_LINE, EDIT_COLUMN);
     const queryRange = editor.document.lineAt(EDIT_LINE).range;
     await editor.edit((builder) => builder.insert(editAt, INSERTED_SPACE));
     try {
+      // [LIVE-OPEN-BUFFERS] [VSIX-STATE-DIRTY] Wait for changed source offsets,
+      // proving this report describes the unsaved buffer rather than disk.
+      const refreshedCluster = await waitFor(() => api.reportStore?.current.report?.clusters.find((item) =>
+        item.id === originalCluster.id && item.occurrences.some((occurrence, index) =>
+          occurrence.end_byte > (originalCluster.occurrences[index]?.end_byte ?? occurrence.end_byte)),
+      ), HOVER_REPORT_TIMEOUT_MS);
+      assert.ok(editor.document.isDirty, "the editor source remains unsaved after analysis");
+      assert.equal(refreshedCluster.kind, originalCluster.kind, "whitespace preserves the clone bucket");
+      assert.equal(refreshedCluster.occurrence_count, SHIPPING_COPY_COUNT, "the unsaved report retains both copies");
+      assert.deepEqual(
+        api.reportStore?.current.visibleReport?.clusters.find((item) => item.id === refreshedCluster.id),
+        refreshedCluster,
+        "fresh unsaved clones must remain visible with the engine's membership, counts, mass and rank",
+      );
       const hint = await waitFor(async () => {
         const hints = await vscode.commands.executeCommand<vscode.InlayHint[]>(
           HINT_PROVIDER_COMMAND, editor.document.uri, queryRange,
@@ -69,10 +80,7 @@ suite("live bubble (real LSP)", () => {
 
   test("hovering over a real clone shows the 0.32.0-style detail card", async () => {
     const api = await activateExtension();
-    const editor = await openFixture(SHIPPING_FILE);
-    const cluster = await waitFor(() => api.reportStore?.current.visibleReport?.clusters.find((item) =>
-      item.occurrences.some((occurrence) => path.basename(occurrence.path) === SHIPPING_FILE),
-    ), HOVER_REPORT_TIMEOUT_MS);
+    const { editor, cluster } = await openVisibleCloneFixture(api, SHIPPING_FILE, HOVER_REPORT_TIMEOUT_MS);
     const occurrence = cluster.occurrences.find((item) => path.basename(item.path) === SHIPPING_FILE);
     assert.ok(occurrence, "the real report must locate a Shipping clone");
     assert.equal(cluster.occurrence_count, SHIPPING_COPY_COUNT, "the engine reports both copies");

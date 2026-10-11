@@ -317,7 +317,8 @@ impl LanguageServer for LspBackend {
             return;
         };
         let text = params.text_document.text;
-        self.apply_session_change(|session| session.open_buffer(&path, text))
+        let version = params.text_document.version;
+        self.apply_buffer_change(&path, version, |session| session.open_buffer(&path, text))
             .await;
     }
 
@@ -327,7 +328,8 @@ impl LanguageServer for LspBackend {
             return;
         };
         let edits = crate::position::buffer_edits(params.content_changes);
-        self.apply_session_change(|session| session.edit_buffer(&path, &edits))
+        let version = params.text_document.version;
+        self.apply_buffer_change(&path, version, |session| session.edit_buffer(&path, &edits))
             .await;
     }
 
@@ -336,7 +338,7 @@ impl LanguageServer for LspBackend {
         let Some(path) = url_to_path(&params.text_document.uri) else {
             return;
         };
-        self.apply_session_change(|session| session.close_buffer(&path))
+        self.apply_session_change(|session| session.close_buffer(&path), None)
             .await;
     }
 

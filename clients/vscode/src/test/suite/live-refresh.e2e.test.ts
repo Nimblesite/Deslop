@@ -11,7 +11,7 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import type { ReportCluster } from "../../types/report";
 
-import { activateExtension, deleteRange, fixtureRoot, openFixture, waitFor } from "./helpers";
+import { activateExtension, deleteRange, fixtureRoot, openVisibleCloneFixture, waitFor } from "./helpers";
 
 const SHIPPING_FILE = "Shipping.cs";
 const REPORT_FOR_RANGE = "deslop/reportForRange";
@@ -98,10 +98,7 @@ suite("live tree refresh", () => {
   test("an unsaved deleted clone is absent from reportForRange", async () => {
     const api = await activateExtension();
     assert.ok(api.client, "the real LSP must be running");
-    const editor = await openFixture(SHIPPING_FILE);
-    const cluster = await waitFor(() => api.reportStore?.current.report?.clusters.find((candidate) =>
-      candidate.occurrences.some((item) => path.basename(item.path) === SHIPPING_FILE),
-    ), REPORT_READY_TIMEOUT_MS);
+    const { editor, cluster } = await openVisibleCloneFixture(api, SHIPPING_FILE, REPORT_READY_TIMEOUT_MS);
     const occurrence = cluster.occurrences.find((item) => path.basename(item.path) === SHIPPING_FILE);
     assert.ok(occurrence, "the first Shipping method is a reported clone");
     const start = editor.document.positionAt(occurrence.start_byte);
