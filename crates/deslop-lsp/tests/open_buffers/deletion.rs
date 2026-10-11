@@ -89,12 +89,14 @@ fn close_deleted_source(session: &mut FixtureSession, uri: &Url) -> Result<()> {
 /// The removed source must disappear from range queries as well as the workspace report.
 fn assert_deleted_range_empty(session: &mut FixtureSession) -> Result<()> {
     let file = session.workspace.path().join(EDITED_FILE);
-    assert!(report_for_range(
-        &mut session.stdin,
-        &mut session.stdout,
-        &file,
-        OCCURRENCE_START,
-    )?
-    .is_empty());
+    assert_eq!(
+        report_for_range(
+            &mut session.stdin,
+            &mut session.stdout,
+            &file,
+            OCCURRENCE_START,
+        )?,
+        Vec::<Value>::new()
+    );
     Ok(())
 }
