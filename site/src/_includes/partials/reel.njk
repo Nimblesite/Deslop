@@ -1,21 +1,49 @@
-{#- The 0.35.0 reel — shared by the en (/) and zh (/zh/) home pages so the
-    markup lives in exactly one place. The files come from _data/reel.json and
-    the section copy from i18n.json (reel.*); the film itself is in English.
-    One reel in two cuts: wide for a desktop, tall for a phone. The page shows
-    the one that fits and fetches nothing until the visitor presses play. -#}
+{# [SITE-HOME-VIDEO] [SITE-ASSET-TYPE] Shared JavaScript motion reel; encoded video is never shipped. #}
 {% set currentLang = lang | default('en') %}
-<section class="showcase" aria-labelledby="reel-title">
+<link rel="stylesheet" href="/assets/css/reel.css">
+<section class="showcase" id="release-reel" aria-labelledby="reel-title">
   <div class="showcase__head">
     <div class="eyebrow-chip"><span>{{ "reel.eyebrow" | t(currentLang) }}</span></div>
     <h2 class="showcase__title" id="reel-title">{{ "reel.title" | t(currentLang) }}</h2>
     <p class="showcase__lede">{{ "reel.lede" | t(currentLang) }} <a href="{{ reel.post | altLangUrl('en', currentLang) }}">{{ "reel.post" | t(currentLang) }}</a></p>
   </div>
-  {% for cut in reel.cuts %}
-  <figure class="showcase__figure reel reel--{{ cut.device }}">
-    <video controls playsinline preload="none" width="{{ cut.width }}" height="{{ cut.height }}" poster="{{ cut.poster }}" aria-label="{{ reel.name }}">
-      <source src="{{ cut.av1 }}" type="{{ reel.av1Type }}">
-      <source src="{{ cut.h264 }}" type="{{ reel.h264Type }}">
-    </video>
-  </figure>
-  {% endfor %}
+  <div class="motion-reel" data-duration="{{ reel.seconds }}" data-position="0">
+    <div class="motion-reel__stage" aria-label="{{ reel.name }}">
+      {% for scene in reel.scenes %}
+      <div class="motion-reel__scene" data-scene="{{ scene.id }}" data-start="{{ scene.start }}" data-end="{{ scene.end }}" aria-hidden="{{ 'false' if loop.first else 'true' }}">
+        {% if scene.id == 'whole' %}
+        <picture>
+          <source media="(max-width: 767.98px)" srcset="{{ reel.mobilePoster }}">
+          <img src="{{ reel.desktopPoster }}" alt="Now it finds the whole copy. An unedited Deslop 0.35.0 report showing the complete duplicate." width="1280" height="720" loading="lazy">
+        </picture>
+        {% elif scene.id == 'partial' %}
+        <h3>It used to<br>stop here.</h3>
+        <div class="motion-reel__card"><span>The old finding began at</span><strong>line 17</strong><div class="motion-reel__scan" aria-hidden="true"></div></div>
+        {% elif scene.id == 'graded' %}
+        <h3>It got graded<br>on real code.</h3>
+        <div class="motion-reel__verdicts"><p>Real copies. <strong>Found.</strong></p><p>Lookalikes. <strong>Rejected.</strong></p><p>Known answers. <strong>Checked.</strong></p></div>
+        {% elif scene.id == 'compare' %}
+        <h3>Don't trust it.<br><em>Check</em> it.</h3>
+        <div class="motion-reel__terminal"><div>deslop --compare</div><pre><span>$</span> deslop --compare
+
+Compare both copies.
+See why they match.</pre></div>
+        {% else %}
+        <div class="motion-reel__mark" aria-hidden="true">DS</div>
+        <h3>Deslop 0.35.0</h3><p>Find duplicate code.</p><p>Stop coding agents from creating more.</p>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    <audio preload="none" src="{{ reel.audio }}"></audio>
+    <div class="motion-reel__controls">
+      <button type="button" data-action="play" data-play-label="{{ 'reel.play' | t(currentLang) }}" data-pause-label="{{ 'reel.pause' | t(currentLang) }}" disabled>{{ 'reel.play' | t(currentLang) }}</button>
+      <button type="button" data-action="restart" disabled>{{ 'reel.restart' | t(currentLang) }}</button>
+      <label><span class="motion-reel__sr">{{ 'reel.position' | t(currentLang) }}</span><input type="range" min="0" max="{{ reel.seconds }}" step="0.1" value="0" disabled></label>
+      <button type="button" data-action="mute" aria-pressed="false" disabled>{{ 'reel.mute' | t(currentLang) }}</button>
+      <output aria-live="polite" data-error-label="{{ 'reel.error' | t(currentLang) }}"></output>
+    </div>
+    <noscript><p>{{ 'reel.noScript' | t(currentLang) }}</p></noscript>
+  </div>
 </section>
+<script type="module" src="/assets/js/reel.js"></script>
