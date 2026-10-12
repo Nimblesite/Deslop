@@ -976,6 +976,8 @@ async fn exercise_embedding_swap(service: &LiveService) -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn embedding_refresh_keeps_latest_report_readable_while_provider_is_blocked() -> Result<()> {
+    const EDITED_FILE: &str = "Alpha.cs";
+    const EMPTY_BUFFER: &str = "";
     let _slot = live_slot().await;
     // [LIVE-EMBEDDING-CONSENT] Selecting a model queues low-priority
     // embedding work. Query surfaces must keep serving the last
@@ -1005,11 +1007,40 @@ async fn embedding_refresh_keeps_latest_report_readable_while_provider_is_blocke
         stale.embedding_provenance.is_none(),
         "stale structural/token report should remain visible while embeddings run"
     );
+    // [LIVE-OPEN-BUFFERS] Change the editor text after the job captured its inputs.
+    assert!(initial.clusters.iter().any(|cluster| cluster
+        .occurrences
+        .iter()
+        .any(|occurrence| occurrence.path.ends_with(EDITED_FILE))));
+    let current = {
+        let session = service.session();
+        let mut guard = session.lock().await;
+        let delta = guard.open_buffer(&tmp.path().join(EDITED_FILE), EMPTY_BUFFER.to_owned())?;
+        assert!(
+            !delta.is_empty(),
+            "the unsaved deletion must change the report"
+        );
+        guard.report()
+    };
+    assert!(current
+        .clusters
+        .iter()
+        .flat_map(|cluster| &cluster.occurrences)
+        .all(|occurrence| !occurrence.path.ends_with(EDITED_FILE)));
     release.send(()).context("release blocking provider")?;
     tokio::time::timeout(Duration::from_secs(5), completed.notified())
         .await
         .context("embedding refresh completion")?;
     let refreshed = service.report_get().await;
+    assert_eq!(
+        refreshed.clusters, current.clusters,
+        "a completed background job must not restore the older editor text"
+    );
+    assert_eq!(
+        serde_json::to_value(&refreshed.metrics)?,
+        serde_json::to_value(&current.metrics)?
+    );
+    assert_eq!(refreshed.files_analysed, current.files_analysed);
     assert_eq!(
         refreshed
             .embedding_provenance

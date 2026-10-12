@@ -6,6 +6,7 @@ import * as vscode from "vscode";
 import { hoverFor, byteRangeToRange } from "../../decorations/manager";
 import { kindTitle, ReportCluster, ReportOccurrence } from "../../types/report";
 import { FIXTURE_KIND, occurrence, wireCluster } from "../cluster.helpers";
+import { assertCanonicalComparison } from "./comparison.helpers";
 
 function cluster(): ReportCluster {
   return wireCluster({
@@ -38,9 +39,9 @@ suite("decorations helpers", () => {
     assert.match(text, /Canonical/, "canonical section must be shown");
     // Action links present.
     assert.match(text, /command:deslop.openCluster/);
-    // [VSIX-PAIR-COMPARE] Decorations cannot supply two endpoints, so no
-    // compare link may render on a decoration.
-    assert.doesNotMatch(text, /command:deslop\.compareWithCanonical/);
+    // [VSIX-PAIR-COMPARE] A link must identify the chosen peer range; the
+    // canonical endpoint is resolved from the same current cluster.
+    assertCanonicalComparison(text, cluster());
     assert.doesNotMatch(text, /command:deslop\.comparePair/);
     // No raw AI data.
     assert.doesNotMatch(text, /Type-/);

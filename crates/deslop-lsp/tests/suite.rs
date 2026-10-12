@@ -59,6 +59,8 @@ mod notifications;
 mod observability_heartbeat;
 #[path = "ollama_fallback.rs"]
 mod ollama_fallback;
+#[path = "open_buffers.rs"]
+mod open_buffers;
 #[path = "state_file_and_ipc.rs"]
 mod state_file_and_ipc;
 #[path = "virtual_document.rs"]

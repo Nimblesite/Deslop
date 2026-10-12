@@ -83,7 +83,8 @@
   max-width: 40rem;
 }
 
-.hero__sublede a {
+.hero__sublede a,
+.showcase__lede a {
   color: var(--on-surface);
   text-decoration: underline;
   text-underline-offset: 3px;

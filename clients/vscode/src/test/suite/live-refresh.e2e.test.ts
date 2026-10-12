@@ -9,8 +9,14 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
+import type { ReportCluster } from "../../types/report";
 
-import { activateExtension, deleteRange, fixtureRoot, waitFor } from "./helpers";
+import { activateExtension, deleteRange, fixtureRoot, openVisibleCloneFixture, waitFor } from "./helpers";
+
+const SHIPPING_FILE = "Shipping.cs";
+const REPORT_FOR_RANGE = "deslop/reportForRange";
+const INSIDE_OCCURRENCE_BYTE = 1;
+const REPORT_READY_TIMEOUT_MS = 15_000;
 
 suite("live tree refresh", () => {
   let fixtureDir: string;
@@ -84,6 +90,38 @@ suite("live tree refresh", () => {
     // Restore to keep other tests deterministic.
     await deleteRange(editor, 0, 0, 1, 0);
     await doc.save();
+  });
+
+  // [LIVE-OPEN-BUFFERS] [VSIX-LIVE-BUBBLE] The LSP must not answer a query
+  // against unsaved editor text with a cluster calculated from the older
+  // bytes still on disk.
+  test("an unsaved deleted clone is absent from reportForRange", async () => {
+    const api = await activateExtension();
+    assert.ok(api.client, "the real LSP must be running");
+    const { editor, cluster } = await openVisibleCloneFixture(api, SHIPPING_FILE, REPORT_READY_TIMEOUT_MS);
+    const occurrence = cluster.occurrences.find((item) => path.basename(item.path) === SHIPPING_FILE);
+    assert.ok(occurrence, "the first Shipping method is a reported clone");
+    const start = editor.document.positionAt(occurrence.start_byte);
+    const end = editor.document.positionAt(occurrence.end_byte);
+    const range = new vscode.Range(start, end);
+    const original = editor.document.getText(range);
+    await editor.edit((builder) => builder.delete(range));
+    try {
+      assert.ok(editor.document.isDirty, "the changed buffer has not been saved");
+      const result = await api.client.sendRequest<ReportCluster[]>(REPORT_FOR_RANGE, {
+        path: editor.document.uri.fsPath,
+        start_byte: occurrence.start_byte + INSIDE_OCCURRENCE_BYTE,
+        end_byte: occurrence.start_byte + INSIDE_OCCURRENCE_BYTE,
+      });
+      assert.equal(
+        result.some((candidate) => candidate.id === cluster.id),
+        false,
+        "a deleted method must not remain a duplicate in the unsaved buffer",
+      );
+    } finally {
+      await editor.edit((builder) => builder.insert(start, original));
+      await editor.document.save();
+    }
   });
 
   // [VSIX-REACTIVITY-TREE] Regression: the LSP watcher previously deduped

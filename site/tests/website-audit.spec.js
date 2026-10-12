@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expectAssetType } from "./helpers/assets.js";
 
 const representativeRoutes = [
   "/",
@@ -48,9 +49,7 @@ test("declares the social image with its actual MIME type", async ({ page }) => 
   // build ships*. Against production it passed only for posts already
   // deployed and failed for every new one, which makes it a deployment
   // check wearing a build check's name.
-  const response = await page.request.get(new URL(socialImage).pathname);
-  expect(response.ok(), socialImage).toBeTruthy();
-  expect(response.headers()["content-type"], socialImage).toContain(socialImageType);
+  await expectAssetType(page, new URL(socialImage).pathname, socialImageType, socialImage);
 });
 
 test("every page's declared social-image type matches the file it points at", async ({ page }) => {

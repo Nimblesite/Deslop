@@ -66,6 +66,19 @@
       "install": "Install",
       "review": "Rate & review"
     },
+    "reel": {
+      "eyebrow": "Deslop 0.35.0 · 21 seconds",
+      "title": "Now it finds the whole copy.",
+      "lede": "We found the copy and missed 8 lines of it. 0.35.0 reports the complete copy, tells a lookalike from a clone, and shows its verdict when you ask.",
+      "post": "How we measure accuracy",
+      "play": "Play animation",
+      "pause": "Pause animation",
+      "restart": "Restart animation",
+      "position": "Animation position",
+      "mute": "Mute soundtrack",
+      "noScript": "Enable JavaScript to play the animation. The opening frame and accuracy article are available here.",
+      "error": "The soundtrack could not play. You can still explore the scenes with the position control."
+    },
     "testimonials": {
       "eyebrow": "Field report",
       "title": "Findings that ship.",
@@ -157,6 +170,19 @@
       "lede": "从 Visual Studio Marketplace 或 Open VSX 安装同一个扩展。",
       "install": "安装",
       "review": "评分与评论"
+    },
+    "reel": {
+      "eyebrow": "Deslop 0.35.0 · 21 秒",
+      "title": "现在它能找到完整副本。",
+      "lede": "我们找到了那段副本，却漏掉了其中 8 行。0.35.0 会报告完整副本，分得清外形相似和真正的克隆，并在你询问时展示它的判定。",
+      "post": "我们如何衡量准确性",
+      "play": "播放动画",
+      "pause": "暂停动画",
+      "restart": "重新开始动画",
+      "position": "动画进度",
+      "mute": "静音",
+      "noScript": "启用 JavaScript 即可播放动画。首帧和准确性文章仍可查看。",
+      "error": "音轨无法播放。您仍可使用进度控制浏览各个场景。"
     },
     "testimonials": {
       "eyebrow": "实地反馈",

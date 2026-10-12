@@ -565,7 +565,16 @@
             "ghost"
           ],
           "default": "inline",
-          "description": "Bubble layout: inline decoration + inlay hint, or a phantom ghost line below the range."
+          "description": "Bubble layout: inline decoration + inlay hint, or a ghost-line decoration below the range."
+        },
+        "deslop.liveBubble.presentation": {
+          "type": "string",
+          "enum": [
+            "classic",
+            "compact"
+          ],
+          "default": "classic",
+          "description": "Bubble detail: Classic restores the hoverable detail cue and full card; Compact keeps the smaller 0.36.0 callout and brief card."
         },
         "deslop.diagnostics.enabled": {
           "type": "boolean",

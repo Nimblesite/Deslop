@@ -6,7 +6,7 @@
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
-import { LiveBubble } from "../../bubble/live";
+import { LiveBubble, REPORT_FOR_RANGE_METHOD } from "../../bubble/live";
 import {
   capturingEditor,
   openLiveDocument,
@@ -38,10 +38,10 @@ suite("LiveBubble onEdit path", () => {
       await new Promise<void>((resolve) => {
         setTimeout(resolve, 500);
       });
-      const duplicateProbe = requests.find((r) => r.method === "deslop/duplicatesFindSimilar");
+      const duplicateProbe = requests.find((r) => r.method === REPORT_FOR_RANGE_METHOD);
       assert.ok(
         duplicateProbe,
-        `probe must dispatch duplicatesFindSimilar, got ${JSON.stringify(requests)}`,
+        `probe must dispatch ${REPORT_FOR_RANGE_METHOD}, got ${JSON.stringify(requests)}`,
       );
       const params = duplicateProbe.params as {
         path: string;
