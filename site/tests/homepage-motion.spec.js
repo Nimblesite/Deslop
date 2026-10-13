@@ -55,6 +55,22 @@ async function expectHeld(page, reel, seconds) {
   expect(await reelPosition(reel)).toBeCloseTo(seconds, STILL_DIGITS);
 }
 
+async function expectRunning(page, reel, seconds) {
+  await expect(reel).toHaveAttribute("data-playing", "true");
+  await page.clock.runFor(HOLD_MILLISECONDS);
+  expect(await reelPosition(reel)).toBeCloseTo(seconds + HOLD_SECONDS, FRAME_DIGITS);
+}
+
+async function expectPauseAndResume(page, reel, control) {
+  await control.click();
+  await expect(control).toHaveAccessibleName(PLAY);
+  const pausedAt = await reelPosition(reel);
+  await expectHeld(page, reel, pausedAt);
+  await control.click();
+  await expect(control).toHaveAccessibleName(PAUSE);
+  await expectRunning(page, reel, pausedAt);
+}
+
 test("the homepage reel plays every headline in order, loops and pauses from one faint icon", async ({ page }) => {
   await page.setViewportSize(DESKTOP);
   const reel = await openMotion(page);
@@ -70,15 +86,7 @@ test("the homepage reel plays every headline in order, loops and pauses from one
     await advanceTo(page, reel, scene.at);
     await expectScene(reel, scene);
   }
-  await control.click();
-  await expect(control).toHaveAccessibleName(PLAY);
-  const pausedAt = await reelPosition(reel);
-  await expectHeld(page, reel, pausedAt);
-  await control.click();
-  await expect(reel).toHaveAttribute("data-playing", "true");
-  await expect(control).toHaveAccessibleName(PAUSE);
-  await page.clock.runFor(HOLD_MILLISECONDS);
-  expect(await reelPosition(reel)).toBeCloseTo(pausedAt + HOLD_SECONDS, FRAME_DIGITS);
+  await expectPauseAndResume(page, reel, control);
 });
 
 test("each scene rises into place as it fades in", async ({ page }) => {
@@ -118,9 +126,7 @@ test("the reel stops off screen and in a hidden tab, then resumes where it stopp
   await setTabHidden(page, true);
   await expectHeld(page, reel, parkedAt);
   await setTabHidden(page, false);
-  await expect(reel).toHaveAttribute("data-playing", "true");
-  await page.clock.runFor(HOLD_MILLISECONDS);
-  expect(await reelPosition(reel)).toBeCloseTo(parkedAt + HOLD_SECONDS, FRAME_DIGITS);
+  await expectRunning(page, reel, parkedAt);
 });
 
 test("the dark reel remains readable in both website themes", async ({ page }) => {
