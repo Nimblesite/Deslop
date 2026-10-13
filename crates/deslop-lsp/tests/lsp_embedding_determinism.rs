@@ -63,7 +63,7 @@ fn ledger_workspace() -> Result<tempfile::TempDir> {
     Ok(workspace)
 }
 
-fn assert_model_selection(
+pub(super) fn assert_model_selection(
     stdin: &mut ChildStdin,
     stdout: &mut BufReader<ChildStdout>,
     provider_id: &str,

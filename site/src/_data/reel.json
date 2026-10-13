@@ -4,24 +4,36 @@
   "post": "/blog/duplicate-code-detection-accuracy/",
   "uploadDate": "2026-09-29",
   "duration": "PT21S",
-  "av1Type": "video/mp4; codecs=av01.0.08M.08",
-  "h264Type": "video/mp4",
-  "cuts": [
+  "seconds": 21,
+  "audio": "/assets/audio/whole-copy.m4a",
+  "audioType": "audio/mp4",
+  "desktopPoster": "/assets/video/whole-copy-desktop-poster.jpg",
+  "mobilePoster": "/assets/video/whole-copy-mobile-poster.jpg",
+  "scenes": [
     {
-      "device": "desktop",
-      "width": 1280,
-      "height": 720,
-      "av1": "/assets/video/whole-copy-desktop-av1.mp4",
-      "h264": "/assets/video/whole-copy-desktop.mp4",
-      "poster": "/assets/video/whole-copy-desktop-poster.jpg"
+      "id": "whole",
+      "start": 0,
+      "end": 3
     },
     {
-      "device": "mobile",
-      "width": 720,
-      "height": 1280,
-      "av1": "/assets/video/whole-copy-mobile-av1.mp4",
-      "h264": "/assets/video/whole-copy-mobile.mp4",
-      "poster": "/assets/video/whole-copy-mobile-poster.jpg"
+      "id": "partial",
+      "start": 3,
+      "end": 7
+    },
+    {
+      "id": "graded",
+      "start": 7,
+      "end": 14
+    },
+    {
+      "id": "compare",
+      "start": 14,
+      "end": 18
+    },
+    {
+      "id": "brand",
+      "start": 18,
+      "end": 21
     }
   ]
 }

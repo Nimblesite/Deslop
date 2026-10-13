@@ -1,13 +1,13 @@
 //! `tower-lsp` backend wiring `Deslop` into LSP ([LSP-CAPABILITIES]).
 use std::{
     path::{Path, PathBuf},
-    sync::{atomic::AtomicBool, Arc, RwLock},
+    sync::{Arc, RwLock},
 };
 
 use deslop_core::{
     live::{
-        read_report_snapshot, report_for_file_in, ChangeSummary, EmbeddingProgress,
-        EmbeddingProgressReporter, LiveApi, LiveError, LiveService, ReportChangedNotification,
+        read_report_snapshot, report_for_file_in, AnalysisState, EmbeddingProgress,
+        EmbeddingProgressReporter, LiveApi, LiveService,
     },
     report::Report,
 };
@@ -29,10 +29,8 @@ use tower_lsp::{
 };
 
 use crate::{
-    code_action, code_lens, commands,
-    diagnostic_session::DiagnosticSession,
-    notifications::{EmbeddingProgressNotification, ReportChangedLspNotification},
-    observability::Observability,
+    code_action, code_lens, commands, diagnostic_session::DiagnosticSession,
+    notifications::EmbeddingProgressNotification, observability::Observability,
 };
 
 /// User-visible server name advertised in `initialize`.
@@ -41,6 +39,8 @@ pub const SERVER_NAME: &str = "deslop-lsp";
 /// Diagnostic `source` + provider `identifier` surfaced to clients.
 pub const DIAGNOSTIC_SOURCE: &str = "deslop";
 
+#[path = "backend_changes.rs"]
+mod changes;
 #[path = "backend_embedding.rs"]
 mod embedding;
 use embedding::resolve_startup_provider;
@@ -79,12 +79,9 @@ pub struct LspBackend {
     /// held by an in-flight `apply_changes` pass, so Deslop can never
     /// freeze the editor ([LSP-NON-INTERFERENCE]).
     report_snapshot: Arc<RwLock<Arc<Report>>>,
-    /// True while the cache-seed cold pass is still running. Read in
-    /// `initialized()` to push the correct startup analysis state to a
-    /// late-connecting editor, closing the race where the cold pass's
-    /// `running`/`idle` broadcasts predate the VSIX notification
-    /// handlers ([VSIX reactivity]).
-    cold_pass_active: Arc<AtomicBool>,
+    /// Retains the cold pass state for `initialized()`, including refresh errors
+    /// that predate the editor's notification handlers ([LIVE-CACHE-SEED-READINESS]).
+    startup_state: Arc<Mutex<AnalysisState>>,
     /// Shared pull/push diagnostic configuration and publication state.
     diagnostics: Arc<DiagnosticSession>,
 }
@@ -162,7 +159,7 @@ impl LspBackend {
         // pass runs; a fresh session has already finished its blocking
         // scan. `initialized()` reads this to report the right startup
         // state to the editor ([VSIX reactivity]).
-        let cold_pass_active = Arc::new(AtomicBool::new(seeded_from_cache));
+        let startup_state = crate::cache_seed::new_startup_state(seeded_from_cache);
         if seeded_from_cache {
             crate::cache_seed::spawn_refresh(crate::cache_seed::RefreshTask {
                 session: Arc::clone(&session),
@@ -175,7 +172,7 @@ impl LspBackend {
                 provider,
                 mode: resolved_mode,
                 report_changed,
-                cold_pass_active: Arc::clone(&cold_pass_active),
+                startup_state: Arc::clone(&startup_state),
             });
         }
         Ok(Self {
@@ -187,7 +184,7 @@ impl LspBackend {
             observability,
             workspace_root: root,
             report_snapshot,
-            cold_pass_active,
+            startup_state,
             diagnostics,
         })
     }
@@ -217,49 +214,6 @@ impl LspBackend {
     #[must_use]
     pub fn workspace_root(&self) -> &Path {
         &self.workspace_root
-    }
-
-    /// Re-runs analysis for changed paths when VS Code sends file
-    /// lifecycle notifications.
-    async fn apply_changed_paths(&self, paths: &[PathBuf]) {
-        if paths.is_empty() {
-            return;
-        }
-        match self.changed_paths_notification(paths).await {
-            Ok(Some(notification)) => {
-                self.client
-                    .send_notification::<ReportChangedLspNotification>(notification)
-                    .await;
-                self.diagnostics.refresh(&self.client).await;
-            }
-            Ok(None) => {}
-            Err(error) => tracing::error!(%error, "failed to apply changed paths"),
-        }
-    }
-
-    /// Applies paths and converts a non-empty delta into an LSP notification.
-    async fn changed_paths_notification(
-        &self,
-        paths: &[PathBuf],
-    ) -> Result<Option<ReportChangedNotification>, LiveError> {
-        let session = self.service.session();
-        let (previous_generation, previous_report, delta) = {
-            let mut guard = session.lock().await;
-            let previous_generation = guard.generation();
-            let previous_report = guard.report();
-            let delta = guard.apply_changes(paths)?;
-            (previous_generation, previous_report, delta)
-        };
-        self.service
-            .remember_snapshot(previous_generation, previous_report)
-            .await;
-        if delta.is_empty() {
-            return Ok(None);
-        }
-        Ok(Some(ReportChangedNotification {
-            generation: delta.to_generation,
-            summary: ChangeSummary::from_delta(&delta),
-        }))
     }
 }
 
@@ -327,7 +281,7 @@ impl LanguageServer for LspBackend {
         // notification handlers are registered, so the panel reflects an
         // in-flight cold pass (or a settled scan) without a window reload
         // ([VSIX reactivity]).
-        crate::cache_seed::push_initial_state(&self.client, &self.cold_pass_active).await;
+        crate::cache_seed::push_initial_state(&self.client, &self.startup_state).await;
         // [CI-DESLOP]: the threshold is a CLI-only gate; its sole
         // live-surface effect is one non-blocking warning when the budget
         // is smashed. Nothing else in the editor changes.
@@ -352,21 +306,40 @@ impl LanguageServer for LspBackend {
         self.apply_changed_paths(&paths).await;
     }
 
+    // [LIVE-OPEN-BUFFERS] From `didOpen` until `didClose` the editor's
+    // text, not the file on disk, is what the session analyses for this
+    // path. Every edit is applied to that text and re-analysed at once,
+    // so the report never claims a clone the user has already deleted in
+    // an unsaved buffer.
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
         self.observability.record_handler("did_open");
-        if let Some(path) = url_to_path(&params.text_document.uri) {
-            self.apply_changed_paths(&[path]).await;
-        }
+        let Some(path) = url_to_path(&params.text_document.uri) else {
+            return;
+        };
+        let text = params.text_document.text;
+        let version = params.text_document.version;
+        self.apply_buffer_change(&path, version, |session| session.open_buffer(&path, text))
+            .await;
     }
-
-    async fn did_close(&self, _params: DidCloseTextDocumentParams) {}
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
         self.observability.record_handler("did_change");
         let Some(path) = url_to_path(&params.text_document.uri) else {
             return;
         };
-        self.apply_changed_paths(&[path]).await;
+        let edits = crate::position::buffer_edits(params.content_changes);
+        let version = params.text_document.version;
+        self.apply_buffer_change(&path, version, |session| session.edit_buffer(&path, &edits))
+            .await;
+    }
+
+    async fn did_close(&self, params: DidCloseTextDocumentParams) {
+        self.observability.record_handler("did_close");
+        let Some(path) = url_to_path(&params.text_document.uri) else {
+            return;
+        };
+        self.apply_session_change(|session| session.close_buffer(&path), None)
+            .await;
     }
 
     async fn diagnostic(

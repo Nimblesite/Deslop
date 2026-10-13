@@ -2,7 +2,7 @@
 //!
 //! Every figure printed here was computed in [`super`] or [`super::gate`].
 //! This module formats; it never derives a number, so the document and the
-//! machine-readable `score.json` beside it can never disagree.
+//! machine-readable JSON scorecard beside it can never disagree.
 //!
 //! Every table reads **side by side**. The corpus standing is one measure per
 //! row with a column per engine; each per-repository table is one repository
@@ -11,19 +11,24 @@
 //! reader has to reassemble by eye.
 
 mod cells;
+mod checks;
+mod cost;
 mod coverage;
+mod verdict;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use cells::{
-    counted, cpu, header, megabytes, row, score_cell, seconds, signed, signed_amount,
-    signed_fraction, ABSENT,
-};
+use cells::{counted, header, row, score_cell, signed, signed_fraction, ABSENT};
+use checks::checks_section;
+use cost::{cost_section, standing_cost};
 use coverage::{coverage_section, coverage_value};
 use serde::Serialize;
+use verdict::verdict_banner;
 
 use super::{
+    checks::CheckOutcome,
     gate::{Breach, CorpusChange, CorpusTotals, Degradation, Thresholds},
+    verdict::Verdict,
     RepoScore, RunCost,
 };
 
@@ -46,13 +51,33 @@ pub struct TargetScore {
     pub language: String,
     /// The commit scanned and judged.
     pub sha: String,
-    /// Score per engine id.
+    /// Whether a clone register judged this repository at the scanned commit.
+    /// An unjudged repository is still reported: its cost and its curated
+    /// checks are evidence, and leaving it out would let a partial run read as
+    /// a smaller, cleaner one.
+    pub registered: bool,
+    /// Register score per engine id; empty when there is no register.
     pub scores: BTreeMap<String, RepoScore>,
+    /// Clusters each engine's report published, per engine id.
+    pub clusters: BTreeMap<String, usize>,
     /// Measured cost per engine id.
     pub costs: BTreeMap<String, RunCost>,
+    /// Curated corpus checks per engine id, present when a corpus test ran them.
+    pub checks: BTreeMap<String, CheckOutcome>,
     /// Whether the last engine lost ground against the first. Absent unless
     /// exactly two engines ran.
     pub degradation: Option<Degradation>,
+}
+
+impl TargetScore {
+    /// Whether `engine_id` scanned this repository at all — including a scan
+    /// that crashed, which has a cost and a check outcome but no report.
+    #[must_use]
+    pub fn ran(&self, engine_id: &str) -> bool {
+        self.clusters.contains_key(engine_id)
+            || self.costs.contains_key(engine_id)
+            || self.checks.contains_key(engine_id)
+    }
 }
 
 /// A whole scored run: every engine, every target, the totals and the gate.
@@ -71,8 +96,11 @@ pub struct Scorecard {
     pub change: Option<CorpusChange>,
     /// The gate each repository was held to.
     pub thresholds: BTreeMap<String, Thresholds>,
-    /// Every threshold the last engine breached. Empty means the run passes.
+    /// Every threshold the last engine breached. Empty means the register
+    /// gate passes.
     pub breaches: Vec<Breach>,
+    /// Whether the run passed, and every reason it did not.
+    pub verdict: Verdict,
 }
 
 /// One cell per engine, in run order, out of a map keyed by engine id. Every
@@ -135,36 +163,17 @@ fn standing_accuracy(card: &Scorecard) -> Vec<String> {
             &|totals| totals.false_positives.to_string(),
             moved.map(|moved| signed(moved.false_positives)),
         ),
-    ]
-}
-
-/// The cost rows of the corpus standing — description, never scored.
-fn standing_cost(card: &Scorecard) -> Vec<String> {
-    let moved = card.change.as_ref();
-    vec![
         standing_row(
             card,
-            "clusters",
-            &|totals| totals.clusters_total.to_string(),
-            moved.map(|moved| signed(moved.clusters_total)),
+            "curated checks passed",
+            &|totals| format!("{}/{}", totals.checks_passed, totals.checks_evaluated),
+            moved.map(|_| ABSENT.to_owned()),
         ),
         standing_row(
             card,
-            "wall",
-            &|totals| totals.elapsed_ms.map_or_else(|| ABSENT.to_owned(), seconds),
-            moved.map(|moved| signed_amount(moved.elapsed_ms, "ms")),
-        ),
-        standing_row(
-            card,
-            "CPU",
-            &|totals| cpu(totals.cpu_seconds),
-            moved.map(|moved| signed_fraction(moved.cpu_seconds, "s")),
-        ),
-        standing_row(
-            card,
-            "peak RSS",
-            &|totals| megabytes(totals.peak_rss_mb),
-            moved.map(|moved| signed_amount(moved.peak_rss_mb, "MB")),
+            "new curated check failures",
+            &|totals| totals.checks_new_failures.to_string(),
+            moved.map(|_| ABSENT.to_owned()),
         ),
     ]
 }
@@ -179,6 +188,37 @@ fn standing_coverage(card: &Scorecard) -> String {
     )
 }
 
+/// One titled table: the heading, what the table means, its header and its
+/// rows. Every section of the scorecard that is a single table is built here,
+/// so no two sections can lay out a heading, an intro or a header differently.
+fn table_section(
+    title: &str,
+    intro: &str,
+    columns: &[String],
+    rows: impl IntoIterator<Item = String>,
+) -> Vec<String> {
+    let mut lines = vec![
+        title.to_owned(),
+        String::new(),
+        intro.to_owned(),
+        String::new(),
+    ];
+    lines.extend(header(columns));
+    lines.extend(rows);
+    lines.push(String::new());
+    lines
+}
+
+/// What the corpus standing means, stated above it.
+const TOTALS_INTRO: &str = "Score is `correct / judged` over every judged pair in the corpus. \
+     Curated checks are the `corpus/<name>.json` assertions a corpus test evaluated. Each \
+     engine has its own column, so every measure reads across one row. Matched IN coverage \
+     is covered / judged lines among reported CLEARLY IN pairs; missed and CLEARLY OUT pairs \
+     are excluded. Coverage, clusters, wall time, CPU and memory are description — reported \
+     beside the score and never folded into it or its gate. Cost totals cover every \
+     repository scanned: wall and CPU time are summed, and each peak is the largest single \
+     scan's.";
+
 /// The corpus standing: one measure per row, one column per engine.
 fn totals_section(card: &Scorecard) -> Vec<String> {
     let mut columns = vec!["measure".to_owned()];
@@ -190,23 +230,10 @@ fn totals_section(card: &Scorecard) -> Vec<String> {
     if card.change.is_some() {
         columns.push("change".to_owned());
     }
-    let mut lines = vec![
-        "## Corpus standing".to_owned(),
-        String::new(),
-        "Score is `correct / judged` over every judged pair in the corpus. Each engine \
-         has its own column, so every measure reads across one row. Matched IN coverage \
-         is covered / judged lines among reported CLEARLY IN pairs; missed and CLEARLY OUT \
-         pairs are excluded. Coverage, clusters, wall time and memory are description — \
-         reported beside the score and never folded into it or its gate."
-            .to_owned(),
-        String::new(),
-    ];
-    lines.extend(header(&columns));
-    lines.extend(standing_accuracy(card));
-    lines.push(standing_coverage(card));
-    lines.extend(standing_cost(card));
-    lines.push(String::new());
-    lines
+    let mut rows = standing_accuracy(card);
+    rows.push(standing_coverage(card));
+    rows.extend(standing_cost(card));
+    table_section("## Corpus standing", TOTALS_INTRO, &columns, rows)
 }
 
 /// One header cell per engine for a measure: the measure, then the engine id.
@@ -220,6 +247,9 @@ fn measure_headers(card: &Scorecard, measure: &str) -> Vec<String> {
 /// What the register judged for this repository. The register is the same
 /// document for every engine, so it is stated once rather than per column.
 fn judged_cell(target: &TargetScore) -> String {
+    if !target.registered {
+        return "no register".to_owned();
+    }
     target.scores.values().next().map_or_else(
         || ABSENT.to_owned(),
         |score| {
@@ -276,6 +306,12 @@ fn accuracy_row(card: &Scorecard, target: &TargetScore) -> String {
     row(&cells)
 }
 
+/// What the per-repository accuracy table means, stated above it.
+const ACCURACY_INTRO: &str = "One row per repository, one column per engine, so the two runs \
+     sit beside each other. `IN found` is the CLEARLY IN pairs the engine reported; `OUT \
+     absent` the CLEARLY OUT pairs it correctly stayed silent on. The last column says \
+     whether a defect is **new** against the first engine or **standing** in both.";
+
 /// The per-repository accuracy table.
 fn accuracy_section(card: &Scorecard) -> Vec<String> {
     let mut columns = vec!["repository".to_owned(), "judged".to_owned()];
@@ -283,63 +319,18 @@ fn accuracy_section(card: &Scorecard) -> Vec<String> {
         columns.extend(measure_headers(card, measure));
     }
     columns.push("defects".to_owned());
-    let mut lines = vec![
-        "## Per repository — accuracy".to_owned(),
-        String::new(),
-        "One row per repository, one column per engine, so the two runs sit beside each \
-         other. `IN found` is the CLEARLY IN pairs the engine reported; `OUT absent` the \
-         CLEARLY OUT pairs it correctly stayed silent on. The last column says whether a \
-         defect is **new** against the first engine or **standing** in both."
-            .to_owned(),
-        String::new(),
-    ];
-    lines.extend(header(&columns));
-    lines.extend(card.targets.iter().map(|target| accuracy_row(card, target)));
-    lines.push(String::new());
-    lines
-}
-
-/// One cost row: the repository, then every engine's cost side by side.
-fn cost_row(card: &Scorecard, target: &TargetScore) -> String {
-    let mut cells = vec![repo_cell(target)];
-    cells.extend(engine_cells(card, &target.scores, &|score| {
-        score.clusters_total.to_string()
-    }));
-    cells.extend(engine_cells(card, &target.costs, &|cost| {
-        seconds(cost.elapsed_ms)
-    }));
-    cells.extend(engine_cells(card, &target.costs, &|cost| {
-        megabytes(cost.peak_rss_mb)
-    }));
-    cells.extend(engine_cells(card, &target.costs, &|cost| {
-        cpu(cost.cpu_seconds)
-    }));
-    row(&cells)
-}
-
-/// The per-repository cost table.
-fn cost_section(card: &Scorecard) -> Vec<String> {
-    let mut columns = vec!["repository".to_owned()];
-    for measure in ["clusters", "wall", "peak", "CPU"] {
-        columns.extend(measure_headers(card, measure));
-    }
-    let mut lines = vec![
-        "## Per repository — cost".to_owned(),
-        String::new(),
-        "Description, never scored. Reported beside the accuracy table so a change in \
-         cost can never be mistaken for a change in what the engine found."
-            .to_owned(),
-        String::new(),
-    ];
-    lines.extend(header(&columns));
-    lines.extend(card.targets.iter().map(|target| cost_row(card, target)));
-    lines.push(String::new());
-    lines
+    let rows = card.targets.iter().map(|target| accuracy_row(card, target));
+    table_section(
+        "## Per repository — accuracy",
+        ACCURACY_INTRO,
+        &columns,
+        rows,
+    )
 }
 
 /// The gate: what each repository must clear, and anything it did not.
 fn gate_section(card: &Scorecard) -> Vec<String> {
-    let mut lines = vec!["## Gate".to_owned(), String::new()];
+    let mut lines = vec!["## Register gate".to_owned(), String::new()];
     lines.extend(header(
         &["repository", "max false neg", "max false pos"].map(ToOwned::to_owned),
     ));
@@ -355,8 +346,18 @@ fn gate_section(card: &Scorecard) -> Vec<String> {
     lines
 }
 
+/// What the gate and the defect list say when no repository in the run has a
+/// clone register: nothing was judged, which is not the same as nothing wrong.
+const NO_REGISTER_GATE: &str = "**No register gate** — no repository in this run has a clone \
+                                register, so nothing was scored against one.";
+/// See [`NO_REGISTER_GATE`].
+const NO_JUDGED_PAIRS: &str = "No judged pairs — no repository in this run has a clone register.";
+
 /// The verdict, stated in words rather than left to the reader.
 fn breach_lines(card: &Scorecard) -> Vec<String> {
+    if card.thresholds.is_empty() {
+        return vec![NO_REGISTER_GATE.to_owned(), String::new()];
+    }
     if card.breaches.is_empty() {
         return vec![
             "**PASS** — every scored repository is inside its gate.".to_owned(),
@@ -383,35 +384,50 @@ fn defects_section(card: &Scorecard) -> Vec<String> {
     let Some(engine) = card.engines.last() else {
         return Vec::new();
     };
+    let judged = card
+        .targets
+        .iter()
+        .any(|target| target.scores.contains_key(&engine.id));
+    let defects = defect_lines(card, &engine.id);
+    let verdict = match (judged, defects.is_empty()) {
+        (false, _) => vec![NO_JUDGED_PAIRS.to_owned()],
+        (true, true) => vec!["None. Every judged pair is answered correctly.".to_owned()],
+        (true, false) => defects,
+    };
     let mut lines = vec![
         format!("## Judged pairs `{}` gets wrong", engine.label),
         String::new(),
     ];
-    let mut any = false;
-    for target in &card.targets {
-        let Some(score) = target.scores.get(&engine.id) else {
-            continue;
-        };
-        for entry in score.entries.iter().filter(|entry| !entry.correct) {
-            any = true;
-            let kind = if entry.is_false_negative() {
-                "FALSE NEGATIVE"
-            } else {
-                "FALSE POSITIVE"
-            };
-            lines.push(format!(
-                "- **{kind}** {} — `{}`\n  - {}",
-                target.name,
-                entry.occurrences.join("` + `"),
-                entry.why
-            ));
-        }
-    }
-    if !any {
-        lines.push("None. Every judged pair is answered correctly.".to_owned());
-    }
+    lines.extend(verdict);
     lines.push(String::new());
     lines
+}
+
+/// One line per judged pair `engine_id` answered wrongly.
+fn defect_lines(card: &Scorecard, engine_id: &str) -> Vec<String> {
+    card.targets
+        .iter()
+        .filter_map(|target| Some((target, target.scores.get(engine_id)?)))
+        .flat_map(|(target, score)| {
+            score
+                .entries
+                .iter()
+                .filter(|entry| !entry.correct)
+                .map(move |entry| {
+                    let kind = if entry.is_false_negative() {
+                        "FALSE NEGATIVE"
+                    } else {
+                        "FALSE POSITIVE"
+                    };
+                    format!(
+                        "- **{kind}** {} — `{}`\n  - {}",
+                        target.name,
+                        entry.occurrences.join("` + `"),
+                        entry.why
+                    )
+                })
+        })
+        .collect()
 }
 
 /// The scope of the run, stated before any figure: how many repositories were
@@ -436,9 +452,8 @@ fn scope_line(card: &Scorecard) -> String {
 /// Renders the whole scorecard.
 #[must_use]
 pub fn scorecard(card: &Scorecard) -> String {
-    let mut lines = vec![
-        "# Corpus accuracy scorecard".to_owned(),
-        String::new(),
+    let mut lines = verdict_banner(card);
+    lines.extend([
         format!("Generated {}.", card.generated_at),
         String::new(),
         scope_line(card),
@@ -446,12 +461,14 @@ pub fn scorecard(card: &Scorecard) -> String {
         "Scored against the clone registers in `corpus/register/` — independent ground truth \
          judged in isolation from this codebase (`docs/specs/corpus.md` [CORPUS-REGISTER]). \
          A CLEARLY IN nobody reports is a **false negative**; a CLEARLY OUT that gets \
-         reported is a **false positive**. Both are bugs."
+         reported is a **false positive**. Both are bugs. A repository no register judges \
+         is still listed, with its curated checks and its cost."
             .to_owned(),
         String::new(),
-    ];
+    ]);
     lines.extend(totals_section(card));
     lines.extend(accuracy_section(card));
+    lines.extend(checks_section(card));
     lines.extend(coverage_section(card));
     lines.extend(cost_section(card));
     lines.extend(gate_section(card));

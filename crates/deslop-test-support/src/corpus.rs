@@ -12,20 +12,20 @@
 //! target to run, never a silent skip.
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
     ffi::OsString,
     fs,
     path::{Path, PathBuf},
-    process::{Command, Output, Stdio},
-    time::{Duration, Instant},
+    process::Output,
 };
 
 use anyhow::{anyhow, Context, Result};
 use serde_json::Value;
 
-/// Environment variable that switches the suite from strict mode (any failure
-/// fails the test) to baseline mode (only *new* failures fail).
-pub const BASELINE_ENV: &str = "DESLOP_CORPUS_BASELINE";
+use crate::corpus_measure::{measured_run, measurement, ProcessCost};
+
+mod baseline;
+
+pub use baseline::{baseline_mode, classify, Baseline, BASELINE_ENV};
 
 /// [CORPUS-PIN] The one list naming the files under `corpus/` and
 /// `corpus/register/` that describe no single upstream repository, so no
@@ -85,16 +85,6 @@ pub const OCCURRENCE_COUNT: &str = "occurrence_count";
 /// disk and in a log line.
 pub const SHORT_SHA_LENGTH: usize = 12;
 
-/// `/usr/bin/time` flag that reports peak resident set size. BSD (macOS)
-/// spells it `-l`; GNU (Linux, which is what the scheduled corpus workflow
-/// runs on) has no `-l` at all and rejects the invocation outright, so a
-/// hard-coded `-l` would kill every scan before a single check ran.
-const PEAK_RSS_FLAG: &str = if cfg!(target_os = "macos") {
-    "-l"
-} else {
-    "-v"
-};
-
 /// One failed check, keyed by a rank-independent id.
 ///
 /// The id must not embed a cluster rank or count. #301 makes ranks move
@@ -118,146 +108,15 @@ impl Failure {
     }
 }
 
-/// [CORPUS-BASELINE] The set of checks already known to fail, per repository.
-///
-/// This is a ratchet, not an excuse: entries record defects that already have
-/// a tracked issue, so CI reports them without blocking. Anything not listed
-/// is a regression and fails even in baseline mode.
-#[derive(Debug, Default)]
-pub struct Baseline {
-    /// Check ids already known to fail, keyed by repository name.
-    known: BTreeMap<String, BTreeSet<String>>,
-}
-
-impl Baseline {
-    /// Loads `corpus/known-failures.json`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error when the file exists but is not valid JSON.
-    pub fn load() -> Result<Self> {
-        let path = repo_root().join("corpus").join("known-failures.json");
-        if !path.exists() {
-            return Ok(Self::default());
-        }
-        let parsed: Value = crate::read_json(&path)?;
-        let known = parsed
-            .get("known_failures")
-            .and_then(Value::as_object)
-            .map(|entries| {
-                entries
-                    .iter()
-                    .map(|(repo, checks)| {
-                        let checks = checks
-                            .as_array()
-                            .map(|list| {
-                                list.iter()
-                                    .filter_map(Value::as_str)
-                                    .map(ToOwned::to_owned)
-                                    .collect()
-                            })
-                            .unwrap_or_default();
-                        (repo.clone(), checks)
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-        Ok(Self { known })
-    }
-
-    /// Checks recorded as already failing for `repo`.
-    #[must_use]
-    pub fn known_for(&self, repo: &str) -> BTreeSet<String> {
-        self.known.get(repo).cloned().unwrap_or_default()
-    }
-}
-
-/// True when the suite should report known failures instead of failing on them.
-#[must_use]
-pub fn baseline_mode() -> bool {
-    std::env::var(BASELINE_ENV).is_ok_and(|value| value != "0" && !value.is_empty())
-}
-
-/// Prints every observed failure, classified against the baseline, and returns
-/// the failures that should fail the test.
-///
-/// In strict mode (the default, and what `make test-corpus` runs locally) that
-/// is all of them. In baseline mode it is only the ones not already recorded.
-/// Checks in the baseline that did *not* fire are reported as possibly fixed
-/// but never fail a run — with #301 outstanding, a lucky pass is not proof.
-/// `evaluated` names the checks this caller actually ran. It is required
-/// because a repository's checks are split across more than one test: the
-/// determinism gate cannot observe `memory`, and the main gate cannot observe
-/// `determinism`. Without it, each test would report the other's baseline
-/// entries as possibly fixed while they were still failing elsewhere.
-#[must_use]
-pub fn classify(
-    repo: &str,
-    evaluated: &[&str],
-    observed: &[Failure],
-    baseline: &Baseline,
-) -> Vec<Failure> {
-    let known = baseline.known_for(repo);
-    let (fresh, carried): (Vec<Failure>, Vec<Failure>) = observed
-        .iter()
-        .cloned()
-        .partition(|failure| !known.contains(&failure.check));
-
-    print_failures("[KNOWN] ", repo, &carried);
-    print_failures("[NEW]   ", repo, &fresh);
-    print_possibly_fixed(repo, evaluated, observed, &known);
-
-    if baseline_mode() {
-        fresh
-    } else {
-        observed.to_vec()
-    }
-}
-
-/// Prints each failure under a classification label.
-fn print_failures(label: &str, repo: &str, failures: &[Failure]) {
-    for failure in failures {
-        println!("  {label} {repo}/{}: {}", failure.check, failure.detail);
-    }
-}
-
-/// Prints the baseline entries that were evaluated this run and did not fire.
-///
-/// Scoped to `evaluated` on purpose: a repository's checks are split across
-/// more than one test, so an unscoped reconciliation would announce the
-/// determinism gate's live defect as fixed from inside the resource gate.
-fn print_possibly_fixed(
-    repo: &str,
-    evaluated: &[&str],
-    observed: &[Failure],
-    known: &BTreeSet<String>,
-) {
-    let observed_checks: BTreeSet<&str> = observed
-        .iter()
-        .map(|failure| failure.check.as_str())
-        .collect();
-    let evaluated: BTreeSet<&str> = evaluated.iter().copied().collect();
-    for check in known
-        .iter()
-        .filter(|check| evaluated.contains(check.as_str()))
-        .filter(|check| !observed_checks.contains(check.as_str()))
-    {
-        println!(
-            "  [FIXED?] {repo}/{check}: baseline expects this to fail but it passed. \
-             Confirm, then remove it from corpus/known-failures.json."
-        );
-    }
-}
-
-/// A scan's measured cost, alongside the parsed report it produced.
+/// A scan's measured cost, alongside the report it produced.
 #[derive(Debug)]
 pub struct CorpusRun {
     /// Parsed canonical JSON report.
     pub report: Value,
-    /// Wall-clock duration of the scan process.
-    pub wall: Duration,
-    /// Peak resident set size in mebibytes, as reported by [`Measurement`].
-    pub peak_rss_mb: u64,
+    /// Where that report was written, so it can be kept beside the scorecard.
+    pub report_path: PathBuf,
+    /// What the scan cost, as [`crate::corpus_measure`] measured it.
+    pub cost: ProcessCost,
 }
 
 /// Repository root, derived from this crate's manifest directory.
@@ -322,28 +181,30 @@ pub fn u64_field(value: &Value, name: &str) -> Result<u64> {
 }
 
 /// Scans `scan_root` with the release `deslop` binary under this platform's
-/// peak-RSS [`Measurement`], returning the parsed report plus measured wall
-/// time and peak RSS.
+/// [`crate::corpus_measure::Measurement`], returning the parsed report plus
+/// what the scan cost.
 ///
 /// Embeddings are off and the fingerprint cache is disabled so the measurement
 /// reflects a cold analytical run and never writes into the clone.
 ///
 /// # Errors
 ///
-/// Returns an error when the binary is missing, the scan exits non-zero, or
-/// the rendered report cannot be read.
+/// Returns an error when the binary is missing, or the rendered report cannot
+/// be read. A scan that exits non-zero is a [`ScanCrashed`], which still
+/// carries what the scan cost up to its exit.
 pub fn scan(scan_root: &Path, output_prefix: &Path) -> Result<CorpusRun> {
     let binary = release_binary()?;
     let run = measured_run(&binary, &scan_args(scan_root, output_prefix))?;
 
     if !run.output.status.success() {
-        return Err(scan_failure(scan_root, &run.output));
+        return Err(ScanCrashed::new(scan_root, &run.output, run.cost).into());
     }
 
+    let report_path = crate::with_ext(output_prefix, "json");
     Ok(CorpusRun {
-        report: crate::read_json(&with_json_extension(output_prefix)).context("scan report")?,
-        wall: run.wall,
-        peak_rss_mb: run.peak_rss_mb,
+        report: crate::read_json(&report_path).context("scan report")?,
+        report_path,
+        cost: run.cost,
     })
 }
 
@@ -372,7 +233,11 @@ fn release_binary_path() -> PathBuf {
 }
 
 /// Locates the release binary the suite measures.
-fn release_binary() -> Result<PathBuf> {
+///
+/// # Errors
+///
+/// Returns an error naming the expected path when the binary is not there.
+pub fn release_binary() -> Result<PathBuf> {
     let binary = release_binary_path();
     if binary.is_file() {
         return Ok(binary);
@@ -381,51 +246,6 @@ fn release_binary() -> Result<PathBuf> {
         "release binary missing at {}. Run `make test-corpus`, which builds it first.",
         binary.display()
     ))
-}
-
-/// How this platform measures a child process's peak resident set size.
-///
-/// [CORPUS-CEILINGS] needs a *true* peak, not a sampled one: a sample taken
-/// every few hundred milliseconds is a lower bound, and a lower bound on a
-/// ceiling assertion produces false passes. Both arms below read a counter
-/// the kernel maintains, so neither can miss a spike.
-#[derive(Debug)]
-pub enum Measurement {
-    /// POSIX: `/usr/bin/time <flag>` wraps the scan and reports the peak on
-    /// stderr when it exits.
-    PosixTime {
-        /// The peak-RSS flag this platform's `time` accepts.
-        flag: &'static str,
-    },
-    /// Windows has no `/usr/bin/time`. The scan is spawned directly and a
-    /// PowerShell monitor watches `PeakWorkingSet64` — the OS's own
-    /// monotonically increasing peak counter — for that pid.
-    WindowsPeakMonitor {
-        /// The monitor script this platform runs.
-        script: PathBuf,
-    },
-}
-
-/// The peak-RSS measurement this platform uses.
-#[must_use]
-pub fn measurement() -> Measurement {
-    if cfg!(windows) {
-        Measurement::WindowsPeakMonitor {
-            script: windows_monitor_script(),
-        }
-    } else {
-        Measurement::PosixTime {
-            flag: PEAK_RSS_FLAG,
-        }
-    }
-}
-
-/// The PowerShell monitor that reports a pid's peak working set.
-fn windows_monitor_script() -> PathBuf {
-    repo_root()
-        .join("scripts")
-        .join("corpus")
-        .join("peak-working-set.ps1")
 }
 
 /// The analysis flags every corpus scan runs with.
@@ -444,188 +264,54 @@ const SCAN_FLAGS: [&str; 7] = [
     "--nohtml",
 ];
 
-/// Runs one scan under this platform's peak-RSS measurement, capturing its
-/// output. Both arms leave the peak on stderr in the form [`peak_rss_mb`]
-/// reads, so everything downstream is platform-independent.
-fn timed_scan(program: &Path, args: &[OsString]) -> Result<Output> {
-    match measurement() {
-        Measurement::PosixTime { flag } => posix_scan(flag, program, args),
-        Measurement::WindowsPeakMonitor { script } => windows_scan(&script, program, args),
+/// A scan that exited non-zero: why it stopped, and what it cost up to then.
+///
+/// A crash is a result, not an absence of one — the scorecard records it with
+/// the wall time, CPU and peak memory the scan reached, because a scan that
+/// runs out of memory is exactly the one whose memory figure matters.
+#[derive(Debug)]
+pub struct ScanCrashed {
+    /// What the scan cost before it exited.
+    pub cost: ProcessCost,
+    /// How the scan exited, and everything it wrote to stderr.
+    pub reason: String,
+}
+
+impl ScanCrashed {
+    /// Describes a non-zero scan, quoting all of its stderr: the line that
+    /// says why a scan stopped is rarely the first, and cutting the quote
+    /// short is how an out-of-memory abort was once reported as its banner.
+    ///
+    /// The failing process may be `deslop` or the measurement wrapper itself —
+    /// a flag the host's `time` does not accept dies here too — so the message
+    /// names the measurement rather than blaming the scan for a harness fault.
+    fn new(scan_root: &Path, output: &Output, cost: ProcessCost) -> Self {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let quoted: Vec<&str> = stderr
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .collect();
+        Self {
+            cost,
+            reason: format!(
+                "`{:?} deslop {}` exited {:?}: {}",
+                measurement(),
+                scan_root.display(),
+                output.status.code(),
+                quoted.join(" | ")
+            ),
+        }
     }
 }
 
-/// One command run under this platform's peak-RSS measurement.
-#[derive(Debug)]
-pub struct MeasuredRun {
-    /// Everything the process wrote, and how it exited.
-    pub output: Output,
-    /// Wall-clock duration of the process.
-    pub wall: Duration,
-    /// Peak resident set size in mebibytes.
-    pub peak_rss_mb: u64,
-    /// User + system CPU seconds, absent when the host's `time` did not
-    /// report them. Absent is printed as absent; never as a free scan.
-    pub cpu_seconds: Option<f64>,
+impl std::fmt::Display for ScanCrashed {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.reason)
+    }
 }
 
-/// Runs `program` with `args` under this platform's peak-RSS measurement.
-///
-/// This is the one place a measured process is spawned. The corpus ceiling
-/// suite and the [CORPUS-SCORE] scorecard both read their figures from here,
-/// so the two can never disagree about what a scan cost.
-///
-/// # Errors
-///
-/// Returns an error when the process cannot be spawned, or when the
-/// measurement reported no peak resident set size.
-pub fn measured_run(program: &Path, args: &[OsString]) -> Result<MeasuredRun> {
-    let started = Instant::now();
-    let output = timed_scan(program, args)?;
-    let wall = started.elapsed();
-    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-    Ok(MeasuredRun {
-        peak_rss_mb: peak_rss_mb(&stderr)?,
-        cpu_seconds: cpu_seconds(&stderr),
-        output,
-        wall,
-    })
-}
-
-/// Runs the scan under `/usr/bin/time`, which reports the peak itself.
-fn posix_scan(flag: &str, program: &Path, args: &[OsString]) -> Result<Output> {
-    Command::new("/usr/bin/time")
-        .arg(flag)
-        .arg(program)
-        .args(args)
-        .output()
-        .context("failed to spawn /usr/bin/time")
-}
-
-/// Runs the scan directly and watches its peak working set from PowerShell.
-///
-/// The monitor takes only a pid, so no path has to survive a shell quoting
-/// round-trip. Its reading is appended to the scan's own stderr, which is
-/// where the POSIX arm leaves it too.
-fn windows_scan(script: &Path, program: &Path, args: &[OsString]) -> Result<Output> {
-    let child = Command::new(program)
-        .args(args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .with_context(|| format!("failed to spawn {}", program.display()))?;
-    let monitor = spawn_peak_monitor(script, child.id())?;
-    let mut output = child.wait_with_output().context("scan did not complete")?;
-    let peak = monitor
-        .wait_with_output()
-        .context("peak-working-set monitor did not complete")?;
-    output.stderr.extend_from_slice(&peak.stdout);
-    Ok(output)
-}
-
-/// Starts the PowerShell monitor watching `process_id`.
-fn spawn_peak_monitor(script: &Path, process_id: u32) -> Result<std::process::Child> {
-    Command::new("powershell")
-        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
-        .arg(script)
-        .arg("-ProcessId")
-        .arg(process_id.to_string())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .with_context(|| format!("failed to spawn {}", script.display()))
-}
-
-/// Describes a non-zero scan, quoting stderr.
-///
-/// The failing process may be `deslop` or the measurement wrapper itself — a
-/// flag the host's `time` does not accept dies here too — so the message
-/// names the measurement rather than blaming the scan for a harness fault.
-fn scan_failure(scan_root: &Path, output: &Output) -> anyhow::Error {
-    anyhow!(
-        "`{:?} deslop {}` exited {:?}: {}",
-        measurement(),
-        scan_root.display(),
-        output.status.code(),
-        String::from_utf8_lossy(&output.stderr)
-            .lines()
-            .take(3)
-            .collect::<Vec<_>>()
-            .join(" | ")
-    )
-}
-
-/// Appends `.json` to an `--output` prefix.
-fn with_json_extension(prefix: &Path) -> PathBuf {
-    let mut name = prefix.file_name().unwrap_or_default().to_os_string();
-    name.push(".json");
-    prefix.with_file_name(name)
-}
-
-/// [CORPUS-CEILINGS] Extracts peak RSS in mebibytes from `/usr/bin/time -l` (BSD/macOS, bytes)
-/// or `/usr/bin/time -v` (GNU, kbytes) output. The unit is decided by the
-/// label itself rather than by the host, so a mislabelled build cannot be
-/// silently misread by three orders of magnitude.
-fn peak_rss_mb(stderr: &str) -> Result<u64> {
-    let line = stderr
-        .lines()
-        .find(|line| {
-            line.to_ascii_lowercase()
-                .contains("maximum resident set size")
-        })
-        .ok_or_else(|| anyhow!("the measurement reported no maximum resident set size"))?;
-
-    let value: u64 = line
-        .split_whitespace()
-        .find_map(|token| token.parse().ok())
-        .ok_or_else(|| anyhow!("no numeric peak RSS in {line:?}"))?;
-
-    let in_kbytes = line.to_ascii_lowercase().contains("kbytes");
-    Ok(if in_kbytes {
-        value / 1024
-    } else {
-        value / (1024 * 1024)
-    })
-}
-
-/// [CORPUS-SCORE] Extracts CPU seconds (user + system) from `/usr/bin/time`
-/// output, in either dialect.
-///
-/// BSD prints one summary line — `0.53 real 0.42 user 0.09 sys`; GNU prints
-/// labelled `User time (seconds): 0.42` lines. Absent rather than zero when
-/// neither shape is present: a host whose `time` reports no CPU must print an
-/// empty cell, never a scan that appears to have cost nothing.
-fn cpu_seconds(stderr: &str) -> Option<f64> {
-    bsd_cpu_seconds(stderr).or_else(|| gnu_cpu_seconds(stderr))
-}
-
-/// The BSD summary line: the value sits immediately before its unit word.
-fn bsd_cpu_seconds(stderr: &str) -> Option<f64> {
-    let line = stderr
-        .lines()
-        .find(|line| line.contains(" user") && line.contains(" sys"))?;
-    let tokens: Vec<&str> = line.split_whitespace().collect();
-    let before = |unit: &str| {
-        tokens
-            .iter()
-            .position(|token| *token == unit)
-            .and_then(|at| at.checked_sub(1))
-            .and_then(|at| tokens.get(at))
-            .and_then(|token| token.parse::<f64>().ok())
-    };
-    Some(before("user")? + before("sys")?)
-}
-
-/// The GNU labelled lines: the value is whatever follows the final colon.
-fn gnu_cpu_seconds(stderr: &str) -> Option<f64> {
-    let labelled = |prefix: &str| {
-        stderr
-            .lines()
-            .find(|line| line.trim().to_ascii_lowercase().starts_with(prefix))
-            .and_then(|line| line.rsplit(':').next())
-            .and_then(|value| value.trim().parse::<f64>().ok())
-    };
-    Some(labelled("user time")? + labelled("system time")?)
-}
+impl std::error::Error for ScanCrashed {}
 
 /// Every occurrence path in the report's `clusters`, grouped per cluster.
 #[must_use]

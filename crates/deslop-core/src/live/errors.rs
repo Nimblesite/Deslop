@@ -94,6 +94,13 @@ pub enum LiveError {
     /// not yet completed ([LIVE-CACHE-SEED]).
     #[error("analysis pipeline not ready yet")]
     AnalysisNotReady,
+    /// An editor sent buffer edits for a file it never opened, so there
+    /// is no text to apply them to ([LIVE-OPEN-BUFFERS]).
+    #[error("no open editor buffer for {path:?}")]
+    BufferNotOpen {
+        /// Path the edits named.
+        path: PathBuf,
+    },
     /// Wraps any [`CoreError`] surfaced by the underlying pipeline.
     #[error(transparent)]
     Core(#[from] CoreError),
@@ -122,6 +129,7 @@ impl LiveError {
             Self::SchedulerBusy { .. } => "scheduler_busy",
             Self::WatcherInit { .. } => "watcher_init",
             Self::AnalysisNotReady => "analysis_not_ready",
+            Self::BufferNotOpen { .. } => "buffer_not_open",
             Self::Core(_) => "core_error",
         }
     }

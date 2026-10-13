@@ -1,7 +1,7 @@
 <!-- agent-pmo:b636503 -->
 # Deslop Live — Agent Instructions
 
-NEVER CLOSE GH ISSUES, EVEN WITH PR COMMENTS!
+Default to not closing GitHub issues, even on PRs unless the user requests this.
 
 Deslop is a duplicate-code detector. **We are in accuracy-audit mode.** One measure outranks everything else — not features, not languages, not UI, not performance:
 
@@ -59,6 +59,10 @@ REPLACE BROKEN CODE; DON'T WRITE NEW CODE WITH A DUPLICATE PATH
 - **`make test` is fail-fast** and always enforces coverage. Never `--no-fail-fast`. Target 100% coverage and a high mutation score.
 - **Deterministic.** No `sleep`, no timing dependencies, no random state.
 - **Coverage thresholds live in `coverage-thresholds.json`** at the repo root — never env vars, GitHub variables, or CI YAML. Monotonic increase only (−1% rounding allowance); falling below fails the pipeline.
+
+## Version comparison — the corpus run
+
+"Compare to version X" means one thing: run `scripts/compare-versions.sh <X> HEAD` ([CORPUS-SCORE-COMPARE]). It is an objective test run. Both builds are scored against the corpus of known answers in `corpus/register/`. The script writes the report itself, under `.corpus/version-compare/reports/`: the scorecard `compare-<UTC timestamp>.md` — a new one every run, with a `.json` twin ([CORPUS-REPORT]) — `INDEX.md`, and a `SUMMARY.md` for each repo. Point the user at those files. A comparison is never pi, a subagent, or an LLM code review, and an agent-written review is never part of its output.
 
 ## Universal rules
 

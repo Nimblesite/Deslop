@@ -20,6 +20,9 @@ use serde_json::Value;
 
 use crate::common::{rerun_ops::*, scan_dir::temp_scan_dir, *};
 
+#[path = "rerun/removals.rs"]
+mod removals;
+
 /// Config body that excludes the `Beta.cs` half of the seeded clone pair.
 const EXCLUDE_BETA: &str = "[defaults]\nexclude = [\"**/Beta.cs\"]\n";
 

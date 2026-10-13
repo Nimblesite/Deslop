@@ -117,6 +117,11 @@ impl ClusterKindJudge for RelationJudge {
                 .then_some(ClusterKind::NearlyIdentical)
         })
     }
+
+    /// Relations are recorded by corpus index; an unindexed span has none.
+    fn span_kind(&self, _left: &Fingerprint, _right: &Fingerprint) -> Option<ClusterKind> {
+        None
+    }
 }
 
 fn recoverable_edges(
@@ -146,6 +151,11 @@ impl ClusterKindJudge for CountingJudge {
         let _previous = self.0.fetch_add(1, Ordering::Relaxed);
         vec![(members.to_vec(), ClusterKind::NearlyIdentical)]
     }
+
+    /// Counts group folds only; a span pair is not one.
+    fn span_kind(&self, _left: &Fingerprint, _right: &Fingerprint) -> Option<ClusterKind> {
+        None
+    }
 }
 
 impl ClusterKindJudge for HashAwareJudge<'_> {
@@ -155,6 +165,11 @@ impl ClusterKindJudge for HashAwareJudge<'_> {
 
     fn groups(&self, members: &[usize]) -> Vec<(Vec<usize>, ClusterKind)> {
         vec![(members.to_vec(), self.measured(members))]
+    }
+
+    /// A span pair is read the way a member pair is: one Merkle hash is a copy.
+    fn span_kind(&self, left: &Fingerprint, right: &Fingerprint) -> Option<ClusterKind> {
+        (left.hash == right.hash).then_some(ClusterKind::NearlyIdentical)
     }
 }
 

@@ -17,11 +17,17 @@ use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
 
 use super::{super::check_boilerplate_not_ranked_first, FLAT_DECLARATION, STATELESS_WIDGET};
-use crate::corpus::{repo_root, CorpusRun, Failure};
+use crate::{
+    corpus::{repo_root, CorpusRun, Failure},
+    corpus_measure::ProcessCost,
+};
 
 /// Where the scan roots for these tests live: under `target`, the only
 /// place a build may leave files.
 const GATE_ROOT: &str = "corpus-precision-gate";
+/// The report path a hand-built run names. The check reads the report held in
+/// memory, never this file, so nothing writes it.
+const UNWRITTEN_REPORT: &str = "report.json";
 
 /// Each test owns a subdirectory of [`GATE_ROOT`]. The fixtures are
 /// rewritten on every call and `fs::write` truncates before it writes, so
@@ -96,8 +102,13 @@ fn judged(case: &str, cluster: &Value) -> Result<Vec<Failure>> {
     );
     let run = CorpusRun {
         report: json!({ "clusters": [cluster] }),
-        wall: Duration::ZERO,
-        peak_rss_mb: 0,
+        report_path: scan_root(case)?.join(UNWRITTEN_REPORT),
+        cost: ProcessCost {
+            wall: Duration::ZERO,
+            peak_rss_mb: 0,
+            cpu_seconds: 0.0,
+            peak_cpu_percent: None,
+        },
     };
     let mut failures = Vec::new();
     check_boilerplate_not_ranked_first(&manifest(), &scan_root(case)?, &run, &mut failures)?;

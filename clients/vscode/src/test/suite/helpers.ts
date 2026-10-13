@@ -1,4 +1,5 @@
 import * as assert from "node:assert/strict";
+import * as path from "node:path";
 import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 import type { ExtensionApi } from "../../extension";
@@ -13,6 +14,7 @@ const MULTI_OCCURRENCE_MINIMUM = 2;
 const POLL_INTERVAL_MS = 250;
 const ACTIVATION_POLL_ATTEMPTS = 20;
 const REPORT_POLL_ATTEMPTS = 40;
+const EXECUTE_CODE_LENS_PROVIDER = "vscode.executeCodeLensProvider";
 
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -24,12 +26,12 @@ export function sleep(ms: number): Promise<void> {
 // condition (a report landing, a generation advancing) rather than a fixed
 // delay. Shared by every suite that needs the live pipeline to settle.
 export async function waitFor<T>(
-  predicate: () => T | undefined,
+  predicate: () => T | Promise<T | undefined> | undefined,
   timeoutMs: number,
 ): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const value = predicate();
+    const value = await predicate();
     if (value !== undefined) return value;
     await sleep(100);
   }
@@ -70,6 +72,21 @@ export async function waitForCluster(
   throw new Error(`${failure}; last cluster count ${last?.clusters.length ?? 0}`);
 }
 
+// The first multi-occurrence cluster with an occurrence in `fileName`.
+export function waitForClusterHolding(client: LanguageClient, fileName: string): Promise<ReportCluster> {
+  return waitForCluster(
+    client,
+    (candidate) => candidate.occurrences.some((occurrence) => path.basename(occurrence.path) === fileName),
+    `no cluster holding ${fileName} in LSP report`,
+  );
+}
+
+// The code lenses VS Code itself would paint on `uri` — what the LSP's
+// provider answered, exactly as the editor sees it ([LSP-CODE-LENS]).
+export async function codeLenses(uri: vscode.Uri): Promise<vscode.CodeLens[]> {
+  return (await vscode.commands.executeCommand<vscode.CodeLens[]>(EXECUTE_CODE_LENS_PROVIDER, uri)) ?? [];
+}
+
 // Every E2E suite must await activation before executing deslop.* commands.
 // The extension activates on onStartupFinished, which races the mocha runner;
 // awaiting activate() here makes each suite deterministic regardless of that
@@ -97,6 +114,20 @@ export function fixtureUri(name: string): vscode.Uri {
 export async function openFixture(name: string): Promise<vscode.TextEditor> {
   const doc = await vscode.workspace.openTextDocument(fixtureUri(name));
   return await vscode.window.showTextDocument(doc);
+}
+
+/** Opens a real fixture clone only after its visible report is ready. */
+export async function openVisibleCloneFixture(api: ExtensionApi, name: string, timeoutMs: number) {
+  const editor = await openFixture(name);
+  const cluster = await waitFor(() => clusterForFile(api.reportStore?.current.visibleReport, name), timeoutMs);
+  return { editor, cluster };
+}
+
+/** Finds the first reported cluster containing a fixture file. */
+export function clusterForFile(report: Report | null | undefined, name: string): ReportCluster | undefined {
+  return report?.clusters.find((candidate) =>
+    candidate.occurrences.some((occurrence) => path.basename(occurrence.path) === name),
+  );
 }
 
 /** Deletes a range from `editor` — the undo half of every "edit, then put the

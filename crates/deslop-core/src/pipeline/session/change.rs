@@ -4,8 +4,11 @@
 //! resolution, path canonicalisation, and pipeline config construction.
 //! All methods are `pub(super)` — they are called only from `session/mod.rs`.
 
+#[cfg(test)]
+mod tests;
+
 use std::{
-    collections::HashSet,
+    collections::{BTreeSet, HashSet},
     path::{Path, PathBuf},
 };
 
@@ -13,12 +16,16 @@ use super::{
     super::{
         config::{EmbeddingSettings, PipelineConfig},
         corpus::{log_skip_too_deep, parse_one_file, parser_for_language, CorpusBuildState},
+        open_buffers::OpenBuffers,
     },
     PipelineSession,
 };
 use crate::{
-    boilerplate::collect_import_boilerplate_ranges, discover::discover_files, error::CoreError,
-    report::CacheStats, state::FileId,
+    boilerplate::collect_import_boilerplate_ranges,
+    discover::{discover_files, discover_files_in, DiscoveredFile},
+    error::CoreError,
+    report::CacheStats,
+    state::FileId,
 };
 
 /// Whether a change pass altered the analysed corpus
@@ -54,19 +61,68 @@ impl CorpusEffect {
     }
 }
 
+/// [LIVE-SCHEDULER-REMOVAL-COST] Resolves a path or its surviving parent.
+fn canonicalise_path(
+    path: &Path,
+    mut resolve: impl FnMut(&Path) -> std::io::Result<PathBuf>,
+) -> PathBuf {
+    match std::fs::symlink_metadata(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            canonicalise_parent(path, resolve)
+        }
+        _ => resolve(path).unwrap_or_else(|_| canonicalise_parent(path, resolve)),
+    }
+}
+
+/// Preserves native parent aliases when a removed leaf cannot be resolved.
+fn canonicalise_parent(
+    path: &Path,
+    mut resolve: impl FnMut(&Path) -> std::io::Result<PathBuf>,
+) -> PathBuf {
+    match (path.parent(), path.file_name()) {
+        (Some(parent), Some(leaf)) => match resolve(parent) {
+            Ok(canonical_parent) => canonical_parent.join(leaf),
+            Err(_) => path.to_path_buf(),
+        },
+        _ => path.to_path_buf(),
+    }
+}
+
+/// [LIVE-OPEN-BUFFERS] Disk and editor sources form one inventory in stable path order.
+fn source_paths(files: &[DiscoveredFile], buffers: &OpenBuffers) -> BTreeSet<PathBuf> {
+    files
+        .iter()
+        .map(|file| file.path.as_path())
+        .chain(buffers.paths())
+        .map(Path::to_path_buf)
+        .collect()
+}
+
 impl PipelineSession {
     /// Applies one changed path: delete, update, or add. Reports whether
     /// the corpus actually moved, so a pass made entirely of paths the
-    /// gates below reject can skip the re-render.
+    /// gates below reject can skip the re-render. The source comes from
+    /// `buffers` for files an editor holds open ([LIVE-OPEN-BUFFERS]).
     pub(super) fn apply_one_change(
         &mut self,
         path: &Path,
         stats: &mut CacheStats,
         embedding: &EmbeddingSettings<'_>,
+        buffers: &OpenBuffers,
     ) -> Result<CorpusEffect, CoreError> {
         let absolute = self.canonicalise_reference(path);
-        if !absolute.exists() {
-            return Ok(self.drop_subtree(&absolute));
+        if !absolute.exists() && !buffers.contains(&absolute) {
+            // [LIVE-OPEN-BUFFERS] A removed directory can still contain open editor sources.
+            self.ignore_matcher.remove_subtree(&absolute);
+            let present = source_paths(&[], buffers);
+            return Ok(self.drop_absent_descendants(&absolute, &present));
+        }
+        // [LIVE-WATCHER-DIRECTORIES] Alias notifications cannot widen the workspace corpus.
+        if !absolute.starts_with(&self.root) {
+            return Ok(CorpusEffect::Untouched);
+        }
+        if absolute.is_dir() {
+            return self.reconcile_directory(&absolute, stats, embedding, buffers);
         }
         let Some(language) = self.language_for(&absolute) else {
             return Ok(CorpusEffect::Untouched);
@@ -91,18 +147,25 @@ impl PipelineSession {
             .unwrap_or_else(|| self.registry.register(absolute.clone()));
         let config = self.pipeline_config_with_mode(embedding);
         let mut build_stats = CorpusBuildState::default();
-        let (cached, source, lines) =
-            match parse_one_file(file_id, &absolute, parser, &config, stats, &mut build_stats) {
-                Ok(parsed) => parsed,
-                // A pathologically deep file must not crash the long-lived
-                // server: drop it and keep serving, the same way an
-                // excluded path is handled above. Real parser errors propagate.
-                Err(CoreError::AstTooDeep { language, limit }) => {
-                    log_skip_too_deep(language, limit);
-                    return Ok(self.drop_path(&absolute));
-                }
-                Err(other) => return Err(other),
-            };
+        let (cached, source, lines) = match parse_one_file(
+            file_id,
+            &absolute,
+            parser,
+            &config,
+            stats,
+            &mut build_stats,
+            buffers,
+        ) {
+            Ok(parsed) => parsed,
+            // A pathologically deep file must not crash the long-lived
+            // server: drop it and keep serving, the same way an
+            // excluded path is handled above. Real parser errors propagate.
+            Err(CoreError::AstTooDeep { language, limit }) => {
+                log_skip_too_deep(language, limit);
+                return Ok(self.drop_path(&absolute));
+            }
+            Err(other) => return Err(other),
+        };
         if self
             .sources
             .get(&file_id)
@@ -133,6 +196,77 @@ impl PipelineSession {
         Ok(CorpusEffect::Mutated)
     }
 
+    /// [LIVE-WATCHER-DIRECTORIES] Reconciles a directory when individual events may be missing.
+    fn reconcile_directory(
+        &mut self,
+        directory: &Path,
+        stats: &mut CacheStats,
+        embedding: &EmbeddingSettings<'_>,
+        buffers: &OpenBuffers,
+    ) -> Result<CorpusEffect, CoreError> {
+        if !self.prepare_directory(directory)? {
+            return Ok(self.drop_subtree(directory));
+        }
+        let discovered = discover_files_in(
+            &self.root,
+            directory,
+            &self.extension_to_language,
+            &self.exclusion,
+        )?;
+        self.apply_directory_files(directory, &discovered.files, stats, embedding, buffers)
+    }
+
+    /// Reloads root policy for overflow recovery and refreshes only admitted subtrees.
+    fn prepare_directory(&mut self, directory: &Path) -> Result<bool, CoreError> {
+        if directory == self.root {
+            self.reload_exclusion()?;
+        }
+        let admitted = !self.exclusion.is_excluded(directory, None)
+            && !self.ignore_matcher.is_ignored(directory);
+        if admitted && directory != self.root {
+            self.ignore_matcher
+                .refresh_subtree(directory, &self.exclusion)?;
+        }
+        Ok(admitted)
+    }
+
+    /// Applies the complete scoped inventory, including removals and unchanged empty files.
+    fn apply_directory_files(
+        &mut self,
+        directory: &Path,
+        files: &[DiscoveredFile],
+        stats: &mut CacheStats,
+        embedding: &EmbeddingSettings<'_>,
+        buffers: &OpenBuffers,
+    ) -> Result<CorpusEffect, CoreError> {
+        let present = source_paths(files, buffers)
+            .into_iter()
+            .filter(|path| path.starts_with(directory))
+            .collect();
+        let initial = self
+            .drop_absent_descendants(directory, &present)
+            .merge(CorpusEffect::from_touched(directory == self.root));
+        present.iter().try_fold(initial, |effect, path| {
+            self.apply_one_change(path, stats, embedding, buffers)
+                .map(|changed| effect.merge(changed))
+        })
+    }
+
+    /// [LIVE-WATCHER-RESCAN] Evicts only indexed members absent from the reconciled subtree.
+    fn drop_absent_descendants(
+        &mut self,
+        directory: &Path,
+        present: &BTreeSet<PathBuf>,
+    ) -> CorpusEffect {
+        self.live_paths
+            .descendants(directory)
+            .iter()
+            .filter(|path| !present.contains(*path))
+            .fold(CorpusEffect::Untouched, |effect, path| {
+                effect.merge(self.drop_path(path))
+            })
+    }
+
     /// Reloads `.deslop.toml` and re-evaluates the existing corpus
     /// against it: drops files the new `exclude` patterns now match
     /// and re-discovers files a removed pattern re-admits
@@ -142,6 +276,7 @@ impl PipelineSession {
         &mut self,
         stats: &mut CacheStats,
         embedding: &EmbeddingSettings<'_>,
+        buffers: &OpenBuffers,
     ) -> Result<(), CoreError> {
         if let Err(error) = self.reload_exclusion() {
             tracing::warn!(
@@ -151,7 +286,7 @@ impl PipelineSession {
             return Ok(());
         }
         let dropped = self.drop_newly_excluded();
-        let added = self.apply_newly_included(stats, embedding)?;
+        let added = self.apply_newly_included(stats, embedding, buffers)?;
         tracing::info!(dropped, added, "deslop_toml_reloaded corpus re-evaluated");
         Ok(())
     }
@@ -185,17 +320,16 @@ impl PipelineSession {
         &mut self,
         stats: &mut CacheStats,
         embedding: &EmbeddingSettings<'_>,
+        buffers: &OpenBuffers,
     ) -> Result<usize, CoreError> {
         let discovery = discover_files(&self.root, &self.extension_to_language, &self.exclusion);
         let known: HashSet<PathBuf> = self.live_paths.values().cloned().collect();
-        let fresh: Vec<PathBuf> = discovery
-            .files
+        let fresh: Vec<PathBuf> = source_paths(&discovery.files, buffers)
             .into_iter()
-            .map(|file| file.path)
             .filter(|path| !known.contains(path))
             .collect();
         for path in &fresh {
-            let _effect = self.apply_one_change(path, stats, embedding)?;
+            let _effect = self.apply_one_change(path, stats, embedding, buffers)?;
         }
         Ok(fresh.len())
     }
@@ -212,12 +346,8 @@ impl PipelineSession {
     /// removal event for a path the corpus never held leaves it
     /// [`CorpusEffect::Untouched`].
     pub(super) fn drop_subtree(&mut self, prefix: &Path) -> CorpusEffect {
-        let doomed: Vec<PathBuf> = self
-            .live_paths
-            .values()
-            .filter(|registered| registered.starts_with(prefix))
-            .cloned()
-            .collect();
+        self.ignore_matcher.remove_subtree(prefix);
+        let doomed = self.live_paths.descendants(prefix);
         doomed.iter().fold(CorpusEffect::Untouched, |effect, path| {
             effect.merge(self.drop_path(path))
         })
@@ -226,15 +356,10 @@ impl PipelineSession {
     /// Removes a path from every in-memory map, reporting whether it was
     /// present to begin with.
     pub(super) fn drop_path(&mut self, absolute: &Path) -> CorpusEffect {
-        let Some((file_id, _)) = self
-            .live_paths
-            .iter()
-            .find(|(_, registered)| registered.as_path() == absolute)
-            .map(|(id, path)| (*id, path.clone()))
-        else {
+        let Some(file_id) = self.live_paths.file_id(absolute) else {
             return CorpusEffect::Untouched;
         };
-        let _removed_path = self.live_paths.remove(&file_id);
+        let _removed_path = self.live_paths.remove(file_id);
         let _removed_records = self.store.remove(file_id);
         let _removed_source = self.sources.remove(&file_id);
         let _removed_lang = self.file_languages.remove(&file_id);
@@ -280,16 +405,7 @@ impl PipelineSession {
         } else {
             self.root.join(path)
         };
-        if let Ok(resolved) = std::fs::canonicalize(&joined) {
-            return resolved;
-        }
-        match (joined.parent(), joined.file_name()) {
-            (Some(parent), Some(leaf)) => match std::fs::canonicalize(parent) {
-                Ok(canonical_parent) => canonical_parent.join(leaf),
-                Err(_) => joined,
-            },
-            _ => joined,
-        }
+        canonicalise_path(&joined, |candidate| std::fs::canonicalize(candidate))
     }
 
     /// Builds a [`PipelineConfig`] snapshot for a pass that does not

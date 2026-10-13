@@ -64,10 +64,15 @@ jobs:
 
       # Clones are pinned by SHA, so the cache key only has to track the
       # manifests. A moved upstream tag is caught by fetch-corpus.mjs anyway.
+      # The scorecard the corpus tests write lives under `.corpus/` too, and is
+      # kept out of the cache: it describes this run, and a restored one would
+      # carry another run's repositories into it ([CORPUS-REPORT]).
       - name: Cache corpus clones
         uses: actions/cache@v6
         with:
-          path: .corpus
+          path: |
+            .corpus
+            !.corpus/test-corpus
           key: corpus-${{ hashFiles('corpus/*.json') }}
 
       - uses: Swatinem/rust-cache@v2
@@ -97,23 +102,11 @@ jobs:
         if: always()
         run: |
           {
-            echo "### Measurements"
-            echo ""
-            echo "| repo | files | LOC | clusters | dup% | wall | peak RSS |"
-            echo "|---|---|---|---|---|---|---|"
-            grep -oE '^[a-z]+ \[[a-z#]+\]: files=[0-9]+ loc=[0-9]+ clusters=[0-9]+ dup=[0-9.]+% wall=[0-9.]+s peak_rss=[0-9]+MB' corpus-output.txt \
-              | sed -E 's/^([a-z]+) \[[a-z#]+\]: files=([0-9]+) loc=([0-9]+) clusters=([0-9]+) dup=([0-9.]+)% wall=([0-9.]+)s peak_rss=([0-9]+)MB/| \1 | \2 | \3 | \4 | \5% | \6s | \7 MB |/' \
-              || echo "| (no measurements parsed) | | | | | | |"
-
-            echo ""
-            echo "### Known defects (tracked, not blocking)"
-            echo ""
-            grep -F '[KNOWN]' corpus-output.txt | sed 's/^/- /' || echo "- none"
-
-            echo ""
-            echo "### NEW failures (regressions — investigate)"
-            echo ""
-            grep -F '[NEW]' corpus-output.txt | sed 's/^/- /' || echo "- none"
+            # [CORPUS-REPORT] The scorecard the corpus tests wrote: accuracy,
+            # wall time, CPU time, peak CPU and peak memory per repository —
+            # the same document `make score-gate` and `make compare` produce.
+            # Each test wrote its own, named after the test and when it ran.
+            cat .corpus/test-corpus/*.md 2>/dev/null || echo "> **No scorecard was written** — no corpus test reached its scan."
 
             echo ""
             echo "### Possibly fixed (confirm, then delete from corpus/known-failures.json)"

@@ -119,14 +119,17 @@ fn recv_response(reader: &mut BufReader<ChildStdout>, id: i64) -> Result<(Value,
 
 /// Builds an `initialize` request.
 pub fn initialize_request() -> Result<(i64, String)> {
-    request(
-        "initialize",
-        &serde_json::json!({
-            "processId": null,
-            "rootUri": null,
-            "capabilities": {}
-        }),
-    )
+    initialize_request_with_params(&serde_json::json!({
+        "processId": null,
+        "rootUri": null,
+        "capabilities": {}
+    }))
+}
+
+/// Builds initialization with the real client's selected options and capabilities.
+pub fn initialize_request_with_params(params: &Value) -> Result<(i64, String)> {
+    const INITIALIZE: &str = "initialize";
+    request(INITIALIZE, params)
 }
 
 /// Builds a JSON-RPC request envelope. A `Null` `params` is left out of
@@ -169,9 +172,28 @@ pub fn handshake(
     stdin: &mut ChildStdin,
     stdout: &mut BufReader<ChildStdout>,
 ) -> Result<serde_json::Value> {
-    let (init_id, init) = initialize_request()?;
-    let response = send_and_recv(stdin, stdout, init_id, &init)?;
-    write_frame(stdin, &notification("initialized", &serde_json::json!({}))?)?;
+    handshake_request(stdin, stdout, initialize_request()?)
+}
+
+/// Completes one initialization request and registers the real client's handlers.
+pub fn handshake_request(
+    stdin: &mut ChildStdin,
+    stdout: &mut BufReader<ChildStdout>,
+    request: (i64, String),
+) -> Result<Value> {
+    const INITIALIZED: &str = "initialized";
+    request_then_notify(stdin, stdout, request, INITIALIZED)
+}
+
+/// Finishes a lifecycle request before sending its following notification.
+pub fn request_then_notify(
+    stdin: &mut ChildStdin,
+    stdout: &mut BufReader<ChildStdout>,
+    (id, payload): (i64, String),
+    next_method: &str,
+) -> Result<Value> {
+    let response = send_and_recv(stdin, stdout, id, &payload)?;
+    write_frame(stdin, &notification(next_method, &serde_json::json!({}))?)?;
     Ok(response)
 }
 

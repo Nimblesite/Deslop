@@ -36,14 +36,27 @@ pub(super) fn seconds(ms: u64) -> String {
     format!("{:.2} s", as_f64(ms) / MS_PER_SECOND)
 }
 
+/// A measured figure through `show`, or an explicit absence when nobody
+/// measured it.
+pub(super) fn or_absent<T>(value: Option<T>, show: impl FnOnce(T) -> String) -> String {
+    value.map_or_else(|| ABSENT.to_owned(), show)
+}
+
 /// Mebibytes, or an explicit absence.
 pub(super) fn megabytes(value: Option<u64>) -> String {
-    value.map_or_else(|| ABSENT.to_owned(), |mb| format!("{mb} MB"))
+    or_absent(value, |mb| format!("{mb} MB"))
 }
 
 /// CPU seconds, or an explicit absence.
 pub(super) fn cpu(value: Option<f64>) -> String {
-    value.map_or_else(|| ABSENT.to_owned(), |secs| format!("{secs:.2} s"))
+    or_absent(value, |secs| format!("{secs:.2} s"))
+}
+
+/// A CPU rate in percent of one core, or an explicit absence. Whole percents:
+/// the figure is an average over a sampling window, and a decimal would claim
+/// a precision the window does not have.
+pub(super) fn cpu_rate(value: Option<f64>) -> String {
+    or_absent(value, |percent| format!("{percent:.0}%"))
 }
 
 /// Widening that keeps the lossy cast in one reviewed place.

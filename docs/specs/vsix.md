@@ -19,23 +19,25 @@ Distribution: one platform-specific `.vsix` per VS Code target attached to each 
 
 The bubble reports duplication while the edited code remains under the cursor.
 
-**When it fires.** After every coalesced buffer edit ([LIVE-WATCHER] debounce = 250 ms), the VSIX issues `duplicates/findSimilar` on the range the user most recently touched. The bubble appears when the range belongs to a reported duplicate component and shows membership plus mass only. Pair admission has already happened in the engine; the client neither receives nor filters on pair evidence. If nothing matches, no bubble.
+**When it fires.** After every coalesced buffer edit ([LIVE-WATCHER] debounce = 250 ms), the VSIX issues `deslop/reportForRange` ([LSP-CUSTOM-METHODS]) on the range the user most recently touched. The bubble appears when the range belongs to a reported duplicate component and shows membership plus mass only. Pair admission has already happened in the engine; the client neither receives nor filters on pair evidence. If nothing matches, no bubble.
 
-**What it looks like.** A compact floating widget (VS Code `InlayHint` + `Webview`-backed overlay, rendered by a single `DecorationType` whose `after.contentText` is an HTML-safe Unicode glyph, with a hover-triggered richer webview for detail). Anatomy, from left to right:
+**What it looks like.** An inline clone callout followed by a hoverable `ⓘ Details` inlay hint. Hovering over the hint or duplicated code opens the same rich VS Code card, without taking focus from the editor. Anatomy, from left to right:
 
 - **Kind colour** — the bubble uses the category colour from [CLONE-KIND-COLOR](taxonomy.md#clone-kind-color-colour-describes-the-category). Diagnostic severity is configured separately ([SEVERITY-CONFIG](severity.md#severity-config-configuration)).
 - **Verdict** — use the engine-authored category and shared title from [CLONE-KIND-LABELS](taxonomy.md#clone-kind-labels-use-the-same-names-everywhere), with informational handling from [CLONE-BUCKETS-STRUCTURAL-ONLY](taxonomy.md#clone-buckets-structural-only-shape-only-is-not-duplication).
-- **Count + location** — `× 4 • UserService.cs:230`. The canonical occurrence of the cluster, linkified to jump on click.
-- **Action chevron** — click expands the bubble into a webview-backed card with cluster membership, mass, and all occurrences. The card carries no compare button. The cluster panel offers one-click **Compare with canonical** on each non-canonical occurrence ([webview-runtime.md §VSIX-PAIR-COMPARE](webview-runtime.md#vsix-pair-compare)); the native diff shows the two source ranges.
+- **Count + location** — `× 4 · UserService.cs` in the inline callout. The hover card gives human-readable line numbers for the canonical and other occurrences.
+- **Details cue** — hovering opens a card with the verdict, copy count, duplicated mass, canonical location, and all reported occurrence locations. Each non-canonical occurrence has its own **Compare** action against the canonical range, so the user chooses the exact peer. **View cluster** and **Dismiss** remain available.
 
-**How it's rendered.** VS Code doesn't give us a true floating tooltip over a specific range, so the bubble uses the layering documented in the VS Code extension cookbook:
+**How it's rendered.** VS Code doesn't give extensions a free-floating widget over a specific range, so the bubble uses two native editor surfaces:
 
 - Primary: a `TextEditorDecorationType` with `after.contentText` attached to the end of the duplicated range's last line, carrying the cluster slug, the kind title, and the occurrence count, painted in the kind colour. This is the always-visible indicator.
-- Secondary: hover opens the LSP hover ([LSP-HOVER]) for cluster membership and mass.
+- Secondary: an `InlayHint` at the edited range's end displays `ⓘ Details` and carries the shared hover card. The additive VSIX hover provider presents that card when the user hovers over the duplicated code ([VSIX-HOVER-PROVIDER]); the LSP does not advertise a hover provider ([LSP-HOVER]).
 
-No native floating bubble is possible in current VS Code APIs without a custom webview overlay, and a webview overlay would steal focus. The decoration plus hover is the closest legal approximation and never steals the caret.
+The decoration and inlay hint never steal the caret. Neither surface shows pair-only scores ([FUSED-PAIR-SIGNALS]); comparison requires selecting an occurrence.
 
-**Ghost-line mode (opt-in, `deslop.liveBubble.mode = "ghost"`).** For users who want a tighter callout, ghost-line mode renders the bubble on a **phantom line inserted below the duplicated range**, using VS Code's `CodeLens` API with a custom-styled title. The phantom line is visually distinct from the real buffer (dimmed background, italic). It never modifies the buffer; scroll behaviour matches code lenses. This is the closest thing to "a speech bubble pointing at the duplicate" that VS Code natively supports.
+**Ghost-line mode (opt-in, `deslop.liveBubble.mode = "ghost"`).** A whole-line decoration paints a dimmed, italic callout at the edited range. It changes no buffer text and has no inlay hint; switching back to inline restores the hoverable cue in Classic presentation.
+
+**Presentation (`deslop.liveBubble.presentation`).** `classic` is the default and restores the hoverable `ⓘ Details` cue and full card. `compact` keeps the less intrusive 0.36.0 inline callout with no detail inlay and the brief hover card: slug, copy count, canonical path, and existing actions. The setting changes presentation only; both choices use the same report, admission, inline text renderer, and dismissal path. Changing it repaints an active bubble without another edit. In ghost-line mode there is no detail inlay in either presentation.
 
 **Cooldown + budget.**
 - Bubbles don't flicker: once shown for a range, the same cluster on the same range stays bubbled until the user moves out, even if debounce re-fires. Cluster stability across re-analyses ([LIVE-DELTA]) makes this trivial — same id, same bubble.
@@ -242,16 +244,18 @@ Centralisation is the enabler for [VSIX-REACTIVITY] below: one store + signal-ba
 
 #### [VSIX-STATE-DIRTY] Canonical report vs. visible projection — dirty tracking contract
 
+Dirty tracking records the editor document version. `deslop/reportChanged` carries `analysed_buffer` for editor-driven analysis, even when clone membership is unchanged. Applying that report and releasing the matching dirty version happen atomically; an acknowledgement of an older version cannot reveal a newer edit. Unsaved status alone never hides an occurrence after its editor version has been analysed ([LIVE-OPEN-BUFFERS]).
+
 When a user types into a file that participates in a cluster, two things must happen at once: stale byte ranges must stop driving decorations and tree rows ([#78], [#117]) **and** every command that resolves a cluster by id (`deslop.compareWithCanonical`, `deslop.openCluster`, `deslop.openOccurrence`, `deslop.openCanonicalFile`, `deslop.copyClusterLocations`, the cluster detail webview's row navigation) must continue to find that cluster until the LSP itself retracts it via `deslop/reportChanged`. Both requirements are non-negotiable.
 
 The store therefore exposes **two views of the same report**:
 
 - **Canonical report.** The exact snapshot the LSP last published. Only `deslop/reportChanged` (full snapshot or applied delta) writes it. Editor-side dirty tracking **never** mutates the canonical report. Every command that takes a cluster id, occurrence id, or file path resolves through the canonical report. Lookup by id never returns `undefined` for a cluster the LSP still considers live.
-- **Visible projection.** A `computed()` derived from the canonical report and the per-file dirty set. For each file with unsaved edits, occurrences in that file are filtered out of the projection. Clusters whose visible occurrence count drops below two are elided from the projection (a one-copy "top offender" is a contradiction — see [#117]). Engine figures such as `canonical_node_count` and mass remain unchanged. Tree providers, decorations, hovers, code lenses, the live bubble, the status bar, the activity-bar badge, and the session panel render the visible projection. Report and duplication webviews receive that projection; the anchored detail restores its selected cluster's original membership ([VSIX-PAIR-COMPARE]). Tree canonical markers resolve identity against the full report, never the first surviving peer. `report-store-dirty.unit.test.ts` and `compare-canonical.unit.test.ts` pin the figures and canonical identity.
+- **Visible projection.** A `computed()` derived from the canonical report and the per-file versions awaiting analysis. For each unacknowledged editor version, occurrences in that file are filtered out of the projection. Clusters whose visible occurrence count drops below two are elided from the projection (a one-copy "top offender" is a contradiction — see [#117]). Engine figures such as `canonical_node_count` and mass remain unchanged. Tree providers, decorations, hovers, code lenses, the live bubble, the status bar, the activity-bar badge, and the session panel render the visible projection. Report and duplication webviews receive that projection; the anchored detail restores its selected cluster's original membership ([VSIX-PAIR-COMPARE]). Tree canonical markers resolve identity against the full report, never the first surviving peer. `report-store-dirty.unit.test.ts` and `compare-canonical.unit.test.ts` pin the figures and canonical identity.
 
-`onDidChangeTextDocument` updates the dirty set, never the canonical report. On `didSaveTextDocument` (or external file watcher fire) the file leaves the dirty set; the LSP re-analyses and emits a fresh `deslop/reportChanged` which then updates the canonical report. The visible projection recomputes through the signal graph in the same microtask as either change.
+`onDidChangeTextDocument` updates the dirty set, never the canonical report. The same edit reaches the LSP as `textDocument/didChange`, which re-analyses the buffer text and emits `deslop/reportChanged` ([live.md §LIVE-OPEN-BUFFERS](live.md#live-open-buffers-open-editor-buffers-shadow-the-file-on-disk)), so the canonical report follows the unsaved text as well; the dirty projection is the client-side guard for the moment between the keystroke and that notification. On `didSaveTextDocument` (or external file watcher fire) the file leaves the dirty set; the LSP re-analyses and emits a fresh `deslop/reportChanged` which then updates the canonical report. The visible projection recomputes through the signal graph in the same microtask as either change.
 
-This makes the two requirements compose: the visible projection drops the cluster from the tree the moment the user types (no stale "1 copies"), while the canonical report keeps the cluster id resolvable so `compareWithCanonical` can still diff the canonical (saved) bytes against the selected peer. When the user saves, the LSP confirms the new shape and both views converge.
+This makes the two requirements compose: the visible projection drops the cluster from the tree the moment the user types (no stale "1 copies"), while the canonical report keeps the cluster id resolvable for commands. When the LSP confirms the edited version, both views converge even while the editor remains unsaved.
 
 Tests must respect this contract too: any e2e test that injects a synthetic edit into a fixture file is responsible for restoring it before the suite ends, otherwise the dirty set leaks across suites and downstream tests see an unexpectedly empty visible projection.
 
@@ -346,8 +350,8 @@ The picker is the flagship customisation of the VSIX. It's the single UI knob th
 
 The clone card a developer hovers is rendered by one function, wherever it appears, so the bubble and the squiggle can never describe the same cluster differently. Two layouts share that renderer, and the only thing that varies between them is whether the card states the verdict:
 
-- **Full** — the bubble, with no diagnostic beside it: the cluster slug and its clone kind in bold, the occurrence count, the canonical path, the action links and Dismiss.
-- **Compact** — the squiggle hover, alongside a diagnostic that already carries the verdict: the same card with the verdict dropped, ending in Copy for AI.
+- **Full** — the bubble and the in-editor hover: the stable slug and clone kind in bold, the authoritative copy count, duplicated mass, human-readable occurrence locations, and actions. A non-canonical row can compare that exact occurrence with the canonical one; no pair score is claimed on the cluster card.
+- **Compact** — selected by `deslop.liveBubble.presentation = "compact"`: the 0.36.0 headline and canonical path with actions, without the detail cue, mass, or occurrence list. A source-code hover omits the verdict as in 0.36.0 and offers Copy for AI; the inline decoration still states the kind.
 
 The verdict is the cluster's clone kind ([CLONE-KIND-LABELS]) and nothing else. The card leads with the **slug** — the first seven hex characters of the cluster id, stable across runs — resolved through the same `clusterSlug()` helper the tree uses, so one cluster is never shown under two short forms. **Rank may never take the slug's place** in the leading position: rank changes on every snapshot, and both humans and agents read the leading element as the row's identity (Deslop#149, Deslop#349).
 
@@ -355,7 +359,7 @@ The verdict is the cluster's clone kind ([CLONE-KIND-LABELS]) and nothing else. 
 
 Occurrences overlap, so a cursor can sit inside several clusters at once. The provider answers with exactly one card: the highest-ranked cluster whose occurrence byte range contains the cursor, in the file being hovered. Clusters arrive already sorted worst-first, so the first match is the answer and no ranking is recomputed in the client.
 
-One card is a deliberate limit, not a truncation to be lifted. A hover that stacks every overlapping cluster buries the finding that matters under the shapes that merely enclose it, and the user has the tree and the cluster panel for the full set. The card itself is [VSIX-HOVER-SHARED]'s compact layout, because the diagnostic beside it already states the verdict.
+One card is a deliberate limit, not a truncation to be lifted. A hover that stacks every overlapping cluster buries the finding that matters under the shapes that merely enclose it, and the user has the tree and the cluster panel for the full set. The provider uses the full card by default because diagnostics are off by default; `compact` deliberately restores the briefer 0.36.0 card.
 
 ### [VSIX-STATUS-BAR] Status bar
 

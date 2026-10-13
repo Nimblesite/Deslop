@@ -1,7 +1,7 @@
 //! [SEVERITY-CONFIG] One live configuration for pull and workspace publication.
 
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -33,8 +33,8 @@ pub(crate) struct DiagnosticSession {
     report: Arc<RwLock<Arc<Report>>>,
     /// Root used to resolve reported paths.
     root: PathBuf,
-    /// Files to clear after findings disappear or scope changes.
-    published: Mutex<BTreeSet<PathBuf>>,
+    /// Last payload per file, for changed publications and clearing removed findings.
+    published: Mutex<BTreeMap<PathBuf, Vec<Diagnostic>>>,
     /// Whether the client accepts workspace diagnostic refresh requests.
     refresh_supported: AtomicBool,
 }
@@ -46,7 +46,7 @@ impl DiagnosticSession {
             settings: RwLock::new(DiagnosticSettings::default()),
             report,
             root,
-            published: Mutex::new(BTreeSet::new()),
+            published: Mutex::new(BTreeMap::new()),
             refresh_supported: AtomicBool::new(false),
         })
     }
@@ -112,21 +112,37 @@ impl DiagnosticSession {
         }
     }
 
-    /// Publishes current files and clears files previously published.
+    /// [SEVERITY-CONFIG] Publishes changed payloads and clears files previously published.
     async fn publish_workspace(&self, client: &Client) {
         let mut published = self.published.lock().await;
         let settings = self.settings();
         let report = read_report_snapshot(&self.report);
         let current = workspace_paths(&report, &settings);
-        for path in current.union(&published) {
-            let items = if current.contains(path) {
-                self.for_report_path(&report, path, &settings)
-            } else {
-                Vec::new()
-            };
-            self.publish_path(client, path, items).await;
+        let paths: BTreeSet<_> = current.iter().chain(published.keys()).cloned().collect();
+        for path in paths {
+            let visible_report = current.contains(&path).then_some(report.as_ref());
+            self.publish_if_changed(client, &path, visible_report, &settings, &mut published)
+                .await;
         }
-        *published = current;
+        published.retain(|path, _| current.contains(path));
+    }
+
+    /// Avoids queueing identical diagnostics while retaining every payload change.
+    async fn publish_if_changed(
+        &self,
+        client: &Client,
+        path: &Path,
+        report: Option<&Report>,
+        settings: &DiagnosticSettings,
+        published: &mut BTreeMap<PathBuf, Vec<Diagnostic>>,
+    ) {
+        let items = report.map_or_else(Vec::new, |report| {
+            self.for_report_path(report, path, settings)
+        });
+        if published.get(path) != Some(&items) {
+            self.publish_path(client, path, items.clone()).await;
+        }
+        let _previous = published.insert(path.to_path_buf(), items);
     }
 
     /// Sends diagnostics at an absolute file URI.

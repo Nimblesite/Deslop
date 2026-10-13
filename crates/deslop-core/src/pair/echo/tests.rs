@@ -111,7 +111,7 @@ fn related_ranges_are_those_inside_or_around_the_query_and_no_other() {
         names(index.related(QUERY_FAR)),
         ["far", "same start, wider"]
     );
-    assert!(names(index.related(QUERY_BEYOND)).is_empty());
+    assert_eq!(names(index.related(QUERY_BEYOND)), Vec::<&str>::new());
     assert_eq!(
         names(index.related(WHOLE)).len(),
         labelled().len(),

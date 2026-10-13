@@ -110,7 +110,10 @@ fn disabled_diagnostics_suppress_even_explicit_error_overrides() {
             .severity_by_kind
             .insert(kind, DiagnosticLevel::Error);
         let report = report_for(kind, MASSES[0]);
-        assert!(build_for_file(&report, Path::new(WORKSPACE), &settings).is_empty());
+        assert_eq!(
+            build_for_file(&report, Path::new(WORKSPACE), &settings),
+            Vec::<tower_lsp::lsp_types::Diagnostic>::new()
+        );
     }
 }
 

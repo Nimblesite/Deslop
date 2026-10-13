@@ -49,7 +49,7 @@ fn truncate_for_wire_caps_occurrences_without_inventing_a_pair() -> anyhow::Resu
         .clusters
         .first()
         .ok_or_else(|| anyhow::anyhow!("truncated report must retain its cluster"))?;
-    assert!(report.schema_doc.is_empty());
+    assert_eq!(report.schema_doc, String::new());
     assert_eq!(cluster.occurrences.len(), WIRE_OCCURRENCE_CAP);
     assert_eq!(cluster.occurrences_total, FULL_OCCURRENCE_COUNT);
     assert_eq!(cluster.occurrence_count, FULL_OCCURRENCE_COUNT);

@@ -31,17 +31,16 @@ description: "Find duplicate code in nine languages. Deslop ranks what to remove
   }
 }
 </script>
-{% set reelCut = reel.cuts | first %}
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
-  "@type": "VideoObject",
+  "@type": "CreativeWork",
   "name": {{ reel.name | jsonValue | safe }},
   "description": {{ reel.description | jsonValue | safe }},
-  "thumbnailUrl": {{ (site.url + reelCut.poster) | jsonValue | safe }},
-  "contentUrl": {{ (site.url + reelCut.h264) | jsonValue | safe }},
-  "uploadDate": {{ reel.uploadDate | jsonValue | safe }},
-  "duration": {{ reel.duration | jsonValue | safe }},
+  "image": {{ (site.url + reel.desktopPoster) | jsonValue | safe }},
+  "url": {{ (site.url + '/#release-reel') | jsonValue | safe }},
+  "datePublished": {{ reel.uploadDate | jsonValue | safe }},
+  "timeRequired": {{ reel.duration | jsonValue | safe }},
   "publisher": { "@id": "https://deslop.live/#organization" }
 }
 </script>

@@ -1,9 +1,6 @@
 //! Explicit endpoint-to-endpoint evidence measurement ([FUSED-PAIR-SIGNALS]).
 
-use std::{
-    collections::{hash_map::RandomState, HashMap},
-    path::{Path, PathBuf},
-};
+use std::collections::{hash_map::RandomState, HashMap};
 
 use super::PipelineSession;
 use crate::{
@@ -11,22 +8,24 @@ use crate::{
     content::{tree_index_of, ContentContradiction, ContentMeasurer, PairScope},
     embedding::{cosine_similarity, EmbeddingProvider},
     error::CoreError,
-    fingerprint::Fingerprint,
-    lsh::{estimate_jaccard, SignatureLookup},
+    lsh::estimate_jaccard,
     overlap::{OverlapMeasurer, RescueContext},
     pair::{CandidatePair, PairScore},
-    report::{
-        ContentMeasurement, PairComparison, PairComparisonParams, PairEndpoint, PairEvidence,
-        PairTextIdentity,
-    },
+    report::{ContentMeasurement, PairComparison, PairComparisonParams, PairEvidence},
     state::FileId,
 };
+
+/// An explicit comparison measures the whole endpoints the caller named,
+/// never the interior-window scope ([FUSED-PAIR-SIGNALS]).
+const WHOLE_ENDPOINTS: bool = false;
 
 mod admission;
 use admission::AdmissionFacts;
 mod cluster_kind;
 pub(crate) use cluster_kind::ClusterKindMeasurer;
 mod core_need;
+mod endpoints;
+use endpoints::{ResolvedEndpoint, ResolvedPair};
 mod text_identity;
 pub(super) use text_identity::same_source_bytes_and_language;
 use text_identity::SourceIdentity;
@@ -57,40 +56,6 @@ impl PipelineSession {
         })
     }
 
-    /// Resolves both endpoint identities against the current flat corpus.
-    fn resolve_pair<'corpus>(
-        &'corpus self,
-        params: &PairComparisonParams,
-    ) -> Result<ResolvedPair<'corpus>, CoreError> {
-        let left = self.resolve_endpoint(&params.left)?;
-        let right = self.resolve_endpoint(&params.right)?;
-        Ok(ResolvedPair { left, right })
-    }
-
-    /// Resolves one exact path/range to its fingerprint and signature index.
-    fn resolve_endpoint(&self, endpoint: &PairEndpoint) -> Result<ResolvedEndpoint<'_>, CoreError> {
-        let requested = canonical_endpoint_path(&self.root, &endpoint.path);
-        self.store
-            .fingerprints()
-            .iter()
-            .enumerate()
-            .find(|(_, fingerprint)| self.endpoint_matches(fingerprint, endpoint, &requested))
-            .map(|(index, fingerprint)| ResolvedEndpoint { index, fingerprint })
-            .ok_or_else(|| unknown_endpoint(endpoint))
-    }
-
-    /// Tests exact file identity and byte range for one fingerprint.
-    fn endpoint_matches(
-        &self,
-        fingerprint: &Fingerprint,
-        endpoint: &PairEndpoint,
-        requested: &Path,
-    ) -> bool {
-        fingerprint.byte_range.start == endpoint.start_byte
-            && fingerprint.byte_range.end == endpoint.end_byte
-            && self.registry.path(fingerprint.file_id) == Some(requested)
-    }
-
     /// Measures every pair-owned axis and applies the admission algebra.
     fn measure_pair(
         &self,
@@ -101,7 +66,7 @@ impl PipelineSession {
         let pairs = self.comparison_anchor_pairs();
         let mut axes = PairAxes::new(&trees, self, &pairs);
         let embedding_cos = self.embedding_cos(pair, provider)?;
-        let measurements = self.measure_axes(pair, &mut axes, embedding_cos);
+        let measurements = self.measure_axes(pair, &mut axes, embedding_cos, WHOLE_ENDPOINTS);
         Ok(self.build_evidence(pair, measurements))
     }
 
@@ -122,12 +87,16 @@ impl PipelineSession {
     /// Measures structural, token, and raw-content evidence beside the
     /// caller-supplied embedding cosine. The explicit comparison asks a
     /// provider for the cosine; the cluster fold reads the one the
-    /// embedding pass already measured ([CLONE-KIND-FOLD]).
+    /// embedding pass already measured ([CLONE-KIND-FOLD]). `interior`
+    /// is the content scope of two windows strictly inside a function
+    /// ([FUSED-CONTENT-GATE-INTERIOR]), which only a span admitted here
+    /// rather than at discovery pays.
     fn measure_axes(
         &self,
         pair: &ResolvedPair<'_>,
         axes: &mut PairAxes<'_>,
         embedding_cos: f64,
+        interior: bool,
     ) -> Measurements {
         let merkle_equal = pair.left.fingerprint.hash == pair.right.fingerprint.hash;
         let text = pair.text_identity(&self.sources);
@@ -145,7 +114,7 @@ impl PipelineSession {
             &self.sources,
             PairScope {
                 same_file: !pair.cross_file(),
-                interior: false,
+                interior,
                 core: false,
             },
         );
@@ -340,71 +309,6 @@ impl<'corpus> PairAxes<'corpus> {
     }
 }
 
-/// One resolved endpoint and its positional signature index.
-#[derive(Clone, Copy)]
-struct ResolvedEndpoint<'corpus> {
-    /// Flat-corpus index.
-    index: usize,
-    /// Exact fingerprint occurrence.
-    fingerprint: &'corpus Fingerprint,
-}
-
-impl ResolvedEndpoint<'_> {
-    /// Signature aligned with this endpoint's flat-corpus index.
-    fn signature(self, signatures: &dyn SignatureLookup) -> Option<&crate::lsh::Signature> {
-        signatures.signature(self.index)
-    }
-}
-
-/// Two exact endpoint occurrences.
-struct ResolvedPair<'corpus> {
-    /// Caller-selected left endpoint.
-    left: ResolvedEndpoint<'corpus>,
-    /// Caller-selected right endpoint.
-    right: ResolvedEndpoint<'corpus>,
-}
-
-impl ResolvedPair<'_> {
-    /// Source snippets for the pair, preserving request order.
-    fn snippets(
-        &self,
-        sources: &std::collections::HashMap<crate::state::FileId, Vec<u8>>,
-    ) -> Vec<String> {
-        [self.left.fingerprint, self.right.fingerprint]
-            .into_iter()
-            .map(|fingerprint| super::super::embedding_batch::snippet_for(fingerprint, sources))
-            .collect()
-    }
-
-    /// Whether the pair spans two source files.
-    fn cross_file(&self) -> bool {
-        self.left.fingerprint.file_id != self.right.fingerprint.file_id
-    }
-
-    /// Whether endpoint languages require discovery's cross-language token space.
-    fn cross_language(&self, languages: &HashMap<FileId, &'static str>) -> bool {
-        languages.get(&self.left.fingerprint.file_id)
-            != languages.get(&self.right.fingerprint.file_id)
-    }
-
-    /// How far the two raw endpoint snippets are the same text, read once
-    /// from the same bytes so the byte answer and the indentation answer
-    /// cannot disagree ([FUSED-PAIR-SIGNALS]).
-    fn text_identity(
-        &self,
-        sources: &std::collections::HashMap<crate::state::FileId, Vec<u8>>,
-    ) -> SourceIdentity {
-        let snippets = self.snippets(sources);
-        let [left, right] = snippets.as_slice() else {
-            return SourceIdentity {
-                raw: PairTextIdentity::Different,
-                identical: false,
-            };
-        };
-        SourceIdentity::measure(left, right)
-    }
-}
-
 /// Pair axes and raw-content populations before admission gates.
 #[derive(Clone, Copy)]
 struct Measurements {
@@ -472,23 +376,4 @@ fn valid_cosine(provider: &dyn EmbeddingProvider, vectors: &[Vec<f32>]) -> Resul
     Err(CoreError::Embedding {
         message: "pair comparison provider returned invalid vectors".to_owned(),
     })
-}
-
-/// Canonical absolute identity of a wire endpoint path.
-fn canonical_endpoint_path(root: &Path, path: &Path) -> PathBuf {
-    let absolute = if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        root.join(path)
-    };
-    std::fs::canonicalize(&absolute).unwrap_or(absolute)
-}
-
-/// Constructs the structured unknown-endpoint error.
-fn unknown_endpoint(endpoint: &PairEndpoint) -> CoreError {
-    CoreError::UnknownPairEndpoint {
-        path: endpoint.path.clone(),
-        start_byte: endpoint.start_byte,
-        end_byte: endpoint.end_byte,
-    }
 }

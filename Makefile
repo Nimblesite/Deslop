@@ -415,7 +415,10 @@ ci-ollama: ci test-ollama
 ##              runner-dependent — so `--ignored` is what selects it here,
 ##              scoped to Cargo's dedicated `corpus_repos` test target.
 ##              `make test`/`make ci` still compile and lint the target. Run
-##              this when touching the pipeline.
+##              this when touching the pipeline. [CORPUS-REPORT] Every test
+##              writes accuracy, wall time, CPU time, peak CPU and peak memory
+##              into its own .corpus/test-corpus/<test>-<UTC timestamp>.md —
+##              the same scorecard `score-gate` and `compare` write.
 test-corpus:
 	node scripts/corpus/fetch-corpus.mjs
 	cargo build --release --bin deslop

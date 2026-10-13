@@ -8,7 +8,10 @@
 
 use std::path::Path;
 
-use deslop_core::{live::FileReport, report::ReportCluster};
+use deslop_core::{
+    live::FileReport,
+    report::{ReportCluster, ReportOccurrence},
+};
 use serde_json::json;
 use tower_lsp::lsp_types::{CodeLens, Command, Position, Range};
 
@@ -19,6 +22,9 @@ pub const JUMP_COMMAND: &str = "deslop.jumpToNextOccurrence";
 
 /// Trailing action the lens title ends with, naming what a click does.
 const JUMP_ACTION: &str = "— jump to next";
+
+/// The lens anchors at the start of its occurrence's first line.
+const FIRST_COLUMN: u32 = 0;
 
 /// Builds the code lenses for one file report.
 #[must_use]
@@ -38,15 +44,19 @@ fn lenses_for_cluster(cluster: &ReportCluster, path: &Path) -> Vec<CodeLens> {
         .iter()
         .enumerate()
         .filter(|(_, occurrence)| occurrence_matches_path(occurrence, path))
-        .map(|(index, _occurrence)| lens_for_occurrence(cluster, index))
+        .map(|(index, occurrence)| lens_for_occurrence(cluster, index, occurrence))
         .collect()
 }
 
-/// Builds a code lens at column zero of the cluster's first line for
-/// the occurrence at `occurrence_index`.
-fn lens_for_occurrence(cluster: &ReportCluster, occurrence_index: usize) -> CodeLens {
+/// Builds a code lens at column zero of the first line of `occurrence`,
+/// which sits at `occurrence_index` in the cluster ([LSP-CODE-LENS]).
+fn lens_for_occurrence(
+    cluster: &ReportCluster,
+    occurrence_index: usize,
+    occurrence: &ReportOccurrence,
+) -> CodeLens {
     CodeLens {
-        range: zero_range(),
+        range: first_line_range(occurrence),
         command: Some(Command {
             title: title_for(cluster),
             command: JUMP_COMMAND.to_owned(),
@@ -76,17 +86,18 @@ fn title_for(cluster: &ReportCluster) -> String {
     )
 }
 
-/// Returns a zero-width range at position `(0, 0)` — the lens anchor.
-fn zero_range() -> Range {
+/// Returns a zero-width range at column zero of the occurrence's first
+/// line — the lens anchor ([LSP-CODE-LENS]). The wire reports one-based
+/// lines; LSP positions are zero-based.
+fn first_line_range(occurrence: &ReportOccurrence) -> Range {
+    let line = u32::try_from(occurrence.start_line.saturating_sub(1).max(0)).unwrap_or(u32::MAX);
+    let anchor = Position {
+        line,
+        character: FIRST_COLUMN,
+    };
     Range {
-        start: Position {
-            line: 0,
-            character: 0,
-        },
-        end: Position {
-            line: 0,
-            character: 0,
-        },
+        start: anchor,
+        end: anchor,
     }
 }
 
@@ -105,18 +116,34 @@ mod tests {
 
     const ALPHA_FILE: &str = "Alpha.cs";
     const PAIR_SIZE: usize = 2;
+    /// One-based first lines of the two Alpha.cs occurrences below.
+    const ALPHA_START_LINES: [i64; 2] = [3, 14];
+    const GOLD_START_LINE: i64 = 25;
+    /// A wire occurrence that carries no line information.
+    const NO_LINE: i64 = 0;
+    /// The zero-based line a lens falls back to.
+    const TOP_LINE: u32 = 0;
 
     fn make_cluster(id: &str, occurrences: Vec<ReportOccurrence>) -> ReportCluster {
         deslop_core::report_fixtures::fixture_cluster(id, occurrences)
     }
 
     fn occurrence(path: &str, start: usize, end: usize) -> ReportOccurrence {
+        occurrence_on_line(path, start, end, 1)
+    }
+
+    fn occurrence_on_line(
+        path: &str,
+        start: usize,
+        end: usize,
+        start_line: i64,
+    ) -> ReportOccurrence {
         ReportOccurrence {
             path: PathBuf::from(path),
             start_byte: start,
             end_byte: end,
-            start_line: 1,
-            end_line: 1,
+            start_line,
+            end_line: start_line,
             hidden: false,
             in_diff: None,
         }
@@ -127,8 +154,8 @@ mod tests {
         let cluster = make_cluster(
             "cluster-alpha",
             vec![
-                occurrence(ALPHA_FILE, 0, 10),
-                occurrence(ALPHA_FILE, 50, 80),
+                occurrence_on_line(ALPHA_FILE, 0, 10, ALPHA_START_LINES[0]),
+                occurrence_on_line(ALPHA_FILE, 50, 80, ALPHA_START_LINES[1]),
                 occurrence("Other.cs", 10, 20),
             ],
         );
@@ -144,8 +171,18 @@ mod tests {
             PAIR_SIZE,
             "two matching occurrences → two lenses: {lenses:?}"
         );
-        for (expected_index, lens) in lenses.iter().enumerate() {
-            assert_eq!(lens.range, zero_range(), "lens range must be zero anchor");
+        for ((expected_index, lens), start_line) in lenses.iter().enumerate().zip(ALPHA_START_LINES)
+        {
+            let expected_line = u32::try_from(start_line - 1)?;
+            assert_eq!(
+                lens.range.start.line, expected_line,
+                "[LSP-CODE-LENS] the lens sits at the first line of its own occurrence"
+            );
+            assert_eq!(
+                lens.range.end, lens.range.start,
+                "lens range is a zero-width anchor"
+            );
+            assert_eq!(lens.range.start.character, FIRST_COLUMN);
             assert!(lens.data.is_none(), "no data payload on emitted lenses");
             let command = lens
                 .command
@@ -243,7 +280,9 @@ mod tests {
     #[test]
     fn lens_for_occurrence_preserves_cluster_id_and_index() -> Result<()> {
         let cluster = make_cluster("xyz-789", vec![occurrence("A.cs", 0, 1)]);
-        let lens = lens_for_occurrence(&cluster, 4);
+        let target = occurrence_on_line("A.cs", 0, 1, GOLD_START_LINE);
+        let lens = lens_for_occurrence(&cluster, 4, &target);
+        assert_eq!(lens.range, first_line_range(&target));
         let command = lens.command.ok_or_else(|| anyhow!("command populated"))?;
         let arguments = command
             .arguments
@@ -264,12 +303,21 @@ mod tests {
     }
 
     #[test]
-    fn zero_range_is_a_zero_width_anchor_at_origin() {
-        let range = zero_range();
-        assert_eq!(range.start.line, 0);
-        assert_eq!(range.start.character, 0);
-        assert_eq!(range.end.line, 0);
-        assert_eq!(range.end.character, 0);
+    fn first_line_range_is_a_zero_width_anchor_at_the_occurrence_first_line() -> Result<()> {
+        let range = first_line_range(&occurrence_on_line("A.cs", 0, 1, GOLD_START_LINE));
+        assert_eq!(range.start.line, u32::try_from(GOLD_START_LINE - 1)?);
+        assert_eq!(range.start.character, FIRST_COLUMN);
+        assert_eq!(range.start, range.end, "range is zero-width");
+        Ok(())
+    }
+
+    /// An occurrence without a line — the wire's lines are one-based, so
+    /// zero carries none — anchors at the top of the file, never past its end.
+    #[test]
+    fn first_line_range_without_a_line_anchors_at_the_top_of_the_file() {
+        let range = first_line_range(&occurrence_on_line("A.cs", 0, 1, NO_LINE));
+        assert_eq!(range.start.line, TOP_LINE);
+        assert_eq!(range.start.character, FIRST_COLUMN);
         assert_eq!(range.start, range.end, "range is zero-width");
     }
 

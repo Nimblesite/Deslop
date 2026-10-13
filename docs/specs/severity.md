@@ -49,6 +49,8 @@ The editor owns diagnostic colours. Deslop's category colours are defined separa
 
 Accept only these five kind keys and the levels `none`, `hint`, `information`, `warning`, `error`. Reject unknown keys or levels. Apply user/workspace precedence per entry. Configuration changes refresh or clear diagnostics without re-analysis, in both pull and workspace-push modes. Diagnostic scope and the master switch still apply.
 
+Workspace publication sends a file's diagnostic list only when that complete payload changes. Reapplying identical settings or refreshing unchanged findings must not queue duplicate publications. Changes to severity, findings or ranges still publish; disabling workspace diagnostics clears each previously published file, and re-enabling publishes its findings again.
+
 ### [SEVERITY-TESTING] Required checks
 
 Verify each default and override, including `none`, omitted entries, invalid configuration and the master switch. Defaults must hold at every clone rank. Pull and push modes must agree and refresh when settings change. No diagnostic setting may change clone weight, rank, counts, percentages or category order.

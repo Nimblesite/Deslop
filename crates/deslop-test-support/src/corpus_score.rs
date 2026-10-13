@@ -20,11 +20,16 @@ use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub mod checks;
 mod coverage;
 pub mod gate;
 pub mod render;
+pub mod run;
+pub mod verdict;
 
 use coverage::matching_cluster;
+
+use crate::corpus_measure::ProcessCost;
 
 /// The two judged verdicts. NOT CLEAR is recorded in a register and scores
 /// nothing, by design.
@@ -52,9 +57,28 @@ pub struct RunCost {
     /// User + system CPU seconds, absent when unmeasured.
     #[serde(default)]
     pub cpu_seconds: Option<f64>,
+    /// The busiest [`crate::corpus_measure::CPU_SAMPLE_WINDOW`] of the scan, in
+    /// percent of one core. Absent when unmeasured, or when the scan ended
+    /// inside its first window.
+    #[serde(default)]
+    pub peak_cpu_percent: Option<f64>,
     /// The exact binary that produced the numbers. A figure whose producing
     /// binary is unidentified is not comparable.
     pub binary_sha256: String,
+}
+
+impl RunCost {
+    /// The record of one measured process, stamped with the binary it ran.
+    #[must_use]
+    pub fn measured(cost: &ProcessCost, binary_sha256: &str) -> Self {
+        Self {
+            elapsed_ms: u64::try_from(cost.wall.as_millis()).unwrap_or(u64::MAX),
+            peak_rss_mb: Some(cost.peak_rss_mb),
+            cpu_seconds: Some(cost.cpu_seconds),
+            peak_cpu_percent: cost.peak_cpu_percent,
+            binary_sha256: binary_sha256.to_owned(),
+        }
+    }
 }
 
 /// One judged range, written `path:startLine-endLine` in a register.

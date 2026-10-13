@@ -82,9 +82,16 @@ type ChangeSummary {
   worst_mass: Int
 }
 
+# [LIVE-OPEN-BUFFERS] The editor version included in this analysis.
+type AnalysedBuffer {
+  path: String
+  version: Int
+}
+
 type ReportChangedNotification {
   generation: Int
   summary: ChangeSummary
+  analysed_buffer: Option<AnalysedBuffer>
 }
 
 union EmbeddingPhase {

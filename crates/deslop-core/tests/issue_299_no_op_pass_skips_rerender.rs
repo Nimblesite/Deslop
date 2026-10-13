@@ -299,7 +299,7 @@ struct SchedulerHarness {
     /// The session the scheduler and the test share.
     session: Arc<tokio::sync::Mutex<AnalysisSession>>,
     /// Stands in for the watcher's path feed.
-    events_tx: tokio::sync::mpsc::Sender<PathBuf>,
+    events_tx: tokio::sync::mpsc::UnboundedSender<PathBuf>,
     /// `report/changed`, exactly as a subscriber sees it.
     report_rx: Receiver<ReportChangedNotification>,
     /// `analysis/state`, read only to know when a pass has finished.
@@ -317,7 +317,7 @@ impl SchedulerHarness {
         let tmp = copy_fixture("csharp-small")?;
         let (session, baseline_generation) = seeded_session(tmp.path())?;
         let session = Arc::new(tokio::sync::Mutex::new(session));
-        let (events_tx, events_rx) = tokio::sync::mpsc::channel(8);
+        let (events_tx, events_rx) = tokio::sync::mpsc::unbounded_channel();
         let scheduler = Scheduler::start(
             Arc::clone(&session),
             events_rx,
@@ -339,7 +339,6 @@ impl SchedulerHarness {
     async fn pass(&mut self, path: &Path, what: &str) -> Result<()> {
         self.events_tx
             .send(path.to_path_buf())
-            .await
             .with_context(|| format!("queue {what}"))?;
         await_pass_complete(&mut self.state_rx).await
     }
