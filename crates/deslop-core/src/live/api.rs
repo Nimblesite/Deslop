@@ -327,28 +327,45 @@ async fn disable_embeddings(
 async fn run_background_refresh(
     inner: Arc<Mutex<AnalysisSession>>,
     previous_reports: Arc<Mutex<BTreeMap<u64, Arc<Report>>>>,
-    job: EmbeddingRefreshJob,
+    mut job: EmbeddingRefreshJob,
 ) {
-    let outcome = tokio::task::spawn_blocking(move || run_embedding_refresh(job)).await;
-    match outcome {
-        Ok(Ok((job, report))) => {
-            commit_background_refresh(inner, previous_reports, job, report).await;
+    loop {
+        let outcome = tokio::task::spawn_blocking(move || run_embedding_refresh(job)).await;
+        match outcome {
+            Ok(Ok((finished, report))) => {
+                let next =
+                    commit_background_refresh(&inner, &previous_reports, finished, report).await;
+                let Some(retry) = next else { break };
+                job = retry;
+            }
+            Ok(Err(failure)) => {
+                report_background_error(Arc::clone(&inner), &failure).await;
+                break;
+            }
+            Err(error) => {
+                tracing::error!(%error, "embedding refresh task failed");
+                break;
+            }
         }
-        Ok(Err(failure)) => report_background_error(inner, &failure).await,
-        Err(error) => tracing::error!(%error, "embedding refresh task failed"),
     }
 }
 
 /// Swaps a completed refresh report into the live session and records
 /// the previous generation for delta queries.
 async fn commit_background_refresh(
-    inner: Arc<Mutex<AnalysisSession>>,
-    previous_reports: Arc<Mutex<BTreeMap<u64, Arc<Report>>>>,
+    inner: &Arc<Mutex<AnalysisSession>>,
+    previous_reports: &Arc<Mutex<BTreeMap<u64, Arc<Report>>>>,
     job: EmbeddingRefreshJob,
     report: Report,
-) {
+) -> Option<EmbeddingRefreshJob> {
     let committed = {
         let mut guard = inner.lock().await;
+        if guard.embedding_refresh_is_current(&job)
+            && !guard.embedding_refresh_matches_sources(&job)
+        {
+            tracing::debug!("embedding refresh sources changed; retrying current selection");
+            return Some(guard.prepare_embedding_refresh(Arc::clone(&job.provider)));
+        }
         guard.commit_embedding_refresh(&job, report)
     };
     if let Some(committed) = committed {
@@ -363,6 +380,7 @@ async fn commit_background_refresh(
             "embedding refresh committed",
         );
     }
+    None
 }
 
 /// Emits progress and logs for a failed background refresh, when that

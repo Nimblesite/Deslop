@@ -52,7 +52,7 @@ Deslop's only `initialize` capabilities are therefore **purely additive** — ea
 
 | Capability | Purpose |
 |---|---|
-| `textDocumentSync = Incremental` | Track in-memory edits so the daemon can analyse buffer contents before save. Affects no editor command. |
+| `textDocumentSync = Incremental` | Receive the text of every open file and each edit to it, so the daemon analyses what the editor shows before save ([live.md §LIVE-OPEN-BUFFERS](live.md#live-open-buffers-open-editor-buffers-shadow-the-file-on-disk)). Affects no editor command. |
 | `codeLensProvider` | Inline "N copies of this block — jump to next" badge at the head of every clone occurrence. A Deslop-owned lens, never a standard feature. |
 | `executeCommandProvider` | Deslop's own `deslop.*` verbs ([LSP-COMMANDS]): refresh report, open full report, pick embedding model, etc. |
 | `diagnosticProvider` (LSP 3.17 pull) | Apply [SEVERITY-DIAGNOSTICS](severity.md#severity-diagnostics-resolve-the-configured-level) and [SEVERITY-DIAGNOSTICS-GATE](severity.md#severity-diagnostics-gate-master-switch). Deslop diagnostics are additive and never replace another tool's diagnostics. |
@@ -128,7 +128,7 @@ Clicking the lens runs the Deslop-owned `deslop.jumpToNextOccurrence` command, w
 
 **The LSP does not register `hoverProvider`** ([LSP-NON-INTERFERENCE]). Deslop must never answer `textDocument/hover`, because hover results from every provider stack into one popup and the editor waits on the slowest — a duplication linter has no business sitting in that path.
 
-The clone card a user sees on hover is rendered entirely client-side by the VSIX's `ClusterHoverProvider` ([VSIX-HOVER-PROVIDER]), registered as an ordinary `vscode.languages.registerHoverProvider`. VS Code stacks it alongside the language server's own hover. The card adds cluster id, occurrence count, mass, and an action that lets the user explicitly select two occurrences for comparison. It never chooses a pair or renders pair evidence on the cluster card. It reads the in-memory report pushed through `deslop/reportChanged`, so it needs no LSP hover round-trip.
+The clone card a user sees on hover is rendered entirely client-side by the VSIX's `ClusterHoverProvider` ([VSIX-HOVER-PROVIDER]), registered as an ordinary `vscode.languages.registerHoverProvider`. VS Code stacks it alongside the language server's own hover. By default the card shows the clone kind, cluster id, occurrence count, mass, and human-readable locations. A Compare action belongs to each non-canonical occurrence, letting the user select the peer against the canonical range. It never chooses a peer or renders pair evidence automatically. The optional compact presentation keeps the brief 0.36.0 hover card ([VSIX-LIVE-BUBBLE]). Both read the in-memory report pushed through `deslop/reportChanged`, so neither needs an LSP hover round-trip.
 
 Editors without a Deslop client lose nothing essential: the same clone information is always available through diagnostics ([LSP-DIAGNOSTICS]) — whose `relatedInformation` links to the canonical occurrence — and the code-lens badges ([LSP-CODE-LENS]).
 
@@ -180,7 +180,7 @@ Live responses must stay small enough to ship over JSON-RPC on every analysis pa
 **Three complementary triggers feed the same session:**
 
 1. **`notify`-backed filesystem watcher** (`[LIVE-WATCHER]`) — started at LSP init against the full workspace root. Catches every mutation: terminal saves, `git pull`, AI coding agents editing files, CI pipelines, formatters, other editors. **This is the primary, non-negotiable trigger.** The LSP is not a VS Code extension; it cannot assume all mutations come from the editor.
-2. **`textDocument/didChange` / `textDocument/didOpen`** — editor-side events for files the user has open. Belt-and-suspenders; slightly faster than waiting for the OS watcher on in-buffer edits.
+2. **`textDocument/didOpen` / `didChange` / `didClose`** — editor-side events for files the user has open. These carry the buffer text itself, so unsaved edits are analysed the moment they happen; the OS watcher only ever sees the saved bytes ([live.md §LIVE-OPEN-BUFFERS](live.md#live-open-buffers-open-editor-buffers-shadow-the-file-on-disk)).
 3. **`workspace/didChangeWatchedFiles`** — the editor's own file-event relay. Belt-and-suspenders.
 
 All three routes call `AnalysisSession::apply_changes` on the **same `Arc<Mutex<AnalysisSession>>`** — no duplicate state, just serialised access. The watcher-driven path goes through `Scheduler` (with a 250 ms debounce); the editor-driven path goes directly.

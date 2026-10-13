@@ -12,6 +12,7 @@ import type { Report, ReportCluster } from "../../types/report";
 import {
   activateExtension,
   codeLenses,
+  clusterForFile,
   deleteRange,
   fixtureUri,
   openFixture,
@@ -85,9 +86,7 @@ async function waitForStartLines(
   startLines: number[],
 ): Promise<ReportCluster> {
   return await waitFor(() => {
-    const cluster = api.reportStore?.current.report?.clusters.find((candidate) =>
-      candidate.occurrences.some((occurrence) => path.basename(occurrence.path) === fileName),
-    );
+    const cluster = clusterForFile(api.reportStore?.current.report, fileName);
     if (!cluster) return undefined;
     return startLinesIn(cluster).join() === startLines.join() ? cluster : undefined;
   }, REANALYSIS_TIMEOUT_MS);

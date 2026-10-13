@@ -26,12 +26,12 @@ export function sleep(ms: number): Promise<void> {
 // condition (a report landing, a generation advancing) rather than a fixed
 // delay. Shared by every suite that needs the live pipeline to settle.
 export async function waitFor<T>(
-  predicate: () => T | undefined,
+  predicate: () => T | Promise<T | undefined> | undefined,
   timeoutMs: number,
 ): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const value = predicate();
+    const value = await predicate();
     if (value !== undefined) return value;
     await sleep(100);
   }
@@ -114,6 +114,20 @@ export function fixtureUri(name: string): vscode.Uri {
 export async function openFixture(name: string): Promise<vscode.TextEditor> {
   const doc = await vscode.workspace.openTextDocument(fixtureUri(name));
   return await vscode.window.showTextDocument(doc);
+}
+
+/** Opens a real fixture clone only after its visible report is ready. */
+export async function openVisibleCloneFixture(api: ExtensionApi, name: string, timeoutMs: number) {
+  const editor = await openFixture(name);
+  const cluster = await waitFor(() => clusterForFile(api.reportStore?.current.visibleReport, name), timeoutMs);
+  return { editor, cluster };
+}
+
+/** Finds the first reported cluster containing a fixture file. */
+export function clusterForFile(report: Report | null | undefined, name: string): ReportCluster | undefined {
+  return report?.clusters.find((candidate) =>
+    candidate.occurrences.some((occurrence) => path.basename(occurrence.path) === name),
+  );
 }
 
 /** Deletes a range from `editor` — the undo half of every "edit, then put the

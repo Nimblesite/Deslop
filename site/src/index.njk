@@ -31,6 +31,19 @@ description: "Find duplicate code in nine languages. Deslop ranks what to remove
   }
 }
 </script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "CreativeWork",
+  "name": {{ reel.name | jsonValue | safe }},
+  "description": {{ reel.description | jsonValue | safe }},
+  "image": {{ (site.url + reel.desktopPoster) | jsonValue | safe }},
+  "url": {{ (site.url + '/#release-reel') | jsonValue | safe }},
+  "datePublished": {{ reel.uploadDate | jsonValue | safe }},
+  "timeRequired": {{ reel.duration | jsonValue | safe }},
+  "publisher": { "@id": "https://deslop.live/#organization" }
+}
+</script>
 {% endblock %}
 
 <div class="home">
@@ -61,6 +74,8 @@ description: "Find duplicate code in nine languages. Deslop ranks what to remove
       </figure>
     </div>
   </section>
+
+  {% include "partials/reel.njk" %}
 
   <section class="showcase">
     <div class="showcase__head">

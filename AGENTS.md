@@ -1,7 +1,7 @@
 <!-- agent-pmo:b636503 -->
 # Deslop Live — Agent Instructions
 
-NEVER CLOSE GH ISSUES, EVEN WITH PR COMMENTS!
+Default to not closing GitHub issues, even on PRs unless the user requests this.
 
 Deslop is a duplicate-code detector. **We are in accuracy-audit mode.** One measure outranks everything else — not features, not languages, not UI, not performance:
 

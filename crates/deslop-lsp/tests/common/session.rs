@@ -14,8 +14,9 @@ use serde_json::Value;
 use tower_lsp::lsp_types::Url;
 
 use super::{
-    call, call_capturing, code_action_params, handshake, notification, rewrite_offer,
-    spawn_lsp_on_fixture_guarded, wait_for_actions, workspace_file_uri, write_frame, LspGuard,
+    call, call_capturing, code_action_params, handshake_request, initialize_request,
+    initialize_request_with_params, request, request_then_notify, rewrite_offer,
+    spawn_lsp_on_fixture_guarded, wait_for_actions, workspace_file_uri, LspGuard,
 };
 
 /// Spawns the real LSP with observable startup logs and caller-selected flags.
@@ -46,9 +47,9 @@ pub fn take_stdin_stdout(child: &mut Child) -> Result<(ChildStdin, BufReader<Chi
 
 /// Sends shutdown, retains the response for assertions, then notifies exit.
 pub fn shutdown(stdin: &mut ChildStdin, reader: &mut BufReader<ChildStdout>) -> Result<Value> {
-    let response = call(stdin, reader, "shutdown", &Value::Null)?;
-    write_frame(stdin, &notification("exit", &serde_json::json!({}))?)?;
-    Ok(response)
+    const SHUTDOWN: &str = "shutdown";
+    const EXIT: &str = "exit";
+    request_then_notify(stdin, reader, request(SHUTDOWN, &Value::Null)?, EXIT)
 }
 
 /// Title of the lazily resolved merge offer ([AUTOFIX-MERGE-CODE-ACTION]).
@@ -79,8 +80,17 @@ pub struct FixtureSession {
 impl FixtureSession {
     /// Copies `fixture`, spawns the LSP on it, and completes the handshake.
     pub fn open(fixture: &str) -> Result<Self> {
+        Self::open_with_request(fixture, initialize_request()?)
+    }
+
+    /// Opens the real server with the client's supported capabilities and settings.
+    pub fn open_with_initialization(fixture: &str, params: &Value) -> Result<Self> {
+        Self::open_with_request(fixture, initialize_request_with_params(params)?)
+    }
+
+    fn open_with_request(fixture: &str, request: (i64, String)) -> Result<Self> {
         let (workspace, guard, mut stdin, mut stdout) = spawn_lsp_on_fixture_guarded(fixture)?;
-        let init = handshake(&mut stdin, &mut stdout)?;
+        let init = handshake_request(&mut stdin, &mut stdout, request)?;
         Ok(Self {
             stdin,
             stdout,

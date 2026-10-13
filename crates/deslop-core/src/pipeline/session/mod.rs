@@ -11,6 +11,7 @@
 mod ast_access;
 mod change;
 mod diff;
+mod initialise;
 mod pair_compare;
 mod render;
 /// Where a snippet's code already lives ([MCP-TOOL-FINDSIMILAR-EXISTING]).
@@ -28,14 +29,13 @@ use store::CorpusStore;
 
 use super::{
     config::{EmbeddingSettings, PipelineConfig},
-    corpus::{build_extension_map, default_parsers, fingerprint_corpus, FingerprintCorpus},
+    corpus::FingerprintCorpus,
+    open_buffers::OpenBuffers,
 };
 use crate::{
     boilerplate::BoilerplateRange,
     config::{is_config_path, watched_config_paths, ExclusionConfig},
-    discover::{
-        discover_files, is_ignore_rule_path, DiscoveredFile, DiscoveryResult, IgnoreMatcher,
-    },
+    discover::{is_ignore_rule_path, DiscoveredFile, DiscoveryResult, IgnoreMatcher},
     error::CoreError,
     lang::LanguageParser,
     report::{CacheStats, Report},
@@ -157,87 +157,23 @@ impl PipelineSession {
         embedding: EmbeddingSettings<'_>,
         diff: Option<&crate::diff_scope::ParsedDiff>,
     ) -> Result<(Self, Report), CoreError> {
-        let parsers = default_parsers();
-        let extension_to_language = build_extension_map(&parsers);
-        // [#141 MCP-SAFETY] Canonicalise the root so the registry,
-        // exclusion matchers and watcher inputs all share one
-        // filesystem identity. Without this the macOS `/var/...` →
-        // `/private/var/...` symlink pair leaves the registry holding
-        // one form while the canonical root sits on the other, and
-        // every later path comparison silently misses.
-        let root = std::fs::canonicalize(&root).unwrap_or(root);
-        tracing::info!(
-            root = %root.display(),
-            root_exists = root.exists(),
-            root_is_dir = root.is_dir(),
-            min_nodes,
-            incremental,
-            supported_extensions = ?extension_to_language.keys().collect::<Vec<_>>(),
-            "pipeline session initialising",
-        );
-        let exclusion = Arc::new(load_exclusion(&root, config_path.as_deref())?);
-        // [CONFIG-INCREMENTAL-OPTOUT] The config file is the outermost
-        // escape hatch: `[analysis] incremental = false` disables
-        // persisted processing for every surface that reaches this
-        // point — CLI batch, rerun, LSP, MCP — whatever the invocation
-        // requested.
-        let effective_incremental = incremental && exclusion.incremental_enabled();
-        if incremental && !effective_incremental {
-            tracing::info!(
-                "persisted processing disabled by config (`[analysis] incremental = false`)",
-            );
-        }
-        let ignore_matcher = IgnoreMatcher::build(&root);
-        let discovery = discover_files(&root, &extension_to_language, &exclusion);
-        log_discovery_summary(&discovery, &root);
         let config = PipelineConfig {
-            root: root.clone(),
-            min_nodes,
-            config_path: config_path.clone(),
-            embedding,
-            incremental: effective_incremental,
-        };
-        let mut corpus = fingerprint_corpus(&discovery.files, &parsers, &config)?;
-        let store = build_store(&mut corpus, &discovery.files, &root);
-        let mut live_paths = LivePaths::default();
-        let mut file_languages: HashMap<FileId, &'static str> = HashMap::new();
-        for discovered in &discovery.files {
-            let _prev = live_paths.insert(discovered.file_id, discovered.path.clone());
-            let _prev_language = file_languages.insert(discovered.file_id, discovered.language);
-        }
-        let files_analysed = discovery.files.len();
-        let mut session = Self {
             root,
             min_nodes,
-            incremental,
             config_path,
-            parsers,
-            extension_to_language,
-            exclusion,
-            ignore_matcher,
-            registry: discovery.registry,
-            store,
-            sources: corpus.sources,
-            live_paths,
-            file_languages,
-            cumulative_stats: corpus.cache_stats,
-            analysed_lines: corpus.analysed_lines,
-            boilerplate_ranges: corpus.boilerplate_ranges,
-            files_analysed,
-            diff_scope: None,
+            embedding,
+            incremental,
         };
-        if let Some(parsed) = diff {
-            session.attach_diff(parsed)?;
-        }
-        let report = session.render(&config, corpus.cache_stats)?;
-        Ok((session, report))
+        Self::initialise_from_sources(config, diff, &OpenBuffers::default())
     }
 
     /// Re-parses (or drops) each path in `changed` and returns the
     /// refreshed [`Report`]. A `changed` entry that no longer exists
     /// on disk is treated as a deletion. Paths outside the workspace
     /// root or with unsupported extensions are silently skipped — a
-    /// watcher can fire on any file, not only interesting ones.
+    /// watcher can fire on any file, not only interesting ones. A path
+    /// an editor holds open is re-parsed from its buffer in `buffers`,
+    /// not from disk ([LIVE-OPEN-BUFFERS]).
     ///
     /// A `changed` entry naming a watched config file
     /// (`<root>/.deslop.toml` or the explicit override) or an
@@ -262,6 +198,7 @@ impl PipelineSession {
         &mut self,
         changed: &[PathBuf],
         embedding: EmbeddingSettings<'_>,
+        buffers: &OpenBuffers,
     ) -> Result<Option<Report>, CoreError> {
         let mut stats = CacheStats::default();
         let watched = watched_config_paths(&self.root, self.config_path.as_deref());
@@ -271,13 +208,13 @@ impl PipelineSession {
         let mut effect =
             CorpusEffect::from_touched(changed.iter().any(|path| reshapes_corpus(path, &watched)));
         if effect == CorpusEffect::Mutated {
-            self.refresh_exclusion(&mut stats, &embedding)?;
+            self.refresh_exclusion(&mut stats, &embedding, buffers)?;
         }
         for path in changed
             .iter()
             .filter(|path| !reshapes_corpus(path, &watched))
         {
-            effect = effect.merge(self.apply_one_change(path, &mut stats, &embedding)?);
+            effect = effect.merge(self.apply_one_change(path, &mut stats, &embedding, buffers)?);
         }
         if effect == CorpusEffect::Untouched {
             tracing::debug!(

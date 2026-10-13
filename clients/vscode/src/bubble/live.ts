@@ -1,5 +1,5 @@
 // Live duplication bubble — [VSIX-LIVE-BUBBLE].
-// Fires after every coalesced buffer edit. Calls deslop/duplicatesFindSimilar
+// Fires after every coalesced buffer edit. Calls deslop/reportForRange
 // on the most-recently-touched range; admission is `bubbleAdmits`: a
 // reported cluster renders — the engine's verdict, reached with content
 // evidence and byte proof this client never sees. Surfaces:
@@ -13,6 +13,7 @@ import type { LanguageClient } from "vscode-languageclient/node";
 
 import { COLOR, KIND_COLOR } from "../design";
 import { ReportStore } from "../reportStore";
+import { ANALYSED_LANGUAGE_IDS } from "../types/languages";
 import {
   ClusterKind,
   ReportCluster,
@@ -20,6 +21,8 @@ import {
   compareClusterRank,
   type Severity,
 } from "../types/report";
+import { BubbleInlayProvider } from "./inlay";
+import { bubblePresentation, type BubblePresentation } from "./presentation";
 import { bubbleHover, ghostText, inlineText } from "./renderParts";
 
 export { shortPath } from "../pathUtils";
@@ -29,15 +32,18 @@ export * from "./renderParts";
 
 const DEBOUNCE_MS = 250;
 const BUDGET_MS = 250;
+export const REPORT_FOR_RANGE_METHOD = "deslop/reportForRange";
 
 interface ActiveBubble {
   editor: vscode.TextEditor;
   clusterId: string;
   range: vscode.Range;
   severity: Severity;
+  mode: string;
+  presentation: BubblePresentation;
 }
 
-// [VSIX-STATE-DIRTY] Everything a `findSimilar` answer is only valid *for*,
+// [VSIX-STATE-DIRTY] Everything a `reportForRange` answer is only valid *for*,
 // captured before the request goes out: the store revision (client-owned
 // monotonic token — the wire generation can read the same value twice across
 // out-of-order snapshot completions, ABA), the document, and its version. By
@@ -84,6 +90,7 @@ const realBudgetScheduler: BudgetScheduler = (expire, ms) => {
 export class LiveBubble implements vscode.Disposable {
   private readonly bubbleDecoration: vscode.TextEditorDecorationType;
   private readonly ghostDecoration: vscode.TextEditorDecorationType;
+  private readonly inlayProvider = new BubbleInlayProvider();
   private readonly disposables: vscode.Disposable[] = [];
   private active: ActiveBubble | null = null;
   private dismissedClusters = new Set<string>();
@@ -118,11 +125,17 @@ export class LiveBubble implements vscode.Disposable {
     this.disposables.push(
       this.bubbleDecoration,
       this.ghostDecoration,
+      this.inlayProvider,
+      vscode.languages.registerInlayHintsProvider(
+        ANALYSED_LANGUAGE_IDS.map((language) => ({ language })),
+        this.inlayProvider,
+      ),
       // effect() tracks store.report (read inside clearRemovedActiveCluster).
       // Clears the bubble automatically when the active cluster disappears.
       { dispose: effect(() => this.clearRemovedActiveCluster()) },
       vscode.workspace.onDidChangeTextDocument((e) => this.onEdit(e)),
       vscode.window.onDidChangeActiveTextEditor(() => this.clearBubble()),
+      vscode.workspace.onDidChangeConfiguration((event) => this.onPresentationChanged(event)),
     );
     this.tryRegister("deslop.bubble.dismiss", () => this.dismiss());
     this.tryRegister("deslop.bubble.dismissCluster", (id) =>
@@ -199,7 +212,7 @@ export class LiveBubble implements vscode.Disposable {
     const dispatch = this.beginProbe(editor.document, change);
     try {
       const clusters = await client.sendRequest<ReportCluster[]>(
-        "deslop/duplicatesFindSimilar",
+        REPORT_FOR_RANGE_METHOD,
         requestParams(editor.document, dispatch.range),
         dispatch.cancellation.token,
       );
@@ -299,15 +312,18 @@ export class LiveBubble implements vscode.Disposable {
       return;
     }
     const severity = clusterSeverity(best);
-    if (this.active?.clusterId === best.id && this.active.range.isEqual(range) && this.active.severity === severity)
-      return;
     const mode = vscode.workspace
       .getConfiguration("deslop")
       .get<string>("liveBubble.mode", "inline");
+    const presentation = bubblePresentation();
+    if (this.active?.clusterId === best.id && this.active.range.isEqual(range)
+      && this.active.severity === severity && this.active.mode === mode
+      && this.active.presentation === presentation) return;
     const lineEnd = editor.document.lineAt(range.end.line).range.end;
     const anchor = new vscode.Range(lineEnd, lineEnd);
 
     if (mode === "ghost") {
+      this.inlayProvider.clear();
       editor.setDecorations(this.bubbleDecoration, []);
       editor.setDecorations(this.ghostDecoration, [
         {
@@ -316,11 +332,13 @@ export class LiveBubble implements vscode.Disposable {
         },
       ]);
     } else {
+      if (presentation === "classic") this.inlayProvider.set(editor.document.uri, range, best);
+      else this.inlayProvider.clear();
       editor.setDecorations(this.ghostDecoration, []);
       editor.setDecorations(this.bubbleDecoration, [
         {
           range: anchor,
-          hoverMessage: bubbleHover(best),
+          hoverMessage: bubbleHover(best, presentation),
           renderOptions: {
             after: {
               contentText: inlineText(best, severity),
@@ -335,10 +353,22 @@ export class LiveBubble implements vscode.Disposable {
       ]);
     }
 
-    this.active = { editor, clusterId: best.id, range, severity };
+    this.active = { editor, clusterId: best.id, range, severity, mode, presentation };
+  }
+
+  private onPresentationChanged(event: vscode.ConfigurationChangeEvent): void {
+    if (!event.affectsConfiguration("deslop.liveBubble.presentation")
+      && !event.affectsConfiguration("deslop.liveBubble.mode")) return;
+    const active = this.active;
+    if (!active) return;
+    const cluster = this.store.current.visibleReport?.clusters.find(
+      (candidate) => candidate.id === active.clusterId,
+    );
+    if (cluster) this.render(active.editor, active.range, [cluster]);
   }
 
   private clearBubble(): void {
+    this.inlayProvider.clear();
     const editor = this.active?.editor;
     if (editor) {
       editor.setDecorations(this.bubbleDecoration, []);
@@ -405,7 +435,7 @@ function probeRange(
   return new vscode.Range(start, end);
 }
 
-// Wire params for deslop/duplicatesFindSimilar: byte offsets, because the
+// Wire params for deslop/reportForRange: byte offsets, because the
 // LSP indexes by UTF-8 bytes while VS Code positions are UTF-16 based.
 function requestParams(
   doc: vscode.TextDocument,

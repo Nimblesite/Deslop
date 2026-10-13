@@ -8,7 +8,7 @@
 mod tests;
 
 use std::{
-    collections::HashSet,
+    collections::{BTreeSet, HashSet},
     path::{Path, PathBuf},
 };
 
@@ -16,6 +16,7 @@ use super::{
     super::{
         config::{EmbeddingSettings, PipelineConfig},
         corpus::{log_skip_too_deep, parse_one_file, parser_for_language, CorpusBuildState},
+        open_buffers::OpenBuffers,
     },
     PipelineSession,
 };
@@ -87,26 +88,41 @@ fn canonicalise_parent(
     }
 }
 
+/// [LIVE-OPEN-BUFFERS] Disk and editor sources form one inventory in stable path order.
+fn source_paths(files: &[DiscoveredFile], buffers: &OpenBuffers) -> BTreeSet<PathBuf> {
+    files
+        .iter()
+        .map(|file| file.path.as_path())
+        .chain(buffers.paths())
+        .map(Path::to_path_buf)
+        .collect()
+}
+
 impl PipelineSession {
     /// Applies one changed path: delete, update, or add. Reports whether
     /// the corpus actually moved, so a pass made entirely of paths the
-    /// gates below reject can skip the re-render.
+    /// gates below reject can skip the re-render. The source comes from
+    /// `buffers` for files an editor holds open ([LIVE-OPEN-BUFFERS]).
     pub(super) fn apply_one_change(
         &mut self,
         path: &Path,
         stats: &mut CacheStats,
         embedding: &EmbeddingSettings<'_>,
+        buffers: &OpenBuffers,
     ) -> Result<CorpusEffect, CoreError> {
         let absolute = self.canonicalise_reference(path);
-        if !absolute.exists() {
-            return Ok(self.drop_subtree(&absolute));
+        if !absolute.exists() && !buffers.contains(&absolute) {
+            // [LIVE-OPEN-BUFFERS] A removed directory can still contain open editor sources.
+            self.ignore_matcher.remove_subtree(&absolute);
+            let present = source_paths(&[], buffers);
+            return Ok(self.drop_absent_descendants(&absolute, &present));
         }
         // [LIVE-WATCHER-DIRECTORIES] Alias notifications cannot widen the workspace corpus.
         if !absolute.starts_with(&self.root) {
             return Ok(CorpusEffect::Untouched);
         }
         if absolute.is_dir() {
-            return self.reconcile_directory(&absolute, stats, embedding);
+            return self.reconcile_directory(&absolute, stats, embedding, buffers);
         }
         let Some(language) = self.language_for(&absolute) else {
             return Ok(CorpusEffect::Untouched);
@@ -131,18 +147,25 @@ impl PipelineSession {
             .unwrap_or_else(|| self.registry.register(absolute.clone()));
         let config = self.pipeline_config_with_mode(embedding);
         let mut build_stats = CorpusBuildState::default();
-        let (cached, source, lines) =
-            match parse_one_file(file_id, &absolute, parser, &config, stats, &mut build_stats) {
-                Ok(parsed) => parsed,
-                // A pathologically deep file must not crash the long-lived
-                // server: drop it and keep serving, the same way an
-                // excluded path is handled above. Real parser errors propagate.
-                Err(CoreError::AstTooDeep { language, limit }) => {
-                    log_skip_too_deep(language, limit);
-                    return Ok(self.drop_path(&absolute));
-                }
-                Err(other) => return Err(other),
-            };
+        let (cached, source, lines) = match parse_one_file(
+            file_id,
+            &absolute,
+            parser,
+            &config,
+            stats,
+            &mut build_stats,
+            buffers,
+        ) {
+            Ok(parsed) => parsed,
+            // A pathologically deep file must not crash the long-lived
+            // server: drop it and keep serving, the same way an
+            // excluded path is handled above. Real parser errors propagate.
+            Err(CoreError::AstTooDeep { language, limit }) => {
+                log_skip_too_deep(language, limit);
+                return Ok(self.drop_path(&absolute));
+            }
+            Err(other) => return Err(other),
+        };
         if self
             .sources
             .get(&file_id)
@@ -179,6 +202,7 @@ impl PipelineSession {
         directory: &Path,
         stats: &mut CacheStats,
         embedding: &EmbeddingSettings<'_>,
+        buffers: &OpenBuffers,
     ) -> Result<CorpusEffect, CoreError> {
         if !self.prepare_directory(directory)? {
             return Ok(self.drop_subtree(directory));
@@ -189,7 +213,7 @@ impl PipelineSession {
             &self.extension_to_language,
             &self.exclusion,
         )?;
-        self.apply_directory_files(directory, &discovered.files, stats, embedding)
+        self.apply_directory_files(directory, &discovered.files, stats, embedding, buffers)
     }
 
     /// Reloads root policy for overflow recovery and refreshes only admitted subtrees.
@@ -213,13 +237,17 @@ impl PipelineSession {
         files: &[DiscoveredFile],
         stats: &mut CacheStats,
         embedding: &EmbeddingSettings<'_>,
+        buffers: &OpenBuffers,
     ) -> Result<CorpusEffect, CoreError> {
-        let present = files.iter().map(|file| file.path.clone()).collect();
+        let present = source_paths(files, buffers)
+            .into_iter()
+            .filter(|path| path.starts_with(directory))
+            .collect();
         let initial = self
             .drop_absent_descendants(directory, &present)
             .merge(CorpusEffect::from_touched(directory == self.root));
-        files.iter().try_fold(initial, |effect, file| {
-            self.apply_one_change(&file.path, stats, embedding)
+        present.iter().try_fold(initial, |effect, path| {
+            self.apply_one_change(path, stats, embedding, buffers)
                 .map(|changed| effect.merge(changed))
         })
     }
@@ -228,7 +256,7 @@ impl PipelineSession {
     fn drop_absent_descendants(
         &mut self,
         directory: &Path,
-        present: &HashSet<PathBuf>,
+        present: &BTreeSet<PathBuf>,
     ) -> CorpusEffect {
         self.live_paths
             .descendants(directory)
@@ -248,6 +276,7 @@ impl PipelineSession {
         &mut self,
         stats: &mut CacheStats,
         embedding: &EmbeddingSettings<'_>,
+        buffers: &OpenBuffers,
     ) -> Result<(), CoreError> {
         if let Err(error) = self.reload_exclusion() {
             tracing::warn!(
@@ -257,7 +286,7 @@ impl PipelineSession {
             return Ok(());
         }
         let dropped = self.drop_newly_excluded();
-        let added = self.apply_newly_included(stats, embedding)?;
+        let added = self.apply_newly_included(stats, embedding, buffers)?;
         tracing::info!(dropped, added, "deslop_toml_reloaded corpus re-evaluated");
         Ok(())
     }
@@ -291,17 +320,16 @@ impl PipelineSession {
         &mut self,
         stats: &mut CacheStats,
         embedding: &EmbeddingSettings<'_>,
+        buffers: &OpenBuffers,
     ) -> Result<usize, CoreError> {
         let discovery = discover_files(&self.root, &self.extension_to_language, &self.exclusion);
         let known: HashSet<PathBuf> = self.live_paths.values().cloned().collect();
-        let fresh: Vec<PathBuf> = discovery
-            .files
+        let fresh: Vec<PathBuf> = source_paths(&discovery.files, buffers)
             .into_iter()
-            .map(|file| file.path)
             .filter(|path| !known.contains(path))
             .collect();
         for path in &fresh {
-            let _effect = self.apply_one_change(path, stats, embedding)?;
+            let _effect = self.apply_one_change(path, stats, embedding, buffers)?;
         }
         Ok(fresh.len())
     }

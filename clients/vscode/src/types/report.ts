@@ -69,6 +69,7 @@ export function occurrenceCount(cluster: ReportCluster): number {
 // every consumer. The generated source is gitignored; `make
 // typediagram-gen` (chained into `make vsix-build`) regenerates it.
 export type {
+  AnalysedBuffer,
   AnalysisState,
   ChangeSummary,
   EmbeddingModelInfo,

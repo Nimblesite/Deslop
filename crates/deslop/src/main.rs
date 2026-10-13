@@ -20,9 +20,9 @@ use anyhow::{bail, Context, Result};
 use clap::Parser;
 use deslop_core::{
     apply_only_changed, debug_ast_dump, validate_threshold_percent, version_contract_output,
-    ComponentKind, EmbeddingMode, EmbeddingSettings, ExclusionConfig, OllamaProvider, ParsedDiff,
-    PipelineSession, Report, ReportDelta, DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL,
-    DEFAULT_PROVIDER_ID,
+    ComponentKind, EmbeddingMode, EmbeddingSettings, ExclusionConfig, OllamaProvider, OpenBuffers,
+    ParsedDiff, PipelineSession, Report, ReportDelta, DEFAULT_OLLAMA_ENDPOINT,
+    DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID,
 };
 use tracing::Level;
 
@@ -534,8 +534,9 @@ fn produce_report(
     );
     // `None` means the replayed paths touched no analysed file, so the
     // initial report still stands and re-rendering it would be waste.
+    // The batch CLI has no editor, so no open buffer shadows a file.
     let updated = session
-        .update_files(&touched, embedding())
+        .update_files(&touched, embedding(), &OpenBuffers::default())
         .context("incremental rerun failed")?;
     let delta = ReportDelta::between(Some((0, &initial)), 1, updated.as_ref().unwrap_or(&initial));
     Ok(PipelineOutcome {

@@ -61,6 +61,8 @@ mod live_delta_field_coverage;
 mod live_find_similar;
 #[path = "live_merge_plan.rs"]
 mod live_merge_plan;
+#[path = "live_open_buffers.rs"]
+mod live_open_buffers;
 #[path = "live_session_status.rs"]
 mod live_session_status;
 #[path = "pair_admission_bounded_max.rs"]
