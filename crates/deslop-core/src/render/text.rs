@@ -9,7 +9,7 @@ use std::fmt::Write as _;
 
 use crate::{
     report::{Report, ReportCluster},
-    report_facts::{repo_cluster_count, threshold_verdict, DiffDelta},
+    report_facts::{included_kind_titles, repo_cluster_count, threshold_verdict, DiffDelta},
     report_location::diff_badge,
 };
 
@@ -44,6 +44,17 @@ fn write_metrics(out: &mut String, report: &Report) {
         clusters = repo_cluster_count(report),
         files = metrics.duplicated_files,
     );
+    // [METRICS-TOTAL-INCLUDE] The headline counts only the kinds named
+    // here, so the total is never mistaken for every relation found.
+    // Suppressed when the set is empty — a report written before the
+    // field existed asserts nothing about it.
+    if !metrics.total_includes.is_empty() {
+        let _ = writeln!(
+            out,
+            "total counts: {kinds}",
+            kinds = included_kind_titles(&metrics.total_includes),
+        );
+    }
     let Some(verdict) = threshold_verdict(&metrics.threshold) else {
         return;
     };
@@ -52,6 +63,19 @@ fn write_metrics(out: &mut String, report: &Report) {
         "threshold: {pct:.2}% ({verdict})",
         pct = metrics.threshold.percent,
     );
+    // [EXIT-CODES] Per-kind gates print beside the total's, in display
+    // order, only when the user set one.
+    for row in &metrics.per_kind {
+        if let Some(kind_verdict) = threshold_verdict(&row.threshold) {
+            let _ = writeln!(
+                out,
+                "{title} threshold: {pct:.2}% ({verdict})",
+                title = row.kind.labels().title,
+                pct = row.threshold.percent,
+                verdict = kind_verdict,
+            );
+        }
+    }
 }
 
 /// Writes the diff-scoped metrics block ([METRICS-DIFF-SCOPE]):

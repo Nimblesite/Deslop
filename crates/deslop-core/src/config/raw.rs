@@ -7,8 +7,12 @@ use std::{collections::HashMap, path::Path};
 
 use serde::Deserialize;
 
-use super::{BoilerplateImportsMode, ClonePolicy};
-use crate::{error::CoreError, report_metrics::validate_threshold_percent};
+use super::{BoilerplateImportsMode, ClonePolicy, KindThresholds};
+use crate::{
+    buckets::{ClusterKind, TotalInclude},
+    error::CoreError,
+    report_metrics::validate_threshold_percent,
+};
 
 /// Raw on-disk TOML shape.
 #[derive(Debug, Default, Clone, Deserialize)]
@@ -24,6 +28,10 @@ pub(super) struct RawConfig {
     /// `[threshold]` block to `.deslop.toml`.
     #[serde(default)]
     pub(super) threshold: Option<RawThreshold>,
+    /// [METRICS-TOTAL-INCLUDE] Which clone kinds count toward the repo
+    /// total. Populated when a user adds a `[total]` block.
+    #[serde(default)]
+    pub(super) total: Option<RawTotal>,
     /// Analysis-wide behavior toggles.
     #[serde(default)]
     pub(super) analysis: RawAnalysis,
@@ -148,6 +156,43 @@ pub(super) struct RawThreshold {
     /// [EXIT-CODES]. `None` means "key not set" — the gate is off.
     #[serde(default)]
     max_duplication_percent: Option<f64>,
+    /// [EXIT-CODES] Per-kind optional limits (`[threshold.kinds]`).
+    /// Every key defaults to unset — no per-kind gate exists unless the
+    /// user writes one.
+    #[serde(default)]
+    pub(super) kinds: RawThresholdKinds,
+}
+
+/// Raw `[threshold.kinds]` subsection: one optional percentage per
+/// clone kind ([EXIT-CODES]). Unknown keys are rejected — a typo'd kind
+/// must not silently disable the gate the user meant to set. Shape-only
+/// is rejected here too, keeping it a permanent non-clone
+/// ([CLONE-BUCKETS-STRUCTURAL-ONLY]).
+#[derive(Debug, Default, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct RawThresholdKinds {
+    /// Limit on the `identical` kind's own percentage.
+    #[serde(default)]
+    pub(super) identical: Option<f64>,
+    /// Limit on the `nearly_identical` kind's own percentage.
+    #[serde(default)]
+    pub(super) nearly_identical: Option<f64>,
+    /// Limit on the `loosely_similar` kind's own percentage.
+    #[serde(default)]
+    pub(super) loosely_similar: Option<f64>,
+    /// Limit on the `same_behavior` kind's own percentage.
+    #[serde(default)]
+    pub(super) same_behavior: Option<f64>,
+}
+
+/// Raw on-disk shape of the `[total]` section ([METRICS-TOTAL-INCLUDE]).
+#[derive(Debug, Default, Clone, Deserialize)]
+pub(super) struct RawTotal {
+    /// Wire spellings of the kinds whose lines count toward the repo
+    /// total. Absent means the default set
+    /// ([`crate::buckets::DEFAULT_TOTAL_INCLUDES`]).
+    #[serde(default)]
+    pub(super) include: Vec<String>,
 }
 
 /// One TOML section — shared shape across `[defaults]` and
@@ -189,4 +234,69 @@ pub(super) fn resolve_threshold(
             path: source.to_path_buf(),
             message: msg,
         })
+}
+
+/// Validates every `[threshold.kinds]` limit against
+/// [`validate_threshold_percent`]; unset keys stay unset. Shape-only has
+/// no key to set ([CLONE-BUCKETS-STRUCTURAL-ONLY]) and an unknown key is
+/// rejected by serde before this runs.
+pub(super) fn resolve_kind_thresholds(
+    source: &Path,
+    raw: Option<&RawThreshold>,
+) -> Result<KindThresholds, CoreError> {
+    let Some(block) = raw else {
+        return Ok(KindThresholds::default());
+    };
+    let reject = |message: String| CoreError::ConfigThreshold {
+        path: source.to_path_buf(),
+        message,
+    };
+    let validate = |kind: &str, percent: Option<f64>| -> Result<Option<f64>, CoreError> {
+        match percent {
+            None => Ok(None),
+            Some(value) => validate_threshold_percent(value)
+                .map(Some)
+                .map_err(|msg| reject(format!("[threshold.kinds] {kind}: {msg}"))),
+        }
+    };
+    Ok(KindThresholds {
+        identical: validate("identical", block.kinds.identical)?,
+        nearly_identical: validate("nearly_identical", block.kinds.nearly_identical)?,
+        loosely_similar: validate("loosely_similar", block.kinds.loosely_similar)?,
+        same_behavior: validate("same_behavior", block.kinds.same_behavior)?,
+    })
+}
+
+/// Resolves the `[total] include` set ([METRICS-TOTAL-INCLUDE]):
+/// default when the section is absent, otherwise every label must name a
+/// clone kind. `structural_only` is refused with a message naming the
+/// spec that keeps it a permanent non-clone.
+pub(super) fn resolve_total_include(
+    source: &Path,
+    raw: Option<&RawTotal>,
+) -> Result<TotalInclude, CoreError> {
+    let Some(block) = raw else {
+        return Ok(TotalInclude::default());
+    };
+    let mut kinds = Vec::with_capacity(block.include.len());
+    for label in &block.include {
+        let kind =
+            ClusterKind::from_wire_label(label).ok_or_else(|| CoreError::ConfigThreshold {
+                path: source.to_path_buf(),
+                message: format!(
+                    "[total] include: unknown kind '{label}' — expected one of \
+                     identical, nearly_identical, loosely_similar, same_behavior"
+                ),
+            })?;
+        if kind == ClusterKind::StructuralOnly {
+            return Err(CoreError::ConfigThreshold {
+                path: source.to_path_buf(),
+                message: "[total] include: 'structural_only' is never duplication \
+                     ([CLONE-BUCKETS-STRUCTURAL-ONLY]); it cannot count toward the total"
+                    .to_owned(),
+            });
+        }
+        kinds.push(kind);
+    }
+    Ok(TotalInclude::from_kinds(kinds))
 }

@@ -14,7 +14,19 @@ const TYPE_I_TAG = "[Type I]";
 const TYPE_II_III_TAG = "[Type II / III]";
 
 suite("TopOffendersProvider", () => {
-  test("cluster mode (default) lists clusters worst-first with global ranks", () => {
+  suiteSetup(async () => {
+    await vscode.workspace
+      .getConfiguration("deslop")
+      .update("topOffenders.groupBy", "cluster", vscode.ConfigurationTarget.Global);
+  });
+
+  suiteTeardown(async () => {
+    await vscode.workspace
+      .getConfiguration("deslop")
+      .update("topOffenders.groupBy", undefined, vscode.ConfigurationTarget.Global);
+  });
+
+  test("cluster mode lists clusters worst-first with global ranks", () => {
     // [VSIX-TOP-OFFENDERS-CLUSTER-MODE] No file-keyed reordering.
     // [VSIX-TOP-OFFENDERS-RANK-GLOBAL] rank #N lives in the grey description;
     // [VSIX-TOP-OFFENDERS-CLUSTER-ID] the stable short id leads the bold label.

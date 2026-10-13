@@ -23,7 +23,7 @@ use crate::{
         html_snippets::{render_snippet_body, SnippetLoader},
     },
     report::{Report, ReportCluster, ReportOccurrence},
-    report_facts::{repo_cluster_count, threshold_verdict, DiffDelta},
+    report_facts::{included_kind_titles, repo_cluster_count, threshold_verdict, DiffDelta},
     report_location::diff_badge,
     report_metrics::ThresholdSource,
 };
@@ -144,6 +144,29 @@ fn metrics_banner_text(report: &Report) -> String {
             pct = metrics.threshold.percent
         ),
     };
+    // [METRICS-TOTAL-INCLUDE] The banner names what the total counts,
+    // so a reader who sees Similar findings below is not surprised the
+    // headline ignores them. Suppressed when the set is empty — a
+    // report written before the field existed asserts nothing about it.
+    if !metrics.total_includes.is_empty() {
+        let _ = write!(
+            sentence,
+            " · total counts: {kinds}",
+            kinds = included_kind_titles(&metrics.total_includes),
+        );
+    }
+    // [EXIT-CODES] Per-kind gate verdicts, display order, only the
+    // kinds the user gated.
+    for row in &metrics.per_kind {
+        if let Some(verdict) = threshold_verdict(&row.threshold) {
+            let _ = write!(
+                sentence,
+                " · {title} threshold {pct:.2}% ({verdict})",
+                title = row.kind.labels().title,
+                pct = row.threshold.percent,
+            );
+        }
+    }
     sentence.push_str(&diff_banner_text(report));
     sentence
 }
@@ -232,7 +255,12 @@ fn write_clusters_flat(out: &mut String, report: &Report, snippets: &mut Snippet
     if report.clusters.is_empty() {
         let _ = write!(out, "<p class=\"empty\">No duplication detected.</p>");
     }
-    write_bucket_groups(out, &report.clusters, snippets);
+    write_bucket_groups(
+        out,
+        &report.clusters,
+        snippets,
+        &report.metrics.total_includes,
+    );
     let _ = write!(out, "</section>");
 }
 
@@ -249,7 +277,7 @@ fn write_clusters_by_language(out: &mut String, report: &Report, snippets: &mut 
             name = escape(language_display_name(language)),
             count = clusters.len(),
         );
-        write_bucket_groups(out, clusters, snippets);
+        write_bucket_groups(out, clusters, snippets, &report.metrics.total_includes);
         let _ = write!(out, "</section>");
     }
 }

@@ -206,4 +206,4 @@ exclude = [
 #   code_action_refusal — tracked in gh #397. Ratchet down as that work
 #   lands.
 [threshold]
-max_duplication_percent = 16.4
+max_duplication_percent = 5.5

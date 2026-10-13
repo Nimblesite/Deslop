@@ -178,6 +178,7 @@ pub fn render_report<S: BuildHasher + Sync>(inputs: ReportInputs<'_, S>) -> Repo
         analysed_lines: inputs.analysed_lines,
         scan_root: inputs.scan_root,
         diff: inputs.diff,
+        total_include: inputs.exclusion.total_include(),
     });
     if let Some(scope) = inputs.diff {
         crate::diff_scope::tag_clusters(&mut clusters, scope);
@@ -185,6 +186,13 @@ pub fn render_report<S: BuildHasher + Sync>(inputs: ReportInputs<'_, S>) -> Repo
     metrics.threshold = inputs
         .exclusion
         .resolve_threshold(metrics.duplication_percent);
+    // [EXIT-CODES] Per-kind gates resolve beside the total's, from the
+    // same config, so the live LSP/MCP render path and the CLI agree.
+    for row in &mut metrics.per_kind {
+        row.threshold = inputs
+            .exclusion
+            .resolve_kind_threshold(row.kind, row.duplication_percent);
+    }
     let boilerplate_hints = build_boilerplate_hints(
         inputs.boilerplate_ranges,
         inputs.registry,

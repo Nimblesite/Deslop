@@ -12,15 +12,16 @@ use std::{
     path::{Path, PathBuf},
 };
 
-// `RepoMetrics`, `DiffMetrics`, `ThresholdSummary`, and
+// `RepoMetrics`, `DiffMetrics`, `ThresholdSummary`, `KindMetric`, and
 // `ThresholdSource` are generated from `docs/models/live-ipc.td` by
 // `scripts/typediagram/generate.mjs`. The data shapes live in
 // `crate::wire_generated`; the constructors and `Default` impl below
 // stay here.
 pub use crate::wire_generated::{
-    DiffMetrics, FileMetric, RepoMetrics, ThresholdSource, ThresholdSummary,
+    DiffMetrics, FileMetric, KindMetric, RepoMetrics, ThresholdSource, ThresholdSummary,
 };
 use crate::{
+    buckets::{ClusterKind, TotalInclude, DEFAULT_TOTAL_INCLUDES},
     cluster::Cluster,
     diff_scope::DiffScope,
     report_render::{relative_to_scan_root, LineIndex, LineIndices},
@@ -40,6 +41,8 @@ impl RepoMetrics {
             clusters_total: 0,
             duplicated_files: 0,
             threshold: ThresholdSummary::none(),
+            total_includes: DEFAULT_TOTAL_INCLUDES.to_vec(),
+            per_kind: Vec::new(),
             per_file: Vec::new(),
             folders: Vec::new(),
             diff: None,
@@ -122,6 +125,11 @@ pub struct MetricsInputs<'a> {
     /// [METRICS-DIFF-SCOPE] added-line block; `None` leaves
     /// `RepoMetrics.diff` absent and every mechanical field untouched.
     pub diff: Option<&'a DiffScope>,
+    /// [METRICS-TOTAL-INCLUDE] The kinds whose lines count toward the
+    /// total — resolved once from `[total] include`, default
+    /// [`DEFAULT_TOTAL_INCLUDES`]. Drives the total, every per-file and
+    /// folder numerator, and the wire's `total_includes`.
+    pub total_include: &'a TotalInclude,
 }
 
 /// Computes [`RepoMetrics`] for a finished analysis pass. The returned
@@ -131,16 +139,13 @@ pub struct MetricsInputs<'a> {
 #[must_use]
 pub fn compute_repo_metrics(inputs: &MetricsInputs<'_>) -> RepoMetrics {
     let analysed_loc: u64 = inputs.analysed_lines.values().copied().sum();
-    let clones: Vec<_> = inputs
-        .clusters
-        .iter()
-        .copied()
-        .filter(|cluster| cluster.kind.is_clone())
-        .collect();
-    let mut per_file_lines: HashMap<FileId, BTreeSet<u64>> = HashMap::new();
-    for &cluster in &clones {
-        fold_cluster_lines(cluster, inputs, &mut per_file_lines);
-    }
+    // One line-set bucket per clone kind ([METRICS-TOTAL-INCLUDE]): the
+    // total unions the included kinds' buckets, the per-kind rows read
+    // their own, and an excluded kind's lines never reach the total's
+    // per-file or folder numerators. Shape-only is not a clone and is
+    // never bucketed ([CLONE-BUCKETS-STRUCTURAL-ONLY]).
+    let kind_buckets = fold_kind_buckets(inputs);
+    let per_file_lines = union_included_lines(&kind_buckets, inputs.total_include);
     let duplicated_loc: u64 = per_file_lines
         .values()
         .map(|lines| u64::try_from(lines.len()).unwrap_or(u64::MAX))
@@ -157,15 +162,84 @@ pub fn compute_repo_metrics(inputs: &MetricsInputs<'_>) -> RepoMetrics {
         duplicated_loc,
         duplication_percent,
         // [CLONE-BUCKETS-STRUCTURAL-ONLY] Informational findings are never clones.
-        clusters_total: clones.len(),
+        clusters_total: inputs
+            .clusters
+            .iter()
+            .filter(|cluster| cluster.kind.is_clone())
+            .count(),
         duplicated_files,
         threshold: ThresholdSummary::none(),
+        total_includes: inputs.total_include.kinds().to_vec(),
+        per_kind: kind_metrics(&kind_buckets, analysed_loc, inputs.total_include),
         per_file,
         folders,
         diff: inputs
             .diff
             .map(|scope| diff_metrics(&per_file_lines, inputs, scope)),
     }
+}
+
+/// Projects every visible clone cluster's non-hidden occurrences into
+/// one per-file line-set bucket per clone kind.
+fn fold_kind_buckets(
+    inputs: &MetricsInputs<'_>,
+) -> HashMap<ClusterKind, HashMap<FileId, BTreeSet<u64>>> {
+    let mut buckets: HashMap<ClusterKind, HashMap<FileId, BTreeSet<u64>>> = HashMap::new();
+    for &cluster in inputs.clusters {
+        if !cluster.kind.is_clone() {
+            continue;
+        }
+        fold_cluster_lines(cluster, inputs, buckets.entry(cluster.kind).or_default());
+    }
+    buckets
+}
+
+/// Unions the line-set buckets of every included kind into the total's
+/// per-file projection. Overlapping clusters of different kinds share
+/// lines through the union, exactly as overlapping clusters of one kind
+/// share them through the set.
+fn union_included_lines(
+    buckets: &HashMap<ClusterKind, HashMap<FileId, BTreeSet<u64>>>,
+    include: &TotalInclude,
+) -> HashMap<FileId, BTreeSet<u64>> {
+    let mut total: HashMap<FileId, BTreeSet<u64>> = HashMap::new();
+    for kind in include.kinds() {
+        let Some(bucket) = buckets.get(kind) else {
+            continue;
+        };
+        for (file_id, lines) in bucket {
+            total.entry(*file_id).or_default().extend(lines);
+        }
+    }
+    total
+}
+
+/// Builds the [METRICS-TOTAL-INCLUDE] `per_kind` rows: one per clone
+/// kind with a visible cluster, in category display order, each carrying
+/// its own figures whether or not it counts toward the total. Thresholds
+/// stay `none()` here; the config layer resolves them beside the total's.
+fn kind_metrics(
+    buckets: &HashMap<ClusterKind, HashMap<FileId, BTreeSet<u64>>>,
+    analysed_loc: u64,
+    include: &TotalInclude,
+) -> Vec<KindMetric> {
+    ClusterKind::all()
+        .into_iter()
+        .filter_map(|kind| {
+            let duplicated_loc = buckets.get(&kind)?;
+            let lines: u64 = duplicated_loc
+                .values()
+                .map(|set| u64::try_from(set.len()).unwrap_or(u64::MAX))
+                .sum();
+            Some(KindMetric {
+                kind,
+                duplicated_loc: lines,
+                duplication_percent: percent(lines, analysed_loc),
+                included_in_total: include.contains(kind),
+                threshold: ThresholdSummary::none(),
+            })
+        })
+        .collect()
 }
 
 /// Builds the per-folder breakdown ([METRICS-REPO] `RepoMetrics.folders`)

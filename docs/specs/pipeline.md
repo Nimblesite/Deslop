@@ -438,17 +438,35 @@ The default HTML renderer embeds, for each occurrence, the source bytes covered 
 
 ### [METRICS-REPO] Repo-wide duplication metrics
 
-One repository duplication percentage is computed deterministically from visible, established clone occurrences and carried at `Report.metrics`. It is pure line coverage and drives the single fail-over gate in [EXIT-CODES]. Shape-only information is excluded before counting, even when visible or enabled as diagnostics ([CLONE-BUCKETS-STRUCTURAL-ONLY]). Any relation with no or negligible content similarity and no independent clone proof contributes nothing, regardless of its display label. Admitted clone lines count equally; evidence never scales them.
+One repository duplication percentage is computed deterministically from visible, established clone occurrences and carried at `Report.metrics`. It is pure line coverage and drives the single fail-over gate in [EXIT-CODES]. Which clone kinds feed it is a configuration choice — the include set — fixed by [METRICS-TOTAL-INCLUDE]; by default only Identical and Nearly identical lines count. Shape-only information is excluded before counting, even when visible or enabled as diagnostics ([CLONE-BUCKETS-STRUCTURAL-ONLY]); it can never join the include set. Any relation with no or negligible content similarity and no independent clone proof contributes nothing, regardless of its display label. Admitted clone lines count equally; evidence never scales them.
 
 `RepoMetrics` fields:
 
 - `analysed_loc: u64` — physical lines across every file in `files_analysed`. Counted once per file, regardless of clustering. Lines are `\n`-terminated plus the trailing partial line if any; empty files contribute zero.
-- `duplicated_loc: u64` — lines covered by **≥ 2 established clone occurrences across the whole corpus**, deduplicated per file through a `BTreeSet<line>`. Exclude shape-only/non-clone relations before projecting occurrences; visibility alone is not eligibility. Hidden occurrences (`[EXCLUSION-CONFIG]` `report_hide`) and dedicated literal findings ([RANK-LITERAL-FAMILY]) are also excluded. Preserve independently established clone subsets in mixed groups; a line supported by a real clone counts once even if an informational finding overlaps it. Shape-only source lines remain in `analysed_loc`. Required black-box CLI assertions under [CLONE-KIND-TESTING] cover a shape-only-only corpus with zero duplication, a mixed corpus with unchanged true-clone coverage, exact per-file/folder/diff values, clone counts, paths, ordering and threshold verdicts.
+- `duplicated_loc: u64` — lines covered by **≥ 2 established clone occurrences of the kinds the include set names**, deduplicated per file through a `BTreeSet<line>`. Exclude shape-only/non-clone relations before projecting occurrences; visibility alone is not eligibility. Hidden occurrences (`[EXCLUSION-CONFIG]` `report_hide`) and dedicated literal findings ([RANK-LITERAL-FAMILY]) are also excluded. Preserve independently established clone subsets in mixed groups; a line supported by a real clone counts once even if an informational finding overlaps it. Shape-only source lines remain in `analysed_loc`. Required black-box CLI assertions under [CLONE-KIND-TESTING] cover a shape-only-only corpus with zero duplication, a mixed corpus with unchanged true-clone coverage, exact per-file/folder/diff values, clone counts, paths, ordering and threshold verdicts.
 - `duplication_percent: f64` — `100.0 × duplicated_loc / analysed_loc`, clamped into `[0.0, 100.0]`. Zero when `analysed_loc == 0`. Rounded to two decimals in text + HTML; carried at full `f64` precision in JSON.
 - `clusters_total: usize` — count of non-hidden clone clusters, excluding all informational shape-only groups. It must not be obtained by counting a mixed list of clones and non-clones. Under `--only-changed`, the repo-wide clone count is recovered as `clusters_total + clusters_outside_diff` ([METRICS-DIFF-SCOPE]); both counts exclude informational findings. Any informational group count is labelled separately and never called a clone count.
-- `duplicated_files: usize` — count of files with nonzero eligible `duplicated_loc`; a file containing only shape-only information is not duplicated. Upper-bounded by `files_analysed`.
-- `per_file: Vec<FileMetric>` — per-file breakdown, one `FileMetric { path, analysed_loc, duplicated_loc, duplication_percent }` per analysed file (clean files included with `duplicated_loc == 0` so percentage denominators stay exact). Same per-file line-set computation as the repo aggregate, scoped to one file; `duplication_percent` uses that file's own `analysed_loc` as the denominator. Sorted by `duplication_percent` desc, path tiebreaker. **`path` is rendered relative to the scan root**, the same form `ReportOccurrence.path` carries, so a consumer that opens a `FileMetric` must resolve it against the workspace exactly as it resolves an occurrence — treating it as absolute names a file that does not exist. Powers the per-file rows in [VSIX-METRICS-PANEL].
+- `duplicated_files: usize` — count of files with nonzero eligible `duplicated_loc` under the include set; a file containing only excluded-kind or shape-only findings is not duplicated. Upper-bounded by `files_analysed`.
+- `total_includes: Vec<ClusterKind>` — the include set itself, in category display order, so clients grey out excluded kinds instead of re-deriving the set. `#[serde(default)]` on the wire so reports written before the field parse as empty.
+- `per_kind: Vec<KindMetric>` — one row per clone kind with a visible cluster, in category display order, each `{ kind, duplicated_loc, duplication_percent, included_in_total, threshold }` over the same repo denominator. An excluded kind keeps its row and its figures; only its membership in the total changes. `#[serde(default)]` on the wire.
+- `per_file: Vec<FileMetric>` — per-file breakdown, one `FileMetric { path, analysed_loc, duplicated_loc, duplication_percent }` per analysed file (clean files included with `duplicated_loc == 0` so percentage denominators stay exact). Same per-file line-set computation as the repo aggregate, scoped to one file and to the include set; `duplication_percent` uses that file's own `analysed_loc` as the denominator. Sorted by `duplication_percent` desc, path tiebreaker. **`path` is rendered relative to the scan root**, the same form `ReportOccurrence.path` carries, so a consumer that opens a `FileMetric` must resolve it against the workspace exactly as it resolves an occurrence — treating it as absolute names a file that does not exist. Powers the per-file rows in [VSIX-METRICS-PANEL].
 - `folders: Vec<FileMetric>` — engine-computed per-folder rollup, one row per folder prefix containing at least one duplicated line. Each row sums the `analysed_loc` and `duplicated_loc` of every `per_file` row under the prefix — clean files included, keeping the denominator exact — and derives `duplication_percent` through the **same single `percent` function** as the repo and per-file figures. Consumers render these rows verbatim; recomputing a folder percentage (or re-summing folder LOC) outside the engine is prohibited — every duplication percentage on every surface traces back to this one function. Paths are scan-root-relative folder prefixes joined with `/` on every platform; sorted `duplication_percent` desc, path tiebreaker, exactly as `per_file`. Zero-duplication folders are omitted. `#[serde(default)]` on the wire so reports written before the field parse as empty. Powers the folder rows in [VSIX-METRICS-PANEL].
+
+#### [METRICS-TOTAL-INCLUDE] Which kinds count toward the total
+
+> **Status: shipped.** Pinned by `crates/deslop/tests/cli/metrics.rs` and `crates/deslop/tests/cli/thresholds.rs`.
+
+The `.deslop.toml` `[total]` section chooses the kinds whose lines feed `duplicated_loc`, every per-file and folder numerator, and `duplicated_files`:
+
+```toml
+[total]
+include = ["identical", "nearly_identical"]   # the default
+```
+
+- Valid keys are the four clone kinds: `identical`, `nearly_identical`, `loosely_similar`, `same_behavior`. An empty list is legal — the total reads zero. Unknown keys and duplicates are rejected at config load; `structural_only` is refused with a message naming [CLONE-BUCKETS-STRUCTURAL-ONLY](taxonomy.md#clone-buckets-structural-only-shape-only-is-not-duplication), because shape-only is permanently not duplication.
+- Naming every clone kind reproduces the all-clones total exactly — the include set partitions the same line projection, it never recomputes lines.
+- Excluded kinds keep their clusters, their `per_kind` figures and their ranking. Only the headline number, per-file/folder numerators and `duplicated_files` change.
+- Every surface states what the total counts (text and HTML print `total counts: <kinds>`) and marks excluded kinds wherever kinds are listed: greyed groups in the HTML report, greyed tree rows with no bubbles in VS Code. Clients read `total_includes` from the wire; none re-derives the set.
 
 #### [METRICS-REPO-WEIGHTED] Evidence weighting is prohibited
 
@@ -475,7 +493,7 @@ Exit codes:
 - `0` — analysis succeeded; no enabled gate breached.
 - `1` — unexpected runtime error (parse failure, I/O error, cache corruption that couldn't be recovered). Pre-existing behaviour; unchanged by this spec.
 - `2` — invalid CLI invocation (bad flag, incompatible combination, missing required argument). Pre-existing behaviour; unchanged.
-- `3` — **duplication threshold breached.** `metrics.duplication_percent > threshold` after a successful analysis. Under `--only-changed` the gate reads the diff-scoped percentage instead ([METRICS-DIFF-SCOPE]). The report is still written to disk in full so CI can surface the offenders.
+- `3` — **duplication threshold breached.** `metrics.duplication_percent > threshold` after a successful analysis, or any per-kind limit breached ([EXIT-CODES-KINDS]). Under `--only-changed` the gate reads the diff-scoped percentage instead ([METRICS-DIFF-SCOPE]). The report is still written to disk in full so CI can surface the offenders.
 
 Threshold sources, highest precedence first:
 
@@ -483,7 +501,23 @@ Threshold sources, highest precedence first:
 2. `[threshold] max_duplication_percent` in `.deslop.toml` (or the file passed via `--config`). Same validation rules.
 3. Absent — no threshold is enforced; exit `3` is unreachable and the text/HTML headers render the metric without a pass/fail verdict.
 
-A `--no-fail-over` flag (mutually exclusive with `--fail-over`) overrides a config-file threshold and restores the "report only" behaviour, so a developer can run the CLI locally against a repo whose CI gate they don't want to trip.
+A `--no-fail-over` flag (mutually exclusive with `--fail-over`) overrides a config-file threshold and restores the "report only" behaviour, so a developer can run the CLI locally against a repo whose CI gate they don't want to trip. It clears every per-kind limit in the same stroke.
+
+#### [EXIT-CODES-KINDS] Per-kind limits
+
+> **Status: shipped.** Pinned by `crates/deslop/tests/cli/thresholds.rs`.
+
+`[threshold.kinds]` gives each clone kind its own optional limit, read against that kind's own `per_kind.duplication_percent` — not the repo total:
+
+```toml
+[threshold.kinds]
+identical = 3
+nearly_identical = 5
+loosely_similar = 7
+same_behavior = 9
+```
+
+Every key defaults to unset — no per-kind gate exists until the user writes one. A set limit breaches independently of the total: a repo can pass `max_duplication_percent` while one kind fails its own limit, and either breach exits `3`. Each verdict is carried on that kind's `per_kind[].threshold` with source `config`; there is no CLI flag for per-kind limits. Unknown keys are rejected at config load, and `structural_only` has no key to set ([CLONE-BUCKETS-STRUCTURAL-ONLY](taxonomy.md#clone-buckets-structural-only-shape-only-is-not-duplication)): shape-only can never breach a threshold. A kind excluded from the total can still be gated — its own figures are exact whatever the include set ([METRICS-TOTAL-INCLUDE]).
 
 #### [EXIT-CODES-WEIGHTED] Evidence-weighted gates are prohibited
 

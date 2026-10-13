@@ -43,13 +43,24 @@ pub(crate) fn duplicated_loc_for_path(report: &Value, path: &str) -> Result<u64>
 /// Asserts the report attributes at least `minimum` duplicated lines —
 /// the metric half of every "this stayed visible" control. A cluster
 /// that is reported but contributes no lines is a metric defect, so
-/// visibility assertions pair with this one.
+/// visibility assertions pair with this one. Reads the per-kind rows
+/// ([METRICS-TOTAL-INCLUDE]): visible duplication counts toward its
+/// kind's own figures whether or not that kind feeds the repo total —
+/// the total alone would read zero for a corpus whose only relation is
+/// an excluded kind.
 pub(crate) fn assert_duplicated_loc_at_least(report: &Value, minimum: u64) {
-    let actual = duplicated_loc(report);
+    let counted: u64 = metric_field(report, "per_kind")
+        .as_array()
+        .map(|rows| {
+            rows.iter()
+                .map(|row| field(row, "duplicated_loc").as_u64().unwrap_or(0))
+                .sum()
+        })
+        .unwrap_or_default();
     assert!(
-        actual >= minimum,
+        counted >= minimum,
         "visible duplication must count toward the metrics: \
-         duplicated_loc={actual}, expected >= {minimum}, report={report:#}"
+         per-kind lines={counted}, expected >= {minimum}, report={report:#}"
     );
 }
 

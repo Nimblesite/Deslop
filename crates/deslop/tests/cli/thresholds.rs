@@ -1,5 +1,7 @@
 use super::support::*;
 
+use super::metrics::{seed_three_relation_corpus, TOTAL_INCLUDE_MIN_NODES};
+
 const FAIL_OVER_FLAG: &str = "--fail-over";
 const ZERO_THRESHOLD: &str = "0.0";
 const SOURCE_FIELD: &str = "source";
@@ -297,5 +299,158 @@ fn config_threshold_out_of_range_fails_runtime() -> Result<()> {
         .args(UNGATED_ARGS)
         .assert()
         .code(RUNTIME_ERROR_EXIT_CODE);
+    Ok(())
+}
+
+// --- [EXIT-CODES] per-kind limits ---------------------------------------
+// `[threshold.kinds]` gives each clone kind its own optional gate. All
+// default to unset; a set limit reads that kind's own measured
+// percentage (not the repo total) and breaches independently — a repo
+// can pass its total gate while one kind fails its own.
+
+/// The identical pair covers 16 of the corpus's 100 analysed lines.
+const IDENTICAL_KIND_PERCENT: f64 = 16.0;
+/// A limit below the identical kind's measured percentage.
+const IDENTICAL_KIND_BEACHING_LIMIT: &str = "10";
+/// A limit above it.
+const IDENTICAL_KIND_PASSING_LIMIT: &str = "20";
+/// The loosely-similar pair covers 40 of 100 lines — excluded from the
+/// total by default, so its own gate is the only way it can fail a run.
+const SIMILAR_KIND_PASSING_LIMIT: &str = "50";
+/// The `[threshold.kinds]` line pinning one kind's limit.
+const KIND_LIMIT_IDENTICAL: &str = "identical = ";
+const KIND_LIMIT_SIMILAR: &str = "loosely_similar = ";
+
+/// Seeds the three-relation corpus (identical 16%, `nearly_identical`
+/// 44%, `loosely_similar` 40% over 100 analysed lines) with a
+/// `[threshold.kinds]` block built from `lines`. The returned
+/// [`TempDir`] must stay bound — dropping it deletes the tree the
+/// command reads.
+fn kind_limit_run(lines: &[&str]) -> Result<(tempfile::TempDir, RunOutputs, assert_cmd::Command)> {
+    let (tmp, scan_root) = temp_scan_dir("src")?;
+    seed_three_relation_corpus(&scan_root)?;
+    let mut body = String::from("[threshold.kinds]\n");
+    for line in lines {
+        body.push_str(line);
+        body.push('\n');
+    }
+    fs::write(scan_root.join(".deslop.toml"), body)?;
+    let out = outputs_under(tmp.path());
+    let cmd = deslop_command(&scan_root, &tmp.path().join(REPORT_OUTPUT_STEM))?;
+    Ok((tmp, out, cmd))
+}
+
+/// Asserts one kind's row carries `source` / `breached`.
+fn assert_kind_threshold(json: &Value, kind: &str, source: &str, breached: bool) {
+    let row = per_kind_row(json, kind).unwrap_or(Value::Null);
+    assert!(!row.is_null(), "a {kind} row must exist: {json:#}");
+    let threshold = field(&row, "threshold");
+    assert_eq!(field(threshold, "source").as_str(), Some(source));
+    assert_eq!(field(threshold, "breached").as_bool(), Some(breached));
+}
+
+// Implements [EXIT-CODES]: a per-kind limit below that kind's measured
+// percentage exits 3 while the repo-total gate — unset here — stays
+// clean, proving the kind gate is independent.
+#[test]
+fn kind_limit_below_measured_percent_exits_three() -> Result<()> {
+    let (_tmp, out, mut cmd) = kind_limit_run(&[&format!(
+        "{KIND_LIMIT_IDENTICAL}{IDENTICAL_KIND_BEACHING_LIMIT}"
+    )])?;
+    let _assertion = cmd
+        .args([MIN_NODES_FLAG, TOTAL_INCLUDE_MIN_NODES, NO_COLOR_FLAG])
+        .assert()
+        .code(THRESHOLD_BREACH_EXIT_CODE);
+    let json = read_json_report(&out.json)?;
+    assert_kind_threshold(&json, "identical", CONFIG_SOURCE, true);
+    assert_eq!(
+        threshold_field(&json, "source").as_str(),
+        Some(NO_SOURCE),
+        "the total gate stays unset: only the kind gate breached"
+    );
+    let row = per_kind_row(&json, "identical").unwrap_or(Value::Null);
+    let measured = field(&row, "duplication_percent").as_f64().unwrap_or(-1.0);
+    assert!(
+        (measured - IDENTICAL_KIND_PERCENT).abs() < 0.01,
+        "the gate reads the kind's own percentage, got {measured}"
+    );
+    Ok(())
+}
+
+// Implements [EXIT-CODES]: a per-kind limit above the measured
+// percentage passes, even for a kind the total excludes.
+#[test]
+fn kind_limit_above_measured_percent_passes() -> Result<()> {
+    let (_tmp, out, mut cmd) = kind_limit_run(&[
+        &format!("{KIND_LIMIT_IDENTICAL}{IDENTICAL_KIND_PASSING_LIMIT}"),
+        &format!("{KIND_LIMIT_SIMILAR}{SIMILAR_KIND_PASSING_LIMIT}"),
+    ])?;
+    let _assertion = cmd
+        .args([MIN_NODES_FLAG, TOTAL_INCLUDE_MIN_NODES, NO_COLOR_FLAG])
+        .assert()
+        .success();
+    let json = read_json_report(&out.json)?;
+    assert_kind_threshold(&json, "identical", CONFIG_SOURCE, false);
+    assert_kind_threshold(&json, "loosely_similar", CONFIG_SOURCE, false);
+    let row = per_kind_row(&json, "loosely_similar").unwrap_or(Value::Null);
+    assert_eq!(
+        field(&row, "included_in_total").as_bool(),
+        Some(false),
+        "the gated kind is still excluded from the total"
+    );
+    Ok(())
+}
+
+// Implements [EXIT-CODES]: with no `[threshold.kinds]` block every
+// kind's gate reads `none` — the default is no gate at all.
+#[test]
+fn unset_kind_limits_leave_no_gate() -> Result<()> {
+    let (tmp, scan_root) = temp_scan_dir("src")?;
+    seed_three_relation_corpus(&scan_root)?;
+    let out = outputs_under(tmp.path());
+    run_scan(
+        &scan_root,
+        &tmp.path().join(REPORT_OUTPUT_STEM),
+        &[MIN_NODES_FLAG, TOTAL_INCLUDE_MIN_NODES],
+    )?;
+    let json = read_json_report(&out.json)?;
+    for kind in ["identical", "nearly_identical", "loosely_similar"] {
+        assert_kind_threshold(&json, kind, NO_SOURCE, false);
+    }
+    Ok(())
+}
+
+// Implements [EXIT-CODES]: `--no-fail-over` restores report-only
+// behaviour for per-kind limits exactly as it does for the total.
+#[test]
+fn no_fail_over_clears_kind_limits() -> Result<()> {
+    let (_tmp, out, mut cmd) = kind_limit_run(&[&format!(
+        "{KIND_LIMIT_IDENTICAL}{IDENTICAL_KIND_BEACHING_LIMIT}"
+    )])?;
+    let _assertion = cmd
+        .args([
+            MIN_NODES_FLAG,
+            TOTAL_INCLUDE_MIN_NODES,
+            NO_FAIL_OVER_FLAG,
+            NO_COLOR_FLAG,
+        ])
+        .assert()
+        .success();
+    assert_kind_threshold(&read_json_report(&out.json)?, "identical", NO_SOURCE, false);
+    Ok(())
+}
+
+// Implements [CLONE-BUCKETS-STRUCTURAL-ONLY]: shape-only can never
+// breach a threshold, so `[threshold.kinds]` refuses its key outright.
+#[test]
+fn structural_only_kind_limit_is_rejected() -> Result<()> {
+    const STRUCTURAL_ONLY_KEY: &str = "structural_only = 0";
+    let (_tmp, _out, mut cmd) = kind_limit_run(&[STRUCTURAL_ONLY_KEY])?;
+    let _assertion = cmd
+        .args([MIN_NODES_FLAG, TOTAL_INCLUDE_MIN_NODES, NO_COLOR_FLAG])
+        .assert()
+        .code(RUNTIME_ERROR_EXIT_CODE)
+        .stderr(contains("structural_only"))
+        .stderr(contains("unknown field"));
     Ok(())
 }

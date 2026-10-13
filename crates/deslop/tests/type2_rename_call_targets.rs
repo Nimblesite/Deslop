@@ -135,18 +135,29 @@ fn assert_reports_the_copy(report: &Value, corpus: &str, contract: RenameContrac
 
 /// Asserts a corpus is wholly duplicated: it holds nothing but the copy,
 /// so reporting any of it as clean is a false negative ([METRICS-REPO]).
+/// Reads the pair's own kind row: a copy whose relation folds to a kind
+/// the default include set excludes still covers every line — its own
+/// percentage is the figure that must read 100 ([METRICS-TOTAL-INCLUDE]).
 fn assert_wholly_duplicated(report: &Value, corpus: &str) {
+    let kind = report
+        .get("clusters")
+        .and_then(Value::as_array)
+        .and_then(|clusters| clusters.first())
+        .map(crate::common::cluster_kind)
+        .unwrap_or_default();
+    let row = per_kind_row(report, kind).unwrap_or(Value::Null);
     assert_eq!(
-        metric_field(report, "duplication_percent").as_f64(),
+        field(&row, "duplication_percent").as_f64(),
         Some(TOTAL_DUPLICATION),
-        "{corpus}: the corpus is nothing but the copy: {report:#}"
+        "{corpus}: the corpus is nothing but the copy, so its {kind} row \
+         must read 100%: {report:#}"
     );
-    for side in SIDES {
-        assert!(
-            duplicated_loc_for(report, side) > NO_TOLERANCE,
-            "{corpus}: {side} carries duplicated lines: {report:#}"
-        );
-    }
+    let duplicated = field(&row, "duplicated_loc").as_u64().unwrap_or(0);
+    let analysed = metric_field(report, "analysed_loc").as_u64().unwrap_or(0);
+    assert_eq!(
+        duplicated, analysed,
+        "{corpus}: every analysed line is covered by the copy: {report:#}"
+    );
 }
 
 /// Asserts a rename moved no figure: the renamed corpus reports the same

@@ -34,10 +34,14 @@ use ranking::resolve_ranking_policy;
 pub use ranking::{
     ClonePolicy, RankingPolicy, DEFAULT_DATA_CLONE_WEIGHT, DEFAULT_STRUCTURAL_ONLY_WEIGHT,
 };
-use raw::{resolve_threshold, PersistedProcessing, RawConfig};
+use raw::{
+    resolve_kind_thresholds, resolve_threshold, resolve_total_include, PersistedProcessing,
+    RawConfig,
+};
 use serde::Deserialize;
 
 use crate::{
+    buckets::{ClusterKind, TotalInclude},
     error::CoreError,
     report_metrics::{ThresholdSource, ThresholdSummary},
 };
@@ -71,6 +75,46 @@ impl BoilerplateImportsMode {
     }
 }
 
+/// [EXIT-CODES] Per-kind optional duplication limits, resolved from
+/// `[threshold.kinds]`. Every kind defaults to unset — no gate exists
+/// until the user writes one. Shape-only has no limit to set
+/// ([CLONE-BUCKETS-STRUCTURAL-ONLY]): it can never breach a threshold.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct KindThresholds {
+    /// Limit on the `identical` kind's own percentage.
+    pub identical: Option<f64>,
+    /// Limit on the `nearly_identical` kind's own percentage.
+    pub nearly_identical: Option<f64>,
+    /// Limit on the `loosely_similar` kind's own percentage.
+    pub loosely_similar: Option<f64>,
+    /// Limit on the `same_behavior` kind's own percentage.
+    pub same_behavior: Option<f64>,
+}
+
+impl KindThresholds {
+    /// The limit configured for `kind`, if any. Shape-only always reads
+    /// unset ([CLONE-BUCKETS-STRUCTURAL-ONLY]).
+    #[must_use]
+    pub fn get(&self, kind: ClusterKind) -> Option<f64> {
+        match kind {
+            ClusterKind::Identical => self.identical,
+            ClusterKind::NearlyIdentical => self.nearly_identical,
+            ClusterKind::LooselySimilar => self.loosely_similar,
+            ClusterKind::SameBehavior => self.same_behavior,
+            ClusterKind::StructuralOnly => None,
+        }
+    }
+
+    /// True when no kind carries a limit.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.identical.is_none()
+            && self.nearly_identical.is_none()
+            && self.loosely_similar.is_none()
+            && self.same_behavior.is_none()
+    }
+}
+
 /// Compiled exclusion configuration ready for matching. Built by merging
 /// per-language sections onto the defaults so a `.cs` file is tested
 /// against `defaults.exclude ∪ language.csharp.exclude` without the
@@ -95,6 +139,11 @@ pub struct ExclusionConfig {
     /// max_duplication_percent` per [EXIT-CODES]. `None` means the
     /// config file did not opt in.
     fail_over_percent: Option<f64>,
+    /// [METRICS-TOTAL-INCLUDE] Which clone kinds count toward the repo
+    /// total. Defaults to [`DEFAULT_TOTAL_INCLUDES`].
+    total_include: TotalInclude,
+    /// [EXIT-CODES] Per-kind optional limits from `[threshold.kinds]`.
+    kind_thresholds: KindThresholds,
     /// Whether candidate pairs may span different parser language ids
     /// ([CONFIG-CROSS-LANGUAGE]). Defaults off to keep reports focused
     /// on same-language refactoring.
@@ -150,6 +199,8 @@ impl ExclusionConfig {
             per_language: HashMap::new(),
             default_boilerplate_imports: BoilerplateImportsMode::Suppress,
             fail_over_percent: None,
+            total_include: TotalInclude::default(),
+            kind_thresholds: KindThresholds::default(),
             allow_cross_language_comparison: false,
             include_dependencies: false,
             max_average_line_bytes: DEFAULT_MAX_AVERAGE_LINE_BYTES,
@@ -235,6 +286,8 @@ impl ExclusionConfig {
             );
         }
         let fail_over_percent = resolve_threshold(path, raw.threshold.as_ref())?;
+        let total_include = resolve_total_include(path, raw.total.as_ref())?;
+        let kind_thresholds = resolve_kind_thresholds(path, raw.threshold.as_ref())?;
         let ranking_policy = resolve_ranking_policy(path, &raw.ranking)?.with_global_override();
         Ok(Self {
             source: path.to_path_buf(),
@@ -244,6 +297,8 @@ impl ExclusionConfig {
             per_language,
             default_boilerplate_imports,
             fail_over_percent,
+            total_include,
+            kind_thresholds,
             allow_cross_language_comparison: raw.analysis.allow_cross_language_comparison,
             include_dependencies: raw.analysis.include_dependencies,
             max_average_line_bytes: raw.analysis.max_average_line_bytes,
@@ -274,6 +329,25 @@ impl ExclusionConfig {
     #[must_use]
     pub fn resolve_threshold(&self, measured: f64) -> ThresholdSummary {
         match self.fail_over_percent {
+            Some(percent) => ThresholdSummary::resolve(percent, ThresholdSource::Config, measured),
+            None => ThresholdSummary::none(),
+        }
+    }
+
+    /// [METRICS-TOTAL-INCLUDE] The kinds whose lines count toward the
+    /// repo total, in category display order.
+    #[must_use]
+    pub fn total_include(&self) -> &TotalInclude {
+        &self.total_include
+    }
+
+    /// Resolves the `[threshold.kinds]` limit for `kind` into a verdict
+    /// against its measured per-kind percentage ([EXIT-CODES]). The
+    /// single place a per-kind config limit becomes a
+    /// [`ThresholdSummary`], mirroring [`Self::resolve_threshold`].
+    #[must_use]
+    pub fn resolve_kind_threshold(&self, kind: ClusterKind, measured: f64) -> ThresholdSummary {
+        match self.kind_thresholds.get(kind) {
             Some(percent) => ThresholdSummary::resolve(percent, ThresholdSource::Config, measured),
             None => ThresholdSummary::none(),
         }

@@ -231,6 +231,20 @@ export const CORE_TYPE_CONFIG = {
       threshold: "Diff-scoped gate verdict. Resolved only under `--only-changed`; source `none` otherwise.",
     },
   },
+  KindMetric: {
+    docs: "One clone-kind row carried on `RepoMetrics.per_kind` ([METRICS-TOTAL-INCLUDE]): the kind's own duplicated lines and percentage over the same repo denominator, whether its lines count toward the total, and its optional per-kind gate verdict. Computed by the engine beside the total it partitions; consumers render these rows verbatim, never recompute them.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldOverrides: {
+      duplicated_loc: "u64",
+    },
+    fieldDocs: {
+      kind: "The clone kind this row measures.",
+      duplicated_loc: "Lines covered by `>= 2` non-hidden occurrences of this kind's clusters.",
+      duplication_percent: "Clamped `100.0 * duplicated_loc / analysed_loc` over the same repo denominator the total uses.",
+      included_in_total: "True when this kind's lines count toward the repo total's numerator.",
+      threshold: "Per-kind gate verdict ([EXIT-CODES]). Source `none` when no `[threshold.kinds]` limit was set for this kind.",
+    },
+  },
   RepoMetrics: {
     docs: "Repo-wide duplication metrics, embedded at `Report.metrics`.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
@@ -241,6 +255,8 @@ export const CORE_TYPE_CONFIG = {
       duplicated_files: "usize",
     },
     fieldSerdeAttrs: {
+      total_includes: ["default"],
+      per_kind: ["default"],
       per_file: ["default"],
       folders: ["default"],
       diff: ["default", 'skip_serializing_if = "Option::is_none"'],
@@ -248,12 +264,16 @@ export const CORE_TYPE_CONFIG = {
     tsOptional: ["diff"],
     fieldDocs: {
       analysed_loc: "Physical lines across every analysed file.",
-      duplicated_loc: "Lines covered by `>= 2` non-hidden clone occurrences.",
+      duplicated_loc: "Lines covered by `>= 2` non-hidden clone occurrences of the kinds `total_includes` names ([METRICS-TOTAL-INCLUDE]).",
       duplication_percent: "Clamped `100.0 * duplicated_loc / analysed_loc`.",
       clusters_total:
         "Count of non-hidden clusters carried in `clusters` — always equals `clusters.len()`, so the banner figure can never disagree with the body it summarises ([METRICS-REPO]).",
-      duplicated_files: "Count of files with at least one non-hidden clone occurrence.",
+      duplicated_files: "Count of files with at least one non-hidden clone occurrence of an included kind.",
       threshold: "Resolved fail-over threshold.",
+      total_includes:
+        "The kinds whose lines `duplicated_loc` counts ([METRICS-TOTAL-INCLUDE]), in category display order. Carried so clients grey out excluded kinds rather than re-deriving the set. Empty on reports produced before this field existed.",
+      per_kind:
+        "One row per clone kind with a non-hidden cluster, in category display order, each carrying its own figures whatever the include set ([METRICS-TOTAL-INCLUDE]). Empty on reports produced before this field existed.",
       per_file: "Per-file duplication breakdown, worst-first. Empty on reports produced before this field existed.",
       folders:
         "Per-folder duplication breakdown, worst-first: one row per folder prefix containing duplicated lines, summed over every file beneath it (clean files included in the denominator) and divided by the engine's single `percent` function. Consumers render these rows verbatim — recomputing them anywhere else is prohibited ([METRICS-REPO]). Empty on reports produced before this field existed.",

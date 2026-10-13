@@ -10,6 +10,7 @@
 //! returns; they never recompute it.
 
 use crate::{
+    buckets::ClusterKind,
     report::Report,
     report_metrics::{ThresholdSource, ThresholdSummary},
 };
@@ -43,6 +44,29 @@ pub fn repo_cluster_count(report: &Report) -> usize {
         .metrics
         .clusters_total
         .saturating_add(report.clusters_outside_diff.unwrap_or(0))
+}
+
+/// Comma-joined titles of the kinds whose lines the total counts
+/// ([METRICS-TOTAL-INCLUDE]) — the phrase every surface prints beside
+/// the headline figure, so a reader always knows what the number
+/// measures. Derived here, once, from the same kind registry the rest
+/// of the report labels kinds with; renderers never re-derive it.
+#[must_use]
+pub fn included_kind_titles(kinds: &[ClusterKind]) -> String {
+    kinds
+        .iter()
+        .map(|kind| kind.labels().title)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// True when `kind` is a clone whose lines the include set leaves out
+/// of the total ([METRICS-TOTAL-INCLUDE]). Shape-only is never
+/// "excluded" — it was never a candidate ([CLONE-BUCKETS-STRUCTURAL-ONLY])
+/// — so it keeps its informational styling.
+#[must_use]
+pub fn kind_excluded_from_total(kind: ClusterKind, total_includes: &[ClusterKind]) -> bool {
+    kind.is_clone() && !total_includes.contains(&kind)
 }
 
 /// The `--only-changed` cluster split ([METRICS-DIFF-SCOPE]).

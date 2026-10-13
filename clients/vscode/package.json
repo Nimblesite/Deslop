@@ -496,7 +496,7 @@
             "kind",
             "language"
           ],
-          "default": "cluster",
+          "default": "kind",
           "scope": "window",
           "description": "Group Top Offenders by Clone Category, Folder, Language, File, or show an ungrouped list. Highest weight first in every mode.",
           "enumDescriptions": [

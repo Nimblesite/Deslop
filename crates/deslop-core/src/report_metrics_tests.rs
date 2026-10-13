@@ -5,7 +5,7 @@ use anyhow::{anyhow, Result};
 use super::*;
 use crate::{
     ast::ByteRange,
-    buckets::ClusterKind,
+    buckets::{ClusterKind, TotalInclude},
     cluster_filters::ParseCache,
     config::ExclusionConfig,
     fingerprint::Fingerprint,
@@ -72,6 +72,7 @@ impl Corpus {
             analysed_lines: &analysed_lines,
             scan_root: Path::new("."),
             diff: None,
+            total_include: &TotalInclude::default(),
         })
     }
 }

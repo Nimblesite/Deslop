@@ -10,6 +10,7 @@ import type { LanguageClient } from "vscode-languageclient/node";
 import { ReportStore, LifecyclePhase } from "../reportStore";
 import {
   applyFacetFilter,
+  ClusterKind,
   FacetFilter,
   ReportCluster,
   RepoMetrics,
@@ -221,15 +222,16 @@ function readAxis<T>(key: string, fallback: string, normalise: (value: string) =
 }
 
 // [VSIX-TOP-OFFENDERS-GROUPING] Reads `deslop.topOffenders.groupBy`
-// (cluster | file | folder | type, default cluster).
+// (cluster | file | folder | kind | language, default kind).
 function readGroupBy(): GroupBy {
-  return readAxis("topOffenders.groupBy", "cluster", normalizeGroupBy);
+  return readAxis("topOffenders.groupBy", "kind", normalizeGroupBy);
 }
 
 export class TopOffendersProvider extends LifecycleAwareProvider {
   getChildren(node?: Node): Node[] {
+    const totalIncludes = this.store.current.visibleReport?.metrics.total_includes;
     if (node instanceof FolderNode) return node.children;
-    if (node instanceof FileNode) return getFileNodeChildren(node);
+    if (node instanceof FileNode) return getFileNodeChildren(node, totalIncludes);
     // One machinery for both group axes: file-mode kind sections and
     // kind-mode roots.
     if (node instanceof GroupNode) return getGroupNodeChildren(node);
@@ -257,7 +259,7 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
       // when there is no duplication (principle 2).
       return [new StatusNode("No duplication detected", INFORMATION_STATUS_KIND)];
     }
-    const roots = buildRoots(visibleReport.clusters);
+    const roots = buildRoots(visibleReport.clusters, totalIncludes);
     // [req: incremental indicator] Keep clusters visible during a
     // re-analysis (stale > blank) and lead with a busy badge so the user
     // sees an update is in flight ([VSIX-REACTIVITY-TREE]).
@@ -273,16 +275,19 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
 }
 
 // [VSIX-TOP-OFFENDERS-GROUPING] Group the filtered report without changing engine ranks.
-function buildRoots(clusters: ReportCluster[]): Node[] {
+function buildRoots(
+  clusters: ReportCluster[],
+  totalIncludes?: readonly ClusterKind[],
+): Node[] {
   const groupBy = readGroupBy();
   const filter = readTopOffendersFilter();
   const visible = applyFacetFilter(clusters, filter);
   const build = (subset: ReportCluster[]): Node[] => {
     if (groupBy === "file") return buildFileMode(subset);
     if (groupBy === "folder") return buildFolderMode(subset);
-    if (groupBy === "kind") return buildKindMode(subset);
+    if (groupBy === "kind") return buildKindMode(subset, totalIncludes);
     if (groupBy === "language") return buildLanguageMode(subset);
-    return buildClusterMode(subset);
+    return buildClusterMode(subset, totalIncludes);
   };
   return [...filterStatusRow(filter), ...build(visible)];
 }

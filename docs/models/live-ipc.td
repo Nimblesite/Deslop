@@ -143,6 +143,19 @@ type DiffMetrics {
   threshold: ThresholdSummary
 }
 
+# [METRICS-TOTAL-INCLUDE] The kinds whose lines count toward the repo
+# total — a configuration choice ([METRICS-TOTAL-INCLUDE]), carried on
+# the wire so every client renders the same total and can grey out the
+# kinds it excludes. Always in the category display order, never empty
+# unless the user explicitly emptied `[total] include`.
+type KindMetric {
+  kind: ClusterKind
+  duplicated_loc: Int
+  duplication_percent: Float
+  included_in_total: Bool
+  threshold: ThresholdSummary
+}
+
 type RepoMetrics {
   analysed_loc: Int
   duplicated_loc: Int
@@ -150,6 +163,8 @@ type RepoMetrics {
   clusters_total: Int
   duplicated_files: Int
   threshold: ThresholdSummary
+  total_includes: List<ClusterKind>
+  per_kind: List<KindMetric>
   per_file: List<FileMetric>
   folders: List<FileMetric>
   diff: Option<DiffMetrics>

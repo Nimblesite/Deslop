@@ -75,6 +75,7 @@ export type {
   EmbeddingPhase,
   EmbeddingProgress,
   FileMetric,
+  KindMetric,
   PairClassification,
   PairComparison,
   PairComparisonParams,
@@ -166,8 +167,8 @@ export function clusterMass(cluster: ReportCluster): number {
 export const CLUSTER_KINDS: readonly ClusterKind[] = [
   "identical",
   "nearly_identical",
-  "same_behavior",
   "loosely_similar",
+  "same_behavior",
   "structural_only",
 ] as const;
 

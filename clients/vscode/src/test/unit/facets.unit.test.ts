@@ -4,6 +4,7 @@
 // kind-grouping mode's flat roots (#258, re-stated on the clone kind).
 
 import * as assert from "node:assert/strict";
+import * as vscode from "vscode";
 
 import {
   applyFacetFilter,
@@ -74,10 +75,10 @@ suite("clone-kind grouping mode ([FACET-GROUP-BY-KIND])", () => {
   // Kind mode groups by the engine's clone kind — every identical cluster
   // surfaces together in one flat group, strongest kind first, with no
   // file/folder sub-grouping in between ([FACET-GROUP-BY-KIND]).
-  test("roots are one flat group per kind present, highest weight first, so all identical clusters sit together", () => {
+  test("roots are one flat group per kind present, in category display order, so all identical clusters sit together", () => {
     const roots = buildKindMode(KIND_GROUPED);
     assert.equal(roots.length, 3, "identical + nearly identical + loosely similar groups; absent kinds omitted");
-    const [nearGroup, identicalGroup, looseGroup] = roots as [KindGroupNode, KindGroupNode, KindGroupNode];
+    const [identicalGroup, nearGroup, looseGroup] = roots as [KindGroupNode, KindGroupNode, KindGroupNode];
     assert.ok(identicalGroup instanceof KindGroupNode);
     assert.equal(identicalGroup.kind, IDENTICAL_KIND);
     assert.equal(nearGroup.kind, NEARLY_IDENTICAL_KIND);
@@ -144,6 +145,18 @@ suite("clone-kind grouping mode ([FACET-GROUP-BY-KIND])", () => {
 // produces — the same function the report webview and status bar use —
 // with global rank gaps preserved and the filtered status row leading.
 suite("facet filter cross-surface consistency", () => {
+  suiteSetup(async () => {
+    await vscode.workspace
+      .getConfiguration("deslop")
+      .update("topOffenders.groupBy", "cluster", vscode.ConfigurationTarget.Global);
+  });
+
+  suiteTeardown(async () => {
+    await vscode.workspace
+      .getConfiguration("deslop")
+      .update("topOffenders.groupBy", undefined, vscode.ConfigurationTarget.Global);
+  });
+
   test("filtered tree = shared slice, rank gaps kept, status row leads with clear action", async () => {
     const worstSetting = "topOffenders.filterSeverities";
     const store = storeWith(report(ALL));

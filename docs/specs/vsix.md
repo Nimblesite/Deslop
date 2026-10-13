@@ -19,7 +19,7 @@ Distribution: one platform-specific `.vsix` per VS Code target attached to each 
 
 The bubble reports duplication while the edited code remains under the cursor.
 
-**When it fires.** After every coalesced buffer edit ([LIVE-WATCHER] debounce = 250 ms), the VSIX issues `duplicates/findSimilar` on the range the user most recently touched. The bubble appears when the range belongs to a reported duplicate component and shows membership plus mass only. Pair admission has already happened in the engine; the client neither receives nor filters on pair evidence. If nothing matches, no bubble.
+**When it fires.** After every coalesced buffer edit ([LIVE-WATCHER] debounce = 250 ms), the VSIX issues `duplicates/findSimilar` on the range the user most recently touched. The bubble appears when the range belongs to a reported duplicate component and shows membership plus mass only. A cluster whose kind the include set excludes never bubbles ([VSIX-TOP-OFFENDERS-EXCLUDED], [METRICS-TOTAL-INCLUDE]) — the set comes from the server's `metrics.total_includes`, never a client-side calculation. Pair admission has already happened in the engine; the client neither receives nor filters on pair evidence. If nothing matches, no bubble.
 
 **What it looks like.** A compact floating widget (VS Code `InlayHint` + `Webview`-backed overlay, rendered by a single `DecorationType` whose `after.contentText` is an HTML-safe Unicode glyph, with a hover-triggered richer webview for detail). Anatomy, from left to right:
 
@@ -117,11 +117,17 @@ Code: `types/report.ts`, `tree/nodes.ts`, `compare/title.ts`, `webview-ui/src/co
 
 #### [VSIX-TOP-OFFENDERS-GROUPING] One grouping picker
 
-The Top Offenders header has one **Group Top Offenders** picker with **Clone Category**, **Folder**, **Language**, **File** and **No Grouping**. It marks the current selection and persists `deslop.topOffenders.groupBy` to workspace settings (`kind`, `folder`, `language`, `file`, `cluster`). Canceling leaves the setting unchanged. Unknown values fall back to `cluster`. Changing grouping is a local presentation operation.
+The Top Offenders header has one **Group Top Offenders** picker with **Clone Category**, **Folder**, **Language**, **File** and **No Grouping**. It marks the current selection and persists `deslop.topOffenders.groupBy` to workspace settings (`kind`, `folder`, `language`, `file`, `cluster`). The default is **Clone Category** (`kind`). Canceling leaves the setting unchanged. Unknown values fall back to `kind`. Changing grouping is a local presentation operation.
 
 Code: `commands/topOffendersView.ts`, `commands/register.ts`, `tree/grouping.ts`, `tree/providers.ts`, `package.json`. Assertions: `package-menus.unit.test.ts`, `topOffendersView.unit.test.ts`, `facets.unit.test.ts`, `topOffendersPanel.e2e.test.ts`.
 
-#### [VSIX-TOP-OFFENDERS-CLUSTER-MODE] Cluster mode (default)
+#### [VSIX-TOP-OFFENDERS-EXCLUDED] Excluded kinds render excluded
+
+Which clone kinds count toward the repo total is the server's include set ([METRICS-TOTAL-INCLUDE](pipeline.md#metrics-total-include-which-kinds-count-toward-the-total)), carried on `metrics.total_includes`. The extension reads it from the report and never re-derives it. A clone kind the set excludes renders greyed wherever kinds are listed: the kind icon takes the disabled foreground colour, the row description gains `· excluded`, and the kind-group tooltip says the group is excluded from the total. Its clusters, ranks and occurrences stay — only their lines left the headline number. Shape-only is never marked excluded; it was never a candidate ([CLONE-BUCKETS-STRUCTURAL-ONLY]). Enabling the kind in `.deslop.toml` makes its rows and bubbles reappear after the next live refresh.
+
+Code: `tree/grouping.ts`, `tree/nodes.ts`, `bubble/live.ts`, `types/report.ts`. Assertions: `tree.topOffenders.groups.unit.test.ts`, `live-bubble-admission.unit.test.ts`.
+
+#### [VSIX-TOP-OFFENDERS-CLUSTER-MODE] Cluster mode
 
 Clone rows follow the engine's mass rank and expand to their occurrences. The label is `<slug> <kind title> · <file>`; the description is `rank #N · N copies · mass M`. Shape-only information follows all clones and shows its title, locations and match count, without duplicate rank or duplicated-mass claim. The slug is the stable 7-hex prefix ([VSIX-TOP-OFFENDERS-CLUSTER-ID]).
 

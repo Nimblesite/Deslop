@@ -77,6 +77,14 @@ pub(crate) fn pipeline_error(err: CoreError) -> anyhow::Error {
 /// lie about the repository.
 pub(crate) fn apply_threshold(args: &Cli, report: &mut Report) -> Result<()> {
     report.metrics.threshold = resolve_threshold(args, report.metrics.duplication_percent)?;
+    // [EXIT-CODES] `--no-fail-over` restores report-only behaviour for
+    // the per-kind limits exactly as it does for the total — one flag
+    // clears every config gate.
+    if args.no_fail_over {
+        for row in &mut report.metrics.per_kind {
+            row.threshold = ThresholdSummary::none();
+        }
+    }
     if !args.diff_scope.only_changed {
         return Ok(());
     }
@@ -113,15 +121,24 @@ fn resolve_threshold(args: &Cli, measured: f64) -> Result<ThresholdSummary> {
 
 /// Which verdict gates the exit code: the diff-scoped one under
 /// `--only-changed` ([METRICS-DIFF-SCOPE]), the repo-wide one
-/// otherwise. A missing `metrics.diff` block cannot gate — there is no
-/// measurement to gate on — so it reads as unbreached.
+/// otherwise, each OR-ed with every per-kind verdict
+/// ([EXIT-CODES] `[threshold.kinds]`) — one breached kind fails the
+/// run however clean the total is. A missing `metrics.diff` block
+/// cannot gate — there is no measurement to gate on — so it reads as
+/// unbreached.
 pub(crate) fn gate_breached(args: &Cli, report: &Report) -> bool {
+    let kind_breached = report
+        .metrics
+        .per_kind
+        .iter()
+        .any(|row| row.threshold.breached);
     if args.diff_scope.only_changed {
         return report
             .metrics
             .diff
             .as_ref()
-            .is_some_and(|diff| diff.threshold.breached);
+            .is_some_and(|diff| diff.threshold.breached)
+            || kind_breached;
     }
-    report.metrics.breached()
+    report.metrics.breached() || kind_breached
 }

@@ -10,7 +10,7 @@
 
 import * as assert from "node:assert/strict";
 import { ghostText, inlineText } from "../../bubble/live";
-import { BubbleCapture, bubbleCluster, renderStep, renderStepOffersNothing, setBubbleMode, withBubble } from "./bubble.helpers";
+import { assertBubbleShows, BubbleCapture, bubbleCluster, renderStep, renderStepOffersNothing, setBubbleMode, span, withBubble } from "./bubble.helpers";
 import type { LiveBubble } from "../../bubble/live";
 import type { ReportCluster } from "../../types/report";
 import { SEVERITY_DOT } from "../../design";
@@ -120,6 +120,25 @@ suite("LiveBubble admission", () => {
       renderStepOffersNothing(capture, bubble, 0, [], "an empty probe paints nothing");
       assert.equal(capture.history().length, 0, "no decoration was ever set");
     
+    });
+  });
+
+  test("an excluded clone kind shows no bubble until enabled by live refresh", async () => {
+    const similar = { ...bubbleCluster("c-similar", 12), kind: "loosely_similar" as const };
+    await withBubble({
+      snapshot: reportWithClusters([similar], {}, { total_includes: ["identical", "nearly_identical"] }),
+    }, ({ capture, bubble, store }) => {
+      renderStepOffersNothing(capture, bubble, 0, [similar], "excluded kind produces no bubble");
+      assert.equal(capture.visible(), undefined);
+
+      store.setSnapshot(
+        reportWithClusters([similar], {}, { total_includes: ["identical", "nearly_identical", "loosely_similar"] }),
+        1,
+      );
+
+      bubble.render(capture.editor, span(0), [similar]);
+      const visible = assertBubbleShows(capture, "Similar code", "included kind renders bubble");
+      assert.ok(visible.includes("Similar code"));
     });
   });
 });

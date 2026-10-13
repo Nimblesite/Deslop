@@ -1,6 +1,7 @@
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import { FileNode, FolderNode } from "../../tree/providers";
+import { KindGroupNode, Node } from "../../tree/nodes";
 import { ReportStore } from "../../reportStore";
 import { CLUSTER_KINDS, kindTitle } from "../../types/report";
 import { cluster, iconColorId, labelText, report, storeWith, tooltipText, topOffenders, withGroupBy } from "./tree.helpers";
@@ -70,12 +71,14 @@ suite("TopOffendersProvider groups", () => {
     );
     const provider = topOffenders(store);
 
-    const thirdRow = provider.getChildren()[2] as vscode.TreeItem;
-    assert.match(
-      String(thirdRow.description ?? ""),
-      /\brank\s+#3\b/,
-      "third row in cluster mode is rank #3 (least)",
-    );
+    await withGroupBy("cluster", () => {
+      const thirdRow = provider.getChildren()[2] as vscode.TreeItem;
+      assert.match(
+        String(thirdRow.description ?? ""),
+        /\brank\s+#3\b/,
+        "third row in cluster mode is rank #3 (least)",
+      );
+    });
 
     await withGroupBy(FILE_GROUPING_MODE, () => {
       const fileRoots = provider.getChildren();
@@ -99,13 +102,13 @@ suite("TopOffendersProvider groups", () => {
     });
   });
 
-  test("an unknown topOffenders.groupBy value falls back to cluster mode", async () => {
+  test("an unknown topOffenders.groupBy value falls back to kind mode", async () => {
     // [VSIX-TOP-OFFENDERS-GROUPING] Defensive read; never panics.
     const store = storeWith(report([cluster("c", HIGHEST_CLUSTER_MASS, MIXED_FILE_PATH)]));
     const provider = topOffenders(store);
 
     const cfg = vscode.workspace.getConfiguration("deslop");
-    const previous = cfg.get<string>("topOffenders.groupBy", "cluster");
+    const previous = cfg.get<string>("topOffenders.groupBy", "kind");
     try {
       // Inspect — does the schema accept an unknown value? VS Code tolerates
       // out-of-enum writes via the API so the runtime fallback can be
@@ -116,7 +119,8 @@ suite("TopOffendersProvider groups", () => {
         return;
       }
       const [first] = provider.getChildren();
-      assert.ok(first, "fallback render must produce a cluster row");
+      assert.ok(first, "first root must exist");
+      assert.ok(first instanceof KindGroupNode, "fallback render must produce a kind group row");
       assert.doesNotMatch(
         labelText(first),
         /1 cluster\b/,
@@ -226,9 +230,11 @@ suite("TopOffendersProvider groups", () => {
     const store = storeWith(report([cluster("only", HIGHEST_CLUSTER_MASS, "/repo/src/Mixed.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, "error")]));
     const provider = topOffenders(store);
 
-    const [clusterMode] = provider.getChildren();
-    assert.ok(clusterMode);
-    assert.match(tooltipText(clusterMode), /\/repo\/src\/Mixed\.cs/);
+    await withGroupBy("cluster", () => {
+      const [clusterMode] = provider.getChildren();
+      assert.ok(clusterMode);
+      assert.match(tooltipText(clusterMode), /\/repo\/src\/Mixed\.cs/);
+    });
 
     await withGroupBy(FILE_GROUPING_MODE, () => {
       const [fileRoot] = provider.getChildren();
@@ -248,9 +254,12 @@ suite("TopOffendersProvider groups", () => {
     store.setSnapshot(report([c]), 0);
     const provider = topOffenders(store);
 
-    const [clusterRoot] = provider.getChildren();
-    assert.ok(clusterRoot);
-    const clusterModeOccurrences = provider.getChildren(clusterRoot);
+    let clusterModeOccurrences: Node[] = [];
+    await withGroupBy("cluster", () => {
+      const [clusterRoot] = provider.getChildren();
+      assert.ok(clusterRoot);
+      clusterModeOccurrences = provider.getChildren(clusterRoot);
+    });
 
     await withGroupBy(FILE_GROUPING_MODE, () => {
       const [fileRoot] = provider.getChildren();
@@ -285,7 +294,10 @@ suite("TopOffendersProvider groups", () => {
     // the two-decimal precision reserved for measured pair signals.
     const store = storeWith(report([cluster(HEAVY_CLUSTER_ID, WHOLE_NUMBER_MASS, ALPHA_FILE_PATH)]));
     const provider = topOffenders(store);
-    const [clusterRow] = provider.getChildren();
+    let clusterRow: Node | undefined;
+    await withGroupBy("cluster", () => {
+      [clusterRow] = provider.getChildren();
+    });
     assert.ok(clusterRow, CLUSTER_ROOT_REQUIRED);
     const fileRow = await firstRootIn(provider, FILE_GROUPING_MODE);
     const folderRow = await firstRootIn(provider, FOLDER_GROUPING_MODE);
@@ -329,5 +341,30 @@ suite("TopOffendersProvider groups", () => {
         "Alpha's cluster keeps its global worst-first rank in folder mode",
       );
     });
+  });
+
+  test("default grouping is Clone Category (kind) and excluded kinds render greyed out", () => {
+    const store = storeWith(
+      report(
+        [
+          cluster("c1", HIGH_CLUSTER_MASS, ALPHA_FILE_PATH, 0, 20, "information", 1, "identical"),
+          cluster("c2", MEDIUM_CLUSTER_MASS, BETA_FILE_PATH, 0, 20, "information", 2, "loosely_similar"),
+        ],
+        { total_includes: ["identical"] },
+      ),
+    );
+    const provider = topOffenders(store);
+    const roots = provider.getChildren();
+    const [identicalGroup, similarGroup] = roots as [KindGroupNode, KindGroupNode];
+    assert.ok(identicalGroup instanceof KindGroupNode);
+    assert.ok(similarGroup instanceof KindGroupNode);
+    assert.equal(identicalGroup.description, undefined);
+    assert.equal(similarGroup.description, "excluded");
+    assert.equal(iconColorId(identicalGroup), KIND_THEME_COLOR.identical);
+    assert.equal(iconColorId(similarGroup), "disabledForeground");
+
+    const similarChildren = provider.getChildren(similarGroup);
+    assert.ok(String(similarChildren[0]?.description ?? "").includes("excluded"));
+    assert.equal(iconColorId(similarChildren[0] as vscode.TreeItem), "disabledForeground");
   });
 });

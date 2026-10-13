@@ -116,6 +116,8 @@ fn metrics(diff: Option<DiffMetrics>) -> RepoMetrics {
             breached: true,
             source: ThresholdSource::Cli,
         },
+        total_includes: Vec::new(),
+        per_kind: Vec::new(),
         per_file: Vec::new(),
         folders: Vec::new(),
         diff,

@@ -6,6 +6,7 @@ use crate::{
     buckets::ClusterKind,
     render::{html::write_cluster_card, html_snippets::SnippetLoader},
     report::ReportCluster,
+    report_facts::kind_excluded_from_total,
 };
 
 /// Groups clusters by `key`, preserving mass order and first-seen group order.
@@ -36,12 +37,25 @@ where
 
 /// Opens one kind's collapsible expander: the CSS suffix the colour rule
 /// keys on, the taxonomy tooltip, the title and the live group count.
-fn write_group_header(out: &mut String, kind: ClusterKind, groups: usize) {
+/// An excluded kind's header carries the grey modifier class and says
+/// so in words, so a reader never wonders why its lines are missing
+/// from the headline ([METRICS-TOTAL-INCLUDE]).
+fn write_group_header(out: &mut String, kind: ClusterKind, groups: usize, excluded: bool) {
     let labels = kind.labels();
+    let modifier = if excluded {
+        " clone-group--excluded"
+    } else {
+        ""
+    };
+    let marker = if excluded {
+        " — not counted in total"
+    } else {
+        ""
+    };
     let _ = write!(
         out,
-        "<details class=\"clone-group clone-group--{suffix}\" open>\
-         <summary title=\"{taxonomy}\">{title} — {groups} group(s)</summary>",
+        "<details class=\"clone-group clone-group--{suffix}{modifier}\" open>\
+         <summary title=\"{taxonomy}\">{title} — {groups} group(s){marker}</summary>",
         suffix = labels.css_suffix,
         taxonomy = labels.taxonomy,
         title = labels.title,
@@ -62,13 +76,19 @@ pub(super) fn write_bucket_groups<'c>(
     out: &mut String,
     clusters: impl IntoIterator<Item = &'c ReportCluster>,
     snippets: &mut SnippetLoader<'_>,
+    total_includes: &[ClusterKind],
 ) {
     let grouped = group_by_first_seen(clusters, |cluster| cluster.kind);
     for kind in ClusterKind::all() {
         let Some((_, clusters)) = grouped.iter().find(|(present, _)| *present == kind) else {
             continue;
         };
-        write_group_header(out, kind, clusters.len());
+        write_group_header(
+            out,
+            kind,
+            clusters.len(),
+            kind_excluded_from_total(kind, total_includes),
+        );
         for cluster in clusters {
             write_cluster_card(out, cluster, snippets);
         }
