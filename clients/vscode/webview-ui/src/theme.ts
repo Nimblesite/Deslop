@@ -121,6 +121,8 @@ export const GLOBAL_CSS = `
   }
   code, .mono { font-family: ${FONT.mono}; font-size: 12px; letter-spacing: 0.02em; }
   .label { font-family: ${FONT.mono}; font-size: 11px; letter-spacing: 0.04em; color: ${COLOR.onSurfaceMuted}; text-transform: uppercase; }
+  .kind-option--excluded { color: ${COLOR.onSurfaceMuted}; }
+  .total-counts-caption { color: ${COLOR.onSurfaceMuted}; }
   .stale { opacity: 0.4; }
   .cluster-panel { padding: 24px clamp(16px, 4vw, 32px); max-width: 1200px; margin: auto; }
   .cluster-eyebrow, .cluster-heading, .cluster-weight, .cluster-shortcuts { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

@@ -12,6 +12,7 @@ import {
   ReportCluster,
   ReportOccurrence,
   compareClusterRank,
+  isKindExcluded,
 } from "../types/report";
 import {
   ClusterNode,
@@ -30,15 +31,6 @@ export type GroupBy = "cluster" | "file" | "folder" | "kind" | "language";
  * back to `"kind"` — never panic ([VSIX-TOP-OFFENDERS-GROUPING]). */
 export function normalizeGroupBy(raw: string | undefined): GroupBy {
   return raw === "cluster" || raw === "file" || raw === "folder" || raw === "kind" || raw === "language" ? raw : "kind";
-}
-
-/** True when a clone kind is excluded from the configured total include set. */
-export function isKindExcluded(
-  kind: ClusterKind,
-  totalIncludes?: readonly ClusterKind[],
-): boolean {
-  if (totalIncludes === undefined) return false;
-  return kind !== "structural_only" && !totalIncludes.includes(kind);
 }
 
 /** A file and the clusters within it, plus the two impact keys its row

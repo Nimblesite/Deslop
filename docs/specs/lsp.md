@@ -77,7 +77,7 @@ The LSP consumes the configurable kind-to-diagnostic map in [SEVERITY-MODEL](sev
 
 Use the defaults, override rules and validation in [SEVERITY-CONFIG](severity.md#severity-config-configuration). `crates/deslop-lsp/src/diagnostics.rs::severity_for` is the single resolver; clients consume its result.
 
-Diagnostic resolution is `master switch → configured kind severity → scope → publish or suppress`. `none` suppresses publication. Pull and push use the same resolver; configuration changes refresh diagnostics without re-analysis ([SEVERITY-CONFIG]).
+Diagnostic resolution is `master switch → configured kind severity → include-set suppression ([SEVERITY-DIAGNOSTICS-EXCLUDED](severity.md#severity-diagnostics-excluded-excluded-kinds-are-silent-by-default)) → category default → scope → publish or suppress`. `none` suppresses publication. Pull and push use the same resolver; configuration changes refresh diagnostics without re-analysis ([SEVERITY-CONFIG]).
 
 ### [LSP-DIAGNOSTICS] Diagnostic content
 

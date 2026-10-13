@@ -152,17 +152,26 @@ test.describe("VSIX webview bundles", () => {
 
       await expect(page.getByText("DESLOP").first()).toBeVisible();
       await expect(page.getByRole("heading", { name: /18\.4%/ })).toBeVisible();
-      await expect(page.getByText(IDENTICAL_TITLE, { exact: true })).toBeVisible();
-      await expect(page.getByText(NEARLY_IDENTICAL_TITLE, { exact: true })).toBeVisible();
-      await expect(page.getByText(STRUCTURAL_ONLY_TITLE, { exact: true })).toBeVisible();
-      await expect(page.getByText(RETIRED_NEUTRAL_TITLE, { exact: true })).toHaveCount(0);
+      // [METRICS-TOTAL-INCLUDE] The kind filter marks what the total
+      // ignores — greyed, still selectable — and the headline names the
+      // kinds it counts.
+      await expect(
+        page.getByRole("option", { name: /Similar code \(excluded from total\)/ }),
+      ).toBeAttached();
+      await expect(page.locator("option.kind-option--excluded")).toHaveCount(2);
+      await expect(page.getByText("total counts: Identical code, Nearly identical code")).toBeVisible();
+      const clusterList = page.getByRole("list");
+      await expect(clusterList.getByText(IDENTICAL_TITLE, { exact: true })).toBeVisible();
+      await expect(clusterList.getByText(NEARLY_IDENTICAL_TITLE, { exact: true })).toBeVisible();
+      await expect(clusterList.getByText(STRUCTURAL_ONLY_TITLE, { exact: true })).toBeVisible();
+      await expect(clusterList.getByText(RETIRED_NEUTRAL_TITLE, { exact: true })).toHaveCount(0);
 
       await clearPostedMessages(page);
       await page.getByRole("button", { name: "Refresh" }).click();
       await expectPosted(page, "refresh");
 
       await clearPostedMessages(page);
-      await page.getByText(IDENTICAL_TITLE, { exact: true }).first().click();
+      await clusterList.getByText(IDENTICAL_TITLE, { exact: true }).first().click();
       await expectPosted(page, "open/cluster");
 
       await expectHealthyRender(page, errors, `report-${viewport.name}`);
@@ -248,6 +257,8 @@ test.describe("VSIX webview bundles", () => {
 
       await expect(page.getByText("DESLOP").first()).toBeVisible();
       await expect(page.getByRole("heading", { name: /18\.4%/ })).toBeVisible();
+      // [METRICS-TOTAL-INCLUDE] The headline names the kinds it counts.
+      await expect(page.getByText("total counts: Identical code, Nearly identical code")).toBeVisible();
       await expect(page.getByText("alpha.dart")).toBeVisible();
       await expect(page.getByText("parser_beta.dart")).toBeVisible();
 

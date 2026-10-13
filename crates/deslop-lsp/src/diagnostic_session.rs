@@ -99,7 +99,12 @@ impl DiagnosticSession {
         path: &Path,
         settings: &DiagnosticSettings,
     ) -> Vec<Diagnostic> {
-        diagnostics::build_for_file(&report_for_file_in(report, path), &self.root, settings)
+        diagnostics::build_for_file(
+            &report_for_file_in(report, path),
+            &self.root,
+            settings,
+            &report.metrics.total_includes,
+        )
     }
 
     /// Refreshes publication without running analysis ([SEVERITY-CONFIG]).

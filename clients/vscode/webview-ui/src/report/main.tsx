@@ -15,15 +15,15 @@ import { FilterSelect } from "../components/FilterSelect";
 import { MetricHeading } from "../components/MetricHeading";
 import { ClusterBadge } from "../components/ClusterBadge";
 import {
-  CLUSTER_KINDS,
   clusterSlug,
+  kindFilterOptions,
   kindTitle,
   isClone,
   INFORMATIONAL_FINDING,
   occurrenceCount,
   SEVERITIES,
   severityLabel,
-  type ClusterKind,
+  totalCountsCaption,
   type Severity,
 } from "../../../src/types/report";
 
@@ -37,7 +37,9 @@ const CLUSTER_ROW_CLASS = "report-cluster-row";
 
 // [FACET-REPORT-WEBVIEW] Every option list derives from the shared
 // registries (the #170/#198 anti-drift rule): severities from SEVERITIES,
-// clone kinds from CLUSTER_KINDS. `null` = no filter on that axis.
+// clone kinds from `kindFilterOptions` over the server's include set —
+// excluded kinds stay selectable but greyed ([METRICS-TOTAL-INCLUDE]).
+// `null` = no filter on that axis.
 const SEVERITY_OPTIONS = [
   { label: "All severities", value: null as Severity | null },
   ...SEVERITIES.map((severity) => ({
@@ -46,18 +48,13 @@ const SEVERITY_OPTIONS = [
   })),
 ];
 
-const KIND_OPTIONS = [
-  { label: "All clone kinds", value: null as ClusterKind | null },
-  ...CLUSTER_KINDS.map((kind) => ({
-    label: kindTitle(kind),
-    value: kind as ClusterKind | null,
-  })),
-];
-
 function ReportApp() {
   const snapshot = report.value;
   const rows = filteredClusters.value;
   const state = analysisState.value;
+  const kindOptions = kindFilterOptions(snapshot?.metrics.total_includes);
+  const countsCaption = totalCountsCaption(snapshot?.metrics.total_includes);
+  const caption = countsCaption ? `total counts: ${countsCaption}` : "";
 
   if (!snapshot) {
     return (
@@ -84,7 +81,10 @@ function ReportApp() {
             gap: LARGE_SPACING,
           }}
         >
-          <MetricHeading value={snapshot.metrics.duplication_percent} label="duplicated" />
+          <div>
+            <MetricHeading value={snapshot.metrics.duplication_percent} label="duplicated" />
+            {caption ? <div class="total-counts-caption">{caption}</div> : null}
+          </div>
           <div
             style={{
               textAlign: RIGHT_ALIGNMENT,
@@ -119,7 +119,7 @@ function ReportApp() {
           onChange={(severity) => (filters.value = { ...filters.value, severity })}
         />
         <FilterSelect
-          options={KIND_OPTIONS}
+          options={kindOptions}
           value={filters.value.kind}
           onChange={(kind) => (filters.value = { ...filters.value, kind })}
         />

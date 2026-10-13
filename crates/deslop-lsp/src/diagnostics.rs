@@ -15,8 +15,10 @@ use std::{
 };
 
 use deslop_core::{
+    buckets::ClusterKind,
     live::FileReport,
     report::{ReportCluster, ReportOccurrence},
+    report_facts::kind_excluded_from_total,
 };
 use tower_lsp::lsp_types::{
     Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Location, Position, Range, Url,
@@ -38,6 +40,7 @@ pub fn build_for_file(
     report: &FileReport,
     workspace_root: &Path,
     settings: &DiagnosticSettings,
+    total_includes: &[ClusterKind],
 ) -> Vec<Diagnostic> {
     let primary_path = absolute_path(&report.path, workspace_root);
     let primary_source = std::fs::read_to_string(&primary_path).unwrap_or_default();
@@ -53,6 +56,7 @@ pub fn build_for_file(
                 &primary_source,
                 &mut source_cache,
                 settings,
+                total_includes,
             )
         })
         .collect()
@@ -88,26 +92,50 @@ fn build_for_cluster(
     source_bytes: &str,
     cache: &mut HashMap<PathBuf, String>,
     settings: &DiagnosticSettings,
+    total_includes: &[ClusterKind],
 ) -> Vec<Diagnostic> {
-    let Some(severity) = severity_for(cluster, settings) else {
+    let Some(severity) = severity_for(cluster, settings, total_includes) else {
         return Vec::new();
     };
     cluster
         .occurrences
         .iter()
         .filter(|occ| occurrence_matches_path(occ, path))
-        .map(|occurrence| Diagnostic {
-            range: byte_range_to_lsp(occurrence.start_byte, occurrence.end_byte, source_bytes),
-            severity: Some(severity),
-            code: None,
-            code_description: None,
-            source: Some("deslop".to_owned()),
-            message: diagnostic_message(cluster),
-            related_information: related_info_for(cluster, path, workspace_root, cache),
-            tags: None,
-            data: Some(diagnostic_data(cluster)),
+        .map(|occ| {
+            occurrence_to_diagnostic(
+                occ,
+                cluster,
+                path,
+                workspace_root,
+                source_bytes,
+                cache,
+                severity,
+            )
         })
         .collect()
+}
+
+/// Converts a single occurrence into an LSP diagnostic for that location.
+fn occurrence_to_diagnostic(
+    occ: &ReportOccurrence,
+    cluster: &ReportCluster,
+    path: &Path,
+    workspace_root: &Path,
+    source_bytes: &str,
+    cache: &mut HashMap<PathBuf, String>,
+    severity: DiagnosticSeverity,
+) -> Diagnostic {
+    Diagnostic {
+        range: byte_range_to_lsp(occ.start_byte, occ.end_byte, source_bytes),
+        severity: Some(severity),
+        code: None,
+        code_description: None,
+        source: Some("deslop".to_owned()),
+        message: diagnostic_message(cluster),
+        related_information: related_info_for(cluster, path, workspace_root, cache),
+        tags: None,
+        data: Some(diagnostic_data(cluster)),
+    }
 }
 
 /// Returns `true` when the occurrence matches the file the report applies to.
@@ -116,15 +144,23 @@ pub(crate) fn occurrence_matches_path(occurrence: &ReportOccurrence, path: &Path
 }
 
 /// [SEVERITY-DESLOP-MAP] The single category-to-diagnostic resolver.
+/// Resolution order: master switch → explicit `severityByKind` entry →
+/// [SEVERITY-DIAGNOSTICS-EXCLUDED] include-set suppression → category
+/// default. An explicit override beats exclusion because setting a
+/// level for a kind is an opt-in to hear about it.
 fn severity_for(
     cluster: &ReportCluster,
     settings: &DiagnosticSettings,
+    total_includes: &[ClusterKind],
 ) -> Option<DiagnosticSeverity> {
     if !settings.enabled {
         return None;
     }
     if let Some(level) = settings.severity_by_kind.get(&cluster.kind) {
         return level.severity();
+    }
+    if kind_excluded_from_total(cluster.kind, total_includes) {
+        return None;
     }
     match cluster.kind.default_diagnostic_severity() {
         "warning" => Some(DiagnosticSeverity::WARNING),

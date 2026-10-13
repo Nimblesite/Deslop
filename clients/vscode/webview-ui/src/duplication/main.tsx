@@ -13,6 +13,7 @@ import { MetricHeading } from "../components/MetricHeading";
 import { buildFolderRollup, type RollupChild } from "../../../src/tree/rollup";
 import { thresholdStatus } from "../../../src/tree/threshold";
 import { formatPercent } from "../../../src/types/format";
+import { totalCountsCaption } from "../../../src/types/report";
 
 const MONOSPACE_CLASS = "mono";
 
@@ -97,6 +98,10 @@ function DuplicationApp() {
   const rows = buildFolderRollup(metrics);
   const status = thresholdStatus(metrics.threshold);
   const gate = status.configured ? ` · ${status.label}` : "";
+  // [METRICS-TOTAL-INCLUDE] The headline names the kinds it counts so it
+  // is never mistaken for every relation found (the CLI/HTML wording).
+  const countsCaption = totalCountsCaption(metrics.total_includes);
+  const caption = countsCaption ? `total counts: ${countsCaption}` : "";
   return (
     <main style={{ padding: "24px 32px" }}>
       <header style={{ display: "grid", gap: "12px", paddingBottom: "20px" }}>
@@ -104,6 +109,7 @@ function DuplicationApp() {
           DESLOP · DUPLICATION · {snapshot.tool_version}
         </div>
         <MetricHeading value={metrics.duplication_percent} label="duplicated" />
+        {caption ? <div class="total-counts-caption">{caption}</div> : null}
         <div class={MONOSPACE_CLASS} style={{ fontSize: "12px", color: COLOR.onSurfaceMuted }}>
           {metrics.duplicated_loc}/{metrics.analysed_loc} LOC · {metrics.clusters_total} clusters ·{" "}
           {metrics.duplicated_files} files{gate}

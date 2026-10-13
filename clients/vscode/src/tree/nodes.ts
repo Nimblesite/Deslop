@@ -214,8 +214,9 @@ export class GroupNode extends vscode.TreeItem {
      * the group is a root (no file ancestor implies the file). */
     readonly showFileInChildren: boolean,
     icon?: vscode.ThemeIcon,
+    collapsibleState: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.Expanded,
   ) {
-    super(`${title} (${clusters.length})`, vscode.TreeItemCollapsibleState.Expanded);
+    super(`${title} (${clusters.length})`, collapsibleState);
     this.contextValue = contextValue;
     if (icon) this.iconPath = icon;
     this.accessibilityInformation = {
@@ -237,7 +238,18 @@ export class KindGroupNode extends GroupNode {
     showFileInChildren = false,
     readonly excluded = false,
   ) {
-    super(kindTitle(kind), clusters, "deslop.kindGroup", showFileInChildren, kindIcon(kind, excluded));
+    super(
+      kindTitle(kind),
+      clusters,
+      "deslop.kindGroup",
+      showFileInChildren,
+      kindIcon(kind, excluded),
+      // [VSIX-TOP-OFFENDERS-EXCLUDED] Excluded noise starts collapsed —
+      // the default view leads with the kinds that count.
+      excluded
+        ? vscode.TreeItemCollapsibleState.Collapsed
+        : vscode.TreeItemCollapsibleState.Expanded,
+    );
     if (excluded) this.description = "excluded";
     const excludedNotice = excluded ? "\n\n*(Excluded from total duplication)*" : "";
     this.tooltip = new vscode.MarkdownString(`**${kindTitle(kind)}** — ${kindTaxonomy(kind)}${excludedNotice}`);

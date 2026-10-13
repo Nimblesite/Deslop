@@ -366,5 +366,15 @@ suite("TopOffendersProvider groups", () => {
     const similarChildren = provider.getChildren(similarGroup);
     assert.ok(String(similarChildren[0]?.description ?? "").includes("excluded"));
     assert.equal(iconColorId(similarChildren[0] as vscode.TreeItem), "disabledForeground");
+    assert.equal(
+      identicalGroup.collapsibleState,
+      vscode.TreeItemCollapsibleState.Expanded,
+      "included kinds open their clusters immediately",
+    );
+    assert.equal(
+      similarGroup.collapsibleState,
+      vscode.TreeItemCollapsibleState.Collapsed,
+      "excluded noise groups start collapsed so the default view leads with signal",
+    );
   });
 });

@@ -114,6 +114,9 @@ export const sampleReport = {
     clusters_total: 3,
     duplicated_files: 3,
     threshold: { percent: 15, breached: true, source: "config" },
+    // [METRICS-TOTAL-INCLUDE] The shipped default set — the webview
+    // caption and the greyed filter options read it verbatim.
+    total_includes: ["identical", "nearly_identical"],
     per_file: [
       { path: "src/dart/alpha.dart", analysed_loc: 120, duplicated_loc: 42, duplication_percent: 35 },
       { path: "src/dart/parser_beta.dart", analysed_loc: 180, duplicated_loc: 38, duplication_percent: 21.1 },

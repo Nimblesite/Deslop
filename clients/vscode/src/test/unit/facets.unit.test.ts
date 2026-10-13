@@ -8,8 +8,10 @@ import * as vscode from "vscode";
 
 import {
   applyFacetFilter,
+  kindFilterOptions,
   kindTitle,
   sanitizeFacetFilter,
+  totalCountsCaption,
 } from "../../types/report";
 import { buildKindMode, buildLanguageMode, getGroupNodeChildren } from "../../tree/grouping";
 import { ClusterNode, GroupNode, KindGroupNode } from "../../tree/nodes";
@@ -34,6 +36,11 @@ const RANK_TWO_ID = "cluster02";
 const IDENTICAL_KIND = "identical";
 const NEARLY_IDENTICAL_KIND = "nearly_identical";
 const LOOSELY_SIMILAR_KIND = "loosely_similar";
+const SAME_BEHAVIOR_KIND = "same_behavior";
+const STRUCTURAL_ONLY_KIND = "structural_only";
+const DEFAULT_TOTAL_INCLUDES = [IDENTICAL_KIND, NEARLY_IDENTICAL_KIND] as const;
+const ALL_CLONE_KINDS_LABEL = "All clone kinds";
+const EXCLUDED_FILTER_MARKER = "(excluded from total)";
 
 // Category grouping is independent of mass and diagnostic severity.
 const KIND_GROUPED = stampRanks([
@@ -243,5 +250,52 @@ suite("facet filter cross-surface consistency", () => {
         "a filtered-empty tree must never be mistakable for the clean state",
       );
     });
+  });
+});
+
+suite("include-set surfaces ([METRICS-TOTAL-INCLUDE] in the webview)", () => {
+  test("the caption names exactly the kinds the total counts", () => {
+    assert.equal(
+      totalCountsCaption(DEFAULT_TOTAL_INCLUDES),
+      `${kindTitle(IDENTICAL_KIND)}, ${kindTitle(NEARLY_IDENTICAL_KIND)}`,
+    );
+    assert.equal(totalCountsCaption([IDENTICAL_KIND]), kindTitle(IDENTICAL_KIND));
+  });
+
+  test("the caption makes no claim when the wire carries no include set", () => {
+    assert.equal(totalCountsCaption(undefined), "");
+    assert.equal(totalCountsCaption([]), "");
+  });
+
+  test("the kind filter marks excluded kinds without hiding them", () => {
+    const options = kindFilterOptions(DEFAULT_TOTAL_INCLUDES);
+    assert.equal(options.length, 6, "All + five kinds, in category display order");
+    assert.deepEqual(
+      options.map((option) => option.value),
+      [null, IDENTICAL_KIND, NEARLY_IDENTICAL_KIND, LOOSELY_SIMILAR_KIND, SAME_BEHAVIOR_KIND, STRUCTURAL_ONLY_KIND],
+    );
+    const byKind = new Map(options.map((option) => [option.value, option]));
+    assert.equal(byKind.get(null)?.label, ALL_CLONE_KINDS_LABEL);
+    assert.equal(byKind.get(null)?.excluded, false);
+    assert.equal(byKind.get(IDENTICAL_KIND)?.label, kindTitle(IDENTICAL_KIND));
+    assert.equal(byKind.get(IDENTICAL_KIND)?.excluded, false);
+    assert.equal(
+      byKind.get(LOOSELY_SIMILAR_KIND)?.label,
+      `${kindTitle(LOOSELY_SIMILAR_KIND)} ${EXCLUDED_FILTER_MARKER}`,
+    );
+    assert.equal(byKind.get(LOOSELY_SIMILAR_KIND)?.excluded, true);
+    assert.equal(byKind.get(SAME_BEHAVIOR_KIND)?.excluded, true);
+    assert.equal(
+      byKind.get(STRUCTURAL_ONLY_KIND)?.excluded,
+      false,
+      "shape-only is never marked excluded — it was never a candidate",
+    );
+  });
+
+  test("the kind filter carries no excluded marks when the wire carries no include set", () => {
+    for (const option of kindFilterOptions(undefined)) {
+      assert.equal(option.excluded, false);
+      assert.ok(!option.label.includes(EXCLUDED_FILTER_MARKER));
+    }
   });
 });
