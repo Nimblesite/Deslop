@@ -1,13 +1,17 @@
 # Website
 
-## [SITE-HOME-VIDEO] Homepage release motion
+## [SITE-HOME-VIDEO] Homepage motion reel
 
-The English and Chinese homepages share one JavaScript motion reel with translated headings, playback controls and accuracy-post links. The animation renders its scenes in the page with Web Animations; no encoded video files are shipped. One responsive stage changes between wide desktop and tall phone layouts, retaining the opening report artwork. The original soundtrack loads only after the visitor presses play and clocks the 21-second sequence. Play, pause, restart, mute and seek operate on that same timeline. Playback pauses when the page is hidden. Without JavaScript, the opening frame and accuracy link remain available. Reduced-motion preferences suppress movement. Metadata describes the page animation as a CreativeWork, without advertising a nonexistent hosted video.
+The English and Chinese homepages open with the same short animation of what Deslop does. It plays five translated headlines in order: find duplicate code, nine languages, worst offenders first, stop coding agents from creating more, and live in VS Code. Then it loops.
 
-`site/tests/homepage-motion.spec.js` and `site/tests/homepage-reel.spec.js` drive real playback, pause, seek, responsive layouts, translated controls, links and metadata against the built site. Together the script, styles, soundtrack and both posters must remain within 512 KiB.
+The reel is always in the first screen. It sits beside the headline on wide screens and above it once the hero stacks. The stage is wide on desktop and tablets and square on phones, and its type scales with the stage.
+
+It plays silently on its own. Its only control is one small, faint pause icon. It stops while it is off screen or the tab is hidden, and resumes where it stopped. Visitors who prefer reduced motion see the finished opening scene until they press play; scenes then fade without moving. Without JavaScript the finished opening scene stays and no control is shown.
+
+The animation is built in the page with JavaScript; no encoded video or audio is shipped. `site/tests/homepage-motion.spec.js` and `site/tests/homepage-reel.spec.js` drive it on the page's own clock through every scene, pause, reduced motion, off-screen and hidden-tab stops, both themes, each screen size and the Chinese translation. Together the script and styles must stay within 32 KiB.
 
 ## [SITE-ASSET-TYPE] Declared media types match served assets
 
-Every referenced soundtrack, poster, script, stylesheet and social card is served successfully with a content type matching its declaration. Playback retains the original soundtrack and duration. The site build contains no encoded video assets.
+Every referenced script, stylesheet, image and social card is served successfully with a content type matching its declaration. The site source contains no encoded video or audio files.
 
-The homepage and website-audit tests share `site/tests/helpers/assets.js` to verify actual HTTP asset responses. Shared motion assertions verify real playback and complete responsive stage dimensions.
+The homepage and website-audit tests share `site/tests/helpers/assets.js` to verify actual HTTP asset responses, and the website audit checks the site source for encoded media.

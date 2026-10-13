@@ -1,49 +1,49 @@
-{# [SITE-HOME-VIDEO] [SITE-ASSET-TYPE] Shared JavaScript motion reel; encoded video is never shipped. #}
+{# [SITE-HOME-VIDEO] [SITE-ASSET-TYPE] Shared JavaScript motion reel that opens the homepage with what Deslop does; encoded video is never shipped. #}
 {% set currentLang = lang | default('en') %}
+{% macro cue(scene, index, from) %}{{ (from + index * scene.step) | round(2) }}{% endmacro %}
+{% macro codeLines(lines) %}{% for line in lines %}<span class="motion-reel__line" style="--indent: {{ line.indent }}">{% for width in line.tokens %}<i style="--width: {{ width }}%"></i>{% endfor %}</span>{% endfor %}{% endmacro %}
 <link rel="stylesheet" href="/assets/css/reel.css">
-<section class="showcase" id="release-reel" aria-labelledby="reel-title">
-  <div class="showcase__head">
-    <div class="eyebrow-chip"><span>{{ "reel.eyebrow" | t(currentLang) }}</span></div>
-    <h2 class="showcase__title" id="reel-title">{{ "reel.title" | t(currentLang) }}</h2>
-    <p class="showcase__lede">{{ "reel.lede" | t(currentLang) }} <a href="{{ reel.post | altLangUrl('en', currentLang) }}">{{ "reel.post" | t(currentLang) }}</a></p>
-  </div>
-  <div class="motion-reel" data-duration="{{ reel.seconds }}" data-position="0">
-    <div class="motion-reel__stage" aria-label="{{ reel.name }}">
-      {% for scene in reel.scenes %}
-      <div class="motion-reel__scene" data-scene="{{ scene.id }}" data-start="{{ scene.start }}" data-end="{{ scene.end }}" aria-hidden="{{ 'false' if loop.first else 'true' }}">
-        {% if scene.id == 'whole' %}
-        <picture>
-          <source media="(max-width: 767.98px)" srcset="{{ reel.mobilePoster }}">
-          <img src="{{ reel.desktopPoster }}" alt="Now it finds the whole copy. An unedited Deslop 0.35.0 report showing the complete duplicate." width="1280" height="720" loading="lazy">
-        </picture>
-        {% elif scene.id == 'partial' %}
-        <h3>It used to<br>stop here.</h3>
-        <div class="motion-reel__card"><span>The old finding began at</span><strong>line 17</strong><div class="motion-reel__scan" aria-hidden="true"></div></div>
-        {% elif scene.id == 'graded' %}
-        <h3>It got graded<br>on real code.</h3>
-        <div class="motion-reel__verdicts"><p>Real copies. <strong>Found.</strong></p><p>Lookalikes. <strong>Rejected.</strong></p><p>Known answers. <strong>Checked.</strong></p></div>
-        {% elif scene.id == 'compare' %}
-        <h3>Don't trust it.<br><em>Check</em> it.</h3>
-        <div class="motion-reel__terminal"><div>deslop --compare</div><pre><span>$</span> deslop --compare
-
-Compare both copies.
-See why they match.</pre></div>
-        {% else %}
-        <div class="motion-reel__mark" aria-hidden="true">DS</div>
-        <h3>Deslop 0.35.0</h3><p>Find duplicate code.</p><p>Stop coding agents from creating more.</p>
-        {% endif %}
+<figure class="motion-reel" id="deslop-reel" aria-label="{{ 'reel.label' | t(currentLang) }}" data-duration="{{ reel.seconds }}" data-opening="{{ reel.opening }}" data-position="{{ reel.opening }}">
+  <div class="motion-reel__stage">
+    {% for scene in reel.scenes %}
+    <div class="motion-reel__scene" data-scene="{{ scene.id }}" data-start="{{ scene.start }}" data-end="{{ scene.end }}" aria-hidden="{{ 'false' if loop.first else 'true' }}">
+      {% if scene.id == 'brand' %}
+      <p class="motion-reel__wordmark"><img src="/assets/img/logo.svg" alt="" width="512" height="512">Deslop</p>
+      <p class="motion-reel__headline" data-cue="{{ scene.cue }}">{{ 'reel.brand' | t(currentLang) }}</p>
+      {% else %}
+      <p class="motion-reel__headline">{{ ('reel.' + scene.id) | t(currentLang) }}</p>
+      {% endif %}
+      {% if scene.id == 'find' %}
+      <div class="motion-reel__panes" aria-hidden="true">
+        {% for pane in reel.code.panes %}
+        <div class="motion-reel__pane" data-cue="{{ cue(scene, loop.index0, scene.cue) }}">
+          {{ codeLines(pane.before) }}<span class="motion-reel__copy">{{ codeLines(reel.code.copy) }}<b data-cue="{{ cue(scene, loop.index0, scene.mark) }}" data-effect="fade"></b></span>{{ codeLines(pane.after) }}
+        </div>
+        {% endfor %}
       </div>
-      {% endfor %}
+      {% elif scene.id == 'languages' %}
+      <ul class="motion-reel__languages">
+        {% for language in reel.languages %}<li data-cue="{{ cue(scene, loop.index0, scene.cue) }}">{{ language }}</li>{% endfor %}
+      </ul>
+      {% elif scene.id == 'rank' %}
+      <ol class="motion-reel__ranks" aria-hidden="true">
+        {% for width in reel.ranks %}<li><span>{{ loop.index }}</span><span><i data-cue="{{ cue(scene, loop.index0, scene.cue) }}" data-effect="grow" style="--width: {{ width }}%"></i></span></li>{% endfor %}
+      </ol>
+      {% elif scene.id == 'agents' %}
+      <div class="motion-reel__chat">
+        {% for message in reel.chat %}
+        <p data-cue="{{ cue(scene, loop.index0, scene.cue) }}"><span>{{ message.speaker | t(currentLang) }}</span> {{ message.line | t(currentLang) }}</p>
+        {% endfor %}
+      </div>
+      {% endif %}
     </div>
-    <audio preload="none" src="{{ reel.audio }}"></audio>
-    <div class="motion-reel__controls">
-      <button type="button" data-action="play" data-play-label="{{ 'reel.play' | t(currentLang) }}" data-pause-label="{{ 'reel.pause' | t(currentLang) }}" disabled>{{ 'reel.play' | t(currentLang) }}</button>
-      <button type="button" data-action="restart" disabled>{{ 'reel.restart' | t(currentLang) }}</button>
-      <label><span class="motion-reel__sr">{{ 'reel.position' | t(currentLang) }}</span><input type="range" min="0" max="{{ reel.seconds }}" step="0.1" value="0" disabled></label>
-      <button type="button" data-action="mute" aria-pressed="false" disabled>{{ 'reel.mute' | t(currentLang) }}</button>
-      <output aria-live="polite" data-error-label="{{ 'reel.error' | t(currentLang) }}"></output>
+    {% endfor %}
+    <div class="motion-reel__controls" hidden>
+      <button type="button" class="motion-reel__toggle" data-action="play" aria-label="{{ 'reel.play' | t(currentLang) }}" data-play-label="{{ 'reel.play' | t(currentLang) }}" data-pause-label="{{ 'reel.pause' | t(currentLang) }}">
+        <svg class="motion-reel__play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+        <svg class="motion-reel__pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zm6.5 0H17v14h-3.5z"/></svg>
+      </button>
     </div>
-    <noscript><p>{{ 'reel.noScript' | t(currentLang) }}</p></noscript>
   </div>
-</section>
+</figure>
 <script type="module" src="/assets/js/reel.js"></script>
