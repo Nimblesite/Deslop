@@ -1,6 +1,6 @@
 use super::support::*;
 
-use super::metrics::{seed_three_relation_corpus, TOTAL_INCLUDE_MIN_NODES};
+use super::total_include::{seed_three_relation_corpus, TOTAL_INCLUDE_MIN_NODES};
 
 const FAIL_OVER_FLAG: &str = "--fail-over";
 const ZERO_THRESHOLD: &str = "0.0";

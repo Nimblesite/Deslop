@@ -21,12 +21,16 @@ pub use crate::wire_generated::{
     DiffMetrics, FileMetric, KindMetric, RepoMetrics, ThresholdSource, ThresholdSummary,
 };
 use crate::{
-    buckets::{ClusterKind, TotalInclude, DEFAULT_TOTAL_INCLUDES},
+    buckets::{TotalInclude, DEFAULT_TOTAL_INCLUDES},
     cluster::Cluster,
     diff_scope::DiffScope,
     report_render::{relative_to_scan_root, LineIndex, LineIndices},
     state::{FileId, FileRegistry},
 };
+
+#[path = "report_metrics_kind.rs"]
+mod kind;
+use kind::{fold_kind_buckets, kind_metrics, union_included_lines};
 
 impl RepoMetrics {
     /// Returns an empty metrics block (all counters zero, threshold
@@ -179,69 +183,6 @@ pub fn compute_repo_metrics(inputs: &MetricsInputs<'_>) -> RepoMetrics {
     }
 }
 
-/// Projects every visible clone cluster's non-hidden occurrences into
-/// one per-file line-set bucket per clone kind.
-fn fold_kind_buckets(
-    inputs: &MetricsInputs<'_>,
-) -> HashMap<ClusterKind, HashMap<FileId, BTreeSet<u64>>> {
-    let mut buckets: HashMap<ClusterKind, HashMap<FileId, BTreeSet<u64>>> = HashMap::new();
-    for &cluster in inputs.clusters {
-        if !cluster.kind.is_clone() {
-            continue;
-        }
-        fold_cluster_lines(cluster, inputs, buckets.entry(cluster.kind).or_default());
-    }
-    buckets
-}
-
-/// Unions the line-set buckets of every included kind into the total's
-/// per-file projection. Overlapping clusters of different kinds share
-/// lines through the union, exactly as overlapping clusters of one kind
-/// share them through the set.
-fn union_included_lines(
-    buckets: &HashMap<ClusterKind, HashMap<FileId, BTreeSet<u64>>>,
-    include: &TotalInclude,
-) -> HashMap<FileId, BTreeSet<u64>> {
-    let mut total: HashMap<FileId, BTreeSet<u64>> = HashMap::new();
-    for kind in include.kinds() {
-        let Some(bucket) = buckets.get(kind) else {
-            continue;
-        };
-        for (file_id, lines) in bucket {
-            total.entry(*file_id).or_default().extend(lines);
-        }
-    }
-    total
-}
-
-/// Builds the [METRICS-TOTAL-INCLUDE] `per_kind` rows: one per clone
-/// kind with a visible cluster, in category display order, each carrying
-/// its own figures whether or not it counts toward the total. Thresholds
-/// stay `none()` here; the config layer resolves them beside the total's.
-fn kind_metrics(
-    buckets: &HashMap<ClusterKind, HashMap<FileId, BTreeSet<u64>>>,
-    analysed_loc: u64,
-    include: &TotalInclude,
-) -> Vec<KindMetric> {
-    ClusterKind::all()
-        .into_iter()
-        .filter_map(|kind| {
-            let duplicated_loc = buckets.get(&kind)?;
-            let lines: u64 = duplicated_loc
-                .values()
-                .map(|set| u64::try_from(set.len()).unwrap_or(u64::MAX))
-                .sum();
-            Some(KindMetric {
-                kind,
-                duplicated_loc: lines,
-                duplication_percent: percent(lines, analysed_loc),
-                included_in_total: include.contains(kind),
-                threshold: ThresholdSummary::none(),
-            })
-        })
-        .collect()
-}
-
 /// Builds the per-folder breakdown ([METRICS-REPO] `RepoMetrics.folders`)
 /// by summing the already-computed `per_file` rows under every folder
 /// prefix — clean files stay in the denominator exactly as they do per
@@ -388,7 +329,7 @@ fn file_metric(
 /// Projects every non-hidden occurrence of `cluster` onto per-file line
 /// sets. Hidden occurrences contribute nothing, so a generated tier
 /// never inflates `duplicated_loc` ([METRICS-REPO]).
-fn fold_cluster_lines(
+pub(crate) fn fold_cluster_lines(
     cluster: &Cluster,
     inputs: &MetricsInputs<'_>,
     per_file_lines: &mut HashMap<FileId, BTreeSet<u64>>,

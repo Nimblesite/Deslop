@@ -52,9 +52,10 @@ fn write_group_header(out: &mut String, kind: ClusterKind, groups: usize, exclud
     } else {
         ""
     };
+    let open_attr = if excluded { "" } else { " open" };
     let _ = write!(
         out,
-        "<details class=\"clone-group clone-group--{suffix}{modifier}\" open>\
+        "<details class=\"clone-group clone-group--{suffix}{modifier}\"{open_attr}>\
          <summary title=\"{taxonomy}\">{title} — {groups} group(s){marker}</summary>",
         suffix = labels.css_suffix,
         taxonomy = labels.taxonomy,

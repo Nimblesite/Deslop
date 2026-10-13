@@ -37,3 +37,5 @@ mod report_css;
 mod routing;
 #[path = "cli/thresholds.rs"]
 mod thresholds;
+#[path = "cli/total_include.rs"]
+pub(crate) mod total_include;
