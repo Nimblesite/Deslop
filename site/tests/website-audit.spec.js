@@ -1,3 +1,5 @@
+import { readdir } from "node:fs/promises";
+import { extname } from "node:path";
 import { expect, test } from "@playwright/test";
 import { expectAssetType } from "./helpers/assets.js";
 
@@ -265,4 +267,14 @@ test("internal page links and fragments resolve", async ({ page }) => {
       }
     }
   }
+});
+
+// [SITE-ASSET-TYPE] Motion is built in the page, so no encoded video or audio file is ever published.
+const SITE_SOURCE = new URL("../src/", import.meta.url);
+const ENCODED_MEDIA = new Set([".aac", ".avi", ".flac", ".m4a", ".m4v", ".mkv", ".mov", ".mp3", ".mp4", ".ogg", ".wav", ".webm"]);
+const NO_FILES = [];
+
+test("the site source publishes no encoded video or audio", async () => {
+  const files = await readdir(SITE_SOURCE, { recursive: true });
+  expect(files.filter((file) => ENCODED_MEDIA.has(extname(file).toLowerCase()))).toEqual(NO_FILES);
 });

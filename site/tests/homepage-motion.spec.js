@@ -1,127 +1,147 @@
 import { expect, test } from "@playwright/test";
-import { expectPlayback, expectMotionFits, openMotion, expectOpeningScene } from "./helpers/motion.js";
+import { advanceTo, expectScene, openMotion, reelPosition, OPENING_SECONDS, REEL_NAME, SCENE_SECONDS } from "./helpers/motion.js";
 
-// [SITE-HOME-VIDEO] The release reel runs in the page, without encoded video.
-const PLAYER = ".motion-reel";
-const STAGE = ".motion-reel__stage";
-const NO_VIDEO_PLAYERS = 0;
-const ONE_PLAYER = 1;
-const REEL_SECONDS = 21;
-const GRADED_SECONDS = 10;
-const START_SECONDS = 0;
-const SOURCE_SCRIPT = "/assets/js/reel.js";
-const REPLAY = "Restart animation";
-const SEEK = "Animation position";
+// [SITE-HOME-VIDEO] The homepage reel loops Deslop's headlines in the page, behind one faint pause icon.
 const DESKTOP = { width: 1440, height: 900 };
-const PHONE = { width: 390, height: 844 };
-const DESKTOP_SHAPE = 720 / 1280;
-const PHONE_SHAPE = 1280 / 720;
-const GRADED_ENTRY_SECONDS = 7.1;
-const IDENTITY_TRANSFORM = "matrix(1, 0, 0, 1, 0, 0)";
-const AUDIO_ROUTE = "**/assets/audio/whole-copy.m4a";
+const LANGUAGES = ["C#", "Rust", "Python", "Dart", "JavaScript", "TypeScript", "PHP", "F#", "Go"];
+const RANKS = ["1", "2", "3", "4"];
+const CHAT = ["Agent I'll write a total() helper.", "Deslop Similar code already exists.", "Agent Then I'll reuse it."];
+const TWO_MATCHES = ["", ""];
+const FOUR_BARS = ["", "", "", ""];
+const SCENES = [
+  { id: "find", at: SCENE_SECONDS.find, headline: "Find duplicate code.", items: [[".motion-reel__copy b", TWO_MATCHES]] },
+  { id: "languages", at: SCENE_SECONDS.languages, headline: "Nine languages.", items: [["li", LANGUAGES]] },
+  { id: "rank", at: SCENE_SECONDS.rank, headline: "Worst offenders first.", items: [["li", RANKS], ["li i", FOUR_BARS]] },
+  { id: "agents", at: SCENE_SECONDS.agents, headline: "Stop coding agents from creating more.", items: [[".motion-reel__chat p", CHAT]] },
+  { id: "brand", at: SCENE_SECONDS.brand, headline: "Live in VS Code.", items: [[".motion-reel__wordmark", ["Deslop"]]] },
+];
+const FIRST = 0;
+const LANGUAGES_SCENE = '[data-scene="languages"]';
+const ENTERING_SECONDS = 5.2;
 const PLAY = "Play animation";
-const MEDIA_ERROR = "The soundtrack could not play.";
-const NO_SCRIPT_MESSAGE = "Enable JavaScript to play the animation. The opening frame and accuracy article are available here.";
+const PAUSE = "Pause animation";
+const ONE_CONTROL = 1;
+const NO_MEDIA = 0;
+const NO_TEXT = "";
+const FAINT = "0.4";
+const HOLD_SECONDS = 5;
+const HOLD_MILLISECONDS = HOLD_SECONDS * 1000;
+const FRAME_DIGITS = 1;
+const STILL_DIGITS = 6;
+const HIDDEN = 0;
+const VISIBLE = 1;
+const SETTLED = 0;
 const REEL_TEXT = "rgb(238, 238, 238)";
-const TRANSPARENT = "rgba(0, 0, 0, 0)";
-const COMPARE_SECONDS = 16;
+const REEL_SURFACE = "rgb(23, 23, 23)";
 const THEME_CONTROL = "Toggle dark mode";
-const NO_PLAYBACK_ERROR = "";
 
-test("the homepage plays, pauses and seeks its JavaScript motion reel without video files", async ({ page }) => {
+function entry(scene) {
+  return scene.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { opacity: Number(style.opacity), lift: new DOMMatrixReadOnly(style.transform).m42 };
+  });
+}
+
+async function setTabHidden(page, hidden) {
+  await page.evaluate((value) => {
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => value });
+    document.dispatchEvent(new Event("visibilitychange"));
+  }, hidden);
+}
+
+async function expectHeld(page, reel, seconds) {
+  await expect(reel).toHaveAttribute("data-playing", "false");
+  await page.clock.runFor(HOLD_MILLISECONDS);
+  expect(await reelPosition(reel)).toBeCloseTo(seconds, STILL_DIGITS);
+}
+
+test("the homepage reel plays every headline in order, loops and pauses from one faint icon", async ({ page }) => {
   await page.setViewportSize(DESKTOP);
   const reel = await openMotion(page);
-  await expect(reel.locator("video")).toHaveCount(NO_VIDEO_PLAYERS);
-  await expect(reel.locator(PLAYER)).toHaveCount(ONE_PLAYER);
-  await expect(reel.locator(STAGE)).toBeVisible();
-  await expect(page.locator(`script[src="${SOURCE_SCRIPT}"]`)).toHaveCount(ONE_PLAYER);
-  await expect(reel.locator("audio")).toHaveJSProperty("paused", true);
-  await expect(reel.getByRole("slider", { name: SEEK })).toHaveAttribute("max", String(REEL_SECONDS));
-  await expectPlayback(reel);
-  await expectPosition(reel, GRADED_SECONDS);
-  await expect(reel.locator('[data-scene="graded"]')).toBeVisible();
-  await reel.getByRole("button", { name: REPLAY, exact: true }).click();
-  await expectOpeningScene(reel);
-});
-
-async function expectPosition(reel, seconds) {
-  const slider = reel.getByRole("slider", { name: SEEK });
-  await slider.fill(String(seconds));
-  await expect(reel.locator("audio")).toHaveJSProperty("currentTime", seconds);
-  await expect(reel.locator(PLAYER)).toHaveAttribute("data-position", String(seconds));
-}
-
-async function holdAudio(page) {
-  const held = Promise.withResolvers();
-  const observed = Promise.withResolvers();
-  await page.route(AUDIO_ROUTE, async (route) => {
-    observed.resolve();
-    await held.promise;
-    await route.continue();
-  });
-  return { started: observed.promise, release: held.resolve };
-}
-
-test("the same motion player fits desktop and phone screens without cropping", async ({ page }) => {
-  await openMotion(page);
-  for (const [viewport, shape] of [[DESKTOP, DESKTOP_SHAPE], [PHONE, PHONE_SHAPE]]) {
-    await page.setViewportSize(viewport);
-    await expectMotionFits(page.locator(STAGE), viewport, shape);
+  const control = reel.getByRole("button");
+  await expect(reel).toHaveAttribute("data-playing", "true");
+  expect(await reelPosition(reel)).toBe(OPENING_SECONDS);
+  await expect(reel.locator("video, audio, input")).toHaveCount(NO_MEDIA);
+  await expect(control).toHaveCount(ONE_CONTROL);
+  await expect(control).toHaveAccessibleName(PAUSE);
+  await expect(control).toHaveText(NO_TEXT);
+  await expect(control).toHaveCSS("opacity", FAINT);
+  for (const scene of [...SCENES, SCENES[FIRST]]) {
+    await advanceTo(page, reel, scene.at);
+    await expectScene(reel, scene);
   }
+  await control.click();
+  await expect(control).toHaveAccessibleName(PLAY);
+  const pausedAt = await reelPosition(reel);
+  await expectHeld(page, reel, pausedAt);
+  await control.click();
+  await expect(reel).toHaveAttribute("data-playing", "true");
+  await expect(control).toHaveAccessibleName(PAUSE);
+  await page.clock.runFor(HOLD_MILLISECONDS);
+  expect(await reelPosition(reel)).toBeCloseTo(pausedAt + HOLD_SECONDS, FRAME_DIGITS);
 });
 
-test("reduced motion keeps scene changes still and playback waits for the visitor", async ({ page }) => {
+test("each scene rises into place as it fades in", async ({ page }) => {
+  const reel = await openMotion(page);
+  await expect(reel).toHaveAttribute("data-playing", "true");
+  await advanceTo(page, reel, ENTERING_SECONDS);
+  const { opacity, lift } = await entry(reel.locator(LANGUAGES_SCENE));
+  expect(opacity).toBeGreaterThan(HIDDEN);
+  expect(opacity).toBeLessThan(VISIBLE);
+  expect(lift).toBeGreaterThan(SETTLED);
+});
+
+test("reduced motion holds the finished opening scene until the visitor presses play, then scenes only fade", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   const reel = await openMotion(page);
-  await expect(reel.locator("audio")).toHaveJSProperty("paused", true);
-  await expectPosition(reel, GRADED_ENTRY_SECONDS);
-  const graded = reel.locator('[data-scene="graded"]');
-  await expect(graded).toBeVisible();
-  await expect(graded).toHaveCSS("transform", IDENTITY_TRANSFORM);
+  const control = reel.getByRole("button");
+  await expect(control).toHaveAccessibleName(PLAY);
+  await expectHeld(page, reel, OPENING_SECONDS);
+  await expectScene(reel, SCENES[FIRST]);
+  await control.click();
+  await expect(reel).toHaveAttribute("data-playing", "true");
+  await advanceTo(page, reel, ENTERING_SECONDS);
+  const { opacity, lift } = await entry(reel.locator(LANGUAGES_SCENE));
+  expect(opacity).toBeGreaterThan(HIDDEN);
+  expect(opacity).toBeLessThan(VISIBLE);
+  expect(lift).toBe(SETTLED);
+});
+
+test("the reel stops off screen and in a hidden tab, then resumes where it stopped", async ({ page }) => {
+  const reel = await openMotion(page);
+  await expect(reel).toHaveAttribute("data-playing", "true");
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  const parkedAt = await reelPosition(reel);
+  await expectHeld(page, reel, parkedAt);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect(reel).toHaveAttribute("data-playing", "true");
+  await setTabHidden(page, true);
+  await expectHeld(page, reel, parkedAt);
+  await setTabHidden(page, false);
+  await expect(reel).toHaveAttribute("data-playing", "true");
+  await page.clock.runFor(HOLD_MILLISECONDS);
+  expect(await reelPosition(reel)).toBeCloseTo(parkedAt + HOLD_SECONDS, FRAME_DIGITS);
 });
 
 test("the dark reel remains readable in both website themes", async ({ page }) => {
   const reel = await openMotion(page);
-  await expectPosition(reel, COMPARE_SECONDS);
-  const heading = reel.locator('[data-scene="compare"] h3');
-  const terminal = reel.locator('[data-scene="compare"] pre');
+  await advanceTo(page, reel, SCENE_SECONDS.agents);
+  const headline = reel.locator('[data-scene="agents"] .motion-reel__headline');
+  const message = reel.locator('[data-scene="agents"] .motion-reel__chat p').first();
   for (const theme of ["initial", "toggled"]) {
-    await expect(heading, theme).toHaveCSS("color", REEL_TEXT);
-    await expect(terminal, theme).toHaveCSS("color", REEL_TEXT);
-    await expect(terminal, theme).toHaveCSS("background-color", TRANSPARENT);
+    await expect(headline, theme).toHaveCSS("color", REEL_TEXT);
+    await expect(message, theme).toHaveCSS("color", REEL_TEXT);
+    await expect(message, theme).toHaveCSS("background-color", REEL_SURFACE);
     await page.getByRole("button", { name: THEME_CONTROL }).click();
   }
 });
 
-test("an unavailable soundtrack reports the error and the scenes remain seekable", async ({ page }) => {
-  await page.route(AUDIO_ROUTE, (route) => route.abort());
-  const reel = await openMotion(page);
-  await reel.getByRole("button", { name: PLAY, exact: true }).click();
-  await expect(reel.locator("output")).toContainText(MEDIA_ERROR);
-  await expectPosition(reel, GRADED_SECONDS);
-  await expect(reel.locator('[data-scene="graded"]')).toBeVisible();
-  await expect(reel.locator("audio")).toHaveJSProperty("paused", true);
-});
-
-test("restarting pending playback returns to the opening scene without a false audio error", async ({ page }) => {
-  const audioRequest = await holdAudio(page);
-  const reel = await openMotion(page);
-  await reel.getByRole("button", { name: PLAY, exact: true }).click();
-  await audioRequest.started;
-  await reel.getByRole("button", { name: REPLAY, exact: true }).click();
-  audioRequest.release();
-  await expectOpeningScene(reel);
-  await expect(reel.locator("output")).toHaveText(NO_PLAYBACK_ERROR);
-});
-
 test.describe("without JavaScript", () => {
   test.use({ javaScriptEnabled: false });
-  test("the opening artwork and accuracy link remain available", async ({ page }) => {
-    const reel = await openMotion(page);
-    await expect(reel.locator('[data-scene="whole"]')).toBeVisible();
-    await expect(reel.getByRole("link", { name: "How we measure accuracy" })).toHaveAttribute("href", "/blog/duplicate-code-detection-accuracy/");
-    await expect(reel.getByRole("button", { name: PLAY, exact: true })).toBeDisabled();
-    await expect(reel.locator("noscript")).toBeVisible();
-    await expect(reel.locator("noscript")).toHaveJSProperty("textContent", NO_SCRIPT_MESSAGE);
+  test("the finished opening scene stands still with no dead control", async ({ page }) => {
+    await page.goto("/");
+    const reel = page.getByRole("figure", { name: REEL_NAME });
+    await expectScene(reel, SCENES[FIRST]);
+    await expect(reel.locator("button")).toBeHidden();
   });
 });

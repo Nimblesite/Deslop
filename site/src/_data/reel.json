@@ -1,39 +1,30 @@
 {
-  "name": "Deslop 0.35.0: now it finds the whole copy",
-  "description": "Deslop 0.35.0 reports the complete copy, tells a lookalike from a clone, and shows its verdict when you ask.",
-  "post": "/blog/duplicate-code-detection-accuracy/",
-  "uploadDate": "2026-09-29",
-  "duration": "PT21S",
   "seconds": 21,
-  "audio": "/assets/audio/whole-copy.m4a",
-  "audioType": "audio/mp4",
-  "desktopPoster": "/assets/video/whole-copy-desktop-poster.jpg",
-  "mobilePoster": "/assets/video/whole-copy-mobile-poster.jpg",
+  "opening": 2,
   "scenes": [
-    {
-      "id": "whole",
-      "start": 0,
-      "end": 3
-    },
-    {
-      "id": "partial",
-      "start": 3,
-      "end": 7
-    },
-    {
-      "id": "graded",
-      "start": 7,
-      "end": 14
-    },
-    {
-      "id": "compare",
-      "start": 14,
-      "end": 18
-    },
-    {
-      "id": "brand",
-      "start": 18,
-      "end": 21
-    }
+    { "id": "find", "start": 0, "end": 5, "cue": 0.2, "step": 0.25, "mark": 1 },
+    { "id": "languages", "start": 5, "end": 9, "cue": 0.3, "step": 0.1 },
+    { "id": "rank", "start": 9, "end": 13, "cue": 0.3, "step": 0.2 },
+    { "id": "agents", "start": 13, "end": 18, "cue": 0.5, "step": 1 },
+    { "id": "brand", "start": 18, "end": 21, "cue": 0.5, "step": 0 }
+  ],
+  "languages": ["C#", "Rust", "Python", "Dart", "JavaScript", "TypeScript", "PHP", "F#", "Go"],
+  "code": {
+    "copy": [
+      { "indent": 0, "tokens": [14, 34] },
+      { "indent": 1, "tokens": [10, 24, 18] },
+      { "indent": 1, "tokens": [10, 38] },
+      { "indent": 0, "tokens": [6] }
+    ],
+    "panes": [
+      { "before": [{ "indent": 0, "tokens": [24, 20] }], "after": [{ "indent": 0, "tokens": [30, 14] }] },
+      { "before": [{ "indent": 0, "tokens": [12, 30] }, { "indent": 1, "tokens": [22] }], "after": [] }
+    ]
+  },
+  "ranks": [92, 68, 44, 26],
+  "chat": [
+    { "speaker": "reel.agent", "line": "reel.agentAsk" },
+    { "speaker": "reel.deslop", "line": "reel.agentWarn" },
+    { "speaker": "reel.agent", "line": "reel.agentReuse" }
   ]
 }

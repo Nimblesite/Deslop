@@ -31,19 +31,6 @@ description: "Find duplicate code in nine languages. Deslop ranks what to remove
   }
 }
 </script>
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "CreativeWork",
-  "name": {{ reel.name | jsonValue | safe }},
-  "description": {{ reel.description | jsonValue | safe }},
-  "image": {{ (site.url + reel.desktopPoster) | jsonValue | safe }},
-  "url": {{ (site.url + '/#release-reel') | jsonValue | safe }},
-  "datePublished": {{ reel.uploadDate | jsonValue | safe }},
-  "timeRequired": {{ reel.duration | jsonValue | safe }},
-  "publisher": { "@id": "https://deslop.live/#organization" }
-}
-</script>
 {% endblock %}
 
 <div class="home">
@@ -66,16 +53,9 @@ description: "Find duplicate code in nine languages. Deslop ranks what to remove
     </div>
 
     <div class="hero__right">
-      <figure class="product-shot">
-        <img src="/assets/img/deslop-report.png"
-             alt="A real Deslop report finding repeated C# code, with the duplicate group and example source shown."
-             width="1280" height="760" decoding="async">
-        <figcaption>Real Deslop output from a C# fixture: the duplicate group, matched source, and other location.</figcaption>
-      </figure>
+      {% include "partials/reel.njk" %}
     </div>
   </section>
-
-  {% include "partials/reel.njk" %}
 
   <section class="showcase">
     <div class="showcase__head">
