@@ -1,0 +1,147 @@
+{
+  "name": "dio",
+  "language": "dart",
+  "url": "https://github.com/cfug/dio.git",
+  "sha": "45a2849a601b2137b797e4f183ee2da6b13c05a8",
+  "protocol": {
+    "spec": "docs/specs/corpus.md",
+    "spec_section": "[CORPUS-REGISTER]",
+    "judging_skill": ".agents/skills/judge-clone-pairs/SKILL.md",
+    "preparer_skill": ".agents/skills/clone-register-prepare/SKILL.md"
+  },
+  "clearly_in": [
+    {
+      "why": "Both complete pairs of helper classes record the same three events, forward to the same handlers, and throw after the same async wait. Queued wrapper names and the error string are the only substantive differences.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- dio/test/interceptor_test.dart:1585-1628\n+++ dio/test/interceptor_test.dart:1541-1583\n@@ -1,5 +1,5 @@\n-class _SubclassedQueuedInterceptorsWrapper extends QueuedInterceptorsWrapper {\n-  _SubclassedQueuedInterceptorsWrapper(this.events);\n+class _SubclassedInterceptorsWrapper extends InterceptorsWrapper {\n+  _SubclassedInterceptorsWrapper(this.events);\n \n   final List<String> events;\n \n@@ -31,14 +31,13 @@\n   }\n }\n \n-class _AsyncSubclassedQueuedInterceptorsWrapper\n-    extends QueuedInterceptorsWrapper {\n+class _AsyncSubclassedInterceptorsWrapper extends InterceptorsWrapper {\n   @override\n   Future<void> onRequest(\n     RequestOptions options,\n     RequestInterceptorHandler handler,\n   ) async {\n     await Future<void>.value();\n-    throw StateError('Async queued wrapper subclass error');\n+    throw StateError('Async wrapper subclass error');\n   }\n }\n",
+      "type": "Type II",
+      "occurrences": [
+        "dio/test/interceptor_test.dart:1585-1628",
+        "dio/test/interceptor_test.dart:1541-1583"
+      ]
+    }
+  ],
+  "clearly_out": [
+    {
+      "why": "One span checks echoed header values; the other checks a CORS explanation string. Only the testing API's assertion syntax is shared.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- dio_test/lib/src/test/headers_tests.dart:49-51\n+++ plugins/web_adapter/test/cors_preflight_test.dart:203-206\n@@ -1,3 +1,4 @@\n-      expect(content, contains('Stringkey: 1'));\n-      expect(content, contains('Numkey: 2'));\n-      expect(content, contains('Booleankey: false'));\n+      expect(reason, startsWith(baseReason));\n+      expect(reason, contains('cross-origin'));\n+      expect(reason, contains('PUT'));\n+      expect(reason, contains('CORS preflight'));\n",
+      "occurrences": [
+        "dio_test/lib/src/test/headers_tests.dart:49-51",
+        "plugins/web_adapter/test/cors_preflight_test.dart:203-206"
+      ]
+    }
+  ],
+  "not_clear": [
+    {
+      "why": "These are repeated option assertions with only the object name changed; the selected material is ordinary test scaffolding.",
+      "occurrences": [
+        "dio/test/options_test.dart:102-106",
+        "dio/test/options_test.dart:75-79"
+      ]
+    },
+    {
+      "why": "Both spans initialize the same logging test harness with different flag combinations. That repeated setup does not make a substantive clone certain.",
+      "occurrences": [
+        "dio/test/interceptor_test.dart:1174-1192",
+        "dio/test/interceptor_test.dart:1323-1341"
+      ]
+    },
+    {
+      "why": "The selected code is an exception matcher reused in related status-code tests, with a fixed code replaced by the loop variable.",
+      "occurrences": [
+        "dio_test/lib/src/test/status_code_tests.dart:43-53",
+        "dio_test/lib/src/test/status_code_tests.dart:20-30"
+      ]
+    },
+    {
+      "why": "The same option fields are declared in nullable public options and resolved request options, with different initialization and documentation. Shared data declarations leave doubt about a clone verdict.",
+      "occurrences": [
+        "dio/lib/src/options.dart:492-529",
+        "dio/lib/src/options.dart:814-821"
+      ]
+    },
+    {
+      "why": "The repeated interceptor configuration and one assertion are test scaffolding for different logging flags.",
+      "occurrences": [
+        "dio/test/interceptor_test.dart:1230-1245",
+        "dio/test/interceptor_test.dart:1328-1343"
+      ]
+    },
+    {
+      "why": "This is the same response-construction setup for object and array JSON test inputs; the selected ranges omit their assertions.",
+      "occurrences": [
+        "dio/test/transformer_test.dart:93-106",
+        "dio/test/transformer_test.dart:112-125"
+      ]
+    },
+    {
+      "why": "Only three routine option assertions are selected, with the tested variable renamed.",
+      "occurrences": [
+        "dio/test/options_test.dart:102-104",
+        "dio/test/options_test.dart:75-77"
+      ]
+    },
+    {
+      "why": "This is the short request-and-two-assertions logging idiom, with different expected output and booleans.",
+      "occurrences": [
+        "dio/test/interceptor_test.dart:1218-1221",
+        "dio/test/interceptor_test.dart:1368-1371"
+      ]
+    },
+    {
+      "why": "Only a two-line POST-and-assert idiom repeats, apart from indentation.",
+      "occurrences": [
+        "plugins/http2_adapter/test/http2_test.dart:81-82",
+        "plugins/http2_adapter/test/http2_test.dart:112-113"
+      ]
+    },
+    {
+      "why": "Both operators use the conventional identity/type/field equality pattern. The deep collection comparison differs from ordinary field equality; copying is not certain.",
+      "occurrences": [
+        "plugins/cookie_manager/test/cookies_persistance_test.dart:46-52",
+        "dio/lib/src/parameter.dart:26-32"
+      ]
+    },
+    {
+      "why": "These three assertions repeat apart from indentation, but are a short HTTP response-checking idiom.",
+      "occurrences": [
+        "dio_test/lib/src/test/http_method_tests.dart:176-178",
+        "dio_test/lib/src/test/http_method_tests.dart:160-162"
+      ]
+    },
+    {
+      "why": "These are two-line examples demonstrating the same generic call with different response types.",
+      "occurrences": [
+        "example_dart/lib/generic.dart:20-21",
+        "example_dart/lib/generic.dart:16-17"
+      ]
+    },
+    {
+      "why": "The field lists intentionally represent the same options in public and resolved forms, changing nullability and initialization. There is no substantive routine in these ranges.",
+      "occurrences": [
+        "dio/lib/src/options.dart:487-524",
+        "dio/lib/src/options.dart:813-820"
+      ]
+    },
+    {
+      "why": "Two timeout assertions recur with different values, while the second range also includes a method assertion. The short scaffolding and uneven boundaries leave doubt.",
+      "occurrences": [
+        "dio/test/options_test.dart:103-104",
+        "dio/test/options_timeout_integration_test.dart:118-120"
+      ]
+    },
+    {
+      "why": "These are corresponding option-field declarations with different nullability, late initialization, and documentation; declarations alone leave doubt about calling this copied code.",
+      "occurrences": [
+        "dio/lib/src/options.dart:815-822",
+        "dio/lib/src/options.dart:497-535"
+      ]
+    },
+    {
+      "why": "The exact repeated span creates a cancellation token and schedules its cancellation; this is short shared test setup.",
+      "occurrences": [
+        "plugins/native_dio_adapter/test/conversion_layer_adapter_test.dart:93-99",
+        "plugins/native_dio_adapter/test/conversion_layer_adapter_test.dart:69-75"
+      ]
+    }
+  ]
+}

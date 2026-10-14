@@ -219,9 +219,43 @@ test("an agreed NOT CLEAR note shorter than the assertion floor is still recorde
   );
 });
 
+const REPORT_TITLE = "# Verdict disagreements";
+
 test("a repository that gains a register leaves the judging queue", () => {
   const { json } = runAgreed();
   assert.deepEqual(json(QUEUE).repositories, [], "a queue that never drains buys nothing");
+});
+
+test("a --report path outside the root is written exactly where it names", () => {
+  const elsewhere = join(mkdtempSync(join(tmpdir(), "verdict-merge-report-")), "merge.md");
+  const { root, status } = runAgreed(["--dry-run", "--report", elsewhere]);
+  assert.equal(status, 0, "a dry run with an absolute report path succeeds");
+  assert.ok(readFileSync(elsewhere, "utf8").startsWith(REPORT_TITLE), "the report is at the path given");
+  assert.throws(
+    () => readFileSync(join(root, elsewhere), "utf8"),
+    "an absolute path is never re-rooted under the repository",
+  );
+});
+
+/// A first pass whose judges agree on a CLEARLY OUT and a NOT CLEAR but split
+/// on the only CLEARLY IN: every agreed verdict is real, yet none is a clone.
+const NO_AGREED_CLONE = {
+  [FIRST_JUDGE]: { clearly_in: [scored(1)], clearly_out: [scored(3)], not_clear: [noted(2)] },
+  [SECOND_JUDGE]: { clearly_in: [], clearly_out: [scored(3)], not_clear: [noted(1), noted(2)] },
+};
+
+test("a register with no agreed CLEARLY IN is filed and stays queued", () => {
+  const { status, json } = runPasses(NO_AGREED_CLONE);
+  assert.equal(status, 0, "agreeing on no clone is an outcome, not an error");
+  const register = json(join(REGISTER_DIR, REGISTER));
+  assert.deepEqual(register.clearly_in, [], "the split CLEARLY IN stays out");
+  assert.deepEqual(register.clearly_out.map((entry) => entry.occurrences), [at(3)], "the agreed CLEARLY OUT is in");
+  assert.deepEqual(register.not_clear.map((entry) => entry.occurrences), [at(2)], "the agreed NOT CLEAR is in");
+  assert.deepEqual(
+    json(QUEUE).repositories.map((repository) => repository.name),
+    [REPO],
+    "a register that finds no clone yet waits in the queue for a pass that agrees on one",
+  );
 });
 
 test("--dry-run merges nothing even when every judge agrees", () => {
