@@ -2,6 +2,9 @@
 
 use super::*;
 
+#[path = "liveness/information.rs"]
+mod information;
+
 /// Runs the cluster contract check.
 fn judge(clusters: &[Value]) -> Vec<Failure> {
     let mut failures = Vec::new();

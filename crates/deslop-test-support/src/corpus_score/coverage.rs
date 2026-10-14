@@ -25,7 +25,7 @@ fn is_clone_label(label: &Value) -> bool {
 }
 
 /// Both report schemas must certify a clone when both fields are present.
-fn is_clone_finding(cluster: &Value) -> bool {
+pub(crate) fn is_clone_finding(cluster: &Value) -> bool {
     let mut classified = false;
     for field in TAXONOMY_FIELDS {
         if let Some(label) = cluster.get(*field) {

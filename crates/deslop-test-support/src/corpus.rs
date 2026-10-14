@@ -351,11 +351,18 @@ pub fn reports_clone_spanning(report: &Value, files: &[String]) -> bool {
     if files.is_empty() {
         return false;
     }
-    cluster_paths(report).iter().any(|paths| {
-        files
-            .iter()
-            .all(|file| paths.iter().any(|path| path == file))
-    })
+    visible_clone_clusters(report)
+        .iter()
+        .any(|cluster| cluster_shows_span(cluster, files))
+}
+
+/// [CORPUS-SCORE] Visible published clones; informational and unknown classifications certify nothing.
+#[must_use]
+pub fn visible_clone_clusters(report: &Value) -> Vec<&Value> {
+    visible_clusters(report)
+        .into_iter()
+        .filter(|cluster| crate::corpus_score::is_clone_finding(cluster))
+        .collect()
 }
 
 /// Clusters the report actually shows a user. A cluster whose every

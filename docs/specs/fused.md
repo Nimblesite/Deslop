@@ -213,6 +213,14 @@ An external selector gaining or losing exactly the `Async` suffix is a bounded e
 
 Keep the actual content measurements even when a contradiction rejects the pair. Rejection does not mean zero similarity. Truly unavailable measurements are unknown under [REPORT-CONTEXT-PAIR](REPORTING-CONTEXT.md#report-context-pair-comparing-two-occurrences).
 
+#### [FUSED-CONTENT-GATE-CALL-TARGET-CONTRACT] A renamed receiver contract carries its method names
+
+A TypeScript dispatcher can keep the variable name `instance` while renaming the interface and the method it dispatches. The receiver's explicit cast, or a copied function declaration whose type predicate positively guards that receiver, supplies its named contract. A repeated, consistent rename of that contract can explain the method rename. The predicate must guard its sole supplied parameter, its declaration must be unambiguous inside the copied region, and its positive condition must govern the call's consequent branch. A negated guard, a disjunction, an alternative branch or an unchanged contract cannot supply that proof. Contract references outside an aligned-core slice are not carried into the slice. Implemented in `content/call_targets/contracts.rs`; pinned by `clone_extent_recovery::shutdown_hooks::lifecycle_dispatchers_keep_the_whole_renamed_module` and its changed-operation and guard controls.
+
+#### [FUSED-CONTENT-GATE-CALL-TARGET-PADDING] Surrounding syntax cannot hide a changed operation
+
+An extra import or declaration can change the whole endpoint's shape while leaving its calls in the same positions relative to each other. When the complete external-call sequences have equal lengths and matching call shapes in source order, an AST-owned, unchanged named contract can prove that a selector change on an unchanged receiver remains a contradiction. An unchanged variable name alone cannot supply this unaligned proof; such pairs retain their ordinary aligned-core verdict. Renamed receiver or contract names still need the ordinary aligned rename proof. Conventional async affix edits retain their existing treatment. Contract declarations are indexed once per matched region, and call metadata is stored only for external selectors. Implemented in `content/call_targets/sites.rs`; pinned by `clone_extent_recovery::shutdown_hooks::changed_operations_on_the_same_contract_keep_only_the_shared_work`, `clone_extent_recovery::grouped_commands::grouped_command_factories_retain_the_complete_copied_setup` and `type2_rename_call_targets`.
+
 #### [FUSED-CONTENT-GATE-PARAMETER] Where nothing was renamed, a consistent literal substitution is a parameter
 
 A drifted literal that echoes nothing contradicts the *rename* the identifier bijection claims — that is what separates the `#134` stride family, renamed consistently end to end and diverging at one aligned literal, from a reportable Type-2 clone.

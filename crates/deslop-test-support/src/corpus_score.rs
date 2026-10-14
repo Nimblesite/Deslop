@@ -27,6 +27,7 @@ pub mod render;
 pub mod run;
 pub mod verdict;
 
+pub(crate) use coverage::is_clone_finding;
 use coverage::matching_cluster;
 
 use crate::corpus_measure::ProcessCost;
