@@ -21,13 +21,16 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub mod checks;
+pub mod clone_type;
 mod coverage;
 pub mod gate;
 pub mod render;
 pub mod run;
 pub mod verdict;
 
-use coverage::matching_cluster;
+use clone_type::CloneType;
+use coverage::{matching_cluster, reported_kind};
+pub use coverage::RangeCoverage;
 
 use crate::corpus_measure::ProcessCost;
 
@@ -128,6 +131,11 @@ pub struct ScoredEntry {
     pub why: String,
     /// The ranges as the register wrote them.
     pub occurrences: Vec<String>,
+    /// The clone type the judge pinned, absent when any type answers it.
+    pub clone_type: Option<String>,
+    /// When a pinned type went unmatched, the kind of the clone cluster that
+    /// did show the pair, so a typed miss reads as mislabelled, not unseen.
+    pub reported_as: Option<String>,
     /// Whether a published clone cluster showed every range together.
     pub matched: bool,
     /// The cluster that matched, when one did.
@@ -136,31 +144,6 @@ pub struct ScoredEntry {
     pub coverage: Option<RangeCoverage>,
     /// Whether the engine got this entry right.
     pub correct: bool,
-}
-
-/// How much of a judged pair's source the matching cluster actually shows.
-#[derive(Debug, Clone, Serialize)]
-pub struct RangeCoverage {
-    /// Distinct judged lines overlapped by visible occurrences.
-    pub covered_lines: u64,
-    /// Inclusive lines across all judged ranges.
-    pub judged_lines: u64,
-    /// `100 * covered_lines / judged_lines`, absent for an empty entry.
-    pub percent: Option<f64>,
-}
-
-impl RangeCoverage {
-    /// Keep line coverage arithmetic in one place for pairs and aggregates.
-    fn new(covered_lines: u64, judged_lines: u64) -> Self {
-        Self {
-            covered_lines,
-            judged_lines,
-            percent: percent(
-                usize::try_from(covered_lines).unwrap_or(usize::MAX),
-                usize::try_from(judged_lines).unwrap_or(usize::MAX),
-            ),
-        }
-    }
 }
 
 impl ScoredEntry {
@@ -409,12 +392,19 @@ fn score_entry(report: &Value, entry: &Value, verdict: &str) -> Result<ScoredEnt
         .iter()
         .map(|range| Range::parse(range))
         .collect::<Result<Vec<_>>>()?;
-    let matched_cluster = matching_cluster(report, &ranges);
+    let pinned = CloneType::pinned(entry, verdict)?;
+    let matched_cluster = matching_cluster(report, &ranges, pinned);
     let matched = matched_cluster.is_some();
+    let reported_as = match (pinned, &matched_cluster) {
+        (Some(_), None) => reported_kind(report, &ranges),
+        _ => None,
+    };
     Ok(ScoredEntry {
         verdict: verdict.to_owned(),
         why: text(entry, "why"),
         occurrences: written,
+        clone_type: pinned.map(|clone_type| clone_type.label().to_owned()),
+        reported_as,
         matched,
         cluster: matched_cluster
             .as_ref()
@@ -441,8 +431,9 @@ fn score_list(report: &Value, register: &Value, verdict: &str) -> Result<Vec<Sco
 ///
 /// # Errors
 ///
-/// Returns an error when a register range is malformed — an entry that names
-/// nothing must fail loudly rather than silently score as correct.
+/// Returns an error when a register range or clone type is malformed — an
+/// entry that names nothing must fail loudly rather than silently score as
+/// correct.
 pub fn score_repo(name: &str, register: &Value, report: &Value) -> Result<RepoScore> {
     let mut entries = score_list(report, register, CLEARLY_IN)?;
     entries.extend(score_list(report, register, CLEARLY_OUT)?);

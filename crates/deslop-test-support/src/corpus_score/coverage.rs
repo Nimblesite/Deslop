@@ -1,19 +1,47 @@
 //! [CORPUS-SCORE] The judged-line extent of a matched cluster.
 
 use deslop_core::buckets::ClusterKind;
+use serde::Serialize;
 use serde_json::Value;
 
 use super::{
-    clusters, has_distinct_matches, occurrence_key, overlaps, visible, Range, RangeCoverage,
+    clone_type::CloneType, clusters, has_distinct_matches, occurrence_key, overlaps, percent,
+    visible, Range,
 };
+
+/// How much of a judged pair's source the matching cluster actually shows.
+#[derive(Debug, Clone, Serialize)]
+pub struct RangeCoverage {
+    /// Distinct judged lines overlapped by visible occurrences.
+    pub covered_lines: u64,
+    /// Inclusive lines across all judged ranges.
+    pub judged_lines: u64,
+    /// `100 * covered_lines / judged_lines`, absent for an empty entry.
+    pub percent: Option<f64>,
+}
+
+impl RangeCoverage {
+    /// Keep line coverage arithmetic in one place for pairs and aggregates.
+    pub(super) fn new(covered_lines: u64, judged_lines: u64) -> Self {
+        Self {
+            covered_lines,
+            judged_lines,
+            percent: percent(
+                usize::try_from(covered_lines).unwrap_or(usize::MAX),
+                usize::try_from(judged_lines).unwrap_or(usize::MAX),
+            ),
+        }
+    }
+}
 
 /// Both serialized report spellings of the cluster classification.
 const TAXONOMY_FIELDS: &[&str] = &["kind", "bucket"];
 
 /// Old reports call the cluster taxonomy `bucket`; current ones call it `kind`.
 /// Either field can disprove a clone, and an absent or unknown taxonomy cannot
-/// certify one ([CORPUS-SCORE]).
-fn is_clone_label(label: &Value) -> bool {
+/// certify one ([CORPUS-SCORE]). A pinned type must also be one the kind
+/// reports ([CORPUS-REGISTER-TYPE]).
+fn is_clone_label(label: &Value, pinned: Option<CloneType>) -> bool {
     label
         .as_str()
         .and_then(|label| {
@@ -21,16 +49,16 @@ fn is_clone_label(label: &Value) -> bool {
                 .into_iter()
                 .find(|kind| kind.wire_label() == label)
         })
-        .is_some_and(ClusterKind::is_clone)
+        .is_some_and(|kind| kind.is_clone() && pinned.map_or(true, |pin| pin.admits(kind)))
 }
 
 /// Both report schemas must certify a clone when both fields are present.
-fn is_clone_finding(cluster: &Value) -> bool {
+fn is_clone_finding(cluster: &Value, pinned: Option<CloneType>) -> bool {
     let mut classified = false;
     for field in TAXONOMY_FIELDS {
         if let Some(label) = cluster.get(*field) {
             classified = true;
-            if !is_clone_label(label) {
+            if !is_clone_label(label, pinned) {
                 return false;
             }
         }
@@ -42,11 +70,12 @@ fn is_clone_finding(cluster: &Value) -> bool {
 pub(super) fn matching_cluster<'a>(
     report: &'a Value,
     ranges: &[Range],
+    pinned: Option<CloneType>,
 ) -> Option<(&'a Value, RangeCoverage)> {
     clusters(report)
         .iter()
         .filter(|cluster| {
-            is_clone_finding(cluster)
+            is_clone_finding(cluster, pinned)
                 && cluster.get("id").and_then(Value::as_str).is_some()
                 && has_distinct_matches(&visible(cluster), ranges)
         })
@@ -58,6 +87,16 @@ pub(super) fn matching_cluster<'a>(
                 best
             }
         })
+}
+
+/// The kind of the clone cluster that shows every range, whatever type it
+/// reports — what the engine called a typed pair it did not answer.
+pub(super) fn reported_kind(report: &Value, ranges: &[Range]) -> Option<String> {
+    let (cluster, _) = matching_cluster(report, ranges, None)?;
+    TAXONOMY_FIELDS
+        .iter()
+        .find_map(|field| cluster.get(*field)?.as_str())
+        .map(ToOwned::to_owned)
 }
 
 /// Clip one published occurrence to the lines the judge actually read.

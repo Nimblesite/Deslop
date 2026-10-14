@@ -104,13 +104,34 @@ An empty `clearly_out` list must carry `clearly_out_status` prose saying so, for
 
 The protocol lives in two skills, deliberately split so neither role can drift into the other: `.agents/skills/clone-register-prepare` builds the workspace and files what comes back, and `.agents/skills/judge-clone-pairs` is the judging protocol, which never names this project and is copied to the root of the handed-over folder as `JUDGING.md`. Each repository directory links to that file, so a judge never reaches back here to read it. The A/B key and the pinned checkouts are written beside that folder and never inside it.
 
+### [CORPUS-REGISTER-TYPE] Pinning a clone type
+
+A CLEARLY IN entry may carry a `type`: `Type I`, `Type II`, `Type III` or `Type IV`, spelled exactly so, meaning what [CLONE-TYPE-TAXONOMY](taxonomy.md#clone-type-taxonomy-how-this-relates-to-the-research) says they mean. A blank or absent type means any type is acceptable. CLEARLY OUT and NOT CLEAR entries never carry one: a pair that is not a clone has no clone type.
+
+**Judges always name it.** The judging protocol asks for a type on every CLEARLY IN, gives each type's definition, and settles it from the diff: the lowest type that accounts for every difference.
+
+**A typed pair is found only under its own type.** The scorer counts a typed CLEARLY IN as reported only when the matching cluster's kind reports that type, by the [CLONE-KIND-LABELS](taxonomy.md#clone-kind-labels-use-the-same-names-everywhere) table:
+
+| `type` | Found by a cluster of kind |
+|---|---|
+| `Type I` | `identical` |
+| `Type II` | `nearly_identical` |
+| `Type III` | `nearly_identical` or `loosely_similar` |
+| `Type IV` | `same_behavior` |
+
+So renamed code published as identical code is a false negative for a `Type II` entry: the engine reported the pair, but claimed it was something it is not. The scorecard prints the pinned type beside every such miss, with the kind the engine did report the pair under — `(Type I; reported as nearly_identical)` — so a reader can see why a pair the engine did report still counts against it. An untyped entry is found by any clone kind, exactly as before.
+
+**A type the sources do not agree on is left unspecified.** When verdicts are merged ([CORPUS-REGISTER-MERGE]), the verdict alone decides whether a pair enters the register. Its type is written only when every source gave the same valid type — the standing register included, and a blank counts as a vote. `Type I` against `Type II`, a typed ruling against a blank one, or a label outside the four all leave the pair filed with no type, which means any type is acceptable. A standing entry whose type a later pass contradicts loses its type the same way; nothing else about it changes. Every pair filed without a type that some source did name is listed under `types_left_unspecified` in `docs/reports/verdict-merge.md`, with each source's type.
+
+A type on anything but a CLEARLY IN is never written by the merge, and fails the scorer and `corpus_register_contract` if it ever reaches a register. Implemented in `crates/deslop-test-support/src/corpus_score/clone_type.rs` and `scripts/corpus/merge-verdicts/pass.mjs`; asserted by `corpus_score/tests/clone_type.rs`, `every_pinned_clone_type_is_a_research_type_on_a_clearly_in`, and `scripts/repository/verdict-merge.test.mjs`.
+
 ### [CORPUS-REGISTER-COVERAGE] How far the register is meant to go
 
 The register is built up over time, never in one pass. The shape it is growing towards:
 
 - **Two to three repositories per language, of visibly different size.** A single repository teaches the register that language's house style, not the language. A small library and a large application disagree about what repetition is normal, and the register needs both.
 - **Roughly 100 CLEARLY IN and 100 CLEARLY OUT entries per repository.** Reaching that takes several judging passes at different seeds; a pass that yields a dozen firm verdicts out of two hundred candidates is doing well, not badly.
-- **About 200 candidates per repository per pass, as a ceiling.** Past that a repository stops paying for the time. `scripts/corpus/register-workspace.mjs` caps the draw there.
+- **About 200 candidates per repository per pass, as a ceiling.** Past that a repository stops paying for the time. `scripts/corpus/register-workspace.mjs` caps the draw there. `make judging-folder JUDGING_CANDIDATES=<n>` asks for a shorter pass, from 1 up to that ceiling; anything else is refused rather than clamped.
 
 **Breadth beats depth.** When the choice is another pass on a repository already judged versus a first pass on a language with no register at all, the new language wins. A false positive that only appears in Kotlin is invisible until some Kotlin is judged, however deep the Python register goes.
 
@@ -173,7 +194,9 @@ The rest of the rules:
 - **Judges must finish the same repositories.** A repository absent from one folder is an unfinished pass, not an empty verdict. The merge refuses the whole run before creating or draining any register.
 - A repository that gains a register leaves `corpus/judging-queue.json` in the same run, per [CORPUS-REGISTER-QUEUE].
 
-`docs/reports/verdict-merge.md` holds what was left out. Every string in it is a column header, a label derived from the verdicts themselves, or a value read out of a judging folder — the only sentences are the judges' own, quoted. Rows are sorted by kind, repository and candidate, so two runs over the same verdicts produce the same document.
+A clone type the sources did not all agree on never leaves a pair out: the pair is filed without a type ([CORPUS-REGISTER-TYPE]).
+
+`docs/reports/verdict-merge.md` holds what was left out, and which pairs were filed without the type some source named. Every string in it is a column header, a label derived from the verdicts themselves, or a value read out of a judging folder — the only sentences are the judges' own, quoted. Rows are sorted by kind, repository and candidate, so two runs over the same verdicts produce the same document.
 
 Asserted by `scripts/repository/verdict-merge.test.mjs`, which drives the script against throwaway judging folders that agree and that do not.
 
@@ -190,6 +213,8 @@ Implemented in `crates/deslop-test-support/src/corpus_score/render.rs` (document
 The register says which pairs are real. The score says how the engine is doing against them, in one number per repository and one for the corpus.
 
 **The number.** `score = 100 × correct / judged`, where `judged` is every CLEARLY IN and CLEARLY OUT entry and `correct` is the ones the engine answered right. A CLEARLY IN it reports is correct; one it misses is a **false negative**. A CLEARLY OUT it stays silent on is correct; one it reports is a **false positive**. Both wrong answers are bugs, and each costs exactly one judged pair — no weighting, no partial credit.
+
+**A typed CLEARLY IN is answered only by a cluster of its type** — see [CORPUS-REGISTER-TYPE].
 
 **A report answers a clone verdict only through a clone finding.** Each judged range must overlap a different visible occurrence in the same cluster. The old report schema calls the cluster classification `bucket`; the current schema calls it `kind`. The scorer reads both through the shared clone-kind registry. `structural_only` means matching shape without verified copied content, so its occurrences cannot satisfy CLEARLY IN or breach CLEARLY OUT. Missing or unknown classification cannot certify a clone either. If an informational family also contains a real clone pair, a separately published clone cluster must show that pair; the informational family alone is not proof. Asserted by `informational_findings_cannot_satisfy_either_verdict` and `only_a_clone_finding_certifies_a_pair_inside_a_mixed_family` under [CORPUS-SCORE].
 

@@ -9,6 +9,10 @@
 ##
 ## Usage:   scripts/corpus/prepare-judging.sh <folder> [seed] [name ...]
 ## Example: scripts/corpus/prepare-judging.sh ~/clone-judging 1 click cobra
+## Example: JUDGING_CANDIDATES=20 scripts/corpus/prepare-judging.sh ~/clone-judging
+##
+## JUDGING_CANDIDATES asks for a shorter pass than the 200-candidate ceiling.
+## COMPARE_REPORTS names the comparison to draw from, when it is not the default.
 ##
 ## With no names, every repository in the comparison is prepared. The folder must
 ## be OUTSIDE this repository — a judge who can walk up into this source is
@@ -79,7 +83,8 @@ to walk up into the source that produced the reports" ;; esac
       --workspace "$root/$slug" --source "$checkout" \
       --report-one "$report_a" --report-two "$report_b" \
       --url "$url" --sha "$sha" --seed "$seed" --keys "$root.keys" \
-      ${NOMINATIONS_DIR:+--nominations "$NOMINATIONS_DIR/$slug.json"}
+      ${NOMINATIONS_DIR:+--nominations "$NOMINATIONS_DIR/$slug.json"} \
+      ${JUDGING_CANDIDATES:+--candidates "$JUDGING_CANDIDATES"}
   done < <(compare_targets "$@")
 
   log "handed-over folder: $root"

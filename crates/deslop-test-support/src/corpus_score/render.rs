@@ -29,7 +29,7 @@ use super::{
     checks::CheckOutcome,
     gate::{Breach, CorpusChange, CorpusTotals, Degradation, Thresholds},
     verdict::Verdict,
-    RepoScore, RunCost,
+    RepoScore, RunCost, ScoredEntry,
 };
 
 /// One engine in a scored run.
@@ -403,6 +403,16 @@ fn defects_section(card: &Scorecard) -> Vec<String> {
     lines
 }
 
+/// [CORPUS-REGISTER-TYPE] The type a pair was held to, and what the engine
+/// called it when it reported the pair under another kind.
+fn pinned_note(entry: &ScoredEntry) -> String {
+    match (&entry.clone_type, &entry.reported_as) {
+        (Some(clone_type), Some(kind)) => format!(" ({clone_type}; reported as {kind})"),
+        (Some(clone_type), None) => format!(" ({clone_type})"),
+        (None, _) => String::new(),
+    }
+}
+
 /// One line per judged pair `engine_id` answered wrongly.
 fn defect_lines(card: &Scorecard, engine_id: &str) -> Vec<String> {
     card.targets
@@ -419,8 +429,9 @@ fn defect_lines(card: &Scorecard, engine_id: &str) -> Vec<String> {
                     } else {
                         "FALSE POSITIVE"
                     };
+                    let pinned = pinned_note(entry);
                     format!(
-                        "- **{kind}** {} — `{}`\n  - {}",
+                        "- **{kind}** {} — `{}`{pinned}\n  - {}",
                         target.name,
                         entry.occurrences.join("` + `"),
                         entry.why

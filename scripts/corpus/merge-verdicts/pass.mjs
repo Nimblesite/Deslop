@@ -8,6 +8,8 @@
 //
 //   * Agreement. Every supplied judge must have ruled on a candidate exactly
 //     once with the SAME verdict. A split or incomplete pass records nothing.
+//   * Clone type. A CLEARLY IN keeps a type only when every source gave the
+//     same valid one, blank included; otherwise it is filed without a type.
 //   * The ranges come from the workspace's own pair list, not from what a judge
 //     retyped. A judge whose ranges disagree with the candidate read something
 //     other than the candidate, so that verdict is refused and named.
@@ -27,6 +29,11 @@ export const CLEARLY_IN = SCORED[0];
 export const CLEARLY_OUT = SCORED[1];
 export const NOT_CLEAR = "not_clear";
 export const VERDICTS = [...SCORED, NOT_CLEAR];
+/// [CORPUS-REGISTER-TYPE] The clone types a CLEARLY IN may carry, as the
+/// scorer's `CloneType` (`corpus_score/clone_type.rs`) spells them. A blank
+/// type pins nothing: any clone kind may report the pair.
+const CLONE_TYPES = ["Type I", "Type II", "Type III", "Type IV"];
+const UNTYPED = "";
 /// A judgement stated in fewer characters than this is not a judgement. Matches
 /// the floor `corpus_register_contract` holds every SCORED entry to.
 export const MINIMUM_PROSE = 40;
@@ -65,6 +72,18 @@ const entriesOf = (pass) =>
   VERDICTS.flatMap((verdict) =>
     (pass[verdict] ?? []).map((entry) => ({ verdict, ...entry })),
   );
+
+/// The clone type a ruling or register entry names, blank when it names none.
+const typeOf = (entry) => String(entry.type ?? UNTYPED).trim();
+
+/// The type every source gave, or blank when any two differ — a blank and a
+/// label outside the four included. Never a majority: a type two readers see
+/// differently is not specified at all.
+const agreedType = (votes) => {
+  const [first] = votes;
+  const unanimous = votes.every((vote) => vote.type === first.type);
+  return unanimous && CLONE_TYPES.includes(first.type) ? first.type : UNTYPED;
+};
 
 /// Groups every judge's ruling by the candidate it ruled on.
 const byCandidate = (passes) => {
@@ -132,6 +151,11 @@ const entryFor = (verdict, prose, occurrences) =>
     ? { why: prose.why, occurrences }
     : { why: prose.why, verified: prose.verified, occurrences };
 
+/// A CLEARLY IN with `type` set, or removed when blank, kept beside its prose
+/// and before its ranges so a register diff shows the type where it is read.
+const withType = ({ type: _dropped, occurrences, ...prose }, type) =>
+  type === UNTYPED ? { ...prose, occurrences } : { ...prose, type, occurrences };
+
 /// A candidate absent from the list shown to judges cannot name any pair.
 const refuseUnknown = (candidate, rulings, out) => {
   out.refused.push({
@@ -180,11 +204,25 @@ const rule = (candidate, rulings, pairs, standing, out, expectedJudges) => {
   record(candidate, rulings, verdict, occurrences, standing, out);
 };
 
+/// Collects every source's type for an agreed CLEARLY IN, keyed by pair, so the
+/// type is settled once over all of them — the standing register included.
+const voteTypes = (verdict, candidate, occurrences, votes, out) => {
+  if (verdict !== CLEARLY_IN) return;
+  const pair = key(occurrences);
+  const found = out.typeVotes.get(pair) ?? { candidate, occurrences, votes: [] };
+  found.votes.push(...votes);
+  out.typeVotes.set(pair, found);
+};
+
 /// Applies an agreed verdict, or reports why it cannot be applied.
 const record = (candidate, honest, verdict, occurrences, standing, out) => {
   const already = standing.get(key(occurrences));
+  const votes = honest.map((ruling) => ({ source: ruling.judge, type: typeOf(ruling) }));
   if (already) {
-    if (already.verdict !== verdict) {
+    if (already.verdict === verdict) {
+      const prior = already.from === FROM_REGISTER ? [{ source: FROM_REGISTER, type: already.type }] : [];
+      voteTypes(verdict, candidate, occurrences, [...prior, ...votes], out);
+    } else {
       const clash = {
         candidate,
         occurrences,
@@ -210,29 +248,53 @@ const record = (candidate, honest, verdict, occurrences, standing, out) => {
   }
   out.added[verdict].push(entryFor(verdict, prose, occurrences));
   standing.set(key(occurrences), { verdict, from: candidate });
+  voteTypes(verdict, candidate, occurrences, votes, out);
 };
 
-/// Every verdict the register already holds, keyed by pair. The register is
-/// read as one more judge: a standing entry the new passes contradict is a
-/// disagreement, not an update.
+/// Every verdict the register already holds, keyed by pair, with its type. The
+/// register is read as one more judge: a standing entry the new passes
+/// contradict is a disagreement, not an update, and its type is one more vote.
 const standingVerdicts = (register) =>
   new Map(
     VERDICTS.flatMap((verdict) =>
       (register[verdict] ?? []).map((entry) => [
         key(entry.occurrences),
-        { verdict, from: FROM_REGISTER },
+        { verdict, type: typeOf(entry), from: FROM_REGISTER },
       ]),
     ),
   );
 
+/// The type each voted pair settles on, and the pairs some source typed but
+/// whose sources did not all agree — those are filed without a type.
+const settleTypes = (out) => {
+  const settled = new Map();
+  for (const [pair, { candidate, occurrences, votes }] of out.typeVotes) {
+    const type = agreedType(votes);
+    settled.set(pair, type);
+    if (type === UNTYPED && votes.some((vote) => vote.type !== UNTYPED)) {
+      out.untyped.push({ candidate, occurrences, votes });
+    }
+  }
+  return settled;
+};
+
+/// Every CLEARLY IN with the type its sources settled on; pairs nobody voted
+/// on this run keep the type they already had.
+const typed = (entries, settled) =>
+  entries.map((entry) => {
+    const type = settled.get(key(entry.occurrences));
+    return type === undefined ? entry : withType(entry, type);
+  });
+
 /// The register as it will be written: original fields first, then each verdict
 /// list with this pass's agreed entries appended.
-const rewrite = (register, added) => {
+const rewrite = (register, added, settled) => {
   const merged = {};
   for (const field of REGISTER_FIELDS) {
     if (register[field] !== undefined) merged[field] = register[field];
   }
   for (const verdict of SCORED) merged[verdict] = [...(register[verdict] ?? []), ...added[verdict]];
+  merged[CLEARLY_IN] = typed(merged[CLEARLY_IN], settled);
   if (register.clearly_out_status && merged.clearly_out.length === 0) {
     merged.clearly_out_status = register.clearly_out_status;
   }
@@ -250,6 +312,8 @@ export const mergePass = ({ register, pairs, passes, expectedJudges = passes.len
     disagreements: [],
     contradicted: [],
     restated: [],
+    typeVotes: new Map(),
+    untyped: [],
   };
   const standing = standingVerdicts(register);
   const ordered = [...byCandidate(passes)].sort((left, right) => left[0] - right[0]);
@@ -258,5 +322,6 @@ export const mergePass = ({ register, pairs, passes, expectedJudges = passes.len
   for (const verdict of VERDICTS) {
     out.added[verdict] = out.added[verdict].filter((entry) => !disputed.has(key(entry.occurrences)));
   }
-  return { ...out, merged: rewrite(register, out.added), judges: passes.length };
+  const settled = settleTypes(out);
+  return { ...out, merged: rewrite(register, out.added, settled), judges: passes.length };
 };

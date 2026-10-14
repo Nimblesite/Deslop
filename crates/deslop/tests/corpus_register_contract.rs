@@ -18,7 +18,7 @@
 use std::{fs, path::Path};
 
 use anyhow::{Context, Result};
-use deslop_test_support::{corpus::repo_root, read_json};
+use deslop_test_support::{corpus::repo_root, corpus_score::clone_type::CloneType, read_json};
 use serde_json::Value;
 
 /// Where the judged registers live, one per target repository.
@@ -192,6 +192,26 @@ fn every_range_is_a_well_formed_non_empty_span() -> Result<()> {
                 for range in entries(entry, OCCURRENCES) {
                     assert_range(&format!("{name} {verdict}"), range);
                 }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// [CORPUS-REGISTER-TYPE] A pinned type is one of the four research types and
+/// sits only on a CLEARLY IN: a pair that is not a clone has no clone type, and
+/// a label the scorer cannot read would fail every score that reaches it.
+#[test]
+fn every_pinned_clone_type_is_a_research_type_on_a_clearly_in() -> Result<()> {
+    for (name, register) in registers()? {
+        for verdict in [CLEARLY_IN, CLEARLY_OUT, NOT_CLEAR] {
+            for (index, entry) in entries(&register, verdict).iter().enumerate() {
+                let pinned = CloneType::pinned(entry, verdict);
+                assert!(
+                    pinned.is_ok(),
+                    "{name} {verdict}[{index}]: {}",
+                    pinned.err().map(|error| error.to_string()).unwrap_or_default()
+                );
             }
         }
     }

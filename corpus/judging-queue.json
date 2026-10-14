@@ -7,6 +7,41 @@
       "sha": "49b5339ce85385dc52d4d8e8f2b8308becf23506",
       "language": "csharp",
       "why": "C# carries one register, and it is the language the merge refactor emits for, so the ground truth under that feature is the thinnest it can be. A structured-logging library builds the same enricher, sink and configuration-extension shape many times over, which is exactly the sibling-family question the register decides badly when it has only one repository to learn from."
+    },
+    {
+      "name": "hugo",
+      "url": "https://github.com/gohugoio/hugo.git",
+      "sha": "57a784e027a264790ddf36c89b62200525a4561b",
+      "language": "go",
+      "why": "Go is judged on cobra alone, a small CLI library. A large static-site generator repeats template, config and content-pipeline code across many packages, which a small library never shows. Pinned at the commit the curated corpus already scans."
+    },
+    {
+      "name": "react",
+      "url": "https://github.com/facebook/react.git",
+      "sha": "1dd4ecbdabf826f527fc9a58c05ea70375b7d170",
+      "language": "javascript",
+      "why": "JavaScript is judged on axios alone, a small HTTP client. React is a large monorepo whose renderer packages fork the same reconciler and test scaffolding, the cross-package twin a small library cannot show. Pinned at the commit the curated corpus already scans."
+    },
+    {
+      "name": "dio",
+      "url": "https://github.com/cfug/dio.git",
+      "sha": "45a2849a601b2137b797e4f183ee2da6b13c05a8",
+      "language": "dart",
+      "why": "Dart is judged on bloc alone. dio is a mid-sized HTTP client split into a core package and platform adapters, so it repeats request and adapter code across packages in a way a state-management library does not."
+    },
+    {
+      "name": "composer",
+      "url": "https://github.com/composer/composer.git",
+      "sha": "43f74517021a59ed4054a801c1472ef66355c49a",
+      "language": "php",
+      "why": "PHP is judged on guzzle alone, a small library. Composer is a large application with many console commands, repository drivers and solver tests, the size and shape the PHP register has never seen."
+    },
+    {
+      "name": "Giraffe",
+      "url": "https://github.com/giraffe-fsharp/Giraffe.git",
+      "sha": "279fe3a30c27bd647d2655745f71190c74bdd749",
+      "language": "fsharp",
+      "why": "F# is judged on FSharp.Data alone, a large library of type providers. Giraffe is a small web framework of handlers and routing combinators, so the F# register gains a repository of visibly different size and style."
     }
   ]
 }

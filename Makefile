@@ -549,9 +549,11 @@ compare:
 #   who can read this source is contaminated and every verdict from that pass is
 #   void. Override the location with JUDGING_DIR.
 JUDGING_DIR ?= $(HOME)/clone-judging
+#   JUDGING_CANDIDATES asks for a shorter pass than the 200-candidate ceiling.
+JUDGING_CANDIDATES ?=
 ## judging-folder: Build the blinded folder a clone judge works through.
 judging-folder:
-	./scripts/corpus/prepare-judging.sh $(JUDGING_DIR)
+	JUDGING_CANDIDATES=$(JUDGING_CANDIDATES) ./scripts/corpus/prepare-judging.sh $(JUDGING_DIR)
 
 ## merge-verdicts: Fold judged verdicts back into the clone registers. Takes
 ##                 two or more judging folders. Imports ONLY the pairs every

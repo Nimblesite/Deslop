@@ -48,10 +48,12 @@ judge next.
 | fsharp | FSharp.Data | a second fsharp repo of a different size |
 
 Every one of the nine languages now has a register, and every judged repository is on the
-small side — so depth and size are what the next passes buy, not breadth. **The judging
-queue is empty**, which means nothing new can enter the register until a repository is
-added to `corpus/judging-queue.json`; `corpus_commit_pins.rs` fails while that is true,
-by design.
+small side — so depth and size are what the next passes buy, not breadth. Six languages
+rest on a single repository; `corpus/judging-queue.json` holds a second one for each of
+them. `corpus_commit_pins.rs` fails whenever the queue is empty, by design.
+
+A CLEARLY IN may pin a clone type (`Type I` to `Type IV`); blank accepts any type. See
+`docs/specs/corpus.md` §[CORPUS-REGISTER-TYPE].
 
 Counts are not written here. `docs/reports/verdict-merge.md` carries them, written by the
 run that produced them.

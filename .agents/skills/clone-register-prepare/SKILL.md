@@ -101,6 +101,14 @@ For one repository, or a different location:
 scripts/corpus/prepare-judging.sh ~/clone-judging 1 click
 ```
 
+For a short pass — a first look at a new repository, say — ask for fewer candidates. The ceiling of 200 still holds:
+
+```bash
+make judging-folder JUDGING_CANDIDATES=20
+```
+
+To build from a comparison written somewhere other than `.corpus/version-compare` (for instance one run over only the queued repositories, so it does not overwrite another run's reports), point `COMPARE_REPORTS` at its `reports/` directory.
+
 ### Adding a repository that has never been judged
 
 A repository with no register is not scanned by the comparison, and a repository the
@@ -150,12 +158,13 @@ Verdicts land in `corpus/register/<name>.json`, pinned to the same `sha`:
 {
   "name": "click",
   "url": "…", "tag": "…", "sha": "…",
-  "clearly_in":  [ { "why": "…", "verified": "…", "occurrences": ["a.py:340-345", "a.py:394-399"] } ],
+  "clearly_in":  [ { "why": "…", "verified": "…", "type": "Type II", "occurrences": ["a.py:340-345", "a.py:394-399"] } ],
   "clearly_out": [ { "why": "…", "verified": "…", "occurrences": ["a.cs:15-21", "b.cs:13-18"] } ],
   "not_clear":   [ { "why": "…", "occurrences": [...] } ]
 }
 ```
 
+- `type` is CLEARLY IN only: `Type I` to `Type IV`, or absent for "any type". Judges always name one; the merge keeps it only when every source gave the same type, and otherwise files the pair without one. See `docs/specs/corpus.md` §[CORPUS-REGISTER-TYPE].
 - Copy `why` and `verified` across **as the judge wrote them**. Do not tidy, sharpen or
   re-argue. If a verdict reads oddly, that is data about the judging, not a typo to fix.
 - An empty `clearly_out` needs a `clearly_out_status` saying why it is empty. An empty
