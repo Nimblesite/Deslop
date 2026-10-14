@@ -77,13 +77,19 @@ pub(crate) fn pipeline_error(err: CoreError) -> anyhow::Error {
 /// lie about the repository.
 pub(crate) fn apply_threshold(args: &Cli, report: &mut Report) -> Result<()> {
     report.metrics.threshold = resolve_threshold(args, report.metrics.duplication_percent)?;
-    // [EXIT-CODES] `--no-fail-over` restores report-only behaviour for
-    // the per-kind limits exactly as it does for the total — one flag
-    // clears every config gate.
-    if args.no_fail_over {
-        for row in &mut report.metrics.per_kind {
-            row.threshold = ThresholdSummary::none();
-        }
+    let config = (!args.no_fail_over)
+        .then(|| crate::load_run_config(args))
+        .transpose()?;
+    if let Some(config) = &config {
+        validate_kind_measurements(report, config)?;
+    }
+    // [EXIT-CODES-KINDS] Resolve current limits for scans and report replay alike.
+    for row in &mut report.metrics.per_kind {
+        row.threshold = config
+            .as_ref()
+            .map_or_else(ThresholdSummary::none, |config| {
+                config.resolve_kind_threshold(row.kind, row.duplication_percent)
+            });
     }
     if !args.diff_scope.only_changed {
         return Ok(());
@@ -99,6 +105,20 @@ pub(crate) fn apply_threshold(args: &Cli, report: &mut Report) -> Result<()> {
     let verdict = resolve_threshold(args, measured)?;
     if let Some(diff) = report.metrics.diff.as_mut() {
         diff.threshold = verdict;
+    }
+    Ok(())
+}
+
+/// [EXIT-CODES-KINDS] A saved report cannot silently bypass limits it cannot measure.
+fn validate_kind_measurements(
+    report: &Report,
+    config: &deslop_core::ExclusionConfig,
+) -> Result<()> {
+    if report.metrics.per_kind.is_empty()
+        && deslop_core::report_facts::repo_cluster_count(report) > 0
+        && !config.kind_thresholds().is_empty()
+    {
+        return Err(UsageError::new("per-kind limits require per-kind measurements; regenerate the saved report or use --no-fail-over").into());
     }
     Ok(())
 }

@@ -46,23 +46,19 @@ fn write_metrics(out: &mut String, report: &Report) {
     );
     // [METRICS-TOTAL-INCLUDE] The headline counts only the kinds named
     // here, so the total is never mistaken for every relation found.
-    // Suppressed when the set is empty — a report written before the
-    // field existed asserts nothing about it.
-    if !metrics.total_includes.is_empty() {
-        let _ = writeln!(
-            out,
-            "total counts: {kinds}",
-            kinds = included_kind_titles(&metrics.total_includes),
-        );
-    }
-    let Some(verdict) = threshold_verdict(&metrics.threshold) else {
-        return;
-    };
+    // An explicit empty set is named too.
     let _ = writeln!(
         out,
-        "threshold: {pct:.2}% ({verdict})",
-        pct = metrics.threshold.percent,
+        "total counts: {kinds}",
+        kinds = included_kind_titles(&metrics.total_includes),
     );
+    if let Some(verdict) = threshold_verdict(&metrics.threshold) {
+        let _ = writeln!(
+            out,
+            "threshold: {pct:.2}% ({verdict})",
+            pct = metrics.threshold.percent,
+        );
+    }
     // [EXIT-CODES] Per-kind gates print beside the total's, in display
     // order, only when the user set one.
     for row in &metrics.per_kind {

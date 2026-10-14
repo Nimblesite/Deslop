@@ -17,6 +17,15 @@ pub const CONTENT_SUPPORT_FLOOR: f64 = 0.7;
 pub const DEFAULT_TOTAL_INCLUDES: [ClusterKind; 2] =
     [ClusterKind::Identical, ClusterKind::NearlyIdentical];
 
+/// [METRICS-TOTAL-INCLUDE] Reports predating the include field counted every clone kind.
+#[must_use]
+pub fn all_clone_kinds() -> Vec<ClusterKind> {
+    ClusterKind::all()
+        .into_iter()
+        .filter(|kind| kind.is_clone())
+        .collect()
+}
+
 /// Stronger pair-content support floor an unanchored LSH-only pair pays
 /// in every scope ([FUSED-CONTENT-GATE]).
 pub const CONTENT_PROMOTE_FLOOR: f64 = 0.85;

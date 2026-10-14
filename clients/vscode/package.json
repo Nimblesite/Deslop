@@ -676,7 +676,7 @@
     "coverage:collect": "vscode-test",
     "coverage:extension": "node ./scripts/extension-coverage.mjs",
     "coverage:extension:check": "node ./scripts/check-coverage.mjs --extension",
-    "test:playwright": "playwright test scripts/playwright-webview-smoke.spec.ts",
+    "test:playwright": "playwright test scripts/playwright-webview-smoke.spec.ts scripts/playwright-report-parity.spec.ts",
     "test:playwright:html": "playwright test scripts/playwright-html-report.spec.ts",
     "coverage:webview": "node ./scripts/webview-coverage.mjs",
     "coverage:webview:check": "node ./scripts/check-coverage.mjs --webview",

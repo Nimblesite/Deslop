@@ -254,6 +254,19 @@ suite("facet filter cross-surface consistency", () => {
 });
 
 suite("include-set surfaces ([METRICS-TOTAL-INCLUDE] in the webview)", () => {
+  test("language groups keep excluded clone rows muted", async () => {
+    const store = storeWith(report(KIND_GROUPED, { total_includes: [...DEFAULT_TOTAL_INCLUDES] }));
+    const provider = topOffenders(store);
+    await withSetting("topOffenders.groupBy", "language", () => {
+    const children = provider.getChildren().flatMap((root) => provider.getChildren(root));
+    const similar = children.find((node) => node instanceof ClusterNode && node.cluster.kind === LOOSELY_SIMILAR_KIND);
+    assert.ok(similar instanceof ClusterNode);
+    assert.ok(String(similar.description).includes("excluded"));
+    assert.equal((similar.iconPath as vscode.ThemeIcon).color?.id, "disabledForeground");
+    assert.equal(children.length, KIND_GROUPED.length);
+    assert.deepEqual(children.map((node) => (node as ClusterNode).cluster.id).sort(), KIND_GROUPED.map((item) => item.id).sort());
+    });
+  });
   test("the caption names exactly the kinds the total counts", () => {
     assert.equal(
       totalCountsCaption(DEFAULT_TOTAL_INCLUDES),
@@ -264,7 +277,7 @@ suite("include-set surfaces ([METRICS-TOTAL-INCLUDE] in the webview)", () => {
 
   test("the caption makes no claim when the wire carries no include set", () => {
     assert.equal(totalCountsCaption(undefined), "");
-    assert.equal(totalCountsCaption([]), "");
+    assert.equal(totalCountsCaption([]), "No clone kinds");
   });
 
   test("the kind filter marks excluded kinds without hiding them", () => {

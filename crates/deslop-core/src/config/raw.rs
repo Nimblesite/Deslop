@@ -192,7 +192,7 @@ pub(super) struct RawTotal {
     /// total. Absent means the default set
     /// ([`crate::buckets::DEFAULT_TOTAL_INCLUDES`]).
     #[serde(default)]
-    pub(super) include: Vec<String>,
+    pub(super) include: Option<Vec<String>>,
 }
 
 /// One TOML section — shared shape across `[defaults]` and
@@ -278,8 +278,11 @@ pub(super) fn resolve_total_include(
     let Some(block) = raw else {
         return Ok(TotalInclude::default());
     };
-    let mut kinds = Vec::with_capacity(block.include.len());
-    for label in &block.include {
+    let Some(include) = block.include.as_ref() else {
+        return Ok(TotalInclude::default());
+    };
+    let mut kinds = Vec::with_capacity(include.len());
+    for label in include {
         let kind =
             ClusterKind::from_wire_label(label).ok_or_else(|| CoreError::ConfigThreshold {
                 path: source.to_path_buf(),

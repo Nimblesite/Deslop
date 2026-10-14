@@ -166,12 +166,12 @@ function registerGroup(node: GroupNode, list: ReportCluster[]): GroupNode {
 
 // Children of any GroupNode: ClusterNodes in the group's stored display
 // order, with the file suffix driven by the group's axis.
-export function getGroupNodeChildren(group: GroupNode): Node[] {
+export function getGroupNodeChildren(group: GroupNode, totalIncludes?: readonly ClusterKind[]): Node[] {
   const clusters = groupClusters.get(group);
   if (!clusters) return [];
-  const excluded = group instanceof KindGroupNode && group.excluded;
   return clusters.map(
-    (cluster) => new ClusterNode(cluster, { showFile: group.showFileInChildren, excluded }),
+    (cluster) => new ClusterNode(cluster, { showFile: group.showFileInChildren,
+      excluded: totalIncludes === undefined ? group instanceof KindGroupNode && group.excluded : isKindExcluded(cluster.kind, totalIncludes) }),
   );
 }
 

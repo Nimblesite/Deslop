@@ -129,6 +129,8 @@ Which clone kinds count toward the repo total is the server's include set ([METR
 
 Code: `tree/grouping.ts`, `tree/nodes.ts`, `bubble/live.ts`, `types/report.ts`. Assertions: `tree.topOffenders.groups.unit.test.ts`, `live-bubble-admission.unit.test.ts`.
 
+The HTML report and VSIX report use the same clone-type order and group expansion defaults. Excluded rows stay selectable, retain the engine's rank, copies and mass, and render muted. Language grouping also marks excluded child rows. Report and duplication panels show configured per-kind verdicts, including excluded kinds; a zero included total with reported clones still shows its include-set caption and gate failures. `playwright-report-parity.spec.ts` drives both report surfaces with the same real CLI output and pins cluster IDs, kinds, copies, paths, mass and rank.
+
 #### [VSIX-TOP-OFFENDERS-CLUSTER-MODE] Cluster mode
 
 Clone rows follow the engine's mass rank and expand to their occurrences. The label is `<slug> <kind title> · <file>`; the description is `rank #N · N copies · mass M`. Shape-only information follows all clones and shows its title, locations and match count, without duplicate rank or duplicated-mass claim. The slug is the stable 7-hex prefix ([VSIX-TOP-OFFENDERS-CLUSTER-ID]).

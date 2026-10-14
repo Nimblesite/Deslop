@@ -222,7 +222,10 @@ export function isKindExcluded(
  * score so the number is never mistaken for every relation found.
  * Empty when the wire carries no include set: no claim, no caption. */
 export function totalCountsCaption(totalIncludes: readonly ClusterKind[] | undefined): string {
-  if (!totalIncludes || totalIncludes.length === 0) return "";
+  if (!totalIncludes) return "";
+  if (totalIncludes.length === 0) return NO_CLONE_KINDS_LABEL;
+  const cloneKinds = CLUSTER_KINDS.filter((kind) => kind !== "structural_only");
+  if (cloneKinds.every((kind) => totalIncludes.includes(kind))) return ALL_CLONE_KINDS_LABEL;
   return totalIncludes.map(kindTitle).join(", ");
 }
 
@@ -234,6 +237,7 @@ export interface KindFilterOption {
 }
 
 const ALL_CLONE_KINDS_LABEL = "All clone kinds";
+const NO_CLONE_KINDS_LABEL = "No clone kinds";
 const EXCLUDED_FILTER_MARKER = "(excluded from total)";
 
 /** [FACET-REPORT-WEBVIEW] The kind axis's option list, shared by every

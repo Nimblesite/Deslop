@@ -267,7 +267,7 @@ export const CORE_TYPE_CONFIG = {
       duplicated_files: "usize",
     },
     fieldSerdeAttrs: {
-      total_includes: ["default"],
+      total_includes: ['default = "crate::buckets::all_clone_kinds"'],
       per_kind: ["default"],
       per_file: ["default"],
       folders: ["default"],
@@ -283,7 +283,7 @@ export const CORE_TYPE_CONFIG = {
       duplicated_files: "Count of files with at least one non-hidden clone occurrence of an included kind.",
       threshold: "Resolved fail-over threshold.",
       total_includes:
-        "The kinds whose lines `duplicated_loc` counts ([METRICS-TOTAL-INCLUDE]), in category display order. Carried so clients grey out excluded kinds rather than re-deriving the set. Empty on reports produced before this field existed.",
+        "The kinds whose lines `duplicated_loc` counts ([METRICS-TOTAL-INCLUDE]), in category display order. Defaults to every clone kind for reports predating the field, preserving their measured total. An explicit empty list excludes every clone kind.",
       per_kind:
         "One row per clone kind with a non-hidden cluster, in category display order, each carrying its own figures whatever the include set ([METRICS-TOTAL-INCLUDE]). Empty on reports produced before this field existed.",
       per_file: "Per-file duplication breakdown, worst-first. Empty on reports produced before this field existed.",

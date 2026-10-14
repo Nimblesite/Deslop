@@ -15,6 +15,7 @@ import {
   ReportCluster,
   RepoMetrics,
   severityLabel,
+  totalCountsCaption,
 } from "../types/report";
 import { readTopOffendersFilter } from "../commands/topOffendersView";
 import {
@@ -42,7 +43,7 @@ import {
 } from "./grouping";
 import { buildFolderMode } from "./folder";
 import { buildMetricRows } from "./metrics";
-import { thresholdStatus } from "./threshold";
+import { metricsThresholdStatus } from "./threshold";
 
 // Re-export node classes so existing call sites
 // (commands/register.ts, commands/treeMenus.ts, tests, e2e suites)
@@ -234,7 +235,7 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
     if (node instanceof FileNode) return getFileNodeChildren(node, totalIncludes);
     // One machinery for both group axes: file-mode kind sections and
     // kind-mode roots.
-    if (node instanceof GroupNode) return getGroupNodeChildren(node);
+    if (node instanceof GroupNode) return getGroupNodeChildren(node, totalIncludes);
     if (node instanceof ClusterNode) {
       // [VSIX-PAIR-COMPARE] Dirty projection and path sorting never promote
       // a surviving peer into the original canonical occurrence.
@@ -324,7 +325,7 @@ export class MetricsProvider extends LifecycleAwareProvider {
       return indicator ? [indicator] : [new StatusNode("No session yet", INFORMATION_STATUS_KIND)];
     }
     const metrics = visibleReport.metrics;
-    if (metrics.duplicated_loc === 0) {
+    if (metrics.duplicated_loc === 0 && metrics.clusters_total === 0) {
       // Same completion gate as Top Offenders: only the server's idle
       // state may render the terminal "clean" verdict ([VSIX reactivity]).
       if (indicator) return [indicator];
@@ -338,14 +339,16 @@ export class MetricsProvider extends LifecycleAwareProvider {
 // totals, with the configured duplication gate and an over/within verdict
 // appended whenever `.deslop.toml` sets one.
 function metricsHeadline(metrics: RepoMetrics): MetricsHeadlineNode {
+  const caption = totalCountsCaption(metrics.total_includes);
+  const includes = caption ? ` · total counts: ${caption}` : "";
   const detail =
     `${metrics.analysed_loc.toLocaleString()} LOC analysed · ` +
     `${metrics.duplicated_loc.toLocaleString()} duplicated · ` +
-    `${metrics.clusters_total} clusters across ${metrics.duplicated_files} files`;
+    `${metrics.clusters_total} clusters across ${metrics.duplicated_files} files${includes}`;
   return new MetricsHeadlineNode(
     metrics.duplication_percent,
     detail,
-    thresholdStatus(metrics.threshold),
+    metricsThresholdStatus(metrics),
   );
 }
 

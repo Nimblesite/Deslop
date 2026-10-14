@@ -2,6 +2,9 @@ use super::support::*;
 
 use super::total_include::{seed_three_relation_corpus, TOTAL_INCLUDE_MIN_NODES};
 
+#[path = "thresholds/render.rs"]
+mod render;
+
 const FAIL_OVER_FLAG: &str = "--fail-over";
 const ZERO_THRESHOLD: &str = "0.0";
 const SOURCE_FIELD: &str = "source";

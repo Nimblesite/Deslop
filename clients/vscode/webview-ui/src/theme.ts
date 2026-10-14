@@ -11,6 +11,11 @@ export { COLOR, FONT, KIND_COLOR, SEVERITY_DOT } from "../../src/design";
 const REPORT_STACK_WIDTH = "600px";
 
 export const GLOBAL_CSS = `
+  .report-cluster-row--excluded { opacity: 0.55; }
+  .clone-group { margin-bottom: 16px; }
+  .clone-group > summary { cursor: pointer; font-weight: 600; padding: 12px 0; }
+  .clone-group--excluded > summary { color: ${COLOR.onSurfaceMuted}; }
+  .threshold-verdict--breached { color: ${COLOR.primary}; }
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
   html, body {

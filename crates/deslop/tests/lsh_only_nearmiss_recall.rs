@@ -49,6 +49,9 @@ use anyhow::anyhow;
 /// value as [`LSH_ONLY_NODE_FLOOR`], which the surviving endpoints must
 /// clear anyway.
 const MIN_NODES: u32 = 40;
+/// [METRICS-TOTAL-INCLUDE] Included pairs duplicate both files; excluded pairs leave both total numerators.
+const DUPLICATED_PAIR_FILES: u64 = 2;
+const EXCLUDED_PAIR_FILES: u64 = 0;
 
 /// `pair::LSH_ONLY_MIN_NODE_COUNT`: both endpoints of an LSH-only pair
 /// must carry at least this many nodes to survive clustering.
@@ -246,6 +249,16 @@ fn assert_recall_metrics(report: &serde_json::Value) -> Result<()> {
         .ok_or_else(|| anyhow!("the visible pair: {report:#}"))?;
     let kind = cluster_kind(cluster);
     let row = per_kind_row(report, kind).ok_or_else(|| anyhow!("a {kind} row: {report:#}"))?;
+    let expected_files = if field(&row, "included_in_total").as_bool() == Some(true) {
+        DUPLICATED_PAIR_FILES
+    } else {
+        EXCLUDED_PAIR_FILES
+    };
+    assert_eq!(
+        metric_field(report, "duplicated_files").as_u64(),
+        Some(expected_files),
+        "the pair's include status decides the exact total file count: {report:#}"
+    );
     let duplicated = field(&row, "duplicated_loc").as_u64().unwrap_or(0);
     assert!(
         duplicated > 0,

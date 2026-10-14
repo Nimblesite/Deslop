@@ -1,3 +1,4 @@
+import { expect, type Page } from "@playwright/test";
 // The smoke suite's fixture report and page bootstrap ([VSIX-WEBVIEW-COVERAGE]).
 // Split out of `playwright-webview-smoke.spec.ts` so the spec stays a list of
 // user journeys: the data a webview is fed, and the page it is fed into, are
@@ -222,4 +223,43 @@ function occurrence(
       commandTitle: "Open occurrence",
     },
   };
+}
+
+export async function loadView(
+  page: Page,
+  kind: ViewKind,
+  viewport: { readonly width: number; readonly height: number },
+): Promise<string[]> {
+  const errors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  page.on("pageerror", (error) => {
+    errors.push(error.message);
+  });
+
+  await page.setViewportSize({ width: viewport.width, height: viewport.height });
+  await page.setContent(webviewHtml(kind), { waitUntil: "domcontentloaded" });
+  await page.waitForFunction(() => window.__deslopPosts?.some((message) => message.kind === "ready"));
+  return errors;
+}
+
+export async function postHostMessage(page: Page, message: unknown): Promise<void> {
+  await page.evaluate((payload) => {
+    window.postMessage(payload, "*");
+  }, message);
+}
+
+export async function clearPostedMessages(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    window.__deslopPosts = [];
+  });
+}
+
+export async function expectPosted(page: Page, kind: string): Promise<void> {
+  await expect
+    .poll(async () => {
+      return await page.evaluate(() => window.__deslopPosts?.map((message) => message.kind) ?? []);
+    })
+    .toContain(kind);
 }

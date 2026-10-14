@@ -154,7 +154,8 @@ type DiffMetrics {
 # total — a configuration choice ([METRICS-TOTAL-INCLUDE]), carried on
 # the wire so every client renders the same total and can grey out the
 # kinds it excludes. Always in the category display order, never empty
-# unless the user explicitly emptied `[total] include`.
+# unless the user explicitly emptied `[total] include`. Older reports
+# without the field deserialize as all clone kinds, matching their measured total.
 type KindMetric {
   kind: ClusterKind
   duplicated_loc: Int

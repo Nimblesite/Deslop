@@ -118,8 +118,23 @@ fn write_metrics_banner(out: &mut String, report: &Report) {
 /// ([METRICS-DIFF-SCOPE]). The page must never render green while the
 /// run exited breached.
 fn governing_threshold(report: &Report) -> &crate::report_metrics::ThresholdSummary {
+    // [EXIT-CODES-KINDS] A breached kind governs even when the total passes.
+    if let Some(row) = report
+        .metrics
+        .per_kind
+        .iter()
+        .find(|row| row.threshold.breached)
+    {
+        return &row.threshold;
+    }
     match report.metrics.diff.as_ref() {
         Some(diff) if !matches!(diff.threshold.source, ThresholdSource::None) => &diff.threshold,
+        _ if matches!(report.metrics.threshold.source, ThresholdSource::None) => report
+            .metrics
+            .per_kind
+            .iter()
+            .find(|row| !matches!(row.threshold.source, ThresholdSource::None))
+            .map_or(&report.metrics.threshold, |row| &row.threshold),
         _ => &report.metrics.threshold,
     }
 }
@@ -146,15 +161,12 @@ fn metrics_banner_text(report: &Report) -> String {
     };
     // [METRICS-TOTAL-INCLUDE] The banner names what the total counts,
     // so a reader who sees Similar findings below is not surprised the
-    // headline ignores them. Suppressed when the set is empty — a
-    // report written before the field existed asserts nothing about it.
-    if !metrics.total_includes.is_empty() {
-        let _ = write!(
-            sentence,
-            " · total counts: {kinds}",
-            kinds = included_kind_titles(&metrics.total_includes),
-        );
-    }
+    // headline ignores them. An explicit empty set is named too.
+    let _ = write!(
+        sentence,
+        " · total counts: {kinds}",
+        kinds = included_kind_titles(&metrics.total_includes),
+    );
     // [EXIT-CODES] Per-kind gate verdicts, display order, only the
     // kinds the user gated.
     for row in &metrics.per_kind {

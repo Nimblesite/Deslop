@@ -158,6 +158,20 @@ fn assert_wholly_duplicated(report: &Value, corpus: &str) {
         duplicated, analysed,
         "{corpus}: every analysed line is covered by the copy: {report:#}"
     );
+    for side in SIDES {
+        if field(&row, "included_in_total").as_bool() == Some(true) {
+            assert!(
+                duplicated_loc_for(report, side) > NO_TOLERANCE,
+                "{corpus}: {side} carries duplicated lines: {report:#}"
+            );
+        } else {
+            assert_eq!(
+                duplicated_loc_for(report, side),
+                NO_TOLERANCE,
+                "{corpus}: excluded kinds leave the per-file total: {report:#}"
+            );
+        }
+    }
 }
 
 /// Asserts a rename moved no figure: the renamed corpus reports the same
