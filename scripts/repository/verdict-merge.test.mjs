@@ -9,64 +9,43 @@
 // candidate never showed, a pass that contradicts a standing entry.
 
 import { strict as assert } from "node:assert";
-import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import test from "node:test";
 
-const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const SCRIPT = join(REPO_ROOT, "scripts", "corpus", "merge-verdicts.mjs");
-const REPORT = "docs/reports/verdict-merge.md";
-const REGISTER_DIR = "corpus/register";
-const QUEUE = "corpus/judging-queue.json";
-
-/// The fixture repository, and the two judges sent to read it.
-const REPO = "widgets";
-const REGISTER = "widgets.json";
-const LANGUAGE = "rust";
-const URL = "https://example.invalid/widgets.git";
-const SHA = "0123456789abcdef0123456789abcdef01234567";
-const FIRST_JUDGE = "judge-one";
-const SECOND_JUDGE = "judge-two";
-const THIRD_JUDGE = "judge-three";
-
-/// A repository that already has a register, so a standing verdict can be
-/// contradicted by a later pass.
-const JUDGED = "gadgets";
-const JUDGED_REGISTER = "gadgets.json";
-
-/// Prose long enough to clear the assertion floor a scored entry is held to.
-const WHY = "The same twenty lines appear twice with only the type name changed.";
-const VERIFIED = "diff of the two ranges: identical but for the type name on line 3.";
-/// A NOT CLEAR note, deliberately shorter than that floor. NOT CLEAR asserts
-/// nothing, so it must still be recorded — otherwise the next pass re-reads a
-/// pair somebody has already ruled on.
-const TERSE_NOTE = "2-line idiom.";
-/// The note both judges write about the pair the standing register already
-/// calls CLEARLY IN, so the merge has to choose between them.
-const STANDING_NOTE = "Copied text is real but the boundaries are ragged.";
-
-/// The candidates every judge is shown. Same list for both, or their candidate
-/// numbers would name different pairs.
-const PAIRS = {
-  pairs: [
-    { number: 1, occurrences: ["src/a.rs:10-30", "src/b.rs:10-30"] },
-    { number: 2, occurrences: ["src/c.rs:1-4", "src/d.rs:1-4"] },
-    { number: 3, occurrences: ["src/e.rs:5-9", "src/f.rs:5-9"] },
-    { number: 4, occurrences: ["src/g.rs:1-2", "src/h.rs:1-2"] },
-    { number: 5, occurrences: ["src/i.rs:1-9", "src/j.rs:1-9"] },
-    { number: 6, occurrences: ["src/k.rs:1-9", "src/l.rs:1-9"] },
-  ],
-};
-/// The pair the standing register already calls CLEARLY IN. Both judges call
-/// it NOT CLEAR, so the merge meets a verdict it must report and not apply.
-const STANDING = ["src/k.rs:1-9", "src/l.rs:1-9"];
-
-const at = (pair) => PAIRS.pairs.find((entry) => entry.number === pair).occurrences;
-const scored = (candidate) => ({ candidate, why: WHY, verified: VERIFIED, occurrences: at(candidate) });
-const noted = (candidate, why = TERSE_NOTE) => ({ candidate, why, occurrences: at(candidate) });
+import {
+  EMPTY_VERDICTS,
+  FIRST_JUDGE,
+  JUDGED,
+  JUDGED_REGISTER,
+  LANGUAGE,
+  PAIRS,
+  QUEUE,
+  REGISTER,
+  REGISTER_DIR,
+  REPO,
+  REPORT,
+  SCRIPT,
+  SECOND_JUDGE,
+  SHA,
+  STANDING,
+  STANDING_NOTE,
+  TERSE_NOTE,
+  THIRD_JUDGE,
+  URL,
+  VERIFIED,
+  WHY,
+  at,
+  fixtureRoot,
+  judgingFolder,
+  noted,
+  run,
+  runPasses,
+  scored,
+  write,
+} from "./verdict-merge-fixture.mjs";
 
 /// What each judge filed. Between them they cover every outcome the script has
 /// to tell apart.
@@ -93,60 +72,6 @@ const VERDICTS_BY_JUDGE = {
   },
 };
 
-const write = (path, value) => {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, typeof value === "string" ? value : `${JSON.stringify(value, null, 2)}\n`);
-};
-
-/// A judging folder holding one workspace per repository, as the preparer
-/// builds it.
-const judgingFolder = (root, judge, repos) => {
-  const folder = join(root, judge);
-  for (const [slug, verdicts] of Object.entries(repos)) {
-    const workspace = join(folder, slug);
-    write(join(workspace, "PINNED.txt"), `${URL}\n${SHA}\n`);
-    write(join(workspace, "candidates", "pairs.json"), PAIRS);
-    write(join(workspace, "verdicts.json"), verdicts);
-  }
-  return folder;
-};
-
-/// A repository root with a queue, one standing register, and nothing else.
-const fixtureRoot = (root) => {
-  write(join(root, QUEUE), {
-    why: "Repositories waiting on a first judging pass.",
-    repositories: [{ name: REPO, url: URL, sha: SHA, language: LANGUAGE, why: "First pass." }],
-  });
-  write(join(root, REGISTER_DIR, JUDGED_REGISTER), {
-    name: JUDGED,
-    language: LANGUAGE,
-    url: URL,
-    sha: SHA,
-    protocol: { spec: "docs/specs/corpus.md" },
-    clearly_in: [{ why: WHY, verified: VERIFIED, occurrences: STANDING }],
-    clearly_out: [],
-    clearly_out_status: "NONE FOUND. Nothing in this repository reached CLEARLY OUT in any pass.",
-    not_clear: [],
-  });
-};
-
-/// Runs the merge over a prepared root, capturing the exit status rather than
-/// throwing on it: a run that finds a disagreement is meant to fail.
-const run = (root, folders, extra = []) => {
-  const result = spawnSync("node", [SCRIPT, "--root", root, ...extra, ...folders], {
-    encoding: "utf8",
-  });
-  const read = (path) => readFileSync(join(root, path), "utf8");
-  return {
-    root,
-    status: result.status,
-    stdout: result.stdout,
-    stderr: result.stderr,
-    read,
-    json: (path) => JSON.parse(read(path)),
-  };
-};
-
 /// Builds a fixture whose judges disagree, and runs the merge over it.
 const runDisputed = (extra = []) => {
   const root = mkdtempSync(join(tmpdir(), "verdict-merge-"));
@@ -167,17 +92,7 @@ const AGREED = {
   clearly_out: [],
   not_clear: [noted(2)],
 };
-const EMPTY_VERDICTS = { clearly_in: [], clearly_out: [], not_clear: [] };
 const RULING_WITHOUT_RANGES = { candidate: 1, why: WHY, verified: VERIFIED };
-
-const runPasses = (verdicts) => {
-  const root = mkdtempSync(join(tmpdir(), "verdict-merge-independent-"));
-  fixtureRoot(root);
-  const folders = Object.entries(verdicts).map(([judge, pass]) =>
-    judgingFolder(root, judge, { [REPO]: pass }),
-  );
-  return run(root, folders);
-};
 
 const runAgreed = (extra = []) => {
   const root = mkdtempSync(join(tmpdir(), "verdict-merge-agreed-"));
@@ -428,125 +343,4 @@ test("opposed verdicts on the same pair in one pass leave neither verdict in the
   assert.deepEqual(register.clearly_in, [], "the earlier verdict is disputed in this same pass");
   assert.deepEqual(register.clearly_out, [], "the later verdict is disputed too");
   assert.match(read(REPORT), /duplicate_pair/);
-});
-
-// [CORPUS-REGISTER-TYPE] A judge names a CLEARLY IN's clone type. The verdict
-// alone decides whether a pair is imported; the type travels with it only when
-// every source gave the same one, and is otherwise left unspecified.
-const TYPE_ONE = "Type I";
-const TYPE_TWO = "Type II";
-const MALFORMED_TYPE = "Type 2";
-const UNSPECIFIED_SECTION = "## types_left_unspecified";
-const typed = (entry, type) => ({ ...entry, type });
-
-/// The rows of the report's unspecified-type table, so assertions about it
-/// cannot be satisfied by text elsewhere in the document.
-const unspecifiedRows = (report) => report.slice(report.indexOf(UNSPECIFIED_SECTION));
-
-test("judges who agree on a clone type file it with the pair", () => {
-  const pass = { ...EMPTY_VERDICTS, clearly_in: [typed(scored(1), TYPE_TWO), scored(5)] };
-  const { status, json, read } = runPasses({ [FIRST_JUDGE]: pass, [SECOND_JUDGE]: pass });
-  assert.equal(status, 0);
-  const register = json(join(REGISTER_DIR, REGISTER));
-  assert.equal(register.clearly_in.length, 2, "both agreed pairs are imported");
-  assert.deepEqual(register.clearly_in[0].occurrences, at(1));
-  assert.equal(register.clearly_in[0].type, TYPE_TWO, "the agreed type travels with the pair");
-  assert.deepEqual(
-    Object.keys(register.clearly_in[0]),
-    ["why", "verified", "type", "occurrences"],
-    "the type sits beside the prose, before the ranges",
-  );
-  assert.equal(register.clearly_in[0].why, WHY, "the judge's words are still copied verbatim");
-  assert.deepEqual(register.clearly_in[1].occurrences, at(5));
-  assert.equal(register.clearly_in[1].type, undefined, "two blank types are written as no type");
-  const report = read(REPORT);
-  assert.ok(report.includes("| pairs_left_out | 0 |"), "nothing was disputed");
-  assert.ok(report.includes("| types_unspecified | 0 |"), "every typed pair kept its type");
-  assert.ok(unspecifiedRows(report).includes("(none)"));
-});
-
-test("judges who split on clone type still file the pair, without a type", () => {
-  const { status, json, read } = runPasses({
-    [FIRST_JUDGE]: { ...EMPTY_VERDICTS, clearly_in: [typed(scored(1), TYPE_ONE), typed(scored(5), TYPE_TWO)] },
-    [SECOND_JUDGE]: { ...EMPTY_VERDICTS, clearly_in: [typed(scored(1), TYPE_TWO), scored(5)] },
-  });
-  assert.equal(status, 0);
-  const register = json(join(REGISTER_DIR, REGISTER));
-  assert.deepEqual(
-    register.clearly_in.map((entry) => entry.occurrences),
-    [at(1), at(5)],
-    "the verdict was agreed, so both pairs are imported",
-  );
-  assert.deepEqual(
-    register.clearly_in.map((entry) => entry.type),
-    [undefined, undefined],
-    "a type the judges did not agree on is not specified",
-  );
-  const report = read(REPORT);
-  assert.ok(report.includes("| pairs_left_out | 0 |"), "a type split leaves no pair out");
-  assert.ok(report.includes("| types_unspecified | 2 |"), report);
-  const rows = unspecifiedRows(report);
-  assert.ok(rows.includes(`${FIRST_JUDGE}=${TYPE_ONE}<br>${SECOND_JUDGE}=${TYPE_TWO}`), rows);
-  assert.ok(rows.includes(`${FIRST_JUDGE}=${TYPE_TWO}<br>${SECOND_JUDGE}=blank`), "a blank is a vote too");
-  for (const range of [...at(1), ...at(5)]) assert.ok(rows.includes(range), `${range} is named`);
-});
-
-test("a malformed type is never filed, and other verdicts never carry one", () => {
-  const pass = {
-    clearly_in: [typed(scored(1), MALFORMED_TYPE)],
-    clearly_out: [typed(scored(3), TYPE_ONE)],
-    not_clear: [typed(noted(2), TYPE_ONE)],
-  };
-  const { status, json, read } = runPasses({ [FIRST_JUDGE]: pass, [SECOND_JUDGE]: pass });
-  assert.equal(status, 0);
-  const register = json(join(REGISTER_DIR, REGISTER));
-  assert.deepEqual(register.clearly_in.map((entry) => entry.occurrences), [at(1)]);
-  assert.equal(register.clearly_in[0].type, undefined, "an unknown label is not a type");
-  assert.deepEqual(register.clearly_out.map((entry) => entry.occurrences), [at(3)]);
-  assert.equal(register.clearly_out[0].type, undefined, "a pair that is not a clone has no type");
-  assert.deepEqual(register.not_clear.map((entry) => entry.occurrences), [at(2)]);
-  assert.equal(register.not_clear[0].type, undefined);
-  const rows = unspecifiedRows(read(REPORT));
-  assert.ok(rows.includes(`${FIRST_JUDGE}=${MALFORMED_TYPE}<br>${SECOND_JUDGE}=${MALFORMED_TYPE}`), rows);
-});
-
-test("a typed pass over an untyped standing entry leaves it untyped", () => {
-  const root = mkdtempSync(join(tmpdir(), "verdict-merge-typed-standing-"));
-  fixtureRoot(root);
-  const pass = { ...EMPTY_VERDICTS, clearly_in: [typed(scored(6), TYPE_ONE)] };
-  const folders = [FIRST_JUDGE, SECOND_JUDGE].map((judge) =>
-    judgingFolder(root, judge, { [JUDGED]: pass }),
-  );
-  const { status, json, read } = run(root, folders);
-  assert.equal(status, 0);
-  const standing = json(join(REGISTER_DIR, JUDGED_REGISTER));
-  assert.equal(standing.clearly_in.length, 1, "nothing is added beside the standing entry");
-  assert.deepEqual(standing.clearly_in[0].occurrences, STANDING);
-  assert.equal(standing.clearly_in[0].type, undefined, "the register's blank disagrees, so no type");
-  const report = read(REPORT);
-  assert.ok(!report.includes("register_conflict"), "the verdicts agree; only the type differs");
-  assert.ok(report.includes("| types_unspecified | 1 |"), report);
-  assert.ok(unspecifiedRows(report).includes(`register=blank<br>${FIRST_JUDGE}=${TYPE_ONE}`));
-});
-
-test("a standing type the judges contradict is no longer specified", () => {
-  const root = mkdtempSync(join(tmpdir(), "verdict-merge-retyped-standing-"));
-  fixtureRoot(root);
-  const path = join(root, REGISTER_DIR, JUDGED_REGISTER);
-  const register = JSON.parse(readFileSync(path, "utf8"));
-  register.clearly_in[0] = typed(register.clearly_in[0], TYPE_ONE);
-  write(path, register);
-  const pass = { ...EMPTY_VERDICTS, clearly_in: [typed(scored(6), TYPE_TWO), typed(scored(1), TYPE_ONE)] };
-  const folders = [FIRST_JUDGE, SECOND_JUDGE].map((judge) =>
-    judgingFolder(root, judge, { [JUDGED]: pass }),
-  );
-  const { status, json, read } = run(root, folders);
-  assert.equal(status, 0);
-  const merged = json(join(REGISTER_DIR, JUDGED_REGISTER));
-  assert.deepEqual(merged.clearly_in.map((entry) => entry.occurrences), [STANDING, at(1)]);
-  assert.equal(merged.clearly_in[0].type, undefined, "Type I against Type II: not specified");
-  assert.equal(merged.clearly_in[0].why, WHY, "the standing entry is otherwise untouched");
-  assert.equal(merged.clearly_in[1].type, TYPE_ONE, "the new pair the judges agree on keeps its type");
-  const rows = unspecifiedRows(read(REPORT));
-  assert.ok(rows.includes(`register=${TYPE_ONE}<br>${FIRST_JUDGE}=${TYPE_TWO}`), rows);
 });

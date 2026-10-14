@@ -210,7 +210,10 @@ fn every_pinned_clone_type_is_a_research_type_on_a_clearly_in() -> Result<()> {
                 assert!(
                     pinned.is_ok(),
                     "{name} {verdict}[{index}]: {}",
-                    pinned.err().map(|error| error.to_string()).unwrap_or_default()
+                    pinned
+                        .err()
+                        .map(|error| error.to_string())
+                        .unwrap_or_default()
                 );
             }
         }

@@ -67,7 +67,7 @@ fn is_clone_finding(cluster: &Value, pinned: Option<CloneType>) -> bool {
 }
 
 /// Of the matching clone clusters, keep the one showing the most judged lines.
-pub(super) fn matching_cluster<'a>(
+fn matching_cluster<'a>(
     report: &'a Value,
     ranges: &[Range],
     pinned: Option<CloneType>,
@@ -80,18 +80,50 @@ pub(super) fn matching_cluster<'a>(
                 && has_distinct_matches(&visible(cluster), ranges)
         })
         .map(|cluster| (cluster, range_coverage(cluster, ranges)))
-        .reduce(|best, next| {
-            if next.1.covered_lines > best.1.covered_lines {
-                next
-            } else {
-                best
-            }
-        })
+        .reduce(wider)
+}
+
+/// The match showing more judged lines; on a tie, the earlier in report order.
+fn wider<'a>(
+    best: (&'a Value, RangeCoverage),
+    next: (&'a Value, RangeCoverage),
+) -> (&'a Value, RangeCoverage) {
+    if next.1.covered_lines > best.1.covered_lines {
+        next
+    } else {
+        best
+    }
+}
+
+/// What one judged entry found in a report.
+pub(super) struct EntryMatch<'a> {
+    /// The clone cluster that answered the entry, with its coverage.
+    pub(super) cluster: Option<(&'a Value, RangeCoverage)>,
+    /// For a typed entry nothing answered, the kind of the clone cluster that
+    /// showed the pair anyway — what the engine called it instead.
+    pub(super) reported_as: Option<String>,
+}
+
+/// Matches one entry's ranges, held to its pinned type when it has one.
+pub(super) fn match_entry<'a>(
+    report: &'a Value,
+    ranges: &[Range],
+    pinned: Option<CloneType>,
+) -> EntryMatch<'a> {
+    let cluster = matching_cluster(report, ranges, pinned);
+    let reported_as = match (pinned, &cluster) {
+        (Some(_), None) => reported_kind(report, ranges),
+        _ => None,
+    };
+    EntryMatch {
+        cluster,
+        reported_as,
+    }
 }
 
 /// The kind of the clone cluster that shows every range, whatever type it
-/// reports — what the engine called a typed pair it did not answer.
-pub(super) fn reported_kind(report: &Value, ranges: &[Range]) -> Option<String> {
+/// reports.
+fn reported_kind(report: &Value, ranges: &[Range]) -> Option<String> {
     let (cluster, _) = matching_cluster(report, ranges, None)?;
     TAXONOMY_FIELDS
         .iter()

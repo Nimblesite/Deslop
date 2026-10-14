@@ -80,13 +80,28 @@ fn published_twice() -> Value {
 fn assert_found(judged: &Value, kind: &str, found: bool, label: &str) -> Result<()> {
     let score = score_repo(REPO, judged, &published_as(kind))?;
     let entry = first_entry(&score)?;
-    assert_eq!(score.clearly_in_total, 1, "{label} vs {kind}: one judged pair");
-    assert_eq!(score.clearly_in_found, usize::from(found), "{label} vs {kind}");
-    assert_eq!(score.false_negatives, usize::from(!found), "{label} vs {kind}");
+    assert_eq!(
+        score.clearly_in_total, 1,
+        "{label} vs {kind}: one judged pair"
+    );
+    assert_eq!(
+        score.clearly_in_found,
+        usize::from(found),
+        "{label} vs {kind}"
+    );
+    assert_eq!(
+        score.false_negatives,
+        usize::from(!found),
+        "{label} vs {kind}"
+    );
     assert_eq!(entry.matched, found, "{label} vs {kind}: matched");
     assert_eq!(entry.correct, found, "{label} vs {kind}: correct");
     let expected_cluster = found.then_some(kind);
-    assert_eq!(entry.cluster.as_deref(), expected_cluster, "{label} vs {kind}");
+    assert_eq!(
+        entry.cluster.as_deref(),
+        expected_cluster,
+        "{label} vs {kind}"
+    );
     Ok(())
 }
 
@@ -117,7 +132,11 @@ fn a_blank_or_absent_type_is_found_by_any_clone_kind() -> Result<()> {
         }
         assert_found(judged, STRUCTURAL_ONLY, false, label)?;
         let score = score_repo(REPO, judged, &published_as(IDENTICAL))?;
-        assert_eq!(first_entry(&score)?.clone_type, None, "{label} pins nothing");
+        assert_eq!(
+            first_entry(&score)?.clone_type,
+            None,
+            "{label} pins nothing"
+        );
     }
     Ok(())
 }
@@ -146,7 +165,11 @@ fn a_typed_pair_is_answered_by_the_cluster_of_its_own_type() -> Result<()> {
 #[test]
 fn a_type_outside_the_four_fails_the_score_rather_than_matching_anything() {
     for malformed in MALFORMED_TYPES {
-        let scored = score_repo(REPO, &typed(CLEARLY_IN, &json!(malformed)), &published_twice());
+        let scored = score_repo(
+            REPO,
+            &typed(CLEARLY_IN, &json!(malformed)),
+            &published_twice(),
+        );
         assert!(scored.is_err(), "`{malformed}` is not a clone type");
     }
     let numeric = score_repo(REPO, &typed(CLEARLY_IN, &json!(2)), &published_twice());
@@ -155,8 +178,15 @@ fn a_type_outside_the_four_fails_the_score_rather_than_matching_anything() {
 
 #[test]
 fn a_type_on_a_clearly_out_fails_the_score_because_it_names_no_clone() -> Result<()> {
-    let pinned = score_repo(REPO, &typed(CLEARLY_OUT, &json!(TYPE_ONE)), &published_twice());
-    assert!(pinned.is_err(), "a CLEARLY OUT is not a clone, so it has no type");
+    let pinned = score_repo(
+        REPO,
+        &typed(CLEARLY_OUT, &json!(TYPE_ONE)),
+        &published_twice(),
+    );
+    assert!(
+        pinned.is_err(),
+        "a CLEARLY OUT is not a clone, so it has no type"
+    );
     let blank = score_repo(REPO, &typed(CLEARLY_OUT, &json!("")), &published_twice())?;
     assert_eq!(blank.false_positives, 1, "a blank type pins nothing");
     assert_eq!(first_entry(&blank)?.cluster.as_deref(), Some(EXACT_ID));
@@ -169,15 +199,30 @@ fn a_typed_miss_names_its_type_and_the_kind_that_did_report_it() -> Result<()> {
     let found = score_repo(REPO, &judged, &published_as(IDENTICAL))?;
     let mistyped = score_repo(REPO, &judged, &published_as(NEARLY_IDENTICAL))?;
     let unreported = score_repo(REPO, &judged, &json!({ "clusters": [] }))?;
-    assert_eq!(mistyped.false_negatives, 1, "renamed code is not a Type I answer");
-    assert_eq!(first_entry(&found)?.reported_as, None, "a found pair needs no excuse");
+    assert_eq!(
+        mistyped.false_negatives, 1,
+        "renamed code is not a Type I answer"
+    );
+    assert_eq!(
+        first_entry(&found)?.reported_as,
+        None,
+        "a found pair needs no excuse"
+    );
     assert_eq!(
         first_entry(&mistyped)?.reported_as.as_deref(),
         Some(NEARLY_IDENTICAL),
         "the kind the engine did report the pair under is recorded"
     );
-    assert_eq!(first_entry(&mistyped)?.cluster, None, "no cluster answered the type");
-    assert_eq!(first_entry(&unreported)?.reported_as, None, "nothing reported it at all");
+    assert_eq!(
+        first_entry(&mistyped)?.cluster,
+        None,
+        "no cluster answered the type"
+    );
+    assert_eq!(
+        first_entry(&unreported)?.reported_as,
+        None,
+        "nothing reported it at all"
+    );
     let rendered = scorecard(&card(&found, &mistyped));
     assert!(
         rendered.contains("**FALSE NEGATIVE** fixture"),

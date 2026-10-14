@@ -29,7 +29,7 @@ pub mod run;
 pub mod verdict;
 
 use clone_type::CloneType;
-use coverage::{matching_cluster, reported_kind};
+use coverage::match_entry;
 pub use coverage::RangeCoverage;
 
 use crate::corpus_measure::ProcessCost;
@@ -388,35 +388,34 @@ fn written_ranges(entry: &Value) -> Result<Vec<String>> {
 /// Scores one register entry against one report.
 fn score_entry(report: &Value, entry: &Value, verdict: &str) -> Result<ScoredEntry> {
     let written = written_ranges(entry)?;
-    let ranges = written
-        .iter()
-        .map(|range| Range::parse(range))
-        .collect::<Result<Vec<_>>>()?;
+    let ranges = parsed_ranges(&written)?;
     let pinned = CloneType::pinned(entry, verdict)?;
-    let matched_cluster = matching_cluster(report, &ranges, pinned);
-    let matched = matched_cluster.is_some();
-    let reported_as = match (pinned, &matched_cluster) {
-        (Some(_), None) => reported_kind(report, &ranges),
-        _ => None,
-    };
+    let found = match_entry(report, &ranges, pinned);
+    let matched = found.cluster.is_some();
     Ok(ScoredEntry {
         verdict: verdict.to_owned(),
         why: text(entry, "why"),
         occurrences: written,
         clone_type: pinned.map(|clone_type| clone_type.label().to_owned()),
-        reported_as,
+        reported_as: found.reported_as,
         matched,
-        cluster: matched_cluster
-            .as_ref()
-            .and_then(|(cluster, _)| cluster.get("id").and_then(Value::as_str))
-            .map(ToOwned::to_owned),
-        coverage: matched_cluster.map(|(_, coverage)| coverage),
-        correct: if verdict == CLEARLY_IN {
-            matched
-        } else {
-            !matched
-        },
+        cluster: cluster_id(found.cluster.as_ref()),
+        coverage: found.cluster.map(|(_, coverage)| coverage),
+        // A matched CLEARLY IN is found; an unmatched CLEARLY OUT is absent.
+        correct: matched == (verdict == CLEARLY_IN),
     })
+}
+
+/// Parses every written range, refusing the entry if any is malformed.
+fn parsed_ranges(written: &[String]) -> Result<Vec<Range>> {
+    written.iter().map(|range| Range::parse(range)).collect()
+}
+
+/// The id of the cluster that answered an entry, when one did.
+fn cluster_id(found: Option<&(&Value, RangeCoverage)>) -> Option<String> {
+    found
+        .and_then(|(cluster, _)| cluster.get("id").and_then(Value::as_str))
+        .map(ToOwned::to_owned)
 }
 
 /// Scores every entry of one verdict list against one report.

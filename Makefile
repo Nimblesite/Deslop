@@ -233,6 +233,7 @@ _ci-contract-tests: _vsix-node-modules
 	@node --test scripts/repository/judging-workspace.test.mjs
 	@echo "==> Verdict merge gate ([CORPUS-REGISTER-MERGE])..."
 	@node --test scripts/repository/verdict-merge.test.mjs
+	@node --test scripts/repository/verdict-merge-types.test.mjs
 	@echo "==> Test-selection gate ([TEST-SELECTION])..."
 	@node --test scripts/repository/test-selection.test.mjs
 	@echo "==> Coverage-isolation gate ([CI-COVERAGE-ISOLATION])..."

@@ -123,7 +123,7 @@ So renamed code published as identical code is a false negative for a `Type II` 
 
 **A type the sources do not agree on is left unspecified.** When verdicts are merged ([CORPUS-REGISTER-MERGE]), the verdict alone decides whether a pair enters the register. Its type is written only when every source gave the same valid type — the standing register included, and a blank counts as a vote. `Type I` against `Type II`, a typed ruling against a blank one, or a label outside the four all leave the pair filed with no type, which means any type is acceptable. A standing entry whose type a later pass contradicts loses its type the same way; nothing else about it changes. Every pair filed without a type that some source did name is listed under `types_left_unspecified` in `docs/reports/verdict-merge.md`, with each source's type.
 
-A type on anything but a CLEARLY IN is never written by the merge, and fails the scorer and `corpus_register_contract` if it ever reaches a register. Implemented in `crates/deslop-test-support/src/corpus_score/clone_type.rs` and `scripts/corpus/merge-verdicts/pass.mjs`; asserted by `corpus_score/tests/clone_type.rs`, `every_pinned_clone_type_is_a_research_type_on_a_clearly_in`, and `scripts/repository/verdict-merge.test.mjs`.
+A type on anything but a CLEARLY IN is never written by the merge, and fails the scorer and `corpus_register_contract` if it ever reaches a register. Implemented in `crates/deslop-test-support/src/corpus_score/clone_type.rs` and `scripts/corpus/merge-verdicts/pass.mjs`; asserted by `corpus_score/tests/clone_type.rs`, `every_pinned_clone_type_is_a_research_type_on_a_clearly_in`, and `scripts/repository/verdict-merge-types.test.mjs`.
 
 ### [CORPUS-REGISTER-COVERAGE] How far the register is meant to go
 

@@ -423,22 +423,24 @@ fn defect_lines(card: &Scorecard, engine_id: &str) -> Vec<String> {
                 .entries
                 .iter()
                 .filter(|entry| !entry.correct)
-                .map(move |entry| {
-                    let kind = if entry.is_false_negative() {
-                        "FALSE NEGATIVE"
-                    } else {
-                        "FALSE POSITIVE"
-                    };
-                    let pinned = pinned_note(entry);
-                    format!(
-                        "- **{kind}** {} — `{}`{pinned}\n  - {}",
-                        target.name,
-                        entry.occurrences.join("` + `"),
-                        entry.why
-                    )
-                })
+                .map(move |entry| defect_line(&target.name, entry))
         })
         .collect()
+}
+
+/// One judged pair an engine answered wrongly, with the judge's reason.
+fn defect_line(repository: &str, entry: &ScoredEntry) -> String {
+    let kind = if entry.is_false_negative() {
+        "FALSE NEGATIVE"
+    } else {
+        "FALSE POSITIVE"
+    };
+    format!(
+        "- **{kind}** {repository} — `{}`{}\n  - {}",
+        entry.occurrences.join("` + `"),
+        pinned_note(entry),
+        entry.why
+    )
 }
 
 /// The scope of the run, stated before any figure: how many repositories were

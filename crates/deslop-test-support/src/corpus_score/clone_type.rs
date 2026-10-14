@@ -77,7 +77,9 @@ impl CloneType {
             return Ok(None);
         }
         if verdict != CLEARLY_IN {
-            return Err(anyhow!("a {verdict} entry names no clone, so it has no type"));
+            return Err(anyhow!(
+                "a {verdict} entry names no clone, so it has no type"
+            ));
         }
         Self::all()
             .into_iter()
