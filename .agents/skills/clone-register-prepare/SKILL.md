@@ -116,8 +116,7 @@ comparison never scanned has no reports to draw candidates from — so a new one
 never get in. `corpus/judging-queue.json` is the way through: add it there with its url,
 a full commit id and its language, and the next `make compare` scans it alongside the
 registers. Prefer a language with no register at all over a second repository in one that
-already has one. When the verdicts come back, the repository moves into
-`corpus/register/` and out of the queue. See §[CORPUS-REGISTER-QUEUE].
+already has one. When the verdicts come back, the repository gets a register in `corpus/register/`; it leaves the queue only once that register holds a CLEARLY IN. A register of only CLEARLY OUT and NOT CLEAR stays queued for another pass. See §[CORPUS-REGISTER-QUEUE].
 
 ### What the folder guarantees, and you must not undo
 

@@ -38,19 +38,16 @@ judge next.
 | Language | Judged | Next |
 |---|---|---|
 | python | click | a large python repo; `django` or `tornado` are pinned already |
-| go | cobra | a large go repo; `hugo` is pinned already |
-| javascript | axios | a large js repo; `react` is pinned already |
-| csharp | Polly | a small csharp repo to sit under Polly |
+| go | cobra, hugo | more passes on hugo |
+| javascript | axios, react | more passes on react |
+| csharp | Polly, serilog | more passes on serilog |
 | rust | ripgrep, deslop | a second rust repo of a different size; `deslop` is the self-register, filed from tracked issues rather than a blinded pass (see its `provenance`) |
 | typescript | zod | a second typescript repo of a different size |
-| dart | bloc | a second dart repo of a different size |
-| php | guzzle | a second php repo of a different size |
-| fsharp | FSharp.Data | a second fsharp repo of a different size |
+| dart | bloc, dio | more passes on dio |
+| php | guzzle, composer | more passes on composer |
+| fsharp | FSharp.Data, giraffe (no agreed CLEARLY IN yet) | another pass on giraffe, which is still queued |
 
-Every one of the nine languages now has a register, and every judged repository is on the
-small side — so depth and size are what the next passes buy, not breadth. Six languages
-rest on a single repository; `corpus/judging-queue.json` holds a second one for each of
-them. `corpus_commit_pins.rs` fails whenever the queue is empty, by design.
+Every one of the nine languages now has a register. Python and TypeScript still rest on a single repository, and the second repositories above were judged on a short pass, so depth is what the next passes buy, not breadth. `corpus/judging-queue.json` still holds giraffe, because its register has no agreed CLEARLY IN. `corpus_commit_pins.rs` fails whenever the queue is empty, by design.
 
 A CLEARLY IN may pin a clone type (`Type I` to `Type IV`); blank accepts any type. See
 `docs/specs/corpus.md` §[CORPUS-REGISTER-TYPE].
@@ -59,8 +56,7 @@ Counts are not written here. `docs/reports/verdict-merge.md` carries them, writt
 run that produced them.
 
 "Queued" means `corpus/judging-queue.json`: the comparison scans those repositories so a
-first pass has reports to draw candidates from, and each moves into this directory when
-its verdicts come back. See `docs/specs/corpus.md` §[CORPUS-REGISTER-QUEUE].
+first pass has reports to draw candidates from. Each gets a register here when its verdicts come back, and leaves the queue once that register holds a CLEARLY IN. See `docs/specs/corpus.md` §[CORPUS-REGISTER-QUEUE].
 
 Verdicts reach these files only through `make merge-verdicts JUDGED_DIRS="<folder> <folder>"`.
 It imports **only** the pairs every source agrees on — these registers included. Anything a

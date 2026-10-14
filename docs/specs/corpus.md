@@ -164,7 +164,7 @@ A repository cannot become a register until a judge has ruled on its pairs, and 
 
 `corpus/judging-queue.json` breaks that circle. It lists repositories waiting on a first pass — url, commit id, language, and why this one — and the comparison scans everything in it alongside the registers. Each queued repository then gets a workspace from `make judging-folder` exactly like a judged one.
 
-A queued repository has **no register yet**, and a repository with a register is **not** in the queue; `crates/deslop/tests/corpus_commit_pins.rs` asserts both, so the queue drains rather than growing a second copy of the corpus. Entries are pinned to a full commit id for the same reason a register is: the judge and the scan have to read one identical tree.
+A repository leaves the queue once its register holds at least one CLEARLY IN. Until then it may already have a register holding only the CLEARLY OUT and NOT CLEAR pairs its judges agreed on. That is better than nothing, but it cannot catch a missed clone, so the repository stays queued for another pass, and the comparison scans it once, as its register. `crates/deslop/tests/corpus_commit_pins.rs` asserts that a queued repository's register holds no CLEARLY IN, and `crates/deslop/tests/corpus_register_contract.rs` asserts that a register with no CLEARLY IN is still queued, so the queue drains rather than growing a second copy of the corpus. Entries are pinned to a full commit id for the same reason a register is: the judge and the scan have to read one identical tree.
 
 The CI accuracy gate does **not** scan the queue. It runs a small slice of judged registers, because a repository with no verdicts can answer no questions and would only cost time on every push.
 
@@ -192,7 +192,7 @@ The rest of the rules:
 - **One tree.** Every judged folder and the register must name the same commit. A line number means nothing without the tree it was read in.
 - **Judges must have been shown the same candidates.** Candidate numbers are the only handle a verdict has on a pair, so two workspaces with different pair lists would have their verdicts cross-matched into disagreements that never happened. The run refuses outright.
 - **Judges must finish the same repositories.** A repository absent from one folder is an unfinished pass, not an empty verdict. The merge refuses the whole run before creating or draining any register.
-- A repository that gains a register leaves `corpus/judging-queue.json` in the same run, per [CORPUS-REGISTER-QUEUE].
+- A repository whose register now holds a CLEARLY IN leaves `corpus/judging-queue.json` in the same run. One whose agreed pairs are all CLEARLY OUT or NOT CLEAR is filed and stays queued, per [CORPUS-REGISTER-QUEUE].
 
 A clone type the sources did not all agree on never leaves a pair out: the pair is filed without a type ([CORPUS-REGISTER-TYPE]).
 
