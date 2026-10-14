@@ -5,10 +5,10 @@
 
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
-import { DecorationManager } from "../../decorations/manager";
+import { DecorationManager, decoratableClusters } from "../../decorations/manager";
 import { ReportStore } from "../../reportStore";
 import { ScheduleFn } from "../../util/debounce";
-import { Report, ReportCluster } from "../../types/report";
+import { Report, ReportCluster, RepoMetrics } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
 import { occurrence, wireCluster } from "../cluster.helpers";
 
@@ -65,7 +65,54 @@ function report(clusters: ReportCluster[]): Report {
   );
 }
 
+const DEFAULT_TOTAL_INCLUDES = ["identical", "nearly_identical"] as const;
+
+function kindedCluster(id: string, kind: ReportCluster["kind"], path: string): ReportCluster {
+  const built = wireCluster({
+    id,
+    mass: 10,
+    canonical_node_count: 3,
+    occurrences: [occurrence(path, 0, 3)],
+  });
+  return { ...built, kind };
+}
+
 suite("DecorationManager redraw", () => {
+  test("excluded kinds paint no decoration until the include set names them", () => {
+    const identical = kindedCluster("dm-identical", "identical", "/repo/A.cs");
+    const similar = kindedCluster("dm-similar", "loosely_similar", "/repo/A.cs");
+    const excludedReport = reportWithClusters(
+      [identical, similar],
+      {},
+      { total_includes: [...DEFAULT_TOTAL_INCLUDES] },
+    );
+    assert.deepEqual(
+      decoratableClusters(excludedReport).map((item) => item.id),
+      ["dm-identical"],
+      "the default include set paints only identical and nearly identical",
+    );
+    const allKindsReport = reportWithClusters(
+      [identical, similar],
+      {},
+      { total_includes: ["identical", "nearly_identical", "loosely_similar", "same_behavior"] },
+    );
+    assert.deepEqual(
+      decoratableClusters(allKindsReport).map((item) => item.id),
+      ["dm-identical", "dm-similar"],
+      "naming the kind in config paints its decorations again",
+    );
+    // A pre-#585 report carries no include set — the fixture helper
+    // defaults it, so model the legacy wire shape explicitly: the field
+    // absent, which `exactOptionalPropertyTypes` cannot spell inline.
+    const legacyMetrics = { total_includes: undefined } as unknown as Partial<RepoMetrics>;
+    const legacyReport = reportWithClusters([identical, similar], {}, legacyMetrics);
+    assert.deepEqual(
+      decoratableClusters(legacyReport).map((item) => item.id),
+      ["dm-identical", "dm-similar"],
+      "a report with no include set claims nothing — every kind paints",
+    );
+  });
+
   test("redraws when a matching editor is visible", async () => {
     const doc = await vscode.workspace.openTextDocument({
       content: "abc\ndef\n",

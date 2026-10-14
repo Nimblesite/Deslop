@@ -50,6 +50,8 @@ function report(clusterId: string, path: string): Report {
       clusters_total: 1,
       duplicated_files: 1,
       threshold: { percent: 0, breached: false, source: "none" },
+      total_includes: ["identical", "nearly_identical"],
+      per_kind: [],
       per_file: [],
       folders: [],
     },

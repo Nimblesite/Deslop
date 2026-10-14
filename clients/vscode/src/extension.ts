@@ -297,7 +297,7 @@ export function currentApi(): ExtensionApi {
 // [VSIX-TOP-OFFENDERS-GROUPING] Mirror grouping and filter state for view commands.
 export function syncTopOffendersContext(): void {
   const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE);
-  const groupBy = normalizeGroupBy(cfg.get<string>("topOffenders.groupBy", "cluster"));
+  const groupBy = normalizeGroupBy(cfg.get<string>("topOffenders.groupBy", "kind"));
   void vscode.commands.executeCommand(SET_CONTEXT_COMMAND, "deslop.topOffendersGroupBy", groupBy);
   void vscode.commands.executeCommand(
     SET_CONTEXT_COMMAND,

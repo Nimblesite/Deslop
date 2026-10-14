@@ -28,6 +28,15 @@ const DEFAULTS: [(ClusterKind, Option<DiagnosticSeverity>); 5] = [
     (ClusterKind::StructuralOnly, None),
 ];
 const MASSES: [u64; 2] = [1, 10_000];
+/// [METRICS-TOTAL-INCLUDE] The shipped default: the two byte-level kinds.
+const DEFAULT_INCLUDES: [ClusterKind; 2] = [ClusterKind::Identical, ClusterKind::NearlyIdentical];
+/// Naming every clone kind in the include set — the pre-#585 behaviour.
+const ALL_CLONES: [ClusterKind; 4] = [
+    ClusterKind::Identical,
+    ClusterKind::NearlyIdentical,
+    ClusterKind::LooselySimilar,
+    ClusterKind::SameBehavior,
+];
 const LEVELS: [DiagnosticLevel; 5] = [
     DiagnosticLevel::None,
     DiagnosticLevel::Hint,
@@ -63,7 +72,8 @@ fn category_defaults_do_not_depend_on_mass_or_rank() {
     for (kind, expected) in DEFAULTS {
         for mass in MASSES {
             let report = report_for(kind, mass);
-            let diagnostics = build_for_file(&report, Path::new(WORKSPACE), &enabled());
+            let diagnostics =
+                build_for_file(&report, Path::new(WORKSPACE), &enabled(), &ALL_CLONES);
             assert_eq!(
                 diagnostics.len(),
                 usize::from(expected.is_some()),
@@ -85,7 +95,8 @@ fn every_kind_accepts_every_override_without_changing_the_report() -> anyhow::Re
         for level in LEVELS {
             let mut settings = enabled();
             let _previous = settings.severity_by_kind.insert(kind, level);
-            let diagnostics = build_for_file(&report, Path::new(WORKSPACE), &settings);
+            let diagnostics =
+                build_for_file(&report, Path::new(WORKSPACE), &settings, &DEFAULT_INCLUDES);
             assert_eq!(diagnostics.len(), usize::from(level.severity().is_some()));
             assert_eq!(
                 diagnostics.first().and_then(|item| item.severity),
@@ -111,10 +122,59 @@ fn disabled_diagnostics_suppress_even_explicit_error_overrides() {
             .insert(kind, DiagnosticLevel::Error);
         let report = report_for(kind, MASSES[0]);
         assert_eq!(
-            build_for_file(&report, Path::new(WORKSPACE), &settings),
+            build_for_file(&report, Path::new(WORKSPACE), &settings, &DEFAULT_INCLUDES),
             Vec::<tower_lsp::lsp_types::Diagnostic>::new()
         );
     }
+}
+
+/// [SEVERITY-DIAGNOSTICS-EXCLUDED] An excluded kind stays silent under the
+/// category defaults; an explicit override is an opt-in that wins over
+/// exclusion, and an included kind keeps its default untouched.
+#[test]
+fn excluded_kinds_publish_nothing_unless_the_user_opts_in() {
+    let report = report_for(ClusterKind::LooselySimilar, MASSES[0]);
+    assert_eq!(
+        build_for_file(&report, Path::new(WORKSPACE), &enabled(), &DEFAULT_INCLUDES),
+        Vec::<tower_lsp::lsp_types::Diagnostic>::new(),
+        "excluded kind under the default include set publishes nothing"
+    );
+    assert_eq!(
+        build_for_file(&report, Path::new(WORKSPACE), &enabled(), &ALL_CLONES)
+            .first()
+            .and_then(|item| item.severity),
+        Some(DiagnosticSeverity::INFORMATION),
+        "naming the kind in the include set restores the category default"
+    );
+    let mut overridden = enabled();
+    let _previous = overridden
+        .severity_by_kind
+        .insert(ClusterKind::LooselySimilar, DiagnosticLevel::Warning);
+    assert_eq!(
+        build_for_file(
+            &report,
+            Path::new(WORKSPACE),
+            &overridden,
+            &DEFAULT_INCLUDES
+        )
+        .first()
+        .and_then(|item| item.severity),
+        Some(DiagnosticSeverity::WARNING),
+        "an explicit severityByKind entry beats exclusion — it is an opt-in"
+    );
+    let identical = report_for(ClusterKind::Identical, MASSES[0]);
+    assert_eq!(
+        build_for_file(
+            &identical,
+            Path::new(WORKSPACE),
+            &enabled(),
+            &DEFAULT_INCLUDES
+        )
+        .first()
+        .and_then(|item| item.severity),
+        Some(DiagnosticSeverity::WARNING),
+        "an included kind keeps its category default"
+    );
 }
 
 #[test]
@@ -125,7 +185,7 @@ fn opted_in_shape_only_diagnostic_describes_information_without_duplicate_quanti
     let _previous = settings
         .severity_by_kind
         .insert(ClusterKind::StructuralOnly, DiagnosticLevel::Hint);
-    let diagnostics = build_for_file(&report, Path::new(WORKSPACE), &settings);
+    let diagnostics = build_for_file(&report, Path::new(WORKSPACE), &settings, &DEFAULT_INCLUDES);
     assert_eq!(diagnostics.len(), 1);
     let diagnostic = diagnostics
         .first()

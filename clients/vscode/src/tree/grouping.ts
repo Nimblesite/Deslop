@@ -12,6 +12,7 @@ import {
   ReportCluster,
   ReportOccurrence,
   compareClusterRank,
+  isKindExcluded,
 } from "../types/report";
 import {
   ClusterNode,
@@ -27,9 +28,9 @@ import { compareWeightedPath } from "./sort";
 export type GroupBy = "cluster" | "file" | "folder" | "kind" | "language";
 
 /** Normalizes a persisted groupBy value. Unknown / missing values fall
- * back to `"cluster"` — never panic ([VSIX-TOP-OFFENDERS-GROUPING]). */
+ * back to `"kind"` — never panic ([VSIX-TOP-OFFENDERS-GROUPING]). */
 export function normalizeGroupBy(raw: string | undefined): GroupBy {
-  return raw === "file" || raw === "folder" || raw === "kind" || raw === "language" ? raw : "cluster";
+  return raw === "cluster" || raw === "file" || raw === "folder" || raw === "kind" || raw === "language" ? raw : "kind";
 }
 
 /** A file and the clusters within it, plus the two impact keys its row
@@ -67,8 +68,14 @@ function totalMass(clusters: ReportCluster[]): number {
 const byRank = compareClusterRank;
 
 // [VSIX-TOP-OFFENDERS-CLUSTER-MODE] Cluster roots keep engine rank.
-export function buildClusterMode(clusters: ReportCluster[]): Node[] {
-  return clusters.map((cluster) => new ClusterNode(cluster, { showFile: true }));
+export function buildClusterMode(
+  clusters: ReportCluster[],
+  totalIncludes?: readonly ClusterKind[],
+): Node[] {
+  return clusters.map((cluster) => {
+    const excluded = isKindExcluded(cluster.kind, totalIncludes);
+    return new ClusterNode(cluster, { showFile: true, excluded });
+  });
 }
 
 // [VSIX-TOP-OFFENDERS-SORT] Keep canonical occurrence order and identity.
@@ -121,7 +128,7 @@ export function fileNodeWithChildren(file: FileAgg): FileNode {
 // provider's getChildren impl trivial.
 const fileNodeClusters = new WeakMap<FileNode, ReportCluster[]>();
 
-// [CLONE-KIND-LABELS] Omit empty categories; order groups by their worst engine rank.
+// [CLONE-KIND-LABELS] Omit empty categories; order groups by category display order.
 function kindSections(
   clusters: ReportCluster[],
   order: (list: ReportCluster[]) => ReportCluster[],
@@ -129,17 +136,20 @@ function kindSections(
   return CLUSTER_KINDS.map((kind) => ({
     kind,
     list: order(clusters.filter((cluster) => cluster.kind === kind)),
-  })).filter(({ list }) => list.length > 0)
-    .sort((left, right) => compareGroups(left.list, right.list));
+  })).filter(({ list }) => list.length > 0);
 }
 
-// File categories share the same weight order as category roots.
-export function getFileNodeChildren(file: FileNode): Node[] {
+// File categories share the same category display order as category roots.
+export function getFileNodeChildren(
+  file: FileNode,
+  totalIncludes?: readonly ClusterKind[],
+): Node[] {
   const clusters = fileNodeClusters.get(file);
   if (!clusters) return [];
-  return kindSections(clusters, (list) => list.slice().sort(byRank)).map(({ kind, list }) =>
-    registerGroup(new KindGroupNode(kind, list), list),
-  );
+  return kindSections(clusters, (list) => list.slice().sort(byRank)).map(({ kind, list }) => {
+    const excluded = isKindExcluded(kind, totalIncludes);
+    return registerGroup(new KindGroupNode(kind, list, false, excluded), list);
+  });
 }
 
 // Per-GroupNode side table — one machinery for BOTH group axes
@@ -156,19 +166,24 @@ function registerGroup(node: GroupNode, list: ReportCluster[]): GroupNode {
 
 // Children of any GroupNode: ClusterNodes in the group's stored display
 // order, with the file suffix driven by the group's axis.
-export function getGroupNodeChildren(group: GroupNode): Node[] {
+export function getGroupNodeChildren(group: GroupNode, totalIncludes?: readonly ClusterKind[]): Node[] {
   const clusters = groupClusters.get(group);
   if (!clusters) return [];
   return clusters.map(
-    (cluster) => new ClusterNode(cluster, { showFile: group.showFileInChildren }),
+    (cluster) => new ClusterNode(cluster, { showFile: group.showFileInChildren,
+      excluded: totalIncludes === undefined ? group instanceof KindGroupNode && group.excluded : isKindExcluded(cluster.kind, totalIncludes) }),
   );
 }
 
-// [FACET-GROUP-BY-KIND] Flat category roots, highest weight first.
-export function buildKindMode(clusters: ReportCluster[]): Node[] {
-  return kindSections(clusters, (list) => list).map(({ kind, list }) =>
-    registerGroup(new KindGroupNode(kind, list, true), list),
-  );
+// [FACET-GROUP-BY-KIND] Flat category roots, category display order.
+export function buildKindMode(
+  clusters: ReportCluster[],
+  totalIncludes?: readonly ClusterKind[],
+): Node[] {
+  return kindSections(clusters, (list) => list).map(({ kind, list }) => {
+    const excluded = isKindExcluded(kind, totalIncludes);
+    return registerGroup(new KindGroupNode(kind, list, true, excluded), list);
+  });
 }
 
 // [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] Language is a grouping choice, not a second axis.

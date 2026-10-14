@@ -207,8 +207,8 @@ const SHAPE_CHIP = "Shape";
 const EXPECTED_KIND_LABELS: readonly (readonly [ClusterKind, string, string, string])[] = [
   ["identical", "Identical code", "Type-1 exact clone", TYPE_I_CHIP],
   ["nearly_identical", "Nearly identical code", "Type-2 / close Type-3 clone", TYPE_II_III_CHIP],
-  ["same_behavior", "Same behavior, different code", "Type-4 semantic clone", TYPE_IV_CHIP],
   ["loosely_similar", "Similar code", "Type-3 clone with larger edits", TYPE_III_CHIP],
+  ["same_behavior", "Same behavior, different code", "Type-4 semantic clone", TYPE_IV_CHIP],
   ["structural_only", "Same shape, different content", "Informational non-clone", SHAPE_CHIP],
 ];
 suite("clone category presentation", () => {

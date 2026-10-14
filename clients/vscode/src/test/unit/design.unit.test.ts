@@ -44,8 +44,8 @@ suite("design tokens", () => {
     const EXPECTED_PAINT: readonly (readonly [ClusterKind, string, string])[] = [
       ["identical", COLOR.primaryContainer, "crimson — byte-identical code, the only kind proven character by character"],
       ["nearly_identical", COLOR.amber, "amber — a near-copy, renamed or lightly edited"],
-      ["same_behavior", COLOR.violet, "violet — equivalent behaviour reached by different code"],
       ["loosely_similar", COLOR.tertiary, "blue — an established copy with larger edits"],
+      ["same_behavior", COLOR.violet, "violet — equivalent behaviour reached by different code"],
       ["structural_only", COLOR.onSurfaceMuted, "muted grey — shape only, and not a clone however high it ranks"],
     ];
     assert.equal(

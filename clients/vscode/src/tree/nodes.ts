@@ -50,9 +50,12 @@ export type Node =
 
 // [CLONE-KIND-COLOR] The row icon is the cluster's clone kind: one codicon
 // and one contributed theme colour per kind, from the single paint table
-// in design.ts. Rank never chooses a colour.
-export function kindIcon(kind: ClusterKind): vscode.ThemeIcon {
-  return new vscode.ThemeIcon(KIND_ICON[kind], new vscode.ThemeColor(KIND_THEME_COLOR[kind]));
+// in design.ts. Rank never chooses a colour. Excluded kinds render greyed out.
+export function kindIcon(kind: ClusterKind, excluded = false): vscode.ThemeIcon {
+  const color = excluded
+    ? new vscode.ThemeColor("disabledForeground")
+    : new vscode.ThemeColor(KIND_THEME_COLOR[kind]);
+  return new vscode.ThemeIcon(KIND_ICON[kind], color);
 }
 
 // [VSIX-TOP-OFFENDERS-CLUSTER-ID] The bold label leads with the cluster's
@@ -78,6 +81,7 @@ export function clusterRowLabel(args: {
 
 export interface ClusterNodeOptions {
   showFile?: boolean;
+  excluded?: boolean;
 }
 
 export class ClusterNode extends vscode.TreeItem {
@@ -93,6 +97,7 @@ export class ClusterNode extends vscode.TreeItem {
     const filePath = representativePath(cluster);
     const fileLabel = displayPath(filePath);
     const showFile = options.showFile ?? true;
+    const excluded = options.excluded ?? false;
     const slug = clusterSlug(cluster);
     const severity = clusterSeverity(cluster);
     const kind = cluster.kind;
@@ -101,10 +106,11 @@ export class ClusterNode extends vscode.TreeItem {
     super(clusterRowLabel(labelArgs), vscode.TreeItemCollapsibleState.Collapsed);
     const rank = cluster.rank;
     this.rank = rank;
-    this.description = isClone(cluster) ? `rank #${rank} · ${occurrenceCount(cluster)} copies` : INFORMATIONAL_FINDING;
+    const baseDesc = isClone(cluster) ? `rank #${rank} · ${occurrenceCount(cluster)} copies` : INFORMATIONAL_FINDING;
+    this.description = excluded ? `${baseDesc} · excluded` : baseDesc;
     this.contextValue =
       occurrenceCount(cluster) > 1 ? "deslop.clusterComparable" : "deslop.clusterSingle";
-    this.iconPath = kindIcon(kind);
+    this.iconPath = kindIcon(kind, excluded);
     this.accessibilityInformation = {
       label: `${kindChip(kind)}, ${title} in ${fileLabel}, cluster ${cluster.id}, ${this.description}`,
       role: TREE_ITEM_ROLE,
@@ -208,8 +214,9 @@ export class GroupNode extends vscode.TreeItem {
      * the group is a root (no file ancestor implies the file). */
     readonly showFileInChildren: boolean,
     icon?: vscode.ThemeIcon,
+    collapsibleState: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.Expanded,
   ) {
-    super(`${title} (${clusters.length})`, vscode.TreeItemCollapsibleState.Expanded);
+    super(`${title} (${clusters.length})`, collapsibleState);
     this.contextValue = contextValue;
     if (icon) this.iconPath = icon;
     this.accessibilityInformation = {
@@ -229,9 +236,23 @@ export class KindGroupNode extends GroupNode {
     readonly kind: ClusterKind,
     clusters: ReportCluster[],
     showFileInChildren = false,
+    readonly excluded = false,
   ) {
-    super(kindTitle(kind), clusters, "deslop.kindGroup", showFileInChildren, kindIcon(kind));
-    this.tooltip = new vscode.MarkdownString(`**${kindTitle(kind)}** — ${kindTaxonomy(kind)}`);
+    super(
+      kindTitle(kind),
+      clusters,
+      "deslop.kindGroup",
+      showFileInChildren,
+      kindIcon(kind, excluded),
+      // [VSIX-TOP-OFFENDERS-EXCLUDED] Excluded noise starts collapsed —
+      // the default view leads with the kinds that count.
+      excluded
+        ? vscode.TreeItemCollapsibleState.Collapsed
+        : vscode.TreeItemCollapsibleState.Expanded,
+    );
+    if (excluded) this.description = "excluded";
+    const excludedNotice = excluded ? "\n\n*(Excluded from total duplication)*" : "";
+    this.tooltip = new vscode.MarkdownString(`**${kindTitle(kind)}** — ${kindTaxonomy(kind)}${excludedNotice}`);
   }
 }
 

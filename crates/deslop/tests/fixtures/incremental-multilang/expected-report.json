@@ -18,6 +18,23 @@
       "breached": false,
       "source": "none"
     },
+    "total_includes": [
+      "identical",
+      "nearly_identical"
+    ],
+    "per_kind": [
+      {
+        "kind": "identical",
+        "duplicated_loc": 136,
+        "duplication_percent": 64.76190476190476,
+        "included_in_total": true,
+        "threshold": {
+          "percent": 0.0,
+          "breached": false,
+          "source": "none"
+        }
+      }
+    ],
     "per_file": [
       {
         "path": "ledger_alpha.dart",

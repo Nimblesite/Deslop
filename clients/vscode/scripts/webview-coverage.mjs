@@ -25,7 +25,7 @@ function collect() {
   rmSync(rawDir, { recursive: true, force: true });
   let status = runTool("npm", ["--prefix", "webview-ui", "run", "build", "--", "--coverage"]);
   if (status !== 0) process.exit(status);
-  status = runTool("npx", ["playwright", "test", "scripts/playwright-webview-smoke.spec.ts"], {
+  status = runTool("npx", ["playwright", "test", "scripts/playwright-webview-smoke.spec.ts", "scripts/playwright-report-parity.spec.ts"], {
     WEBVIEW_COVERAGE: "1",
   });
   if (status !== 0) process.exit(status);

@@ -13,17 +13,19 @@ import {
 import { COLOR, FONT, GLOBAL_CSS } from "../theme";
 import { FilterSelect } from "../components/FilterSelect";
 import { MetricHeading } from "../components/MetricHeading";
+import { MetricContext } from "../components/MetricContext";
 import { ClusterBadge } from "../components/ClusterBadge";
 import {
-  CLUSTER_KINDS,
   clusterSlug,
+  CLUSTER_KINDS,
+  kindFilterOptions,
+  isKindExcluded,
   kindTitle,
   isClone,
   INFORMATIONAL_FINDING,
   occurrenceCount,
   SEVERITIES,
   severityLabel,
-  type ClusterKind,
   type Severity,
 } from "../../../src/types/report";
 
@@ -37,7 +39,9 @@ const CLUSTER_ROW_CLASS = "report-cluster-row";
 
 // [FACET-REPORT-WEBVIEW] Every option list derives from the shared
 // registries (the #170/#198 anti-drift rule): severities from SEVERITIES,
-// clone kinds from CLUSTER_KINDS. `null` = no filter on that axis.
+// clone kinds from `kindFilterOptions` over the server's include set —
+// excluded kinds stay selectable but greyed ([METRICS-TOTAL-INCLUDE]).
+// `null` = no filter on that axis.
 const SEVERITY_OPTIONS = [
   { label: "All severities", value: null as Severity | null },
   ...SEVERITIES.map((severity) => ({
@@ -46,18 +50,11 @@ const SEVERITY_OPTIONS = [
   })),
 ];
 
-const KIND_OPTIONS = [
-  { label: "All clone kinds", value: null as ClusterKind | null },
-  ...CLUSTER_KINDS.map((kind) => ({
-    label: kindTitle(kind),
-    value: kind as ClusterKind | null,
-  })),
-];
-
 function ReportApp() {
   const snapshot = report.value;
   const rows = filteredClusters.value;
   const state = analysisState.value;
+  const kindOptions = kindFilterOptions(snapshot?.metrics.total_includes);
 
   if (!snapshot) {
     return (
@@ -84,7 +81,10 @@ function ReportApp() {
             gap: LARGE_SPACING,
           }}
         >
-          <MetricHeading value={snapshot.metrics.duplication_percent} label="duplicated" />
+          <div>
+            <MetricHeading value={snapshot.metrics.duplication_percent} label="duplicated" />
+            <MetricContext metrics={snapshot.metrics} />
+          </div>
           <div
             style={{
               textAlign: RIGHT_ALIGNMENT,
@@ -119,7 +119,7 @@ function ReportApp() {
           onChange={(severity) => (filters.value = { ...filters.value, severity })}
         />
         <FilterSelect
-          options={KIND_OPTIONS}
+          options={kindOptions}
           value={filters.value.kind}
           onChange={(kind) => (filters.value = { ...filters.value, kind })}
         />
@@ -137,13 +137,20 @@ function ReportApp() {
         </button>
       </section>
 
-      <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
-        {rows.map((cluster, i) => {
+      {CLUSTER_KINDS.map((kind) => {
+        const group = rows.filter((cluster) => cluster.kind === kind);
+        if (group.length === 0) return null;
+        const excludedKind = isKindExcluded(kind, snapshot.metrics.total_includes);
+        return <details key={kind} class={excludedKind ? "clone-group clone-group--excluded" : "clone-group"} open={!excludedKind}>
+          <summary>{kindTitle(kind)} — {group.length} group(s){excludedKind ? " — not counted in total" : ""}</summary>
+          <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
+        {group.map((cluster, i) => {
           const severity = severityByClusterId.value.get(cluster.id) ?? "hint";
           const slug = clusterSlug(cluster);
+          const excluded = isKindExcluded(cluster.kind, snapshot.metrics.total_includes);
           return (
             <li
-              class={CLUSTER_ROW_CLASS}
+              class={excluded ? `${CLUSTER_ROW_CLASS} report-cluster-row--excluded` : CLUSTER_ROW_CLASS}
               key={cluster.id}
               onClick={() => {
                 selectedClusterId.value = cluster.id;
@@ -179,6 +186,7 @@ function ReportApp() {
                   <span style={{ fontWeight: 600, overflowWrap: "anywhere" }}>
                     {kindTitle(cluster.kind)}
                   </span>
+                  {excluded ? <span>excluded from total</span> : null}
                 </div>
                 <div
                   class={MONOSPACE_CLASS}
@@ -197,6 +205,8 @@ function ReportApp() {
           );
         })}
       </ol>
+        </details>;
+      })}
     </main>
   );
 }

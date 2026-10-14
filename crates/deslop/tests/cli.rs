@@ -28,7 +28,7 @@ mod language_sections;
 #[path = "cli/logging.rs"]
 mod logging;
 #[path = "cli/metrics.rs"]
-mod metrics;
+pub(crate) mod metrics;
 #[path = "cli/pair_compare.rs"]
 mod pair_compare;
 #[path = "cli/report_css.rs"]
@@ -37,3 +37,5 @@ mod report_css;
 mod routing;
 #[path = "cli/thresholds.rs"]
 mod thresholds;
+#[path = "cli/total_include.rs"]
+pub(crate) mod total_include;

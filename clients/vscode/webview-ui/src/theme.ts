@@ -11,6 +11,11 @@ export { COLOR, FONT, KIND_COLOR, SEVERITY_DOT } from "../../src/design";
 const REPORT_STACK_WIDTH = "600px";
 
 export const GLOBAL_CSS = `
+  .report-cluster-row--excluded { opacity: 0.55; }
+  .clone-group { margin-bottom: 16px; }
+  .clone-group > summary { cursor: pointer; font-weight: 600; padding: 12px 0; }
+  .clone-group--excluded > summary { color: ${COLOR.onSurfaceMuted}; }
+  .threshold-verdict--breached { color: ${COLOR.primary}; }
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
   html, body {
@@ -121,6 +126,8 @@ export const GLOBAL_CSS = `
   }
   code, .mono { font-family: ${FONT.mono}; font-size: 12px; letter-spacing: 0.02em; }
   .label { font-family: ${FONT.mono}; font-size: 11px; letter-spacing: 0.04em; color: ${COLOR.onSurfaceMuted}; text-transform: uppercase; }
+  .kind-option--excluded { color: ${COLOR.onSurfaceMuted}; }
+  .total-counts-caption { color: ${COLOR.onSurfaceMuted}; }
   .stale { opacity: 0.4; }
   .cluster-panel { padding: 24px clamp(16px, 4vw, 32px); max-width: 1200px; margin: auto; }
   .cluster-eyebrow, .cluster-heading, .cluster-weight, .cluster-shortcuts { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

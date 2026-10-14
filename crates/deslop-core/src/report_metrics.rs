@@ -12,20 +12,25 @@ use std::{
     path::{Path, PathBuf},
 };
 
-// `RepoMetrics`, `DiffMetrics`, `ThresholdSummary`, and
+// `RepoMetrics`, `DiffMetrics`, `ThresholdSummary`, `KindMetric`, and
 // `ThresholdSource` are generated from `docs/models/live-ipc.td` by
 // `scripts/typediagram/generate.mjs`. The data shapes live in
 // `crate::wire_generated`; the constructors and `Default` impl below
 // stay here.
 pub use crate::wire_generated::{
-    DiffMetrics, FileMetric, RepoMetrics, ThresholdSource, ThresholdSummary,
+    DiffMetrics, FileMetric, KindMetric, RepoMetrics, ThresholdSource, ThresholdSummary,
 };
 use crate::{
+    buckets::{TotalInclude, DEFAULT_TOTAL_INCLUDES},
     cluster::Cluster,
     diff_scope::DiffScope,
     report_render::{relative_to_scan_root, LineIndex, LineIndices},
     state::{FileId, FileRegistry},
 };
+
+#[path = "report_metrics_kind.rs"]
+mod kind;
+use kind::{fold_kind_buckets, kind_metrics, union_included_lines};
 
 impl RepoMetrics {
     /// Returns an empty metrics block (all counters zero, threshold
@@ -40,6 +45,8 @@ impl RepoMetrics {
             clusters_total: 0,
             duplicated_files: 0,
             threshold: ThresholdSummary::none(),
+            total_includes: DEFAULT_TOTAL_INCLUDES.to_vec(),
+            per_kind: Vec::new(),
             per_file: Vec::new(),
             folders: Vec::new(),
             diff: None,
@@ -122,6 +129,11 @@ pub struct MetricsInputs<'a> {
     /// [METRICS-DIFF-SCOPE] added-line block; `None` leaves
     /// `RepoMetrics.diff` absent and every mechanical field untouched.
     pub diff: Option<&'a DiffScope>,
+    /// [METRICS-TOTAL-INCLUDE] The kinds whose lines count toward the
+    /// total — resolved once from `[total] include`, default
+    /// [`DEFAULT_TOTAL_INCLUDES`]. Drives the total, every per-file and
+    /// folder numerator, and the wire's `total_includes`.
+    pub total_include: &'a TotalInclude,
 }
 
 /// Computes [`RepoMetrics`] for a finished analysis pass. The returned
@@ -131,16 +143,13 @@ pub struct MetricsInputs<'a> {
 #[must_use]
 pub fn compute_repo_metrics(inputs: &MetricsInputs<'_>) -> RepoMetrics {
     let analysed_loc: u64 = inputs.analysed_lines.values().copied().sum();
-    let clones: Vec<_> = inputs
-        .clusters
-        .iter()
-        .copied()
-        .filter(|cluster| cluster.kind.is_clone())
-        .collect();
-    let mut per_file_lines: HashMap<FileId, BTreeSet<u64>> = HashMap::new();
-    for &cluster in &clones {
-        fold_cluster_lines(cluster, inputs, &mut per_file_lines);
-    }
+    // One line-set bucket per clone kind ([METRICS-TOTAL-INCLUDE]): the
+    // total unions the included kinds' buckets, the per-kind rows read
+    // their own, and an excluded kind's lines never reach the total's
+    // per-file or folder numerators. Shape-only is not a clone and is
+    // never bucketed ([CLONE-BUCKETS-STRUCTURAL-ONLY]).
+    let kind_buckets = fold_kind_buckets(inputs);
+    let per_file_lines = union_included_lines(&kind_buckets, inputs.total_include);
     let duplicated_loc: u64 = per_file_lines
         .values()
         .map(|lines| u64::try_from(lines.len()).unwrap_or(u64::MAX))
@@ -157,9 +166,15 @@ pub fn compute_repo_metrics(inputs: &MetricsInputs<'_>) -> RepoMetrics {
         duplicated_loc,
         duplication_percent,
         // [CLONE-BUCKETS-STRUCTURAL-ONLY] Informational findings are never clones.
-        clusters_total: clones.len(),
+        clusters_total: inputs
+            .clusters
+            .iter()
+            .filter(|cluster| cluster.kind.is_clone())
+            .count(),
         duplicated_files,
         threshold: ThresholdSummary::none(),
+        total_includes: inputs.total_include.kinds().to_vec(),
+        per_kind: kind_metrics(&kind_buckets, analysed_loc, inputs.total_include),
         per_file,
         folders,
         diff: inputs
@@ -314,7 +329,7 @@ fn file_metric(
 /// Projects every non-hidden occurrence of `cluster` onto per-file line
 /// sets. Hidden occurrences contribute nothing, so a generated tier
 /// never inflates `duplicated_loc` ([METRICS-REPO]).
-fn fold_cluster_lines(
+pub(crate) fn fold_cluster_lines(
     cluster: &Cluster,
     inputs: &MetricsInputs<'_>,
     per_file_lines: &mut HashMap<FileId, BTreeSet<u64>>,

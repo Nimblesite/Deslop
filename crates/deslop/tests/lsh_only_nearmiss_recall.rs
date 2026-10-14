@@ -22,16 +22,18 @@
 use std::{fs, path::Path};
 
 use crate::common::{
-    cluster_size, expect_cluster_spanning, field,
+    cluster_kind, cluster_size, clusters, expect_cluster_spanning, field,
     incremental::{
         assert_pass, assert_reports_equal, assert_warm_pass, cold_then_warm,
         edit_preserving_offsets, run_store_on, ColdThenWarm,
     },
-    metric_field, run_report,
+    metric_field, per_kind_row, run_report,
     scan_dir::temp_scan_dir,
     verdict::loc_as_f64,
     Result,
 };
+
+use anyhow::anyhow;
 
 /// Subtree floor at which only the two function roots (and whole-body
 /// windows straddling the reorder) fingerprint — probed so exactly one
@@ -47,6 +49,9 @@ use crate::common::{
 /// value as [`LSH_ONLY_NODE_FLOOR`], which the surviving endpoints must
 /// clear anyway.
 const MIN_NODES: u32 = 40;
+/// [METRICS-TOTAL-INCLUDE] Included pairs duplicate both files; excluded pairs leave both total numerators.
+const DUPLICATED_PAIR_FILES: u64 = 2;
+const EXCLUDED_PAIR_FILES: u64 = 0;
 
 /// `pair::LSH_ONLY_MIN_NODE_COUNT`: both endpoints of an LSH-only pair
 /// must carry at least this many nodes to survive clustering.
@@ -222,34 +227,50 @@ fn assert_mass_only_cluster(cluster: &serde_json::Value) {
     }
 }
 
-/// [METRICS-REPO] The recall half: a reported pair must move every
-/// duplication figure off zero, and the figures must agree with each
-/// other — re-derived percentage, both files counted, nothing hidden.
+/// [METRICS-REPO] [METRICS-TOTAL-INCLUDE] The recall half: a reported
+/// pair must move every duplication figure off zero, and the figures
+/// must agree with each other — re-derived percentage, nothing hidden.
+/// `duplicated_files` and `duplication_loc` read the repo total, which
+/// the include set governs, so the pair's own kind row is where its
+/// lines must appear — for an excluded kind the total legitimately
+/// reads zero while the kind's own figures stay exact.
 fn assert_recall_metrics(report: &serde_json::Value) -> Result<()> {
     assert_eq!(
         (
             metric_field(report, "clusters_total").as_u64(),
-            metric_field(report, "duplicated_files").as_u64(),
             field(report, "clusters_hidden").as_u64(),
         ),
-        (Some(1), Some(2), Some(0)),
+        (Some(1), Some(0)),
         "the pair is the corpus's only cluster and it must be visible, \
          not hidden: {report}"
     );
-    let duplicated = metric_field(report, "duplicated_loc").as_u64().unwrap_or(0);
+    let cluster = clusters(report)
+        .first()
+        .ok_or_else(|| anyhow!("the visible pair: {report:#}"))?;
+    let kind = cluster_kind(cluster);
+    let row = per_kind_row(report, kind).ok_or_else(|| anyhow!("a {kind} row: {report:#}"))?;
+    let expected_files = if field(&row, "included_in_total").as_bool() == Some(true) {
+        DUPLICATED_PAIR_FILES
+    } else {
+        EXCLUDED_PAIR_FILES
+    };
+    assert_eq!(
+        metric_field(report, "duplicated_files").as_u64(),
+        Some(expected_files),
+        "the pair's include status decides the exact total file count: {report:#}"
+    );
+    let duplicated = field(&row, "duplicated_loc").as_u64().unwrap_or(0);
     assert!(
         duplicated > 0,
         "a reported clone pair must contribute duplicated LOC — zero here \
          is the false negative this test pins: {report}"
     );
     let analysed = metric_field(report, "analysed_loc").as_u64().unwrap_or(0);
-    let reported = metric_field(report, "duplication_percent")
-        .as_f64()
-        .unwrap_or(-1.0);
+    let reported = field(&row, "duplication_percent").as_f64().unwrap_or(-1.0);
     let expected = 100.0 * loc_as_f64(duplicated)? / loc_as_f64(analysed)?;
     assert!(
         (reported - expected).abs() <= f64::EPSILON,
-        "duplication_percent must be duplicated/analysed × 100 \
+        "the kind's percent must be duplicated/analysed × 100 \
          ({duplicated}/{analysed}), got {reported}: {report}"
     );
     Ok(())

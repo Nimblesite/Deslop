@@ -35,7 +35,7 @@ const DUPLICATED_EXTENSION: &str = "ts";
 const DUPLICATED_MIN_NODES: &str = "8";
 /// Every metric key the wire may carry under `metrics`, and nothing else
 /// may appear beside them.
-const ALLOWED_METRIC_KEYS: [&str; 8] = [
+const ALLOWED_METRIC_KEYS: [&str; 10] = [
     "analysed_loc",
     "clusters_total",
     "duplicated_files",
@@ -43,7 +43,9 @@ const ALLOWED_METRIC_KEYS: [&str; 8] = [
     "duplication_percent",
     "folders",
     "per_file",
+    "per_kind",
     "threshold",
+    "total_includes",
 ];
 /// The percentage two byte-identical files must produce.
 const WHOLLY_DUPLICATED_PERCENT: f64 = 100.0;

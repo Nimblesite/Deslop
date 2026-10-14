@@ -14,7 +14,13 @@ import type { LanguageClient } from "vscode-languageclient/node";
 import { COLOR, KIND_COLOR } from "../design";
 import { ReportStore } from "../reportStore";
 import { ANALYSED_LANGUAGE_IDS } from "../types/languages";
-import { ReportCluster, clusterSeverity, compareClusterRank, type Severity } from "../types/report";
+import {
+  ClusterKind,
+  ReportCluster,
+  clusterSeverity,
+  compareClusterRank,
+  type Severity,
+} from "../types/report";
 import { BubbleInlayProvider } from "./inlay";
 import { bubblePresentation, type BubblePresentation } from "./presentation";
 import { bubbleHover, ghostText, inlineText } from "./renderParts";
@@ -299,6 +305,7 @@ export class LiveBubble implements vscode.Disposable {
       clusters,
       this.dismissedClusters,
       this.store.current.retractedClusters,
+      report.metrics?.total_includes,
     );
     if (!best) {
       this.clearBubble();
@@ -381,7 +388,9 @@ export class LiveBubble implements vscode.Disposable {
     const current = report.clusters.find(
       (cluster) => cluster.id === active.clusterId,
     );
-    if (!current) this.clearBubble();
+    const totalIncludes = report.metrics?.total_includes;
+    const isExcluded = totalIncludes !== undefined && current !== undefined && !totalIncludes.includes(current.kind);
+    if (!current || isExcluded) this.clearBubble();
     else if (active.severity !== clusterSeverity(current)) this.render(active.editor, active.range, [current]);
   }
 }
@@ -391,6 +400,7 @@ function bestBubbleCluster(
   probeClusters: ReportCluster[],
   dismissedClusters: Set<string>,
   retractedClusters: ReadonlySet<string>,
+  totalIncludes?: readonly ClusterKind[],
 ): ReportCluster | undefined {
   const byId = new Map(reportClusters.map((cluster) => [cluster.id, cluster]));
   // [VSIX-LIVE-BUBBLE] The bubble fires only when the range belongs to a
@@ -402,6 +412,7 @@ function bestBubbleCluster(
     .filter((cluster): cluster is ReportCluster => cluster !== undefined)
     .filter((cluster) => !retractedClusters.has(cluster.id))
     .filter((cluster) => !dismissedClusters.has(cluster.id))
+    .filter((cluster) => totalIncludes === undefined || totalIncludes.includes(cluster.kind))
     // Worst first is the engine's ranking, tie-break included.
     .sort(compareClusterRank)[0];
 }

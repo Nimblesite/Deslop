@@ -117,6 +117,9 @@ fn diagnostics_for(cluster: ReportCluster, path: &str, workspace: &Path) -> Vec<
             enabled: true,
             ..DiagnosticSettings::default()
         },
+        // Every kind included — these tests pin the pre-#585 publication
+        // behaviour, independent of the include-set suppression.
+        &ClusterKind::all(),
     )
 }
 
@@ -165,7 +168,8 @@ fn severity_for_preserves_kind_level_at_every_rank() {
                 &DiagnosticSettings {
                     enabled: true,
                     ..DiagnosticSettings::default()
-                }
+                },
+                &ClusterKind::all(),
             ),
             Some(expected_severity),
             "{rationale}"

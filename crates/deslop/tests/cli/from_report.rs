@@ -1,6 +1,9 @@
 use super::support::*;
 use crate::common::IDENTICAL_TITLE;
 
+#[path = "from_report/include.rs"]
+mod include;
+
 /// Writes `report_body` to `<tmp>/<file_name>`, runs the CLI in
 /// `--from-report` replay mode over it (adding `--no-color` when
 /// requested), and asserts the run succeeds. The shared setup for the

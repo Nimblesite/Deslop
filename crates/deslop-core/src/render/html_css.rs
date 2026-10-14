@@ -49,6 +49,10 @@ pub const REPORT_CSS: &str = "\
 .cluster-card--same-behavior,.clone-group--same-behavior{--kind-color:var(--kind-same-behavior);}\
 .cluster-card--structural-only,.clone-group--structural-only{--kind-color:var(--kind-structural-only);}\
 .cluster-card--loosely-similar,.clone-group--loosely-similar{--kind-color:var(--kind-loosely-similar);}\
+.clone-group--excluded>summary{color:var(--on-surface-variant);}\
+.clone-group.clone-group--excluded>summary::before,.clone-group--excluded .cluster-card__title::before{color:var(--on-surface-variant);}\
+.clone-group--excluded .cluster-card__title{color:var(--on-surface-variant);}\
+.clone-group--excluded .cluster-card{border-left-color:var(--surface-container-highest);opacity:0.55;}\
 .cluster-card__title::before{content:\"\\25CF\";color:var(--kind-color);margin-right:var(--space-2);}\
 .cluster-card__ai-badge{font-family:var(--font-mono);font-size:0.6875rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;background:var(--secondary-container);color:var(--on-secondary-container);padding:0.125rem var(--space-2);border-radius:var(--radius-sm);white-space:nowrap;align-self:center;}\
 .cluster-card__head{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--space-4);margin-bottom:var(--space-3);flex-wrap:wrap;}\

@@ -64,6 +64,19 @@ function fixtureRoot(): string {
 }
 
 suite("MetricsProvider", () => {
+  // [METRICS-TOTAL-INCLUDE] Excluding all kinds does not erase findings or failed limits.
+  test("a zero included total still exposes excluded findings and their breached gate", () => {
+    const store = treeStore([], { analysed_loc: STANDARD_ANALYSED_LOC, duplicated_loc: 0, duplication_percent: 0,
+      clusters_total: 1, total_includes: [], per_kind: [{ kind: "loosely_similar", duplicated_loc: 40,
+        duplication_percent: 40, included_in_total: false, threshold: { source: "config", percent: 20, breached: true } }] });
+    store.setLifecycle({ kind: "ready" });
+    const first = metricsPanel(store).getChildren()[0];
+    assert.ok(first instanceof MetricsHeadlineNode);
+    assert.ok(first.tooltip instanceof vscode.MarkdownString);
+    assert.ok(first.tooltip.value.includes("No clone kinds"));
+    assert.ok(String(first.description).includes("Similar code"));
+    assert.ok(String(first.description).includes("over 20.0% gate"));
+  });
   test("shows a spinner before the first report arrives", () => {
     const provider = metricsPanel(new ReportStore());
     const [first] = provider.getChildren();
