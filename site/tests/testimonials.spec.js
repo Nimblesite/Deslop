@@ -28,8 +28,8 @@ const MERGED_PULL_REQUESTS = [
 ];
 
 const HOME_ROUTE = { en: "/", zh: "/zh/" };
-// The 0.35.0 reel and the editor screenshot are both showcases: the demo is the pair of them.
-const SECTION_ORDER = ["hero", "showcase", "showcase", "testimonials", "editors", "community"];
+// [SITE-HOME-VIDEO] The motion reel lives inside the hero, so the editor showcase is the only demo section.
+const SECTION_ORDER = ["hero", "showcase", "testimonials", "editors", "community"];
 const SECTION_HEADING = { en: "Findings that ship.", zh: "可以直接合并的发现。" };
 const SECTION_EYEBROW = { en: "Field report", zh: "实地反馈" };
 

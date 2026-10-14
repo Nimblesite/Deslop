@@ -4,9 +4,7 @@ const PRIMARY_NAV_FONT_SIZE = "16px";
 const SECONDARY_NAV_FONT_SIZE = "15px";
 const NAV_LABEL_FONT_SIZE = "13px";
 
-/* The hero is a single centred block: equal air above and below the copy, the
-   product shot sharing its centre line, and one repeated gap between every
-   element of the copy. Tolerances absorb sub-pixel layout rounding only. */
+/* [SITE-HOME-VIDEO] The hero is a single centred block: equal air above and below the copy, the motion reel sharing its centre line, and one repeated gap between every element of the copy. Tolerances absorb sub-pixel layout rounding only. */
 const HERO_CENTRING_TOLERANCE_PX = 2;
 const HERO_RHYTHM_TOLERANCE_PX = 1;
 const HERO_OVERFLOW_TOLERANCE_PX = 1;
@@ -31,18 +29,18 @@ test("homepage hero fills the desktop viewport exactly", async ({ page }) => {
   ).toBeLessThanOrEqual(HERO_OVERFLOW_TOLERANCE_PX);
 });
 
-test("centres the hero copy and product shot in the viewport", async ({ page }) => {
+test("centres the hero copy and motion reel in the viewport", async ({ page }) => {
   await page.goto("/");
   const hero = await page.locator(".hero").evaluate((element) => {
     const box = (selector) => element.querySelector(selector).getBoundingClientRect();
     const outer = element.getBoundingClientRect();
     const copy = box(".hero__left");
-    const shot = box(".hero__right");
+    const reel = box(".hero__right");
     return {
       airAbove: copy.top - outer.top,
       airBelow: outer.bottom - copy.bottom,
       copyCentre: (copy.top + copy.bottom) / 2,
-      shotCentre: (shot.top + shot.bottom) / 2,
+      reelCentre: (reel.top + reel.bottom) / 2,
     };
   });
 
@@ -51,8 +49,8 @@ test("centres the hero copy and product shot in the viewport", async ({ page }) 
     `hero copy must sit centred: ${hero.airAbove}px above vs ${hero.airBelow}px below`,
   ).toBeLessThanOrEqual(HERO_CENTRING_TOLERANCE_PX);
   expect(
-    Math.abs(hero.copyCentre - hero.shotCentre),
-    "product shot must share the hero copy's centre line",
+    Math.abs(hero.copyCentre - hero.reelCentre),
+    "motion reel must share the hero copy's centre line",
   ).toBeLessThanOrEqual(HERO_CENTRING_TOLERANCE_PX);
 });
 
