@@ -89,7 +89,7 @@ const fixture = () => {
   return { base, source, one, two };
 };
 
-const build = ({ base, source, one, two }, keys) =>
+const build = ({ base, source, one, two }, keys, extra = []) =>
   execFileSync(
     "node",
     [
@@ -102,6 +102,7 @@ const build = ({ base, source, one, two }, keys) =>
       "--sha", PINNED_SHA,
       "--seed", SEED,
       "--keys", keys ?? join(base, "keys"),
+      ...extra,
     ],
     { encoding: "utf8" },
   );
@@ -257,4 +258,47 @@ test("[CORPUS-REGISTER-WORKSPACE] every word the judge reads is copied, never co
         "reviewed, and two passes would hand two different folders to two judges",
     );
   }
+});
+
+/// A short pass: fewer candidates than the fixture offers, so the draw has to
+/// stop at the requested count rather than run out of pairs.
+const SHORT_PASS = 3;
+/// The ceiling a pass may not exceed, and the first count past it.
+const CANDIDATE_CEILING = 200;
+const PAST_CEILING = String(CANDIDATE_CEILING + 1);
+
+test("[CORPUS-REGISTER-WORKSPACE] a pass can ask for fewer candidates than the ceiling", () => {
+  const files = fixture();
+  const output = build(files, undefined, ["--candidates", String(SHORT_PASS)]);
+  const candidates = join(files.base, "folder", REPO, "candidates");
+  const { pairs } = JSON.parse(readFileSync(join(candidates, "pairs.json"), "utf8"));
+  assert.equal(pairs.length, SHORT_PASS, "the draw stops at the requested count");
+  assert.deepEqual(
+    pairs.map((pair) => pair.number),
+    Array.from({ length: SHORT_PASS }, (_, index) => index + 1),
+    "candidates are numbered from one with no gaps",
+  );
+  const rendered = readdirSync(candidates).filter((name) => /^\d{4}\.md$/.test(name));
+  assert.equal(rendered.length, SHORT_PASS, "one rendered file per drawn candidate");
+  const index = readFileSync(join(candidates, "index.md"), "utf8");
+  assert.ok(index.includes(`${SHORT_PASS} pairs, shuffled.`), "the checklist counts what was drawn");
+  assert.ok(output.includes(`${SHORT_PASS} candidates drawn from ${CLUSTER_COUNT} available pairs`), output);
+});
+
+test("[CORPUS-REGISTER-WORKSPACE] a candidate count past the ceiling or below one is refused", () => {
+  for (const count of [PAST_CEILING, "0", "-4", "twenty"]) {
+    const files = fixture();
+    assert.throws(
+      () => build(files, undefined, ["--candidates", count]),
+      /--candidates must be a whole number from 1 to 200/,
+      `--candidates ${count} must fail loudly rather than draw an unbounded or empty pass`,
+    );
+  }
+});
+
+test("[CORPUS-REGISTER-WORKSPACE] make judging-folder passes the candidate count through", () => {
+  assert.ok(
+    makefile.includes("JUDGING_CANDIDATES") && preparerScript.includes("--candidates"),
+    "a short pass is chosen once, on the command line, and reaches every workspace",
+  );
 });

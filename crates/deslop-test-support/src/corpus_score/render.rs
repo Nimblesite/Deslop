@@ -29,7 +29,7 @@ use super::{
     checks::CheckOutcome,
     gate::{Breach, CorpusChange, CorpusTotals, Degradation, Thresholds},
     verdict::Verdict,
-    RepoScore, RunCost,
+    RepoScore, RunCost, ScoredEntry,
 };
 
 /// One engine in a scored run.
@@ -403,6 +403,16 @@ fn defects_section(card: &Scorecard) -> Vec<String> {
     lines
 }
 
+/// [CORPUS-REGISTER-TYPE] The type a pair was held to, and what the engine
+/// called it when it reported the pair under another kind.
+fn pinned_note(entry: &ScoredEntry) -> String {
+    match (&entry.clone_type, &entry.reported_as) {
+        (Some(clone_type), Some(kind)) => format!(" ({clone_type}; reported as {kind})"),
+        (Some(clone_type), None) => format!(" ({clone_type})"),
+        (None, _) => String::new(),
+    }
+}
+
 /// One line per judged pair `engine_id` answered wrongly.
 fn defect_lines(card: &Scorecard, engine_id: &str) -> Vec<String> {
     card.targets
@@ -413,21 +423,24 @@ fn defect_lines(card: &Scorecard, engine_id: &str) -> Vec<String> {
                 .entries
                 .iter()
                 .filter(|entry| !entry.correct)
-                .map(move |entry| {
-                    let kind = if entry.is_false_negative() {
-                        "FALSE NEGATIVE"
-                    } else {
-                        "FALSE POSITIVE"
-                    };
-                    format!(
-                        "- **{kind}** {} — `{}`\n  - {}",
-                        target.name,
-                        entry.occurrences.join("` + `"),
-                        entry.why
-                    )
-                })
+                .map(move |entry| defect_line(&target.name, entry))
         })
         .collect()
+}
+
+/// One judged pair an engine answered wrongly, with the judge's reason.
+fn defect_line(repository: &str, entry: &ScoredEntry) -> String {
+    let kind = if entry.is_false_negative() {
+        "FALSE NEGATIVE"
+    } else {
+        "FALSE POSITIVE"
+    };
+    format!(
+        "- **{kind}** {repository} — `{}`{}\n  - {}",
+        entry.occurrences.join("` + `"),
+        pinned_note(entry),
+        entry.why
+    )
 }
 
 /// The scope of the run, stated before any figure: how many repositories were

@@ -1,0 +1,137 @@
+{
+  "name": "giraffe",
+  "language": "fsharp",
+  "url": "https://github.com/giraffe-fsharp/Giraffe.git",
+  "sha": "279fe3a30c27bd647d2655745f71190c74bdd749",
+  "protocol": {
+    "spec": "docs/specs/corpus.md",
+    "spec_section": "[CORPUS-REGISTER]",
+    "judging_skill": ".agents/skills/judge-clone-pairs/SKILL.md",
+    "preparer_skill": ".agents/skills/clone-register-prepare/SKILL.md"
+  },
+  "clearly_in": [],
+  "clearly_out": [
+    {
+      "why": "One list supplies GUID parsing cases and the other supplies integer pet-route cases. Only the InlineData attribute format is shared.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- tests/Giraffe.Tests/EndpointRoutingTests.fs:18-24\n+++ tests/Giraffe.Tests/EndpointRoutingTests.fs:180-186\n@@ -1,7 +1,7 @@\n-[<InlineData(\"00000000-0000-0000-0000-000000000000\", \"Success: 00000000-0000-0000-0000-000000000000\")>]\n-[<InlineData(\"00000000-0000-0000-0000-00000000000\", \"Not Found\")>]\n-[<InlineData(\"0000000000000000000000\", \"Success: d3344dd3-344d-4dd3-34d3-4d34d34d34d3\")>] // ShortGuid\n-[<InlineData(\"DBvYFN7y#$@u933Kc8pM#^\", \"Not Found\")>]\n-[<InlineData(\"8b3557db-fa-c0c90785ec0b\", \"Not Found\")>]\n-[<InlineData(\"8b3557db-fa-c0c90785ec\", \"Success: e7f9bdf1-5bb7-f6f9-be73-473dd3bf3979\")>] // ShortGuid\n-[<InlineData(\"8b3557db-fa-c0c90785e\", \"Not Found\")>]\n+[<InlineData(\"/pet/0\", \"PetId: 0\")>]\n+[<InlineData(\"/pet/123\", \"PetId: 123\")>]\n+[<InlineData(\"/pet/-1\", \"PetId: -1\")>]\n+[<InlineData(\"/pet/abc\", \"Not Found\")>]\n+[<InlineData(\"/pet/123abc\", \"Not Found\")>]\n+[<InlineData(\"/pet/123.456\", \"Not Found\")>]\n+[<InlineData(\"/pet/123-456\", \"Not Found\")>]\n",
+      "occurrences": [
+        "tests/Giraffe.Tests/EndpointRoutingTests.fs:18-24",
+        "tests/Giraffe.Tests/EndpointRoutingTests.fs:180-186"
+      ]
+    }
+  ],
+  "not_clear": [
+    {
+      "why": "This is the same short handler pipeline used as test setup; the framework composition idiom leaves doubt about calling this a substantive clone.",
+      "occurrences": [
+        "tests/Giraffe.Tests/RequestLimitationTests.fs:301-305",
+        "tests/Giraffe.Tests/RequestLimitationTests.fs:333-337"
+      ]
+    },
+    {
+      "why": "Both tests run a handler and assert the rejection response. The repeated part is routine test scaffolding, with different expected error messages.",
+      "occurrences": [
+        "tests/Giraffe.Tests/RequestLimitationTests.fs:412-423",
+        "tests/Giraffe.Tests/RequestLimitationTests.fs:217-228"
+      ]
+    },
+    {
+      "why": "The repeated task and assertions are the usual response-test pattern; the payload and content type describe different cases.",
+      "occurrences": [
+        "tests/Giraffe.Tests/HttpHandlerTests.fs:468-480",
+        "tests/Giraffe.Tests/HttpHandlerTests.fs:728-741"
+      ]
+    },
+    {
+      "why": "Most of this span is shared explanatory comments and imports, followed by two URL constants. There is too little substantive code here for a certain clone verdict.",
+      "occurrences": [
+        "tests/Giraffe.Tests/StreamingTests.fs:5-48",
+        "tests/Giraffe.Tests/PreconditionalTests.fs:6-48"
+      ]
+    },
+    {
+      "why": "These spans mix two tests and unrelated following type declarations. Some test scaffolding repeats, but the boundaries do not isolate matching code.",
+      "occurrences": [
+        "tests/Giraffe.Tests/HttpHandlerTests.fs:99-175",
+        "tests/Giraffe.Tests/RoutingTests.fs:531-586"
+      ]
+    },
+    {
+      "why": "This is repeated request setup and the standard invoke-and-assert tail of two routing tests.",
+      "occurrences": [
+        "tests/Giraffe.Tests/RoutingTests.fs:1030-1042",
+        "tests/Giraffe.Tests/RoutingTests.fs:954-966"
+      ]
+    },
+    {
+      "why": "The negotiation tests share their harness, but the mixed-Accept case adds a content-type guard. The test pattern alone does not make copying certain.",
+      "occurrences": [
+        "tests/Giraffe.Tests/HttpHandlerTests.fs:1011-1025",
+        "tests/Giraffe.Tests/HttpHandlerTests.fs:1083-1103"
+      ]
+    },
+    {
+      "why": "Only one route declaration is selected; an identical one-line test setup idiom is insufficient for a firm verdict.",
+      "occurrences": [
+        "tests/Giraffe.Tests/RoutingTests.fs:300-300",
+        "tests/Giraffe.Tests/RoutingTests.fs:354-354"
+      ]
+    },
+    {
+      "why": "The expected fixture text repeats along with the ordinary task-and-assert test tail. This is test scaffolding rather than an unarguable substantive clone.",
+      "occurrences": [
+        "tests/Giraffe.Tests/ModelBindingTests.fs:1089-1098",
+        "tests/Giraffe.Tests/ModelBindingTests.fs:1014-1023"
+      ]
+    },
+    {
+      "why": "This is a small repeated form fixture with one date value changed. Reused test data leaves doubt about treating the selected setup as a substantive clone.",
+      "occurrences": [
+        "tests/Giraffe.Tests/ModelBindingTests.fs:1036-1044",
+        "tests/Giraffe.Tests/ModelBindingTests.fs:1412-1420"
+      ]
+    },
+    {
+      "why": "Only three shared parameters of related parsing helpers are selected; their implementations are outside the ranges.",
+      "occurrences": [
+        "src/Giraffe/ModelParser.fs:224-226",
+        "src/Giraffe/ModelParser.fs:274-276"
+      ]
+    },
+    {
+      "why": "These are matching argument declarations on a method and its forwarding function, not duplicated implementations.",
+      "occurrences": [
+        "src/Giraffe/Negotiation.fs:107-109",
+        "src/Giraffe/Negotiation.fs:163-165"
+      ]
+    },
+    {
+      "why": "The binding routines are close twins, but both ranges continue into documentation for different following functions. The selected boundaries are ragged.",
+      "occurrences": [
+        "src/Giraffe/Core.fs:372-392",
+        "src/Giraffe/Core.fs:468-499"
+      ]
+    },
+    {
+      "why": "Both ToString overrides format five fields and a date; that short formatting idiom could reasonably be written independently for these different records.",
+      "occurrences": [
+        "tests/Giraffe.Tests/ModelBindingTests.fs:39-46",
+        "tests/Giraffe.Tests/HttpHandlerTests.fs:29-36"
+      ]
+    },
+    {
+      "why": "Only three identical fixture fields are selected from larger records; this is too small for a firm verdict.",
+      "occurrences": [
+        "tests/Giraffe.Tests/ModelBindingTests.fs:437-439",
+        "tests/Giraffe.Tests/ModelBindingTests.fs:519-521"
+      ]
+    },
+    {
+      "why": "These are related HTTP feature tests with repeated request-and-check scaffolding, but their preconditions and range assertions differ substantially.",
+      "occurrences": [
+        "tests/Giraffe.Tests/PreconditionalTests.fs:212-244",
+        "tests/Giraffe.Tests/StreamingTests.fs:205-247"
+      ]
+    }
+  ]
+}

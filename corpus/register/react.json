@@ -1,0 +1,162 @@
+{
+  "name": "react",
+  "language": "javascript",
+  "url": "https://github.com/facebook/react.git",
+  "sha": "1dd4ecbdabf826f527fc9a58c05ea70375b7d170",
+  "protocol": {
+    "spec": "docs/specs/corpus.md",
+    "spec_section": "[CORPUS-REGISTER]",
+    "judging_skill": ".agents/skills/judge-clone-pairs/SKILL.md",
+    "preparer_skill": ".agents/skills/clone-register-prepare/SKILL.md"
+  },
+  "clearly_in": [
+    {
+      "why": "The complete fixture components repeat the same array creation, hook, click handler, map, and mutation call. One map assignment changes and the entrypoint input loses a field.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- compiler/packages/babel-plugin-react-compiler/src/__tests__/fixtures/compiler/repro-dont-memoize-array-with-mutable-map-after-hook.js:1-26\n+++ compiler/packages/babel-plugin-react-compiler/src/__tests__/fixtures/compiler/repro-dont-memoize-array-with-capturing-map-after-hook.js:1-26\n@@ -11,7 +11,7 @@\n   return (\n     <div onClick={onClick}>\n       {x.map(item => {\n-        item.flag = true;\n+        y = item;\n         return <span key={item.id}>{item.text}</span>;\n       })}\n       {mutate(y)}\n@@ -21,6 +21,6 @@\n \n export const FIXTURE_ENTRYPOINT = {\n   fn: Component,\n-  params: [{value: {id: 0, text: 'Hello', flag: false}}],\n+  params: [{value: {id: 0, text: 'Hello!'}}],\n   isComponent: true,\n };\n",
+      "type": "Type III",
+      "occurrences": [
+        "compiler/packages/babel-plugin-react-compiler/src/__tests__/fixtures/compiler/repro-dont-memoize-array-with-mutable-map-after-hook.js:1-26",
+        "compiler/packages/babel-plugin-react-compiler/src/__tests__/fixtures/compiler/repro-dont-memoize-array-with-capturing-map-after-hook.js:1-26"
+      ]
+    },
+    {
+      "why": "These complete recovery tests repeat the same custom component, stream wiring, error collection, and error-boundary render. The async twin adds a promise, loading assertion, and explicit rejection.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- packages/react-server-dom-webpack/src/__tests__/ReactFlightDOM-test.js:1268-1313\n+++ packages/react-server-dom-webpack/src/__tests__/ReactFlightDOM-test.js:1315-1372\n@@ -1,11 +1,16 @@\n-  it('should be able to recover from a direct reference erroring client-side', async () => {\n+  it('should be able to recover from a direct reference erroring client-side async', async () => {\n     const reportedErrors = [];\n \n     const ClientComponent = clientExports(function ({prop}) {\n       return 'This should never render';\n     });\n \n-    const ClientReference = clientModuleError(new Error('module init error'));\n+    let rejectPromise;\n+    const ClientReference = await clientExports(\n+      new Promise((resolve, reject) => {\n+        rejectPromise = reject;\n+      }),\n+    );\n \n     const {writable, readable} = getTestStream();\n     const {pipe} = await serverAct(() =>\n@@ -40,7 +45,14 @@\n         </ErrorBoundary>,\n       );\n     });\n-    expect(container.innerHTML).toBe('<p>module init error</p>');\n \n+    expect(container.innerHTML).toBe('<p>(loading)</p>');\n+\n+    await act(() => {\n+      rejectPromise(new Error('async module init error'));\n+    });\n+\n+    expect(container.innerHTML).toBe('<p>async module init error</p>');\n+\n     expect(reportedErrors).toEqual([]);\n   });\n",
+      "type": "Type III",
+      "occurrences": [
+        "packages/react-server-dom-webpack/src/__tests__/ReactFlightDOM-test.js:1268-1313",
+        "packages/react-server-dom-webpack/src/__tests__/ReactFlightDOM-test.js:1315-1372"
+      ]
+    },
+    {
+      "why": "The same initModules function and its module bindings are defined independently in both files. The only difference is a reset-warning-cache comment.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- packages/react-dom/src/__tests__/ReactDOMServerIntegrationElements-test.js:17-36\n+++ packages/react-dom/src/__tests__/ReactDOMServerIntegrationAttributes-test.js:15-35\n@@ -5,6 +5,7 @@\n let assertConsoleErrorDev;\n \n function initModules() {\n+  // Reset warning cache.\n   jest.resetModules();\n   React = require('react');\n   ReactDOM = require('react-dom');\n",
+      "type": "Type I",
+      "occurrences": [
+        "packages/react-dom/src/__tests__/ReactDOMServerIntegrationElements-test.js:17-36",
+        "packages/react-dom/src/__tests__/ReactDOMServerIntegrationAttributes-test.js:15-35"
+      ]
+    },
+    {
+      "why": "The complete effect-classification routines repeat the same switch and detailed invariant error. One moves Capture to the false cases and replaces the location parameter with GeneratedSource.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- compiler/packages/babel-plugin-react-compiler/src/HIR/HIR.ts:1554-1589\n+++ compiler/packages/babel-plugin-react-compiler/src/Inference/InferMutationAliasingEffects.ts:2791-2823\n@@ -1,9 +1,5 @@\n-export function isMutableEffect(\n-  effect: Effect,\n-  location: SourceLocation,\n-): boolean {\n+export function isKnownMutableEffect(effect: Effect): boolean {\n   switch (effect) {\n-    case Effect.Capture:\n     case Effect.Store:\n     case Effect.ConditionallyMutate:\n     case Effect.ConditionallyMutateIterator:\n@@ -18,7 +14,7 @@\n         details: [\n           {\n             kind: 'error',\n-            loc: location,\n+            loc: GeneratedSource,\n             message: null,\n           },\n         ],\n@@ -26,6 +22,7 @@\n       });\n     }\n     case Effect.Read:\n+    case Effect.Capture:\n     case Effect.Freeze: {\n       return false;\n     }\n",
+      "type": "Type III",
+      "occurrences": [
+        "compiler/packages/babel-plugin-react-compiler/src/HIR/HIR.ts:1554-1589",
+        "compiler/packages/babel-plugin-react-compiler/src/Inference/InferMutationAliasingEffects.ts:2791-2823"
+      ]
+    },
+    {
+      "why": "The complete error-logging routines repeat name lookup, message extraction, property collection, timing options, and measurement emission. One adds source debug-task selection and changes the tooltip and guard.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- packages/react-reconciler/src/ReactFiberPerformanceTrack.js:421-486\n+++ packages/react-reconciler/src/ReactFiberPerformanceTrack.js:338-419\n@@ -1,4 +1,4 @@\n-function logComponentEffectErrored(\n+export function logComponentErrored(\n   fiber: Fiber,\n   startTime: number,\n   endTime: number,\n@@ -11,9 +11,18 @@\n       return;\n     }\n     if (__DEV__) {\n+      let debugTask: ?ConsoleTask = null;\n       const properties: Array<[string, string]> = [];\n       for (let i = 0; i < errors.length; i++) {\n         const capturedValue = errors[i];\n+        if (debugTask == null && capturedValue.source !== null) {\n+          // If the captured value has a source Fiber, use its debugTask for\n+          // the stack instead of the error boundary's stack. So you can find\n+          // which component errored since we don't show the errored render tree.\n+          // TODO: Ideally we should instead, store the failed fibers and log the\n+          // whole subtree including the component that errored.\n+          debugTask = capturedValue.source._debugTask;\n+        }\n         const error = capturedValue.value;\n         const message =\n           typeof error === 'object' &&\n@@ -31,20 +40,27 @@\n       if (fiber.memoizedProps !== null) {\n         addObjectToProperties(fiber.memoizedProps, properties, 0, '');\n       }\n-      const options = {\n+      if (debugTask == null) {\n+        // If the captured values don't have a debug task, fallback to the\n+        // error boundary itself.\n+        debugTask = fiber._debugTask;\n+      }\n+      const options: PerformanceMeasureOptions = {\n         start: startTime,\n         end: endTime,\n         detail: {\n           devtools: {\n             color: 'error',\n             track: COMPONENTS_TRACK,\n-            tooltipText: 'A lifecycle or effect errored',\n+            tooltipText:\n+              fiber.tag === SuspenseComponent\n+                ? 'Hydration failed'\n+                : 'Error boundary caught an error',\n             properties,\n           },\n         },\n       };\n-      const debugTask = fiber._debugTask;\n-      if (debugTask) {\n+      if (__DEV__ && debugTask) {\n         debugTask.run(\n           // $FlowFixMe[method-unbinding]\n           performance.measure.bind(performance, '\\u200b' + name, options),\n",
+      "type": "Type III",
+      "occurrences": [
+        "packages/react-reconciler/src/ReactFiberPerformanceTrack.js:421-486",
+        "packages/react-reconciler/src/ReactFiberPerformanceTrack.js:338-419"
+      ]
+    }
+  ],
+  "clearly_out": [
+    {
+      "why": "These entries describe different SVG attributes on different filter elements. Only the fixture schema and property-reader API are shared.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- fixtures/attribute-behavior/src/attributes.js:1941-1952\n+++ fixtures/attribute-behavior/src/attributes.js:1019-1030\n@@ -1,12 +1,12 @@\n   {\n-    name: 'targetX',\n-    read: getSVGProperty('targetX'),\n+    name: 'k1',\n+    read: getSVGProperty('k1'),\n     containerTagName: 'svg',\n-    tagName: 'feConvolveMatrix',\n+    tagName: 'feComposite',\n   },\n   {\n-    name: 'targetY',\n-    read: getSVGProperty('targetY'),\n+    name: 'k2',\n+    read: getSVGProperty('k2'),\n     containerTagName: 'svg',\n-    tagName: 'feConvolveMatrix',\n+    tagName: 'feComposite',\n   },\n",
+      "occurrences": [
+        "fixtures/attribute-behavior/src/attributes.js:1941-1952",
+        "fixtures/attribute-behavior/src/attributes.js:1019-1030"
+      ]
+    }
+  ],
+  "not_clear": [
+    {
+      "why": "These four lines are the same module-loading setup at different nesting levels, not a substantive routine.",
+      "occurrences": [
+        "packages/react-dom/src/events/__tests__/DOMPluginEventSystem-test.internal.js:79-82",
+        "packages/react-dom/src/events/__tests__/DOMPluginEventSystem-test.internal.js:3023-3026"
+      ]
+    },
+    {
+      "why": "This is the repeated act/log/rendered-output assertion pattern for incrementing a counter, with different expected counts.",
+      "occurrences": [
+        "packages/react-reconciler/src/__tests__/useEffectEvent-test.js:572-579",
+        "packages/react-reconciler/src/__tests__/useEffectEvent-test.js:424-435"
+      ]
+    },
+    {
+      "why": "The host configurations share many path entries, but select different bundler-specific modules and additional files. This declarative configuration leaves doubt about a firm clone verdict.",
+      "occurrences": [
+        "scripts/shared/inlinedHostConfigs.js:199-232",
+        "scripts/shared/inlinedHostConfigs.js:530-561"
+      ]
+    },
+    {
+      "why": "Only three identical lines of a ternary fixture are selected. Even with matching surrounding code, these ranges are too short for a firm verdict.",
+      "occurrences": [
+        "compiler/packages/babel-plugin-react-compiler/src/__tests__/fixtures/compiler/propagate-scope-deps-hir-fork/ssa-renaming-unconditional-ternary.js:5-7",
+        "compiler/packages/babel-plugin-react-compiler/src/__tests__/fixtures/compiler/ssa-renaming-unconditional-ternary.js:4-6"
+      ]
+    },
+    {
+      "why": "This exact block configures the outer parent's event callbacks in related propagation tests; it is repeated test setup rather than an unarguable substantive clone.",
+      "occurrences": [
+        "packages/react-dom/src/__tests__/ReactDOMEventPropagation-test.js:2527-2535",
+        "packages/react-dom/src/__tests__/ReactDOMEventPropagation-test.js:2344-2352"
+      ]
+    },
+    {
+      "why": "These are three short console-output lines with changed browser names, and each range includes the next browser's heading.",
+      "occurrences": [
+        "scripts/devtools/build-and-test.js:103-105",
+        "scripts/devtools/build-and-test.js:106-108"
+      ]
+    },
+    {
+      "why": "Both fragments use the normal create-root, render, and assert-attribute test pattern for different HTML elements and attributes.",
+      "occurrences": [
+        "packages/react-dom/src/__tests__/ReactDOMComponent-test.js:661-667",
+        "packages/react-dom/src/__tests__/ReactDOMComponent-test.js:671-677"
+      ]
+    },
+    {
+      "why": "Only three lines of a larger blocked-stylesheet fixture are selected, with different fixture values.",
+      "occurrences": [
+        "packages/react-dom/src/__tests__/ReactDOMFloat-test.js:972-974",
+        "packages/react-dom/src/__tests__/ReactDOMFloat-test.js:1240-1242"
+      ]
+    },
+    {
+      "why": "These are two-line assertions about previous and next props for different lifecycle methods.",
+      "occurrences": [
+        "packages/react-reconciler/src/__tests__/ReactIncremental-test.js:2404-2405",
+        "packages/react-reconciler/src/__tests__/ReactIncremental-test.js:2421-2422"
+      ]
+    },
+    {
+      "why": "The rule-test objects share expected-diagnostic scaffolding, while their hooks and property-access expressions differ. This remains a related test pattern with doubt.",
+      "occurrences": [
+        "packages/eslint-plugin-react-hooks/__tests__/ESLintRuleExhaustiveDeps-test.js:3239-3266",
+        "packages/eslint-plugin-react-hooks/__tests__/ESLintRuleExhaustiveDeps-test.js:1601-1628"
+      ]
+    },
+    {
+      "why": "The repeated context and tiny logging Child component are setup shared by two provider tests.",
+      "occurrences": [
+        "packages/react-reconciler/src/__tests__/ReactNewContext-test.js:994-1001",
+        "packages/react-reconciler/src/__tests__/ReactNewContext-test.js:962-969"
+      ]
+    },
+    {
+      "why": "Only the two-line create-root-and-render idiom is selected.",
+      "occurrences": [
+        "packages/react-devtools-shared/src/__tests__/profilingCache-test.js:1144-1145",
+        "packages/react-devtools-shared/src/__tests__/profilingCache-test.js:1176-1177"
+      ]
+    },
+    {
+      "why": "Both fragments initialize the devtools test globals and import React modules, with different extra imports. This is test setup with uneven selected boundaries.",
+      "occurrences": [
+        "packages/react-devtools-shared/src/__tests__/storeStressTestConcurrent-test.js:24-30",
+        "packages/react-devtools-shared/src/__tests__/inspectedElement-test.js:54-60"
+      ]
+    }
+  ]
+}

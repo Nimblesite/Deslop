@@ -18,11 +18,16 @@
 use std::{fs, path::Path};
 
 use anyhow::{Context, Result};
-use deslop_test_support::{corpus::repo_root, read_json};
+use deslop_test_support::{corpus::repo_root, corpus_score::clone_type::CloneType, read_json};
 use serde_json::Value;
 
 /// Where the judged registers live, one per target repository.
 const REGISTER_DIR: &str = "corpus/register";
+/// [CORPUS-REGISTER-QUEUE] Repositories waiting on a judging pass. A register
+/// with no CLEARLY IN yet must still be listed here.
+const JUDGING_QUEUE: &str = "corpus/judging-queue.json";
+const QUEUED_REPOSITORIES: &str = "repositories";
+const NAME: &str = "name";
 /// The gate config shares that directory but is not a register. Naming it here
 /// keeps the directory scan from reading configuration as ground truth.
 const THRESHOLDS_STEM: &str = "score-thresholds";
@@ -123,6 +128,7 @@ fn line_bounds(range: &str) -> Option<(u32, u32)> {
 #[test]
 fn every_register_pins_a_commit_and_at_least_one_judged_pair() -> Result<()> {
     let found = registers()?;
+    let queued = queued_names()?;
     assert!(
         found.len() >= EXPECTED_REGISTERS,
         "the register set lost files: only {:?} remain",
@@ -135,12 +141,28 @@ fn every_register_pins_a_commit_and_at_least_one_judged_pair() -> Result<()> {
             "{name}: a register must pin the full commit its ranges were read at, \
              or every line number in it names something unknown"
         );
+        let judged = entries(register, CLEARLY_IN).len() + entries(register, CLEARLY_OUT).len();
         assert!(
-            !entries(register, CLEARLY_IN).is_empty(),
-            "{name}: no CLEARLY IN entries — a register that judges nothing asserts nothing"
+            judged > 0,
+            "{name}: no CLEARLY IN or CLEARLY OUT entries — a register that judges nothing \
+             asserts nothing"
+        );
+        assert!(
+            !entries(register, CLEARLY_IN).is_empty() || queued.contains(&name.to_lowercase()),
+            "{name}: no CLEARLY IN entries and not in {JUDGING_QUEUE} — a register that finds no \
+             clone yet must wait in the queue for a pass that agrees on one"
         );
     }
     Ok(())
+}
+
+/// The lowercased names of every repository waiting in the judging queue.
+fn queued_names() -> Result<Vec<String>> {
+    let queue: Value = read_json(&repo_root().join(JUDGING_QUEUE))?;
+    Ok(entries(&queue, QUEUED_REPOSITORIES)
+        .iter()
+        .map(|repository| text(repository, NAME).to_lowercase())
+        .collect())
 }
 
 #[test]
@@ -192,6 +214,29 @@ fn every_range_is_a_well_formed_non_empty_span() -> Result<()> {
                 for range in entries(entry, OCCURRENCES) {
                     assert_range(&format!("{name} {verdict}"), range);
                 }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// [CORPUS-REGISTER-TYPE] A pinned type is one of the four research types and
+/// sits only on a CLEARLY IN: a pair that is not a clone has no clone type, and
+/// a label the scorer cannot read would fail every score that reaches it.
+#[test]
+fn every_pinned_clone_type_is_a_research_type_on_a_clearly_in() -> Result<()> {
+    for (name, register) in registers()? {
+        for verdict in [CLEARLY_IN, CLEARLY_OUT, NOT_CLEAR] {
+            for (index, entry) in entries(&register, verdict).iter().enumerate() {
+                let pinned = CloneType::pinned(entry, verdict);
+                assert!(
+                    pinned.is_ok(),
+                    "{name} {verdict}[{index}]: {}",
+                    pinned
+                        .err()
+                        .map(|error| error.to_string())
+                        .unwrap_or_default()
+                );
             }
         }
     }

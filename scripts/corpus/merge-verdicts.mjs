@@ -27,7 +27,7 @@
 //   e.g. merge-verdicts.mjs ~/clone-judging-codex ~/clone-judging-glm5.3
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { mergePass, MINIMUM_JUDGES, NOT_CLEAR, VERDICTS } from "./merge-verdicts/pass.mjs";
@@ -207,12 +207,14 @@ const mergeRepository = (root, folders, slug) => {
   return { name: slug.toLowerCase(), slug, language: register.language, sha: register.sha, hadRegister, registerPath, result };
 };
 
-/// Takes every repository that now has a register out of the judging queue. A
-/// queue that never drains scans the same repository forever and buys nothing.
+/// Takes every repository whose register now holds a CLEARLY IN out of the
+/// judging queue. A queue that never drains scans the same repository forever
+/// and buys nothing; a register that finds no clone yet waits for another pass.
 const drainQueue = (root, merged, dryRun) => {
   const path = join(root, JUDGING_QUEUE);
   const queue = readJson(path);
-  const names = new Set(merged.map((repo) => repo.name));
+  const judged = merged.filter((repo) => repo.result.merged.clearly_in.length > 0);
+  const names = new Set(judged.map((repo) => repo.name));
   const kept = queue.repositories.filter((repo) => !names.has(repo.name.toLowerCase()));
   const drained = queue.repositories
     .filter((repo) => names.has(repo.name.toLowerCase()))
@@ -249,7 +251,7 @@ const main = () => {
   if (slugs.length === 0) throw new Error(`no ${VERDICTS_FILE} under any of ${folders.join(", ")}`);
   const repos = slugs.map((slug) => mergeRepository(options.root, folders, slug));
 
-  const reportPath = join(options.root, options.report);
+  const reportPath = resolve(options.root, options.report);
   mkdirSync(dirname(reportPath), { recursive: true });
   writeFileSync(reportPath, render({ sources: folders, repos }));
 

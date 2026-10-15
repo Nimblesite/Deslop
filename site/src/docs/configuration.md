@@ -224,7 +224,7 @@ Every run also takes flags. A flag overrides the matching `.deslop.toml` key for
 `--compare` was added in **0.35.0**. Pass two endpoints as `<path>:<start_byte>:<end_byte>`, using exact byte ranges from the JSON report:
 
 ```text
-deslop . --compare "<left-path>:<start-byte>:<end-byte>" "<right-path>:<start-byte>:<end-byte>"
+deslop . --compare "<left-path>:<start-byte>:<end-byte>" --compare "<right-path>:<start-byte>:<end-byte>"
 ```
 
 The command scans the root, recomputes the pair's evidence, and prints a JSON verdict to stdout. Offsets are bytes, not lines, and the end is exclusive. A range must resolve to a fingerprinted occurrence; a cluster ID is not an endpoint.
