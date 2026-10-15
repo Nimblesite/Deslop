@@ -21,14 +21,19 @@ const UPDATE_REBIND: &str = "value++;";
 const OTHER_WRITE: &str = "other = value;";
 const PROPERTY_WRITE: &str = "value.item = other;";
 const SIBLING_SHADOW: &str = "{ let value = other; }";
+const SIBLING_REBIND: &str = "{ let value = other; value = other; }";
 const UNRELATED_PARAMETER: &str = "const callback = (value: any) => value;";
+const UNRELATED_PARAMETER_WRITE: &str = "const callback = (value: any) => { value = other; };";
+const NESTED_OUTER_WRITE: &str = "{ value = other; }";
 const DECLARED_SHADOW: &str = "function value() { return other; }";
 const STABLE_SCENARIOS: &[(&str, &str)] = &[
     (NO_CHANGE, NO_CHANGE),
     (OTHER_WRITE, NO_CHANGE),
     (PROPERTY_WRITE, NO_CHANGE),
     (SIBLING_SHADOW, NO_CHANGE),
+    (SIBLING_REBIND, NO_CHANGE),
     (UNRELATED_PARAMETER, NO_CHANGE),
+    (UNRELATED_PARAMETER_WRITE, NO_CHANGE),
     (NO_CHANGE, REBIND),
 ];
 const REPLACED_BINDINGS: &[&str] = &[
@@ -39,10 +44,12 @@ const REPLACED_BINDINGS: &[&str] = &[
     COMPOUND_REBIND,
     UPDATE_REBIND,
     DECLARED_SHADOW,
+    NESTED_OUTER_WRITE,
 ];
 const PLAIN: (&str, &str) = (NO_CHANGE, NO_CHANGE);
 const ASSIGN_RESULT: (&str, &str) = ("value = ", "");
 const SHADOWED_CALL: (&str, &str) = ("((value: any) => ", ")(other)");
+const DIRECT_PARAMETER_SHADOW: (&str, &str) = ("(value => ", ")(other)");
 const UNRELATED_PREDICATE: &str = r"import { isReady } from './external';
 function unused() {
   function isReady(value: unknown): value is Ready { return true; }
@@ -145,5 +152,10 @@ fn rebinding_or_shadowing_cannot_borrow_the_old_receiver_contract() -> Result<()
         assert!(!has_contract(before, NO_CHANGE, PLAIN)?, "{before}");
     }
     assert!(!has_contract(NO_CHANGE, NO_CHANGE, SHADOWED_CALL)?);
+    assert!(!has_contract(
+        NO_CHANGE,
+        NO_CHANGE,
+        DIRECT_PARAMETER_SHADOW
+    )?);
     Ok(())
 }

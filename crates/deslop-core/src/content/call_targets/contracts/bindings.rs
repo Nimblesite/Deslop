@@ -2,10 +2,12 @@
 
 use super::{bytes, NormalizedNode, IDENTIFIER_KIND};
 
+/// A declaration's name belongs to its parent scope, unlike an expression's name.
+const FUNCTION_DECLARATION: &str = "function_declaration";
 /// These productions introduce a scope for the declarations they contain.
 const BINDING_SCOPES: &[&str] = &[
     "statement_block",
-    "function_declaration",
+    FUNCTION_DECLARATION,
     "function_expression",
     "arrow_function",
     "catch_clause",
@@ -18,7 +20,7 @@ const BINDING_DECLARATIONS: &[&str] = &[
     "required_parameter",
     "optional_parameter",
     "catch_clause",
-    "function_declaration",
+    FUNCTION_DECLARATION,
     "class_declaration",
 ];
 /// These expressions can replace the checked receiver before its selected call.
@@ -31,6 +33,8 @@ const RECEIVER_WRITES: &[&str] = &[
 const COMPOSITE_PATTERNS: &[&str] = &["array_pattern", "object_pattern", "rest_pattern"];
 /// Expressions can bind their own callable name or an unparenthesized parameter.
 const LOCAL_CALLABLE_BINDINGS: &[&str] = &["function_expression", "arrow_function"];
+/// These containers declare bindings directly in their own lexical scope.
+const LOCAL_BINDING_CONTAINERS: &[&str] = &["lexical_declaration", "formal_parameters"];
 
 /// Every enclosing lexical scope must also contain the predicate call.
 pub(super) fn declaration_reaches_call(
@@ -48,6 +52,12 @@ pub(super) fn declaration_reaches_call(
 
 /// Any competing copied binding makes the predicate's identity ambiguous.
 pub(super) fn names_binding(node: &NormalizedNode, name: &NormalizedNode, source: &[u8]) -> bool {
+    if LOCAL_BINDING_CONTAINERS.contains(&node.kind) {
+        return node
+            .children
+            .iter()
+            .any(|child| names_binding(child, name, source));
+    }
     (BINDING_DECLARATIONS.contains(&node.kind)
         || LOCAL_CALLABLE_BINDINGS.contains(&node.kind)
         || RECEIVER_WRITES.contains(&node.kind))
@@ -66,7 +76,7 @@ pub(super) fn preserves_receiver(
 ) -> bool {
     let mut pending = vec![(branch, true)];
     while let Some((node, visible)) = pending.pop() {
-        if node.byte_range.start >= call.byte_range.start {
+        if unrelated_binding(node, call, receiver, source) {
             continue;
         }
         if invalidates_receiver(node, call, receiver, source, visible) {
@@ -76,6 +86,36 @@ pub(super) fn preserves_receiver(
         pending.extend(node.children.iter().map(|child| (child, visible)));
     }
     true
+}
+
+/// A separate lexical binding owns its assignments, including those in callbacks.
+fn unrelated_binding(
+    node: &NormalizedNode,
+    call: &NormalizedNode,
+    receiver: &NormalizedNode,
+    source: &[u8],
+) -> bool {
+    BINDING_SCOPES.contains(&node.kind)
+        && !node.byte_range.covers(call.byte_range)
+        && !(node.kind == FUNCTION_DECLARATION && names_binding(node, receiver, source))
+        && scope_binds_receiver(node, receiver, source)
+}
+
+/// Stop at nested scopes: their declarations cannot own a sibling scope's writes.
+fn scope_binds_receiver(scope: &NormalizedNode, receiver: &NormalizedNode, source: &[u8]) -> bool {
+    if LOCAL_CALLABLE_BINDINGS.contains(&scope.kind) && names_binding(scope, receiver, source) {
+        return true;
+    }
+    let mut pending: Vec<_> = scope.children.iter().collect();
+    while let Some(node) = pending.pop() {
+        if LOCAL_BINDING_CONTAINERS.contains(&node.kind) && names_binding(node, receiver, source) {
+            return true;
+        }
+        if !BINDING_SCOPES.contains(&node.kind) {
+            pending.extend(node.children.iter());
+        }
+    }
+    false
 }
 
 /// A sibling scope's local declarations cannot shadow the selected call.
@@ -93,7 +133,10 @@ fn invalidates_receiver(
 ) -> bool {
     let writes =
         RECEIVER_WRITES.contains(&node.kind) && node.byte_range.end <= call.byte_range.start;
-    let declares = visible && BINDING_DECLARATIONS.contains(&node.kind);
+    let declares = visible
+        && (BINDING_DECLARATIONS.contains(&node.kind)
+            || (LOCAL_CALLABLE_BINDINGS.contains(&node.kind)
+                && node.byte_range.covers(call.byte_range)));
     (writes || declares)
         && node
             .children
