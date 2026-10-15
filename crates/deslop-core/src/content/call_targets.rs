@@ -9,11 +9,15 @@ use super::{
     frontier::{frontiers_aligned, leaf_bytes, population, MemberContent, Population},
     rename::Corroboration,
 };
+use crate::fingerprint::{subtree_hash, HashScratch};
 use crate::{
     ast::{ByteRange, NormalizedNode},
     lang::shared::IDENTIFIER_KIND,
     state::FileId,
 };
+
+mod contracts;
+mod sites;
 
 /// The prefix or suffix carried by a sync/async twin's external call selector.
 const ASYNC_AFFIX: &[u8] = b"Async";
@@ -43,33 +47,91 @@ const CALLABLE_DECLARATIONS: &[&str] = &[
 
 /// An external selector and the collaborator it is selected on.
 pub(super) struct CallTarget {
-    /// Frontier position of the receiver the call is made on — the
-    /// property or the handle at the head of the callee chain.
-    receiver: Option<usize>,
+    /// Sparse call metadata stays off the every-leaf frontier storage.
+    site: Box<CallSite>,
+}
+
+/// Receiver ownership and call shape for one external selector.
+struct CallSite {
+    /// Frontier positions of the receiver handle and its AST-owned named contract.
+    receivers: Vec<usize>,
+    /// An explicit contract must survive slicing before it can prove a contradiction.
+    contract: Option<usize>,
+    /// Normalized call shape, independent of surrounding imports and declarations.
+    shape: Option<[u8; blake3::OUT_LEN]>,
+}
+
+/// AST ownership before converting receiver byte ranges into frontier positions.
+struct ReceiverSite<'node> {
+    /// Handle and explicit contract ranges qualifying the selected operation.
+    receivers: Vec<ByteRange>,
+    /// The AST-selected contract whose ownership is stronger than a handle name.
+    contract: Option<ByteRange>,
+    /// The call is measured only when this region contains an owned receiver contract.
+    call: &'node NormalizedNode,
 }
 
 impl CallTarget {
+    /// One sparse descriptor, allocated only for an actual external selector.
+    fn new(
+        receivers: Vec<usize>,
+        contract: Option<usize>,
+        shape: Option<[u8; blake3::OUT_LEN]>,
+    ) -> Self {
+        Self {
+            site: Box::new(CallSite {
+                receivers,
+                contract,
+                shape,
+            }),
+        }
+    }
+
+    /// Frontier positions that can corroborate this receiver's rename.
+    fn receiver_positions(&self) -> &[usize] {
+        &self.site.receivers
+    }
+
+    /// An AST-owned contract remains inside this matched region.
+    fn has_contract(&self) -> bool {
+        self.site.contract.is_some()
+    }
+
+    /// This call's normalized structural identity.
+    fn shape(&self) -> Option<&[u8; blake3::OUT_LEN]> {
+        self.site.shape.as_ref()
+    }
+
     /// The same target inside a frontier that begins `offset` positions
     /// later — how a span's targets join a concatenated core
     /// ([FUSED-SHARED-SUBTREE-CORE]).
     pub(super) fn shifted(&self, offset: usize) -> Self {
-        Self {
-            receiver: self
-                .receiver
+        Self::new(
+            self.receiver_positions()
+                .iter()
+                .map(|position| position.saturating_add(offset))
+                .collect(),
+            self.site
+                .contract
                 .map(|position| position.saturating_add(offset)),
-        }
+            self.site.shape,
+        )
     }
 
     /// The same target inside the stretch of `len` positions starting
     /// at `first`; a receiver outside the stretch no longer qualifies
     /// the selector ([FUSED-SHARED-SUBTREE-CORE]).
     pub(super) fn within(&self, first: usize, len: usize) -> Self {
-        Self {
-            receiver: self
-                .receiver
-                .filter(|position| *position >= first && position.saturating_sub(first) < len)
-                .map(|position| position.saturating_sub(first)),
-        }
+        Self::new(
+            self.receiver_positions()
+                .iter()
+                .filter_map(|position| position_within(*position, first, len))
+                .collect(),
+            self.site
+                .contract
+                .and_then(|position| position_within(position, first, len)),
+            self.site.shape,
+        )
     }
 }
 
@@ -82,49 +144,90 @@ pub(super) fn external_targets(
 ) -> Vec<Option<CallTarget>> {
     let nodes = covered_nodes(root, range);
     let declarations = declared_names(&nodes, source);
-    let targets = external_selector_ranges(&nodes, &declarations, source);
+    let targets = external_selector_ranges(root, &nodes, &declarations, source);
+    let needs_shapes = targets.values().any(|site| site.contract.is_some());
     leaves
         .iter()
         .map(|leaf| {
             targets
                 .get(&(leaf.start, leaf.end))
-                .map(|receiver| target_for_receiver(*receiver, leaves))
+                .map(|site| target_for_receiver(site, leaves, needs_shapes))
         })
         .collect()
 }
 
 /// Locates a call's receiver in the same collapsed frontier as its selector.
-fn target_for_receiver(receiver: Option<ByteRange>, leaves: &[ByteRange]) -> CallTarget {
-    CallTarget {
-        receiver: receiver.and_then(|range| leaves.iter().position(|leaf| *leaf == range)),
-    }
+fn target_for_receiver(
+    site: &ReceiverSite<'_>,
+    leaves: &[ByteRange],
+    needs_shapes: bool,
+) -> CallTarget {
+    CallTarget::new(
+        site.receivers
+            .iter()
+            .filter_map(|range| leaves.iter().position(|leaf| leaf == range))
+            .collect(),
+        site.contract
+            .and_then(|range| leaves.iter().position(|leaf| *leaf == range)),
+        needs_shapes.then(|| subtree_hash(site.call, &mut HashScratch::default())),
+    )
+}
+
+/// The same range mapping applies to handle and contract ownership.
+fn position_within(position: usize, first: usize, len: usize) -> Option<usize> {
+    position
+        .checked_sub(first)
+        .filter(|position| *position < len)
 }
 
 /// Selector spans whose names are not declared in the matched region.
-fn external_selector_ranges(
-    nodes: &[&NormalizedNode],
+fn external_selector_ranges<'node>(
+    root: &'node NormalizedNode,
+    nodes: &[&'node NormalizedNode],
     declarations: &BTreeSet<&[u8]>,
     source: &[u8],
-) -> BTreeMap<(usize, usize), Option<ByteRange>> {
+) -> BTreeMap<(usize, usize), ReceiverSite<'node>> {
+    let contracts = contracts::ReceiverContracts::new(root, nodes, source);
     nodes
         .iter()
-        .filter_map(|node| external_call_target(node, declarations, source))
+        .filter_map(|node| external_call_target(node, &contracts, declarations, source))
         .collect()
 }
 
 /// A copied collaborator can rename the operation selected on it.
-fn external_call_target(
-    call: &NormalizedNode,
+fn external_call_target<'node>(
+    call: &'node NormalizedNode,
+    contracts: &contracts::ReceiverContracts<'_, '_>,
     declarations: &BTreeSet<&[u8]>,
     source: &[u8],
-) -> Option<((usize, usize), Option<ByteRange>)> {
+) -> Option<((usize, usize), ReceiverSite<'node>)> {
     let selector = call_selector(call)?.byte_range;
     let name = source.get(selector.start..selector.end)?;
     if declarations.contains(name) {
         return None;
     }
-    let receiver = call_receiver(call).map(|node| node.byte_range);
-    Some(((selector.start, selector.end), receiver))
+    Some((
+        (selector.start, selector.end),
+        receiver_site(call, contracts),
+    ))
+}
+
+/// Read the call's own shape and the AST-owned names that qualify its selector.
+fn receiver_site<'node>(
+    call: &'node NormalizedNode,
+    contracts: &contracts::ReceiverContracts<'_, '_>,
+) -> ReceiverSite<'node> {
+    let contract = contracts::receiver_contract(call, contracts);
+    let receivers = call_receiver(call)
+        .map(|node| node.byte_range)
+        .into_iter()
+        .chain(contract)
+        .collect();
+    ReceiverSite {
+        receivers,
+        contract,
+        call,
+    }
 }
 
 /// [FUSED-CONTENT-GATE-CALL-TARGET] Whether the two members select
@@ -141,11 +244,11 @@ fn external_call_target(
 /// edit; it is neither a free rename nor an unrelated-operation veto
 /// ([CLONE-BUCKETS-NORTH-STAR], [ACCURACY-RECOVERY-TWIN-FN]).
 ///
-/// The rule reads positions, so frontiers that do not align carry no
-/// verdict here. A near-miss pair is read over its aligned core instead
-/// ([FUSED-SHARED-SUBTREE-CORE]): comparing the two members' method names
-/// without positions cannot see a receiver, and rejected a renamed
-/// near-miss copy its unrenamed twin reported at 100%.
+/// Renames read aligned frontier positions, including owned receiver
+/// contracts ([FUSED-CONTENT-GATE-CALL-TARGET-CONTRACT]). An equal ordered
+/// sequence of call shapes can also prove an unchanged receiver's operation
+/// changed despite surrounding syntax ([FUSED-CONTENT-GATE-CALL-TARGET-PADDING]).
+/// Other near-miss pairs retain their aligned-core verdict ([FUSED-SHARED-SUBTREE-CORE]).
 ///
 /// Pinned by `type2_rename_call_targets`,
 /// `js_literal_variation_calls::member_targets` and
@@ -155,17 +258,29 @@ pub(super) fn changed<S: BuildHasher>(
     right: &MemberContent,
     sources: &HashMap<FileId, Vec<u8>, S>,
 ) -> Option<CallTargetChange> {
-    let changed = unexcused_positions(left, right);
+    let changed = changed_positions(left, right);
     if changed.is_empty() {
         return None;
     }
     if changed
         .iter()
-        .all(|index| async_affix_edit(left, right, *index, sources))
+        .all(|indices| async_affix_edit(left, right, *indices, sources))
     {
         Some(CallTargetChange::AsyncEdit)
     } else {
         Some(CallTargetChange::Other)
+    }
+}
+
+/// Match authored positions, or independently corresponding call sites when the surrounding syntax differs.
+fn changed_positions(left: &MemberContent, right: &MemberContent) -> Vec<(usize, usize)> {
+    if frontiers_aligned(left, right) {
+        unexcused_positions(left, right)
+            .into_iter()
+            .map(|index| (index, index))
+            .collect()
+    } else {
+        sites::changes(left, right)
     }
 }
 
@@ -206,11 +321,11 @@ fn unexcused_selector(
 fn async_affix_edit<S: BuildHasher>(
     left: &MemberContent,
     right: &MemberContent,
-    index: usize,
+    indices: (usize, usize),
     sources: &HashMap<FileId, Vec<u8>, S>,
 ) -> bool {
     let Some((left_name, right_name)) =
-        leaf_bytes(left, index, sources).zip(leaf_bytes(right, index, sources))
+        leaf_bytes(left, indices.0, sources).zip(leaf_bytes(right, indices.1, sources))
     else {
         return false;
     };
@@ -247,15 +362,14 @@ fn selector_renames(
     targets: (&CallTarget, &CallTarget),
     corroboration: &Corroboration,
 ) -> bool {
-    let Some((left_index, right_index)) = targets.0.receiver.zip(targets.1.receiver) else {
-        return false;
-    };
-    left_index == right_index
-        && left
-            .keys
-            .get(left_index)
-            .zip(right.keys.get(right_index))
-            .is_some_and(|(left, right)| corroboration.admits((left.key, right.key)))
+    targets.0.receiver_positions().iter().any(|index| {
+        targets.1.receiver_positions().contains(index)
+            && left
+                .keys
+                .get(*index)
+                .zip(right.keys.get(*index))
+                .is_some_and(|(left, right)| corroboration.admits((left.key, right.key)))
+    })
 }
 
 /// Nodes wholly covered by the reported bytes; enclosing callback headers never enter this view.

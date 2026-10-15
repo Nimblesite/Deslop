@@ -29,6 +29,7 @@ pub mod run;
 pub mod verdict;
 
 use clone_type::CloneType;
+pub(crate) use coverage::is_clone_finding;
 use coverage::match_entry;
 pub use coverage::RangeCoverage;
 
