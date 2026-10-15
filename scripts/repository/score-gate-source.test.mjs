@@ -7,10 +7,11 @@
 // passed or failed, and that the local target and the CI job call one script so
 // a green local run cannot mean a red one in CI.
 //
-// They also pin the two properties that make the gate honest: the thresholds
-// live in one JSON file rather than in a workflow or a Makefile, and the CI
-// slice takes its commits from the registers rather than repeating a pin that
-// could drift away from the source a judge actually read. Run with `node --test`.
+// They also pin the two properties that make the gate honest: every judged
+// pair is held to its own outcome in one recorded JSON file, which CI refuses to
+// let a run change uncommitted, and the CI slice takes its commits from the
+// registers rather than repeating a pin that could drift away from the source a
+// judge actually read. Run with `node --test`.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -33,7 +34,13 @@ const SCRIPT = "scripts/corpus/score-gate.sh";
 const TARGETS = "scripts/corpus/target-repos.sh";
 const COMPARE = "scripts/compare-versions.sh";
 const JOB = "corpus-score";
-const THRESHOLDS = "corpus/register/score-thresholds.json";
+/// [CORPUS-SCORE-OUTCOMES] The judged pair record, and the per-repository
+/// count gate it replaced, which must never come back beside it.
+const OUTCOMES = "corpus/register/outcomes.json";
+const RETIRED_THRESHOLDS = "corpus/register/score-thresholds.json";
+const COUNT_ALLOWANCES = ["score-thresholds", "maximum_false", "minimum_score_percent"];
+/// The CI step that refuses a record the run changed but nobody committed.
+const RECORD_CHECK = `git status --porcelain -- ${OUTCOMES}`;
 const REGISTER_DIR = "corpus/register";
 const POLLY_REGISTER = `${REGISTER_DIR}/polly.json`;
 const FSHARP_REGISTER = `${REGISTER_DIR}/fsharp.data.json`;
@@ -95,28 +102,27 @@ test("[CORPUS-SCORE] the local target and the CI job run one script", () => {
   );
 });
 
-test("[CORPUS-SCORE] thresholds live in one file, never in CI or the Makefile", () => {
-  assert.ok(existsSync(resolve(repoRoot, THRESHOLDS)), `${THRESHOLDS} is missing`);
-  const config = JSON.parse(read(THRESHOLDS));
-  assert.deepEqual(
-    [config.defaults.maximum_false_negatives, config.defaults.maximum_false_positives],
-    [0, 0],
-    "the default gate must demand a perfect score; an exception belongs under `repos`, with its reason",
+test("[CORPUS-SCORE-OUTCOMES] every pair is held to one record, which CI refuses to see changed", () => {
+  assert.ok(
+    !existsSync(resolve(repoRoot, RETIRED_THRESHOLDS)),
+    `${RETIRED_THRESHOLDS} is back; a count allowance tolerates any defect up to its number, so one pair fixed and another broken leave it unmoved`,
   );
-  for (const [section, entries] of [["defaults", { defaults: config.defaults }], ["repos", config.repos]]) {
-    for (const [name, entry] of Object.entries(entries ?? {})) {
-      assert.ok(
-        entry.minimum_score_percent === undefined,
-        `${section}.${name} gates on a percentage, which is a defect allowance divided by the register size and so widens every time the register grows; state the allowance in maximum_false_negatives and maximum_false_positives`,
-      );
+  for (const [name, source] of [["ci.yml", ciWorkflow], ["Makefile", makefile], [SCRIPT, gateScript], [COMPARE, compareScript]]) {
+    for (const allowance of COUNT_ALLOWANCES) {
+      assert.ok(!source.includes(allowance), `${name} mentions \`${allowance}\`; ${OUTCOMES} is the only gate`);
     }
   }
-  for (const source of [ciWorkflow, read("Makefile"), gateScript]) {
-    assert.ok(
-      !source.includes("minimum_score_percent") && !source.includes("maximum_false"),
-      `a threshold is set outside ${THRESHOLDS}; that file is the single source of truth`,
-    );
-  }
+  const job = ciWorkflow.slice(ciWorkflow.indexOf(`  ${JOB}:`));
+  const gate = job.indexOf(`run: ${SCRIPT}`);
+  const check = job.indexOf(RECORD_CHECK);
+  assert.ok(
+    check > gate && gate > 0,
+    `the \`${JOB}\` job must run \`${RECORD_CHECK}\` after ${SCRIPT}: a fix left off the record keeps the pair on record as failing, and its next regression passes as the old tolerated defect`,
+  );
+  assert.ok(
+    job.slice(check, job.indexOf("- name:", check)).includes("exit 1"),
+    "a record the run changed must fail the job, not just print a diff",
+  );
 });
 
 /// The repositories the CI slice scans, as named in score-gate.sh.
@@ -270,10 +276,17 @@ const REJUDGED = { name: "Rejudged", url: "https://example.invalid/rejudged.git"
 const UNJUDGED = { name: "unjudged", url: "https://example.invalid/unjudged.git", sha: "b".repeat(COMMIT_ID_LENGTH), language: "go" };
 const spec = (repository) => `${repository.url}#${repository.sha}#${repository.language}`;
 
+/// [CORPUS-PIN] The settings files beside the registers, which a target list
+/// must never read as a repository to scan.
+const NOT_A_REPOSITORY = "corpus/not-a-repository.json";
+const RECORD_FILE = "outcomes.json";
+
 test("[CORPUS-REGISTER-QUEUE] a queued repository that already has a register is scanned once", () => {
   const root = mkdtempSync(join(tmpdir(), "default-targets-"));
   mkdirSync(join(root, REGISTER_DIR), { recursive: true });
   writeFileSync(join(root, REGISTER_DIR, `${REJUDGED.name.toLowerCase()}.json`), JSON.stringify(REJUDGED));
+  writeFileSync(join(root, REGISTER_DIR, RECORD_FILE), JSON.stringify({ spec: "", pairs: [] }));
+  writeFileSync(join(root, NOT_A_REPOSITORY), JSON.stringify({ files: [RECORD_FILE] }));
   writeFileSync(join(root, JUDGING_QUEUE), JSON.stringify({ repositories: [REJUDGED, UNJUDGED] }));
   const listed = execFileSync(
     "bash",
@@ -283,6 +296,7 @@ test("[CORPUS-REGISTER-QUEUE] a queued repository that already has a register is
   assert.deepEqual(
     listed,
     [spec(REJUDGED), spec(UNJUDGED)],
-    "a register still waiting on another pass is one target, not two scans of one tree",
+    "a register still waiting on another pass is one target, not two scans of one tree, and the " +
+      "judged pair record beside the registers is no target at all",
   );
 });

@@ -46,8 +46,11 @@ const UNMEASURED_WALL_ROW: &str = "| wall | — | — | — |";
 const BOTH_ELAPSED_MS: u64 = OLD_ELAPSED_MS + NEW_ELAPSED_MS;
 const BOTH_CPU_SECONDS: f64 = CPU_SECONDS + CPU_SECONDS;
 const TWO_REPOS: usize = 2;
-/// The strict gate one missed pair breaches, once.
-const ONE_BREACH: usize = 1;
+/// The one pair the fixture misses, failing with no record: the strict default.
+const ONE_REJECTED_PAIR: usize = 1;
+/// How the defect list says that pair stands against the record.
+const UNRECORDED_DEFECT: &str = "- **FALSE NEGATIVE** fixture — `src/one.rs:10-20` + \
+                                 `src/two.rs:30-40` — failing, and not on record as failing";
 const TOTALS_FIELD: &str = "totals";
 const CHANGE_FIELD: &str = "change";
 const REPOS_FIELD: &str = "repos";
@@ -340,13 +343,17 @@ fn the_engines_sit_side_by_side_so_one_row_carries_the_whole_comparison() -> Res
 }
 
 #[test]
-fn a_breached_gate_renders_as_a_failure_that_names_the_measure() -> Result<()> {
+fn a_pair_failing_off_the_record_renders_as_a_failure_that_names_the_pair() -> Result<()> {
     let (found, missed) = found_and_missed()?;
     let breached = card(&found, &missed);
     assert_eq!(
-        breached.breaches.len(),
-        ONE_BREACH,
-        "the missed pair breaches the strict gate the card is held to"
+        breached
+            .outcomes
+            .iter()
+            .filter(|pair| pair.standing.fails_the_run())
+            .count(),
+        ONE_REJECTED_PAIR,
+        "the missed pair is not on record as failing, so the empty record rejects it"
     );
     let rendered = scorecard(&breached);
     assert_eq!(
@@ -359,8 +366,8 @@ fn a_breached_gate_renders_as_a_failure_that_names_the_measure() -> Result<()> {
         "a breach renders as a failure"
     );
     assert!(
-        rendered.contains("false negatives: allows at most 0, recorded 1"),
-        "the breach names the measure, the allowance and the actual: {rendered}"
+        rendered.contains(UNRECORDED_DEFECT),
+        "the defect names the pair, its ranges and how it stands against the record: {rendered}"
     );
     assert!(
         !rendered.contains("**PASS**"),

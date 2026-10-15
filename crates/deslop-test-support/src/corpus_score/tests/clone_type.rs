@@ -48,8 +48,10 @@ const MALFORMED_TYPES: [&str; 4] = ["Type 2", "type ii", "Type-1", "Type V"];
 /// the engine did report still counts against it.
 const MISTYPED_DEFECT: &str =
     "`src/one.rs:10-20` + `src/two.rs:30-40` (Type I; reported as nearly_identical)";
-/// A typed pair nothing reported at all names only the type it was held to.
-const UNREPORTED_DEFECT: &str = "`src/one.rs:10-20` + `src/two.rs:30-40` (Type I)\n";
+/// A typed pair nothing reported at all names only the type it was held to,
+/// then how it stands against the judged pair record.
+const UNREPORTED_DEFECT: &str = "`src/one.rs:10-20` + `src/two.rs:30-40` (Type I) — failing, and \
+                                 not on record as failing\n";
 
 /// One judged pair under `verdict`, pinned to `clone_type`.
 fn typed(verdict: &str, clone_type: &Value) -> Value {

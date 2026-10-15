@@ -21,9 +21,7 @@ The judge works in an isolated workspace and never loads this codebase. Read
   `corpus-score` CI job on every push, and by `scripts/compare-versions.sh` on every
   version comparison.
 
-The score itself, its thresholds and its markdown are `docs/specs/corpus.md`
-§[CORPUS-SCORE]. Gate exceptions live in `score-thresholds.json` beside these files:
-one entry per tracked defect, with the reason, tightened only by fixing the engine.
+The score itself and its markdown are `docs/specs/corpus.md` §[CORPUS-SCORE]. `outcomes.json` beside these files is not a register: it records every judged pair's last outcome, pass or fail, and since when. A pair on record as failing is a known defect; one that fails after passing, or with no record, fails the run. See `docs/specs/corpus.md` §[CORPUS-SCORE-OUTCOMES].
 
 ## Where it stands
 

@@ -1,12 +1,12 @@
 //! [CORPUS-SCORE-RENDER] [CORPUS-REPORT-VERDICT] The two-engine scorecard the
 //! rendering and verdict suites read.
 //!
-//! The card is gated and judged the way a real run gates and judges one
-//! (`corpus_score::run`): the last engine's breaches come from its own score
-//! against the gate the card states, and the verdict from those breaches and
-//! its curated checks. Neither is ever set by hand — a fixture that could head
-//! a breached gate with a pass would have every suite that reads it asserting
-//! against a document no run can write.
+//! The card is judged the way a real run judges one (`corpus_score::run`):
+//! every judged pair of the last engine stands against a record of outcomes —
+//! empty unless a test supplies one, which is the strict default — and the
+//! verdict comes from those pairs and its curated checks. Neither is ever set
+//! by hand — a fixture that could head a failing pair with a pass would have
+//! every suite that reads it asserting against a document no run can write.
 
 use std::collections::BTreeMap;
 
@@ -14,10 +14,11 @@ use super::{
     super::{
         checks::CheckOutcome,
         gate::{add_checks, CorpusTotals},
+        outcomes::{standings, Ledger},
         verdict::verdict,
     },
-    add_costs, breaches, corpus_change, degradation, pinned_sha, totals, Engine, RepoScore,
-    RunCost, Scorecard, TargetScore, Thresholds, REPO,
+    add_costs, corpus_change, degradation, pinned_sha, totals, Engine, RepoScore, RunCost,
+    Scorecard, TargetScore, REPO,
 };
 
 pub(super) const OLD_ENGINE: &str = "old";
@@ -108,7 +109,8 @@ fn standing(score: &RepoScore, measured: RunCost, checks: Option<&CheckOutcome>)
     summed
 }
 
-/// A two-engine scorecard over one repository no corpus test checked.
+/// A two-engine scorecard over one repository no corpus test checked, held
+/// to an empty record.
 pub(super) fn card(before: &RepoScore, after: &RepoScore) -> Scorecard {
     checked_card(before, after, BTreeMap::new())
 }
@@ -120,20 +122,28 @@ pub(super) fn checked_card(
     after: &RepoScore,
     checks: BTreeMap<String, CheckOutcome>,
 ) -> Scorecard {
+    recorded_card(before, after, checks, &Ledger::default())
+}
+
+/// The scorecard with its judged pairs held to `ledger`.
+pub(super) fn recorded_card(
+    before: &RepoScore,
+    after: &RepoScore,
+    checks: BTreeMap<String, CheckOutcome>,
+    ledger: &Ledger,
+) -> Scorecard {
     let before_totals = standing(before, old_cost(), checks.get(OLD_ENGINE));
     let after_totals = standing(after, new_cost(), checks.get(NEW_ENGINE));
     let engines = engines();
     let targets = vec![target(before, after, checks)];
-    let gate = Thresholds::default();
-    let breached = breaches(after, &gate);
+    let outcomes = standings(ledger, NEW_ENGINE, &targets);
     Scorecard {
         generated_at: GENERATED_AT.to_owned(),
-        verdict: verdict(&engines, &targets, &breached),
+        verdict: verdict(&engines, &targets, &outcomes),
         engines,
         targets,
         change: Some(corpus_change(&before_totals, &after_totals)),
         totals: per_engine(before_totals, after_totals),
-        thresholds: BTreeMap::from([(REPO.to_owned(), gate)]),
-        breaches: breached,
+        outcomes,
     }
 }

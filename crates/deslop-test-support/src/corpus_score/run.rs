@@ -26,10 +26,11 @@ use super::{
     checks::CheckOutcome,
     clusters,
     gate::{
-        add_checks, add_costs, breaches, corpus_change, degradation, load_thresholds, totals,
-        Breach, CorpusChange, CorpusTotals, Degradation, Thresholds,
+        add_checks, add_costs, corpus_change, degradation, totals, CorpusChange, CorpusTotals,
+        Degradation,
     },
     list,
+    outcomes::{self, standings, Ledger, PairOutcome, RunStamp},
     render::{scorecard, Engine, Scorecard, TargetScore},
     score_repo, text,
     verdict::verdict,
@@ -336,28 +337,6 @@ fn engine_costs(engine_id: &str, ran: &[&TargetScore]) -> BTreeMap<String, RunCo
         .collect()
 }
 
-/// The gate the last engine is held to, and everything it breached. Only a
-/// judged repository has a gate: there is nothing to breach without a register.
-fn gate_last_engine(
-    engines: &[Engine],
-    targets: &[TargetScore],
-    config: &Value,
-) -> (BTreeMap<String, Thresholds>, Vec<Breach>) {
-    let mut thresholds = BTreeMap::new();
-    let mut found = Vec::new();
-    let Some(last) = engines.last() else {
-        return (thresholds, found);
-    };
-    for target in targets.iter().filter(|target| target.registered) {
-        let gate = Thresholds::for_repo(config, &target.name);
-        if let Some(score) = target.scores.get(&last.id) {
-            found.extend(breaches(score, &gate));
-        }
-        let _previous = thresholds.insert(target.name.clone(), gate);
-    }
-    (thresholds, found)
-}
-
 /// How the last engine's corpus standing moved against the first. Absent unless
 /// exactly two engines ran: there is no "change" to state against yourself.
 fn standing_change(
@@ -370,48 +349,82 @@ fn standing_change(
     Some(corpus_change(totals.get(&first.id)?, totals.get(&last.id)?))
 }
 
-/// Scores a whole run manifest into a scorecard.
-fn build_scorecard(run_path: &Path, root: &Path, gate: bool) -> Result<Scorecard> {
-    let run = read_json(run_path)?;
-    let engines = engines(&run);
+/// Scores a whole run manifest into a scorecard, holding the last engine's
+/// every judged pair to `ledger`.
+fn build_scorecard(run: &Path, root: &Path, ledger: &Ledger, strict: bool) -> Result<Scorecard> {
+    let manifest = read_json(run)?;
+    let engines = engines(&manifest);
     let order: Vec<String> = engines.iter().map(|engine| engine.id.clone()).collect();
-    let targets = score_targets(&run, root, &order, gate)?;
-    let totals = engines
-        .iter()
-        .map(|engine| (engine.id.clone(), engine_totals(engine, &targets)))
-        .collect();
-    let (thresholds, breached) = gate_last_engine(&engines, &targets, &load_thresholds(root)?);
-    let verdict = verdict(&engines, &targets, &breached);
+    let targets = score_targets(&manifest, root, &order, strict)?;
+    let totals = engine_standings(&engines, &targets);
+    let outcomes = last_engine_outcomes(&engines, ledger, &targets);
     Ok(Scorecard {
-        generated_at: text(&run, "generated_at"),
+        generated_at: text(&manifest, "generated_at"),
         change: standing_change(&engines, &totals),
+        verdict: verdict(&engines, &targets, &outcomes),
         engines,
         targets,
         totals,
-        thresholds,
-        breaches: breached,
-        verdict,
+        outcomes,
     })
 }
 
+/// Every engine's corpus standing, keyed by engine id.
+fn engine_standings(engines: &[Engine], targets: &[TargetScore]) -> BTreeMap<String, CorpusTotals> {
+    engines
+        .iter()
+        .map(|engine| (engine.id.clone(), engine_totals(engine, targets)))
+        .collect()
+}
+
+/// [CORPUS-SCORE-OUTCOMES] How every judged pair of the last engine stands
+/// against `ledger`; the first engine of a comparison is only the reference.
+fn last_engine_outcomes(
+    engines: &[Engine],
+    ledger: &Ledger,
+    targets: &[TargetScore],
+) -> Vec<PairOutcome> {
+    engines
+        .last()
+        .map_or_else(Vec::new, |last| standings(ledger, &last.id, targets))
+}
+
+/// How a run is scored, beyond scoring it.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Scoring {
+    /// A judged run missing its timing or its report is an error.
+    pub strict: bool,
+    /// [CORPUS-SCORE-OUTCOMES] Put every failing pair that has no record on
+    /// record as failing, accepting it as a known defect.
+    pub accept_failures: bool,
+}
+
 /// Scores the run manifest at `run_path` and writes `<stem>.md` and
-/// `<stem>.json` into `out` — `stem` from [`report_stem`]. With `gate`, a
-/// judged run missing its timing is an error; whether the last engine
-/// breached its gate is on the returned card, so the caller decides what a
-/// breach does — after the documents exist.
+/// `<stem>.json` into `out` — `stem` from [`report_stem`] — then writes the
+/// judged pair record back under `root` ([CORPUS-SCORE-OUTCOMES]). Whether a
+/// pair failed the run is on the returned card, so the caller decides what a
+/// failure does — after the documents exist.
 ///
 /// # Errors
 ///
-/// Returns an error when the manifest, a report, a register or a timing file
-/// cannot be read, or the documents cannot be written.
+/// Returns an error when the manifest, a report, a register, a timing file or
+/// the record cannot be read, or the documents or the record cannot be written.
 pub fn write_scorecard(
     run_path: &Path,
     root: &Path,
     out: &Path,
     stem: &str,
-    gate: bool,
+    scoring: Scoring,
 ) -> Result<WrittenScorecard> {
-    let card = build_scorecard(run_path, root, gate)?;
+    let ledger = outcomes::load(root)?;
+    let card = build_scorecard(run_path, root, &ledger, scoring.strict)?;
+    let written = write_documents(card, out, stem)?;
+    record_outcomes(root, &ledger, &written.card, scoring.accept_failures)?;
+    Ok(written)
+}
+
+/// Writes `<stem>.md` and `<stem>.json` into `out`.
+fn write_documents(card: Scorecard, out: &Path, stem: &str) -> Result<WrittenScorecard> {
     fs::create_dir_all(out)?;
     let markdown = scorecard(&card);
     let path = out.join(format!("{stem}.{MARKDOWN_EXTENSION}"));
@@ -424,6 +437,23 @@ pub fn write_scorecard(
         path,
         json_path,
     })
+}
+
+/// Writes the record back when this run changed it. A run that judged nothing
+/// leaves it alone.
+fn record_outcomes(root: &Path, ledger: &Ledger, card: &Scorecard, accept: bool) -> Result<()> {
+    let Some(last) = card.engines.last().filter(|_| !card.outcomes.is_empty()) else {
+        return Ok(());
+    };
+    let stamp = RunStamp {
+        at: &card.generated_at,
+        engine: &last.label,
+    };
+    let updated = outcomes::record(ledger, &card.outcomes, stamp, accept);
+    if updated.pairs == ledger.pairs {
+        return Ok(());
+    }
+    outcomes::write(root, &updated)
 }
 
 #[cfg(test)]

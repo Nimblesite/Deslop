@@ -25,7 +25,7 @@ use crate::corpus_measure::{measured_run, measurement, ProcessCost};
 
 mod baseline;
 
-pub use baseline::{baseline_mode, classify, Baseline, BASELINE_ENV};
+pub use baseline::{baseline_mode, classify, Baseline, BASELINE_ENV, KNOWN_FAILURES_PATH};
 
 /// [CORPUS-PIN] The one list naming the files under `corpus/` and
 /// `corpus/register/` that describe no single upstream repository, so no

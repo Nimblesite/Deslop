@@ -1,0 +1,1941 @@
+{
+  "spec": "docs/specs/corpus.md [CORPUS-SCORE-OUTCOMES]",
+  "pairs": [
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/test.js:80-92",
+        "test/module/test.js:94-106"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:104-116",
+        "test/module/typings/esm/index.ts:127-139"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:129-159",
+        "test/module/typings/esm/index.ts:152-182"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:133-143",
+        "test/module/typings/esm/index.ts:156-166"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:133-163",
+        "test/module/typings/esm/index.ts:156-186"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:137-169",
+        "test/module/typings/esm/index.ts:160-192"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:141-151",
+        "test/module/typings/esm/index.ts:164-174"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:141-173",
+        "test/module/typings/esm/index.ts:164-196"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:145-177",
+        "test/module/typings/esm/index.ts:168-200"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:149-181",
+        "test/module/typings/esm/index.ts:172-204"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:153-163",
+        "test/module/typings/esm/index.ts:176-186"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:153-185",
+        "test/module/typings/esm/index.ts:176-208"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:157-189",
+        "test/module/typings/esm/index.ts:180-212"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:161-193",
+        "test/module/typings/esm/index.ts:184-216"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:167-173",
+        "test/module/typings/esm/index.ts:190-196"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:167-197",
+        "test/module/typings/esm/index.ts:190-220"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:171-201",
+        "test/module/typings/esm/index.ts:194-224"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:175-205",
+        "test/module/typings/esm/index.ts:198-228"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:179-212",
+        "test/module/typings/esm/index.ts:202-235"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:183-193",
+        "test/module/typings/esm/index.ts:206-216"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:19-28",
+        "test/module/typings/esm/index.ts:42-51"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:219-225",
+        "test/module/typings/esm/index.ts:242-248"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:219-249",
+        "test/module/typings/esm/index.ts:242-272"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:223-233",
+        "test/module/typings/esm/index.ts:246-256"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:223-251",
+        "test/module/typings/esm/index.ts:246-274"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:227-252",
+        "test/module/typings/esm/index.ts:250-275"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:231-253",
+        "test/module/typings/esm/index.ts:254-276"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:239-256",
+        "test/module/typings/esm/index.ts:262-279"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:251-259",
+        "test/module/typings/esm/index.ts:274-282"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:254-275",
+        "test/module/typings/esm/index.ts:277-298"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:264-275",
+        "test/module/typings/esm/index.ts:287-298"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:279-289",
+        "test/module/typings/cjs/index.ts:294-304"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:345-354",
+        "test/module/typings/esm/index.ts:374-383"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:68-98",
+        "test/module/typings/esm/index.ts:91-121"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:72-102",
+        "test/module/typings/esm/index.ts:95-125"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:76-106",
+        "test/module/typings/esm/index.ts:99-129"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:80-111",
+        "test/module/typings/esm/index.ts:103-134"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:84-116",
+        "test/module/typings/esm/index.ts:107-139"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:96-102",
+        "test/module/typings/esm/index.ts:119-125"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/specs/core/mergeConfig.spec.js:173-213",
+        "test/specs/core/mergeConfig.spec.js:229-269"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/specs/interceptors.spec.js:238-252",
+        "test/specs/interceptors.spec.js:267-281"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/specs/interceptors.spec.js:575-587",
+        "test/specs/interceptors.spec.js:589-601"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/specs/requests.spec.js:236-255",
+        "test/specs/requests.spec.js:257-276"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/specs/utils/endsWith.js:1-12",
+        "test/specs/utils/kindOfTest.js:1-12"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/specs/xsrf.spec.js:100-113",
+        "test/specs/xsrf.spec.js:115-128"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/unit/adapters/fetch.js:132-152",
+        "test/unit/adapters/fetch.js:206-226"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/unit/adapters/fetch.js:134-154",
+        "test/unit/adapters/fetch.js:208-228"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/unit/adapters/fetch.js:174-188",
+        "test/unit/adapters/fetch.js:249-263"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/unit/adapters/fetch.js:251-263",
+        "test/unit/adapters/http.js:2000-2012"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/unit/adapters/fetch.js:251-263",
+        "test/unit/adapters/http.js:2060-2072"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/unit/adapters/http.js:1057-1077",
+        "test/unit/adapters/http.js:1158-1178"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/unit/adapters/http.js:1321-1341",
+        "test/unit/adapters/http.js:1364-1384"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/unit/adapters/http.js:1321-1341",
+        "test/unit/adapters/http.js:1400-1420"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/unit/adapters/http.js:1364-1384",
+        "test/unit/adapters/http.js:1400-1420"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/unit/adapters/http.js:1960-1979",
+        "test/unit/adapters/http.js:2018-2038"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "lib/axios.js:50-60",
+        "test/manual/promise.js:9-9"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "click",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/click/_compat.py:176-191",
+        "src/click/_compat.py:194-209"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "click",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/click/_compat.py:287-300",
+        "src/click/_compat.py:303-316"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "click",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/click/decorators.py:133-165",
+        "src/click/decorators.py:258-290"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "click",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/click/decorators.py:324-349",
+        "src/click/decorators.py:352-377"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "click",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/click/decorators.py:550-556",
+        "src/click/decorators.py:592-598"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "click",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/click/exceptions.py:238-260",
+        "src/click/exceptions.py:274-296"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "click",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/click/shell_completion.py:432-442",
+        "src/click/shell_completion.py:530-540"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "click",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/click/shell_completion.py:451-464",
+        "src/click/shell_completion.py:527-540"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "click",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/click/shell_completion.py:454-464",
+        "src/click/shell_completion.py:530-540"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "click",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/test_arguments.py:340-345",
+        "tests/test_arguments.py:394-399"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "click",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/test_basic.py:207-213",
+        "tests/test_basic.py:230-236"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "click",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/test_basic.py:550-562",
+        "tests/test_basic.py:608-620"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "click",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/test_context.py:52-59",
+        "tests/test_context.py:75-82"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "click",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/test_context.py:539-566",
+        "tests/test_context.py:593-620"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "click",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/test_options.py:939-946",
+        "tests/test_options.py:972-979"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "click",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/test_stream_lifecycle.py:340-347",
+        "tests/test_stream_lifecycle.py:498-505"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "click",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/test_termui.py:977-985",
+        "tests/test_termui.py:997-1005"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "click",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/test_testing.py:18-26",
+        "tests/test_testing.py:36-44"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "cobra",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "args_test.go:190-206",
+        "args_test.go:240-256"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "cobra",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "bash_completions.go:567-573",
+        "bash_completions.go:581-587"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "cobra",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "command.go:1344-1355",
+        "command.go:1414-1425"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "cobra",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "command.go:412-420",
+        "command.go:422-430"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "cobra",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "command.go:464-473",
+        "command.go:505-515"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "cobra",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "command.go:563-570",
+        "command.go:573-580"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "cobra",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "completions_test.go:1326-1354",
+        "completions_test.go:2292-2320"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "cobra",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "completions_test.go:1337-1354",
+        "completions_test.go:2303-2320"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "cobra",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "completions_test.go:1385-1402",
+        "completions_test.go:1718-1735"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "cobra",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "completions_test.go:1404-1433",
+        "completions_test.go:1504-1533"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "cobra",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "completions_test.go:1753-1763",
+        "completions_test.go:1797-1807"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "cobra",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "completions_test.go:3059-3083",
+        "completions_test.go:3159-3183"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "cobra",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "completions_test.go:3060-3071",
+        "completions_test.go:3160-3171"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "cobra",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "completions_test.go:3060-3071",
+        "completions_test.go:3258-3269"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "cobra",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "completions_test.go:3122-3139",
+        "completions_test.go:3220-3237"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "cobra",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "completions_test.go:3142-3155",
+        "completions_test.go:3568-3581"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "cobra",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "completions_test.go:3240-3253",
+        "completions_test.go:3334-3347"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "cobra",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "completions_test.go:391-423",
+        "completions_test.go:442-474"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "cobra",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "doc/md_docs.go:125-129",
+        "doc/yaml_docs.go:53-57"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "cobra",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "doc/rest_docs_test.go:80-96",
+        "doc/yaml_docs_test.go:57-73"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "cobra",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "fish_completions.go:28-34",
+        "powershell_completions.go:31-37"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "deslop",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "crates/deslop-core/src/cluster_filters/structural_families/tests.rs:305-314",
+        "crates/deslop-core/src/cluster_filters/structural_families/tests.rs:357-366"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "deslop",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "crates/deslop-core/src/live/session.rs:753-759",
+        "crates/deslop-core/src/live/session.rs:779-785"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "deslop",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "crates/deslop-core/src/pipeline/corpus.rs:128-133",
+        "crates/deslop-core/src/pipeline/session/mod.rs:459-464"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "deslop",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "crates/deslop-core/src/refactor/emit.rs:108-113",
+        "crates/deslop-core/src/refactor/merge/mod.rs:245-250"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "deslop",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "crates/deslop-core/tests/content_gate_admits.rs:63-76",
+        "crates/deslop-core/tests/content_gate_rejects.rs:47-60"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "deslop",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "crates/deslop-lsp/tests/cli.rs:324-330",
+        "crates/deslop/tests/cli/invocation.rs:29-35"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "deslop",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "crates/deslop-lsp/tests/cpu_throttle_knob.rs:218-222",
+        "crates/deslop-lsp/tests/observability_heartbeat.rs:231-235"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "deslop",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "crates/deslop-lsp/tests/cpu_throttle_knob.rs:243-251",
+        "crates/deslop-lsp/tests/observability_heartbeat.rs:237-245"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "deslop",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "crates/deslop-lsp/tests/cpu_throttle_knob.rs:253-258",
+        "crates/deslop-lsp/tests/observability_heartbeat.rs:248-253"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "deslop",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "crates/deslop-lsp/tests/cpu_throttle_knob.rs:260-268",
+        "crates/deslop-lsp/tests/observability_heartbeat.rs:255-263"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "deslop",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "crates/deslop-mcp/tests/cli.rs:1801-1808",
+        "crates/deslop-mcp/tests/cli.rs:2761-2768"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "deslop",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "crates/deslop-test-support/src/skip_policy.rs:394-400",
+        "crates/deslop-test-support/src/test_target_parity/suite_scan.rs:190-196"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "deslop",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "crates/deslop/tests/cli/thresholds.rs:131-137",
+        "crates/deslop/tests/cli/thresholds.rs:161-167"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "deslop",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "crates/deslop/tests/common/corpora.rs:79-84",
+        "crates/deslop/tests/common/corpora.rs:93-98"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "deslop",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "crates/deslop/tests/python_issue_104_module_preamble.rs:24-33",
+        "crates/deslop/tests/python_issue_133_constant_table.rs:45-54"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "deslop",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "crates/deslop-core/src/cluster_filters/calls/args.rs:134-139",
+        "crates/deslop-core/src/cluster_filters/calls/asserts.rs:164-168"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "fsharp.data",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/FSharp.Data.DesignTime/Xml/XmlProvider.fs:155-168",
+        "src/FSharp.Data.DesignTime/Xml/XmlProvider.fs:90-103"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "fsharp.data",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:515-547",
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:664-696"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "fsharp.data",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:526-608",
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:675-757"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "fsharp.data",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:555-586",
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:704-735"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "fsharp.data",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:564-575",
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:713-724"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "fsharp.data",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:576-608",
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:725-757"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "fsharp.data",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:587-619",
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:736-768"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "fsharp.data",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:597-630",
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:746-779"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "fsharp.data",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:620-652",
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:769-801"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "fsharp.data",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/FSharp.Data.Http/Http.fs:2333-2368",
+        "src/FSharp.Data.Http/Http.fs:2369-2404"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "fsharp.data",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/FSharp.Data.Json.Core/JsonSchema.fs:181-187",
+        "src/FSharp.Data.Json.Core/JsonSchema.fs:197-203"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "fsharp.data",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/FSharp.Data.Json.Core/JsonSchema.fs:404-409",
+        "src/FSharp.Data.Json.Core/JsonSchema.fs:420-425"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "fsharp.data",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:442-447",
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:449-454"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "fsharp.data",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "docs/library/HtmlProvider.fsx:105-113",
+        "docs/library/HtmlProvider.fsx:370-404"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "fsharp.data",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "docs/library/TypeInference.fsx:185-210",
+        "tests/FSharp.Data.Tests/JsonProvider.fs:832-839"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "fsharp.data",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/FSharp.Data.DesignTime/CommonProviderImplementation/Helpers.fs:12-17",
+        "src/FSharp.Data.DesignTime/Xml/XmlGenerator.fs:7-12"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "fsharp.data",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/FSharp.Data.DesignTime/Json/JsonGenerator.fs:10-20",
+        "src/FSharp.Data.DesignTime/Xml/XmlGenerator.fs:10-22"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "fsharp.data",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/FSharp.Data.DesignTime/Json/JsonGenerator.fs:7-12",
+        "tests/FSharp.Data.DesignTime.Tests/InferenceTests.fs:8-13"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "fsharp.data",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/FSharp.Data.DesignTime/Json/JsonProvider.fs:6-13",
+        "src/FSharp.Data.DesignTime/Xml/XmlProvider.fs:7-14"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "fsharp.data",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/FSharp.Data.DesignTime/Json/JsonProvider.fs:8-18",
+        "src/FSharp.Data.DesignTime/Xml/XmlProvider.fs:9-19"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "fsharp.data",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/FSharp.Data.Http/Http.fs:2043-2045",
+        "src/FSharp.Data.Http/Http.fs:2046-2048"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "fsharp.data",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/FSharp.Data.Http/Http.fs:2044-2046",
+        "src/FSharp.Data.Http/Http.fs:2047-2049"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "fsharp.data",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/FSharp.Data.Http/Http.fs:248-278",
+        "src/FSharp.Data.Http/Http.fs:690-720"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "fsharp.data",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/FSharp.Data.Http/Http.fs:359-390",
+        "src/FSharp.Data.Http/Http.fs:418-449"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "fsharp.data",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/FSharp.Data.Http/Http.fs:418-445",
+        "src/FSharp.Data.Http/Http.fs:697-724"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "fsharp.data",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/FSharp.Data.Http/Http.fs:57-73",
+        "tests/FSharp.Data.Core.Tests/WorldBankRuntime.fs:23-173"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "fsharp.data",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HtmlRuntimeTypes.fs:1-9",
+        "tests/FSharp.Data.Tests/JsonProvider.fs:1-9"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.Shared/Caching/SerializingCacheProvider.cs:10-51",
+        "src/Polly.Shared/Caching/SerializingCacheProvider.cs:59-100"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.Shared/Retry/RetrySyntaxAsync.cs:531-535",
+        "src/Polly.Shared/Retry/RetryTResultSyntaxAsync.cs:403-407"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.Shared/Retry/RetryTResultSyntaxAsync.cs:467-479",
+        "src/Polly.Shared/Retry/RetryTResultSyntaxAsync.cs:804-816"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.Shared/Wrap/PolicyWrapSyntax.cs:44-77",
+        "src/Polly.Shared/Wrap/PolicyWrapSyntaxAsync.cs:44-77"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.Shared/Wrap/PolicyWrapSyntax.cs:8-42",
+        "src/Polly.Shared/Wrap/PolicyWrapSyntaxAsync.cs:8-42"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Caching/CacheAsyncSpecs.cs:17-48",
+        "src/Polly.SharedSpecs/Caching/CacheSpecs.cs:16-47"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Caching/SerializingCacheProviderAsyncSpecs.cs:14-46",
+        "src/Polly.SharedSpecs/Caching/SerializingCacheProviderSpecs.cs:12-44"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:1280-1303",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:1378-1401"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:1280-1303",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:1427-1450"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:1470-1494",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:1508-1532"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:152-156",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:153-157"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:1901-1925",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:2537-2561"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:2437-2461",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:2537-2561"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:43-137",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:44-138"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:65-113",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:66-114"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:65-157",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:66-158"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:1482-1497",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:1521-1536"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:1583-1608",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerSpecs.cs:501-526"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:2082-2107",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:2472-2497"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:2161-2184",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:2223-2246"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:2471-2494",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:2571-2594"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:408-427",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:496-515"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:1198-1203",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerSpecs.cs:1132-1137"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:234-251",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:665-682"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:998-1010",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerSpecs.cs:988-1000"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerSpecs.cs:404-429",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerSpecs.cs:501-526"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:294-312",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:333-351"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:298-315",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:337-354"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:813-820",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:805-812"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultMixedResultExceptionSpecs.cs:387-398",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultMixedResultExceptionSpecs.cs:42-53"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:1027-1043",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:981-997"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/PolicyContextAndKeyAsyncSpecs.cs:206-283",
+        "src/Polly.SharedSpecs/PolicyContextAndKeySpecs.cs:202-280"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/RetryAsyncSpecs.cs:378-382",
+        "src/Polly.SharedSpecs/Retry/RetryTResultSpecsAsync.cs:438-442"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/WaitAndRetrySpecs.cs:330-341",
+        "src/Polly.SharedSpecs/Retry/WaitAndRetrySpecs.cs:375-386"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Wrap/PolicyWrapSpecs.cs:17-104",
+        "src/Polly.SharedSpecs/Wrap/PolicyWrapSpecsAsync.cs:18-104"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Wrap/PolicyWrapSpecs.cs:37-109",
+        "src/Polly.SharedSpecs/Wrap/PolicyWrapSpecsAsync.cs:38-109"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/Polly.Shared/Bulkhead/BulkheadEngine.cs:15-21",
+        "src/Polly.Shared/Caching/CacheEngine.cs:13-18"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "polly",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:334-337",
+        "src/Polly.SharedSpecs/Fallback/FallbackAsyncSpecs.cs:577-604"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    }
+  ]
+}

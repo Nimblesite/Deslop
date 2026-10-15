@@ -24,7 +24,7 @@ use crate::{
     corpus_measure::{binary_sha256, ProcessCost},
     corpus_score::{
         checks::{CheckFailure, CheckOutcome},
-        run::{report_stem, write_scorecard},
+        run::{report_stem, write_scorecard, Scoring},
         RunCost,
     },
 };
@@ -116,7 +116,7 @@ pub fn publish(record: &Record<'_>) -> Result<PathBuf> {
         &run_path,
         &run_manifest(record, &relative_dir, &binary_sha)?,
     )?;
-    let written = write_scorecard(&run_path, &root, &dir, &stem, false)?;
+    let written = write_scorecard(&run_path, &root, &dir, &stem, Scoring::default())?;
     println!("==> corpus scorecard: {}", written.path.display());
     Ok(written.path)
 }
