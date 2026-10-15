@@ -618,6 +618,325 @@
       "engine": "deslop (binary ad0de561b294)"
     },
     {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "examples/flutter_firebase_login/lib/login/view/login_form.dart:53-92",
+        "examples/flutter_firebase_login/lib/sign_up/view/sign_up_form.dart:42-81"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "examples/flutter_firebase_login/packages/form_inputs/lib/src/password.dart:19-28",
+        "examples/flutter_form_validation/lib/models/password.dart:9-18"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "examples/flutter_login/lib/login/bloc/login_event.dart:3-30",
+        "examples/flutter_todos/lib/edit_todo/bloc/edit_todo_event.dart:3-30"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "examples/flutter_login/lib/login/models/password.dart:1-14",
+        "examples/flutter_login/lib/login/models/username.dart:1-14"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "examples/flutter_login/test/login/models/password_test.dart:2-38",
+        "examples/flutter_login/test/login/models/username_test.dart:2-38"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "examples/flutter_login/test/login/view/login_form_test.dart:22-45",
+        "examples/flutter_login/test/login/view/login_form_test.dart:47-70"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "examples/flutter_timer/lib/timer/view/timer_page.dart:83-96",
+        "examples/flutter_timer/lib/timer/view/timer_page.dart:97-110"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "examples/flutter_todos/lib/main_development.dart:1-13",
+        "examples/flutter_todos/lib/main_staging.dart:1-13"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "examples/flutter_todos/lib/main_production.dart:1-13",
+        "examples/flutter_todos/lib/main_staging.dart:1-13"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "examples/flutter_todos/test/edit_todo/bloc/edit_todo_bloc_test.dart:170-186",
+        "examples/flutter_todos/test/edit_todo/bloc/edit_todo_bloc_test.dart:74-90"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "examples/flutter_todos/test/edit_todo/bloc/edit_todo_event_test.dart:26-42",
+        "examples/flutter_todos/test/edit_todo/bloc/edit_todo_event_test.dart:8-24"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "examples/flutter_todos/test/stats/view/stats_page_test.dart:130-169",
+        "examples/flutter_todos/test/stats/view/stats_page_test.dart:89-128"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "examples/flutter_weather/lib/weather/cubit/weather_cubit.dart:25-36",
+        "examples/flutter_weather/lib/weather/cubit/weather_cubit.dart:49-60"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "examples/flutter_weather/test/weather/cubit/weather_cubit_test.dart:102-114",
+        "examples/flutter_weather/test/weather/cubit/weather_cubit_test.dart:224-236"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "extensions/vscode/src/commands/new-bloc.command.ts:110-146",
+        "extensions/vscode/src/commands/new-cubit.command.ts:96-132"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "extensions/vscode/src/commands/new-bloc.command.ts:20-74",
+        "extensions/vscode/src/commands/new-cubit.command.ts:16-70"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "extensions/vscode/src/templates/bloc-state.template.ts:4-55",
+        "extensions/vscode/src/templates/cubit-state.template.ts:4-55"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/bloc/test/bloc_event_transformer_test.dart:5-41",
+        "packages/bloc/test/bloc_event_transformer_test_legacy.dart:5-41"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/bloc/test/bloc_test.dart:303-315",
+        "packages/bloc/test/bloc_test.dart:352-364"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/bloc/test/bloc_test.dart:303-316",
+        "packages/bloc/test/bloc_test.dart:352-365"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/bloc/test/bloc_test.dart:541-604",
+        "packages/bloc/test/bloc_test.dart:640-703"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/bloc/test/bloc_test.dart:542-604",
+        "packages/bloc/test/bloc_test.dart:641-703"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/bloc_lint/lib/src/text_document.dart:100-158",
+        "packages/bloc_tools/lib/src/lsp/text_document.dart:41-99"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/bloc_lint/lib/src/text_document.dart:191-197",
+        "packages/bloc_tools/lib/src/lsp/text_document.dart:195-201"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/bloc_lint/test/src/analysis_options_test.dart:135-147",
+        "packages/bloc_lint/test/src/linter_test.dart:49-61"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/replay_bloc/test/replay_bloc_test.dart:202-240",
+        "packages/replay_bloc/test/replay_bloc_test.dart:489-527"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/replay_bloc/test/replay_bloc_test.dart:271-306",
+        "packages/replay_bloc/test/replay_bloc_test.dart:529-564"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/replay_bloc/test/replay_bloc_test.dart:423-443",
+        "packages/replay_bloc/test/replay_bloc_test.dart:71-91"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "bloc",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/replay_bloc/test/replay_cubit_test.dart:188-245",
+        "packages/replay_bloc/test/replay_cubit_test.dart:433-490"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
       "repo": "click",
       "verdict": "clearly_in",
       "occurrences": [
@@ -1047,6 +1366,83 @@
       "engine": "deslop (binary ad0de561b294)"
     },
     {
+      "repo": "composer",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Composer/Util/ConfigValidator.php:190-197",
+        "src/Composer/Util/ConfigValidator.php:201-208"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/Composer/Command/RequireCommand.php:56-70",
+        "src/Composer/Util/RemoteFilesystem.php:34-48"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/Composer/Installer/PackageEvent.php:41-78",
+        "src/Composer/Plugin/PreFileDownloadEvent.php:62-74"
+      ],
+      "outcome": "fail",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/Composer/Plugin/PrePoolCreateEvent.php:30-62",
+        "tests/Composer/Test/Autoload/AutoloadGeneratorTest.php:56-94"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/Composer/Plugin/PrePoolCreateEvent.php:34-62",
+        "src/Composer/Util/RemoteFilesystem.php:34-46"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tests/Composer/Test/DependencyResolver/PoolTest.php:1-19",
+        "tests/Composer/Test/Policy/MalwarePolicyConfigTest.php:1-19"
+      ],
+      "outcome": "fail",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tests/Composer/Test/EventDispatcher/EventDispatcherTest.php:25-29",
+        "tests/Composer/Test/Package/Loader/ValidatingArrayLoaderTest.php:15-19"
+      ],
+      "outcome": "fail",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
       "repo": "deslop",
       "verdict": "clearly_in",
       "occurrences": [
@@ -1220,6 +1616,127 @@
       ],
       "outcome": "pass",
       "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "dio",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "dio/test/interceptor_test.dart:1541-1583",
+        "dio/test/interceptor_test.dart:1585-1628"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "dio",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "dio_test/lib/src/test/headers_tests.dart:49-51",
+        "plugins/web_adapter/test/cors_preflight_test.dart:203-206"
+      ],
+      "outcome": "fail",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "django",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "django/core/management/commands/sqlflush.py:12-24",
+        "django/core/management/commands/sqlsequencereset.py:10-22"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "django",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "django/db/models/fields/related_descriptors.py:297-309",
+        "django/db/models/fields/related_descriptors.py:578-590"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "django",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/flatpages_tests/test_csrf.py:32-67",
+        "tests/flatpages_tests/test_middleware.py:17-52"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "django",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/flatpages_tests/test_csrf.py:72-105",
+        "tests/flatpages_tests/test_middleware.py:71-104"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "django",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/flatpages_tests/test_templatetags.py:13-47",
+        "tests/flatpages_tests/test_views.py:15-49"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "django",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/migrations/test_commands.py:1895-1909",
+        "tests/migrations/test_commands.py:1973-1987"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "django",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/migrations/test_operations.py:4319-4343",
+        "tests/migrations/test_operations.py:4388-4412"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "django",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/model_meta/results.py:356-403",
+        "tests/model_meta/results.py:482-529"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "django",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/timezones/tests.py:212-230",
+        "tests/timezones/tests.py:493-511"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
       "engine": "deslop (binary ad0de561b294)"
     },
     {
@@ -1517,6 +2034,534 @@
       ],
       "outcome": "pass",
       "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "giraffe",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tests/Giraffe.Tests/EndpointRoutingTests.fs:18-24",
+        "tests/Giraffe.Tests/EndpointRoutingTests.fs:180-186"
+      ],
+      "outcome": "fail",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/AuthMiddleware.php:819-842",
+        "src/Handler/StreamHandler.php:594-617"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Cookie/SetCookie.php:197-210",
+        "src/Cookie/SetCookie.php:215-228"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Handler/CurlFactory.php:2912-2922",
+        "src/Handler/TlsVersion.php:55-63"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Handler/CurlFactory.php:602-624",
+        "src/Handler/CurlMultiHandler.php:531-553"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/AuthMiddlewareTest.php:218-233",
+        "tests/AuthMiddlewareTest.php:259-274"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/AuthMiddlewareTest.php:259-274",
+        "tests/AuthMiddlewareTest.php:614-629"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/ClientTest.php:1598-1631",
+        "tests/Handler/CurlMultiHandlerTest.php:4098-4131"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Cookie/CookieJarTest.php:528-541",
+        "tests/Cookie/CookieJarTest.php:566-579"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Cookie/FileCookieJarTest.php:271-278",
+        "tests/Cookie/SessionCookieJarTest.php:216-223"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Cookie/FileCookieJarTest.php:336-366",
+        "tests/Cookie/SessionCookieJarTest.php:229-259"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:10182-10219",
+        "tests/Handler/ProxyEnvTest.php:198-235"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:6475-6487",
+        "tests/Handler/CurlFactoryTest.php:6757-6769"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Handler/CurlHandlerTest.php:194-233",
+        "tests/Handler/CurlMultiHandlerTest.php:1858-1897"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Handler/CurlHandlerTest.php:327-386",
+        "tests/Handler/CurlMultiHandlerTest.php:1671-1730"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Handler/ProxyEnvTest.php:198-235",
+        "tests/Handler/StreamHandlerTest.php:2206-2243"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:5063-5095",
+        "tests/Handler/StreamHandlerTest.php:5132-5164"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:5071-5082",
+        "tests/Handler/StreamHandlerTest.php:5140-5151"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/RedirectMiddlewareTest.php:1241-1273",
+        "tests/RedirectMiddlewareTest.php:359-392"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "resources/image_cache.go:61-66",
+        "resources/image_cache.go:86-91"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tpl/collections/collections.go:195-227",
+        "tpl/collections/collections.go:355-387"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "common/paths/path_test.go:136-143",
+        "tpl/internal/go_templates/htmltemplate/css_test.go:220-227"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "config/allconfig/allconfig_integration_test.go:135-166",
+        "tpl/transform/transform_integration_test.go:353-381"
+      ],
+      "outcome": "fail",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "hugolib/hugo_sites_build_test.go:208-244",
+        "hugolib/menu_test.go:111-146"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tpl/collections/init.go:151-164",
+        "tpl/urls/init.go:47-58"
+      ],
+      "outcome": "fail",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tpl/internal/go_templates/htmltemplate/exec_test.go:497-500",
+        "tpl/internal/go_templates/htmltemplate/exec_test.go:664-668"
+      ],
+      "outcome": "fail",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tpl/internal/go_templates/texttemplate/exec_test.go:605-611",
+        "tpl/internal/go_templates/texttemplate/exec_test.go:618-624"
+      ],
+      "outcome": "fail",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tpl/lang/init.go:35-52",
+        "tpl/strings/init.go:51-69"
+      ],
+      "outcome": "fail",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "nest",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "integration/inspector/src/users/users.controller.ts:14-42",
+        "integration/repl/src/users/users.controller.ts:14-42"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "nest",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "integration/microservices/e2e/sum-rpc-tls.spec.ts:61-129",
+        "integration/microservices/e2e/sum-rpc.spec.ts:46-114"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "nest",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "integration/microservices/e2e/sum-rpc-tls.spec.ts:68-137",
+        "integration/microservices/e2e/sum-rpc.spec.ts:53-122"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "nest",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "integration/microservices/src/app.controller.ts:32-45",
+        "integration/microservices/src/tcp-tls/app.controller.ts:45-58"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "nest",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "integration/microservices/src/app.controller.ts:99-114",
+        "integration/microservices/src/tcp-tls/app.controller.ts:112-127"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "nest",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "integration/microservices/src/app.controller.ts:99-117",
+        "integration/microservices/src/tcp-tls/app.controller.ts:112-130"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "nest",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "integration/microservices/src/redis/redis.controller.ts:25-47",
+        "integration/microservices/src/tcp-tls/app.controller.ts:69-91"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "nest",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "integration/versioning/e2e/custom-versioning-fastify.spec.ts:299-317",
+        "integration/versioning/e2e/custom-versioning-fastify.spec.ts:780-798"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "nest",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "integration/versioning/e2e/header-versioning-fastify.spec.ts:31-343",
+        "integration/versioning/e2e/header-versioning.spec.ts:24-336"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "nest",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "integration/versioning/e2e/header-versioning-fastify.spec.ts:365-671",
+        "integration/versioning/e2e/header-versioning.spec.ts:355-661"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "nest",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "integration/versioning/e2e/media-type-versioning-fastify.spec.ts:31-343",
+        "integration/versioning/e2e/media-type-versioning.spec.ts:24-336"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "nest",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "integration/versioning/e2e/media-type-versioning-fastify.spec.ts:409-451",
+        "integration/versioning/e2e/media-type-versioning.spec.ts:399-441"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "nest",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "integration/versioning/e2e/uri-versioning-fastify.spec.ts:207-363",
+        "integration/versioning/e2e/uri-versioning.spec.ts:197-353"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "nest",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/core/test/errors/test/exceptions-zone.spec.ts:21-33",
+        "packages/core/test/errors/test/exceptions-zone.spec.ts:76-88"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "nest",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/core/test/hooks/before-app-shutdown.hook.spec.ts:19-37",
+        "packages/core/test/hooks/on-module-init.hook.spec.ts:19-37"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "nest",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "sample/01-cats-app/e2e/cats/cats.e2e-spec.ts:1-34",
+        "sample/36-hmr-esm/e2e/cats/cats.e2e-spec.ts:1-34"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "nest",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "sample/01-cats-app/src/cats/cats.controller.ts:15-32",
+        "sample/36-hmr-esm/src/cats/cats.controller.ts:15-32"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "nest",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "sample/31-graphql-federation-code-first/users-application/eslint.config.mjs:8-42",
+        "sample/32-graphql-federation-schema-first/posts-application/eslint.config.mjs:8-42"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "nest",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "sample/31-graphql-federation-code-first/users-application/src/users/users.resolver.spec.ts:1-39",
+        "sample/32-graphql-federation-schema-first/users-application/src/users/users.resolver.spec.ts:1-39"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "nest",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "sample/31-graphql-federation-code-first/users-application/src/users/users.resolver.spec.ts:6-39",
+        "sample/32-graphql-federation-schema-first/users-application/src/users/users.resolver.spec.ts:6-39"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
       "engine": "deslop (binary ad0de561b294)"
     },
     {
@@ -1935,6 +2980,589 @@
       ],
       "outcome": "pass",
       "since": "2026-10-15T00:16:41.805Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "react",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "compiler/packages/babel-plugin-react-compiler/src/HIR/HIR.ts:1554-1589",
+        "compiler/packages/babel-plugin-react-compiler/src/Inference/InferMutationAliasingEffects.ts:2791-2823"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "react",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "compiler/packages/babel-plugin-react-compiler/src/__tests__/fixtures/compiler/repro-dont-memoize-array-with-capturing-map-after-hook.js:1-26",
+        "compiler/packages/babel-plugin-react-compiler/src/__tests__/fixtures/compiler/repro-dont-memoize-array-with-mutable-map-after-hook.js:1-26"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "react",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/react-dom/src/__tests__/ReactDOMServerIntegrationAttributes-test.js:15-35",
+        "packages/react-dom/src/__tests__/ReactDOMServerIntegrationElements-test.js:17-36"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "react",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/react-reconciler/src/ReactFiberPerformanceTrack.js:338-419",
+        "packages/react-reconciler/src/ReactFiberPerformanceTrack.js:421-486"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "react",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/react-server-dom-webpack/src/__tests__/ReactFlightDOM-test.js:1268-1313",
+        "packages/react-server-dom-webpack/src/__tests__/ReactFlightDOM-test.js:1315-1372"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "react",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "fixtures/attribute-behavior/src/attributes.js:1019-1030",
+        "fixtures/attribute-behavior/src/attributes.js:1941-1952"
+      ],
+      "outcome": "fail",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "ripgrep",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "crates/globset/src/lib.rs:1035-1041",
+        "crates/globset/src/lib.rs:1043-1049"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "ripgrep",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "crates/printer/src/json.rs:1033-1039",
+        "crates/printer/src/json.rs:1049-1055"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "ripgrep",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "crates/printer/src/summary.rs:1054-1064",
+        "crates/printer/src/summary.rs:921-931"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "ripgrep",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "crates/searcher/src/searcher/core.rs:561-580",
+        "crates/searcher/src/searcher/core.rs:592-611"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "ripgrep",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/json.rs:159-178",
+        "tests/json.rs:210-229"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "serilog",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Serilog/Configuration/LoggerEnrichmentConfiguration.cs:22-66",
+        "src/Serilog/Configuration/LoggerFilterConfiguration.cs:22-62"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "serilog",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Serilog/Core/Pipeline/MessageTemplateCache.cs:18-73",
+        "test/Serilog.PerformanceTests/Support/DictionaryMessageTemplateCache.cs:4-50"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "serilog",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Serilog/Formatting/Json/JsonValueFormatter.cs:314-331",
+        "src/Serilog/Formatting/Json/JsonValueFormatter.cs:333-350"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "serilog",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/Serilog.PerformanceTests/Support/ConcurrentDictionaryTemplateCache.cs:4-46",
+        "test/Serilog.PerformanceTests/Support/DictionaryMessageTemplateCache.cs:4-50"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "tokio",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "examples/connect-tcp.rs:28-44",
+        "examples/connect-udp.rs:28-44"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "tokio",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tokio-util/src/time/wheel/mod.rs:278-317",
+        "tokio/src/runtime/time/wheel/mod.rs:292-331"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "tokio",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tokio/src/fs/file/tests.rs:617-635",
+        "tokio/src/fs/file/tests.rs:651-669"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "tokio",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tokio/src/net/tcp/socket.rs:595-615",
+        "tokio/src/net/tcp/socket.rs:655-675"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "tokio",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tokio/src/runtime/time/wheel/level.rs:150-192",
+        "tokio/src/runtime/time_alt/wheel/level.rs:152-194"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "tokio",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tokio/tests/dump.rs:35-62",
+        "tokio/tests/dump.rs:73-100"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "tokio",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tokio/tests/tcp_stream.rs:181-213",
+        "tokio/tests/uds_stream.rs:209-241"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "tokio",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tokio/tests/tcp_stream.rs:297-312",
+        "tokio/tests/tcp_stream.rs:38-53"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v3/tests/async-parsing.test.ts:53-110",
+        "packages/zod/src/v4/classic/tests/async-parsing.test.ts:52-109"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v3/tests/async-parsing.test.ts:68-125",
+        "packages/zod/src/v4/classic/tests/async-parsing.test.ts:67-124"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v3/tests/branded.test.ts:18-23",
+        "packages/zod/src/v4/classic/tests/brand.test.ts:16-21"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v3/tests/map.test.ts:71-79",
+        "packages/zod/src/v4/classic/tests/map.test.ts:181-189"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v3/tests/object.test.ts:186-199",
+        "packages/zod/src/v4/classic/tests/object.test.ts:195-208"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v3/tests/partials.test.ts:165-233",
+        "packages/zod/src/v4/classic/tests/partial.test.ts:79-147"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v3/tests/record.test.ts:149-162",
+        "packages/zod/src/v4/classic/tests/record.test.ts:420-433"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v3/tests/unions.test.ts:6-28",
+        "packages/zod/src/v4/classic/tests/union.test.ts:5-27"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v4/classic/from-json-schema.ts:567-572",
+        "packages/zod/src/v4/classic/from-json-schema.ts:772-777"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/codec.test.ts:24-39",
+        "packages/zod/src/v4/mini/tests/codec.test.ts:27-42"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/codec.test.ts:85-183",
+        "packages/zod/src/v4/mini/tests/codec.test.ts:88-186"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/detached-methods.test.ts:63-68",
+        "packages/zod/src/v4/classic/tests/detached-methods.test.ts:75-80"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/in-out.test.ts:147-150",
+        "packages/zod/src/v4/classic/tests/in-out.test.ts:6-9"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/index.test.ts:134-215",
+        "packages/zod/src/v4/mini/tests/index.test.ts:134-215"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/index.test.ts:155-222",
+        "packages/zod/src/v4/mini/tests/index.test.ts:155-222"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/index.test.ts:174-191",
+        "packages/zod/src/v4/mini/tests/index.test.ts:174-191"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/index.test.ts:275-289",
+        "packages/zod/src/v4/mini/tests/index.test.ts:331-345"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/index.test.ts:44-166",
+        "packages/zod/src/v4/mini/tests/index.test.ts:44-166"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/index.test.ts:44-67",
+        "packages/zod/src/v4/mini/tests/index.test.ts:44-67"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/index.test.ts:461-560",
+        "packages/zod/src/v4/mini/tests/index.test.ts:537-636"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/index.test.ts:480-489",
+        "packages/zod/src/v4/mini/tests/index.test.ts:556-565"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/index.test.ts:727-736",
+        "packages/zod/src/v4/mini/tests/index.test.ts:803-812"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/index.test.ts:832-847",
+        "packages/zod/src/v4/mini/tests/index.test.ts:935-950"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/index.test.ts:84-204",
+        "packages/zod/src/v4/mini/tests/index.test.ts:84-204"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/record.test.ts:179-193",
+        "packages/zod/src/v4/classic/tests/record.test.ts:266-280"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/recursive-types.test.ts:145-152",
+        "packages/zod/src/v4/mini/tests/recursive-types.test.ts:152-159"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v4/classic/tests/stringbool.test.ts:19-24",
+        "packages/zod/src/v4/mini/tests/index.test.ts:900-905"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v4/core/api.ts:162-177",
+        "packages/zod/src/v4/core/api.ts:180-195"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "packages/zod/src/v4/core/checks.ts:1043-1051",
+        "packages/zod/src/v4/core/checks.ts:1087-1095"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
+      "engine": "deslop (binary ad0de561b294)"
+    },
+    {
+      "repo": "zod",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "vitest.compile.config.ts:13-22",
+        "vitest.config.ts:8-17"
+      ],
+      "outcome": "pass",
+      "since": "2026-10-15T00:26:18.131Z",
       "engine": "deslop (binary ad0de561b294)"
     }
   ]
