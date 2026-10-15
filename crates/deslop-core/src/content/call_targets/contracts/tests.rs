@@ -11,6 +11,7 @@ use crate::{
 const FILE_PATH: &str = "dispatcher.ts";
 const METHOD: &[u8] = b"work";
 const TARGET_MESSAGE: &str = "the parsed fixture contains its selected method call";
+const ONE_PREDICATE: usize = 1;
 const NO_CHANGE: &str = "";
 const REBIND: &str = "value = other;";
 const SHADOW: &str = "let value = other;";
@@ -74,11 +75,34 @@ function run(value: any, other: any) {
   if (isReady(value)) { value.work(); }
 }
 ";
+const METHOD_PREDICATE: &str = r"import { isReady } from './external';
+class Unused {
+  isReady(value: unknown): value is Ready { return true; }
+}
+function run(value: any) {
+  if (isReady(value)) { value.work(); }
+}
+";
+const SWITCH_PREDICATE: &str = r"import { isReady } from './external';
+switch (flag) {
+  case 0: function isReady(value: unknown): value is Ready { return true; }
+}
+function run(value: any) {
+  if (isReady(value)) { value.work(); }
+}
+";
+const EXPORTED_PREDICATE: &str = r"export function isReady(value: unknown): value is Ready { return true; }
+function run(value: any) {
+  if (isReady(value)) { value.work(); }
+}
+";
 const AMBIGUOUS_PREDICATES: &[&str] = &[
     UNRELATED_PREDICATE,
     SHADOWED_PREDICATE,
     EXPRESSION_SHADOW,
     REBOUND_PREDICATE,
+    METHOD_PREDICATE,
+    SWITCH_PREDICATE,
 ];
 
 fn scenario(before: &str, after: &str, wrapper: (&str, &str)) -> String {
@@ -115,15 +139,36 @@ fn has_contract(before: &str, after: &str, wrapper: (&str, &str)) -> Result<bool
 
 fn source_has_contract(source: &str) -> Result<bool, CoreError> {
     let root = normalized_source(source)?;
-    let nodes = covered_nodes(&root, root.byte_range);
-    let contracts = ReceiverContracts::new(&nodes, source.as_bytes());
+    Ok(contract_within(&root, source, root.byte_range))
+}
+
+fn contract_within(root: &NormalizedNode, source: &str, range: ByteRange) -> bool {
+    let nodes = covered_nodes(root, range);
+    let contracts = ReceiverContracts::new(root, &nodes, source.as_bytes());
     let target = nodes
         .iter()
         .find(|node| selected_call(node, source.as_bytes()));
     assert!(target.is_some(), "{TARGET_MESSAGE}");
-    Ok(target
+    target
         .and_then(|node| receiver_contract(node, &contracts))
-        .is_some())
+        .is_some()
+}
+
+#[test]
+fn declaration_scope_still_matters_outside_the_copied_range() -> Result<(), CoreError> {
+    let source = UNRELATED_PREDICATE;
+    let root = normalized_source(source)?;
+    let nodes = covered_nodes(&root, root.byte_range);
+    let complete = ReceiverContracts::new(&root, &nodes, source.as_bytes());
+    assert_eq!(complete.predicates.len(), ONE_PREDICATE);
+    for predicate in complete.predicates {
+        let range = ByteRange {
+            start: predicate.byte_range.start,
+            end: root.byte_range.end,
+        };
+        assert!(!contract_within(&root, source, range));
+    }
+    Ok(())
 }
 
 #[test]
@@ -143,6 +188,7 @@ fn positive_guard_keeps_the_checked_receiver_until_it_changes() -> Result<(), Co
         );
     }
     assert!(has_contract(NO_CHANGE, NO_CHANGE, ASSIGN_RESULT)?);
+    assert!(source_has_contract(EXPORTED_PREDICATE)?);
     Ok(())
 }
 

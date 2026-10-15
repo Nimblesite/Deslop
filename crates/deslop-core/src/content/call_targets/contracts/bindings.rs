@@ -3,7 +3,7 @@
 use super::{bytes, NormalizedNode, IDENTIFIER_KIND};
 
 /// A declaration's name belongs to its parent scope, unlike an expression's name.
-const FUNCTION_DECLARATION: &str = "function_declaration";
+pub(super) const FUNCTION_DECLARATION: &str = "function_declaration";
 /// These productions introduce a scope for the declarations they contain.
 const BINDING_SCOPES: &[&str] = &[
     "statement_block",
@@ -35,19 +35,33 @@ const COMPOSITE_PATTERNS: &[&str] = &["array_pattern", "object_pattern", "rest_p
 const LOCAL_CALLABLE_BINDINGS: &[&str] = &["function_expression", "arrow_function"];
 /// These containers declare bindings directly in their own lexical scope.
 const LOCAL_BINDING_CONTAINERS: &[&str] = &["lexical_declaration", "formal_parameters"];
+/// Exporting a declaration does not give it a separate lexical scope.
+const TRANSPARENT_DECLARATIONS: &[&str] = &["export_statement"];
 
 /// Every enclosing lexical scope must also contain the predicate call.
 pub(super) fn declaration_reaches_call(
     declaration: &NormalizedNode,
     call: &NormalizedNode,
-    nodes: &[&NormalizedNode],
+    root: &NormalizedNode,
 ) -> bool {
-    nodes.iter().all(|scope| {
-        !BINDING_SCOPES.contains(&scope.kind)
-            || scope.byte_range == declaration.byte_range
-            || !scope.byte_range.covers(declaration.byte_range)
-            || scope.byte_range.covers(call.byte_range)
-    })
+    let mut pending = vec![root];
+    while let Some(scope) = pending.pop() {
+        if !strict_ancestor(scope, declaration) {
+            continue;
+        }
+        if !scope.byte_range.covers(call.byte_range)
+            && !TRANSPARENT_DECLARATIONS.contains(&scope.kind)
+        {
+            return false;
+        }
+        pending.extend(scope.children.iter());
+    }
+    true
+}
+
+/// A declaration's own body is not an enclosing scope at its call site.
+fn strict_ancestor(scope: &NormalizedNode, declaration: &NormalizedNode) -> bool {
+    scope.byte_range != declaration.byte_range && scope.byte_range.covers(declaration.byte_range)
 }
 
 /// Any competing copied binding makes the predicate's identity ambiguous.

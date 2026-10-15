@@ -144,7 +144,7 @@ pub(super) fn external_targets(
 ) -> Vec<Option<CallTarget>> {
     let nodes = covered_nodes(root, range);
     let declarations = declared_names(&nodes, source);
-    let targets = external_selector_ranges(&nodes, &declarations, source);
+    let targets = external_selector_ranges(root, &nodes, &declarations, source);
     let needs_shapes = targets.values().any(|site| site.contract.is_some());
     leaves
         .iter()
@@ -182,11 +182,12 @@ fn position_within(position: usize, first: usize, len: usize) -> Option<usize> {
 
 /// Selector spans whose names are not declared in the matched region.
 fn external_selector_ranges<'node>(
+    root: &'node NormalizedNode,
     nodes: &[&'node NormalizedNode],
     declarations: &BTreeSet<&[u8]>,
     source: &[u8],
 ) -> BTreeMap<(usize, usize), ReceiverSite<'node>> {
-    let contracts = contracts::ReceiverContracts::new(nodes, source);
+    let contracts = contracts::ReceiverContracts::new(root, nodes, source);
     nodes
         .iter()
         .filter_map(|node| external_call_target(node, &contracts, declarations, source))

@@ -14,9 +14,13 @@ mod tests;
 const CONJUNCTION_KIND: &str = "__op__&&";
 /// The explicit TypeScript cast production supplying a named receiver contract.
 const AS_EXPRESSION_KIND: &str = "as_expression";
+/// The annotation explicitly naming a TypeScript guard's contract.
+const TYPE_PREDICATE_ANNOTATION_KIND: &str = "type_predicate_annotation";
 
 /// Contract declarations are indexed once per matched region, never once per call.
 pub(super) struct ReceiverContracts<'nodes, 'source> {
+    /// Full-file ancestry validates scope without borrowing external rename evidence.
+    root: &'nodes NormalizedNode,
     /// Only nodes inside the region can establish ownership.
     nodes: &'nodes [&'nodes NormalizedNode],
     /// Authored identifier bytes, selected exclusively by AST ranges.
@@ -27,22 +31,32 @@ pub(super) struct ReceiverContracts<'nodes, 'source> {
 
 impl<'nodes, 'source> ReceiverContracts<'nodes, 'source> {
     /// Index positive type predicates once; other languages have none.
-    pub(super) fn new(nodes: &'nodes [&'nodes NormalizedNode], source: &'source [u8]) -> Self {
+    pub(super) fn new(
+        root: &'nodes NormalizedNode,
+        nodes: &'nodes [&'nodes NormalizedNode],
+        source: &'source [u8],
+    ) -> Self {
         let predicates: Vec<_> = nodes
             .iter()
             .copied()
-            .filter(|node| {
-                node.children
-                    .iter()
-                    .any(|child| child.kind == "type_predicate_annotation")
-            })
+            .filter(|node| copied_predicate(node))
             .collect();
         Self {
+            root,
             nodes,
             source,
             predicates,
         }
     }
+}
+
+/// A direct function declaration can own a free guard call; a class method cannot.
+fn copied_predicate(node: &NormalizedNode) -> bool {
+    node.kind == bindings::FUNCTION_DECLARATION
+        && node
+            .children
+            .iter()
+            .any(|child| child.kind == TYPE_PREDICATE_ANNOTATION_KIND)
 }
 
 /// An explicit cast or a positive, locally declared type guard qualifying this call.
@@ -186,7 +200,7 @@ fn visible_predicate(
     call: &NormalizedNode,
     contracts: &ReceiverContracts<'_, '_>,
 ) -> bool {
-    bindings::declaration_reaches_call(declaration, call, contracts.nodes)
+    bindings::declaration_reaches_call(declaration, call, contracts.root)
         && contracts.nodes.iter().all(|node| {
             node.byte_range == declaration.byte_range
                 || !bindings::names_binding(node, callee, contracts.source)
@@ -210,7 +224,7 @@ fn predicate_contract(declaration: &NormalizedNode, source: &[u8]) -> Option<Byt
     let annotation = declaration
         .children
         .iter()
-        .find(|node| node.kind == "type_predicate_annotation")?;
+        .find(|node| node.kind == TYPE_PREDICATE_ANNOTATION_KIND)?;
     let predicate = annotation.children.first()?;
     let [parameter, contract] = predicate.children.as_slice() else {
         return None;
