@@ -6,6 +6,7 @@ use crate::{
     lang::shared::IDENTIFIER_KIND,
 };
 
+mod bindings;
 #[cfg(test)]
 mod tests;
 
@@ -90,11 +91,12 @@ fn consequent_contract(
     let [condition, consequent, ..] = node.children.as_slice() else {
         return None;
     };
-    consequent
-        .byte_range
-        .covers(call.byte_range)
-        .then(|| positive_contract(condition, receiver, contracts))
-        .flatten()
+    if !consequent.byte_range.covers(call.byte_range)
+        || !bindings::preserves_receiver(node, call, receiver, contracts.source)
+    {
+        return None;
+    }
+    positive_contract(condition, receiver, contracts)
 }
 
 /// Negation, disjunction, comparisons and unknown conditions prove no positive guard.
@@ -138,8 +140,8 @@ fn called_contract(
 ) -> Option<ByteRange> {
     unique_contract(
         guarded_callee(call, receiver, contracts.source)?,
-        &contracts.predicates,
-        contracts.source,
+        call,
+        contracts,
     )
 }
 
@@ -165,14 +167,30 @@ fn guarded_callee<'call>(
 /// Ambiguous declarations cannot certify a receiver contract.
 fn unique_contract(
     callee: &NormalizedNode,
-    nodes: &[&NormalizedNode],
-    source: &[u8],
+    call: &NormalizedNode,
+    contracts: &ReceiverContracts<'_, '_>,
 ) -> Option<ByteRange> {
-    let mut contracts = nodes
+    let mut matching = contracts
+        .predicates
         .iter()
-        .filter_map(|node| matching_contract(node, callee, source));
-    let contract = contracts.next()?;
-    contracts.next().is_none().then_some(contract)
+        .filter(|declaration| visible_predicate(declaration, callee, call, contracts))
+        .filter_map(|node| matching_contract(node, callee, contracts.source));
+    let contract = matching.next()?;
+    matching.next().is_none().then_some(contract)
+}
+
+/// A same-named declaration elsewhere cannot qualify a shadowed or out-of-scope call.
+fn visible_predicate(
+    declaration: &NormalizedNode,
+    callee: &NormalizedNode,
+    call: &NormalizedNode,
+    contracts: &ReceiverContracts<'_, '_>,
+) -> bool {
+    bindings::declaration_reaches_call(declaration, call, contracts.nodes)
+        && contracts.nodes.iter().all(|node| {
+            node.byte_range == declaration.byte_range
+                || !bindings::names_binding(node, callee, contracts.source)
+        })
 }
 
 /// A copied declaration binds this predicate name to a named contract.
