@@ -2,6 +2,9 @@
 
 use super::*;
 
+#[path = "recall/information.rs"]
+mod information;
+
 /// Curated exact-copy pair.
 const PAIR: [&str; 2] = ["lib/slider.dart", "lib/range_slider.dart"];
 

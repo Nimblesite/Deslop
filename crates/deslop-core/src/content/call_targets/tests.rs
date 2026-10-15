@@ -71,28 +71,34 @@ fn source(selector: &str) -> Vec<u8> {
 }
 
 fn member(file: FileId, selector: &str, selector_key: u64) -> MemberContent {
-    let selector_start = RECEIVER.len().saturating_add(SELECTOR_SEPARATOR_SIZE);
     MemberContent {
         file,
         shape: [EMPTY_HASH_BYTE; SHAPE_SIZE],
         keys: vec![key(RECEIVER_KEY), key(selector_key)],
-        ranges: vec![
-            ByteRange {
-                start: SOURCE_START,
-                end: RECEIVER.len(),
-            },
-            ByteRange {
-                start: selector_start,
-                end: selector_start.saturating_add(selector.len()),
-            },
-        ],
+        ranges: ranges(selector),
         external_calls: vec![
             None,
-            Some(CallTarget {
-                receiver: Some(RECEIVER_INDEX),
-            }),
+            Some(CallTarget::new(
+                vec![RECEIVER_INDEX],
+                None,
+                Some([EMPTY_HASH_BYTE; SHAPE_SIZE]),
+            )),
         ],
     }
+}
+
+fn ranges(selector: &str) -> Vec<ByteRange> {
+    let selector_start = RECEIVER.len().saturating_add(SELECTOR_SEPARATOR_SIZE);
+    vec![
+        ByteRange {
+            start: SOURCE_START,
+            end: RECEIVER.len(),
+        },
+        ByteRange {
+            start: selector_start,
+            end: selector_start.saturating_add(selector.len()),
+        },
+    ]
 }
 
 fn key(value: u64) -> LeafKey {

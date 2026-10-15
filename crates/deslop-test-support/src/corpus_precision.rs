@@ -23,15 +23,14 @@ use deslop_core::{
 use serde_json::Value;
 
 use crate::{
-    corpus::{
-        array, cluster_shows_span, field_u64, u64_field, visible_clusters, CorpusRun, Failure,
-        OCCURRENCE_COUNT,
-    },
+    corpus::{array, field_u64, u64_field, CorpusRun, Failure, OCCURRENCE_COUNT},
     enclosure::{span_of, Span},
 };
 
 /// Canonical duplicated-mass field, the ranked figure a breach is judged by.
 const MASS: &str = "mass";
+
+mod curated;
 
 /// [CORPUS-PRECISION-CURATED] `precision` — code a human confirmed is
 /// **not** duplicated must never be reported as one cluster.
@@ -54,47 +53,8 @@ const MASS: &str = "mass";
 /// engine wrongly joined.
 pub fn check_curated_precision(manifest: &Value, report: &Value, failures: &mut Vec<Failure>) {
     for entry in array(manifest, "must_not_cluster") {
-        check_one_curated_non_duplicate(entry, report, failures);
+        curated::check_one(entry, report, failures);
     }
-}
-
-/// Judges one curated `must_not_cluster` entry against the rendered report.
-fn check_one_curated_non_duplicate(entry: &Value, report: &Value, failures: &mut Vec<Failure>) {
-    let files: Vec<String> = array(entry, "files")
-        .iter()
-        .filter_map(|file| file.as_str().map(ToOwned::to_owned))
-        .collect();
-    let why = entry.get("why").and_then(Value::as_str).unwrap_or("");
-    if files.len() < 2 {
-        failures.push(Failure::new(
-            "precision",
-            format!(
-                "`must_not_cluster` entry names {} file(s); a non-duplication claim needs \
-                 at least two paths or it asserts nothing. Curated: {why}",
-                files.len()
-            ),
-        ));
-        return;
-    }
-    let Some(breach) = visible_clusters(report)
-        .into_iter()
-        .find(|cluster| cluster_shows_span(cluster, &files))
-    else {
-        return;
-    };
-    failures.push(Failure::new(
-        "precision",
-        format!(
-            "cluster {id} (mass {mass}, {size} occurrences) is shown spanning \
-             {files:?}, which a human verified is not duplication. Curated: {why}",
-            id = breach
-                .get("id")
-                .and_then(Value::as_str)
-                .unwrap_or("<unlabelled>"),
-            mass = field_u64(breach, MASS),
-            size = field_u64(breach, OCCURRENCE_COUNT),
-        ),
-    ));
 }
 
 /// [CORPUS-PRECISION] Language- or framework-mandated scaffolding must never

@@ -52,6 +52,8 @@ An absent bound is not a repository with no opinion about its own size — it is
 
 ### [CORPUS-RECALL] Curated duplicates
 
+Curated recall and precision use the same published-clone classification rule as the independent register scorer ([CORPUS-SCORE]). Informational `structural_only` findings and absent or unknown classifications cannot satisfy a duplicate claim or breach a non-duplicate claim. The cluster contract still inspects informational records: their duplicated mass and clone rank must both be zero ([RANK-STRUCTURAL-ONLY]). Pinned by `corpus_confidence::tests::recall::information` and `corpus_confidence::tests::liveness::information`.
+
 `must_find` lists duplicates a human confirmed byte-for-byte, each with the `diff` that proved it. Two check ids judge it:
 
 - `recall` — some cluster spans every path in the entry. Anything less is a false negative on code known to be duplicated.
