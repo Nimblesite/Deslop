@@ -233,7 +233,7 @@ structural_only = "ignore"
 `--compare` 在 **0.35.0** 中加入。传入两个 `<path>:<start_byte>:<end_byte>` 端点，使用 JSON 报告中的确切字节范围：
 
 ```text
-deslop . --compare "<left-path>:<start-byte>:<end-byte>" "<right-path>:<start-byte>:<end-byte>"
+deslop . --compare "<left-path>:<start-byte>:<end-byte>" --compare "<right-path>:<start-byte>:<end-byte>"
 ```
 
 命令先扫描根目录，重新计算配对证据，再向 stdout 输出 JSON 判定。偏移量按字节而非行计，结束位置不包含在范围内。范围必须对应已生成指纹的出现位置；簇 ID 不能用作端点。

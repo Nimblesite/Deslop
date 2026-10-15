@@ -21,6 +21,7 @@ use super::{
 };
 
 mod card;
+mod clone_type;
 mod render;
 mod taxonomy;
 pub(super) mod verdict;

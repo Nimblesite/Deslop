@@ -1,0 +1,159 @@
+{
+  "name": "composer",
+  "language": "php",
+  "url": "https://github.com/composer/composer.git",
+  "sha": "43f74517021a59ed4054a801c1472ef66355c49a",
+  "protocol": {
+    "spec": "docs/specs/corpus.md",
+    "spec_section": "[CORPUS-REGISTER]",
+    "judging_skill": ".agents/skills/judge-clone-pairs/SKILL.md",
+    "preparer_skill": ".agents/skills/clone-register-prepare/SKILL.md"
+  },
+  "clearly_in": [
+    {
+      "why": "The same loop checks script metadata against the script table and appends the same formatted warning; only the metadata names and warning text change.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- src/Composer/Util/ConfigValidator.php:190-197\n+++ src/Composer/Util/ConfigValidator.php:201-208\n@@ -1,7 +1,7 @@\n-        foreach ($scriptsDescriptions as $scriptName => $scriptDescription) {\n+        foreach ($scriptAliases as $scriptName => $scriptAlias) {\n             if (!array_key_exists($scriptName, $scripts)) {\n                 $warnings[] = sprintf(\n-                    'Description for non-existent script \"%s\" found in \"scripts-descriptions\"',\n+                    'Aliases for non-existent script \"%s\" found in \"scripts-aliases\"',\n                     $scriptName\n                 );\n             }\n",
+      "type": "Type II",
+      "occurrences": [
+        "src/Composer/Util/ConfigValidator.php:190-197",
+        "src/Composer/Util/ConfigValidator.php:201-208"
+      ]
+    }
+  ],
+  "clearly_out": [
+    {
+      "why": "These are imports for different test classes; only the PHP use syntax and a common test base are shared.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- tests/Composer/Test/EventDispatcher/EventDispatcherTest.php:25-29\n+++ tests/Composer/Test/Package/Loader/ValidatingArrayLoaderTest.php:15-19\n@@ -1,5 +1,5 @@\n-use Composer\\Repository\\RepositoryManager;\n-use Composer\\Test\\Mock\\HttpDownloaderMock;\n-use Composer\\Test\\Mock\\InstallationManagerMock;\n+use Composer\\Exception\\SecurityException;\n+use Composer\\Package\\Loader\\ValidatingArrayLoader;\n+use Composer\\Package\\Loader\\InvalidPackageException;\n+use Composer\\Package\\PackageInterface;\n use Composer\\Test\\TestCase;\n-use Composer\\IO\\BufferIO;\n",
+      "occurrences": [
+        "tests/Composer/Test/EventDispatcher/EventDispatcherTest.php:25-29",
+        "tests/Composer/Test/Package/Loader/ValidatingArrayLoaderTest.php:15-19"
+      ]
+    },
+    {
+      "why": "The common material is the file header and license; the namespaces and imports belong to different test subjects.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- tests/Composer/Test/DependencyResolver/PoolTest.php:1-19\n+++ tests/Composer/Test/Policy/MalwarePolicyConfigTest.php:1-19\n@@ -10,10 +10,10 @@\n  * file that was distributed with this source code.\n  */\n \n-namespace Composer\\Test\\DependencyResolver;\n+namespace Composer\\Test\\Policy;\n \n-use Composer\\DependencyResolver\\PolicyRemovalReason;\n-use Composer\\DependencyResolver\\Pool;\n-use Composer\\Package\\Link;\n-use Composer\\Semver\\Constraint\\Constraint;\n-use Composer\\Test\\TestCase;\n+use Composer\\Policy\\IgnorePackageRule;\n+use Composer\\Policy\\ListPolicyConfig;\n+use Composer\\Policy\\MalwarePolicyConfig;\n+use Composer\\Semver\\Constraint\\MatchAllConstraint;\n+use Composer\\Semver\\VersionParser;\n",
+      "occurrences": [
+        "tests/Composer/Test/DependencyResolver/PoolTest.php:1-19",
+        "tests/Composer/Test/Policy/MalwarePolicyConfigTest.php:1-19"
+      ]
+    },
+    {
+      "why": "These are unrelated property lists for an autoload test and a pool event. Private-field declarations and PHPDoc are the only common structure.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- tests/Composer/Test/Autoload/AutoloadGeneratorTest.php:56-94\n+++ src/Composer/Plugin/PrePoolCreateEvent.php:30-62\n@@ -1,39 +1,33 @@\n-    private $origDir;\n-\n+    private $repositories;\n     /**\n-     * @var InstallationManager&MockObject\n+     * @var Request\n      */\n-    private $im;\n-\n+    private $request;\n     /**\n-     * @var InstalledRepositoryInterface&MockObject\n+     * @var int[] array of stability => BasePackage::STABILITY_* value\n+     * @phpstan-var array<string, BasePackage::STABILITY_*>\n      */\n-    private $repository;\n-\n+    private $acceptableStabilities;\n     /**\n-     * @var AutoloadGenerator\n+     * @var int[] array of package name => BasePackage::STABILITY_* value\n+     * @phpstan-var array<string, BasePackage::STABILITY_*>\n      */\n-    private $generator;\n-\n+    private $stabilityFlags;\n     /**\n-     * @var Filesystem\n+     * @var array[] of package => version => [alias, alias_normalized]\n+     * @phpstan-var array<string, array<string, array{alias: string, alias_normalized: string}>>\n      */\n-    private $fs;\n-\n+    private $rootAliases;\n     /**\n-     * @var BufferIO\n+     * @var string[]\n+     * @phpstan-var array<string, string>\n      */\n-    private $io;\n-\n+    private $rootReferences;\n     /**\n-     * @var EventDispatcher&MockObject\n+     * @var BasePackage[]\n      */\n-    private $eventDispatcher;\n-\n+    private $packages;\n     /**\n-     * Map of setting name => return value configuration for the stub Config\n-     * object.\n-     *\n-     * @var array<string, callable|bool>\n+     * @var BasePackage[]\n      */\n-    private $configValueMap;\n+    private $unacceptableFixedPackages;\n",
+      "occurrences": [
+        "tests/Composer/Test/Autoload/AutoloadGeneratorTest.php:56-94",
+        "src/Composer/Plugin/PrePoolCreateEvent.php:30-62"
+      ]
+    },
+    {
+      "why": "The event's request and package fields have nothing to do with the downloader's URL and transfer fields. Only property-declaration syntax repeats.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- src/Composer/Plugin/PrePoolCreateEvent.php:34-62\n+++ src/Composer/Util/RemoteFilesystem.php:34-46\n@@ -1,29 +1,13 @@\n-    private $request;\n-    /**\n-     * @var int[] array of stability => BasePackage::STABILITY_* value\n-     * @phpstan-var array<string, BasePackage::STABILITY_*>\n-     */\n-    private $acceptableStabilities;\n-    /**\n-     * @var int[] array of package name => BasePackage::STABILITY_* value\n-     * @phpstan-var array<string, BasePackage::STABILITY_*>\n-     */\n-    private $stabilityFlags;\n-    /**\n-     * @var array[] of package => version => [alias, alias_normalized]\n-     * @phpstan-var array<string, array<string, array{alias: string, alias_normalized: string}>>\n-     */\n-    private $rootAliases;\n-    /**\n-     * @var string[]\n-     * @phpstan-var array<string, string>\n-     */\n-    private $rootReferences;\n-    /**\n-     * @var BasePackage[]\n-     */\n-    private $packages;\n-    /**\n-     * @var BasePackage[]\n-     */\n-    private $unacceptableFixedPackages;\n+    private $io;\n+    /** @var Config */\n+    private $config;\n+    /** @var string */\n+    private $scheme;\n+    /** @var int */\n+    private $bytesMax;\n+    /** @var string */\n+    private $originUrl;\n+    /** @var non-empty-string */\n+    private $fileUrl;\n+    /** @var ?string */\n+    private $fileName;\n",
+      "occurrences": [
+        "src/Composer/Plugin/PrePoolCreateEvent.php:34-62",
+        "src/Composer/Util/RemoteFilesystem.php:34-46"
+      ]
+    },
+    {
+      "why": "These are unrelated command-state and HTTP-transfer fields. The similarity is private declarations with type comments.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- src/Composer/Command/RequireCommand.php:56-70\n+++ src/Composer/Util/RemoteFilesystem.php:34-48\n@@ -1,15 +1,15 @@\n-    private $newlyCreated;\n-    /** @var bool */\n-    private $firstRequire;\n-    /** @var JsonFile */\n-    private $json;\n+    private $io;\n+    /** @var Config */\n+    private $config;\n     /** @var string */\n-    private $file;\n+    private $scheme;\n+    /** @var int */\n+    private $bytesMax;\n     /** @var string */\n-    private $composerBackup;\n-    /** @var string file name */\n-    private $lock;\n-    /** @var ?string contents before modification if the lock file exists */\n-    private $lockBackup;\n+    private $originUrl;\n+    /** @var non-empty-string */\n+    private $fileUrl;\n+    /** @var ?string */\n+    private $fileName;\n     /** @var bool */\n-    private $dependencyResolutionCompleted = false;\n+    private $retry = false;\n",
+      "occurrences": [
+        "src/Composer/Command/RequireCommand.php:56-70",
+        "src/Composer/Util/RemoteFilesystem.php:34-48"
+      ]
+    },
+    {
+      "why": "These event classes initialize different payloads. The shared shape is a parent constructor call, field assignments, and a trivial getter; the first span also includes separate declarations.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- src/Composer/Installer/PackageEvent.php:41-78\n+++ src/Composer/Plugin/PreFileDownloadEvent.php:62-74\n@@ -1,38 +1,13 @@\n-    private $devMode;\n-\n-    /**\n-     * @var RepositoryInterface\n-     */\n-    private $localRepo;\n-\n-    /**\n-     * @var OperationInterface[]\n-     */\n-    private $operations;\n-\n-    /**\n-     * @var OperationInterface The operation instance which is being executed\n-     */\n-    private $operation;\n-\n-    /**\n-     * Constructor.\n-     *\n-     * @param OperationInterface[] $operations\n-     */\n-    public function __construct(string $eventName, Composer $composer, IOInterface $io, bool $devMode, RepositoryInterface $localRepo, array $operations, OperationInterface $operation)\n+    public function __construct(string $name, HttpDownloader $httpDownloader, string $processedUrl, string $type, $context = null)\n     {\n-        parent::__construct($eventName);\n-\n-        $this->composer = $composer;\n-        $this->io = $io;\n-        $this->devMode = $devMode;\n-        $this->localRepo = $localRepo;\n-        $this->operations = $operations;\n-        $this->operation = $operation;\n+        parent::__construct($name);\n+        $this->httpDownloader = $httpDownloader;\n+        $this->processedUrl = $processedUrl;\n+        $this->type = $type;\n+        $this->context = $context;\n     }\n \n-    public function getComposer(): Composer\n+    public function getHttpDownloader(): HttpDownloader\n     {\n-        return $this->composer;\n+        return $this->httpDownloader;\n     }\n",
+      "occurrences": [
+        "src/Composer/Installer/PackageEvent.php:41-78",
+        "src/Composer/Plugin/PreFileDownloadEvent.php:62-74"
+      ]
+    }
+  ],
+  "not_clear": [
+    {
+      "why": "The commands genuinely share several option declarations, but each span includes a different selection of command-specific options and starts at a different point in configuration.",
+      "occurrences": [
+        "src/Composer/Command/InstallCommand.php:37-66",
+        "src/Composer/Command/CreateProjectCommand.php:73-101"
+      ]
+    },
+    {
+      "why": "These are runs of trivial property getters and setters. The accessor idiom repeats, but the selected properties do not even align as source/dist counterparts.",
+      "occurrences": [
+        "src/Composer/Package/Package.php:309-351",
+        "src/Composer/Package/Package.php:223-265"
+      ]
+    },
+    {
+      "why": "The repeated lines configure a PHPUnit package mock; changing the development flag selects the opposite test case. This is ordinary test scaffolding.",
+      "occurrences": [
+        "tests/Composer/Test/Downloader/DownloadManagerTest.php:1006-1018",
+        "tests/Composer/Test/Downloader/DownloadManagerTest.php:1054-1066"
+      ]
+    },
+    {
+      "why": "The bytes repeat, but they are package-mock setup for two related tests, and both ranges end at the start of another mock's setup.",
+      "occurrences": [
+        "tests/Composer/Test/Downloader/DownloadManagerTest.php:650-670",
+        "tests/Composer/Test/Downloader/DownloadManagerTest.php:594-614"
+      ]
+    },
+    {
+      "why": "Only three dependency assignments from constructors are selected; this is a short initialization idiom.",
+      "occurrences": [
+        "src/Composer/Util/GitHub.php:47-49",
+        "src/Composer/Util/Bitbucket.php:51-53"
+      ]
+    },
+    {
+      "why": "These few lines create dated package fixtures and invoke a filter. The repeated test setup is too small and conventional for certainty.",
+      "occurrences": [
+        "tests/Composer/Test/DependencyResolver/CooldownPoolFilterTest.php:237-241",
+        "tests/Composer/Test/DependencyResolver/CooldownPoolFilterTest.php:103-107"
+      ]
+    },
+    {
+      "why": "This is a three-line find-and-assert idiom applied to two package names.",
+      "occurrences": [
+        "tests/Composer/Test/Repository/ArrayRepositoryTest.php:66-68",
+        "tests/Composer/Test/Repository/ArrayRepositoryTest.php:62-64"
+      ]
+    },
+    {
+      "why": "The token-storage code is closely related, but the selected spans disagree about including the final return and store different token structures. The boundaries leave doubt.",
+      "occurrences": [
+        "src/Composer/Util/Forgejo.php:95-99",
+        "src/Composer/Util/GitHub.php:168-174"
+      ]
+    },
+    {
+      "why": "Only three entries of longer expected Git command sequences are selected, including a changed remote operation.",
+      "occurrences": [
+        "tests/Composer/Test/Downloader/GitDownloaderTest.php:124-126",
+        "tests/Composer/Test/Downloader/GitDownloaderTest.php:177-179"
+      ]
+    },
+    {
+      "why": "Only the standard three-line load-a-fixture setup is selected, with a different fixture directory.",
+      "occurrences": [
+        "tests/Composer/Test/Repository/PathRepositoryTest.php:57-59",
+        "tests/Composer/Test/Repository/PathRepositoryTest.php:45-47"
+      ]
+    },
+    {
+      "why": "The VCS support checks share substantial local-path logic, but one range cuts off before deep probing while the other includes a whole body and its final return.",
+      "occurrences": [
+        "src/Composer/Repository/Vcs/HgDriver.php:219-239",
+        "src/Composer/Repository/Vcs/FossilDriver.php:228-252"
+      ]
+    },
+    {
+      "why": "The lock-file guard repeats, but one range includes its outer branch and complete return while the other starts inside the branch and stops before package retrieval.",
+      "occurrences": [
+        "src/Composer/Command/AuditCommand.php:118-125",
+        "src/Composer/Command/LicensesCommand.php:68-72"
+      ]
+    }
+  ]
+}

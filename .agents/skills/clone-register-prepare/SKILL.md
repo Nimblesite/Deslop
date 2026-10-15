@@ -101,6 +101,14 @@ For one repository, or a different location:
 scripts/corpus/prepare-judging.sh ~/clone-judging 1 click
 ```
 
+For a short pass — a first look at a new repository, say — ask for fewer candidates. The ceiling of 200 still holds:
+
+```bash
+make judging-folder JUDGING_CANDIDATES=20
+```
+
+To build from a comparison written somewhere other than `.corpus/version-compare` (for instance one run over only the queued repositories, so it does not overwrite another run's reports), point `COMPARE_REPORTS` at its `reports/` directory.
+
 ### Adding a repository that has never been judged
 
 A repository with no register is not scanned by the comparison, and a repository the
@@ -108,8 +116,7 @@ comparison never scanned has no reports to draw candidates from — so a new one
 never get in. `corpus/judging-queue.json` is the way through: add it there with its url,
 a full commit id and its language, and the next `make compare` scans it alongside the
 registers. Prefer a language with no register at all over a second repository in one that
-already has one. When the verdicts come back, the repository moves into
-`corpus/register/` and out of the queue. See §[CORPUS-REGISTER-QUEUE].
+already has one. When the verdicts come back, the repository gets a register in `corpus/register/`; it leaves the queue only once that register holds a CLEARLY IN. A register of only CLEARLY OUT and NOT CLEAR stays queued for another pass. See §[CORPUS-REGISTER-QUEUE].
 
 ### What the folder guarantees, and you must not undo
 
@@ -150,12 +157,13 @@ Verdicts land in `corpus/register/<name>.json`, pinned to the same `sha`:
 {
   "name": "click",
   "url": "…", "tag": "…", "sha": "…",
-  "clearly_in":  [ { "why": "…", "verified": "…", "occurrences": ["a.py:340-345", "a.py:394-399"] } ],
+  "clearly_in":  [ { "why": "…", "verified": "…", "type": "Type II", "occurrences": ["a.py:340-345", "a.py:394-399"] } ],
   "clearly_out": [ { "why": "…", "verified": "…", "occurrences": ["a.cs:15-21", "b.cs:13-18"] } ],
   "not_clear":   [ { "why": "…", "occurrences": [...] } ]
 }
 ```
 
+- `type` is CLEARLY IN only: `Type I` to `Type IV`, or absent for "any type". Judges always name one; the merge keeps it only when every source gave the same type, and otherwise files the pair without one. See `docs/specs/corpus.md` §[CORPUS-REGISTER-TYPE].
 - Copy `why` and `verified` across **as the judge wrote them**. Do not tidy, sharpen or
   re-argue. If a verdict reads oddly, that is data about the judging, not a typo to fix.
 - An empty `clearly_out` needs a `clearly_out_status` saying why it is empty. An empty

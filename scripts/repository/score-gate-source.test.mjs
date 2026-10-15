@@ -14,8 +14,9 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 
 import { repoRoot } from "../lib/repo-root.mjs";
@@ -261,4 +262,27 @@ test("[CORPUS-REGISTER-QUEUE] the comparison scans the queue and the gate does n
       `${repository.name} is queued for judging and cannot be in the CI slice`,
     );
   }
+});
+
+/// A repository judged once, with no agreed CLEARLY IN: it holds a register and
+/// is still queued for another pass. And one that is only queued.
+const REJUDGED = { name: "Rejudged", url: "https://example.invalid/rejudged.git", sha: "a".repeat(COMMIT_ID_LENGTH), language: "fsharp" };
+const UNJUDGED = { name: "unjudged", url: "https://example.invalid/unjudged.git", sha: "b".repeat(COMMIT_ID_LENGTH), language: "go" };
+const spec = (repository) => `${repository.url}#${repository.sha}#${repository.language}`;
+
+test("[CORPUS-REGISTER-QUEUE] a queued repository that already has a register is scanned once", () => {
+  const root = mkdtempSync(join(tmpdir(), "default-targets-"));
+  mkdirSync(join(root, REGISTER_DIR), { recursive: true });
+  writeFileSync(join(root, REGISTER_DIR, `${REJUDGED.name.toLowerCase()}.json`), JSON.stringify(REJUDGED));
+  writeFileSync(join(root, JUDGING_QUEUE), JSON.stringify({ repositories: [REJUDGED, UNJUDGED] }));
+  const listed = execFileSync(
+    "bash",
+    ["-c", `WORK_DIR="$1"; source "${TARGETS}"; default_targets "$1"`, "default-targets", root],
+    { cwd: repoRoot, encoding: "utf8" },
+  ).split("\n").filter(Boolean);
+  assert.deepEqual(
+    listed,
+    [spec(REJUDGED), spec(UNJUDGED)],
+    "a register still waiting on another pass is one target, not two scans of one tree",
+  );
 });

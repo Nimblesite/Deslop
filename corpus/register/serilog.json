@@ -1,0 +1,138 @@
+{
+  "name": "serilog",
+  "language": "csharp",
+  "url": "https://github.com/serilog/serilog.git",
+  "sha": "49b5339ce85385dc52d4d8e8f2b8308becf23506",
+  "protocol": {
+    "spec": "docs/specs/corpus.md",
+    "spec_section": "[CORPUS-REGISTER]",
+    "judging_skill": ".agents/skills/judge-clone-pairs/SKILL.md",
+    "preparer_skill": ".agents/skills/clone-register-prepare/SKILL.md"
+  },
+  "clearly_in": [
+    {
+      "why": "The complete floating-point formatting routine repeats its special-value handling, stack buffer, TryFormat path, fallback, and feature directives. Only the method name and float/double type change.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- src/Serilog/Formatting/Json/JsonValueFormatter.cs:314-331\n+++ src/Serilog/Formatting/Json/JsonValueFormatter.cs:333-350\n@@ -1,6 +1,6 @@\n-    static void FormatFloatValue(float value, TextWriter output)\n+    static void FormatDoubleValue(double value, TextWriter output)\n     {\n-        if (float.IsNaN(value) || float.IsInfinity(value))\n+        if (double.IsNaN(value) || double.IsInfinity(value))\n         {\n             FormatStringValue(value.ToString(CultureInfo.InvariantCulture), output);\n             return;\n",
+      "type": "Type II",
+      "occurrences": [
+        "src/Serilog/Formatting/Json/JsonValueFormatter.cs:314-331",
+        "src/Serilog/Formatting/Json/JsonValueFormatter.cs:333-350"
+      ]
+    },
+    {
+      "why": "Both configuration implementations repeat the stored configuration/action, guarded constructor, array loop, and generic forwarding overload. The filter/enricher names change and the per-element null check is replaced.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- src/Serilog/Configuration/LoggerFilterConfiguration.cs:22-62\n+++ src/Serilog/Configuration/LoggerEnrichmentConfiguration.cs:22-66\n@@ -1,41 +1,45 @@\n     readonly LoggerConfiguration _loggerConfiguration;\n-    readonly Action<ILogEventFilter> _addFilter;\n+    readonly Action<ILogEventEnricher> _addEnricher;\n \n-    internal LoggerFilterConfiguration(\n+    internal LoggerEnrichmentConfiguration(\n         LoggerConfiguration loggerConfiguration,\n-        Action<ILogEventFilter> addFilter)\n+        Action<ILogEventEnricher> addEnricher)\n     {\n         _loggerConfiguration = Guard.AgainstNull(loggerConfiguration);\n-        _addFilter = Guard.AgainstNull(addFilter);\n+        _addEnricher = Guard.AgainstNull(addEnricher);\n     }\n \n     /// <summary>\n-    /// Filter out log events from the stream based on the provided filter.\n+    /// Specifies one or more enrichers that may add properties dynamically to\n+    /// log events.\n     /// </summary>\n-    /// <param name=\"filters\">The filters to apply.</param>\n+    /// <param name=\"enrichers\">Enrichers to apply to all events passing through\n+    /// the logger.</param>\n     /// <returns>Configuration object allowing method chaining.</returns>\n-    /// <exception cref=\"ArgumentNullException\">When <paramref name=\"filters\"/> is <code>null</code></exception>\n-    /// <exception cref=\"ArgumentException\">When any element of <paramref name=\"filters\"/> is <code>null</code></exception>\n-    public LoggerConfiguration With(params ILogEventFilter[] filters)\n+    /// <exception cref=\"ArgumentNullException\">When <paramref name=\"enrichers\"/> is <code>null</code></exception>\n+    /// <exception cref=\"ArgumentException\">When any element of <paramref name=\"enrichers\"/> is <code>null</code></exception>\n+    public LoggerConfiguration With(params ILogEventEnricher[] enrichers)\n     {\n-        Guard.AgainstNull(filters);\n+        Guard.AgainstNull(enrichers);\n \n-        foreach (var logEventFilter in filters)\n+        foreach (var logEventEnricher in enrichers)\n         {\n-            if (logEventFilter == null) throw new ArgumentException(\"Null filter is not allowed.\");\n+            Guard.AgainstNull(logEventEnricher);\n \n-            _addFilter(logEventFilter);\n+            _addEnricher(logEventEnricher);\n         }\n         return _loggerConfiguration;\n     }\n \n     /// <summary>\n-    /// Filter out log events from the stream based on the provided filter.\n+    /// Specifies an enricher that may add properties dynamically to\n+    /// log events.\n     /// </summary>\n-    /// <typeparam name=\"TFilter\">The filters to apply.</typeparam>\n+    /// <typeparam name=\"TEnricher\">Enricher type to apply to all events passing through\n+    /// the logger.</typeparam>\n     /// <returns>Configuration object allowing method chaining.</returns>\n-    public LoggerConfiguration With<TFilter>()\n-        where TFilter : ILogEventFilter, new()\n+    public LoggerConfiguration With<TEnricher>()\n+        where TEnricher : ILogEventEnricher, new()\n     {\n-        return With(new TFilter());\n+        return With(new TEnricher());\n     }\n",
+      "type": "Type III",
+      "occurrences": [
+        "src/Serilog/Configuration/LoggerFilterConfiguration.cs:22-62",
+        "src/Serilog/Configuration/LoggerEnrichmentConfiguration.cs:22-66"
+      ]
+    },
+    {
+      "why": "The cache bodies repeat the same parser guard, length bypass, lookup, parse, capacity eviction, storage, and return. The concurrent-dictionary variant removes explicit locking and changes the lookup declaration.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- test/Serilog.PerformanceTests/Support/DictionaryMessageTemplateCache.cs:4-50\n+++ test/Serilog.PerformanceTests/Support/ConcurrentDictionaryTemplateCache.cs:4-46\n@@ -1,13 +1,12 @@\n {\n     readonly IMessageTemplateParser _innerParser;\n-    readonly object _templatesLock = new();\n \n-    readonly Dictionary<string, MessageTemplate> _templates = new(ByReferenceStringComparer.Instance);\n+    readonly ConcurrentDictionary<string, MessageTemplate> _templates = new(ByReferenceStringComparer.Instance);\n \n     const int MaxCacheItems = 1000;\n     const int MaxCachedTemplateLength = 1024;\n \n-    public DictionaryMessageTemplateCache(IMessageTemplateParser innerParser)\n+    public ConcurrentDictionaryMessageTemplateCache(IMessageTemplateParser innerParser)\n     {\n         _innerParser = Guard.AgainstNull(innerParser);\n     }\n@@ -19,14 +18,11 @@\n         if (messageTemplate.Length > MaxCachedTemplateLength)\n             return _innerParser.Parse(messageTemplate);\n \n-        MessageTemplate? result;\n-        lock (_templatesLock)\n-            if (_templates.TryGetValue(messageTemplate, out result))\n-                return result;\n+        if (_templates.TryGetValue(messageTemplate, out var result))\n+            return result;\n \n         result = _innerParser.Parse(messageTemplate);\n \n-        lock (_templatesLock)\n         {\n             // Exceeding MaxCacheItems is *not* the sunny day scenario; all we're doing here is preventing out-of-memory\n             // conditions when the library is used incorrectly. Correct use (templates, rather than\n",
+      "type": "Type III",
+      "occurrences": [
+        "test/Serilog.PerformanceTests/Support/DictionaryMessageTemplateCache.cs:4-50",
+        "test/Serilog.PerformanceTests/Support/ConcurrentDictionaryTemplateCache.cs:4-46"
+      ]
+    },
+    {
+      "why": "Both complete cache bodies use the same parser, limits, bypass, parsing, eviction, and insertion sequence. The Hashtable version changes the collection and lookup and removes the read lock.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- test/Serilog.PerformanceTests/Support/DictionaryMessageTemplateCache.cs:4-50\n+++ src/Serilog/Core/Pipeline/MessageTemplateCache.cs:18-73\n@@ -2,12 +2,20 @@\n     readonly IMessageTemplateParser _innerParser;\n     readonly object _templatesLock = new();\n \n-    readonly Dictionary<string, MessageTemplate> _templates = new(ByReferenceStringComparer.Instance);\n-\n+    // Hashtable is used, instead of Dictionary<,> for thread safety reasons.\n+    //\n+    // > Hashtable is thread safe for multi-thread use when only one of the threads perform write (update)\n+    // https://learn.microsoft.com/en-us/dotnet/api/system.collections.hashtable#thread-safety\n+    //\n+    // > Dictionary<,> can support multiple readers concurrently, as long as the collection is not modified\n+    // https://learn.microsoft.com/en-us/dotnet/api/system.collections.generic.dictionary-2#thread-safety\n+    //\n+    // Hence the reason to use Hashtable, otherwise read operation should have been placed into the lock section\n+    readonly Hashtable _templates = new(ByReferenceStringComparer.Instance);\n     const int MaxCacheItems = 1000;\n     const int MaxCachedTemplateLength = 1024;\n \n-    public DictionaryMessageTemplateCache(IMessageTemplateParser innerParser)\n+    public MessageTemplateCache(IMessageTemplateParser innerParser)\n     {\n         _innerParser = Guard.AgainstNull(innerParser);\n     }\n@@ -19,10 +27,11 @@\n         if (messageTemplate.Length > MaxCachedTemplateLength)\n             return _innerParser.Parse(messageTemplate);\n \n-        MessageTemplate? result;\n-        lock (_templatesLock)\n-            if (_templates.TryGetValue(messageTemplate, out result))\n-                return result;\n+        // ReSharper disable once InconsistentlySynchronizedField\n+        // ignored warning because this is by design\n+        var result = (MessageTemplate?)_templates[messageTemplate];\n+        if (result != null)\n+            return result;\n \n         result = _innerParser.Parse(messageTemplate);\n \n",
+      "type": "Type III",
+      "occurrences": [
+        "test/Serilog.PerformanceTests/Support/DictionaryMessageTemplateCache.cs:4-50",
+        "src/Serilog/Core/Pipeline/MessageTemplateCache.cs:18-73"
+      ]
+    }
+  ],
+  "clearly_out": [],
+  "not_clear": [
+    {
+      "why": "These short tests follow the convert-and-assert-array pattern for integer and string elements; the repetition is ordinary test scaffolding.",
+      "occurrences": [
+        "test/Serilog.Tests/Settings/SettingValueConversionsTests.cs:49-56",
+        "test/Serilog.Tests/Settings/SettingValueConversionsTests.cs:33-40"
+      ]
+    },
+    {
+      "why": "The log-level overload pattern repeats, but the ranges start inside one member and stop at a feature directive inside another. The boundaries are ragged.",
+      "occurrences": [
+        "src/Serilog/ILogger.cs:1185-1217",
+        "src/Serilog/ILogger.cs:708-740"
+      ]
+    },
+    {
+      "why": "Only three lines constructing a parser and test event are selected, with a different template format string.",
+      "occurrences": [
+        "test/Serilog.Tests/Formatting/Json/JsonFormatterTests.cs:256-258",
+        "test/Serilog.Tests/Formatting/Json/JsonFormatterTests.cs:228-230"
+      ]
+    },
+    {
+      "why": "Each method contains one forwarding call. The static/instance and log-level differences do not make this tiny wrapper idiom a certain substantive clone.",
+      "occurrences": [
+        "src/Serilog/Log.cs:380-383",
+        "src/Serilog/Core/Logger.cs:1049-1052"
+      ]
+    },
+    {
+      "why": "Only one identical template-list initialization expression is selected.",
+      "occurrences": [
+        "test/Serilog.PerformanceTests/MessageTemplateCacheBenchmark/MessageTemplateCacheBenchmark_Cached.cs:22-22",
+        "test/Serilog.PerformanceTests/MessageTemplateCacheBenchmark/MessageTemplateCacheBenchmark_Leaking.cs:22-22"
+      ]
+    },
+    {
+      "why": "Each six-line test contains only a conversion and an assertion, using different subclass fixtures. That short test idiom leaves doubt.",
+      "occurrences": [
+        "test/Serilog.Tests/Capturing/PropertyValueConverterTests.cs:461-466",
+        "test/Serilog.Tests/Capturing/PropertyValueConverterTests.cs:468-473"
+      ]
+    },
+    {
+      "why": "Only a two-line extract-and-assert pattern repeats for two event properties.",
+      "occurrences": [
+        "test/Serilog.Tests/Core/LoggerTests.cs:407-408",
+        "test/Serilog.Tests/Core/LoggerTests.cs:405-406"
+      ]
+    },
+    {
+      "why": "These are single assertions for two properties; a one-line assertion idiom is insufficient for a firm verdict.",
+      "occurrences": [
+        "test/Serilog.Tests/Capturing/PropertyValueConverterTests.cs:303-303",
+        "test/Serilog.Tests/Capturing/PropertyValueConverterTests.cs:302-302"
+      ]
+    },
+    {
+      "why": "These few lines repeat child-logger construction and disposal setup for different overloads; the assertions are outside the selected ranges.",
+      "occurrences": [
+        "test/Serilog.Tests/Core/ChildLoggerDisposalTests.cs:55-59",
+        "test/Serilog.Tests/Core/ChildLoggerDisposalTests.cs:68-72"
+      ]
+    },
+    {
+      "why": "Only three lines of a format-and-fallback idiom are selected, without the controlling condition, and the format specifier changes.",
+      "occurrences": [
+        "src/Serilog/Formatting/Json/JsonValueFormatter.cs:344-346",
+        "src/Serilog/Formatting/Json/JsonValueFormatter.cs:476-478"
+      ]
+    },
+    {
+      "why": "These conditional-compilation cases each contain only a tuple conversion and type assertion. The short test idiom leaves doubt despite matching input.",
+      "occurrences": [
+        "test/Serilog.Tests/Capturing/PropertyValueConverterTests.cs:391-396",
+        "test/Serilog.Tests/Capturing/PropertyValueConverterTests.cs:382-387"
+      ]
+    },
+    {
+      "why": "The Information/Fatal forwarding pattern repeats, but the ranges start inside an overload and stop before the last member's directives and terminator. These are ragged fragments.",
+      "occurrences": [
+        "src/Serilog/ILogger.cs:804-838",
+        "src/Serilog/ILogger.cs:1281-1315"
+      ]
+    }
+  ],
+  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 20 candidates at this commit and no pair was called CLEARLY OUT by all of them. 0 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing."
+}

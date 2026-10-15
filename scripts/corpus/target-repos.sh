@@ -92,19 +92,23 @@ register_targets() {
 # queued-targets: print one `url#commit#language` spec per repository waiting on
 # its first judging pass. Without these a new repository could never enter the
 # register at all: a workspace needs two reports, and a comparison would only
-# ever scan repositories that already have a register.
+# ever scan repositories that already have a register. A queued repository that
+# already holds a register (judged, but with no agreed CLEARLY IN yet) is
+# scanned as that register, never a second time.
 queued_targets() {
   local root="$1" queue="$1/$JUDGING_QUEUE"
   [ -f "$queue" ] || return 0
   node -e '
+    const { existsSync } = require("node:fs");
     const queue = require(process.argv[1]);
-    for (const repository of queue.repositories) {
+    const registered = (name) => existsSync(`${process.argv[2]}/${name.toLowerCase()}.json`);
+    for (const repository of queue.repositories.filter(({ name }) => !registered(name))) {
       for (const field of ["url", "sha", "language"]) {
         if (!repository[field]) throw new Error(`${repository.name} has no ${field}`);
       }
       process.stdout.write(`${repository.url}#${repository.sha}#${repository.language}\n`);
     }
-  ' "$queue"
+  ' "$queue" "$root/$REGISTER_DIR"
 }
 
 # ---------------------------------------------------------------------------

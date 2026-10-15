@@ -361,7 +361,7 @@ pub fn reports_clone_spanning(report: &Value, files: &[String]) -> bool {
 pub fn visible_clone_clusters(report: &Value) -> Vec<&Value> {
     visible_clusters(report)
         .into_iter()
-        .filter(|cluster| crate::corpus_score::is_clone_finding(cluster))
+        .filter(|cluster| crate::corpus_score::is_clone_finding(cluster, None))
         .collect()
 }
 
