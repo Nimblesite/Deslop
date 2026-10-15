@@ -15,7 +15,7 @@ use serde_json::{json, Value};
 use super::{
     super::{
         checks::{CheckFailure, CheckOutcome},
-        gate::Breach,
+        outcomes::PairOutcome,
         verdict::{verdict, FailureReason},
     },
     card::{card, checked_card, NEW_ENGINE, OLD_ENGINE},
@@ -29,10 +29,13 @@ use super::{
 pub(in crate::corpus_score) const PASSED_HEADING: &str = "# ✅ PASSED — Corpus accuracy scorecard";
 pub(in crate::corpus_score) const FAILED_HEADING: &str = "# 🔴 FAILED — Corpus accuracy scorecard";
 pub(in crate::corpus_score) const VERDICT_FAILURES: &str = "/verdict/failures";
-/// The threshold one missed pair breaches under the strict gate, and what the
-/// verdict reports of it.
-pub(in crate::corpus_score) const BREACHED_MEASURE: &str = "false negatives";
-pub(in crate::corpus_score) const BREACH_DETAIL: &str = "allows at most 0, recorded 1";
+/// What one missed pair is called, and what the verdict says of it when the
+/// record does not hold it as failing — the strict default.
+pub(in crate::corpus_score) const MISSED_DEFECT: &str = "false negative";
+pub(in crate::corpus_score) const UNRECORDED_DETAIL: &str =
+    "`src/one.rs:10-20` + `src/two.rs:30-40`: failing, and not on record as failing";
+/// The records a tracked failure names.
+pub(in crate::corpus_score) const KNOWN_FAILURES: &str = "corpus/known-failures.json";
 /// What opens the block that lists a failed run's failures, and the quoted
 /// blank line between its summary and the list.
 const CAUTION: &str = "> [!CAUTION]";
@@ -61,7 +64,8 @@ const TRACKED_LINE: &str = "> - 🔴 **fixture** — `memory` (tracked in \
                             `corpus/known-failures.json`): peak RSS 9100MB exceeds the 9000MB \
                             ceiling";
 const NEW_LINE: &str = "> - 🔴 **fixture** — `wall`: scan took 400s the ceiling is 300s";
-const BREACH_LINE: &str = "> - 🔴 **fixture** — `false negatives`: allows at most 0, recorded 1";
+const UNRECORDED_LINE: &str = "> - 🔴 **fixture** — `false negative`: `src/one.rs:10-20` + \
+                               `src/two.rs:30-40`: failing, and not on record as failing";
 /// A second repository, so the order failures are listed in is not an accident
 /// of there being one.
 const OTHER_REPO: &str = "other";
@@ -73,16 +77,16 @@ pub(in crate::corpus_score) fn one_untracked_failure(
     what: &str,
     detail: &str,
 ) -> Value {
-    json!([{ "repo": repo, "what": what, "detail": detail, "tracked": false }])
+    json!([{ "repo": repo, "what": what, "detail": detail, "tracked_in": null }])
 }
 
 /// One reason the fixture repository failed.
-fn reason(what: &str, detail: &str, tracked: bool) -> FailureReason {
+fn reason(what: &str, detail: &str, tracked_in: Option<&str>) -> FailureReason {
     FailureReason {
         repo: REPO.to_owned(),
         what: what.to_owned(),
         detail: detail.to_owned(),
-        tracked,
+        tracked_in: tracked_in.map(ToOwned::to_owned),
     }
 }
 
@@ -169,19 +173,19 @@ fn a_run_that_failed_nothing_is_headed_passed_and_lists_no_failure() -> Result<(
 }
 
 #[test]
-fn a_breached_gate_fails_the_run_and_is_named_under_the_heading() -> Result<()> {
+fn a_pair_failing_off_the_record_fails_the_run_and_is_named_under_the_heading() -> Result<()> {
     let (found, missed) = found_and_missed()?;
     let breached = card(&found, &missed);
     assert!(
         !breached.verdict.passed(),
-        "a breached gate is a failed run"
+        "a missed pair the record does not hold as failing is a failed run"
     );
     assert_eq!(
         breached.verdict.failures,
-        [reason(BREACHED_MEASURE, BREACH_DETAIL, false)],
-        "the breach is the one reason: the threshold, what it allows and what was recorded"
+        [reason(MISSED_DEFECT, UNRECORDED_DETAIL, None)],
+        "the pair is the one reason: what it is, its ranges and how it stands against the record"
     );
-    assert_opens_with(&breached, &failed_opening(ONE_FAILURE, &[BREACH_LINE]));
+    assert_opens_with(&breached, &failed_opening(ONE_FAILURE, &[UNRECORDED_LINE]));
     let rendered = scorecard(&breached);
     for claim in [PASSED_HEADING, PASS_MARK] {
         assert!(
@@ -193,8 +197,8 @@ fn a_breached_gate_fails_the_run_and_is_named_under_the_heading() -> Result<()> 
         serde_json::to_value(&breached)?.pointer(VERDICT_FAILURES),
         Some(&one_untracked_failure(
             REPO,
-            BREACHED_MEASURE,
-            BREACH_DETAIL
+            MISSED_DEFECT,
+            UNRECORDED_DETAIL
         )),
         "the JSON scorecard lists the same failure the heading does"
     );
@@ -202,20 +206,20 @@ fn a_breached_gate_fails_the_run_and_is_named_under_the_heading() -> Result<()> 
 }
 
 #[test]
-fn every_failed_check_is_listed_before_the_gate_breaches() -> Result<()> {
+fn every_failed_check_is_listed_before_the_judged_pairs() -> Result<()> {
     let (found, missed) = found_and_missed()?;
     let checks = checked_by(NEW_ENGINE, vec![tracked_failure(), new_failure()]);
     let failing = checked_card(&found, &missed, checks);
     assert_eq!(
         failing.verdict.failures,
         [
-            reason(TRACKED_CHECK, TRACKED_DETAIL, true),
-            reason(NEW_CHECK, NEW_DETAIL, false),
-            reason(BREACHED_MEASURE, BREACH_DETAIL, false),
+            reason(TRACKED_CHECK, TRACKED_DETAIL, Some(KNOWN_FAILURES)),
+            reason(NEW_CHECK, NEW_DETAIL, None),
+            reason(MISSED_DEFECT, UNRECORDED_DETAIL, None),
         ],
-        "every failed check in the order the test recorded it, then every gate breach"
+        "every failed check in the order the test recorded it, then every judged pair"
     );
-    let listed = [TRACKED_LINE, NEW_LINE, BREACH_LINE];
+    let listed = [TRACKED_LINE, NEW_LINE, UNRECORDED_LINE];
     assert_opens_with(&failing, &failed_opening(THREE_FAILURES, &listed));
     Ok(())
 }
@@ -226,12 +230,15 @@ fn a_failure_the_baseline_tracks_still_fails_the_run_and_says_it_is_tracked() ->
     let tracked_only = checked_by(NEW_ENGINE, vec![tracked_failure()]);
     let failing = checked_card(&found, &found, tracked_only);
     assert!(
-        failing.breaches.is_empty(),
-        "the register gate is clean, so the tracked check is the only thing wrong"
+        failing
+            .outcomes
+            .iter()
+            .all(|pair| !pair.standing.fails_the_run()),
+        "every judged pair is answered right, so the tracked check is the only thing wrong"
     );
     assert_eq!(
         failing.verdict.failures,
-        [reason(TRACKED_CHECK, TRACKED_DETAIL, true)],
+        [reason(TRACKED_CHECK, TRACKED_DETAIL, Some(KNOWN_FAILURES))],
         "a tracked failure is still a failure; the flag only says it is not new"
     );
     assert_opens_with(&failing, &failed_opening(ONE_FAILURE, &[TRACKED_LINE]));
@@ -250,7 +257,7 @@ fn only_the_last_engine_is_judged() -> Result<()> {
     let on_trial = checked_card(&found, &found, checked_by(NEW_ENGINE, vec![new_failure()]));
     assert_eq!(
         on_trial.verdict.failures,
-        [reason(NEW_CHECK, NEW_DETAIL, false)],
+        [reason(NEW_CHECK, NEW_DETAIL, None)],
         "the same failure on the last engine fails the run"
     );
     Ok(())
@@ -269,20 +276,19 @@ fn other_target(card: &Scorecard) -> Result<TargetScore> {
     })
 }
 
-/// The fixture repository's breach, recorded against another repository too.
-fn other_breach(card: &Scorecard) -> Result<Breach> {
-    let first = card
-        .breaches
+/// The fixture repository's missed pair, missed in another repository too.
+fn other_pair(card: &Scorecard) -> Result<PairOutcome> {
+    let mut other = card
+        .outcomes
         .first()
-        .ok_or_else(|| anyhow!("the fixture card breaches no gate"))?;
-    Ok(Breach {
-        repo: OTHER_REPO.to_owned(),
-        ..first.clone()
-    })
+        .cloned()
+        .ok_or_else(|| anyhow!("the fixture card judges no pair"))?;
+    other.key.repo = OTHER_REPO.to_owned();
+    Ok(other)
 }
 
 #[test]
-fn failures_are_listed_repository_by_repository_checks_before_breaches() -> Result<()> {
+fn failures_are_listed_repository_by_repository_checks_before_judged_pairs() -> Result<()> {
     let (found, missed) = found_and_missed()?;
     let first = checked_card(
         &found,
@@ -290,8 +296,8 @@ fn failures_are_listed_repository_by_repository_checks_before_breaches() -> Resu
         checked_by(NEW_ENGINE, vec![tracked_failure()]),
     );
     let targets = [first.targets.clone(), vec![other_target(&first)?]].concat();
-    let breaches = [first.breaches.clone(), vec![other_breach(&first)?]].concat();
-    let judged = verdict(&first.engines, &targets, &breaches);
+    let pairs = [first.outcomes.clone(), vec![other_pair(&first)?]].concat();
+    let judged = verdict(&first.engines, &targets, &pairs);
     let listed: Vec<(&str, &str)> = judged
         .failures
         .iter()
@@ -302,10 +308,10 @@ fn failures_are_listed_repository_by_repository_checks_before_breaches() -> Resu
         [
             (REPO, TRACKED_CHECK),
             (OTHER_REPO, NEW_CHECK),
-            (REPO, BREACHED_MEASURE),
-            (OTHER_REPO, BREACHED_MEASURE),
+            (REPO, MISSED_DEFECT),
+            (OTHER_REPO, MISSED_DEFECT),
         ],
-        "check failures in repository order, then gate breaches in repository order"
+        "check failures in repository order, then judged pairs in repository order"
     );
     Ok(())
 }

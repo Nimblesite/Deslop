@@ -14,6 +14,7 @@ mod cells;
 mod checks;
 mod cost;
 mod coverage;
+mod outcomes;
 mod verdict;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -22,12 +23,14 @@ use cells::{counted, header, row, score_cell, signed, signed_fraction, ABSENT};
 use checks::checks_section;
 use cost::{cost_section, standing_cost};
 use coverage::{coverage_section, coverage_value};
+use outcomes::record_section;
 use serde::Serialize;
 use verdict::verdict_banner;
 
 use super::{
     checks::CheckOutcome,
-    gate::{Breach, CorpusChange, CorpusTotals, Degradation, Thresholds},
+    gate::{CorpusChange, CorpusTotals, Degradation},
+    outcomes::{PairKey, PairOutcome},
     verdict::Verdict,
     RepoScore, RunCost, ScoredEntry,
 };
@@ -94,11 +97,9 @@ pub struct Scorecard {
     /// How the last engine's standing moved against the first. Absent unless
     /// two engines ran.
     pub change: Option<CorpusChange>,
-    /// The gate each repository was held to.
-    pub thresholds: BTreeMap<String, Thresholds>,
-    /// Every threshold the last engine breached. Empty means the register
-    /// gate passes.
-    pub breaches: Vec<Breach>,
+    /// [CORPUS-SCORE-OUTCOMES] Every judged pair the last engine was scored
+    /// on — passed or failed — and how it stands against its record.
+    pub outcomes: Vec<PairOutcome>,
     /// Whether the run passed, and every reason it did not.
     pub verdict: Verdict,
 }
@@ -328,58 +329,11 @@ fn accuracy_section(card: &Scorecard) -> Vec<String> {
     )
 }
 
-/// The gate: what each repository must clear, and anything it did not.
-fn gate_section(card: &Scorecard) -> Vec<String> {
-    let mut lines = vec!["## Register gate".to_owned(), String::new()];
-    lines.extend(header(
-        &["repository", "max false neg", "max false pos"].map(ToOwned::to_owned),
-    ));
-    for (repo, thresholds) in &card.thresholds {
-        lines.push(row(&[
-            repo.clone(),
-            thresholds.maximum_false_negatives.to_string(),
-            thresholds.maximum_false_positives.to_string(),
-        ]));
-    }
-    lines.push(String::new());
-    lines.extend(breach_lines(card));
-    lines
-}
-
-/// What the gate and the defect list say when no repository in the run has a
-/// clone register: nothing was judged, which is not the same as nothing wrong.
-const NO_REGISTER_GATE: &str = "**No register gate** — no repository in this run has a clone \
-                                register, so nothing was scored against one.";
-/// See [`NO_REGISTER_GATE`].
+/// What the defect list says when no repository in the run has a clone
+/// register: nothing was judged, which is not the same as nothing wrong.
 const NO_JUDGED_PAIRS: &str = "No judged pairs — no repository in this run has a clone register.";
 
-/// The verdict, stated in words rather than left to the reader.
-fn breach_lines(card: &Scorecard) -> Vec<String> {
-    if card.thresholds.is_empty() {
-        return vec![NO_REGISTER_GATE.to_owned(), String::new()];
-    }
-    if card.breaches.is_empty() {
-        return vec![
-            "**PASS** — every scored repository is inside its gate.".to_owned(),
-            String::new(),
-        ];
-    }
-    let mut lines = vec![format!(
-        "**FAIL** — {} breach(es). A new false positive or false negative is a bug.",
-        card.breaches.len()
-    )];
-    lines.push(String::new());
-    for breach in &card.breaches {
-        lines.push(format!(
-            "- `{}` {}: allows {}, recorded {}",
-            breach.repo, breach.measure, breach.allowed, breach.actual
-        ));
-    }
-    lines.push(String::new());
-    lines
-}
-
-/// Every judged pair the last engine got wrong, so a breach names the code.
+/// Every judged pair the last engine got wrong, each with how it stands.
 fn defects_section(card: &Scorecard) -> Vec<String> {
     let Some(engine) = card.engines.last() else {
         return Vec::new();
@@ -423,24 +377,35 @@ fn defect_lines(card: &Scorecard, engine_id: &str) -> Vec<String> {
                 .entries
                 .iter()
                 .filter(|entry| !entry.correct)
-                .map(move |entry| defect_line(&target.name, entry))
+                .map(move |entry| defect_line(card, &target.name, entry))
         })
         .collect()
 }
 
-/// One judged pair an engine answered wrongly, with the judge's reason.
-fn defect_line(repository: &str, entry: &ScoredEntry) -> String {
+/// One judged pair an engine answered wrongly, with how it stands against its
+/// record and the judge's reason.
+fn defect_line(card: &Scorecard, repository: &str, entry: &ScoredEntry) -> String {
     let kind = if entry.is_false_negative() {
         "FALSE NEGATIVE"
     } else {
         "FALSE POSITIVE"
     };
     format!(
-        "- **{kind}** {repository} — `{}`{}\n  - {}",
+        "- **{kind}** {repository} — `{}`{}{}\n  - {}",
         entry.occurrences.join("` + `"),
         pinned_note(entry),
+        standing_note(card, &PairKey::of(repository, entry)),
         entry.why
     )
+}
+
+/// [CORPUS-SCORE-OUTCOMES] How a wrongly answered pair stands against its
+/// record, so a regression never reads like a defect that was already there.
+fn standing_note(card: &Scorecard, key: &PairKey) -> String {
+    card.outcomes
+        .iter()
+        .find(|pair| &pair.key == key)
+        .map_or_else(String::new, |pair| format!(" — {}", pair.note()))
 }
 
 /// The scope of the run, stated before any figure: how many repositories were
@@ -484,7 +449,7 @@ pub fn scorecard(card: &Scorecard) -> String {
     lines.extend(checks_section(card));
     lines.extend(coverage_section(card));
     lines.extend(cost_section(card));
-    lines.extend(gate_section(card));
+    lines.extend(record_section(card));
     lines.extend(defects_section(card));
     lines.join("\n")
 }

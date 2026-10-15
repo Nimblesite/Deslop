@@ -200,8 +200,7 @@ make score-gate            # score the current build and fail if it slipped
 One register, one scorer, no second copy. The calculation, the gate and the scorecard
 markdown all live in `deslop-test-support`'s `corpus_score` module — nothing outside Rust
 computes a count, a percentage or a delta. `scripts/compare-versions.sh` scores both
-engines on every run, the `corpus-score` CI job gates every push, and the thresholds sit
-in `corpus/register/score-thresholds.json`. See `docs/specs/corpus.md` §[CORPUS-SCORE].
+engines on every run, the `corpus-score` CI job gates every push, and every judged pair is held to its own recorded outcome in `corpus/register/outcomes.json`. A run writes that record back; commit it. See `docs/specs/corpus.md` §[CORPUS-SCORE] and §[CORPUS-SCORE-OUTCOMES].
 
 This gives degradation a hard definition:
 

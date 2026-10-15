@@ -24,6 +24,7 @@ pub mod checks;
 pub mod clone_type;
 mod coverage;
 pub mod gate;
+pub mod outcomes;
 pub mod render;
 pub mod run;
 pub mod verdict;
@@ -41,8 +42,6 @@ pub const CLEARLY_IN: &str = "clearly_in";
 /// See [`CLEARLY_IN`].
 pub const CLEARLY_OUT: &str = "clearly_out";
 
-/// Default gate on defects: none tolerated unless the config records one.
-pub const DEFAULT_MAXIMUM_DEFECTS: usize = 0;
 /// Percentage base, named so the calculation reads as one.
 const PERCENT: f64 = 100.0;
 

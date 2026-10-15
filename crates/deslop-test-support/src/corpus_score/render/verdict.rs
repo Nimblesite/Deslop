@@ -7,9 +7,6 @@ use crate::corpus_score::verdict::FailureReason;
 
 /// The document's title, after the verdict.
 const TITLE: &str = "Corpus accuracy scorecard";
-/// What a tracked failure says, so it is never mistaken for a new one — nor
-/// for a pass.
-const TRACKED: &str = " (tracked in `corpus/known-failures.json`)";
 
 /// The verdict heading, and for a failed run the caution block that lists
 /// every failure.
@@ -34,9 +31,14 @@ pub(super) fn verdict_banner(card: &Scorecard) -> Vec<String> {
     lines
 }
 
-/// One failure, kept on one line so the caution block stays whole.
+/// One failure, kept on one line so the caution block stays whole. A tracked
+/// failure names the record that tracks it, so it is never mistaken for a new
+/// one — nor for a pass.
 fn failure_line(failure: &FailureReason) -> String {
-    let tracked = if failure.tracked { TRACKED } else { "" };
+    let tracked = failure
+        .tracked_in
+        .as_ref()
+        .map_or_else(String::new, |record| format!(" (tracked in `{record}`)"));
     format!(
         "> - 🔴 **{}** — `{}`{tracked}: {}",
         failure.repo,

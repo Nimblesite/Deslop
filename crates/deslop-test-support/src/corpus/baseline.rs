@@ -24,14 +24,17 @@ pub struct Baseline {
     known: BTreeMap<String, BTreeSet<String>>,
 }
 
+/// Where the baseline of known failures lives, relative to the repository root.
+pub const KNOWN_FAILURES_PATH: &str = "corpus/known-failures.json";
+
 impl Baseline {
-    /// Loads `corpus/known-failures.json`.
+    /// Loads [`KNOWN_FAILURES_PATH`].
     ///
     /// # Errors
     ///
     /// Returns an error when the file exists but is not valid JSON.
     pub fn load() -> Result<Self> {
-        let path = repo_root().join("corpus").join("known-failures.json");
+        let path = repo_root().join(KNOWN_FAILURES_PATH);
         if !path.exists() {
             return Ok(Self::default());
         }
