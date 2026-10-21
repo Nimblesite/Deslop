@@ -95,9 +95,10 @@ Output (`DuplicatesPage` — the one page wire type, whatever the scope or detai
   generation, tool_version, files_analysed, min_nodes, clusters_hidden,
   embedding_provenance, cache_stats, metrics,
   total_clusters, total_occurrences,
-  page: { offset, limit, returned },
+  page: { offset, limit, returned, next_offset, has_more },
   filters: { …echo of applied filter block… },
-  clusters: [ClusterSummary…] | [ReportCluster…]   // per `detail`
+  clusters: [ClusterSummary…] | [ReportCluster…],  // per `detail`
+  truncated, truncated_reason, next_action
 }
 ```
 
@@ -106,6 +107,12 @@ Output (`DuplicatesPage` — the one page wire type, whatever the scope or detai
 `metrics` carries the headline repo totals on every page. Its **`per_file` breakdown is opt-in** via `include_per_file: true` and empty otherwise: it holds one row per analysed file, so on a workspace of a thousand files — or a few hundred deeply nested ones — that block alone exceeds the whole [MCP-RESULT-SIZE-CAP] budget before a single cluster is added, which made every page overflow ([issue #286](https://github.com/Nimblesite/Deslop/issues/286)). Every `per_file` path is rendered relative to the scan root, the same form occurrence paths use, so a report never mixes the two and never carries the user's home directory.
 
 `schema_doc` is intentionally absent from every page; agents call `schema-doc` or read `deslop://schema` once. `total_clusters` lets the agent decide whether to keep paging; exhaustive audits page until `offset + returned >= total_clusters`.
+
+#### [MCP-PAGE-CONTINUATION] Budget limits disclose what remains
+
+Every page reports `has_more` and `next_offset`, computed from the rows actually returned rather than the requested limit. `next_offset` is null when no matched clusters remain. Occurrence-budget omissions set top-level `truncated: true`, a reason, and a continuation hint, even when only an occurrence tail was omitted. Ordinary pagination alone does not set `truncated`. A byte cap includes these markers in its budget and reconciles `page.returned`, `next_offset`, and `has_more` after trimming, including inside a `rescan.page` envelope. Callers keep the same filters when following a cursor and use `cluster-by-id` for omitted occurrences. When a byte cap leaves zero rows, change the request to a smaller summary without per-file metrics rather than repeating a cursor that cannot advance. A snapshot's generation may change between calls; re-read the page sequence if a consistent inventory is required.
+
+Implemented by `page/continuation.rs` and `tools/limits.rs`; pinned by `tests/query/pagination.rs::occurrence_budget_exposes_continuation_and_preserves_the_complete_pairs` and `tools/limits.rs::byte_budget_includes_markers_and_updates_the_returned_page`. The SharpLsp acceptance work is tracked under [MCP-REPORT-FOLLOWUP].
 
 ### [MCP-OCCURRENCE-BUDGET] Per-call total-occurrence budget
 
@@ -123,7 +130,7 @@ A budget exactly consumed by a cluster's full occurrence list does **not** set `
 
 **`cluster-by-id`** is the escape hatch: the full cluster, no budget (the agent asked for exactly one), capped at the live-wire occurrence cap of 100 per call. It accepts `offset?` (integer ≥ 0, default 0) over the occurrence list, so a large clone component is fully enumerable by paging until fewer than 100 come back. Dedicated literal findings are not addressable as clusters.
 
-Tool descriptions lead with the budget so an LLM reading `tools/list` sees the contract before the first call. The budget behaviour is pinned by the issue-136 tests named in [MCP-TESTING].
+The tool schema documents the occurrence budget. The budget behavior is pinned by the issue-136 tests named in [MCP-TESTING] and the continuation assertions under [MCP-PAGE-CONTINUATION].
 
 ### [MCP-RESULT-SIZE-CAP] Defensive tool-result size cap
 

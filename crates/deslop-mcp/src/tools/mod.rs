@@ -54,7 +54,7 @@ const TOOLS: [ToolDefinition; 8] = [
     },
     ToolDefinition {
         name: "duplicates",
-        description: "Duplicate clusters ranked by mass. Start here when fixing duplicates.",
+        description: "Start cleanup with a small summary page. Kinds inherit repository configuration; override kinds per call. Follow page.next_offset, then drill into a cluster-by-id before editing.",
         input_schema: schema_duplicates,
     },
     ToolDefinition {
@@ -69,7 +69,7 @@ const TOOLS: [ToolDefinition; 8] = [
     },
     ToolDefinition {
         name: "rescan",
-        description: "Force the LSP refresh and return a fresh filtered duplicates page with change counts.",
+        description: "Recovery only for suspected watcher lag. Normal edits refresh automatically. Returns a fresh duplicates page; change counts describe this refresh, not changes since your last query.",
         input_schema: schema_rescan,
     },
     ToolDefinition {

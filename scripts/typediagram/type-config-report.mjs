@@ -241,8 +241,8 @@ export const REPORT_TYPE_CONFIG = {
   ReportPageInfo: {
     docs: "Pagination cursor echoed on a duplicates page.",
     derives: ["Debug", "Clone", "Copy", "Serialize", "Deserialize"],
-    fieldOverrides: { offset: "usize", limit: "usize", returned: "usize" },
-    fieldDocs: { offset: "Zero-based start index.", limit: "Requested page limit.", returned: "Rows actually returned after budgeting." },
+    fieldOverrides: { offset: "usize", limit: "usize", returned: "usize", next_offset: "Option<usize>" },
+    fieldDocs: { offset: "Zero-based start index.", limit: "Requested page limit.", returned: "Rows actually returned after budgeting.", next_offset: "Next matched-cluster offset, or null when complete.", has_more: "Whether matched clusters remain after this page ([MCP-PAGE-CONTINUATION])." },
   },
   DuplicatesFilters: {
     docs: "Cluster-owned filters echoed by duplicates and rescan.",
@@ -268,6 +268,9 @@ export const REPORT_TYPE_CONFIG = {
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
     fieldOverrides: { generation: "u64", files_analysed: "usize", min_nodes: "u32", clusters_hidden: "usize", total_clusters: "usize", total_occurrences: "usize" },
     fieldDocs: {
+      truncated: "Whether an occurrence or byte budget omitted requested content.",
+      truncated_reason: "Why requested content was omitted, when applicable.",
+      next_action: "How to continue a budget-limited result without assuming completeness.",
       tool_version: "Producer version.",
       generation: "Live generation.",
       files_analysed: "Analysed file count.",

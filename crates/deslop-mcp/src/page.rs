@@ -5,7 +5,7 @@ use deslop_core::{
     report::{occurrence_count, Report, ReportCluster},
     wire_generated::{
         ClusterSummary, DuplicateCluster, DuplicatesFilters, DuplicatesPage, OccurrenceSummary,
-        RepoMetrics, ReportPageInfo,
+        RepoMetrics,
     },
 };
 
@@ -14,6 +14,15 @@ mod tests;
 
 mod filters;
 use filters::{effective_filters, matches_filters};
+
+mod continuation;
+use continuation::is_truncated;
+pub(crate) use continuation::page_info;
+
+/// Explanation shared by occurrence-budget truncations.
+const OCCURRENCE_LIMIT_REASON: &str = "max_occurrences omitted requested clusters or occurrences";
+/// Cluster navigation and occurrence navigation have separate cursors.
+const CONTINUE_ACTION: &str = "Use page.next_offset with the same filters for more clusters; use cluster-by-id for occurrences_truncated members.";
 
 /// Page cursor and optional metrics detail.
 #[derive(Debug, Clone, Copy)]
@@ -66,6 +75,13 @@ pub fn build_page(
         .map(|cluster| occurrence_count(cluster))
         .sum();
     let clusters = selected_page(&matched, shape);
+    let page = page_info(
+        shape.pagination.offset,
+        shape.pagination.limit,
+        clusters.len(),
+        total_clusters,
+    );
+    let truncated = is_truncated(&clusters, &page, total_clusters);
     DuplicatesPage {
         tool_version: report.tool_version.clone(),
         generation,
@@ -77,13 +93,12 @@ pub fn build_page(
         metrics: page_metrics(report, shape.pagination.include_per_file),
         total_clusters,
         total_occurrences,
-        page: ReportPageInfo {
-            offset: shape.pagination.offset,
-            limit: shape.pagination.limit,
-            returned: clusters.len(),
-        },
+        page,
         clusters,
         filters,
+        truncated,
+        truncated_reason: truncated.then(|| OCCURRENCE_LIMIT_REASON.to_owned()),
+        next_action: truncated.then(|| CONTINUE_ACTION.to_owned()),
     }
 }
 
