@@ -166,3 +166,45 @@ fn main() -> Result<()> {
         ),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    const TEST_REPORT: &str = "target/.corpus/corpus-score-missing-timing/report.json";
+    const TEST_TIMING: &str = "target/.corpus/corpus-score-missing-timing/absent-timing.json";
+    const ENGINE_ID: &str = "current";
+
+    /// [CORPUS-SCORE-COST-COMPLETE] Missing required cost fails the strict gate.
+    #[test]
+    fn registered_run_with_missing_timing_fails_scoring() -> Result<()> {
+        let root = repo_root();
+        let report = root.join(TEST_REPORT);
+        fs::create_dir_all(root.join("target/.corpus/corpus-score-missing-timing"))?;
+        fs::write(report, "{\"clusters\":[]}")?;
+        let target = json!({"name":"fixture","runs":{ENGINE_ID:{"report":TEST_REPORT,"timing":TEST_TIMING}}});
+        let register = json!({"clearly_in":[],"clearly_out":[]});
+        let result = score_target(&target, &register, &root, &[ENGINE_ID.to_owned()], true);
+        assert!(
+            result.is_err(),
+            "a missing timing file must never yield a green scorecard"
+        );
+        Ok(())
+    }
+
+    /// [CORPUS-SCORE-COST-COMPLETE] Accuracy-only scoring accepts an unmeasured run.
+    #[test]
+    fn unmeasured_run_keeps_accuracy_score_without_a_timing_field() -> Result<()> {
+        let root = repo_root();
+        let report = root.join(TEST_REPORT);
+        fs::create_dir_all(root.join("target/.corpus/corpus-score-missing-timing"))?;
+        fs::write(report, "{\"clusters\":[]}")?;
+        let run = json!({"report":TEST_REPORT});
+        let register = json!({"clearly_in":[],"clearly_out":[]});
+        let result = scored_run(&run, &register, &root, ENGINE_ID, "fixture", false)?;
+        assert_eq!(result.0.correct, 0, "empty register has no judged pairs");
+        assert!(result.1.is_none(), "unmeasured run has no timing cost");
+        Ok(())
+    }
+}

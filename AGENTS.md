@@ -60,6 +60,10 @@ REPLACE BROKEN CODE; DON'T WRITE NEW CODE WITH A DUPLICATE PATH
 - **Deterministic.** No `sleep`, no timing dependencies, no random state.
 - **Coverage thresholds live in `coverage-thresholds.json`** at the repo root — never env vars, GitHub variables, or CI YAML. Monotonic increase only (−1% rounding allowance); falling below fails the pipeline.
 
+## Version comparison — the corpus run
+
+"Compare to version X" means one thing: run `scripts/compare-versions.sh <X> HEAD` ([CORPUS-SCORE-COMPARE]). It is an objective test run. Both builds are scored against the corpus of known answers in `corpus/register/`. The script writes the report itself: `.corpus/version-compare/reports/SCORE.md`, `INDEX.md`, and a `SUMMARY.md` for each repo. Point the user at those files. A comparison is never pi, a subagent, or an LLM code review, and an agent-written review is never part of its output.
+
 ## Universal rules
 
 - **Files < 500 lines. Functions < 20 lines.** Refactor when over.
