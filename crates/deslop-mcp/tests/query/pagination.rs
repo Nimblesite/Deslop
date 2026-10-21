@@ -16,6 +16,10 @@ const TOTAL_OCCURRENCES: usize = 4;
 const FIRST_ID: &str = "54a6b248b64f425d";
 const SECOND_ID: &str = "77b94fb5d8ae7d7c";
 const FULL: &str = "full";
+const CSHARP: &str = "csharp";
+const FILTER_PATH: &str = "Gamma.cs";
+const FIRST_SOURCE: &str = include_str!("../fixtures/csharp-mcp/Alpha.cs");
+const SECOND_SOURCE: &str = include_str!("../fixtures/csharp-mcp/Gamma.cs");
 
 /// The caller deliberately asks for more clusters than the occurrence budget fits.
 fn read_page(mcp: &mut McpHandle, offset: usize) -> Result<Value> {
@@ -78,4 +82,40 @@ fn occurrence_budget_exposes_continuation_and_preserves_the_complete_pairs() -> 
     let _lsp = spawn_lsp_and_wait_for_socket(workspace.path())?;
     let mut mcp = wait_for_state_then_init_mcp(workspace.path())?;
     assert_continuation(&mut mcp)
+}
+
+/// [MCP-TOOL-FILTERS] Filtering precedes the result limit on similarity queries too.
+#[test]
+fn snippet_filter_selects_a_later_pair_before_applying_the_limit() -> Result<()> {
+    let workspace = copied_fixture()?;
+    let _lsp = spawn_lsp_and_wait_for_socket(workspace.path())?;
+    let mut mcp = wait_for_state_then_init_mcp(workspace.path())?;
+    let snippet = format!("{FIRST_SOURCE}\n{SECOND_SOURCE}");
+    let all = call_tool(
+        &mut mcp,
+        "find-similar",
+        &json!({
+            "snippet": snippet, "language": CSHARP, "limit": PAGE_LIMIT,
+        }),
+    )?;
+    assert_eq!(all.get("total_clusters"), Some(&json!(PAGE_LIMIT)));
+    let scoped = call_tool(
+        &mut mcp,
+        "find-similar",
+        &json!({
+            "snippet": snippet, "language": CSHARP, "limit": OCCURRENCE_BUDGET,
+            "path_contains": FILTER_PATH,
+        }),
+    )?;
+    assert_eq!(
+        scoped.get("total_clusters"),
+        Some(&json!(OCCURRENCE_BUDGET))
+    );
+    assert_eq!(scoped.pointer("/clusters/0/id"), Some(&json!(SECOND_ID)));
+    assert_eq!(scoped.pointer("/clusters/0/rank"), Some(&json!(PAGE_LIMIT)));
+    assert_eq!(
+        scoped.pointer("/clusters/0/occurrence_count"),
+        Some(&json!(PAGE_LIMIT))
+    );
+    Ok(())
 }

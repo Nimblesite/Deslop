@@ -323,6 +323,10 @@ The `live` module exposes the `LiveApi` trait. The LSP holds a `LiveApi` impl an
 ### [LIVE-CLUSTER-OFFSET-FRESHNESS] Cluster offset freshness on read
 A `cluster/byId` read (and `report/forFile` / `report/forRange` / `duplicates/findSimilar`) returns occurrence byte and line ranges that map onto the current on-disk file — or, for a file an editor holds open, onto its current buffer ([LIVE-OPEN-BUFFERS]) — even when the agent has edited files without an explicit `rescan` between reads. The session re-stats every occurrence path on each IPC read ([LIVE-CLUSTER-OFFSET-FRESHNESS]) and synchronously re-analyses any file whose mtime is newer than last observed, before resolving the cluster. A stale offset that overshoots the post-edit file length would corrupt agent context, so this gate is mandatory on every agent-facing read path, not just `rescan`.
 
+### [LIVE-WORKSPACE-SCOPE] Only workspace buffers enter the session
+
+Open, edit, and close operations validate the resolved path against the pinned workspace root before retaining editor text or changing analysis state. An external scratch file returns `PathOutsideWorkspace`; its text, paths, lines, and clone memberships never enter the workspace report. The existing live path guard is shared with range queries. Implemented by `live/session_buffers.rs` and `AnalysisSession::guard_path`; pinned by `tests/live/scope.rs::external_editor_buffer_is_rejected_without_changing_workspace_metrics_or_clusters` and tracked under [MCP-REPORT-FOLLOWUP].
+
 ### [LIVE-OPEN-BUFFERS] Open editor buffers shadow the file on disk
 
 Editor-driven report notifications identify the analysed path and LSP document version using the generated `AnalysedBuffer` wire model. They are emitted even when the analysis leaves clone membership unchanged, so the VSIX can release its stale-offset guard without waiting for save ([VSIX-STATE-DIRTY]).

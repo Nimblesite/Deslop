@@ -881,7 +881,7 @@ impl AnalysisSession {
     }
 
     /// Asserts `path` is under the workspace root.
-    fn guard_path(&self, path: &Path) -> Result<(), LiveError> {
+    pub(super) fn guard_path(&self, path: &Path) -> Result<(), LiveError> {
         let resolved = if path.is_absolute() {
             path.to_path_buf()
         } else {
