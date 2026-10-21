@@ -136,49 +136,15 @@ fn page_metrics(report: &Report, include_per_file: bool) -> RepoMetrics {
     metrics
 }
 
-/// Applies only cluster-owned filters.
-fn matches_filters(filters: &DuplicatesFilters, cluster: &ReportCluster) -> bool {
-    filter_min_size(filters, cluster)
-        && filter_severity(filters, cluster)
-        && filter_language(filters, cluster)
-        && filter_path(filters, cluster)
-}
-
-/// Applies the canonical extent floor.
-fn filter_min_size(filters: &DuplicatesFilters, cluster: &ReportCluster) -> bool {
-    match filters.min_size {
-        Some(minimum) => cluster.canonical_node_count >= minimum,
-        None => true,
-    }
-}
-
-/// Applies engine-stamped mass severity bands.
-fn filter_severity(filters: &DuplicatesFilters, cluster: &ReportCluster) -> bool {
-    match filters.severities.as_ref() {
-        Some(values) => values.iter().any(|value| value == &cluster.severity),
-        None => true,
-    }
-}
-
-/// Applies language filters derived from the stable first occurrence.
-fn filter_language(filters: &DuplicatesFilters, cluster: &ReportCluster) -> bool {
-    match filters.languages.as_ref() {
-        Some(values) => values
-            .iter()
-            .any(|value| value == cluster_language(cluster)),
-        None => true,
-    }
-}
-
-/// Applies occurrence-path substring filtering.
-fn filter_path(filters: &DuplicatesFilters, cluster: &ReportCluster) -> bool {
-    match filters.path_contains.as_ref() {
-        Some(needle) => cluster
-            .occurrences
-            .iter()
-            .any(|occurrence| occurrence.path.to_string_lossy().contains(needle)),
-        None => true,
-    }
+/// [MCP-TOOL-FILTERS-KINDS] Quarantines selection that ignored configured clone kinds.
+#[expect(clippy::panic, reason = "AGENTS.md mandates an accuracy quarantine")]
+fn matches_filters(_filters: &DuplicatesFilters, _cluster: &ReportCluster) -> bool {
+    // Removed the size/severity/language/path-only matcher: it admitted nearly
+    // identical pairs under an identical-only configuration and ignored caller
+    // kind overrides. Pinned by the real-process test
+    // configured_clone_kinds_are_inherited_and_explicit_arguments_override_one_call
+    // in tests/query/kinds.rs. Restore filtering only after that contract passes.
+    panic!("MCP clone-kind filtering is quarantined: configured and explicit kinds were ignored")
 }
 
 /// Returns the stable first occurrence's language id.

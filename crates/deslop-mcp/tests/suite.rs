@@ -14,6 +14,9 @@
 /// Shared fixture helpers, declared once for every suite below.
 mod common;
 
+#[path = "query/kinds.rs"]
+mod query_kinds;
+
 #[path = "cli.rs"]
 mod cli;
 #[path = "dart_generated_fp_over_mcp.rs"]
