@@ -52,12 +52,19 @@ Every cluster-returning tool (`duplicates`, `rescan`, `find-similar`) accepts on
 
 ```text
 languages?:      [enum]   // the core language registry (the #170/#198 anti-drift fix)
+kinds?:          [enum]   // explicit per-call clone-kind selection; omission inherits configuration
 path_contains?:  string
 severities?:     [enum]   // configured diagnostic severity
 min_size?:       integer
 ```
 
-Array params with empty/absent = no filtering; a one-element array is the single-value form. The Language values derive from the canonical parser registry. Pair classification, pair evidence, literal kind, category, and confidence are not cluster filters. Filtered tools echo the applied filters so transcripts are reproducible; `total_clusters` reflects the post-filter count.
+Empty or absent language and severity arrays impose no restriction; a one-element array is the single-value form. Language values derive from the canonical parser registry. Pair evidence, literal kind, category, and confidence are not cluster filters. Filtered tools echo the applied filters so transcripts are reproducible; `total_clusters` reflects the post-filter count.
+
+#### [MCP-TOOL-FILTERS-KINDS] Configured clone kinds are the default selection
+
+`duplicates`, `find-similar`, and `rescan` inherit the running engine's `metrics.total_includes` when `kinds` is omitted. That selection comes from `.deslop.toml`'s `[total] include` and defaults to `identical` and `nearly_identical`. An explicit `kinds` array replaces it for that call only; an empty array selects no clusters. Values come from the core `ClusterKind` registry; unknown values or non-array inputs are `InvalidParams`. The response echoes the effective selection, deduplicated in registry display order. Kind filtering combines with every other filter before pagination and occurrence budgeting and preserves engine ranking. Repository metrics retain the configured whole-workspace totals; a query filter does not redefine those totals. `existing` snippet matches are occurrences without a cluster kind and remain independent of this filter.
+
+Implemented in `crates/deslop-mcp/src/page/filters.rs`, `tools/handlers.rs`, and the generated `DuplicatesFilters` model in `docs/models/live-ipc.td`. Pinned by `page/tests.rs::selected_kind_and_occurrence_filters_retain_the_ranked_pair` and `tests/query/kinds.rs::configured_clone_kinds_are_inherited_and_explicit_arguments_override_one_call`. Follow-up scope is tracked under [MCP-START-WORK] in `docs/plans/mcp-agent-workflow.md`.
 
 The shared pagination block rides beside it on `duplicates` and `rescan`:
 

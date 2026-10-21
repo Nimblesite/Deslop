@@ -358,6 +358,13 @@ fn extract_page_shape(args: &Value) -> Result<PageShape, JsonRpcError> {
 /// Extracts the shared cluster-owned filters.
 fn extract_filters(args: &Value) -> Result<DuplicatesFilters, JsonRpcError> {
     Ok(DuplicatesFilters {
+        kinds: args
+            .get("kinds")
+            .map(|value| {
+                serde_json::from_value(value.clone())
+                    .map_err(|_| invalid_parameter("kinds", "array of registered clone kinds"))
+            })
+            .transpose()?,
         languages: extract_string_array(args, "languages")?,
         path_contains: args
             .get("path_contains")

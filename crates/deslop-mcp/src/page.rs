@@ -9,6 +9,12 @@ use deslop_core::{
     },
 };
 
+#[cfg(test)]
+mod tests;
+
+mod filters;
+use filters::{effective_filters, matches_filters};
+
 /// Page cursor and optional metrics detail.
 #[derive(Debug, Clone, Copy)]
 pub struct Pagination {
@@ -49,9 +55,10 @@ pub fn build_page(
     shape: PageShape,
     filters: &DuplicatesFilters,
 ) -> DuplicatesPage {
+    let filters = effective_filters(report, filters);
     let matched: Vec<&ReportCluster> = candidates
         .iter()
-        .filter(|cluster| matches_filters(filters, cluster))
+        .filter(|cluster| matches_filters(&filters, cluster))
         .collect();
     let total_clusters = matched.len();
     let total_occurrences = matched
@@ -76,7 +83,7 @@ pub fn build_page(
             returned: clusters.len(),
         },
         clusters,
-        filters: filters.clone(),
+        filters,
     }
 }
 
@@ -134,17 +141,6 @@ fn page_metrics(report: &Report, include_per_file: bool) -> RepoMetrics {
         metrics.folders.clear();
     }
     metrics
-}
-
-/// [MCP-TOOL-FILTERS-KINDS] Quarantines selection that ignored configured clone kinds.
-#[expect(clippy::panic, reason = "AGENTS.md mandates an accuracy quarantine")]
-fn matches_filters(_filters: &DuplicatesFilters, _cluster: &ReportCluster) -> bool {
-    // Removed the size/severity/language/path-only matcher: it admitted nearly
-    // identical pairs under an identical-only configuration and ignored caller
-    // kind overrides. Pinned by the real-process test
-    // configured_clone_kinds_are_inherited_and_explicit_arguments_override_one_call
-    // in tests/query/kinds.rs. Restore filtering only after that contract passes.
-    panic!("MCP clone-kind filtering is quarantined: configured and explicit kinds were ignored")
 }
 
 /// Returns the stable first occurrence's language id.

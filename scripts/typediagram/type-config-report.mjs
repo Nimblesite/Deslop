@@ -249,6 +249,7 @@ export const REPORT_TYPE_CONFIG = {
     derives: ["Debug", "Clone", "Default", "Serialize", "Deserialize"],
     fieldOverrides: { min_size: "Option<usize>" },
     fieldDocs: {
+      kinds: "Effective clone kinds; omitted input inherits `metrics.total_includes` ([MCP-TOOL-FILTERS-KINDS]).",
       languages: "Registered language ids.",
       path_contains: "Case-sensitive occurrence-path fragment.",
       severities: "Engine-stamped mass severities.",

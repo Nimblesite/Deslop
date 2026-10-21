@@ -1,6 +1,6 @@
 //! JSON schemas for the canonical MCP tools.
 
-use deslop_core::pipeline::language_ids;
+use deslop_core::{buckets::ClusterKind, pipeline::language_ids};
 use serde_json::{json, Map, Value};
 
 /// Default cluster count returned by paginated tools.
@@ -108,6 +108,11 @@ pub(super) fn schema_merge_plan() -> Value {
 /// Shared cluster-owned filter block.
 fn filter_properties() -> Map<String, Value> {
     let mut properties = Map::new();
+    let _old = properties.insert(
+        "kinds".to_owned(),
+        json!({"type": "array", "items": {"type": "string", "enum": ClusterKind::all()},
+            "description": "Overrides configured clone kinds for this call. Omit to inherit [total] include (default identical and nearly_identical); [] selects none."}),
+    );
     let _old = properties.insert(
         "languages".to_owned(),
         json!({"type": "array", "items": {"type": "string", "enum": language_enum()}}),

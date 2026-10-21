@@ -535,6 +535,7 @@ type ReportPageInfo {
 }
 
 type DuplicatesFilters {
+  kinds: Option<List<ClusterKind>>
   languages: Option<List<String>>
   path_contains: Option<String>
   severities: Option<List<String>>

@@ -91,6 +91,6 @@ fn mismatch(
         mcp_version: crate::version().to_owned(),
         engine_version: engine_version.unwrap_or_else(|| UNSTAMPED_ENGINE_VERSION.to_owned()),
         endpoint: endpoint.to_path_buf(),
-        detail,
+        detail: detail.into_boxed_str(),
     }
 }

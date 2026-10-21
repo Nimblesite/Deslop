@@ -87,7 +87,7 @@ pub enum BackendError {
         /// The IPC endpoint the reply came from.
         endpoint: PathBuf,
         /// What was found: the foreign version, or the decode failure.
-        detail: String,
+        detail: Box<str>,
     },
 }
 
