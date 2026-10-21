@@ -16,7 +16,7 @@ use super::{
     super::{
         config::{EmbeddingSettings, PipelineConfig},
         corpus::{log_skip_too_deep, parse_one_file, parser_for_language, CorpusBuildState},
-        open_buffers::OpenBuffers,
+        open_buffers::{canonicalise_path, OpenBuffers},
     },
     PipelineSession,
 };
@@ -58,33 +58,6 @@ impl CorpusEffect {
         } else {
             Self::Untouched
         }
-    }
-}
-
-/// [LIVE-SCHEDULER-REMOVAL-COST] Resolves a path or its surviving parent.
-fn canonicalise_path(
-    path: &Path,
-    mut resolve: impl FnMut(&Path) -> std::io::Result<PathBuf>,
-) -> PathBuf {
-    match std::fs::symlink_metadata(path) {
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            canonicalise_parent(path, resolve)
-        }
-        _ => resolve(path).unwrap_or_else(|_| canonicalise_parent(path, resolve)),
-    }
-}
-
-/// Preserves native parent aliases when a removed leaf cannot be resolved.
-fn canonicalise_parent(
-    path: &Path,
-    mut resolve: impl FnMut(&Path) -> std::io::Result<PathBuf>,
-) -> PathBuf {
-    match (path.parent(), path.file_name()) {
-        (Some(parent), Some(leaf)) => match resolve(parent) {
-            Ok(canonical_parent) => canonical_parent.join(leaf),
-            Err(_) => path.to_path_buf(),
-        },
-        _ => path.to_path_buf(),
     }
 }
 

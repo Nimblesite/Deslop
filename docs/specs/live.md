@@ -244,7 +244,7 @@ The scheduler waits for a watcher event while no file changes are pending, inclu
 
 A removed path that matches no analysed file must be rejected through the corpus path index without scanning every analysed path. Matching leaves and whole subtrees are still evicted, while a component-prefix sibling such as `pkg_twin` survives removal of `pkg`. Lookup work grows with the matching files plus the logarithm of the analysed file count.
 
-A path already known to be missing resolves its surviving parent directly, without first attempting a doomed canonical lookup of the missing leaf. Existing paths retain native alias resolution, and dangling symlinks retain their fallback behavior. `pipeline/session/change/tests.rs` checks resolver calls alongside existing-file and real/broken-symlink controls for the implementation in `pipeline/session/change.rs`.
+A path already known to be missing resolves its nearest surviving ancestor directly, without first attempting a doomed canonical lookup of the missing leaf or its removed parents. Existing paths retain native alias resolution, and dangling symlinks retain their fallback behavior. Corpus updates, editor buffers, and path guards share `pipeline/open_buffers.rs::canonicalise_path`. `pipeline/session/change/tests.rs` keeps the one-resolution assertion even when a parent is absent and checks existing-file and real/broken-symlink controls; `tests/live/scope.rs` pins removal of a buffer whose parent directory disappeared.
 
 ### [LIVE-SCHEDULER-NOOP] No-op pass early-out
 

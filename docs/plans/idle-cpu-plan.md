@@ -26,7 +26,7 @@ Keep live-file membership indexed by path as well as file identifier in `crates/
 
 The CLI assertions in `crates/deslop/tests/rerun/removals.rs` pin bounded candidate visits and preserve the rendered cluster, occurrence paths, ranking, counts, and empty delta for an unrelated deletion. [live.md](../specs/live.md) defines the contract. Repeat the native churn workload after rebuilding to measure the complete watcher-to-report loop.
 
-Resolve a known-missing path through its surviving parent instead of first canonicalising the absent leaf. `pipeline/session/change/tests.rs` pins the lookup count and preserves existing-file, native-alias, and dangling-symlink behavior.
+Resolve a known-missing path through its nearest surviving ancestor instead of first canonicalising an absent leaf or removed directory. Corpus updates, buffers, and path guards now share `pipeline/open_buffers.rs::canonicalise_path`; `pipeline/session/change/tests.rs` still pins one useful resolution and preserves existing-file, native-alias, and dangling-symlink behavior. `tests/live/scope.rs` checks complete report restoration when the editor closes a deleted directory's buffer.
 
 ## [LIVE-WATCHER-CONFIG-COST] Resolve plausible configuration aliases
 

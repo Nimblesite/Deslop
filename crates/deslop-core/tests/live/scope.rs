@@ -34,7 +34,10 @@ fn closing_a_buffer_after_its_parent_directory_is_removed_restores_the_baseline(
     let _closed = session.close_buffer(&file)?;
     assert_eq!(session.report().files_analysed, before.files_analysed);
     assert_eq!(session.report().clusters, before.clusters);
-    assert_eq!(serde_json::to_value(&session.report().metrics)?, serde_json::to_value(&before.metrics)?);
+    assert_eq!(
+        serde_json::to_value(&session.report().metrics)?,
+        serde_json::to_value(&before.metrics)?
+    );
     Ok(())
 }
 
@@ -70,7 +73,8 @@ fn external_editor_buffer_is_rejected_without_changing_workspace_metrics_or_clus
 
 /// [LIVE-WORKSPACE-SCOPE] A new editor document under the root is valid before save.
 #[test]
-fn unsaved_workspace_source_survives_path_validation_and_closes_back_to_the_baseline() -> Result<()> {
+fn unsaved_workspace_source_survives_path_validation_and_closes_back_to_the_baseline() -> Result<()>
+{
     let workspace = copy_fixture(FIXTURE)?;
     let mut session = live_session(workspace.path())?;
     let before = session.report();
@@ -79,11 +83,17 @@ fn unsaved_workspace_source_survives_path_validation_and_closes_back_to_the_base
     let _opened = session.open_buffer(&unsaved, text)?;
     let opened = session.report();
     assert_eq!(opened.files_analysed, WORKSPACE_WITH_UNSAVED_FILE);
-    assert!(opened.clusters.iter().flat_map(|cluster| &cluster.occurrences)
+    assert!(opened
+        .clusters
+        .iter()
+        .flat_map(|cluster| &cluster.occurrences)
         .any(|occurrence| occurrence.path.ends_with(SCRATCH_FILE)));
     let _closed = session.close_buffer(&unsaved)?;
     assert_eq!(session.report().files_analysed, before.files_analysed);
     assert_eq!(session.report().clusters, before.clusters);
-    assert_eq!(serde_json::to_value(&session.report().metrics)?, serde_json::to_value(&before.metrics)?);
+    assert_eq!(
+        serde_json::to_value(&session.report().metrics)?,
+        serde_json::to_value(&before.metrics)?
+    );
     Ok(())
 }
