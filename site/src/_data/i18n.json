@@ -66,6 +66,21 @@
       "install": "Install",
       "review": "Rate & review"
     },
+    "reel": {
+      "label": "What Deslop does",
+      "find": "Find duplicate code.",
+      "languages": "Nine languages.",
+      "rank": "Worst offenders first.",
+      "agents": "Stop coding agents from creating more.",
+      "brand": "Live in VS Code.",
+      "agent": "Agent",
+      "deslop": "Deslop",
+      "agentAsk": "I'll write a total() helper.",
+      "agentWarn": "Similar code already exists.",
+      "agentReuse": "Then I'll reuse it.",
+      "play": "Play animation",
+      "pause": "Pause animation"
+    },
     "testimonials": {
       "eyebrow": "Field report",
       "title": "Findings that ship.",
@@ -157,6 +172,21 @@
       "lede": "从 Visual Studio Marketplace 或 Open VSX 安装同一个扩展。",
       "install": "安装",
       "review": "评分与评论"
+    },
+    "reel": {
+      "label": "Deslop 能做什么",
+      "find": "查找重复代码。",
+      "languages": "覆盖九种语言。",
+      "rank": "最严重的重复排在最前。",
+      "agents": "阻止编码智能体制造更多重复。",
+      "brand": "在 VS Code 中实时分析。",
+      "agent": "智能体",
+      "deslop": "Deslop",
+      "agentAsk": "我来写一个 total() 辅助函数。",
+      "agentWarn": "相似代码已经存在。",
+      "agentReuse": "那我就复用它。",
+      "play": "播放动画",
+      "pause": "暂停动画"
     },
     "testimonials": {
       "eyebrow": "实地反馈",

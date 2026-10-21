@@ -10,10 +10,12 @@ import type { LanguageClient } from "vscode-languageclient/node";
 import { ReportStore, LifecyclePhase } from "../reportStore";
 import {
   applyFacetFilter,
+  ClusterKind,
   FacetFilter,
   ReportCluster,
   RepoMetrics,
   severityLabel,
+  totalCountsCaption,
 } from "../types/report";
 import { readTopOffendersFilter } from "../commands/topOffendersView";
 import {
@@ -41,7 +43,7 @@ import {
 } from "./grouping";
 import { buildFolderMode } from "./folder";
 import { buildMetricRows } from "./metrics";
-import { thresholdStatus } from "./threshold";
+import { metricsThresholdStatus } from "./threshold";
 
 // Re-export node classes so existing call sites
 // (commands/register.ts, commands/treeMenus.ts, tests, e2e suites)
@@ -221,18 +223,19 @@ function readAxis<T>(key: string, fallback: string, normalise: (value: string) =
 }
 
 // [VSIX-TOP-OFFENDERS-GROUPING] Reads `deslop.topOffenders.groupBy`
-// (cluster | file | folder | type, default cluster).
+// (cluster | file | folder | kind | language, default kind).
 function readGroupBy(): GroupBy {
-  return readAxis("topOffenders.groupBy", "cluster", normalizeGroupBy);
+  return readAxis("topOffenders.groupBy", "kind", normalizeGroupBy);
 }
 
 export class TopOffendersProvider extends LifecycleAwareProvider {
   getChildren(node?: Node): Node[] {
+    const totalIncludes = this.store.current.visibleReport?.metrics.total_includes;
     if (node instanceof FolderNode) return node.children;
-    if (node instanceof FileNode) return getFileNodeChildren(node);
+    if (node instanceof FileNode) return getFileNodeChildren(node, totalIncludes);
     // One machinery for both group axes: file-mode kind sections and
     // kind-mode roots.
-    if (node instanceof GroupNode) return getGroupNodeChildren(node);
+    if (node instanceof GroupNode) return getGroupNodeChildren(node, totalIncludes);
     if (node instanceof ClusterNode) {
       // [VSIX-PAIR-COMPARE] Dirty projection and path sorting never promote
       // a surviving peer into the original canonical occurrence.
@@ -257,7 +260,7 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
       // when there is no duplication (principle 2).
       return [new StatusNode("No duplication detected", INFORMATION_STATUS_KIND)];
     }
-    const roots = buildRoots(visibleReport.clusters);
+    const roots = buildRoots(visibleReport.clusters, totalIncludes);
     // [req: incremental indicator] Keep clusters visible during a
     // re-analysis (stale > blank) and lead with a busy badge so the user
     // sees an update is in flight ([VSIX-REACTIVITY-TREE]).
@@ -273,16 +276,19 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
 }
 
 // [VSIX-TOP-OFFENDERS-GROUPING] Group the filtered report without changing engine ranks.
-function buildRoots(clusters: ReportCluster[]): Node[] {
+function buildRoots(
+  clusters: ReportCluster[],
+  totalIncludes?: readonly ClusterKind[],
+): Node[] {
   const groupBy = readGroupBy();
   const filter = readTopOffendersFilter();
   const visible = applyFacetFilter(clusters, filter);
   const build = (subset: ReportCluster[]): Node[] => {
     if (groupBy === "file") return buildFileMode(subset);
     if (groupBy === "folder") return buildFolderMode(subset);
-    if (groupBy === "kind") return buildKindMode(subset);
+    if (groupBy === "kind") return buildKindMode(subset, totalIncludes);
     if (groupBy === "language") return buildLanguageMode(subset);
-    return buildClusterMode(subset);
+    return buildClusterMode(subset, totalIncludes);
   };
   return [...filterStatusRow(filter), ...build(visible)];
 }
@@ -319,7 +325,7 @@ export class MetricsProvider extends LifecycleAwareProvider {
       return indicator ? [indicator] : [new StatusNode("No session yet", INFORMATION_STATUS_KIND)];
     }
     const metrics = visibleReport.metrics;
-    if (metrics.duplicated_loc === 0) {
+    if (metrics.duplicated_loc === 0 && metrics.clusters_total === 0) {
       // Same completion gate as Top Offenders: only the server's idle
       // state may render the terminal "clean" verdict ([VSIX reactivity]).
       if (indicator) return [indicator];
@@ -333,14 +339,16 @@ export class MetricsProvider extends LifecycleAwareProvider {
 // totals, with the configured duplication gate and an over/within verdict
 // appended whenever `.deslop.toml` sets one.
 function metricsHeadline(metrics: RepoMetrics): MetricsHeadlineNode {
+  const caption = totalCountsCaption(metrics.total_includes);
+  const includes = caption ? ` · total counts: ${caption}` : "";
   const detail =
     `${metrics.analysed_loc.toLocaleString()} LOC analysed · ` +
     `${metrics.duplicated_loc.toLocaleString()} duplicated · ` +
-    `${metrics.clusters_total} clusters across ${metrics.duplicated_files} files`;
+    `${metrics.clusters_total} clusters across ${metrics.duplicated_files} files${includes}`;
   return new MetricsHeadlineNode(
     metrics.duplication_percent,
     detail,
-    thresholdStatus(metrics.threshold),
+    metricsThresholdStatus(metrics),
   );
 }
 

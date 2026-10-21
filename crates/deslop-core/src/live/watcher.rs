@@ -5,6 +5,9 @@
 //! happens before paths reach the channel — the scheduler downstream
 //! never re-parses an excluded file.
 
+#[cfg(test)]
+mod tests;
+
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},
@@ -12,12 +15,15 @@ use std::{
 };
 
 use notify::{
-    event::EventKind, recommended_watcher, EventHandler, RecommendedWatcher, RecursiveMode,
-    Watcher as NotifyWatcher,
+    event::{CreateKind, EventKind, ModifyKind, RemoveKind, RenameMode},
+    recommended_watcher, EventHandler, RecommendedWatcher, RecursiveMode, Watcher as NotifyWatcher,
 };
-use tokio::sync::mpsc::{self, Receiver, Sender};
+use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
-use crate::{config::ExclusionConfig, discover::is_ignore_rule_path};
+use crate::{
+    config::{is_config_path, ExclusionConfig},
+    discover::is_ignore_rule_path,
+};
 
 /// Exclusion policy shared between the analysis session and the live
 /// watcher ([CONFIG-EXCLUDE-DEPENDENCIES], [LIVE-CONFIG-LIVE]).
@@ -46,11 +52,6 @@ pub fn publish_exclusion(handle: &LiveExclusion, exclusion: Arc<ExclusionConfig>
     *guard = exclusion;
 }
 
-/// Default channel capacity for the watcher → scheduler bridge.
-/// Sized for short bursts of saves; the scheduler's debouncer
-/// coalesces anything beyond.
-const CHANNEL_CAPACITY: usize = 256;
-
 /// Async-friendly file watcher handle. Drop the value to stop watching.
 #[derive(Debug)]
 pub struct LiveWatcher {
@@ -78,17 +79,18 @@ impl LiveWatcher {
         extensions: Vec<String>,
         exclusion: LiveExclusion,
         config_paths: Vec<PathBuf>,
-    ) -> Result<(Self, Receiver<PathBuf>), notify::Error> {
-        let (tx, rx) = mpsc::channel::<PathBuf>(CHANNEL_CAPACITY);
+    ) -> Result<(Self, UnboundedReceiver<PathBuf>), notify::Error> {
+        let (tx, rx) = mpsc::unbounded_channel::<PathBuf>();
         let allowed: HashSet<String> = extensions
             .into_iter()
             .map(|ext| ext.to_lowercase())
             .collect();
-        let watched_config_paths: HashSet<PathBuf> = config_paths
+        let watched_config_paths: Vec<PathBuf> = config_paths
             .into_iter()
             .map(|path| std::fs::canonicalize(&path).unwrap_or(path))
             .collect();
         let handler = WatcherHandler {
+            root: root.to_path_buf(),
             sender: tx,
             allowed,
             exclusion,
@@ -104,8 +106,10 @@ impl LiveWatcher {
 /// async channel. Implements [`EventHandler`] (the `notify` callback
 /// trait) so it can be installed in [`recommended_watcher`].
 struct WatcherHandler {
-    /// Async outbound channel.
-    sender: Sender<PathBuf>,
+    /// Scope restored when the backend reports lost events ([LIVE-WATCHER-RESCAN]).
+    root: PathBuf,
+    /// FIFO delivery retains bursts while analysis is busy ([LIVE-WATCHER-DELIVERY]).
+    sender: UnboundedSender<PathBuf>,
     /// Allowed lowercase extensions (no leading `.`).
     allowed: HashSet<String>,
     /// Exclusion policy consulted before forwarding. Shared with the
@@ -116,7 +120,7 @@ struct WatcherHandler {
     /// Canonical paths that bypass the extension/exclusion filter and
     /// reach the scheduler directly — `.deslop.toml` plus any explicit
     /// override path ([LIVE-WATCHER]).
-    watched_config_paths: HashSet<PathBuf>,
+    watched_config_paths: Vec<PathBuf>,
 }
 
 impl std::fmt::Debug for WatcherHandler {
@@ -133,58 +137,50 @@ impl EventHandler for WatcherHandler {
         let Ok(event) = event else {
             return;
         };
-        if !is_relevant_event(event.kind) {
+        if event.need_rescan() {
+            deliver(&self.sender, self.root.clone());
             return;
         }
-        let is_removal = matches!(event.kind, EventKind::Remove(_));
-        // Dedup paths within this single callback batch so a
-        // `Modify(Metadata) + Modify(Data)` pair only fires once. The
-        // set is stack-local — every new callback starts fresh, so a
-        // path seen in an earlier batch is forwarded again on the next
-        // edit ([LIVE-WATCHER]).
-        let mut seen_in_batch: HashSet<PathBuf> = HashSet::new();
-        for path in event.paths {
-            if !seen_in_batch.insert(path.clone()) {
-                continue;
-            }
-            self.forward_one(path, is_removal);
+        if is_relevant_event(event.kind) {
+            self.forward_paths(event);
         }
     }
 }
 
 impl WatcherHandler {
+    /// Coalesces callback-local paths without suppressing later edits.
+    fn forward_paths(&self, event: notify::Event) {
+        // [LIVE-WATCHER] Dedup paths within this callback only; later callbacks
+        // forward the same path again so every subsequent edit is delivered.
+        let mut seen_in_batch: HashSet<PathBuf> = HashSet::new();
+        for path in event.paths {
+            if !seen_in_batch.insert(path.clone()) {
+                continue;
+            }
+            self.forward_one(path, event.kind);
+        }
+    }
     /// Forwards one path if it passes the filter set.
     ///
-    /// Removals bypass the extension and exclusion filters: a removed
-    /// directory has no source extension yet may be an ancestor of live
-    /// files, and a previously-admitted path that an exclusion now
-    /// matches must still be evictable ([LIVE-WATCHER]). The
-    /// session re-checks existence and ownership before mutating any
-    /// map, so forwarding a removal it does not track is a cheap no-op.
-    fn forward_one(&self, path: PathBuf, is_removal: bool) {
-        if self.is_watched_config_path(&path) {
-            let _result = self.sender.try_send(path);
+    /// [LIVE-WATCHER-REMOVAL] Known files retain extension admission;
+    /// directories and uncertain removals may own source descendants.
+    /// Source removals bypass exclusions so former members remain evictable.
+    /// Configurations and ignore rules always reach the session to rescope it.
+    fn forward_one(&self, path: PathBuf, kind: EventKind) {
+        if is_config_path(&path, &self.watched_config_paths) || is_ignore_rule_path(&path) {
+            deliver(&self.sender, path);
             return;
         }
-        // Ignore-rule files bypass the extension and exclusion filters
-        // the same way `.deslop.toml` does: editing one re-scopes the
-        // live ingest gate, so the session must see it to rebuild its
-        // matcher and re-evaluate the corpus (ignore-rule parity #287).
-        if is_ignore_rule_path(&path) {
-            let _result = self.sender.try_send(path);
+        if !path_matches_filter(&path, &self.allowed)
+            && !may_remove_subtree(&path, kind)
+            && !may_create_subtree(&path, kind)
+        {
             return;
         }
-        if is_removal {
-            let _result = self.sender.try_send(path);
+        if !may_remove_members(kind) && self.current_exclusion().is_excluded(&path, None) {
             return;
         }
-        if !path_matches_filter(&path, &self.allowed) {
-            return;
-        }
-        if self.current_exclusion().is_excluded(&path, None) {
-            return;
-        }
-        let _result = self.sender.try_send(path);
+        deliver(&self.sender, path);
     }
 
     /// Reads the currently-published exclusion policy.
@@ -195,16 +191,37 @@ impl WatcherHandler {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         Arc::clone(&guard)
     }
+}
 
-    /// Returns `true` when `path` (or its canonical form) matches a
-    /// watched config path. Used to bypass the extension filter for
-    /// `.deslop.toml` ([LIVE-WATCHER]).
-    fn is_watched_config_path(&self, path: &Path) -> bool {
-        if self.watched_config_paths.contains(path) {
-            return true;
+/// Untyped and non-file removals may invalidate a directory or an alias.
+/// Existing regular rename targets still use ordinary source extension admission.
+fn may_remove_subtree(path: &Path, kind: EventKind) -> bool {
+    match kind {
+        EventKind::Remove(removal) => removal != RemoveKind::File,
+        EventKind::Modify(ModifyKind::Name(_)) => {
+            !std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.is_file())
         }
-        let canonical = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
-        self.watched_config_paths.contains(&canonical)
+        _ => false,
+    }
+}
+
+/// [LIVE-WATCHER-DIRECTORIES] Untyped creates need directory metadata, never traversal.
+fn may_create_subtree(path: &Path, kind: EventKind) -> bool {
+    matches!(kind, EventKind::Create(CreateKind::Folder))
+        || (matches!(kind, EventKind::Create(CreateKind::Any | CreateKind::Other)) && path.is_dir())
+}
+
+/// Old rename paths must remain evictable even if current rules exclude them.
+fn may_remove_members(kind: EventKind) -> bool {
+    matches!(kind, EventKind::Remove(_))
+        || matches!(kind, EventKind::Modify(ModifyKind::Name(mode)) if mode != RenameMode::To)
+}
+
+/// [LIVE-WATCHER-DELIVERY] Enqueues synchronously without blocking or dropping bursts.
+/// A failed send means the scheduler has closed, so there is no live consumer.
+fn deliver(sender: &UnboundedSender<PathBuf>, path: PathBuf) {
+    if sender.send(path).is_err() {
+        tracing::debug!("watcher scheduler receiver closed; event delivery stopped");
     }
 }
 

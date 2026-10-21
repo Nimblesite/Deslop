@@ -328,6 +328,19 @@ pub(crate) fn cluster_kind(cluster: &Value) -> &str {
     field(cluster, "kind").as_str().unwrap_or_default()
 }
 
+/// [METRICS-TOTAL-INCLUDE] The `metrics.per_kind` row for `kind`, or
+/// `None` when the report carries no such row — so a missing row fails
+/// the assertion with the full JSON printed rather than a null panic.
+pub(crate) fn per_kind_row(report: &Value, kind: &str) -> Option<Value> {
+    metric_field(report, "per_kind")
+        .as_array()
+        .and_then(|rows| {
+            rows.iter()
+                .find(|row| field(row, "kind").as_str() == Some(kind))
+                .cloned()
+        })
+}
+
 /// Length of a named array-valued field, or `0` when missing / non-array (so
 /// the assertion trips with the full JSON printed rather than panicking).
 pub(crate) fn array_len(value: &Value, name: &str) -> usize {

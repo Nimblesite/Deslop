@@ -15,8 +15,12 @@ const FIRST_LINE: u64 = 1;
 const LAST_LINE: u64 = 32;
 const FIRST_RANK: u64 = 1;
 const CANONICAL_NODES: u64 = 197;
-const DUPLICATED_LOC_PER_FILE: u64 = 32;
-const REPO_DUPLICATION_PERCENT: f64 = 100.0;
+/// [METRICS-TOTAL-INCLUDE] Per-file duplicated LOC counts only included kinds (identical: 14 lines).
+const DUPLICATED_LOC_PER_FILE: u64 = 14;
+/// [METRICS-TOTAL-INCLUDE] The repo total counts only included kinds (identical pairs: 28/64 = 43.75%).
+const REPO_DUPLICATION_PERCENT: f64 = 43.75;
+/// The loosely-similar copy covers both complete files (64/64 = 100.0%).
+const LOOSELY_SIMILAR_DUPLICATION_PERCENT: f64 = 100.0;
 const FAMILY_FIXTURE: &str = "csharp-call-target-families";
 const FAMILY_SIDES: [&str; 2] = ["Sync.cs", "Async.cs"];
 const FAMILY_START: u64 = 1;
@@ -73,6 +77,12 @@ fn large_sync_async_copy_survives_changed_static_call_targets() -> Result<()> {
     assert_eq!(
         metric_field(&report, "duplication_percent").as_f64(),
         Some(REPO_DUPLICATION_PERCENT)
+    );
+    let similar_row = per_kind_row(&report, LOOSELY_SIMILAR_KIND).unwrap_or(Value::Null);
+    assert_eq!(
+        field(&similar_row, "duplication_percent").as_f64(),
+        Some(LOOSELY_SIMILAR_DUPLICATION_PERCENT),
+        "loosely_similar covers both files completely: {report:#}"
     );
     for side in SIDES {
         assert_side(&report, cluster, side)?;

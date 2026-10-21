@@ -233,6 +233,7 @@ _ci-contract-tests: _vsix-node-modules
 	@node --test scripts/repository/judging-workspace.test.mjs
 	@echo "==> Verdict merge gate ([CORPUS-REGISTER-MERGE])..."
 	@node --test scripts/repository/verdict-merge.test.mjs
+	@node --test scripts/repository/verdict-merge-types.test.mjs
 	@echo "==> Test-selection gate ([TEST-SELECTION])..."
 	@node --test scripts/repository/test-selection.test.mjs
 	@echo "==> Coverage-isolation gate ([CI-COVERAGE-ISOLATION])..."
@@ -523,16 +524,29 @@ dup-gate: build
 
 # [CORPUS-SCORE] Accuracy gate. Scans the register-backed target repositories
 #   with the CURRENT build and scores every judged pair against the independent
-#   clone registers in `corpus/register/`, failing when a CLEARLY IN goes
-#   unreported or a CLEARLY OUT gets reported past the thresholds in
-#   `corpus/register/score-thresholds.json` — the single source of truth, never
-#   hardcoded here or in CI. Cluster totals and duplication percentages are
-#   printed as description and gate nothing. The workflow calls the same script,
-#   so a green local run means a green gate in CI.
+#   clone registers in `corpus/register/`. [CORPUS-SCORE-OUTCOMES] Every judged
+#   pair is held to its own recorded outcome in `corpus/register/outcomes.json`:
+#   one on record as failing is tolerated, one that fails after passing or with
+#   no record fails the run. The run writes the record back; commit it. Cluster
+#   totals and duplication percentages are printed as description and gate
+#   nothing. The workflow calls the same script, so a green local run means a
+#   green gate in CI.
 ## score-gate: Fail when accuracy drops against the judged clone registers.
 ##             This is the corpus run CI performs, one command, no arguments.
 score-gate:
 	./scripts/corpus/score-gate.sh
+
+# [CORPUS-SCORE-OUTCOMES] Puts every judged pair a corpus run failed, and the
+#   record does not already hold, on record as failing — the explicit act that
+#   makes a known defect tolerated. RUN is the `run.json` a corpus run left
+#   beside its reports. It re-scores that run without scanning again, and it
+#   never moves a pair on record as passing to failing: a regression is fixed,
+#   never accepted.
+## accept-corpus-failures: Record a corpus run's unrecorded failures as known.
+accept-corpus-failures:
+	@test -n "$(RUN)" || { echo "usage: make accept-corpus-failures RUN=<run.json>" >&2; exit 2; }
+	cargo run --release --quiet -p deslop-test-support --bin corpus-score -- \
+	  score "$(RUN)" --out .corpus/accept --name accept --accept-failures
 
 # [CORPUS-SCORE] The two-engine comparison, one command and no arguments: the
 #   last released commit against the current HEAD, each engine rebuilt from a
@@ -549,9 +563,11 @@ compare:
 #   who can read this source is contaminated and every verdict from that pass is
 #   void. Override the location with JUDGING_DIR.
 JUDGING_DIR ?= $(HOME)/clone-judging
+#   JUDGING_CANDIDATES asks for a shorter pass than the 200-candidate ceiling.
+JUDGING_CANDIDATES ?=
 ## judging-folder: Build the blinded folder a clone judge works through.
 judging-folder:
-	./scripts/corpus/prepare-judging.sh $(JUDGING_DIR)
+	JUDGING_CANDIDATES=$(JUDGING_CANDIDATES) ./scripts/corpus/prepare-judging.sh $(JUDGING_DIR)
 
 ## merge-verdicts: Fold judged verdicts back into the clone registers. Takes
 ##                 two or more judging folders. Imports ONLY the pairs every

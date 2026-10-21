@@ -36,7 +36,7 @@ use super::{
     tally::SubsumeTally,
     Cluster,
 };
-use crate::{cluster::exact_runs::copied_union, state::FileId};
+use crate::{cluster::copied_runs::copied_union, state::FileId};
 
 /// The views over one file set, in rank order, with the same-region
 /// preference between every pair that has one.

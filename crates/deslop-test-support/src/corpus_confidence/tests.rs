@@ -1,8 +1,20 @@
 //! Unit tests for mass-only corpus confidence assertions.
 
+use anyhow::{Context, Result};
 use serde_json::{json, Value};
 
 use super::*;
+
+const FIXTURE_FIELD_MESSAGE: &str = "the fixture contains each field before it is changed";
+
+/// Mutate a required fixture field and fail explicitly if its schema changed.
+fn set_field(cluster: &mut Value, name: &str, value: Value) -> Result<()> {
+    let slot = cluster
+        .get_mut(name)
+        .with_context(|| format!("{FIXTURE_FIELD_MESSAGE}: {name}"))?;
+    *slot = value;
+    Ok(())
+}
 
 /// Returns the single failure when exactly one was reported.
 fn only(failures: &[Failure]) -> Option<&Failure> {

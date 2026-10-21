@@ -13,8 +13,9 @@
 //                       commands like comparePair, openCluster,
 //                       openOccurrence keep working through unsaved edits.
 //   * visibleReport   — derived projection. For each file the user has
-//                       edited locally (markFileDirty), occurrences in that
-//                       file are elided. Clusters whose visible occurrence
+//                       edited beyond the analysed version (markFileDirty),
+//                       occurrences in that file are elided until acknowledged.
+//                       Clusters whose visible occurrence
 //                       count drops below two are dropped from this view
 //                       (#117 — a one-copy "top offender" is a contradiction).
 //                       Surfaces — tree providers, decorations, bubbles,
@@ -25,6 +26,7 @@ import * as vscode from "vscode";
 import { signal, batch, effect, computed, ReadonlySignal } from "@preact/signals-core";
 
 import {
+  AnalysedBuffer,
   EmbeddingProgress,
   FacetFilter,
   ReportCluster,
@@ -75,7 +77,7 @@ const MAX_RETRACTED_CLUSTERS = 256;
 
 export class ReportStore implements vscode.Disposable {
   private readonly _report = signal<Report | null>(null);
-  private readonly _dirtyFiles = signal<ReadonlySet<string>>(new Set());
+  private readonly _dirtyFiles = signal<ReadonlyMap<string, number | undefined>>(new Map());
   private readonly _generation = signal<number>(0);
   private readonly _revision = signal<number>(0);
   private readonly _sessionEpoch = signal<number>(0);
@@ -194,11 +196,12 @@ export class ReportStore implements vscode.Disposable {
    * snapshot bumps `revision`, so even a same-generation replacement
    * invalidates answers dispatched before it.
    */
-  setSnapshot(report: Report, generation: number): boolean {
+  setSnapshot(report: Report, generation: number, analysedBuffer?: AnalysedBuffer | null): boolean {
     if (generation < this._generation.value) return false;
     batch(() => {
       this._report.value = report;
       this._generation.value = generation;
+      this.acknowledgeBuffer(analysedBuffer);
       this._revision.value += 1;
       // A full snapshot re-states the whole corpus, so every earlier
       // retraction is settled by it — a cluster still absent here is
@@ -234,7 +237,7 @@ export class ReportStore implements vscode.Disposable {
     for (const id of Array.from(retracted).slice(0, excess)) retracted.delete(id);
   }
 
-  applyDelta(delta: ReportDelta): boolean {
+  applyDelta(delta: ReportDelta, analysedBuffer?: AnalysedBuffer | null): boolean {
     const current = this._report.value;
     if (!current) return false;
     if (delta.from_generation !== this._generation.value) return false;
@@ -276,6 +279,7 @@ export class ReportStore implements vscode.Disposable {
         tool_version: delta.tool_version,
       };
       this._generation.value = delta.to_generation;
+      this.acknowledgeBuffer(analysedBuffer);
       this._revision.value += 1;
       // Same rule as setSnapshot: only a non-empty result settles the
       // lifecycle; an emptied report waits for the server's idle signal.
@@ -287,17 +291,23 @@ export class ReportStore implements vscode.Disposable {
   }
 
   /**
-   * Mark a file as having unsaved local edits. Updates the dirty set only —
+   * Mark a file version as awaiting analysis. Updates the dirty map only —
    * the canonical report is untouched ([VSIX-STATE-DIRTY]). The visible
    * projection recomputes through `visibleReport`, eliding occurrences in
    * this file and any cluster that drops below two visible occurrences.
    */
-  markFileDirty(path: string): void {
+  markFileDirty(path: string, version?: number): void {
     const key = normalisePath(path);
-    if (this._dirtyFiles.value.has(key)) return;
-    const next = new Set(this._dirtyFiles.value);
-    next.add(key);
+    if (this._dirtyFiles.value.has(key) && this._dirtyFiles.value.get(key) === version) return;
+    const next = new Map(this._dirtyFiles.value);
+    next.set(key, version);
     this._dirtyFiles.value = next;
+  }
+
+  /** [LIVE-OPEN-BUFFERS] Reveal only the editor version this report analysed. */
+  private acknowledgeBuffer(buffer?: AnalysedBuffer | null): void {
+    if (!buffer || this._dirtyFiles.value.get(normalisePath(buffer.path)) !== buffer.version) return;
+    this.clearFileDirty(buffer.path);
   }
 
   /**
@@ -309,7 +319,7 @@ export class ReportStore implements vscode.Disposable {
   clearFileDirty(path: string): void {
     const key = normalisePath(path);
     if (!this._dirtyFiles.value.has(key)) return;
-    const next = new Set(this._dirtyFiles.value);
+    const next = new Map(this._dirtyFiles.value);
     next.delete(key);
     this._dirtyFiles.value = next;
   }
@@ -354,7 +364,7 @@ export class ReportStore implements vscode.Disposable {
   }
 }
 
-function projectVisible(canonical: Report | null, dirty: ReadonlySet<string>): Report | null {
+function projectVisible(canonical: Report | null, dirty: ReadonlyMap<string, number | undefined>): Report | null {
   if (!canonical) return null;
   if (dirty.size === 0) return canonical;
   let changed = false;
@@ -388,9 +398,9 @@ function projectVisible(canonical: Report | null, dirty: ReadonlySet<string>): R
   };
 }
 
-function occurrenceIsDirty(occurrencePath: string, dirty: ReadonlySet<string>): boolean {
+function occurrenceIsDirty(occurrencePath: string, dirty: ReadonlyMap<string, number | undefined>): boolean {
   const left = normalisePath(occurrencePath);
-  for (const dirtyPath of dirty) {
+  for (const dirtyPath of dirty.keys()) {
     if (samePathOrSuffix(left, dirtyPath) || samePathOrSuffix(dirtyPath, left)) return true;
   }
   return false;

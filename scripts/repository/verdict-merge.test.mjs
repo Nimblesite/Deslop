@@ -9,64 +9,43 @@
 // candidate never showed, a pass that contradicts a standing entry.
 
 import { strict as assert } from "node:assert";
-import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import test from "node:test";
 
-const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const SCRIPT = join(REPO_ROOT, "scripts", "corpus", "merge-verdicts.mjs");
-const REPORT = "docs/reports/verdict-merge.md";
-const REGISTER_DIR = "corpus/register";
-const QUEUE = "corpus/judging-queue.json";
-
-/// The fixture repository, and the two judges sent to read it.
-const REPO = "widgets";
-const REGISTER = "widgets.json";
-const LANGUAGE = "rust";
-const URL = "https://example.invalid/widgets.git";
-const SHA = "0123456789abcdef0123456789abcdef01234567";
-const FIRST_JUDGE = "judge-one";
-const SECOND_JUDGE = "judge-two";
-const THIRD_JUDGE = "judge-three";
-
-/// A repository that already has a register, so a standing verdict can be
-/// contradicted by a later pass.
-const JUDGED = "gadgets";
-const JUDGED_REGISTER = "gadgets.json";
-
-/// Prose long enough to clear the assertion floor a scored entry is held to.
-const WHY = "The same twenty lines appear twice with only the type name changed.";
-const VERIFIED = "diff of the two ranges: identical but for the type name on line 3.";
-/// A NOT CLEAR note, deliberately shorter than that floor. NOT CLEAR asserts
-/// nothing, so it must still be recorded — otherwise the next pass re-reads a
-/// pair somebody has already ruled on.
-const TERSE_NOTE = "2-line idiom.";
-/// The note both judges write about the pair the standing register already
-/// calls CLEARLY IN, so the merge has to choose between them.
-const STANDING_NOTE = "Copied text is real but the boundaries are ragged.";
-
-/// The candidates every judge is shown. Same list for both, or their candidate
-/// numbers would name different pairs.
-const PAIRS = {
-  pairs: [
-    { number: 1, occurrences: ["src/a.rs:10-30", "src/b.rs:10-30"] },
-    { number: 2, occurrences: ["src/c.rs:1-4", "src/d.rs:1-4"] },
-    { number: 3, occurrences: ["src/e.rs:5-9", "src/f.rs:5-9"] },
-    { number: 4, occurrences: ["src/g.rs:1-2", "src/h.rs:1-2"] },
-    { number: 5, occurrences: ["src/i.rs:1-9", "src/j.rs:1-9"] },
-    { number: 6, occurrences: ["src/k.rs:1-9", "src/l.rs:1-9"] },
-  ],
-};
-/// The pair the standing register already calls CLEARLY IN. Both judges call
-/// it NOT CLEAR, so the merge meets a verdict it must report and not apply.
-const STANDING = ["src/k.rs:1-9", "src/l.rs:1-9"];
-
-const at = (pair) => PAIRS.pairs.find((entry) => entry.number === pair).occurrences;
-const scored = (candidate) => ({ candidate, why: WHY, verified: VERIFIED, occurrences: at(candidate) });
-const noted = (candidate, why = TERSE_NOTE) => ({ candidate, why, occurrences: at(candidate) });
+import {
+  EMPTY_VERDICTS,
+  FIRST_JUDGE,
+  JUDGED,
+  JUDGED_REGISTER,
+  LANGUAGE,
+  PAIRS,
+  QUEUE,
+  REGISTER,
+  REGISTER_DIR,
+  REPO,
+  REPORT,
+  SCRIPT,
+  SECOND_JUDGE,
+  SHA,
+  STANDING,
+  STANDING_NOTE,
+  TERSE_NOTE,
+  THIRD_JUDGE,
+  URL,
+  VERIFIED,
+  WHY,
+  at,
+  fixtureRoot,
+  judgingFolder,
+  noted,
+  run,
+  runPasses,
+  scored,
+  write,
+} from "./verdict-merge-fixture.mjs";
 
 /// What each judge filed. Between them they cover every outcome the script has
 /// to tell apart.
@@ -93,60 +72,6 @@ const VERDICTS_BY_JUDGE = {
   },
 };
 
-const write = (path, value) => {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, typeof value === "string" ? value : `${JSON.stringify(value, null, 2)}\n`);
-};
-
-/// A judging folder holding one workspace per repository, as the preparer
-/// builds it.
-const judgingFolder = (root, judge, repos) => {
-  const folder = join(root, judge);
-  for (const [slug, verdicts] of Object.entries(repos)) {
-    const workspace = join(folder, slug);
-    write(join(workspace, "PINNED.txt"), `${URL}\n${SHA}\n`);
-    write(join(workspace, "candidates", "pairs.json"), PAIRS);
-    write(join(workspace, "verdicts.json"), verdicts);
-  }
-  return folder;
-};
-
-/// A repository root with a queue, one standing register, and nothing else.
-const fixtureRoot = (root) => {
-  write(join(root, QUEUE), {
-    why: "Repositories waiting on a first judging pass.",
-    repositories: [{ name: REPO, url: URL, sha: SHA, language: LANGUAGE, why: "First pass." }],
-  });
-  write(join(root, REGISTER_DIR, JUDGED_REGISTER), {
-    name: JUDGED,
-    language: LANGUAGE,
-    url: URL,
-    sha: SHA,
-    protocol: { spec: "docs/specs/corpus.md" },
-    clearly_in: [{ why: WHY, verified: VERIFIED, occurrences: STANDING }],
-    clearly_out: [],
-    clearly_out_status: "NONE FOUND. Nothing in this repository reached CLEARLY OUT in any pass.",
-    not_clear: [],
-  });
-};
-
-/// Runs the merge over a prepared root, capturing the exit status rather than
-/// throwing on it: a run that finds a disagreement is meant to fail.
-const run = (root, folders, extra = []) => {
-  const result = spawnSync("node", [SCRIPT, "--root", root, ...extra, ...folders], {
-    encoding: "utf8",
-  });
-  const read = (path) => readFileSync(join(root, path), "utf8");
-  return {
-    root,
-    status: result.status,
-    stdout: result.stdout,
-    stderr: result.stderr,
-    read,
-    json: (path) => JSON.parse(read(path)),
-  };
-};
-
 /// Builds a fixture whose judges disagree, and runs the merge over it.
 const runDisputed = (extra = []) => {
   const root = mkdtempSync(join(tmpdir(), "verdict-merge-"));
@@ -167,17 +92,7 @@ const AGREED = {
   clearly_out: [],
   not_clear: [noted(2)],
 };
-const EMPTY_VERDICTS = { clearly_in: [], clearly_out: [], not_clear: [] };
 const RULING_WITHOUT_RANGES = { candidate: 1, why: WHY, verified: VERIFIED };
-
-const runPasses = (verdicts) => {
-  const root = mkdtempSync(join(tmpdir(), "verdict-merge-independent-"));
-  fixtureRoot(root);
-  const folders = Object.entries(verdicts).map(([judge, pass]) =>
-    judgingFolder(root, judge, { [REPO]: pass }),
-  );
-  return run(root, folders);
-};
 
 const runAgreed = (extra = []) => {
   const root = mkdtempSync(join(tmpdir(), "verdict-merge-agreed-"));
@@ -304,9 +219,43 @@ test("an agreed NOT CLEAR note shorter than the assertion floor is still recorde
   );
 });
 
+const REPORT_TITLE = "# Verdict disagreements";
+
 test("a repository that gains a register leaves the judging queue", () => {
   const { json } = runAgreed();
   assert.deepEqual(json(QUEUE).repositories, [], "a queue that never drains buys nothing");
+});
+
+test("a --report path outside the root is written exactly where it names", () => {
+  const elsewhere = join(mkdtempSync(join(tmpdir(), "verdict-merge-report-")), "merge.md");
+  const { root, status } = runAgreed(["--dry-run", "--report", elsewhere]);
+  assert.equal(status, 0, "a dry run with an absolute report path succeeds");
+  assert.ok(readFileSync(elsewhere, "utf8").startsWith(REPORT_TITLE), "the report is at the path given");
+  assert.throws(
+    () => readFileSync(join(root, elsewhere), "utf8"),
+    "an absolute path is never re-rooted under the repository",
+  );
+});
+
+/// A first pass whose judges agree on a CLEARLY OUT and a NOT CLEAR but split
+/// on the only CLEARLY IN: every agreed verdict is real, yet none is a clone.
+const NO_AGREED_CLONE = {
+  [FIRST_JUDGE]: { clearly_in: [scored(1)], clearly_out: [scored(3)], not_clear: [noted(2)] },
+  [SECOND_JUDGE]: { clearly_in: [], clearly_out: [scored(3)], not_clear: [noted(1), noted(2)] },
+};
+
+test("a register with no agreed CLEARLY IN is filed and stays queued", () => {
+  const { status, json } = runPasses(NO_AGREED_CLONE);
+  assert.equal(status, 0, "agreeing on no clone is an outcome, not an error");
+  const register = json(join(REGISTER_DIR, REGISTER));
+  assert.deepEqual(register.clearly_in, [], "the split CLEARLY IN stays out");
+  assert.deepEqual(register.clearly_out.map((entry) => entry.occurrences), [at(3)], "the agreed CLEARLY OUT is in");
+  assert.deepEqual(register.not_clear.map((entry) => entry.occurrences), [at(2)], "the agreed NOT CLEAR is in");
+  assert.deepEqual(
+    json(QUEUE).repositories.map((repository) => repository.name),
+    [REPO],
+    "a register that finds no clone yet waits in the queue for a pass that agrees on one",
+  );
 });
 
 test("--dry-run merges nothing even when every judge agrees", () => {

@@ -14,14 +14,17 @@ use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 
 use super::{
-    gate::{add_costs, breaches, corpus_change, degradation, totals, Thresholds},
+    gate::{add_costs, corpus_change, degradation, totals},
     percent,
     render::{scorecard, Engine, Scorecard, TargetScore},
     score_repo, Range, RepoScore, RunCost, CLEARLY_IN, CLEARLY_OUT,
 };
 
+mod card;
+mod clone_type;
 mod render;
 mod taxonomy;
+pub(super) mod verdict;
 
 const REPO: &str = "fixture";
 const PATH: &str = "src/one.rs";
@@ -29,8 +32,8 @@ const OTHER: &str = "src/two.rs";
 const CLUSTER_ID: &str = "abc123";
 const FULL_COVERAGE_CLUSTER_ID: &str = "full123";
 const IDENTICAL_KIND: &str = "identical";
-const FIRST_RANGE: &str = "src/one.rs:10-20";
-const SECOND_RANGE: &str = "src/two.rs:30-40";
+pub(super) const FIRST_RANGE: &str = "src/one.rs:10-20";
+pub(super) const SECOND_RANGE: &str = "src/two.rs:30-40";
 const SAME_FILE_SECOND_RANGE: &str = "src/one.rs:30-40";
 const BROAD_START: u64 = 8;
 const BROAD_END: u64 = 44;
@@ -46,22 +49,22 @@ fn occurrence(path: &str, start: u64, end: u64, hidden: bool) -> Value {
     json!({ "path": path, "start_line": start, "end_line": end, "hidden": hidden })
 }
 
-fn report(occurrences: &[Value]) -> Value {
+pub(super) fn report(occurrences: &[Value]) -> Value {
     json!({ "clusters": [ { "id": CLUSTER_ID, "kind": IDENTICAL_KIND, "occurrences": occurrences } ] })
 }
 
-fn pinned_sha() -> String {
+pub(super) fn pinned_sha() -> String {
     "0".repeat(PINNED_SHA_LENGTH)
 }
 
-fn register(verdict: &str, ranges: &[&str]) -> Value {
+pub(super) fn register(verdict: &str, ranges: &[&str]) -> Value {
     json!({
         "sha": pinned_sha(),
         verdict: [ { "why": "judged", "occurrences": ranges } ],
     })
 }
 
-fn the_pair() -> Vec<Value> {
+pub(super) fn the_pair() -> Vec<Value> {
     vec![
         occurrence(PATH, 10, 20, false),
         occurrence(OTHER, 30, 40, false),
@@ -339,108 +342,6 @@ fn corpus_totals_weight_by_judged_pairs_not_by_repository() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn the_gate_defaults_to_strict_and_reads_every_override_from_config() {
-    let strict = Thresholds::default();
-    assert_eq!(strict.maximum_false_negatives, 0);
-    assert_eq!(
-        strict.maximum_false_positives, 0,
-        "zero defects of either kind is what a perfect score is, in units that do not \
-         re-scale with the register"
-    );
-
-    let config = json!({
-        "defaults": { "maximum_false_negatives": 3 },
-        "repos": { "Polly": { "maximum_false_positives": 2 } },
-    });
-    let inherited = Thresholds::for_repo(&config, "click");
-    assert_eq!(
-        inherited.maximum_false_negatives, 3,
-        "defaults apply to unlisted repositories"
-    );
-    assert_eq!(
-        inherited.maximum_false_positives, 0,
-        "a field the config never sets stays strict"
-    );
-
-    let scoped = Thresholds::for_repo(&config, "Polly");
-    assert_eq!(
-        scoped.maximum_false_positives, 2,
-        "a repository override wins"
-    );
-    assert_eq!(
-        scoped.maximum_false_negatives, 3,
-        "a field the override omits falls back to the default, not to the other allowance"
-    );
-}
-
-#[test]
-fn the_gate_breaches_on_a_new_defect_and_its_allowance_never_re_scales() -> Result<()> {
-    let missed = score_repo(
-        REPO,
-        &register(CLEARLY_IN, &[FIRST_RANGE, SECOND_RANGE]),
-        &report(&[]),
-    )?;
-
-    let strict = breaches(&missed, &Thresholds::default());
-    assert_eq!(
-        strict.len(),
-        1,
-        "one false negative breaches the strict count gate, and nothing else: the gate \
-         judges defect counts only, so one defect is one breach"
-    );
-    assert!(strict
-        .iter()
-        .any(|breach| breach.measure == "false negatives"));
-    assert!(
-        strict.iter().all(|breach| breach.measure != "score"),
-        "the gate never judges a ratio: a percentage threshold is a defect allowance \
-         divided by the register size, so it loosens itself as the register grows"
-    );
-    assert!(strict.iter().all(|breach| breach.repo == REPO));
-
-    let tracked = Thresholds {
-        maximum_false_negatives: 1,
-        maximum_false_positives: 0,
-    };
-    assert!(
-        breaches(&missed, &tracked).is_empty(),
-        "a recorded, tracked defect is inside its gate"
-    );
-
-    // The allowance must mean the same thing at every register size. A gate that
-    // tolerates one defect tolerates exactly one whether the register judges six
-    // pairs or six hundred; a ratio would have widened with the denominator.
-    let small = RepoScore {
-        judged: 6,
-        correct: 5,
-        score_percent: percent(5, 6),
-        ..missed.clone()
-    };
-    let grown = RepoScore {
-        judged: 600,
-        correct: 599,
-        score_percent: percent(599, 600),
-        ..missed.clone()
-    };
-    for score in [&small, &grown] {
-        assert!(
-            breaches(score, &tracked).is_empty(),
-            "one tracked defect is inside a one-defect gate at every register size"
-        );
-        let two = RepoScore {
-            false_negatives: 2,
-            ..score.clone()
-        };
-        assert_eq!(
-            breaches(&two, &tracked).len(),
-            1,
-            "two defects breach a one-defect gate at every register size"
-        );
-    }
-    Ok(())
-}
-
 /// The same judged pair, found by one engine and missed by the other.
 fn found_and_missed() -> Result<(RepoScore, RepoScore)> {
     let judged = register(CLEARLY_IN, &[FIRST_RANGE, SECOND_RANGE]);
@@ -467,7 +368,7 @@ fn degradation_separates_a_new_defect_from_one_both_engines_share() -> Result<()
         !standing.degraded,
         "a defect both engines share is standing, not slippage"
     );
-    assert!(standing.new_false_negatives.is_empty());
+    assert_eq!(standing.new_false_negatives, Vec::<String>::new());
     assert_eq!(standing.standing_false_negatives, 1);
 
     let fixed = degradation(&missed, &found);

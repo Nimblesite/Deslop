@@ -6,6 +6,10 @@ import { anchorForClusterId, clusterPanelFeed } from "../src/clusterSelection";
 import {
   CANONICAL_OCCURRENCE_INDEX,
   FIRST_PEER_INDEX,
+  loadView,
+  postHostMessage,
+  clearPostedMessages,
+  expectPosted,
   reportWithoutSignalSource,
   sampleReport,
   screenshotDir,
@@ -108,6 +112,31 @@ const viewports: readonly ViewportCase[] = [
 ];
 
 test.describe("VSIX webview bundles", () => {
+  // [VSIX-TOP-OFFENDERS-EXCLUDED] Report rows retain their identity while quieted.
+  test("excluded report rows are marked and muted until their kind is enabled", async ({ page }) => {
+    const excludedKind = "nearly_identical";
+    const excludedTitle = "Nearly identical code";
+    const excludedClass = "report-cluster-row--excluded";
+    const clusterId = sampleReport.clusters[SECOND_CLUSTER_INDEX].id;
+    await loadView(page, "report", viewports[DESKTOP_VIEWPORT_INDEX]);
+    const quietReport = { ...sampleReport, metrics: { ...sampleReport.metrics, total_includes: ["identical"] } };
+    await postHostMessage(page, { kind: "report/snapshot", report: quietReport });
+    const row = page.locator(".report-cluster-row").filter({ hasText: excludedTitle });
+    await expect(page.locator(".report-cluster-row")).toHaveCount(sampleReport.clusters.length);
+    await expect(row).toHaveClass(`report-cluster-row ${excludedClass}`);
+    await expect(row).toContainText("excluded from total");
+    await expect(row).toHaveCSS("opacity", "0.55");
+    await row.locator("xpath=../..").locator("summary").click();
+    await row.click();
+    await expectPosted(page, "open/cluster");
+    expect(await page.evaluate(() => window.__deslopPosts?.find((message) => message.kind === "open/cluster"))).toEqual({ kind: "open/cluster", id: clusterId });
+    await postHostMessage(page, { kind: "report/delta", report: sampleReport });
+    await expect(row).toHaveClass("report-cluster-row");
+    await expect(row).toHaveCSS("opacity", "1");
+    await expect(row).not.toContainText("excluded from total");
+    await expect(page.getByRole("option", { name: excludedTitle, exact: true })).toHaveAttribute("value", excludedKind);
+    await expect(page.locator(".report-cluster-row")).toHaveCount(sampleReport.clusters.length);
+  });
   test("shape-only findings show information without duplication claims", async ({ page }) => {
     const viewport = viewports[DESKTOP_VIEWPORT_INDEX];
     if (!viewport) throw new Error("Missing desktop viewport");
@@ -152,17 +181,26 @@ test.describe("VSIX webview bundles", () => {
 
       await expect(page.getByText("DESLOP").first()).toBeVisible();
       await expect(page.getByRole("heading", { name: /18\.4%/ })).toBeVisible();
-      await expect(page.getByText(IDENTICAL_TITLE, { exact: true })).toBeVisible();
-      await expect(page.getByText(NEARLY_IDENTICAL_TITLE, { exact: true })).toBeVisible();
-      await expect(page.getByText(STRUCTURAL_ONLY_TITLE, { exact: true })).toBeVisible();
-      await expect(page.getByText(RETIRED_NEUTRAL_TITLE, { exact: true })).toHaveCount(0);
+      // [METRICS-TOTAL-INCLUDE] The kind filter marks what the total
+      // ignores — greyed, still selectable — and the headline names the
+      // kinds it counts.
+      await expect(
+        page.getByRole("option", { name: /Similar code \(excluded from total\)/ }),
+      ).toBeAttached();
+      await expect(page.locator("option.kind-option--excluded")).toHaveCount(2);
+      await expect(page.getByText("total counts: Identical code, Nearly identical code")).toBeVisible();
+      const clusterList = page.locator(".report-cluster-row");
+      await expect(clusterList.getByText(IDENTICAL_TITLE, { exact: true })).toBeVisible();
+      await expect(clusterList.getByText(NEARLY_IDENTICAL_TITLE, { exact: true })).toBeVisible();
+      await expect(clusterList.getByText(STRUCTURAL_ONLY_TITLE, { exact: true })).toBeVisible();
+      await expect(clusterList.getByText(RETIRED_NEUTRAL_TITLE, { exact: true })).toHaveCount(0);
 
       await clearPostedMessages(page);
       await page.getByRole("button", { name: "Refresh" }).click();
       await expectPosted(page, "refresh");
 
       await clearPostedMessages(page);
-      await page.getByText(IDENTICAL_TITLE, { exact: true }).first().click();
+      await clusterList.getByText(IDENTICAL_TITLE, { exact: true }).first().click();
       await expectPosted(page, "open/cluster");
 
       await expectHealthyRender(page, errors, `report-${viewport.name}`);
@@ -248,6 +286,8 @@ test.describe("VSIX webview bundles", () => {
 
       await expect(page.getByText("DESLOP").first()).toBeVisible();
       await expect(page.getByRole("heading", { name: /18\.4%/ })).toBeVisible();
+      // [METRICS-TOTAL-INCLUDE] The headline names the kinds it counts.
+      await expect(page.getByText("total counts: Identical code, Nearly identical code")).toBeVisible();
       await expect(page.getByText("alpha.dart")).toBeVisible();
       await expect(page.getByText("parser_beta.dart")).toBeVisible();
 
@@ -340,44 +380,13 @@ test.describe("VSIX webview bundles", () => {
   });
 });
 
-async function loadView(
-  page: Page,
-  kind: ViewKind,
-  viewport: ViewportCase,
-): Promise<string[]> {
-  const errors: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") errors.push(message.text());
-  });
-  page.on("pageerror", (error) => {
-    errors.push(error.message);
-  });
 
-  await page.setViewportSize({ width: viewport.width, height: viewport.height });
-  await page.setContent(webviewHtml(kind), { waitUntil: "domcontentloaded" });
-  await page.waitForFunction(() => window.__deslopPosts?.some((message) => message.kind === "ready"));
-  return errors;
-}
 
-async function postHostMessage(page: Page, message: unknown): Promise<void> {
-  await page.evaluate((payload) => {
-    window.postMessage(payload, "*");
-  }, message);
-}
 
-async function clearPostedMessages(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    window.__deslopPosts = [];
-  });
-}
 
-async function expectPosted(page: Page, kind: string): Promise<void> {
-  await expect
-    .poll(async () => {
-      return await page.evaluate(() => window.__deslopPosts?.map((message) => message.kind) ?? []);
-    })
-    .toContain(kind);
-}
+
+
+
 
 async function expectPostedCanonical(page: Page, clusterIndex: number, occurrenceIndex: number): Promise<void> {
   const cluster = sampleReport.clusters[clusterIndex];

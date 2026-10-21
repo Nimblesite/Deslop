@@ -1,0 +1,162 @@
+{
+  "name": "hugo",
+  "language": "go",
+  "url": "https://github.com/gohugoio/hugo.git",
+  "sha": "57a784e027a264790ddf36c89b62200525a4561b",
+  "protocol": {
+    "spec": "docs/specs/corpus.md",
+    "spec_section": "[CORPUS-REGISTER]",
+    "judging_skill": ".agents/skills/judge-clone-pairs/SKILL.md",
+    "preparer_skill": ".agents/skills/clone-register-prepare/SKILL.md"
+  },
+  "clearly_in": [
+    {
+      "why": "The same six lines that set the image's target path and its open-source callback are pasted into both the read and the create closures of the image cache.",
+      "verified": "diff -u of image_cache.go:86-91 vs 61-66: IDENTICAL (6 lines, byte-for-byte, same indentation). Lines before (img = parent.clone(nil) / createImage) and after (setSourceFilenameIsHash / return img.EncodeTo) differ, so the span is exactly the duplicated block.",
+      "type": "Type I",
+      "occurrences": [
+        "resources/image_cache.go:86-91",
+        "resources/image_cache.go:61-66"
+      ]
+    },
+    {
+      "why": "First and Last repeat the entire input-validation, reflection, kind-checking, and limit-clamping routine. Last renames the reflected value and changes the final slice expression.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- tpl/collections/collections.go:195-227\n+++ tpl/collections/collections.go:355-387\n@@ -1,4 +1,4 @@\n-func (ns *Namespace) First(limit any, l any) (any, error) {\n+func (ns *Namespace) Last(limit any, l any) (any, error) {\n \tif limit == nil || l == nil {\n \t\treturn nil, errors.New(\"both limit and seq must be provided\")\n \t}\n@@ -12,22 +12,22 @@\n \t\treturn nil, errors.New(\"sequence length must be non-negative\")\n \t}\n \n-\tlv := reflect.ValueOf(l)\n-\tlv, isNil := indirect(lv)\n+\tseqv := reflect.ValueOf(l)\n+\tseqv, isNil := indirect(seqv)\n \tif isNil {\n \t\treturn nil, errors.New(\"can't iterate over a nil value\")\n \t}\n \n-\tswitch lv.Kind() {\n+\tswitch seqv.Kind() {\n \tcase reflect.Array, reflect.Slice, reflect.String:\n \t\t// okay\n \tdefault:\n \t\treturn nil, errors.New(\"can't iterate over \" + reflect.ValueOf(l).Type().String())\n \t}\n \n-\tif limitv > lv.Len() {\n-\t\tlimitv = lv.Len()\n+\tif limitv > seqv.Len() {\n+\t\tlimitv = seqv.Len()\n \t}\n \n-\treturn lv.Slice(0, limitv).Interface(), nil\n+\treturn seqv.Slice(seqv.Len()-limitv, seqv.Len()).Interface(), nil\n }\n",
+      "type": "Type III",
+      "occurrences": [
+        "tpl/collections/collections.go:195-227",
+        "tpl/collections/collections.go:355-387"
+      ]
+    }
+  ],
+  "clearly_out": [
+    {
+      "why": "These are different range-language test cases: else/break/continue and type handling on one side, variable binding and iterator functions on the other. The shared shape is the test-table row format.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- tpl/internal/go_templates/texttemplate/exec_test.go:605-611\n+++ tpl/internal/go_templates/texttemplate/exec_test.go:618-624\n@@ -1,7 +1,7 @@\n-\t{\"range []int else\", \"{{range .SI}}-{{.}}-{{else}}EMPTY{{end}}\", \"-3--4--5-\", tVal, true},\n-\t{\"range empty else\", \"{{range .SIEmpty}}-{{.}}-{{else}}EMPTY{{end}}\", \"EMPTY\", tVal, true},\n-\t{\"range []int break else\", \"{{range .SI}}-{{.}}-{{break}}NOTREACHED{{else}}EMPTY{{end}}\", \"-3-\", tVal, true},\n-\t{\"range []int continue else\", \"{{range .SI}}-{{.}}-{{continue}}NOTREACHED{{else}}EMPTY{{end}}\", \"-3--4--5-\", tVal, true},\n-\t{\"range []bool\", \"{{range .SB}}-{{.}}-{{end}}\", \"-true--false-\", tVal, true},\n-\t{\"range []int method\", \"{{range .SI | .MAdd .I}}-{{.}}-{{end}}\", \"-20--21--22-\", tVal, true},\n-\t{\"range map\", \"{{range .MSI}}-{{.}}-{{end}}\", \"-1--3--2-\", tVal, true},\n+\t{\"range $x $y SI\", \"{{range $x, $y := .SI}}<{{$x}}={{$y}}>{{end}}\", \"<0=3><1=4><2=5>\", tVal, true},\n+\t{\"range $x MSIone\", \"{{range $x := .MSIone}}<{{$x}}>{{end}}\", \"<1>\", tVal, true},\n+\t{\"range $x $y MSIone\", \"{{range $x, $y := .MSIone}}<{{$x}}={{$y}}>{{end}}\", \"<one=1>\", tVal, true},\n+\t{\"range $x PSI\", \"{{range $x := .PSI}}<{{$x}}>{{end}}\", \"<21><22><23>\", tVal, true},\n+\t{\"declare in range\", \"{{range $x := .PSI}}<{{$foo:=$x}}{{$x}}>{{end}}\", \"<21><22><23>\", tVal, true},\n+\t{\"range count\", `{{range $i, $x := count 5}}[{{$i}}]{{$x}}{{end}}`, \"[0]a[1]b[2]c[3]d[4]e\", tVal, true},\n+\t{\"range nil count\", `{{range $i, $x := count 0}}{{else}}empty{{end}}`, \"empty\", tVal, true},\n",
+      "occurrences": [
+        "tpl/internal/go_templates/texttemplate/exec_test.go:605-611",
+        "tpl/internal/go_templates/texttemplate/exec_test.go:618-624"
+      ]
+    },
+    {
+      "why": "One span registers URL helpers and the other registers collection helpers. Only the required method-registration call format repeats.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- tpl/urls/init.go:47-58\n+++ tpl/collections/init.go:151-164\n@@ -1,12 +1,14 @@\n-\t\tns.AddMethodMapping(ctx.RelURL,\n-\t\t\t[]string{\"relURL\"},\n+\t\tns.AddMethodMapping(ctx.Where,\n+\t\t\t[]string{\"where\"},\n \t\t\t[][2]string{},\n \t\t)\n-\t\tns.AddMethodMapping(ctx.RelLangURL,\n-\t\t\t[]string{\"relLangURL\"},\n+\n+\t\tns.AddMethodMapping(ctx.Append,\n+\t\t\t[]string{\"append\"},\n \t\t\t[][2]string{},\n \t\t)\n-\t\tns.AddMethodMapping(ctx.RelRef,\n-\t\t\t[]string{\"relref\"},\n+\n+\t\tns.AddMethodMapping(ctx.Group,\n+\t\t\t[]string{\"group\"},\n \t\t\t[][2]string{},\n \t\t)\n",
+      "occurrences": [
+        "tpl/urls/init.go:47-58",
+        "tpl/collections/init.go:151-164"
+      ]
+    },
+    {
+      "why": "One fixture configures translated content and the other configures menus. Their content differs throughout; only the test builder's fixture-call shape is shared.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- hugolib/hugo_sites_build_test.go:208-244\n+++ hugolib/menu_test.go:111-146\n@@ -1,37 +1,36 @@\n-\tb.WithConfigFile(\"toml\", `\n-\n-baseURL = \"http://example.com/\"\n-\n-defaultContentLanguage = \"en\"\n-\n-[languages]\n-[languages.en]\n-weight = 10\n-contentDir = \"content/en\"\n-[languages.nn]\n-weight = 20\n-contentDir = \"content/nn\"\n-\n-\n+\tb.WithTemplatesAdded(\"index.html\", `\n+Main: {{ len .Site.Menus.main }}\n+Other: {{ len .Site.Menus.other }}\n+{{ range .Site.Menus.main }}\n+* Main|{{ .Name }}: {{ .URL }}\n+{{ end }}\n+{{ range .Site.Menus.other }}\n+* Other|{{ .Name }}: {{ .URL }}\n+{{ end }}\n `)\n \n-\tb.WithContent(\"en/mysection/_index.md\", `\n+\t// Issue #5828\n+\tb.WithContent(\"blog/page1.md\", `\n ---\n-Title: My Section\n+title: \"P1\"\n+menu: main\n ---\n \n `)\n \n-\tb.WithContent(\"en/_index.md\", `\n+\tb.WithContent(\"blog/page2.md\", `\n ---\n-Title: My Home\n+title: \"P2\"\n+menu: [main,other]\n ---\n \n `)\n \n-\tb.WithContent(\"en/categories/mycat/_index.md\", `\n+\tb.WithContent(\"blog/page3.md\", `\n ---\n-Title: My MyCat\n+title: \"P3\"\n+menu:\n+  main:\n+    weight: 30\n ---\n-\n `)\n",
+      "occurrences": [
+        "hugolib/hugo_sites_build_test.go:208-244",
+        "hugolib/menu_test.go:111-146"
+      ]
+    },
+    {
+      "why": "Translation and number-format registration has no matching implementation in word-count and containment registration; only the registration API and example format are shared.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- tpl/lang/init.go:35-52\n+++ tpl/strings/init.go:51-69\n@@ -1,18 +1,19 @@\n-\t\tns.AddMethodMapping(ctx.Translate,\n-\t\t\t[]string{\"i18n\", \"T\"},\n+\t\tns.AddMethodMapping(ctx.CountWords,\n+\t\t\t[]string{\"countwords\"},\n \t\t\t[][2]string{},\n \t\t)\n \n-\t\tns.AddMethodMapping(ctx.FormatNumber,\n+\t\tns.AddMethodMapping(ctx.Count,\n \t\t\tnil,\n \t\t\t[][2]string{\n-\t\t\t\t{`{{ 512.5032 | lang.FormatNumber 2 }}`, `512.50`},\n+\t\t\t\t{`{{ \"aabab\" | strings.Count \"a\" }}`, `3`},\n \t\t\t},\n \t\t)\n \n-\t\tns.AddMethodMapping(ctx.FormatPercent,\n+\t\tns.AddMethodMapping(ctx.Contains,\n \t\t\tnil,\n \t\t\t[][2]string{\n-\t\t\t\t{`{{ 512.5032 | lang.FormatPercent 2 }}`, `512.50%`},\n+\t\t\t\t{`{{ strings.Contains \"abc\" \"b\" }}`, `true`},\n+\t\t\t\t{`{{ strings.Contains \"abc\" \"d\" }}`, `false`},\n \t\t\t},\n \t\t)\n",
+      "occurrences": [
+        "tpl/lang/init.go:35-52",
+        "tpl/strings/init.go:51-69"
+      ]
+    },
+    {
+      "why": "Slice-index test inputs and field-chain regression inputs share only the test-table format; they exercise different template operations.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- tpl/internal/go_templates/htmltemplate/exec_test.go:497-500\n+++ tpl/internal/go_templates/htmltemplate/exec_test.go:664-668\n@@ -1,4 +1,5 @@\n-\t{\"slice[1]\", \"{{index .SI 1}}\", \"4\", tVal, true},\n-\t{\"slice[HUGE]\", \"{{index .SI 10}}\", \"\", tVal, false},\n-\t{\"slice[WRONG]\", \"{{index .SI `hello`}}\", \"\", tVal, false},\n-\t{\"slice[nil]\", \"{{index .SI nil}}\", \"\", tVal, false},\n+\t{\"bug13\", \"{{print (.Copy).I}}\", \"17\", tVal, true},\n+\t// Didn't protect against nil or literal values in field chains.\n+\t{\"bug14a\", \"{{(nil).True}}\", \"\", tVal, false},\n+\t{\"bug14b\", \"{{$x := nil}}{{$x.anything}}\", \"\", tVal, false},\n+\t{\"bug14c\", `{{$x := (1.0)}}{{$y := (\"hello\")}}{{$x.anything}}{{$y.true}}`, \"\", tVal, false},\n",
+      "occurrences": [
+        "tpl/internal/go_templates/htmltemplate/exec_test.go:497-500",
+        "tpl/internal/go_templates/htmltemplate/exec_test.go:664-668"
+      ]
+    },
+    {
+      "why": "One table contains basename-extraction examples and the other contains rejected CSS values. Only pairs of string literals in table rows are shared.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- common/paths/path_test.go:136-143\n+++ tpl/internal/go_templates/htmltemplate/css_test.go:220-227\n@@ -1,8 +1,8 @@\n-\t\t{\"index.html\", \"index\"},\n-\t\t{\"./index.html\", \"index\"},\n-\t\t{\"/index.html\", \"index\"},\n-\t\t{\"index\", \"index\"},\n-\t\t{\"/tmp/index.html\", \"index\"},\n-\t\t{\"./filename-no-ext\", \"filename-no-ext\"},\n-\t\t{\"/filename-no-ext\", \"filename-no-ext\"},\n-\t\t{\"filename-no-ext\", \"filename-no-ext\"},\n+\t\t{\"//\", \"ZgotmplZ\"},\n+\t\t{\"[href=~\", \"ZgotmplZ\"},\n+\t\t{\"expression(alert(1337))\", \"ZgotmplZ\"},\n+\t\t{\"-expression(alert(1337))\", \"ZgotmplZ\"},\n+\t\t{\"expression\", \"ZgotmplZ\"},\n+\t\t{\"Expression\", \"ZgotmplZ\"},\n+\t\t{\"EXPRESSION\", \"ZgotmplZ\"},\n+\t\t{\"-moz-binding\", \"ZgotmplZ\"},\n",
+      "occurrences": [
+        "common/paths/path_test.go:136-143",
+        "tpl/internal/go_templates/htmltemplate/css_test.go:220-227"
+      ]
+    },
+    {
+      "why": "The pagination-alias test and Portable Text conversion test have different fixtures, operations, and expectations. Only the standard integration-test wrapper is common.",
+      "verified": "Extracted the two inclusive source ranges and ran diff -u; exit 1. Exact diff:\n--- config/allconfig/allconfig_integration_test.go:135-166\n+++ tpl/transform/transform_integration_test.go:353-381\n@@ -1,32 +1,29 @@\n-func TestPaginationConfigDisableAliases(t *testing.T) {\n+func TestPortableText(t *testing.T) {\n \tfiles := `\n -- hugo.toml --\n-disableKinds = [\"taxonomy\", \"term\"]\n-[pagination]\n-disableAliases = true\n-pagerSize = 2\n--- layouts/_default/list.html --\n-{{ $paginator := .Paginate  site.RegularPages }}\n-{{ template \"_internal/pagination.html\" . }}\n-{{ range $paginator.Pages }}\n-  {{ .Title }}\n-{{ end }}\n--- content/p1.md --\n----\n-title: \"p1\"\n----\n--- content/p2.md --\n----\n-title: \"p2\"\n----\n--- content/p3.md --\n----\n-title: \"p3\"\n----\n-`\n+-- assets/sample.json --\n+[\n+  {\n+    \"_key\": \"a\",\n+    \"_type\": \"block\",\n+    \"children\": [\n+      {\n+        \"_key\": \"b\",\n+        \"_type\": \"span\",\n+        \"marks\": [],\n+        \"text\": \"Heading 2\"\n+      }\n+    ],\n+    \"markDefs\": [],\n+    \"style\": \"h2\"\n+  }\n+]\n+-- layouts/index.html --\n+{{ $markdown := resources.Get \"sample.json\" | transform.Unmarshal | transform.PortableText }}\n+Markdown: {{ $markdown }}|\n \n+`\n \tb := hugolib.Test(t, files)\n \n-\tb.AssertFileExists(\"public/page/1/index.html\", false)\n-\tb.AssertFileContent(\"public/page/2/index.html\", \"pagination-default\")\n+\tb.AssertFileContent(\"public/index.html\", \"Markdown: ## Heading 2\\n|\")\n }\n",
+      "occurrences": [
+        "config/allconfig/allconfig_integration_test.go:135-166",
+        "tpl/transform/transform_integration_test.go:353-381"
+      ]
+    }
+  ],
+  "not_clear": [
+    {
+      "why": "The repeated reverse-lookup assertions run into the next lookup on each side, with a directory-mount comment included on only one side. The boundaries are ragged test fragments.",
+      "occurrences": [
+        "hugofs/rootmapping_fs_test.go:286-292",
+        "hugofs/rootmapping_fs_test.go:280-285"
+      ]
+    },
+    {
+      "why": "The benchmark setup and build loop repeat, but the render-hook and partial-cache workloads are different. The common benchmark harness leaves doubt about treating the complete functions as copies.",
+      "occurrences": [
+        "markup/goldmark/goldmark_integration_test.go:234-292",
+        "tpl/partials/partials_integration_test.go:206-251"
+      ]
+    },
+    {
+      "why": "The source-map checking helper repeats with an added assertion comment, but both selected ranges also contain different preceding file-content checks. The boundaries mix shared and unshared code.",
+      "occurrences": [
+        "internal/js/esbuild/batch_integration_test.go:380-399",
+        "resources/resource_transformers/js/js_integration_test.go:207-229"
+      ]
+    },
+    {
+      "why": "Only two path-cleaning assignments repeat, and one range includes an extra declaration. This is a short idiom with uneven boundaries.",
+      "occurrences": [
+        "modules/collect.go:650-652",
+        "modules/config.go:221-222"
+      ]
+    },
+    {
+      "why": "These are three-line assertions about different parts of the Asciidoctor argument list. This is short assertion scaffolding.",
+      "occurrences": [
+        "markup/asciidocext/convert_test.go:214-216",
+        "markup/asciidocext/convert_test.go:251-253"
+      ]
+    },
+    {
+      "why": "Only three fixture fields repeat, selecting a different sort key while keeping the expected data.",
+      "occurrences": [
+        "tpl/collections/sort_test.go:78-80",
+        "tpl/collections/sort_test.go:72-74"
+      ]
+    },
+    {
+      "why": "This is the three-line command-initialization idiom with a different command description.",
+      "occurrences": [
+        "commands/config.go:112-114",
+        "commands/config.go:228-230"
+      ]
+    },
+    {
+      "why": "Both short branches add weights for matching descriptor fields; this is a small repeated conditional idiom.",
+      "occurrences": [
+        "tpl/tplimpl/templatedescriptor.go:204-207",
+        "tpl/tplimpl/templatedescriptor.go:209-212"
+      ]
+    },
+    {
+      "why": "The filesystem integration builder setup repeats, but the fixtures test reading a missing file versus reading a themed directory. The common harness alone leaves doubt.",
+      "occurrences": [
+        "tpl/os/os_integration_test.go:55-72",
+        "tpl/os/os_integration_test.go:24-46"
+      ]
+    },
+    {
+      "why": "The five lines repeat a mount-and-check test pattern with different destination paths; they are related case scaffolding.",
+      "occurrences": [
+        "resources/resource/resources_test.go:79-83",
+        "resources/resource/resources_test.go:91-95"
+      ]
+    }
+  ]
+}

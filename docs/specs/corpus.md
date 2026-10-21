@@ -28,8 +28,10 @@ Every corpus scan records four figures, and each means the same thing on Windows
 
 - **Wall time** — how long the scan took, start to exit.
 - **CPU time** — user plus system time across every core. POSIX reads it from `/usr/bin/time`; Windows reads the process's own processor-time totals after it exits, through `scripts/corpus/process-monitor.ps1`, which prints them in the same `User time (seconds):` / `System time (seconds):` form GNU `time` uses. One parser reads every platform.
-- **Peak CPU** — the busiest half-second of the scan, in percent of one core: `400%` means four cores were busy for that whole half-second. It is the one sampled figure, because no operating system keeps a peak CPU rate the way it keeps a peak working set. **[CORPUS-MEASURE-PEAK-CPU]** One implementation samples every platform: every half-second it reads the total CPU time of the scan's process tree, and the peak is the largest rise over one interval divided by that interval's wall time. On POSIX the spawned process is `time` and the scan is its child, which is why the tree is summed. A scan shorter than one interval has no peak and says so.
+- **Peak CPU** — the busiest half-second of the scan, in percent of one core: `400%` means four cores were busy for that whole half-second. It is the one sampled figure, because no operating system keeps a peak CPU rate the way it keeps a peak working set ([CORPUS-MEASURE-PEAK-CPU]).
 - **Peak memory** — the true peak resident set, per [CORPUS-CEILINGS].
+
+**[CORPUS-MEASURE-PEAK-CPU] One implementation samples peak CPU on every platform.** Every half-second it reads the total CPU time of the scan's process tree, and the peak is the largest rise over one interval divided by that interval's wall time. On POSIX the spawned process is `time` and the scan is its child, which is why the tree is summed. A scan shorter than one interval has no peak and says so.
 
 A figure that was not measured is an error or an explicit absence, never a zero: a zero reads as a scan that cost nothing. Implemented in `crates/deslop-test-support/src/corpus_measure.rs` and `corpus_measure/cpu.rs`; pinned by `corpus_measure/tests.rs`, including `gnu_and_windows_cpu_time_is_user_plus_system` and `peak_cpu_is_the_busiest_window_in_percent_of_one_core`.
 
@@ -49,6 +51,8 @@ So both bounds are deliberately loose rails, each sized to the failure it exists
 An absent bound is not a repository with no opinion about its own size — it is a check that cannot fire, so a manifest that omits one fails the gate rather than passing it, and `corpus_manifest_contract.rs` refuses it before any scan runs.
 
 ### [CORPUS-RECALL] Curated duplicates
+
+Curated recall and precision use the same published-clone classification rule as the independent register scorer ([CORPUS-SCORE]). Informational `structural_only` findings and absent or unknown classifications cannot satisfy a duplicate claim or breach a non-duplicate claim. The cluster contract still inspects informational records: their duplicated mass and clone rank must both be zero ([RANK-STRUCTURAL-ONLY]). Pinned by `corpus_confidence::tests::recall::information` and `corpus_confidence::tests::liveness::information`.
 
 `must_find` lists duplicates a human confirmed byte-for-byte, each with the `diff` that proved it. Two check ids judge it:
 
@@ -102,13 +106,34 @@ An empty `clearly_out` list must carry `clearly_out_status` prose saying so, for
 
 The protocol lives in two skills, deliberately split so neither role can drift into the other: `.agents/skills/clone-register-prepare` builds the workspace and files what comes back, and `.agents/skills/judge-clone-pairs` is the judging protocol, which never names this project and is copied to the root of the handed-over folder as `JUDGING.md`. Each repository directory links to that file, so a judge never reaches back here to read it. The A/B key and the pinned checkouts are written beside that folder and never inside it.
 
+### [CORPUS-REGISTER-TYPE] Pinning a clone type
+
+A CLEARLY IN entry may carry a `type`: `Type I`, `Type II`, `Type III` or `Type IV`, spelled exactly so, meaning what [CLONE-TYPE-TAXONOMY](taxonomy.md#clone-type-taxonomy-how-this-relates-to-the-research) says they mean. A blank or absent type means any type is acceptable. CLEARLY OUT and NOT CLEAR entries never carry one: a pair that is not a clone has no clone type.
+
+**Judges always name it.** The judging protocol asks for a type on every CLEARLY IN, gives each type's definition, and settles it from the diff: the lowest type that accounts for every difference.
+
+**A typed pair is found only under its own type.** The scorer counts a typed CLEARLY IN as reported only when the matching cluster's kind reports that type, by the [CLONE-KIND-LABELS](taxonomy.md#clone-kind-labels-use-the-same-names-everywhere) table:
+
+| `type` | Found by a cluster of kind |
+|---|---|
+| `Type I` | `identical` |
+| `Type II` | `nearly_identical` |
+| `Type III` | `nearly_identical` or `loosely_similar` |
+| `Type IV` | `same_behavior` |
+
+So renamed code published as identical code is a false negative for a `Type II` entry: the engine reported the pair, but claimed it was something it is not. The scorecard prints the pinned type beside every such miss, with the kind the engine did report the pair under — `(Type I; reported as nearly_identical)` — so a reader can see why a pair the engine did report still counts against it. An untyped entry is found by any clone kind, exactly as before.
+
+**A type the sources do not agree on is left unspecified.** When verdicts are merged ([CORPUS-REGISTER-MERGE]), the verdict alone decides whether a pair enters the register. Its type is written only when every source gave the same valid type — the standing register included, and a blank counts as a vote. `Type I` against `Type II`, a typed ruling against a blank one, or a label outside the four all leave the pair filed with no type, which means any type is acceptable. A standing entry whose type a later pass contradicts loses its type the same way; nothing else about it changes. Every pair filed without a type that some source did name is listed under `types_left_unspecified` in `docs/reports/verdict-merge.md`, with each source's type.
+
+A type on anything but a CLEARLY IN is never written by the merge, and fails the scorer and `corpus_register_contract` if it ever reaches a register. Implemented in `crates/deslop-test-support/src/corpus_score/clone_type.rs` and `scripts/corpus/merge-verdicts/pass.mjs`; asserted by `corpus_score/tests/clone_type.rs`, `every_pinned_clone_type_is_a_research_type_on_a_clearly_in`, and `scripts/repository/verdict-merge-types.test.mjs`.
+
 ### [CORPUS-REGISTER-COVERAGE] How far the register is meant to go
 
 The register is built up over time, never in one pass. The shape it is growing towards:
 
 - **Two to three repositories per language, of visibly different size.** A single repository teaches the register that language's house style, not the language. A small library and a large application disagree about what repetition is normal, and the register needs both.
 - **Roughly 100 CLEARLY IN and 100 CLEARLY OUT entries per repository.** Reaching that takes several judging passes at different seeds; a pass that yields a dozen firm verdicts out of two hundred candidates is doing well, not badly.
-- **About 200 candidates per repository per pass, as a ceiling.** Past that a repository stops paying for the time. `scripts/corpus/register-workspace.mjs` caps the draw there.
+- **About 200 candidates per repository per pass, as a ceiling.** Past that a repository stops paying for the time. `scripts/corpus/register-workspace.mjs` caps the draw there. `make judging-folder JUDGING_CANDIDATES=<n>` asks for a shorter pass, from 1 up to that ceiling; anything else is refused rather than clamped.
 
 **Breadth beats depth.** When the choice is another pass on a repository already judged versus a first pass on a language with no register at all, the new language wins. A false positive that only appears in Kotlin is invisible until some Kotlin is judged, however deep the Python register goes.
 
@@ -141,7 +166,7 @@ A repository cannot become a register until a judge has ruled on its pairs, and 
 
 `corpus/judging-queue.json` breaks that circle. It lists repositories waiting on a first pass — url, commit id, language, and why this one — and the comparison scans everything in it alongside the registers. Each queued repository then gets a workspace from `make judging-folder` exactly like a judged one.
 
-A queued repository has **no register yet**, and a repository with a register is **not** in the queue; `crates/deslop/tests/corpus_commit_pins.rs` asserts both, so the queue drains rather than growing a second copy of the corpus. Entries are pinned to a full commit id for the same reason a register is: the judge and the scan have to read one identical tree.
+A repository leaves the queue once its register holds at least one CLEARLY IN. Until then it may already have a register holding only the CLEARLY OUT and NOT CLEAR pairs its judges agreed on. That is better than nothing, but it cannot catch a missed clone, so the repository stays queued for another pass, and the comparison scans it once, as its register. `crates/deslop/tests/corpus_commit_pins.rs` asserts that a queued repository's register holds no CLEARLY IN, and `crates/deslop/tests/corpus_register_contract.rs` asserts that a register with no CLEARLY IN is still queued, so the queue drains rather than growing a second copy of the corpus. Entries are pinned to a full commit id for the same reason a register is: the judge and the scan have to read one identical tree.
 
 The CI accuracy gate does **not** scan the queue. It runs a small slice of judged registers, because a repository with no verdicts can answer no questions and would only cost time on every push.
 
@@ -169,15 +194,17 @@ The rest of the rules:
 - **One tree.** Every judged folder and the register must name the same commit. A line number means nothing without the tree it was read in.
 - **Judges must have been shown the same candidates.** Candidate numbers are the only handle a verdict has on a pair, so two workspaces with different pair lists would have their verdicts cross-matched into disagreements that never happened. The run refuses outright.
 - **Judges must finish the same repositories.** A repository absent from one folder is an unfinished pass, not an empty verdict. The merge refuses the whole run before creating or draining any register.
-- A repository that gains a register leaves `corpus/judging-queue.json` in the same run, per [CORPUS-REGISTER-QUEUE].
+- A repository whose register now holds a CLEARLY IN leaves `corpus/judging-queue.json` in the same run. One whose agreed pairs are all CLEARLY OUT or NOT CLEAR is filed and stays queued, per [CORPUS-REGISTER-QUEUE].
 
-`docs/reports/verdict-merge.md` holds what was left out. Every string in it is a column header, a label derived from the verdicts themselves, or a value read out of a judging folder — the only sentences are the judges' own, quoted. Rows are sorted by kind, repository and candidate, so two runs over the same verdicts produce the same document.
+A clone type the sources did not all agree on never leaves a pair out: the pair is filed without a type ([CORPUS-REGISTER-TYPE]).
+
+`docs/reports/verdict-merge.md` holds what was left out, and which pairs were filed without the type some source named. Every string in it is a column header, a label derived from the verdicts themselves, or a value read out of a judging folder — the only sentences are the judges' own, quoted. Rows are sorted by kind, repository and candidate, so two runs over the same verdicts produce the same document.
 
 Asserted by `scripts/repository/verdict-merge.test.mjs`, which drives the script against throwaway judging folders that agree and that do not.
 
 ### [CORPUS-SCORE-RENDER] The scorecard formats figures and never derives one
 
-the scorecard is written by the run that took the measurements ([CORPUS-SCORE]), and the module that writes it is allowed to format and nothing else. Every number it prints was computed upstream, so the markdown a human reads and the the JSON scorecard beside it cannot disagree — there is no second implementation of the arithmetic to drift.
+The scorecard is written by the run that took the measurements ([CORPUS-SCORE]), and the module that writes it is allowed to format and nothing else. Every number it prints was computed upstream, so the markdown a human reads and the JSON scorecard beside it cannot disagree — there is no second implementation of the arithmetic to drift.
 
 Tables read **side by side**: the corpus standing is one measure per row with a column per engine, and each per-repository table is one repository with a column per engine. A reader compares two builds by moving along a row, never by holding two documents open. Missing figures render as an explicit absence rather than a zero, because "not measured" and "measured as none" are different claims about a run.
 
@@ -188,6 +215,8 @@ Implemented in `crates/deslop-test-support/src/corpus_score/render.rs` (document
 The register says which pairs are real. The score says how the engine is doing against them, in one number per repository and one for the corpus.
 
 **The number.** `score = 100 × correct / judged`, where `judged` is every CLEARLY IN and CLEARLY OUT entry and `correct` is the ones the engine answered right. A CLEARLY IN it reports is correct; one it misses is a **false negative**. A CLEARLY OUT it stays silent on is correct; one it reports is a **false positive**. Both wrong answers are bugs, and each costs exactly one judged pair — no weighting, no partial credit.
+
+**A typed CLEARLY IN is answered only by a cluster of its type** — see [CORPUS-REGISTER-TYPE].
 
 **A report answers a clone verdict only through a clone finding.** Each judged range must overlap a different visible occurrence in the same cluster. The old report schema calls the cluster classification `bucket`; the current schema calls it `kind`. The scorer reads both through the shared clone-kind registry. `structural_only` means matching shape without verified copied content, so its occurrences cannot satisfy CLEARLY IN or breach CLEARLY OUT. Missing or unknown classification cannot certify a clone either. If an informational family also contains a real clone pair, a separately published clone cluster must show that pair; the informational family alone is not proof. Asserted by `informational_findings_cannot_satisfy_either_verdict` and `only_a_clone_finding_certifies_a_pair_inside_a_mixed_family` under [CORPUS-SCORE].
 
@@ -201,7 +230,7 @@ A register with no entries scores **nothing**, never 100%. Being asked no questi
 
 **[CORPUS-SCORE-COST-COMPLETE] An incomplete measurement is absent, never fast.** Aggregate wall time is shown only when every scanned repository has a timing file. Aggregate CPU time, peak CPU and peak memory additionally require that every such file measured that field. The JSON scorecard records an absent aggregate as `null`, and the Markdown shows `—`; neither turns a missing run into zero cost. The strict score gate fails when a judged run lacks its timing file, while a comparison can still render the available per-repository measurements without publishing a partial aggregate.
 
-**The gate.** `corpus/register/score-thresholds.json` holds a maximum false-positive and false-negative count per repository. Those counts are the whole gate, and there is deliberately no minimum-score percentage: a score is `100 * (judged - false negatives - false positives) / judged`, so a percentage threshold is really a defect allowance divided by the size of the register. Leave one in place and it widens on its own every time the register grows - the number on the page never changes while what it permits multiplies. Counts mean the same thing whether a register judges six pairs or six hundred, and "no false positives and no false negatives" already says "a perfect score" exactly. The defaults are strict — a judged repository must answer every judged pair correctly — and every entry under `repos` is an admission that a defect shipped, carrying the reason, exactly like [CORPUS-BASELINE]. Numbers move one way: tightened when the engine improves, never loosened to make a run pass. Deleting an entry by fixing the defect is the only correct exit.
+**The gate is the judged pair record.** Every judged pair is held to its own last recorded outcome in `corpus/register/outcomes.json` — see [CORPUS-SCORE-OUTCOMES]. There is no count allowance and no minimum-score percentage. A score is `100 * (judged - false negatives - false positives) / judged`, so a percentage threshold is a defect allowance divided by the size of the register: the number on the page never changes while what it permits multiplies as the register grows. A per-repository count is better but still blind: one pair fixed and another broken in the same change leave it exactly where it was. Only a record of each pair can tell a regression from a defect that was already there.
 
 **The report is mechanical, and it lives in the repository.** The markdown and JSON scorecards are written by the run that took the measurements, not by whoever is reading them. No figure in either document is transcribed, summarised or re-typed by hand or by an agent, and **neither is ever hosted, uploaded or published anywhere** — a report you cannot re-run, diff and reproduce from the tool is not evidence, it is somebody's recollection. Point at the path.
 
@@ -211,7 +240,36 @@ A register with no entries scores **nothing**, never 100%. Being asked no questi
 
 **One implementation.** The scoring, the gate and the scorecard markdown are all `deslop-test-support`'s `corpus_score` module, run through the `corpus-score` binary. Nothing outside Rust computes a count, a percentage or a delta; the shell measures and orchestrates, and `scripts/compare-versions-summary.mjs` reads the scorecard rather than deriving anything from it, so the two documents cannot disagree. The scorer is deliberately built from the working tree and never from a compared engine's source: two engines in a comparison must be scored by one identical scorer.
 
-**Three entry points, one report.** `scripts/corpus/score-gate.sh` scans the register-backed targets with the current build and gates on the thresholds — this is what CI runs, on a small slice. `scripts/compare-versions.sh` scans the same targets with two engines and additionally reports whether the second lost ground against the first. The `corpus_*` tests behind `make test-corpus` file each scan they make into the same scorecard ([CORPUS-REPORT]). All three write the same run manifest and render it through the same code.
+**Three entry points, one report.** `scripts/corpus/score-gate.sh` scans the register-backed targets with the current build and holds every judged pair to its record — this is what CI runs, on a small slice. `scripts/compare-versions.sh` scans the same targets with two engines and additionally reports whether the second lost ground against the first. The `corpus_*` tests behind `make test-corpus` file each scan they make into the same scorecard ([CORPUS-REPORT]). All three write the same run manifest and render it through the same code.
+
+### [CORPUS-SCORE-OUTCOMES] Every judged pair's outcome is on record
+
+`corpus/register/outcomes.json` lists every judged pair a corpus run has scored: its repository, its verdict and its ranges, whether the engine answered it right (`pass`) or wrong (`fail`), when that outcome was recorded (`since`, the timestamp of the run that recorded it) and the engine that run scored. It answers two questions at a glance: which judged pairs fail today, and how long each has failed.
+
+**How a run is held to it.** A run scores every judged pair, then reads the last engine's answer against the record:
+
+| Answer now | On record | Standing | The run |
+|---|---|---|---|
+| right | failing | fixed | passes; the pair goes on record as passing |
+| right | passing, or not recorded | passing | passes; a new pair goes on record as passing |
+| wrong | failing | still failing | is tolerated, and the scorecard lists the pair as tracked |
+| wrong | passing | regressed | fails |
+| wrong | not recorded | not on record | fails |
+
+So existing failures are tolerated and every new one fails: a pair that has passed once must keep passing.
+
+**The record only tightens.** Every run writes the record back. A fixed pair and a newly judged passing pair go on record as passing, and a pair its register no longer judges leaves the record. A regression is never written over the pass it broke, and a repository the run did not scan keeps its entries untouched. A failing pair goes on record only through `make accept-corpus-failures RUN=<run.json>`, which re-scores a finished run without scanning again and records its unrecorded failures as failing. It never moves a passing pair to failing: a regression is fixed, never accepted. Accepting is the admission that a defect shipped, and it shows in the diff for review.
+
+**CI refuses an uncommitted change.** The `corpus-score` job fails when its run changed the record. A fix left off the record would keep the pair on record as failing, and its next regression would pass as the old tolerated defect.
+
+**Pairs are keyed so every run agrees.** A pair is its repository — named as its register file is, in lower case — its verdict and its ranges, sorted. The record is written sorted by that key, so two runs over the same answers write the same file.
+
+**The scorecard shows it.** The JSON scorecard's `outcomes` lists every judged pair the last engine was scored on, passed or failed, with its `standing` and `recorded_since`. The markdown's **Judged pair record** section says whether the run kept to the record and lists every pair it fixed, and each wrongly answered pair in the defect list says how it stands against the record.
+
+#### For AI
+
+- Implemented in `crates/deslop-test-support/src/corpus_score/outcomes.rs` (`standings`, `record`), `run.rs` (`write_scorecard`, `Scoring`) and `render/outcomes.rs`. `corpus-score score --gate` exits non-zero on a `regressed` or `unrecorded` pair; `--accept-failures` cannot be combined with it.
+- Pinned end to end by `corpus_score/run/tests/record.rs`, over the file on disk by `every_recorded_pair_is_a_pair_its_register_judges` and `the_record_holds_one_outcome_per_pair_in_one_stable_order_and_nothing_else` in `crates/deslop/tests/corpus_register_contract.rs`, and in CI wiring by `scripts/repository/score-gate-source.test.mjs`.
 
 ### [CORPUS-SCORE-GATE-SLICE] The default gate covers judged languages
 
@@ -234,8 +292,6 @@ Whichever way the corpus is run — `make score-gate`, `make compare`, `make tes
 
 A repository with no register is still listed. Its accuracy is its curated checks, and its cost is its cost; leaving it out would make a run over flutter produce an empty scorecard.
 
-**[CORPUS-REPORT-VERDICT] The verdict comes first.** Every scorecard opens with its verdict: `# ✅ PASSED` when nothing failed, or `# 🔴 FAILED` followed by a red caution block listing every failure — each failed curated check (a crashed scan included) and each register threshold breached, naming the repository, the check and what was observed. A failure tracked in `corpus/known-failures.json` is still listed, marked as tracked; it is still a failure. A reader must never have to find a failure in a table. Implemented in `crates/deslop-test-support/src/corpus_score/verdict.rs` and `render/verdict.rs`; pinned by `a_crashed_scan_is_reported_with_its_cost_and_its_reason`, `a_run_with_no_failure_opens_with_passed` and `a_breached_gate_renders_as_a_failure_that_names_the_measure`.
-
 **A crashed scan is a result.** A scan that exits non-zero — an out-of-memory abort above all — is filed with a failed `scan` check that quotes everything the scan wrote to stderr, and with the wall time, CPU time, peak CPU and peak memory it reached before it stopped. The test then fails on it. A crash that left no row would read as a repository nobody scanned, and the memory figure of a scan that ran out of memory is the one that matters most. Under the strict score gate, a judged run with no report is an error rather than an unscored row.
 
 **Every run writes its own scorecard, named after what ran and when**, in UTC with the time's colons written as dashes so the name is legal on Windows. No run overwrites another, and the names sort in the order the runs happened.
@@ -251,6 +307,8 @@ Each markdown scorecard has a `.json` twin of the same name. A corpus test is na
 **A corpus test's scorecard covers what that test scanned.** Before it asserts anything, the test writes its scorecard and, in a directory of the same name beside it, what the scorecard was rendered from — the scan's report, its cost, its curated-check outcome and the run manifest — so a failing test still leaves the document that says why, and any scorecard can be re-rendered later. The corpus workflow keeps `.corpus/test-corpus/` out of its cache, so a job's summary prints only the scorecards that job wrote. Implemented in `crates/deslop-test-support/src/corpus_record.rs`, with the file-then-judge order every test follows in `corpus_judge.rs`; pinned by `corpus_record/tests.rs` and by `an_unregistered_repository_reports_its_checks_and_its_cost` in `corpus_score/run/tests.rs`.
 
 **[CORPUS-REPORT-CHECKS] Curated checks sit beside the register score.** For every repository a corpus test scanned, the scorecard lists how many of the `corpus/<name>.json` checks passed and names each failure, marked `known` when `corpus/known-failures.json` tracks it and `NEW` when it does not. A repository whose manifest curates no accuracy claim is marked `ceilings only`, because its pass says nothing about whether detection there is correct. A run that evaluated no curated checks shows `—` rather than a pass. The determinism tests file their own record, labelled `<repo> (determinism)` and not scored against the register, so one register is never counted twice.
+
+**[CORPUS-REPORT-VERDICT] The scorecard opens with its verdict.** The first line says whether the run passed — `# ✅ PASSED — Corpus accuracy scorecard` or `# 🔴 FAILED — Corpus accuracy scorecard` — because a failure that has to be found in a table is one a reader skims past. A run fails when the engine failed any curated check on any repository, a crashed scan's `scan` check included, or answered any judged pair wrongly ([CORPUS-SCORE-OUTCOMES]); a run that failed nothing is headed PASSED. Under a FAILED heading a caution block counts the failures and lists each on one line: the repository, the check or the judged pair, and what was observed. Failed checks come first, repository by repository, then judged pairs. A failure already tracked — a check in `corpus/known-failures.json`, or a pair on record as failing in `corpus/register/outcomes.json` — still fails the scorecard, and its line names the record that tracks it, so it reads neither as new nor as a pass. That is deliberately stricter than the exit status of `make test-corpus-ci` and of `make score-gate`, which excuse tracked failures ([CORPUS-BASELINE], [CORPUS-SCORE-OUTCOMES]): a run can exit green under a scorecard headed FAILED, because the defect is still there. Only the last engine is judged — in a comparison the first is the reference the second is read against. The JSON scorecard carries the same list as `verdict.failures`. Implemented in `crates/deslop-test-support/src/corpus_score/verdict.rs` and `render/verdict.rs`; pinned by `corpus_score/tests/verdict.rs` and, end to end, by `a_judged_run_is_headed_by_whether_it_kept_to_its_record` in `corpus_score/run/tests.rs`.
 
 ### [CORPUS-BASELINE] The known-failures ratchet
 

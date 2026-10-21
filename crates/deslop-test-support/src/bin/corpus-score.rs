@@ -3,8 +3,8 @@
 //! Two jobs, kept in one binary because they share the measurement and the
 //! arithmetic: `measure` runs a scan under this platform's measurement and
 //! records what it cost, and `score` reads the resulting run manifest, scores
-//! every report against its clone register, renders the scorecard, and holds
-//! the last engine to the gate.
+//! every report against its clone register, renders the scorecard, writes the
+//! judged pair record back, and holds the last engine to that record.
 //!
 //! Both jobs are thin: the measurement is [`deslop_test_support::corpus_measure`]
 //! and the scorecard is [`deslop_test_support::corpus_score::run`], the same
@@ -22,12 +22,13 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 use deslop_test_support::{
     corpus::repo_root,
     corpus_measure::{measured_run, ProcessCost},
     corpus_score::{
-        run::{report_stem, write_scorecard},
+        render::Scorecard,
+        run::{report_stem, write_scorecard, Scoring},
         RunCost,
     },
 };
@@ -60,23 +61,32 @@ enum Command {
         command_line: Vec<OsString>,
     },
     /// Score every report in a run manifest against its clone register.
-    Score {
-        /// The run manifest describing engines, targets and report paths.
-        run: PathBuf,
-        /// Directory the scorecard is written to.
-        #[arg(long)]
-        out: PathBuf,
-        /// What ran — `score-gate`, `compare` — which, with the moment it ran,
-        /// names the scorecard, so no run overwrites another's.
-        #[arg(long)]
-        name: String,
-        /// Exit non-zero when the last engine breaches its gate.
-        #[arg(long)]
-        gate: bool,
-        /// Print only the JSON scorecard's path, for a caller that reads it.
-        #[arg(long)]
-        print_json_path: bool,
-    },
+    Score(ScoreArgs),
+}
+
+/// What `score` reads, where it writes, and what it holds the run to.
+#[derive(Args)]
+struct ScoreArgs {
+    /// The run manifest describing engines, targets and report paths.
+    run: PathBuf,
+    /// Directory the scorecard is written to.
+    #[arg(long)]
+    out: PathBuf,
+    /// What ran — `score-gate`, `compare` — which, with the moment it ran,
+    /// names the scorecard, so no run overwrites another's.
+    #[arg(long)]
+    name: String,
+    /// Exit non-zero when a judged pair regressed, or failed without being on
+    /// record as failing ([CORPUS-SCORE-OUTCOMES]).
+    #[arg(long)]
+    gate: bool,
+    /// Put every failing pair that has no record on record as failing,
+    /// accepting it as a known defect. Never moves a pass to a fail.
+    #[arg(long, conflicts_with = "gate")]
+    accept_failures: bool,
+    /// Print only the JSON scorecard's path, for a caller that reads it.
+    #[arg(long)]
+    print_json_path: bool,
 }
 
 /// Runs one measured command and records its cost.
@@ -123,21 +133,37 @@ fn print_measured(cost: &ProcessCost) {
     );
 }
 
-/// Scores a whole run, writes the scorecard, and holds the last engine to the
-/// gate when asked to. The documents are written before the gate is applied,
-/// so a failing run still leaves a readable report.
-fn score(run_path: &Path, out: &Path, stem: &str, gate: bool, print_json_path: bool) -> Result<()> {
-    let written = write_scorecard(run_path, &repo_root(), out, stem, gate)?;
-    if print_json_path {
+/// Scores a whole run, writes the scorecard and the record, and holds the last
+/// engine to the record when asked to. The documents are written before the
+/// record is applied, so a failing run still leaves a readable report.
+fn score(args: &ScoreArgs) -> Result<()> {
+    let scoring = Scoring {
+        strict: args.gate,
+        accept_failures: args.accept_failures,
+    };
+    let stem = report_stem(&args.name, SystemTime::now());
+    let written = write_scorecard(&args.run, &repo_root(), &args.out, &stem, scoring)?;
+    if args.print_json_path {
         println!("{}", written.json_path.display());
     } else {
         println!("{}", written.markdown);
     }
     eprintln!("==> scorecard: {}", written.path.display());
-    if gate && !written.card.breaches.is_empty() {
+    held_to_the_record(&written.card, scoring)
+}
+
+/// [CORPUS-SCORE-OUTCOMES] Fails a strict run when a judged pair regressed or
+/// failed without being on record as failing.
+fn held_to_the_record(card: &Scorecard, scoring: Scoring) -> Result<()> {
+    let rejected = card
+        .outcomes
+        .iter()
+        .filter(|pair| pair.standing.fails_the_run())
+        .count();
+    if scoring.strict && rejected > 0 {
         return Err(anyhow!(
-            "{} threshold breach(es) — see the Register gate section above",
-            written.card.breaches.len()
+            "{rejected} judged pair(s) regressed or failed without being on record — see the \
+             Judged pair record section above"
         ));
     }
     Ok(())
@@ -151,60 +177,6 @@ fn main() -> Result<()> {
             binary_sha,
             command_line,
         } => measure(&timing, &binary_sha, &command_line),
-        Command::Score {
-            run,
-            out,
-            name,
-            gate,
-            print_json_path,
-        } => score(
-            &run,
-            &out,
-            &report_stem(&name, SystemTime::now()),
-            gate,
-            print_json_path,
-        ),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    const TEST_REPORT: &str = "target/.corpus/corpus-score-missing-timing/report.json";
-    const TEST_TIMING: &str = "target/.corpus/corpus-score-missing-timing/absent-timing.json";
-    const ENGINE_ID: &str = "current";
-
-    /// [CORPUS-SCORE-COST-COMPLETE] Missing required cost fails the strict gate.
-    #[test]
-    fn registered_run_with_missing_timing_fails_scoring() -> Result<()> {
-        let root = repo_root();
-        let report = root.join(TEST_REPORT);
-        fs::create_dir_all(root.join("target/.corpus/corpus-score-missing-timing"))?;
-        fs::write(report, "{\"clusters\":[]}")?;
-        let target = json!({"name":"fixture","runs":{ENGINE_ID:{"report":TEST_REPORT,"timing":TEST_TIMING}}});
-        let register = json!({"clearly_in":[],"clearly_out":[]});
-        let result = score_target(&target, &register, &root, &[ENGINE_ID.to_owned()], true);
-        assert!(
-            result.is_err(),
-            "a missing timing file must never yield a green scorecard"
-        );
-        Ok(())
-    }
-
-    /// [CORPUS-SCORE-COST-COMPLETE] Accuracy-only scoring accepts an unmeasured run.
-    #[test]
-    fn unmeasured_run_keeps_accuracy_score_without_a_timing_field() -> Result<()> {
-        let root = repo_root();
-        let report = root.join(TEST_REPORT);
-        fs::create_dir_all(root.join("target/.corpus/corpus-score-missing-timing"))?;
-        fs::write(report, "{\"clusters\":[]}")?;
-        let run = json!({"report":TEST_REPORT});
-        let register = json!({"clearly_in":[],"clearly_out":[]});
-        let result = scored_run(&run, &register, &root, ENGINE_ID, "fixture", false)?;
-        assert_eq!(result.0.correct, 0, "empty register has no judged pairs");
-        assert!(result.1.is_none(), "unmeasured run has no timing cost");
-        Ok(())
+        Command::Score(args) => score(&args),
     }
 }

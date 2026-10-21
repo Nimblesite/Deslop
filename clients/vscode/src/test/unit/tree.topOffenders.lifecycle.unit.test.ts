@@ -3,10 +3,22 @@ import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import { StatusTicker, TopOffendersProvider } from "../../tree/providers";
 import { ReportStore } from "../../reportStore";
-import { cluster, labelText, metrics, report, storeWith, topOffenders } from "./tree.helpers";
+import { cluster, labelText, metrics, report, storeWith, topOffenders, withGroupBy } from "./tree.helpers";
 import { HIGHEST_CLUSTER_MASS, HIGH_CLUSTER_MASS, TIED_CLUSTER_MASS, MIXED_FILE_PATH, REPO_A_PATH, REPO_B_PATH, ANALYSING_PHASE, FIRST_CLUSTER_ID, SECOND_CLUSTER_ID, FIRST_FIXTURE_PATH, PAIR_COUNT, SECOND_GENERATION, CACHE_HIT_COUNT, EXPECTED_TREE_REFRESH_COUNT, MIN_VISIBLE_NODE_COUNT, LOW_CLUSTER_WEIGHT, DIRTY_OCCURRENCE_START_BYTE, DIRTY_FILE_PATH, reportOccurrence, withOccurrences } from "./tree.topOffenders.fixtures";
 
 suite("TopOffendersProvider lifecycle", () => {
+  suiteSetup(async () => {
+    await vscode.workspace
+      .getConfiguration("deslop")
+      .update("topOffenders.groupBy", "cluster", vscode.ConfigurationTarget.Global);
+  });
+
+  suiteTeardown(async () => {
+    await vscode.workspace
+      .getConfiguration("deslop")
+      .update("topOffenders.groupBy", undefined, vscode.ConfigurationTarget.Global);
+  });
+
   test("renders an Analysing… placeholder before the first report arrives", () => {
     const store = new ReportStore();
     const provider = topOffenders(store);
@@ -258,7 +270,7 @@ suite("TopOffendersProvider lifecycle", () => {
     assert.match(labelText(errorNode), /Stopped: crash/);
   });
 
-  test("retains existing clusters during re-analysis — stale > blank ([VSIX-REACTIVITY-TREE])", () => {
+  test("retains existing clusters during re-analysis — stale > blank ([VSIX-REACTIVITY-TREE])", async () => {
     const store = storeWith(
       report([
         cluster(FIRST_CLUSTER_ID, HIGHEST_CLUSTER_MASS, REPO_A_PATH),
@@ -266,12 +278,14 @@ suite("TopOffendersProvider lifecycle", () => {
       ]),
     );
     store.setLifecycle({ kind: ANALYSING_PHASE });
-    const provider = topOffenders(store);
-    const nodes = provider.getChildren();
-    assert.ok(nodes.length >= MIN_VISIBLE_NODE_COUNT, "cluster rows must remain visible during re-analysis");
-    const labels = nodes.map(labelText);
-    assert.ok(labels.some((l) => /A\.cs/i.test(l) || /c1/i.test(l)), "A.cs cluster must stay visible");
-    assert.ok(labels.some((l) => /B\.cs/i.test(l) || /c2/i.test(l)), "B.cs cluster must stay visible");
+    await withGroupBy("cluster", () => {
+      const provider = topOffenders(store);
+      const nodes = provider.getChildren();
+      assert.ok(nodes.length >= MIN_VISIBLE_NODE_COUNT, "cluster rows must remain visible during re-analysis");
+      const labels = nodes.map(labelText);
+      assert.ok(labels.some((l) => /A\.cs/i.test(l) || /c1/i.test(l)), "A.cs cluster must stay visible");
+      assert.ok(labels.some((l) => /B\.cs/i.test(l) || /c2/i.test(l)), "B.cs cluster must stay visible");
+    });
   });
 
   // [VSIX-TOP-OFFENDERS-TOOLBAR] Expand All / Collapse All rewrite the collapsible

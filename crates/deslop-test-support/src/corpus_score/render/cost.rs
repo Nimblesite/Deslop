@@ -2,9 +2,9 @@
 //! and peak memory, per engine, beside — never inside — the accuracy figures.
 
 use super::{
-    cells::{cpu, cpu_rate, megabytes, seconds, signed, signed_amount, signed_fraction},
-    engine_cells, header, measure_headers, repo_cell, row, standing_row, Scorecard, TargetScore,
-    ABSENT,
+    cells::{cpu, cpu_rate, megabytes, or_absent, seconds, signed, signed_amount, signed_fraction},
+    engine_cells, measure_headers, repo_cell, row, standing_row, table_section, Scorecard,
+    TargetScore,
 };
 use crate::{
     corpus_measure::CPU_SAMPLE_WINDOW,
@@ -23,20 +23,12 @@ type CostRow = (
 const COST_ROWS: [CostRow; 5] = [
     (
         "clusters",
-        |totals| {
-            totals
-                .clusters_total
-                .map_or_else(|| ABSENT.to_owned(), |count| count.to_string())
-        },
-        |moved| {
-            moved
-                .clusters_total
-                .map_or_else(|| ABSENT.to_owned(), signed)
-        },
+        |totals| or_absent(totals.clusters_total, |count| count.to_string()),
+        |moved| or_absent(moved.clusters_total, signed),
     ),
     (
         "wall",
-        |totals| totals.elapsed_ms.map_or_else(|| ABSENT.to_owned(), seconds),
+        |totals| or_absent(totals.elapsed_ms, seconds),
         |moved| signed_amount(moved.elapsed_ms, "ms"),
     ),
     (
@@ -91,16 +83,8 @@ pub(super) fn cost_section(card: &Scorecard) -> Vec<String> {
     for (measure, _, _) in COST_ROWS {
         columns.extend(measure_headers(card, measure));
     }
-    let mut lines = vec![
-        "## Per repository — cost".to_owned(),
-        String::new(),
-        cost_intro(),
-        String::new(),
-    ];
-    lines.extend(header(&columns));
-    lines.extend(card.targets.iter().map(|target| cost_row(card, target)));
-    lines.push(String::new());
-    lines
+    let rows = card.targets.iter().map(|target| cost_row(card, target));
+    table_section("## Per repository — cost", &cost_intro(), &columns, rows)
 }
 
 /// What each cost column means, stated above the table.

@@ -27,35 +27,18 @@ Recent research supports that risk model:
 
 ## Clone taxonomy
 
-Deslop follows the standard clone taxonomy used throughout the code-clone literature:
+Type I describes exact copies apart from layout and comments; Type II allows renaming and changed literals; Type III includes edited statements; Type IV describes equivalent behaviour implemented differently. Deslop's current labels and stricter text-identity rule are explained in [How It Works](/docs/how-it-works/#read-the-categories). Shape-only findings are outside this taxonomy and do not count as duplication.
 
-| Clone class | Meaning | Deslop signal |
-| --- | --- | --- |
-| Type-1 | Exact copied text except layout or comments | Structural hash after parsing and normalization |
-| Type-2 | Same structure with renamed identifiers or changed literals | Structural hash after identifier/literal collapse |
-| Type-3 | Near-miss clone with inserted, deleted, or changed statements | Sibling-window fingerprints and token MinHash LSH |
-| Type-4 | Similar behavior with different syntax or structure | Optional embedding cosine similarity |
+## Implementation
 
-The public report buckets are implemented in `crates/deslop-core/src/buckets.rs`. The code maps signal triples to five wire labels: `identical`, `nearly_identical`, `structural_only`, `loosely_similar`, and `same_behavior`. The `structural_only` bucket marks clusters whose only positive evidence is the normalized AST shape; they are weight-demoted in the ranking by default. The `same_behavior` bucket is only reachable when the embedding signal is strong enough.
+- Tree-sitter parsing and normalization identify structural candidates: `crates/deslop-core/src/lang/`.
+- Subtree and sibling-run fingerprints locate repeated code: `fingerprint.rs` and `sibling.rs`.
+- MinHash and LSH retrieve near-miss candidates: `lsh.rs`, `lsh/banding.rs` and `tokens.rs`.
+- Optional embeddings add semantic candidates: `embedding/`.
+- Pair admission checks content as well as structure: `pair/content_gate.rs`. Explicit comparisons expose pair evidence; clusters do not inherit one pair's confidence.
+- Reports rank surviving clones by duplicated mass: `report_weight.rs`. Percentage calculations live in `report_metrics.rs`.
 
-## Algorithm foundations
-
-Each row links a research line to the shipped implementation it influenced.
-
-| Research line | What Deslop takes from it | Status & implementation pointer |
-| --- | --- | --- |
-| [Baxter et al. 1998 — AST clone detection](https://ieeexplore.ieee.org/document/738528) | Parse code into syntax trees, normalize irrelevant spelling, and compare tree structure rather than raw text. | ✅ `crates/deslop-core/src/lang/shared.rs`, `lang/csharp.rs`, `lang/rust_lang.rs`, `lang/python.rs`, `lang/dart.rs` (registered through `pipeline/corpus.rs::default_parsers`) |
-| Chilowicz et al. 2009 — syntax-tree fingerprinting | Hash subtrees so exact structural clones become equal fingerprints; extend coverage with sibling sequences for near-miss clones. | ✅ Bottom-up BLAKE3 Merkle in `crates/deslop-core/src/fingerprint.rs::collect_non_boilerplate_fingerprints` and width-2..8 sibling windows in `crates/deslop-core/src/sibling.rs::collect_non_boilerplate_sibling_fingerprints` |
-| [SourcererCC (Sajnani et al. 2016)](https://arxiv.org/abs/1512.06448) | Token k-grams and Jaccard similarity for scalable near-miss detection. | ✅ Adapted to **normalized AST-kind k-grams** rather than raw source tokens: `crates/deslop-core/src/tokens.rs`, `crates/deslop-core/src/pipeline/signatures.rs` |
-| [MinHash (Broder 1997)](https://ieeexplore.ieee.org/document/666900) | Estimates Jaccard from compact signatures. | ✅ 128-value signatures in `crates/deslop-core/src/lsh.rs::minhash_signature`; Jaccard estimated by `estimate_jaccard` |
-| LSH banding (Indyk & Motwani 1998) | Bucket similar fingerprints in sub-linear time. | ✅ 32 bands × 4 rows in `crates/deslop-core/src/lsh.rs::band_collisions` |
-| In Defense of MinHash Over SimHash (Shrivastava & Li 2014) | Use MinHash, not SimHash, for binarized features. | ✅ MinHash chosen; SimHash and Winnowing not used |
-| Neural semantic clone detection (CodeBERT, GraphCodeBERT, UniXCoder) | Use embeddings as a recall layer for Type-4 clones. | ✅ `EmbeddingProvider` trait in `crates/deslop-core/src/embedding/provider.rs`; Ollama provider in `embedding/ollama.rs`; default model `nomic-embed-text` |
-| [SSCD (Ahmed et al., Wiley 2024) — BERT + ANN at scale](https://onlinelibrary.wiley.com/doi/full/10.1002/spe.3355) | HNSW ANN over BERT-style embeddings as the Type-3/4 recall path. | ✅ `instant-distance` HNSW with deterministic seed, top-k retrieval, cosine threshold 0.80: `crates/deslop-core/src/embedding/pairs.rs` |
-| [Ensemble-LLM 2025 (arXiv 2510.15480) — max/sum fusion](https://arxiv.org/abs/2510.15480) | Strong signals should not be diluted by averaging. | ✅ Candidate admission uses the bounded maximum of structural, token, and embedding signals in `crates/deslop-core/src/pair.rs::PairScore::bounded_fused`. Report rendering then applies a content-evidence gate to saturated, non-identical structural matches in `crates/deslop-core/src/buckets/gate.rs::content_gated_signals`. |
-| Hybrid clone detection (no pure-RAG paper recommends pure embeddings) | Union structural + token + embedding pairs, fuse, cluster. | ✅ `crates/deslop-core/src/pair.rs::candidate_pairs`, transitive closure in `crates/deslop-core/src/cluster.rs` |
-| Boilerplate filtering (mature-tool convention) | Drop import / namespace / decorator clones before fingerprinting; re-surface as low-noise hints. | ✅ `crates/deslop-core/src/boilerplate.rs` and `report_boilerplate.rs` |
-| Autofix `refactor.extract` (LSP code action) | Rewrite Type-1 clusters into a single shared method. | ✅ Shipped — spec in [`docs/specs/autofix-extract.md`](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/autofix-extract.md) |
+These are detection techniques, not proofs of safe refactoring. The [accuracy documentation](/docs/accuracy-transparency/) explains the independent checks.
 
 ## References
 

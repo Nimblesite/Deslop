@@ -9,7 +9,6 @@ import { INCOMPLETE, MISCITED, VERDICTS } from "./pass.mjs";
 
 /// Labels for the disagreements that are not simply two verdicts differing.
 /// Each names the comparison that produced the row, never a diagnosis of it.
-const MISCITED_KIND = MISCITED;
 const REGISTER_KIND = "register_conflict";
 const DUPLICATE_KIND = "duplicate_pair";
 /// Separates the two verdicts of a split, and the parts of a multi-value cell.
@@ -17,6 +16,9 @@ const DUPLICATE_KIND = "duplicate_pair";
 /// one silently splits the cell it is in.
 const VERSUS = "/";
 const WITHIN_CELL = "<br>";
+
+/// How a source that named no clone type reads in a by-source cell.
+const BLANK_TYPE = "blank";
 
 /// Markdown cell text: a table breaks on an unescaped pipe or a line feed, and
 /// judges write both.
@@ -45,7 +47,7 @@ const rowsFor = (repo) => [
     .map((entry) => ({
       repository: repo.name,
       candidate: String(entry.candidate),
-      kind: MISCITED_KIND,
+      kind: entry.kind,
       occurrences: entry.shown,
       verdicts: [`${entry.judge} filed=${entry.filed.join(", ")}`],
       reasons: [],
@@ -93,6 +95,24 @@ const allRows = (repos) =>
         left.candidate.localeCompare(right.candidate, undefined, { numeric: true }),
     );
 
+/// [CORPUS-REGISTER-TYPE] Every CLEARLY IN filed without a type because its
+/// sources did not all give the same one, in a fixed order.
+const untypedRows = (repos) =>
+  repos
+    .flatMap((repo) =>
+      repo.result.untyped.map((entry) => ({
+        repository: repo.name,
+        candidate: String(entry.candidate),
+        occurrences: entry.occurrences,
+        votes: entry.votes.map((vote) => `${vote.source}=${cell(vote.type || BLANK_TYPE)}`),
+      })),
+    )
+    .sort(
+      (left, right) =>
+        left.repository.localeCompare(right.repository) ||
+        left.candidate.localeCompare(right.candidate, undefined, { numeric: true }),
+    );
+
 /// A markdown table of rows already reduced to strings.
 const table = (headers, rows) =>
   rows.length === 0
@@ -122,6 +142,7 @@ const tally = (rows, field) => {
 /// The whole report.
 export const render = ({ sources, repos }) => {
   const rows = allRows(repos);
+  const untyped = untypedRows(repos);
   const judges = sources.map((source) => source.split("/").filter(Boolean).pop());
   return `# Verdict disagreements
 
@@ -133,6 +154,7 @@ export const render = ({ sources, repos }) => {
 | repositories | ${repos.length} |
 | pairs_imported | ${importedCount(repos)} |
 | pairs_left_out | ${rows.length} |
+| types_unspecified | ${untyped.length} |
 
 ## by_kind
 
@@ -155,5 +177,11 @@ ${table(
     pairs(row.verdicts),
     pairs(row.reasons),
   ]),
+)}
+## types_left_unspecified
+
+${table(
+  ["repository", "candidate", "candidate_occurrences", "by_source"],
+  untyped.map((row) => [row.repository, row.candidate, ranges(row.occurrences), pairs(row.votes)]),
 )}`;
 };

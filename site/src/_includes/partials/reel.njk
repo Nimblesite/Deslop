@@ -1,0 +1,49 @@
+{# [SITE-HOME-VIDEO] [SITE-ASSET-TYPE] Shared JavaScript motion reel that opens the homepage with what Deslop does; encoded video is never shipped. #}
+{% set currentLang = lang | default('en') %}
+{% macro cue(scene, index, from) %}{{ (from + index * scene.step) | round(2) }}{% endmacro %}
+{% macro codeLines(lines) %}{% for line in lines %}<span class="motion-reel__line" style="--indent: {{ line.indent }}">{% for width in line.tokens %}<i style="--width: {{ width }}%"></i>{% endfor %}</span>{% endfor %}{% endmacro %}
+<link rel="stylesheet" href="/assets/css/reel.css">
+<figure class="motion-reel" id="deslop-reel" aria-label="{{ 'reel.label' | t(currentLang) }}" data-duration="{{ reel.seconds }}" data-opening="{{ reel.opening }}" data-position="{{ reel.opening }}">
+  <div class="motion-reel__stage">
+    {% for scene in reel.scenes %}
+    <div class="motion-reel__scene" data-scene="{{ scene.id }}" data-start="{{ scene.start }}" data-end="{{ scene.end }}" aria-hidden="{{ 'false' if loop.first else 'true' }}">
+      {% if scene.id == 'brand' %}
+      <p class="motion-reel__wordmark"><img src="/assets/img/logo.svg" alt="" width="512" height="512">Deslop</p>
+      <p class="motion-reel__headline" data-cue="{{ scene.cue }}">{{ 'reel.brand' | t(currentLang) }}</p>
+      {% else %}
+      <p class="motion-reel__headline">{{ ('reel.' + scene.id) | t(currentLang) }}</p>
+      {% endif %}
+      {% if scene.id == 'find' %}
+      <div class="motion-reel__panes" aria-hidden="true">
+        {% for pane in reel.code.panes %}
+        <div class="motion-reel__pane" data-cue="{{ cue(scene, loop.index0, scene.cue) }}">
+          {{ codeLines(pane.before) }}<span class="motion-reel__copy">{{ codeLines(reel.code.copy) }}<b data-cue="{{ cue(scene, loop.index0, scene.mark) }}" data-effect="fade"></b></span>{{ codeLines(pane.after) }}
+        </div>
+        {% endfor %}
+      </div>
+      {% elif scene.id == 'languages' %}
+      <ul class="motion-reel__languages">
+        {% for language in reel.languages %}<li data-cue="{{ cue(scene, loop.index0, scene.cue) }}">{{ language }}</li>{% endfor %}
+      </ul>
+      {% elif scene.id == 'rank' %}
+      <ol class="motion-reel__ranks" aria-hidden="true">
+        {% for width in reel.ranks %}<li><span>{{ loop.index }}</span><span><i data-cue="{{ cue(scene, loop.index0, scene.cue) }}" data-effect="grow" style="--width: {{ width }}%"></i></span></li>{% endfor %}
+      </ol>
+      {% elif scene.id == 'agents' %}
+      <div class="motion-reel__chat">
+        {% for message in reel.chat %}
+        <p data-cue="{{ cue(scene, loop.index0, scene.cue) }}"><span>{{ message.speaker | t(currentLang) }}</span> {{ message.line | t(currentLang) }}</p>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+    <div class="motion-reel__controls" hidden>
+      <button type="button" class="motion-reel__toggle" data-action="play" aria-label="{{ 'reel.play' | t(currentLang) }}" data-play-label="{{ 'reel.play' | t(currentLang) }}" data-pause-label="{{ 'reel.pause' | t(currentLang) }}">
+        <svg class="motion-reel__play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+        <svg class="motion-reel__pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zm6.5 0H17v14h-3.5z"/></svg>
+      </button>
+    </div>
+  </div>
+</figure>
+<script type="module" src="/assets/js/reel.js"></script>

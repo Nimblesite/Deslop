@@ -166,6 +166,7 @@ async fn notify_if_changed(backend: &LspBackend, delta: &deslop_core::ReportDelt
         .send_notification::<ReportChangedLspNotification>(ReportChangedNotification {
             generation: delta.to_generation,
             summary: ChangeSummary::from_delta(delta),
+            analysed_buffer: None,
         })
         .await;
 }

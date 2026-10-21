@@ -52,7 +52,7 @@ GitClear 的 [2025 年 AI Copilot 代码质量研究](https://www.gitclear.com/a
 3. **近似重复代码** —— 逻辑大体相同，但有语句被插入、删除或重新排序：同一个表单校验多了一个分支。
 4. **行为相同、代码不同** —— 两个 widget 或函数用不同的语法解决同一个问题（一个 `for` 循环对比一个 `map().toList()`）。
 
-经典的克隆检测研究把这些称为 Type-1 到 Type-4。Deslop 的实现与研究参考见[研究背景](/zh/docs/research-background/)。
+克隆检测研究将这些称为 Type I 到 Type IV。Deslop 当前标签，以及克隆与仅形状参考信息的区别，见[工作原理](/zh/docs/how-it-works/)。
 
 ## 为什么对 Dart 而言行匹配不够
 

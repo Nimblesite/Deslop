@@ -69,12 +69,14 @@ export function occurrenceCount(cluster: ReportCluster): number {
 // every consumer. The generated source is gitignored; `make
 // typediagram-gen` (chained into `make vsix-build`) regenerates it.
 export type {
+  AnalysedBuffer,
   AnalysisState,
   ChangeSummary,
   EmbeddingModelInfo,
   EmbeddingPhase,
   EmbeddingProgress,
   FileMetric,
+  KindMetric,
   PairClassification,
   PairComparison,
   PairComparisonParams,
@@ -166,8 +168,8 @@ export function clusterMass(cluster: ReportCluster): number {
 export const CLUSTER_KINDS: readonly ClusterKind[] = [
   "identical",
   "nearly_identical",
-  "same_behavior",
   "loosely_similar",
+  "same_behavior",
   "structural_only",
 ] as const;
 
@@ -201,6 +203,61 @@ export function kindTaxonomy(kind: ClusterKind): string {
 /** [VSIX-CLONE-TYPE-CHIP] Compact label shared by cluster and pair surfaces. */
 export function kindChip(kind: ClusterKind): string {
   return KIND_LABELS[kind].chip;
+}
+
+/** [METRICS-TOTAL-INCLUDE] True when a clone kind is excluded from the
+ * server's include set. An absent set claims nothing — reports written
+ * before the field existed keep every kind eligible. Shape-only is
+ * never excluded: it was never a candidate ([CLONE-BUCKETS-STRUCTURAL-ONLY]). */
+export function isKindExcluded(
+  kind: ClusterKind,
+  totalIncludes: readonly ClusterKind[] | undefined,
+): boolean {
+  if (totalIncludes === undefined) return false;
+  return kind !== "structural_only" && !totalIncludes.includes(kind);
+}
+
+/** [METRICS-TOTAL-INCLUDE] The kinds the headline counts, as one
+ * human caption — the webview duplication panel prints it beside the
+ * score so the number is never mistaken for every relation found.
+ * Empty when the wire carries no include set: no claim, no caption. */
+export function totalCountsCaption(totalIncludes: readonly ClusterKind[] | undefined): string {
+  if (!totalIncludes) return "";
+  if (totalIncludes.length === 0) return NO_CLONE_KINDS_LABEL;
+  const cloneKinds = CLUSTER_KINDS.filter((kind) => kind !== "structural_only");
+  if (cloneKinds.every((kind) => totalIncludes.includes(kind))) return ALL_CLONE_KINDS_LABEL;
+  return totalIncludes.map(kindTitle).join(", ");
+}
+
+/** One entry of the report webview's kind filter ([FACET-REPORT-WEBVIEW]). */
+export interface KindFilterOption {
+  label: string;
+  value: ClusterKind | null;
+  excluded: boolean;
+}
+
+const ALL_CLONE_KINDS_LABEL = "All clone kinds";
+const NO_CLONE_KINDS_LABEL = "No clone kinds";
+const EXCLUDED_FILTER_MARKER = "(excluded from total)";
+
+/** [FACET-REPORT-WEBVIEW] The kind axis's option list, shared by every
+ * filter surface: All first, then the kinds in category display order,
+ * excluded kinds marked in the label so the filter greys what the total
+ * ignores without hiding it. */
+export function kindFilterOptions(
+  totalIncludes: readonly ClusterKind[] | undefined,
+): KindFilterOption[] {
+  return [
+    { label: ALL_CLONE_KINDS_LABEL, value: null, excluded: false },
+    ...CLUSTER_KINDS.map((kind) => {
+      const excluded = isKindExcluded(kind, totalIncludes);
+      return {
+        label: excluded ? `${kindTitle(kind)} ${EXCLUDED_FILTER_MARKER}` : kindTitle(kind),
+        value: kind,
+        excluded,
+      };
+    }),
+  ];
 }
 
 // [FACET-TOP-OFFENDERS-FILTER] Every listing shares this diagnostic filter.

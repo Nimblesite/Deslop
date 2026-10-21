@@ -29,6 +29,8 @@ const JUDGING_QUEUE: &str = "corpus/judging-queue.json";
 const REGISTER_DIR: &str = "corpus/register";
 const QUEUED_REPOSITORIES: &str = "repositories";
 const NAME: &str = "name";
+/// The verdict whose presence means a register no longer waits in the queue.
+const CLEARLY_IN: &str = "clearly_in";
 /// The pin field, and its length as a full git object name.
 const SHA: &str = "sha";
 const COMMIT_ID_LENGTH: usize = 40;
@@ -170,16 +172,29 @@ fn every_queued_repository_is_pinned_to_a_full_commit_id() -> Result<()> {
     Ok(())
 }
 
+/// [CORPUS-REGISTER-QUEUE] A register that already finds a clone has left the
+/// queue; one judged with no agreed CLEARLY IN yet stays for another pass.
 #[test]
-fn a_queued_repository_has_no_register_yet() -> Result<()> {
+fn a_queued_repository_has_no_register_that_finds_a_clone_yet() -> Result<()> {
     let root = repo_root();
     for (name, _) in queued()? {
-        let register = root.join(REGISTER_DIR).join(format!("{name}.json"));
-        assert!(
-            !register.exists(),
-            "{name} is queued for a first judging pass and already has {}. A queue that never \
-             drains scans the same repository twice and buys nothing",
-            register.display()
+        let path = root
+            .join(REGISTER_DIR)
+            .join(format!("{}.json", name.to_lowercase()));
+        if !path.exists() {
+            continue;
+        }
+        let register: Value = read_json(&path)?;
+        let clearly_in = register
+            .get(CLEARLY_IN)
+            .and_then(Value::as_array)
+            .map_or(0, Vec::len);
+        assert_eq!(
+            clearly_in,
+            0,
+            "{name} is queued and {} already holds a CLEARLY IN. A queue that never drains \
+             scans the same repository twice and buys nothing",
+            path.display()
         );
     }
     Ok(())

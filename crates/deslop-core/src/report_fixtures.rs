@@ -15,6 +15,7 @@
 use crate::{
     buckets::ClusterKind,
     cluster::ClusterKindJudge,
+    fingerprint::Fingerprint,
     report::{CacheStats, Report, ReportCluster, ReportOccurrence},
     report_metrics::RepoMetrics,
 };
@@ -30,6 +31,10 @@ pub struct UniformKind(pub ClusterKind);
 
 impl ClusterKindJudge for UniformKind {
     fn kind(&self, _members: &[usize]) -> Option<ClusterKind> {
+        Some(self.0)
+    }
+
+    fn span_kind(&self, _left: &Fingerprint, _right: &Fingerprint) -> Option<ClusterKind> {
         Some(self.0)
     }
 }

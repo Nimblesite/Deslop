@@ -1,144 +1,14 @@
-//! [CORPUS-SCORE] The thresholds a scored run is held to, and the totals
-//! across every scored repository.
+//! [CORPUS-SCORE] How two engines' standings compare, and the totals across
+//! every scored repository.
 //!
-//! Thresholds are configuration, never constants buried in code: the defaults
-//! below are the strict answer (a judged repository must be perfect), and
-//! `corpus/register/score-thresholds.json` records every place the engine is
-//! not yet there, with the reason. An entry in that file is an admission that a
-//! defect shipped — the same ratchet as `corpus/known-failures.json`. Loosening
-//! one to make a run pass is prohibited; the only correct exit is fixing the
-//! engine and tightening the number.
+//! What a run is held to lives in [`super::outcomes`]: every judged pair is
+//! held to its own recorded outcome ([CORPUS-SCORE-OUTCOMES]).
 
 use std::collections::BTreeMap;
 
-use anyhow::Result;
 use serde::Serialize;
-use serde_json::Value;
 
-use super::{percent, RangeCoverage, RepoScore, CLEARLY_IN, DEFAULT_MAXIMUM_DEFECTS};
-
-/// Where the gate reads its thresholds.
-pub const THRESHOLDS_PATH: &str = "corpus/register/score-thresholds.json";
-
-/// The gate for one repository, stated only in absolute defect counts.
-///
-/// A percentage threshold is deliberately absent. The score is
-/// `100 * (judged - false negatives - false positives) / judged`, so a minimum
-/// percentage is a defect allowance divided by the register size: the identical
-/// number permits proportionally more defects every time the register grows,
-/// loosening the gate with nobody editing it. Counts mean the same thing at
-/// every register size, and `false positives = 0` with `false negatives = 0` is
-/// already exactly a demand for a perfect score.
-#[derive(Debug, Clone, Copy, Serialize)]
-pub struct Thresholds {
-    /// Most false positives tolerated. Every one is a tracked defect.
-    pub maximum_false_positives: usize,
-    /// Most false negatives tolerated. Every one is a tracked defect.
-    pub maximum_false_negatives: usize,
-}
-
-impl Default for Thresholds {
-    fn default() -> Self {
-        Self {
-            maximum_false_positives: DEFAULT_MAXIMUM_DEFECTS,
-            maximum_false_negatives: DEFAULT_MAXIMUM_DEFECTS,
-        }
-    }
-}
-
-/// A count threshold, falling back when the field is absent or out of range.
-fn count_field(entry: &Value, name: &str, fallback: usize) -> usize {
-    entry
-        .get(name)
-        .and_then(Value::as_u64)
-        .and_then(|value| usize::try_from(value).ok())
-        .unwrap_or(fallback)
-}
-
-impl Thresholds {
-    /// Reads one repository's thresholds out of a parsed config document,
-    /// falling back to the defaults field by field.
-    #[must_use]
-    pub fn for_repo(config: &Value, repo: &str) -> Self {
-        let defaults = Self::read(
-            config.get("defaults").unwrap_or(&Value::Null),
-            Self::default(),
-        );
-        let scoped = config.get("repos").and_then(|repos| repos.get(repo));
-        scoped.map_or(defaults, |entry| Self::read(entry, defaults))
-    }
-
-    /// Reads one threshold set, taking every absent field from `fallback`.
-    fn read(entry: &Value, fallback: Self) -> Self {
-        let count = |name, fallback| count_field(entry, name, fallback);
-        Self {
-            maximum_false_positives: count(
-                "maximum_false_positives",
-                fallback.maximum_false_positives,
-            ),
-            maximum_false_negatives: count(
-                "maximum_false_negatives",
-                fallback.maximum_false_negatives,
-            ),
-        }
-    }
-}
-
-/// Loads the thresholds config, or an empty document when none exists.
-///
-/// # Errors
-///
-/// Returns an error when the file exists but is not valid JSON — a malformed
-/// gate must fail the run rather than silently fall back to the defaults.
-pub fn load_thresholds(repo_root: &std::path::Path) -> Result<Value> {
-    let path = repo_root.join(THRESHOLDS_PATH);
-    if !path.exists() {
-        return Ok(Value::Null);
-    }
-    crate::read_json(&path)
-}
-
-/// One breached threshold, stated so the message names the fix.
-#[derive(Debug, Clone, Serialize)]
-pub struct Breach {
-    /// Repository whose gate was breached.
-    pub repo: String,
-    /// Which threshold it was.
-    pub measure: String,
-    /// What the gate allows, and what the run actually recorded.
-    pub allowed: String,
-    /// See [`Self::allowed`].
-    pub actual: String,
-}
-
-/// Every threshold this repository's score breaches.
-#[must_use]
-pub fn breaches(score: &RepoScore, thresholds: &Thresholds) -> Vec<Breach> {
-    let mut found = Vec::new();
-    let mut breach = |measure: &str, allowed: String, actual: String| {
-        found.push(Breach {
-            repo: score.name.clone(),
-            measure: measure.to_owned(),
-            allowed,
-            actual,
-        });
-    };
-    if score.false_negatives > thresholds.maximum_false_negatives {
-        breach(
-            "false negatives",
-            format!("at most {}", thresholds.maximum_false_negatives),
-            score.false_negatives.to_string(),
-        );
-    }
-    if score.false_positives > thresholds.maximum_false_positives {
-        breach(
-            "false positives",
-            format!("at most {}", thresholds.maximum_false_positives),
-            score.false_positives.to_string(),
-        );
-    }
-    found
-}
+use super::{percent, RangeCoverage, RepoScore, CLEARLY_IN};
 
 /// Whether one engine lost ground against another on the same register.
 ///
@@ -361,6 +231,14 @@ fn moved_measured(before: Option<f64>, after: Option<f64>) -> Option<f64> {
     before.zip(after).map(|(before, after)| after - before)
 }
 
+/// The signed difference between two counts, or nothing when either side went
+/// uncounted — an unmeasured run must never read as no change.
+fn moved_counted<T: TryInto<i64>>(before: Option<T>, after: Option<T>) -> Option<i64> {
+    before
+        .zip(after)
+        .map(|(before, after)| moved(before, after))
+}
+
 /// Compares two engines' corpus standing, measure by measure.
 #[must_use]
 pub fn corpus_change(before: &CorpusTotals, after: &CorpusTotals) -> CorpusChange {
@@ -369,19 +247,10 @@ pub fn corpus_change(before: &CorpusTotals, after: &CorpusTotals) -> CorpusChang
         correct: moved(before.correct, after.correct),
         false_negatives: moved(before.false_negatives, after.false_negatives),
         false_positives: moved(before.false_positives, after.false_positives),
-        clusters_total: before
-            .clusters_total
-            .zip(after.clusters_total)
-            .map(|(before, after)| moved(before, after)),
-        elapsed_ms: before
-            .elapsed_ms
-            .zip(after.elapsed_ms)
-            .map(|(before, after)| moved(before, after)),
+        clusters_total: moved_counted(before.clusters_total, after.clusters_total),
+        elapsed_ms: moved_counted(before.elapsed_ms, after.elapsed_ms),
         cpu_seconds: moved_measured(before.cpu_seconds, after.cpu_seconds),
         peak_cpu_percent: moved_measured(before.peak_cpu_percent, after.peak_cpu_percent),
-        peak_rss_mb: before
-            .peak_rss_mb
-            .zip(after.peak_rss_mb)
-            .map(|(before, after)| moved(before, after)),
+        peak_rss_mb: moved_counted(before.peak_rss_mb, after.peak_rss_mb),
     }
 }

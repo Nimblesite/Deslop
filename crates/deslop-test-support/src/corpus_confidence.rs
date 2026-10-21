@@ -1,9 +1,11 @@
 //! Corpus assertions for mass-only cluster reports.
 
+use deslop_core::buckets::ClusterKind;
 use serde_json::Value;
 
 use crate::corpus::{
-    cluster_shows_span, field_u64, reports_clone_spanning, visible_clusters, Failure,
+    cluster_shows_span, field_u64, reports_clone_spanning, visible_clone_clusters,
+    visible_clusters, Failure,
 };
 
 /// Canonical extent field on a mass-only cluster.
@@ -16,6 +18,20 @@ const OCCURRENCES_TOTAL: &str = "occurrences_total";
 const MASS: &str = "mass";
 /// Engine-stamped global order field.
 const RANK: &str = "rank";
+/// Classification whose ownership determines mass and ranking.
+const CLUSTER_KIND: &str = "kind";
+/// Informational records carry no duplicate quantity.
+const INFORMATIONAL_QUANTITY: u64 = 0;
+/// A family requires two carried occurrences, including hidden copies.
+const MIN_CARRIED_OCCURRENCES: u64 = 2;
+/// A canonical occurrence is not an additional copy.
+const CANONICAL_OCCURRENCE: u64 = 1;
+/// Reports number their positions from one.
+const FIRST_POSITION: usize = 1;
+/// Contract check identifiers shared by diagnostics and their assertions.
+const MASS_CHECK: &str = "cluster_mass";
+/// Engine-stamped rank contract identifier.
+const RANK_CHECK: &str = "cluster_rank";
 /// Curated manifest extent floor.
 const CURATED_EXTENT_FIELD: &str = "min_nodes";
 /// Fields forbidden because they belong to pairs or retired presentation policy.
@@ -72,29 +88,74 @@ fn check_forbidden_fields(cluster: &Value, index: usize, failures: &mut Vec<Fail
 /// publish. Such a cluster carries mass 0 by the same equation, which is
 /// what sinks it to the bottom of the ranking.
 fn check_mass(cluster: &Value, index: usize, failures: &mut Vec<Failure>) {
-    let nodes = field_u64(cluster, CANONICAL_NODE_COUNT);
-    let occurrences = field_u64(cluster, OCCURRENCE_COUNT);
     let carried = field_u64(cluster, OCCURRENCES_TOTAL);
-    let expected = nodes.saturating_mul(occurrences.saturating_sub(1));
+    let expected = expected_mass(cluster);
     let actual = field_u64(cluster, MASS);
-    if carried < 2 || actual != expected {
+    if carried < MIN_CARRIED_OCCURRENCES || actual != expected {
         failures.push(Failure::new(
-            "cluster_mass",
-            format!("cluster {} has mass {actual} with {carried} carried and {occurrences} visible occurrences; expected {nodes} × max({occurrences} - 1, 0) = {expected} from at least 2 carried", index.saturating_add(1)),
+            MASS_CHECK,
+            mass_detail(cluster, index, expected),
         ));
     }
 }
 
+/// [RANK-MASS-SUM] Only clones carry duplicated AST mass.
+fn expected_mass(cluster: &Value) -> u64 {
+    if is_informational(cluster) {
+        return INFORMATIONAL_QUANTITY;
+    }
+    field_u64(cluster, CANONICAL_NODE_COUNT)
+        .saturating_mul(field_u64(cluster, OCCURRENCE_COUNT).saturating_sub(CANONICAL_OCCURRENCE))
+}
+
+/// The printed equation follows the record's actual clone eligibility.
+fn mass_expectation(cluster: &Value, expected: u64) -> String {
+    if is_informational(cluster) {
+        return format!("zero duplicate mass ({expected}) for informational findings");
+    }
+    format!(
+        "{} × max({} - {CANONICAL_OCCURRENCE}, 0) = {expected}",
+        field_u64(cluster, CANONICAL_NODE_COUNT),
+        field_u64(cluster, OCCURRENCE_COUNT)
+    )
+}
+
+/// Mass diagnostics explain both visible and carried counts without attributing mass to information.
+fn mass_detail(cluster: &Value, index: usize, expected: u64) -> String {
+    let position = index.saturating_add(FIRST_POSITION);
+    let actual = field_u64(cluster, MASS);
+    let carried = field_u64(cluster, OCCURRENCES_TOTAL);
+    let occurrences = field_u64(cluster, OCCURRENCE_COUNT);
+    let equation = mass_expectation(cluster, expected);
+    format!("cluster {position} has mass {actual} with {carried} carried and {occurrences} visible occurrences; expected {equation} from at least {MIN_CARRIED_OCCURRENCES} carried")
+}
+
 /// Enforces one-based report order on the engine-stamped rank.
 fn check_rank(cluster: &Value, index: usize, failures: &mut Vec<Failure>) {
-    let expected = u64::try_from(index.saturating_add(1)).unwrap_or(u64::MAX);
+    let expected = if is_informational(cluster) {
+        INFORMATIONAL_QUANTITY
+    } else {
+        u64::try_from(index.saturating_add(FIRST_POSITION)).unwrap_or(u64::MAX)
+    };
     let actual = field_u64(cluster, RANK);
     if actual != expected {
         failures.push(Failure::new(
-            "cluster_rank",
-            format!("cluster at position {expected} carries rank {actual}"),
+            RANK_CHECK,
+            format!(
+                "cluster at position {} carries rank {actual}; expected {expected}",
+                index.saturating_add(FIRST_POSITION)
+            ),
         ));
     }
+}
+
+/// [RANK-STRUCTURAL-ONLY] Informational families are outside clone mass and ranking.
+fn is_informational(cluster: &Value) -> bool {
+    cluster
+        .get(CLUSTER_KIND)
+        .and_then(Value::as_str)
+        .and_then(ClusterKind::from_wire_label)
+        == Some(ClusterKind::StructuralOnly)
 }
 
 /// Verifies every curated exact-copy family is visible and within its rank ceiling.
@@ -125,7 +186,7 @@ pub fn check_type2_curated_recall(manifest: &Value, report: &Value, failures: &m
 fn check_one_curated_clone(entry: &Value, report: &Value, failures: &mut Vec<Failure>) {
     let files = curated_files(entry);
     let why = entry.get("why").and_then(Value::as_str).unwrap_or("");
-    let Some((rank, _)) = visible_clusters(report)
+    let Some((rank, _)) = visible_clone_clusters(report)
         .into_iter()
         .enumerate()
         .find(|(_, cluster)| cluster_shows_span(cluster, &files))
@@ -154,15 +215,20 @@ fn check_one_curated_type2(entry: &Value, report: &Value, failures: &mut Vec<Fai
         ));
         return;
     }
-    let widest = visible_clusters(report)
-        .into_iter()
-        .filter(|cluster| cluster_shows_span(cluster, &files))
-        .map(|cluster| field_u64(cluster, CANONICAL_NODE_COUNT))
-        .max()
-        .unwrap_or_default();
+    let widest = widest_curated_clone(report, &files);
     if widest < min_nodes {
         failures.push(Failure::new("type2_recall", format!("widest cluster spanning {files:?} has {widest} canonical nodes; expected at least {min_nodes}. Hand-verified Type-2 rename: {why}")));
     }
+}
+
+/// Only published clones can establish a curated family's extent.
+fn widest_curated_clone(report: &Value, files: &[String]) -> u64 {
+    visible_clone_clusters(report)
+        .into_iter()
+        .filter(|cluster| cluster_shows_span(cluster, files))
+        .map(|cluster| field_u64(cluster, CANONICAL_NODE_COUNT))
+        .max()
+        .unwrap_or_default()
 }
 
 /// Applies an optional curated maximum rank.

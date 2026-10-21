@@ -29,20 +29,28 @@ pub use builtin::DEFAULT_MAX_AVERAGE_LINE_BYTES;
 use builtin::{built_in_report_hidden, corpus_built_in_excluded, is_minified_artifact};
 pub(crate) use generated_banner::opens_with_generated_banner;
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
+pub use paths::{is_config_path, watched_config_paths};
 use ranking::resolve_ranking_policy;
 pub use ranking::{
     ClonePolicy, RankingPolicy, DEFAULT_DATA_CLONE_WEIGHT, DEFAULT_STRUCTURAL_ONLY_WEIGHT,
 };
-use raw::{resolve_threshold, PersistedProcessing, RawConfig};
+use raw::{
+    resolve_kind_thresholds, resolve_threshold, resolve_total_include, PersistedProcessing,
+    RawConfig,
+};
 use serde::Deserialize;
 
 use crate::{
+    buckets::{ClusterKind, TotalInclude},
     error::CoreError,
     report_metrics::{ThresholdSource, ThresholdSummary},
 };
 
 mod builtin;
 mod generated_banner;
+mod kind_thresholds;
+pub use kind_thresholds::KindThresholds;
+mod paths;
 mod ranking;
 mod raw;
 mod tuning;
@@ -93,6 +101,11 @@ pub struct ExclusionConfig {
     /// max_duplication_percent` per [EXIT-CODES]. `None` means the
     /// config file did not opt in.
     fail_over_percent: Option<f64>,
+    /// [METRICS-TOTAL-INCLUDE] Which clone kinds count toward the repo
+    /// total. Defaults to [`DEFAULT_TOTAL_INCLUDES`].
+    total_include: TotalInclude,
+    /// [EXIT-CODES] Per-kind optional limits from `[threshold.kinds]`.
+    kind_thresholds: KindThresholds,
     /// Whether candidate pairs may span different parser language ids
     /// ([CONFIG-CROSS-LANGUAGE]). Defaults off to keep reports focused
     /// on same-language refactoring.
@@ -148,6 +161,8 @@ impl ExclusionConfig {
             per_language: HashMap::new(),
             default_boilerplate_imports: BoilerplateImportsMode::Suppress,
             fail_over_percent: None,
+            total_include: TotalInclude::default(),
+            kind_thresholds: KindThresholds::default(),
             allow_cross_language_comparison: false,
             include_dependencies: false,
             max_average_line_bytes: DEFAULT_MAX_AVERAGE_LINE_BYTES,
@@ -233,6 +248,8 @@ impl ExclusionConfig {
             );
         }
         let fail_over_percent = resolve_threshold(path, raw.threshold.as_ref())?;
+        let total_include = resolve_total_include(path, raw.total.as_ref())?;
+        let kind_thresholds = resolve_kind_thresholds(path, raw.threshold.as_ref())?;
         let ranking_policy = resolve_ranking_policy(path, &raw.ranking)?.with_global_override();
         Ok(Self {
             source: path.to_path_buf(),
@@ -242,6 +259,8 @@ impl ExclusionConfig {
             per_language,
             default_boilerplate_imports,
             fail_over_percent,
+            total_include,
+            kind_thresholds,
             allow_cross_language_comparison: raw.analysis.allow_cross_language_comparison,
             include_dependencies: raw.analysis.include_dependencies,
             max_average_line_bytes: raw.analysis.max_average_line_bytes,
@@ -272,6 +291,31 @@ impl ExclusionConfig {
     #[must_use]
     pub fn resolve_threshold(&self, measured: f64) -> ThresholdSummary {
         match self.fail_over_percent {
+            Some(percent) => ThresholdSummary::resolve(percent, ThresholdSource::Config, measured),
+            None => ThresholdSummary::none(),
+        }
+    }
+
+    /// [METRICS-TOTAL-INCLUDE] The kinds whose lines count toward the
+    /// repo total, in category display order.
+    #[must_use]
+    pub fn total_include(&self) -> &TotalInclude {
+        &self.total_include
+    }
+
+    /// [EXIT-CODES-KINDS] The configured limits, including unset kinds.
+    #[must_use]
+    pub fn kind_thresholds(&self) -> &KindThresholds {
+        &self.kind_thresholds
+    }
+
+    /// Resolves the `[threshold.kinds]` limit for `kind` into a verdict
+    /// against its measured per-kind percentage ([EXIT-CODES]). The
+    /// single place a per-kind config limit becomes a
+    /// [`ThresholdSummary`], mirroring [`Self::resolve_threshold`].
+    #[must_use]
+    pub fn resolve_kind_threshold(&self, kind: ClusterKind, measured: f64) -> ThresholdSummary {
+        match self.kind_thresholds.get(kind) {
             Some(percent) => ThresholdSummary::resolve(percent, ThresholdSource::Config, measured),
             None => ThresholdSummary::none(),
         }
@@ -371,38 +415,6 @@ impl ExclusionConfig {
 /// only ever feed per-file paths to [`ExclusionConfig::is_excluded`].
 fn matches(matcher: &Gitignore, path: &Path) -> bool {
     matcher.matched(path, false).is_ignore()
-}
-
-/// Builds the canonical set of config paths that should trigger a live
-/// exclusion reload — `<root>/.deslop.toml` plus the explicit override
-/// (if any) ([LIVE-CONFIG-LIVE]).
-#[must_use]
-pub fn watched_config_paths(root: &Path, override_path: Option<&Path>) -> Vec<PathBuf> {
-    let default = root.join(DEFAULT_CONFIG_FILENAME);
-    let mut paths = vec![canonicalise_or_clone(&default)];
-    if let Some(explicit) = override_path {
-        paths.push(canonicalise_or_clone(explicit));
-    }
-    paths
-}
-
-/// Returns `true` when `candidate` matches one of the watched config
-/// paths in either canonical or as-given form.
-#[must_use]
-pub fn is_config_path(candidate: &Path, watched: &[PathBuf]) -> bool {
-    if watched.iter().any(|watched_path| watched_path == candidate) {
-        return true;
-    }
-    let canonical = canonicalise_or_clone(candidate);
-    watched
-        .iter()
-        .any(|watched_path| watched_path == &canonical)
-}
-
-/// Canonicalises `path` when possible; otherwise returns a clone so
-/// non-existent override paths still compare predictably.
-fn canonicalise_or_clone(path: &Path) -> PathBuf {
-    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 /// Compiles a list of glob patterns into an [`ignore::gitignore::Gitignore`]

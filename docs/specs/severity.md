@@ -20,6 +20,10 @@ One shared map owns these defaults. A clone's size or rank does not change its d
 
 Use the finding's kind and `deslop.diagnostics.severityByKind`. Missing entries use the defaults above. `none` means no diagnostic; `hint`, `information`, `warning` and `error` map directly to the editor's levels.
 
+### [SEVERITY-DIAGNOSTICS-EXCLUDED] Excluded kinds are silent by default
+
+A clone kind the total's include set excludes ([METRICS-TOTAL-INCLUDE](pipeline.md#metrics-total-include-which-kinds-count-toward-the-total)) publishes no diagnostic under the defaults — the same quieting the Top Offenders tree greys out. The server reads `metrics.total_includes` from its own report; the client never re-derives the set. An explicit `severityByKind` entry for that kind wins over exclusion, because configuring a level is an opt-in to hear about it. Shape-only is unaffected — it was never in the include set ([SEVERITY-DIAGNOSTICS-STRUCTURAL-ONLY]).
+
 ### [SEVERITY-DIAGNOSTICS-STRUCTURAL-ONLY] Shape-only is silent by default
 
 Shape-only produces no diagnostic, including when clone diagnostics are enabled. The user may explicitly override `structural_only` to any diagnostic level. Its clone status still follows [CLONE-BUCKETS-STRUCTURAL-ONLY](taxonomy.md#clone-buckets-structural-only-shape-only-is-not-duplication).
@@ -48,6 +52,8 @@ The editor owns diagnostic colours. Deslop's category colours are defined separa
 ```
 
 Accept only these five kind keys and the levels `none`, `hint`, `information`, `warning`, `error`. Reject unknown keys or levels. Apply user/workspace precedence per entry. Configuration changes refresh or clear diagnostics without re-analysis, in both pull and workspace-push modes. Diagnostic scope and the master switch still apply.
+
+Workspace publication sends a file's diagnostic list only when that complete payload changes. Reapplying identical settings or refreshing unchanged findings must not queue duplicate publications. Changes to severity, findings or ranges still publish; disabling workspace diagnostics clears each previously published file, and re-enabling publishes its findings again.
 
 ### [SEVERITY-TESTING] Required checks
 

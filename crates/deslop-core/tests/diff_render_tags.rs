@@ -11,6 +11,7 @@
 use std::path::PathBuf;
 
 use deslop_core::{
+    buckets::DEFAULT_TOTAL_INCLUDES,
     render::{render_html, render_text},
     report::{CacheStats, Report, ReportCluster, ReportOccurrence},
     report_metrics::{DiffMetrics, RepoMetrics, ThresholdSource, ThresholdSummary},
@@ -116,6 +117,8 @@ fn metrics(diff: Option<DiffMetrics>) -> RepoMetrics {
             breached: true,
             source: ThresholdSource::Cli,
         },
+        total_includes: DEFAULT_TOTAL_INCLUDES.to_vec(),
+        per_kind: Vec::new(),
         per_file: Vec::new(),
         folders: Vec::new(),
         diff,
@@ -225,6 +228,7 @@ fn assert_page(html: &str, expectations: &[Expectation]) {
 /// golden is the byte-identity contract for every no-diff run.
 const UNTAGGED_TEXT: &str = "deslop test -- 6 file(s), 3 cluster(s), 0 hidden
 repo: 20.0% duplicated (40 / 200 LOC, 3 clusters across 4 files)
+total counts: Identical code, Nearly identical code
 threshold: 10.00% (breached)
 embeddings: off
 #1 [aaaa1111] mass=12 occurrences=2 canonical_nodes=12 kind=nearly_identical
@@ -240,6 +244,7 @@ embeddings: off
 
 const DIFF_TEXT: &str = "deslop test -- 6 file(s), 3 cluster(s), 0 hidden
 repo: 20.0% duplicated (40 / 200 LOC, 3 clusters across 4 files)
+total counts: Identical code, Nearly identical code
 threshold: 10.00% (breached)
 diff: 63.2% of added lines duplicated (24 / 38 added LOC)
 embeddings: off
@@ -256,6 +261,7 @@ embeddings: off
 
 const ONLY_CHANGED_TEXT: &str = "deslop test -- 6 file(s), 2 cluster(s), 0 hidden
 repo: 20.0% duplicated (40 / 200 LOC, 3 clusters across 4 files)
+total counts: Identical code, Nearly identical code
 threshold: 10.00% (ok)
 diff: 63.2% of added lines duplicated (24 / 38 added LOC)
 diff threshold: 0.00% (breached)
@@ -271,20 +277,20 @@ embeddings: off
 
 const UNTAGGED_BANNER: &str = "<p class=\"metrics-banner metrics-banner--breached\">repo: \
      20.0% duplicated (40 / 200 LOC, 3 clusters across 4 files) · threshold 10.00% \
-     (breached)</p>";
+     (breached) · total counts: Identical code, Nearly identical code</p>";
 
 /// The `--diff` banner: the added-lines figure appended, no delta
 /// segment (nothing was omitted).
 const DIFF_BANNER: &str = "<p class=\"metrics-banner metrics-banner--breached\">repo: \
      20.0% duplicated (40 / 200 LOC, 3 clusters across 4 files) · threshold 10.00% \
-     (breached) · diff: 63.2% of added lines duplicated (24 / 38 added LOC)</p>";
+     (breached) · total counts: Identical code, Nearly identical code · diff: 63.2% of added lines duplicated (24 / 38 added LOC)</p>";
 
 /// The `--only-changed` banner: the governing diff verdict and the
 /// four-figure delta appended, and the colour class read from the
 /// governing diff gate — breached here although the repo gate is ok.
 const ONLY_CHANGED_BANNER: &str = "<p class=\"metrics-banner metrics-banner--breached\">repo: \
      20.0% duplicated (40 / 200 LOC, 3 clusters across 4 files) · threshold 10.00% \
-     (ok) · diff: 63.2% of added lines duplicated (24 / 38 added LOC) · diff threshold \
+     (ok) · total counts: Identical code, Nearly identical code · diff: 63.2% of added lines duplicated (24 / 38 added LOC) · diff threshold \
      0.00% (breached) · 1 newly introduced group(s), 1 cross-file with untouched code, \
      1 untouched group(s) omitted</p>";
 
@@ -292,7 +298,7 @@ const ONLY_CHANGED_BANNER: &str = "<p class=\"metrics-banner metrics-banner--bre
 /// must follow the governing diff gate and render ok.
 const ONLY_CHANGED_CLEAN_BANNER: &str = "<p class=\"metrics-banner metrics-banner--ok\">repo: \
      20.0% duplicated (40 / 200 LOC, 3 clusters across 4 files) · threshold 10.00% \
-     (breached) · diff: 63.2% of added lines duplicated (24 / 38 added LOC) · diff threshold \
+     (breached) · total counts: Identical code, Nearly identical code · diff: 63.2% of added lines duplicated (24 / 38 added LOC) · diff threshold \
      65.00% (ok) · 1 newly introduced group(s), 1 cross-file with untouched code, \
      1 untouched group(s) omitted</p>";
 

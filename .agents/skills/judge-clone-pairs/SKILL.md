@@ -105,6 +105,21 @@ each other."*
 - Two- and three-line idioms.
 - Pairs whose *content* is duplicated but whose *boundaries* are ragged.
 
+### The clone type — every CLEARLY IN names one
+
+Every CLEARLY IN carries a `type`, from the standard clone taxonomy. Settle it from the diff you ran, not from the excerpt:
+
+| `type` | Definition | What the diff shows |
+|---|---|---|
+| `Type I` | Identical code, apart from whitespace, layout and comments. | Nothing but whitespace, line breaks, indentation or comments differs. |
+| `Type II` | The same code with identifiers, literals or types renamed or changed — and nothing else. | Every differing token is a name, a literal value or a type name, and the statements line up one for one. |
+| `Type III` | A copy with statements added, removed or modified. | At least one statement exists on one side only, or changed beyond a rename. |
+| `Type IV` | The same behaviour written as different code. | The statements do not line up, yet both regions compute the same thing. |
+
+Pick the lowest type that accounts for **every** difference the diff shows. One renamed variable makes a byte-for-byte copy Type II; one added statement makes it Type III.
+
+Spell the label exactly as written in the first column — `Type I`, `Type II`, `Type III` or `Type IV`. CLEARLY OUT and NOT CLEAR never carry a type: a pair that is not a clone has no clone type.
+
 ### Two traps
 
 - **Repetition is not the question.** Test scaffolding is often genuinely repeated *and*
@@ -150,6 +165,7 @@ decided by a coin flip recorded outside this folder. So:
       "candidate": 41,
       "why": "plain English, as an engineer would say it out loud",
       "verified": "the diff you ran, and what it returned",
+      "type": "Type II",
       "occurrences": ["path/one.py:340-345", "path/one.py:394-399"]
     }
   ],
@@ -161,6 +177,7 @@ decided by a coin flip recorded outside this folder. So:
 - `why` — the judgement in plain English. Not a rule, not a metric. What you would tell
   a colleague leaning over your shoulder.
 - `verified` — the diff, and its result.
+- `type` — CLEARLY IN only, always: `Type I`, `Type II`, `Type III` or `Type IV`, settled from the diff as described above.
 - `occurrences` — two or more ranges. **Never write a range you did not read**, and never
   widen one so it matches a report.
 - `not_clear` is recorded so nobody re-litigates it, and asserts nothing.

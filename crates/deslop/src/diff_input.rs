@@ -77,6 +77,20 @@ pub(crate) fn pipeline_error(err: CoreError) -> anyhow::Error {
 /// lie about the repository.
 pub(crate) fn apply_threshold(args: &Cli, report: &mut Report) -> Result<()> {
     report.metrics.threshold = resolve_threshold(args, report.metrics.duplication_percent)?;
+    let config = (!args.no_fail_over)
+        .then(|| crate::load_run_config(args))
+        .transpose()?;
+    if let Some(config) = &config {
+        validate_kind_measurements(report, config)?;
+    }
+    // [EXIT-CODES-KINDS] Resolve current limits for scans and report replay alike.
+    for row in &mut report.metrics.per_kind {
+        row.threshold = config
+            .as_ref()
+            .map_or_else(ThresholdSummary::none, |config| {
+                config.resolve_kind_threshold(row.kind, row.duplication_percent)
+            });
+    }
     if !args.diff_scope.only_changed {
         return Ok(());
     }
@@ -91,6 +105,20 @@ pub(crate) fn apply_threshold(args: &Cli, report: &mut Report) -> Result<()> {
     let verdict = resolve_threshold(args, measured)?;
     if let Some(diff) = report.metrics.diff.as_mut() {
         diff.threshold = verdict;
+    }
+    Ok(())
+}
+
+/// [EXIT-CODES-KINDS] A saved report cannot silently bypass limits it cannot measure.
+fn validate_kind_measurements(
+    report: &Report,
+    config: &deslop_core::ExclusionConfig,
+) -> Result<()> {
+    if report.metrics.per_kind.is_empty()
+        && deslop_core::report_facts::repo_cluster_count(report) > 0
+        && !config.kind_thresholds().is_empty()
+    {
+        return Err(UsageError::new("per-kind limits require per-kind measurements; regenerate the saved report or use --no-fail-over").into());
     }
     Ok(())
 }
@@ -113,15 +141,24 @@ fn resolve_threshold(args: &Cli, measured: f64) -> Result<ThresholdSummary> {
 
 /// Which verdict gates the exit code: the diff-scoped one under
 /// `--only-changed` ([METRICS-DIFF-SCOPE]), the repo-wide one
-/// otherwise. A missing `metrics.diff` block cannot gate — there is no
-/// measurement to gate on — so it reads as unbreached.
+/// otherwise, each OR-ed with every per-kind verdict
+/// ([EXIT-CODES] `[threshold.kinds]`) — one breached kind fails the
+/// run however clean the total is. A missing `metrics.diff` block
+/// cannot gate — there is no measurement to gate on — so it reads as
+/// unbreached.
 pub(crate) fn gate_breached(args: &Cli, report: &Report) -> bool {
+    let kind_breached = report
+        .metrics
+        .per_kind
+        .iter()
+        .any(|row| row.threshold.breached);
     if args.diff_scope.only_changed {
         return report
             .metrics
             .diff
             .as_ref()
-            .is_some_and(|diff| diff.threshold.breached);
+            .is_some_and(|diff| diff.threshold.breached)
+            || kind_breached;
     }
-    report.metrics.breached()
+    report.metrics.breached() || kind_breached
 }

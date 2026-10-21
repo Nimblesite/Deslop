@@ -297,7 +297,7 @@ export function currentApi(): ExtensionApi {
 // [VSIX-TOP-OFFENDERS-GROUPING] Mirror grouping and filter state for view commands.
 export function syncTopOffendersContext(): void {
   const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE);
-  const groupBy = normalizeGroupBy(cfg.get<string>("topOffenders.groupBy", "cluster"));
+  const groupBy = normalizeGroupBy(cfg.get<string>("topOffenders.groupBy", "kind"));
   void vscode.commands.executeCommand(SET_CONTEXT_COMMAND, "deslop.topOffendersGroupBy", groupBy);
   void vscode.commands.executeCommand(
     SET_CONTEXT_COMMAND,
@@ -368,11 +368,11 @@ export function resolveWorkspaceRoot(): string | undefined {
 }
 
 export function wireDirtyDocuments(store: ReportStore): vscode.Disposable {
-  // [VSIX-STATE-DIRTY]: text edits add to the dirty set so the visible
-  // projection elides their occurrences; saves remove the file from the set
-  // so the LSP's next reportChanged converges both views again.
+  // [LIVE-OPEN-BUFFERS] [VSIX-STATE-DIRTY] Hide stale offsets until the LSP
+  // publishes a report that acknowledges this exact editor version.
   const onChange = vscode.workspace.onDidChangeTextDocument((event) => {
-    store.markFileDirty(event.document.uri.fsPath);
+    if (event.contentChanges.length === 0) return;
+    store.markFileDirty(event.document.uri.fsPath, event.document.version);
   });
   const onSave = vscode.workspace.onDidSaveTextDocument((doc) => {
     store.clearFileDirty(doc.uri.fsPath);

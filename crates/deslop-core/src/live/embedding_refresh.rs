@@ -13,13 +13,17 @@ use super::{
 };
 use crate::{
     embedding::{EmbeddingMode, EmbeddingProvider, EmbeddingSpec},
-    pipeline::{EmbeddingSettings, PipelineSession},
+    pipeline::{EmbeddingSettings, OpenBuffers, PipelineSession},
     report::{EmbeddingProvenance, Report},
 };
 
 /// Immutable description of one queued embedding refresh.
 #[derive(Clone)]
 pub(super) struct EmbeddingRefreshJob {
+    /// Report generation whose sources were captured for this job.
+    pub(super) generation: u64,
+    /// Editor sources captured under the session lock; never logged.
+    pub(super) buffers: OpenBuffers,
     /// Monotonic session-local refresh id.
     pub(super) revision: u64,
     /// Workspace root to rescan outside the session lock.
@@ -61,6 +65,8 @@ impl EmbeddingRefreshJob {
     pub(super) fn new(input: EmbeddingRefreshInput) -> Self {
         let spec = input.provider.spec();
         Self {
+            generation: input.generation,
+            buffers: input.buffers,
             revision: input.revision,
             root: input.root,
             min_nodes: input.min_nodes,
@@ -114,6 +120,10 @@ impl EmbeddingRefreshJob {
 /// Constructor input kept separate so `EmbeddingRefreshJob::new`
 /// remains short while preserving explicit field names at the call site.
 pub(super) struct EmbeddingRefreshInput {
+    /// Source generation captured at queue time.
+    pub(super) generation: u64,
+    /// Open editor text captured at queue time.
+    pub(super) buffers: OpenBuffers,
     /// Monotonic refresh id.
     pub(super) revision: u64,
     /// Workspace root.
@@ -169,13 +179,14 @@ pub(super) fn run_embedding_refresh(
         batch_yield: live_batch_yield(EmbeddingMode::Auto),
         progress: Some(&progress),
     };
-    let outcome = PipelineSession::initialise(
-        job.root.clone(),
-        job.min_nodes,
-        job.incremental,
-        job.config_path.clone(),
+    let config = crate::PipelineConfig {
+        root: job.root.clone(),
+        min_nodes: job.min_nodes,
+        config_path: job.config_path.clone(),
         embedding,
-    );
+        incremental: job.incremental,
+    };
+    let outcome = PipelineSession::initialise_with_buffers(config, &job.buffers);
     match outcome {
         Ok((_, report)) => admit_refresh_report(job, report),
         Err(error) => Err(FailedEmbeddingRefresh {

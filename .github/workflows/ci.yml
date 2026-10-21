@@ -403,10 +403,10 @@ jobs:
 
   # [CORPUS-SCORE] The accuracy gate. Scans a small slice of register-backed
   # repositories with the release binary this workflow just built, scores every
-  # judged pair against `corpus/register/`, and fails the moment a CLEARLY IN
-  # goes unreported or a CLEARLY OUT gets reported past the thresholds in
-  # `corpus/register/score-thresholds.json`. Cluster totals and duplication
-  # percentages are printed as description and gate nothing.
+  # judged pair against `corpus/register/`, and fails the moment a pair
+  # regresses or fails without being on record as failing in
+  # `corpus/register/outcomes.json` ([CORPUS-SCORE-OUTCOMES]). Cluster totals
+  # and duplication percentages are printed as description and gate nothing.
   #
   # The slice is deliberately the two smallest judged repositories, so the job
   # finishes in seconds; the full register runs under `compare-versions.sh`.
@@ -436,6 +436,17 @@ jobs:
           key: ${{ runner.os }}-cargo-release-${{ github.sha }}
       - name: Score the corpus against the clone registers
         run: scripts/corpus/score-gate.sh
+      # [CORPUS-SCORE-OUTCOMES] The run writes the judged pair record back. A
+      # fixed or newly judged pair changes it, and that change must be
+      # committed: a fix left off the record keeps the pair on record as
+      # failing, and its next regression would pass as the old tolerated defect.
+      - name: The judged pair record is committed
+        run: |
+          if [ -n "$(git status --porcelain -- corpus/register/outcomes.json)" ]; then
+            git diff -- corpus/register/outcomes.json
+            echo "::error::corpus/register/outcomes.json changed on this run. Run make score-gate and commit the record."
+            exit 1
+          fi
       # The scorecard is uploaded whether the gate passed or failed: a failing
       # run is exactly when someone needs to read which judged pair broke.
       - name: Upload the scorecard
@@ -636,6 +647,11 @@ jobs:
       - name: Install typediagram
         run: npm install -g typediagram@0.11.0
 
+      # [LIVE-PARENT-LIVENESS] The native process-job accounting driver uses Python.
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
       - name: Cache cargo registry and target
         uses: actions/cache@v6
         with:
@@ -689,6 +705,8 @@ jobs:
           cargo test --release -p deslop-mcp --test tcp_transport --features deslop-core/live
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo test --release -p deslop-core --lib paths::
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --release -p deslop-core --lib process::
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo test --release -p deslop --test suite -- $env:WINDOWS_SUITE_FILTERS.Split(" ")
 

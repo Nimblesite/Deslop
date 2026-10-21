@@ -6,7 +6,7 @@
 // panels stay byte-identical ([UI] "do not duplicate the rendering").
 
 import { formatPercent } from "../types/format";
-import type { ThresholdSummary } from "../types/report";
+import { kindTitle, type RepoMetrics, type ThresholdSummary } from "../types/report";
 
 /** Panel-ready verdict for the configured duplication gate. */
 export interface ThresholdStatus {
@@ -37,4 +37,19 @@ export function thresholdStatus(threshold: ThresholdSummary): ThresholdStatus {
     breached: threshold.breached,
     label: threshold.breached ? `⚠ over ${gate}` : `✓ within ${gate}`,
   };
+}
+
+/** [EXIT-CODES-KINDS] Every panel uses these same configured gate labels. */
+export function metricsThresholdStatuses(metrics: RepoMetrics): ThresholdStatus[] {
+  return [thresholdStatus(metrics.threshold), ...(metrics.per_kind ?? []).map((row) => {
+    const status = thresholdStatus(row.threshold);
+    return { ...status, label: status.configured ? `${kindTitle(row.kind)}: ${status.label}` : "" };
+  })].filter((status) => status.configured);
+}
+
+/** [EXIT-CODES-KINDS] A panel's verdict includes every configured kind gate. */
+export function metricsThresholdStatus(metrics: RepoMetrics): ThresholdStatus {
+  const statuses = metricsThresholdStatuses(metrics);
+  return { configured: statuses.length > 0, breached: statuses.some((status) => status.breached),
+    label: statuses.map((status) => status.label).join(" · ") };
 }

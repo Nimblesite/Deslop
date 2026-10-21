@@ -274,7 +274,8 @@ const PROVIDER_MIN_NODES: u32 = 30;
 const PROVIDER_FILE_COUNT: u64 = 2;
 const PROVIDER_PAIR_SIZE: u64 = 2;
 const PROVIDER_FINDING_COUNT: u64 = 2;
-const PROVIDER_DUPLICATED_LINES: u64 = 46;
+/// [METRICS-TOTAL-INCLUDE] Lines covered by the included nearly-identical variants (22 + 22 = 44).
+const PROVIDER_DUPLICATED_LINES: u64 = 44;
 
 #[test]
 fn same_file_generic_variants_survive_a_wider_cross_file_clone() -> Result<()> {
@@ -297,7 +298,10 @@ fn same_file_generic_variants_survive_a_wider_cross_file_clone() -> Result<()> {
     assert!(field(field(&report, "metrics"), "clusters_total")
         .as_u64()
         .is_some_and(|count| count >= PROVIDER_FINDING_COUNT));
-    assert!(duplicated_loc_for(&report, PROVIDER_SYNC_FILE) >= PROVIDER_DUPLICATED_LINES);
+    assert_eq!(
+        duplicated_loc_for(&report, PROVIDER_SYNC_FILE),
+        PROVIDER_DUPLICATED_LINES
+    );
     Ok(())
 }
 

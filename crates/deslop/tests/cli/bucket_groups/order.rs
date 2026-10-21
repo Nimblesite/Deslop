@@ -1,10 +1,15 @@
 //! [CLONE-KIND-LABELS] The category display order, on the rendered report.
 //!
 //! The kind table in `docs/specs/taxonomy.md` is the display order:
-//! Identical, Nearly identical, Same behavior, Similar, then shape-only.
+//! Identical, Nearly identical, Similar, Same behavior, then shape-only.
 //! [CLONE-BUCKETS-STRUCTURAL-ONLY] strengthens the tail of it — shape-only
 //! "is always the last category, below Similar, regardless of its size or
 //! number of matches".
+//!
+//! Note the Similar / Same behavior swap relative to relation strength:
+//! display order is [CLONE-KIND-LABELS] policy, not the fold order
+//! ([CLONE-KIND-FOLD]) — Similar code is the more actionable finding, so
+//! it lists first.
 //!
 //! Order by mass would be a different order. A reader who opens the report
 //! and sees "Similar code" above "Identical code" cannot tell whether the
@@ -98,13 +103,13 @@ const MIXED_DIR: &str = "category_order";
 /// position on the page.
 const GROUP_OPEN: &str = "<details class=\"clone-group";
 
-/// [CLONE-KIND-LABELS] The category display order, strongest relation
-/// first and the informational non-clone last.
+/// [CLONE-KIND-LABELS] The category display order: Identical, Nearly
+/// identical, Similar, Same behavior, then the informational non-clone.
 const CATEGORY_DISPLAY_ORDER: [&str; 5] = [
     IDENTICAL_TITLE,
     NEARLY_IDENTICAL_TITLE,
-    SAME_BEHAVIOR_TITLE,
     LOOSELY_SIMILAR_TITLE,
+    SAME_BEHAVIOR_TITLE,
     STRUCTURAL_ONLY_TITLE,
 ];
 

@@ -6,7 +6,7 @@
 //! checked".
 
 use super::{
-    engine_cells, header, measure_headers, repo_cell, row, Scorecard, TargetScore, ABSENT,
+    engine_cells, measure_headers, repo_cell, row, table_section, Scorecard, TargetScore, ABSENT,
 };
 use crate::corpus_score::checks::{CheckFailure, CheckOutcome};
 
@@ -91,15 +91,13 @@ pub(super) fn checks_section(card: &Scorecard) -> Vec<String> {
     let mut columns = vec!["repository".to_owned()];
     columns.extend(measure_headers(card, "checks"));
     columns.push("failing".to_owned());
-    let mut lines = vec![
-        "## Per repository — curated checks".to_owned(),
-        String::new(),
-        CHECKS_INTRO.to_owned(),
-        String::new(),
-    ];
-    lines.extend(header(&columns));
-    lines.extend(card.targets.iter().map(|target| checks_row(card, target)));
-    lines.push(String::new());
+    let rows = card.targets.iter().map(|target| checks_row(card, target));
+    let mut lines = table_section(
+        "## Per repository — curated checks",
+        CHECKS_INTRO,
+        &columns,
+        rows,
+    );
     lines.extend(failure_details(card));
     lines.push(String::new());
     lines

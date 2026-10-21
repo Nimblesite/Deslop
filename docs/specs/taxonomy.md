@@ -54,11 +54,11 @@ Classify and separate informational findings before applying [RANK-MASS-SUM](pip
 |---|---|---|
 | `identical` | Identical code | Type-1 exact clone |
 | `nearly_identical` | Nearly identical code | Type-2 / close Type-3 clone |
-| `same_behavior` | Same behavior, different code | Type-4 semantic clone |
 | `loosely_similar` | Similar code | Type-3 clone with larger edits |
+| `same_behavior` | Same behavior, different code | Type-4 semantic clone |
 | `structural_only` | Same shape, different content | Informational non-clone |
 
-This is the category display order. `loosely_similar` remains the machine key; its human title is **Similar code**. Every renderer, tree, hover, diagnostic and Copy Context For AI uses this registry. Titles describe the relation; they do not promise that merging is safe. Diagnostic defaults and user overrides come from [SEVERITY-DESLOP-MAP](severity.md#severity-deslop-map-defaults-when-diagnostics-are-enabled), not from mass rank.
+This is the category display order — Identical, Nearly identical, Similar, Same behavior, then shape-only last. Display order is presentation policy, not relation strength: Similar code lists above Same behavior because it is the more actionable finding, while the fold still treats Same behavior as the stronger relation ([CLONE-KIND-FOLD](#clone-kind-fold-compare-the-actual-members)). `loosely_similar` remains the machine key; its human title is **Similar code**. Every renderer, tree, hover, diagnostic and Copy Context For AI uses this registry. Titles describe the relation; they do not promise that merging is safe. Diagnostic defaults and user overrides come from [SEVERITY-DESLOP-MAP](severity.md#severity-deslop-map-defaults-when-diagnostics-are-enabled), not from mass rank.
 
 ### [CLONE-KIND-COLOR] Colour describes the category
 

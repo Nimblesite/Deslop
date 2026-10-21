@@ -29,6 +29,8 @@ mod cli;
 mod code_action;
 #[path = "code_action_refusal.rs"]
 mod code_action_refusal;
+#[path = "code_lens.rs"]
+mod code_lens;
 #[path = "cpu_throttle_knob.rs"]
 mod cpu_throttle_knob;
 #[path = "dependency_reactivity.rs"]
@@ -45,6 +47,8 @@ mod execute_command;
 mod history_determinism;
 #[path = "lifecycle.rs"]
 mod lifecycle;
+#[path = "live/bursts.rs"]
+mod live_bursts;
 #[path = "lsp_embedding_determinism.rs"]
 mod lsp_embedding_determinism;
 #[path = "lsp_workspace_scoping.rs"]
@@ -55,6 +59,8 @@ mod notifications;
 mod observability_heartbeat;
 #[path = "ollama_fallback.rs"]
 mod ollama_fallback;
+#[path = "open_buffers.rs"]
+mod open_buffers;
 #[path = "state_file_and_ipc.rs"]
 mod state_file_and_ipc;
 #[path = "virtual_document.rs"]

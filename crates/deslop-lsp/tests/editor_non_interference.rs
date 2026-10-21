@@ -18,8 +18,8 @@ use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 
 use crate::common::{
-    call, handshake, notification, session::FixtureSession, spawn_lsp_on_fixture_guarded,
-    write_frame, LspGuard,
+    call, copy_fixture, handshake, notification, session::FixtureSession, spawn_lsp_guarded,
+    spawn_lsp_on_fixture_guarded, write_frame, LspGuard,
 };
 
 const DEFINITION: &str = "textDocument/definition";
@@ -27,7 +27,12 @@ const HOVER: &str = "textDocument/hover";
 const DIAGNOSTIC: &str = "textDocument/diagnostic";
 const CODE_LENS: &str = "textDocument/codeLens";
 const EXECUTE_COMMAND: &str = "workspace/executeCommand";
+const REFRESH_COMMAND: &str = "deslop.lsp.refreshReport";
 const REPORT_GET: &str = "deslop/reportGet";
+const CSHARP_FIXTURE: &str = "csharp-small";
+const ALPHA_FILE: &str = "Alpha.cs";
+const SOLO_SOURCE: &str =
+    "namespace Alpha { public class Solo { public int One() { return 1; } } }\n";
 
 /// Every standard language-intelligence capability that belongs to the
 /// editor's real language server and that Deslop must never advertise.
@@ -50,7 +55,7 @@ const FORBIDDEN_CAPABILITIES: &[&str] = &[
 
 #[test]
 fn initialize_advertises_no_standard_language_providers() -> Result<()> {
-    let session = FixtureSession::open("csharp-small")?;
+    let session = FixtureSession::open(CSHARP_FIXTURE)?;
     let caps = session
         .init
         .pointer("/result/capabilities")
@@ -266,23 +271,23 @@ fn additive_code_lens_carries_deslops_own_jump_command_not_definition() -> Resul
 
 #[test]
 fn refresh_command_re_evaluates_the_corpus_after_an_edit() -> Result<()> {
-    // The additive `deslop.lsp.refreshReport` verb re-runs analysis:
-    // editing Alpha.cs away from its Beta.cs twin drops the clone, and the
-    // refresh reports the removal. Exercises Deslop's own command surface,
-    // which is wholly separate from any standard editor request.
-    let (_workspace, _guard, mut stdin, mut stdout, alpha) = lsp_alpha_session()?;
+    // [LSP-COMMANDS] Create the alias before the watcher starts. Writing
+    // outside its root changes the same file without racing an automatic
+    // refresh, so this command must itself discover and report the removal.
+    let workspace = copy_fixture(CSHARP_FIXTURE)?;
+    let external = tempfile::tempdir()?;
+    let alpha = external.path().join(ALPHA_FILE);
+    std::fs::hard_link(workspace.path().join(ALPHA_FILE), &alpha)?;
+    let (_guard, mut stdin, mut stdout) = spawn_lsp_guarded(workspace.path())?;
+    let _init = handshake(&mut stdin, &mut stdout)?;
     let _report = wait_for_clusters(&mut stdin, &mut stdout)?;
+    std::fs::write(&alpha, SOLO_SOURCE)?;
+    let params = json!({ "command": REFRESH_COMMAND });
+    let response = call(&mut stdin, &mut stdout, EXECUTE_COMMAND, &params)?;
+    assert_refresh_removed_clone(&response)
+}
 
-    std::fs::write(
-        &alpha,
-        "namespace Alpha { public class Solo { public int One() { return 1; } } }\n",
-    )?;
-    let response = call(
-        &mut stdin,
-        &mut stdout,
-        EXECUTE_COMMAND,
-        &json!({ "command": "deslop.lsp.refreshReport" }),
-    )?;
+fn assert_refresh_removed_clone(response: &Value) -> Result<()> {
     let removed = response
         .pointer("/result/clustersRemoved")
         .and_then(Value::as_u64)
@@ -306,8 +311,8 @@ fn lsp_alpha_session() -> Result<(
     std::io::BufReader<std::process::ChildStdout>,
     std::path::PathBuf,
 )> {
-    let (workspace, guard, mut stdin, mut stdout) = spawn_lsp_on_fixture_guarded("csharp-small")?;
-    let alpha = workspace.path().join("Alpha.cs");
+    let (workspace, guard, mut stdin, mut stdout) = spawn_lsp_on_fixture_guarded(CSHARP_FIXTURE)?;
+    let alpha = workspace.path().join(ALPHA_FILE);
     let _init = handshake(&mut stdin, &mut stdout)?;
     Ok((workspace, guard, stdin, stdout, alpha))
 }

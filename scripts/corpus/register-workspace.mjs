@@ -28,7 +28,7 @@
 //
 // Usage: register-workspace.mjs --workspace <dir> --source <dir>
 //          --report-one <file> --report-two <file> --url <url> --sha <commit>
-//          --keys <dir> [--seed <number>] [--nominations <file>]
+//          --keys <dir> [--seed <number>] [--nominations <file>] [--candidates <n>]
 
 import {
   cpSync,
@@ -45,8 +45,9 @@ import { fileURLToPath } from "node:url";
 /// Candidates a judging pass is given. This is a ceiling, not a quota: past
 /// roughly this many pairs a single repository stops paying for the time, and
 /// the next hour is better spent on another repository or another language.
-/// See docs/specs/corpus.md [CORPUS-REGISTER-COVERAGE]. Drawing fewer is fine.
-const CANDIDATE_TARGET = 200;
+/// See docs/specs/corpus.md [CORPUS-REGISTER-COVERAGE]. `--candidates` asks for
+/// a shorter pass; it can never ask for a longer one.
+const CANDIDATE_CEILING = 200;
 /// Regions rendered per candidate; a judge compares two regions, not a family.
 const REGIONS_PER_CANDIDATE = 2;
 /// Prefix on a nominated pair's id, so it can never collide with a published
@@ -77,7 +78,8 @@ const GUIDE = "README.md";
 const REQUIRED_FLAGS = ["workspace", "source", "report-one", "report-two", "url", "sha", "keys"];
 const USAGE =
   "usage: register-workspace.mjs --workspace <dir> --source <dir> --report-one <file> " +
-  "--report-two <file> --url <url> --sha <commit> --keys <dir> [--seed <n>] [--nominations <file>]";
+  "--report-two <file> --url <url> --sha <commit> --keys <dir> [--seed <n>] [--nominations <file>] " +
+  "[--candidates <n>]";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
@@ -139,11 +141,11 @@ const stratify = (one, two, nominated) => {
   );
 };
 
-const draw = (strata, random) => {
+const draw = (strata, random, limit) => {
   const drawn = new Map();
-  while (drawn.size < CANDIDATE_TARGET && strata.some((stratum) => stratum.length > 0)) {
+  while (drawn.size < limit && strata.some((stratum) => stratum.length > 0)) {
     for (const stratum of strata) {
-      if (stratum.length === 0 || drawn.size >= CANDIDATE_TARGET) continue;
+      if (stratum.length === 0 || drawn.size >= limit) continue;
       const picked = stratum.splice(Math.floor(random() * stratum.length), 1)[0];
       drawn.set(picked.id, picked);
     }
@@ -169,7 +171,8 @@ const renderCandidate = (sourceDir, candidate) =>
     "",
     "Two regions of `source/`. Read both **in the files themselves**, diff them, then",
     "record CLEARLY IN, CLEARLY OUT or NOT CLEAR in `verdicts.json` with the diff you",
-    "ran. If you hesitate, it is NOT CLEAR.",
+    "ran. If you hesitate, it is NOT CLEAR. A CLEARLY IN also names its clone type,",
+    "`Type I` to `Type IV`, as defined in `JUDGING.md`.",
     "",
     ...candidate.regions.map((region) => renderRegion(sourceDir, region)),
   ].join("\n");
@@ -284,7 +287,19 @@ const parseFlags = (argv) => {
   return options;
 };
 
+/// How many candidates this pass draws: the ceiling unless a shorter pass was
+/// asked for. A count the draw cannot honour is refused, never clamped.
+const candidateLimit = (requested) => {
+  if (requested === undefined) return CANDIDATE_CEILING;
+  const count = Number(requested);
+  if (!Number.isInteger(count) || count < 1 || count > CANDIDATE_CEILING) {
+    throw new Error(`--candidates must be a whole number from 1 to ${CANDIDATE_CEILING}, got '${requested}'`);
+  }
+  return count;
+};
+
 const options = parseFlags(process.argv.slice(2));
+const limit = candidateLimit(options.get("candidates"));
 const url = options.get("url");
 const sha = options.get("sha");
 const seed = Number(options.get("seed") ?? Date.now() % 1_000_000);
@@ -326,7 +341,7 @@ writeFileSync(
 );
 
 const nominated = readNominations(options.get("nominations"));
-const candidates = draw(stratify(one, two, nominated), random);
+const candidates = draw(stratify(one, two, nominated), random, limit);
 writeFileSync(join(root, "PINNED.txt"), `${url}\n${sha}\n`);
 writeFileSync(
   join(root, "verdicts.json"),

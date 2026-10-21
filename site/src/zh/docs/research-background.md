@@ -28,35 +28,18 @@ Deslop 组合了成熟的克隆检测技术：归一化语法树、Merkle 指纹
 
 ## 克隆分类法
 
-Deslop 遵循代码克隆文献中通用的标准克隆分类法：
+Type I 是除布局和注释外的精确副本；Type II 允许重命名和字面量变化；Type III 包含语句编辑；Type IV 描述不同实现中的等价行为。Deslop 当前标签及更严格的文本一致性规则见[工作原理](/zh/docs/how-it-works/)。仅形状相同的结果不属于克隆分类，也不计入重复率。
 
-| 克隆类别 | 含义 | Deslop 信号 |
-| --- | --- | --- |
-| Type-1 | 除布局或注释外完全复制的文本 | 解析与归一化后的结构哈希 |
-| Type-2 | 结构相同，但标识符被重命名或字面量被改动 | 标识符/字面量折叠后的结构哈希 |
-| Type-3 | 插入、删除或改动了语句的近似克隆 | 兄弟窗口指纹与词元 MinHash LSH |
-| Type-4 | 行为相似但语法或结构不同 | 可选的嵌入余弦相似度 |
+## 实现
 
-公开报告的分桶在 `crates/deslop-core/src/buckets.rs` 中实现。代码将信号三元组映射到五个线协议标签：`identical`、`nearly_identical`、`structural_only`、`loosely_similar` 和 `same_behavior`。`structural_only` 桶标记那些唯一证据是归一化 AST 形状的簇；它们默认在排名中降权。`same_behavior` 桶只有在嵌入信号足够强时才可达。
+- tree-sitter 解析和归一化寻找结构候选：`crates/deslop-core/src/lang/`。
+- 子树和连续语句指纹定位重复代码：`fingerprint.rs` 和 `sibling.rs`。
+- MinHash 与 LSH 检索近似候选：`lsh.rs`、`lsh/banding.rs` 和 `tokens.rs`。
+- 可选嵌入分析补充语义候选：`embedding/`。
+- 配对准入同时检查内容和结构：`pair/content_gate.rs`。明确的比较展示配对证据；簇不继承某一对的置信度。
+- 报告按重复质量排列克隆：`report_weight.rs`。百分比计算位于 `report_metrics.rs`。
 
-## 算法基础
-
-每一行都将一条研究脉络与受其影响的已交付实现对应起来。
-
-| 研究脉络 | Deslop 从中采纳了什么 | 状态与实现指针 |
-| --- | --- | --- |
-| [Baxter et al. 1998 — AST 克隆检测](https://ieeexplore.ieee.org/document/738528) | 将代码解析为语法树，归一化无关的拼写，并比较树结构而非原始文本。 | ✅ `crates/deslop-core/src/lang/shared.rs`、`lang/csharp.rs`、`lang/rust_lang.rs`、`lang/python.rs`、`lang/dart.rs`（通过 `pipeline/corpus.rs::default_parsers` 注册） |
-| Chilowicz et al. 2009 — 语法树指纹 | 对子树进行哈希，使精确的结构克隆产生相等的指纹；通过兄弟序列扩展覆盖近似克隆。 | ✅ `crates/deslop-core/src/fingerprint.rs::collect_non_boilerplate_fingerprints` 中的自底向上 BLAKE3 Merkle，以及 `crates/deslop-core/src/sibling.rs::collect_non_boilerplate_sibling_fingerprints` 中宽度 2..8 的兄弟窗口 |
-| [SourcererCC (Sajnani et al. 2016)](https://arxiv.org/abs/1512.06448) | 用词元 k-gram 与 Jaccard 相似度进行可扩展的近似检测。 | ✅ 调整为基于**归一化 AST 种类 k-gram**而非原始源词元：`crates/deslop-core/src/tokens.rs`、`crates/deslop-core/src/pipeline/signatures.rs` |
-| [MinHash (Broder 1997)](https://ieeexplore.ieee.org/document/666900) | 从紧凑签名估计 Jaccard。 | ✅ `crates/deslop-core/src/lsh.rs::minhash_signature` 中的 128 值签名；由 `estimate_jaccard` 估计 Jaccard |
-| LSH 分带 (Indyk & Motwani 1998) | 以亚线性时间将相似指纹分桶。 | ✅ `crates/deslop-core/src/lsh.rs::band_collisions` 中的 32 带 × 4 行 |
-| In Defense of MinHash Over SimHash (Shrivastava & Li 2014) | 对二值化特征使用 MinHash 而非 SimHash。 | ✅ 选用 MinHash；未使用 SimHash 和 Winnowing |
-| 神经语义克隆检测 (CodeBERT、GraphCodeBERT、UniXCoder) | 将嵌入用作 Type-4 克隆的召回层。 | ✅ `crates/deslop-core/src/embedding/provider.rs` 中的 `EmbeddingProvider` trait；`embedding/ollama.rs` 中的 Ollama 提供方；默认模型 `nomic-embed-text` |
-| [SSCD (Ahmed et al., Wiley 2024) — 规模化的 BERT + ANN](https://onlinelibrary.wiley.com/doi/full/10.1002/spe.3355) | 将基于 BERT 式嵌入的 HNSW ANN 作为 Type-3/4 召回路径。 | ✅ 带确定性种子的 `instant-distance` HNSW、top-k 检索、余弦阈值 0.80：`crates/deslop-core/src/embedding/pairs.rs` |
-| [Ensemble-LLM 2025 (arXiv 2510.15480) — max/sum 融合](https://arxiv.org/abs/2510.15480) | 强信号不应被平均值稀释。 | ✅ 候选准入在 `crates/deslop-core/src/pair.rs::PairScore::bounded_fused` 中取结构、词元与嵌入信号的有界最大值。报告渲染随后在 `crates/deslop-core/src/buckets/gate.rs::content_gated_signals` 中，对结构信号饱和但内容并不相同的匹配应用内容证据门控。 |
-| 混合克隆检测（没有纯 RAG 论文推荐使用纯嵌入） | 对结构、词元与嵌入配对取并集，然后融合并聚簇。 | ✅ `crates/deslop-core/src/pair.rs::candidate_pairs`，`crates/deslop-core/src/cluster.rs` 中的传递闭包 |
-| 样板过滤（成熟工具的惯例） | 在指纹化前丢弃 import / namespace / decorator 克隆；以低噪声提示的形式重新呈现。 | ✅ `crates/deslop-core/src/boilerplate.rs` 与 `report_boilerplate.rs` |
-| Autofix `refactor.extract`（LSP 代码动作） | 将 Type-1 簇重写为单一的共享方法。 | ✅ 已交付 — 规范见 [`docs/specs/autofix-extract.md`](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/autofix-extract.md) |
+这些是检测技术，不是安全重构的证明。独立检查见[准确性文档](/zh/docs/accuracy-transparency/)。
 
 ## 参考文献
 

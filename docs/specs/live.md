@@ -82,6 +82,12 @@ One `AnalysisSession` per workspace root, owned by `deslop-lsp`. On `initialize`
 
 Shutdown: stop accepting new edits, finish the current pass, flush caches, remove the IPC socket, exit. The session never writes outside `.deslop/cache/` and never modifies source files.
 
+### [LIVE-PARENT-LIVENESS] Parent checks create no child processes
+
+The LSP and MCP check their parent's liveness without launching a command for each probe. Windows uses a native process handle and a zero-timeout wait; Unix retains its signal-zero check. A running process is alive, and a missing or exited process is dead. Access-denied or unknown probe errors remain conservatively alive. Each Windows handle closes when the probe returns.
+
+`crates/deslop-core/src/process.rs` supplies both servers. The Windows test in `process/tests.rs` checks a live process and a reaped process while `scripts/lib/windows_job_probe.py` accounts for every process created by the probe, including children that have already exited. Platform scope is registered in `crates/deslop/tests/skip_policy_contract.rs`.
+
 ### [LIVE-PROFILING] CPU repro evidence
 
 When `deslop-lsp` appears pegged at 100% CPU, capture both diagnosis channels:
@@ -139,6 +145,12 @@ A cold pass over a large workspace takes seconds, and an editor that shows nothi
 
 The seed is a **cache, never a result**. It is offered only at startup, it is never written back by the session that read it, and the first completed pass overwrites every cluster it supplied. A seed that cannot be read at all is not an error: the session simply starts empty and waits for its own pass. `AnalysisSession::try_seeded_from_cache` implements it; [LIVE-CACHE-SEED-KEY] states the compatibility a seed must satisfy before it may be served, and [LIVE-CLUSTER-OFFSET-FRESHNESS] states what a seeded cluster may claim about how current it is.
 
+### [LIVE-CACHE-SEED-READINESS] Cached startup is not completed analysis
+
+A cached report may appear while the real pipeline is being built, but queuing changes into a seed-only session must not announce `Idle` as though an analysis pass completed. Cold-pass `Idle` means the real pipeline has been installed and changes already deferred into `AnalysisSession::pending_changes` have been replayed. It does not promise an empty watcher or debounce queue: a later batch follows the normal scheduler lifecycle. `live/scheduler.rs` and `deslop-lsp/src/cache_seed.rs` implement this ordering; deterministic scheduler tests in `live/scheduler/tests.rs` pin deferred delivery and the final state transition.
+
+The LSP retains its latest startup state, including the exact error message when a cold refresh fails. A late `initialized` notification receives that retained outcome instead of interpreting an inactive pass as successful `Idle`. Retaining and publishing startup state use the same order, so a late initial notification cannot overwrite a newer startup outcome with an older one. `deslop-lsp/src/cache_seed/tests/readiness.rs` pins the failed-refresh ordering.
+
 ### [LIVE-CACHE-SEED-KEY] A seed must have been produced by this run's settings
 
 A cache seed is served to the editor **as an answer**, and an answer computed under different settings is a wrong answer, not a slightly old one. The seed was accepted on one condition — that the bytes deserialise as a `Report`. Nothing else was compared: not the tool version that produced it, not the `min_nodes` it was clustered at, not the configuration that scoped it, not the embedding provider that scored it. A report analysed at `--min-nodes 4` with embeddings on was therefore served verbatim to a session running at `--min-nodes 40` with embeddings off, and [LIVE-CLUSTER-OFFSET-FRESHNESS] then stamped current mtimes over those clusters, so the answer read as **fresh** rather than as a placeholder: byte offsets from a different analysis, pointing into files the editor has since changed, under a duplication figure the user is no longer asking for.
@@ -182,6 +194,32 @@ Events matching `[EXCLUSION-CONFIG]` `exclude` patterns are dropped before debou
 
 The LSP supplements the watcher with `textDocument/didChange` and `workspace/didChangeWatchedFiles` from the editor — belt-and-suspenders for in-buffer edits where the OS watcher may lag. Both paths converge on the same `AnalysisSession`.
 
+### [LIVE-WATCHER-DELIVERY] Bursts retain every admitted change
+
+Every path admitted by the watcher reaches the scheduler in arrival order, including bursts larger than the former 256-path queue and events received during an analysis pass. Repeated paths within one callback coalesce; the same path in a later callback remains a new change. Delivery uses a queue without retry threads or polling timers. A closed scheduler receiver lets the watcher callback return promptly.
+
+When the watcher closes its sender, the scheduler drains accepted paths and dispatches the final pending changeset without waiting for the debounce timeout. An installed pipeline finishes that pass before the scheduler stops; a seed-only session retains the changes for replay during cold installation ([LIVE-CACHE-SEED-READINESS]). `live/watcher/tests/delivery.rs` pins queue retention and closure, and `live/scheduler/tests.rs` pins final dispatch with a deterministic clock. Their implementations are `live/watcher.rs` and `live/scheduler.rs`.
+
+The real LSP fixture in `crates/deslop-lsp/tests/live/bursts.rs` checks the complete watcher-to-report loop: a burst of new source files, clone removal and restoration, and directory deletion. Its assertions preserve file counts, cluster kind and rank, occurrence paths, and complete cluster and metric equality.
+
+### [LIVE-WATCHER-DIRECTORIES] New and renamed directories retain their contents
+
+A directory creation or rename can arrive after its first children were written but before the operating system installed recursive watches. Admit the structural directory event and reconcile its current source files through the existing discovery and incremental analysis paths. Renames must also evict membership and cached ignore rules under the old path. Resolve changed-path aliases before applying workspace boundaries: a source target outside the workspace must not enter its report. Watched configuration aliases retain their separate policy-refresh route. The resulting report includes every admitted file, including empty source files, without relying on another child event.
+
+Keep the original workspace's configuration and ancestor ignore rules, including new rules inside the changed subtree. Reconcile only the affected subtree; do not traverse unrelated sibling subtrees or perform discovery in the watcher callback. Excluded build and dependency directories must remain excluded before traversal. Discovery must complete successfully before its results can justify deleting corpus membership; an unreadable subtree is not an empty subtree. Preserve ordinary non-source file filtering and no-op report behavior. The real LSP burst test in `crates/deslop-lsp/tests/live/bursts.rs` and deterministic directory-event tests cover the watcher and session implementations.
+
+### [LIVE-WATCHER-RESCAN] Recover when the operating system loses events
+
+A notification marked as requiring rescan must schedule workspace reconciliation even when it has no paths or an otherwise irrelevant event kind. Reload configuration and ignore rules because their changes may also have been lost. Reuse directory reconciliation to add or update discovered files and evict previously tracked files that are absent or no longer admitted. This full traversal is recovery from an explicit lost-event notification, not a periodic task. After reconciliation, the scheduler returns to its ordinary idle wait.
+
+### [LIVE-WATCHER-REMOVAL] Known non-source file removals need no analysis
+
+A removal explicitly identified as a file must match a supported source extension to enter the scheduler. Watched configurations and ignore-rule files always bypass that filter. Source-file removals bypass current exclusions so a formerly admitted file can still leave the corpus. Directory removals and removals with an unknown or other kind keep every path, regardless of extension, because they may invalidate source descendants or aliases. `live/watcher.rs` implements the policy; `live/watcher/tests/delivery/removals.rs` pins every event class and exclusion bypass.
+
+### [LIVE-WATCHER-CONFIG-COST] Unrelated file events avoid config resolution
+
+Checking whether an event names a watched configuration must not canonicalise every unrelated build file. The watcher and incremental pipeline use the same matcher in `config/paths.rs`, so repeated pipeline admission checks retain the same lookup bound. Exact registered paths match directly. Config filenames reached through parent-directory aliases and differently named leaf symlinks still resolve normally; uncertain Unicode, case, and platform filename aliases retain the conservative filesystem lookup. Missing unrelated paths need no canonical lookup. This changes lookup cost only, preserving event admission and configuration reload behavior. Resolver-call and alias assertions in `config/paths/tests.rs` pin the shared contract without requiring the `live` feature.
+
 ### [LIVE-SCHEDULER] Re-analysis scheduler
 
 After the watcher emits a coalesced changeset:
@@ -197,6 +235,16 @@ After the watcher emits a coalesced changeset:
 Single-threaded per session. Consecutive queued changesets merge before dispatch.
 
 Budget: ≤ 10 changed files, warm cache, 100 K-LOC → **< 500 ms**. Miss the budget → `tracing::warn!` with timing breakdown.
+
+### [LIVE-SCHEDULER-IDLE] Quiet workspaces stay asleep
+
+The scheduler waits for a watcher event while no file changes are pending, including after a completed pass. Debounce timers run only while changes are queued. Time spent idle never becomes a burst of overdue timer ticks when the next change arrives. Closing the watcher channel drains and dispatches accepted work before the scheduler stops ([LIVE-WATCHER-DELIVERY]).
+
+### [LIVE-SCHEDULER-REMOVAL-COST] Removed paths use the corpus index
+
+A removed path that matches no analysed file must be rejected through the corpus path index without scanning every analysed path. Matching leaves and whole subtrees are still evicted, while a component-prefix sibling such as `pkg_twin` survives removal of `pkg`. Lookup work grows with the matching files plus the logarithm of the analysed file count.
+
+A path already known to be missing resolves its surviving parent directly, without first attempting a doomed canonical lookup of the missing leaf. Existing paths retain native alias resolution, and dangling symlinks retain their fallback behavior. `pipeline/session/change/tests.rs` checks resolver calls alongside existing-file and real/broken-symlink controls for the implementation in `pipeline/session/change.rs`.
 
 ### [LIVE-SCHEDULER-NOOP] No-op pass early-out
 
@@ -273,7 +321,24 @@ The `live` module exposes the `LiveApi` trait. The LSP holds a `LiveApi` impl an
 `rescan` (the `deslop.lsp.refreshReport` IPC method) blocks until a fresh full pass completes and returns that pass's report — never one from before the refresh. The `paths` argument is informational; the LSP always runs a full `refresh_full` under the session lock. The response's `generation` and `clusters` fields are drawn from the same post-refresh generation, so one call surfaces the post-edit state — eliminated clusters disappear and surviving clusters carry post-edit offsets without a second call.
 
 ### [LIVE-CLUSTER-OFFSET-FRESHNESS] Cluster offset freshness on read
-A `cluster/byId` read (and `report/forFile` / `report/forRange` / `duplicates/findSimilar`) returns occurrence byte and line ranges that map onto the current on-disk file, even when the agent has edited files without an explicit `rescan` between reads. The session re-stats every occurrence path on each IPC read ([LIVE-CLUSTER-OFFSET-FRESHNESS]) and synchronously re-analyses any file whose mtime is newer than last observed, before resolving the cluster. A stale offset that overshoots the post-edit file length would corrupt agent context, so this gate is mandatory on every agent-facing read path, not just `rescan`.
+A `cluster/byId` read (and `report/forFile` / `report/forRange` / `duplicates/findSimilar`) returns occurrence byte and line ranges that map onto the current on-disk file — or, for a file an editor holds open, onto its current buffer ([LIVE-OPEN-BUFFERS]) — even when the agent has edited files without an explicit `rescan` between reads. The session re-stats every occurrence path on each IPC read ([LIVE-CLUSTER-OFFSET-FRESHNESS]) and synchronously re-analyses any file whose mtime is newer than last observed, before resolving the cluster. A stale offset that overshoots the post-edit file length would corrupt agent context, so this gate is mandatory on every agent-facing read path, not just `rescan`.
+
+### [LIVE-OPEN-BUFFERS] Open editor buffers shadow the file on disk
+
+Editor-driven report notifications identify the analysed path and LSP document version using the generated `AnalysedBuffer` wire model. They are emitted even when the analysis leaves clone membership unchanged, so the VSIX can release its stale-offset guard without waiting for save ([VSIX-STATE-DIRTY]).
+What the editor shows is what gets analysed. From the moment an editor opens a file until it closes it, the session analyses that file from the editor's text, not from the bytes on disk. Every edit the editor reports is applied to that text and re-analysed at once, so a clone the user deletes in an unsaved buffer leaves the report, the diagnostics, the code lenses, the live bubble and every `report/forRange` answer before the file is saved. Restoring the text brings the clone back. Closing the buffer without saving makes the disk the truth again and the report returns to what the saved bytes say.
+
+The rules:
+
+- An opened buffer whose text equals the disk changes nothing ([LIVE-SCHEDULER-NOOP]).
+- Selecting an embedding model captures the current editor text and analyses it before rendering the background report. If an edit changes the sources while that job runs, its result is discarded and the current selection is retried against the latest sources; it never overwrites the newer report. Code: `live/embedding_refresh.rs`, `live/api.rs`, `pipeline/session/initialise.rs`. Tests: `deslop-lsp/tests/open_buffers/embedding.rs` and `embedding_refresh_keeps_latest_report_readable_while_provider_is_blocked` in `deslop-core/tests/live.rs`.
+- An edit to a file the editor never opened is refused (`buffer_not_open`) and changes nothing — there is no text to apply it to.
+- Unsaved text is never written to the on-disk fingerprint cache ([PIPELINE-INCREMENTAL]). A keystroke is not a file state worth persisting.
+- A full pass (`refresh_full`, the cold start) reads disk, then re-applies every open buffer before its report is served, so a full refresh never silently reverts to saved bytes behind the user's back.
+- When a file is open in an editor and also edited on disk by another actor, the editor's buffer wins until it is closed. The editor shows one text and reports a conflict on save; the report describes that text.
+- Removing the disk file or its parent directory preserves any open editor source, including during directory reconciliation and full refresh. Closing that buffer removes the source if no disk file remains. Code: `pipeline/session/change.rs`; tests: `deslop-lsp/tests/open_buffers.rs` and `deslop-lsp/tests/open_buffers/deletion.rs`.
+
+Code: `OpenBuffers` (`crates/deslop-core/src/pipeline/open_buffers.rs`), `AnalysisSession::open_buffer` / `edit_buffer` / `close_buffer` (`crates/deslop-core/src/live/session_buffers.rs`), the `didOpen` / `didChange` / `didClose` handlers in `crates/deslop-lsp/src/backend.rs`. Tests: `crates/deslop-core/tests/live_open_buffers.rs`, `crates/deslop-lsp/tests/open_buffers.rs`, `an unsaved deleted clone is absent from reportForRange` in `clients/vscode/src/test/suite/live-refresh.e2e.test.ts`.
 
 ### [LIVE-NOTIFICATIONS] Push notifications
 

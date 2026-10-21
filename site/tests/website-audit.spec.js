@@ -1,4 +1,7 @@
+import { readdir } from "node:fs/promises";
+import { extname } from "node:path";
 import { expect, test } from "@playwright/test";
+import { expectAssetType } from "./helpers/assets.js";
 
 const representativeRoutes = [
   "/",
@@ -15,7 +18,7 @@ const representativeRoutes = [
 
 // Every English blog post appears in the feed; the Chinese translations do not.
 // Bump this when a post is added so the feed cannot silently lose an entry.
-const ENGLISH_BLOG_POST_COUNT = 9;
+const ENGLISH_BLOG_POST_COUNT = 10;
 
 const isInScope = (pathname) => !pathname.startsWith("/issues/") && pathname !== "/issues/";
 
@@ -48,9 +51,7 @@ test("declares the social image with its actual MIME type", async ({ page }) => 
   // build ships*. Against production it passed only for posts already
   // deployed and failed for every new one, which makes it a deployment
   // check wearing a build check's name.
-  const response = await page.request.get(new URL(socialImage).pathname);
-  expect(response.ok(), socialImage).toBeTruthy();
-  expect(response.headers()["content-type"], socialImage).toContain(socialImageType);
+  await expectAssetType(page, new URL(socialImage).pathname, socialImageType, socialImage);
 });
 
 test("every page's declared social-image type matches the file it points at", async ({ page }) => {
@@ -266,4 +267,14 @@ test("internal page links and fragments resolve", async ({ page }) => {
       }
     }
   }
+});
+
+// [SITE-ASSET-TYPE] Motion is built in the page, so no encoded video or audio file is ever published.
+const SITE_SOURCE = new URL("../src/", import.meta.url);
+const ENCODED_MEDIA = new Set([".aac", ".avi", ".flac", ".m4a", ".m4v", ".mkv", ".mov", ".mp3", ".mp4", ".ogg", ".wav", ".webm"]);
+const NO_FILES = [];
+
+test("the site source publishes no encoded video or audio", async () => {
+  const files = await readdir(SITE_SOURCE, { recursive: true });
+  expect(files.filter((file) => ENCODED_MEDIA.has(extname(file).toLowerCase()))).toEqual(NO_FILES);
 });

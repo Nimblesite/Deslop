@@ -27,6 +27,7 @@ import {
   Report,
   ReportCluster,
   ReportOccurrence,
+  isKindExcluded,
   occurrenceCount,
 } from "../types/report";
 
@@ -78,7 +79,7 @@ export class DecorationManager implements vscode.Disposable {
       CLUSTER_KINDS.map((kind) => [kind, []]),
     );
     let buffer: Buffer | undefined;
-    for (const cluster of report.clusters) {
+    for (const cluster of decoratableClusters(report)) {
       for (const occurrence of cluster.occurrences) {
         if (!sameFile(occurrence.path, activePath)) continue;
         buffer ??= Buffer.from(editor.document.getText(), UTF8_ENCODING);
@@ -94,6 +95,18 @@ export class DecorationManager implements vscode.Disposable {
   private clear(editor: vscode.TextEditor): void {
     for (const decoration of this.byKind.values()) editor.setDecorations(decoration, []);
   }
+}
+
+/** [VSIX-TOP-OFFENDERS-EXCLUDED] Clusters eligible for editor decoration:
+ * every kind except those the include set excludes — the same quieting
+ * the tree greys out and bubbles refuse. The set comes from the
+ * server's `metrics.total_includes`; the client never re-derives it. */
+export function decoratableClusters(report: Report): ReportCluster[] {
+  const totalIncludes = report.metrics.total_includes;
+  if (totalIncludes === undefined) return report.clusters;
+  return report.clusters.filter(
+    (cluster) => !isKindExcluded(cluster.kind, totalIncludes),
+  );
 }
 
 function createDecoration(kind: ClusterKind): vscode.TextEditorDecorationType {

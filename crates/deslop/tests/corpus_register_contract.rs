@@ -18,14 +18,20 @@
 use std::{fs, path::Path};
 
 use anyhow::{Context, Result};
-use deslop_test_support::{corpus::repo_root, read_json};
+use deslop_test_support::{corpus::repo_root, corpus_score::clone_type::CloneType, read_json};
 use serde_json::Value;
 
 /// Where the judged registers live, one per target repository.
 const REGISTER_DIR: &str = "corpus/register";
-/// The gate config shares that directory but is not a register. Naming it here
-/// keeps the directory scan from reading configuration as ground truth.
-const THRESHOLDS_STEM: &str = "score-thresholds";
+/// [CORPUS-REGISTER-QUEUE] Repositories waiting on a judging pass. A register
+/// with no CLEARLY IN yet must still be listed here.
+const JUDGING_QUEUE: &str = "corpus/judging-queue.json";
+const QUEUED_REPOSITORIES: &str = "repositories";
+const NAME: &str = "name";
+/// [CORPUS-SCORE-OUTCOMES] The judged pair record shares that directory but is
+/// not a register. Naming it here keeps the directory scan from reading a
+/// record of the engine's answers as ground truth.
+const OUTCOMES_STEM: &str = "outcomes";
 /// The two judged verdicts, and the recorded-but-asserting-nothing third.
 const CLEARLY_IN: &str = "clearly_in";
 const CLEARLY_OUT: &str = "clearly_out";
@@ -52,20 +58,25 @@ const PROTOCOL_PATH_FIELDS: [&str; 3] = ["spec", "judging_skill", "preparer_skil
 const SPEC_FIELD: &str = "spec";
 const SPEC_SECTION_FIELD: &str = "spec_section";
 const JUDGING_SKILL_FIELD: &str = "judging_skill";
-/// [CORPUS-SCORE] The gate every scored repository is held to.
-const THRESHOLDS: &str = "corpus/register/score-thresholds.json";
-const DEFAULTS: &str = "defaults";
-const REPOS: &str = "repos";
-/// A ratio threshold, refused by the gate contract below: see
-/// [`every_gate_allowance_is_an_absolute_count_so_a_growing_register_cannot_loosen_it`].
-const MINIMUM_SCORE: &str = "minimum_score_percent";
-const MAXIMUM_FALSE_NEGATIVES: &str = "maximum_false_negatives";
-const MAXIMUM_FALSE_POSITIVES: &str = "maximum_false_positives";
-/// The strict default: a judged repository answers every judged pair
-/// correctly, so it is allowed zero false negatives and zero false positives.
-/// Loosening this instead of recording a tracked exception would silently drop
-/// the gate on every repository at once.
-const PERFECT_SCORE: u64 = 0;
+/// [CORPUS-SCORE-OUTCOMES] Every judged pair's last recorded outcome, the
+/// fields a record entry carries — exactly these, so no count or percentage
+/// allowance can creep in beside them — and the two outcomes it may hold.
+const OUTCOMES: &str = "corpus/register/outcomes.json";
+const RECORD_FIELDS: [&str; 2] = ["pairs", "spec"];
+const PAIRS: &str = "pairs";
+const PAIR_FIELDS: [&str; 6] = [
+    "engine",
+    "occurrences",
+    "outcome",
+    "repo",
+    "since",
+    "verdict",
+];
+const REPO: &str = "repo";
+const VERDICT: &str = "verdict";
+const OUTCOME_FIELDS: [&str; 3] = ["outcome", "since", "engine"];
+const OUTCOME: &str = "outcome";
+const OUTCOMES_ALLOWED: [&str; 2] = ["pass", "fail"];
 
 /// The judging protocol is only independent ground truth while the judge cannot
 /// learn what produced the reports, so the protocol itself must never name this
@@ -79,7 +90,7 @@ fn registers() -> Result<Vec<(String, Value)>> {
     for entry in fs::read_dir(&directory).context("corpus/register must be readable")? {
         let path = entry?.path();
         let name = stem(&path);
-        if path.extension().is_some_and(|ext| ext == "json") && name != THRESHOLDS_STEM {
+        if path.extension().is_some_and(|ext| ext == "json") && name != OUTCOMES_STEM {
             found.push((name, read_json(&path)?));
         }
     }
@@ -123,6 +134,7 @@ fn line_bounds(range: &str) -> Option<(u32, u32)> {
 #[test]
 fn every_register_pins_a_commit_and_at_least_one_judged_pair() -> Result<()> {
     let found = registers()?;
+    let queued = queued_names()?;
     assert!(
         found.len() >= EXPECTED_REGISTERS,
         "the register set lost files: only {:?} remain",
@@ -135,12 +147,28 @@ fn every_register_pins_a_commit_and_at_least_one_judged_pair() -> Result<()> {
             "{name}: a register must pin the full commit its ranges were read at, \
              or every line number in it names something unknown"
         );
+        let judged = entries(register, CLEARLY_IN).len() + entries(register, CLEARLY_OUT).len();
         assert!(
-            !entries(register, CLEARLY_IN).is_empty(),
-            "{name}: no CLEARLY IN entries — a register that judges nothing asserts nothing"
+            judged > 0,
+            "{name}: no CLEARLY IN or CLEARLY OUT entries — a register that judges nothing \
+             asserts nothing"
+        );
+        assert!(
+            !entries(register, CLEARLY_IN).is_empty() || queued.contains(&name.to_lowercase()),
+            "{name}: no CLEARLY IN entries and not in {JUDGING_QUEUE} — a register that finds no \
+             clone yet must wait in the queue for a pass that agrees on one"
         );
     }
     Ok(())
+}
+
+/// The lowercased names of every repository waiting in the judging queue.
+fn queued_names() -> Result<Vec<String>> {
+    let queue: Value = read_json(&repo_root().join(JUDGING_QUEUE))?;
+    Ok(entries(&queue, QUEUED_REPOSITORIES)
+        .iter()
+        .map(|repository| text(repository, NAME).to_lowercase())
+        .collect())
 }
 
 #[test]
@@ -192,6 +220,29 @@ fn every_range_is_a_well_formed_non_empty_span() -> Result<()> {
                 for range in entries(entry, OCCURRENCES) {
                     assert_range(&format!("{name} {verdict}"), range);
                 }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// [CORPUS-REGISTER-TYPE] A pinned type is one of the four research types and
+/// sits only on a CLEARLY IN: a pair that is not a clone has no clone type, and
+/// a label the scorer cannot read would fail every score that reaches it.
+#[test]
+fn every_pinned_clone_type_is_a_research_type_on_a_clearly_in() -> Result<()> {
+    for (name, register) in registers()? {
+        for verdict in [CLEARLY_IN, CLEARLY_OUT, NOT_CLEAR] {
+            for (index, entry) in entries(&register, verdict).iter().enumerate() {
+                let pinned = CloneType::pinned(entry, verdict);
+                assert!(
+                    pinned.is_ok(),
+                    "{name} {verdict}[{index}]: {}",
+                    pinned
+                        .err()
+                        .map(|error| error.to_string())
+                        .unwrap_or_default()
+                );
             }
         }
     }
@@ -258,110 +309,116 @@ fn the_judging_protocol_never_names_this_project() -> Result<()> {
     Ok(())
 }
 
-/// A count field, or zero when absent.
-fn count(value: &Value, field: &str) -> u64 {
-    value.get(field).and_then(Value::as_u64).unwrap_or_default()
+/// The judged pair record, as checked in.
+fn record() -> Result<Value> {
+    read_json(&repo_root().join(OUTCOMES))
+}
+
+/// The record's pairs, each with what identifies it.
+fn recorded_pairs(record: &Value) -> Vec<(String, String, Vec<String>, &Value)> {
+    entries(record, PAIRS)
+        .iter()
+        .map(|pair| {
+            let occurrences = entries(pair, OCCURRENCES)
+                .iter()
+                .map(|range| range.as_str().unwrap_or_default().to_owned())
+                .collect();
+            (text(pair, REPO), text(pair, VERDICT), occurrences, pair)
+        })
+        .collect()
+}
+
+/// The ranges of every entry under `verdict`, sorted as the record keys them.
+fn judged_pairs(register: &Value, verdict: &str) -> Vec<Vec<String>> {
+    entries(register, verdict)
+        .iter()
+        .map(|entry| {
+            let mut ranges: Vec<String> = entries(entry, OCCURRENCES)
+                .iter()
+                .map(|range| range.as_str().unwrap_or_default().to_owned())
+                .collect();
+            ranges.sort();
+            ranges
+        })
+        .collect()
 }
 
 #[test]
-fn the_score_gate_is_strict_by_default_and_every_exception_is_a_tracked_repository() -> Result<()> {
-    let root = repo_root();
-    let config: Value = read_json(&root.join(THRESHOLDS))?;
-    let defaults = config.get(DEFAULTS).cloned().unwrap_or(Value::Null);
-    for allowance in [MAXIMUM_FALSE_NEGATIVES, MAXIMUM_FALSE_POSITIVES] {
+fn every_recorded_pair_is_a_pair_its_register_judges() -> Result<()> {
+    let record = record()?;
+    let pairs = recorded_pairs(&record);
+    assert!(
+        !pairs.is_empty(),
+        "{OUTCOMES} records no judged pair — every corpus run writes it, and a record that \
+         holds nothing tolerates nothing and catches no regression"
+    );
+    for (repo, verdict, occurrences, _) in &pairs {
+        let path = repo_root().join(REGISTER_DIR).join(format!("{repo}.json"));
+        let register: Value = read_json(&path)
+            .with_context(|| format!("{OUTCOMES} records `{repo}`, which has no register"))?;
+        assert!(
+            [CLEARLY_IN, CLEARLY_OUT].contains(&verdict.as_str()),
+            "{OUTCOMES} records a `{verdict}` pair in `{repo}`; only judged verdicts are scored"
+        );
+        assert!(
+            judged_pairs(&register, verdict).contains(occurrences),
+            "{OUTCOMES} records `{repo}` {verdict} {occurrences:?}, which its register no longer \
+             judges — a record of a pair nobody asserts tolerates or demands nothing real"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn the_record_holds_one_outcome_per_pair_in_one_stable_order_and_nothing_else() -> Result<()> {
+    let record = record()?;
+    let mut fields: Vec<&str> = record
+        .as_object()
+        .into_iter()
+        .flatten()
+        .map(|(key, _)| key.as_str())
+        .collect();
+    fields.sort_unstable();
+    assert_eq!(
+        fields, RECORD_FIELDS,
+        "{OUTCOMES} holds its spec and its pairs, nothing else"
+    );
+    let pairs = recorded_pairs(&record);
+    for (repo, verdict, occurrences, pair) in &pairs {
+        let mut fields: Vec<&str> = pair
+            .as_object()
+            .into_iter()
+            .flatten()
+            .map(|(key, _)| key.as_str())
+            .collect();
+        fields.sort_unstable();
         assert_eq!(
-            defaults.get(allowance).and_then(Value::as_u64),
-            Some(PERFECT_SCORE),
-            "the default gate must demand a perfect score, and `{allowance}` of zero is what a \
-             perfect score is in units that do not re-scale with the register — an exception \
-             belongs under `{REPOS}`, with the reason, not in the default that covers every \
-             repository at once"
+            fields, PAIR_FIELDS,
+            "`{repo}` {verdict} {occurrences:?} must carry exactly its identity and its outcome — \
+             an allowance, a count or a percentage beside them would tolerate defects nobody named"
         );
-    }
-
-    let repos = config.get(REPOS).and_then(Value::as_object);
-    for (name, entry) in repos.into_iter().flatten() {
-        let register = root
-            .join(REGISTER_DIR)
-            .join(format!("{}.json", name.to_lowercase()));
-        assert!(
-            register.exists(),
-            "`{REPOS}.{name}` gates a repository with no register at {}",
-            register.display()
-        );
-        assert!(
-            text(entry, WHY).len() >= MINIMUM_PROSE,
-            "`{REPOS}.{name}` relaxes the gate without saying which defect it is tracking — \
-             an entry here is an admission that a bug shipped, and must read like one"
-        );
-    }
-    Ok(())
-}
-
-#[test]
-fn no_gated_allowance_exceeds_what_its_register_actually_judges() -> Result<()> {
-    let root = repo_root();
-    let config: Value = read_json(&root.join(THRESHOLDS))?;
-    let repos = config.get(REPOS).and_then(Value::as_object);
-    for (name, entry) in repos.into_iter().flatten() {
-        let register: Value = read_json(
-            &root
-                .join(REGISTER_DIR)
-                .join(format!("{}.json", name.to_lowercase())),
-        )?;
-        for (allowance, verdict) in [
-            (MAXIMUM_FALSE_NEGATIVES, CLEARLY_IN),
-            (MAXIMUM_FALSE_POSITIVES, CLEARLY_OUT),
-        ] {
-            let judged = entries(&register, verdict).len() as u64;
+        for field in OUTCOME_FIELDS {
             assert!(
-                count(entry, allowance) <= judged,
-                "`{REPOS}.{name}.{allowance}` allows more defects than the register has \
-                 {verdict} entries ({judged}) — a gate nothing can breach is not a gate"
+                !text(pair, field).is_empty(),
+                "`{repo}` {occurrences:?} has no `{field}`"
             );
         }
-    }
-    Ok(())
-}
-
-#[test]
-fn every_gate_allowance_is_an_absolute_count_so_a_growing_register_cannot_loosen_it() -> Result<()>
-{
-    let root = repo_root();
-    let config: Value = read_json(&root.join(THRESHOLDS))?;
-    let sections = [
-        (
-            DEFAULTS,
-            config.get(DEFAULTS).cloned().unwrap_or(Value::Null),
-        ),
-        (REPOS, config.get(REPOS).cloned().unwrap_or(Value::Null)),
-    ];
-    for (section, value) in sections {
-        let entries: Vec<(String, Value)> = value.as_object().map_or_else(
-            || vec![(section.to_owned(), value.clone())],
-            |fields| {
-                if section == REPOS {
-                    fields
-                        .iter()
-                        .map(|(name, entry)| (name.clone(), entry.clone()))
-                        .collect()
-                } else {
-                    vec![(section.to_owned(), value.clone())]
-                }
-            },
+        assert!(
+            OUTCOMES_ALLOWED.contains(&text(pair, OUTCOME).as_str()),
+            "`{repo}` {occurrences:?} records `{}`, which is neither pass nor fail",
+            text(pair, OUTCOME)
         );
-        for (name, entry) in entries {
-            assert!(
-                entry.get(MINIMUM_SCORE).is_none(),
-                "`{section}.{name}` gates on `{MINIMUM_SCORE}`, a ratio against the register. \
-                 A score is `100 * (judged - false negatives - false positives) / judged`, so a \
-                 percentage threshold is a defect allowance divided by the register size: the \
-                 same number permits more defects every time the register grows, loosening the \
-                 gate with nobody editing it. State the allowance in \
-                 `{MAXIMUM_FALSE_NEGATIVES}` and `{MAXIMUM_FALSE_POSITIVES}`, which mean the \
-                 same thing at every register size."
-            );
-        }
     }
+    let keys: Vec<(&String, &String, &Vec<String>)> = pairs
+        .iter()
+        .map(|(repo, verdict, ranges, _)| (repo, verdict, ranges))
+        .collect();
+    assert!(
+        keys.iter()
+            .zip(keys.iter().skip(1))
+            .all(|(earlier, later)| earlier < later),
+        "{OUTCOMES} must list each pair once, sorted by repository, verdict and ranges, so two \
+         runs over the same answers write the same file"
+    );
     Ok(())
 }

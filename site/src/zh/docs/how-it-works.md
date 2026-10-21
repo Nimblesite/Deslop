@@ -12,106 +12,52 @@ lang: zh
 
 # 工作原理
 
-Deslop 是一条固定的、确定性的流水线。没有任何步骤在源代码上使用正则。每个步骤都以缓存键标识，因此未变更的文件会被跳过。每个阶段的输出都很小、结构化且可审计。
+Deslop 使用 tree-sitter 解析源代码，寻找候选副本，检查内容，再将符合条件的结果分组。CLI、编辑器和 MCP 工具共用同一个 Rust 引擎。
 
-```
-discover → parse → normalize → fingerprint → cluster
-           → LSH → embed → fuse → rank → render
-```
+本指南适用于 [0.35.0](/zh/releases/)。
 
-每个阶段都对应一条研究脉络；文件指针见[研究背景](/zh/docs/research-background/)以及规范的[算法实现状态表](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/SPEC.md#algorithm-implementation-status)。
+## 寻找候选副本
 
-## Discover（发现）
+支持 C#、Rust、Python、Dart、JavaScript、TypeScript/TSX、PHP、F# 和 Go。默认遵循 `.gitignore`，排除依赖目录和构建产物。详见[配置](/zh/docs/configuration/)。
 
-`.gitignore` 会被遵循。只有扩展名映射到受支持语言语法的文件才会被分析 —— 其余一切，包括二进制文件，都会被跳过。不跟随符号链接。每个候选文件的内容都用 BLAKE3 进行哈希，该哈希是每个阶段所用复合缓存键的一个组成部分，因此未变更的文件会被跳过。
+引擎归一化语法树，使名称、字面量和格式差异不会遮蔽候选副本。它对语法子树和连续语句生成指纹，也会查找同一文件中的复制。结构重叠和 MinHash 相似度帮助找回外层方法已经变化的副本。
 
-## Parse（解析）
+仅有相同结构不足以证明重复。引擎还检查源内容、一致的重命名以及实际执行的操作。给协作对象换个名字，与改为调用另一个操作，是两种不同的变化。
 
-每种语言都通过 tree-sitter 提供一份语法：
+## 理解分类
 
-| 语言 | 状态 |
+| 报告标签 | 含义 |
 | --- | --- |
-| [C#](https://learn.microsoft.com/en-us/dotnet/csharp/) | v1 |
-| [Rust](https://www.rust-lang.org/) | v1 |
-| [Python](https://www.python.org/) | v1 |
-| [Dart](https://dart.dev/) | v1 |
-| [JavaScript](https://developer.mozilla.org/en-US/docs/Web/JavaScript) | v1 |
-| [TypeScript](https://www.typescriptlang.org/) / TSX | v1 |
-| [PHP](https://www.php.net/) | v1 |
-| [F#](https://fsharp.org/) | v1 |
-| [Go](https://go.dev/) | v1 |
+| **Identical code** | 除允许的空白差异外，源文本相同。对应 Type I；研究定义还允许注释差异，因此 Deslop 的文本一致性规则更严格。 |
+| **Nearly identical code** | 重命名、参数化或略有改动的副本：Type II 和接近原文的 Type III。 |
+| **Similar code** | 仍有大量复制内容，但语句或控制流变化较大：Type III。 |
+| **Same behavior, different code** | 可选嵌入分析给出的 Type IV 候选。需要审查两处实现，不能据此认定可以互换。 |
+| **Same shape, different content** | 布局相似，但几乎没有共享内容。仅供参考，不是克隆。 |
 
-解析器产出一棵 AST。这条流水线上从不会有任何源代码级别的正则参与 —— 永远不会。
+仅形状相同的结果不计入克隆数、重复质量或重复百分比，排在克隆之后，默认不产生诊断。分组标签描述已建立的成员关系；一串间接匹配并不能证明任意两处都匹配。
 
-## Normalize（归一化）
+## 比较两个位置
 
-相同的代码可能仅在标识符和字面量上有所不同（Type-2 重命名）。Deslop 会剥除：
+相似度证据属于两个明确的源代码范围。簇只携带类型、出现位置、质量和排名，不会把某一对的相似度当成整个簇的置信度。
 
-- 标识符名称（重写为 `__ident__`）
-- 字符串 / 数字 / 字符字面量（重写为 `__literal__`）
-- 注释、空白、琐碎字符
+在 VS Code 中使用 **Compare To Canonical**，或先 **Select for Compare**，再 **Compare with Selected**。CLI 也支持 [`--compare`](/zh/docs/configuration/#compare-two-occurrences)。引擎会重新计算所选两个位置的判定。
 
-按语言定制的归一化规则，跨语言保持完全一致的输出格式。一个方法的重命名副本会哈希出与原始版本相同的指纹。
+## 按重复质量排名
 
-## Fingerprint（指纹）
-
-每棵节点数 ≥ `--min-nodes` 的子树都会获得一个**自底向上的 BLAKE3 Merkle 哈希**，它将节点类型与其子节点的有序哈希组合在一起。这是 Chilowicz 2009 的语法树指纹技术，应用于 tree-sitter AST。第二趟 —— 宽度为 2 到 8 的兄弟窗口指纹 —— 通过对父节点之间不共享结构的连续语句序列进行哈希，扩展了**近乎相同代码** [Type-3] 的召回率（`crates/deslop-core/src/sibling.rs`）。子树以字节范围发出 —— 行号是渲染期才关心的事项。磁盘上的缓存以 `(content_hash, language, tool_version, min_nodes)` 为键。
-
-## Cluster（聚类）
-
-跨文件或同一文件内相同的 Merkle 哈希会立即构成一个**相同代码**簇（Type-1 / Type-2）。这一趟是 O(n) 的，无需任何近似匹配即可找出代价最高的重复。来自 LSH 与嵌入趟次的幸存配对会被并入，并通过**传递闭包**进行聚类（[`crates/deslop-core/src/cluster.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/cluster.rs)）—— 即使 A 与 C 从未直接配对，A↔B 和 B↔C 也会产生同一个簇。
-
-## LSH（近似匹配）
-
-对于**近乎相同的代码**（Type-3，结构相似但不完全相同），Deslop 为每棵子树构建一条宽度为 5 的归一化 AST 类型 k-gram 流，计算出一个 **128 值的 MinHash 签名**（Broder 1997），并将它们分组为 **32 个带、每带 4 行**，用于 [Indyk-Motwani 局部敏感哈希](https://en.wikipedia.org/wiki/Locality-sensitive_hashing)。在同一带中发生碰撞的子树对构成候选配对；随后根据完整签名的一致程度估算 Jaccard 相似度。SourcererCC 的词袋设计是灵感来源，但 Deslop 在归一化的 AST 类型而非原始源代码词元上运行其 k-gram。实现位于 [`crates/deslop-core/src/lsh.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/lsh.rs) 与 [`crates/deslop-core/src/tokens.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/tokens.rs)。
-
-## Embed（语义）
-
-可选，**默认关闭** —— 通过 `--embeddings auto`（探测并在失败时附带警告回退）或 `--embeddings required`（若提供方不可达则硬失败）来启用。启用后，每棵子树都会经过一个代码嵌入模型（默认使用本地 Ollama —— 开箱即用 `nomic-embed-text`，可通过 `--embedding-model` 选用任意 Ollama 嵌入模型）。最近邻搜索在一个 **HNSW** 索引上运行（`instant-distance`，纯 Rust，确定性种子），余弦阈值定义于 [`crates/deslop-core/src/embedding/pairs.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/embedding/pairs.rs)。这会产出**行为相同、代码不同**的候选（Type-4）—— 语义等价但语法不同的代码，例如命令式循环与 LINQ 表达式之别。SSCD（Wiley 2024）验证了 HNSW + ANN 是规模化场景下正确的召回层；Deslop 采用相同的形态，并按 [`fused.md`](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/fused.md) 将其与结构趟次和 LSH 趟次配对。
-
-嵌入缓存以 `(content_hash, provider_id, model_id, model_version)` 为键，因此切换模型只会使嵌入层失效 —— 结构与 LSH 缓存得以保留。
-
-## Fuse（融合）
-
-每个候选配对都会获得三个独立的评分：
-
-| 信号 | 范围 | 检测 | 来源 |
-| --- | --- | --- | --- |
-| `structural` | 0 / 1 | 相同代码 [Type-1/2] —— 完全相同的 Merkle 桶 | `pair.rs::collect_structural_pairs` |
-| `token_jaccard` | 0..1 | 近乎相同的代码 [Type-3] —— MinHash 带碰撞 | `lsh.rs::band_collisions` + `tokens.rs` |
-| `embedding_cos` | 0..1 | 行为相同、代码不同 [Type-3/4] —— HNSW top-k | `embedding/pairs.rs` |
-
-候选配对首先采用**有界最大值**——`max(structural, token_jaccard, embedding_cos)`，取值于 `[0,1]`（[`pair.rs::PairScore::bounded_fused`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/pair.rs)）。该值越过 `FUSED_THRESHOLD = 0.85` 时，配对才会保留。仅由 LSH 产生的配对还必须满足 `token_jaccard ≥ 0.90`，且两端均至少包含 40 个 AST 节点。
-
-报告渲染前，形状证据饱和的非完全相同簇会按 `max(embedding_cos, shape × content_confidence)` 经过内容门禁；其中内容置信度取原始内容一致度与折扣后的重命名一致性两者中的较高值（[`buckets/gate.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/buckets/gate.rs)）。这样，即使归一化后的形状完全一致，底层代码有差异时也不会显示为满置信度。逐字节相同的簇和形状证据未饱和的簇保留候选评分。
-
-除非 `.deslop.toml` 明确启用，否则跨语言配对会被丢弃。启用后，没有结构锚点的跨语言配对按 `0.10` 的下限准入；带结构锚点的配对仍使用 `0.85` 阈值。
-
-## Rank（排名）
-
-排名评分就是整个面向用户的产品。其实现位于 [`crates/deslop-core/src/cluster.rs::rank_weight`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/cluster.rs)：
-
-```
-weight = clone_node_count × (cluster_size − 1) × log2(1 + spanned_bytes)
+```text
+mass = canonical_node_count × max(visible_members − 1, 0)
 ```
 
-更大的片段权重更高（`clone_node_count`）。副本越多权重越高（`cluster_size − 1`，因此单成员簇得分为零）。`log2(1 + spanned_bytes)` 项随收益增长，但对极大跨度趋于平缓，因此一个被复制四次的 50 行方法的排名高于一个被复制一次的 5000 行文件。报告顶部永远是收益最大者 —— 而非最先找到的簇。
+质量是被复制语法树的节点数乘以额外可见副本数。克隆按质量降序排列，相同时用稳定 ID 排序。仅形状相同的结果重复质量为零，没有克隆排名。
 
-## Render（渲染）
+质量既不是置信度，也不是百分比。[重复百分比](/zh/docs/accuracy-transparency/)统计被克隆覆盖的源代码行，重叠范围只计一次。
 
-三个渲染器读取同一份物化视图：面向智能体的规范 **JSON**、面向终端的按行组织的 **TXT**，以及面向人类的独立 **HTML**。智能体消费 JSON；人类在终端阅读 TXT，或在浏览器中打开 HTML。TXT 或 HTML 所作的每一项陈述也都呈现在 JSON 中。
+## 可选嵌入分析
 
-三者各自的结构以及一次运行返回的退出码，参见[报告输出](/zh/docs/configuration/#report-output)。
+嵌入默认关闭。`--embeddings auto` 在提供方可用时启用；`--embeddings required` 在无法连接时失败。Ollama 默认模型是 `nomic-embed-text`，模型和端点均可配置。嵌入相似度提供候选，不能证明行为等价或提取安全。
 
-## 实时 = 响应式
+## 保持报告更新
 
-上述全部内容也会在 LSP 服务器内增量运行（`crates/deslop-core/src/live/`）。
+未修改文件可以复用缓存的解析和签名结果。实时会话监听编辑、更新分析，并向编辑器广播新报告。MCP 查询读取该会话；CLI 为 CI 或单次检查另行扫描。
 
-文件监视器对编辑进行批处理（防抖，并设有硬上限，使格式化器的连发不会拖垮调度器），并通过 `PipelineSession::update_files` 重新运行流水线。最新报告被保留在内存中，随后 LSP 会：
-
-- 在 LSP 线路上广播 `deslop/reportChanged`，并且
-- 通过本地 IPC 端点提供运行中的语料，使得捆绑的 MCP 服务器无需重新解析即可应答 `find-similar`。macOS 与 Linux 使用 `.deslop/cache/deslop.sock`；Windows 使用通过 `.deslop/cache/deslop.port` 发现、由令牌保护的 TCP 回环端点。
-
-`.deslop/cache/live-report.json` 仅作为冷启动种子写入 —— 以便刚启动的 LSP 能在其首趟扫描运行期间应答查询 —— 而非在每次编辑时写入。
-
-每个 VS Code 界面 —— 气泡、Top Offenders 树、状态栏、悬停、代码透镜 —— 以及每个智能体 MCP 查询都从那同一份内存中报告读取。CLI 则是 CI 门禁的冷缓存回退。
+JSON、文本和 HTML 展示同一份报告。详见[报告输出](/zh/docs/configuration/#report-output)、[准确性透明度](/zh/docs/accuracy-transparency/)和[研究背景](/zh/docs/research-background/)。

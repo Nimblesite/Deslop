@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 ## score-gate: scan the register-backed target repositories with the CURRENT
-## working tree's deslop and hold the result to the thresholds in
-## `corpus/register/score-thresholds.json`.
+## working tree's deslop and hold every judged pair to its recorded outcome in
+## `corpus/register/outcomes.json`, writing the record back
+## ([CORPUS-SCORE-OUTCOMES]).
 ##
 ## This is the accuracy gate. It answers one question — does this build report
 ## every CLEARLY IN pair and stay silent on every CLEARLY OUT pair the judges
-## recorded — and fails when it does not. Cluster totals and duplication
-## percentages are printed as description and gate nothing.
+## recorded — and fails when a pair regresses or fails without being on record
+## as failing. Cluster totals and duplication percentages are printed as
+## description and gate nothing.
 ##
 ## Usage:   scripts/corpus/score-gate.sh [url#commit#language ...]
 ## Example: scripts/corpus/score-gate.sh

@@ -5,13 +5,18 @@
 
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
-import { LiveBubble } from "../../bubble/live";
-import { DEFAULT_BUBBLE_CLUSTER_MASS, FIXTURE_KIND_TITLE, PRIMARY_BUBBLE_CLUSTER_ID, openLiveDocument, probeCluster as cluster, probeReport as report, renderFullConfidenceBubble, retractCluster, setBubbleMode as setMode, span, withBubble } from "./bubble.helpers";
+import { bubbleHover, LiveBubble } from "../../bubble/live";
+import { DEFAULT_BUBBLE_CLUSTER_MASS, FIXTURE_KIND_TITLE, PRIMARY_BUBBLE_CLUSTER_ID, openLiveDocument, probeCluster as cluster, probeReport as report, queryBubbleInlayHints, renderFullConfidenceBubble, retractCluster, setBubbleMode as setMode, span, withBubble } from "./bubble.helpers";
 import { reportWithClusters } from "./report.helpers";
 
 const DISMISSIBLE_CLUSTER_ID = "c-dismiss";
 const SHORT_SPAN_LENGTH = 6;
 const FIVE_OCCURRENCE_REPORT = 5;
+const HOVERABLE_DETAIL_LABEL = "ⓘ Details";
+const BUBBLE_PRESENTATION_SETTING = "liveBubble.presentation";
+const COMPACT_PRESENTATION = "compact";
+const DETAIL_EDIT_END_COLUMN = 4;
+const DETAIL_QUERY_END_COLUMN = 8;
 
 suite("LiveBubble render", () => {
   test("inline mode renders the bubble decoration", async () => {
@@ -266,25 +271,86 @@ suite("LiveBubble render", () => {
     });
   });
 
-  test("no inlay hint provider remains after render is populated", async () => {
+  test("inline bubble restores the hoverable detail cue from 0.32.0", async () => {
+    const config = vscode.workspace.getConfiguration("deslop");
+    await config.update(BUBBLE_PRESENTATION_SETTING, undefined, vscode.ConfigurationTarget.Workspace);
+    assert.equal(config.get(BUBBLE_PRESENTATION_SETTING), "classic", "Classic is the shipped default");
     const { doc, editor, store } = await openLiveDocument("line one\nline two\n");
     const bubble = new LiveBubble(store, () => undefined);
     try {
-      const range = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 4));
-      bubble.render(editor, range, [cluster("c-inlay", DEFAULT_BUBBLE_CLUSTER_MASS)]);
-      const hints = await vscode.commands.executeCommand<vscode.InlayHint[]>(
-        "vscode.executeInlayHintProvider",
-        doc.uri,
-        new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 8)),
-      );
+      const range = span(DETAIL_EDIT_END_COLUMN);
+      const queryRange = span(DETAIL_QUERY_END_COLUMN);
+      bubble.render(editor, range, [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_MASS)]);
+      const hints = await queryBubbleInlayHints(doc, queryRange);
       assert.ok(Array.isArray(hints), "inlay hint query must return an array");
-      assert.equal(
-        hints.length,
-        0,
-        `LiveBubble registers no inlay provider — pair signals render on no editor surface ([FUSED-PAIR-SIGNALS]), got ${JSON.stringify(hints)}`,
-      );
+      assert.equal(hints.length, 1, "the edited clone has one hoverable detail cue");
+      const hint = hints[0];
+      assert.ok(hint, "the detail cue must exist");
+      assert.equal(hint.kind, vscode.InlayHintKind.Type, "the 0.32.0 inlay stays a Type hint");
+      assert.equal(hint.position.character, range.end.character, "the cue follows the edited range");
+      assert.equal(hint.label, HOVERABLE_DETAIL_LABEL, "the cue invites the user to hover");
+      assert.ok(hint.tooltip instanceof vscode.MarkdownString, "the cue carries a rich hover card");
+      const reported = store.current.visibleReport?.clusters[0];
+      assert.ok(reported, "the fixture has an authoritative report cluster");
+      assert.equal(hint.tooltip.value, bubbleHover(reported).value, "inlay and inline bubble share the full card");
+      assert.match(hint.tooltip.value, /× 5/, "the card shows the authoritative copy count");
+      assert.match(hint.tooltip.value, /Mass: 10/, "the card shows duplicated mass");
+      assert.match(hint.tooltip.value, /A\.cs:1/, "the card locates the canonical occurrence");
+      assert.match(hint.tooltip.value, /B\.cs:1/, "the card locates the other occurrence");
+      assert.match(hint.tooltip.value, /command:deslop\.openCluster/, "the card opens the cluster");
+      assert.match(hint.tooltip.value, /command:deslop\.compareWithCanonical/, "the card lets the user compare a chosen occurrence");
+      assert.match(hint.tooltip.value, /command:deslop\.bubble\.dismissCluster/, "the card can be dismissed");
+      assert.doesNotMatch(hint.tooltip.value, /structural|jaccard|embedding|pair 1/u, "cluster hover reveals no pair-only evidence");
+      bubble.dismiss();
+      const cleared = await queryBubbleInlayHints(doc, queryRange);
+      assert.deepEqual(cleared, [], "dismissing the bubble removes its hoverable cue");
     } finally {
       bubble.dispose();
+    }
+  });
+
+  test("compact presentation keeps the 0.36.0 bubble without the extra cue", async () => {
+    const config = vscode.workspace.getConfiguration("deslop");
+    await config.update(BUBBLE_PRESENTATION_SETTING, "classic", vscode.ConfigurationTarget.Workspace);
+    const { doc, editor, store } = await openLiveDocument("line one\nline two\n");
+    const bubble = new LiveBubble(store, () => undefined);
+    try {
+      const range = span(DETAIL_EDIT_END_COLUMN);
+      const queryRange = span(DETAIL_QUERY_END_COLUMN);
+      const queryHints = () => queryBubbleInlayHints(doc, queryRange);
+      bubble.render(editor, range, [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_MASS)]);
+      assert.equal((await queryHints())?.length, 1, "Classic starts with the hoverable cue");
+      await config.update(BUBBLE_PRESENTATION_SETTING, COMPACT_PRESENTATION, vscode.ConfigurationTarget.Workspace);
+      const hints = await queryHints();
+      assert.deepEqual(hints, [], "Compact keeps the 0.36.0 inline callout without a detail inlay");
+      await config.update(BUBBLE_PRESENTATION_SETTING, "classic", vscode.ConfigurationTarget.Workspace);
+      assert.equal((await queryHints())?.length, 1, "switching back restores the cue without a new edit");
+    } finally {
+      bubble.dispose();
+      await config.update(BUBBLE_PRESENTATION_SETTING, undefined, vscode.ConfigurationTarget.Workspace);
+    }
+  });
+
+  test("compact presentation retains the 0.36.0 inline callout and short hover", async () => {
+    const config = vscode.workspace.getConfiguration("deslop");
+    await config.update(BUBBLE_PRESENTATION_SETTING, COMPACT_PRESENTATION, vscode.ConfigurationTarget.Workspace);
+    try {
+      await withBubble({}, ({ capture, bubble }) => {
+        bubble.render(capture.editor, span(0), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_MASS)]);
+        const visible = capture.visible();
+        assert.ok(visible, "Compact keeps the inline duplicate callout");
+        assert.match(visible, /×\s*5/, "the callout keeps the authoritative copy count");
+        assert.match(visible, /A\.cs/, "the callout still identifies the canonical file");
+        const hover = capture.visibleHover();
+        assert.ok(hover, "the 0.36.0 callout remains hoverable");
+        assert.match(hover.value, /\*\*c-a Nearly identical code\*\* × 5/, "the short title remains");
+        assert.match(hover.value, /Canonical: `.*A\.cs`/, "the short card keeps the canonical path");
+        assert.match(hover.value, /command:deslop\.openCluster/, "the short card opens the cluster");
+        assert.match(hover.value, /command:deslop\.bubble\.dismissCluster/, "the short card can be dismissed");
+        assert.doesNotMatch(hover.value, /Mass:|Occurrences:|Compare/, "the expanded Classic details stay out of Compact");
+      });
+    } finally {
+      await config.update(BUBBLE_PRESENTATION_SETTING, undefined, vscode.ConfigurationTarget.Workspace);
     }
   });
 

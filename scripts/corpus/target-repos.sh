@@ -22,6 +22,9 @@ export SHORT_SHA_LENGTH
 COMMIT_ID_LENGTH=40
 # Where the register-backed default target list is read from.
 REGISTER_DIR="corpus/register"
+# [CORPUS-PIN] The one list of files beside the registers that hold settings,
+# such as the judged pair record, rather than a register.
+NOT_A_REPOSITORY="corpus/not-a-repository.json"
 # Repositories queued for a first judging pass: scanned like a register, but
 # with no verdicts yet, because a judge cannot rule on pairs nothing produced.
 JUDGING_QUEUE="corpus/judging-queue.json"
@@ -64,6 +67,22 @@ $COMMIT_ID_LENGTH-character commit id — pin the commit, never a tag or a versi
 }
 
 # ---------------------------------------------------------------------------
+# registered-names: the file stem of every register under $1, sorted. A file
+# corpus/not-a-repository.json names holds settings and is skipped, so the
+# judged pair record is never read as a repository to scan.
+registered_names() {
+  node -e '
+    const { readdirSync } = require("node:fs");
+    const settings = new Set(require(process.argv[2]).files);
+    const JSON_EXTENSION = ".json";
+    readdirSync(process.argv[1])
+      .filter((file) => file.endsWith(JSON_EXTENSION) && !settings.has(file))
+      .sort()
+      .forEach((file) => console.log(file.slice(0, -JSON_EXTENSION.length)));
+  ' "$1/$REGISTER_DIR" "$1/$NOT_A_REPOSITORY"
+}
+
+# ---------------------------------------------------------------------------
 # register-targets: print one `url#commit#language` spec per register named in
 # $@, or for every register when called with none. The url and the commit come
 # from the register itself, so a scan can only ever read the source the judge
@@ -72,8 +91,9 @@ register_targets() {
   local root="$1"; shift
   local names=("$@") name register
   if [ ${#names[@]} -eq 0 ]; then
-    while IFS= read -r register; do names+=("$(basename "$register" .json)"); done \
-      < <(find "$root/$REGISTER_DIR" -maxdepth 1 -name '*.json' ! -name 'score-*' | sort)
+    local listing
+    listing="$(registered_names "$root")" || die "cannot list the registers under $root/$REGISTER_DIR"
+    while IFS= read -r name; do [ -z "$name" ] || names+=("$name"); done <<<"$listing"
   fi
   for name in "${names[@]}"; do
     register="$root/$REGISTER_DIR/$name.json"
@@ -92,19 +112,23 @@ register_targets() {
 # queued-targets: print one `url#commit#language` spec per repository waiting on
 # its first judging pass. Without these a new repository could never enter the
 # register at all: a workspace needs two reports, and a comparison would only
-# ever scan repositories that already have a register.
+# ever scan repositories that already have a register. A queued repository that
+# already holds a register (judged, but with no agreed CLEARLY IN yet) is
+# scanned as that register, never a second time.
 queued_targets() {
   local root="$1" queue="$1/$JUDGING_QUEUE"
   [ -f "$queue" ] || return 0
   node -e '
+    const { existsSync } = require("node:fs");
     const queue = require(process.argv[1]);
-    for (const repository of queue.repositories) {
+    const registered = (name) => existsSync(`${process.argv[2]}/${name.toLowerCase()}.json`);
+    for (const repository of queue.repositories.filter(({ name }) => !registered(name))) {
       for (const field of ["url", "sha", "language"]) {
         if (!repository[field]) throw new Error(`${repository.name} has no ${field}`);
       }
       process.stdout.write(`${repository.url}#${repository.sha}#${repository.language}\n`);
     }
-  ' "$queue"
+  ' "$queue" "$root/$REGISTER_DIR"
 }
 
 # ---------------------------------------------------------------------------
