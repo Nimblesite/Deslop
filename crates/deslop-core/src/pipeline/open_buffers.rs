@@ -111,19 +111,19 @@ impl OpenBuffers {
 /// Resolves `path` to the key the buffer map is indexed by. A path that
 /// cannot be canonicalised (e.g. removed from disk while open) resolves
 /// against its surviving parent so aliases (like `/var` on macOS) match.
-fn canonical_key(path: &Path) -> PathBuf {
+pub(crate) fn canonical_key(path: &Path) -> PathBuf {
     fs::canonicalize(path).unwrap_or_else(|_error| canonicalise_parent(path))
 }
 
-/// Canonicalises the parent directory of a missing file leaf.
+/// Canonicalises the nearest surviving ancestor of a missing source path.
 fn canonicalise_parent(path: &Path) -> PathBuf {
-    match (path.parent(), path.file_name()) {
-        (Some(parent), Some(leaf)) => match fs::canonicalize(parent) {
-            Ok(canonical_parent) => canonical_parent.join(leaf),
-            Err(_) => path.to_path_buf(),
-        },
-        _ => path.to_path_buf(),
-    }
+    path.parent().and_then(|parent| {
+        parent.ancestors().find_map(|ancestor| {
+            let canonical = fs::canonicalize(ancestor).ok()?;
+            let suffix = path.strip_prefix(ancestor).ok()?;
+            Some(canonical.join(suffix))
+        })
+    }).unwrap_or_else(|| path.to_path_buf())
 }
 
 /// Replaces the span `edit` names in `text` — the whole text when it

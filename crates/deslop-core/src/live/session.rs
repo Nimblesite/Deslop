@@ -891,9 +891,10 @@ impl AnalysisSession {
         // `/private/var/...` resolves identically — without this the
         // MCP sends canonicalized paths and the LSP fails to match
         // a non-canonical workspace root prefix.
-        let canonical_resolved = std::fs::canonicalize(&resolved).unwrap_or(resolved);
-        let canonical_root =
-            std::fs::canonicalize(&self.root).unwrap_or_else(|_| self.root.clone());
+        // [LIVE-WORKSPACE-SCOPE] Unsaved and deleted leaves use the same
+        // canonical surviving parent as the buffer map, including Windows prefixes.
+        let canonical_resolved = crate::pipeline::canonical_source_path(&resolved);
+        let canonical_root = crate::pipeline::canonical_source_path(&self.root);
         if canonical_resolved.starts_with(&canonical_root) {
             Ok(())
         } else {

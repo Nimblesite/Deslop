@@ -325,7 +325,7 @@ A `cluster/byId` read (and `report/forFile` / `report/forRange` / `duplicates/fi
 
 ### [LIVE-WORKSPACE-SCOPE] Only workspace buffers enter the session
 
-Open, edit, and close operations validate the resolved path against the pinned workspace root before retaining editor text or changing analysis state. An external scratch file returns `PathOutsideWorkspace`; its text, paths, lines, and clone memberships never enter the workspace report. The existing live path guard is shared with range queries. Implemented by `live/session_buffers.rs` and `AnalysisSession::guard_path`; pinned by `tests/live/scope.rs::external_editor_buffer_is_rejected_without_changing_workspace_metrics_or_clusters` and tracked under [MCP-REPORT-FOLLOWUP].
+Open, edit, and close operations validate the resolved path against the pinned workspace root before retaining editor text or changing analysis state. An external scratch file returns `PathOutsideWorkspace`; its text, paths, lines, and clone memberships never enter the workspace report. Missing leaves resolve through the buffer map's canonical surviving parent so unsaved and deleted workspace files remain valid on Windows and through path aliases. The existing live path guard is shared with range queries. Implemented by `live/session_buffers.rs`, `AnalysisSession::guard_path`, and `pipeline/open_buffers.rs::canonical_key`; pinned by both scope tests in `tests/live/scope.rs` and the real LSP deletion test in `deslop-lsp/tests/open_buffers/deletion.rs`, and tracked under [MCP-REPORT-FOLLOWUP].
 
 ### [LIVE-OPEN-BUFFERS] Open editor buffers shadow the file on disk
 
