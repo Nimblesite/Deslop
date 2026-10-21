@@ -11,7 +11,19 @@ docsGroup: reference
 
 # For AI
 
-This page is written for you, the coding agent. It tells you how to find Deslop on this machine, how to use the MCP server, what to do when the MCP server is not working, how to run the CLI without repeating work, and how to remove duplicates in a safe order. It covers [0.35.0](/releases/). A human wiring up an MCP client wants [AI Agents](/docs/ai-integration/) instead.
+This page is written for you, the coding agent. It tells you how to find Deslop on this machine, start work in an unfamiliar repository, recover when MCP fails, reuse cached analysis, and remove duplicates safely. Inspect the installed tool's version and `tools/list` before assuming it supports a parameter described here. A human wiring up an MCP client wants [AI Agents](/docs/ai-integration/) instead.
+
+## Start work in a new codebase
+
+<!-- [MCP-START-WORK] [MCP-TOOL-FILTERS-KINDS] -->
+
+1. Identify the absolute repository root and read its agent instructions and `.deslop.toml`. Bind MCP's `--root` to that directory. Run `session {}` once and verify its `root`; a connection to another repository is not a useful empty result.
+2. Request `duplicates {"detail":"summary","limit":5}`. Omitted `kinds` inherits the configured `[total] include`, normally `identical` and `nearly_identical`. The response's `filters.kinds` tells you the effective selection. To inspect only exact copies, request `{"kinds":["identical"],"detail":"summary","limit":5}`; an explicit list replaces configuration for that call, and `[]` selects none. Invalid kind names are errors.
+3. Scope to the area you will edit with `path` or `path_contains`. A substring matches any occurrence; the summary's first occurrence may be elsewhere. Use `cluster-by-id` and inspect all members before editing. Keep overview pages small; request full occurrences for a selected cluster rather than hundreds of full clusters.
+4. Before adding a helper or other code unit, call `find-similar` with `snippet` and the registered `language`. Inspect both `clusters` and `existing`. A disk report cannot perform this in-memory snippet query. A caller-supplied kind selection applies to clusters; `existing` occurrences have no cluster kind.
+5. Run the project's tests after editing and query the changed paths again. The live index refreshes automatically. Use `rescan` only to recover suspected watcher lag; it is not required after every edit. `merge-plan` is optional: use it only when the returned verdict supports the language and transformation. An `ai_or_human` verdict is not an executable merge.
+
+`metrics` describes configured whole-repository totals even when the cluster page is filtered. `total_clusters` describes the filtered query. Never present one as the other's denominator, compare different tool versions as if only the source changed, or infer that every reported similarity is safe to refactor.
 
 ## What you are working with
 
@@ -55,7 +67,7 @@ $deslop = Get-ChildItem "$env:USERPROFILE\.vscode\extensions\nimblesite.deslop-l
 & $deslop --version
 ```
 
-The layout is `nimblesite.deslop-live-<VERSION>[-<platform>]/bin/<platform>/`, holding `deslop`, `deslop-lsp` and `deslop-mcp` (`.exe` on Windows). `<platform>` is `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64` or `win32-x64`. Editors built on VS Code keep extensions in their own folder: replace `~/.vscode/extensions` with `~/.vscode-insiders/extensions`, `~/.cursor/extensions`, `~/.windsurf/extensions` or `~/.vscode-oss/extensions`. If more than one version is installed, use the newest; the editor may not have removed the old one yet.
+The layout is `nimblesite.deslop-live-<VERSION>[-<platform>]/bin/<platform>/`, holding `deslop`, `deslop-lsp` and `deslop-mcp` (`.exe` on Windows). `<platform>` is `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64` or `win32-x64`. Editors built on VS Code keep extensions in their own folder: replace `~/.vscode/extensions` with `~/.vscode-insiders/extensions`, `~/.cursor/extensions`, `~/.windsurf/extensions` or `~/.vscode-oss/extensions`. Discovery above finds an installed candidate. If multiple versions exist, select the bundle the active editor uses; the newest directory alone does not prove which engine is running. Check the report's `tool_version` and the binaries' `--version` before comparing results.
 
 ### No extension: install the CLI
 
@@ -83,7 +95,7 @@ Every MCP answer comes from the editor's live analysis, which updates as files c
 | Tool | Use it to |
 | --- | --- |
 | `find-similar` | Ask, **before writing code**, whether equivalent code already exists. Pass a `snippet` and `language`, or a `path` with `start_byte` and `end_byte`. Read `clusters` and also `existing`: places where the snippet's code already appears once, outside any cluster. An empty `clusters` with a non-empty `existing` means you are about to create a duplicate. |
-| `duplicates` | List clusters worst first. Scope with `path` (and `start_byte`/`end_byte`); filter with `languages`, `path_contains`, `severities` or `min_size`. Pages default to 5 clusters; use `detail: "summary"` with a larger `limit` for an overview and page with `offset` until `offset + returned >= total_clusters`. |
+| `duplicates` | List clusters worst first. Scope with `path` (and `start_byte`/`end_byte`); filter with `kinds`, `languages`, `path_contains`, `severities` or `min_size`. Start with a small `detail: "summary"` page and continue with `offset` until all matched clusters are read. |
 | `cluster-by-id` | Get every occurrence of one cluster before you change it. Pages hold 100 occurrences; page with `offset`. |
 | `merge-plan` | Get a read-only plan for merging a cluster, including a `WorkspaceEdit`, before you edit by hand. |
 | `compare-pair` | Get the engine's evidence for two specific occurrences. Clusters carry no pair measurements. |
@@ -91,11 +103,11 @@ Every MCP answer comes from the editor's live analysis, which updates as files c
 | `session` | Check the workspace `root`, settings and cache state. Never call `set-embedding-model` unless the user explicitly asks for that model. |
 | `schema-doc` | Get the meaning of every field. Call it once per session. |
 
-Responses are capped in size. A response with `truncated: true` or a cluster with `occurrences_truncated: true` is incomplete, not wrong: page with `offset`, lower `limit`, use `detail: "summary"`, or call `cluster-by-id`.
+Responses are capped in size. Follow `page.next_offset` with the same filters while `has_more` is true. `truncated: true` means a budget omitted requested rows or occurrences; read `next_action`. A cluster with `occurrences_truncated: true` needs `cluster-by-id` occurrence paging. If a byte cap leaves zero rows and a cursor cannot advance, request a small summary with `include_per_file: false` instead of repeating the same call. A changing generation means the workspace changed during your inventory; restart paging if you need a consistent snapshot.
 
 ### When the MCP server is not working properly
 
-An error, a timeout or an empty answer from a failing server is not evidence that there is no duplicate code. Switch to the CLI in any of these cases:
+An error, a timeout or an empty answer from a failing server is not evidence that there is no duplicate code. First read an existing JSON report as described below; generate a cached CLI report if none is usable. Recover the live connection separately in these cases:
 
 | What you see | What it means | What to do |
 | --- | --- | --- |
@@ -111,15 +123,19 @@ The CLI runs the same engine and writes the same JSON. It cannot answer "does th
 
 ### Do not redo work: use what is already there
 
+<!-- [MCP-START-RECOVERY] -->
+
+**Read an existing JSON report first.** Check `.deslop/deslop-report.json`, the project's documented custom `--output` path, and then `.deslop/cache/live-report.json`. Parse the JSON directly with a JSON parser; you do not need to re-render it to read its clusters. Record which file and `tool_version` you used. Disk reports are snapshots: check their source paths and ranges against the working tree before editing. The live seed may predate incremental edits and is not proof of current absence. If no report exists, a report is incompatible, or it predates relevant changes, generate a fresh one with the cached CLI command below.
+
 Pick the cheapest option that answers your question.
 
-**1. The editor has already analysed the repository.** When `.deslop/cache/live-report.json` exists, render it instead of analysing again. This takes well under a second:
+**1. The editor has already analysed the repository.** When `.deslop/cache/live-report.json` exists and you need a human-readable rendering, render it without analysing again:
 
 ```bash
 "$DESLOP" --from-report .deslop/cache/live-report.json --no-color
 ```
 
-This writes `.deslop/deslop-report.txt` and `.html` and copies the JSON to `.deslop/deslop-report.json`. The file holds the editor's last full analysis; it is not rewritten after each edit. Use it to read the current state, not to check a change you just made. If it will not parse, it came from a different Deslop version: use the extension's own `deslop`.
+This writes `.deslop/deslop-report.txt` and `.html` and copies the JSON to `.deslop/deslop-report.json`. The file holds the editor's last full analysis; it is not rewritten after each edit. Re-rendering does not refresh analysis or validate offsets against current source. A parse failure can mean an incompatible version, a partial write, or corruption; inspect the error and regenerate with the matching bundled CLI when necessary.
 
 **2. Re-render a report you already have.** `--from-report .deslop/deslop-report.json --nojson` writes a fresh HTML and text report from the last CLI run without analysing anything.
 
@@ -135,7 +151,7 @@ This writes `.deslop/deslop-report.txt` and `.html` and copies the JSON to `.des
 git diff HEAD | "$DESLOP" . --diff - --only-changed --notext --nohtml --no-color
 ```
 
-Do not pass `--no-incremental`. It switches the cache off and parses every file again; it exists for diagnosing cache problems.
+On Windows, use `& $deslop . --notext --nohtml --no-color` from the repository root. The JSON goes to `.deslop/deslop-report.json`; `--output <prefix>` writes `<prefix>.json` instead. Keep the same root, config, binary version, and embedding policy when comparing runs. A normal repeat run uses the content-addressed cache and reparses changed files while matching across the whole repository. `[analysis] incremental = false` in `.deslop.toml` disables persisted caching even without a CLI flag; respect that setting and report it rather than overriding it silently. Do not pass `--no-incremental` for ordinary work or delete the cache to force a refresh.
 
 ### Basic options
 
@@ -181,12 +197,12 @@ jq -r '.clusters[] | select(.kind == "identical")
   .deslop/deslop-report.json
 ```
 
-Over MCP, call `duplicates` with `detail: "summary"` and a larger `limit`, and take the rows whose `kind` is `identical`.
+Over MCP, call `duplicates {"kinds":["identical"],"detail":"summary","limit":5}`. Page the filtered results; do not download every clone kind and filter it client-side. On an older binary without `kinds`, use the parsed JSON report and disclose that compatibility fallback.
 
 For each cluster:
 
 1. Fetch every occurrence (`cluster-by-id`, or `clusters[].occurrences[]` in the JSON) and read the code at each range. Skip occurrences marked `hidden`; they are generated or excluded from the report on purpose.
-2. Over MCP, call `merge-plan` and read its verdict before editing.
+2. Optionally call `merge-plan` for a supported transformation and read its verdict. If unsupported, refactor from the source and project tests; do not retry the same unsupported request.
 3. Choose where the single copy lives: the most general module that every caller can depend on, not the first file you opened.
 4. Move the code there and change every caller. Do not leave the old copies behind or add a third copy.
 5. Run the project's tests.
@@ -198,12 +214,13 @@ Do not make findings disappear by other means. Do not add `exclude` or `report_h
 
 ## Read the JSON
 
-Parse the JSON, never the text or HTML. The report carries its own field guide in `schema_doc`; over MCP, call `schema-doc` once.
+Parse the JSON, never the text or HTML. `schema_doc` can be empty in ordinary reports. Over MCP, call `schema-doc` once; offline, use [the report reference](/docs/configuration/#report-output) and the field guide below.
 
 | Field | Meaning |
 | --- | --- |
 | `metrics.duplication_percent` | Duplicated lines divided by analysed lines, counting only the kinds listed in `metrics.total_includes`. Not a measure of detector accuracy. |
 | `metrics.per_kind[]` | Duplicated lines and percentage for each kind, and `included_in_total`: whether that kind counts toward the headline figure. |
+| `metrics.folders` / `metrics.per_file` | Engine-calculated area and file breakdowns. Compare test and shipped-source areas here rather than calculating another percentage. MCP omits these unless `include_per_file: true`; use the JSON snapshot if the breakdown exceeds the response budget. |
 | `metrics.threshold.breached` | Whether the configured ceiling was exceeded. The CLI writes the reports and then exits `3`. |
 | `clusters` | Clones in descending mass order, then informational findings. |
 | `cluster.id` | Stable identifier. Use it to refer to a finding everywhere. |
@@ -216,6 +233,8 @@ Parse the JSON, never the text or HTML. The report carries its own field guide i
 | `tool_version` | The Deslop version that wrote the report. |
 
 ### Byte ranges, not line numbers
+
+Duplication percentage counts source lines, so formatting, long fixture literals, and changes in the analysed denominator can move it without equivalent changes in reusable logic. Review the actual pairs and the area's engine-calculated totals; do not weaken assertions, shrink test messages, or reformat call sites merely to improve the percentage. Use `compare-pair` for differences and content evidence before deciding a merge preserves behavior. Report a suspected inaccurate finding with its source ranges and a fixture instead of hiding it.
 
 Ranges are `[start_byte, end_byte)`: the end is excluded. They refer to the file as it was when analysed. After any edit, analyse again before you reuse an offset. Lines are included for reading, not for editing.
 

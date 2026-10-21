@@ -1,4 +1,5 @@
 //! MCP `tools/list` + `tools/call` for the [MCP-TOOLS] tools.
+//! [MCP-START-WORK] Advertise a small-page workflow and reserve forced refresh for recovery.
 //!
 //! Each entry binds a [`ToolDefinition`] — schema + agent-facing
 //! description — to a dispatch function that forwards to the active
@@ -21,7 +22,9 @@ use crate::{
 
 mod handlers;
 mod limits;
+mod recovery;
 mod schemas;
+use recovery::lsp_recovery_data;
 
 use handlers::{
     call_cluster_by_id, call_compare_pair, call_duplicates, call_find_similar, call_merge_plan,
@@ -84,7 +87,7 @@ const TOOLS: [ToolDefinition; 8] = [
     },
     ToolDefinition {
         name: "merge-plan",
-        description: "Mechanical plan for a cluster BEFORE hand-editing: same-file clusters merge into one helper; cross-file identical definitions consolidate to one canonical copy. Verdict + WorkspaceEdit. Read-only.",
+        description: "Optional read-only merge plan for supported transformations. An ai_or_human verdict means inspect the source and refactor with project tests; do not retry an unsupported language.",
         input_schema: schema_merge_plan,
     },
 ];
@@ -243,29 +246,4 @@ fn lsp_not_running_rpc(socket_path: &std::path::Path) -> JsonRpcError {
         message,
         data: Some(lsp_recovery_data(socket_path)),
     }
-}
-
-/// Assembles the machine-readable recovery payload for a missing LSP.
-/// The cache-fallback and TCP-discovery paths are derived from the
-/// socket's parent directory (the `.deslop/cache` dir), so an agent
-/// can read the last analysis while the LSP is down and knows where
-/// the TCP endpoint record would appear ([MCP-IPC-DISCOVERY]).
-fn lsp_recovery_data(socket_path: &std::path::Path) -> Value {
-    let cache_fallback = socket_path
-        .parent()
-        .map(|dir| dir.join(deslop_core::live::LIVE_REPORT_FILE_NAME));
-    let port_file = socket_path
-        .parent()
-        .map(|dir| dir.join(deslop_core::live::transport::IPC_PORT_FILE_NAME));
-    json!({
-        "reason": "lsp_not_running",
-        "retry_after_ms": 500,
-        "socket_path": socket_path.display().to_string(),
-        "port_file_path": port_file.map(|path| path.display().to_string()),
-        "cache_fallback": {
-            "path": cache_fallback.map(|path| path.display().to_string()),
-            "format": "live-report-json",
-            "note": "If the LSP stays down after retry, read this on-disk live-report cache for the last analysis.",
-        },
-    })
 }

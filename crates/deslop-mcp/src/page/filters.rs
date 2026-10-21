@@ -33,12 +33,17 @@ pub(super) fn matches_filters(filters: &DuplicatesFilters, cluster: &ReportClust
         && matches_values(filters.languages.as_deref(), |value| {
             value == cluster_language(cluster)
         })
-        && filters.path_contains.as_ref().map_or(true, |needle| {
-            cluster
-                .occurrences
-                .iter()
-                .any(|item| item.path.to_string_lossy().contains(needle))
-        })
+        && matches_path(filters.path_contains.as_deref(), cluster)
+}
+
+/// A path fragment can select any occurrence, not only the representative member.
+fn matches_path(needle: Option<&str>, cluster: &ReportCluster) -> bool {
+    needle.map_or(true, |needle| {
+        cluster
+            .occurrences
+            .iter()
+            .any(|item| item.path.to_string_lossy().contains(needle))
+    })
 }
 
 /// Empty language and severity arrays impose no restriction ([MCP-TOOL-FILTERS]).

@@ -182,6 +182,9 @@ fn stamp_truncated(payload: &mut Value) {
     for (key, value) in truncation_marker_fields() {
         let _ = object.insert(key, value);
     }
+    if let Some(page) = object.get_mut("page").filter(|page| direct_clusters(page)) {
+        stamp_truncated(page);
+    }
 }
 
 /// Returns the four `(key, value)` pairs that mark a payload as
@@ -203,7 +206,7 @@ fn truncation_marker_fields() -> [(String, Value); 4] {
         (
             NEXT_ACTION_KEY.to_owned(),
             Value::String(format!(
-                "call {PAGINATED_TOOL_NAME} with smaller limit, or paginate via offset/limit"
+                "call {PAGINATED_TOOL_NAME} with detail: summary, include_per_file: false, and a smaller limit; follow page.next_offset when it advances"
             )),
         ),
     ]
@@ -219,7 +222,7 @@ fn fallback_truncated_stub() -> Value {
             "result exceeded {MAX_TOOL_RESULT_BYTES} byte MCP wire cap"
         ),
         (TRUNCATED_AT_BYTES_KEY): MAX_TOOL_RESULT_BYTES,
-        (NEXT_ACTION_KEY): format!("call {PAGINATED_TOOL_NAME} with smaller limit"),
+        (NEXT_ACTION_KEY): format!("call {PAGINATED_TOOL_NAME} with detail: summary, include_per_file: false, and a smaller limit"),
     })
 }
 
@@ -229,6 +232,23 @@ mod tests {
 
     const TOP_OFFENDERS_TOOL: &str = "top-offenders";
     const TEST_CLUSTER_ID: &str = "id";
+
+    /// [MCP-PAGE-CONTINUATION] A rescan's inner page cannot deny outer truncation.
+    #[test]
+    fn nested_rescan_page_discloses_byte_trimming_in_its_own_metadata() {
+        const CLUSTER_COUNT: usize = 300;
+        const BLOB_BYTES: usize = 1024;
+        const OFFSET: usize = 0;
+        let clusters = vec![json!({"blob": "x".repeat(BLOB_BYTES)}); CLUSTER_COUNT];
+        let payload = json!({"page": {"clusters": clusters, "total_clusters": CLUSTER_COUNT,
+            "truncated": false, "page": {"offset": OFFSET, "limit": CLUSTER_COUNT,
+                "returned": CLUSTER_COUNT, "has_more": false, "next_offset": null}}});
+        let capped = cap_tool_result("rescan", payload);
+        assert_eq!(capped.get(TRUNCATED_KEY), Some(&json!(true)));
+        assert_eq!(capped.pointer("/page/truncated"), Some(&json!(true)));
+        assert_eq!(capped.pointer("/page/page/has_more"), Some(&json!(true)));
+        assert!(serialised_len(&capped) <= MAX_TOOL_RESULT_BYTES);
+    }
 
     /// [MCP-RESULT-SIZE-CAP] Metadata and page cursors are part of the wire budget.
     #[test]

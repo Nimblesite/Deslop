@@ -1,6 +1,8 @@
 # Design: MCP self-sufficiency — LSP sidecar auto-spawn
 
 **Status:** Proposed (design only — not implemented).
+
+Current shipped recovery is [MCP-START-RECOVERY] in [the MCP specification](../specs/mcp.md): read an existing JSON snapshot, then use the adjacent bundled CLI with normal caching if no usable report exists. `tools/recovery.rs` and `tests/query/recovery.rs` implement and pin that path. It does not auto-spawn an engine. Keep this proposed bootstrap design separate from the [implemented agent workflow](../plans/mcp-agent-workflow.md).
 **Owner:** TBD.
 **Spec IDs introduced:** `[MCP-ENGINE-BOOTSTRAP]`, `[MCP-ENGINE-BOOTSTRAP-RACE]`, `[MCP-ENGINE-BOOTSTRAP-OPTOUT]`.
 **Related:** `[MCP-WHY-LIVE]`, `[MCP-IPC-CLIENT]`, `[LIVE-IPC-SOCKET]`, `[LSP-IPC]`, `[MCP-SAFETY]`; issues #141, #148, #151, #157.

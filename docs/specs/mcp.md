@@ -66,6 +66,16 @@ Empty or absent language and severity arrays impose no restriction; a one-elemen
 
 Implemented in `crates/deslop-mcp/src/page/filters.rs`, `tools/handlers.rs`, and the generated `DuplicatesFilters` model in `docs/models/live-ipc.td`. Pinned by `page/tests.rs::selected_kind_and_occurrence_filters_retain_the_ranked_pair` and `tests/query/kinds.rs::configured_clone_kinds_are_inherited_and_explicit_arguments_override_one_call`. Follow-up scope is tracked under [MCP-START-WORK] in `docs/plans/mcp-agent-workflow.md`.
 
+#### [MCP-START-WORK] For AI: start small in a new repository
+
+For a new repository, call `session {}` and verify the absolute root, then `duplicates {"detail":"summary","limit":5}`. Use `kinds` and path scope to narrow work, `cluster-by-id` to inspect a selected finding, and `find-similar` before authoring. Pair evidence belongs to `compare-pair`. `merge-plan` is optional for supported transformations and `rescan` is recovery for watcher lag. Its change summary describes that forced refresh, not the difference since the caller's last observation; a zero summary cannot prove that no prior edits occurred.
+
+#### [MCP-START-RECOVERY] For AI: recover from JSON without a live engine
+
+If MCP is unreliable, parse an existing canonical JSON report first: the normal CLI output, a documented custom output, then the editor seed. Check provenance and current source ranges; snapshots can be stale and cannot search unwritten snippets. With no usable report, run the CLI adjacent to the versioned MCP binary against the same root using `--notext --nohtml --no-color`. Persisted caching is enabled by default, subject to `[analysis] incremental = false`; do not discard caches or silently override repository configuration. An error or stale empty result is never evidence of uniqueness.
+
+An unavailable-engine error supplies `report_fallback`, the existing `cache_fallback`, `cli_fallback`, `fallback_order`, and an absolute `guide` URL. The CLI fallback contains the adjacent executable's absolute path, separate argument strings, the JSON output path, and a cache/configuration warning. It never suggests an unrelated PATH binary. Implemented in `tools/recovery.rs`; pinned by the real-process `tests/query/recovery.rs::unavailable_engine_provides_json_first_and_cached_cli_recovery`. The [AI guide](../../site/src/docs/for-ai.md), [instruction recipe](../snippets/agents-md-recipe.md), and [workflow plan](../plans/mcp-agent-workflow.md) carry the same procedure.
+
 The shared pagination block rides beside it on `duplicates` and `rescan`:
 
 ```text
@@ -134,7 +144,7 @@ The tool schema documents the occurrence budget. The budget behavior is pinned b
 
 ### [MCP-RESULT-SIZE-CAP] Defensive tool-result size cap
 
-Every `tools/call` result envelope is bounded at a fixed wire budget of **200 KB** (well under the ~512 KB most JSON-RPC clients tolerate, and below the smaller ceiling at which Codex's `rmcp_client` crashes — issue #136). This is the outer, last-resort guard layered on top of the per-call occurrence budget ([MCP-OCCURRENCE-BUDGET]). When a serialized payload exceeds the cap the dispatcher drops clusters from the tail of the inner `clusters[]` array until it fits, then stamps the response with `truncated: true`, a human-readable `truncated_reason`, `truncated_at_bytes`, and a `next_action` pointer to the paginated report tool; payloads with no `clusters` array — **and payloads still over budget once every cluster has been dropped** — degrade to a stub carrying the same markers. Draining the cluster array is not by itself success: reporting it as one shipped an oversized payload stamped `truncated: true`, which is the one outcome this cap exists to prevent ([issue #286](https://github.com/Nimblesite/Deslop/issues/286)). Every truncation emits a `tracing::warn!` so operators can size their corpora. A companion budget keeps the whole `tools/list` payload ≤16 KB with each description ≤200 chars so long-form rationale stays in the `deslop://schema` resource.
+Every `tools/call` result envelope is bounded at a fixed wire budget of **200 KB** (well under the ~512 KB most JSON-RPC clients tolerate, and below the smaller ceiling at which Codex's `rmcp_client` crashes — issue #136). This is the outer, last-resort guard layered on top of the per-call occurrence budget ([MCP-OCCURRENCE-BUDGET]). When a serialized payload exceeds the cap the dispatcher drops clusters from the tail of the inner `clusters[]` array until the payload including its markers fits. The response carries `truncated: true`, a human-readable `truncated_reason`, `truncated_at_bytes`, and a `next_action` pointer to the paginated report tool; payloads with no `clusters` array — **and payloads still over budget once every cluster has been dropped** — degrade to a stub carrying the same markers. Draining the cluster array is not by itself success: reporting it as one shipped an oversized payload stamped `truncated: true`, which is the one outcome this cap exists to prevent ([issue #286](https://github.com/Nimblesite/Deslop/issues/286)). Every truncation emits a `tracing::warn!` so operators can size their corpora. A companion budget keeps the whole `tools/list` payload ≤16 KB with each description ≤200 chars so long-form rationale stays in the `deslop://schema` resource.
 
 ### [MCP-EMBEDDING-CONSENT] Embedding model consent
 
@@ -144,7 +154,7 @@ The set action writes only `deslop.embedding.*` workspace settings, never source
 
 ### [MCP-TOOL-FINDSIMILAR] `find-similar` — the keystone tool
 
-Input variants:
+Input variants (both collect matching candidates before the shared filters and caller result limit):
 
 1. **Range on an open file:** `{ path, start_byte, end_byte }` — the LSP already has this parsed; the query is a cache lookup + LSH + ANN probe.
 2. **Snippet + language:** `{ snippet, language }` — for code the agent is *about to write*. The LSP parses in-memory, fingerprints, probes, and returns matches. Nothing is written to the cache.
