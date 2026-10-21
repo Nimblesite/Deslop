@@ -116,7 +116,11 @@ fn an_unregistered_repository_reports_its_checks_and_its_cost() -> Result<()> {
         "the markdown is named after the run"
     );
     let markdown = fs::read_to_string(&written.path)?;
-    assert_eq!(markdown, written.markdown, "SCORE.md is what was rendered");
+    assert_eq!(markdown, written.markdown, "the file is what was rendered");
+    assert!(
+        markdown.starts_with(FAILED_HEADING) && markdown.contains(MEMORY_BANNER_LINE),
+        "a failed curated check opens the scorecard in red, naming it:\n{markdown}"
+    );
     for row in [
         SCOPE_LINE,
         ACCURACY_ROW,
@@ -211,6 +215,13 @@ const NO_REGISTER_GATE: &str = "**No register gate**";
 const NO_JUDGED_PAIRS: &str = "No judged pairs";
 /// What they must never say about a run that judged nothing.
 const FALSE_PASS: &str = "**PASS**";
+/// The verdict a scorecard opens with.
+const FAILED_HEADING: &str = "# 🔴 FAILED — Corpus accuracy scorecard";
+const PASSED_HEADING: &str = "# ✅ PASSED — Corpus accuracy scorecard";
+const CAUTION_BLOCK: &str = "> [!CAUTION]";
+const CRASH_BANNER_LINE: &str = "> - 🔴 **flutter** — `scan`: deslop exited";
+const MEMORY_BANNER_LINE: &str =
+    "> - 🔴 **flutter** — `memory`: peak RSS 9100MB exceeds the 9000MB ceiling";
 const FALSE_CLEAN: &str = "Every judged pair is answered correctly";
 
 /// [CORPUS-REPORT] A scan that crashed wrote no report, and is reported
@@ -244,6 +255,20 @@ fn a_crashed_scan_is_reported_with_its_cost_and_its_reason() -> Result<()> {
         }),
     )?;
     let written = write_scorecard(&root.path().join(RUN), root.path(), root.path(), STEM, true)?;
+    assert!(
+        written.markdown.starts_with(FAILED_HEADING),
+        "a crashed run opens with the red FAILED verdict:\n{}",
+        written.markdown
+    );
+    assert!(
+        written.markdown.contains(CAUTION_BLOCK) && written.markdown.contains(CRASH_BANNER_LINE),
+        "the caution block names the crash before any table:\n{}",
+        written.markdown
+    );
+    assert!(
+        !written.card.verdict.passed(),
+        "the card records the failure"
+    );
     for row in [
         SCOPE_LINE,
         CRASHED_CHECKS_ROW,
@@ -310,4 +335,44 @@ fn a_scorecard_is_named_after_its_run_and_the_moment_it_ran() {
         stem < later,
         "the names sort in the order the runs happened"
     );
+}
+
+/// [CORPUS-REPORT-VERDICT] A run whose every check passed says so first, and
+/// carries no failure banner.
+#[test]
+fn a_run_with_no_failure_opens_with_passed() -> Result<()> {
+    let root = tempfile::tempdir()?;
+    write(root.path(), REPORT, &json!({ "clusters": [{}] }))?;
+    write(root.path(), TIMING, &measured())?;
+    let clean = CheckOutcome {
+        evaluated: vec![PASSING_CHECK.to_owned()],
+        accuracy_curated: true,
+        failures: Vec::new(),
+    };
+    write(root.path(), CHECKS, &clean)?;
+    write(
+        root.path(),
+        RUN,
+        &json!({
+            "generated_at": "2026-09-27T00:00:00Z",
+            "engines": [{ "id": ENGINE_ID, "label": ENGINE_LABEL }],
+            "targets": [{
+                "name": REPO, "language": LANGUAGE, "sha": SHA, "register": null,
+                "runs": { ENGINE_ID: { "report": REPORT, "timing": TIMING, "checks": CHECKS } },
+            }],
+        }),
+    )?;
+    let written = write_scorecard(&root.path().join(RUN), root.path(), root.path(), STEM, true)?;
+    assert!(
+        written.markdown.starts_with(PASSED_HEADING),
+        "a clean run opens with PASSED:\n{}",
+        written.markdown
+    );
+    assert!(
+        !written.markdown.contains(CAUTION_BLOCK) && !written.markdown.contains(FAILED_HEADING),
+        "a clean run carries no failure banner:\n{}",
+        written.markdown
+    );
+    assert!(written.card.verdict.passed(), "the card records the pass");
+    Ok(())
 }

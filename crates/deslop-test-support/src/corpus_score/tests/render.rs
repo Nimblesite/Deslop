@@ -11,7 +11,11 @@ use std::collections::BTreeMap;
 use anyhow::{anyhow, Result};
 use serde_json::Value;
 
-use super::super::{gate::CorpusTotals, CLEARLY_IN};
+use super::super::{
+    gate::CorpusTotals,
+    verdict::{verdict, Verdict},
+    CLEARLY_IN,
+};
 use super::{
     add_costs, breaches, corpus_change, degradation, found_and_missed, occurrence, pinned_sha,
     register, report, score_repo, scorecard, totals, Engine, RepoScore, RunCost, Scorecard,
@@ -19,6 +23,11 @@ use super::{
 };
 
 const OLD_ENGINE: &str = "old";
+/// The verdict every scorecard opens with.
+const PASSED_HEADING: &str = "# ✅ PASSED — Corpus accuracy scorecard";
+const FAILED_HEADING: &str = "# 🔴 FAILED — Corpus accuracy scorecard";
+const CAUTION_BLOCK: &str = "> [!CAUTION]";
+const BREACH_REASON: &str = "> - 🔴 **fixture** — `false negatives`: allows at most 0, recorded 1";
 const NEW_ENGINE: &str = "new";
 /// Measured costs the rendering tests assert against.
 const OLD_ELAPSED_MS: u64 = 2000;
@@ -184,6 +193,7 @@ fn card(before: &RepoScore, after: &RepoScore) -> Scorecard {
         ]),
         thresholds: BTreeMap::from([(REPO.to_owned(), Thresholds::default())]),
         breaches: Vec::new(),
+        verdict: Verdict::default(),
     }
 }
 
@@ -431,7 +441,20 @@ fn a_breached_gate_renders_as_a_failure_that_names_the_measure() -> Result<()> {
     let (found, missed) = found_and_missed()?;
     let mut breached = card(&found, &missed);
     breached.breaches = breaches(&missed, &Thresholds::default());
+    breached.verdict = verdict(&breached.engines, &breached.targets, &breached.breaches);
     let rendered = scorecard(&breached);
+    assert!(
+        rendered.starts_with(FAILED_HEADING),
+        "a breached run opens with the red FAILED verdict: {rendered}"
+    );
+    assert!(
+        rendered.contains(CAUTION_BLOCK) && rendered.contains(BREACH_REASON),
+        "the caution block names the breach before any table: {rendered}"
+    );
+    assert!(
+        !rendered.contains(PASSED_HEADING),
+        "a breached run never also claims to pass: {rendered}"
+    );
     assert!(
         rendered.contains("**FAIL**"),
         "a breach renders as a failure"
@@ -451,6 +474,14 @@ fn a_breached_gate_renders_as_a_failure_that_names_the_measure() -> Result<()> {
 fn a_clean_scorecard_says_pass_and_names_no_defect() -> Result<()> {
     let (found, _) = found_and_missed()?;
     let rendered = scorecard(&card(&found, &found));
+    assert!(
+        rendered.starts_with(PASSED_HEADING),
+        "a clean run opens with the PASSED verdict: {rendered}"
+    );
+    assert!(
+        !rendered.contains(CAUTION_BLOCK) && !rendered.contains(FAILED_HEADING),
+        "a clean run carries no failure banner: {rendered}"
+    );
     assert!(rendered.contains("**PASS**"));
     assert!(rendered.contains("None. Every judged pair is answered correctly."));
     assert!(!rendered.contains("FALSE NEGATIVE"));
