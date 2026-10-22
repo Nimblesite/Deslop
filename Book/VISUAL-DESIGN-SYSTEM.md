@@ -89,8 +89,8 @@ Every node contains evidence or an action. A box that says only “quality” te
 
 ## Product capture contract
 
-- Capture the edition's pinned artifacts in a clean fixture workspace.
-- Record OS, architecture, editor, extension, theme, zoom, Deslop version, fixture, and capture method in `figures.json`.
+- Capture a real running build and identify its artifacts and workspace. State whether the source is a working checkout or a frozen fixture.
+- Record OS, architecture, editor, extension, theme, zoom, Deslop version, fixture, and capture method in `figures.json` or its referenced environment record. Mark any unrecorded setting explicitly.
 - Keep untouched masters under `assets/screenshots/masters/`.
 - Crop and uniformly resize; never repaint product pixels or text.
 - Put explanatory callouts outside the captured product area.

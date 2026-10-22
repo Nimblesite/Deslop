@@ -1,15 +1,13 @@
 {
   "schemaVersion": 1,
   "title": "The Deslop Book",
-  "status": "structural-scaffold",
+  "status": "concise-draft",
   "editionModel": "living-release-aligned",
-  "deslopRelease": "0.0.0-dev",
-  "releasePinStatus": "pin-before-long-form-drafting",
+  "deslopRelease": "0.38.0",
+  "releasePinStatus": "installed-bundle-hashes-recorded",
   "terminologyAuthority": "GLOSSARY.md",
   "targets": {
-    "words": 31000,
-    "printEquivalentPages": 110,
-    "figures": 36
+    "words": 5000
   },
   "sections": [
     {
@@ -17,162 +15,162 @@
       "part": "Front matter",
       "title": "How to use this book",
       "file": "manuscript/00-how-to-use-this-book.md",
-      "status": "representative-draft",
-      "targetWords": 1300,
-      "targetPages": 5,
-      "targetFigures": 1
+      "status": "concise-draft"
     },
     {
       "kind": "chapter",
-      "part": "Part I — Stop duplicates before they are written",
+      "part": "Part I \u2014 Stop duplicates before they are written",
       "number": 1,
       "title": "Why coding agents duplicate code",
       "file": "manuscript/01-duplication-tax-of-agent-speed.md",
-      "status": "complete",
-      "targetWords": 1900,
-      "targetPages": 6,
-      "targetFigures": 2
+      "status": "concise-draft"
     },
     {
       "kind": "chapter",
-      "part": "Part I — Stop duplicates before they are written",
+      "part": "Part I \u2014 Stop duplicates before they are written",
       "number": 2,
       "title": "Connect Deslop to agents, editors, and CI",
       "file": "manuscript/02-put-deslop-in-the-loop.md",
-      "status": "complete",
-      "targetWords": 2000,
-      "targetPages": 7,
-      "targetFigures": 3
+      "status": "concise-draft"
     },
     {
       "kind": "chapter",
-      "part": "Part I — Stop duplicates before they are written",
+      "part": "Part I \u2014 Stop duplicates before they are written",
       "number": 3,
       "title": "Check for matching code before writing",
       "file": "manuscript/03-ask-before-you-author.md",
-      "status": "representative-draft",
-      "targetWords": 2200,
-      "targetPages": 7,
-      "targetFigures": 3
+      "status": "concise-draft"
     },
     {
       "kind": "chapter",
-      "part": "Part I — Stop duplicates before they are written",
+      "part": "Part I \u2014 Stop duplicates before they are written",
       "number": 4,
       "title": "Understand a Deslop result",
       "file": "manuscript/04-read-what-deslop-found.md",
-      "status": "representative-draft",
-      "targetWords": 1900,
-      "targetPages": 7,
-      "targetFigures": 2
+      "status": "concise-draft"
     },
     {
       "kind": "chapter",
-      "part": "Part II — Make the check part of every change",
+      "part": "Part II \u2014 Make the check part of every change",
       "number": 5,
       "title": "Add the check to agent instructions",
       "file": "manuscript/05-teach-the-agent-the-law.md",
-      "status": "editorial-scaffold",
-      "targetWords": 2100,
-      "targetPages": 7,
-      "targetFigures": 2
+      "status": "concise-draft"
     },
     {
       "kind": "chapter",
-      "part": "Part II — Make the check part of every change",
+      "part": "Part II \u2014 Make the check part of every change",
       "number": 6,
       "title": "Use Deslop evidence to decide what to do",
       "file": "manuscript/06-use-evidence-not-hunches.md",
-      "status": "editorial-scaffold",
-      "targetWords": 2100,
-      "targetPages": 7,
-      "targetFigures": 3
+      "status": "concise-draft"
     },
     {
       "kind": "chapter",
-      "part": "Part II — Make the check part of every change",
+      "part": "Part II \u2014 Make the check part of every change",
       "number": 7,
       "title": "Check the result after every code change",
       "file": "manuscript/07-keep-the-working-set-live.md",
-      "status": "editorial-scaffold",
-      "targetWords": 2000,
-      "targetPages": 7,
-      "targetFigures": 2
+      "status": "concise-draft"
     },
     {
       "kind": "chapter",
-      "part": "Part II — Make the check part of every change",
+      "part": "Part II \u2014 Make the check part of every change",
       "number": 8,
       "title": "Set a duplication limit in CI",
       "file": "manuscript/08-turn-the-ceiling-into-a-quality-gate.md",
-      "status": "editorial-scaffold",
-      "targetWords": 2200,
-      "targetPages": 8,
-      "targetFigures": 3
+      "status": "concise-draft"
     },
     {
       "kind": "chapter",
-      "part": "Part III — Remove duplication that already exists",
+      "part": "Part III \u2014 Remove duplication that already exists",
       "number": 9,
       "title": "Measure existing duplication without changing code",
       "file": "manuscript/09-establish-a-read-only-baseline.md",
-      "status": "representative-draft",
-      "targetWords": 2600,
-      "targetPages": 9,
-      "targetFigures": 3
+      "status": "concise-draft"
     },
     {
       "kind": "chapter",
-      "part": "Part III — Remove duplication that already exists",
+      "part": "Part III \u2014 Remove duplication that already exists",
       "number": 10,
       "title": "Inspect the largest duplicate groups first",
       "file": "manuscript/10-work-worst-first-then-decide.md",
-      "status": "representative-draft",
-      "targetWords": 3000,
-      "targetPages": 10,
-      "targetFigures": 4
+      "status": "concise-draft"
     },
     {
       "kind": "chapter",
-      "part": "Part III — Remove duplication that already exists",
+      "part": "Part III \u2014 Remove duplication that already exists",
       "number": 11,
       "title": "Merge one duplicate group safely",
       "file": "manuscript/11-consolidate-surgically.md",
-      "status": "editorial-scaffold",
-      "targetWords": 3200,
-      "targetPages": 11,
-      "targetFigures": 4
+      "status": "concise-draft"
     },
     {
       "kind": "chapter",
-      "part": "Part III — Remove duplication that already exists",
+      "part": "Part III \u2014 Remove duplication that already exists",
       "number": 12,
       "title": "Verify the cleanup and prevent new copies",
       "file": "manuscript/12-prove-the-cleanup-and-hold-the-line.md",
-      "status": "editorial-scaffold",
-      "targetWords": 3100,
-      "targetPages": 12,
-      "targetFigures": 4
+      "status": "concise-draft"
+    },
+    {
+      "kind": "chapter",
+      "part": "Part IV \u2014 Get help when something looks wrong",
+      "number": 13,
+      "title": "When the Deslop panel looks empty",
+      "file": "manuscript/13-when-the-panel-looks-empty.md",
+      "status": "concise-draft"
     },
     {
       "kind": "back-matter",
       "part": "Back matter",
-      "title": "Appendices and next steps",
+      "title": "Quick reference",
       "file": "manuscript/90-appendices-and-next-steps.md",
-      "status": "editorial-scaffold",
-      "targetWords": 700,
-      "targetPages": 3,
-      "targetFigures": 0
+      "status": "concise-draft"
     },
     {
       "kind": "glossary",
       "part": "Back matter",
       "title": "Glossary",
       "file": "GLOSSARY.md",
-      "status": "representative-draft",
-      "targetWords": 700,
-      "targetPages": 4,
-      "targetFigures": 0
+      "status": "concise-draft"
     }
-  ]
+  ],
+  "artifactPin": {
+    "capturedAt": "2026-10-22T08:57:59Z",
+    "os": "macOS 26.6.2",
+    "architecture": "arm64",
+    "editor": "Visual Studio Code 1.142.0",
+    "extensionVersion": "0.38.0",
+    "extensionPackageSha256": "f26601832f59e372fd236d20c834493d26c8dd80f74dfa5529c4e5d39fe112b0",
+    "binaries": {
+      "deslop": {
+        "version": "deslop 0.38.0",
+        "sha256": "bbe22e7769ce0bb18ee90ddacc671ab8a47af95c0d68941ebc00f21bb62a279b"
+      },
+      "deslop-lsp": {
+        "version": "deslop-lsp 0.38.0",
+        "sha256": "f96a3c9939af36776f868b257290fc0e67fe86251eb9900d0c65cea1e428d94a"
+      },
+      "deslop-mcp": {
+        "version": "deslop-mcp 0.38.0",
+        "sha256": "6864560b58ce5e942f788925ef89ea28f9c9cf8d49c4f066d5ac653cbf176c56"
+      }
+    },
+    "theme": "dark (exact theme name not recorded)",
+    "zoom": null,
+    "workspace": "Deslop repository; existing working checkout; no source edits made for captures",
+    "captureMethod": "cua_repl App.getScreenshot; native VS Code window",
+    "uiActions": [
+      "Open Deslop activity view",
+      "Maximize cluster editor group",
+      "Select cluster fb54f67cacf6b2f7",
+      "Compare To Canonical on occurrence 2"
+    ],
+    "sourceFiles": {
+      "clients/vscode/src/test/unit/facets.unit.test.ts": "ad47f22d1de457944ccf1aac6a35ae140e02b8daa89a42c6294d333cf61ca88a",
+      "clients/vscode/src/test/unit/tree.topOffenders.lifecycle.unit.test.ts": "0b20d7e5a69bc63cdbc866313cad6d2850138e736dcaa8b0e4e3975093dccabf",
+      "clients/vscode/src/test/unit/tree.topOffenders.unit.test.ts": "b58b59af0fd9c211a26a9d39913335573f4feea698ee71fef8fb19dd8d61fd7c"
+    }
+  }
 }

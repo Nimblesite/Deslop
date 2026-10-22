@@ -1,73 +1,25 @@
 # Chapter 4 — Understand a Deslop result
 
-Deslop reports evidence in five plain-language labels. Each label tells you what kind of relationship was observed and how cautiously to act.
+Start with the label, then read the occurrences. A duplicate group is called a `cluster` in JSON and agent tools.
 
-## What you will be able to do
+| Visible label | Meaning |
+|---|---|
+| Identical code | The same source text, allowing whitespace differences |
+| Nearly identical code | Copies with renames, changed inputs or constants, or small edits |
+| Similar code | Substantial copied work remains after larger edits |
+| Same behavior, different code | Optional semantic evidence suggests equivalent work; inspect both implementations |
+| Same shape, different content | Informational structural similarity; **not a clone** |
 
-I will show you how to explain a duplicate group using the current UX title, its occurrences, evidence, and rank before you propose a code change.
+The editor also shows compact tags: Type I, Type II / III, Type III, Type IV, and Shape. Use the plain-language titles when explaining a finding. The [taxonomy](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/taxonomy.md) defines both forms.
 
-## The five labels
+![The actual Deslop cluster panel shows Identical code, a Type I tag, three occurrences, duplicated mass, and comparison controls.](assets/screenshots/04-cluster-panel.png)
 
-### Identical code
+*A real finding in the Deslop repository. Open an occurrence to inspect its source, or choose Compare To Canonical to compare it with the reference copy.*
 
-Deslop has proved that every copy contains equivalent source. This is the clearest candidate for sharing one implementation, although the developer still chooses where that implementation should live.
+## Read the group correctly
 
-### Nearly identical code
+The **canonical occurrence** is the reference for comparison, not an instruction about where shared code must live. **Mass** measures duplicated code for ranking. **Rank** tells you which clone group to inspect first, not how safe extraction would be.
 
-The copies are strongly alike, but small differences may matter. Inspect those differences and decide whether they are parameters, policy, drift, or evidence that the code should remain separate.
+Shape-only findings have no duplicated mass and do not count toward duplication totals. Similar code means an established edited copy, not merely weak textual overlap.
 
-### Same shape, different content
-
-Deslop strongly supports only the code shape in this result. Sibling boilerplate can look like a reusable implementation while carrying unrelated content. Read the occurrences before extracting.
-
-### Similar code
-
-The text overlaps weakly. Treat the group as a hint that can guide search, not as a consolidation plan.
-
-### Same behavior, different code
-
-Semantic analysis suggests two different-looking implementations perform the same job. Read both. Different code often encodes a reason the model cannot infer from similarity alone.
-
-## What a duplicate group contains
-
-The human report calls related sections of code a duplicate group. Tool responses and JSON commonly call the same thing a `cluster`. Each section is an occurrence. Deslop selects one occurrence as the reference copy, called the canonical occurrence. The developer may choose a different occurrence as the final shared implementation.
-
-Rank helps you choose which group to inspect first. It does not say that a refactor is safe. The group at the top has the highest reported impact, but its occurrences may still need to remain separate.
-
-## Record the result before changing code
-
-Before editing, capture:
-
-```text
-group id:
-visible label:
-occurrences and owners:
-canonical occurrence:
-differences that may matter:
-why consolidation might reduce drift:
-why consolidation might damage the design:
-decision: investigate / consolidate / retain
-```
-
-This note records what Deslop found separately from the developer's decision about the code.
-
-## Workshop exercise
-
-Choose one Workshop group and explain it without using a numbered academic label, source-code enum, or vague synonym such as “basically the same.” Use the exact visible title, name every occurrence, and write one reason to consolidate and one reason to retain it.
-
-## Check your understanding
-
-1. Which Deslop label provides the strongest proof that source is repeated?
-2. Why does the reference occurrence not automatically determine where shared code should live?
-3. What does a group's rank tell you, and what does it not tell you?
-
-## Instruction for coding agents
-
-```text
-Report Deslop's visible duplicate label first. Use rank only to choose what to inspect first. Treat the canonical occurrence as the reference copy, and read every occurrence before recommending a refactor.
-```
-
-## Sources used for this chapter
-
-- `deslop-taxonomy`
-- `deslop-vscode-labels`
+**Try it:** open one group, read every occurrence, and name one reason to merge it and one reason to keep it separate. Do this before proposing a helper.

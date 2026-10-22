@@ -27,7 +27,7 @@
       "title": "VS Code report labels",
       "url": "https://github.com/Nimblesite/Deslop/blob/main/clients/vscode/src/types/report.ts",
       "repositoryPath": "clients/vscode/src/types/report.ts",
-      "role": "exact human-facing titles and action sentences"
+      "role": "exact human-facing titles and clone-type tags"
     },
     {
       "key": "deslop-configuration",

@@ -12,7 +12,7 @@ HTML := dist/index.html
 .PHONY: check render-assets epub html release clean
 
 check:
-	@$(JQ) -e '(.schemaVersion == 1) and ((.sections | length) == 15)' $(BOOK_JSON) >/dev/null
+	@$(JQ) -e '(.schemaVersion == 1) and ((.sections | length) == 16)' $(BOOK_JSON) >/dev/null
 	@$(JQ) -e '(.schemaVersion == 1) and ((.sources | length) >= 8)' sources.json >/dev/null
 	@$(JQ) -e '(.schemaVersion == 1) and ((.figures | length) >= 3)' figures.json >/dev/null
 	@for file in $(MANUSCRIPT); do test -f "$$file" || { echo "Missing manuscript file: $$file"; exit 1; }; done

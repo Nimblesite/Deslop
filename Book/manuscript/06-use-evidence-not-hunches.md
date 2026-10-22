@@ -1,50 +1,23 @@
-# Chapter 6 — Use Deslop evidence to decide what to do
+# Chapter 6 — Use evidence to decide what to do
 
-> **Current status:** This chapter is an outline. I will use scores captured from the exact Deslop release used for the book.
+Use a group's kind to understand the relationship and its rank to choose what to inspect. Neither proves that a merge preserves behavior.
 
-## What you will be able to do
+## Compare a specific pair
 
-I will show you how to use Deslop's scores, source locations, stable group IDs, and guidance to decide what to inspect. I will not treat one score as an automatic instruction to refactor.
+`compare-pair` takes `left` and `right` endpoints. Each names `path`, `start_byte`, and `end_byte`. It returns evidence for those two ranges, including text identity, content and rename evidence, admission decision, and any classification.
 
-## Planned sections
+Clusters do not carry a selected pair's similarity measurements. A fused admission score belongs to the pair comparison; it is not a universal refactoring threshold. See the [MCP specification](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/mcp.md).
 
-### How Deslop builds the score
+## Treat locations as a snapshot
 
-Deslop compares parsed code structure, text overlap, and optional behavior-based similarity. It combines those results in the `signals.fused` score. The visible duplicate label explains the kind of match in the same words used by the editor.
+Byte offsets identify exact ranges in the analysed source. An edit before a range can shift its offsets as well as its line numbers. Refresh after editing before reusing either.
 
-### What the score ranges mean
+A group ID stays stable while the cloned code is unchanged. Editing that code can change the ID. Track the affected files and ranges too; a missing old ID alone does not prove cleanup.
 
-The score ranges tell an agent whether to stop, read the closest occurrence, or proceed and check again. The developer must still decide code ownership and check types, behavior, and performance.
+## Read the percentage's scope
 
-### Byte ranges identify the exact code
+`metrics.duplication_percent` is duplicated source lines divided by analysed source lines, using the clone kinds listed in `metrics.total_includes`. By default, the total includes Identical and Nearly identical code. Shape-only findings never count.
 
-Line numbers help developers find code in an editor. Byte ranges identify the exact section in Deslop's machine-readable responses, even when edits above it change the line number.
+Filtering a `duplicates` page changes the returned cluster list, not the whole-repository metrics. A lower percentage can also come from a larger analysed denominator. It is not a measure of detector accuracy.
 
-### Group IDs stay stable while report order changes
-
-Use the stable group ID in notes and before-and-after comparisons. A group's position can move after cleanup because Deslop sorts the updated report again.
-
-### Each label requires a different check
-
-Identical code is the clearest candidate for sharing one implementation. Nearly identical code requires the developer to list every difference. Same-shape, loosely-similar, and same-behavior findings require more inspection before any merge.
-
-## Workshop exercise
-
-Create a note for one group. Record its visible label, stable ID, source ranges, current rank, reference occurrence, and the facts you still need before deciding whether to merge it.
-
-## Check your understanding
-
-1. What does the fused score help an agent decide?
-2. Why should cleanup notes use the stable group ID instead of the report position?
-3. Why does a strong similarity score not choose the correct module for shared code?
-
-## Instruction for coding agents
-
-```text
-Use the fused score to choose the next inspection step. Use source evidence and repository ownership to choose the code change.
-```
-
-## Sources used for this chapter
-
-- `deslop-for-ai`
-- `deslop-taxonomy`
+**Try it:** record one group's ID, kind, mass, source ranges, and the total's included kinds. Compare two occurrences before deciding what to share.
