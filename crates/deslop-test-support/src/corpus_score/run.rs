@@ -29,6 +29,7 @@ use super::{
         add_checks, add_costs, corpus_change, degradation, totals, CorpusChange, CorpusTotals,
         Degradation,
     },
+    history::{self, Source},
     list,
     outcomes::{self, standings, Ledger, PairOutcome, RunStamp},
     render::{scorecard, Engine, Scorecard, TargetScore},
@@ -366,6 +367,7 @@ fn build_scorecard(run: &Path, root: &Path, ledger: &Ledger, strict: bool) -> Re
         targets,
         totals,
         outcomes,
+        history: None,
     })
 }
 
@@ -391,19 +393,24 @@ fn last_engine_outcomes(
 
 /// How a run is scored, beyond scoring it.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct Scoring {
+pub struct Scoring<'a> {
     /// A judged run missing its timing or its report is an error.
     pub strict: bool,
     /// [CORPUS-SCORE-OUTCOMES] Put every failing pair that has no record on
     /// record as failing, accepting it as a known defect.
     pub accept_failures: bool,
+    /// [CORPUS-HISTORY] The source the engine was built from, when the run is
+    /// held to the run history and appended to it.
+    pub history: Option<&'a Source>,
 }
 
 /// Scores the run manifest at `run_path` and writes `<stem>.md` and
 /// `<stem>.json` into `out` — `stem` from [`report_stem`] — then writes the
-/// judged pair record back under `root` ([CORPUS-SCORE-OUTCOMES]). Whether a
-/// pair failed the run is on the returned card, so the caller decides what a
-/// failure does — after the documents exist.
+/// judged pair record back under `root` ([CORPUS-SCORE-OUTCOMES]). A run held
+/// to the run history is checked against every earlier run first and appended
+/// to it last ([CORPUS-HISTORY]). Whether a pair failed the run is on the
+/// returned card, so the caller decides what a failure does — after the
+/// documents exist.
 ///
 /// # Errors
 ///
@@ -414,12 +421,18 @@ pub fn write_scorecard(
     root: &Path,
     out: &Path,
     stem: &str,
-    scoring: Scoring,
+    scoring: Scoring<'_>,
 ) -> Result<WrittenScorecard> {
     let ledger = outcomes::load(root)?;
-    let card = build_scorecard(run_path, root, &ledger, scoring.strict)?;
+    let mut card = build_scorecard(run_path, root, &ledger, scoring.strict)?;
+    if let Some(source) = scoring.history {
+        history::hold(&mut card, root, source)?;
+    }
     let written = write_documents(card, out, stem)?;
     record_outcomes(root, &ledger, &written.card, scoring.accept_failures)?;
+    if let Some(record) = history::record(&written.card, stem) {
+        history::append(root, &record)?;
+    }
     Ok(written)
 }
 

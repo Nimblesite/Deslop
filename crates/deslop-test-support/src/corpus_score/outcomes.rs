@@ -116,7 +116,7 @@ pub struct Ledger {
 }
 
 /// How one judged pair's outcome in this run stands against its record.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Standing {
     /// Passes, and is not on record as failing.

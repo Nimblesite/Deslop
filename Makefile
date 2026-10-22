@@ -212,6 +212,8 @@ _ci-contract-tests: _vsix-node-modules
 	@node --test scripts/actions/verify-env-path-writes.test.mjs
 	@echo "==> Composite-action step scanner proof ([ACTION-TESTS])..."
 	@node --test scripts/actions/action-yaml.test.mjs
+	@echo "==> Required CI status merge gate ([CI-MERGE-GATE])..."
+	@node --test scripts/actions/merge-gate.test.mjs
 	@echo "==> Docs installer snippet fail-closed gate ([DEPLOY-DOCS-INSTALLER-FAILCLOSED])..."
 	@node --test scripts/deployment/installer-snippet.test.mjs
 	@echo "==> Archive reader/writer gate ([DEPLOY-VSIX-PACKAGE])..."
@@ -535,6 +537,16 @@ dup-gate: build
 ##             This is the corpus run CI performs, one command, no arguments.
 score-gate:
 	./scripts/corpus/score-gate.sh
+
+# [CORPUS-HISTORY] The whole judged corpus: every register that judges at least
+#   one pair, and no repository without judgments. Held to the record and to
+#   the run history — one judged pair that passed in any earlier run of the
+#   same commit and fails now fails the run — then appended to
+#   corpus/history/corpus-runs.jsonl with every judged pair's outcome, each
+#   repository's cost, the machine and the source commit. Commit the history.
+## score-corpus: Score every judged register and append the run to the history.
+score-corpus:
+	./scripts/corpus/score-gate.sh --all-judged
 
 # [CORPUS-SCORE-OUTCOMES] Puts every judged pair a corpus run failed, and the
 #   record does not already hold, on record as failing — the explicit act that
@@ -913,6 +925,7 @@ help:
 	@echo "  deployment-verify      - Validate deployment manifest and built binary contracts"
 	@echo "  test-ollama            - Ollama-gated Rust + VSIX tests (never in CI)"
 	@echo "  score-gate             - Score this build against the judged clone registers (what CI runs)"
+	@echo "  score-corpus           - Score every judged register; append the run to the tracked history"
 	@echo "  compare                - Compare the last release against HEAD across every register"
 	@echo "  judging-folder         - Build the blinded repos+reports+skill folder for a clone judge"
 	@echo "  merge-verdicts         - Import verdicts every source agrees on (JUDGED_DIRS=\"a b\")"

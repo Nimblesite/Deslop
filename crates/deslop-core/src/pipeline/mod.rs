@@ -23,6 +23,7 @@ mod signatures;
 pub use config::{EmbeddingSettings, PipelineConfig};
 pub(crate) use corpus::parser_for_language;
 pub use corpus::{default_parsers, language_for_path, language_ids, watched_source_extensions};
+#[cfg(feature = "live")]
 pub(crate) use open_buffers::canonical_key as canonical_source_path;
 pub use open_buffers::{BufferEdit, OpenBuffers, SourceBytes};
 pub use run::{debug_ast_dump, run};

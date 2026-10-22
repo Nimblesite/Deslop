@@ -14,6 +14,7 @@ mod cells;
 mod checks;
 mod cost;
 mod coverage;
+mod history;
 mod outcomes;
 mod verdict;
 
@@ -23,6 +24,7 @@ use cells::{counted, header, row, score_cell, signed, signed_fraction, ABSENT};
 use checks::checks_section;
 use cost::{cost_section, standing_cost};
 use coverage::{coverage_section, coverage_value};
+use history::history_section;
 use outcomes::record_section;
 use serde::Serialize;
 use verdict::verdict_banner;
@@ -30,6 +32,7 @@ use verdict::verdict_banner;
 use super::{
     checks::CheckOutcome,
     gate::{CorpusChange, CorpusTotals, Degradation},
+    history::HistoryCheck,
     outcomes::{PairKey, PairOutcome},
     verdict::Verdict,
     RepoScore, RunCost, ScoredEntry,
@@ -102,6 +105,9 @@ pub struct Scorecard {
     pub outcomes: Vec<PairOutcome>,
     /// Whether the run passed, and every reason it did not.
     pub verdict: Verdict,
+    /// [CORPUS-HISTORY] How the run stood against every earlier run, when it
+    /// was held to the run history.
+    pub history: Option<HistoryCheck>,
 }
 
 /// One cell per engine, in run order, out of a map keyed by engine id. Every
@@ -450,6 +456,7 @@ pub fn scorecard(card: &Scorecard) -> String {
     lines.extend(coverage_section(card));
     lines.extend(cost_section(card));
     lines.extend(record_section(card));
+    lines.extend(history_section(card));
     lines.extend(defects_section(card));
     lines.join("\n")
 }

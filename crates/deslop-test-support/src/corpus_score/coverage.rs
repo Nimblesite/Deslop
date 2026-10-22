@@ -42,14 +42,44 @@ const TAXONOMY_FIELDS: &[&str] = &["kind", "bucket"];
 /// certify one ([CORPUS-SCORE]). A pinned type must also be one the kind
 /// reports ([CORPUS-REGISTER-TYPE]).
 fn is_clone_label(label: &Value, pinned: Option<CloneType>) -> bool {
-    label
-        .as_str()
-        .and_then(|label| {
-            ClusterKind::all()
-                .into_iter()
-                .find(|kind| kind.wire_label() == label)
-        })
+    registered_kind(label)
         .is_some_and(|kind| kind.is_clone() && pinned.map_or(true, |pin| pin.admits(kind)))
+}
+
+/// The registered kind a classification label names, if it names one.
+fn registered_kind(label: &Value) -> Option<ClusterKind> {
+    label.as_str().and_then(|label| {
+        ClusterKind::all()
+            .into_iter()
+            .find(|kind| kind.wire_label() == label)
+    })
+}
+
+/// The classification labels a cluster carries, in either report schema.
+fn labels(cluster: &Value) -> impl Iterator<Item = &Value> {
+    TAXONOMY_FIELDS
+        .iter()
+        .filter_map(|field| cluster.get(*field))
+}
+
+/// [CORPUS-PRECISION-CURATED] Whether a cluster is positively informational:
+/// it carries a classification, and every one it carries names a registered
+/// kind that is not a clone. An absent or unrecognised classification proves
+/// nothing, so it is never informational — a renamed label must fail a
+/// non-duplicate claim, not silence it.
+pub(crate) fn is_informational_finding(cluster: &Value) -> bool {
+    labels(cluster).next().is_some()
+        && labels(cluster).all(|label| registered_kind(label).is_some_and(|kind| !kind.is_clone()))
+}
+
+/// The first classification a cluster carries, as written; absent when it
+/// carries none.
+pub(crate) fn classification(cluster: &Value) -> Option<String> {
+    labels(cluster).next().map(|label| {
+        label
+            .as_str()
+            .map_or_else(|| label.to_string(), ToOwned::to_owned)
+    })
 }
 
 /// Both report schemas must certify a clone when both fields are present.

@@ -24,15 +24,16 @@ pub mod checks;
 pub mod clone_type;
 mod coverage;
 pub mod gate;
+pub mod history;
 pub mod outcomes;
 pub mod render;
 pub mod run;
 pub mod verdict;
 
 use clone_type::CloneType;
-pub(crate) use coverage::is_clone_finding;
 use coverage::match_entry;
 pub use coverage::RangeCoverage;
+pub(crate) use coverage::{classification, is_clone_finding, is_informational_finding};
 
 use crate::corpus_measure::ProcessCost;
 

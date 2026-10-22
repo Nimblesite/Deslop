@@ -22,14 +22,16 @@ use crate::corpus_score::{
     RunCost, CLEARLY_IN,
 };
 
+mod history;
 mod record;
 mod verdict;
 
 /// Scoring that holds a judged run to everything: its timing, its report and
 /// its record.
-const STRICT: Scoring = Scoring {
+const STRICT: Scoring<'static> = Scoring {
     strict: true,
     accept_failures: false,
+    history: None,
 };
 
 const ENGINE_ID: &str = "current";

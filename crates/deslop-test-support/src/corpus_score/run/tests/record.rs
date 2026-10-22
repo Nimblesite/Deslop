@@ -25,15 +25,16 @@ use crate::corpus_score::{
 /// The run manifest field a run's timestamp is read from.
 const GENERATED_AT_FIELD: &str = "generated_at";
 /// When each run in a sequence was generated.
-const FIRST_RUN: &str = "2026-10-01T00:00:00Z";
-const SECOND_RUN: &str = "2026-10-02T00:00:00Z";
-const THIRD_RUN: &str = "2026-10-03T00:00:00Z";
-const FOURTH_RUN: &str = "2026-10-04T00:00:00Z";
+pub(super) const FIRST_RUN: &str = "2026-10-01T00:00:00Z";
+pub(super) const SECOND_RUN: &str = "2026-10-02T00:00:00Z";
+pub(super) const THIRD_RUN: &str = "2026-10-03T00:00:00Z";
+pub(super) const FOURTH_RUN: &str = "2026-10-04T00:00:00Z";
 const FIFTH_RUN: &str = "2026-10-05T00:00:00Z";
 /// A run that puts every unrecorded failure on record.
-const ACCEPTING: Scoring = Scoring {
+const ACCEPTING: Scoring<'static> = Scoring {
     strict: false,
     accept_failures: true,
+    history: None,
 };
 /// A second judged pair in the same register, sorted as the record keys it.
 const THIRD_RANGE: &str = "src/three.rs:50-60";
@@ -67,7 +68,12 @@ fn the_ranges() -> [&'static str; 2] {
 
 /// Scores one run of the fixture's judged register, generated at `at`, whose
 /// scan wrote `scanned`. A register already written under `root` is kept.
-fn scored(root: &Path, at: &str, scanned: &Value, scoring: Scoring) -> Result<WrittenScorecard> {
+pub(super) fn scored(
+    root: &Path,
+    at: &str,
+    scanned: &Value,
+    scoring: Scoring<'_>,
+) -> Result<WrittenScorecard> {
     let register: Value = crate::read_json(&root.join(REGISTER)).unwrap_or(Value::Null);
     judged_run(root, scanned)?;
     if !register.is_null() {
@@ -104,7 +110,7 @@ fn entry(repo: &str, ranges: &[&str], outcome: &str, since: &str, engine: &str) 
 }
 
 /// The record holding only the fixture pair, written by this suite's engine.
-fn holding(outcome: &str, since: &str) -> Value {
+pub(super) fn holding(outcome: &str, since: &str) -> Value {
     json!([entry(REPO, &the_ranges(), outcome, since, ENGINE_LABEL)])
 }
 
@@ -123,7 +129,7 @@ struct Step<'a> {
     /// Whether its scan reported the judged pair.
     reported: bool,
     /// How it was scored.
-    scoring: Scoring,
+    scoring: Scoring<'a>,
     /// How the pair must stand, and the scorecard's first line.
     standing: Standing,
     heading: &'a str,
@@ -283,7 +289,7 @@ fn two_pair_register() -> Value {
 }
 
 /// Writes `pairs` as the record under `root`.
-fn seed(root: &Path, pairs: &Value) -> Result<()> {
+pub(super) fn seed(root: &Path, pairs: &Value) -> Result<()> {
     let path = root.join(OUTCOMES_PATH);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;

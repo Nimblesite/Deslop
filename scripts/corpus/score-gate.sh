@@ -11,8 +11,18 @@
 ## description and gate nothing.
 ##
 ## Usage:   scripts/corpus/score-gate.sh [url#commit#language ...]
+##          scripts/corpus/score-gate.sh --all-judged
 ## Example: scripts/corpus/score-gate.sh
 ## Inspect: scripts/corpus/score-gate.sh --list-default-targets
+##          scripts/corpus/score-gate.sh --list-judged-targets
+##
+## `--all-judged` scans every register that judges at least one pair — the
+## whole judged corpus, and no repository without judgments — and holds it to
+## the run history in `corpus/history/corpus-runs.jsonl` as well as the record:
+## one judged pair that passed in any earlier run of the same commit and fails
+## now fails the run. The run is then appended to the history with every judged
+## pair's outcome, each repository's cost, the machine and the source commit
+## ([CORPUS-HISTORY]). Its scorecard is `score-corpus-<UTC timestamp>.md`.
 ##
 ## With no targets it scans the default slice: judged repositories across the
 ## core languages, each pinned to the exact commit its register was judged at,
@@ -101,20 +111,44 @@ write_run() {
   ' "$run_path" "$ENGINE_ID" "$ENGINE_LABEL" "${fields[@]}"
 }
 
+# ---------------------------------------------------------------------------
+# source-flags: [CORPUS-HISTORY] the scorer flags naming the commit this build
+# came from, and whether uncommitted changes were built with it.
+source_flags() {
+  local commit
+  commit="$(git -C "$REPO_ROOT" rev-parse HEAD)" || die "cannot read the source commit"
+  SCORE_FLAGS+=(--history-commit "$commit")
+  [ -z "$(git -C "$REPO_ROOT" status --porcelain)" ] || SCORE_FLAGS+=(--history-dirty)
+}
+
+# ---------------------------------------------------------------------------
+# targets: the specs main scans — the arguments, every judged register under
+# --all-judged, or the default slice.
+targets() {
+  case "${1:-}" in
+    --all-judged) judged_targets "$REPO_ROOT" ;;
+    "") register_targets "$REPO_ROOT" "${DEFAULT_SLICE[@]}" ;;
+    *) printf '%s\n' "$@" ;;
+  esac
+}
+
 main() {
   case "${1:-}" in
     -h | --help) usage; exit 0 ;;
     --list-default-targets) register_targets "$REPO_ROOT" "${DEFAULT_SLICE[@]}"; exit 0 ;;
+    --list-judged-targets) judged_targets "$REPO_ROOT"; exit 0 ;;
   esac
   command -v cargo >/dev/null || die "cargo not on PATH"
   command -v node >/dev/null || die "node not on PATH"
-  if [ $# -eq 0 ]; then
-    local slice=()
-    while IFS= read -r spec; do slice+=("$spec"); done \
-      < <(register_targets "$REPO_ROOT" "${DEFAULT_SLICE[@]}")
-    set -- "${slice[@]}"
+  RUN_NAME=score-gate
+  SCORE_FLAGS=(--gate)
+  if [ "${1:-}" = "--all-judged" ]; then
+    RUN_NAME=score-corpus
+    source_flags
   fi
-  parse_targets "$@"
+  local specs=() spec
+  while IFS= read -r spec; do specs+=("$spec"); done < <(targets "$@")
+  parse_targets "${specs[@]}"
   build
 
   ENGINE_SHA="$(shasum -a 256 "$BINARY" | awk '{print $1}')"
@@ -132,7 +166,7 @@ main() {
   mkdir -p "$REPORTS_ROOT"
   write_run "$REPORTS_ROOT/run.json"
   echo
-  "$SCORER" score "$REPORTS_ROOT/run.json" --out "$WORK_DIR" --name score-gate --gate
+  "$SCORER" score "$REPORTS_ROOT/run.json" --out "$WORK_DIR" --name "$RUN_NAME" "${SCORE_FLAGS[@]}"
 }
 
 main "$@"

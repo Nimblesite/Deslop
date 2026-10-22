@@ -109,6 +109,34 @@ register_targets() {
 }
 
 # ---------------------------------------------------------------------------
+# judged-names: every register under $1 that judges at least one pair CLEARLY IN
+# or CLEARLY OUT, sorted. A register holding only NOT CLEAR verdicts scores
+# nothing, so scanning its repository would spend the time and measure nothing
+# ([CORPUS-HISTORY]).
+judged_names() {
+  local name
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    node -e '
+      const register = require(process.argv[1]);
+      const judged = ["clearly_in", "clearly_out"]
+        .reduce((total, verdict) => total + (register[verdict] ?? []).length, 0);
+      if (judged > 0) console.log(process.argv[2]);
+    ' "$1/$REGISTER_DIR/$name.json" "$name"
+  done < <(registered_names "$1")
+}
+
+# ---------------------------------------------------------------------------
+# judged-targets: one `url#commit#language` spec per register judging at least
+# one pair — the whole judged corpus, and nothing that has no judgments.
+judged_targets() {
+  local names=() name
+  while IFS= read -r name; do names+=("$name"); done < <(judged_names "$1")
+  [ ${#names[@]} -gt 0 ] || die "no register under $1/$REGISTER_DIR judges any pair"
+  register_targets "$1" "${names[@]}"
+}
+
+# ---------------------------------------------------------------------------
 # queued-targets: print one `url#commit#language` spec per repository waiting on
 # its first judging pass. Without these a new repository could never enter the
 # register at all: a workspace needs two reports, and a comparison would only

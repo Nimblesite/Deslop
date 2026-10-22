@@ -1,11 +1,14 @@
 //! Corpus assertions for mass-only cluster reports.
 
-use deslop_core::buckets::ClusterKind;
 use serde_json::Value;
 
-use crate::corpus::{
-    cluster_shows_span, field_u64, reports_clone_spanning, visible_clone_clusters,
-    visible_clusters, Failure,
+use crate::{
+    corpus::{
+        cluster_shows_span, field_u64, reports_clone_spanning, visible_clone_clusters,
+        visible_clusters, Failure,
+    },
+    // [RANK-STRUCTURAL-ONLY] Informational families are outside clone mass and ranking.
+    corpus_score::is_informational_finding,
 };
 
 /// Canonical extent field on a mass-only cluster.
@@ -18,8 +21,6 @@ const OCCURRENCES_TOTAL: &str = "occurrences_total";
 const MASS: &str = "mass";
 /// Engine-stamped global order field.
 const RANK: &str = "rank";
-/// Classification whose ownership determines mass and ranking.
-const CLUSTER_KIND: &str = "kind";
 /// Informational records carry no duplicate quantity.
 const INFORMATIONAL_QUANTITY: u64 = 0;
 /// A family requires two carried occurrences, including hidden copies.
@@ -101,7 +102,7 @@ fn check_mass(cluster: &Value, index: usize, failures: &mut Vec<Failure>) {
 
 /// [RANK-MASS-SUM] Only clones carry duplicated AST mass.
 fn expected_mass(cluster: &Value) -> u64 {
-    if is_informational(cluster) {
+    if is_informational_finding(cluster) {
         return INFORMATIONAL_QUANTITY;
     }
     field_u64(cluster, CANONICAL_NODE_COUNT)
@@ -110,7 +111,7 @@ fn expected_mass(cluster: &Value) -> u64 {
 
 /// The printed equation follows the record's actual clone eligibility.
 fn mass_expectation(cluster: &Value, expected: u64) -> String {
-    if is_informational(cluster) {
+    if is_informational_finding(cluster) {
         return format!("zero duplicate mass ({expected}) for informational findings");
     }
     format!(
@@ -132,7 +133,7 @@ fn mass_detail(cluster: &Value, index: usize, expected: u64) -> String {
 
 /// Enforces one-based report order on the engine-stamped rank.
 fn check_rank(cluster: &Value, index: usize, failures: &mut Vec<Failure>) {
-    let expected = if is_informational(cluster) {
+    let expected = if is_informational_finding(cluster) {
         INFORMATIONAL_QUANTITY
     } else {
         u64::try_from(index.saturating_add(FIRST_POSITION)).unwrap_or(u64::MAX)
@@ -147,15 +148,6 @@ fn check_rank(cluster: &Value, index: usize, failures: &mut Vec<Failure>) {
             ),
         ));
     }
-}
-
-/// [RANK-STRUCTURAL-ONLY] Informational families are outside clone mass and ranking.
-fn is_informational(cluster: &Value) -> bool {
-    cluster
-        .get(CLUSTER_KIND)
-        .and_then(Value::as_str)
-        .and_then(ClusterKind::from_wire_label)
-        == Some(ClusterKind::StructuralOnly)
 }
 
 /// Verifies every curated exact-copy family is visible and within its rank ceiling.

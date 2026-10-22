@@ -145,5 +145,6 @@ pub(super) fn recorded_card(
         change: Some(corpus_change(&before_totals, &after_totals)),
         totals: per_engine(before_totals, after_totals),
         outcomes,
+        history: None,
     }
 }
