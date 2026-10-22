@@ -9,7 +9,8 @@ use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 
 use super::{
-    judged_run, write, ENGINE_LABEL, RECORD_FAIL, RECORD_PASS, REGISTER, REPO, RUN, STEM, STRICT,
+    judged_run, write, ENGINE_LABEL, RECORD_FAIL, RECORD_PASS, REGISTER, REPO, RUN, SOURCE_COMMIT,
+    STEM, STRICT,
 };
 use crate::corpus_score::{
     outcomes::{Standing, OUTCOMES_PATH},
@@ -22,8 +23,14 @@ use crate::corpus_score::{
     CLEARLY_IN,
 };
 
-/// The run manifest field a run's timestamp is read from.
+/// The run manifest fields a run's timestamp and its engine's release version
+/// are read from.
 const GENERATED_AT_FIELD: &str = "generated_at";
+const VERSION_FIELD: &str = "version";
+/// Where a fixture manifest's one engine sits.
+const THE_ENGINE: &str = "/engines/0";
+/// What a time's `:` becomes in a scorecard name.
+const FILE_NAME_TIME_SEPARATOR: &str = "-";
 /// When each run in a sequence was generated.
 pub(super) const FIRST_RUN: &str = "2026-10-01T00:00:00Z";
 pub(super) const SECOND_RUN: &str = "2026-10-02T00:00:00Z";
@@ -31,10 +38,10 @@ pub(super) const THIRD_RUN: &str = "2026-10-03T00:00:00Z";
 pub(super) const FOURTH_RUN: &str = "2026-10-04T00:00:00Z";
 const FIFTH_RUN: &str = "2026-10-05T00:00:00Z";
 /// A run that puts every unrecorded failure on record.
-const ACCEPTING: Scoring<'static> = Scoring {
+const ACCEPTING: Scoring = Scoring {
     strict: false,
     accept_failures: true,
-    history: None,
+    history: false,
 };
 /// A second judged pair in the same register, sorted as the record keys it.
 const THIRD_RANGE: &str = "src/three.rs:50-60";
@@ -72,7 +79,19 @@ pub(super) fn scored(
     root: &Path,
     at: &str,
     scanned: &Value,
-    scoring: Scoring<'_>,
+    scoring: Scoring,
+) -> Result<WrittenScorecard> {
+    scored_as(root, at, scanned, scoring, None)
+}
+
+/// [`scored`], with the engine built from a release `version`. Each run's
+/// scorecard is named after when it ran, as every real run's is.
+pub(super) fn scored_as(
+    root: &Path,
+    at: &str,
+    scanned: &Value,
+    scoring: Scoring,
+    version: Option<&str>,
 ) -> Result<WrittenScorecard> {
     let register: Value = crate::read_json(&root.join(REGISTER)).unwrap_or(Value::Null);
     judged_run(root, scanned)?;
@@ -84,8 +103,17 @@ pub(super) fn scored(
         .as_object_mut()
         .ok_or_else(|| anyhow!("the run manifest is not an object"))?
         .insert(GENERATED_AT_FIELD.to_owned(), json!(at));
+    let _previous = the_engine(&mut run)?.insert(VERSION_FIELD.to_owned(), json!(version));
     write(root, RUN, &run)?;
-    write_scorecard(&root.join(RUN), root, root, STEM, scoring)
+    let stem = format!("{STEM}-{}", at.replace(':', FILE_NAME_TIME_SEPARATOR));
+    write_scorecard(&root.join(RUN), root, root, &stem, scoring)
+}
+
+/// The one engine a fixture run manifest names, to change what it says.
+pub(super) fn the_engine(run: &mut Value) -> Result<&mut serde_json::Map<String, Value>> {
+    run.pointer_mut(THE_ENGINE)
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| anyhow!("the run manifest names no engine"))
 }
 
 /// The pairs the record on disk holds, or none when no run has written it.
@@ -106,6 +134,7 @@ fn entry(repo: &str, ranges: &[&str], outcome: &str, since: &str, engine: &str) 
     json!({
         "repo": repo, "verdict": CLEARLY_IN, "occurrences": ranges,
         "outcome": outcome, "since": since, "engine": engine,
+        "commit": SOURCE_COMMIT, "version": null,
     })
 }
 
@@ -129,7 +158,7 @@ struct Step<'a> {
     /// Whether its scan reported the judged pair.
     reported: bool,
     /// How it was scored.
-    scoring: Scoring<'a>,
+    scoring: Scoring,
     /// How the pair must stand, and the scorecard's first line.
     standing: Standing,
     heading: &'a str,

@@ -177,8 +177,8 @@ write_meta() {
   node -e '
     const FIELDS_PER_TARGET = 4;
     const SHORT = Number(process.env.SHORT_SHA_LENGTH);
-    const [metaPath, shaA, subjectA, shaB, subjectB, flags, reportsRoot, indexPath,
-      ...rest] = process.argv.slice(1);
+    const [metaPath, shaA, subjectA, versionA, shaB, subjectB, versionB, flags, reportsRoot,
+      indexPath, ...rest] = process.argv.slice(1);
     const targets = [];
     for (let at = 0; at < rest.length; at += FIELDS_PER_TARGET) {
       const [slug, url, sha, language] = rest.slice(at, at + FIELDS_PER_TARGET);
@@ -209,8 +209,10 @@ write_meta() {
     fs.writeFileSync(metaPath.replace(/meta\.json$/, "run.json"), JSON.stringify({
       generated_at,
       engines: [
-        { id: engineId(shaA), label: `deslop@${engineId(shaA)}` },
-        { id: engineId(shaB), label: `deslop@${engineId(shaB)}` },
+        // [CORPUS-HISTORY-SOURCE] Each engine names the commit it was built
+        // from, and its release version when it is one.
+        { id: engineId(shaA), label: `deslop@${engineId(shaA)}`, commit: shaA, version: versionA || null },
+        { id: engineId(shaB), label: `deslop@${engineId(shaB)}`, commit: shaB, version: versionB || null },
       ],
       targets: targets.map((target) => ({
         name: target.slug,
@@ -225,7 +227,9 @@ write_meta() {
     }, null, 2) + "\n");
   ' "$meta_path" \
     "$commit_a" "$(git -C "$REPO_ROOT" log -1 --format=%s "$commit_a")" \
+    "$(release_version "$REPO_ROOT" "$commit_a")" \
     "$commit_b" "$(git -C "$REPO_ROOT" log -1 --format=%s "$commit_b")" \
+    "$(release_version "$REPO_ROOT" "$commit_b")" \
     "${RUN_FLAGS[*]}" "$REPORTS_ROOT" "$REPORTS_ROOT/INDEX.md" \
     "${fields[@]}"
 }
@@ -263,6 +267,9 @@ main() {
   command -v cargo >/dev/null || die "cargo not on PATH"
   command -v node >/dev/null || die "node not on PATH (build.rs regenerates the wire models)"
   command -v shasum >/dev/null || die "shasum not on PATH (each run fingerprints its binary)"
+  # [CORPUS-HISTORY-SOURCE] The scorer is built from the working tree, so a
+  # local comparison refuses uncommitted changes like every corpus run.
+  if is_local; then require_clean_tree "$REPO_ROOT"; fi
   local commit_a commit_b index sha_a sha_b
   read_commits "$@"
   commit_a="$COMMIT_A"; commit_b="$COMMIT_B"

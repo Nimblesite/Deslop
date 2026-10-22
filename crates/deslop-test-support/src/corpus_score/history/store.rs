@@ -46,7 +46,10 @@ fn record_paths(dir: &Path) -> Result<Vec<PathBuf>> {
         .with_context(|| format!("cannot read {}", dir.display()))?
         .map(|entry| entry.map(|entry| entry.path()))
         .collect::<std::io::Result<Vec<PathBuf>>>()?;
-    paths.retain(|path| path.extension().is_some_and(|extension| extension == RECORD_EXTENSION));
+    paths.retain(|path| {
+        path.extension()
+            .is_some_and(|extension| extension == RECORD_EXTENSION)
+    });
     paths.sort();
     Ok(paths)
 }

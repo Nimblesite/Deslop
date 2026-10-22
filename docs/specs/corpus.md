@@ -244,7 +244,7 @@ A register with no entries scores **nothing**, never 100%. Being asked no questi
 
 ### [CORPUS-SCORE-OUTCOMES] Every judged pair's outcome is on record
 
-`corpus/register/outcomes.json` lists every judged pair a corpus run has scored: its repository, its verdict and its ranges, whether the engine answered it right (`pass`) or wrong (`fail`), when that outcome was recorded (`since`, the timestamp of the run that recorded it) and the engine that run scored. It answers two questions at a glance: which judged pairs fail today, and how long each has failed.
+`corpus/register/outcomes.json` lists every judged pair a corpus run has scored: its repository, its verdict and its ranges, whether the engine answered it right (`pass`) or wrong (`fail`), when that outcome was recorded (`since`, the timestamp of the run that recorded it), the engine that run scored, and the `commit` — and release `version`, when there is one — that engine was built from ([CORPUS-HISTORY-SOURCE]). Only a run tied to a commit writes it. It answers two questions at a glance: which judged pairs fail today, and how long each has failed.
 
 **How a run is held to it.** A run scores every judged pair, then reads the last engine's answer against the record:
 
@@ -328,21 +328,31 @@ Each markdown scorecard has a `.json` twin of the same name. A corpus test is na
 
 `make score-corpus` (`scripts/corpus/score-gate.sh --all-judged`) scans every register that judges at least one pair CLEARLY IN or CLEARLY OUT, and no repository without judgments. `--list-judged-targets` prints that list without building or scanning. CI does not run it: the CI gate stays the slice in [CORPUS-SCORE-GATE-SLICE].
 
-**Every run is appended to `corpus/history/corpus-runs.jsonl`**, one JSON line per run, committed so the history can be tracked over time. A line holds:
+**Read it in `corpus/history/HISTORY.md`.** The page is rendered again from every run record each time a run is added, and is never edited by hand. Newest run first, it has:
 
-- when the run was generated, the scorecard it wrote, and the engine;
-- the source: the commit the engine was built from, and whether the working tree had uncommitted changes;
-- the machine: operating system and version, architecture, CPU model, logical CPUs, physical cores and memory — CPU and memory figures are only comparable on the same machine;
-- each repository: language, commit, whether it matched every judgment, judged and correct pairs, CLEARLY IN found, CLEARLY OUT absent, false negatives, false positives, score, clusters, and the scan's wall time, CPU time, peak CPU and peak memory;
-- every judged pair: its repository, verdict, ranges, pass or fail, and how it stood against `corpus/register/outcomes.json`;
-- whether the run passed — true unless something that passed before fails now — and every backslide.
+- **Runs** — one row per run: when it ran, its source (the release version when there is one, then the commit), passed or failed, correct / judged, score, regressions, known defects, total wall time, total CPU time, peak memory and the machine;
+- **By repository** — one table per repository, one row per run: whether it matched its judgments, correct / judged, CLEARLY IN found, CLEARLY OUT absent, false negatives, false positives, wall time, CPU time, peak CPU and peak memory;
+- **Judged pairs the latest run gets wrong** — each marked as a regression or a known defect;
+- **Regressions** — every judged pair any run found going backwards, with the run it passed in.
 
-**One judgment going backwards fails the run.** A judged pair that passed in any earlier run in the history, at the same commit, and fails now is a **backslide**. There is no allowance and no way to accept one: the judged pair record ([CORPUS-SCORE-OUTCOMES]) can put a failure on record as known, but the history is append-only, so once a pass is recorded every later run of that commit is held to it. A pair judged at a different commit is a different pair. A failed run is still appended, with `passed: false`.
+**Each run is recorded in its own file**, `corpus/history/runs/score-corpus-<UTC timestamp>.json`, committed so the history is tracked. A record holds when the run was generated, the scorecard it wrote, the engine, its source ([CORPUS-HISTORY-SOURCE]), the machine (operating system and version, architecture, CPU model, logical CPUs, physical cores, memory — CPU and memory figures only compare on one machine), the run's totals, how many regressions and known defects it had, every repository's counts and cost, every judged pair's outcome and how it stood against `corpus/register/outcomes.json`, and every backslide.
+
+**One judgment going backwards fails the run.** A judged pair that passed in any earlier recorded run, at the same commit, and fails now is a **backslide**. There is no allowance and no way to accept one: once a pass is recorded, every later run of that commit is held to it. A pair judged at a different commit is a different pair. A failed run is still recorded, with `passed: false`.
 
 The scorecard of a run held to the history has a **Run history** section: the source, the machine, one row per repository saying whether it matched its judgments with its score and cost, and either a PASS line or every backslide. Each backslide is also listed in the verdict at the top, and `corpus-score score` exits non-zero on it.
 
-- Implemented in `crates/deslop-test-support/src/corpus_score/history.rs` and `render/history.rs`, wired through `run.rs` (`write_scorecard`, `Scoring::history`) and `corpus-score score --history-commit <commit> [--history-dirty]`, which requires `--gate`. Targets come from `judged_targets` in `scripts/corpus/target-repos.sh`.
+- Implemented in `crates/deslop-test-support/src/corpus_score/history.rs`, `history/store.rs`, `render/history.rs` and `render/history_log.rs`, wired through `run.rs` (`write_scorecard`, `Scoring::history`) and `corpus-score score --history`, which requires `--gate`. Targets come from `judged_targets` in `scripts/corpus/target-repos.sh`.
 - Pinned end to end by `corpus_score/run/tests/history.rs`.
+
+### [CORPUS-HISTORY-SOURCE] Every result is tied to a commit
+
+Every recorded result names the commit of the engine that produced it, in full, and the release version beside it when a release tag (`v*`) points at that commit. A version is only a name for a commit, and a name can be re-pointed; the commit is the source. The run manifest names both on each engine; a run history record, every `corpus/register/outcomes.json` entry and both scorecards carry them.
+
+- **A run tied to no commit records nothing.** It still writes its scorecard, but it neither writes the judged pair record nor joins the run history; asked to accept failures or to join the history, it is refused.
+- **A local run refuses uncommitted changes.** `score-gate.sh` (both modes) and `compare-versions.sh` stop before building when the working tree has any uncommitted change, naming each one: a commit does not name source nobody committed.
+- **A local run rebuilds from nothing.** `score-gate.sh` cleans the release build of `deslop`, `deslop-core` and `deslop-test-support` before it builds, so the binaries that run are the committed source. `compare-versions.sh` already builds each engine from a fresh extract of its commit.
+- CI's checkout and build are fresh on every run, so CI is not held to the last two rules; it is told apart by the `CI` environment variable.
+- Implemented in `corpus_score/source.rs`, `outcomes.rs` (`write_back`) and `history.rs` (`hold`); in scripts by `is_local`, `require_clean_tree` and `release_version` in `scripts/corpus/target-repos.sh`. Pinned by `corpus_score/run/tests/history.rs` and the record field list in `crates/deslop/tests/corpus_register_contract.rs`.
 
 ### [CORPUS-BASELINE] The known-failures ratchet
 

@@ -542,12 +542,14 @@ score-gate:
 	./scripts/corpus/score-gate.sh
 
 # [CORPUS-HISTORY] The whole judged corpus: every register that judges at least
-#   one pair, and no repository without judgments. Held to the record and to
-#   the run history — one judged pair that passed in any earlier run of the
-#   same commit and fails now fails the run — then appended to
-#   corpus/history/corpus-runs.jsonl with every judged pair's outcome, each
-#   repository's cost, the machine and the source commit. Commit the history.
-## score-corpus: Score every judged register and append the run to the history.
+#   one pair, and no repository without judgments. Refuses uncommitted changes
+#   and rebuilds from nothing first ([CORPUS-HISTORY-SOURCE]). Held to the
+#   record and to the run history — one judged pair that passed in any earlier
+#   run of the same commit and fails now fails the run — then recorded in
+#   corpus/history/runs/ with every judged pair's outcome, each repository's
+#   cost, the machine, the commit and the release version, and
+#   corpus/history/HISTORY.md is rendered again. Commit both.
+## score-corpus: Score every judged register and record the run in the history.
 score-corpus:
 	./scripts/corpus/score-gate.sh --all-judged
 

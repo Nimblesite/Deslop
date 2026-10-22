@@ -335,7 +335,10 @@ pub fn write_back(root: &Path, ledger: &Ledger, card: &Scorecard, accept: bool) 
     };
     let Some(source) = last.source.as_ref() else {
         return if accept {
-            Err(anyhow!("{} names no commit, so nothing it scored can go on record", last.label))
+            Err(anyhow!(
+                "{} names no commit, so nothing it scored can go on record",
+                last.label
+            ))
         } else {
             Ok(())
         };

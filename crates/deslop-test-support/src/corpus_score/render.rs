@@ -15,6 +15,7 @@ mod checks;
 mod cost;
 mod coverage;
 mod history;
+mod history_log;
 mod outcomes;
 mod verdict;
 
@@ -25,6 +26,7 @@ use checks::checks_section;
 use cost::{cost_section, standing_cost};
 use coverage::{coverage_section, coverage_value};
 use history::history_section;
+pub use history_log::history_log;
 use outcomes::record_section;
 use serde::Serialize;
 use verdict::verdict_banner;
@@ -33,8 +35,8 @@ use super::{
     checks::CheckOutcome,
     gate::{CorpusChange, CorpusTotals, Degradation},
     history::HistoryCheck,
-    source::Source,
     outcomes::{PairKey, PairOutcome},
+    source::Source,
     verdict::Verdict,
     RepoScore, RunCost, ScoredEntry,
 };

@@ -21,7 +21,7 @@ use crate::corpus_score::{
 const NOT_CLEAR: &str = "not_clear";
 
 /// Scores the run manifest under `root` as `scoring` asks.
-fn scored(root: &Path, scoring: Scoring<'_>) -> Result<WrittenScorecard> {
+fn scored(root: &Path, scoring: Scoring) -> Result<WrittenScorecard> {
     write_scorecard(&root.join(RUN), root, root, STEM, scoring)
 }
 
@@ -30,7 +30,9 @@ fn scored(root: &Path, scoring: Scoring<'_>) -> Result<WrittenScorecard> {
 /// pass.
 fn assert_refused(root: &Path, scanned: usize) -> Result<()> {
     let Err(refusal) = scored(root, STRICT) else {
-        return Err(anyhow!("a gate that judged no pair passed over {scanned} repositories"));
+        return Err(anyhow!(
+            "a gate that judged no pair passed over {scanned} repositories"
+        ));
     };
     assert_eq!(refusal.to_string(), nothing_judged(scanned));
     assert!(
@@ -78,7 +80,11 @@ fn a_gate_that_judged_no_pair_fails_instead_of_passing() -> Result<()> {
         "the gate scored the judged pair"
     );
     assert_eq!(
-        passed.card.outcomes.first().map(|pair| pair.key.verdict.as_str()),
+        passed
+            .card
+            .outcomes
+            .first()
+            .map(|pair| pair.key.verdict.as_str()),
         Some(CLEARLY_IN)
     );
     Ok(())

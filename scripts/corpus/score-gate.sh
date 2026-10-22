@@ -19,11 +19,17 @@
 ##
 ## `--all-judged` scans every register that judges at least one pair — the
 ## whole judged corpus, and no repository without judgments — and holds it to
-## the run history in `corpus/history/corpus-runs.jsonl` as well as the record:
-## one judged pair that passed in any earlier run of the same commit and fails
-## now fails the run. The run is then appended to the history with every judged
-## pair's outcome, each repository's cost, the machine and the source commit
+## the run history in `corpus/history/runs/` as well as the record: one judged
+## pair that passed in any earlier run of the same commit and fails now fails
+## the run. The run is then recorded in the history with every judged pair's
+## outcome, each repository's cost, the machine, the commit and the release
+## version, and `corpus/history/HISTORY.md` is rendered again from every record
 ## ([CORPUS-HISTORY]). Its scorecard is `score-corpus-<UTC timestamp>.md`.
+##
+## [CORPUS-HISTORY-SOURCE] Every run is tied to the commit it was built from,
+## and to its release version when a release tag points at that commit. Run
+## locally, it refuses a working tree with uncommitted changes and rebuilds the
+## engine and the scorer from nothing before it scans anything.
 ##
 ## With no targets it scans the default slice: judged repositories across the
 ## core languages, each pinned to the exact commit its register was judged at,
@@ -50,6 +56,9 @@ WORK_DIR="${SCORE_GATE_WORK_DIR:-$REPO_ROOT/.corpus/score-gate}"
 source "$REPO_ROOT/scripts/corpus/target-repos.sh"
 
 BINARY="$REPO_ROOT/target/release/deslop"
+# The workspace packages a local run rebuilds from nothing, so the binaries
+# that run are the committed source and nothing older.
+REBUILT_PACKAGES=(deslop deslop-core deslop-test-support)
 SCORER="$REPO_ROOT/target/release/corpus-score"
 # The same analysis config the version comparison uses, so a figure measured
 # here and one measured there are comparable.
@@ -60,6 +69,12 @@ usage() { grep '^## ' "${BASH_SOURCE[0]}" | cut -c4-; }
 # ---------------------------------------------------------------------------
 # build: compile the engine and the scorer from the working tree.
 build() {
+  if is_local; then
+    log "rebuilding ${REBUILT_PACKAGES[*]} from nothing"
+    local package clean_args=()
+    for package in "${REBUILT_PACKAGES[@]}"; do clean_args+=(-p "$package"); done
+    (cd "$REPO_ROOT" && cargo clean --release "${clean_args[@]}")
+  fi
   log "building deslop and the scorer from the working tree"
   (cd "$REPO_ROOT" && cargo build --release --bin deslop)
   (cd "$REPO_ROOT" && cargo build --release -p deslop-test-support --bin corpus-score)
@@ -94,7 +109,7 @@ write_run() {
   done
   node -e '
     const FIELDS_PER_TARGET = 4;
-    const [runPath, engineId, engineLabel, ...rest] = process.argv.slice(1);
+    const [runPath, engineId, engineLabel, commit, version, ...rest] = process.argv.slice(1);
     const targets = [];
     for (let at = 0; at < rest.length; at += FIELDS_PER_TARGET) {
       const [name, language, sha, dir] = rest.slice(at, at + FIELDS_PER_TARGET);
@@ -106,20 +121,19 @@ write_run() {
     }
     require("fs").writeFileSync(runPath, JSON.stringify({
       generated_at: new Date().toISOString(),
-      engines: [{ id: engineId, label: engineLabel }],
+      engines: [{ id: engineId, label: engineLabel, commit, version: version || null }],
       targets,
     }, null, 2) + "\n");
-  ' "$run_path" "$ENGINE_ID" "$ENGINE_LABEL" "${fields[@]}"
+  ' "$run_path" "$ENGINE_ID" "$ENGINE_LABEL" "$SOURCE_COMMIT" "$SOURCE_VERSION" "${fields[@]}"
 }
 
 # ---------------------------------------------------------------------------
-# source-flags: [CORPUS-HISTORY] the scorer flags naming the commit this build
-# came from, and whether uncommitted changes were built with it.
-source_flags() {
-  local commit
-  commit="$(git -C "$REPO_ROOT" rev-parse HEAD)" || die "cannot read the source commit"
-  SCORE_FLAGS+=(--history-commit "$commit")
-  [ -z "$(git -C "$REPO_ROOT" status --porcelain)" ] || SCORE_FLAGS+=(--history-dirty)
+# read-source: [CORPUS-HISTORY-SOURCE] the commit this build comes from, and
+# the release version when a release tag points at it.
+read_source() {
+  SOURCE_COMMIT="$(git -C "$REPO_ROOT" rev-parse HEAD)" || die "cannot read the source commit"
+  SOURCE_VERSION="$(release_version "$REPO_ROOT" "$SOURCE_COMMIT")"
+  log "source: commit $SOURCE_COMMIT${SOURCE_VERSION:+, release $SOURCE_VERSION}"
 }
 
 # ---------------------------------------------------------------------------
@@ -156,11 +170,13 @@ main() {
   esac
   command -v cargo >/dev/null || die "cargo not on PATH"
   command -v node >/dev/null || die "node not on PATH"
+  if is_local; then require_clean_tree "$REPO_ROOT"; fi
+  read_source
   RUN_NAME=score-gate
   SCORE_FLAGS=(--gate)
   if [ "${1:-}" = "--all-judged" ]; then
     RUN_NAME=score-corpus
-    source_flags
+    SCORE_FLAGS+=(--history)
   fi
   resolve_targets "$@"
   build

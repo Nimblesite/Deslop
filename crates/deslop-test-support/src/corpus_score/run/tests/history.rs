@@ -1,19 +1,26 @@
 //! [CORPUS-HISTORY] The run history, driven end to end: the fixture
-//! repository's judged pair scored run after run in one checkout, with the
-//! history file on disk read back after each run.
+//! repository's judged pair scored run after run in one checkout, with every
+//! run record and the rendered `HISTORY.md` on disk read back after each run.
 
 use std::{fs, path::Path};
 
 use anyhow::{anyhow, Result};
 
 use super::{
-    record::{holding, scored, seed, FIRST_RUN, FOURTH_RUN, SECOND_RUN, THIRD_RUN},
-    ELAPSED_MS, PEAK_RSS_MB, REPO, STRICT,
+    record::{
+        holding, scored, scored_as, seed, the_engine, FIRST_RUN, FOURTH_RUN, SECOND_RUN, THIRD_RUN,
+    },
+    write, ELAPSED_MS, PEAK_RSS_MB, REPO, RUN, SOURCE_COMMIT, STEM, STRICT,
 };
 use crate::corpus_score::{
-    history::{self, Host, RunRecord, Source, BACKSLIDE, HISTORY_PATH},
+    history::{
+        self,
+        store::{self, LOG_PATH, RUNS_DIR},
+        Host, RunRecord, BACKSLIDE,
+    },
     outcomes::{Outcome, Standing},
-    run::{Scoring, WrittenScorecard},
+    run::{write_scorecard, Scoring, WrittenScorecard},
+    source::Source,
     tests::{
         pinned_sha, report, the_pair,
         verdict::{FAILED_HEADING, PASSED_HEADING},
@@ -22,14 +29,44 @@ use crate::corpus_score::{
     CLEARLY_IN,
 };
 
-/// The commit the fixture engine is recorded as built from.
-const SOURCE_COMMIT: &str = "1111111111111111111111111111111111111111";
+/// A release the fixture engine is built from in one run.
+const RELEASE: &str = "v9.9.9";
+/// The run manifest field an engine's commit is read from, and what a run
+/// held to the history says when its engine names no commit.
+const COMMIT: &str = "commit";
+const NO_COMMIT: &str = "must name the commit it was built from";
 /// A commit the fixture repository was never scanned at.
 const OTHER_SHA: &str = "2222222222222222222222222222222222222222";
 /// The scorecard lines the history section must carry.
 const SECTION: &str = "## Run history";
-const SOURCE_LINE: &str =
-    "Source: commit `1111111111111111111111111111111111111111`, with uncommitted changes.";
+const SOURCE_LINE: &str = "Source: commit `1111111111111111111111111111111111111111`.";
+const RELEASE_LINE: &str = "Source: **v9.9.9**, commit `1111111111111111111111111111111111111111`.";
+/// How `HISTORY.md` lists each run: its time, its source, its result, its
+/// score and its cost. The machine follows, and is this machine's.
+const LOG_FIRST_ROW: &str =
+    "| 2026-10-01T00:00:00Z | `111111111111` | ✅ passed | 1/1 | 100.0% | 0 \
+                             | 0 | 295.00 s | 1210.50 s | 7947 MB |";
+const LOG_SECOND_ROW: &str =
+    "| 2026-10-02T00:00:00Z | `111111111111` | 🔴 failed | 0/1 | 0.0% | 1 \
+                              | 0 | 295.00 s | 1210.50 s | 7947 MB |";
+const LOG_RELEASE_ROW: &str =
+    "| 2026-10-04T00:00:00Z | **v9.9.9** (`111111111111`) | ✅ passed | 0/1 \
+                               | 0.0% | 0 | 1 | 295.00 s | 1210.50 s | 7947 MB |";
+const LOG_REPO_ROW: &str =
+    "| 2026-10-02T00:00:00Z | `111111111111` | 🔴 no | 0/1 (0.0%) | 0/1 | 0/0 \
+                            | 1 | 0 | 295.00 s | 1210.50 s | 781% | 7947 MB |";
+const LOG_REGRESSION: &str = "  - 🔴 **flutter** — false negative — `src/one.rs:10-20` + \
+                              `src/two.rs:30-40` — passed in the run of 2026-10-01T00:00:00Z";
+const LOG_KNOWN_DEFECT: &str = "- ⚠️ known defect — **flutter** — false negative — \
+                                `src/one.rs:10-20` + `src/two.rs:30-40`";
+/// The headings `HISTORY.md` carries, newest run first.
+const LOG_HEADINGS: [&str; 5] = [
+    "# Corpus run history",
+    "## Runs",
+    "### flutter (dart)",
+    "## Judged pairs the latest run gets wrong (1)",
+    "## Regressions",
+];
 const NO_EARLIER_RUNS: &str =
     "**PASS** — no judged pair went backwards against **0 earlier runs**.";
 const NONE_AGAINST_TWO: &str =
@@ -54,25 +91,38 @@ const MISSED_ROW: &str =
 fn source() -> Source {
     Source {
         commit: SOURCE_COMMIT.to_owned(),
-        dirty: true,
+        version: None,
     }
 }
+
+/// Scoring that holds a run to the history and records it there.
+const HELD: Scoring = Scoring {
+    history: true,
+    ..STRICT
+};
 
 /// One run of the fixture held to the history, whose scan reported the pair
 /// when `reported`.
 fn run(root: &Path, at: &str, reported: bool) -> Result<WrittenScorecard> {
     let pairs = if reported { the_pair() } else { Vec::new() };
-    let source = source();
-    let scoring = Scoring {
-        history: Some(&source),
-        ..STRICT
-    };
-    scored(root, at, &report(&pairs), scoring)
+    scored(root, at, &report(&pairs), HELD)
 }
 
 /// Every run the history under `root` holds.
 fn runs(root: &Path) -> Result<Vec<RunRecord>> {
-    history::load(root)
+    store::load(root)
+}
+
+/// The history document under `root`.
+fn log(root: &Path) -> Result<String> {
+    Ok(fs::read_to_string(root.join(LOG_PATH))?)
+}
+
+/// Asserts `text` carries every line in `lines`.
+fn holds(text: &str, lines: &[&str]) {
+    for line in lines {
+        assert!(text.contains(line), "missing `{line}`\n{text}");
+    }
 }
 
 /// The last run the history holds.
@@ -84,10 +134,7 @@ fn last(root: &Path) -> Result<RunRecord> {
 
 /// Asserts the scorecard carries every line in `lines`.
 fn carries(written: &WrittenScorecard, lines: &[&str]) {
-    for line in lines {
-        let markdown = &written.markdown;
-        assert!(markdown.contains(line), "missing `{line}`\n{markdown}");
-    }
+    holds(&written.markdown, lines);
 }
 
 /// Asserts one history run: when it ran, whether it passed, how its one pair
@@ -110,7 +157,7 @@ fn assert_run(
     assert_eq!(
         record.source,
         source(),
-        "{at}: the source commit and tree are recorded"
+        "{at}: the source commit is recorded"
     );
     assert_eq!(
         record.host,
@@ -215,6 +262,24 @@ fn a_pass_on_record_in_the_history_holds_every_later_run_of_that_commit() -> Res
     assert_run(&last(root)?, SECOND_RUN, Outcome::Fail, Some(FIRST_RUN))?;
     assert_repo(&last(root)?, false)?;
     assert_eq!(runs(root)?.len(), 2, "a failed run is recorded too");
+    let (regressions, known) = (last(root)?.regressions, last(root)?.known_defects);
+    assert_eq!(
+        (regressions, known),
+        (1, 0),
+        "a pair both regressed and backslid counts once"
+    );
+
+    let history_log = log(root)?;
+    holds(
+        &history_log,
+        &[LOG_FIRST_ROW, LOG_SECOND_ROW, LOG_REPO_ROW, LOG_REGRESSION],
+    );
+    holds(&history_log, &LOG_HEADINGS);
+    let newest_first = history_log.find(LOG_SECOND_ROW) < history_log.find(LOG_FIRST_ROW);
+    assert!(
+        newest_first,
+        "the newest run is listed first:\n{history_log}"
+    );
     Ok(())
 }
 
@@ -248,8 +313,8 @@ fn a_pass_at_another_commit_holds_nothing_and_a_run_off_the_history_writes_none(
     let root = root.path();
     let unrecorded = scored(root, FIRST_RUN, &report(&the_pair()), STRICT)?;
     assert!(
-        !root.join(HISTORY_PATH).exists(),
-        "a run off the history appends nothing"
+        !root.join(RUNS_DIR).exists() && !root.join(LOG_PATH).exists(),
+        "a run off the history records nothing"
     );
     assert!(
         !unrecorded.markdown.contains(SECTION),
@@ -258,12 +323,14 @@ fn a_pass_at_another_commit_holds_nothing_and_a_run_off_the_history_writes_none(
 
     let _first = run(root, FIRST_RUN, true)?;
     let _second = run(root, SECOND_RUN, false)?;
-    let path = root.join(HISTORY_PATH);
-    let repinned = fs::read_to_string(&path)?.replace(&pinned_sha(), OTHER_SHA);
-    fs::write(&path, repinned)?;
+    for entry in fs::read_dir(root.join(RUNS_DIR))? {
+        let path = entry?.path();
+        let repinned = fs::read_to_string(&path)?.replace(&pinned_sha(), OTHER_SHA);
+        fs::write(&path, repinned)?;
+    }
     seed(root, &holding("fail", SECOND_RUN))?;
 
-    let fourth = run(root, FOURTH_RUN, false)?;
+    let fourth = scored_as(root, FOURTH_RUN, &report(&[]), HELD, Some(RELEASE))?;
     assert_eq!(
         history::backslid(&fourth.card),
         0,
@@ -278,11 +345,40 @@ fn a_pass_at_another_commit_holds_nothing_and_a_run_off_the_history_writes_none(
         Some(PASSED_HEADING),
         "a known defect that went nowhere is no regression, so the scorecard passes"
     );
-    carries(&fourth, &[NONE_AGAINST_TWO]);
+    carries(&fourth, &[NONE_AGAINST_TWO, RELEASE_LINE]);
     assert_eq!(
         runs(root)?.len(),
         3,
-        "every run held to the history is appended as one line"
+        "every run held to the history is recorded in its own file"
+    );
+    let released = last(root)?;
+    assert_eq!(
+        released.source.version.as_deref(),
+        Some(RELEASE),
+        "a release run records its version beside its commit"
+    );
+    assert_eq!((released.regressions, released.known_defects), (0, 1));
+    holds(&log(root)?, &[LOG_RELEASE_ROW, LOG_KNOWN_DEFECT]);
+    Ok(())
+}
+
+#[test]
+fn a_run_held_to_the_history_must_name_its_commit() -> Result<()> {
+    let root = tempfile::tempdir()?;
+    let root = root.path();
+    let _first = run(root, FIRST_RUN, true)?;
+    let mut manifest: serde_json::Value = crate::read_json(&root.join(RUN))?;
+    let _commit = the_engine(&mut manifest)?.remove(COMMIT);
+    write(root, RUN, &manifest)?;
+    let refused = write_scorecard(&root.join(RUN), root, root, STEM, HELD);
+    assert!(
+        refused.is_err_and(|error| error.to_string().contains(NO_COMMIT)),
+        "a run tied to no commit is never added to the history"
+    );
+    assert_eq!(
+        runs(root)?.len(),
+        1,
+        "the history keeps only the run that named its commit"
     );
     Ok(())
 }

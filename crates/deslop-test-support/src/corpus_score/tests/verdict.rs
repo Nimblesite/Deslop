@@ -55,6 +55,7 @@ const TWO_KNOWN_DEFECTS: &str = "> ⚠️ **2 known defects** — none of them p
 /// When the fixture pair went on record as passing, and how the verdict says
 /// it regressed from that pass.
 const PASSED_SINCE: &str = "2026-10-01T00:00:00Z";
+const PASSED_COMMIT: &str = "1111111111111111111111111111111111111111";
 const REGRESSED_DETAIL: &str = "`src/one.rs:10-20` + `src/two.rs:30-40`: regressed; on record as \
                                 passing since 2026-10-01T00:00:00Z";
 const REGRESSED_LINE: &str = "> - 🔴 **fixture** — `false negative`: `src/one.rs:10-20` + \
@@ -129,6 +130,8 @@ fn passing_record(score: &RepoScore) -> Ledger {
                 outcome: Outcome::Pass,
                 since: PASSED_SINCE.to_owned(),
                 engine: NEW_LABEL.to_owned(),
+                commit: PASSED_COMMIT.to_owned(),
+                version: None,
             })
             .collect(),
     }

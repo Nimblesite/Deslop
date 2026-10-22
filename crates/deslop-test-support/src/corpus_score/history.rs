@@ -201,7 +201,9 @@ pub fn hold(card: &mut Scorecard, root: &Path) -> Result<()> {
         .engines
         .last()
         .and_then(|engine| engine.source.clone())
-        .ok_or_else(|| anyhow!("a run held to the history must name the commit it was built from"))?;
+        .ok_or_else(|| {
+            anyhow!("a run held to the history must name the commit it was built from")
+        })?;
     let earlier = store::load(root)?;
     let repos = repo_records(card);
     let backslides = backslides(&earlier, &repos, &judgments(card));

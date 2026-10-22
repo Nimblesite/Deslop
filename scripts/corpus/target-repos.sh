@@ -29,10 +29,38 @@ NOT_A_REPOSITORY="corpus/not-a-repository.json"
 # with no verdicts yet, because a judge cannot rule on pairs nothing produced.
 JUDGING_QUEUE="corpus/judging-queue.json"
 
+# [CORPUS-HISTORY-SOURCE] The tags a release is cut under; any other tag names
+# no version.
+RELEASE_TAGS="v*"
+
 log() { echo "==> $*" >&2; }
 die() { echo "==> ERROR: $*" >&2; exit 1; }
 
 short_sha() { printf '%.*s' "$SHORT_SHA_LENGTH" "$1"; }
+
+# ---------------------------------------------------------------------------
+# is-local: true off CI. A local run is held to the rules CI's fresh checkout
+# and fresh build already keep ([CORPUS-HISTORY-SOURCE]).
+is_local() { [ -z "${CI:-}" ]; }
+
+# ---------------------------------------------------------------------------
+# require-clean-tree: [CORPUS-HISTORY-SOURCE] refuse a run over uncommitted
+# changes in the repository at $1. Every result is tied to a commit, and a
+# commit does not name source nobody committed.
+require_clean_tree() {
+  local changes
+  changes="$(git -C "$1" status --porcelain)" || die "cannot read the working tree at $1"
+  [ -z "$changes" ] || die "uncommitted changes — every corpus run is tied to a commit, so \
+commit or stash these first:
+$changes"
+}
+
+# ---------------------------------------------------------------------------
+# release-version: [CORPUS-HISTORY-SOURCE] the release tag pointing at commit
+# $2 of the repository at $1, or nothing when the commit is not a release.
+release_version() {
+  git -C "$1" tag --points-at "$2" --list "$RELEASE_TAGS" | sort -V | tail -n 1
+}
 
 # ---------------------------------------------------------------------------
 # is-commit-id: true when $1 is a full, lowercase, hexadecimal git object name.

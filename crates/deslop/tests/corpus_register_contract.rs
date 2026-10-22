@@ -61,16 +61,20 @@ const JUDGING_SKILL_FIELD: &str = "judging_skill";
 /// [CORPUS-SCORE-OUTCOMES] Every judged pair's last recorded outcome, the
 /// fields a record entry carries — exactly these, so no count or percentage
 /// allowance can creep in beside them — and the two outcomes it may hold.
+/// [CORPUS-HISTORY-SOURCE] Every entry names the commit, and the release
+/// version, of the engine that recorded it.
 const OUTCOMES: &str = "corpus/register/outcomes.json";
 const RECORD_FIELDS: [&str; 2] = ["pairs", "spec"];
 const PAIRS: &str = "pairs";
-const PAIR_FIELDS: [&str; 6] = [
+const PAIR_FIELDS: [&str; 8] = [
+    "commit",
     "engine",
     "occurrences",
     "outcome",
     "repo",
     "since",
     "verdict",
+    "version",
 ];
 const REPO: &str = "repo";
 const VERDICT: &str = "verdict";

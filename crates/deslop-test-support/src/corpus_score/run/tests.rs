@@ -29,20 +29,22 @@ mod verdict;
 
 /// Scoring that holds a judged run to everything: its timing, its report and
 /// its record.
-const STRICT: Scoring<'static> = Scoring {
+const STRICT: Scoring = Scoring {
     strict: true,
     accept_failures: false,
-    history: None,
+    history: false,
 };
 /// Scoring as a `corpus_*` test runs it: ungated, so a repository no register
 /// judges is reported rather than refused ([CORPUS-SCORE-GATE-JUDGED]).
-const UNGATED: Scoring<'static> = Scoring {
+const UNGATED: Scoring = Scoring {
     strict: false,
     ..STRICT
 };
 
 const ENGINE_ID: &str = "current";
 const ENGINE_LABEL: &str = "deslop (binary current)";
+/// [CORPUS-HISTORY-SOURCE] The commit the fixture engine was built from.
+const SOURCE_COMMIT: &str = "1111111111111111111111111111111111111111";
 const REPO: &str = "flutter";
 const LANGUAGE: &str = "dart";
 const SHA: &str = "67323de285b00232883f53b84095eb72be97d35c";
@@ -120,7 +122,7 @@ fn write(root: &Path, name: &str, value: &impl serde::Serialize) -> Result<()> {
 fn manifest(sha: &str, register: Option<&str>, run: &Value) -> Value {
     json!({
         "generated_at": GENERATED_AT,
-        "engines": [{ "id": ENGINE_ID, "label": ENGINE_LABEL }],
+        "engines": [{ "id": ENGINE_ID, "label": ENGINE_LABEL, "commit": SOURCE_COMMIT }],
         "targets": [{
             "name": REPO, "language": LANGUAGE, "sha": sha, "register": register,
             "runs": { ENGINE_ID: run },
@@ -142,12 +144,6 @@ fn unregistered_run(root: &Path) -> Result<()> {
 /// the baseline does not track on.
 fn failure_line(what: &str, detail: &str) -> String {
     format!("> - 🔴 **{REPO}** — `{what}`: {detail}")
-}
-
-/// [CORPUS-REPORT-VERDICT] The line the known-defect note lists one untracked
-/// failure that never passed on.
-fn known_line(what: &str, detail: &str) -> String {
-    format!("> - ⚠️ **{REPO}** — `{what}`: {detail}")
 }
 
 /// [CORPUS-REPORT] A repository no register judged is still reported — its
@@ -407,87 +403,6 @@ fn judged_run(root: &Path, scanned: &Value) -> Result<()> {
     write(root, TIMING, &measured())?;
     let run = json!({ "report": REPORT, "timing": TIMING });
     write(root, RUN, &manifest(&pinned_sha(), Some(REGISTER), &run))
-}
-
-/// Scores a judged run of the fixture repository whose scan wrote `scanned`
-/// under the strict gate, returning the scorecard and the JSON it left on disk.
-fn judged_scorecard(scanned: &Value) -> Result<(WrittenScorecard, Value)> {
-    let root = tempfile::tempdir()?;
-    judged_run(root.path(), scanned)?;
-    let written = write_scorecard(
-        &root.path().join(RUN),
-        root.path(),
-        root.path(),
-        STEM,
-        STRICT,
-    )?;
-    let recorded = crate::read_json(&written.json_path)?;
-    Ok((written, recorded))
-}
-
-/// [CORPUS-REPORT-VERDICT] A judged run is headed by whether anything that
-/// passed before fails now, in the markdown and the JSON alike: the same
-/// repository passes while its judged pair is reported, and still passes —
-/// listing the pair as a known defect — when it is missed with no pass on
-/// record, because a pair that never passed cannot regress.
-#[test]
-fn a_judged_run_fails_only_on_a_pair_that_passed_before() -> Result<()> {
-    let (clean, clean_json) = judged_scorecard(&report(&the_pair()))?;
-    assert_eq!(
-        clean.markdown.lines().next(),
-        Some(PASSED_HEADING),
-        "a run that kept to its record opens by saying it passed:\n{}",
-        clean.markdown
-    );
-    assert!(
-        clean.card.verdict.passed(),
-        "the judged pair was reported, so nothing failed"
-    );
-    assert!(
-        clean.markdown.contains(RECORD_PASS),
-        "the record section agrees with the heading:\n{}",
-        clean.markdown
-    );
-    assert_eq!(
-        clean_json.pointer(VERDICT_FAILURES),
-        Some(&json!([])),
-        "the JSON scorecard carries the same empty verdict"
-    );
-
-    let (missed, missed_json) = judged_scorecard(&report(&[]))?;
-    assert_eq!(
-        missed.markdown.lines().next(),
-        Some(PASSED_HEADING),
-        "a missed CLEARLY IN that never passed is no regression, so the run passes:\n{}",
-        missed.markdown
-    );
-    for row in [
-        known_line(MISSED_DEFECT, UNRECORDED_DETAIL).as_str(),
-        RECORD_PASS,
-    ] {
-        assert!(
-            missed.markdown.contains(row),
-            "the scorecard must carry `{row}`:\n{}",
-            missed.markdown
-        );
-    }
-    for claim in [FAILED_HEADING, CAUTION, RECORD_FAIL] {
-        assert!(
-            !missed.markdown.contains(claim),
-            "a known defect is never shown as a regression (`{claim}`)"
-        );
-    }
-    assert_eq!(
-        missed_json.pointer(VERDICT_FAILURES),
-        Some(&one_untracked_failure(
-            REPO,
-            MISSED_DEFECT,
-            UNRECORDED_DETAIL,
-            KNOWN_DEFECT
-        )),
-        "the JSON scorecard lists the pair as a known defect, not a regression"
-    );
-    Ok(())
 }
 
 /// [CORPUS-REPORT] Every run's scorecard is named after what ran and when, so

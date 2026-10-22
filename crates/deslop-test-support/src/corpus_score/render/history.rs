@@ -6,7 +6,10 @@ use super::{
     cells::{counted, cpu, cpu_rate, header, megabytes, or_absent, row, score_cell, seconds},
     Scorecard,
 };
-use crate::corpus_score::history::{Backslide, Host, RepoRecord, Source};
+use crate::corpus_score::{
+    history::{Backslide, Host, RepoRecord},
+    source::Source,
+};
 
 /// A repository that matched every judgment, and one that did not.
 const MATCHES: &str = "✅ yes";
@@ -34,10 +37,10 @@ pub(in crate::corpus_score) fn history_section(card: &Scorecard) -> Vec<String> 
         "## Run history".to_owned(),
         String::new(),
         format!(
-            "This run is appended to `{}`, with every judged pair's outcome. A judged pair that \
-             passed in any earlier run of the same commit and fails now is a **backslide**, and \
-             one backslide fails the run.",
-            history.path
+            "This run is recorded in `{}`, with every judged pair's outcome, and `{}` is rendered \
+             again from every record. A judged pair that passed in any earlier run of the same \
+             commit and fails now is a **backslide**, and one backslide fails the run.",
+            history.runs, history.log
         ),
         String::new(),
         format!("Source: {}.", source_line(&history.source)),
@@ -52,14 +55,12 @@ pub(in crate::corpus_score) fn history_section(card: &Scorecard) -> Vec<String> 
     lines
 }
 
-/// The commit, and whether uncommitted changes were built with it.
+/// The release version when the commit is one, then the full commit.
 fn source_line(source: &Source) -> String {
-    let tree = if source.dirty {
-        "with uncommitted changes"
-    } else {
-        "clean"
-    };
-    format!("commit `{}`, {tree}", source.commit)
+    source.version.as_ref().map_or_else(
+        || format!("commit `{}`", source.commit),
+        |version| format!("**{version}**, commit `{}`", source.commit),
+    )
 }
 
 /// The machine's facts on one line.

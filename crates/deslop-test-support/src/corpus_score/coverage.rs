@@ -1,7 +1,7 @@
 //! [CORPUS-SCORE] The judged-line extent of a matched cluster.
 
 use deslop_core::buckets::ClusterKind;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::{
@@ -10,7 +10,7 @@ use super::{
 };
 
 /// How much of a judged pair's source the matching cluster actually shows.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RangeCoverage {
     /// Distinct judged lines overlapped by visible occurrences.
     pub covered_lines: u64,
