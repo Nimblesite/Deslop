@@ -71,6 +71,7 @@ fn engines() -> Vec<Engine> {
         .map(|(id, label)| Engine {
             id: id.to_owned(),
             label: label.to_owned(),
+            source: None,
         })
         .into()
 }

@@ -28,6 +28,7 @@ pub mod history;
 pub mod outcomes;
 pub mod render;
 pub mod run;
+pub mod source;
 pub mod verdict;
 
 use clone_type::CloneType;

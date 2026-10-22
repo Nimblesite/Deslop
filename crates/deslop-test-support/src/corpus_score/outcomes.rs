@@ -20,10 +20,14 @@ use std::{
     path::Path,
 };
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 
-use super::{render::TargetScore, ScoredEntry, CLEARLY_IN};
+use super::{
+    render::{Scorecard, TargetScore},
+    source::Source,
+    ScoredEntry, CLEARLY_IN,
+};
 use crate::read_json;
 
 /// Where the record lives, relative to the repository root.
@@ -105,6 +109,10 @@ pub struct RecordedPair {
     pub since: String,
     /// The engine that run scored.
     pub engine: String,
+    /// [CORPUS-HISTORY-SOURCE] The commit that engine was built from.
+    pub commit: String,
+    /// The release version at that commit, absent for an untagged commit.
+    pub version: Option<String>,
 }
 
 /// The whole record.
@@ -189,6 +197,8 @@ pub struct RunStamp<'a> {
     pub at: &'a str,
     /// The engine it scored.
     pub engine: &'a str,
+    /// The source that engine was built from.
+    pub source: &'a Source,
 }
 
 /// Reads the record under `root`; an absent file is an empty record.
@@ -291,6 +301,8 @@ fn recorded(pair: &PairOutcome, stamp: RunStamp<'_>) -> RecordedPair {
         outcome: pair.outcome,
         since: stamp.at.to_owned(),
         engine: stamp.engine.to_owned(),
+        commit: stamp.source.commit.clone(),
+        version: stamp.source.version.clone(),
     }
 }
 
@@ -306,4 +318,36 @@ pub fn write(root: &Path, ledger: &Ledger) -> Result<()> {
     }
     fs::write(&path, serde_json::to_string_pretty(ledger)? + "\n")
         .with_context(|| format!("cannot write {}", path.display()))
+}
+
+/// Writes the record under `root` back when this run changed it. Only a run
+/// whose last engine names the commit it was built from writes the record
+/// ([CORPUS-HISTORY-SOURCE]): an entry nobody can trace to source is no
+/// baseline. A run that judged nothing leaves the record alone.
+///
+/// # Errors
+///
+/// Returns an error when the record cannot be written, or when `accept` asks a
+/// run tied to no commit to put failures on record.
+pub fn write_back(root: &Path, ledger: &Ledger, card: &Scorecard, accept: bool) -> Result<()> {
+    let Some(last) = card.engines.last().filter(|_| !card.outcomes.is_empty()) else {
+        return Ok(());
+    };
+    let Some(source) = last.source.as_ref() else {
+        return if accept {
+            Err(anyhow!("{} names no commit, so nothing it scored can go on record", last.label))
+        } else {
+            Ok(())
+        };
+    };
+    let stamp = RunStamp {
+        at: &card.generated_at,
+        engine: &last.label,
+        source,
+    };
+    let updated = record(ledger, &card.outcomes, stamp, accept);
+    if updated.pairs == ledger.pairs {
+        return Ok(());
+    }
+    write(root, &updated)
 }

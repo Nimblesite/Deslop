@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::{percent, RangeCoverage, RepoScore, CLEARLY_IN};
 
@@ -70,7 +70,7 @@ pub fn degradation(before: &RepoScore, after: &RepoScore) -> Degradation {
 }
 
 /// The standing across every scored repository, for one engine.
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CorpusTotals {
     /// Repositories scored.
     pub repos: usize,

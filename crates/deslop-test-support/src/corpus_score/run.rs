@@ -29,9 +29,10 @@ use super::{
         add_checks, add_costs, corpus_change, degradation, totals, CorpusChange, CorpusTotals,
         Degradation,
     },
-    history::{self, Source},
+    history,
+    source::Source,
     list,
-    outcomes::{self, standings, Ledger, PairOutcome, RunStamp},
+    outcomes::{self, standings, Ledger, PairOutcome},
     render::{scorecard, Engine, Scorecard, TargetScore},
     score_repo, text,
     verdict::verdict,
@@ -288,6 +289,7 @@ fn engines(run: &Value) -> Vec<Engine> {
         .map(|engine| Engine {
             id: text(engine, "id"),
             label: text(engine, "label"),
+            source: Source::of_engine(engine),
         })
         .collect()
 }
@@ -393,15 +395,15 @@ fn last_engine_outcomes(
 
 /// How a run is scored, beyond scoring it.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct Scoring<'a> {
+pub struct Scoring {
     /// A judged run missing its timing or its report is an error.
     pub strict: bool,
     /// [CORPUS-SCORE-OUTCOMES] Put every failing pair that has no record on
     /// record as failing, accepting it as a known defect.
     pub accept_failures: bool,
-    /// [CORPUS-HISTORY] The source the engine was built from, when the run is
-    /// held to the run history and appended to it.
-    pub history: Option<&'a Source>,
+    /// [CORPUS-HISTORY] Hold the run to every earlier run in the run history,
+    /// and add it to the history. The last engine must name its source.
+    pub history: bool,
 }
 
 /// Scores the run manifest at `run_path` and writes `<stem>.md` and
@@ -421,20 +423,20 @@ pub fn write_scorecard(
     root: &Path,
     out: &Path,
     stem: &str,
-    scoring: Scoring<'_>,
+    scoring: Scoring,
 ) -> Result<WrittenScorecard> {
     let ledger = outcomes::load(root)?;
     let mut card = build_scorecard(run_path, root, &ledger, scoring.strict)?;
     if scoring.strict && card.outcomes.is_empty() {
         return Err(anyhow!(nothing_judged(card.targets.len())));
     }
-    if let Some(source) = scoring.history {
-        history::hold(&mut card, root, source)?;
+    if scoring.history {
+        history::hold(&mut card, root)?;
     }
     let written = write_documents(card, out, stem)?;
-    record_outcomes(root, &ledger, &written.card, scoring.accept_failures)?;
+    outcomes::write_back(root, &ledger, &written.card, scoring.accept_failures)?;
     if let Some(record) = history::record(&written.card, stem) {
-        history::append(root, &record)?;
+        history::store::add(root, &record)?;
     }
     Ok(written)
 }
@@ -463,23 +465,6 @@ fn write_documents(card: Scorecard, out: &Path, stem: &str) -> Result<WrittenSco
         path,
         json_path,
     })
-}
-
-/// Writes the record back when this run changed it. A run that judged nothing
-/// leaves it alone.
-fn record_outcomes(root: &Path, ledger: &Ledger, card: &Scorecard, accept: bool) -> Result<()> {
-    let Some(last) = card.engines.last().filter(|_| !card.outcomes.is_empty()) else {
-        return Ok(());
-    };
-    let stamp = RunStamp {
-        at: &card.generated_at,
-        engine: &last.label,
-    };
-    let updated = outcomes::record(ledger, &card.outcomes, stamp, accept);
-    if updated.pairs == ledger.pairs {
-        return Ok(());
-    }
-    outcomes::write(root, &updated)
 }
 
 #[cfg(test)]

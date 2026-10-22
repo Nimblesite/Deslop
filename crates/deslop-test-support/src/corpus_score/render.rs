@@ -33,6 +33,7 @@ use super::{
     checks::CheckOutcome,
     gate::{CorpusChange, CorpusTotals, Degradation},
     history::HistoryCheck,
+    source::Source,
     outcomes::{PairKey, PairOutcome},
     verdict::Verdict,
     RepoScore, RunCost, ScoredEntry,
@@ -46,6 +47,10 @@ pub struct Engine {
     pub id: String,
     /// Human label, e.g. `deslop@e8a215e99fb9`.
     pub label: String,
+    /// [CORPUS-HISTORY-SOURCE] The commit, and release version, the engine was
+    /// built from; absent when the run manifest names none, and then the run
+    /// writes no record.
+    pub source: Option<Source>,
 }
 
 /// One target repository, scored by every engine in the run.

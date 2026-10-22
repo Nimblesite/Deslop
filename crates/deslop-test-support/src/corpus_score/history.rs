@@ -1,7 +1,8 @@
-//! [CORPUS-HISTORY] The run history: one line per corpus run in
-//! `corpus/history/corpus-runs.jsonl`, carrying every judged pair's outcome,
-//! each repository's score and cost, the machine it ran on and the source it
-//! was built from — so accuracy, CPU and memory can be tracked run over run.
+//! [CORPUS-HISTORY] The run history: one record per corpus run in
+//! `corpus/history/runs/`, carrying every judged pair's outcome, each
+//! repository's score and cost, the machine it ran on and the commit — and
+//! release version — it was built from, with `corpus/history/HISTORY.md`
+//! rendered from every record so accuracy, CPU and memory read run over run.
 //!
 //! The history also gates. A judged pair that passed in any earlier recorded
 //! run of the same commit and fails now is a **backslide**, and one backslide
@@ -9,42 +10,32 @@
 //! judged pair record ([CORPUS-SCORE-OUTCOMES]), the history is append-only,
 //! so a pass, once recorded, holds every later run to it.
 
+pub mod store;
+
 use std::{
-    collections::BTreeMap,
-    fs::{self, OpenOptions},
-    io::Write,
+    collections::{BTreeMap, BTreeSet},
     path::Path,
 };
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use sysinfo::{CpuRefreshKind, System};
 
 use super::{
+    gate::CorpusTotals,
     outcomes::{Outcome, PairKey, Standing},
     render::{Scorecard, TargetScore},
+    source::Source,
     verdict::FailureReason,
     RunCost,
 };
 
-/// Where the history lives, relative to the repository root.
-pub const HISTORY_PATH: &str = "corpus/history/corpus-runs.jsonl";
 /// What a backslide is called in the verdict.
 pub const BACKSLIDE: &str = "backslide";
 /// Bytes in a mebibyte, for the machine's memory.
 const BYTES_PER_MB: u64 = 1024 * 1024;
 /// What a machine fact the platform would not report is recorded as.
 const UNKNOWN: &str = "unknown";
-
-/// The source a run's engine was built from.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Source {
-    /// The commit checked out when the run was built.
-    pub commit: String,
-    /// True when the working tree held uncommitted changes, so the commit
-    /// alone does not name the source that ran.
-    pub dirty: bool,
-}
 
 /// The machine a run measured its cost on. A CPU or memory figure is only
 /// comparable with one taken on the same machine.
@@ -162,6 +153,15 @@ pub struct RunRecord {
     pub host: Host,
     /// True when nothing that passed before fails now.
     pub passed: bool,
+    /// The run's standing across every repository it scored: judged and
+    /// correct pairs, the score, and summed wall and CPU time with the peaks.
+    pub totals: CorpusTotals,
+    /// Judged pairs that failed the run: on record as passing, or passing in
+    /// an earlier run of the history, and failing now.
+    pub regressions: usize,
+    /// Judged pairs failing that never passed — known defects, not
+    /// regressions.
+    pub known_defects: usize,
     /// Every backslide this run found.
     pub backslides: Vec<Backslide>,
     /// Every repository scored.
@@ -173,8 +173,10 @@ pub struct RunRecord {
 /// The run history as the scorecard shows it.
 #[derive(Debug, Clone, Serialize)]
 pub struct HistoryCheck {
-    /// Where the history is kept.
-    pub path: String,
+    /// Where each run's record is kept.
+    pub runs: String,
+    /// The history document rendered from every record.
+    pub log: String,
     /// Runs already in the history when this one was checked.
     pub earlier_runs: usize,
     /// The source this run was built from.
@@ -187,70 +189,30 @@ pub struct HistoryCheck {
     pub backslides: Vec<Backslide>,
 }
 
-/// Reads every run in the history under `root`; an absent file is none.
-///
-/// # Errors
-///
-/// Returns an error when a line cannot be read as a run: a damaged history
-/// must fail the run rather than hold it to nothing.
-pub fn load(root: &Path) -> Result<Vec<RunRecord>> {
-    let path = root.join(HISTORY_PATH);
-    if !path.exists() {
-        return Ok(Vec::new());
-    }
-    let text =
-        fs::read_to_string(&path).with_context(|| format!("cannot read {}", path.display()))?;
-    text.lines()
-        .enumerate()
-        .filter(|(_, line)| !line.trim().is_empty())
-        .map(|(index, line)| {
-            serde_json::from_str(line).with_context(|| {
-                format!(
-                    "{} line {} is not a run",
-                    path.display(),
-                    index.saturating_add(1)
-                )
-            })
-        })
-        .collect()
-}
-
-/// Appends `record` to the history under `root` as one line.
-///
-/// # Errors
-///
-/// Returns an error when the history cannot be written.
-pub fn append(root: &Path, record: &RunRecord) -> Result<()> {
-    let path = root.join(HISTORY_PATH);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)
-        .with_context(|| format!("cannot open {}", path.display()))?;
-    writeln!(file, "{}", serde_json::to_string(record)?)
-        .with_context(|| format!("cannot write {}", path.display()))
-}
-
 /// Holds `card` to every earlier run in the history under `root`: records the
-/// source and machine on it, and fails its verdict on every backslide.
+/// last engine's source and the machine on it, and fails its verdict on every
+/// backslide.
 ///
 /// # Errors
 ///
 /// Returns an error when the history cannot be read.
-pub fn hold(card: &mut Scorecard, root: &Path, source: &Source) -> Result<()> {
-    let earlier = load(root)?;
+pub fn hold(card: &mut Scorecard, root: &Path) -> Result<()> {
+    let source = card
+        .engines
+        .last()
+        .and_then(|engine| engine.source.clone())
+        .ok_or_else(|| anyhow!("a run held to the history must name the commit it was built from"))?;
+    let earlier = store::load(root)?;
     let repos = repo_records(card);
     let backslides = backslides(&earlier, &repos, &judgments(card));
     card.verdict
         .failures
         .extend(backslides.iter().map(backslide_failure));
     card.history = Some(HistoryCheck {
-        path: HISTORY_PATH.to_owned(),
+        runs: store::RUNS_DIR.to_owned(),
+        log: store::LOG_PATH.to_owned(),
         earlier_runs: earlier.len(),
-        source: source.clone(),
+        source,
         host: Host::this_machine(),
         repos,
         backslides,
@@ -263,17 +225,40 @@ pub fn hold(card: &mut Scorecard, root: &Path, source: &Source) -> Result<()> {
 #[must_use]
 pub fn record(card: &Scorecard, stem: &str) -> Option<RunRecord> {
     let history = card.history.as_ref()?;
+    let engine = card.engines.last()?;
+    let judgments = judgments(card);
+    let regressions = regressions(&judgments, &history.backslides);
+    let failing = judgments
+        .iter()
+        .filter(|judgment| judgment.outcome == Outcome::Fail)
+        .count();
     Some(RunRecord {
         generated_at: card.generated_at.clone(),
         scorecard: stem.to_owned(),
-        engine: card.engines.last().map(|engine| engine.label.clone())?,
+        engine: engine.label.clone(),
         source: history.source.clone(),
         host: history.host.clone(),
         passed: kept(card),
+        totals: card.totals.get(&engine.id).cloned().unwrap_or_default(),
+        regressions,
+        known_defects: failing.saturating_sub(regressions),
         backslides: history.backslides.clone(),
         repos: history.repos.clone(),
-        judgments: judgments(card),
+        judgments,
     })
+}
+
+/// Distinct judged pairs that failed the run: regressed against the record,
+/// or backslid against the history — a pair doing both is counted once.
+fn regressions(judgments: &[Judgment], backslides: &[Backslide]) -> usize {
+    let regressed = judgments
+        .iter()
+        .filter(|judgment| judgment.standing.fails_the_run())
+        .map(|judgment| &judgment.key);
+    regressed
+        .chain(backslides.iter().map(|backslide| &backslide.key))
+        .collect::<BTreeSet<_>>()
+        .len()
 }
 
 /// Whether a run held to the history kept to it: no pair on record as
