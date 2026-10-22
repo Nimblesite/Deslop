@@ -229,6 +229,8 @@ _ci-contract-tests: _vsix-node-modules
 	@node --test scripts/repository/dup-gate-source.test.mjs
 	@echo "==> Accuracy-gate wiring gate ([CORPUS-SCORE])..."
 	@node --test scripts/repository/score-gate-source.test.mjs
+	@echo "==> Judged-target gate ([CORPUS-SCORE-GATE-JUDGED])..."
+	@node --test scripts/repository/score-gate-targets.test.mjs
 	@echo "==> Corpus fetch gate ([CORPUS-PIN])..."
 	@node --test scripts/repository/corpus-fetch.test.mjs
 	@echo "==> Blinded judging folder gate ([CORPUS-REGISTER-WORKSPACE])..."
@@ -528,8 +530,9 @@ dup-gate: build
 #   with the CURRENT build and scores every judged pair against the independent
 #   clone registers in `corpus/register/`. [CORPUS-SCORE-OUTCOMES] Every judged
 #   pair is held to its own recorded outcome in `corpus/register/outcomes.json`:
-#   one on record as failing is tolerated, one that fails after passing or with
-#   no record fails the run. The run writes the record back; commit it. Cluster
+#   only a pair on record as passing that fails now — a regression — fails the
+#   run; one that never passed is listed as a known defect. The run writes the
+#   record back; commit it. Cluster
 #   totals and duplication percentages are printed as description and gate
 #   nothing. The workflow calls the same script, so a green local run means a
 #   green gate in CI.

@@ -160,8 +160,7 @@ pub struct RunRecord {
     pub source: Source,
     /// The machine it ran on.
     pub host: Host,
-    /// True when no judged pair regressed, failed off the record or
-    /// backslid.
+    /// True when nothing that passed before fails now.
     pub passed: bool,
     /// Every backslide this run found.
     pub backslides: Vec<Backslide>,
@@ -277,15 +276,16 @@ pub fn record(card: &Scorecard, stem: &str) -> Option<RunRecord> {
     })
 }
 
-/// Whether a run held to the history failed: a pair regressed or failed off
-/// the record ([CORPUS-SCORE-OUTCOMES]), or a pair backslid.
+/// Whether a run held to the history kept to it: no pair on record as
+/// passing fails now ([CORPUS-SCORE-OUTCOMES]), and no pair that passed in an
+/// earlier run fails now.
 #[must_use]
 pub fn kept(card: &Scorecard) -> bool {
-    let off_record = card
+    let regressed = card
         .outcomes
         .iter()
         .any(|pair| pair.standing.fails_the_run());
-    !off_record && backslid(card) == 0
+    !regressed && backslid(card) == 0
 }
 
 /// How many judged pairs went backwards against the run history; none when
@@ -402,5 +402,6 @@ fn backslide_failure(backslide: &Backslide) -> FailureReason {
             backslide.passed_at
         ),
         tracked_in: None,
+        regression: true,
     }
 }

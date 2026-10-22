@@ -14,14 +14,15 @@ use crate::corpus_score::{
     tests::{
         pinned_sha, register, report, the_pair,
         verdict::{
-            one_untracked_failure, CAUTION, FAILED_HEADING, MISSED_DEFECT, PASSED_HEADING,
-            UNRECORDED_DETAIL, VERDICT_FAILURES,
+            one_untracked_failure, CAUTION, FAILED_HEADING, KNOWN_DEFECT, MISSED_DEFECT,
+            PASSED_HEADING, REGRESSION, UNRECORDED_DETAIL, VERDICT_FAILURES,
         },
         FIRST_RANGE, SECOND_RANGE,
     },
     RunCost, CLEARLY_IN,
 };
 
+mod gate;
 mod history;
 mod record;
 mod verdict;
@@ -32,6 +33,12 @@ const STRICT: Scoring<'static> = Scoring {
     strict: true,
     accept_failures: false,
     history: None,
+};
+/// Scoring as a `corpus_*` test runs it: ungated, so a repository no register
+/// judges is reported rather than refused ([CORPUS-SCORE-GATE-JUDGED]).
+const UNGATED: Scoring<'static> = Scoring {
+    strict: false,
+    ..STRICT
 };
 
 const ENGINE_ID: &str = "current";
@@ -137,6 +144,12 @@ fn failure_line(what: &str, detail: &str) -> String {
     format!("> - 🔴 **{REPO}** — `{what}`: {detail}")
 }
 
+/// [CORPUS-REPORT-VERDICT] The line the known-defect note lists one untracked
+/// failure that never passed on.
+fn known_line(what: &str, detail: &str) -> String {
+    format!("> - ⚠️ **{REPO}** — `{what}`: {detail}")
+}
+
 /// [CORPUS-REPORT] A repository no register judged is still reported — its
 /// accuracy as curated checks, its wall time, CPU time, peak CPU and peak
 /// memory — rather than dropped from the scorecard, which is what a flutter
@@ -150,7 +163,7 @@ fn an_unregistered_repository_reports_its_checks_and_its_cost() -> Result<()> {
         root.path(),
         root.path(),
         STEM,
-        STRICT,
+        UNGATED,
     )?;
     assert_eq!(
         written.path,
@@ -215,7 +228,12 @@ fn an_unregistered_repository_reports_its_checks_and_its_cost() -> Result<()> {
     );
     assert_eq!(
         recorded.pointer(VERDICT_FAILURES),
-        Some(&one_untracked_failure(REPO, FAILING_CHECK, FAILURE_DETAIL)),
+        Some(&one_untracked_failure(
+            REPO,
+            FAILING_CHECK,
+            FAILURE_DETAIL,
+            REGRESSION
+        )),
         "the JSON scorecard lists the failure the heading reports"
     );
     Ok(())
@@ -307,7 +325,7 @@ fn a_crashed_scan_is_reported_with_its_cost_and_its_reason() -> Result<()> {
         root.path(),
         root.path(),
         STEM,
-        STRICT,
+        UNGATED,
     )?;
     assert_eq!(
         written.markdown.lines().next(),
@@ -377,10 +395,8 @@ fn a_judged_run_with_no_report_fails_the_strict_gate() -> Result<()> {
 }
 
 /// What the judged pair record section says, by outcome.
-pub(super) const RECORD_PASS: &str =
-    "**PASS** — no judged pair regressed, and every pair answered wrongly is on record as failing.";
-pub(super) const RECORD_FAIL: &str =
-    "**FAIL** — a judged pair regressed, or failed without being on record as failing.";
+pub(super) const RECORD_PASS: &str = "**PASS** — no judged pair that passed before fails now.";
+pub(super) const RECORD_FAIL: &str = "**FAIL** — a judged pair that passed before fails now.";
 
 /// A run manifest naming the fixture repository with a register that judges
 /// one CLEARLY IN pair, the report its scan wrote and its measured cost.
@@ -409,12 +425,13 @@ fn judged_scorecard(scanned: &Value) -> Result<(WrittenScorecard, Value)> {
     Ok((written, recorded))
 }
 
-/// [CORPUS-REPORT-VERDICT] A judged run is headed by whether the engine kept
-/// to the judged pair record, in the markdown and the JSON alike: the same
-/// repository passes while its judged pair is reported, and fails — naming the
-/// pair — the moment it is not and nothing records it as failing.
+/// [CORPUS-REPORT-VERDICT] A judged run is headed by whether anything that
+/// passed before fails now, in the markdown and the JSON alike: the same
+/// repository passes while its judged pair is reported, and still passes —
+/// listing the pair as a known defect — when it is missed with no pass on
+/// record, because a pair that never passed cannot regress.
 #[test]
-fn a_judged_run_is_headed_by_whether_it_kept_to_its_record() -> Result<()> {
+fn a_judged_run_fails_only_on_a_pair_that_passed_before() -> Result<()> {
     let (clean, clean_json) = judged_scorecard(&report(&the_pair()))?;
     assert_eq!(
         clean.markdown.lines().next(),
@@ -437,36 +454,38 @@ fn a_judged_run_is_headed_by_whether_it_kept_to_its_record() -> Result<()> {
         "the JSON scorecard carries the same empty verdict"
     );
 
-    let (breached, breached_json) = judged_scorecard(&report(&[]))?;
+    let (missed, missed_json) = judged_scorecard(&report(&[]))?;
     assert_eq!(
-        breached.markdown.lines().next(),
-        Some(FAILED_HEADING),
-        "a missed CLEARLY IN with no record fails the run, and the scorecard opens by saying \
-         so:\n{}",
-        breached.markdown
+        missed.markdown.lines().next(),
+        Some(PASSED_HEADING),
+        "a missed CLEARLY IN that never passed is no regression, so the run passes:\n{}",
+        missed.markdown
     );
     for row in [
-        failure_line(MISSED_DEFECT, UNRECORDED_DETAIL).as_str(),
-        RECORD_FAIL,
+        known_line(MISSED_DEFECT, UNRECORDED_DETAIL).as_str(),
+        RECORD_PASS,
     ] {
         assert!(
-            breached.markdown.contains(row),
-            "a failed scorecard must carry `{row}`:\n{}",
-            breached.markdown
+            missed.markdown.contains(row),
+            "the scorecard must carry `{row}`:\n{}",
+            missed.markdown
         );
     }
-    assert!(
-        !breached.markdown.contains(PASSED_HEADING),
-        "a pair that failed the run is never also headed as a pass"
-    );
+    for claim in [FAILED_HEADING, CAUTION, RECORD_FAIL] {
+        assert!(
+            !missed.markdown.contains(claim),
+            "a known defect is never shown as a regression (`{claim}`)"
+        );
+    }
     assert_eq!(
-        breached_json.pointer(VERDICT_FAILURES),
+        missed_json.pointer(VERDICT_FAILURES),
         Some(&one_untracked_failure(
             REPO,
             MISSED_DEFECT,
-            UNRECORDED_DETAIL
+            UNRECORDED_DETAIL,
+            KNOWN_DEFECT
         )),
-        "the JSON scorecard lists the pair the heading reports"
+        "the JSON scorecard lists the pair as a known defect, not a regression"
     );
     Ok(())
 }

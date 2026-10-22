@@ -104,7 +104,7 @@ register_targets() {
         if (!register[field]) throw new Error(`${process.argv[1]} has no ${field}`);
       }
       process.stdout.write(`${register.url}#${register.sha}#${register.language}\n`);
-    ' "$register"
+    ' "$register" || die "cannot read a target from $register"
   done
 }
 
@@ -114,26 +114,54 @@ register_targets() {
 # nothing, so scanning its repository would spend the time and measure nothing
 # ([CORPUS-HISTORY]).
 judged_names() {
-  local name
+  local listing name register
+  listing="$(registered_names "$1")" || die "cannot list the registers under $1/$REGISTER_DIR"
   while IFS= read -r name; do
     [ -n "$name" ] || continue
+    register="$1/$REGISTER_DIR/$name.json"
     node -e '
       const register = require(process.argv[1]);
       const judged = ["clearly_in", "clearly_out"]
         .reduce((total, verdict) => total + (register[verdict] ?? []).length, 0);
       if (judged > 0) console.log(process.argv[2]);
-    ' "$1/$REGISTER_DIR/$name.json" "$name"
-  done < <(registered_names "$1")
+    ' "$register" "$name" || die "cannot read the register $register"
+  done <<<"$listing"
 }
 
 # ---------------------------------------------------------------------------
 # judged-targets: one `url#commit#language` spec per register judging at least
 # one pair — the whole judged corpus, and nothing that has no judgments.
 judged_targets() {
-  local names=() name
-  while IFS= read -r name; do names+=("$name"); done < <(judged_names "$1")
+  local listing names=() name
+  listing="$(judged_names "$1")" || die "cannot list the judged registers under $1/$REGISTER_DIR"
+  while IFS= read -r name; do [ -z "$name" ] || names+=("$name"); done <<<"$listing"
   [ ${#names[@]} -gt 0 ] || die "no register under $1/$REGISTER_DIR judges any pair"
   register_targets "$1" "${names[@]}"
+}
+
+# ---------------------------------------------------------------------------
+# require-judged: refuse every target in $2.. whose repository has no register
+# under $1 judging a pair CLEARLY IN or CLEARLY OUT. A gate can only score what
+# a judge ruled on, so scanning anything else measures nothing, and a gate that
+# measured nothing must never pass ([CORPUS-SCORE-GATE-JUDGED]). A register is
+# named after its repository in lower case, as the run manifest names it.
+require_judged() {
+  local root="$1"; shift
+  local listing judged=() spec name
+  listing="$(judged_names "$root")" || die "cannot list the judged registers under $root/$REGISTER_DIR"
+  while IFS= read -r name; do [ -z "$name" ] || judged+=("$name"); done <<<"$listing"
+  for spec in "$@"; do
+    name="$(basename "${spec%%#*}" .git | tr '[:upper:]' '[:lower:]')"
+    is_listed "$name" ${judged[@]+"${judged[@]}"} \
+      || die "target '$spec' has no register under $root/$REGISTER_DIR judging any pair"
+  done
+}
+
+# is-listed: true when $1 is one of $2..
+is_listed() {
+  local wanted="$1" item; shift
+  for item in "$@"; do [ "$item" != "$wanted" ] || return 0; done
+  return 1
 }
 
 # ---------------------------------------------------------------------------

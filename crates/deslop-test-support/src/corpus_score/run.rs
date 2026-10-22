@@ -425,6 +425,9 @@ pub fn write_scorecard(
 ) -> Result<WrittenScorecard> {
     let ledger = outcomes::load(root)?;
     let mut card = build_scorecard(run_path, root, &ledger, scoring.strict)?;
+    if scoring.strict && card.outcomes.is_empty() {
+        return Err(anyhow!(nothing_judged(card.targets.len())));
+    }
     if let Some(source) = scoring.history {
         history::hold(&mut card, root, source)?;
     }
@@ -434,6 +437,16 @@ pub fn write_scorecard(
         history::append(root, &record)?;
     }
     Ok(written)
+}
+
+/// [CORPUS-SCORE-GATE-JUDGED] Why a gated run that scored no judged pair over
+/// `scanned` repositories is refused.
+#[must_use]
+pub fn nothing_judged(scanned: usize) -> String {
+    format!(
+        "a gated run must score at least one judged pair, but none of the {scanned} \
+         repositories scanned has a register judging one CLEARLY IN or CLEARLY OUT"
+    )
 }
 
 /// Writes `<stem>.md` and `<stem>.json` into `out`.

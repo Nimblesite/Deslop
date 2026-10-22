@@ -2,11 +2,12 @@
 //!
 //! `corpus/register/outcomes.json` holds the last recorded outcome of every
 //! judged pair a run has scored, and since when it has held it. A run reads
-//! the record before it judges anything: a pair on record as failing is a
-//! known defect and is tolerated, while a pair that fails after passing, or
-//! fails with no record at all, fails the run. A count could not tell those
-//! apart — one pair fixed and another broken in the same change leave every
-//! count where it was.
+//! the record before it judges anything. Exactly one thing fails a run: a
+//! pair on record as passing that fails now — a regression. A pair that has
+//! never passed, whether on record as failing or not on record at all, is a
+//! known defect: listed, still a bug, but not a regression. A count could not
+//! tell those apart — one pair fixed and another broken in the same change
+//! leave every count where it was.
 //!
 //! Every run writes the record back, and the record only ever tightens: a
 //! fixed pair is recorded as passing, a newly judged passing pair is recorded,
@@ -125,7 +126,8 @@ pub enum Standing {
     Fixed,
     /// Fails, and is on record as failing: a known defect, tolerated.
     StillFailing,
-    /// Fails, with no record: a defect nobody accepted.
+    /// Fails, with no record: it has never passed, so it is a known defect,
+    /// not a regression.
     Unrecorded,
     /// Fails, and was on record as passing.
     Regressed,
@@ -143,10 +145,11 @@ impl Standing {
         }
     }
 
-    /// Whether this standing fails the run.
+    /// Whether this standing fails the run: only a regression — a pair that
+    /// passed before and fails now — does.
     #[must_use]
     pub fn fails_the_run(self) -> bool {
-        matches!(self, Self::Unrecorded | Self::Regressed)
+        self == Self::Regressed
     }
 }
 

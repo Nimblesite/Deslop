@@ -20,8 +20,8 @@
 ## its own scorecard, `compare-<UTC timestamp>.md` and `.json` under the reports
 ## directory, writes the judged pair record `corpus/register/outcomes.json`
 ## back for the second engine, and exits non-zero when one of its judged pairs
-## regressed or failed without being on record as failing
-## ([CORPUS-SCORE-OUTCOMES]) — the documents are written first, so a failing
+## on record as passing fails now — a regression, the only thing that fails a
+## run ([CORPUS-SCORE-OUTCOMES]) — the documents are written first, so a failing
 ## gate still leaves a readable report.
 ##
 ## Usage:   scripts/compare-versions.sh [commit-a commit-b] [url#commit#language ...]

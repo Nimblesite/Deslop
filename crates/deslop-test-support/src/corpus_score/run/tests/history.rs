@@ -273,6 +273,11 @@ fn a_pass_at_another_commit_holds_nothing_and_a_run_off_the_history_writes_none(
         history::kept(&fourth.card),
         "with the pair on record as failing, the run keeps"
     );
+    assert_eq!(
+        fourth.markdown.lines().next(),
+        Some(PASSED_HEADING),
+        "a known defect that went nowhere is no regression, so the scorecard passes"
+    );
     carries(&fourth, &[NONE_AGAINST_TWO]);
     assert_eq!(
         runs(root)?.len(),

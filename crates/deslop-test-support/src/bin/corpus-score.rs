@@ -77,8 +77,8 @@ struct ScoreArgs {
     /// names the scorecard, so no run overwrites another's.
     #[arg(long)]
     name: String,
-    /// Exit non-zero when a judged pair regressed, or failed without being on
-    /// record as failing ([CORPUS-SCORE-OUTCOMES]).
+    /// Exit non-zero when a judged pair that passed before fails now
+    /// ([CORPUS-SCORE-OUTCOMES], [CORPUS-HISTORY]).
     #[arg(long)]
     gate: bool,
     /// Put every failing pair that has no record on record as failing,
@@ -175,9 +175,10 @@ fn score(args: &ScoreArgs) -> Result<()> {
     held_to_the_record(&written.card, scoring)
 }
 
-/// [CORPUS-SCORE-OUTCOMES] Fails a strict run when a judged pair regressed or
-/// failed without being on record as failing, and [CORPUS-HISTORY] when one
-/// passed in an earlier run and fails now.
+/// Fails a strict run when a judged pair on record as passing fails now
+/// ([CORPUS-SCORE-OUTCOMES]), and any run held to the history when a pair
+/// that passed in an earlier run fails now ([CORPUS-HISTORY]). Nothing else
+/// fails a run: a pair that never passed is a known defect.
 fn held_to_the_record(card: &Scorecard, scoring: Scoring<'_>) -> Result<()> {
     let rejected = card
         .outcomes
@@ -186,8 +187,8 @@ fn held_to_the_record(card: &Scorecard, scoring: Scoring<'_>) -> Result<()> {
         .count();
     if scoring.strict && rejected > 0 {
         return Err(anyhow!(
-            "{rejected} judged pair(s) regressed or failed without being on record — see the \
-             Judged pair record section above"
+            "{rejected} judged pair(s) on record as passing fail now — see the Judged pair \
+             record section above"
         ));
     }
     let backslid = history::backslid(card);

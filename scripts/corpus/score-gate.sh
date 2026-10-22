@@ -6,8 +6,9 @@
 ##
 ## This is the accuracy gate. It answers one question — does this build report
 ## every CLEARLY IN pair and stay silent on every CLEARLY OUT pair the judges
-## recorded — and fails when a pair regresses or fails without being on record
-## as failing. Cluster totals and duplication percentages are printed as
+## recorded — and fails on a regression, and only on a regression: a pair on
+## record as passing that fails now. A pair that has never passed is listed as
+## a known defect. Cluster totals and duplication percentages are printed as
 ## description and gate nothing.
 ##
 ## Usage:   scripts/corpus/score-gate.sh [url#commit#language ...]
@@ -132,6 +133,21 @@ targets() {
   esac
 }
 
+# ---------------------------------------------------------------------------
+# resolve-targets: parse every target main scans into the TARGET_* arrays.
+# The whole list or nothing: a target list that cannot be read in full, is
+# empty, or names a repository no register judges fails the run, because a
+# shorter scan — down to none at all — would otherwise pass
+# ([CORPUS-SCORE-GATE-JUDGED]).
+resolve_targets() {
+  local listing specs=() spec
+  listing="$(targets "$@")" || die "cannot list the targets to scan"
+  while IFS= read -r spec; do [ -z "$spec" ] || specs+=("$spec"); done <<<"$listing"
+  [ ${#specs[@]} -gt 0 ] || die "no target to scan"
+  require_judged "$REPO_ROOT" "${specs[@]}"
+  parse_targets "${specs[@]}"
+}
+
 main() {
   case "${1:-}" in
     -h | --help) usage; exit 0 ;;
@@ -146,9 +162,7 @@ main() {
     RUN_NAME=score-corpus
     source_flags
   fi
-  local specs=() spec
-  while IFS= read -r spec; do specs+=("$spec"); done < <(targets "$@")
-  parse_targets "${specs[@]}"
+  resolve_targets "$@"
   build
 
   ENGINE_SHA="$(shasum -a 256 "$BINARY" | awk '{print $1}')"
@@ -169,4 +183,5 @@ main() {
   "$SCORER" score "$REPORTS_ROOT/run.json" --out "$WORK_DIR" --name "$RUN_NAME" "${SCORE_FLAGS[@]}"
 }
 
-main "$@"
+# Run only when executed; a test sources the script to drive its functions.
+[ "${BASH_SOURCE[0]}" != "$0" ] || main "$@"

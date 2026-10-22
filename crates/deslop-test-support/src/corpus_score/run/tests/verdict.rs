@@ -2,7 +2,7 @@
 
 use super::{
     unregistered_run, write, write_scorecard, CheckOutcome, Result, CAUTION, CHECKS,
-    FAILED_HEADING, PASSED_HEADING, PASSING_CHECK, RUN, STEM, STRICT,
+    FAILED_HEADING, PASSED_HEADING, PASSING_CHECK, RUN, STEM, UNGATED,
 };
 
 /// [CORPUS-REPORT-VERDICT] Every check passed, so no failure banner is carried.
@@ -21,7 +21,7 @@ fn a_run_with_no_failure_opens_with_passed() -> Result<()> {
         root.path(),
         root.path(),
         STEM,
-        STRICT,
+        UNGATED,
     )?;
     assert!(written.markdown.starts_with(PASSED_HEADING));
     assert!(!written.markdown.contains(CAUTION) && !written.markdown.contains(FAILED_HEADING));
