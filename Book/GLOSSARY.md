@@ -1,129 +1,47 @@
 # Glossary
 
-This glossary defines the terms used in *The Deslop Book*. The five duplicate labels use the exact titles and guidance shown in Deslop. The product sources are `clients/vscode/src/types/report.ts` and `docs/specs/taxonomy.md`.
+Titles and tags follow Deslop's [label registry](https://github.com/Nimblesite/Deslop/blob/main/clients/vscode/src/types/report.ts) and [taxonomy](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/taxonomy.md).
 
-The book uses the labels developers see in Deslop. It does not replace them with numbered academic jargon.
+## Finding labels
 
-## Deslop duplicate labels
+| Title | Meaning | Machine kind | UI tag |
+|---|---|---|---|
+| Identical code | Same source text, allowing whitespace differences | `identical` | Type I |
+| Nearly identical code | Renamed, parameterized, or lightly edited copies | `nearly_identical` | Type II / III |
+| Similar code | Established copies with larger edits | `loosely_similar` | Type III |
+| Same behavior, different code | Optional semantic evidence of equivalent work; requires inspection | `same_behavior` | Type IV |
+| Same shape, different content | Informational similarity, not a clone | `structural_only` | Shape |
 
-### Identical code
-
-Copies whose source is equivalent under Deslop's byte-level proof. The UX guidance is: **“Safe to extract — every copy is the same.”** This is the strongest consolidation candidate, but the maintainer still chooses ownership and the final abstraction.
-
-Wire value: `identical`.
-
-### Nearly identical code
-
-Copies that are strongly alike but contain differences that may carry behavior or policy. The UX guidance is: **“Review the locations — small differences may matter.”** Consolidation usually begins by naming those differences explicitly.
-
-Wire value: `nearly_identical`.
-
-### Same shape, different content
-
-Code whose structure lines up while textual or semantic support is insufficient. The UX guidance is: **“Only the code shape matches — usually sibling boilerplate. Verify before extracting.”** This is a prompt to inspect, not a refactoring instruction.
-
-Wire value: `structural_only`.
-
-### Similar code
-
-Code with weak textual overlap. The UX guidance is: **“Loose textual overlap. Treat as a hint.”** It can lead to a useful investigation, but it does not justify consolidation by itself.
-
-Wire value: `loosely_similar`.
-
-### Same behavior, different code
-
-Different-looking implementations that semantic analysis suggests perform the same job. The UX guidance is: **“The AI noticed these do the same thing written two ways — read both before merging.”** This label is available only when the embedding analysis runs.
-
-Wire value: `same_behavior`.
+No label proves that extracting shared code preserves behavior.
 
 ## Report terms
 
-### Canonical occurrence
+**Cluster / duplicate group:** related source occurrences. A shape-only group is informational rather than a clone.
 
-The occurrence Deslop selects as the reference copy for a duplicate group. Tool responses call it the `canonical` occurrence. It is a useful place to start comparing code, but the developer may choose a different occurrence as the final shared implementation.
+**Occurrence:** one source range in a group. Paths and offsets describe the source at analysis time.
 
-### Duplicate code
+**Canonical occurrence:** the reference copy used for comparison. The developer chooses the final shared owner.
 
-The book's umbrella term for source fragments that Deslop places in the same duplicate group. The label attached to the group explains what kind of similarity Deslop observed.
+**Group ID:** an identifier stable while the cloned code is unchanged. Editing that code may change it. Rank is not an ID.
 
-### Duplicate group
+**Mass:** duplicated-code impact used to rank clone groups. It is not confidence or permission to merge.
 
-The human-facing collection of related occurrences shown together in Deslop. Machine-readable reports and MCP tools commonly call the same collection a `cluster`.
+**Pair evidence:** measurements and a decision about two explicitly named source ranges. Read it through `compare-pair`; clusters do not carry one selected pair's measurements.
 
-### Cluster
+**Duplication percentage:** duplicated source lines divided by analysed source lines for the configured included clone kinds. The default includes Identical and Nearly identical code. Shape-only findings never contribute. This percentage does not measure detector accuracy.
 
-The report and tool name for a duplicate group. Use “duplicate group” in explanatory prose and `cluster` when naming a field, tool response, or stable ID.
+**Hidden occurrence:** still analysed but removed from duplication metrics by `report_hide` policy. Exclusion instead removes a file before analysis.
 
-### Occurrence
-
-One source range that belongs to a duplicate group. A group contains two or more occurrences.
-
-### Stable group ID
-
-An ID that Deslop uses to refer to the same duplicate group across repeated runs. Put this ID in cleanup notes. Do not use the group's position in the report as its ID because that position can change.
-
-### Similarity evidence
-
-The structure, text overlap, and optional behavior-based scores Deslop uses to compare sections of code. These scores explain why code was grouped together. The developer still decides whether to change it.
-
-### Fused score
-
-The combined similarity score in the `signals.fused` report field. Agent instructions use this score to choose the next step: stop and inspect a strong match, read the closest result for a borderline match, or write the new code and check again for a weak or empty result.
-
-### Weight
-
-The score Deslop uses to put larger or more important duplicate groups near the top of the report. Weight helps you choose which group to inspect first. It does not prove that merging the code is safe.
-
-### Worst offender
-
-The highest-ranked duplicate group in the current report or filtered view. Deslop's agent tool for this ranked list is called `top-offenders`.
-
-### Duplication percentage
-
-The percentage of analysed source lines that Deslop counts as duplicated. A repository can set a maximum allowed percentage and fail CI when the result is higher.
-
-### Hidden occurrence
-
-An occurrence that Deslop still analyses but leaves out of the main duplication percentage because it matches a `report_hide` rule. The occurrence remains in the report, which is useful when hand-written code matches generated code.
+**Generation:** a live analysis revision. Recheck pagination when it changes during an inventory.
 
 ## Workflow terms
 
-### Address a finding
+**Baseline:** the saved Deslop report, configuration, source revision, and check results before editing.
 
-Investigate a duplicate group and give it an explicit outcome: reuse an existing owner, move ownership, delete a redundant path, generate required repetition, or retain the copies with a recorded technical reason. Addressing a finding does not automatically mean creating an abstraction.
+**Duplication ceiling:** the configured maximum percentage. The CLI writes reports and exits `3` when the result exceeds it.
 
-### DRY principle
+**Read-only audit:** a scan that writes reports outside the target checkout, disables cache writes there, and changes no source or configuration.
 
-Don't Repeat Yourself is a design principle about giving knowledge or intent one authoritative representation. The book does not use DRY as a synonym for textual deduplication and does not describe Deslop as a DRY enforcement engine.
+**Deliberate duplication:** copies retained for a recorded technical reason, such as independent policies or a fixture that tests repeated code.
 
-### Check before writing
-
-The steps an agent follows before adding code: describe the proposed code, call `find-similar`, inspect the closest existing occurrence, reuse it or write new code, and then check the changed files.
-
-### Cleanup steps
-
-The steps for existing duplication: record the current test and Deslop results, start with `top-offenders`, inspect one group with `cluster-by-id`, decide whether to merge it, make one focused change, run the tests, and run Deslop again.
-
-### Duplication worth merging
-
-A developer's decision that several copies represent one concept and can share an implementation without damaging types, behavior, performance, or clarity. This is a book term, not a Deslop label.
-
-### Duplication that should stay separate
-
-A developer's decision to keep repeated code because sharing an implementation would damage a more important property, or because a test or external boundary requires the repetition. Record the reason instead of silently hiding the finding.
-
-### Baseline
-
-The test, static-analysis, and Deslop results recorded before cleanup. These results let you compare the repository before and after the change.
-
-### Duplication limit
-
-The maximum duplication percentage allowed by the repository configuration. After verified cleanup, lower the limit to the new result. Do not raise it just to make CI pass.
-
-### Read-only scan
-
-A Deslop run that writes reports to a temporary directory, disables cache writes inside the target repository, and does not change source files.
-
-### Minimal consolidation
-
-A refactor that changes only the shared implementation, required inputs, call sites, and tests needed to remove one duplicate group.
+**DRY:** a design principle about one authoritative representation of knowledge or intent. A source match alone does not identify that owner.

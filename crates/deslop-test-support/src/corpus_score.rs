@@ -24,15 +24,18 @@ pub mod checks;
 pub mod clone_type;
 mod coverage;
 pub mod gate;
+pub mod history;
 pub mod outcomes;
 pub mod render;
 pub mod run;
+pub mod source;
 pub mod verdict;
+mod written_entry;
 
 use clone_type::CloneType;
-pub(crate) use coverage::is_clone_finding;
 use coverage::match_entry;
 pub use coverage::RangeCoverage;
+pub(crate) use coverage::{classification, is_clone_finding, is_informational_finding};
 
 use crate::corpus_measure::ProcessCost;
 
@@ -122,8 +125,10 @@ impl Range {
     }
 }
 
-/// One register entry after scoring.
+/// One register entry after scoring. The JSON scorecard writes it as pass or
+/// fail ([CORPUS-REPORT-ENTRY]).
 #[derive(Debug, Clone, Serialize)]
+#[serde(into = "written_entry::WrittenEntry")]
 pub struct ScoredEntry {
     /// [`CLEARLY_IN`] or [`CLEARLY_OUT`].
     pub verdict: String,

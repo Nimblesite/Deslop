@@ -212,6 +212,8 @@ _ci-contract-tests: _vsix-node-modules
 	@node --test scripts/actions/verify-env-path-writes.test.mjs
 	@echo "==> Composite-action step scanner proof ([ACTION-TESTS])..."
 	@node --test scripts/actions/action-yaml.test.mjs
+	@echo "==> Required CI status merge gate ([CI-MERGE-GATE])..."
+	@node --test scripts/actions/merge-gate.test.mjs
 	@echo "==> Docs installer snippet fail-closed gate ([DEPLOY-DOCS-INSTALLER-FAILCLOSED])..."
 	@node --test scripts/deployment/installer-snippet.test.mjs
 	@echo "==> Archive reader/writer gate ([DEPLOY-VSIX-PACKAGE])..."
@@ -227,6 +229,8 @@ _ci-contract-tests: _vsix-node-modules
 	@node --test scripts/repository/dup-gate-source.test.mjs
 	@echo "==> Accuracy-gate wiring gate ([CORPUS-SCORE])..."
 	@node --test scripts/repository/score-gate-source.test.mjs
+	@echo "==> Judged-target gate ([CORPUS-SCORE-GATE-JUDGED])..."
+	@node --test scripts/repository/score-gate-targets.test.mjs
 	@echo "==> Corpus fetch gate ([CORPUS-PIN])..."
 	@node --test scripts/repository/corpus-fetch.test.mjs
 	@echo "==> Blinded judging folder gate ([CORPUS-REGISTER-WORKSPACE])..."
@@ -526,8 +530,9 @@ dup-gate: build
 #   with the CURRENT build and scores every judged pair against the independent
 #   clone registers in `corpus/register/`. [CORPUS-SCORE-OUTCOMES] Every judged
 #   pair is held to its own recorded outcome in `corpus/register/outcomes.json`:
-#   one on record as failing is tolerated, one that fails after passing or with
-#   no record fails the run. The run writes the record back; commit it. Cluster
+#   only a pair on record as passing that fails now — a regression — fails the
+#   run; one that never passed is listed as a known defect. The run writes the
+#   record back; commit it. Cluster
 #   totals and duplication percentages are printed as description and gate
 #   nothing. The workflow calls the same script, so a green local run means a
 #   green gate in CI.
@@ -535,6 +540,18 @@ dup-gate: build
 ##             This is the corpus run CI performs, one command, no arguments.
 score-gate:
 	./scripts/corpus/score-gate.sh
+
+# [CORPUS-HISTORY] The whole judged corpus: every register that judges at least
+#   one pair, and no repository without judgments. Refuses uncommitted changes
+#   and rebuilds from nothing first ([CORPUS-HISTORY-SOURCE]). Held to the
+#   record and to the run history — one judged pair that passed in any earlier
+#   run of the same commit and fails now fails the run — then recorded in
+#   corpus/history/runs/ with every judged pair's outcome, each repository's
+#   cost, the machine, the commit and the release version, and
+#   corpus/history/HISTORY.md is rendered again. Commit both.
+## score-corpus: Score every judged register and record the run in the history.
+score-corpus:
+	./scripts/corpus/score-gate.sh --all-judged
 
 # [CORPUS-SCORE-OUTCOMES] Puts every judged pair a corpus run failed, and the
 #   record does not already hold, on record as failing — the explicit act that
@@ -913,6 +930,7 @@ help:
 	@echo "  deployment-verify      - Validate deployment manifest and built binary contracts"
 	@echo "  test-ollama            - Ollama-gated Rust + VSIX tests (never in CI)"
 	@echo "  score-gate             - Score this build against the judged clone registers (what CI runs)"
+	@echo "  score-corpus           - Score every judged register; append the run to the tracked history"
 	@echo "  compare                - Compare the last release against HEAD across every register"
 	@echo "  judging-folder         - Build the blinded repos+reports+skill folder for a clone judge"
 	@echo "  merge-verdicts         - Import verdicts every source agrees on (JUDGED_DIRS=\"a b\")"

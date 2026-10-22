@@ -1,48 +1,21 @@
 # Chapter 5 — Add the check to agent instructions
 
-> **Current status:** This chapter is an outline. I will check the finished agent instruction against the exact Deslop release used for the book.
+“Check for duplication” leaves the timing unclear. Say that the check happens before writing, and specify what the agent must inspect.
 
-## What you will be able to do
+Add this rule to the instruction file your agent reads:
 
-I will show you how to add a clear rule to the repository instructions so every compatible coding agent checks for matching code before writing. The rule will also tell the agent which Deslop tools to use when cleaning up existing duplication.
+```text
+Before adding a code unit larger than a few lines, call find-similar with the proposed snippet and language. Inspect clusters and existing. Read matching source and reuse the existing owner where appropriate. After editing, call duplicates with the changed path and run the repository's tests.
 
-## Planned sections
+For existing duplication, start with a small duplicates summary and inspect the chosen cluster with cluster-by-id. Read every occurrence before changing it.
 
-### Name the covered authoring units
+If MCP fails, check a usable JSON snapshot or run the matching bundled CLI. State that unwritten-code checking was unavailable. Errors and stale snapshots never prove uniqueness.
 
-The rule explicitly covers functions, methods, classes, helpers, fixtures, test setup, parser branches, error types, route handlers, view models, and other multi-line units. An instruction that only says “check for duplication” is unclear because an agent can satisfy it after writing the code. State that the check must happen first.
+Do not hide findings, relax thresholds, or rewrite code merely to evade detection.
+```
 
-### State the order explicitly
+Functions, methods, fixtures, test setup, and handlers all qualify. Repetition in tests still deserves a decision; it is not automatically a reason to extract shared setup.
 
-The instruction gives the exact order: prepare the proposed snippet, call `find-similar`, read the response, and only then edit the source file.
+Keep one authoritative rule. If several agents use different instruction files, point them at the same maintained policy where their hosts support it. See the [official recipe](https://github.com/Nimblesite/Deslop/blob/main/docs/snippets/agents-md-recipe.md).
 
-### Separate prevention from cleanup
-
-`find-similar` answers whether proposed or selected code already exists. `top-offenders` and `cluster-by-id` drive an audit of existing groups. The repository rule names both paths.
-
-### Explain what to do when the connection fails
-
-The agent first tries to restore the live editor server. If that is unavailable, it runs the CLI before and after the change and states that the proposed code could not be checked before writing. It never silently skips the check.
-
-### Do not hide the result
-
-Raising the duplication limit, hiding hand-written findings, or making trivial edits to avoid a match does not remove duplicate code.
-
-## Workshop exercise
-
-Add the repository rule to both supported instruction files, begin a fresh agent session, propose a known duplicate, and capture whether the agent calls `find-similar` before editing.
-
-## Check your understanding
-
-1. Why is “check for duplication” too vague as an agent instruction?
-2. Which tools handle proposed code, and which tools start cleanup of existing code?
-3. What should an agent report when the live connection is unavailable?
-
-## Instruction for coding agents
-
-The finished chapter will include a paste-ready rule checked against Deslop's official repository instructions and the exact release used for the book.
-
-## Sources used for this chapter
-
-- `deslop-agent-recipe`
-- `deslop-for-ai`
+**Try it:** start a fresh agent session and ask for a helper you know already exists. Confirm that the agent checks before editing and reads the match.

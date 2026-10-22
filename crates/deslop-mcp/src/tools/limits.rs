@@ -93,8 +93,8 @@ fn serialised_len(value: &Value) -> usize {
 /// clusters from the tail until the serialised size fits the budget.
 /// Falls back to a stub payload when no array can be trimmed.
 fn shrink_to_budget(mut payload: Value) -> Value {
+    stamp_truncated(&mut payload);
     if shrink_clusters_in_place(&mut payload) {
-        stamp_truncated(&mut payload);
         return payload;
     }
     fallback_truncated_stub()
@@ -123,23 +123,55 @@ fn shrink_clusters_in_place(payload: &mut Value) -> bool {
 
 /// Probes whether `payload` is a JSON object carrying a `clusters` array.
 fn has_cluster_array(payload: &Value) -> bool {
-    payload
-        .as_object()
-        .and_then(|object| object.get(CLUSTERS_KEY))
-        .is_some_and(Value::is_array)
+    direct_clusters(payload) || payload.get("page").is_some_and(direct_clusters)
+}
+
+/// A report page can be top-level or inside a rescan envelope.
+fn direct_clusters(payload: &Value) -> bool {
+    payload.get(CLUSTERS_KEY).is_some_and(Value::is_array)
 }
 
 /// Pops one cluster off the tail of `payload.clusters`. Returns
 /// `false` when the array is missing or already empty so the caller
 /// can exit the shrink loop instead of spinning.
 fn pop_one_cluster(payload: &mut Value) -> bool {
-    let Some(object) = payload.as_object_mut() else {
+    let container = if direct_clusters(payload) {
+        Some(payload)
+    } else {
+        payload.get_mut("page")
+    };
+    let Some(container) = container else {
         return false;
     };
-    let Some(clusters) = object.get_mut(CLUSTERS_KEY).and_then(Value::as_array_mut) else {
+    let Some(clusters) = container
+        .get_mut(CLUSTERS_KEY)
+        .and_then(Value::as_array_mut)
+    else {
         return false;
     };
-    clusters.pop().is_some()
+    let removed = clusters.pop().is_some();
+    let returned = clusters.len();
+    reconcile_cursor(container, returned);
+    removed
+}
+
+/// Byte trimming must never leave the occurrence-budget cursor claiming dropped rows.
+fn reconcile_cursor(container: &mut Value, returned: usize) {
+    let page = container.get("page").cloned().and_then(|value| {
+        serde_json::from_value::<deslop_core::wire_generated::ReportPageInfo>(value).ok()
+    });
+    let total = container
+        .get("total_clusters")
+        .and_then(Value::as_u64)
+        .and_then(|count| usize::try_from(count).ok());
+    if let (Some(page), Some(total), Some(value)) = (page, total, container.get_mut("page")) {
+        *value = json!(crate::page::page_info(
+            page.offset,
+            page.limit,
+            returned,
+            total
+        ));
+    }
 }
 
 /// Adds the truncation marker fields to an existing object payload.
@@ -149,6 +181,9 @@ fn stamp_truncated(payload: &mut Value) {
     };
     for (key, value) in truncation_marker_fields() {
         let _ = object.insert(key, value);
+    }
+    if let Some(page) = object.get_mut("page").filter(|page| direct_clusters(page)) {
+        stamp_truncated(page);
     }
 }
 
@@ -171,7 +206,7 @@ fn truncation_marker_fields() -> [(String, Value); 4] {
         (
             NEXT_ACTION_KEY.to_owned(),
             Value::String(format!(
-                "call {PAGINATED_TOOL_NAME} with smaller limit, or paginate via offset/limit"
+                "call {PAGINATED_TOOL_NAME} with detail: summary, include_per_file: false, and a smaller limit; follow page.next_offset when it advances"
             )),
         ),
     ]
@@ -187,7 +222,7 @@ fn fallback_truncated_stub() -> Value {
             "result exceeded {MAX_TOOL_RESULT_BYTES} byte MCP wire cap"
         ),
         (TRUNCATED_AT_BYTES_KEY): MAX_TOOL_RESULT_BYTES,
-        (NEXT_ACTION_KEY): format!("call {PAGINATED_TOOL_NAME} with smaller limit"),
+        (NEXT_ACTION_KEY): format!("call {PAGINATED_TOOL_NAME} with detail: summary, include_per_file: false, and a smaller limit"),
     })
 }
 
@@ -197,6 +232,54 @@ mod tests {
 
     const TOP_OFFENDERS_TOOL: &str = "top-offenders";
     const TEST_CLUSTER_ID: &str = "id";
+
+    /// [MCP-PAGE-CONTINUATION] A rescan's inner page cannot deny outer truncation.
+    #[test]
+    fn nested_rescan_page_discloses_byte_trimming_in_its_own_metadata() {
+        const CLUSTER_COUNT: usize = 300;
+        const BLOB_BYTES: usize = 1024;
+        const OFFSET: usize = 0;
+        let clusters = vec![json!({"blob": "x".repeat(BLOB_BYTES)}); CLUSTER_COUNT];
+        let payload = json!({"page": {"clusters": clusters, "total_clusters": CLUSTER_COUNT,
+            "truncated": false, "page": {"offset": OFFSET, "limit": CLUSTER_COUNT,
+                "returned": CLUSTER_COUNT, "has_more": false, "next_offset": null}}});
+        let capped = cap_tool_result("rescan", payload);
+        assert_eq!(capped.get(TRUNCATED_KEY), Some(&json!(true)));
+        assert_eq!(capped.pointer("/page/truncated"), Some(&json!(true)));
+        assert_eq!(capped.pointer("/page/page/has_more"), Some(&json!(true)));
+        assert!(serialised_len(&capped) <= MAX_TOOL_RESULT_BYTES);
+    }
+
+    /// [MCP-RESULT-SIZE-CAP] Metadata and page cursors are part of the wire budget.
+    #[test]
+    fn byte_budget_includes_markers_and_updates_the_returned_page() {
+        const BLOB_BYTES: usize = 512;
+        const CLUSTER_COUNT: usize = 2;
+        const OFFSET: usize = 0;
+        const HEADROOM: usize = 8;
+        let cluster = json!({"blob": "x".repeat(BLOB_BYTES)});
+        let mut payload = json!({"clusters": [cluster.clone(), cluster], "padding": "",
+            "total_clusters": CLUSTER_COUNT, "page": {"offset": OFFSET, "limit": CLUSTER_COUNT,
+                "returned": CLUSTER_COUNT, "has_more": false, "next_offset": null}});
+        let padding = MAX_TOOL_RESULT_BYTES
+            .saturating_sub(serialised_len(&payload))
+            .saturating_add(BLOB_BYTES)
+            .saturating_sub(HEADROOM);
+        if let Some(value) = payload.get_mut("padding") {
+            *value = json!("p".repeat(padding));
+        }
+        let capped = cap_tool_result(PAGINATED_TOOL_NAME, payload);
+        assert!(serialised_len(&capped) <= MAX_TOOL_RESULT_BYTES);
+        let returned = capped
+            .get(CLUSTERS_KEY)
+            .and_then(Value::as_array)
+            .map(Vec::len);
+        assert_eq!(
+            capped.pointer("/page/returned").and_then(Value::as_u64),
+            returned.and_then(|count| u64::try_from(count).ok())
+        );
+        assert_eq!(capped.get(TRUNCATED_KEY), Some(&json!(true)));
+    }
 
     /// Small payload under the cap passes through unmodified.
     #[test]

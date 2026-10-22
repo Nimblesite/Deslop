@@ -52,7 +52,7 @@ An absent bound is not a repository with no opinion about its own size — it is
 
 ### [CORPUS-RECALL] Curated duplicates
 
-Curated recall and precision use the same published-clone classification rule as the independent register scorer ([CORPUS-SCORE]). Informational `structural_only` findings and absent or unknown classifications cannot satisfy a duplicate claim or breach a non-duplicate claim. The cluster contract still inspects informational records: their duplicated mass and clone rank must both be zero ([RANK-STRUCTURAL-ONLY]). Pinned by `corpus_confidence::tests::recall::information` and `corpus_confidence::tests::liveness::information`.
+Curated recall uses the same published-clone classification rule as the independent register scorer ([CORPUS-SCORE]): informational `structural_only` findings and absent or unknown classifications cannot satisfy a duplicate claim. Curated precision fails closed instead. Only a cluster positively classified as informational is excused from a non-duplicate claim; a cluster with no classification, or one the scorer does not recognise, breaches it, and the failure names that classification. A renamed or dropped label therefore fails the check rather than silencing it. The cluster contract still inspects informational records: their duplicated mass and clone rank must both be zero ([RANK-STRUCTURAL-ONLY]). Implemented by `corpus_score/coverage.rs::is_informational_finding` and `corpus_precision/curated.rs`. Pinned by `corpus_confidence::tests::recall::information` (including `only_an_informational_family_is_excused_from_curated_precision`) and `corpus_confidence::tests::liveness::information`.
 
 `must_find` lists duplicates a human confirmed byte-for-byte, each with the `diff` that proved it. Two check ids judge it:
 
@@ -224,7 +224,7 @@ A register with no entries scores **nothing**, never 100%. Being asked no questi
 
 **The corpus score is `correct / judged` over every judged pair**, not the mean of the per-repository scores. Averaging percentages would let a repository with two judged pairs outvote one with two hundred.
 
-**Matched-range coverage is description.** For each judged range, the scorer counts the union of its lines overlapped by visible occurrences of a matching cluster; it sums those covered lines and the inclusive judged lines across the ranges. When several clusters match, it shows the one covering the most judged lines, retaining report order for a tie. The JSON scorecard records both counts and their percentage for each matched entry, and the scorecard shows them beside each engine's verdict. The corpus standing also sums covered and judged lines across reported CLEARLY IN pairs, excluding missed and CLEARLY OUT pairs; the JSON scorecard carries the same aggregate. A one-line overlap remains a match, but the reader can see that it covers little of the judged source. Coverage never changes a verdict or gate. Implemented in `crates/deslop-test-support/src/corpus_score/coverage.rs` and `gate.rs`, and asserted by `the_scorecard_describes_how_much_of_each_pair_was_reported` under [CORPUS-SCORE-RENDER].
+**Matched-range coverage is description.** For each judged range, the scorer counts the union of its lines overlapped by visible occurrences of a matching cluster; it sums those covered lines and the inclusive judged lines across the ranges. When several clusters match, it shows the one covering the most judged lines, retaining report order for a tie. The markdown scorecard shows both counts and their percentage beside each engine's verdict. The corpus standing also sums covered and judged lines across reported CLEARLY IN pairs, excluding missed and CLEARLY OUT pairs; the JSON scorecard carries the same aggregate. A one-line overlap remains a match, but the reader can see that it covers little of the judged source. Coverage never changes a verdict or gate. Implemented in `crates/deslop-test-support/src/corpus_score/coverage.rs` and `gate.rs`, and asserted by `the_scorecard_describes_how_much_of_each_pair_was_reported` under [CORPUS-SCORE-RENDER].
 
 **Cost is measured and reported, never scored.** Every scan runs under the same measurement the ceiling suite uses ([CORPUS-MEASURE]), recording wall time, CPU time, peak CPU and peak memory. They sit beside the score so two runs can be compared honestly; a slower engine that finds the same pairs has not become less accurate. Cluster and pair totals are description in exactly the same way.
 
@@ -244,7 +244,7 @@ A register with no entries scores **nothing**, never 100%. Being asked no questi
 
 ### [CORPUS-SCORE-OUTCOMES] Every judged pair's outcome is on record
 
-`corpus/register/outcomes.json` lists every judged pair a corpus run has scored: its repository, its verdict and its ranges, whether the engine answered it right (`pass`) or wrong (`fail`), when that outcome was recorded (`since`, the timestamp of the run that recorded it) and the engine that run scored. It answers two questions at a glance: which judged pairs fail today, and how long each has failed.
+`corpus/register/outcomes.json` lists every judged pair a corpus run has scored: its repository, its verdict and its ranges, whether the engine answered it right (`pass`) or wrong (`fail`), when that outcome was recorded (`since`, the timestamp of the run that recorded it), the engine that run scored, and the `commit` — and release `version`, when there is one — that engine was built from ([CORPUS-HISTORY-SOURCE]). Only a run tied to a commit writes it. It answers two questions at a glance: which judged pairs fail today, and how long each has failed.
 
 **How a run is held to it.** A run scores every judged pair, then reads the last engine's answer against the record:
 
@@ -252,11 +252,11 @@ A register with no entries scores **nothing**, never 100%. Being asked no questi
 |---|---|---|---|
 | right | failing | fixed | passes; the pair goes on record as passing |
 | right | passing, or not recorded | passing | passes; a new pair goes on record as passing |
-| wrong | failing | still failing | is tolerated, and the scorecard lists the pair as tracked |
-| wrong | passing | regressed | fails |
-| wrong | not recorded | not on record | fails |
+| wrong | failing | still failing | passes; the scorecard lists the pair as a known defect, tracked |
+| wrong | not recorded | not on record | passes; the scorecard lists the pair as a known defect |
+| wrong | passing | regressed | **fails** |
 
-So existing failures are tolerated and every new one fails: a pair that has passed once must keep passing.
+**Exactly one thing fails a run: a regression** — a pair that passed before and fails now. A pair that has never passed has nothing to regress from; it is a known defect, listed under the verdict and in the defect list, and still a bug, but it does not fail the run. A pair that has passed once must keep passing.
 
 **The record only tightens.** Every run writes the record back. A fixed pair and a newly judged passing pair go on record as passing, and a pair its register no longer judges leaves the record. A regression is never written over the pass it broke, and a repository the run did not scan keeps its entries untouched. A failing pair goes on record only through `make accept-corpus-failures RUN=<run.json>`, which re-scores a finished run without scanning again and records its unrecorded failures as failing. It never moves a passing pair to failing: a regression is fixed, never accepted. Accepting is the admission that a defect shipped, and it shows in the diff for review.
 
@@ -264,16 +264,29 @@ So existing failures are tolerated and every new one fails: a pair that has pass
 
 **Pairs are keyed so every run agrees.** A pair is its repository — named as its register file is, in lower case — its verdict and its ranges, sorted. The record is written sorted by that key, so two runs over the same answers write the same file.
 
-**The scorecard shows it.** The JSON scorecard's `outcomes` lists every judged pair the last engine was scored on, passed or failed, with its `standing` and `recorded_since`. The markdown's **Judged pair record** section says whether the run kept to the record and lists every pair it fixed, and each wrongly answered pair in the defect list says how it stands against the record.
+**The scorecard shows it.** The JSON scorecard writes every judged pair once, under its repository ([CORPUS-REPORT-ENTRY]), and every failure under `verdict.failures` with whether it is a regression. The markdown's **Judged pair record** section says whether the run kept to the record and lists every pair it fixed, and each wrongly answered pair in the defect list says how it stands against the record.
 
 #### For AI
 
-- Implemented in `crates/deslop-test-support/src/corpus_score/outcomes.rs` (`standings`, `record`), `run.rs` (`write_scorecard`, `Scoring`) and `render/outcomes.rs`. `corpus-score score --gate` exits non-zero on a `regressed` or `unrecorded` pair; `--accept-failures` cannot be combined with it.
+- Implemented in `crates/deslop-test-support/src/corpus_score/outcomes.rs` (`standings`, `record`), `run.rs` (`write_scorecard`, `Scoring`) and `render/outcomes.rs`. `corpus-score score --gate` exits non-zero on a `regressed` pair and on nothing else (`Standing::fails_the_run`); `--accept-failures` cannot be combined with it.
 - Pinned end to end by `corpus_score/run/tests/record.rs`, over the file on disk by `every_recorded_pair_is_a_pair_its_register_judges` and `the_record_holds_one_outcome_per_pair_in_one_stable_order_and_nothing_else` in `crates/deslop/tests/corpus_register_contract.rs`, and in CI wiring by `scripts/repository/score-gate-source.test.mjs`.
 
 ### [CORPUS-SCORE-GATE-SLICE] The default gate covers judged languages
 
 The default `score-gate.sh` slice includes Polly and FSharp.Data so every push checks judged C# and F# pairs alongside the existing Python, Go, JavaScript and Rust registers. `--list-default-targets` prints each target's URL, exact judged commit and language directly from its register without building or scanning. `scripts/repository/score-gate-source.test.mjs` checks both resolved targets and keeps the [CORPUS-REGISTER-COVERAGE] floor of 15 judged pairs for every slice member. FSharp.Data cleared that floor through two independent source-only judging passes; only consensus verdicts entered its register, while disagreements stayed out of the gate. A language with fewer firm verdicts needs more independent judging before it enters the default gate; lowering the floor would make an accuracy claim rest on too little evidence.
+
+### [CORPUS-SCORE-GATE-JUDGED] The gate scans judged repositories, and fails when it judged nothing
+
+A gate can only score pairs a judge ruled on, so `score-gate.sh` scans only repositories whose register judges at least one pair CLEARLY IN or CLEARLY OUT. This holds for the default slice, `--all-judged` and targets named on the command line alike.
+
+The gate fails rather than shrinking its scan:
+
+- a target with no register, or one holding only NOT CLEAR verdicts, fails the run and names the target;
+- a register that cannot be read, or is missing its url, commit or language, fails the run. It never drops that register, or the ones listed after it, from the scan;
+- an empty target list fails the run;
+- `corpus-score score --gate` refuses a run that scored no judged pair and writes no scorecard, so it can never be headed PASSED. An ungated `corpus_*` test still reports a repository no register judges ([CORPUS-REPORT]).
+
+Implemented by `resolve_targets` in `scripts/corpus/score-gate.sh`, `require_judged`, `judged_names` and `register_targets` in `scripts/corpus/target-repos.sh`, and `write_scorecard` / `nothing_judged` in `crates/deslop-test-support/src/corpus_score/run.rs`. Pinned by `scripts/repository/score-gate-targets.test.mjs` and `corpus_score/run/tests/gate.rs`.
 
 ### [CORPUS-SCORE-COMPARE] Comparing two engines
 
@@ -299,6 +312,7 @@ A repository with no register is still listed. Its accuracy is its curated check
 | Run | Scorecard |
 |---|---|
 | `make score-gate` | `.corpus/score-gate/score-gate-2026-09-27T03-35-02Z.md` |
+| `make score-corpus` | `.corpus/score-gate/score-corpus-2026-09-27T03-35-02Z.md` |
 | `make compare` | `.corpus/version-compare/reports/compare-2026-09-27T03-35-02Z.md` |
 | a `corpus_*` test, alone or under `make test-corpus` / `make test-corpus-ci` | `.corpus/test-corpus/corpus_flutter_dart-2026-09-27T03-35-02Z.md` |
 
@@ -306,9 +320,41 @@ Each markdown scorecard has a `.json` twin of the same name. A corpus test is na
 
 **A corpus test's scorecard covers what that test scanned.** Before it asserts anything, the test writes its scorecard and, in a directory of the same name beside it, what the scorecard was rendered from — the scan's report, its cost, its curated-check outcome and the run manifest — so a failing test still leaves the document that says why, and any scorecard can be re-rendered later. The corpus workflow keeps `.corpus/test-corpus/` out of its cache, so a job's summary prints only the scorecards that job wrote. Implemented in `crates/deslop-test-support/src/corpus_record.rs`, with the file-then-judge order every test follows in `corpus_judge.rs`; pinned by `corpus_record/tests.rs` and by `an_unregistered_repository_reports_its_checks_and_its_cost` in `corpus_score/run/tests.rs`.
 
+**[CORPUS-REPORT-ENTRY] A judged pair is written as pass or fail.** A judged pair is answered exactly or it fails, so the JSON scorecard writes each one as its verdict, its ranges and `outcome`: `pass` or `fail`. A failure adds `failed`, the one thing that failed: `not reported` (a CLEARLY IN no cluster shows), `reported as <kind>, judged <type>` (a typed CLEARLY IN shown only under another kind), or `reported in cluster <id>` (a CLEARLY OUT a cluster shows). The scorer's working — the matching cluster, its coverage, the judge's reason — is not written per pair; the markdown scorecard shows it where it explains a result, and the register holds the reason. Implemented in `crates/deslop-test-support/src/corpus_score/written_entry.rs`; pinned by `corpus_score/tests/written.rs` and by the scorecard sections asserted in `corpus_score/run/tests/history.rs`.
+
 **[CORPUS-REPORT-CHECKS] Curated checks sit beside the register score.** For every repository a corpus test scanned, the scorecard lists how many of the `corpus/<name>.json` checks passed and names each failure, marked `known` when `corpus/known-failures.json` tracks it and `NEW` when it does not. A repository whose manifest curates no accuracy claim is marked `ceilings only`, because its pass says nothing about whether detection there is correct. A run that evaluated no curated checks shows `—` rather than a pass. The determinism tests file their own record, labelled `<repo> (determinism)` and not scored against the register, so one register is never counted twice.
 
-**[CORPUS-REPORT-VERDICT] The scorecard opens with its verdict.** The first line says whether the run passed — `# ✅ PASSED — Corpus accuracy scorecard` or `# 🔴 FAILED — Corpus accuracy scorecard` — because a failure that has to be found in a table is one a reader skims past. A run fails when the engine failed any curated check on any repository, a crashed scan's `scan` check included, or answered any judged pair wrongly ([CORPUS-SCORE-OUTCOMES]); a run that failed nothing is headed PASSED. Under a FAILED heading a caution block counts the failures and lists each on one line: the repository, the check or the judged pair, and what was observed. Failed checks come first, repository by repository, then judged pairs. A failure already tracked — a check in `corpus/known-failures.json`, or a pair on record as failing in `corpus/register/outcomes.json` — still fails the scorecard, and its line names the record that tracks it, so it reads neither as new nor as a pass. That is deliberately stricter than the exit status of `make test-corpus-ci` and of `make score-gate`, which excuse tracked failures ([CORPUS-BASELINE], [CORPUS-SCORE-OUTCOMES]): a run can exit green under a scorecard headed FAILED, because the defect is still there. Only the last engine is judged — in a comparison the first is the reference the second is read against. The JSON scorecard carries the same list as `verdict.failures`. Implemented in `crates/deslop-test-support/src/corpus_score/verdict.rs` and `render/verdict.rs`; pinned by `corpus_score/tests/verdict.rs` and, end to end, by `a_judged_run_is_headed_by_whether_it_kept_to_its_record` in `corpus_score/run/tests.rs`.
+**[CORPUS-REPORT-VERDICT] The scorecard opens with its verdict.** The first line says whether the run passed — `# ✅ PASSED — Corpus accuracy scorecard` or `# 🔴 FAILED — Corpus accuracy scorecard` — because a failure that has to be found in a table is one a reader skims past. **A run fails on a regression and on nothing else**: a judged pair on record as passing that fails now ([CORPUS-SCORE-OUTCOMES]), a judged pair that passed in an earlier run of the run history and fails now ([CORPUS-HISTORY]), or a curated check failing that `corpus/known-failures.json` does not track, a crashed scan's `scan` check included ([CORPUS-BASELINE]). Under a FAILED heading a red caution block counts the regressions and lists each on one line (🔴): the repository, the check or the judged pair, and what was observed. Every other failure is a **known defect** — a judged pair that has never passed, or a check the baseline tracks. Known defects follow in a note of their own (⚠️), each naming the record that tracks it when one does; they are still bugs, but none is a regression, so a run whose only failures are known defects is headed PASSED, and its exit status agrees. Failed checks come first, repository by repository, then judged pairs. Only the last engine is judged — in a comparison the first is the reference the second is read against. The JSON scorecard carries every failure as `verdict.failures`, each with `regression` saying whether it fails the run. Implemented in `crates/deslop-test-support/src/corpus_score/verdict.rs` and `render/verdict.rs`; pinned by `corpus_score/tests/verdict.rs` and, end to end, by `a_judged_run_fails_only_on_a_pair_that_passed_before` in `corpus_score/run/tests.rs`.
+
+### [CORPUS-HISTORY] The whole judged corpus, tracked run over run
+
+`make score-corpus` (`scripts/corpus/score-gate.sh --all-judged`) scans every register that judges at least one pair CLEARLY IN or CLEARLY OUT, and no repository without judgments. `--list-judged-targets` prints that list without building or scanning. CI does not run it: the CI gate stays the slice in [CORPUS-SCORE-GATE-SLICE].
+
+**Read it in `corpus/history/HISTORY.md`.** The page is rendered again from every run record each time a run is added, and is never edited by hand. Newest run first, it has:
+
+- **Runs** — one row per run: when it ran, its source (the release version when there is one, then the commit), passed or failed, correct / judged, score, regressions, known defects, total wall time, total CPU time, peak memory and the machine;
+- **By repository** — one table per repository, one row per run: whether it matched its judgments, correct / judged, CLEARLY IN found, CLEARLY OUT absent, false negatives, false positives, wall time, CPU time, peak CPU and peak memory;
+- **Judged pairs the latest run gets wrong** — each marked as a regression or a known defect, with what failed;
+- **Regressions** — every judged pair any run found going backwards, with the run it passed in.
+
+**Each run is recorded in its own file**, `corpus/history/runs/score-corpus-<UTC timestamp>.json`, committed so the history is tracked. A record holds when the run was generated, the scorecard it wrote, the engine, its source ([CORPUS-HISTORY-SOURCE]), the machine (operating system and version, architecture, CPU model, logical CPUs, physical cores, memory — CPU and memory figures only compare on one machine), the run's totals, how many regressions and known defects it had, every repository's counts and cost, every judged pair — its repository, verdict and ranges, and `pass` or `fail`; a failure also names what failed and, only when it passed before, `regression: true` — and every backslide.
+
+**One judgment going backwards fails the run.** A judged pair that passed in any earlier recorded run, at the same commit, and fails now is a **backslide**. There is no allowance and no way to accept one: once a pass is recorded, every later run of that commit is held to it. A pair judged at a different commit is a different pair. A failed run is still recorded, with `passed: false`.
+
+The scorecard of a run held to the history has a **Run history** section: the source, the machine, one row per repository saying whether it matched its judgments with its score and cost, and either a PASS line or every backslide. Each backslide is also listed in the verdict at the top, and `corpus-score score` exits non-zero on it.
+
+- Implemented in `crates/deslop-test-support/src/corpus_score/history.rs`, `history/store.rs`, `render/history.rs` and `render/history_log.rs`, wired through `run.rs` (`write_scorecard`, `Scoring::history`) and `corpus-score score --history`, which requires `--gate`. Targets come from `judged_targets` in `scripts/corpus/target-repos.sh`.
+- Pinned end to end by `corpus_score/run/tests/history.rs`.
+
+### [CORPUS-HISTORY-SOURCE] Every result is tied to a commit
+
+Every recorded result names the commit of the engine that produced it, in full, and the release version beside it when a release tag (`v*`) points at that commit. A version is only a name for a commit, and a name can be re-pointed; the commit is the source. The run manifest names both on each engine; a run history record, every `corpus/register/outcomes.json` entry and both scorecards carry them.
+
+- **A run tied to no commit records nothing.** It still writes its scorecard, but it neither writes the judged pair record nor joins the run history; asked to accept failures or to join the history, it is refused.
+- **A local run refuses uncommitted changes.** `score-gate.sh` (both modes) and `compare-versions.sh` stop before building when the working tree has any uncommitted change, naming each one: a commit does not name source nobody committed.
+- **A local run rebuilds from nothing.** `score-gate.sh` cleans the release build of `deslop`, `deslop-core` and `deslop-test-support` before it builds, so the binaries that run are the committed source. `compare-versions.sh` already builds each engine from a fresh extract of its commit.
+- CI's checkout and build are fresh on every run, so CI is not held to the last two rules; it is told apart by the `CI` environment variable.
+- Implemented in `corpus_score/source.rs`, `outcomes.rs` (`write_back`) and `history.rs` (`hold`); in scripts by `is_local`, `require_clean_tree` and `release_version` in `scripts/corpus/target-repos.sh`. Pinned by `corpus_score/run/tests/history.rs` and the record field list in `crates/deslop/tests/corpus_register_contract.rs`.
 
 ### [CORPUS-BASELINE] The known-failures ratchet
 

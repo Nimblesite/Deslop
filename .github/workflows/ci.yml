@@ -997,26 +997,22 @@ jobs:
           fail-on-severity: high
           comment-summary-in-pr: on-failure
 
-  # The branch ruleset requires a status context literally named "CI" —
-  # the old monolithic job's name. The split into named jobs orphaned it
-  # (every merge since then has violated the rule). This gate restores the
-  # context: it succeeds only when every job in the workflow succeeded or
-  # was skipped (a skip satisfies branch protection, same as the path-
-  # gated heavy jobs).
+  # [CI-MERGE-GATE] The branch ruleset requires a status context literally
+  # named "CI", and GitHub counts a SKIPPED required check as passing. So this
+  # gate always runs — a gate skipped because `changes` failed would let the PR
+  # merge — and scripts/actions/merge-gate.mjs fails it unless every job the
+  # change needed succeeded.
   ci:
     name: CI
     needs: [changes, security, lint, build, rust-tests, repository-tests, corpus-score, windows, vsix, jetbrains, site, coverage]
-    if: always() && needs.changes.outputs.code == 'true'
+    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v7
       - name: Enforce every job's conclusion
-        run: |
-          results='${{ toJSON(needs.*.result) }}'
-          echo "Job conclusions: $results"
-          for result in $(echo "$results" | tr -d '[]"' | tr ',' ' '); do
-            case "$result" in
-              success|skipped) ;;
-              *) echo "FAIL: a required job ended '$result'"; exit 1 ;;
-            esac
-          done
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          CODE: ${{ needs.changes.outputs.code }}
+          SITE: ${{ needs.changes.outputs.site }}
+        run: node scripts/actions/merge-gate.mjs

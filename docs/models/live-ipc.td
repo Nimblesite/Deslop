@@ -532,9 +532,12 @@ type ReportPageInfo {
   offset: Int
   limit: Int
   returned: Int
+  next_offset: Option<Int>
+  has_more: Bool
 }
 
 type DuplicatesFilters {
+  kinds: Option<List<ClusterKind>>
   languages: Option<List<String>>
   path_contains: Option<String>
   severities: Option<List<String>>
@@ -560,6 +563,9 @@ type DuplicatesPage {
   page: ReportPageInfo
   clusters: List<DuplicateCluster>
   filters: DuplicatesFilters
+  truncated: Bool
+  truncated_reason: Option<String>
+  next_action: Option<String>
 }
 
 # ---------------------------------------------------------------------------

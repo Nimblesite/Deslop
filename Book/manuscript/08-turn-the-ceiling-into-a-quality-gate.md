@@ -1,50 +1,26 @@
 # Chapter 8 — Set a duplication limit in CI
 
-> **Current status:** This chapter is an outline. I will include real configuration and CI output from the exact Deslop release used for the book.
+Measure the repository before choosing a limit. Commit the limit in `.deslop.toml` so local scans and CI share it.
 
-## What you will be able to do
-
-I will show you how to set a maximum duplication percentage that local runs, agents, and CI share. You will lower that limit after you verify a cleanup.
-
-## Planned sections
-
-### Measure the current percentage first
-
-Run Deslop before setting the limit. If you set the limit below the repository's current result without first cleaning up, every CI run will fail.
-
-### Commit the limit with the repository
-
-Store the limit in the repository configuration so developers, agents, and CI use the same number and receive the same failure.
-
-### Know the difference between excluding and hiding
-
-Excluded files never enter analysis. Report-hidden occurrences remain available as evidence but do not contribute to the headline. The chapter uses generated code to make the distinction concrete.
-
-### A failed limit still writes the report
-
-When the duplication percentage is too high, Deslop returns a failing exit code and still writes the JSON report. The agent can read the report and explain which groups contributed to the failure.
-
-### Lower the limit only after cleanup
-
-When a verified cleanup reduces the duplication percentage, lower the configured limit in the same change. Do not raise the limit just to make a failing run pass.
-
-## Workshop exercise
-
-Measure the Workshop repository, select a limit it currently meets, introduce a known duplicate in a disposable copy, observe the CI failure, remove the duplicate, and confirm that the check passes again.
-
-## Check your understanding
-
-1. Why must you measure the current repository before setting the duplication limit?
-2. What report remains available when Deslop fails the configured limit?
-3. Why is raising the limit different from removing duplication?
-
-## Instruction for coding agents
-
-```text
-Use the configured duplication limit in local runs and CI. Lower it after real cleanup. Do not hide findings or raise the limit just to make the build pass.
+```toml
+[threshold]
+max_duplication_percent = 5.5
 ```
 
-## Sources used for this chapter
+This is an example ceiling, not a recommended target. Choose a value supported by your baseline. The CLI writes enabled reports and exits `3` when the measured percentage exceeds the ceiling. See the [configuration reference](https://deslop.live/docs/configuration/).
 
-- `deslop-configuration`
-- `deslop-github-action`
+![The actual Deslop Duplication view shows the repository percentage and folder breakdown.](assets/screenshots/08-report-overview.png)
+
+*The Duplication view summarises this captured repository state. Folder percentages use their own folder totals.*
+
+## Keep the measurement comparable
+
+Use the same build, root, analysis settings, and embedding policy for the baseline and check. Commit `[total] include` when changing which clone kinds count; otherwise its default is Identical and Nearly identical code.
+
+Exclusions remove files from analysis. `report_hide` retains analysis evidence but removes hidden occurrences from duplication metrics. Shape-only findings never count. Do not change any of these to conceal a failed cleanup.
+
+## Lower the ceiling after verified cleanup
+
+When tests pass and Deslop confirms the intended copies were removed, lower the ceiling to the accepted measured result. Do not round a displayed percentage down into a ceiling the underlying value already exceeds.
+
+**Try it:** in a disposable repository, set a ceiling the baseline meets. Add a known copy, observe the failing exit and saved report, then remove it and check again.

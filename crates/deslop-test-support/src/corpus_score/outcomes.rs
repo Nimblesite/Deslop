@@ -2,11 +2,12 @@
 //!
 //! `corpus/register/outcomes.json` holds the last recorded outcome of every
 //! judged pair a run has scored, and since when it has held it. A run reads
-//! the record before it judges anything: a pair on record as failing is a
-//! known defect and is tolerated, while a pair that fails after passing, or
-//! fails with no record at all, fails the run. A count could not tell those
-//! apart — one pair fixed and another broken in the same change leave every
-//! count where it was.
+//! the record before it judges anything. Exactly one thing fails a run: a
+//! pair on record as passing that fails now — a regression. A pair that has
+//! never passed, whether on record as failing or not on record at all, is a
+//! known defect: listed, still a bug, but not a regression. A count could not
+//! tell those apart — one pair fixed and another broken in the same change
+//! leave every count where it was.
 //!
 //! Every run writes the record back, and the record only ever tightens: a
 //! fixed pair is recorded as passing, a newly judged passing pair is recorded,
@@ -19,10 +20,15 @@ use std::{
     path::Path,
 };
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 
-use super::{render::TargetScore, ScoredEntry, CLEARLY_IN};
+use super::{
+    render::{Scorecard, TargetScore},
+    source::Source,
+    written_entry::what_failed,
+    ScoredEntry, CLEARLY_IN,
+};
 use crate::read_json;
 
 /// Where the record lives, relative to the repository root.
@@ -46,7 +52,7 @@ pub enum Outcome {
 
 impl Outcome {
     /// The outcome of one scored entry.
-    fn of(entry: &ScoredEntry) -> Self {
+    pub(super) fn of(entry: &ScoredEntry) -> Self {
         if entry.correct {
             Self::Pass
         } else {
@@ -104,6 +110,10 @@ pub struct RecordedPair {
     pub since: String,
     /// The engine that run scored.
     pub engine: String,
+    /// [CORPUS-HISTORY-SOURCE] The commit that engine was built from.
+    pub commit: String,
+    /// The release version at that commit, absent for an untagged commit.
+    pub version: Option<String>,
 }
 
 /// The whole record.
@@ -116,7 +126,7 @@ pub struct Ledger {
 }
 
 /// How one judged pair's outcome in this run stands against its record.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Standing {
     /// Passes, and is not on record as failing.
@@ -125,7 +135,8 @@ pub enum Standing {
     Fixed,
     /// Fails, and is on record as failing: a known defect, tolerated.
     StillFailing,
-    /// Fails, with no record: a defect nobody accepted.
+    /// Fails, with no record: it has never passed, so it is a known defect,
+    /// not a regression.
     Unrecorded,
     /// Fails, and was on record as passing.
     Regressed,
@@ -143,10 +154,11 @@ impl Standing {
         }
     }
 
-    /// Whether this standing fails the run.
+    /// Whether this standing fails the run: only a regression — a pair that
+    /// passed before and fails now — does.
     #[must_use]
     pub fn fails_the_run(self) -> bool {
-        matches!(self, Self::Unrecorded | Self::Regressed)
+        self == Self::Regressed
     }
 }
 
@@ -162,6 +174,8 @@ pub struct PairOutcome {
     pub standing: Standing,
     /// Since when the record has held its outcome; absent with no record.
     pub recorded_since: Option<String>,
+    /// [CORPUS-REPORT-ENTRY] What failed, absent on a pass.
+    pub failed: Option<String>,
 }
 
 impl PairOutcome {
@@ -186,6 +200,8 @@ pub struct RunStamp<'a> {
     pub at: &'a str,
     /// The engine it scored.
     pub engine: &'a str,
+    /// The source that engine was built from.
+    pub source: &'a Source,
 }
 
 /// Reads the record under `root`; an absent file is an empty record.
@@ -212,20 +228,24 @@ pub fn standings(ledger: &Ledger, engine_id: &str, targets: &[TargetScore]) -> V
         .iter()
         .filter_map(|target| Some((target.name.as_str(), target.scores.get(engine_id)?)))
         .flat_map(|(repo, score)| score.entries.iter().map(move |entry| (repo, entry)))
-        .map(|(repo, entry)| standing(&recorded, PairKey::of(repo, entry), Outcome::of(entry)))
+        .map(|(repo, entry)| standing(&recorded, repo, entry))
         .collect()
 }
 
-/// How one pair's `outcome` stands against its record, if it has one.
+/// How the pair `entry` scored in `repo` stands against its record, if it has
+/// one.
 fn standing(
     recorded: &BTreeMap<&PairKey, &RecordedPair>,
-    key: PairKey,
-    outcome: Outcome,
+    repo: &str,
+    entry: &ScoredEntry,
 ) -> PairOutcome {
+    let key = PairKey::of(repo, entry);
+    let outcome = Outcome::of(entry);
     let record = recorded.get(&key);
     PairOutcome {
         standing: Standing::of(outcome, record.map(|pair| pair.outcome)),
         recorded_since: record.map(|pair| pair.since.clone()),
+        failed: (!entry.correct).then(|| what_failed(entry)),
         outcome,
         key,
     }
@@ -288,6 +308,8 @@ fn recorded(pair: &PairOutcome, stamp: RunStamp<'_>) -> RecordedPair {
         outcome: pair.outcome,
         since: stamp.at.to_owned(),
         engine: stamp.engine.to_owned(),
+        commit: stamp.source.commit.clone(),
+        version: stamp.source.version.clone(),
     }
 }
 
@@ -303,4 +325,39 @@ pub fn write(root: &Path, ledger: &Ledger) -> Result<()> {
     }
     fs::write(&path, serde_json::to_string_pretty(ledger)? + "\n")
         .with_context(|| format!("cannot write {}", path.display()))
+}
+
+/// Writes the record under `root` back when this run changed it. Only a run
+/// whose last engine names the commit it was built from writes the record
+/// ([CORPUS-HISTORY-SOURCE]): an entry nobody can trace to source is no
+/// baseline. A run that judged nothing leaves the record alone.
+///
+/// # Errors
+///
+/// Returns an error when the record cannot be written, or when `accept` asks a
+/// run tied to no commit to put failures on record.
+pub fn write_back(root: &Path, ledger: &Ledger, card: &Scorecard, accept: bool) -> Result<()> {
+    let Some(last) = card.engines.last().filter(|_| !card.outcomes.is_empty()) else {
+        return Ok(());
+    };
+    let Some(source) = last.source.as_ref() else {
+        return if accept {
+            Err(anyhow!(
+                "{} names no commit, so nothing it scored can go on record",
+                last.label
+            ))
+        } else {
+            Ok(())
+        };
+    };
+    let stamp = RunStamp {
+        at: &card.generated_at,
+        engine: &last.label,
+        source,
+    };
+    let updated = record(ledger, &card.outcomes, stamp, accept);
+    if updated.pairs == ledger.pairs {
+        return Ok(());
+    }
+    write(root, &updated)
 }

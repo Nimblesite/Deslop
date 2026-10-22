@@ -111,19 +111,38 @@ impl OpenBuffers {
 /// Resolves `path` to the key the buffer map is indexed by. A path that
 /// cannot be canonicalised (e.g. removed from disk while open) resolves
 /// against its surviving parent so aliases (like `/var` on macOS) match.
-fn canonical_key(path: &Path) -> PathBuf {
-    fs::canonicalize(path).unwrap_or_else(|_error| canonicalise_parent(path))
+pub(crate) fn canonical_key(path: &Path) -> PathBuf {
+    canonicalise_path(path, |candidate| fs::canonicalize(candidate))
 }
 
-/// Canonicalises the parent directory of a missing file leaf.
-fn canonicalise_parent(path: &Path) -> PathBuf {
-    match (path.parent(), path.file_name()) {
-        (Some(parent), Some(leaf)) => match fs::canonicalize(parent) {
-            Ok(canonical_parent) => canonical_parent.join(leaf),
-            Err(_) => path.to_path_buf(),
-        },
-        _ => path.to_path_buf(),
+/// [LIVE-SCHEDULER-REMOVAL-COST] Missing sources resolve only surviving ancestors.
+pub(crate) fn canonicalise_path(
+    path: &Path,
+    mut resolve: impl FnMut(&Path) -> std::io::Result<PathBuf>,
+) -> PathBuf {
+    match fs::symlink_metadata(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            canonicalise_parent(path, resolve)
+        }
+        _ => resolve(path).unwrap_or_else(|_| canonicalise_parent(path, resolve)),
     }
+}
+
+/// Shares one identity for editor buffers, deleted corpus members, and path guards.
+fn canonicalise_parent(
+    path: &Path,
+    mut resolve: impl FnMut(&Path) -> std::io::Result<PathBuf>,
+) -> PathBuf {
+    path.parent()
+        .and_then(|parent| {
+            parent.ancestors().find_map(|ancestor| {
+                let _metadata = fs::symlink_metadata(ancestor).ok()?;
+                let canonical = resolve(ancestor).ok()?;
+                let suffix = path.strip_prefix(ancestor).ok()?;
+                Some(canonical.join(suffix))
+            })
+        })
+        .unwrap_or_else(|| path.to_path_buf())
 }
 
 /// Replaces the span `edit` names in `text` — the whole text when it

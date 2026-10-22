@@ -27,6 +27,7 @@ use deslop_test_support::{
     corpus::repo_root,
     corpus_measure::{measured_run, ProcessCost},
     corpus_score::{
+        history,
         render::Scorecard,
         run::{report_stem, write_scorecard, Scoring},
         RunCost,
@@ -76,17 +77,30 @@ struct ScoreArgs {
     /// names the scorecard, so no run overwrites another's.
     #[arg(long)]
     name: String,
-    /// Exit non-zero when a judged pair regressed, or failed without being on
-    /// record as failing ([CORPUS-SCORE-OUTCOMES]).
+    /// Exit non-zero when a judged pair that passed before fails now
+    /// ([CORPUS-SCORE-OUTCOMES], [CORPUS-HISTORY]).
     #[arg(long)]
     gate: bool,
     /// Put every failing pair that has no record on record as failing,
     /// accepting it as a known defect. Never moves a pass to a fail.
     #[arg(long, conflicts_with = "gate")]
     accept_failures: bool,
+    /// What the run writes beyond its scorecard.
+    #[command(flatten)]
+    writes: Writes,
+}
+
+/// What a scored run writes beyond its scorecard.
+#[derive(Args)]
+struct Writes {
     /// Print only the JSON scorecard's path, for a caller that reads it.
     #[arg(long)]
     print_json_path: bool,
+    /// [CORPUS-HISTORY] Hold the run to every earlier run in the run history —
+    /// one judged pair that passed before and fails now fails the run — and
+    /// add it to the history. The manifest's last engine must name its commit.
+    #[arg(long, requires = "gate")]
+    history: bool,
 }
 
 /// Runs one measured command and records its cost.
@@ -140,10 +154,11 @@ fn score(args: &ScoreArgs) -> Result<()> {
     let scoring = Scoring {
         strict: args.gate,
         accept_failures: args.accept_failures,
+        history: args.writes.history,
     };
     let stem = report_stem(&args.name, SystemTime::now());
     let written = write_scorecard(&args.run, &repo_root(), &args.out, &stem, scoring)?;
-    if args.print_json_path {
+    if args.writes.print_json_path {
         println!("{}", written.json_path.display());
     } else {
         println!("{}", written.markdown);
@@ -152,8 +167,10 @@ fn score(args: &ScoreArgs) -> Result<()> {
     held_to_the_record(&written.card, scoring)
 }
 
-/// [CORPUS-SCORE-OUTCOMES] Fails a strict run when a judged pair regressed or
-/// failed without being on record as failing.
+/// Fails a strict run when a judged pair on record as passing fails now
+/// ([CORPUS-SCORE-OUTCOMES]), and any run held to the history when a pair
+/// that passed in an earlier run fails now ([CORPUS-HISTORY]). Nothing else
+/// fails a run: a pair that never passed is a known defect.
 fn held_to_the_record(card: &Scorecard, scoring: Scoring) -> Result<()> {
     let rejected = card
         .outcomes
@@ -162,8 +179,15 @@ fn held_to_the_record(card: &Scorecard, scoring: Scoring) -> Result<()> {
         .count();
     if scoring.strict && rejected > 0 {
         return Err(anyhow!(
-            "{rejected} judged pair(s) regressed or failed without being on record — see the \
-             Judged pair record section above"
+            "{rejected} judged pair(s) on record as passing fail now — see the Judged pair \
+             record section above"
+        ));
+    }
+    let backslid = history::backslid(card);
+    if backslid > 0 {
+        return Err(anyhow!(
+            "{backslid} judged pair(s) passed in an earlier run and fail now — see the Run \
+             history section above"
         ));
     }
     Ok(())

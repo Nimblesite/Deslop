@@ -9,7 +9,8 @@ use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 
 use super::{
-    judged_run, write, ENGINE_LABEL, RECORD_FAIL, RECORD_PASS, REGISTER, REPO, RUN, STEM, STRICT,
+    judged_run, write, ENGINE_LABEL, RECORD_FAIL, RECORD_PASS, REGISTER, REPO, RUN, SOURCE_COMMIT,
+    STEM, STRICT,
 };
 use crate::corpus_score::{
     outcomes::{Standing, OUTCOMES_PATH},
@@ -22,18 +23,25 @@ use crate::corpus_score::{
     CLEARLY_IN,
 };
 
-/// The run manifest field a run's timestamp is read from.
+/// The run manifest fields a run's timestamp and its engine's release version
+/// are read from.
 const GENERATED_AT_FIELD: &str = "generated_at";
+const VERSION_FIELD: &str = "version";
+/// Where a fixture manifest's one engine sits.
+const THE_ENGINE: &str = "/engines/0";
+/// What a time's `:` becomes in a scorecard name.
+const FILE_NAME_TIME_SEPARATOR: &str = "-";
 /// When each run in a sequence was generated.
-const FIRST_RUN: &str = "2026-10-01T00:00:00Z";
-const SECOND_RUN: &str = "2026-10-02T00:00:00Z";
-const THIRD_RUN: &str = "2026-10-03T00:00:00Z";
-const FOURTH_RUN: &str = "2026-10-04T00:00:00Z";
+pub(super) const FIRST_RUN: &str = "2026-10-01T00:00:00Z";
+pub(super) const SECOND_RUN: &str = "2026-10-02T00:00:00Z";
+pub(super) const THIRD_RUN: &str = "2026-10-03T00:00:00Z";
+pub(super) const FOURTH_RUN: &str = "2026-10-04T00:00:00Z";
 const FIFTH_RUN: &str = "2026-10-05T00:00:00Z";
 /// A run that puts every unrecorded failure on record.
 const ACCEPTING: Scoring = Scoring {
     strict: false,
     accept_failures: true,
+    history: false,
 };
 /// A second judged pair in the same register, sorted as the record keys it.
 const THIRD_RANGE: &str = "src/three.rs:50-60";
@@ -47,14 +55,14 @@ const EARLIER_ENGINE: &str = "deslop (binary earlier)";
 const FIXED_LINE: &str = "- ✅ **FIXED** flutter — `src/one.rs:10-20` + `src/two.rs:30-40` — \
                           fixed; on record as failing since 2026-10-02T00:00:00Z";
 /// How a tracked pair names the record that tracks it in the caution block.
-const TRACKED_PAIR_LINE: &str = "> - 🔴 **flutter** — `false negative` (tracked in \
+const TRACKED_PAIR_LINE: &str = "> - ⚠️ **flutter** — `false negative` (tracked in \
                                  `corpus/register/outcomes.json`): `src/one.rs:10-20` + \
                                  `src/two.rs:30-40`: on record as failing since \
                                  2026-10-02T00:00:00Z";
 
 /// How the caution block names the fixture pair when it fails off the record,
 /// and when it regressed after passing since the first run.
-const UNRECORDED_LINE: &str = "> - 🔴 **flutter** — `false negative`: `src/one.rs:10-20` + \
+const UNRECORDED_LINE: &str = "> - ⚠️ **flutter** — `false negative`: `src/one.rs:10-20` + \
                                `src/two.rs:30-40`: failing, and not on record as failing";
 const REGRESSED_LINE: &str = "> - 🔴 **flutter** — `false negative`: `src/one.rs:10-20` + \
                               `src/two.rs:30-40`: regressed; on record as passing since \
@@ -67,7 +75,24 @@ fn the_ranges() -> [&'static str; 2] {
 
 /// Scores one run of the fixture's judged register, generated at `at`, whose
 /// scan wrote `scanned`. A register already written under `root` is kept.
-fn scored(root: &Path, at: &str, scanned: &Value, scoring: Scoring) -> Result<WrittenScorecard> {
+pub(super) fn scored(
+    root: &Path,
+    at: &str,
+    scanned: &Value,
+    scoring: Scoring,
+) -> Result<WrittenScorecard> {
+    scored_as(root, at, scanned, scoring, None)
+}
+
+/// [`scored`], with the engine built from a release `version`. Each run's
+/// scorecard is named after when it ran, as every real run's is.
+pub(super) fn scored_as(
+    root: &Path,
+    at: &str,
+    scanned: &Value,
+    scoring: Scoring,
+    version: Option<&str>,
+) -> Result<WrittenScorecard> {
     let register: Value = crate::read_json(&root.join(REGISTER)).unwrap_or(Value::Null);
     judged_run(root, scanned)?;
     if !register.is_null() {
@@ -78,8 +103,17 @@ fn scored(root: &Path, at: &str, scanned: &Value, scoring: Scoring) -> Result<Wr
         .as_object_mut()
         .ok_or_else(|| anyhow!("the run manifest is not an object"))?
         .insert(GENERATED_AT_FIELD.to_owned(), json!(at));
+    let _previous = the_engine(&mut run)?.insert(VERSION_FIELD.to_owned(), json!(version));
     write(root, RUN, &run)?;
-    write_scorecard(&root.join(RUN), root, root, STEM, scoring)
+    let stem = format!("{STEM}-{}", at.replace(':', FILE_NAME_TIME_SEPARATOR));
+    write_scorecard(&root.join(RUN), root, root, &stem, scoring)
+}
+
+/// The one engine a fixture run manifest names, to change what it says.
+pub(super) fn the_engine(run: &mut Value) -> Result<&mut serde_json::Map<String, Value>> {
+    run.pointer_mut(THE_ENGINE)
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| anyhow!("the run manifest names no engine"))
 }
 
 /// The pairs the record on disk holds, or none when no run has written it.
@@ -100,11 +134,12 @@ fn entry(repo: &str, ranges: &[&str], outcome: &str, since: &str, engine: &str) 
     json!({
         "repo": repo, "verdict": CLEARLY_IN, "occurrences": ranges,
         "outcome": outcome, "since": since, "engine": engine,
+        "commit": SOURCE_COMMIT, "version": null,
     })
 }
 
 /// The record holding only the fixture pair, written by this suite's engine.
-fn holding(outcome: &str, since: &str) -> Value {
+pub(super) fn holding(outcome: &str, since: &str) -> Value {
     json!([entry(REPO, &the_ranges(), outcome, since, ENGINE_LABEL)])
 }
 
@@ -214,24 +249,25 @@ fn a_passing_pair_goes_on_record_and_a_regression_never_overwrites_it() -> Resul
 }
 
 #[test]
-fn a_failure_is_tolerated_only_once_accepted_and_a_fix_is_recorded_for_good() -> Result<()> {
+fn a_failure_that_never_passed_fails_nothing_and_a_fix_is_recorded_for_good() -> Result<()> {
     run_steps(&[
         Step {
             at: FIRST_RUN,
             reported: false,
             scoring: STRICT,
             standing: Standing::Unrecorded,
-            heading: FAILED_HEADING,
-            carries: &[UNRECORDED_LINE, RECORD_FAIL],
+            heading: PASSED_HEADING,
+            carries: &[UNRECORDED_LINE, RECORD_PASS],
             record: json!([]),
-            why: "a failure nobody accepted is never put on record by an ordinary run",
+            why: "a pair that never passed is a known defect, not a regression, and an ordinary \
+                  run never puts its failure on record",
         },
         Step {
             at: SECOND_RUN,
             reported: false,
             scoring: ACCEPTING,
             standing: Standing::Unrecorded,
-            heading: FAILED_HEADING,
+            heading: PASSED_HEADING,
             carries: &[UNRECORDED_LINE],
             record: holding("fail", SECOND_RUN),
             why: "an accepting run puts the failure on record, from the run that accepted it",
@@ -241,12 +277,11 @@ fn a_failure_is_tolerated_only_once_accepted_and_a_fix_is_recorded_for_good() ->
             reported: false,
             scoring: STRICT,
             standing: Standing::StillFailing,
-            heading: FAILED_HEADING,
+            heading: PASSED_HEADING,
             carries: &[TRACKED_PAIR_LINE, RECORD_PASS],
             record: holding("fail", SECOND_RUN),
-            why:
-                "a tolerated defect still heads the scorecard as failed, is named as tracked, and \
-                  keeps the date it started failing",
+            why: "a defect on record is no regression: the scorecard passes, names it as a known \
+                  defect, and keeps the date it started failing",
         },
         Step {
             at: FOURTH_RUN,
@@ -283,7 +318,7 @@ fn two_pair_register() -> Value {
 }
 
 /// Writes `pairs` as the record under `root`.
-fn seed(root: &Path, pairs: &Value) -> Result<()> {
+pub(super) fn seed(root: &Path, pairs: &Value) -> Result<()> {
     let path = root.join(OUTCOMES_PATH);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
@@ -312,10 +347,14 @@ fn a_record_tolerates_exactly_the_pairs_it_names() -> Result<()> {
     assert_eq!(
         standings,
         [Standing::StillFailing, Standing::Unrecorded],
-        "the record tolerates the pair it names and nothing else in the same repository: \
-         tolerance is per pair, so it never widens to cover a second defect"
+        "the record holds the pair it names and nothing else in the same repository: a \
+         record is per pair, so it never widens to cover a second pair"
     );
-    assert!(missed.markdown.contains(RECORD_FAIL), "{}", missed.markdown);
+    assert!(
+        missed.markdown.contains(RECORD_PASS),
+        "neither pair ever passed, so neither regressed:\n{}",
+        missed.markdown
+    );
     assert_eq!(
         recorded(root)?,
         holding("fail", FIRST_RUN),

@@ -1,10 +1,13 @@
 //! [CORPUS-REPORT-VERDICT] Whether a corpus run passed, and every reason it
 //! did not.
 //!
-//! A run fails when any curated check failed — a crashed scan included — or
-//! the last engine answered any judged pair wrongly. The verdict is the first
-//! thing a scorecard says, because a failure that has to be found in a table is
-//! one a reader skims past.
+//! A run fails on a regression, and on nothing else: a judged pair on record
+//! as passing that the last engine now answers wrongly, or a curated check
+//! failing that `corpus/known-failures.json` does not track — a crashed scan
+//! included. Every other failure — a judged pair that has never passed — is
+//! listed as a known defect and does not fail the run. The verdict is the first thing a scorecard says,
+//! because a failure that has to be found in a table is one a reader skims
+//! past.
 
 use serde::Serialize;
 
@@ -25,22 +28,27 @@ pub struct FailureReason {
     pub detail: String,
     /// The record that already tracks it: [`KNOWN_FAILURES_PATH`] for a
     /// curated check, [`OUTCOMES_PATH`] for a judged pair. A tracked failure
-    /// is still a failure; the record only says it is not new.
+    /// is a known defect — still a bug, but not a regression, so it does not
+    /// fail the run.
     pub tracked_in: Option<String>,
+    /// True when this failure is a regression: something that passed before
+    /// fails now. Only a regression fails the run.
+    pub regression: bool,
 }
 
 /// Whether a run passed, and why not when it did not.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct Verdict {
-    /// Every failure, in target order, check failures before judged pairs.
+    /// Every failure, new and known, in target order, check failures before
+    /// judged pairs.
     pub failures: Vec<FailureReason>,
 }
 
 impl Verdict {
-    /// True when nothing failed.
+    /// True when nothing regressed: every failure, if any, is a known defect.
     #[must_use]
     pub fn passed(&self) -> bool {
-        self.failures.is_empty()
+        !self.failures.iter().any(|failure| failure.regression)
     }
 }
 
@@ -76,17 +84,20 @@ fn check_failures<'a>(
                 what: failure.check.clone(),
                 detail: failure.detail.clone(),
                 tracked_in: failure.known.then(|| KNOWN_FAILURES_PATH.to_owned()),
+                regression: !failure.known,
             })
     })
 }
 
-/// [CORPUS-SCORE-OUTCOMES] One judged pair answered wrongly: tracked when it
-/// is on record as failing, new when it regressed or was never recorded.
+/// [CORPUS-SCORE-OUTCOMES] One judged pair answered wrongly: a regression
+/// when it is on record as passing, a known defect otherwise — tracked when it
+/// is on record as failing.
 fn pair_failure(pair: &PairOutcome) -> FailureReason {
     FailureReason {
         repo: pair.key.repo.clone(),
         what: pair.key.defect().to_owned(),
         detail: format!("`{}`: {}", pair.key.occurrences.join("` + `"), pair.note()),
         tracked_in: (pair.standing == Standing::StillFailing).then(|| OUTCOMES_PATH.to_owned()),
+        regression: pair.standing.fails_the_run(),
     }
 }

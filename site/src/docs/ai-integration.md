@@ -26,7 +26,7 @@ Only `find-similar` belongs in the authoring inner loop. Everything else is a re
 | Tool | When to call it |
 | --- | --- |
 | `find-similar` | **Before** writing new code — does an equivalent already exist? This is the prevention tool. |
-| `duplicates` | Ranked clusters, worst first. Narrow to a file, a byte range, or a language. Start cleanup here. |
+| `duplicates` | Ranked clusters, worst first. Start with a small summary; narrow by path, language, or `kinds`. Omitted kinds inherit configuration, normally identical and nearly identical. |
 | `cluster-by-id` | Full member list for one cluster you are about to merge. Evidence belongs to `compare-pair`, never to a cluster. |
 | `compare-pair` | Why two specific occurrences were admitted as duplicates of each other. |
 | `merge-plan` | Read-only mechanical merge plan for a cluster, before you hand-edit. |
@@ -114,7 +114,7 @@ The headline workflow is reactive, not batch:
 3. As the agent edits files, the file watcher fires and the analysis refreshes. The MCP server serves the new state on the next tool call.
 4. The agent re-queries `duplicates` to confirm the cluster is gone. No re-run, no flag, no batch CLI invocation.
 
-When MCP is not available — CI, a cold-cache audit, or an agent with no MCP client — the loop degrades to the `deslop` CLI, which runs the identical pipeline and emits the identical JSON. The incremental cache is on by default, so a re-run after an edit only re-parses the files that changed. The step-by-step fallback is on [For AI](/docs/for-ai/#if-the-mcp-server-is-unavailable-use-the-cli).
+When MCP fails, the agent first reads an existing JSON report and checks its version, paths, and freshness. If none is usable, it runs the matching bundled `deslop` CLI to generate `.deslop/deslop-report.json`. Persisted caching is enabled by default unless repository configuration disables it, so subsequent scans reuse unchanged parse results. A snapshot cannot answer an unwritten-snippet query. The full startup and recovery procedure is on [For AI](/docs/for-ai/).
 
 ## What Deslop deliberately does not do
 

@@ -1,37 +1,30 @@
-# Appendices and next steps
-
-> **Current status:** I have selected the appendix topics. I will check every command against the exact Deslop release used for the finished edition.
-
-## Appendix A — Agent instruction recipe
-
-A paste-ready `AGENTS.md` and `CLAUDE.md` rule based on Deslop's official repository instructions. It will state when to check, what each score range means, which tools handle existing duplication, what to do when the live connection fails, and which changes merely hide a finding.
-
-## Appendix B — Tool-to-job quick reference
+# Quick reference
 
 | Job | Tool or view |
 |---|---|
-| Ask whether proposed code already exists | `find-similar` |
-| Start cleanup at the highest-impact groups | `top-offenders` |
-| Inspect every occurrence in one group | `cluster-by-id` |
-| Investigate one active file | `report-for-file` |
-| Investigate one selected source range | `report-for-range` |
-| Refresh after large external changes | `rescan` |
-| Read the current report-field definitions | `schema-doc` once per session |
-| Run a standalone audit or CI check | Deslop CLI |
+| Check proposed code | `find-similar` with `snippet` and `language`; inspect `clusters` and `existing` |
+| List existing groups | `duplicates`, starting with a small summary |
+| Inspect one group | `cluster-by-id`; page occurrences with `offset` |
+| Check a file or range | `duplicates` with `path`, optionally both byte offsets |
+| Compare two exact ranges | `compare-pair` with `left` and `right` endpoints |
+| Recover watcher lag | `rescan`, optionally with changed `paths` |
+| Verify the live root | `session {}` |
+| Read field definitions | `schema-doc` once per session |
+| Preview a supported consolidation | `merge-plan`; inspect the verdict and edit |
+| Scan saved source in CI | Installed Deslop CLI |
+| Inspect ranked findings visually | Top Offenders in the editor |
 
-## Appendix C — Audit evidence record
+Use the rule in Chapter 5 and the cleanup record in Chapter 12. Ranges refer to the analysed source; refresh them after editing.
 
-A reusable template for the starting results, the decision to merge or retain code, the files changed, tests before and after, the stable group comparison, duplication left in place, and the updated duplication limit.
+## Evidence for this edition
 
-## Appendix D — How screenshots and results were captured
+Screenshots were captured from the running Deslop VS Code extension on macOS, analysing the Deslop repository. Untouched captures are under `assets/screenshots/masters/`; publication crops, environment details, dimensions, and SHA-256 hashes are listed in `figures.json`. The installed binaries report version `0.38.0`; hashes identify the captured build more precisely than the version alone. This is a working checkout, not a frozen release fixture or a demonstrated cleanup.
 
-The exact Deslop files and hashes, editor version, operating system, example repository state, commands, and screenshot steps used for the edition.
+The examples are exercises to perform on your own code. No before-and-after cleanup results or separate Workshop repository are claimed.
 
-## Where to go next
+## Current documentation
 
-- Deslop live documentation
-- AI-agent integration guide
-- Agent-facing prevention guide
-- Configuration and CI references
-- Releases and repository issue tracker
-- Kevin Moore's attributed practitioner audit protocol
+- [Agent setup](https://deslop.live/docs/ai-integration/)
+- [Agent workflow and recovery](https://deslop.live/docs/for-ai/)
+- [Configuration](https://deslop.live/docs/configuration/)
+- [Clone definitions](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/taxonomy.md)

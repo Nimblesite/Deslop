@@ -25,6 +25,7 @@ mod clone_type;
 mod render;
 mod taxonomy;
 pub(super) mod verdict;
+mod written;
 
 const REPO: &str = "fixture";
 const PATH: &str = "src/one.rs";

@@ -14,6 +14,8 @@ mod cells;
 mod checks;
 mod cost;
 mod coverage;
+mod history;
+mod history_log;
 mod outcomes;
 mod verdict;
 
@@ -23,6 +25,8 @@ use cells::{counted, header, row, score_cell, signed, signed_fraction, ABSENT};
 use checks::checks_section;
 use cost::{cost_section, standing_cost};
 use coverage::{coverage_section, coverage_value};
+use history::history_section;
+pub use history_log::history_log;
 use outcomes::record_section;
 use serde::Serialize;
 use verdict::verdict_banner;
@@ -30,7 +34,9 @@ use verdict::verdict_banner;
 use super::{
     checks::CheckOutcome,
     gate::{CorpusChange, CorpusTotals, Degradation},
+    history::HistoryCheck,
     outcomes::{PairKey, PairOutcome},
+    source::Source,
     verdict::Verdict,
     RepoScore, RunCost, ScoredEntry,
 };
@@ -43,6 +49,10 @@ pub struct Engine {
     pub id: String,
     /// Human label, e.g. `deslop@e8a215e99fb9`.
     pub label: String,
+    /// [CORPUS-HISTORY-SOURCE] The commit, and release version, the engine was
+    /// built from; absent when the run manifest names none, and then the run
+    /// writes no record.
+    pub source: Option<Source>,
 }
 
 /// One target repository, scored by every engine in the run.
@@ -98,10 +108,16 @@ pub struct Scorecard {
     /// two engines ran.
     pub change: Option<CorpusChange>,
     /// [CORPUS-SCORE-OUTCOMES] Every judged pair the last engine was scored
-    /// on — passed or failed — and how it stands against its record.
+    /// on — passed or failed — and how it stands against its record. Not
+    /// written to the JSON scorecard: each pair is written once, under its
+    /// repository, and each failure under `verdict` ([CORPUS-REPORT-ENTRY]).
+    #[serde(skip)]
     pub outcomes: Vec<PairOutcome>,
     /// Whether the run passed, and every reason it did not.
     pub verdict: Verdict,
+    /// [CORPUS-HISTORY] How the run stood against every earlier run, when it
+    /// was held to the run history.
+    pub history: Option<HistoryCheck>,
 }
 
 /// One cell per engine, in run order, out of a map keyed by engine id. Every
@@ -450,6 +466,7 @@ pub fn scorecard(card: &Scorecard) -> String {
     lines.extend(coverage_section(card));
     lines.extend(cost_section(card));
     lines.extend(record_section(card));
+    lines.extend(history_section(card));
     lines.extend(defects_section(card));
     lines.join("\n")
 }

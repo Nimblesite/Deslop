@@ -71,6 +71,7 @@ fn engines() -> Vec<Engine> {
         .map(|(id, label)| Engine {
             id: id.to_owned(),
             label: label.to_owned(),
+            source: None,
         })
         .into()
 }
@@ -145,5 +146,6 @@ pub(super) fn recorded_card(
         change: Some(corpus_change(&before_totals, &after_totals)),
         totals: per_engine(before_totals, after_totals),
         outcomes,
+        history: None,
     }
 }

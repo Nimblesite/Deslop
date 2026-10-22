@@ -42,6 +42,16 @@ The full snippet set lives in the [root README](https://github.com/Nimblesite/De
 
 This project runs **Deslop Live** — an MCP server (`deslop-mcp`) that exposes the live duplicate-code analysis as MCP tools. Prevention beats cure: it is cheaper to *not write* a duplicate than to refactor one out later.
 
+### Start and recover
+
+<!-- [MCP-START-WORK] [MCP-START-RECOVERY] [MCP-TOOL-FILTERS-KINDS] -->
+
+Call `session {}` once and verify the absolute repository root. Start with `duplicates {"detail":"summary","limit":5}`. Omitted `kinds` inherits `.deslop.toml`'s `[total] include`, defaulting to `identical` and `nearly_identical`. Use `kinds:["identical"]` for exact copies; overrides affect only that call. Inspect `filters.kinds` and keep repository metrics separate from filtered cluster counts.
+
+If MCP is unavailable, stale, incompatible, or otherwise unreliable, first parse an existing `.deslop/deslop-report.json` or the project's custom JSON output. `.deslop/cache/live-report.json` is also a usable snapshot, but may predate incremental edits. Check the report's version and current source ranges before editing. If no usable report exists, run the versioned VSIX-bundled CLI from the repository root: `"/absolute/path/to/.vscode/extensions/nimblesite.deslop-live-<VERSION>-<platform>/bin/<platform>/deslop" . --notext --nohtml --no-color`. On Windows use the same bundle's `deslop.exe` with PowerShell's `&` operator. Read the resulting `.deslop/deslop-report.json`. Caching is on by default; keep the same root and config, do not use `--no-incremental`, and respect `[analysis] incremental = false` if configured.
+
+A disk report cannot search an unwritten snippet. Read existing occurrences before authoring and use a fresh cached scan to verify changes. Failed tools and stale snapshots never prove that no duplicate exists. Complete instructions: https://deslop.live/docs/for-ai/.
+
 ### LAW: call `find-similar` BEFORE you author new code
 
 Before you write any new function, method, class, helper, fixture, test setup,

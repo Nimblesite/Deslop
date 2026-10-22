@@ -20,6 +20,8 @@ impl AnalysisSession {
     ///
     /// Propagates pipeline errors via [`LiveError::Core`].
     pub fn open_buffer(&mut self, path: &Path, text: String) -> Result<ReportDelta, LiveError> {
+        // [LIVE-WORKSPACE-SCOPE] Validate before retaining editor text or scheduling analysis.
+        self.guard_path(path)?;
         self.buffers.open(path, text);
         self.apply_changes(&[path.to_path_buf()])
     }
@@ -36,6 +38,7 @@ impl AnalysisSession {
         path: &Path,
         edits: &[BufferEdit],
     ) -> Result<ReportDelta, LiveError> {
+        self.guard_path(path)?;
         if !self.buffers.edit(path, edits) {
             return Err(LiveError::BufferNotOpen {
                 path: path.to_path_buf(),
@@ -53,6 +56,7 @@ impl AnalysisSession {
     ///
     /// Propagates pipeline errors via [`LiveError::Core`].
     pub fn close_buffer(&mut self, path: &Path) -> Result<ReportDelta, LiveError> {
+        self.guard_path(path)?;
         let _was_open = self.buffers.close(path);
         self.apply_changes(&[path.to_path_buf()])
     }

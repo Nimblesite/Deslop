@@ -7,6 +7,9 @@
 /// Shared fixture helpers, declared once for every suite below.
 mod common;
 
+#[path = "live/scope.rs"]
+mod live_scope;
+
 #[path = "cluster_overlap_collapse.rs"]
 mod cluster_overlap_collapse;
 #[path = "cluster_subsumption/mod.rs"]

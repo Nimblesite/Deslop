@@ -68,11 +68,17 @@ fn existing_source_resolves_the_complete_path_once() -> std::io::Result<()> {
 }
 
 #[test]
-fn absent_parent_preserves_the_original_removal_reference() -> std::io::Result<()> {
+fn absent_parent_resolves_the_surviving_workspace_ancestor_once() -> std::io::Result<()> {
     let workspace = tempfile::tempdir()?;
     let path = workspace.path().join(MISSING_DIRECTORY).join(MISSING_FILE);
     let (resolved, calls) = resolve_counted(&path);
-    assert_eq!(resolved, path);
+    let expected = std::fs::canonicalize(workspace.path())?
+        .join(MISSING_DIRECTORY)
+        .join(MISSING_FILE);
+    assert_eq!(
+        resolved, expected,
+        "deleted directory members retain their canonical identity"
+    );
     assert_eq!(calls, ONE_RESOLUTION);
     Ok(())
 }

@@ -34,6 +34,8 @@ const END_BYTE_FIELD: &str = "end_byte";
 /// The snippet answer's matches outside any cluster
 /// ([MCP-TOOL-FINDSIMILAR-EXISTING]).
 const EXISTING_FIELD: &str = "existing";
+/// Fetch candidates before shared filtering; the page applies the caller's result limit.
+const ALL_MATCHING_CLUSTERS: usize = usize::MAX;
 
 /// Serialises one generated wire payload.
 fn to_value<T: serde::Serialize>(value: &T) -> Result<Value, JsonRpcError> {
@@ -116,11 +118,10 @@ pub(super) fn call_find_similar(
             "find-similar requires exactly one range or snippet input",
         ));
     }
-    let limit = extract_limit(args);
     let output = if has_range {
-        find_similar_range(backend, args, limit)?
+        find_similar_range(backend, args, ALL_MATCHING_CLUSTERS)?
     } else {
-        find_similar_snippet(backend, args, limit)?
+        find_similar_snippet(backend, args, ALL_MATCHING_CLUSTERS)?
     };
     let report = backend.report_get().map_err(backend_to_rpc)?;
     let mut value = duplicates_page_value(backend, args, &report, &output.clusters)?;
@@ -358,6 +359,13 @@ fn extract_page_shape(args: &Value) -> Result<PageShape, JsonRpcError> {
 /// Extracts the shared cluster-owned filters.
 fn extract_filters(args: &Value) -> Result<DuplicatesFilters, JsonRpcError> {
     Ok(DuplicatesFilters {
+        kinds: args
+            .get("kinds")
+            .map(|value| {
+                serde_json::from_value(value.clone())
+                    .map_err(|_| invalid_parameter("kinds", "array of registered clone kinds"))
+            })
+            .transpose()?,
         languages: extract_string_array(args, "languages")?,
         path_contains: args
             .get("path_contains")
@@ -368,7 +376,7 @@ fn extract_filters(args: &Value) -> Result<DuplicatesFilters, JsonRpcError> {
     })
 }
 
-/// Extracts the positive result limit.
+/// Extracts the positive result limit applied after shared filtering.
 fn extract_limit(args: &Value) -> usize {
     extract_optional_usize(args, "limit")
         .unwrap_or(DEFAULT_LIMIT)

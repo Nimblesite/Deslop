@@ -8,7 +8,11 @@ const RENAMED_FIELD: &str = "must_find_type2";
 const FILES_FIELD: &str = "files";
 const NODES_FIELD: &str = "min_nodes";
 const EXPECTED_CHECKS: [&str; 2] = ["recall", "type2_recall"];
-const REJECTED_LABELS: [&str; 2] = ["structural_only", "unknown-kind"];
+const INFORMATIONAL_LABEL: &str = "structural_only";
+const UNKNOWN_LABEL: &str = "unknown-kind";
+const REJECTED_LABELS: [&str; 2] = [INFORMATIONAL_LABEL, UNKNOWN_LABEL];
+/// How a breach names a family that carries no classification at all.
+const UNCLASSIFIED: &str = "unclassified";
 const VERIFIED_LABEL: &str = "identical";
 const FAMILY_ID: &str = "curated-family";
 const FAMILY_NODES: u64 = 300;
@@ -38,27 +42,52 @@ fn judge_both(label: &str) -> Result<Vec<Failure>> {
     Ok(failures)
 }
 
-fn judge_precision(label: &str) -> Result<Vec<Failure>> {
-    let manifest = json!({PRECISION_FIELD: [{FILES_FIELD: PAIR}]});
-    let mut failures = Vec::new();
-    crate::corpus_precision::check_curated_precision(
-        &manifest,
-        &family_report(label)?,
-        &mut failures,
-    );
-    Ok(failures)
+/// The family with its classification field removed, as a renamed or dropped label would leave it.
+fn unclassified_report() -> Result<Value> {
+    let mut cluster = spanning(FAMILY_ID, FAMILY_NODES, FIRST_RANK, &PAIR);
+    let _label = cluster
+        .as_object_mut()
+        .and_then(|fields| fields.remove(KIND_FIELD))
+        .ok_or_else(|| anyhow::anyhow!("the fixture cluster carries a {KIND_FIELD} field"))?;
+    Ok(report(&[cluster]))
 }
 
+fn judge_precision(report: &Value) -> Vec<Failure> {
+    let manifest = json!({PRECISION_FIELD: [{FILES_FIELD: PAIR}]});
+    let mut failures = Vec::new();
+    crate::corpus_precision::check_curated_precision(&manifest, report, &mut failures);
+    failures
+}
+
+/// [CORPUS-PRECISION-CURATED] Only a family positively classified as
+/// informational is excused. A missing or unrecognised classification fails
+/// the check, so a renamed label can never silence it.
 #[test]
-fn informational_and_unknown_families_cannot_breach_curated_clone_precision() -> Result<()> {
-    assert_eq!(
-        only_check(&judge_precision(VERIFIED_LABEL)?),
-        Some(PRECISION_CHECK)
-    );
-    for label in REJECTED_LABELS {
-        let failures = judge_precision(label)?;
-        assert!(failures.is_empty(), "{label}: {failures:?}");
+fn only_an_informational_family_is_excused_from_curated_precision() -> Result<()> {
+    for label in [VERIFIED_LABEL, UNKNOWN_LABEL] {
+        let failures = judge_precision(&family_report(label)?);
+        assert_eq!(
+            only_check(&failures),
+            Some(PRECISION_CHECK),
+            "{label}: {failures:?}"
+        );
+        assert!(
+            detail_mentions(&failures, FAMILY_ID) && detail_mentions(&failures, label),
+            "{label}: the breach names the family and its classification: {failures:?}"
+        );
     }
+    let unclassified = judge_precision(&unclassified_report()?);
+    assert_eq!(
+        only_check(&unclassified),
+        Some(PRECISION_CHECK),
+        "{unclassified:?}"
+    );
+    assert!(
+        detail_mentions(&unclassified, FAMILY_ID) && detail_mentions(&unclassified, UNCLASSIFIED),
+        "the breach says the family is unclassified: {unclassified:?}"
+    );
+    let informational = judge_precision(&family_report(INFORMATIONAL_LABEL)?);
+    assert!(informational.is_empty(), "{informational:?}");
     Ok(())
 }
 

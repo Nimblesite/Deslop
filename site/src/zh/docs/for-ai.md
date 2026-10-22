@@ -12,7 +12,21 @@ lang: zh
 
 # 面向 AI
 
-本页写给你——编码智能体。内容包括：如何在本机找到 Deslop，如何使用 MCP 服务器，MCP 服务器异常时怎么办，如何运行 CLI 而不重复已完成的工作，以及按什么顺序安全地消除重复。本页适用于 [0.35.0](/zh/releases/)。为 MCP 客户端做连接设置的人类请看[AI 智能体](/zh/docs/ai-integration/)。
+## 在新代码库开始工作
+
+<!-- [MCP-START-WORK] [MCP-START-RECOVERY] [MCP-TOOL-FILTERS-KINDS] -->
+
+先阅读仓库指令和 `.deslop.toml`，确认绝对根目录。调用一次 `session {}` 并核实 `root`，再从 `duplicates {"detail":"summary","limit":5}` 开始。省略 `kinds` 时继承 `[total] include`，默认是 `identical` 和 `nearly_identical`；响应的 `filters.kinds` 给出实际选择。使用 `kinds:["identical"]` 只看完全相同的副本，显式数组只覆盖本次调用，`[]` 不选择任何簇。无效种类会报错。先检查已安装工具的版本和 `tools/list`，旧版本可能没有这些参数。
+
+用路径缩小范围，再用 `cluster-by-id` 读取成员并检查源码。`path_contains` 可以匹配任意成员，概览里的第一个成员可能在别处。添加代码前调用 `find-similar`，同时检查 `clusters` 和 `existing`；后者是没有簇种类的单次出现，不受 `kinds` 过滤。修改后运行项目测试并重新查询路径。实时索引会自动刷新，`rescan` 仅用于怀疑监听器落后时恢复。`merge-plan` 是可选的，不支持该语言或返回 `ai_or_human` 时依据源码和测试重构，不要反复重试。
+
+**MCP 不正常时先读已有 JSON。** 检查 `.deslop/deslop-report.json`、项目自定义 `--output` 路径，以及 `.deslop/cache/live-report.json`。直接用 JSON 解析器读取，不必重新渲染。记下文件位置和 `tool_version`，修改前核实当前源码路径和字节范围。磁盘快照可能早于编辑，重新渲染不会刷新分析；空结果或失败工具不能证明没有重复。
+
+没有可用报告或报告过旧时，从仓库根目录运行配套 CLI：macOS/Linux 用 `"$DESLOP" . --notext --nohtml --no-color`，PowerShell 用 `& $deslop . --notext --nohtml --no-color`。JSON 写到 `.deslop/deslop-report.json`；`--output <prefix>` 改为 `<prefix>.json`。缓存默认开启，后续运行复用内容未变的解析结果；不要加 `--no-incremental` 或删除缓存。若 `.deslop.toml` 设置了 `[analysis] incremental = false`，应遵守并说明，不能偷偷覆盖。保持根目录、配置、二进制版本和嵌入策略一致。磁盘报告不能查询尚未写入的片段；先阅读已有源码，再用缓存扫描验证修改。
+
+过滤后的 `total_clusters` 与整个仓库的 `metrics` 不是同一范围。用 `page.next_offset` 继续读取，直到 `has_more` 为 false；出现 `truncated` 或 `occurrences_truncated` 时继续读取遗漏成员。若字节上限导致零行，不要重复无法前进的游标，应减小概览请求并关闭逐文件指标。不要把不同版本、配置或范围的百分比直接作比较。
+
+本页面向编码智能体，介绍工具连接、缓存和安全去重。先检查工具版本与 `tools/list`；旧版本可能不支持这里的全部参数。为 MCP 客户端做连接设置的人类请看[AI 智能体](/zh/docs/ai-integration/)。
 
 ## 你在使用什么
 
@@ -56,7 +70,7 @@ $deslop = Get-ChildItem "$env:USERPROFILE\.vscode\extensions\nimblesite.deslop-l
 & $deslop --version
 ```
 
-目录结构是 `nimblesite.deslop-live-<VERSION>[-<platform>]/bin/<platform>/`，其中包含 `deslop`、`deslop-lsp` 和 `deslop-mcp`（Windows 上带 `.exe`）。`<platform>` 为 `darwin-arm64`、`darwin-x64`、`linux-x64`、`linux-arm64` 或 `win32-x64`。基于 VS Code 的其他编辑器把扩展放在各自的文件夹：把 `~/.vscode/extensions` 换成 `~/.vscode-insiders/extensions`、`~/.cursor/extensions`、`~/.windsurf/extensions` 或 `~/.vscode-oss/extensions`。如果装有多个版本，使用最新的；编辑器可能还没删除旧版本。
+目录结构是 `nimblesite.deslop-live-<VERSION>[-<platform>]/bin/<platform>/`，其中包含 `deslop`、`deslop-lsp` 和 `deslop-mcp`（Windows 上带 `.exe`）。`<platform>` 为 `darwin-arm64`、`darwin-x64`、`linux-x64`、`linux-arm64` 或 `win32-x64`。基于 VS Code 的其他编辑器把扩展放在各自的文件夹：把 `~/.vscode/extensions` 换成 `~/.vscode-insiders/extensions`、`~/.cursor/extensions`、`~/.windsurf/extensions` 或 `~/.vscode-oss/extensions`。发现命令只提供候选版本；若安装了多个版本，应选择当前编辑器实际使用的捆绑包，并核对报告的 tool_version 与二进制的 --version，不要仅凭最新目录判断。
 
 ### 没有扩展：安装 CLI
 
@@ -116,13 +130,13 @@ CLI 运行同一个引擎，写出同样的 JSON。它无法回答"这段尚未�
 
 选择能回答你问题的最省事的方式。
 
-**1. 编辑器已经分析过仓库。** 如果 `.deslop/cache/live-report.json` 存在，直接渲染它，不要重新分析。耗时远不到一秒：
+**1. 编辑器已经分析过仓库。** 若 `.deslop/cache/live-report.json` 存在且需要给人阅读的文档，可直接渲染而不重新分析：
 
 ```bash
 "$DESLOP" --from-report .deslop/cache/live-report.json --no-color
 ```
 
-这会写出 `.deslop/deslop-report.txt` 和 `.html`，并把 JSON 复制到 `.deslop/deslop-report.json`。该文件是编辑器最近一次完整分析的结果，不会在每次编辑后重写。用它了解当前状态，而不是检查你刚做的修改。如果无法解析，说明它来自另一个 Deslop 版本：请使用扩展自带的 `deslop`。
+这会写出 `.deslop/deslop-report.txt` 和 `.html`，并把 JSON 复制到 `.deslop/deslop-report.json`。种子文件不会在每次编辑后重写；重新渲染不刷新分析，也不验证字节范围。解析失败可能是版本不兼容、文件未写完或损坏；先查看错误，必要时用配套 CLI 重新生成。
 
 **2. 重新渲染已有报告。** `--from-report .deslop/deslop-report.json --nojson` 会根据上一次 CLI 运行写出新的 HTML 和文本报告，不做任何分析。
 
@@ -184,12 +198,12 @@ jq -r '.clusters[] | select(.kind == "identical")
   .deslop/deslop-report.json
 ```
 
-通过 MCP 时，用 `detail: "summary"` 和较大的 `limit` 调用 `duplicates`，取 `kind` 为 `identical` 的行。
+通过 MCP 时，用 `duplicates {"kinds":["identical"],"detail":"summary","limit":5}` 并翻页读取过滤结果。旧版本不支持 `kinds` 时读取 JSON 报告并说明兼容性限制。
 
 对每个簇：
 
 1. 获取全部出现位置（`cluster-by-id`，或 JSON 中的 `clusters[].occurrences[]`），并阅读每个范围内的代码。跳过标记为 `hidden` 的位置；它们是生成代码，或被有意排除在报告之外。
-2. 通过 MCP 时，编辑前调用 `merge-plan` 并阅读它的结论。
+2. 对支持的变换，可选地调用 `merge-plan` 并阅读结论；不支持时依据源码和项目测试重构。
 3. 决定唯一副本放在哪里：放在所有调用方都能依赖的、最通用的模块中，而不是你最先打开的文件。
 4. 把代码移过去并修改每个调用方。不要留下旧副本，也不要再加第三份。
 5. 运行项目测试。
@@ -203,7 +217,7 @@ jq -r '.clusters[] | select(.kind == "identical")
 
 ## 读取 JSON
 
-解析 JSON，不要解析文本或 HTML。报告在 `schema_doc` 中自带字段说明；通过 MCP 时调用一次 `schema-doc` 即可。
+解析 JSON，不要解析文本或 HTML。普通报告中的 `schema_doc` 可能为空；通过 MCP 调用一次 `schema-doc`，离线时参考下面的字段说明和[报告文档](/zh/docs/configuration/#report-output)。
 
 | 字段 | 含义 |
 | --- | --- |

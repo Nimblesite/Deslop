@@ -15,3 +15,7 @@ The animation is built in the page with JavaScript; no encoded video or audio is
 Every referenced script, stylesheet, image and social card is served successfully with a content type matching its declaration. The site source contains no encoded video or audio files.
 
 The homepage and website-audit tests share `site/tests/helpers/assets.js` to verify actual HTTP asset responses, and the website audit checks the site source for encoded media.
+
+## [SITE-ISSUES-FIXTURE] Issue tests run on a fixed set of issues
+
+The published issue pages are built from live GitHub, but their tests are not. `site/tests/fixtures/github-issues.json` is a committed snapshot of the open issues. Each body is cut down to the parts the report reads: its TL;DR and the issues it references. Two of the issues are labelled `fixed-on-main` so the release-verification views always have something to show. Before the tests run, `npm test` generates the issue report from that snapshot with a fixed publication time. `site/tests/helpers/issues.js` then serves that report to every page in `issues.spec.js` and `issues-publication.spec.js`. The tests pass or fail the same way whatever is open on GitHub that day.

@@ -29,10 +29,12 @@ use super::{
         add_checks, add_costs, corpus_change, degradation, totals, CorpusChange, CorpusTotals,
         Degradation,
     },
-    list,
-    outcomes::{self, standings, Ledger, PairOutcome, RunStamp},
+    history, list,
+    outcomes::{self, standings, Ledger, PairOutcome},
     render::{scorecard, Engine, Scorecard, TargetScore},
-    score_repo, text,
+    score_repo,
+    source::Source,
+    text,
     verdict::verdict,
     RepoScore, RunCost,
 };
@@ -287,6 +289,7 @@ fn engines(run: &Value) -> Vec<Engine> {
         .map(|engine| Engine {
             id: text(engine, "id"),
             label: text(engine, "label"),
+            source: Source::of_engine(engine),
         })
         .collect()
 }
@@ -366,6 +369,7 @@ fn build_scorecard(run: &Path, root: &Path, ledger: &Ledger, strict: bool) -> Re
         targets,
         totals,
         outcomes,
+        history: None,
     })
 }
 
@@ -397,13 +401,18 @@ pub struct Scoring {
     /// [CORPUS-SCORE-OUTCOMES] Put every failing pair that has no record on
     /// record as failing, accepting it as a known defect.
     pub accept_failures: bool,
+    /// [CORPUS-HISTORY] Hold the run to every earlier run in the run history,
+    /// and add it to the history. The last engine must name its source.
+    pub history: bool,
 }
 
 /// Scores the run manifest at `run_path` and writes `<stem>.md` and
 /// `<stem>.json` into `out` — `stem` from [`report_stem`] — then writes the
-/// judged pair record back under `root` ([CORPUS-SCORE-OUTCOMES]). Whether a
-/// pair failed the run is on the returned card, so the caller decides what a
-/// failure does — after the documents exist.
+/// judged pair record back under `root` ([CORPUS-SCORE-OUTCOMES]). A run held
+/// to the run history is checked against every earlier run first and appended
+/// to it last ([CORPUS-HISTORY]). Whether a pair failed the run is on the
+/// returned card, so the caller decides what a failure does — after the
+/// documents exist.
 ///
 /// # Errors
 ///
@@ -417,10 +426,29 @@ pub fn write_scorecard(
     scoring: Scoring,
 ) -> Result<WrittenScorecard> {
     let ledger = outcomes::load(root)?;
-    let card = build_scorecard(run_path, root, &ledger, scoring.strict)?;
+    let mut card = build_scorecard(run_path, root, &ledger, scoring.strict)?;
+    if scoring.strict && card.outcomes.is_empty() {
+        return Err(anyhow!(nothing_judged(card.targets.len())));
+    }
+    if scoring.history {
+        history::hold(&mut card, root)?;
+    }
     let written = write_documents(card, out, stem)?;
-    record_outcomes(root, &ledger, &written.card, scoring.accept_failures)?;
+    outcomes::write_back(root, &ledger, &written.card, scoring.accept_failures)?;
+    if let Some(record) = history::record(&written.card, stem) {
+        history::store::add(root, &record)?;
+    }
     Ok(written)
+}
+
+/// [CORPUS-SCORE-GATE-JUDGED] Why a gated run that scored no judged pair over
+/// `scanned` repositories is refused.
+#[must_use]
+pub fn nothing_judged(scanned: usize) -> String {
+    format!(
+        "a gated run must score at least one judged pair, but none of the {scanned} \
+         repositories scanned has a register judging one CLEARLY IN or CLEARLY OUT"
+    )
 }
 
 /// Writes `<stem>.md` and `<stem>.json` into `out`.
@@ -437,23 +465,6 @@ fn write_documents(card: Scorecard, out: &Path, stem: &str) -> Result<WrittenSco
         path,
         json_path,
     })
-}
-
-/// Writes the record back when this run changed it. A run that judged nothing
-/// leaves it alone.
-fn record_outcomes(root: &Path, ledger: &Ledger, card: &Scorecard, accept: bool) -> Result<()> {
-    let Some(last) = card.engines.last().filter(|_| !card.outcomes.is_empty()) else {
-        return Ok(());
-    };
-    let stamp = RunStamp {
-        at: &card.generated_at,
-        engine: &last.label,
-    };
-    let updated = outcomes::record(ledger, &card.outcomes, stamp, accept);
-    if updated.pairs == ledger.pairs {
-        return Ok(());
-    }
-    outcomes::write(root, &updated)
 }
 
 #[cfg(test)]

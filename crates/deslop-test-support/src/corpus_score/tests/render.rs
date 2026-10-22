@@ -19,7 +19,7 @@ use super::{
         NEW_PEAK_MB, OLD_ELAPSED_MS, OLD_ENGINE, OLD_LABEL, ONE_REPO,
     },
     corpus_change, found_and_missed, occurrence, register, report, score_repo, scorecard, totals,
-    verdict::{FAILED_HEADING, PASSED_HEADING},
+    verdict::{CAUTION, FAILED_HEADING, PASSED_HEADING, UNRECORDED_LINE},
     RepoScore, RunCost, Scorecard, FIRST_RANGE, OTHER, PATH, REPO, SECOND_RANGE,
 };
 
@@ -47,7 +47,12 @@ const BOTH_ELAPSED_MS: u64 = OLD_ELAPSED_MS + NEW_ELAPSED_MS;
 const BOTH_CPU_SECONDS: f64 = CPU_SECONDS + CPU_SECONDS;
 const TWO_REPOS: usize = 2;
 /// The one pair the fixture misses, failing with no record: the strict default.
-const ONE_REJECTED_PAIR: usize = 1;
+const NO_REGRESSION: usize = 0;
+/// How the record section says whether the run kept to it.
+const PASS_CLAIM: &str = "**PASS**";
+const FAIL_CLAIM: &str = "**FAIL**";
+/// What opens the note that lists known defects.
+const NOTE: &str = "> [!NOTE]";
 /// How the defect list says that pair stands against the record.
 const UNRECORDED_DEFECT: &str = "- **FALSE NEGATIVE** fixture — `src/one.rs:10-20` + \
                                  `src/two.rs:30-40` — failing, and not on record as failing";
@@ -343,40 +348,38 @@ fn the_engines_sit_side_by_side_so_one_row_carries_the_whole_comparison() -> Res
 }
 
 #[test]
-fn a_pair_failing_off_the_record_renders_as_a_failure_that_names_the_pair() -> Result<()> {
+fn a_pair_that_never_passed_renders_as_a_known_defect_that_names_the_pair() -> Result<()> {
     let (found, missed) = found_and_missed()?;
-    let breached = card(&found, &missed);
+    let never_passed = card(&found, &missed);
     assert_eq!(
-        breached
+        never_passed
             .outcomes
             .iter()
             .filter(|pair| pair.standing.fails_the_run())
             .count(),
-        ONE_REJECTED_PAIR,
-        "the missed pair is not on record as failing, so the empty record rejects it"
+        NO_REGRESSION,
+        "the missed pair has no pass on record, so it cannot have regressed"
     );
-    let rendered = scorecard(&breached);
+    let rendered = scorecard(&never_passed);
     assert_eq!(
         rendered.lines().next(),
-        Some(FAILED_HEADING),
-        "a breached gate heads the whole document as failed: {rendered}"
+        Some(PASSED_HEADING),
+        "nothing regressed, so the document is headed as passed: {rendered}"
     );
     assert!(
-        rendered.contains("**FAIL**"),
-        "a breach renders as a failure"
+        rendered.contains(NOTE) && rendered.contains(UNRECORDED_LINE),
+        "the known-defect note names the failing pair before any table: {rendered}"
     );
     assert!(
         rendered.contains(UNRECORDED_DEFECT),
         "the defect names the pair, its ranges and how it stands against the record: {rendered}"
     );
-    assert!(
-        !rendered.contains("**PASS**"),
-        "a failing scorecard must not also claim to pass"
-    );
-    assert!(
-        !rendered.contains(PASSED_HEADING),
-        "nor may its heading claim it: {rendered}"
-    );
+    for claim in [FAIL_CLAIM, CAUTION, FAILED_HEADING] {
+        assert!(
+            !rendered.contains(claim),
+            "a known defect is never rendered as a regression (`{claim}`): {rendered}"
+        );
+    }
     Ok(())
 }
 
@@ -389,7 +392,11 @@ fn a_clean_scorecard_says_pass_and_names_no_defect() -> Result<()> {
         Some(PASSED_HEADING),
         "a run that failed nothing heads the document as passed: {rendered}"
     );
-    assert!(rendered.contains("**PASS**"));
+    assert!(
+        !rendered.contains(CAUTION) && !rendered.contains(FAILED_HEADING),
+        "a clean run carries no failure banner: {rendered}"
+    );
+    assert!(rendered.contains(PASS_CLAIM));
     assert!(rendered.contains("None. Every judged pair is answered correctly."));
     assert!(!rendered.contains("FALSE NEGATIVE"));
     assert!(

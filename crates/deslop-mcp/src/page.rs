@@ -5,9 +5,24 @@ use deslop_core::{
     report::{occurrence_count, Report, ReportCluster},
     wire_generated::{
         ClusterSummary, DuplicateCluster, DuplicatesFilters, DuplicatesPage, OccurrenceSummary,
-        RepoMetrics, ReportPageInfo,
+        RepoMetrics,
     },
 };
+
+#[cfg(test)]
+mod tests;
+
+mod filters;
+use filters::{effective_filters, matches_filters};
+
+mod continuation;
+use continuation::is_truncated;
+pub(crate) use continuation::page_info;
+
+/// Explanation shared by occurrence-budget truncations.
+const OCCURRENCE_LIMIT_REASON: &str = "max_occurrences omitted requested clusters or occurrences";
+/// Cluster navigation and occurrence navigation have separate cursors.
+const CONTINUE_ACTION: &str = "Use page.next_offset with the same filters for more clusters; use cluster-by-id for occurrences_truncated members.";
 
 /// Page cursor and optional metrics detail.
 #[derive(Debug, Clone, Copy)]
@@ -49,9 +64,10 @@ pub fn build_page(
     shape: PageShape,
     filters: &DuplicatesFilters,
 ) -> DuplicatesPage {
+    let filters = effective_filters(report, filters);
     let matched: Vec<&ReportCluster> = candidates
         .iter()
-        .filter(|cluster| matches_filters(filters, cluster))
+        .filter(|cluster| matches_filters(&filters, cluster))
         .collect();
     let total_clusters = matched.len();
     let total_occurrences = matched
@@ -59,6 +75,13 @@ pub fn build_page(
         .map(|cluster| occurrence_count(cluster))
         .sum();
     let clusters = selected_page(&matched, shape);
+    let page = page_info(
+        shape.pagination.offset,
+        shape.pagination.limit,
+        clusters.len(),
+        total_clusters,
+    );
+    let truncated = is_truncated(&clusters, &page, total_clusters);
     DuplicatesPage {
         tool_version: report.tool_version.clone(),
         generation,
@@ -70,13 +93,12 @@ pub fn build_page(
         metrics: page_metrics(report, shape.pagination.include_per_file),
         total_clusters,
         total_occurrences,
-        page: ReportPageInfo {
-            offset: shape.pagination.offset,
-            limit: shape.pagination.limit,
-            returned: clusters.len(),
-        },
+        page,
         clusters,
-        filters: filters.clone(),
+        filters,
+        truncated,
+        truncated_reason: truncated.then(|| OCCURRENCE_LIMIT_REASON.to_owned()),
+        next_action: truncated.then(|| CONTINUE_ACTION.to_owned()),
     }
 }
 
@@ -134,51 +156,6 @@ fn page_metrics(report: &Report, include_per_file: bool) -> RepoMetrics {
         metrics.folders.clear();
     }
     metrics
-}
-
-/// Applies only cluster-owned filters.
-fn matches_filters(filters: &DuplicatesFilters, cluster: &ReportCluster) -> bool {
-    filter_min_size(filters, cluster)
-        && filter_severity(filters, cluster)
-        && filter_language(filters, cluster)
-        && filter_path(filters, cluster)
-}
-
-/// Applies the canonical extent floor.
-fn filter_min_size(filters: &DuplicatesFilters, cluster: &ReportCluster) -> bool {
-    match filters.min_size {
-        Some(minimum) => cluster.canonical_node_count >= minimum,
-        None => true,
-    }
-}
-
-/// Applies engine-stamped mass severity bands.
-fn filter_severity(filters: &DuplicatesFilters, cluster: &ReportCluster) -> bool {
-    match filters.severities.as_ref() {
-        Some(values) => values.iter().any(|value| value == &cluster.severity),
-        None => true,
-    }
-}
-
-/// Applies language filters derived from the stable first occurrence.
-fn filter_language(filters: &DuplicatesFilters, cluster: &ReportCluster) -> bool {
-    match filters.languages.as_ref() {
-        Some(values) => values
-            .iter()
-            .any(|value| value == cluster_language(cluster)),
-        None => true,
-    }
-}
-
-/// Applies occurrence-path substring filtering.
-fn filter_path(filters: &DuplicatesFilters, cluster: &ReportCluster) -> bool {
-    match filters.path_contains.as_ref() {
-        Some(needle) => cluster
-            .occurrences
-            .iter()
-            .any(|occurrence| occurrence.path.to_string_lossy().contains(needle)),
-        None => true,
-    }
 }
 
 /// Returns the stable first occurrence's language id.

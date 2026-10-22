@@ -244,7 +244,7 @@ The scheduler waits for a watcher event while no file changes are pending, inclu
 
 A removed path that matches no analysed file must be rejected through the corpus path index without scanning every analysed path. Matching leaves and whole subtrees are still evicted, while a component-prefix sibling such as `pkg_twin` survives removal of `pkg`. Lookup work grows with the matching files plus the logarithm of the analysed file count.
 
-A path already known to be missing resolves its surviving parent directly, without first attempting a doomed canonical lookup of the missing leaf. Existing paths retain native alias resolution, and dangling symlinks retain their fallback behavior. `pipeline/session/change/tests.rs` checks resolver calls alongside existing-file and real/broken-symlink controls for the implementation in `pipeline/session/change.rs`.
+A path already known to be missing resolves its nearest surviving ancestor directly, without first attempting a doomed canonical lookup of the missing leaf or its removed parents. Existing paths retain native alias resolution, and dangling symlinks retain their fallback behavior. Corpus updates, editor buffers, and path guards share `pipeline/open_buffers.rs::canonicalise_path`. `pipeline/session/change/tests.rs` keeps the one-resolution assertion even when a parent is absent and checks existing-file and real/broken-symlink controls; `tests/live/scope.rs` pins removal of a buffer whose parent directory disappeared.
 
 ### [LIVE-SCHEDULER-NOOP] No-op pass early-out
 
@@ -322,6 +322,10 @@ The `live` module exposes the `LiveApi` trait. The LSP holds a `LiveApi` impl an
 
 ### [LIVE-CLUSTER-OFFSET-FRESHNESS] Cluster offset freshness on read
 A `cluster/byId` read (and `report/forFile` / `report/forRange` / `duplicates/findSimilar`) returns occurrence byte and line ranges that map onto the current on-disk file — or, for a file an editor holds open, onto its current buffer ([LIVE-OPEN-BUFFERS]) — even when the agent has edited files without an explicit `rescan` between reads. The session re-stats every occurrence path on each IPC read ([LIVE-CLUSTER-OFFSET-FRESHNESS]) and synchronously re-analyses any file whose mtime is newer than last observed, before resolving the cluster. A stale offset that overshoots the post-edit file length would corrupt agent context, so this gate is mandatory on every agent-facing read path, not just `rescan`.
+
+### [LIVE-WORKSPACE-SCOPE] Only workspace buffers enter the session
+
+Open, edit, and close operations validate the resolved path against the pinned workspace root before retaining editor text or changing analysis state. An external scratch file returns `PathOutsideWorkspace`; its text, paths, lines, and clone memberships never enter the workspace report. Missing leaves resolve through the buffer map's canonical surviving parent so unsaved and deleted workspace files remain valid on Windows and through path aliases. The existing live path guard is shared with range queries. Implemented by `live/session_buffers.rs`, `AnalysisSession::guard_path`, and `pipeline/open_buffers.rs::canonical_key`; pinned by both scope tests in `tests/live/scope.rs` and the real LSP deletion test in `deslop-lsp/tests/open_buffers/deletion.rs`, and tracked under [MCP-REPORT-FOLLOWUP].
 
 ### [LIVE-OPEN-BUFFERS] Open editor buffers shadow the file on disk
 
