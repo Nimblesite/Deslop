@@ -108,7 +108,10 @@ pub struct Scorecard {
     /// two engines ran.
     pub change: Option<CorpusChange>,
     /// [CORPUS-SCORE-OUTCOMES] Every judged pair the last engine was scored
-    /// on — passed or failed — and how it stands against its record.
+    /// on — passed or failed — and how it stands against its record. Not
+    /// written to the JSON scorecard: each pair is written once, under its
+    /// repository, and each failure under `verdict` ([CORPUS-REPORT-ENTRY]).
+    #[serde(skip)]
     pub outcomes: Vec<PairOutcome>,
     /// Whether the run passed, and every reason it did not.
     pub verdict: Verdict,

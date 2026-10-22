@@ -7,7 +7,7 @@
 use super::cells::{cpu, cpu_rate, header, megabytes, or_absent, row, score_cell, seconds};
 use crate::corpus_score::{
     history::{Backslide, Host, Judgment, RepoRecord, RunRecord},
-    outcomes::{Outcome, Standing},
+    outcomes::Outcome,
     source::Source,
 };
 
@@ -205,17 +205,19 @@ fn failing_section(latest: Option<&RunRecord>) -> Vec<String> {
     lines
 }
 
-/// One failing pair: a regression in red, a known defect otherwise.
+/// One failing pair and what failed: a regression in red, a known defect
+/// otherwise.
 fn failing_line(judgment: &Judgment) -> String {
-    let mark = if judgment.standing == Standing::Regressed {
+    let mark = if judgment.regression {
         "🔴 regression"
     } else {
         "⚠️ known defect"
     };
     format!(
-        "- {mark} — **{}** — {} — `{}`",
+        "- {mark} — **{}** — {}, {} — `{}`",
         judgment.key.repo,
         judgment.key.defect(),
+        judgment.failed.as_deref().unwrap_or_default(),
         judgment.key.occurrences.join("` + `")
     )
 }

@@ -30,6 +30,7 @@ pub mod render;
 pub mod run;
 pub mod source;
 pub mod verdict;
+mod written_entry;
 
 use clone_type::CloneType;
 use coverage::match_entry;
@@ -124,8 +125,10 @@ impl Range {
     }
 }
 
-/// One register entry after scoring.
+/// One register entry after scoring. The JSON scorecard writes it as pass or
+/// fail ([CORPUS-REPORT-ENTRY]).
 #[derive(Debug, Clone, Serialize)]
+#[serde(into = "written_entry::WrittenEntry")]
 pub struct ScoredEntry {
     /// [`CLEARLY_IN`] or [`CLEARLY_OUT`].
     pub verdict: String,

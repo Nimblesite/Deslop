@@ -23,7 +23,7 @@ use sysinfo::{CpuRefreshKind, System};
 
 use super::{
     gate::CorpusTotals,
-    outcomes::{Outcome, PairKey, Standing},
+    outcomes::{Outcome, PairKey, PairOutcome},
     render::{Scorecard, TargetScore},
     source::Source,
     verdict::FailureReason,
@@ -121,10 +121,15 @@ pub struct Judgment {
     /// Which pair.
     #[serde(flatten)]
     pub key: PairKey,
-    /// Whether it was answered correctly.
+    /// Pass or fail.
     pub outcome: Outcome,
-    /// How that stood against the judged pair record.
-    pub standing: Standing,
+    /// [CORPUS-REPORT-ENTRY] What failed, absent on a pass.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failed: Option<String>,
+    /// Whether the pair passed before and fails now — written only when it
+    /// did, since that is what fails the run.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub regression: bool,
 }
 
 /// A judged pair that passed in an earlier run of the same commit and fails
@@ -206,7 +211,7 @@ pub fn hold(card: &mut Scorecard, root: &Path) -> Result<()> {
         })?;
     let earlier = store::load(root)?;
     let repos = repo_records(card);
-    let backslides = backslides(&earlier, &repos, &judgments(card));
+    let backslides = backslides(&earlier, &repos, &card.outcomes);
     card.verdict
         .failures
         .extend(backslides.iter().map(backslide_failure));
@@ -228,8 +233,11 @@ pub fn hold(card: &mut Scorecard, root: &Path) -> Result<()> {
 pub fn record(card: &Scorecard, stem: &str) -> Option<RunRecord> {
     let history = card.history.as_ref()?;
     let engine = card.engines.last()?;
-    let judgments = judgments(card);
-    let regressions = regressions(&judgments, &history.backslides);
+    let judgments = judgments(card, &history.backslides);
+    let regressions = judgments
+        .iter()
+        .filter(|judgment| judgment.regression)
+        .count();
     let failing = judgments
         .iter()
         .filter(|judgment| judgment.outcome == Outcome::Fail)
@@ -248,19 +256,6 @@ pub fn record(card: &Scorecard, stem: &str) -> Option<RunRecord> {
         repos: history.repos.clone(),
         judgments,
     })
-}
-
-/// Distinct judged pairs that failed the run: regressed against the record,
-/// or backslid against the history — a pair doing both is counted once.
-fn regressions(judgments: &[Judgment], backslides: &[Backslide]) -> usize {
-    let regressed = judgments
-        .iter()
-        .filter(|judgment| judgment.standing.fails_the_run())
-        .map(|judgment| &judgment.key);
-    regressed
-        .chain(backslides.iter().map(|backslide| &backslide.key))
-        .collect::<BTreeSet<_>>()
-        .len()
 }
 
 /// Whether a run held to the history kept to it: no pair on record as
@@ -284,14 +279,18 @@ pub fn backslid(card: &Scorecard) -> usize {
         .map_or(0, |history| history.backslides.len())
 }
 
-/// Every judged pair the last engine was scored on.
-fn judgments(card: &Scorecard) -> Vec<Judgment> {
+/// Every judged pair the last engine was scored on. A pair is a regression
+/// when it regressed against the record or backslid against the history; one
+/// doing both is still one pair.
+fn judgments(card: &Scorecard, backslides: &[Backslide]) -> Vec<Judgment> {
+    let backslid: BTreeSet<&PairKey> = backslides.iter().map(|slide| &slide.key).collect();
     card.outcomes
         .iter()
         .map(|pair| Judgment {
             key: pair.key.clone(),
             outcome: pair.outcome,
-            standing: pair.standing,
+            failed: pair.failed.clone(),
+            regression: pair.standing.fails_the_run() || backslid.contains(&pair.key),
         })
         .collect()
 }
@@ -335,17 +334,14 @@ type PinnedPair = (String, PairKey);
 
 /// Every failing pair in `now` that passed in an earlier run of the same
 /// commit, with the latest earlier run it passed in.
-fn backslides(earlier: &[RunRecord], repos: &[RepoRecord], now: &[Judgment]) -> Vec<Backslide> {
+fn backslides(earlier: &[RunRecord], repos: &[RepoRecord], now: &[PairOutcome]) -> Vec<Backslide> {
     let passed = passes(earlier);
     now.iter()
-        .filter(|judgment| judgment.outcome == Outcome::Fail)
-        .filter_map(|judgment| {
-            let pinned = (
-                scanned_sha(repos, &judgment.key.repo)?,
-                judgment.key.clone(),
-            );
+        .filter(|pair| pair.outcome == Outcome::Fail)
+        .filter_map(|pair| {
+            let pinned = (scanned_sha(repos, &pair.key.repo)?, pair.key.clone());
             Some(Backslide {
-                key: judgment.key.clone(),
+                key: pair.key.clone(),
                 passed_at: passed.get(&pinned)?.clone(),
             })
         })

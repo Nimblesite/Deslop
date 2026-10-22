@@ -26,6 +26,7 @@ use serde::{Deserialize, Serialize};
 use super::{
     render::{Scorecard, TargetScore},
     source::Source,
+    written_entry::what_failed,
     ScoredEntry, CLEARLY_IN,
 };
 use crate::read_json;
@@ -51,7 +52,7 @@ pub enum Outcome {
 
 impl Outcome {
     /// The outcome of one scored entry.
-    fn of(entry: &ScoredEntry) -> Self {
+    pub(super) fn of(entry: &ScoredEntry) -> Self {
         if entry.correct {
             Self::Pass
         } else {
@@ -173,6 +174,8 @@ pub struct PairOutcome {
     pub standing: Standing,
     /// Since when the record has held its outcome; absent with no record.
     pub recorded_since: Option<String>,
+    /// [CORPUS-REPORT-ENTRY] What failed, absent on a pass.
+    pub failed: Option<String>,
 }
 
 impl PairOutcome {
@@ -225,20 +228,24 @@ pub fn standings(ledger: &Ledger, engine_id: &str, targets: &[TargetScore]) -> V
         .iter()
         .filter_map(|target| Some((target.name.as_str(), target.scores.get(engine_id)?)))
         .flat_map(|(repo, score)| score.entries.iter().map(move |entry| (repo, entry)))
-        .map(|(repo, entry)| standing(&recorded, PairKey::of(repo, entry), Outcome::of(entry)))
+        .map(|(repo, entry)| standing(&recorded, repo, entry))
         .collect()
 }
 
-/// How one pair's `outcome` stands against its record, if it has one.
+/// How the pair `entry` scored in `repo` stands against its record, if it has
+/// one.
 fn standing(
     recorded: &BTreeMap<&PairKey, &RecordedPair>,
-    key: PairKey,
-    outcome: Outcome,
+    repo: &str,
+    entry: &ScoredEntry,
 ) -> PairOutcome {
+    let key = PairKey::of(repo, entry);
+    let outcome = Outcome::of(entry);
     let record = recorded.get(&key);
     PairOutcome {
         standing: Standing::of(outcome, record.map(|pair| pair.outcome)),
         recorded_since: record.map(|pair| pair.since.clone()),
+        failed: (!entry.correct).then(|| what_failed(entry)),
         outcome,
         key,
     }

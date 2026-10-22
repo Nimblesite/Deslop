@@ -15,6 +15,8 @@ const TOP_CLUSTER_ROWS = 5;
 const SHORT_SHA_LENGTH = 12;
 const BINARY_SHA_PREVIEW = 16;
 const ABSENT = "n/a";
+// [CORPUS-REPORT-ENTRY] A judged pair the scorer wrote as answered correctly.
+const PASS = "pass";
 // [CORPUS-SCORE] Every register figure in this document is read from the JSON
 // scorecard `corpus-score` wrote for this run; none is recomputed here, so the
 // scorecard and these summaries can never disagree.
@@ -156,7 +158,7 @@ const registerLines = (scored, engineId) =>
     row([
       entry.verdict === "clearly_in" ? "CLEARLY IN" : "CLEARLY OUT",
       `\`${entry.occurrences.join("\` + \`")}\``,
-      entry.correct
+      entry.outcome === PASS
         ? "correct"
         : entry.verdict === "clearly_in"
           ? "**FALSE NEGATIVE**"

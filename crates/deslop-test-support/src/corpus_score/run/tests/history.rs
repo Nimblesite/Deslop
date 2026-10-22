@@ -57,8 +57,21 @@ const LOG_REPO_ROW: &str =
                             | 1 | 0 | 295.00 s | 1210.50 s | 781% | 7947 MB |";
 const LOG_REGRESSION: &str = "  - 🔴 **flutter** — false negative — `src/one.rs:10-20` + \
                               `src/two.rs:30-40` — passed in the run of 2026-10-01T00:00:00Z";
-const LOG_KNOWN_DEFECT: &str = "- ⚠️ known defect — **flutter** — false negative — \
-                                `src/one.rs:10-20` + `src/two.rs:30-40`";
+const LOG_KNOWN_DEFECT: &str = "- ⚠️ known defect — **flutter** — false negative, not reported \
+                                — `src/one.rs:10-20` + `src/two.rs:30-40`";
+/// The JSON scorecard's sections, in key order: each judged pair is written
+/// once, under its repository, and never again in a list of its own.
+const SCORECARD_SECTIONS: [&str; 7] = [
+    "change",
+    "engines",
+    "generated_at",
+    "history",
+    "targets",
+    "totals",
+    "verdict",
+];
+/// What failed when the fixture pair fails: nothing reported it.
+const NOT_REPORTED: &str = "not reported";
 /// The headings `HISTORY.md` carries, newest run first.
 const LOG_HEADINGS: [&str; 5] = [
     "# Corpus run history",
@@ -181,6 +194,16 @@ fn assert_run(
         judgment.outcome, outcome,
         "{at}: every judged pair is recorded"
     );
+    assert_eq!(
+        judgment.failed.as_deref(),
+        (outcome == Outcome::Fail).then_some(NOT_REPORTED),
+        "{at}: a failure names what failed, a pass names nothing"
+    );
+    assert_eq!(
+        judgment.regression,
+        backslid_since.is_some(),
+        "{at}: a pair that passed before and fails now is a regression"
+    );
     let since: Vec<&str> = record
         .backslides
         .iter()
@@ -241,6 +264,15 @@ fn a_pass_on_record_in_the_history_holds_every_later_run_of_that_commit() -> Res
 
     let second = run(root, SECOND_RUN, false)?;
     assert_eq!(second.markdown.lines().next(), Some(FAILED_HEADING));
+    let json: serde_json::Value = crate::read_json(&second.json_path)?;
+    let sections: Vec<&str> = json
+        .as_object()
+        .map(|card| card.keys().map(String::as_str).collect())
+        .unwrap_or_default();
+    assert_eq!(
+        sections, SCORECARD_SECTIONS,
+        "the JSON scorecard writes each judged pair once, under its repository"
+    );
     carries(
         &second,
         &[ONE_AGAINST_ONE, BACKSLIDE_LINE, CAUTION_LINE, MISSED_ROW],
