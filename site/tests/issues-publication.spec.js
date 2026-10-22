@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./helpers/issues.js";
 
 const LONG_TIMESTAMP = /^Published \d{1,2}(?:st|nd|rd|th) of [A-Z][a-z]+ \d{4}, \d{1,2}(?:am|pm) UTC$/;
 

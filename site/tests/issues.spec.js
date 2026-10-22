@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./helpers/issues.js";
 
 const DOCS_LINK_COUNT = 12;
 
