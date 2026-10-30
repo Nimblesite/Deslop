@@ -27,22 +27,11 @@ Panics are banned for control flow and error handling but **mandated** here: a p
 - 🛑 **Never kill a VS Code process**, including browser-hosted instances. The user cannot recover.
 - 🛑 **Never host a report.** No artifacts, hosted pages or uploads. Every report is a Markdown file in this repo, emitted **mechanically** by the code that ran the measurement; agent-typed figures can't be reproduced or diffed. Point the user at the file path.
 - 🛑 **One branch, one worktree.** Merge loose code, stashes and branches into a ***single*** branch.
-- **Clean up after yourself.** Delete every temporary file you write.
 - **Tree-sitter only.** **No regex** or text matching on source code or structured data.
 - **Core calculations (e.g. percentages) live only in Rust.** Any duplication-finding calculation outside core Rust (e.g. in TypeScript) is a hard violation. Scripts and utilities are exempt.
-- **Files < 500 lines, functions < 20 lines.**
-- **Named constants, not literals**, in tests too. Every threshold is a named default the user can override in config.
-- **Spec IDs, not issue numbers.** IDs are hierarchical and non-numeric (`[GROUP-TOPIC]`, `[GROUP-TOPIC-DETAIL]`) and appear in spec, code and test comments, so `grep [RANK-` finds all three. Same-group sections sit adjacent. Only explicit regression tests may cite a GitHub issue.
 - **No placeholders, silent no-ops, legacy code or linter suppressions** (`#[allow(clippy::...)]`). Use proper error types; fix the code.
-- **All global state lives in `crates/deslop-core/src/state.rs`**, with one equivalent file per other language.
 - **Bug fixes follow the [fix-bug skill](.claude/skills/fix-bug/SKILL.md).** Fix the root cause; replace broken code, **never** add a duplicate path beside it.
-- **Dependency versions stay in sync** across `Cargo.toml`, `.github/workflows/ci.yml` and `.devcontainer/`.
-- **Auto-memory is off.** Durable rules are reviewed changes to this file.
 - **IPC wire models are generated from [typeDiagram](https://typediagram.dev/docs/language-reference.html)**, never hand-written or committed.
-- **The VSIX is the only distribution**, plus Homebrew/Scoop for the CLI. Build output stays under `target/`; **never** `cargo install --path crates/deslop-*`.
-- **Docs point external MCP clients at the absolute VSIX path** `~/.vscode/extensions/nimblesite.deslop-live-<VERSION>-<platform>/bin/<platform>/deslop-mcp` (or the Windows equivalent); a `PATH` binary drifts off the wire contract. Bare `deslop-mcp` is for Homebrew/Scoop only.
-- **Logging is `tracing` only**, never `println!`/`eprintln!`. Use structured fields (`tracing::info!(file_count = 42)`) and log entry and exit of significant operations. Log counts and hashes, **never** file contents, user paths or secrets. Reports go to stdout or `--output <path>`, not logs.
-- **"Deslop.live" means the whole reactive loop:** watcher → scheduler → session → broadcast → UI refresh.
 
 ### Strongly Recommended
 
@@ -53,6 +42,17 @@ Panics are banned for control flow and error handling but **mandated** here: a p
 - **Headlines only.** Chat replies are a status line: the result, the number that moved, the file path. Don't restate the request, narrate steps, or repeat tables the report already contains. Mark anything critical so it's findable at a glance: 🛑 a blocker, 🔴 a regression or failing gate, ✅ a pass.
 - **Use Too Many Cooks** for file locking and agent messaging when it is available.
 - Don't close GitHub issues, even from PRs, unless the user asks.
+- **Clean up after yourself.** Delete every temporary file you write.
+- **Files < 500 lines, functions < 20 lines.**
+- **Named constants, not literals**, in tests too. Every threshold is a named default the user can override in config.
+- **Spec IDs, not issue numbers.** IDs are hierarchical and non-numeric (`[GROUP-TOPIC]`, `[GROUP-TOPIC-DETAIL]`) and appear in spec, code and test comments, so `grep [RANK-` finds all three. Same-group sections sit adjacent. Only explicit regression tests may cite a GitHub issue.
+- **All global state lives in `crates/deslop-core/src/state.rs`**, with one equivalent file per other language.
+- **Dependency versions stay in sync** across `Cargo.toml`, `.github/workflows/ci.yml` and `.devcontainer/`.
+- **Auto-memory is off.** Durable rules are reviewed changes to this file.
+- **The VSIX is the only distribution**, plus Homebrew/Scoop for the CLI. Build output stays under `target/`; **never** `cargo install --path crates/deslop-*`.
+- **Docs point external MCP clients at the absolute VSIX path** `~/.vscode/extensions/nimblesite.deslop-live-<VERSION>-<platform>/bin/<platform>/deslop-mcp` (or the Windows equivalent); a `PATH` binary drifts off the wire contract. Bare `deslop-mcp` is for Homebrew/Scoop only.
+- **Logging is `tracing` only**, never `println!`/`eprintln!`. Use structured fields (`tracing::info!(file_count = 42)`) and log entry and exit of significant operations. Log counts and hashes, **never** file contents, user paths or secrets. Reports go to stdout or `--output <path>`, not logs.
+- **"Deslop.live" means the whole reactive loop:** watcher → scheduler → session → broadcast → UI refresh.
 
 ## Testing — the accuracy enforcement surface
 
