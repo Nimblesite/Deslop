@@ -92,15 +92,12 @@ If you encounter code that could cause a false negative or a false positive — 
 ## Documentation
 
 - **Always cross-reference spec IDs across tests, code, specs and plans.**
-- Specs are for humans first and foremost. If you have to add jargon, add a separate "For AI" section
-- Make specs readable to humans: less jargon.
-- Each spec section must have a unique, hierarchical, non-numeric spec ID
-- Code, specs and tests must agree. Where they don't, STOP and report the issue to the user
-- Remove line feeds from text that is only there to enforce text wrapping
-- Don't use line endings to force word wrap. Allow text to wrap naturally.
+- Each spec section has a unique, hierarchical, non-numeric spec ID.
+- Code, specs and tests must agree. Where they don't, STOP and report the issue to the user.
+- Specs are for humans first: keep jargon out of the main text and put it in a separate "For AI" section.
+- Remove fluff from specs that doesn't specify anything.
 - Keep PR documentation tight and human-readable (except for the AI section).
-- Remove line endings that only exist to wrap text
-- Remove fluff from the specs that don't specify anything
+- Don't use line breaks to force word wrap; let text wrap naturally.
 
 ## Run Deslop on Deslop
 
