@@ -191,6 +191,7 @@ mod tests {
             end_line: 1,
             hidden: false,
             in_diff: None,
+            language: None,
         }
     }
 }

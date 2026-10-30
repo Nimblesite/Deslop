@@ -12,7 +12,7 @@ use crate::{
 /// Groups clusters by `key`, preserving mass order and first-seen group order.
 pub(super) fn group_by_first_seen<'c, K, I>(
     clusters: I,
-    key: impl Fn(&ReportCluster) -> K,
+    key: impl Fn(&'c ReportCluster) -> K,
 ) -> Vec<(K, Vec<&'c ReportCluster>)>
 where
     K: Copy + Eq + Hash,

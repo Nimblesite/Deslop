@@ -175,6 +175,7 @@ fn cluster() -> Result<Value> {
             end_line: 1,
             hidden: false,
             in_diff: None,
+            language: None,
         })
         .collect();
     let cluster = ReportCluster {

@@ -28,6 +28,8 @@ The MCP surface splits into **tools**, **resources**, and **notifications**.
 
 The MCP stdio transport carries one JSON-RPC 2.0 message per line: each frame is UTF-8 JSON terminated by a single `\n`, written under one mutex so responses and server→client notifications never interleave. One frame in produces zero frames out for a notification (no `id`) or exactly one for a request. Error frames are strict JSON-RPC envelopes — `{ "jsonrpc": "2.0", "id": <n>, "error": { "code", "message", "data"? } }` with no extra top-level or error keys — using the canonical reserved codes: ParseError (-32700) for malformed JSON, InvalidRequest (-32600) for a wrong `jsonrpc` version, MethodNotFound (-32601) for an unknown method, and InvalidParams (-32602) for bad arguments. The strict shape is what keeps stricter clients (Codex's `rmcp_client`) from tripping on an unexpected envelope.
 
+The integration harness initializes the companion LSP using `Content-Length` framing. If the child's stdout ends before the header block is complete, the shared reader returns `io::ErrorKind::UnexpectedEof` immediately. Child startup failures must fail the test rather than leave it spinning at EOF.
+
 ### [MCP-TOOLS] Seven core analysis tools
 
 > **Normative cutover.** The server exposes the seven core analysis tools below. The retired twelve-tool analysis-query surface is deleted wholesale; it is neither a compatibility alias nor an alternate mode. `duplicates` owns report queries, `session` owns session and embedding-model management, and `compare-pair` is the only pair-evidence tool. Orthogonal refactor tools remain governed by [AUTOFIX-MERGE-MCP] and [AUTOFIX-EXTRACT-AI-MCP-TOOLS]; they do not create another report or pair-evidence path.
@@ -76,7 +78,7 @@ If MCP is unreliable, parse an existing canonical JSON report first: the normal 
 
 An unavailable-engine error supplies `report_fallback`, the existing `cache_fallback`, `cli_fallback`, `fallback_order`, and an absolute `guide` URL. The CLI fallback contains the adjacent executable's absolute path, separate argument strings, the JSON output path, and a cache/configuration warning. It never suggests an unrelated PATH binary. Every path in the payload is rendered as display text, so a workspace whose path is not valid UTF-8 still gets its recovery guidance instead of a crashed MCP. Implemented in `tools/recovery.rs`; pinned by the real-process `tests/query/recovery.rs::unavailable_engine_provides_json_first_and_cached_cli_recovery` and, on Unix, `tools/recovery/tests.rs::recovery_for_a_non_utf8_workspace_reports_every_path_lossily`. The [AI guide](../../site/src/docs/for-ai.md), [instruction recipe](../snippets/agents-md-recipe.md), and [workflow plan](../plans/mcp-agent-workflow.md) carry the same procedure.
 
-The shared pagination block rides beside it on `duplicates` and `rescan`:
+The shared pagination block rides beside it on `duplicates`, `rescan`, and `find-similar`:
 
 ```text
 limit?:           integer >= 1, default 5
@@ -84,6 +86,7 @@ offset?:          integer >= 0, default 0
 detail?:          "full" (default) | "summary"   // full = ReportCluster + occurrence budget;
                                                  // summary = slim ClusterSummary rows
 max_occurrences?: integer >= 1, default 15        // detail = "full" only ([MCP-OCCURRENCE-BUDGET])
+include_per_file?: boolean, default false         // opt in to per-file metrics
 ```
 
 Every page preserves the engine's mass-descending, cluster-id-ascending order. The MCP has no alternate score, occurrence-count, size, or client-local sort mode.
@@ -122,11 +125,11 @@ Output (`DuplicatesPage` — the one page wire type, whatever the scope or detai
 
 Every page reports `has_more` and `next_offset`, computed from the rows actually returned rather than the requested limit. `next_offset` is null when no matched clusters remain. Occurrence-budget omissions set top-level `truncated: true`, a reason, and a continuation hint, even when only an occurrence tail was omitted. Ordinary pagination alone does not set `truncated`. A byte cap includes these markers in its budget and reconciles `page.returned`, `next_offset`, and `has_more` after trimming, including inside a `rescan.page` envelope. Callers keep the same filters when following a cursor and use `cluster-by-id` for omitted occurrences. When a byte cap leaves zero rows, change the request to a smaller summary without per-file metrics rather than repeating a cursor that cannot advance. A snapshot's generation may change between calls; re-read the page sequence if a consistent inventory is required.
 
-Implemented by `page/continuation.rs` and `tools/limits.rs`; pinned by `tests/query/pagination.rs::occurrence_budget_exposes_continuation_and_preserves_the_complete_pairs` and `tools/limits.rs::byte_budget_includes_markers_and_updates_the_returned_page`. The SharpLsp acceptance work is tracked under [MCP-REPORT-FOLLOWUP].
+The discovery schema for each paginated tool exposes the same page controls, so strict clients can follow `next_offset` and request the summary or metrics settings suggested by recovery guidance. Implemented by `page/continuation.rs`, `tools/schemas.rs`, and `tools/limits.rs`; pinned by `tests/query/pagination.rs::occurrence_budget_exposes_continuation_and_preserves_the_complete_pairs`, `tests/query/pagination.rs::similarity_schema_supports_the_returned_cursor_and_recovery_controls`, `tests/query/pagination.rs::similarity_summary_pages_preserve_filters_and_exhaust_the_cursor`, and `tools/limits.rs::byte_budget_includes_markers_and_updates_the_returned_page`. The SharpLsp acceptance work is tracked under [MCP-REPORT-FOLLOWUP].
 
 ### [MCP-OCCURRENCE-BUDGET] Per-call total-occurrence budget
 
-Every call that ships full `ReportCluster` shapes — `duplicates` / `rescan` with `detail: "full"`, and `find-similar` — accepts `max_occurrences` (default **15**) bounding the **total** occurrences across **all** returned clusters. The budget is the fix for [issue #136](https://github.com/Nimblesite/Deslop/issues/136): an unbounded full-detail response on a real workspace ships 50+ occurrences per cluster, enough to crash some MCP clients (e.g. Codex's `rmcp_client`). No tool result is allowed to be large enough to break the agent.
+Every call that ships full `ReportCluster` shapes — `duplicates`, `rescan`, or `find-similar` with `detail: "full"` — accepts `max_occurrences` (default **15**) bounding the **total** occurrences across **all** returned clusters. The budget is the fix for [issue #136](https://github.com/Nimblesite/Deslop/issues/136): an unbounded full-detail response on a real workspace ships 50+ occurrences per cluster, enough to crash some MCP clients (e.g. Codex's `rmcp_client`). No tool result is allowed to be large enough to break the agent.
 
 **Algorithm.** Walk the candidate clusters worst-first. Track running `used` occurrences. For each cluster:
 
@@ -144,7 +147,11 @@ The tool schema documents the occurrence budget. The budget behavior is pinned b
 
 ### [MCP-RESULT-SIZE-CAP] Defensive tool-result size cap
 
-Every `tools/call` result envelope is bounded at a fixed wire budget of **200 KB** (well under the ~512 KB most JSON-RPC clients tolerate, and below the smaller ceiling at which Codex's `rmcp_client` crashes — issue #136). This is the outer, last-resort guard layered on top of the per-call occurrence budget ([MCP-OCCURRENCE-BUDGET]). When a serialized payload exceeds the cap the dispatcher drops clusters from the tail of the inner `clusters[]` array until the payload including its markers fits. The response carries `truncated: true`, a human-readable `truncated_reason`, `truncated_at_bytes`, and a `next_action` pointer to the paginated report tool; payloads with no `clusters` array — **and payloads still over budget once every cluster has been dropped** — degrade to a stub carrying the same markers. Draining the cluster array is not by itself success: reporting it as one shipped an oversized payload stamped `truncated: true`, which is the one outcome this cap exists to prevent ([issue #286](https://github.com/Nimblesite/Deslop/issues/286)). Every truncation emits a `tracing::warn!` so operators can size their corpora. A companion budget keeps the whole `tools/list` payload ≤16 KB with each description ≤200 chars so long-form rationale stays in the `deslop://schema` resource.
+Every `tools/call` success response is bounded at a fixed wire budget of **204800 bytes**. The budget covers the complete serialized JSON-RPC frame: the actual numeric or escaped string request identifier, both `content.text` and `structuredContent`, JSON escaping, truncation metadata, and the terminating newline. The same measurement is used before returning a payload and while trimming clusters. This is the outer guard layered on top of the per-call occurrence budget ([MCP-OCCURRENCE-BUDGET]).
+
+When a frame exceeds the cap the dispatcher drops clusters from the tail of the inner `clusters[]` array until the complete frame fits. The response carries `truncated: true`, a human-readable `truncated_reason`, `truncated_at_bytes`, and a `next_action` pointer to the paginated report tool. Payloads with no `clusters` array, and payloads still over budget once every cluster has been dropped, degrade to a stub carrying the same markers. Before dispatch, the server rejects `tools/call` identifiers that leave no room for the bounded fallback, returning `InvalidRequest` with a null ID so the error frame also stays within budget. Every truncation emits a `tracing::warn!` so operators can size their corpora. A companion budget keeps the whole `tools/list` payload ≤16 KB with each description ≤200 chars so long-form rationale stays in the `deslop://schema` resource.
+
+Error frames also stay within the same complete-frame budget. The writer replaces an oversized error message and data with a compact error carrying the original error code, truncation markers, and guidance to retry with a shorter identifier and smaller arguments to retrieve the full error and recovery guidance. It preserves the request ID when that compact response fits, otherwise uses a null ID. Responses already within budget remain unchanged. Full `resources/read` success responses retain their canonical content; the tool-success cap does not truncate resources.
 
 ### [MCP-EMBEDDING-CONSENT] Embedding model consent
 
@@ -159,13 +166,15 @@ Input variants (both collect matching candidates before the shared filters and c
 1. **Range on an open file:** `{ path, start_byte, end_byte }` — the LSP already has this parsed; the query is a cache lookup + LSH + ANN probe.
 2. **Snippet + language:** `{ snippet, language }` — for code the agent is *about to write*. The LSP parses in-memory, fingerprints, probes, and returns matches. Nothing is written to the cache.
 
+Discovery uses `oneOf` with the required fields of these two variants: exactly one complete input is required. Empty inputs, incomplete inputs without another complete variant, and simultaneous complete range and snippet inputs are rejected. A complete snippet may also carry a partial range block such as `path` to scope the results. Pinned by `tests/query/pagination.rs::similarity_schema_requires_exactly_one_complete_input_variant`, which checks discovery against the real handler and retains the shared continuation controls.
+
 Both delegate to the LSP via [LIVE-IPC-SOCKET]. Budget: < 250 ms ([LIVE-PERF-BUDGETS]).
 
 The tool description keeps its prevention framing: **"Call BEFORE writing new code to PREVENT duplication."** `find-similar` returns clone clusters only. Dedicated literal findings remain a separate top-level collection in the canonical report available through `deslop://report`; they are never exposed as cluster filters or cluster fields.
 
-`find-similar` accepts the [MCP-TOOL-FILTERS] block and the uniform `limit` plus `max_occurrences` params.
+`find-similar` accepts the [MCP-TOOL-FILTERS] block and the shared `limit`, `offset`, `detail`, `max_occurrences`, and `include_per_file` controls. Follow `page.next_offset` with the same input and filters to retrieve remaining clusters ([MCP-PAGE-CONTINUATION]).
 
-Output: top-`limit` clusters in report order by duplicated mass ([RANK-MASS-SUM](pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only)), carrying occurrences, mass, and the filter echo. Pair signals, classifications, and explanations are absent; `compare-pair` owns them.
+Output: a page of up to `limit` clusters in report order by duplicated mass ([RANK-MASS-SUM](pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only)), using the full or summary shape selected by `detail`, plus the filter echo and continuation metadata. Pair signals, classifications, and explanations are absent; `compare-pair` owns them.
 
 #### [MCP-TOOL-FINDSIMILAR-EXISTING] A snippet that copies code found only once still gets an answer
 

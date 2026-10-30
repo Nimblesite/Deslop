@@ -97,19 +97,21 @@ impl PipelineSession {
         if absolute.is_dir() {
             return self.reconcile_directory(&absolute, stats, embedding, buffers);
         }
-        let Some(language) = self.language_for(&absolute) else {
+        let Some(fallback) = self.language_for(&absolute) else {
             return Ok(CorpusEffect::Untouched);
         };
+        // Defaults and ignore rules prune before metadata or source is read.
+        if self.exclusion.is_excluded(&absolute, None) || self.ignore_matcher.is_ignored(&absolute)
+        {
+            return Ok(self.drop_path(&absolute));
+        }
+        let language =
+            self.osprey_projects
+                .language(&absolute, &buffers.read(&absolute)?.bytes, fallback)?;
         // Both gates evict, not just skip: a path the corpus already holds
         // must leave it the moment it becomes inadmissible, so an inflated
         // corpus self-heals instead of needing a restart.
         if self.exclusion.is_excluded(&absolute, Some(language)) {
-            return Ok(self.drop_path(&absolute));
-        }
-        // Discovery's walker prunes these; the live path is handed paths
-        // directly and must apply the same rules or it admits files
-        // discovery never would.
-        if self.ignore_matcher.is_ignored(&absolute) {
             return Ok(self.drop_path(&absolute));
         }
         let Some(parser) = parser_for_language(&self.parsers, language) else {
@@ -143,6 +145,7 @@ impl PipelineSession {
             .sources
             .get(&file_id)
             .is_some_and(|previous| previous == &source)
+            && self.file_languages.get(&file_id).copied() == Some(language)
         {
             tracing::info!(
                 source_bytes = source.len(),
@@ -186,6 +189,7 @@ impl PipelineSession {
             &self.extension_to_language,
             &self.exclusion,
         )?;
+        self.osprey_projects = discovered.projects;
         self.apply_directory_files(directory, &discovered.files, stats, embedding, buffers)
     }
 
@@ -258,6 +262,8 @@ impl PipelineSession {
             );
             return Ok(());
         }
+        self.osprey_projects =
+            crate::lang::osprey_selection::OspreyProjects::load(&self.root, &self.exclusion)?;
         let dropped = self.drop_newly_excluded();
         let added = self.apply_newly_included(stats, embedding, buffers)?;
         tracing::info!(dropped, added, "deslop_toml_reloaded corpus re-evaluated");
@@ -295,16 +301,14 @@ impl PipelineSession {
         embedding: &EmbeddingSettings<'_>,
         buffers: &OpenBuffers,
     ) -> Result<usize, CoreError> {
-        let discovery = discover_files(&self.root, &self.extension_to_language, &self.exclusion);
+        let discovery = discover_files(&self.root, &self.extension_to_language, &self.exclusion)?;
         let known: HashSet<PathBuf> = self.live_paths.values().cloned().collect();
-        let fresh: Vec<PathBuf> = source_paths(&discovery.files, buffers)
-            .into_iter()
-            .filter(|path| !known.contains(path))
-            .collect();
-        for path in &fresh {
+        let paths = source_paths(&discovery.files, buffers);
+        let fresh = paths.iter().filter(|path| !known.contains(*path)).count();
+        for path in &paths {
             let _effect = self.apply_one_change(path, stats, embedding, buffers)?;
         }
-        Ok(fresh.len())
+        Ok(fresh)
     }
 
     /// Evicts every live file at or under `prefix`. A directory removal

@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: Getting Started — Install Deslop and find duplicate code
-description: Install Deslop to find duplicate code in nine languages. Get live VS Code warnings, MCP checks for coding agents, and the CLI in one extension.
+description: Install Deslop to find duplicate code in ten languages. Get live VS Code warnings, MCP checks for coding agents, and the CLI in one extension.
 eleventyNavigation:
   key: Getting Started
   order: 1
@@ -11,7 +11,7 @@ docsGroup: start
 
 # Getting Started
 
-**Deslop finds duplicate code across nine languages, ranks what to remove first, and tells your coding agent when similar code already exists.** It runs on your workspace and updates as you type — Claude Code, Cursor, Copilot, Continue, Codex, and your editor all read the same live analysis.
+**Deslop finds duplicate code across ten languages, ranks what to remove first, and tells your coding agent when similar code already exists.** It runs on your workspace and updates as you type — Claude Code, Cursor, Copilot, Continue, Codex, and your editor all read the same live analysis.
 
 The preferred way to install it is the **VS Code extension**. One install bundles all three surfaces: live editor warnings, the check agents call before writing code, and the CLI.
 
@@ -23,7 +23,7 @@ Install from the **VS Code Marketplace**:
 - **Command line:** `code --install-extension nimblesite.deslop-live`
 - **Browser:** open the [Deslop.live Marketplace page](https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live) and hit **Install**.
 
-Then open a supported source file (`.cs`, `.rs`, `.py`, `.dart`, `.js`, `.mjs`, `.cjs`, `.jsx`, `.ts`, `.tsx`, `.php`, `.fs`, `.fsx`, or `.go`). The live bubble is active immediately, and the **Top Offenders** tree populates as the file watcher fires.
+Then open a supported source file (`.cs`, `.rs`, `.py`, `.dart`, `.js`, `.mjs`, `.cjs`, `.jsx`, `.ts`, `.tsx`, `.php`, `.fs`, `.fsx`, `.go`, or `.osp`). The live bubble is active immediately, and the **Top Offenders** tree populates as the file watcher fires.
 
 The extension bundles native binaries for `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, and `win32-x64` — the right one is selected for you automatically.
 

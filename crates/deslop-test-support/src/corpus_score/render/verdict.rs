@@ -1,8 +1,6 @@
 //! [CORPUS-REPORT-VERDICT] The first thing a scorecard says: whether the run
-//! passed, and — when it did not — every regression, in a red caution block
-//! no reader can scroll past. Known defects, none of which ever passed, follow
-//! in a note of their own: they are still bugs, but none is a regression, so
-//! none fails the run.
+//! passed, and every blocking failure in a red caution block. Explicitly accepted
+//! judged defects follow in a separate note; they remain bugs but are tolerated.
 
 use super::{cells::counted, Scorecard};
 use crate::corpus_score::verdict::FailureReason;
@@ -14,14 +12,13 @@ const NEW_MARK: &str = "🔴";
 /// See [`NEW_MARK`].
 const KNOWN_MARK: &str = "⚠️";
 
-/// The verdict heading, the caution block that lists every regression of a
-/// failed run, and the note that lists every known defect.
+/// The verdict heading, every blocking failure, and explicitly accepted defects.
 pub(super) fn verdict_banner(card: &Scorecard) -> Vec<String> {
     let (known, new): (Vec<&FailureReason>, Vec<&FailureReason>) = card
         .verdict
         .failures
         .iter()
-        .partition(|failure| !failure.regression);
+        .partition(|failure| !failure.fails_the_run());
     let mut lines = if new.is_empty() {
         vec![format!("# ✅ PASSED — {TITLE}"), String::new()]
     } else {
@@ -31,16 +28,16 @@ pub(super) fn verdict_banner(card: &Scorecard) -> Vec<String> {
     lines
 }
 
-/// The failed heading and the caution block listing every regression.
+/// The failed heading and the caution block listing every blocking failure.
 fn failed_block(new: &[&FailureReason]) -> Vec<String> {
     let mut lines = vec![
         format!("# {NEW_MARK} FAILED — {TITLE}"),
         String::new(),
         "> [!CAUTION]".to_owned(),
         format!(
-            "> **{NEW_MARK} FAILED** — {}: something that passed before fails now. Every \
-             regression is listed here; the tables below give the detail.",
-            counted(new.len(), "regression", "regressions")
+            "> **{NEW_MARK} FAILED** — {}. Every blocking failure is listed here; \
+             the tables below give the detail.",
+            counted(new.len(), "failure", "failures")
         ),
         ">".to_owned(),
     ];
@@ -57,9 +54,9 @@ fn known_block(known: &[&FailureReason]) -> Vec<String> {
     let mut lines = vec![
         "> [!NOTE]".to_owned(),
         format!(
-            "> {KNOWN_MARK} {} — none of them passed before, so none is a regression and none \
-             fails the run. Each is still a bug.",
-            counted(known.len(), "known defect", "known defects")
+            "> {KNOWN_MARK} {} — explicitly accepted on record. None fails the run. \
+             Each is still a bug.",
+            counted(known.len(), "accepted defect", "accepted defects")
         ),
         ">".to_owned(),
     ];

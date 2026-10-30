@@ -77,8 +77,8 @@ struct ScoreArgs {
     /// names the scorecard, so no run overwrites another's.
     #[arg(long)]
     name: String,
-    /// Exit non-zero when a judged pair that passed before fails now
-    /// ([CORPUS-SCORE-OUTCOMES], [CORPUS-HISTORY]).
+    /// Exit non-zero on an unaccepted incorrect judgment, regression or failed
+    /// curated check ([CORPUS-SCORE-OUTCOMES], [CORPUS-REPORT-VERDICT]).
     #[arg(long)]
     gate: bool,
     /// Put every failing pair that has no record on record as failing,
@@ -167,20 +167,12 @@ fn score(args: &ScoreArgs) -> Result<()> {
     held_to_the_record(&written.card, scoring)
 }
 
-/// Fails a strict run when a judged pair on record as passing fails now
-/// ([CORPUS-SCORE-OUTCOMES]), and any run held to the history when a pair
-/// that passed in an earlier run fails now ([CORPUS-HISTORY]). Nothing else
-/// fails a run: a pair that never passed is a known defect.
+/// [CORPUS-REPORT-VERDICT] A strict CLI run uses the complete scorecard verdict.
+/// Every backslide also fails any run held to history ([CORPUS-HISTORY]).
 fn held_to_the_record(card: &Scorecard, scoring: Scoring) -> Result<()> {
-    let rejected = card
-        .outcomes
-        .iter()
-        .filter(|pair| pair.standing.fails_the_run())
-        .count();
-    if scoring.strict && rejected > 0 {
+    if scoring.strict && !card.verdict.passed() {
         return Err(anyhow!(
-            "{rejected} judged pair(s) on record as passing fail now — see the Judged pair \
-             record section above"
+            "corpus accuracy gate failed — see the scorecard verdict above"
         ));
     }
     let backslid = history::backslid(card);

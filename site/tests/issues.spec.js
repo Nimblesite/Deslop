@@ -1,6 +1,6 @@
 import { expect, test } from "./helpers/issues.js";
 
-const DOCS_LINK_COUNT = 12;
+const DOCS_LINK_COUNT = 13;
 
 // The org-level Priority field options and lane labels — see scripts/issues/rules.py.
 const PRIORITY_LADDER = ["showstopper", "critical", "normal", "low", "unset"];

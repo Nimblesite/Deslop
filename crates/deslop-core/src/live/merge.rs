@@ -69,7 +69,7 @@ fn single_file_merge_plan(
     let absolute = pipeline.root().join(&first.path);
     let (Some(file_id), Some(parser)) = (
         pipeline.file_id_for(&absolute),
-        refactor::parser_for_path(&absolute),
+        refactor::parser_for_occurrence(first, &absolute),
     ) else {
         return Ok(refusal(
             cluster,
@@ -104,7 +104,8 @@ fn consolidation_plan_for(
     let Some(first) = cluster.occurrences.first() else {
         return Ok(refusal(cluster, "cluster has no occurrences".to_owned()));
     };
-    let Some(parser) = refactor::parser_for_path(&pipeline.root().join(&first.path)) else {
+    let Some(parser) = refactor::parser_for_occurrence(first, &pipeline.root().join(&first.path))
+    else {
         return Ok(refusal(
             cluster,
             format!("occurrence file {} is not analysable", first.path.display()),

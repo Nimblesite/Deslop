@@ -1,17 +1,17 @@
 {
   "meta": {
     "repo": "Nimblesite/Deslop",
-    "published_at": "2026-10-22T20:17:12Z",
-    "published_at_long": "22nd of October 2026, 8pm",
+    "published_at": "2026-10-28T05:38:31Z",
+    "published_at_long": "28th of October 2026, 5am",
     "source_url": "https://github.com/Nimblesite/Deslop/issues",
     "method": "GitHub metadata: the Priority field, lane/* labels, explicit relationships, and cross-references. No AI enrichment.",
     "planning_note": "Indicative only — not a schedule. Relative sequencing uses two parallel tracks per workstream, holds blocked work until every blocker finishes, and takes effort units from the Effort field (high 8, medium 4, low 2) or, when it is unset, the issue type: feature 8, bug 5, task 4."
   },
   "summary": {
-    "open": 146,
+    "open": 147,
     "verify": 0,
     "showstoppers": 7,
-    "critical": 54,
+    "critical": 55,
     "linked": 89,
     "relationships": 123
   },
@@ -57,8 +57,8 @@
       "name": "CLI, MCP & automation",
       "description": "Command-line, MCP, actions, and agent-facing workflows.",
       "color": "#8bd3c7",
-      "count": 15,
-      "urgent": 6,
+      "count": 16,
+      "urgent": 7,
       "verify": 0
     },
     {
@@ -113,7 +113,7 @@
       "name": "Critical",
       "description": "seriously impacting accuracy or the usefulness of the tool",
       "color": "#f06292",
-      "count": 54
+      "count": 55
     },
     {
       "id": "normal",
@@ -2134,6 +2134,33 @@
       }
     },
     {
+      "number": 595,
+      "title": "MCP cannot reach the language server when the project path is long (socket path exceeds SUN_LEN)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/595",
+      "excerpt": "The Deslop MCP tools stop working if your project sits in a folder with a long path. The editor still shows duplicates, but every MCP call fails.",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/integrations",
+          "color": "8bd3c7",
+          "description": "CLI, MCP, actions, and agent-facing workflows"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-10-23T01:00:07Z",
+      "updated_at": "2026-10-23T01:00:15Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "integrations",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 15,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
       "number": 381,
       "title": "[ACTION-METADATA] GitHub action never persists .deslop/cache: every Marketplace run is a cold parse",
       "url": "https://github.com/Nimblesite/Deslop/issues/381",
@@ -2226,7 +2253,7 @@
       "plan": {
         "offset": 15,
         "effort_units": 4,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -2337,7 +2364,7 @@
       "workstream": "integrations",
       "inbound_links": 1,
       "plan": {
-        "offset": 15,
+        "offset": 19,
         "effort_units": 4,
         "track": 1
       }
@@ -2472,7 +2499,7 @@
       "workstream": "integrations",
       "inbound_links": 1,
       "plan": {
-        "offset": 19,
+        "offset": 20,
         "effort_units": 5,
         "track": 0
       }
@@ -2555,7 +2582,7 @@
       "plan": {
         "offset": 24,
         "effort_units": 4,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -2580,9 +2607,9 @@
       "workstream": "integrations",
       "inbound_links": 1,
       "plan": {
-        "offset": 19,
+        "offset": 25,
         "effort_units": 5,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -2661,7 +2688,7 @@
       "workstream": "integrations",
       "inbound_links": 0,
       "plan": {
-        "offset": 24,
+        "offset": 28,
         "effort_units": 8,
         "track": 1
       }
@@ -2688,7 +2715,7 @@
       "workstream": "integrations",
       "inbound_links": 0,
       "plan": {
-        "offset": 28,
+        "offset": 30,
         "effort_units": 4,
         "track": 0
       }
@@ -2968,7 +2995,7 @@
       "workstream": "integrations",
       "inbound_links": 0,
       "plan": {
-        "offset": 32,
+        "offset": 34,
         "effort_units": 4,
         "track": 0
       }
@@ -4412,7 +4439,7 @@
       "workstream": "integrations",
       "inbound_links": 0,
       "plan": {
-        "offset": 32,
+        "offset": 36,
         "effort_units": 4,
         "track": 1
       }

@@ -22,6 +22,7 @@ use ignore::{
 use crate::{
     config::ExclusionConfig,
     error::CoreError,
+    lang::osprey_selection::OspreyProjects,
     state::{indexed_subtree_paths, FileId, FileRegistry},
 };
 
@@ -33,6 +34,8 @@ const IGNORE_FILE_NAMES: [&str; 2] = [".gitignore", ".ignore"];
 
 /// Compiled rules grouped by their governing directory, retaining same-directory precedence.
 type DirectoryMatchers = BTreeMap<PathBuf, Vec<Gitignore>>;
+/// Filesystem identity, extension, and selected parser identity.
+type FileMetadata = (PathBuf, String, &'static str);
 
 /// Standalone equivalent of the ignore rules [`discover_files`] gets for
 /// free from `WalkBuilder::standard_filters(true)` ([PIPELINE-DISCOVER-FILES]).
@@ -242,14 +245,21 @@ pub struct DiscoveredFile {
 /// `extension_to_language`. Files whose absolute path matches a config
 /// `exclude` pattern are skipped before registration and are not counted
 /// in `files_analysed`.
-#[must_use]
+///
+/// # Errors
+/// Returns source-read, Osprey project TOML, or conflicting flavor metadata errors.
 pub fn discover_files<S: BuildHasher>(
     root: &Path,
     extension_to_language: &HashMap<String, &'static str, S>,
     config: &ExclusionConfig,
-) -> DiscoveryResult {
+) -> Result<DiscoveryResult, CoreError> {
     let walker = scoped_walker(root, root, None).build();
-    collect_discovered(walker.filter_map(Result::ok), extension_to_language, config)
+    collect_discovered(
+        walker.filter_map(Result::ok),
+        extension_to_language,
+        config,
+        OspreyProjects::load(root, config)?,
+    )
 }
 
 /// [LIVE-WATCHER-DIRECTORIES] Scopes traversal while retaining workspace ignore context.
@@ -260,7 +270,13 @@ pub(crate) fn discover_files_in<S: BuildHasher>(
     config: &Arc<ExclusionConfig>,
 ) -> Result<DiscoveryResult, CoreError> {
     let walker = scoped_walker(root, subtree, Some(Arc::clone(config))).build();
-    collect_complete(walker, subtree, extension_to_language, config)
+    collect_complete(
+        walker,
+        subtree,
+        extension_to_language,
+        config,
+        OspreyProjects::load(root, config)?,
+    )
 }
 
 /// Collects a scoped inventory before the live session applies its membership diff.
@@ -269,9 +285,10 @@ fn collect_complete<S: BuildHasher>(
     subtree: &Path,
     extensions: &HashMap<String, &'static str, S>,
     config: &ExclusionConfig,
+    projects: OspreyProjects,
 ) -> Result<DiscoveryResult, CoreError> {
     let entries = complete_walk(walker, subtree)?;
-    Ok(collect_discovered(entries.into_iter(), extensions, config))
+    collect_discovered(entries.into_iter(), extensions, config, projects)
 }
 
 /// [LIVE-WATCHER-RESCAN] Incomplete discovery must never authorize membership eviction.
@@ -314,13 +331,19 @@ fn collect_discovered<S: BuildHasher>(
     walker: impl Iterator<Item = ignore::DirEntry>,
     extensions: &HashMap<String, &'static str, S>,
     config: &ExclusionConfig,
-) -> DiscoveryResult {
+    projects: OspreyProjects,
+) -> Result<DiscoveryResult, CoreError> {
     let mut registry = FileRegistry::new();
     let files = walker
-        .filter_map(|entry| eligible_file(entry, extensions, config))
-        .map(|metadata| register_discovered(metadata, &mut registry))
-        .collect();
-    DiscoveryResult { registry, files }
+        .map(|entry| eligible_file(entry, extensions, config, &projects))
+        .filter_map(Result::transpose)
+        .map(|result| result.map(|metadata| register_discovered(metadata, &mut registry)))
+        .collect::<Result<_, _>>()?;
+    Ok(DiscoveryResult {
+        projects,
+        registry,
+        files,
+    })
 }
 
 /// Applies the same file, extension, language, and config gates to every walk.
@@ -328,17 +351,34 @@ fn eligible_file<S: BuildHasher>(
     entry: ignore::DirEntry,
     extensions: &HashMap<String, &'static str, S>,
     config: &ExclusionConfig,
-) -> Option<(PathBuf, String, &'static str)> {
-    if !entry
-        .file_type()
-        .is_some_and(|file_type| file_type.is_file())
-    {
+    projects: &OspreyProjects,
+) -> Result<Option<FileMetadata>, CoreError> {
+    let Some((path, extension, fallback)) = registered_file(entry, extensions) else {
+        return Ok(None);
+    };
+    if config.is_excluded(&path, None) {
+        return Ok(None);
+    }
+    let language = if matches!(fallback, "osprey" | "osprey-ml" | "python") {
+        projects.language(&path, &crate::pipeline::read_source(&path)?, fallback)?
+    } else {
+        fallback
+    };
+    Ok((!config.is_excluded(&path, Some(language))).then_some((path, extension, language)))
+}
+
+/// Reject non-source entries before reading source or project-specific markers.
+fn registered_file<S: BuildHasher>(
+    entry: ignore::DirEntry,
+    extensions: &HashMap<String, &'static str, S>,
+) -> Option<FileMetadata> {
+    if !entry.file_type().is_some_and(|kind| kind.is_file()) {
         return None;
     }
     let path = entry.into_path();
     let extension = lowercase_extension(&path)?;
     let language = extensions.get(&extension).copied()?;
-    (!config.is_excluded(&path, Some(language))).then_some((path, extension, language))
+    Some((path, extension, language))
 }
 
 /// Attaches the registry identity after a discovered file has passed admission.
@@ -357,6 +397,8 @@ fn register_discovered(
 /// Output of [`discover_files`].
 #[derive(Debug)]
 pub struct DiscoveryResult {
+    /// Osprey project selection rules for subsequent editor changes.
+    pub(crate) projects: OspreyProjects,
     /// Populated file registry; ownership passes to the pipeline.
     pub registry: FileRegistry,
     /// Files discovered, in walk order.

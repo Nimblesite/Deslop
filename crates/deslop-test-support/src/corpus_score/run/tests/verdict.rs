@@ -1,6 +1,6 @@
 //! [CORPUS-REPORT-VERDICT] A run's verdict, driven end to end through a run
 //! manifest on disk: a clean measured run opens with its passing verdict, and
-//! a judged run fails only on a pair that passed before.
+//! a judged run fails on any unaccepted incorrect pair.
 
 use serde_json::{json, Value};
 
@@ -11,10 +11,9 @@ use super::{
     STRICT, UNGATED, UNRECORDED_DETAIL, VERDICT_FAILURES,
 };
 
-/// [CORPUS-REPORT-VERDICT] The line the known-defect note lists one untracked
-/// failure that never passed on.
+/// [CORPUS-REPORT-VERDICT] The caution line naming an unaccepted failure.
 fn known_line(what: &str, detail: &str) -> String {
-    format!("> - ⚠️ **{REPO}** — `{what}`: {detail}")
+    format!("> - 🔴 **{REPO}** — `{what}`: {detail}")
 }
 
 /// [CORPUS-REPORT-VERDICT] Every check passed, so no failure banner is carried.
@@ -57,13 +56,10 @@ fn judged_scorecard(scanned: &Value) -> Result<(WrittenScorecard, Value)> {
     Ok((written, recorded))
 }
 
-/// [CORPUS-REPORT-VERDICT] A judged run is headed by whether anything that
-/// passed before fails now, in the markdown and the JSON alike: the same
-/// repository passes while its judged pair is reported, and still passes —
-/// listing the pair as a known defect — when it is missed with no pass on
-/// record, because a pair that never passed cannot regress.
+/// [CORPUS-REPORT-VERDICT] A correct judgment passes; an unaccepted incorrect
+/// judgment fails in the rendered report and the JSON alike.
 #[test]
-fn a_judged_run_fails_only_on_a_pair_that_passed_before() -> Result<()> {
+fn a_judged_run_fails_on_an_unaccepted_incorrect_pair() -> Result<()> {
     let (clean, clean_json) = judged_scorecard(&report(&the_pair()))?;
     assert_eq!(
         clean.markdown.lines().next(),
@@ -89,13 +85,13 @@ fn a_judged_run_fails_only_on_a_pair_that_passed_before() -> Result<()> {
     let (missed, missed_json) = judged_scorecard(&report(&[]))?;
     assert_eq!(
         missed.markdown.lines().next(),
-        Some(PASSED_HEADING),
-        "a missed CLEARLY IN that never passed is no regression, so the run passes:\n{}",
+        Some(FAILED_HEADING),
+        "an unaccepted missed CLEARLY IN fails the run:\n{}",
         missed.markdown
     );
     for row in [
         known_line(MISSED_DEFECT, UNRECORDED_DETAIL).as_str(),
-        RECORD_PASS,
+        RECORD_FAIL,
     ] {
         assert!(
             missed.markdown.contains(row),
@@ -105,8 +101,8 @@ fn a_judged_run_fails_only_on_a_pair_that_passed_before() -> Result<()> {
     }
     for claim in [FAILED_HEADING, CAUTION, RECORD_FAIL] {
         assert!(
-            !missed.markdown.contains(claim),
-            "a known defect is never shown as a regression (`{claim}`)"
+            missed.markdown.contains(claim),
+            "an unaccepted failure is shown as blocking (`{claim}`)"
         );
     }
     assert_eq!(

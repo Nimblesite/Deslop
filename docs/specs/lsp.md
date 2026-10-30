@@ -14,7 +14,9 @@ The editor owns stdio, so anything else that wants the live report needs its own
 
 The endpoint is **an accessor, never a second engine**. It answers from the live session's current report and mutates nothing but the refresh it is explicitly asked for; the analysis, the watcher and the schedule stay the editor session's. It is bound at startup and removed on exit, so a stale artefact never advertises a server that has gone. Its transport is per platform — a Unix domain socket where those exist, TCP loopback with a per-session secret on Windows ([LIVE-IPC-SOCKET], [LIVE-IPC-TCP]) — and a reply it serves carries the producing version, so a client from another build is refused by name rather than left to misparse it ([MCP-IPC-WIRE-MISMATCH]).
 
-Implemented in `deslop-lsp/src/ipc/`, bound through `deslop-core`'s shared transport; pinned by `crates/deslop-lsp/tests/state_file_and_ipc.rs`.
+Overlong Unix socket paths use the authenticated TCP transport automatically. If the endpoint cannot start, the editor receives an error notification after initialization naming the workspace, MCP availability and the underlying cause; a log warning alone is insufficient. The editor's analysis remains available.
+
+Implemented in `deslop-lsp/src/ipc/`, bound through `deslop-core`'s shared transport; pinned by `crates/deslop-lsp/tests/state_file_and_ipc.rs`, `tests/notifications.rs` and `crates/deslop-mcp/tests/transport/workspace_paths.rs`.
 
 ### [LSP-CLI-HELP] Command-line help
 

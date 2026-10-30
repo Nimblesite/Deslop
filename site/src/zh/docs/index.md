@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: 快速开始 — 安装 Deslop 并查找重复代码
-description: 安装 Deslop，在九种编程语言中查找重复代码。一个 VS Code 扩展即可获得实时警告、面向编码智能体的 MCP 检查和 CLI。
+description: 安装 Deslop，在十种编程语言中查找重复代码。一个 VS Code 扩展即可获得实时警告、面向编码智能体的 MCP 检查和 CLI。
 eleventyNavigation:
   key: 快速开始
   order: 1
@@ -12,7 +12,7 @@ lang: zh
 
 # 快速开始
 
-**Deslop 在九种编程语言中查找重复代码，按影响程度排列最值得移除的重复，并在相似代码已经存在时告诉你的编码智能体。** 它运行于你的工作区，并随你的输入实时更新 —— Claude Code、Cursor、Copilot、Continue、Codex 以及你的编辑器读取的都是同一份实时分析。
+**Deslop 在十种编程语言中查找重复代码，按影响程度排列最值得移除的重复，并在相似代码已经存在时告诉你的编码智能体。** 它运行于你的工作区，并随你的输入实时更新 —— Claude Code、Cursor、Copilot、Continue、Codex 以及你的编辑器读取的都是同一份实时分析。
 
 安装它的首选方式是 **VS Code 扩展**。一次安装即可获得全部三个接口面：实时编辑器警告、智能体写代码前所做的那次检查，以及 CLI。
 
@@ -24,7 +24,7 @@ lang: zh
 - **命令行：** `code --install-extension nimblesite.deslop-live`
 - **浏览器：** 打开 [Deslop.live Marketplace 页面](https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live) 并点击**安装**。
 
-随后打开一个受支持的源文件（`.cs`、`.rs`、`.py`、`.dart`、`.js`、`.mjs`、`.cjs`、`.jsx`、`.ts`、`.tsx`、`.php`、`.fs`、`.fsx` 或 `.go`）。实时气泡会立即生效，并且随着文件监视器触发，**Top Offenders** 树状视图会随之填充。
+随后打开一个受支持的源文件（`.cs`、`.rs`、`.py`、`.dart`、`.js`、`.mjs`、`.cjs`、`.jsx`、`.ts`、`.tsx`、`.php`、`.fs`、`.fsx` `.go` 或 `.osp`）。实时气泡会立即生效，并且随着文件监视器触发，**Top Offenders** 树状视图会随之填充。
 
 该扩展捆绑了面向 `darwin-arm64`、`darwin-x64`、`linux-x64`、`linux-arm64` 和 `win32-x64` 的原生二进制文件 —— 系统会自动为你选择正确的那一个。
 

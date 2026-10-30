@@ -83,6 +83,7 @@ fn occurrence(path: &str, start: usize, end: usize) -> ReportOccurrence {
         end_line: 1,
         hidden: false,
         in_diff: None,
+        language: None,
     }
 }
 

@@ -7,6 +7,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 publish = false
+autotests = false
 
 [dependencies]
 anyhow.workspace = true
@@ -27,6 +28,10 @@ tempfile.workspace = true
 [[bin]]
 name = "corpus-score"
 path = "src/bin/corpus-score.rs"
+
+[[test]]
+name = "suite"
+path = "tests/suite.rs"
 
 [lints]
 workspace = true

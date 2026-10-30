@@ -391,8 +391,10 @@ fn a_judged_run_with_no_report_fails_the_strict_gate() -> Result<()> {
 }
 
 /// What the judged pair record section says, by outcome.
-pub(super) const RECORD_PASS: &str = "**PASS** — no judged pair that passed before fails now.";
-pub(super) const RECORD_FAIL: &str = "**FAIL** — a judged pair that passed before fails now.";
+pub(super) const RECORD_PASS: &str =
+    "**PASS** — every failed judged pair is explicitly accepted on record.";
+pub(super) const RECORD_FAIL: &str =
+    "**FAIL** — an unaccepted judged pair fails or a passing pair regressed.";
 
 /// A run manifest naming the fixture repository with a register that judges
 /// one CLEARLY IN pair, the report its scan wrote and its measured cost.

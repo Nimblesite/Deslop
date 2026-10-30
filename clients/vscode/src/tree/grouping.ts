@@ -19,6 +19,7 @@ import {
   FileNode,
   GroupNode,
   KindGroupNode,
+  languageIcon,
   Node,
 } from "./nodes";
 import { displayPath, representativePath } from "./paths";
@@ -190,7 +191,7 @@ export function buildKindMode(
 export function buildLanguageMode(clusters: ReportCluster[]): Node[] {
   const groups = new Map<string, ReportCluster[]>();
   for (const cluster of clusters) {
-    const language = languageForPath(representativePath(cluster));
+    const language = languageForPath(representativePath(cluster), cluster.occurrences[0]?.language);
     const members = groups.get(language) ?? [];
     members.push(cluster);
     groups.set(language, members);
@@ -198,7 +199,7 @@ export function buildLanguageMode(clusters: ReportCluster[]): Node[] {
   return [...groups.entries()]
     .map(([language, members]) => ({ language, members: members.slice().sort(byRank) }))
     .sort((left, right) => compareGroups(left.members, right.members))
-    .map(({ language, members }) => registerGroup(new GroupNode(languageDisplayName(language), members, "deslop.languageGroup", true), members));
+    .map(({ language, members }) => registerGroup(new GroupNode(languageDisplayName(language), members, "deslop.languageGroup", true, languageIcon(language)), members));
 }
 
 function compareGroups(left: ReportCluster[], right: ReportCluster[]): number {

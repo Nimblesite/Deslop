@@ -14,6 +14,12 @@
 /// Shared fixture helpers, declared once for every suite below.
 mod common;
 
+#[path = "languages/osprey.rs"]
+mod osprey_language;
+
+#[path = "transport/workspace_paths.rs"]
+mod transport_workspace_paths;
+
 #[path = "query/kinds.rs"]
 mod query_kinds;
 

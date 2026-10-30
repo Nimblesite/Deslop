@@ -1,8 +1,6 @@
 <!-- agent-pmo:b636503 -->
 # Deslop Live — Agent Instructions
 
-Default to not closing GitHub issues, even on PRs unless the user requests this.
-
 Deslop is a duplicate-code detector. **We are in accuracy-audit mode.** One measure outranks everything else — not features, not languages, not UI, not performance:
 
 > **Every reported cluster is a real duplicate, and every real duplicate is reported.** And, the reported figures like percentages are **transparent, accurate** calculations 
@@ -33,8 +31,10 @@ CRITICAL: YOU ARE NOT ALLOWED TO BACK OFF ANY TESTS OR ASSERTIONS
 YOU MUST FIX THE ROOT CAUSE OF BUGS; NOT WORK AROUND THEM
 REPLACE BROKEN CODE; DON'T WRITE NEW CODE WITH A DUPLICATE PATH
 
-## Standing prohibitions
+## Hard Rules
 
+- Clean up disk space routinely. If you put temporary files on the hard drive, you need to delete them afterwards. Disk space is your responsibility
+- Default to not closing GitHub issues, even on PRs unless the user requests this.
 - ⚠️ **Never kill a VS Code process**, including browser-hosted instances. The user cannot recover from this.
 - ⚠️ **Never host a report anywhere.** No Claude artifacts, no hosted pages, no external upload — for any result, scorecard, comparison or audit. **Every report is a markdown file, in this repository, produced MECHANICALLY by the code that ran the measurement.** A report typed up by an agent is not a report: the numbers cannot be reproduced, cannot be diffed, cannot be re-run, and the agent is free to be wrong. If a figure is worth reporting, the tool that measured it emits it. Point the user at the file path.
 - ⚠️ **Headlines only. No essays.** Chat replies are a status line, not a document: the result, the number that moved, the file path. No restating the request, no narrating the steps taken, no tables the emitted report already contains. Use an emoji to mark anything critical — 🛑 a blocker, 🔴 a regression or failing gate, ✅ a pass — so it is findable at a glance. Detail belongs in the mechanically-produced report above; point at it instead of retyping it.

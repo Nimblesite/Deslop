@@ -1,0 +1,4 @@
+[project]
+name = "flavors"
+source_roots = ["."]
+python_sources = ["alpha.py", "beta.py"]

@@ -298,19 +298,19 @@ fn write_clusters_by_language(out: &mut String, report: &Report, snippets: &mut 
 /// the input worst-first order within each bucket. Delegates to the
 /// shared first-seen grouper so language sections and bucket groups
 /// order identically.
-fn group_clusters_by_language(
-    clusters: &[ReportCluster],
-) -> Vec<(&'static str, Vec<&ReportCluster>)> {
+fn group_clusters_by_language(clusters: &[ReportCluster]) -> Vec<(&str, Vec<&ReportCluster>)> {
     group_by_first_seen(clusters, canonical_language)
 }
 
 /// Language id of a cluster's canonical (first) occurrence, or
 /// `"unknown"` when it has none.
-fn canonical_language(cluster: &ReportCluster) -> &'static str {
-    cluster
-        .occurrences
-        .first()
-        .map_or("unknown", |occurrence| language_for_path(&occurrence.path))
+fn canonical_language(cluster: &ReportCluster) -> &str {
+    cluster.occurrences.first().map_or("unknown", |occurrence| {
+        occurrence
+            .language
+            .as_deref()
+            .unwrap_or_else(|| language_for_path(&occurrence.path))
+    })
 }
 
 /// One-line per-language count clause for the intro lede, worst-first.
@@ -331,6 +331,7 @@ fn language_breakdown(report: &Report) -> String {
 /// Human display name for a language id used in section headings.
 fn language_display_name(language: &str) -> &'static str {
     match language {
+        "osprey" | "osprey-ml" | "osprey-python" => "Osprey",
         "csharp" => "C#",
         "rust" => "Rust",
         "python" => "Python",
@@ -417,7 +418,10 @@ fn write_example(
     let Some(example) = occurrences.first() else {
         return;
     };
-    let language = language_for_path(&example.path);
+    let language = example
+        .language
+        .as_deref()
+        .unwrap_or_else(|| language_for_path(&example.path));
     let location = snippets.location(&example.path, example.start_byte);
     let badge = diff_badge_markup(example.in_diff);
     match snippets.snippet(&example.path, example.start_byte, example.end_byte) {

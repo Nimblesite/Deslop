@@ -29,9 +29,10 @@ pub fn is_import_boilerplate_carrier(language: &str, kind: &str) -> bool {
     match language {
         "csharp" => csharp_carrier(kind),
         "python" => python_carrier(kind),
+        "osprey-python" => python_import_carrier(kind),
         "rust" => rust_carrier(kind),
         "dart" => dart_carrier(kind),
-        "javascript" | "typescript" | "tsx" => ecmascript_carrier(kind),
+        "javascript" | "typescript" | "tsx" | "osprey" | "osprey-ml" => ecmascript_carrier(kind),
         "go" => go_carrier(kind),
         _ => false,
     }
@@ -108,9 +109,14 @@ fn csharp_carrier(kind: &str) -> bool {
 
 /// Python import/prologue and framework-route carriers.
 fn python_carrier(kind: &str) -> bool {
+    kind == "decorator" || python_import_carrier(kind)
+}
+
+/// Osprey decorators declare language semantics and remain structural.
+fn python_import_carrier(kind: &str) -> bool {
     matches!(
         kind,
-        "future_import_statement" | "import_statement" | "import_from_statement" | "decorator"
+        "future_import_statement" | "import_statement" | "import_from_statement"
     )
 }
 

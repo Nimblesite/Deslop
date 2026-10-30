@@ -17,7 +17,7 @@ use tracing::debug;
 
 use crate::{
     backend::McpBackend,
-    protocol::{jsonrpc_error, JsonRpcError},
+    protocol::{jsonrpc_error, JsonRpcError, RequestId},
 };
 
 mod handlers;
@@ -30,7 +30,8 @@ use handlers::{
     call_cluster_by_id, call_compare_pair, call_duplicates, call_find_similar, call_merge_plan,
     call_rescan, call_schema_doc, call_session,
 };
-use limits::cap_tool_result;
+use limits::cap_tool_result_for_request;
+pub(crate) use limits::{request_id_fits_response_budget, REQUEST_ID_BUDGET_MESSAGE};
 use schemas::{
     schema_cluster_by_id, schema_compare_pair, schema_duplicates, schema_empty,
     schema_find_similar, schema_merge_plan, schema_rescan, schema_session,
@@ -163,11 +164,11 @@ pub fn wrap_tool_result(payload: &Value) -> Value {
 
 /// Dispatches a `tools/call` request by name.
 ///
-/// The returned [`Value`] is passed through [`cap_tool_result`] so a
+/// The returned [`Value`] is passed through [`cap_tool_result_for_request`] so a
 /// pathological payload (multi-MB top-offenders on a huge monorepo)
 /// can never blow out a strict MCP client (Codex's `rmcp_client` in
 /// particular — see). The cap is silent on small results
-/// and adds a `truncated` flag plus pointer to `report-get` on large
+/// and adds a `truncated` flag plus pointer to `duplicates` on large
 /// ones.
 ///
 /// # Errors
@@ -179,9 +180,10 @@ pub fn dispatch_tool_call(
     backend: &dyn McpBackend,
     name: &str,
     arguments: &Value,
+    request_id: &RequestId,
 ) -> Result<Value, JsonRpcError> {
     let payload = dispatch_inner(backend, name, arguments)?;
-    Ok(cap_tool_result(name, payload))
+    cap_tool_result_for_request(name, payload, request_id)
 }
 
 /// Inner dispatch table — kept separate from [`dispatch_tool_call`]

@@ -50,13 +50,17 @@ pub fn build_for_range(
     let Ok(text) = std::str::from_utf8(source) else {
         return Vec::new();
     };
-    let Some(parser) = refactor::parser_for_path(path) else {
-        return Vec::new();
-    };
     let start_byte = byte_for_position(text, range.start);
     let end_byte = byte_for_position(text, range.end);
     let mut actions = Vec::new();
     for cluster in &report_for_range_in(report, path, start_byte, end_byte) {
+        let Some(parser) = cluster
+            .occurrences
+            .first()
+            .and_then(|occurrence| refactor::parser_for_occurrence(occurrence, path))
+        else {
+            continue;
+        };
         if let Some(plan) = plan_for_cluster(cluster, source, parser.as_ref()) {
             actions.push(action_for_plan(uri, text, &plan));
         } else if refactor::preconditions::eligible_ranges(cluster).is_some() {

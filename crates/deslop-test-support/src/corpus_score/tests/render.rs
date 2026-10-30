@@ -47,12 +47,12 @@ const BOTH_ELAPSED_MS: u64 = OLD_ELAPSED_MS + NEW_ELAPSED_MS;
 const BOTH_CPU_SECONDS: f64 = CPU_SECONDS + CPU_SECONDS;
 const TWO_REPOS: usize = 2;
 /// The one pair the fixture misses, failing with no record: the strict default.
-const NO_REGRESSION: usize = 0;
+const ONE_BLOCKING_FAILURE: usize = 1;
 /// How the record section says whether the run kept to it.
 const PASS_CLAIM: &str = "**PASS**";
 const FAIL_CLAIM: &str = "**FAIL**";
 /// What opens the note that lists known defects.
-const NOTE: &str = "> [!NOTE]";
+const CAUTION_BLOCK: &str = "> [!CAUTION]";
 /// How the defect list says that pair stands against the record.
 const UNRECORDED_DEFECT: &str = "- **FALSE NEGATIVE** fixture — `src/one.rs:10-20` + \
                                  `src/two.rs:30-40` — failing, and not on record as failing";
@@ -348,7 +348,7 @@ fn the_engines_sit_side_by_side_so_one_row_carries_the_whole_comparison() -> Res
 }
 
 #[test]
-fn a_pair_that_never_passed_renders_as_a_known_defect_that_names_the_pair() -> Result<()> {
+fn an_unaccepted_pair_renders_as_a_blocking_failure_that_names_the_pair() -> Result<()> {
     let (found, missed) = found_and_missed()?;
     let never_passed = card(&found, &missed);
     assert_eq!(
@@ -357,18 +357,18 @@ fn a_pair_that_never_passed_renders_as_a_known_defect_that_names_the_pair() -> R
             .iter()
             .filter(|pair| pair.standing.fails_the_run())
             .count(),
-        NO_REGRESSION,
-        "the missed pair has no pass on record, so it cannot have regressed"
+        ONE_BLOCKING_FAILURE,
+        "the missed pair is unaccepted, so it blocks the run"
     );
     let rendered = scorecard(&never_passed);
     assert_eq!(
         rendered.lines().next(),
-        Some(PASSED_HEADING),
-        "nothing regressed, so the document is headed as passed: {rendered}"
+        Some(FAILED_HEADING),
+        "an unaccepted failure heads the document as failed: {rendered}"
     );
     assert!(
-        rendered.contains(NOTE) && rendered.contains(UNRECORDED_LINE),
-        "the known-defect note names the failing pair before any table: {rendered}"
+        rendered.contains(CAUTION_BLOCK) && rendered.contains(UNRECORDED_LINE),
+        "the caution block names the failing pair before any table: {rendered}"
     );
     assert!(
         rendered.contains(UNRECORDED_DEFECT),
@@ -376,8 +376,8 @@ fn a_pair_that_never_passed_renders_as_a_known_defect_that_names_the_pair() -> R
     );
     for claim in [FAIL_CLAIM, CAUTION, FAILED_HEADING] {
         assert!(
-            !rendered.contains(claim),
-            "a known defect is never rendered as a regression (`{claim}`): {rendered}"
+            rendered.contains(claim),
+            "an unaccepted failure is rendered as blocking (`{claim}`): {rendered}"
         );
     }
     Ok(())

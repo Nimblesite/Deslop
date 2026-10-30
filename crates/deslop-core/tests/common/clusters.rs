@@ -103,6 +103,7 @@ pub(crate) fn report_occurrence(
         end_line: 0,
         hidden,
         in_diff: None,
+        language: None,
     }
 }
 

@@ -51,6 +51,8 @@ use crate::{
 /// is structurally prevented by the `FileRegistry` invariant.
 #[derive(Debug)]
 pub struct PipelineSession {
+    /// [LANG-CAND-OSPREY] Manifest selection rules shared by all live edits.
+    pub(super) osprey_projects: crate::lang::osprey_selection::OspreyProjects,
     /// Workspace root pinned at [`PipelineSession::initialise`].
     pub(super) root: PathBuf,
     /// Subtree-size floor used throughout the session.
@@ -397,7 +399,11 @@ fn build_store(
 /// live ingest gate admits ([LIVE-CONFIG-LIVE] #189, ignore-rule
 /// parity #287).
 fn reshapes_corpus(path: &Path, watched: &[PathBuf]) -> bool {
-    is_config_path(path, watched) || is_ignore_rule_path(path)
+    is_config_path(path, watched)
+        || is_ignore_rule_path(path)
+        || path
+            .file_name()
+            .is_some_and(|name| name == crate::lang::osprey_selection::MANIFEST)
 }
 
 /// Resolves the exclusion config using the session's override path or

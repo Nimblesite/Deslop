@@ -13,6 +13,9 @@ use tower_lsp::lsp_types::{CodeActionOrCommand, Position, Range};
 
 use super::*;
 
+#[path = "code_action_tests/osprey.rs"]
+mod osprey;
+
 /// Byte spans of the two duplicated statement runs in a fixture.
 type OccurrenceSpans = ((usize, usize), (usize, usize));
 
@@ -103,6 +106,7 @@ fn occurrence(path: &Path, span: (usize, usize)) -> ReportOccurrence {
         end_line: 0,
         hidden: false,
         in_diff: None,
+        language: None,
     }
 }
 

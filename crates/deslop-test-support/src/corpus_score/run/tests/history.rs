@@ -7,10 +7,12 @@ use std::{fs, path::Path};
 use anyhow::{anyhow, Result};
 
 use super::{
+    judged_run, manifest,
     record::{
         holding, scored, scored_as, seed, the_engine, FIRST_RUN, FOURTH_RUN, SECOND_RUN, THIRD_RUN,
     },
-    write, ELAPSED_MS, PEAK_RSS_MB, REPO, RUN, SOURCE_COMMIT, STEM, STRICT,
+    write, CheckFailure, CheckOutcome, CHECKS, ELAPSED_MS, FAILING_CHECK, FAILURE_DETAIL,
+    PEAK_RSS_MB, REGISTER, REPO, REPORT, RUN, SOURCE_COMMIT, STEM, STRICT, TIMING,
 };
 use crate::corpus_score::{
     history::{
@@ -57,7 +59,8 @@ const LOG_REPO_ROW: &str =
                             | 1 | 0 | 295.00 s | 1210.50 s | 781% | 7947 MB |";
 const LOG_REGRESSION: &str = "  - 🔴 **flutter** — false negative — `src/one.rs:10-20` + \
                               `src/two.rs:30-40` — passed in the run of 2026-10-01T00:00:00Z";
-const LOG_KNOWN_DEFECT: &str = "- ⚠️ known defect — **flutter** — false negative, not reported \
+const LOG_KNOWN_DEFECT: &str =
+    "- ⚠️ defect without a prior pass — **flutter** — false negative, not reported \
                                 — `src/one.rs:10-20` + `src/two.rs:30-40`";
 /// The JSON scorecard's sections, in key order: each judged pair is written
 /// once, under its repository, and never again in a list of its own.
@@ -414,3 +417,5 @@ fn a_run_held_to_the_history_must_name_its_commit() -> Result<()> {
     );
     Ok(())
 }
+
+mod verdict;

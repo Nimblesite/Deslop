@@ -159,11 +159,13 @@ fn page_metrics(report: &Report, include_per_file: bool) -> RepoMetrics {
 }
 
 /// Returns the stable first occurrence's language id.
-fn cluster_language(cluster: &ReportCluster) -> &'static str {
-    cluster
-        .occurrences
-        .first()
-        .map_or("unknown", |occurrence| language_for_path(&occurrence.path))
+fn cluster_language(cluster: &ReportCluster) -> &str {
+    cluster.occurrences.first().map_or("unknown", |occurrence| {
+        occurrence
+            .language
+            .as_deref()
+            .unwrap_or_else(|| language_for_path(&occurrence.path))
+    })
 }
 
 /// Builds a compact cluster row: identity, rank, kind, and mass.

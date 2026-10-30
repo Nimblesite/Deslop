@@ -146,6 +146,7 @@ mod tests {
             end_line: start_line,
             hidden: false,
             in_diff: None,
+            language: None,
         }
     }
 

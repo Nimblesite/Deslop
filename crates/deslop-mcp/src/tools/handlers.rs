@@ -59,6 +59,8 @@ pub(super) fn call_duplicates(
 
 /// Forces a refresh and returns a page from the same fresh generation.
 pub(super) fn call_rescan(backend: &dyn McpBackend, args: &Value) -> Result<Value, JsonRpcError> {
+    let filters = extract_filters(args)?;
+    let shape = extract_page_shape(args)?;
     let paths = extract_optional_paths(args, "paths")?;
     let progress = backend.mark_changed(&paths).map_err(backend_to_rpc)?;
     let report = backend.report_get().map_err(backend_to_rpc)?;
@@ -66,8 +68,8 @@ pub(super) fn call_rescan(backend: &dyn McpBackend, args: &Value) -> Result<Valu
         &report,
         progress.generation,
         &report.clusters,
-        extract_page_shape(args)?,
-        &extract_filters(args)?,
+        shape,
+        &filters,
     );
     to_value(&RescanPayload {
         generation: progress.generation,
@@ -359,21 +361,25 @@ fn extract_page_shape(args: &Value) -> Result<PageShape, JsonRpcError> {
 /// Extracts the shared cluster-owned filters.
 fn extract_filters(args: &Value) -> Result<DuplicatesFilters, JsonRpcError> {
     Ok(DuplicatesFilters {
-        kinds: args
-            .get("kinds")
-            .map(|value| {
-                serde_json::from_value(value.clone())
-                    .map_err(|_| invalid_parameter("kinds", "array of registered clone kinds"))
-            })
-            .transpose()?,
+        kinds: extract_optional_filter(args, "kinds", "array of registered clone kinds")?,
         languages: extract_string_array(args, "languages")?,
-        path_contains: args
-            .get("path_contains")
-            .and_then(Value::as_str)
-            .map(str::to_owned),
+        path_contains: extract_optional_filter(args, "path_contains", "string")?,
         severities: extract_string_array(args, "severities")?,
-        min_size: extract_optional_usize(args, "min_size"),
+        min_size: extract_optional_filter(args, "min_size", "non-negative integer")?,
     })
+}
+
+/// Present filters must have their declared wire type; only omission means no filter.
+fn extract_optional_filter<T: serde::de::DeserializeOwned>(
+    args: &Value,
+    field: &str,
+    expected: &str,
+) -> Result<Option<T>, JsonRpcError> {
+    args.get(field)
+        .map(|value| {
+            serde_json::from_value(value.clone()).map_err(|_| invalid_parameter(field, expected))
+        })
+        .transpose()
 }
 
 /// Extracts the positive result limit applied after shared filtering.

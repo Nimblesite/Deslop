@@ -32,7 +32,7 @@ use crate::{
     lang::{shared::parse_source, LanguageParser},
     pipeline::{default_parsers, language_for_path},
     refactor::emit::EmitRequest,
-    report::ReportCluster,
+    report::{ReportCluster, ReportOccurrence},
 };
 
 /// Refactor-computation failure. Reserved for "we tried to compute and
@@ -131,7 +131,27 @@ pub(crate) fn free_variables_of_run(
 /// pipeline session.
 #[must_use]
 pub fn parser_for_path(path: &Path) -> Option<Box<dyn LanguageParser>> {
-    let language = language_for_path(path);
+    parser_for_language(language_for_path(path))
+}
+
+/// Resolves the recorded parser identity, including contextual Osprey flavors.
+/// Legacy reports without identity fall back to the occurrence's absolute path.
+/// [LANG-CAND-OSPREY] Unsaved source and manifest selection must survive dispatch.
+#[must_use]
+pub fn parser_for_occurrence(
+    occurrence: &ReportOccurrence,
+    path: &Path,
+) -> Option<Box<dyn LanguageParser>> {
+    parser_for_language(
+        occurrence
+            .language
+            .as_deref()
+            .unwrap_or_else(|| language_for_path(path)),
+    )
+}
+
+/// Selects the single registered implementation for a parser identity.
+fn parser_for_language(language: &str) -> Option<Box<dyn LanguageParser>> {
     default_parsers()
         .into_iter()
         .find(|parser| parser.id() == language)

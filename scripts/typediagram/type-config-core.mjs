@@ -217,6 +217,8 @@ export const CORE_TYPE_CONFIG = {
   FileMetric: {
     docs: "One duplication-breakdown row, carried on `RepoMetrics.per_file` (one per analysed file; clean files appear with `duplicated_loc == 0` so percentage denominators stay exact) and on `RepoMetrics.folders` (one per folder prefix with duplicated lines). Every figure — file, folder, repo — is computed by the engine's single `percent` function ([METRICS-REPO]); consumers only read these rows, never recompute.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldSerdeAttrs: { language: ["default", 'skip_serializing_if = "Option::is_none"'] },
+    tsOptional: ["language"],
     fieldOverrides: {
       path: "PathBuf",
       analysed_loc: "u64",
@@ -224,6 +226,7 @@ export const CORE_TYPE_CONFIG = {
     },
     fieldDocs: {
       path: "Source path, relative to the scan root when possible.",
+      language: "Engine-selected parser identity ([LANG-CAND-OSPREY]); absent for folders and older reports.",
       analysed_loc: "Physical lines in this file.",
       duplicated_loc: "Lines in this file covered by `>= 2` non-hidden clone occurrences.",
       duplication_percent: "Clamped `100.0 * duplicated_loc / analysed_loc` for this file.",

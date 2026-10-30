@@ -23,7 +23,7 @@ use sysinfo::{CpuRefreshKind, System};
 
 use super::{
     gate::CorpusTotals,
-    outcomes::{Outcome, PairKey, PairOutcome},
+    outcomes::{Outcome, PairKey, PairOutcome, Standing},
     render::{Scorecard, TargetScore},
     source::Source,
     verdict::FailureReason,
@@ -126,8 +126,8 @@ pub struct Judgment {
     /// [CORPUS-REPORT-ENTRY] What failed, absent on a pass.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub failed: Option<String>,
-    /// Whether the pair passed before and fails now — written only when it
-    /// did, since that is what fails the run.
+    /// Whether the pair passed before and fails now — written only for an
+    /// actual regression, not every failure that blocks the run.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub regression: bool,
 }
@@ -156,16 +156,16 @@ pub struct RunRecord {
     pub source: Source,
     /// The machine it ran on.
     pub host: Host,
-    /// True when nothing that passed before fails now.
+    /// True when the scorecard verdict passes, including curated checks.
     pub passed: bool,
     /// The run's standing across every repository it scored: judged and
     /// correct pairs, the score, and summed wall and CPU time with the peaks.
     pub totals: CorpusTotals,
-    /// Judged pairs that failed the run: on record as passing, or passing in
+    /// Judged pairs on record as passing, or passing in
     /// an earlier run of the history, and failing now.
     pub regressions: usize,
-    /// Judged pairs failing that never passed — known defects, not
-    /// regressions.
+    /// Failed judgments without a recorded prior pass, accepted or unaccepted.
+    /// The existing JSON field name does not imply that these failures are tolerated.
     pub known_defects: usize,
     /// Every backslide this run found.
     pub backslides: Vec<Backslide>,
@@ -258,16 +258,11 @@ pub fn record(card: &Scorecard, stem: &str) -> Option<RunRecord> {
     })
 }
 
-/// Whether a run held to the history kept to it: no pair on record as
-/// passing fails now ([CORPUS-SCORE-OUTCOMES]), and no pair that passed in an
-/// earlier run fails now.
+/// Whether the complete scorecard verdict passes, including curated checks
+/// and every backslide against earlier runs ([CORPUS-HISTORY]).
 #[must_use]
 pub fn kept(card: &Scorecard) -> bool {
-    let regressed = card
-        .outcomes
-        .iter()
-        .any(|pair| pair.standing.fails_the_run());
-    !regressed && backslid(card) == 0
+    card.verdict.passed() && backslid(card) == 0
 }
 
 /// How many judged pairs went backwards against the run history; none when
@@ -290,7 +285,7 @@ fn judgments(card: &Scorecard, backslides: &[Backslide]) -> Vec<Judgment> {
             key: pair.key.clone(),
             outcome: pair.outcome,
             failed: pair.failed.clone(),
-            regression: pair.standing.fails_the_run() || backslid.contains(&pair.key),
+            regression: pair.standing == Standing::Regressed || backslid.contains(&pair.key),
         })
         .collect()
 }

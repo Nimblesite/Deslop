@@ -23,11 +23,14 @@ use crate::{
     backend::McpBackend,
     notify::NotificationSender,
     protocol::{
-        jsonrpc_error, jsonrpc_error_response, jsonrpc_response_ok, ErrorCode, JsonRpcError,
-        JsonRpcRequest, RequestId, JSONRPC_VERSION,
+        bounded_response_frame, jsonrpc_error, jsonrpc_error_response, jsonrpc_response_ok,
+        ErrorCode, JsonRpcError, JsonRpcRequest, RequestId, JSONRPC_VERSION,
     },
     resources::{read_resource, resources_list_payload},
-    tools::{advertised_languages, dispatch_tool_call, tools_list_payload, wrap_tool_result},
+    tools::{
+        advertised_languages, dispatch_tool_call, request_id_fits_response_budget,
+        tools_list_payload, wrap_tool_result, REQUEST_ID_BUDGET_MESSAGE,
+    },
     MCP_PROTOCOL_VERSION, MCP_SERVER_NAME,
 };
 
@@ -133,6 +136,10 @@ impl<B: McpBackend> McpServer<B> {
         sender: &NotificationSender,
     ) -> Result<(), ServerError> {
         let method = request.method.as_str();
+        if method == "tools/call" && !request_id_fits_response_budget(&id) {
+            let error = jsonrpc_error(ErrorCode::InvalidRequest, REQUEST_ID_BUDGET_MESSAGE);
+            return write_json(sender, &jsonrpc_error_response(None, error));
+        }
         let params = request.params.clone().unwrap_or_else(|| json!({}));
         debug!(method = method, "mcp_request_received");
         let outcome = match method {
@@ -142,7 +149,7 @@ impl<B: McpBackend> McpServer<B> {
             "tools/list" => Ok(tools_list_payload(&advertised_languages(
                 self.backend.as_ref(),
             ))),
-            "tools/call" => self.handle_tool_call(&params),
+            "tools/call" => self.handle_tool_call(&params, &id),
             "resources/list" => Ok(resources_list_payload()),
             "resources/read" => self.handle_resource_read(&params),
             other => Err(jsonrpc_error(
@@ -207,7 +214,11 @@ impl<B: McpBackend> McpServer<B> {
 
     /// Handles `tools/call` — extracts `name` + `arguments` and
     /// forwards to [`dispatch_tool_call`].
-    fn handle_tool_call(&self, params: &Value) -> Result<Value, JsonRpcError> {
+    fn handle_tool_call(
+        &self,
+        params: &Value,
+        request_id: &RequestId,
+    ) -> Result<Value, JsonRpcError> {
         let name = params.get("name").and_then(Value::as_str).ok_or_else(|| {
             jsonrpc_error(ErrorCode::InvalidParams, "tools/call requires a 'name'")
         })?;
@@ -215,7 +226,7 @@ impl<B: McpBackend> McpServer<B> {
             .get("arguments")
             .cloned()
             .unwrap_or_else(|| json!({}));
-        let payload = dispatch_tool_call(self.backend.as_ref(), name, &arguments)?;
+        let payload = dispatch_tool_call(self.backend.as_ref(), name, &arguments, request_id)?;
         Ok(wrap_tool_result(&payload))
     }
 
@@ -235,12 +246,11 @@ fn write_json<T: serde::Serialize>(
     sender: &NotificationSender,
     value: &T,
 ) -> Result<(), ServerError> {
-    let bytes = serde_json::to_vec(value).map_err(|err| io_from_serde(&err))?;
+    let bytes = bounded_response_frame(value).map_err(|err| io_from_serde(&err))?;
     let mut writer = sender
         .lock()
         .map_err(|_| ServerError::Io(io::Error::other("mcp stdout mutex poisoned")))?;
     writer.write_all(&bytes)?;
-    writer.write_all(b"\n")?;
     writer.flush()?;
     Ok(())
 }

@@ -6,9 +6,9 @@
 ##
 ## This is the accuracy gate. It answers one question — does this build report
 ## every CLEARLY IN pair and stay silent on every CLEARLY OUT pair the judges
-## recorded — and fails on a regression, and only on a regression: a pair on
-## record as passing that fails now. A pair that has never passed is listed as
-## a known defect. Cluster totals and duplication percentages are printed as
+## recorded — and fails on an unaccepted incorrect judgment, a regression,
+## or any failed curated check. Only judged failures explicitly accepted on
+## record are tolerated. Cluster totals and duplication percentages are printed as
 ## description and gate nothing.
 ##
 ## Usage:   scripts/corpus/score-gate.sh [url#commit#language ...]

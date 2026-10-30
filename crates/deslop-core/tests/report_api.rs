@@ -183,6 +183,7 @@ fn sample_report() -> deslop_core::Report {
                 end_line: i64::try_from(index.saturating_add(1)).unwrap_or(i64::MAX),
                 hidden: false,
                 in_diff: None,
+                language: None,
             }
         })
         .collect();
