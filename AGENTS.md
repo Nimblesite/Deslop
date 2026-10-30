@@ -99,20 +99,19 @@ If you encounter code that could cause a false negative or a false positive — 
 - Keep PR documentation tight and human-readable (except for the AI section).
 - Don't use line breaks to force word wrap; let text wrap naturally.
 
-## Run Deslop on Deslop
-
-**Use the Deslop MCP if it is available; fall back to the `deslop` CLI if it is not.**
-
-- **Prevent:** before writing any code unit past a few lines, `find-similar`. On a strong match, reuse the canonical occurrence — do not write the near-copy.
-- **Clean up:** `duplicates` → `cluster-by-id` for existing duplicates; scope `duplicates` with `path` (plus `start_byte`/`end_byte`) for a specific target.
-- **A wrong, stale, or missing result from either surface is an accuracy defect** — `gh issue create` with the cluster id or triggering snippet. Never work around a defect, widen a threshold, or hide a cluster. (`gh` is the sole exception to the no-git rule.)
-
 ## Architecture
 
-```
-discover files → per-language parse (tree-sitter) → normalize AST →
-fingerprint subtrees → cluster → token LSH → embeddings (hybrid) →
-fuse signals → rank → render report
+```mermaid
+flowchart LR
+    discover[Discover files] --> parse[Per-language parse<br/>tree-sitter]
+    parse --> normalize[Normalize AST]
+    normalize --> fingerprint[Fingerprint subtrees]
+    fingerprint --> cluster[Cluster]
+    cluster --> lsh[Token LSH]
+    lsh --> embed[Embeddings<br/>hybrid]
+    embed --> fuse[Fuse signals]
+    fuse --> rank[Rank]
+    rank --> render[Render report]
 ```
 
 Every stage can lose accuracy. Normalization that strips too much manufactures false positives; too little manufactures false negatives. Ranking changes change every report — they need new assertions, not adjusted ones.
