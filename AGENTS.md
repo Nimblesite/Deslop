@@ -66,19 +66,19 @@ If you encounter code that could cause a false negative or a false positive — 
 - **All threshold numbers are configurable.** Define the defaults as constants but allow the user to override these in the config
 - **Never reference GitHub issues in code.** Reference spec IDs only. A test can refer to a gh issue only if it's an explicit regression
 - **Act autonomously.** Do not stop for confirmation — except where the strict accuracy rule says STOP. Record assumptions and continue.
-- **Aggressively DRY.** This tool detects duplication; its own codebase must be exemplary. Move code, don't copy. Copying files is prohibited.
+- **Aggressively DRY.** This tool detects duplication; its own codebase must be exemplary. Use deslop itself to prevent duplication and check the current state routinely
 - **Tree-sitter only.** Regex on source code or structured data is prohibited.
 - **No placeholders, no silent no-ops, no legacy code.** Use proper error types; legacy is deleted.
 - **No linter suppressions.** `#[allow(clippy::...)]` is prohibited — fix the code.
 - **All global state in `crates/deslop-core/src/state.rs`.** Same rule for TypeScript and every other language.
 - **Bug fixes follow the [fix-bug skill](.claude/skills/fix-bug/SKILL.md).** Fix the root cause; never work around it. Replace broken code rather than writing a duplicate path beside it.
-- **Spec IDs are hierarchical and non-numeric** — `[GROUP-TOPIC]` / `[GROUP-TOPIC-DETAIL]`, e.g. `[PARSE-CSHARP-NORMALIZE]`, `[RANK-MASS-SUM]`. Same-group sections sit adjacent; no sequential numbers. Code and tests carry the ID in a comment so `grep [PARSE-` finds spec → code → tests.
-- **Dependency versions stay in sync** across `Cargo.toml`, `.github/workflows/ci.yml`, and `.devcontainer/`.
-- **Auto-memory is off.** Durable rules go through reviewed changes to this file.
-- **IPC wire models are generated from [typeDiagram](https://typediagram.dev/docs/language-reference.html)** — never hand-written. Generated code is git-ignored, never committed.
-- **The VSIX is the only distribution.** Every build target leaves artifacts under `target/` only; `cargo install --path crates/deslop-*` is prohibited. Releases ship via `.vsix`, plus Homebrew/Scoop for the CLI.
-- **External MCP clients use the absolute VSIX path** — `~/.vscode/extensions/nimblesite.deslop-live-<VERSION>-<platform>/bin/<platform>/deslop-mcp`, equivalent on Windows; every doc snippet shows this form. A `PATH` binary shadows the versioned bundle and drifts analysis off the wire contract — an accuracy defect by construction. Bare-name `deslop-mcp` is valid only for Homebrew/Scoop installs.
-- **Logging:** `tracing` only, never `println!`/`eprintln!`. Structured fields, not interpolation — `tracing::info!(file_count = 42, lang = "csharp")`. Log entry and exit of significant operations (`error|warn|info|debug|trace`). Never log file contents, user-data paths, or secrets — counts and hashes only. Reports are not logs: they go to stdout or `--output <path>` via the renderer.
+- **Spec IDs are hierarchical and non-numeric:** `[GROUP-TOPIC]` or `[GROUP-TOPIC-DETAIL]`, e.g. `[RANK-MASS-SUM]`. Keep same-group sections adjacent. Code and tests carry the ID in a comment, so `grep [RANK-` finds spec, code and tests.
+- **Dependency versions stay in sync** across `Cargo.toml`, `.github/workflows/ci.yml` and `.devcontainer/`.
+- **Auto-memory is off.** Durable rules are reviewed changes to this file.
+- **IPC wire models are generated from [typeDiagram](https://typediagram.dev/docs/language-reference.html)**, never hand-written or committed.
+- **The VSIX is the only distribution**, plus Homebrew/Scoop for the CLI. Build output stays under `target/`; `cargo install --path crates/deslop-*` is prohibited.
+- **External MCP clients use the absolute VSIX path** `~/.vscode/extensions/nimblesite.deslop-live-<VERSION>-<platform>/bin/<platform>/deslop-mcp` (or the Windows equivalent) in every doc snippet. A `PATH` binary can drift off the wire contract. Bare `deslop-mcp` is only for Homebrew/Scoop installs.
+- **Logging:** `tracing` only, never `println!`/`eprintln!`. Use structured fields, e.g. `tracing::info!(file_count = 42)`. Log entry and exit of significant operations. Log counts and hashes, never file contents, user-data paths or secrets. Reports aren't logs: they go to stdout or `--output <path>`.
 
 ## Rust
 
