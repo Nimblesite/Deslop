@@ -29,28 +29,25 @@ If you encounter code that could cause a false negative or a false positive — 
 
 ### Invariants
 
-- Clean up after yourself. Delete any temporary files you write; disk space is your responsibility.
-- **Never kill a VS Code process**, including browser-hosted instances. The user cannot recover from this.
-- **Never host a report anywhere.** No Claude artifacts, hosted pages or external uploads for any result, scorecard, comparison or audit. Every report is a Markdown file in this repository, produced mechanically by the code that ran the measurement. A report typed up by an agent can't be reproduced, diffed or re-run, and may simply be wrong. If a figure is worth reporting, the tool that measured it emits it; point the user at the file path.
-- **No git.** No `add`, `commit`, `push`, `checkout`, `merge`, `rebase` or `worktree`. Never push to `main` or stamp yourself as co-author. One branch at a time; never start a new branch while a feature branch exists; converge branches before other work. CI handles git (`gh issue create` excepted).
-- **Tree-sitter only.** No regex or text pattern matching on source code or structured data; use the AST.
-- **Core calculations, such as percentages, exist in one place: Rust.** No calculations outside the core Rust code, e.g. none in TypeScript; any calculation outside Rust is a hard violation. This rule applies only to the core duplication-finding code, not to scripts and utilities.
-- **Files < 500 lines. Functions < 20 lines.** Refactor when over.
-- **Named constants, not literals.** Give values names and reuse them. This includes tests: tests must use named constants, not raw strings.
-- **All threshold numbers are configurable.** Define the defaults as constants but allow the user to override these in the config
-- **Never reference GitHub issues in code.** Reference spec IDs only. A test can refer to a gh issue only if it's an explicit regression
-- **No placeholders, no silent no-ops, no legacy code.** Use proper error types; legacy is deleted.
-- **No linter suppressions.** `#[allow(clippy::...)]` is prohibited — fix the code.
-- **All global state in `crates/deslop-core/src/state.rs`.** Same rule for TypeScript and every other language.
-- **Bug fixes follow the [fix-bug skill](.claude/skills/fix-bug/SKILL.md).** Fix the root cause; never work around it. Replace broken code rather than writing a duplicate path beside it.
-- **Spec IDs are hierarchical and non-numeric:** `[GROUP-TOPIC]` or `[GROUP-TOPIC-DETAIL]`, e.g. `[RANK-MASS-SUM]`. Keep same-group sections adjacent. Code and tests carry the ID in a comment, so `grep [RANK-` finds spec, code and tests.
+- 🛑 **Never kill a VS Code process**, including browser-hosted instances. The user cannot recover.
+- 🛑 **Never host a report.** No artifacts, hosted pages or uploads. Every report is a Markdown file in this repo, emitted **mechanically** by the code that ran the measurement; agent-typed figures can't be reproduced or diffed. Point the user at the file path.
+- 🛑 **One branch, one worktree.** Merge loose code, stashes and branches into a ***single*** branch.
+- **Clean up after yourself.** Delete every temporary file you write.
+- **Tree-sitter only.** **No regex** or text matching on source code or structured data.
+- **Core calculations (e.g. percentages) live only in Rust.** Any duplication-finding calculation outside core Rust (e.g. in TypeScript) is a hard violation. Scripts and utilities are exempt.
+- **Files < 500 lines, functions < 20 lines.**
+- **Named constants, not literals**, in tests too. Every threshold is a named default the user can override in config.
+- **Spec IDs, not issue numbers.** IDs are hierarchical and non-numeric (`[GROUP-TOPIC]`, `[GROUP-TOPIC-DETAIL]`) and appear in spec, code and test comments, so `grep [RANK-` finds all three. Same-group sections sit adjacent. Only explicit regression tests may cite a GitHub issue.
+- **No placeholders, silent no-ops, legacy code or linter suppressions** (`#[allow(clippy::...)]`). Use proper error types; fix the code.
+- **All global state lives in `crates/deslop-core/src/state.rs`**, with one equivalent file per other language.
+- **Bug fixes follow the [fix-bug skill](.claude/skills/fix-bug/SKILL.md).** Fix the root cause; replace broken code, **never** add a duplicate path beside it.
 - **Dependency versions stay in sync** across `Cargo.toml`, `.github/workflows/ci.yml` and `.devcontainer/`.
 - **Auto-memory is off.** Durable rules are reviewed changes to this file.
 - **IPC wire models are generated from [typeDiagram](https://typediagram.dev/docs/language-reference.html)**, never hand-written or committed.
-- **The VSIX is the only distribution**, plus Homebrew/Scoop for the CLI. Build output stays under `target/`; `cargo install --path crates/deslop-*` is prohibited.
-- **External MCP clients use the absolute VSIX path** `~/.vscode/extensions/nimblesite.deslop-live-<VERSION>-<platform>/bin/<platform>/deslop-mcp` (or the Windows equivalent) in every doc snippet. A `PATH` binary can drift off the wire contract. Bare `deslop-mcp` is only for Homebrew/Scoop installs.
-- **Logging:** `tracing` only, never `println!`/`eprintln!`. Use structured fields, e.g. `tracing::info!(file_count = 42)`. Log entry and exit of significant operations. Log counts and hashes, never file contents, user-data paths or secrets. Reports aren't logs: they go to stdout or `--output <path>`.
-- **"Deslop.live" (reactive) means the whole loop:** watcher → scheduler → session → broadcast → UI. An incremental update drives the entire pipeline, including a reactive UI refresh.
+- **The VSIX is the only distribution**, plus Homebrew/Scoop for the CLI. Build output stays under `target/`; **never** `cargo install --path crates/deslop-*`.
+- **Docs point external MCP clients at the absolute VSIX path** `~/.vscode/extensions/nimblesite.deslop-live-<VERSION>-<platform>/bin/<platform>/deslop-mcp` (or the Windows equivalent); a `PATH` binary drifts off the wire contract. Bare `deslop-mcp` is for Homebrew/Scoop only.
+- **Logging is `tracing` only**, never `println!`/`eprintln!`. Use structured fields (`tracing::info!(file_count = 42)`) and log entry and exit of significant operations. Log counts and hashes, **never** file contents, user paths or secrets. Reports go to stdout or `--output <path>`, not logs.
+- **"Deslop.live" means the whole reactive loop:** watcher → scheduler → session → broadcast → UI refresh.
 
 ### Strongly Recommended
 
