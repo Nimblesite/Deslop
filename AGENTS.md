@@ -14,44 +14,38 @@ Deslop is a duplicate-code detector. **We are in accuracy-audit mode.** One meas
 - Assert the cluster, occurrence count, file paths, bucket, and ranking order. A test that would still pass if the detector went blind asserts nothing.
 - Many assertions per test beats many tests with one assertion.
 
-## 🛑 STRICT NO INACCURATE CODE RULE
+## Strict no-inaccurate-code rule
 
 If you encounter code that could cause a false negative or a false positive — whether or not it is the code you were sent to change — do this, in order, and nothing else:
 
 1. **Write a test that fails because of the bug.** It must fail for the real reason, and you must watch it fail.
 2. **Replace all the defective code with a `panic!`**, commented with what the code did, why it was deleted, and which test pins it. You need to put a panic = "deny" ignore in for these kinds of panics
 3. **Report to the user** — file, defect, failing test, what you removed — and why.
-4. 🛑 **STOP.** Do not repair it, do not work around it, do not resume the original task.
+4. **STOP.** Do not repair it, do not work around it, do not resume the original task.
 
-**Panics are NOT ALLOWED for control flow or error handling — but are MANDATED where code is causing inaccuracies.** The quarantine `panic!` is not optional and not merely permitted; it is the required outcome, and it overrides the Rust no-panic rule below. Silently-wrong output is worse than a crash: a panic is found in seconds, a false negative is never found at all.
-
-## BUG FIXING PROCESS
-
-CRITICAL: YOU ARE NOT ALLOWED TO BACK OFF ANY TESTS OR ASSERTIONS
-YOU MUST FIX THE ROOT CAUSE OF BUGS; NOT WORK AROUND THEM
-REPLACE BROKEN CODE; DON'T WRITE NEW CODE WITH A DUPLICATE PATH
+**Panics are not allowed for control flow or error handling, but they are mandated where code is causing inaccuracies.** The quarantine `panic!` is not optional and not merely permitted; it is the required outcome, and it overrides the Rust no-panic rule below. Silently-wrong output is worse than a crash: a panic is found in seconds, a false negative is never found at all.
 
 ## Hard Rules
 
-- Clean up disk space routinely. If you put temporary files on the hard drive, you need to delete them afterwards. Disk space is your responsibility
-- Default to not closing GitHub issues, even on PRs unless the user requests this.
-- ⚠️ **Never kill a VS Code process**, including browser-hosted instances. The user cannot recover from this.
-- ⚠️ **Never host a report anywhere.** No Claude artifacts, no hosted pages, no external upload — for any result, scorecard, comparison or audit. **Every report is a markdown file, in this repository, produced MECHANICALLY by the code that ran the measurement.** A report typed up by an agent is not a report: the numbers cannot be reproduced, cannot be diffed, cannot be re-run, and the agent is free to be wrong. If a figure is worth reporting, the tool that measured it emits it. Point the user at the file path.
-- ⚠️ **Headlines only. No essays.** Chat replies are a status line, not a document: the result, the number that moved, the file path. No restating the request, no narrating the steps taken, no tables the emitted report already contains. Use an emoji to mark anything critical — 🛑 a blocker, 🔴 a regression or failing gate, ✅ a pass — so it is findable at a glance. Detail belongs in the mechanically-produced report above; point at it instead of retyping it.
-- ⚠️ **No git.** No `add`, `commit`, `push`, `checkout`, `merge`, `rebase`, `worktree`. Never push to `main`, never stamp yourself as co-author. One branch at a time; never start a new branch when a feature branch exists; converge branches before other work. CI handles git. (`gh issue create` excepted.)
-- ⚠️ **No using text pattern matching on source code or structured data. No RegEx on code**. USE THE AST!
-- ⚠️ **Token discipline.** Check file size before reading. `Grep` over `Read`; use `offset`/`limit`. Smallest diff that solves the problem. Delete dead code, unused imports, stale comments. Call out irrelevant context — bloat degrades reasoning.
-- ⚠️ **A+ quality bar.** Every change must pass review at a top-tier engineering org. Substandard code is fixed immediately, never deferred.
-- ⚠️ **"Deslop.live" (reactive) means the whole loop** — watcher → scheduler → session → broadcast → UI. An incremental update drives the entire pipeline, including a reactive UI refresh.
+- Clean up after yourself. Delete any temporary files you write; disk space is your responsibility.
+- Don't close GitHub issues, even from PRs, unless the user asks.
+- **Never kill a VS Code process**, including browser-hosted instances. The user cannot recover from this.
+- **Never host a report anywhere.** No Claude artifacts, hosted pages or external uploads for any result, scorecard, comparison or audit. Every report is a Markdown file in this repository, produced mechanically by the code that ran the measurement. A report typed up by an agent can't be reproduced, diffed or re-run, and may simply be wrong. If a figure is worth reporting, the tool that measured it emits it; point the user at the file path.
+- **Headlines only.** Chat replies are a status line: the result, the number that moved, the file path. Don't restate the request, narrate steps, or repeat tables the report already contains. Mark anything critical so it's findable at a glance: 🛑 a blocker, 🔴 a regression or failing gate, ✅ a pass.
+- **No git.** No `add`, `commit`, `push`, `checkout`, `merge`, `rebase` or `worktree`. Never push to `main` or stamp yourself as co-author. One branch at a time; never start a new branch while a feature branch exists; converge branches before other work. CI handles git (`gh issue create` excepted).
+- **No regex or text pattern matching on source code or structured data.** Use the AST.
+- **Token discipline.** Check file size before reading. `Grep` over `Read`; use `offset`/`limit`. Make the smallest diff that solves the problem. Delete dead code, unused imports and stale comments. Call out irrelevant context; bloat degrades reasoning.
+- **A+ quality bar.** Every change must pass review at a top-tier engineering org. Fix substandard code immediately; never defer it.
+- **"Deslop.live" (reactive) means the whole loop:** watcher → scheduler → session → broadcast → UI. An incremental update drives the entire pipeline, including a reactive UI refresh.
 
 ## Testing — the accuracy enforcement surface
 
 - Organise tests in to logical folders and logical files within those folders. Don't just dump tests in crates/deslop/tests and name the file after the issue name. Group them together logically
-- **Coarse E2E, black-box only.**. Drive the CLI against fixture repos; assert against rendered reports. Never reach into internals.
-- **Many user interactions per test, MANY assertions per user interaction**
+- **Coarse E2E, black-box only.** Drive the CLI against fixture repos; assert against rendered reports. Never reach into internals.
+- **Many user interactions per test, many assertions per user interaction.**
 - **Every confirmed false positive or false negative earns a fixture** that would have caught it.
-- **Never delete a failing test, never skip one, never remove an assertion.** Reducing assertiveness is prohibited. Add failing tests for broken or missing functionality.
-- **Avoid EXPLICIT regression test names / file names** Put regression tests in logical groupings with other tests, but you can subtley mention the gh issue number
+- **Never back off a test.** Never delete a failing test, skip one, or remove an assertion. Reducing assertiveness is prohibited. Add failing tests for broken or missing functionality.
+- **Avoid explicit regression test names or file names.** Put regression tests in logical groupings with other tests, but you can subtly mention the gh issue number
 - **Unit tests are only for isolating behavior of functions**
 - **Meaningful assertions only.** `assert!(true)` is banned. Assert positive, human-readable values — not the absence of AI-style labels.
 - **No try/catch that swallows an error and then asserts success.**
@@ -67,17 +61,17 @@ REPLACE BROKEN CODE; DON'T WRITE NEW CODE WITH A DUPLICATE PATH
 ## Universal rules
 
 - **Files < 500 lines. Functions < 20 lines.** Refactor when over.
-- **NAMED CONSTANTS - not literals** Give values names and REUSE them. THIS INCLUDES TESTS. TESTS MUST LEVERAGE NAMED CONSTANTS; NOT RAW STRINGS
-- **Core calcs like percentage calc only exist in ONE PLACE: Rust** ZERO calculations outside the core Rust code. E.g. no calcs in Typescript. Any calcs outside Rust is a HARD VIOLATION. Note: this rule ONLY applies to the core duplication finding code. This is not true for scripts and utilities
-- **All threshold numbers are configurable** Define the defaults as constants but allow the user to override these in the config
-- **Never reference gh issues in code** Reference SPEC IDS only. A test can refer to a gh issue only if it's an explicit regression
+- **Named constants, not literals.** Give values names and reuse them. This includes tests: tests must use named constants, not raw strings.
+- **Core calculations, such as percentages, exist in one place: Rust.** No calculations outside the core Rust code, e.g. none in TypeScript; any calculation outside Rust is a hard violation. This rule applies only to the core duplication-finding code, not to scripts and utilities.
+- **All threshold numbers are configurable.** Define the defaults as constants but allow the user to override these in the config
+- **Never reference GitHub issues in code.** Reference spec IDs only. A test can refer to a gh issue only if it's an explicit regression
 - **Act autonomously.** Do not stop for confirmation — except where the strict accuracy rule says STOP. Record assumptions and continue.
 - **Aggressively DRY.** This tool detects duplication; its own codebase must be exemplary. Move code, don't copy. Copying files is prohibited.
 - **Tree-sitter only.** Regex on source code or structured data is prohibited.
 - **No placeholders, no silent no-ops, no legacy code.** Use proper error types; legacy is deleted.
 - **No linter suppressions.** `#[allow(clippy::...)]` is prohibited — fix the code.
 - **All global state in `crates/deslop-core/src/state.rs`.** Same rule for TypeScript and every other language.
-- **Bug fixes follow the [fix-bug skill](.claude/skills/fix-bug/SKILL.md).**
+- **Bug fixes follow the [fix-bug skill](.claude/skills/fix-bug/SKILL.md).** Fix the root cause; never work around it. Replace broken code rather than writing a duplicate path beside it.
 - **Spec IDs are hierarchical and non-numeric** — `[GROUP-TOPIC]` / `[GROUP-TOPIC-DETAIL]`, e.g. `[PARSE-CSHARP-NORMALIZE]`, `[RANK-MASS-SUM]`. Same-group sections sit adjacent; no sequential numbers. Code and tests carry the ID in a comment so `grep [PARSE-` finds spec → code → tests.
 - **Dependency versions stay in sync** across `Cargo.toml`, `.github/workflows/ci.yml`, and `.devcontainer/`.
 - **Auto-memory is off.** Durable rules go through reviewed changes to this file.
@@ -97,14 +91,14 @@ REPLACE BROKEN CODE; DON'T WRITE NEW CODE WITH A DUPLICATE PATH
 
 ## Documentation
 
-- ***Spec ids must be cross referenced across tests, code specs and plans ALWAYS***
-- Specs are for HUMANS first and foremost. If you have to add jargon, add a separate "For AI" section
-- On the point above, MAKE SPECS READABLE TO HUMANs. Less jargon
-- Each spec section must have a unique, heirarchical non-numeric spec Id
-- Code, specs, and tests MUST agree. Where they don't, 🛑 STOP and report the issue to the user
+- **Always cross-reference spec IDs across tests, code, specs and plans.**
+- Specs are for humans first and foremost. If you have to add jargon, add a separate "For AI" section
+- Make specs readable to humans: less jargon.
+- Each spec section must have a unique, hierarchical, non-numeric spec ID
+- Code, specs and tests must agree. Where they don't, STOP and report the issue to the user
 - Remove line feeds from text that is only there to enforce text wrapping
 - Don't use line endings to force word wrap. Allow text to wrap naturally.
-- Keep PR documentation TIGHT and HUMAN READABLE (except for the AI section)
+- Keep PR documentation tight and human-readable (except for the AI section).
 - Remove line endings that only exist to wrap text
 - Remove fluff from the specs that don't specify anything
 
