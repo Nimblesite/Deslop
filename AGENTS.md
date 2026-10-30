@@ -5,25 +5,20 @@ Deslop is a duplicate-code detector. **We are in accuracy-audit mode.** One meas
 
 > **Every reported cluster is a real duplicate, and every real duplicate is reported.** And, the reported figures like percentages are **transparent, accurate** calculations 
 
-## The value assertion — test assertions outrank code
+## Accuracy quarantine — tests outrank code
 
-**A test that fails because of a bug is worth more than code that might produce a false positive or false negative.** A red test pins the defect, survives refactors, and turns a suspicion into an enforceable contract. Code you *believe* is correct is a liability until an assertion proves it.
+**A failing test that pins a bug is worth more than code that might produce a false positive or false negative.** Code you *believe* is correct is a liability until an assertion proves it. A red test in the tree is a correct outcome; weakening it is not.
 
-- Write the test before the fix. If you can only do one, write the test.
-- Leaving a red test in the tree is a correct outcome. Weakening it is not.
-- Assert the cluster, occurrence count, file paths, bucket, and ranking order. A test that would still pass if the detector went blind asserts nothing.
-- Many assertions per test beats many tests with one assertion.
+When you find code that could cause a false positive or false negative, whether or not you were sent to change it:
 
-## Strict no-inaccurate-code rule
+1. 🛑 **STOP** the current task.
+2. **Delete the defective code** and replace it with a `panic!` documenting what the code did and why it was removed. Allow the `panic = "deny"` lint on that line only.
+3. **Write a test that fails because the code is missing.** Assert the cluster, occurrence count, file paths, bucket and ranking order; a test that would pass if the detector went blind asserts nothing.
+4. **Tell the user:** the file, the defect, the failing test, and what you removed.
 
-If you encounter code that could cause a false negative or a false positive — whether or not it is the code you were sent to change — do this, in order, and nothing else:
+**Next step:** replace the panic with a **fresh, real implementation** that turns the test green. Do **not** start until the user acknowledges. Never patch or work around the deleted code.
 
-1. **Write a test that fails because of the bug.** It must fail for the real reason, and you must watch it fail.
-2. **Replace all the defective code with a `panic!`**, commented with what the code did, why it was deleted, and which test pins it. You need to put a panic = "deny" ignore in for these kinds of panics
-3. **Report to the user** — file, defect, failing test, what you removed — and why.
-4. **STOP.** Do not repair it, do not work around it, do not resume the original task.
-
-**Panics are not allowed for control flow or error handling, but they are mandated where code is causing inaccuracies.** The quarantine `panic!` is not optional and not merely permitted; it is the required outcome, and it overrides the Rust no-panic rule below. Silently-wrong output is worse than a crash: a panic is found in seconds, a false negative is never found at all.
+Panics are banned for control flow and error handling but **mandated** here: a panic is found in seconds, a silent false negative never is.
 
 ## Rules
 
@@ -51,7 +46,7 @@ If you encounter code that could cause a false negative or a false positive — 
 
 ### Strongly Recommended
 
-- **Act autonomously.** Do not stop for confirmation — except where the strict accuracy rule says STOP. Record assumptions and continue.
+- **Act autonomously.** Do not stop for confirmation — except where the accuracy quarantine says STOP. Record assumptions and continue.
 - **Aggressively DRY.** This tool detects duplication; its own codebase must be exemplary. Use deslop itself to prevent duplication and check the current state routinely
 - **A+ quality bar.** Every change must pass review at a top-tier engineering org. Fix substandard code immediately; never defer it.
 - **Token discipline.** Check file size before reading. `Grep` over `Read`; use `offset`/`limit`. Make the smallest diff that solves the problem. Delete dead code, unused imports and stale comments. Call out irrelevant context; bloat degrades reasoning.
