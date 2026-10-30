@@ -72,7 +72,7 @@ Panics are banned for control flow and error handling but **mandated** here: a p
 
 ## Version comparison — the corpus run
 
-"Compare to version X" means one thing: run `scripts/compare-versions.sh <X> HEAD` ([CORPUS-SCORE-COMPARE]). It is an objective test run. Both builds are scored against the corpus of known answers in `corpus/register/`. The script writes the report itself, under `.corpus/version-compare/reports/`: the scorecard `compare-<UTC timestamp>.md` — a new one every run, with a `.json` twin ([CORPUS-REPORT]) — `INDEX.md`, and a `SUMMARY.md` for each repo. Point the user at those files. A comparison is never pi, a subagent, or an LLM code review, and an agent-written review is never part of its output.
+"Compare to version X" means **only** `scripts/compare-versions.sh <X> HEAD` ([CORPUS-SCORE-COMPARE]): both builds are scored against the known answers in `corpus/register/`. The script writes the scorecard `compare-<UTC timestamp>.md` (plus `.json` twin, [CORPUS-REPORT]), `INDEX.md` and per-repo `SUMMARY.md` under `.corpus/version-compare/reports/`. Point the user at those files. **Never** substitute an LLM, subagent or code review.
 
 ## Rust
 
