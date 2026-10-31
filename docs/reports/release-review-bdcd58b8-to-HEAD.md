@@ -172,3 +172,14 @@ disagreement makes `deslop` fail before reporting any cluster. In accuracy-audit
 mode that is the worst failure class. Recommend: make manifest/marker resolution
 fail-soft (skip/log the one file or manifest) and add a fixture pinning a
 malformed root manifest before releasing HEAD.
+
+## Verification against the source (reviewer of this review)
+
+Each finding was checked against the code and against `bdcd58b8`. **No finding is a reachable regression; the release is GO on these grounds.**
+
+- **#1 fail-hard discovery — not a regression.** An unreadable file already failed the whole build at the parse stage in `bdcd58b8` (`pipeline/corpus/shards.rs`, `read_source(...)?` → `Err(other) => return Err(other)`). Failing visibly on a malformed analysed `osprey.toml` or a contradicting flavor marker is the designed contract ([LANG-CAND-OSPREY]); a visible error is not a silent false negative. The coverage gap was real and is now closed by `invalid_flavor_metadata_returns_a_visible_error` in `crates/deslop/tests/cli/detection/osprey_flavors.rs`.
+- **#2 double walk — cost only.** The corpus comparison measured +4% wall time (321 s → 335 s) and −301 MB peak memory across 19 repositories; no accuracy effect.
+- **#3 code-action parser — unreachable.** An extract plan requires every visible occurrence in one file (`refactor/preconditions.rs` `eligible_ranges`), so the first occurrence's language is always the edited file's language. Cross-language clusters never reach the parser.
+- **`Some("")` language — unreachable in practice.** Every discovered file is assigned a language by the session; no input was found that leaves `file_languages` without an entry.
+
+Corpus comparison `bdcd58b8` → `c53641f4`: identical accuracy (313/324, 0 false negatives, 11 standing false positives, 43215 clusters). Scorecard: `.corpus/version-compare/reports/compare-2026-10-31T00-40-17Z.md`.

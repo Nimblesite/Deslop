@@ -33,6 +33,10 @@ const DEFAULT_PROJECT: &str =
 const EXCLUDED_DIRECTORY: &str = "vendor";
 const EXCLUDED_DIRECTORY_CONFIG: &str = "[defaults]\nexclude = [\"vendor/**\"]\n";
 const MALFORMED_MANIFEST: &str = "[project\nflavor = \n";
+const MANIFEST_PARSE_ERROR: &str = "failed to parse";
+const SELECTION_ERROR: &str = "cannot select source language";
+const FLAVOR_CONFLICT: &str = "flavor marker contradicts the extension";
+const CONFLICTING_MARKER: &str = "# osprey: flavor=default\n";
 const OVERRIDING_MANIFEST: &str =
     "[project]\nsource_roots = [\"..\"]\npython_sources = [\"../alpha.py\", \"../beta.py\"]\nflavor = \"default\"\n";
 
@@ -45,19 +49,40 @@ fn detects_identical_osprey_ml_functions() -> Result<()> {
 fn malformed_osprey_ml_returns_a_visible_error() -> Result<()> {
     let (tmp, root) = seeded_fixture_root(ML_FIXTURE)?;
     fs::write(root.join(ML_FILES[0]), MALFORMED_ML)?;
-    let prefix = tmp.path().join(REPORT_OUTPUT_STEM);
-    let output = deslop_command(&root, &prefix)?
+    let stderr = scan_failure(&root, tmp.path())?;
+    assert_contains(&stderr, ML_PARSE_ERROR, "malformed ML is explicit");
+    Ok(())
+}
+
+/// Analysed project metadata that cannot be honoured stops the scan by name.
+#[test]
+fn invalid_flavor_metadata_returns_a_visible_error() -> Result<()> {
+    let (tmp, root) = seeded_fixture_root(PROJECT_FIXTURE)?;
+    fs::write(root.join(MANIFEST), MALFORMED_MANIFEST)?;
+    let stderr = scan_failure(&root, tmp.path())?;
+    assert_contains(&stderr, MANIFEST_PARSE_ERROR, "malformed manifest is explicit");
+    assert_contains(&stderr, MANIFEST, "the manifest is named");
+    let (tmp, root) = seeded_fixture_root(PROJECT_FIXTURE)?;
+    fs::remove_file(root.join(MANIFEST))?;
+    let source = fs::read_to_string(root.join(PYTHON_FILES[0]))?;
+    fs::write(root.join(PYTHON_FILES[0]), format!("{CONFLICTING_MARKER}{source}"))?;
+    let stderr = scan_failure(&root, tmp.path())?;
+    assert_contains(&stderr, SELECTION_ERROR, "the selection failure is explicit");
+    assert_contains(&stderr, FLAVOR_CONFLICT, "the conflict is explained");
+    assert_contains(&stderr, PYTHON_FILES[0], "the conflicting source is named");
+    Ok(())
+}
+
+/// Run a scan that must fail and return its stderr.
+fn scan_failure(root: &Path, output: &Path) -> Result<String> {
+    let prefix = output.join(REPORT_OUTPUT_STEM);
+    let stderr = deslop_command(root, &prefix)?
         .assert()
         .failure()
         .get_output()
         .stderr
         .clone();
-    assert_contains(
-        &String::from_utf8(output)?,
-        ML_PARSE_ERROR,
-        "malformed ML is explicit",
-    );
-    Ok(())
+    Ok(String::from_utf8(stderr)?)
 }
 
 #[test]
