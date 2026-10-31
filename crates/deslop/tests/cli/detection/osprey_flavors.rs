@@ -54,20 +54,35 @@ fn malformed_osprey_ml_returns_a_visible_error() -> Result<()> {
     Ok(())
 }
 
-/// Analysed project metadata that cannot be honoured stops the scan by name.
+/// An analysed manifest that cannot be parsed stops the scan by name.
 #[test]
-fn invalid_flavor_metadata_returns_a_visible_error() -> Result<()> {
+fn malformed_project_manifest_returns_a_visible_error() -> Result<()> {
     let (tmp, root) = seeded_fixture_root(PROJECT_FIXTURE)?;
     fs::write(root.join(MANIFEST), MALFORMED_MANIFEST)?;
     let stderr = scan_failure(&root, tmp.path())?;
-    assert_contains(&stderr, MANIFEST_PARSE_ERROR, "malformed manifest is explicit");
+    assert_contains(
+        &stderr,
+        MANIFEST_PARSE_ERROR,
+        "malformed manifest is explicit",
+    );
     assert_contains(&stderr, MANIFEST, "the manifest is named");
+    Ok(())
+}
+
+/// A marker contradicting its extension stops the scan and names the file.
+#[test]
+fn conflicting_flavor_marker_returns_a_visible_error() -> Result<()> {
     let (tmp, root) = seeded_fixture_root(PROJECT_FIXTURE)?;
     fs::remove_file(root.join(MANIFEST))?;
-    let source = fs::read_to_string(root.join(PYTHON_FILES[0]))?;
-    fs::write(root.join(PYTHON_FILES[0]), format!("{CONFLICTING_MARKER}{source}"))?;
+    let file = root.join(PYTHON_FILES[0]);
+    let source = fs::read_to_string(&file)?;
+    fs::write(&file, format!("{CONFLICTING_MARKER}{source}"))?;
     let stderr = scan_failure(&root, tmp.path())?;
-    assert_contains(&stderr, SELECTION_ERROR, "the selection failure is explicit");
+    assert_contains(
+        &stderr,
+        SELECTION_ERROR,
+        "the selection failure is explicit",
+    );
     assert_contains(&stderr, FLAVOR_CONFLICT, "the conflict is explained");
     assert_contains(&stderr, PYTHON_FILES[0], "the conflicting source is named");
     Ok(())
