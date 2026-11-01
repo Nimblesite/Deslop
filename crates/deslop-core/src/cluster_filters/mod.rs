@@ -340,9 +340,10 @@ impl NoiseFilter {
     /// node. Asking a family that is single-file by construction to span
     /// two files is a question with one answer, and it closed the escape
     /// hatch on that route permanently
-    /// ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL]).
+    /// ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL]). A data-row
+    /// window never repeats by accident, so a same-file repeat is a paste too.
     pub(crate) const fn demands_cross_file_copy(self) -> bool {
-        !matches!(self, Self::PyCollectionSiblingCells)
+        !matches!(self, Self::PyCollectionSiblingCells | Self::DataRows)
     }
 }
 

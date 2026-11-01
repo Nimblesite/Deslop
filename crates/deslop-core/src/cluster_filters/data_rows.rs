@@ -5,7 +5,8 @@
 //! same table, or of an unrelated one. Nothing can be extracted from two
 //! windows that share only the shape of a row. A copied table still surfaces
 //! through the verbatim escape hatch ([CLONE-NOISE-VERBATIM-SUBGROUP]), and a
-//! row holding logic is never a data row, so this filter fails open.
+//! row holding logic is never a data row, so this filter fails open. A call's
+//! arguments and a record's fields are not rows: they say what one thing is.
 
 use std::collections::BTreeSet;
 
@@ -87,6 +88,9 @@ fn covers_data_rows(snippet: &Snippet<'_>) -> bool {
 /// wrapper around a node whose are: a whole table is a declaration around its
 /// rows. The search stops at logic, so a function is never read as its body.
 fn is_data_row_run(parent: Node<'_>, range: ByteRange, source: &[u8]) -> bool {
+    if parent.kind().contains("argument") {
+        return false;
+    }
     let rows: Vec<Node<'_>> = named_children(parent)
         .into_iter()
         .filter(|child| node_intersects_range(*child, range) && !is_comment(*child))
@@ -94,7 +98,9 @@ fn is_data_row_run(parent: Node<'_>, range: ByteRange, source: &[u8]) -> bool {
         .collect();
     let is_run = rows.len() >= MIN_ROWS
         && rows.iter().all(|row| node_enclosed_by_range(*row, range))
-        && !rows.iter().any(|row| row_holds_logic(*row))
+        && !rows
+            .iter()
+            .any(|row| is_record_field(*row) || row_holds_logic(*row))
         && one_row_shape(&rows, source)
         && distinct_payloads(&rows, source) >= MIN_DISTINCT_PAYLOADS;
     is_run
@@ -143,6 +149,12 @@ fn row_shape<'src>(row: Node<'_>, source: &'src [u8]) -> (String, usize, &'src [
 fn is_name(node: Node<'_>) -> bool {
     let kind = node.kind();
     kind.contains("identifier") || kind == "selector_expression" || kind == "member_expression"
+}
+
+/// True for a named field: fields of one record are not rows of a table.
+fn is_record_field(row: Node<'_>) -> bool {
+    let kind = row.kind();
+    kind.contains("keyed") || kind.contains("pair") || kind.contains("field")
 }
 
 /// True when a row is itself computed or holds a cell that is. The row's own

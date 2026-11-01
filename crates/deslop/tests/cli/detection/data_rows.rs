@@ -267,6 +267,78 @@ const GO_LEFT_FIXTURE: &str = "package left\n\nfunc TestPagination(t *testing.T)
 const GO_RIGHT_FIXTURE: &str = "package right\n\nfunc TestPortableText(t *testing.T) {\n\tfiles := `\n-- hugo.toml --\n-- assets/sample.json --\n[{\"_key\": \"a\", \"style\": \"h2\"}]\n`\n\tb := hugolib.Test(t, files)\n\n\tb.AssertFileContent(\"public/index.html\", \"Markdown: ## Heading 2\")\n}\n";
 const GO_LEFT_LOGIC_TEST: &str = "package left\n\nfunc TestLeft(t *testing.T) {\n\tfiles := \"left fixture\"\n\tb := hugolib.Test(t, files)\n\tfor _, name := range b.Pages() {\n\t\tif name == \"\" {\n\t\t\tt.Fatal(\"empty left\")\n\t\t}\n\t}\n}\n";
 const GO_RIGHT_LOGIC_TEST: &str = "package right\n\nfunc TestRight(t *testing.T) {\n\tfiles := \"right fixture\"\n\tb := hugolib.Test(t, files)\n\tfor _, name := range b.Pages() {\n\t\tif name == \"\" {\n\t\t\tt.Fatal(\"empty right\")\n\t\t}\n\t}\n}\n";
+const DART_REPEATED_CALLS: &str = r"class StatsView extends StatelessWidget {
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        ListTile(
+          key: const Key('statsView_completedTodos_listTile'),
+          leading: const Icon(Icons.check_rounded),
+          title: Text(l10n.statsCompletedTodoCountLabel),
+          trailing: Text(
+            '${state.completedTodos}',
+            style: textTheme.headlineSmall,
+          ),
+        ),
+        ListTile(
+          key: const Key('statsView_activeTodos_listTile'),
+          leading: const Icon(Icons.radio_button_unchecked_rounded),
+          title: Text(l10n.statsActiveTodoCountLabel),
+          trailing: Text(
+            '${state.activeTodos}',
+            style: textTheme.headlineSmall,
+          ),
+        ),
+      ],
+    );
+  }
+}
+";
+const GO_REPEATED_RECORDS: &str = r#"package config
+
+func TestRedirects(t *testing.T) {
+	c.Assert(s.MatchRedirect("/foo/bar/baz", nil), qt.DeepEquals, Redirect{
+		From:   "/foo/**",
+		To:     "/baz/",
+		Status: 200,
+	})
+
+	c.Assert(s.MatchRedirect("/foo/bar/", nil), qt.DeepEquals, Redirect{
+		From:   "/foo/**",
+		To:     "/baz/",
+		Status: 200,
+	})
+
+	c.Assert(s.MatchRedirect("/foo/bar/qux", nil), qt.DeepEquals, Redirect{
+		From:   "/foo/**",
+		To:     "/baz/",
+		Status: 200,
+	})
+}
+"#;
+const PY_REPEATED_ASSERTIONS: &str = r#"class AdminTests(TestCase):
+    def test_first_inline(self):
+        response = self.client.get(self.first_url)
+        self.assertContains(response, "first")
+        self.assertNotContains(
+            response,
+            '<h2 id="inner-heading" class="inline-heading">Inner2s</h2>',
+            html=True,
+        )
+        self.assertNotContains(response, "Add another Inner2")
+        self.assertNotContains(response, 'id="id_inner2_set-TOTAL_FORMS"')
+
+    def test_second_inline(self):
+        response = self.client.post(self.second_url, {"a": 1})
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(
+            response,
+            '<h2 id="inner-heading" class="inline-heading">Inner2s</h2>',
+            html=True,
+        )
+        self.assertNotContains(response, "Add another Inner2")
+        self.assertNotContains(response, 'id="id_inner2_set-TOTAL_FORMS"')
+"#;
 const GO_LOGIC_LEFT: &str = r"package left
 
 func apply(order Order) int {
@@ -465,5 +537,38 @@ fn go_tests_holding_logic_are_still_clones() -> Result<()> {
         ],
         "left.go",
         "right.go",
+    )
+}
+
+// bloc's stats_page.dart: the arguments of one call are not table rows.
+#[test]
+fn repeated_calls_with_named_arguments_are_still_clones() -> Result<()> {
+    assert_cluster_spans(
+        "dart-calls",
+        &[("stats.dart", DART_REPEATED_CALLS)],
+        "stats.dart",
+        "stats.dart",
+    )
+}
+
+// hugo's commonConfig_test.go: the fields of one struct value are not table rows.
+#[test]
+fn repeated_assertions_on_one_record_are_still_clones() -> Result<()> {
+    assert_cluster_spans(
+        "go-records",
+        &[("config_test.go", GO_REPEATED_RECORDS)],
+        "config_test.go",
+        "config_test.go",
+    )
+}
+
+// django's admin_inlines/tests.py: a pasted run of assertions inside one file.
+#[test]
+fn assertions_pasted_within_a_file_are_still_clones() -> Result<()> {
+    assert_cluster_spans(
+        "py-pasted",
+        &[("tests.py", PY_REPEATED_ASSERTIONS)],
+        "tests.py",
+        "tests.py",
     )
 }

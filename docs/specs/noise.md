@@ -134,7 +134,9 @@ A table repeats one row shape with different values, so any window of its rows n
 
 A cluster is suppressed when every member covers at least two whole sibling rows with the same kind, cell count and leading name, none holds logic, and the rows hold at least two different strings. A wrapper around a table is read through to its rows, so a whole table counts too, but a function is never read as its body.
 
-A copied table stays visible. Exact copies escape through [CLONE-NOISE-VERBATIM-SUBGROUP], and a table copied and then edited stays when, for every pair of members, at least half of the smaller member's strings also appear in the larger.
+A call's arguments and a record's fields are not rows, because they say what one thing is, so a repeated call or struct value is judged by the other rules.
+
+A copied table stays visible. Exact copies escape through [CLONE-NOISE-VERBATIM-SUBGROUP] even inside one file, and a table copied and then edited stays when, for every pair of members, at least half of the smaller member's strings also appear in the larger.
 
 #### For AI
 
