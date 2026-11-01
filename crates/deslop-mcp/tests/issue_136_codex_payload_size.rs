@@ -29,6 +29,9 @@ use serde_json::{json, Value};
 
 use crate::common;
 
+#[path = "transport/wire_budget.rs"]
+mod wire_budget;
+
 /// Sanity guard for the full `tools/list` payload. Picked an order
 /// of magnitude under what most JSON-RPC clients tolerate so a
 /// future regression that re-inflates a description blows up here
@@ -42,6 +45,78 @@ const TOOL_DESCRIPTION_MAX_CHARS: usize = 200;
 /// The exact tool surface of the normative cutover ([MCP-TOOLS]):
 /// seven core analysis tools plus the merge-plan refactor tool.
 const EXPECTED_TOOL_COUNT: usize = 8;
+/// Complete tools/call response frame limit, including the newline.
+const COMPLETE_FRAME_CAP: usize = 200 * 1024;
+
+/// [MCP-RESULT-SIZE-CAP] An identifier cannot force an oversized error frame either.
+#[test]
+fn oversized_request_identifier_is_rejected_with_a_bounded_frame() -> Result<()> {
+    const ID_CHARACTER: &str = "a";
+    let (workspace, _lsp_guard, _socket) = lsp_workspace_with_socket()?;
+    let mut mcp = initialized_mcp(workspace.path())?;
+    mcp.raw_rpc().send_frame(
+        &json!({"jsonrpc": "2.0", "id": ID_CHARACTER.repeat(COMPLETE_FRAME_CAP),
+        "method": "tools/call", "params": {"name": "session", "arguments": {}}}),
+    )?;
+    let line = mcp.raw_rpc().read_raw_line()?;
+    assert_rejected_identifier_response(&line)?;
+    let ping = mcp.request("ping", &json!({}))?;
+    ensure!(
+        ping.get("result") == Some(&json!({})),
+        "server must remain responsive"
+    );
+    Ok(())
+}
+
+fn assert_rejected_identifier_response(line: &str) -> Result<()> {
+    const INVALID_REQUEST: i64 = -32_600;
+    ensure!(
+        line.len() <= COMPLETE_FRAME_CAP,
+        "oversized identifier emitted {} wire bytes",
+        line.len()
+    );
+    let response: Value = serde_json::from_str(line)?;
+    ensure!(
+        response.get("id") == Some(&Value::Null),
+        "invalid request must not echo oversized id"
+    );
+    ensure!(
+        response.pointer("/error/code").and_then(Value::as_i64) == Some(INVALID_REQUEST),
+        "expected InvalidRequest"
+    );
+    Ok(())
+}
+
+/// [MCP-RESULT-SIZE-CAP] Recovery data and the echoed identifier share one frame budget.
+#[test]
+fn recovery_error_with_a_large_identifier_stays_within_the_wire_budget() -> Result<()> {
+    const ID_HEADROOM: usize = 1_000;
+    const ID_CHARACTER: &str = "a";
+    let workspace = copied_fixture()?;
+    let mut mcp = initialized_mcp(workspace.path())?;
+    mcp.raw_rpc().send_frame(&json!({"jsonrpc": "2.0",
+        "id": ID_CHARACTER.repeat(COMPLETE_FRAME_CAP - ID_HEADROOM),
+        "method": "tools/call", "params": {"name": "duplicates", "arguments": {}}}))?;
+    let line = mcp.raw_rpc().read_raw_line()?;
+    let _response = wire_budget::assert_bounded_error(&line)?;
+    Ok(())
+}
+
+/// [MCP-RESULT-SIZE-CAP] Malformed protocol and unknown-method errors share the guard.
+#[test]
+fn escaped_identifiers_cannot_overflow_other_protocol_errors() -> Result<()> {
+    const CASES: [(&str, &str, i64); 2] =
+        [("9.9", "ping", -32_600), ("2.0", "unknown-method", -32_601)];
+    const ESCAPED_ID: &str = "\"\\\n";
+    let workspace = copied_fixture()?;
+    let mut mcp = initialized_mcp(workspace.path())?;
+    for (version, method, code) in CASES {
+        mcp.raw_rpc().send_frame(&json!({"jsonrpc": version, "id": ESCAPED_ID.repeat(COMPLETE_FRAME_CAP), "method": method, "params": {}}))?;
+        let line = mcp.raw_rpc().read_raw_line()?;
+        wire_budget::assert_protocol_error(&line, code)?;
+    }
+    Ok(())
+}
 
 /// `tools/list` ships every description ≤200 chars and the full
 /// payload ≤16 KB ([MCP-RESULT-SIZE-CAP]).

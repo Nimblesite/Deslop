@@ -51,6 +51,7 @@ pub fn fixture_occurrence(path: &str, start: usize, end: usize) -> ReportOccurre
         end_line: 0,
         hidden: false,
         in_diff: None,
+        language: None,
     }
 }
 

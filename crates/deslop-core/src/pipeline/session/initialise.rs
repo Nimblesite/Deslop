@@ -67,7 +67,7 @@ impl PipelineSession {
             );
         }
         let ignore_matcher = IgnoreMatcher::build(&root);
-        let discovery = discover_files(&root, &extension_to_language, &exclusion);
+        let discovery = discover_files(&root, &extension_to_language, &exclusion)?;
         log_discovery_summary(&discovery, &root);
         let config = PipelineConfig {
             root: root.clone(),
@@ -86,6 +86,7 @@ impl PipelineSession {
         }
         let files_analysed = discovery.files.len();
         let mut session = Self {
+            osprey_projects: discovery.projects,
             root,
             min_nodes,
             incremental,

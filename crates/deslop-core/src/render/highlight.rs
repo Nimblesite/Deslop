@@ -55,7 +55,9 @@ fn grammar_for(language: &str) -> Option<tree_sitter::Language> {
     match language {
         "csharp" => Some(tree_sitter_c_sharp::LANGUAGE.into()),
         "rust" => Some(tree_sitter_rust::LANGUAGE.into()),
-        "python" => Some(tree_sitter_python::LANGUAGE.into()),
+        "python" | "osprey-python" => Some(tree_sitter_python::LANGUAGE.into()),
+        "osprey" => Some(tree_sitter_osprey::LANGUAGE.into()),
+        "osprey-ml" => Some(tree_sitter_osprey_ml::LANGUAGE.into()),
         _ => None,
     }
 }
@@ -98,7 +100,8 @@ fn leaf_class(node: &Node<'_>, source: &[u8], language: &str) -> Option<&'static
     match language {
         "csharp" => csharp_class(node, kind, source),
         "rust" => rust_class(node, kind, source),
-        "python" => python_class(node, kind, source),
+        "python" | "osprey-python" => python_class(node, kind, source),
+        "osprey" | "osprey-ml" => osprey_class(node, kind, source),
         _ => None,
     }
 }
@@ -167,6 +170,20 @@ fn python_class(node: &Node<'_>, kind: &str, source: &[u8]) -> Option<&'static s
         return identifier_class(node, source);
     }
     operator_class(kind)
+}
+
+/// [LANG-CAND-OSPREY] Native effect and handler syntax remains readable in reports.
+fn osprey_class(node: &Node<'_>, kind: &str, source: &[u8]) -> Option<&'static str> {
+    match kind {
+        "fn" | "let" | "mut" | "if" | "else" | "match" | "effect" | "perform" | "handler"
+        | "return" | "resume" | "type" | "import" | "export" | "namespace" | "module"
+        | "static" | "mask" | "then" | "with" | "in" | "rec" | "and" | "of" | "await" | "spawn"
+        | "send" | "recv" | "select" | "kernel" => Some("keyword"),
+        "doc_comment" | "inner_doc_comment" => Some("comment"),
+        "escape_sequence" => Some("string"),
+        "identifier" => identifier_class(node, source),
+        _ => operator_class(kind),
+    }
 }
 
 /// Decides between `function`, `type`, and `identifier` for a bare

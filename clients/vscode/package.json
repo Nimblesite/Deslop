@@ -1,7 +1,7 @@
 {
   "name": "deslop-live",
   "displayName": "Deslop.live",
-  "description": "Live duplicate-code analysis inside VS Code — the reference client for the Deslop LSP server. Inline warnings as you type, worst-offender view, and a live channel your AI agent can consult before it copy-pastes.",
+  "description": "Live duplicate-code analysis inside VS Code \u2014 the reference client for the Deslop LSP server. Inline warnings as you type, worst-offender view, and a live channel your AI agent can consult before it copy-pastes.",
   "version": "0.0.0-dev",
   "publisher": "nimblesite",
   "license": "MIT",
@@ -34,7 +34,10 @@
     "tsx",
     "php",
     "fsharp",
-    "go"
+    "go",
+    "osprey",
+    "osprey-ml",
+    "osprey-python"
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
@@ -64,7 +67,11 @@
     "workspaceContains:**/*.php",
     "workspaceContains:**/*.fs",
     "workspaceContains:**/*.fsx",
-    "workspaceContains:**/*.go"
+    "workspaceContains:**/*.go",
+    "onLanguage:osprey",
+    "workspaceContains:**/*.osp",
+    "onLanguage:osprey-ml",
+    "workspaceContains:**/*.ospml"
   ],
   "contributes": {
     "commands": [
@@ -221,7 +228,7 @@
       },
       {
         "command": "deslop.topOffenders.chooseGrouping",
-        "title": "Deslop: Group Top Offenders…",
+        "title": "Deslop: Group Top Offenders\u2026",
         "icon": "$(list-tree)"
       },
       {
@@ -378,7 +385,7 @@
     "colors": [
       {
         "id": "deslop.kind.identical",
-        "description": "Identical code — every copy is byte-identical to the canonical occurrence (Type-1). [CLONE-KIND-COLOR]",
+        "description": "Identical code \u2014 every copy is byte-identical to the canonical occurrence (Type-1). [CLONE-KIND-COLOR]",
         "defaults": {
           "dark": "#b3261e",
           "light": "#b3261e",
@@ -388,7 +395,7 @@
       },
       {
         "id": "deslop.kind.nearlyIdentical",
-        "description": "Nearly identical code — admitted near-copies of the canonical occurrence (Type-2/3). [CLONE-KIND-COLOR]",
+        "description": "Nearly identical code \u2014 admitted near-copies of the canonical occurrence (Type-2/3). [CLONE-KIND-COLOR]",
         "defaults": {
           "dark": "#e8912d",
           "light": "#e8912d",
@@ -398,7 +405,7 @@
       },
       {
         "id": "deslop.kind.sameBehavior",
-        "description": "Same behavior, different code — matched on embedding evidence (Type-4). [CLONE-KIND-COLOR]",
+        "description": "Same behavior, different code \u2014 matched on embedding evidence (Type-4). [CLONE-KIND-COLOR]",
         "defaults": {
           "dark": "#a98cff",
           "light": "#a98cff",
@@ -408,7 +415,7 @@
       },
       {
         "id": "deslop.kind.structuralOnly",
-        "description": "Same shape, different content — the layout matches but almost none of the content is shared. Informational, not a clone. [CLONE-KIND-COLOR]",
+        "description": "Same shape, different content \u2014 the layout matches but almost none of the content is shared. Informational, not a clone. [CLONE-KIND-COLOR]",
         "defaults": {
           "dark": "#a9a2a0",
           "light": "#a9a2a0",
@@ -418,7 +425,7 @@
       },
       {
         "id": "deslop.kind.looselySimilar",
-        "description": "Similar code — substantial copied work, with statements or control flow changed enough that it is no longer a near-copy (Type-3). [CLONE-KIND-COLOR]",
+        "description": "Similar code \u2014 substantial copied work, with statements or control flow changed enough that it is no longer a near-copy (Type-3). [CLONE-KIND-COLOR]",
         "defaults": {
           "dark": "#00619e",
           "light": "#00619e",
@@ -676,7 +683,7 @@
     "coverage:collect": "vscode-test",
     "coverage:extension": "node ./scripts/extension-coverage.mjs",
     "coverage:extension:check": "node ./scripts/check-coverage.mjs --extension",
-    "test:playwright": "playwright test scripts/playwright-webview-smoke.spec.ts scripts/playwright-report-parity.spec.ts",
+    "test:playwright": "playwright test scripts/playwright-webview-smoke.spec.ts scripts/playwright-report-parity.spec.ts scripts/playwright-language-icons.spec.ts",
     "test:playwright:html": "playwright test scripts/playwright-html-report.spec.ts",
     "coverage:webview": "node ./scripts/webview-coverage.mjs",
     "coverage:webview:check": "node ./scripts/check-coverage.mjs --webview",

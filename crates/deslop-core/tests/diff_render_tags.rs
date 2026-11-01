@@ -72,6 +72,7 @@ fn occurrence(name: &str, line: i64, in_diff: Option<bool>) -> ReportOccurrence 
         end_line: line.saturating_add(9),
         hidden: false,
         in_diff,
+        language: None,
     }
 }
 

@@ -22,6 +22,9 @@ pub mod corpus_record;
 pub mod corpus_scope;
 pub mod corpus_score;
 pub mod enclosure;
+#[cfg(test)]
+#[path = "protocol/tests.rs"]
+mod protocol_tests;
 pub mod reap;
 pub mod skip_contract;
 pub mod skip_policy;
@@ -30,7 +33,7 @@ pub mod test_target_parity;
 
 use std::{
     fs,
-    io::{BufRead, BufReader, Read, Write},
+    io::{self, BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
 };
@@ -112,10 +115,21 @@ pub fn write_lsp_frame(stdin: &mut ChildStdin, payload: &str) -> Result<()> {
 /// Returns an error if the stream ends early, the `Content-Length` header is
 /// missing or unparsable, or the body is not valid JSON.
 pub fn read_lsp_frame(reader: &mut BufReader<ChildStdout>) -> Result<Value> {
+    let length = read_lsp_content_length(reader)?;
+    let mut buf = vec![0_u8; length];
+    reader.read_exact(&mut buf)?;
+    Ok(serde_json::from_slice(&buf)?)
+}
+
+/// [MCP-WIRE-FRAMING] An exited child must terminate the header read with an I/O error.
+fn read_lsp_content_length(reader: &mut impl BufRead) -> Result<usize> {
+    const EOF_MESSAGE: &str = "LSP stream ended while reading frame headers";
     let mut content_length: Option<usize> = None;
     loop {
         let mut line = String::new();
-        let _read = reader.read_line(&mut line)?;
+        if reader.read_line(&mut line)? == 0 {
+            return Err(io::Error::new(io::ErrorKind::UnexpectedEof, EOF_MESSAGE).into());
+        }
         if line == "\r\n" {
             break;
         }
@@ -123,10 +137,7 @@ pub fn read_lsp_frame(reader: &mut BufReader<ChildStdout>) -> Result<Value> {
             content_length = Some(rest.trim().parse::<usize>()?);
         }
     }
-    let length = content_length.ok_or_else(|| anyhow!("missing Content-Length"))?;
-    let mut buf = vec![0_u8; length];
-    reader.read_exact(&mut buf)?;
-    Ok(serde_json::from_slice(&buf)?)
+    content_length.ok_or_else(|| anyhow!("missing Content-Length"))
 }
 
 /// Spawns the `deslop-lsp` binary against `root` with piped stdin/stdout and

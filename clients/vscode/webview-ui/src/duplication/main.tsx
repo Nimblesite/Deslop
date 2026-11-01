@@ -11,6 +11,7 @@ import { report, wireMessagePump } from "../store";
 import { COLOR, FONT, GLOBAL_CSS } from "../theme";
 import { MetricHeading } from "../components/MetricHeading";
 import { MetricContext } from "../components/MetricContext";
+import { LanguageBadge } from "../components/LanguageBadge";
 import { buildFolderRollup, type RollupChild } from "../../../src/tree/rollup";
 import { formatPercent } from "../../../src/types/format";
 
@@ -56,7 +57,7 @@ function Row({ child, depth }: { child: RollupChild; depth: number }) {
           }}
           title={isFolder ? child.folder.path : child.file.path}
         >
-          {isFolder ? "📁 " : ""}
+          {child.kind === "folder" ? "📁 " : <LanguageBadge path={child.file.path} selected={child.file.language} />}
           {name}
         </span>
         <span class={MONOSPACE_CLASS} style={{ fontSize: "11px", color: COLOR.onSurfaceMuted }}>

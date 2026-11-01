@@ -7,6 +7,14 @@ use thiserror::Error;
 /// Errors produced by `deslop-core`.
 #[derive(Debug, Error)]
 pub enum CoreError {
+    /// Source identity cannot be selected without contradicting project metadata.
+    #[error("cannot select source language for {path}: {message}")]
+    LanguageSelection {
+        /// Source path whose parser selection failed.
+        path: PathBuf,
+        /// Invalid or conflicting flavor metadata.
+        message: String,
+    },
     /// Tree-sitter rejected the selected grammar.
     #[error("failed to load tree-sitter grammar for {language}: {source}")]
     GrammarLoad {

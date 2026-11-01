@@ -199,6 +199,7 @@ fn folder_metrics(per_file: &[FileMetric]) -> Vec<FileMetric> {
             analysed_loc,
             duplicated_loc,
             duplication_percent: percent(duplicated_loc, analysed_loc),
+            language: None,
         })
         .collect();
     sort_worst_first(&mut rows);
@@ -323,6 +324,7 @@ fn file_metric(
         analysed_loc,
         duplicated_loc,
         duplication_percent: percent(duplicated_loc, analysed_loc),
+        language: None,
     })
 }
 

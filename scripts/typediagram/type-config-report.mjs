@@ -3,10 +3,14 @@ export const REPORT_TYPE_CONFIG = {
     docs: "One clone occurrence at an exact source range.",
     derives: ["Debug", "Clone", "PartialEq", "Serialize", "Deserialize"],
     fieldOverrides: { path: "PathBuf", start_byte: "usize", end_byte: "usize" },
-    fieldSerdeAttrs: { in_diff: ["default", 'skip_serializing_if = "Option::is_none"'] },
-    tsOptional: ["in_diff"],
+    fieldSerdeAttrs: {
+      language: ["default", 'skip_serializing_if = "Option::is_none"'],
+      in_diff: ["default", 'skip_serializing_if = "Option::is_none"'],
+    },
+    tsOptional: ["language", "in_diff"],
     fieldDocs: {
       path: "Source path, relative to the scan root when possible.",
+      language: "Engine-selected parser identity, including Osprey syntax flavor ([LANG-CAND-OSPREY]); absent in older reports.",
       start_byte: "Inclusive byte offset of the occurrence.",
       end_byte: "Exclusive byte offset of the occurrence.",
       start_line: "One-based first source line.",

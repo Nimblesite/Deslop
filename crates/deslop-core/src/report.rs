@@ -13,7 +13,7 @@ use crate::{
     report_boilerplate::build_boilerplate_hints,
     report_hide::ReportHide,
     report_metrics::{compute_repo_metrics, AnalysedLines, MetricsInputs},
-    report_render::ReportSources,
+    report_render::{relative_to_scan_root, ReportSources},
     report_weight::rank_by_mass,
     state::{FileId, FileRegistry},
 };
@@ -180,6 +180,7 @@ pub fn render_report<S: BuildHasher + Sync>(inputs: ReportInputs<'_, S>) -> Repo
         diff: inputs.diff,
         total_include: inputs.exclusion.total_include(),
     });
+    stamp_file_languages(&mut metrics.per_file, &inputs);
     if let Some(scope) = inputs.diff {
         crate::diff_scope::tag_clusters(&mut clusters, scope);
     }
@@ -225,5 +226,25 @@ pub fn render_report<S: BuildHasher + Sync>(inputs: ReportInputs<'_, S>) -> Repo
         literal_findings_hidden: 0,
         literal_findings_capped: false,
         literal_max_findings: UNLIMITED_LITERAL_FINDINGS,
+    }
+}
+
+/// [LANG-CAND-OSPREY] File labels follow the parser used by this generation.
+fn stamp_file_languages<S: BuildHasher>(
+    rows: &mut [crate::report_metrics::FileMetric],
+    inputs: &ReportInputs<'_, S>,
+) {
+    let languages: HashMap<_, _> = inputs
+        .file_languages
+        .iter()
+        .filter_map(|(id, language)| {
+            let path = inputs.registry.path(*id)?;
+            Some((relative_to_scan_root(path, inputs.scan_root), *language))
+        })
+        .collect();
+    for row in rows {
+        row.language = languages
+            .get(&row.path)
+            .map(|language| (*language).to_owned());
     }
 }

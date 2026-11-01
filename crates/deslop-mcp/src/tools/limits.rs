@@ -25,6 +25,15 @@
 use serde_json::{json, Value};
 use tracing::warn;
 
+use crate::protocol::{
+    jsonrpc_error, jsonrpc_response_ok, serialise_frame, ErrorCode, JsonRpcError, RequestId,
+    MAX_RESPONSE_FRAME_BYTES,
+};
+
+#[cfg(test)]
+#[path = "limits/wire_budget.rs"]
+mod wire_budget_tests;
+
 /// Payload field holding the cluster array a wire cap trims.
 const CLUSTERS_KEY: &str = "clusters";
 /// Payload field flagging that the wire cap removed content.
@@ -54,24 +63,52 @@ const RETIRED_REPORT_GET_TOOL_NAME: &str = "report-get";
 /// frame, Codex's `rmcp_client` is known to choke earlier. At 200 KB
 /// a top-offenders `n=5` / `max_occurrences=15` page lands well under
 /// the cap on every fixture we ship.
-pub(super) const MAX_TOOL_RESULT_BYTES: usize = 200 * 1024;
+pub(super) const MAX_TOOL_RESULT_BYTES: usize = MAX_RESPONSE_FRAME_BYTES;
+/// Explanation shared by the transport guard and standalone dispatch error.
+pub(crate) const REQUEST_ID_BUDGET_MESSAGE: &str =
+    "request identifier exceeds MCP response byte budget";
 
-/// Caps `payload`'s serialised size. Returns `payload` unmodified
-/// when it fits; otherwise truncates the inner `clusters` array
-/// until it does and stamps the result with truncation metadata.
-#[must_use]
-pub(super) fn cap_tool_result(tool: &str, payload: Value) -> Value {
-    let original_bytes = serialised_len(&payload);
+/// Reject identifiers that cannot leave room for the bounded fallback result.
+pub(crate) fn request_id_fits_response_budget(request_id: &RequestId) -> bool {
+    wire_serialised_len(&fallback_truncated_stub(), request_id) <= MAX_TOOL_RESULT_BYTES
+}
+
+#[cfg(test)]
+pub(super) fn cap_tool_result(tool: &str, payload: Value) -> anyhow::Result<Value> {
+    const TEST_REQUEST_ID: RequestId = RequestId::Number(0);
+    cap_tool_result_for_request(tool, payload, &TEST_REQUEST_ID)
+        .map_err(|error| anyhow::anyhow!("{error:?}"))
+}
+
+/// [MCP-RESULT-SIZE-CAP] Cap the complete frame using its actual request identifier.
+pub(super) fn cap_tool_result_for_request(
+    tool: &str,
+    payload: Value,
+    request_id: &RequestId,
+) -> Result<Value, JsonRpcError> {
+    let original_bytes = wire_serialised_len(&payload, request_id);
     if original_bytes <= MAX_TOOL_RESULT_BYTES {
-        return payload;
+        return Ok(payload);
     }
-    truncate_with_log(tool, payload, original_bytes)
+    let capped = truncate_with_log(tool, payload, original_bytes, request_id);
+    if wire_serialised_len(&capped, request_id) > MAX_TOOL_RESULT_BYTES {
+        return Err(jsonrpc_error(
+            ErrorCode::InvalidParams,
+            REQUEST_ID_BUDGET_MESSAGE,
+        ));
+    }
+    Ok(capped)
 }
 
 /// Builds the truncated replacement value and emits the warning log.
-fn truncate_with_log(tool: &str, payload: Value, original_bytes: usize) -> Value {
-    let truncated = shrink_to_budget(payload);
-    let final_bytes = serialised_len(&truncated);
+fn truncate_with_log(
+    tool: &str,
+    payload: Value,
+    original_bytes: usize,
+    request_id: &RequestId,
+) -> Value {
+    let truncated = shrink_to_budget(payload, request_id);
+    let final_bytes = wire_serialised_len(&truncated, request_id);
     warn!(
         tool = tool,
         original_bytes = original_bytes,
@@ -85,16 +122,24 @@ fn truncate_with_log(tool: &str, payload: Value, original_bytes: usize) -> Value
 /// Computes the serialised byte length of `value`. Falls back to a
 /// large sentinel on serde failure so the cap path engages rather
 /// than letting an unserialisable payload escape unchecked.
+#[cfg(test)]
 fn serialised_len(value: &Value) -> usize {
     serde_json::to_vec(value).map_or(usize::MAX, |bytes| bytes.len())
+}
+
+/// Measure the same generated JSON-RPC envelope and newline written by the server.
+fn wire_serialised_len(payload: &Value, request_id: &RequestId) -> usize {
+    let result = crate::tools::wrap_tool_result(payload);
+    let response = jsonrpc_response_ok(request_id.clone(), result);
+    serialise_frame(&response).map_or(usize::MAX, |bytes| bytes.len())
 }
 
 /// Walks the payload and, if it carries a `clusters` array, drops
 /// clusters from the tail until the serialised size fits the budget.
 /// Falls back to a stub payload when no array can be trimmed.
-fn shrink_to_budget(mut payload: Value) -> Value {
+fn shrink_to_budget(mut payload: Value, request_id: &RequestId) -> Value {
     stamp_truncated(&mut payload);
-    if shrink_clusters_in_place(&mut payload) {
+    if shrink_clusters_in_place(&mut payload, request_id) {
         return payload;
     }
     fallback_truncated_stub()
@@ -105,11 +150,11 @@ fn shrink_to_budget(mut payload: Value) -> Value {
 /// there is no `clusters` array to shrink — or when dropping every
 /// cluster still leaves it over budget, so the caller falls back to the
 /// stub instead of returning an oversized result.
-fn shrink_clusters_in_place(payload: &mut Value) -> bool {
+fn shrink_clusters_in_place(payload: &mut Value, request_id: &RequestId) -> bool {
     if !has_cluster_array(payload) {
         return false;
     }
-    while serialised_len(payload) > MAX_TOOL_RESULT_BYTES {
+    while wire_serialised_len(payload, request_id) > MAX_TOOL_RESULT_BYTES {
         // The cluster array is empty and the payload still breaches the
         // cap: the non-cluster content alone is oversized. Reporting
         // success here would stamp `truncated: true` on a payload that
@@ -232,10 +277,70 @@ mod tests {
 
     const TOP_OFFENDERS_TOOL: &str = "top-offenders";
     const TEST_CLUSTER_ID: &str = "id";
+    const WIRE_CLUSTER_KIND: &str = "identical";
+    const WIRE_CLUSTER_SEVERITY: &str = "warning";
+    const FIRST_RANK: usize = 1;
+
+    /// [MCP-RESULT-SIZE-CAP] Budget the serialized JSON-RPC frame, including escaped text.
+    #[test]
+    fn complete_tool_response_fits_the_wire_budget() -> anyhow::Result<()> {
+        const REQUEST_ID: u64 = 1;
+        let payload = near_budget_cluster_page()?;
+        let inner_bytes = serialised_len(&payload);
+        assert!(inner_bytes < MAX_TOOL_RESULT_BYTES);
+        let capped = cap_tool_result(PAGINATED_TOOL_NAME, payload)?;
+        let wrapped = crate::tools::wrap_tool_result(&capped);
+        let id = serde_json::from_value(json!(REQUEST_ID))?;
+        let response = crate::protocol::jsonrpc_response_ok(id, wrapped);
+        let wire_bytes = serde_json::to_vec(&response)?.len();
+        assert!(wire_bytes <= MAX_TOOL_RESULT_BYTES,
+            "complete MCP frame is {wire_bytes} bytes, exceeding {MAX_TOOL_RESULT_BYTES}; inner payload was {inner_bytes}");
+        assert_eq!(capped.get(TRUNCATED_KEY), Some(&json!(true)));
+        assert!(capped
+            .get(CLUSTERS_KEY)
+            .and_then(Value::as_array)
+            .is_some_and(|rows| !rows.is_empty()));
+        Ok(())
+    }
+
+    pub(super) fn near_budget_cluster_page() -> serde_json::Result<Value> {
+        const CLUSTER_COUNT: usize = 16;
+        const COPY_COUNT: usize = 24;
+        const NODE_COUNT: usize = 58;
+        const OFFSET: usize = 0;
+        let clusters = (FIRST_RANK..=CLUSTER_COUNT).map(|rank| {
+            serde_json::from_value::<deslop_core::wire_generated::ReportCluster>(json!({
+                "id": format!("{rank:016x}"), "rank": rank, "kind": WIRE_CLUSTER_KIND, "severity": WIRE_CLUSTER_SEVERITY,
+                "mass": NODE_COUNT, "canonical_node_count": NODE_COUNT, "occurrence_count": COPY_COUNT,
+                "occurrences_total": COPY_COUNT, "occurrences_truncated": false,
+                "occurrences": (0..COPY_COUNT).map(wire_budget_occurrence).collect::<Vec<_>>()
+            }))
+        }).collect::<serde_json::Result<Vec<_>>>()?;
+        Ok(
+            json!({"clusters": clusters, "total_clusters": CLUSTER_COUNT,
+            "page": {"offset": OFFSET, "limit": CLUSTER_COUNT, "returned": CLUSTER_COUNT,
+                "has_more": false, "next_offset": null}}),
+        )
+    }
+
+    fn wire_budget_occurrence(index: usize) -> Value {
+        const PATH_SEGMENT: &str = "/component";
+        const PATH_DEPTH: usize = 32;
+        const START_BYTE: usize = 0;
+        const END_BYTE: usize = 383;
+        const START_LINE: usize = 1;
+        const END_LINE: usize = 19;
+        let path = format!(
+            "/workspace{}/Calculation{index}.cs",
+            PATH_SEGMENT.repeat(PATH_DEPTH)
+        );
+        json!({"path": path, "start_byte": START_BYTE, "end_byte": END_BYTE,
+            "start_line": START_LINE, "end_line": END_LINE, "hidden": false})
+    }
 
     /// [MCP-PAGE-CONTINUATION] A rescan's inner page cannot deny outer truncation.
     #[test]
-    fn nested_rescan_page_discloses_byte_trimming_in_its_own_metadata() {
+    fn nested_rescan_page_discloses_byte_trimming_in_its_own_metadata() -> anyhow::Result<()> {
         const CLUSTER_COUNT: usize = 300;
         const BLOB_BYTES: usize = 1024;
         const OFFSET: usize = 0;
@@ -243,16 +348,17 @@ mod tests {
         let payload = json!({"page": {"clusters": clusters, "total_clusters": CLUSTER_COUNT,
             "truncated": false, "page": {"offset": OFFSET, "limit": CLUSTER_COUNT,
                 "returned": CLUSTER_COUNT, "has_more": false, "next_offset": null}}});
-        let capped = cap_tool_result("rescan", payload);
+        let capped = cap_tool_result("rescan", payload)?;
         assert_eq!(capped.get(TRUNCATED_KEY), Some(&json!(true)));
         assert_eq!(capped.pointer("/page/truncated"), Some(&json!(true)));
         assert_eq!(capped.pointer("/page/page/has_more"), Some(&json!(true)));
         assert!(serialised_len(&capped) <= MAX_TOOL_RESULT_BYTES);
+        Ok(())
     }
 
     /// [MCP-RESULT-SIZE-CAP] Metadata and page cursors are part of the wire budget.
     #[test]
-    fn byte_budget_includes_markers_and_updates_the_returned_page() {
+    fn byte_budget_includes_markers_and_updates_the_returned_page() -> anyhow::Result<()> {
         const BLOB_BYTES: usize = 512;
         const CLUSTER_COUNT: usize = 2;
         const OFFSET: usize = 0;
@@ -268,7 +374,7 @@ mod tests {
         if let Some(value) = payload.get_mut("padding") {
             *value = json!("p".repeat(padding));
         }
-        let capped = cap_tool_result(PAGINATED_TOOL_NAME, payload);
+        let capped = cap_tool_result(PAGINATED_TOOL_NAME, payload)?;
         assert!(serialised_len(&capped) <= MAX_TOOL_RESULT_BYTES);
         let returned = capped
             .get(CLUSTERS_KEY)
@@ -279,24 +385,26 @@ mod tests {
             returned.and_then(|count| u64::try_from(count).ok())
         );
         assert_eq!(capped.get(TRUNCATED_KEY), Some(&json!(true)));
+        Ok(())
     }
 
     /// Small payload under the cap passes through unmodified.
     #[test]
-    fn cap_tool_result_passthrough_small_payload() {
+    fn cap_tool_result_passthrough_small_payload() -> anyhow::Result<()> {
         let payload = json!({(CLUSTERS_KEY): [{(TEST_CLUSTER_ID): "abc"}], "total": 1});
-        let result = cap_tool_result(TOP_OFFENDERS_TOOL, payload.clone());
+        let result = cap_tool_result(TOP_OFFENDERS_TOOL, payload.clone())?;
         assert_eq!(result, payload, "small payload must pass through");
+        Ok(())
     }
 
     /// Oversized payload with `clusters` array gets trimmed and stamped.
     #[test]
-    fn cap_tool_result_trims_oversized_cluster_array() {
+    fn cap_tool_result_trims_oversized_cluster_array() -> anyhow::Result<()> {
         let big_string = "x".repeat(1024);
         let cluster = json!({(TEST_CLUSTER_ID): "cluster", "blob": big_string});
         let clusters: Vec<Value> = (0..300).map(|_| cluster.clone()).collect();
         let payload = json!({(CLUSTERS_KEY): clusters});
-        let result = cap_tool_result(TOP_OFFENDERS_TOOL, payload);
+        let result = cap_tool_result(TOP_OFFENDERS_TOOL, payload)?;
         let bytes = serialised_len(&result);
         assert!(
             bytes <= MAX_TOOL_RESULT_BYTES,
@@ -328,15 +436,16 @@ mod tests {
             !next_action.contains(RETIRED_REPORT_GET_TOOL_NAME),
             "next_action must not point at the deleted report-get tool: got {next_action:?}",
         );
+        Ok(())
     }
 
     /// Payload without a `clusters` array falls back to the stub
     /// pointer instead of escaping the cap.
     #[test]
-    fn cap_tool_result_falls_back_when_no_cluster_array() {
+    fn cap_tool_result_falls_back_when_no_cluster_array() -> anyhow::Result<()> {
         let blob = "y".repeat(MAX_TOOL_RESULT_BYTES + 1024);
         let payload = json!({"text": blob});
-        let result = cap_tool_result("schema-doc", payload);
+        let result = cap_tool_result("schema-doc", payload)?;
         assert!(result.is_object(), "stub must be a JSON object");
         assert_eq!(
             result.get(TRUNCATED_KEY),
@@ -351,6 +460,7 @@ mod tests {
             serialised_len(&result) < MAX_TOOL_RESULT_BYTES,
             "fallback stub must be far below the cap",
         );
+        Ok(())
     }
 
     /// `has_cluster_array` only returns true for object payloads

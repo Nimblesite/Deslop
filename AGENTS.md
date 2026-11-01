@@ -1,57 +1,67 @@
 <!-- agent-pmo:b636503 -->
 # Deslop Live — Agent Instructions
 
-Default to not closing GitHub issues, even on PRs unless the user requests this.
-
 Deslop is a duplicate-code detector. **We are in accuracy-audit mode.** One measure outranks everything else — not features, not languages, not UI, not performance:
 
 > **Every reported cluster is a real duplicate, and every real duplicate is reported.** And, the reported figures like percentages are **transparent, accurate** calculations 
 
-## The value assertion — test assertions outrank code
+## Accuracy quarantine — tests outrank code
 
-**A test that fails because of a bug is worth more than code that might produce a false positive or false negative.** A red test pins the defect, survives refactors, and turns a suspicion into an enforceable contract. Code you *believe* is correct is a liability until an assertion proves it.
+**A failing test that pins a bug is worth more than code that might produce a false positive or false negative.** Code you *believe* is correct is a liability until an assertion proves it. A red test in the tree is a correct outcome; weakening it is not.
 
-- Write the test before the fix. If you can only do one, write the test.
-- Leaving a red test in the tree is a correct outcome. Weakening it is not.
-- Assert the cluster, occurrence count, file paths, bucket, and ranking order. A test that would still pass if the detector went blind asserts nothing.
-- Many assertions per test beats many tests with one assertion.
+When you find code that could cause a false positive or false negative, whether or not you were sent to change it:
 
-## 🛑 STRICT NO INACCURATE CODE RULE
+1. 🛑 **STOP** the current task.
+2. **Delete the defective code** and replace it with a `panic!` documenting what the code did and why it was removed. Allow the `panic = "deny"` lint on that line only.
+3. **Write a test that fails because the code is missing.** Assert the cluster, occurrence count, file paths, bucket and ranking order; a test that would pass if the detector went blind asserts nothing.
+4. **Tell the user:** the file, the defect, the failing test, and what you removed.
 
-If you encounter code that could cause a false negative or a false positive — whether or not it is the code you were sent to change — do this, in order, and nothing else:
+**Next step:** replace the panic with a **fresh, real implementation** that turns the test green. Do **not** start until the user acknowledges. Never patch or work around the deleted code.
 
-1. **Write a test that fails because of the bug.** It must fail for the real reason, and you must watch it fail.
-2. **Replace all the defective code with a `panic!`**, commented with what the code did, why it was deleted, and which test pins it. You need to put a panic = "deny" ignore in for these kinds of panics
-3. **Report to the user** — file, defect, failing test, what you removed — and why.
-4. 🛑 **STOP.** Do not repair it, do not work around it, do not resume the original task.
+Panics are banned for control flow and error handling but **mandated** here: a panic is found in seconds, a silent false negative never is.
 
-**Panics are NOT ALLOWED for control flow or error handling — but are MANDATED where code is causing inaccuracies.** The quarantine `panic!` is not optional and not merely permitted; it is the required outcome, and it overrides the Rust no-panic rule below. Silently-wrong output is worse than a crash: a panic is found in seconds, a false negative is never found at all.
+## Rules
 
-## BUG FIXING PROCESS
+### Invariants
 
-CRITICAL: YOU ARE NOT ALLOWED TO BACK OFF ANY TESTS OR ASSERTIONS
-YOU MUST FIX THE ROOT CAUSE OF BUGS; NOT WORK AROUND THEM
-REPLACE BROKEN CODE; DON'T WRITE NEW CODE WITH A DUPLICATE PATH
+- 🛑 **Never kill a VS Code process**, including browser-hosted instances. The user cannot recover.
+- 🛑 **Never host a report.** No artifacts, hosted pages or uploads. Every report is a Markdown file in this repo, emitted **mechanically** by the code that ran the measurement; agent-typed figures can't be reproduced or diffed. Point the user at the file path.
+- 🛑 **One branch, one worktree.** Merge loose code, stashes and branches into a ***single*** branch.
+- **Tree-sitter only.** **No regex** or text matching on source code or structured data.
+- **Core calculations (e.g. percentages) live only in Rust.** Any duplication-finding calculation outside core Rust (e.g. in TypeScript) is a hard violation. Scripts and utilities are exempt.
+- **No placeholders, silent no-ops, legacy code or linter suppressions** (`#[allow(clippy::...)]`). Use proper error types; fix the code.
+- **Bug fixes follow the [fix-bug skill](.claude/skills/fix-bug/SKILL.md).** Fix the root cause; replace broken code, **never** add a duplicate path beside it.
+- **IPC wire models are generated from [typeDiagram](https://typediagram.dev/docs/language-reference.html)**, never hand-written or committed.
 
-## Standing prohibitions
+### Strongly Recommended
 
-- ⚠️ **Never kill a VS Code process**, including browser-hosted instances. The user cannot recover from this.
-- ⚠️ **Never host a report anywhere.** No Claude artifacts, no hosted pages, no external upload — for any result, scorecard, comparison or audit. **Every report is a markdown file, in this repository, produced MECHANICALLY by the code that ran the measurement.** A report typed up by an agent is not a report: the numbers cannot be reproduced, cannot be diffed, cannot be re-run, and the agent is free to be wrong. If a figure is worth reporting, the tool that measured it emits it. Point the user at the file path.
-- ⚠️ **Headlines only. No essays.** Chat replies are a status line, not a document: the result, the number that moved, the file path. No restating the request, no narrating the steps taken, no tables the emitted report already contains. Use an emoji to mark anything critical — 🛑 a blocker, 🔴 a regression or failing gate, ✅ a pass — so it is findable at a glance. Detail belongs in the mechanically-produced report above; point at it instead of retyping it.
-- ⚠️ **No git.** No `add`, `commit`, `push`, `checkout`, `merge`, `rebase`, `worktree`. Never push to `main`, never stamp yourself as co-author. One branch at a time; never start a new branch when a feature branch exists; converge branches before other work. CI handles git. (`gh issue create` excepted.)
-- ⚠️ **No using text pattern matching on source code or structured data. No RegEx on code**. USE THE AST!
-- ⚠️ **Token discipline.** Check file size before reading. `Grep` over `Read`; use `offset`/`limit`. Smallest diff that solves the problem. Delete dead code, unused imports, stale comments. Call out irrelevant context — bloat degrades reasoning.
-- ⚠️ **A+ quality bar.** Every change must pass review at a top-tier engineering org. Substandard code is fixed immediately, never deferred.
-- ⚠️ **"Deslop.live" (reactive) means the whole loop** — watcher → scheduler → session → broadcast → UI. An incremental update drives the entire pipeline, including a reactive UI refresh.
+- **Act autonomously.** Do not stop for confirmation — except where the accuracy quarantine says STOP. Record assumptions and continue.
+- **Aggressively DRY.** This tool detects duplication; its own codebase must be exemplary. Use deslop itself to prevent duplication and check the current state routinely
+- **A+ quality bar.** Every change must pass review at a top-tier engineering org. Fix substandard code immediately; never defer it.
+- **Token discipline.** Check file size before reading. `Grep` over `Read`; use `offset`/`limit`. Make the smallest diff that solves the problem. Delete dead code, unused imports and stale comments. Call out irrelevant context; bloat degrades reasoning.
+- **Headlines only.** Chat replies are a status line: the result, the number that moved, the file path. Don't restate the request, narrate steps, or repeat tables the report already contains. Mark anything critical so it's findable at a glance: 🛑 a blocker, 🔴 a regression or failing gate, ✅ a pass.
+- **Use Too Many Cooks** for file locking and agent messaging when it is available.
+- Don't close GitHub issues, even from PRs, unless the user asks.
+- **Clean up after yourself.** Delete every temporary file you write.
+- **Files < 500 lines, functions < 20 lines.**
+- **Named constants, not literals**, in tests too. Every threshold is a named default the user can override in config.
+- **Spec IDs, not issue numbers.** IDs are hierarchical and non-numeric (`[GROUP-TOPIC]`, `[GROUP-TOPIC-DETAIL]`) and appear in spec, code and test comments, so `grep [RANK-` finds all three. Same-group sections sit adjacent. Only explicit regression tests may cite a GitHub issue.
+- **All global state lives in `crates/deslop-core/src/state.rs`**, with one equivalent file per other language.
+- **Dependency versions stay in sync** across `Cargo.toml`, `.github/workflows/ci.yml` and `.devcontainer/`.
+- **Auto-memory is off.** Durable rules are reviewed changes to this file.
+- **The VSIX is the only distribution**, plus Homebrew/Scoop for the CLI. Build output stays under `target/`; **never** `cargo install --path crates/deslop-*`.
+- **Docs point external MCP clients at the absolute VSIX path** `~/.vscode/extensions/nimblesite.deslop-live-<VERSION>-<platform>/bin/<platform>/deslop-mcp` (or the Windows equivalent); a `PATH` binary drifts off the wire contract. Bare `deslop-mcp` is for Homebrew/Scoop only.
+- **Logging is `tracing` only**, never `println!`/`eprintln!`. Use structured fields (`tracing::info!(file_count = 42)`) and log entry and exit of significant operations. Log counts and hashes, **never** file contents, user paths or secrets. Reports go to stdout or `--output <path>`, not logs.
+- **"Deslop.live" means the whole reactive loop:** watcher → scheduler → session → broadcast → UI refresh.
 
 ## Testing — the accuracy enforcement surface
 
 - Organise tests in to logical folders and logical files within those folders. Don't just dump tests in crates/deslop/tests and name the file after the issue name. Group them together logically
-- **Coarse E2E, black-box only.**. Drive the CLI against fixture repos; assert against rendered reports. Never reach into internals.
-- **Many user interactions per test, MANY assertions per user interaction**
+- **Coarse E2E, black-box only.** Drive the CLI against fixture repos; assert against rendered reports. Never reach into internals.
+- **Many user interactions per test, many assertions per user interaction.**
 - **Every confirmed false positive or false negative earns a fixture** that would have caught it.
-- **Never delete a failing test, never skip one, never remove an assertion.** Reducing assertiveness is prohibited. Add failing tests for broken or missing functionality.
-- **Avoid EXPLICIT regression test names / file names** Put regression tests in logical groupings with other tests, but you can subtley mention the gh issue number
+- **Never back off a test.** Never delete a failing test, skip one, or remove an assertion. Reducing assertiveness is prohibited. Add failing tests for broken or missing functionality.
+- **Avoid explicit regression test names or file names.** Put regression tests in logical groupings with other tests, but you can subtly mention the gh issue number
 - **Unit tests are only for isolating behavior of functions**
 - **Meaningful assertions only.** `assert!(true)` is banned. Assert positive, human-readable values — not the absence of AI-style labels.
 - **No try/catch that swallows an error and then asserts success.**
@@ -62,29 +72,7 @@ REPLACE BROKEN CODE; DON'T WRITE NEW CODE WITH A DUPLICATE PATH
 
 ## Version comparison — the corpus run
 
-"Compare to version X" means one thing: run `scripts/compare-versions.sh <X> HEAD` ([CORPUS-SCORE-COMPARE]). It is an objective test run. Both builds are scored against the corpus of known answers in `corpus/register/`. The script writes the report itself, under `.corpus/version-compare/reports/`: the scorecard `compare-<UTC timestamp>.md` — a new one every run, with a `.json` twin ([CORPUS-REPORT]) — `INDEX.md`, and a `SUMMARY.md` for each repo. Point the user at those files. A comparison is never pi, a subagent, or an LLM code review, and an agent-written review is never part of its output.
-
-## Universal rules
-
-- **Files < 500 lines. Functions < 20 lines.** Refactor when over.
-- **NAMED CONSTANTS - not literals** Give values names and REUSE them. THIS INCLUDES TESTS. TESTS MUST LEVERAGE NAMED CONSTANTS; NOT RAW STRINGS
-- **Core calcs like percentage calc only exist in ONE PLACE: Rust** ZERO calculations outside the core Rust code. E.g. no calcs in Typescript. Any calcs outside Rust is a HARD VIOLATION. Note: this rule ONLY applies to the core duplication finding code. This is not true for scripts and utilities
-- **All threshold numbers are configurable** Define the defaults as constants but allow the user to override these in the config
-- **Never reference gh issues in code** Reference SPEC IDS only. A test can refer to a gh issue only if it's an explicit regression
-- **Act autonomously.** Do not stop for confirmation — except where the strict accuracy rule says STOP. Record assumptions and continue.
-- **Aggressively DRY.** This tool detects duplication; its own codebase must be exemplary. Move code, don't copy. Copying files is prohibited.
-- **Tree-sitter only.** Regex on source code or structured data is prohibited.
-- **No placeholders, no silent no-ops, no legacy code.** Use proper error types; legacy is deleted.
-- **No linter suppressions.** `#[allow(clippy::...)]` is prohibited — fix the code.
-- **All global state in `crates/deslop-core/src/state.rs`.** Same rule for TypeScript and every other language.
-- **Bug fixes follow the [fix-bug skill](.claude/skills/fix-bug/SKILL.md).**
-- **Spec IDs are hierarchical and non-numeric** — `[GROUP-TOPIC]` / `[GROUP-TOPIC-DETAIL]`, e.g. `[PARSE-CSHARP-NORMALIZE]`, `[RANK-MASS-SUM]`. Same-group sections sit adjacent; no sequential numbers. Code and tests carry the ID in a comment so `grep [PARSE-` finds spec → code → tests.
-- **Dependency versions stay in sync** across `Cargo.toml`, `.github/workflows/ci.yml`, and `.devcontainer/`.
-- **Auto-memory is off.** Durable rules go through reviewed changes to this file.
-- **IPC wire models are generated from [typeDiagram](https://typediagram.dev/docs/language-reference.html)** — never hand-written. Generated code is git-ignored, never committed.
-- **The VSIX is the only distribution.** Every build target leaves artifacts under `target/` only; `cargo install --path crates/deslop-*` is prohibited. Releases ship via `.vsix`, plus Homebrew/Scoop for the CLI.
-- **External MCP clients use the absolute VSIX path** — `~/.vscode/extensions/nimblesite.deslop-live-<VERSION>-<platform>/bin/<platform>/deslop-mcp`, equivalent on Windows; every doc snippet shows this form. A `PATH` binary shadows the versioned bundle and drifts analysis off the wire contract — an accuracy defect by construction. Bare-name `deslop-mcp` is valid only for Homebrew/Scoop installs.
-- **Logging:** `tracing` only, never `println!`/`eprintln!`. Structured fields, not interpolation — `tracing::info!(file_count = 42, lang = "csharp")`. Log entry and exit of significant operations (`error|warn|info|debug|trace`). Never log file contents, user-data paths, or secrets — counts and hashes only. Reports are not logs: they go to stdout or `--output <path>` via the renderer.
+"Compare to version X" means **only** `scripts/compare-versions.sh <X> HEAD` ([CORPUS-SCORE-COMPARE]): both builds are scored against the known answers in `corpus/register/`. The script writes the scorecard `compare-<UTC timestamp>.md` (plus `.json` twin, [CORPUS-REPORT]), `INDEX.md` and per-repo `SUMMARY.md` under `.corpus/version-compare/reports/`. Point the user at those files. **Never** substitute an LLM, subagent or code review.
 
 ## Rust
 
@@ -97,31 +85,27 @@ REPLACE BROKEN CODE; DON'T WRITE NEW CODE WITH A DUPLICATE PATH
 
 ## Documentation
 
-- ***Spec ids must be cross referenced across tests, code specs and plans ALWAYS***
-- Specs are for HUMANS first and foremost. If you have to add jargon, add a separate "For AI" section
-- On the point above, MAKE SPECS READABLE TO HUMANs. Less jargon
-- Each spec section must have a unique, heirarchical non-numeric spec Id
-- Code, specs, and tests MUST agree. Where they don't, 🛑 STOP and report the issue to the user
-- Remove line feeds from text that is only there to enforce text wrapping
-- Don't use line endings to force word wrap. Allow text to wrap naturally.
-- Keep PR documentation TIGHT and HUMAN READABLE (except for the AI section)
-- Remove line endings that only exist to wrap text
-- Remove fluff from the specs that don't specify anything
-
-## Run Deslop on Deslop
-
-**Use the Deslop MCP if it is available; fall back to the `deslop` CLI if it is not.**
-
-- **Prevent:** before writing any code unit past a few lines, `find-similar`. On a strong match, reuse the canonical occurrence — do not write the near-copy.
-- **Clean up:** `duplicates` → `cluster-by-id` for existing duplicates; scope `duplicates` with `path` (plus `start_byte`/`end_byte`) for a specific target.
-- **A wrong, stale, or missing result from either surface is an accuracy defect** — `gh issue create` with the cluster id or triggering snippet. Never work around a defect, widen a threshold, or hide a cluster. (`gh` is the sole exception to the no-git rule.)
+- **Always cross-reference spec IDs across tests, code, specs and plans.**
+- Each spec section has a unique, hierarchical, non-numeric spec ID.
+- Code, specs and tests must agree. Where they don't, STOP and report the issue to the user.
+- Specs are for humans first: keep jargon out of the main text and put it in a separate "For AI" section.
+- Remove fluff from specs that doesn't specify anything.
+- Keep PR documentation tight and human-readable (except for the AI section).
+- Don't use line breaks to force word wrap; let text wrap naturally.
 
 ## Architecture
 
-```
-discover files → per-language parse (tree-sitter) → normalize AST →
-fingerprint subtrees → cluster → token LSH → embeddings (hybrid) →
-fuse signals → rank → render report
+```mermaid
+flowchart LR
+    discover[Discover files] --> parse[Per-language parse<br/>tree-sitter]
+    parse --> normalize[Normalize AST]
+    normalize --> fingerprint[Fingerprint subtrees]
+    fingerprint --> cluster[Cluster]
+    cluster --> lsh[Token LSH]
+    lsh --> embed[Embeddings<br/>hybrid]
+    embed --> fuse[Fuse signals]
+    fuse --> rank[Rank]
+    rank --> render[Render report]
 ```
 
 Every stage can lose accuracy. Normalization that strips too much manufactures false positives; too little manufactures false negatives. Ranking changes change every report — they need new assertions, not adjusted ones.
@@ -136,7 +120,3 @@ Paths, pipeline-stage detail, and the `lspkit` migration map live in [docs/repo-
 - **Never duplicate the rendering of text or links** (clusters, occurrences). One shared function, reused everywhere.
 - Context menus always include "Copy Context For AI".
 - Humans first for code comments, UI, and HTML reports. Raw JSON reports target AI — complete enough to reconstruct the human view.
-
-## Multi-agent (Too Many Cooks)
-
-If the TMC server is available: register on start (name, intent, files), lock files before editing, broadcast your plan, check messages periodically, release locks when done. Never edit a locked file.

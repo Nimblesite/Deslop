@@ -27,12 +27,16 @@ pub fn default_parsers() -> Vec<Box<dyn LanguageParser>> {
         fsharp::FSharpParser,
         go::GoParser,
         javascript::JavaScriptParser,
+        osprey::OspreyParser,
         php::PhpParser,
         python::PythonParser,
         rust_lang::RustParser,
         typescript::{TsxParser, TypeScriptParser},
     };
     vec![
+        Box::new(OspreyParser::new()),
+        Box::new(OspreyParser::ml()),
+        Box::new(OspreyParser::python()),
         Box::new(CSharpParser::new()),
         Box::new(RustParser::new()),
         Box::new(PythonParser::new()),

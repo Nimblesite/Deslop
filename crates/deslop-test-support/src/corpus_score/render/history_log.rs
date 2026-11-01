@@ -25,7 +25,7 @@ const RUN_COLUMNS: [&str; 11] = [
     "correct / judged",
     "score",
     "regressions",
-    "known defects",
+    "other defects",
     "wall",
     "CPU time",
     "peak memory",
@@ -58,7 +58,9 @@ pub fn history_log(runs: &[RunRecord]) -> String {
          Each run is tied to the commit it was built from, and to its release version when the \
          commit is a tagged release. This page is rendered from the records in \
          `corpus/history/runs/` each time a run is added — never edit it by hand. A run fails \
-         only when a judged pair that passed before fails now."
+         on an unaccepted incorrect judgment, a regression, or a failed curated check. \
+         Other defects are failed judgments without a recorded prior pass; this count \
+         does not imply acceptance."
             .to_owned(),
         String::new(),
     ];
@@ -205,13 +207,12 @@ fn failing_section(latest: Option<&RunRecord>) -> Vec<String> {
     lines
 }
 
-/// One failing pair and what failed: a regression in red, a known defect
-/// otherwise.
+/// One failing pair and what failed, distinguishing an actual prior pass.
 fn failing_line(judgment: &Judgment) -> String {
     let mark = if judgment.regression {
         "🔴 regression"
     } else {
-        "⚠️ known defect"
+        "⚠️ defect without a prior pass"
     };
     format!(
         "- {mark} — **{}** — {}, {} — `{}`",

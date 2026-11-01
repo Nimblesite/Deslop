@@ -530,8 +530,8 @@ dup-gate: build
 #   with the CURRENT build and scores every judged pair against the independent
 #   clone registers in `corpus/register/`. [CORPUS-SCORE-OUTCOMES] Every judged
 #   pair is held to its own recorded outcome in `corpus/register/outcomes.json`:
-#   only a pair on record as passing that fails now — a regression — fails the
-#   run; one that never passed is listed as a known defect. The run writes the
+#   an unaccepted incorrect judgment, a regression, or any failed curated check
+#   fails the run; only explicitly accepted judged failures are tolerated. The run writes the
 #   record back; commit it. Cluster
 #   totals and duplication percentages are printed as description and gate
 #   nothing. The workflow calls the same script, so a green local run means a

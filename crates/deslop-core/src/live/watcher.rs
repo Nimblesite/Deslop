@@ -167,7 +167,12 @@ impl WatcherHandler {
     /// Source removals bypass exclusions so former members remain evictable.
     /// Configurations and ignore rules always reach the session to rescope it.
     fn forward_one(&self, path: PathBuf, kind: EventKind) {
-        if is_config_path(&path, &self.watched_config_paths) || is_ignore_rule_path(&path) {
+        if is_config_path(&path, &self.watched_config_paths)
+            || is_ignore_rule_path(&path)
+            || path
+                .file_name()
+                .is_some_and(|name| name == crate::lang::osprey_selection::MANIFEST)
+        {
             deliver(&self.sender, path);
             return;
         }

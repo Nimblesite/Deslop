@@ -32,22 +32,33 @@ Good: "Deslop reports normal test code as duplicates. In this Python repo, most 
 
 ## Canonical issue body
 
-Every issue body — newly filed or backfilled, every type — uses exactly these sections in exactly this order. The headings are machine-parseable: the issue atlas (`scripts/issues/generate_issue_report.py`, `plain_excerpt`) reads the `## TL;DR` section for the site excerpt, so the heading text and level must not vary.
+Every issue body — newly filed or backfilled, every type — uses exactly these six sections, in exactly this order, at exactly this heading level.
+
+**Headings are `###`, level three, mirroring `.github/ISSUE_TEMPLATE/issue.yml`.** GitHub renders each form field as `### <label>`, so an agent-filed issue and a human-filed one must be indistinguishable in structure. Do not use `##`, do not rename a heading, do not reorder them, and do not omit one — write "None." under a heading that genuinely has no content. The issue atlas (`scripts/issues/generate_issue_report.py`, `plain_excerpt`) parses these headings to build the site excerpt from TL;DR.
+
+The six headings, verbatim and in order:
+
+1. `### TL;DR`
+2. `### Details`
+3. `### Steps To Reproduce`
+4. `### Details (for AI)`
+5. `### Acceptance Criteria (for AI)`
+6. `### Screenshots`
 
 ````markdown
-## TL;DR
+### TL;DR
 
 <One or two plain-language sentences a human can act on without reading anything else. Minimal jargon — see the rule above.>
 
-## Details
+### Details
 
 <Two to three plain-language paragraphs for humans: for a bug — what did you expect to see, what did you see instead, why is that wrong; for a feature — the capability wanted and why; for a task — what needs doing and why now. Technical detail goes under Details (for AI), not here.>
 
-## Steps To Reproduce
+### Steps To Reproduce
 
 <Numbered, one action per step, followable by a stranger. Present for every issue type; content varies — see below.>
 
-## Details (for AI)
+### Details (for AI)
 
 ```shell
 # environment
@@ -75,11 +86,11 @@ affected surfaces: <cli | vsix | mcp | site | ci>
 related issues: #<n>
 ```
 
-## Acceptance Criteria (for AI)
+### Acceptance Criteria (for AI)
 
 - <Testable assertion: for a bug — exact cluster id, occurrence count, file paths, bucket, ranking order that the pinning test asserts; for a feature — the observable behavior once delivered; for a task — the verifiable end state.>
 
-## Screenshots
+### Screenshots
 
 <Attach screenshot images if possible — embed hosted URLs with ![...](url). gh cannot upload GitHub user-content assets; for local screenshot files, leave "pending" here and have the user attach them via the web UI.>
 ````

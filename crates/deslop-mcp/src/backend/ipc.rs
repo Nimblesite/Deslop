@@ -6,8 +6,8 @@
 //! delegates them (and every other read) to the LSP via a single-shot
 //! JSON-RPC call over [`deslop_core::live::transport`]: the Unix
 //! domain socket `.deslop/cache/deslop.sock` where it exists, or — on
-//! Windows and wherever the LSP was started with `--ipc-transport
-//! tcp` — the TCP loopback endpoint published in
+//! Windows, for overlong socket paths, and with `--ipc-transport tcp`
+//! — the TCP loopback endpoint published in
 //! `.deslop/cache/deslop.port` ([LIVE-IPC-TCP]). When neither endpoint
 //! is live, the backend returns [`BackendError::LspNotRunning`] so
 //! agents can offer to start the LSP.
@@ -57,7 +57,10 @@ pub fn connect(root: &Path) -> Result<IpcStream, BackendError> {
         IpcConnectError::NotRunning { socket_path, .. } => {
             BackendError::LspNotRunning { socket_path }
         }
-        other => BackendError::StateFileCorrupt(format!("ipc connect failed: {other}")),
+        other => BackendError::StateFileCorrupt(format!(
+            "ipc connect failed for {}: {other}",
+            root.display()
+        )),
     })
 }
 

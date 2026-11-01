@@ -27,6 +27,8 @@ pub mod fsharp;
 pub mod go;
 pub mod javascript;
 mod merge_emit;
+pub mod osprey;
+pub(crate) mod osprey_selection;
 pub mod php;
 pub mod python;
 pub mod rust_lang;

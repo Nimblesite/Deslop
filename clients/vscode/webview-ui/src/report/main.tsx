@@ -15,6 +15,7 @@ import { FilterSelect } from "../components/FilterSelect";
 import { MetricHeading } from "../components/MetricHeading";
 import { MetricContext } from "../components/MetricContext";
 import { ClusterBadge } from "../components/ClusterBadge";
+import { LanguageBadge } from "../components/LanguageBadge";
 import {
   clusterSlug,
   CLUSTER_KINDS,
@@ -192,6 +193,7 @@ function ReportApp() {
                   class={MONOSPACE_CLASS}
                   style={{ color: COLOR.onSurfaceMuted, fontSize: "11px", marginTop: "2px" }}
                 >
+                  <LanguageBadge path={cluster.occurrences[0]?.path ?? ""} selected={cluster.occurrences[0]?.language} />
                   {cluster.occurrences[0]?.path ?? "?"}
                 </div>
               </div>

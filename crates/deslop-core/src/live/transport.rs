@@ -4,10 +4,10 @@
 //! Two transports carry the same line-delimited JSON-RPC protocol:
 //!
 //! - **Unix domain socket** `.deslop/cache/deslop.sock` — the default
-//!   wherever Unix sockets exist. Behaviour is unchanged from the
-//!   original [LIVE-IPC-SOCKET] design.
+//!   wherever Unix sockets exist and the complete path fits their
+//!   address capacity ([LIVE-IPC-SOCKET]). Longer paths use TCP.
 //! - **TCP loopback** `127.0.0.1:<os-assigned port>` — the default on
-//!   Windows (no Unix sockets) and opt-in elsewhere via
+//!   Windows, for overlong Unix socket paths, and opt-in elsewhere via
 //!   `deslop-lsp --ipc-transport tcp`. The bound port and a
 //!   per-session secret are published in `.deslop/cache/deslop.port`
 //!   ([`IpcEndpointFile`]). Clients present the secret as the first
@@ -47,16 +47,23 @@ pub fn port_file_path(root: &Path) -> PathBuf {
 }
 
 /// Absolute path of the discovery artefact this platform's IPC server
-/// publishes — the socket itself on Unix, the endpoint record on
-/// Windows. A caller waiting for the server to come up watches this
+/// publishes by default — the socket on Unix where its path fits,
+/// otherwise the endpoint record. A caller waiting for the server watches this
 /// rather than picking one of the two, so it cannot end up waiting for
 /// an artefact this platform never writes.
 #[must_use]
 pub fn endpoint_path(root: &Path) -> PathBuf {
-    match IpcMode::platform_default() {
-        IpcMode::Unix => socket_path(root),
-        IpcMode::Tcp => port_file_path(root),
+    #[cfg(unix)]
+    if unix_socket_supported(root) {
+        return socket_path(root);
     }
+    port_file_path(root)
+}
+
+/// [LIVE-IPC-SOCKET] Validate against the target platform's actual address limit.
+#[cfg(unix)]
+fn unix_socket_supported(root: &Path) -> bool {
+    std::os::unix::net::SocketAddr::from_pathname(socket_path(root)).is_ok()
 }
 
 /// Which transport the IPC server binds ([LIVE-IPC-TCP]).
@@ -163,14 +170,17 @@ impl IpcServerListener {
     }
 }
 
-/// Unix leg of [`IpcServerListener::bind`].
+/// Unix leg of [`IpcServerListener::bind`], using TCP for overlong paths.
 #[cfg(unix)]
 fn bind_unix(root: &Path) -> std::io::Result<IpcServerListener> {
+    if !unix_socket_supported(root) {
+        return bind_tcp(root);
+    }
     let path = socket_path(root);
     let _removed = std::fs::remove_file(&path);
     let _stale_record = std::fs::remove_file(port_file_path(root));
     let listener = std::os::unix::net::UnixListener::bind(&path)?;
-    tracing::info!(path = %path.display(), "ipc_socket_bound");
+    tracing::info!("ipc_socket_bound");
     Ok(IpcServerListener::Unix(listener))
 }
 
@@ -348,7 +358,7 @@ pub enum IpcConnectError {
 }
 
 /// Connects to the live server for `root`: the Unix socket first where
-/// it exists, then the TCP discovery record. On TCP the token line is
+/// its path fits the platform address, then the TCP discovery record. On TCP the token line is
 /// written before returning, so callers start straight at JSON-RPC.
 ///
 /// # Errors
@@ -357,10 +367,12 @@ pub enum IpcConnectError {
 /// is down. Other variants indicate a live-but-broken endpoint.
 pub fn connect(root: &Path) -> Result<IpcStream, IpcConnectError> {
     #[cfg(unix)]
-    match connect_unix(root) {
-        Ok(stream) => return Ok(stream),
-        Err(error) if endpoint_absent(&error) => {}
-        Err(error) => return Err(IpcConnectError::Io(error)),
+    if unix_socket_supported(root) {
+        match connect_unix(root) {
+            Ok(stream) => return Ok(stream),
+            Err(error) if endpoint_absent(&error) => {}
+            Err(error) => return Err(IpcConnectError::Io(error)),
+        }
     }
     connect_tcp(root)
 }

@@ -9,6 +9,8 @@ const JAVASCRIPT_LANGUAGE_ID = "javascript";
 const FSHARP_LANGUAGE_ID = "fsharp";
 
 const EXTENSION_LANGUAGE: Record<string, string> = {
+  osp: "osprey",
+  ospml: "osprey",
   cs: "csharp",
   rs: "rust",
   py: "python",
@@ -33,13 +35,20 @@ export const SOURCE_EXTENSIONS: readonly string[] = Object.keys(EXTENSION_LANGUA
 
 /** Language id for a file path, derived from its extension. Unknown
  * extensions map to `"unknown"`. */
-export function languageForPath(filePath: string): string {
+export function languageForPath(filePath: string, selected?: string | null): string {
+  if (selected) return languageFamily(selected);
   const dot = filePath.lastIndexOf(".");
   if (dot < 0) return "unknown";
   return EXTENSION_LANGUAGE[filePath.slice(dot + 1).toLowerCase()] ?? "unknown";
 }
 
+/** Flavor-specific parser identities share Osprey's UI family. */
+export function languageFamily(language: string): string {
+  return ["osprey", "osprey-ml", "osprey-python"].includes(language) ? "osprey" : language;
+}
+
 const LANGUAGE_DISPLAY: Record<string, string> = {
+  osprey: "Osprey",
   csharp: "C#",
   rust: "Rust",
   python: "Python",
@@ -55,7 +64,7 @@ const LANGUAGE_DISPLAY: Record<string, string> = {
 /** Human display name for a language id used in group headings and
  * filter options. */
 export function languageDisplayName(language: string): string {
-  return LANGUAGE_DISPLAY[language] ?? "Other";
+  return LANGUAGE_DISPLAY[languageFamily(language)] ?? "Other";
 }
 
 /** Every registered language id in registry order, deduplicated (several
@@ -72,6 +81,8 @@ export const LANGUAGES: readonly string[] = [...new Set(Object.values(EXTENSION_
  * Mirrors the core parser registry
  * (crates/deslop-core/src/pipeline/corpus.rs::default_parsers). */
 export const ANALYSED_LANGUAGE_IDS: readonly string[] = [
+  "osprey",
+  "osprey-ml",
   "csharp",
   "rust",
   "python",

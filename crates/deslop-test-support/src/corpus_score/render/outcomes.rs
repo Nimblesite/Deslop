@@ -10,10 +10,11 @@ use crate::corpus_score::outcomes::{PairOutcome, Standing, OUTCOMES_PATH};
 const NO_RECORD: &str = "**No judged pairs** — no repository in this run has a clone register, \
                          so nothing was held to the record.";
 /// What it says when no pair on record as passing fails now.
-const RECORD_PASS: &str = "**PASS** — no judged pair that passed before fails now.";
+const RECORD_PASS: &str = "**PASS** — every failed judged pair is explicitly accepted on record.";
 /// What it says when one does.
-const RECORD_FAIL: &str = "**FAIL** — a judged pair that passed before fails now. Each one is \
-                           listed at the top of this scorecard and below. A regression is a bug.";
+const RECORD_FAIL: &str =
+    "**FAIL** — an unaccepted judged pair fails or a passing pair regressed. \
+                           Each one is listed at the top of this scorecard and below.";
 
 /// The record section: what it holds, whether the run kept to it, and every
 /// pair this run fixed.
@@ -22,9 +23,8 @@ pub(super) fn record_section(card: &Scorecard) -> Vec<String> {
         "## Judged pair record".to_owned(),
         String::new(),
         format!(
-            "`{OUTCOMES_PATH}` holds every judged pair's last recorded outcome. Only a pair on \
-             record as passing that fails now — a regression — fails the run. A pair that has \
-             never passed is a known defect, listed below."
+            "`{OUTCOMES_PATH}` holds every judged pair's last recorded outcome. An unrecorded \
+             failure or a regression fails the run. Only explicitly accepted failures are tolerated."
         ),
         String::new(),
         kept_line(&card.outcomes).to_owned(),

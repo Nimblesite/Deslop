@@ -19,11 +19,12 @@ use crate::corpus::repo_root;
 /// The crates known to funnel their integration tests through a suite root
 /// at the time of writing. The gate derives its own list; this is the
 /// independent copy that notices the derivation silently shrinking.
-const KNOWN_SUITE_CRATES: [&str; 4] = [
+const KNOWN_SUITE_CRATES: [&str; 5] = [
     "crates/deslop-core",
     "crates/deslop",
     "crates/deslop-lsp",
     "crates/deslop-mcp",
+    "crates/deslop-test-support",
 ];
 
 /// A crate directory whose `tests/` is used as a plausible backdrop for

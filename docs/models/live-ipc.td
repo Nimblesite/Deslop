@@ -138,6 +138,7 @@ type ThresholdSummary {
 
 type FileMetric {
   path: String
+  language: Option<String>
   analysed_loc: Int
   duplicated_loc: Int
   duplication_percent: Float
@@ -210,6 +211,7 @@ type EmbeddingProvenance {
 
 type ReportOccurrence {
   path: String
+  language: Option<String>
   start_byte: Int
   end_byte: Int
   start_line: Int

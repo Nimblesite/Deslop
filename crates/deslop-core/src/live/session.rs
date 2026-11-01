@@ -5,64 +5,36 @@
 //! provider. The session is the single live struct in the live module
 //! — nothing else holds mutable analysis state.
 
+mod embedding;
+mod init;
+mod queries;
+
 use std::{
-    collections::HashSet,
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
 };
 
+pub use queries::{report_for_file_in, report_for_range_in};
+
 use super::{
     cache_seed_key::CacheSeedKey,
-    cluster_lookup::resolve_cluster_by_id_prefix,
-    embedding_refresh::{CommittedEmbeddingRefresh, EmbeddingRefreshInput, EmbeddingRefreshJob},
     errors::LiveError,
     freshness::FreshnessTracker,
-    session_helpers::{
-        append_ollama_models, cluster_overlaps_range, cluster_touches_path,
-        collapse_overlapping_clusters_for_range, earliest_byte_for_path, initialise_pipeline,
-        live_batch_yield, not_listed_by, parse_and_hash_snippet, persist_state_file, truncate,
-        try_load_cached_report,
-    },
-    watcher::{live_exclusion, publish_exclusion, LiveExclusion},
-    wire::{
-        EmbeddingModelInfo, EmbeddingProgress, FileReport, FindSimilarInput, FindSimilarRequest,
-        FindSimilarResult, SessionConfig,
-    },
+    session_helpers::{live_batch_yield, persist_state_file},
+    watcher::{publish_exclusion, LiveExclusion},
+    wire::{EmbeddingProgress, SessionConfig},
 };
 use crate::{
-    config::ExclusionConfig,
     delta::ReportDelta,
     embedding::{EmbeddingMode, EmbeddingProvider},
-    lang::LanguageParser,
     pipeline::{language_for_path, EmbeddingSettings, OpenBuffers, PipelineSession},
-    report::{Report, ReportCluster},
+    report::Report,
 };
 
 /// Sink invoked around a `set_embedding_model` swap so transports can
 /// forward the progress onto `deslop/embeddingProgress`. The reporter
 /// is `Send + Sync` so it survives being moved into a tokio handler.
 pub type EmbeddingProgressReporter = Arc<dyn Fn(EmbeddingProgress) + Send + Sync>;
-
-/// Bundle of arguments required to assemble an [`AnalysisSession`].
-/// Exists so the constructor signature stays under the line budget.
-struct SessionInit {
-    /// Workspace root pinned at construction.
-    root: PathBuf,
-    /// Subtree-size floor pinned at construction.
-    min_nodes: u32,
-    /// Pipeline session, or `None` for the cache-seed fast path.
-    pipeline: Option<PipelineSession>,
-    /// Initial report — fresh or loaded from the disk cache.
-    report: Report,
-    /// Active embedding provider.
-    embedding_provider: Arc<dyn EmbeddingProvider>,
-    /// Active embedding mode.
-    mode: EmbeddingMode,
-    /// Whether the on-disk fingerprint cache is consulted.
-    incremental: bool,
-    /// Optional explicit exclusion config path.
-    config_path: Option<PathBuf>,
-}
 
 /// Live analysis session. Wraps [`PipelineSession`] with the live-only
 /// metadata documented in [LIVE-STATE].
@@ -127,229 +99,6 @@ impl std::fmt::Debug for AnalysisSession {
 }
 
 impl AnalysisSession {
-    /// [LIVE-EMBEDDING-CONSENT] Constructs a new live session by
-    /// running the first full analysis without an embedding pass.
-    ///
-    /// # Errors
-    ///
-    /// Propagates [`LiveError::Core`] from pipeline initialisation.
-    pub fn new(
-        root: PathBuf,
-        min_nodes: u32,
-        incremental: bool,
-        config_path: Option<PathBuf>,
-        embedding_provider: Arc<dyn EmbeddingProvider>,
-    ) -> Result<Self, LiveError> {
-        Self::new_with_mode(
-            root,
-            min_nodes,
-            incremental,
-            config_path,
-            embedding_provider,
-            EmbeddingMode::Off,
-        )
-    }
-
-    /// [LIVE-EMBEDDING-CONSENT] Constructs a live session with an
-    /// already-selected embedding model.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`LiveError`] when pipeline initialisation cannot read
-    /// config, discover files, parse sources, or build the report.
-    pub fn new_with_mode(
-        root: PathBuf,
-        min_nodes: u32,
-        incremental: bool,
-        config_path: Option<PathBuf>,
-        embedding_provider: Arc<dyn EmbeddingProvider>,
-        mode: EmbeddingMode,
-    ) -> Result<Self, LiveError> {
-        let (pipeline, report) = initialise_pipeline(
-            root.clone(),
-            min_nodes,
-            incremental,
-            config_path.clone(),
-            mode,
-            embedding_provider.as_ref(),
-        )?;
-        let session = Self::finalise(SessionInit {
-            root,
-            min_nodes,
-            pipeline: Some(pipeline),
-            report,
-            embedding_provider,
-            mode,
-            incremental,
-            config_path,
-        });
-        session.write_state_file();
-        Ok(session)
-    }
-
-    /// [LIVE-CACHE-SEED] Constructs a session from
-    /// `{root}/.deslop/cache/live-report.json` so query methods can
-    /// answer instantly while the background full pass runs. Returns
-    /// `None` if the cache file is missing or corrupt. Callers must
-    /// follow up with [`Self::install_pipeline`] when the
-    /// asynchronous pass produces a real `(PipelineSession, Report)`.
-    pub fn try_seeded_from_cache(
-        root: PathBuf,
-        min_nodes: u32,
-        incremental: bool,
-        config_path: Option<PathBuf>,
-        embedding_provider: Arc<dyn EmbeddingProvider>,
-        mode: EmbeddingMode,
-    ) -> Option<Self> {
-        // [LIVE-CACHE-SEED-KEY] A seed is served as an answer, so it
-        // must have been computed by a run with the same identity.
-        let key = CacheSeedKey::new(
-            &root,
-            min_nodes,
-            incremental,
-            config_path.as_deref(),
-            mode,
-            &embedding_provider.spec(),
-        );
-        let report = try_load_cached_report(&root, &key)?;
-        let cluster_count = report.clusters.len();
-        let session = Self::finalise(SessionInit {
-            root,
-            min_nodes,
-            pipeline: None,
-            report,
-            embedding_provider,
-            mode,
-            incremental,
-            config_path,
-        });
-        tracing::info!(cached_clusters = cluster_count, "lsp_seeded_from_cache");
-        Some(session)
-    }
-
-    /// [LIVE-CACHE-SEED] Replaces the cache-seeded report with the
-    /// freshly-computed pipeline output and replays any
-    /// [`Self::apply_changes`] calls that arrived during the
-    /// cache-seed window. Returns the previous report so callers can
-    /// fold it into delta history.
-    ///
-    /// # Errors
-    ///
-    /// Propagates pipeline errors when replaying queued changes.
-    pub fn install_pipeline(
-        &mut self,
-        pipeline: PipelineSession,
-        report: Report,
-    ) -> Result<Arc<Report>, LiveError> {
-        let previous_report = Arc::clone(&self.latest_report);
-        self.pipeline = Some(pipeline);
-        self.republish_exclusion();
-        self.generation = self.generation.saturating_add(1);
-        self.publish_report(Arc::new(report));
-        // [LIVE-CLUSTER-OFFSET-FRESHNESS] / Record the on-disk mtime
-        // of every file in the freshly-installed report so the next
-        // read does not falsely refire a refresh.
-        self.freshness
-            .record_from_report(&self.root, &self.latest_report);
-        // [LIVE-OPEN-BUFFERS] The full pass read every file from disk,
-        // so re-apply the open buffers alongside the queued changes:
-        // the editor's text must win again before this report is
-        // served as the answer.
-        let mut replay = std::mem::take(&mut self.pending_changes);
-        replay.extend(self.buffers.paths().map(Path::to_path_buf));
-        if !replay.is_empty() {
-            let _delta = self.apply_changes(&replay)?;
-        }
-        // The seed cache is written by the cold-pass install path
-        // ([LIVE-SEED-CACHE]) — `cache_seed::commit_refresh` calls
-        // [`Self::persist_seed_cache`] explicitly. `refresh_full` and
-        // other reuse paths share `install_pipeline` but must not
-        // touch disk.
-        Ok(previous_report)
-    }
-
-    /// Public, explicit seed-cache write. Called after the LSP cold
-    /// pass installs the freshly-built pipeline so the next LSP
-    /// startup has a warm cache. Must NOT be called on per-pass
-    /// updates ([LIVE-SEED-CACHE]).
-    pub fn persist_seed_cache(&self) {
-        self.write_state_file();
-    }
-
-    /// Forces a fresh full-workspace analysis pass for editor command
-    /// dispatch ([LSP-COMMANDS]).
-    ///
-    /// # Errors
-    ///
-    /// Returns [`LiveError`] when pipeline initialisation fails.
-    pub fn refresh_full(&mut self) -> Result<ReportDelta, LiveError> {
-        let previous_generation = self.generation;
-        let (pipeline, report) = initialise_pipeline(
-            self.root.clone(),
-            self.min_nodes,
-            self.incremental,
-            self.config_path.clone(),
-            self.embedding_mode,
-            self.embedding_provider.as_ref(),
-        )?;
-        let previous = self.install_pipeline(pipeline, report)?;
-        Ok(ReportDelta::between(
-            Some((previous_generation, &previous)),
-            self.generation,
-            &self.latest_report,
-        ))
-    }
-
-    /// Disables live embedding analysis and refreshes the report
-    /// without semantic clusters.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`LiveError`] when the no-embedding refresh fails.
-    pub fn disable_embeddings(&mut self) -> Result<ReportDelta, LiveError> {
-        self.embedding_mode = EmbeddingMode::Off;
-        self.embedding_refresh_revision = self.embedding_refresh_revision.saturating_add(1);
-        self.refresh_full()
-    }
-
-    /// Flips live incremental-cache use and returns the updated config.
-    pub fn toggle_incremental(&mut self) -> SessionConfig {
-        self.incremental = !self.incremental;
-        if let Some(pipeline) = &mut self.pipeline {
-            pipeline.set_incremental(self.incremental);
-        }
-        self.session_config()
-    }
-
-    /// Assembles the session struct.
-    fn finalise(init: SessionInit) -> Self {
-        let mut freshness = FreshnessTracker::new();
-        freshness.record_from_report(&init.root, &init.report);
-        let latest_report = Arc::new(init.report);
-        let exclusion = live_exclusion(init.pipeline.as_ref().map_or_else(
-            || Arc::new(ExclusionConfig::empty().with_scan_root(&init.root)),
-            PipelineSession::exclusion_handle,
-        ));
-        Self {
-            root: init.root,
-            min_nodes: init.min_nodes,
-            pipeline: init.pipeline,
-            pending_changes: Vec::new(),
-            report_snapshot: Arc::new(RwLock::new(Arc::clone(&latest_report))),
-            latest_report,
-            generation: 1,
-            embedding_provider: init.embedding_provider,
-            embedding_mode: init.mode,
-            incremental: init.incremental,
-            config_path: init.config_path,
-            embedding_progress_reporter: None,
-            embedding_refresh_revision: 0,
-            exclusion,
-            freshness,
-            buffers: OpenBuffers::default(),
-        }
-    }
-
     /// Installs (or clears with `None`) the embedding-progress reporter.
     pub fn set_embedding_progress_reporter(&mut self, reporter: Option<EmbeddingProgressReporter>) {
         self.embedding_progress_reporter = reporter;
@@ -545,31 +294,6 @@ impl AnalysisSession {
         }
     }
 
-    /// Resolves a `find_similar` request.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`LiveError::UnsupportedLanguage`] for unknown languages
-    /// and [`LiveError::UnparseableInput`] / [`LiveError::Core`] for
-    /// parse failures.
-    pub fn find_similar(
-        &self,
-        request: &FindSimilarRequest,
-    ) -> Result<FindSimilarResult, LiveError> {
-        match &request.input {
-            FindSimilarInput::OpenRange {
-                path,
-                start_byte,
-                end_byte,
-            } => self.find_similar_for_range(path, *start_byte, *end_byte, request.max_results),
-            FindSimilarInput::Snippet { snippet, language } => self.find_similar_for_snippet(
-                snippet.as_str(),
-                language.as_str(),
-                request.max_results,
-            ),
-        }
-    }
-
     /// Returns the resolved session configuration.
     #[must_use]
     pub fn session_config(&self) -> SessionConfig {
@@ -592,133 +316,6 @@ impl AnalysisSession {
                 .as_ref()
                 .map_or(self.incremental, PipelineSession::effective_incremental),
         }
-    }
-
-    /// Returns clusters whose occurrences overlap `path`. Thin wrapper
-    /// over [`report_for_file_in`] so the live read and the LSP backend's
-    /// lock-free snapshot read share one implementation.
-    #[must_use]
-    pub fn report_for_file(&self, path: &Path) -> FileReport {
-        report_for_file_in(&self.latest_report, path)
-    }
-
-    /// Returns clusters overlapping a byte range in `path`. Thin wrapper
-    /// over [`report_for_range_in`].
-    #[must_use]
-    pub fn report_for_range(
-        &self,
-        path: &Path,
-        start_byte: usize,
-        end_byte: usize,
-    ) -> Vec<ReportCluster> {
-        report_for_range_in(&self.latest_report, path, start_byte, end_byte)
-    }
-
-    /// Looks up a cluster by its stable id.
-    ///
-    /// Accepts either the full 16-hex canonical id or any prefix of at
-    /// least 7 hex characters — the same slug the VSIX shows in hover
-    /// bubbles and tree rows via `clusterSlug()`. Falls back to the
-    /// shared [`resolve_cluster_by_id_prefix`] helper so the truncated-id
-    /// behaviour stays consistent across the live API and the MCP wire.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`LiveError::UnknownCluster`] when no cluster matches, the
-    /// prefix is shorter than the slug floor, or the prefix is ambiguous.
-    pub fn cluster_by_id(&self, id: &str) -> Result<ReportCluster, LiveError> {
-        resolve_cluster_by_id_prefix(&self.latest_report.clusters, id).cloned()
-    }
-
-    /// Queues a selected-model embedding refresh and returns the
-    /// detached job description.
-    pub(super) fn prepare_embedding_refresh(
-        &mut self,
-        provider: Arc<dyn EmbeddingProvider>,
-    ) -> EmbeddingRefreshJob {
-        self.embedding_provider = provider;
-        self.embedding_mode = EmbeddingMode::Auto;
-        self.embedding_refresh_revision = self.embedding_refresh_revision.saturating_add(1);
-        let total = self
-            .pipeline
-            .as_ref()
-            .map_or(0_u64, |pipeline| pipeline.fingerprint_count() as u64);
-        let job = EmbeddingRefreshJob::new(EmbeddingRefreshInput {
-            generation: self.generation,
-            buffers: self.buffers.clone(),
-            revision: self.embedding_refresh_revision,
-            root: self.root.clone(),
-            min_nodes: self.min_nodes,
-            incremental: self.incremental,
-            config_path: self.config_path.clone(),
-            provider: Arc::clone(&self.embedding_provider),
-            total,
-            reporter: self.embedding_progress_reporter.clone(),
-        });
-        job.report_queued();
-        job
-    }
-
-    /// Whether `job` is still the latest selected-model request.
-    ///
-    /// Both terminal announcements are gated on this. A superseded job
-    /// must stay silent in **either** direction: announcing its
-    /// `complete` would publish a verdict for a model the user has
-    /// already replaced, and announcing its `failed` would overwrite the
-    /// newer job's verdict with a stale failure, since clients carry one
-    /// embedding-progress signal rather than one per revision.
-    pub(super) fn embedding_refresh_is_current(&self, job: &EmbeddingRefreshJob) -> bool {
-        job.revision == self.embedding_refresh_revision
-    }
-
-    /// [LIVE-OPEN-BUFFERS] A detached result must still describe current sources.
-    pub(super) fn embedding_refresh_matches_sources(&self, job: &EmbeddingRefreshJob) -> bool {
-        job.generation == self.generation && job.buffers == self.buffers
-    }
-
-    /// Commits a completed embedding refresh when it is still the
-    /// latest selected-model request.
-    pub(super) fn commit_embedding_refresh(
-        &mut self,
-        job: &EmbeddingRefreshJob,
-        report: Report,
-    ) -> Option<CommittedEmbeddingRefresh> {
-        if !self.embedding_refresh_is_current(job) || !self.embedding_refresh_matches_sources(job) {
-            return None;
-        }
-        let previous_generation = self.generation;
-        let previous_report = Arc::clone(&self.latest_report);
-        self.generation = self.generation.saturating_add(1);
-        let provenance = report.embedding_provenance.clone();
-        self.publish_report(Arc::new(report));
-        self.freshness
-            .record_from_report(&self.root, &self.latest_report);
-        Some(CommittedEmbeddingRefresh {
-            previous_generation,
-            previous_report,
-            provenance,
-        })
-    }
-
-    /// Lists embedding models available to the session.
-    ///
-    /// Returns models from every registered production provider. When
-    /// no production provider is reachable (e.g. Ollama not running),
-    /// returns an empty list — the VSIX surfaces the "Ollama not
-    /// detected" empty state without a stub fallback.
-    #[must_use]
-    pub fn list_embedding_models(endpoint: &str) -> Vec<EmbeddingModelInfo> {
-        let mut out: Vec<EmbeddingModelInfo> = Vec::new();
-        match crate::embedding::list_ollama_models(endpoint) {
-            Ok(models) => append_ollama_models(&mut out, models),
-            Err(error) => {
-                tracing::info!(
-                    %error,
-                    "ollama_unreachable_no_models_returned",
-                );
-            }
-        }
-        out
     }
 
     /// Stable list of registered parser ids. During the cache-seed
@@ -751,105 +348,6 @@ impl AnalysisSession {
             progress: None,
         };
         Ok(pipeline.update_files(changed, embedding, &self.buffers)?)
-    }
-
-    /// Resolves the open-buffer-range variant of `find_similar`.
-    fn find_similar_for_range(
-        &self,
-        path: &Path,
-        start_byte: usize,
-        end_byte: usize,
-        max_results: Option<usize>,
-    ) -> Result<FindSimilarResult, LiveError> {
-        self.guard_path(path)?;
-        let mut clusters = self.report_for_range(path, start_byte, end_byte);
-        truncate(&mut clusters, max_results);
-        let total_occurrences: usize = clusters.iter().map(crate::report::occurrence_count).sum();
-        Ok(FindSimilarResult {
-            clusters,
-            existing: Vec::new(),
-            below_min_nodes: false,
-            total_occurrences,
-        })
-    }
-
-    /// Resolves the snippet variant of `find_similar`.
-    fn find_similar_for_snippet(
-        &self,
-        snippet: &str,
-        language: &str,
-        max_results: Option<usize>,
-    ) -> Result<FindSimilarResult, LiveError> {
-        let parser = self.parser_for_language(language)?;
-        let snippet_hashes = parse_and_hash_snippet(parser, snippet, self.min_nodes)?;
-        if snippet_hashes.is_empty() {
-            return Ok(FindSimilarResult {
-                clusters: Vec::new(),
-                existing: Vec::new(),
-                below_min_nodes: true,
-                total_occurrences: 0,
-            });
-        }
-        let mut clusters = self.clusters_at_subtree_hashes(&snippet_hashes);
-        truncate(&mut clusters, max_results);
-        let existing = self.pipeline.as_ref().map_or_else(Vec::new, |pipeline| {
-            not_listed_by(pipeline.existing_occurrences(&snippet_hashes), &clusters)
-        });
-        let total_occurrences: usize = clusters.iter().map(crate::report::occurrence_count).sum();
-        Ok(FindSimilarResult {
-            clusters,
-            existing,
-            below_min_nodes: false,
-            total_occurrences,
-        })
-    }
-
-    /// Returns the report clusters whose occurrences carry any of
-    /// `snippet_hashes` — the content join behind snippet `find_similar`.
-    ///
-    /// A snippet has no workspace identity, so it can only be located
-    /// by content: each hash resolves to the live fingerprints that
-    /// carry it, their ranges are joined to the report through
-    /// [`report_for_range_in`] (the same lookup the open-range variant
-    /// uses), and the surviving clusters keep report order with no
-    /// duplicates. The public cluster id cannot take part: since gh
-    /// #430 it mixes the members' paths, so it is not derivable from a
-    /// pathless snippet's digests at all.
-    fn clusters_at_subtree_hashes(&self, snippet_hashes: &[[u8; 32]]) -> Vec<ReportCluster> {
-        let Some(pipeline) = self.pipeline.as_ref() else {
-            return Vec::new();
-        };
-        let matched_ids: HashSet<String> = pipeline
-            .subtree_occurrences(snippet_hashes)
-            .iter()
-            .flat_map(|(path, range)| {
-                report_for_range_in(&self.latest_report, path, range.start, range.end)
-            })
-            .map(|cluster| cluster.id)
-            .collect();
-        self.latest_report
-            .clusters
-            .iter()
-            .filter(|cluster| matched_ids.contains(&cluster.id))
-            .cloned()
-            .collect()
-    }
-
-    /// Returns the registered parser for `language`. Returns
-    /// [`LiveError::AnalysisNotReady`] in the cache-seed window.
-    fn parser_for_language(&self, language: &str) -> Result<&dyn LanguageParser, LiveError> {
-        let pipeline = self.pipeline.as_ref().ok_or(LiveError::AnalysisNotReady)?;
-        let parsers = pipeline.parsers();
-        if let Some(found) = parsers.iter().find(|parser| parser.id() == language) {
-            return Ok(found.as_ref());
-        }
-        Err(LiveError::UnsupportedLanguage {
-            requested: language.to_owned(),
-            registered: parsers
-                .iter()
-                .map(|parser| parser.id().to_owned())
-                .collect(),
-        })
     }
 
     /// [LIVE-SEED-CACHE] Persists the current report snapshot to
@@ -906,46 +404,6 @@ impl AnalysisSession {
     }
 }
 
-/// Builds a [`FileReport`] for `path` from an arbitrary report snapshot.
-/// Shared by [`AnalysisSession::report_for_file`] and the LSP backend's
-/// lock-free editor reads so both surfaces filter and sort identically
-/// ([LSP-NON-INTERFERENCE]).
-#[must_use]
-pub fn report_for_file_in(report: &Report, path: &Path) -> FileReport {
-    let mut clusters: Vec<ReportCluster> = report
-        .clusters
-        .iter()
-        .filter(|cluster| cluster_touches_path(cluster, path))
-        .cloned()
-        .collect();
-    clusters.sort_by_key(|cluster| earliest_byte_for_path(cluster, path));
-    let total_occurrences: usize = clusters.iter().map(crate::report::occurrence_count).sum();
-    FileReport {
-        path: path.to_path_buf(),
-        clusters,
-        total_occurrences,
-    }
-}
-
-/// Returns clusters overlapping a byte range in `path` from an arbitrary
-/// report snapshot. Shared by [`AnalysisSession::report_for_range`] and
-/// the LSP backend's lock-free editor reads.
-#[must_use]
-pub fn report_for_range_in(
-    report: &Report,
-    path: &Path,
-    start_byte: usize,
-    end_byte: usize,
-) -> Vec<ReportCluster> {
-    let clusters = report
-        .clusters
-        .iter()
-        .filter(|cluster| cluster_overlaps_range(cluster, path, start_byte, end_byte))
-        .cloned()
-        .collect();
-    collapse_overlapping_clusters_for_range(clusters, path, start_byte, end_byte)
-}
-
 /// Clones the current report out of a lock-free snapshot handle without
 /// touching the session mutex. The LSP backend uses this so its additive
 /// editor surfaces never block behind an in-flight analysis pass
@@ -967,10 +425,13 @@ pub fn read_report_snapshot(handle: &RwLock<Arc<Report>>) -> Arc<Report> {
 /// language set from drifting when a language is added ([PIPELINE-LANG-TRAIT],
 /// ).
 fn languages_from_report_occurrences(report: &Report) -> Vec<String> {
-    let mut seen: std::collections::BTreeSet<&'static str> = std::collections::BTreeSet::new();
+    let mut seen: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
     for cluster in &report.clusters {
         for occurrence in &cluster.occurrences {
-            let language = language_for_path(&occurrence.path);
+            let language = occurrence
+                .language
+                .as_deref()
+                .unwrap_or_else(|| language_for_path(&occurrence.path));
             if language != "unknown" {
                 let _inserted = seen.insert(language);
             }

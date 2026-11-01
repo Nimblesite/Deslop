@@ -94,12 +94,25 @@ impl StdioRpc {
 
     /// Reads the next frame, failing when the child closes its stdout.
     pub fn read_frame(&mut self) -> Result<Value> {
+        let line = self.read_raw_line()?;
+        serde_json::from_str(line.trim())
+            .with_context(|| format!("invalid JSON from mcp: frame was: {line}"))
+    }
+
+    /// Reads the unmodified newline-terminated wire frame for byte-budget checks.
+    pub fn read_raw_line(&mut self) -> Result<String> {
         let mut line = String::new();
         let bytes = self.stdout.read_line(&mut line)?;
         if bytes == 0 {
             return Err(anyhow!("mcp stdout closed unexpectedly"));
         }
-        serde_json::from_str(line.trim())
-            .with_context(|| format!("invalid JSON from mcp: frame was: {line}"))
+        Ok(line)
+    }
+}
+
+impl super::McpHandle {
+    /// Accesses the shared transport for custom request identifiers and raw frames.
+    pub fn raw_rpc(&mut self) -> &mut StdioRpc {
+        &mut self.rpc
     }
 }

@@ -23,6 +23,8 @@ The engine compares source ranges, applies the [admission rules](https://github.
 
 Informational records follow the exclusions in [CLONE-BUCKETS-STRUCTURAL-ONLY]. Consumers display the engine's counts and order without recalculating them.
 
+Each occurrence and per-file metric carries an optional `language` parser identity. New reports populate it from the analysis session; older reports may omit it. Under [LANG-CAND-OSPREY], `osprey`, `osprey-ml` and `osprey-python` distinguish syntax while clients display the Osprey family. Consumers prefer this identity over a filename extension, because Osprey's Python flavor shares `.py` with ordinary Python. Folder metrics have no language.
+
 ## [REPORT-CONTEXT-PAIR] Comparing two occurrences
 
 A pair response identifies both source ranges. Its evidence explains that comparison only:

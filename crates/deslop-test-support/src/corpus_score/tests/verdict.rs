@@ -3,8 +3,8 @@
 //!
 //! The rendering tests next door pin the tables; these pin the verdict above
 //! them — which failures it collects and in what order, that only a
-//! regression fails the run while a failure that never passed is listed as a
-//! known defect, that only the last engine is
+//! regression, unaccepted judged failure or failed check fails the run,
+//! that only the last engine is
 //! judged, and that the heading and the caution block say exactly what the
 //! verdict holds, in the markdown and the JSON alike.
 
@@ -43,15 +43,19 @@ pub(in crate::corpus_score) const KNOWN_FAILURES: &str = "corpus/known-failures.
 pub(in crate::corpus_score) const CAUTION: &str = "> [!CAUTION]";
 const QUOTED_BLANK: &str = ">";
 /// The block's summary line, by how many regressions the run recorded.
-const ONE_REGRESSION: &str = "> **🔴 FAILED** — **1 regression**: something that passed before \
-                              fails now. Every regression is listed here; the tables below give \
-                              the detail.";
+const ONE_REGRESSION: &str =
+    "> **🔴 FAILED** — **1 failure**. Every blocking failure is listed here; \
+                              the tables below give the detail.";
+const THREE_FAILURES: &str =
+    "> **🔴 FAILED** — **3 failures**. Every blocking failure is listed here; \
+                              the tables below give the detail.";
 /// What opens the note that lists known defects, and its summary line.
 const NOTE: &str = "> [!NOTE]";
-const ONE_KNOWN_DEFECT: &str = "> ⚠️ **1 known defect** — none of them passed before, so none is \
-                                a regression and none fails the run. Each is still a bug.";
-const TWO_KNOWN_DEFECTS: &str = "> ⚠️ **2 known defects** — none of them passed before, so none \
-                                 is a regression and none fails the run. Each is still a bug.";
+const ONE_KNOWN_DEFECT: &str = "> ⚠️ **1 accepted defect** — explicitly accepted on record. None \
+                                fails the run. Each is still a bug.";
+const ACCEPTED_LINE: &str = "> - ⚠️ **fixture** — `false negative` (tracked in \
+                            `corpus/register/outcomes.json`): `src/one.rs:10-20` + \
+                            `src/two.rs:30-40`: on record as failing since 2026-10-01T00:00:00Z";
 /// When the fixture pair went on record as passing, and how the verdict says
 /// it regressed from that pass.
 const PASSED_SINCE: &str = "2026-10-01T00:00:00Z";
@@ -76,12 +80,12 @@ const TRACKED_DETAIL: &str = "peak RSS 9100MB exceeds the 9000MB ceiling";
 /// A detail that spans two lines; the caution block carries it on one.
 const NEW_DETAIL: &str = "scan took 400s\nthe ceiling is 300s";
 /// One line per failure, as the caution block lists them.
-const TRACKED_LINE: &str = "> - ⚠️ **fixture** — `memory` (tracked in \
+const TRACKED_LINE: &str = "> - 🔴 **fixture** — `memory` (tracked in \
                             `corpus/known-failures.json`): peak RSS 9100MB exceeds the 9000MB \
                             ceiling";
 const NEW_LINE: &str = "> - 🔴 **fixture** — `wall`: scan took 400s the ceiling is 300s";
 pub(in crate::corpus_score) const UNRECORDED_LINE: &str =
-    "> - ⚠️ **fixture** — `false negative`: `src/one.rs:10-20` + \
+    "> - 🔴 **fixture** — `false negative`: `src/one.rs:10-20` + \
                                `src/two.rs:30-40`: failing, and not on record as failing";
 /// A second repository, so the order failures are listed in is not an accident
 /// of there being one.
@@ -265,27 +269,23 @@ fn a_pair_that_passed_before_and_fails_now_fails_the_run_and_is_named_under_the_
 }
 
 #[test]
-fn a_pair_that_never_passed_is_a_known_defect_and_fails_nothing() -> Result<()> {
+fn a_pair_that_never_passed_requires_explicit_acceptance() -> Result<()> {
     let (found, missed) = found_and_missed()?;
     let never_passed = card(&found, &missed);
     assert!(
-        never_passed.verdict.passed(),
-        "a pair with no pass on record has nothing to regress from, so the run passes"
+        !never_passed.verdict.passed(),
+        "an unrecorded failure fails until explicitly accepted"
     );
     assert_eq!(
         never_passed.verdict.failures,
         [reason(MISSED_DEFECT, UNRECORDED_DETAIL, None, KNOWN_DEFECT)],
         "it is still listed: what it is, its ranges and how it stands against the record"
     );
-    let opening = [
-        vec![PASSED_HEADING, ""],
-        known_note(ONE_KNOWN_DEFECT, &[UNRECORDED_LINE]),
-    ]
-    .concat();
+    let opening = failed_opening(ONE_REGRESSION, &[UNRECORDED_LINE]);
     assert_opens_with(&never_passed, &opening);
     assert!(
-        !scorecard(&never_passed).contains(CAUTION),
-        "a known defect is never shown as a regression"
+        scorecard(&never_passed).contains(CAUTION),
+        "an unaccepted defect is shown as a blocking failure"
     );
     assert_eq!(
         serde_json::to_value(&never_passed)?.pointer(VERDICT_FAILURES),
@@ -321,19 +321,15 @@ fn every_failed_check_is_listed_before_the_judged_pairs() -> Result<()> {
     );
     assert!(
         !failing.verdict.passed(),
-        "the untracked check is a regression; the tracked check and the never-passed pair are not"
+        "every failed check and unaccepted judged failure blocks the run"
     );
-    let opening = [
-        failed_opening(ONE_REGRESSION, &[NEW_LINE]),
-        known_note(TWO_KNOWN_DEFECTS, &[TRACKED_LINE, UNRECORDED_LINE]),
-    ]
-    .concat();
+    let opening = failed_opening(THREE_FAILURES, &[TRACKED_LINE, NEW_LINE, UNRECORDED_LINE]);
     assert_opens_with(&failing, &opening);
     Ok(())
 }
 
 #[test]
-fn a_failure_the_baseline_tracks_is_a_known_defect_that_fails_nothing() -> Result<()> {
+fn a_failure_the_baseline_tracks_still_fails_the_run() -> Result<()> {
     let (found, _) = found_and_missed()?;
     let tracked_only = checked_by(NEW_ENGINE, vec![tracked_failure()]);
     let known = checked_card(&found, &found, tracked_only);
@@ -355,12 +351,29 @@ fn a_failure_the_baseline_tracks_is_a_known_defect_that_fails_nothing() -> Resul
         "a tracked failure is still listed, with the record that tracks it"
     );
     assert!(
+        !known.verdict.passed(),
+        "tracking a failed check does not make it pass"
+    );
+    let opening = failed_opening(ONE_REGRESSION, &[TRACKED_LINE]);
+    assert_opens_with(&known, &opening);
+    Ok(())
+}
+
+#[test]
+fn an_explicitly_accepted_pair_remains_tolerated() -> Result<()> {
+    let (found, missed) = found_and_missed()?;
+    let mut accepted = passing_record(&found);
+    for pair in &mut accepted.pairs {
+        pair.outcome = Outcome::Fail;
+    }
+    let known = recorded_card(&found, &missed, BTreeMap::new(), &accepted);
+    assert!(
         known.verdict.passed(),
-        "it is not a regression, so the run passes"
+        "an accepted judged failure stays tolerated"
     );
     let opening = [
         vec![PASSED_HEADING, ""],
-        known_note(ONE_KNOWN_DEFECT, &[TRACKED_LINE]),
+        known_note(ONE_KNOWN_DEFECT, &[ACCEPTED_LINE]),
     ]
     .concat();
     assert_opens_with(&known, &opening);
@@ -437,3 +450,5 @@ fn failures_are_listed_repository_by_repository_checks_before_judged_pairs() -> 
     );
     Ok(())
 }
+
+mod gate;

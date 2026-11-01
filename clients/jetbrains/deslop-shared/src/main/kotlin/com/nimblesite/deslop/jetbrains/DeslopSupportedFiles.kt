@@ -16,6 +16,9 @@ object DeslopSupportedFiles {
      * analysis start-up and grouping together, so the surfaces cannot drift apart.
      */
     private val languages: Map<String, LanguageInfo> = mapOf(
+        "osprey" to LanguageInfo("Osprey", setOf("osp")),
+        "osprey-ml" to LanguageInfo("Osprey", setOf("ospml")),
+        "osprey-python" to LanguageInfo("Osprey", emptySet()),
         "csharp" to LanguageInfo("C#", setOf("cs")),
         "rust" to LanguageInfo("Rust", setOf("rs")),
         "python" to LanguageInfo("Python", setOf("py")),

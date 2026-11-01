@@ -1,0 +1,9 @@
+/// Persist a note through the chosen capability.
+effect Notes { store: fn(string, string) -> Result<int, Error> }
+fn saveNote(name: string, content: string) = match perform Notes.store(name, content) {
+    Success size => if size > 1 { "Stored" } else { "Blank" }
+    Error { detail } => "Again"
+}
+let disconnected = handler Notes {
+    store name content => Error { detail: "unavailable" }
+}

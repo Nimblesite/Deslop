@@ -11,6 +11,8 @@ import { KIND_ICON, KIND_THEME_COLOR, SEVERITY_DOT } from "../design";
 import { occurrenceDisplayLocation } from "../locations";
 import { resolveWorkspacePath } from "../pathUtils";
 import { formatMass, formatPercent } from "../types/format";
+import { languageForPath } from "../types/languages";
+import { languageIconUri } from "../types/languageIcons";
 import {
   ClusterKind,
   clusterSeverity,
@@ -35,6 +37,11 @@ export { displayPath, representativePath } from "./paths";
 const TREE_ITEM_ROLE = "treeitem";
 const FILE_NODE_KIND = "file";
 const CANONICAL_OCCURRENCE_INDEX = 0;
+
+// [VSIX-LANGUAGE-ICONS] Use the same artwork as every webview surface.
+export function languageIcon(language: string): vscode.Uri {
+  return vscode.Uri.parse(languageIconUri(language));
+}
 
 export type Node =
   | ClusterNode
@@ -141,6 +148,7 @@ export class OccurrenceNode extends vscode.TreeItem {
   ) {
     const location = occurrenceDisplayLocation(occurrence);
     super(location?.label ?? occurrence.path, vscode.TreeItemCollapsibleState.None);
+    this.iconPath = languageIcon(languageForPath(occurrence.path, occurrence.language));
     if (location) this.description = location.description;
     this.contextValue =
       parentCluster !== undefined && occurrence === canonicalOccurrence
@@ -178,7 +186,7 @@ export class FileNode extends vscode.TreeItem {
     super(`${label} · ${clusterCount} ${noun}`, vscode.TreeItemCollapsibleState.Collapsed);
     this.description = hasClones ? `worst mass ${formatMass(worstMass)}` : INFORMATIONAL_FINDING;
     this.contextValue = "deslop.fileGroup";
-    this.iconPath = new vscode.ThemeIcon(FILE_NODE_KIND);
+    this.iconPath = languageIcon(languageForPath(filePath, clusters.flatMap(cluster => cluster.occurrences).find(occurrence => occurrence.path === filePath)?.language));
     this.tooltip = hasClones ? pathRollupTooltip(filePath, `${clusterCount} ${noun}`, worstMass) : new vscode.MarkdownString(INFORMATIONAL_FINDING);
     this.accessibilityInformation = {
       label: `${label}, ${clusterCount} ${noun}. ${hasClones ? "" : INFORMATIONAL_FINDING}`,
@@ -213,7 +221,7 @@ export class GroupNode extends vscode.TreeItem {
     /** Whether child cluster rows show their file suffix — true when
      * the group is a root (no file ancestor implies the file). */
     readonly showFileInChildren: boolean,
-    icon?: vscode.ThemeIcon,
+    icon?: vscode.ThemeIcon | vscode.Uri,
     collapsibleState: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.Expanded,
   ) {
     super(`${title} (${clusters.length})`, collapsibleState);
@@ -348,7 +356,7 @@ export class FileMetricNode extends vscode.TreeItem {
     super(baseName(displayPath(metric.path)), vscode.TreeItemCollapsibleState.None);
     this.description = `${formatPercent(metric.duplication_percent)} · ${metric.duplicated_loc}/${metric.analysed_loc} LOC`;
     this.contextValue = "deslop.fileMetric";
-    this.iconPath = new vscode.ThemeIcon(FILE_NODE_KIND);
+    this.iconPath = languageIcon(languageForPath(metric.path, metric.language));
     // `metric.path` is rendered relative to the scan root by the engine, so
     // it must be resolved against the workspace before it names a file on
     // disk — otherwise the row opens a phantom path at the filesystem root

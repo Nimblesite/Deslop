@@ -32,24 +32,27 @@ pub(super) fn schema_rescan() -> Value {
     object_schema(&properties, &[])
 }
 
-/// Schema for preventative similarity lookup.
+/// [MCP-TOOL-FINDSIMILAR] One complete input with [MCP-PAGE-CONTINUATION] controls.
 pub(super) fn schema_find_similar() -> Value {
-    let mut properties = filter_properties();
+    let mut properties = page_properties();
+    properties.extend(filter_properties());
     properties.extend(scope_properties());
     let _old = properties.insert("snippet".to_owned(), json!({"type": "string"}));
     let _old = properties.insert(
         "language".to_owned(),
         json!({"type": "string", "enum": language_enum()}),
     );
-    let _old = properties.insert(
-        "limit".to_owned(),
-        json!({"type": "integer", "minimum": 1, "default": DEFAULT_LIMIT}),
-    );
-    let _old = properties.insert(
-        "max_occurrences".to_owned(),
-        json!({"type": "integer", "minimum": 1, "default": DEFAULT_MAX_OCCURRENCES}),
-    );
-    object_schema(&properties, &[])
+    let mut schema = object_schema_fields(&properties, &[]);
+    let _old = schema.insert("oneOf".to_owned(), similarity_input_variants());
+    Value::Object(schema)
+}
+
+/// The live handler accepts exactly one complete range or snippet input.
+fn similarity_input_variants() -> Value {
+    json!([
+        {"required": ["path", "start_byte", "end_byte"]},
+        {"required": ["snippet", "language"]},
+    ])
 }
 
 /// Schema for exact pair evidence.
@@ -194,10 +197,15 @@ fn language_enum() -> Value {
 
 /// Builds one strict object schema.
 fn object_schema(properties: &Map<String, Value>, required: &[&str]) -> Value {
-    json!({
-        "type": "object",
-        "properties": properties,
-        "required": required,
-        "additionalProperties": false
-    })
+    Value::Object(object_schema_fields(properties, required))
+}
+
+/// Keep the canonical object fields typed for schemas that add constraints.
+fn object_schema_fields(properties: &Map<String, Value>, required: &[&str]) -> Map<String, Value> {
+    Map::from_iter([
+        ("type".to_owned(), json!("object")),
+        ("properties".to_owned(), json!(properties)),
+        ("required".to_owned(), json!(required)),
+        ("additionalProperties".to_owned(), json!(false)),
+    ])
 }

@@ -87,6 +87,7 @@ impl PipelineSession {
         });
         let line_index = LineIndex::new(source);
         let located = Located {
+            language: self.file_languages.get(&member.file_id).copied(),
             absolute: Some(absolute),
             range: member.byte_range,
             line_index: Some(&line_index),

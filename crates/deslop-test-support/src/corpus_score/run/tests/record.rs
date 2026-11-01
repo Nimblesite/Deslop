@@ -62,7 +62,7 @@ const TRACKED_PAIR_LINE: &str = "> - ⚠️ **flutter** — `false negative` (tr
 
 /// How the caution block names the fixture pair when it fails off the record,
 /// and when it regressed after passing since the first run.
-const UNRECORDED_LINE: &str = "> - ⚠️ **flutter** — `false negative`: `src/one.rs:10-20` + \
+const UNRECORDED_LINE: &str = "> - 🔴 **flutter** — `false negative`: `src/one.rs:10-20` + \
                                `src/two.rs:30-40`: failing, and not on record as failing";
 const REGRESSED_LINE: &str = "> - 🔴 **flutter** — `false negative`: `src/one.rs:10-20` + \
                               `src/two.rs:30-40`: regressed; on record as passing since \
@@ -249,25 +249,24 @@ fn a_passing_pair_goes_on_record_and_a_regression_never_overwrites_it() -> Resul
 }
 
 #[test]
-fn a_failure_that_never_passed_fails_nothing_and_a_fix_is_recorded_for_good() -> Result<()> {
+fn an_unaccepted_failure_blocks_the_run_and_a_fix_is_recorded_for_good() -> Result<()> {
     run_steps(&[
         Step {
             at: FIRST_RUN,
             reported: false,
             scoring: STRICT,
             standing: Standing::Unrecorded,
-            heading: PASSED_HEADING,
-            carries: &[UNRECORDED_LINE, RECORD_PASS],
+            heading: FAILED_HEADING,
+            carries: &[UNRECORDED_LINE, RECORD_FAIL],
             record: json!([]),
-            why: "a pair that never passed is a known defect, not a regression, and an ordinary \
-                  run never puts its failure on record",
+            why: "an unrecorded failure blocks an ordinary run and is not silently accepted",
         },
         Step {
             at: SECOND_RUN,
             reported: false,
             scoring: ACCEPTING,
             standing: Standing::Unrecorded,
-            heading: PASSED_HEADING,
+            heading: FAILED_HEADING,
             carries: &[UNRECORDED_LINE],
             record: holding("fail", SECOND_RUN),
             why: "an accepting run puts the failure on record, from the run that accepted it",
@@ -351,8 +350,8 @@ fn a_record_tolerates_exactly_the_pairs_it_names() -> Result<()> {
          record is per pair, so it never widens to cover a second pair"
     );
     assert!(
-        missed.markdown.contains(RECORD_PASS),
-        "neither pair ever passed, so neither regressed:\n{}",
+        missed.markdown.contains(RECORD_FAIL),
+        "the second pair is unaccepted, so it fails the run despite the first pair's acceptance:\n{}",
         missed.markdown
     );
     assert_eq!(

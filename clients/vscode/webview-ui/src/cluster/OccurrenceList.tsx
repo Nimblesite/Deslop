@@ -1,4 +1,5 @@
 import { HelpedText } from "../components/HelpBubble";
+import { LanguageBadge } from "../components/LanguageBadge";
 import { isPicked, pickedOccurrence, post, tapOccurrenceRow } from "../store";
 import type { ReportCluster, ReportOccurrence } from "../../../src/types/report";
 
@@ -41,6 +42,7 @@ function OccurrenceLocation({ occurrence }: { occurrence: ReportOccurrence }) {
   return <div class="occurrence-location">
     <button class="text-action" onClick={() => openOccurrence(occurrence)}
       title={openTitle(occurrence)} aria-label={openTitle(occurrence)}>
+      <LanguageBadge path={occurrence.path} selected={occurrence.language} />
       {occurrence.displayLocation?.label ?? occurrence.path}
     </button>
     <div class="occurrence-position" title={locationDescriptionTitle(occurrence)}>

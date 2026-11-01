@@ -1,0 +1,5 @@
+describe value =
+    if value > 0 then
+        value + 1
+    else
+        value - 1

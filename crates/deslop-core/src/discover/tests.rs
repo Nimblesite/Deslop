@@ -21,6 +21,7 @@ fn incomplete_inventory_returns_the_discovery_failure() -> io::Result<()> {
         Path::new(SUBTREE),
         &HashMap::new(),
         &ExclusionConfig::empty(),
+        OspreyProjects::default(),
     );
     assert!(
         result.is_err(),

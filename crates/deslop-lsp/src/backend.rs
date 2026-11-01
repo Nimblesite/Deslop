@@ -65,8 +65,10 @@ pub struct LspBackend {
     _scheduler: deslop_core::live::Scheduler,
     /// IPC socket server that exposes `duplicates/findSimilar` and
     /// `embedding/listModels` to the MCP server ([LSP-IPC]).
-    /// `None` when the socket could not be bound (non-fatal).
+    /// `None` when binding failed; the editor receives `ipc_startup_error`.
     _ipc: Option<crate::ipc::IpcServer>,
+    /// [LSP-IPC] Retained until the editor can receive startup diagnostics.
+    ipc_startup_error: Option<String>,
     /// CPU/work observability recorder for `deslop/cpuReport`.
     observability: Observability,
     /// Workspace root pinned at construction. Cached here so the
@@ -153,8 +155,8 @@ impl LspBackend {
             Arc::clone(&service),
             report_changed.clone(),
         )
-        .map_err(|e| tracing::warn!(%e, "ipc_socket_start_failed"))
-        .ok();
+        .inspect_err(|error| tracing::warn!(%error, "ipc_socket_start_failed"));
+        let ipc_startup_error = ipc.as_ref().err().map(ToString::to_string);
         // A seeded session serves a cached report while a background cold
         // pass runs; a fresh session has already finished its blocking
         // scan. `initialized()` reads this to report the right startup
@@ -180,7 +182,8 @@ impl LspBackend {
             service,
             _watcher: watcher,
             _scheduler: scheduler,
-            _ipc: ipc,
+            _ipc: ipc.ok(),
+            ipc_startup_error,
             observability,
             workspace_root: root,
             report_snapshot,
@@ -214,6 +217,21 @@ impl LspBackend {
     #[must_use]
     pub fn workspace_root(&self) -> &Path {
         &self.workspace_root
+    }
+
+    /// [LSP-IPC] Explain an unavailable MCP endpoint once handlers are installed.
+    async fn report_ipc_startup_error(&self) {
+        if let Some(error) = &self.ipc_startup_error {
+            self.client
+                .show_message(
+                    MessageType::ERROR,
+                    format!(
+                        "Deslop MCP unavailable for {}: {error}",
+                        self.workspace_root.display()
+                    ),
+                )
+                .await;
+        }
     }
 }
 
@@ -274,6 +292,7 @@ impl LanguageServer for LspBackend {
     }
 
     async fn initialized(&self, _params: InitializedParams) {
+        self.report_ipc_startup_error().await;
         self.client
             .log_message(MessageType::INFO, "deslop-lsp initialised")
             .await;

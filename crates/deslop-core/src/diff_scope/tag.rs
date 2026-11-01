@@ -100,6 +100,7 @@ mod tests {
             end_line,
             hidden,
             in_diff: None,
+            language: None,
         }
     }
 

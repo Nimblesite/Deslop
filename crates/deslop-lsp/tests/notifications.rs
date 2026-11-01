@@ -17,7 +17,11 @@ use anyhow::{anyhow, ensure, Result};
 
 use crate::common::*;
 
-type FrameResult = std::result::Result<serde_json::Value, String>;
+/// A decoded protocol frame or a reader failure.
+pub(crate) type FrameResult = std::result::Result<serde_json::Value, String>;
+
+#[path = "notifications/ipc.rs"]
+mod ipc;
 
 /// Accepts normal VS Code notifications without tower-lsp fallback
 /// warnings.
@@ -282,7 +286,7 @@ fn frame_report_get(
 
 /// Spawns a guarded LSP, starts its frame reader, completes the handshake, and
 /// returns the guard, stdin, frame channel, and the initial `deslop/reportGet`.
-fn spawn_lsp_with_initial_report(
+pub(crate) fn spawn_lsp_with_initial_report(
     workspace: &Path,
 ) -> Result<(
     LspGuard,
@@ -322,7 +326,7 @@ fn send_and_recv_frame(
 }
 
 /// Builds, sends, and receives a JSON-RPC request.
-fn request_response(
+pub(crate) fn request_response(
     stdin: &mut ChildStdin,
     frames: &Receiver<FrameResult>,
     method: &str,
@@ -348,7 +352,7 @@ fn recv_response(
 }
 
 /// Waits until a notification with `method` arrives.
-fn recv_method(
+pub(crate) fn recv_method(
     frames: &Receiver<FrameResult>,
     method: &str,
     timeout: Duration,

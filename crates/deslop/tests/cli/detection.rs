@@ -8,6 +8,12 @@ use crate::common::{
 mod contract;
 use contract::*;
 
+#[path = "detection/osprey.rs"]
+mod osprey;
+
+#[path = "detection/osprey_flavors.rs"]
+mod osprey_flavors;
+
 #[path = "detection/prologue.rs"]
 mod prologue;
 use prologue::{assert_no_cross_file_prologue_cluster, occurrence_source};
