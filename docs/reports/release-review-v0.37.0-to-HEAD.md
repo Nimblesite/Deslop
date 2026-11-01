@@ -123,3 +123,5 @@ The review above was written by a pi agent (`kimi-coding/k3.1-pro`). Each findin
 **Finding 4 leaves one gap.** A code action requested while the analysis of a newer edit is still running gets the previous report and its matching text, so its edits describe the previous version. v0.37.0 had the same exposure for every unsaved buffer, so this is not a regression.
 
 **Finding 6 is a policy question, and nothing changed.** The 11 recorded `fail` outcomes are false positives the gate tolerates by design since #594, which fails a run only on regressions. They were recorded in `13fca3f9`. Making them red again means fixing those 11 pairs in the detector or reversing #594, and neither is a regression fix.
+
+**Corpus comparison.** `scripts/compare-versions.sh v0.37.0 HEAD`, run on `cc9b3e98`, scored both builds at 96.6% (313/324), with 0 false negatives, 11 false positives and 43215 clusters. The 11 false positives therefore already existed at v0.37.0. The dispatcher fix changed no judged pair and no cluster count on this corpus, so `a_renamed_contract_cannot_excuse_an_unrelated_operation` is the only evidence for it.
