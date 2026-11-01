@@ -20,8 +20,6 @@ use crate::ast::{named_children, ByteRange};
 
 /// The fewest rows that make a run.
 const MIN_ROWS: usize = 2;
-/// The fewest distinct string payloads that show a run's rows hold data.
-const MIN_DISTINCT_PAYLOADS: usize = 2;
 /// Members sharing one in this many of the smaller one's strings are copies.
 const COPY_OVERLAP_DENOMINATOR: usize = 2;
 
@@ -67,8 +65,8 @@ fn member_payloads<'src>(snippet: &Snippet<'src>) -> BTreeSet<&'src [u8]> {
     payloads
 }
 
-/// True when the snippet covers whole sibling rows of one shape, none holding
-/// logic, whose string payloads differ.
+/// True when the snippet covers whole, different sibling rows of one shape,
+/// none holding logic, that hold a string.
 fn covers_data_rows(snippet: &Snippet<'_>) -> bool {
     let Some(tree) = parse_for(snippet) else {
         return false;
@@ -102,7 +100,8 @@ fn is_data_row_run(parent: Node<'_>, range: ByteRange, source: &[u8]) -> bool {
             .iter()
             .any(|row| is_record_field(*row) || row_holds_logic(*row))
         && one_row_shape(&rows, source)
-        && distinct_payloads(&rows, source) >= MIN_DISTINCT_PAYLOADS;
+        && rows_differ(&rows, source)
+        && holds_a_string(&rows, source);
     is_run
         || (!is_logic_kind(parent.kind())
             && largest_child(&rows).is_some_and(|child| is_data_row_run(child, range, source)))
@@ -183,8 +182,17 @@ fn is_logic_kind(kind: &str) -> bool {
         || kind == "func_literal"
 }
 
-/// Counts the distinct string texts the rows hold.
-fn distinct_payloads(rows: &[Node<'_>], source: &[u8]) -> usize {
+/// True when no two rows are the same bytes: a repeated row is a paste.
+fn rows_differ(rows: &[Node<'_>], source: &[u8]) -> bool {
+    let texts: BTreeSet<_> = rows
+        .iter()
+        .filter_map(|row| source.get(row.start_byte()..row.end_byte()))
+        .collect();
+    texts.len() == rows.len()
+}
+
+/// True when the rows hold a string, the payload that makes them data.
+fn holds_a_string(rows: &[Node<'_>], source: &[u8]) -> bool {
     let mut payloads = BTreeSet::new();
     for row in rows {
         let range = ByteRange {
@@ -193,7 +201,7 @@ fn distinct_payloads(rows: &[Node<'_>], source: &[u8]) -> usize {
         };
         collect_strings(*row, range, source, &mut payloads);
     }
-    payloads.len()
+    !payloads.is_empty()
 }
 
 /// Gathers the outermost string literals of `node` that overlap `range`.
