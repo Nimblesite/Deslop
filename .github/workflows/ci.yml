@@ -334,9 +334,9 @@ jobs:
       - name: Run Rust tests with coverage collection
         run: make coverage-run
 
+      # [CI-COVERAGE-ONCE] Never `if: always()`: a rerun reads a failed attempt's artifact.
       - name: Upload raw Rust coverage
         uses: actions/upload-artifact@v7
-        if: always()
         with:
           name: rust-coverage-raw
           path: target/llvm-cov-target
@@ -393,9 +393,9 @@ jobs:
 
       - name: Deployment manifest and binary gates
         run: make deployment-verify
+      # [CI-COVERAGE-ONCE] Never `if: always()`: a rerun reads a failed attempt's artifact.
       - name: Upload raw repository coverage
         uses: actions/upload-artifact@v7
-        if: always()
         with:
           name: repository-coverage-raw
           path: coverage/repository/raw
@@ -720,9 +720,9 @@ jobs:
           CARGO_LLVM_COV_TARGET_DIR: target/windows-llvm-cov
         run: cargo llvm-cov --release --features deslop-core/live,deslop-lsp/profiling report --lcov --output-path windows-lcov.info
 
+      # [CI-COVERAGE-ONCE] Never `if: always()`: a rerun reads a failed attempt's artifact.
       - name: Upload Windows Rust coverage report
         uses: actions/upload-artifact@v7
-        if: always()
         with:
           name: windows-rust-coverage
           path: windows-lcov.info
@@ -833,9 +833,9 @@ jobs:
       - name: vsix-package deployment gate
         run: make vsix-package
 
+      # [CI-COVERAGE-ONCE] Never `if: always()`: a rerun reads a failed attempt's artifact.
       - name: Upload VSIX coverage
         uses: actions/upload-artifact@v7
-        if: always()
         with:
           name: vsix-coverage
           path: |

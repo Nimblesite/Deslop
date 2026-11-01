@@ -43,14 +43,17 @@ fn unchanged_receiver(
     right: &MemberContent,
     targets: (&CallTarget, &CallTarget),
 ) -> bool {
+    let qualifiers = (
+        targets.0.qualifier_positions(),
+        targets.1.qualifier_positions(),
+    );
     targets.0.has_contract()
         && targets.1.has_contract()
-        && targets.0.receiver_positions().len() == targets.1.receiver_positions().len()
-        && targets
+        && qualifiers.0.len() == qualifiers.1.len()
+        && qualifiers
             .0
-            .receiver_positions()
             .iter()
-            .zip(targets.1.receiver_positions())
+            .zip(&qualifiers.1)
             .all(|(left_index, right_index)| {
                 keys(left, right, (*left_index, *right_index))
                     .is_some_and(|(left, right)| left == right)

@@ -1,6 +1,7 @@
 //! [LIVE-STATE] Construction, cache-seed install and full refresh of [`AnalysisSession`].
 
 use std::{
+    collections::BTreeMap,
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
 };
@@ -265,7 +266,9 @@ impl AnalysisSession {
             embedding_refresh_revision: 0,
             exclusion,
             freshness,
+            analysed_buffers: Arc::default(),
             buffers: OpenBuffers::default(),
+            deferred_acknowledgements: BTreeMap::new(),
         }
     }
 }

@@ -10,6 +10,7 @@ mod init;
 mod queries;
 
 use std::{
+    collections::BTreeMap,
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
 };
@@ -60,6 +61,10 @@ pub struct AnalysisSession {
     /// a churning monorepo. Republished by [`Self::publish_report`] in
     /// lock-step with `latest_report`.
     report_snapshot: Arc<RwLock<Arc<Report>>>,
+    /// Lock-free copy of the open buffers [`Self::report_snapshot`] analysed
+    /// ([LIVE-OPEN-BUFFERS]), so byte offsets read from that report are
+    /// resolved against the text they describe.
+    analysed_buffers: Arc<RwLock<Arc<OpenBuffers>>>,
     /// Monotonic generation counter.
     generation: u64,
     /// Active embedding provider.
@@ -90,6 +95,9 @@ pub struct AnalysisSession {
     /// describes what the user sees, saved or not. Maintained by the
     /// `*_buffer` methods in `session_buffers.rs`.
     pub(super) buffers: OpenBuffers,
+    /// Latest editor version per path edited while no pass could analyse it.
+    /// Acknowledged by the cold pass that replays them ([LIVE-OPEN-BUFFERS]).
+    pub(super) deferred_acknowledgements: BTreeMap<PathBuf, i32>,
 }
 
 impl std::fmt::Debug for AnalysisSession {
@@ -146,6 +154,10 @@ impl AnalysisSession {
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         *guard = report;
+        *self
+            .analysed_buffers
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Arc::new(self.buffers.clone());
     }
 
     /// Returns the exclusion handle the live watcher must filter with.
@@ -173,6 +185,12 @@ impl AnalysisSession {
     #[must_use]
     pub fn report_snapshot_handle(&self) -> Arc<RwLock<Arc<Report>>> {
         Arc::clone(&self.report_snapshot)
+    }
+
+    /// The lock-free open buffers behind [`Self::report_snapshot_handle`].
+    #[must_use]
+    pub fn analysed_buffers_handle(&self) -> Arc<RwLock<Arc<OpenBuffers>>> {
+        Arc::clone(&self.analysed_buffers)
     }
 
     /// Returns the current generation counter.
@@ -410,6 +428,17 @@ impl AnalysisSession {
 /// ([LSP-NON-INTERFERENCE]).
 #[must_use]
 pub fn read_report_snapshot(handle: &RwLock<Arc<Report>>) -> Arc<Report> {
+    Arc::clone(
+        &handle
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner),
+    )
+}
+
+/// Clones the buffers the current report analysed out of their lock-free
+/// handle, for the same callers as [`read_report_snapshot`].
+#[must_use]
+pub fn read_analysed_buffers(handle: &RwLock<Arc<OpenBuffers>>) -> Arc<OpenBuffers> {
     Arc::clone(
         &handle
             .read()

@@ -18,8 +18,8 @@ use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 
 use crate::common::{
-    call, copy_fixture, handshake, notification, session::FixtureSession, spawn_lsp_guarded,
-    spawn_lsp_on_fixture_guarded, write_frame, LspGuard,
+    call, cluster_count, copy_fixture, handshake, notification, session::FixtureSession,
+    spawn_lsp_guarded, spawn_lsp_on_fixture_guarded, write_frame, LspGuard,
 };
 
 const DEFINITION: &str = "textDocument/definition";
@@ -28,6 +28,9 @@ const DIAGNOSTIC: &str = "textDocument/diagnostic";
 const CODE_LENS: &str = "textDocument/codeLens";
 const EXECUTE_COMMAND: &str = "workspace/executeCommand";
 const REFRESH_COMMAND: &str = "deslop.lsp.refreshReport";
+const REPORT_DELTA: &str = "deslop/reportDelta";
+const NO_CLUSTERS: usize = 0;
+const NO_MASS: u64 = 0;
 const REPORT_GET: &str = "deslop/reportGet";
 const CSHARP_FIXTURE: &str = "csharp-small";
 const ALPHA_FILE: &str = "Alpha.cs";
@@ -271,9 +274,10 @@ fn additive_code_lens_carries_deslops_own_jump_command_not_definition() -> Resul
 
 #[test]
 fn refresh_command_re_evaluates_the_corpus_after_an_edit() -> Result<()> {
-    // [LSP-COMMANDS] Create the alias before the watcher starts. Writing
-    // outside its root changes the same file without racing an automatic
-    // refresh, so this command must itself discover and report the removal.
+    // [LSP-COMMANDS] Create the alias before the watcher starts and write
+    // outside its root. That usually keeps an automatic pass out of the way,
+    // but CI has seen one land first, so the count is held to the passes that
+    // actually ran: only a refresh that was the sole pass must report the removal.
     let workspace = copy_fixture(CSHARP_FIXTURE)?;
     let external = tempfile::tempdir()?;
     let alpha = external.path().join(ALPHA_FILE);
@@ -281,20 +285,48 @@ fn refresh_command_re_evaluates_the_corpus_after_an_edit() -> Result<()> {
     let (_guard, mut stdin, mut stdout) = spawn_lsp_guarded(workspace.path())?;
     let _init = handshake(&mut stdin, &mut stdout)?;
     let _report = wait_for_clusters(&mut stdin, &mut stdout)?;
+    let before = call(
+        &mut stdin,
+        &mut stdout,
+        REPORT_DELTA,
+        &json!({ "since_generation": 0 }),
+    )?;
+    let edited_at = pointer_u64(&before, "/result/to_generation")?;
     std::fs::write(&alpha, SOLO_SOURCE)?;
     let params = json!({ "command": REFRESH_COMMAND });
     let response = call(&mut stdin, &mut stdout, EXECUTE_COMMAND, &params)?;
-    assert_refresh_removed_clone(&response)
+    assert_refresh_removed_clone(&response, edited_at)?;
+    let report = call(&mut stdin, &mut stdout, REPORT_GET, &json!({}))?;
+    assert_eq!(
+        cluster_count(&report),
+        NO_CLUSTERS,
+        "editing Alpha.cs away from Beta.cs must leave no clone: {report}"
+    );
+    Ok(())
 }
 
-fn assert_refresh_removed_clone(response: &Value) -> Result<()> {
-    let removed = response
-        .pointer("/result/clustersRemoved")
+fn pointer_u64(value: &Value, pointer: &str) -> Result<u64> {
+    value
+        .pointer(pointer)
         .and_then(Value::as_u64)
-        .ok_or_else(|| anyhow!("refresh response missing clustersRemoved: {response}"))?;
+        .ok_or_else(|| anyhow!("missing {pointer}: {value}"))
+}
+
+fn assert_refresh_removed_clone(response: &Value, edited_at: u64) -> Result<()> {
+    let removed = pointer_u64(response, "/result/clustersRemoved")?;
+    let generation = pointer_u64(response, "/result/generation")?;
     assert!(
-        removed >= 1,
-        "editing Alpha.cs away from Beta.cs must drop the clone on refresh: {response}"
+        generation > edited_at,
+        "the refresh must publish a newer generation than {edited_at}: {response}"
+    );
+    assert_eq!(
+        pointer_u64(response, "/result/worstMass")?,
+        NO_MASS,
+        "nothing duplicated remains to rank: {response}"
+    );
+    assert!(
+        removed >= 1 || generation > edited_at.saturating_add(1),
+        "as the only pass after the edit, the refresh must report the removal: {response}"
     );
     Ok(())
 }

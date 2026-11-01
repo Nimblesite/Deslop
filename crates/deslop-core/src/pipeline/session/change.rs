@@ -263,7 +263,7 @@ impl PipelineSession {
             return Ok(());
         }
         self.osprey_projects =
-            crate::lang::osprey_selection::OspreyProjects::load(&self.root, &self.exclusion)?;
+            crate::lang::osprey_selection::OspreyProjects::load(&self.root, &self.exclusion);
         let dropped = self.drop_newly_excluded();
         let added = self.apply_newly_included(stats, embedding, buffers)?;
         tracing::info!(dropped, added, "deslop_toml_reloaded corpus re-evaluated");

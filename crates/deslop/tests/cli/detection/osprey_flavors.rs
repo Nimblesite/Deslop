@@ -27,6 +27,7 @@ const STRING_MARKER: &str = "BANNER = \"# osprey: flavor=python\"\n";
 const NO_TEXT: &str = "";
 const DEFAULT_FIXTURE: &str = "osprey-identical";
 const DEFAULT_FILE: &str = "alpha.osp";
+const DEFAULT_FILES: [&str; 2] = [DEFAULT_FILE, "beta.osp"];
 const DEFAULT_LANGUAGE: &str = "osprey";
 const DEFAULT_PROJECT: &str =
     "[project]\npython_sources = [\"alpha.py\", \"beta.py\"]\nflavor = \"default\"\n";
@@ -36,7 +37,14 @@ const MALFORMED_MANIFEST: &str = "[project\nflavor = \n";
 const MANIFEST_PARSE_ERROR: &str = "failed to parse";
 const SELECTION_ERROR: &str = "cannot select source language";
 const FLAVOR_CONFLICT: &str = "flavor marker contradicts the extension";
-const CONFLICTING_MARKER: &str = "# osprey: flavor=default\n";
+const CONFLICTING_MARKER: &str = "// osprey: flavor=ml\n";
+const FOREIGN_PYTHON_MARKERS: [&str; 3] = [
+    "# osprey: flavor=default\n",
+    "# osprey: flavor=ml\n",
+    "# osprey: flavor=unheard-of\n",
+];
+const NESTED_PROJECT: &str = "tools";
+const UNREADABLE_MANIFEST: &[u8] = &[0xFF, 0xFE, 0x00];
 const OVERRIDING_MANIFEST: &str =
     "[project]\nsource_roots = [\"..\"]\npython_sources = [\"../alpha.py\", \"../beta.py\"]\nflavor = \"default\"\n";
 
@@ -54,10 +62,10 @@ fn malformed_osprey_ml_returns_a_visible_error() -> Result<()> {
     Ok(())
 }
 
-/// An analysed manifest that cannot be parsed stops the scan by name.
+/// A manifest that cannot be parsed stops the scan of the Osprey sources it governs, by name.
 #[test]
 fn malformed_project_manifest_returns_a_visible_error() -> Result<()> {
-    let (tmp, root) = seeded_fixture_root(PROJECT_FIXTURE)?;
+    let (tmp, root) = seeded_fixture_root(DEFAULT_FIXTURE)?;
     fs::write(root.join(MANIFEST), MALFORMED_MANIFEST)?;
     let stderr = scan_failure(&root, tmp.path())?;
     assert_contains(
@@ -69,12 +77,37 @@ fn malformed_project_manifest_returns_a_visible_error() -> Result<()> {
     Ok(())
 }
 
-/// A marker contradicting its extension stops the scan and names the file.
+/// A file named `osprey.toml` says nothing about ordinary Python beside it.
+#[test]
+fn broken_project_manifests_leave_ordinary_python_analysable() -> Result<()> {
+    for manifest in [MALFORMED_MANIFEST.as_bytes(), UNREADABLE_MANIFEST] {
+        let (tmp, root) = seeded_fixture_root(PROJECT_FIXTURE)?;
+        fs::write(root.join(MANIFEST), manifest)?;
+        let json = scan_flavor_root(&root, tmp.path())?;
+        assert_flavor_report(&json, PYTHON_FILES, PYTHON_LANGUAGE, true)?;
+        assert_eq!(report_clusters(&json)?.len(), 1, "one ordinary pair");
+    }
+    Ok(())
+}
+
+/// A broken manifest governs its own directory, never Osprey sources outside it.
+#[test]
+fn broken_nested_manifests_leave_sources_outside_them_analysable() -> Result<()> {
+    let (tmp, root) = seeded_fixture_root(DEFAULT_FIXTURE)?;
+    let nested = root.join(NESTED_PROJECT);
+    fs::create_dir_all(&nested)?;
+    fs::write(nested.join(MANIFEST), MALFORMED_MANIFEST)?;
+    let json = scan_flavor_root(&root, tmp.path())?;
+    assert_flavor_report(&json, DEFAULT_FILES, DEFAULT_LANGUAGE, true)?;
+    assert_eq!(report_clusters(&json)?.len(), 1, "one Osprey pair");
+    Ok(())
+}
+
+/// A marker contradicting an Osprey extension stops the scan and names the file.
 #[test]
 fn conflicting_flavor_marker_returns_a_visible_error() -> Result<()> {
-    let (tmp, root) = seeded_fixture_root(PROJECT_FIXTURE)?;
-    fs::remove_file(root.join(MANIFEST))?;
-    let file = root.join(PYTHON_FILES[0]);
+    let (tmp, root) = seeded_fixture_root(DEFAULT_FIXTURE)?;
+    let file = root.join(DEFAULT_FILE);
     let source = fs::read_to_string(&file)?;
     fs::write(&file, format!("{CONFLICTING_MARKER}{source}"))?;
     let stderr = scan_failure(&root, tmp.path())?;
@@ -84,7 +117,16 @@ fn conflicting_flavor_marker_returns_a_visible_error() -> Result<()> {
         "the selection failure is explicit",
     );
     assert_contains(&stderr, FLAVOR_CONFLICT, "the conflict is explained");
-    assert_contains(&stderr, PYTHON_FILES[0], "the conflicting source is named");
+    assert_contains(&stderr, DEFAULT_FILE, "the conflicting source is named");
+    Ok(())
+}
+
+/// Only `flavor=python` opts a `.py` file in; any other comment leaves it Python.
+#[test]
+fn foreign_markers_leave_ordinary_python_analysable() -> Result<()> {
+    for marker in FOREIGN_PYTHON_MARKERS {
+        assert_comment_selection(marker, NO_TEXT, PYTHON_LANGUAGE)?;
+    }
     Ok(())
 }
 

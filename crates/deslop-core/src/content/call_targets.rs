@@ -63,7 +63,7 @@ struct CallSite {
 
 /// AST ownership before converting receiver byte ranges into frontier positions.
 struct ReceiverSite<'node> {
-    /// Handle and explicit contract ranges qualifying the selected operation.
+    /// Handle and selector-naming contract ranges qualifying the selected operation.
     receivers: Vec<ByteRange>,
     /// The AST-selected contract whose ownership is stronger than a handle name.
     contract: Option<ByteRange>,
@@ -90,6 +90,16 @@ impl CallTarget {
     /// Frontier positions that can corroborate this receiver's rename.
     fn receiver_positions(&self) -> &[usize] {
         &self.site.receivers
+    }
+
+    /// Every name qualifying this call, with its contract last even when that
+    /// contract does not name the selector and so cannot excuse its change.
+    fn qualifier_positions(&self) -> Vec<usize> {
+        let handles = self.site.receivers.iter().copied();
+        handles
+            .filter(|position| Some(*position) != self.site.contract)
+            .chain(self.site.contract)
+            .collect()
     }
 
     /// An AST-owned contract remains inside this matched region.
@@ -218,10 +228,14 @@ fn receiver_site<'node>(
     contracts: &contracts::ReceiverContracts<'_, '_>,
 ) -> ReceiverSite<'node> {
     let contract = contracts::receiver_contract(call, contracts);
+    let named_contract = contract.filter(|contract| {
+        call_selector(call)
+            .is_some_and(|selector| contracts::names_selector(*contract, selector, contracts))
+    });
     let receivers = call_receiver(call)
         .map(|node| node.byte_range)
         .into_iter()
-        .chain(contract)
+        .chain(named_contract)
         .collect();
     ReceiverSite {
         receivers,
