@@ -21,7 +21,8 @@ mod asserts;
 
 /// The covered-statement precondition and the statement shapes it reads.
 mod statements;
-use statements::{covered_statements_admissible, is_statement_shape};
+use statements::covered_statements_admissible;
+pub(super) use statements::is_statement_shape;
 
 /// Bound-result flow for invariant adapter calls in scenario scaffolding.
 mod dataflow;

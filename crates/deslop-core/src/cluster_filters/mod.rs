@@ -109,6 +109,10 @@
 //!   module-level `let NAME = <literal>` bindings. Suppressed only when
 //!   the members differ in raw bytes (a verbatim copy survives).
 //!
+//! - [CLONE-NOISE-DATA-ROWS] — a window of table rows normalises to the
+//!   same subtree as any other window of rows with the same shape. Rows
+//!   holding no logic are data, not extractable duplication.
+//!
 //! The filter is purely additive: it never re-routes a `nearly_identical`
 //! cluster as `identical`, only suppresses noise. Any cluster whose
 //! member sources cannot be parsed (missing language plug-in, partial
@@ -119,6 +123,7 @@ mod calls;
 mod constant_table;
 mod contract_index;
 mod dart;
+mod data_rows;
 mod declaration_family;
 mod ecmascript;
 mod family;
@@ -227,11 +232,13 @@ fn run_noise_checks<S: BuildHasher>(
     let signature_only = || is_signature_only_cluster(snippets, cache);
     let literal_calls = || calls::is_literal_variation_call_cluster(snippets, cache);
     let constant_table = || constant_table::is_constant_table_cluster(snippets);
-    let checks: [(NoiseFilter, &dyn Fn() -> bool); 4] = [
+    let data_rows = || data_rows::is_data_row_cluster(snippets);
+    let checks: [(NoiseFilter, &dyn Fn() -> bool); 5] = [
         (NoiseFilter::Polymorphic, &polymorphic),
         (NoiseFilter::SignatureOnly, &signature_only),
         (NoiseFilter::LiteralCalls, &literal_calls),
         (NoiseFilter::ConstantTable, &constant_table),
+        (NoiseFilter::DataRows, &data_rows),
     ];
     for (filter, check) in checks {
         if let Some(fired) = timed(filter, check, snippets.len(), cache) {
@@ -291,6 +298,8 @@ pub(crate) enum NoiseFilter {
     LiteralCalls,
     /// The constant-table filter.
     ConstantTable,
+    /// The data-row filter ([CLONE-NOISE-DATA-ROWS]).
+    DataRows,
     /// The language-specific idiom filters.
     LanguageSpecific,
     /// The Python sibling-cell filter, named apart from the rest of the
@@ -308,6 +317,7 @@ impl NoiseFilter {
             Self::SignatureOnly => "signature_only",
             Self::LiteralCalls => "literal_calls",
             Self::ConstantTable => "constant_table",
+            Self::DataRows => "data_rows",
             Self::LanguageSpecific => "language_specific",
             Self::PyCollectionSiblingCells => "py_collection_sibling_cells",
         }

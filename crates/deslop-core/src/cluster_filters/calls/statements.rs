@@ -114,7 +114,7 @@ fn count_call_free(covered: &[Node<'_>], kinds: &[&str]) -> usize {
 /// out and a Rust run has no covered statements at all, so
 /// [`covered_statements_admissible`] refuses on an empty set and the
 /// whole scaffolding rule is skipped for the language.
-pub(super) fn is_statement_shape(kind: &str) -> bool {
+pub(in crate::cluster_filters) fn is_statement_shape(kind: &str) -> bool {
     kind.ends_with("_statement")
         || matches!(
             kind,
