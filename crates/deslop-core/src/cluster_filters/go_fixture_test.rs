@@ -15,9 +15,13 @@ use super::{
 };
 use crate::ast::named_children;
 
+/// The language this filter reads.
 const LANGUAGE: &str = "go";
+/// The prefix Go requires of a test function's name.
 const TEST_PREFIX: &[u8] = b"Test";
+/// The node a test is declared by.
 const FUNCTION: [&str; 1] = ["function_declaration"];
+/// The string literal kinds a fixture can be.
 const FIXTURE_KINDS: [&str; 2] = ["raw_string_literal", "interpreted_string_literal"];
 
 /// Returns true when every member is one whole fixture-driven test and the

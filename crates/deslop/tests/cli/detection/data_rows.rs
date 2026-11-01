@@ -57,7 +57,7 @@ func init() {
 	)
 }
 "#;
-const JS_OBJECT_ROWS: &str = r#"const attributes = [
+const JS_OBJECT_ROWS: &str = r"const attributes = [
   {
     name: 'k1',
     read: getSVGProperty('k1'),
@@ -85,7 +85,7 @@ const JS_OBJECT_ROWS: &str = r#"const attributes = [
     tagName: 'feConvolveMatrix',
   },
 ];
-"#;
+";
 const FS_INLINE_ROWS: &str = r#"module Tests
 
 [<Theory>]
@@ -104,7 +104,7 @@ let ``guid route`` (url: string, expected: string) = check url expected
 [<InlineData("/pet/123abc", "Not Found")>]
 let ``pet route`` (url: string, expected: string) = verify url expected
 "#;
-const DART_LEFT_EXPECTS: &str = r#"void main() {
+const DART_LEFT_EXPECTS: &str = r"void main() {
   test('headers', () async {
     final content = await read();
     for (final line in content.split('\n')) {
@@ -118,8 +118,8 @@ const DART_LEFT_EXPECTS: &str = r#"void main() {
     expect(content, contains('Booleankey: false'));
   });
 }
-"#;
-const DART_RIGHT_EXPECTS: &str = r#"void main() {
+";
+const DART_RIGHT_EXPECTS: &str = r"void main() {
   test('preflight', () async {
     final reason = await explain();
     expect(reason, startsWith(baseReason));
@@ -128,7 +128,7 @@ const DART_RIGHT_EXPECTS: &str = r#"void main() {
     expect(reason, contains('CORS preflight'));
   });
 }
-"#;
+";
 const PHP_LICENCE: &str =
     "<?php declare(strict_types=1);\n\n/*\n * This file is part of Example.\n */\n\n";
 const PHP_LEFT_IMPORTS: &str = "namespace Example\\Test\\Resolver;\n\nuse Example\\Resolver\\Reason;\nuse Example\\Resolver\\Pool;\nuse Example\\Package\\Link;\nuse Example\\Semver\\Constraint;\nuse Example\\Test\\TestCase;\n\n";
@@ -136,7 +136,7 @@ const PHP_RIGHT_IMPORTS: &str = "namespace Example\\Test\\Policy;\n\nuse Example
 const PHP_LEFT_CLASS: &str = "class LeftTest\n{\n    public function title(): string\n    {\n        return 'left';\n    }\n}\n";
 const PHP_RIGHT_CLASS: &str =
     "class RightTest\n{\n    public function size(): int\n    {\n        return 2;\n    }\n}\n";
-const JS_COPIED_TABLE: &str = r#"export const routes = [
+const JS_COPIED_TABLE: &str = r"export const routes = [
   { path: '/users', method: 'GET', auth: true, handler: 'listUsers' },
   { path: '/users/:id', method: 'GET', auth: true, handler: 'showUser' },
   { path: '/users/:id', method: 'PUT', auth: true, handler: 'saveUser' },
@@ -146,8 +146,8 @@ const JS_COPIED_TABLE: &str = r#"export const routes = [
   { path: '/teams/:id', method: 'PUT', auth: true, handler: 'saveTeam' },
   { path: '/teams/:id', method: 'DELETE', auth: true, handler: 'dropTeam' },
 ];
-"#;
-const JS_LEFT_TESTS: &str = r#"describe('left', () => {
+";
+const JS_LEFT_TESTS: &str = r"describe('left', () => {
   it('accepts ada', () => {
     const user = lookup('ada');
     if (!user.flags.includes('active')) {
@@ -167,8 +167,8 @@ const JS_LEFT_TESTS: &str = r#"describe('left', () => {
     expect(audit.entries()).toHaveLength(0);
   });
 });
-"#;
-const JS_RIGHT_TESTS: &str = r#"describe('right', () => {
+";
+const JS_RIGHT_TESTS: &str = r"describe('right', () => {
   it('accepts edsger', () => {
     const user = lookup('edsger');
     if (!user.flags.includes('active')) {
@@ -188,8 +188,8 @@ const JS_RIGHT_TESTS: &str = r#"describe('right', () => {
     expect(audit.entries()).toHaveLength(0);
   });
 });
-"#;
-const PHP_LEFT_EVENT: &str = r#"<?php
+";
+const PHP_LEFT_EVENT: &str = r"<?php
 class InstallerEvent extends Event
 {
     private $composer;
@@ -211,8 +211,8 @@ class InstallerEvent extends Event
         return $this->composer;
     }
 }
-"#;
-const PHP_RIGHT_EVENT: &str = r#"<?php
+";
+const PHP_RIGHT_EVENT: &str = r"<?php
 class DownloadEvent extends Event
 {
     private $downloader;
@@ -234,8 +234,8 @@ class DownloadEvent extends Event
         return $this->downloader;
     }
 }
-"#;
-const PHP_LEFT_LOGIC: &str = r#"<?php
+";
+const PHP_LEFT_LOGIC: &str = r"<?php
 class LeftOrder
 {
     public function __construct(string $name, $price, $tax, $discount, $ceiling)
@@ -248,8 +248,8 @@ class LeftOrder
         }
     }
 }
-"#;
-const PHP_RIGHT_LOGIC: &str = r#"<?php
+";
+const PHP_RIGHT_LOGIC: &str = r"<?php
 class RightInvoice
 {
     public function __construct(string $label, $amount, $rate, $rebate, $limit)
@@ -262,12 +262,12 @@ class RightInvoice
         }
     }
 }
-"#;
+";
 const GO_LEFT_FIXTURE: &str = "package left\n\nfunc TestPagination(t *testing.T) {\n\tfiles := `\n-- hugo.toml --\ndisableKinds = [\"taxonomy\"]\n-- content/p1.md --\ntitle: p1\n`\n\n\tb := hugolib.Test(t, files)\n\n\tb.AssertFileExists(\"public/page/1/index.html\", false)\n\tb.AssertFileContent(\"public/page/2/index.html\", \"pagination-default\")\n}\n";
 const GO_RIGHT_FIXTURE: &str = "package right\n\nfunc TestPortableText(t *testing.T) {\n\tfiles := `\n-- hugo.toml --\n-- assets/sample.json --\n[{\"_key\": \"a\", \"style\": \"h2\"}]\n`\n\tb := hugolib.Test(t, files)\n\n\tb.AssertFileContent(\"public/index.html\", \"Markdown: ## Heading 2\")\n}\n";
 const GO_LEFT_LOGIC_TEST: &str = "package left\n\nfunc TestLeft(t *testing.T) {\n\tfiles := \"left fixture\"\n\tb := hugolib.Test(t, files)\n\tfor _, name := range b.Pages() {\n\t\tif name == \"\" {\n\t\t\tt.Fatal(\"empty left\")\n\t\t}\n\t}\n}\n";
 const GO_RIGHT_LOGIC_TEST: &str = "package right\n\nfunc TestRight(t *testing.T) {\n\tfiles := \"right fixture\"\n\tb := hugolib.Test(t, files)\n\tfor _, name := range b.Pages() {\n\t\tif name == \"\" {\n\t\t\tt.Fatal(\"empty right\")\n\t\t}\n\t}\n}\n";
-const GO_LOGIC_LEFT: &str = r#"package left
+const GO_LOGIC_LEFT: &str = r"package left
 
 func apply(order Order) int {
 	total := order.Base
@@ -278,8 +278,8 @@ func apply(order Order) int {
 	}
 	return total
 }
-"#;
-const GO_LOGIC_RIGHT: &str = r#"package right
+";
+const GO_LOGIC_RIGHT: &str = r"package right
 
 func charge(invoice Invoice) int {
 	amount := invoice.Base
@@ -290,7 +290,7 @@ func charge(invoice Invoice) int {
 	}
 	return amount
 }
-"#;
+";
 
 /// Scans `files` and returns the report.
 fn scan(dir: &str, files: &[(&str, &str)]) -> Result<serde_json::Value> {

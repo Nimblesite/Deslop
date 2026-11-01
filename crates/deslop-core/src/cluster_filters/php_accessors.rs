@@ -13,7 +13,9 @@ use super::{
 };
 use crate::ast::{named_children, ByteRange};
 
+/// The language this filter reads.
 const LANGUAGE: &str = "php";
+/// The node holding a class's members.
 const CLASS_BODY: [&str; 1] = ["declaration_list"];
 
 /// Returns true when every member covers only class scaffolding.
