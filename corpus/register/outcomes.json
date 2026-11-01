@@ -1646,10 +1646,10 @@
         "src/Composer/Installer/PackageEvent.php:41-78",
         "src/Composer/Plugin/PreFileDownloadEvent.php:62-74"
       ],
-      "outcome": "fail",
-      "since": "2026-10-31T00:40:17.882Z",
-      "engine": "deslop@c53641f4474c",
-      "commit": "c53641f4474c390cbd0378f56976621e0e297c6f",
+      "outcome": "pass",
+      "since": "2026-11-01T23:31:49.918Z",
+      "engine": "deslop@e66786a42470",
+      "commit": "e66786a42470a610969ef7b7a9101af1253fafa4",
       "version": null
     },
     {
@@ -1685,10 +1685,10 @@
         "tests/Composer/Test/DependencyResolver/PoolTest.php:1-19",
         "tests/Composer/Test/Policy/MalwarePolicyConfigTest.php:1-19"
       ],
-      "outcome": "fail",
-      "since": "2026-10-31T00:40:17.882Z",
-      "engine": "deslop@c53641f4474c",
-      "commit": "c53641f4474c390cbd0378f56976621e0e297c6f",
+      "outcome": "pass",
+      "since": "2026-11-01T23:31:49.918Z",
+      "engine": "deslop@e66786a42470",
+      "commit": "e66786a42470a610969ef7b7a9101af1253fafa4",
       "version": null
     },
     {
@@ -1698,10 +1698,10 @@
         "tests/Composer/Test/EventDispatcher/EventDispatcherTest.php:25-29",
         "tests/Composer/Test/Package/Loader/ValidatingArrayLoaderTest.php:15-19"
       ],
-      "outcome": "fail",
-      "since": "2026-10-31T00:40:17.882Z",
-      "engine": "deslop@c53641f4474c",
-      "commit": "c53641f4474c390cbd0378f56976621e0e297c6f",
+      "outcome": "pass",
+      "since": "2026-11-01T23:31:49.918Z",
+      "engine": "deslop@e66786a42470",
+      "commit": "e66786a42470a610969ef7b7a9101af1253fafa4",
       "version": null
     },
     {
@@ -1932,10 +1932,10 @@
         "dio_test/lib/src/test/headers_tests.dart:49-51",
         "plugins/web_adapter/test/cors_preflight_test.dart:203-206"
       ],
-      "outcome": "fail",
-      "since": "2026-10-31T00:40:17.882Z",
-      "engine": "deslop@c53641f4474c",
-      "commit": "c53641f4474c390cbd0378f56976621e0e297c6f",
+      "outcome": "pass",
+      "since": "2026-11-01T23:31:49.918Z",
+      "engine": "deslop@e66786a42470",
+      "commit": "e66786a42470a610969ef7b7a9101af1253fafa4",
       "version": null
     },
     {
@@ -2413,10 +2413,10 @@
         "tests/Giraffe.Tests/EndpointRoutingTests.fs:18-24",
         "tests/Giraffe.Tests/EndpointRoutingTests.fs:180-186"
       ],
-      "outcome": "fail",
-      "since": "2026-10-31T00:40:17.882Z",
-      "engine": "deslop@c53641f4474c",
-      "commit": "c53641f4474c390cbd0378f56976621e0e297c6f",
+      "outcome": "pass",
+      "since": "2026-11-01T23:31:49.918Z",
+      "engine": "deslop@e66786a42470",
+      "commit": "e66786a42470a610969ef7b7a9101af1253fafa4",
       "version": null
     },
     {
@@ -2699,10 +2699,10 @@
         "config/allconfig/allconfig_integration_test.go:135-166",
         "tpl/transform/transform_integration_test.go:353-381"
       ],
-      "outcome": "fail",
-      "since": "2026-10-31T00:40:17.882Z",
-      "engine": "deslop@c53641f4474c",
-      "commit": "c53641f4474c390cbd0378f56976621e0e297c6f",
+      "outcome": "pass",
+      "since": "2026-11-01T23:31:49.918Z",
+      "engine": "deslop@e66786a42470",
+      "commit": "e66786a42470a610969ef7b7a9101af1253fafa4",
       "version": null
     },
     {
@@ -2725,10 +2725,10 @@
         "tpl/collections/init.go:151-164",
         "tpl/urls/init.go:47-58"
       ],
-      "outcome": "fail",
-      "since": "2026-10-31T00:40:17.882Z",
-      "engine": "deslop@c53641f4474c",
-      "commit": "c53641f4474c390cbd0378f56976621e0e297c6f",
+      "outcome": "pass",
+      "since": "2026-11-01T23:31:49.918Z",
+      "engine": "deslop@e66786a42470",
+      "commit": "e66786a42470a610969ef7b7a9101af1253fafa4",
       "version": null
     },
     {
@@ -2738,10 +2738,10 @@
         "tpl/internal/go_templates/htmltemplate/exec_test.go:497-500",
         "tpl/internal/go_templates/htmltemplate/exec_test.go:664-668"
       ],
-      "outcome": "fail",
-      "since": "2026-10-31T00:40:17.882Z",
-      "engine": "deslop@c53641f4474c",
-      "commit": "c53641f4474c390cbd0378f56976621e0e297c6f",
+      "outcome": "pass",
+      "since": "2026-11-01T23:31:49.918Z",
+      "engine": "deslop@e66786a42470",
+      "commit": "e66786a42470a610969ef7b7a9101af1253fafa4",
       "version": null
     },
     {
@@ -2751,10 +2751,10 @@
         "tpl/internal/go_templates/texttemplate/exec_test.go:605-611",
         "tpl/internal/go_templates/texttemplate/exec_test.go:618-624"
       ],
-      "outcome": "fail",
-      "since": "2026-10-31T00:40:17.882Z",
-      "engine": "deslop@c53641f4474c",
-      "commit": "c53641f4474c390cbd0378f56976621e0e297c6f",
+      "outcome": "pass",
+      "since": "2026-11-01T23:31:49.918Z",
+      "engine": "deslop@e66786a42470",
+      "commit": "e66786a42470a610969ef7b7a9101af1253fafa4",
       "version": null
     },
     {
@@ -2764,10 +2764,10 @@
         "tpl/lang/init.go:35-52",
         "tpl/strings/init.go:51-69"
       ],
-      "outcome": "fail",
-      "since": "2026-10-31T00:40:17.882Z",
-      "engine": "deslop@c53641f4474c",
-      "commit": "c53641f4474c390cbd0378f56976621e0e297c6f",
+      "outcome": "pass",
+      "since": "2026-11-01T23:31:49.918Z",
+      "engine": "deslop@e66786a42470",
+      "commit": "e66786a42470a610969ef7b7a9101af1253fafa4",
       "version": null
     },
     {
@@ -3596,10 +3596,10 @@
         "fixtures/attribute-behavior/src/attributes.js:1019-1030",
         "fixtures/attribute-behavior/src/attributes.js:1941-1952"
       ],
-      "outcome": "fail",
-      "since": "2026-10-31T00:40:17.882Z",
-      "engine": "deslop@c53641f4474c",
-      "commit": "c53641f4474c390cbd0378f56976621e0e297c6f",
+      "outcome": "pass",
+      "since": "2026-11-01T23:31:49.918Z",
+      "engine": "deslop@e66786a42470",
+      "commit": "e66786a42470a610969ef7b7a9101af1253fafa4",
       "version": null
     },
     {
