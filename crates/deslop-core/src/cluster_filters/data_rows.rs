@@ -21,13 +21,49 @@ use crate::ast::{named_children, ByteRange};
 const MIN_ROWS: usize = 2;
 /// The fewest distinct string payloads that show a run's rows hold data.
 const MIN_DISTINCT_PAYLOADS: usize = 2;
+/// Members sharing one in this many of the smaller one's strings are copies.
+const COPY_OVERLAP_DENOMINATOR: usize = 2;
 
-/// Returns true when every member is a run of data rows and the members are
-/// not all the same bytes.
+/// Returns true when every member is a run of data rows, the members are not
+/// all the same bytes, and they are not all copies of one another.
 pub(super) fn is_data_row_cluster(snippets: &[Snippet<'_>]) -> bool {
     snippets.len() >= MIN_ROWS
         && snippets.iter().all(covers_data_rows)
         && raw_snippet_texts_differ(snippets)
+        && !members_are_copies(snippets)
+}
+
+/// True when every pair of members holds mostly the same strings: a table
+/// copied and then edited, which the exact-bytes escape hatch cannot see.
+pub(super) fn members_are_copies(snippets: &[Snippet<'_>]) -> bool {
+    let payloads: Vec<BTreeSet<&[u8]>> = snippets.iter().map(member_payloads).collect();
+    payloads.iter().enumerate().all(|(index, left)| {
+        payloads
+            .iter()
+            .skip(index.saturating_add(1))
+            .all(|right| mostly_shared(left, right))
+    })
+}
+
+/// True when the smaller member's strings are mostly in the larger: a table
+/// grown or trimmed after copying shares little of the larger one's strings.
+fn mostly_shared(left: &BTreeSet<&[u8]>, right: &BTreeSet<&[u8]>) -> bool {
+    let shared = left.intersection(right).count();
+    shared.saturating_mul(COPY_OVERLAP_DENOMINATOR) >= left.len().min(right.len())
+}
+
+/// The string literals inside one member's range.
+fn member_payloads<'src>(snippet: &Snippet<'src>) -> BTreeSet<&'src [u8]> {
+    let mut payloads = BTreeSet::new();
+    if let Some(tree) = parse_for(snippet) {
+        collect_strings(
+            tree.root_node(),
+            snippet.range,
+            snippet.source,
+            &mut payloads,
+        );
+    }
+    payloads
 }
 
 /// True when the snippet covers whole sibling rows of one shape, none holding
@@ -139,13 +175,25 @@ fn is_logic_kind(kind: &str) -> bool {
 fn distinct_payloads(rows: &[Node<'_>], source: &[u8]) -> usize {
     let mut payloads = BTreeSet::new();
     for row in rows {
-        collect_strings(*row, source, &mut payloads);
+        let range = ByteRange {
+            start: row.start_byte(),
+            end: row.end_byte(),
+        };
+        collect_strings(*row, range, source, &mut payloads);
     }
     payloads.len()
 }
 
-/// Gathers the outermost string literals under `node`.
-fn collect_strings<'src>(node: Node<'_>, source: &'src [u8], out: &mut BTreeSet<&'src [u8]>) {
+/// Gathers the outermost string literals of `node` that overlap `range`.
+fn collect_strings<'src>(
+    node: Node<'_>,
+    range: ByteRange,
+    source: &'src [u8],
+    out: &mut BTreeSet<&'src [u8]>,
+) {
+    if !node_intersects_range(node, range) {
+        return;
+    }
     if is_string_literal(node.kind()) {
         let _ = source
             .get(node.start_byte()..node.end_byte())
@@ -153,7 +201,7 @@ fn collect_strings<'src>(node: Node<'_>, source: &'src [u8], out: &mut BTreeSet<
         return;
     }
     for child in named_children(node) {
-        collect_strings(child, source, out);
+        collect_strings(child, range, source, out);
     }
 }
 

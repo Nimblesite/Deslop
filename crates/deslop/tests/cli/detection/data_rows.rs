@@ -4,6 +4,7 @@ use super::*;
 
 const MIN_NODES: &str = "30";
 const NO_CLUSTERS: usize = 0;
+const EDITED_TABLE_SPANS: [(u64, u64); 2] = [(319, 404), (405, 530)];
 const GO_LEFT_TABLE: &str = r#"package left
 
 var rows = []row{
@@ -140,6 +141,10 @@ const JS_COPIED_TABLE: &str = r#"export const routes = [
   { path: '/users/:id', method: 'GET', auth: true, handler: 'showUser' },
   { path: '/users/:id', method: 'PUT', auth: true, handler: 'saveUser' },
   { path: '/users/:id', method: 'DELETE', auth: true, handler: 'dropUser' },
+  { path: '/teams', method: 'GET', auth: true, handler: 'listTeams' },
+  { path: '/teams/:id', method: 'GET', auth: true, handler: 'showTeam' },
+  { path: '/teams/:id', method: 'PUT', auth: true, handler: 'saveTeam' },
+  { path: '/teams/:id', method: 'DELETE', auth: true, handler: 'dropTeam' },
 ];
 "#;
 const JS_LEFT_TESTS: &str = r#"describe('left', () => {
@@ -184,6 +189,84 @@ const JS_RIGHT_TESTS: &str = r#"describe('right', () => {
   });
 });
 "#;
+const PHP_LEFT_EVENT: &str = r#"<?php
+class InstallerEvent extends Event
+{
+    private $composer;
+    private $io;
+    private $devMode;
+    private $transaction;
+
+    public function __construct(string $name, $composer, $io, $devMode, $transaction)
+    {
+        parent::__construct($name);
+        $this->composer = $composer;
+        $this->io = $io;
+        $this->devMode = $devMode;
+        $this->transaction = $transaction;
+    }
+
+    public function getComposer()
+    {
+        return $this->composer;
+    }
+}
+"#;
+const PHP_RIGHT_EVENT: &str = r#"<?php
+class DownloadEvent extends Event
+{
+    private $downloader;
+    private $url;
+    private $type;
+    private $context;
+
+    public function __construct(string $name, $downloader, $url, $type, $context)
+    {
+        parent::__construct($name);
+        $this->downloader = $downloader;
+        $this->url = $url;
+        $this->type = $type;
+        $this->context = $context;
+    }
+
+    public function getDownloader()
+    {
+        return $this->downloader;
+    }
+}
+"#;
+const PHP_LEFT_LOGIC: &str = r#"<?php
+class LeftOrder
+{
+    public function __construct(string $name, $price, $tax, $discount, $ceiling)
+    {
+        parent::__construct($name);
+        $this->price = $price * $tax;
+        $this->discount = max($discount, 0);
+        if ($this->price > $ceiling) {
+            $this->price = $ceiling;
+        }
+    }
+}
+"#;
+const PHP_RIGHT_LOGIC: &str = r#"<?php
+class RightInvoice
+{
+    public function __construct(string $label, $amount, $rate, $rebate, $limit)
+    {
+        parent::__construct($label);
+        $this->amount = $amount * $rate;
+        $this->rebate = max($rebate, 0);
+        if ($this->amount > $limit) {
+            $this->amount = $limit;
+        }
+    }
+}
+"#;
+const GO_LEFT_FIXTURE: &str = "package left\n\nfunc TestPagination(t *testing.T) {\n\tfiles := `\n-- hugo.toml --\ndisableKinds = [\"taxonomy\"]\n-- content/p1.md --\ntitle: p1\n`\n\n\tb := hugolib.Test(t, files)\n\n\tb.AssertFileExists(\"public/page/1/index.html\", false)\n\tb.AssertFileContent(\"public/page/2/index.html\", \"pagination-default\")\n}\n";
+const GO_RIGHT_FIXTURE: &str = "package right\n\nfunc TestPortableText(t *testing.T) {\n\tfiles := `\n-- hugo.toml --\n-- assets/sample.json --\n[{\"_key\": \"a\", \"style\": \"h2\"}]\n`\n\tb := hugolib.Test(t, files)\n\n\tb.AssertFileContent(\"public/index.html\", \"Markdown: ## Heading 2\")\n}\n";
+const GO_LEFT_LOGIC_TEST: &str = "package left\n\nfunc TestLeft(t *testing.T) {\n\tfiles := \"left fixture\"\n\tb := hugolib.Test(t, files)\n\tfor _, name := range b.Pages() {\n\t\tif name == \"\" {\n\t\t\tt.Fatal(\"empty left\")\n\t\t}\n\t}\n}\n";
+const GO_RIGHT_LOGIC_TEST: &str = "package right\n\nfunc TestRight(t *testing.T) {\n\tfiles := \"right fixture\"\n\tb := hugolib.Test(t, files)\n\tfor _, name := range b.Pages() {\n\t\tif name == \"\" {\n\t\t\tt.Fatal(\"empty right\")\n\t\t}\n\t}\n}\n";
 const GO_LOGIC_LEFT: &str = r#"package left
 
 func apply(order Order) int {
@@ -304,6 +387,28 @@ fn a_table_copied_between_files_is_still_a_clone() -> Result<()> {
     )
 }
 
+// The real tests/model_meta/results.py from django, whose tables are copied and then edited.
+#[test]
+fn a_table_copied_and_then_edited_is_still_a_clone() -> Result<()> {
+    let json = run_min_nodes("data-rows-edited-table", MIN_NODES)?;
+    let report: serde_json::Value = serde_json::from_str(&json)?;
+    let clusters = array_or_empty(&report, "/clusters");
+    let spans: Vec<Vec<(u64, u64)>> = clusters.iter().map(occurrence_lines).collect();
+    assert!(spans.contains(&EDITED_TABLE_SPANS.to_vec()), "{spans:?}");
+    Ok(())
+}
+
+/// One cluster's occurrences as start and end lines.
+fn occurrence_lines(cluster: &serde_json::Value) -> Vec<(u64, u64)> {
+    array_or_empty(cluster, "/occurrences")
+        .iter()
+        .filter_map(|occurrence| {
+            let line = |key: &str| occurrence.get(key).and_then(serde_json::Value::as_u64);
+            Some((line("start_line")?, line("end_line")?))
+        })
+        .collect()
+}
+
 #[test]
 fn test_cases_holding_logic_are_still_clones() -> Result<()> {
     assert_cluster_spans(
@@ -319,6 +424,45 @@ fn renamed_statements_with_a_branch_are_still_clones() -> Result<()> {
     assert_cluster_spans(
         "go-logic",
         &[("left.go", GO_LOGIC_LEFT), ("right.go", GO_LOGIC_RIGHT)],
+        "left.go",
+        "right.go",
+    )
+}
+
+#[test]
+fn php_value_classes_are_not_clones() -> Result<()> {
+    assert_rows_are_not_clones(
+        "php-events",
+        &[("Left.php", PHP_LEFT_EVENT), ("Right.php", PHP_RIGHT_EVENT)],
+    )
+}
+
+#[test]
+fn php_constructors_holding_logic_are_still_clones() -> Result<()> {
+    assert_cluster_spans(
+        "php-logic",
+        &[("Left.php", PHP_LEFT_LOGIC), ("Right.php", PHP_RIGHT_LOGIC)],
+        "Left.php",
+        "Right.php",
+    )
+}
+
+#[test]
+fn go_tests_differing_only_in_their_fixture_are_not_clones() -> Result<()> {
+    assert_rows_are_not_clones(
+        "go-fixture",
+        &[("left.go", GO_LEFT_FIXTURE), ("right.go", GO_RIGHT_FIXTURE)],
+    )
+}
+
+#[test]
+fn go_tests_holding_logic_are_still_clones() -> Result<()> {
+    assert_cluster_spans(
+        "go-test-logic",
+        &[
+            ("left.go", GO_LEFT_LOGIC_TEST),
+            ("right.go", GO_RIGHT_LOGIC_TEST),
+        ],
         "left.go",
         "right.go",
     )

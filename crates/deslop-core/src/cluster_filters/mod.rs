@@ -112,6 +112,11 @@
 //! - [CLONE-NOISE-DATA-ROWS] — a window of table rows normalises to the
 //!   same subtree as any other window of rows with the same shape. Rows
 //!   holding no logic are data, not extractable duplication.
+//! - [CLONE-NOISE-PHP-ACCESSORS] — properties, constructors storing their
+//!   parameters and getters returning them share one shape in every PHP
+//!   value class.
+//! - [CLONE-NOISE-GO-FIXTURE-TEST] — Go tests whose scenario is one string
+//!   share only the harness calls around it.
 //!
 //! The filter is purely additive: it never re-routes a `nearly_identical`
 //! cluster as `identical`, only suppresses noise. Any cluster whose
@@ -129,8 +134,10 @@ mod ecmascript;
 mod family;
 mod forwarding;
 mod fsharp_scaffolding;
+mod go_fixture_test;
 mod node_search;
 mod override_marker;
+mod php_accessors;
 mod polymorphic;
 mod python;
 mod python_class_shapes;
@@ -354,6 +361,8 @@ fn language_specific_noise(
             || dart::is_dart_widget_scaffold_cluster(snippets))
         .then_some(generic),
         "fsharp" => fsharp_scaffolding::is_import_scaffolding_cluster(snippets).then_some(generic),
+        "go" => go_fixture_test::is_fixture_test_cluster(snippets).then_some(generic),
+        "php" => php_accessors::is_accessor_scaffold_cluster(snippets).then_some(generic),
         "python" => python_noise(snippets),
         "rust" => rust_noise(snippets).then_some(generic),
         "javascript" | "typescript" | "tsx" => {
