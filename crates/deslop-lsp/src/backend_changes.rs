@@ -82,7 +82,9 @@ impl LspBackend {
         change: impl SessionChange,
         analysed_buffer: Option<AnalysedBuffer>,
     ) -> Result<Option<ReportChangedNotification>, LiveError> {
-        let delta = self.apply_change_and_remember(change).await?;
+        let (delta, analysed_buffer) = self
+            .apply_change_and_remember(change, analysed_buffer)
+            .await?;
         if delta.is_empty() && analysed_buffer.is_none() {
             return Ok(None);
         }
@@ -97,18 +99,20 @@ impl LspBackend {
     async fn apply_change_and_remember(
         &self,
         change: impl SessionChange,
-    ) -> Result<ReportDelta, LiveError> {
+        analysed_buffer: Option<AnalysedBuffer>,
+    ) -> Result<(ReportDelta, Option<AnalysedBuffer>), LiveError> {
         let session = self.service.session();
-        let (previous_generation, previous_report, delta) = {
+        let (previous_generation, previous_report, delta, analysed_buffer) = {
             let mut guard = session.lock().await;
             let previous_generation = guard.generation();
             let previous_report = guard.report();
             let delta = change(&mut guard)?;
-            (previous_generation, previous_report, delta)
+            let analysed_buffer = analysed_buffer.and_then(|buffer| guard.acknowledgement(buffer));
+            (previous_generation, previous_report, delta, analysed_buffer)
         };
         self.service
             .remember_snapshot(previous_generation, previous_report)
             .await;
-        Ok(delta)
+        Ok((delta, analysed_buffer))
     }
 }

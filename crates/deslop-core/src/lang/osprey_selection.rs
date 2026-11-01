@@ -14,12 +14,28 @@ pub(crate) const MANIFEST: &str = "osprey.toml";
 const PYTHON_ID: &str = "python";
 /// Metadata payload recognized inside a leading comment node.
 const MARKER: &str = "osprey: flavor=";
+/// The one flavor that opts an ordinary `.py` file into Osprey.
+const PYTHON_FLAVOR: &str = "python";
 /// Marker/extension disagreement requires an explicit project override.
 const FLAVOR_CONFLICT: &str = "flavor marker contradicts the extension";
 
 /// Project rules compiled once for a discovery or manifest refresh.
 #[derive(Debug, Default)]
-pub(crate) struct OspreyProjects(Vec<Project>);
+pub(crate) struct OspreyProjects {
+    /// Readable manifests, deepest first so nested projects win.
+    projects: Vec<Project>,
+    /// Unusable manifests, reported only for the Osprey sources they govern.
+    broken: Vec<BrokenManifest>,
+}
+
+/// A manifest that could not be read or parsed.
+#[derive(Debug)]
+struct BrokenManifest {
+    /// Canonical manifest directory, compared against canonical source paths.
+    directory: PathBuf,
+    /// What went wrong, naming the manifest.
+    problem: String,
+}
 
 #[derive(Debug)]
 /// Resolved source membership and optional project-wide syntax override.
@@ -57,20 +73,27 @@ struct Settings {
 }
 
 impl OspreyProjects {
-    /// Read real TOML, preserving malformed manifests as explicit failures.
+    /// Read real TOML, keeping malformed manifests for [`Self::language`] to
+    /// report: only an Osprey source can need one, so a stray `osprey.toml`
+    /// never stops the scan of a repository written in anything else.
     /// Excluded manifests sit outside the analysed workspace, so they can
     /// neither fail the scan nor select a flavor.
-    pub(crate) fn load(root: &Path, config: &ExclusionConfig) -> Result<Self, CoreError> {
-        let mut projects = ignore::WalkBuilder::new(root)
+    pub(crate) fn load(root: &Path, config: &ExclusionConfig) -> Self {
+        let (projects, broken): (Vec<_>, Vec<_>) = ignore::WalkBuilder::new(root)
             .build()
             .filter_map(Result::ok)
             .filter(|entry| entry.file_type().is_some_and(|kind| kind.is_file()))
             .filter(|entry| entry.file_name() == MANIFEST)
             .filter(|entry| !config.is_excluded(entry.path(), None))
             .map(|entry| Project::read(entry.path()))
-            .collect::<Result<Vec<_>, _>>()?;
+            .partition(Result::is_ok);
+        let mut projects: Vec<_> = projects.into_iter().filter_map(Result::ok).collect();
         projects.sort_by_key(|project| std::cmp::Reverse(project.directory.components().count()));
-        Ok(Self(projects))
+        let broken: Vec<_> = broken.into_iter().filter_map(Result::err).collect();
+        if !broken.is_empty() {
+            tracing::warn!(manifest_count = broken.len(), "osprey_manifests_unusable");
+        }
+        Self { projects, broken }
     }
 
     /// Source bytes include unsaved editor text on the live path.
@@ -83,9 +106,13 @@ impl OspreyProjects {
         if !matches!(fallback, LANGUAGE_ID | PYTHON_ID | ML_LANGUAGE_ID) {
             return Ok(fallback);
         }
-        let project = self.0.iter().find(|project| project.claims(path, fallback));
+        self.require_usable_manifest(path, fallback)?;
+        let project = self
+            .projects
+            .iter()
+            .find(|project| project.claims(path, fallback));
         let marker = flavor_marker(source, fallback)?;
-        if fallback == PYTHON_ID && project.is_none() && marker.is_none() {
+        if fallback == PYTHON_ID && project.is_none() && !opts_into_python(marker.as_deref()) {
             return Ok(fallback);
         }
         if let Some(flavor) = project.and_then(|project| project.flavor.as_deref()) {
@@ -93,24 +120,46 @@ impl OspreyProjects {
         }
         extension_flavor(path, marker.as_deref(), fallback)
     }
+
+    /// Osprey syntax under an unusable manifest cannot be selected. A `.py`
+    /// file stays ordinary Python, because it opts in only explicitly.
+    fn require_usable_manifest(&self, path: &Path, fallback: &str) -> Result<(), CoreError> {
+        if fallback == PYTHON_ID {
+            return Ok(());
+        }
+        self.broken
+            .iter()
+            .find(|manifest| path.starts_with(&manifest.directory))
+            .map_or(Ok(()), |manifest| {
+                Err(selection_error(path, &manifest.problem))
+            })
+    }
+}
+
+/// Any other marker in an unclaimed `.py` file is just a comment.
+fn opts_into_python(marker: Option<&str>) -> bool {
+    let Some(flavor) = marker else {
+        return false;
+    };
+    if flavor != PYTHON_FLAVOR {
+        tracing::warn!("osprey_marker_ignored_in_ordinary_python");
+    }
+    flavor == PYTHON_FLAVOR
 }
 
 impl Project {
     /// Decode project metadata and resolve its paths.
-    fn read(path: &Path) -> Result<Self, CoreError> {
-        let text = fs::read_to_string(path).map_err(|source| CoreError::Io {
-            path: path.to_path_buf(),
-            source,
-        })?;
-        let manifest: Manifest =
-            toml::from_str(&text).map_err(|source| CoreError::ConfigParse {
-                path: path.to_path_buf(),
-                source: Box::new(source),
-            })?;
-        Ok(Self::from_settings(
-            path.parent().unwrap_or(Path::new(".")),
-            manifest.project,
-        ))
+    fn read(path: &Path) -> Result<Self, BrokenManifest> {
+        let directory = path.parent().unwrap_or(Path::new("."));
+        let broken = |problem: String| BrokenManifest {
+            directory: crate::pipeline::canonical_source_path(directory),
+            problem,
+        };
+        let text = fs::read_to_string(path)
+            .map_err(|source| broken(format!("failed to read {}: {source}", path.display())))?;
+        let manifest: Manifest = toml::from_str(&text)
+            .map_err(|source| broken(format!("failed to parse {}: {source}", path.display())))?;
+        Ok(Self::from_settings(directory, manifest.project))
     }
 
     /// Compile relative membership rules against the manifest directory.

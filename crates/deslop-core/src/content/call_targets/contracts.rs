@@ -68,6 +68,20 @@ pub(super) fn receiver_contract(
     cast_contract(receiver).or_else(|| guarded_contract(call, contracts))
 }
 
+/// A contract vouches for a selector only when it is that selector's own name:
+/// `BeforeShutdown.beforeShutdown` renames with its interface, while
+/// `Before.startJob` against `After.cancelJob` asks one value for two operations.
+pub(super) fn names_selector(
+    contract: ByteRange,
+    selector: &NormalizedNode,
+    contracts: &ReceiverContracts<'_, '_>,
+) -> bool {
+    let bytes = |range: ByteRange| contracts.source.get(range.start..range.end);
+    bytes(contract)
+        .zip(bytes(selector.byte_range))
+        .is_some_and(|(contract, selector)| contract.eq_ignore_ascii_case(selector))
+}
+
 /// Only a named contract is evidence; parentheses preserve its ownership.
 fn cast_contract(receiver: &NormalizedNode) -> Option<ByteRange> {
     let mut receiver = receiver;

@@ -258,7 +258,7 @@ pub fn discover_files<S: BuildHasher>(
         walker.filter_map(Result::ok),
         extension_to_language,
         config,
-        OspreyProjects::load(root, config)?,
+        OspreyProjects::load(root, config),
     )
 }
 
@@ -275,7 +275,7 @@ pub(crate) fn discover_files_in<S: BuildHasher>(
         subtree,
         extension_to_language,
         config,
-        OspreyProjects::load(root, config)?,
+        OspreyProjects::load(root, config),
     )
 }
 

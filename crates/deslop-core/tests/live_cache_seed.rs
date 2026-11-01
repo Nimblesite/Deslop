@@ -16,6 +16,7 @@ use deslop_core::{
     embedding::{test_support::StubProvider, EmbeddingMode},
     live::{AnalysisSession, FindSimilarInput, FindSimilarRequest, LiveError},
     report::ReportOccurrence,
+    wire_generated::AnalysedBuffer,
     EmbeddingProvider,
 };
 
@@ -25,6 +26,11 @@ use crate::common::{copy_fixture, DEFAULT_LIVE_MIN_NODES};
 const FIXTURE: &str = "csharp-small";
 /// The fixture's language id.
 const LANGUAGE: &str = "csharp";
+
+/// A file the fixture's clone spans, edited in the seed window.
+const EDITED_FILE: &str = "Alpha.cs";
+const FIRST_VERSION: i32 = 2;
+const LATEST_VERSION: i32 = 3;
 
 /// A snippet query for `snippet` in the fixture's language.
 fn snippet_request(snippet: &str) -> FindSimilarRequest {
@@ -115,6 +121,83 @@ fn a_snippet_query_in_the_seed_window_says_not_ready_never_nothing_similar() -> 
     ensure!(
         !from_seed.clusters.is_empty(),
         "a range query in the seed window answers from the seed report"
+    );
+    Ok(())
+}
+
+/// [LIVE-OPEN-BUFFERS] An edit the seed window only queued may not reveal the
+/// old report as if it had been analysed: the editor is told once, with the
+/// latest version, after the pass that replays the edit.
+#[test]
+fn a_seed_window_edit_is_acknowledged_only_by_the_pass_that_replays_it() -> Result<()> {
+    let tmp = copy_fixture(FIXTURE)?;
+    let root = tmp.path().to_path_buf();
+    let provider: Arc<dyn EmbeddingProvider> = Arc::new(StubProvider::new());
+    let warm = AnalysisSession::new(
+        root.clone(),
+        DEFAULT_LIVE_MIN_NODES,
+        false,
+        None,
+        Arc::clone(&provider),
+    )
+    .context("warm session")?;
+    warm.persist_seed_cache();
+    let cached_clusters = warm.report().clusters.len();
+    ensure!(cached_clusters > 0, "the fixture must cluster");
+    drop(warm);
+
+    let mut seeded = AnalysisSession::try_seeded_from_cache(
+        root.clone(),
+        DEFAULT_LIVE_MIN_NODES,
+        false,
+        None,
+        provider,
+        EmbeddingMode::Off,
+    )
+    .context("the warm run's seed must be served")?;
+    let path = fs::canonicalize(root.join(EDITED_FILE))?;
+    let buffer = |version| AnalysedBuffer {
+        path: path.clone(),
+        version,
+    };
+    for version in [FIRST_VERSION, LATEST_VERSION] {
+        let delta = seeded.open_buffer(&path, String::new())?;
+        ensure!(delta.is_empty(), "the seed window analyses nothing");
+        ensure!(
+            seeded.acknowledgement(buffer(version)).is_none(),
+            "the seed report never analysed version {version}"
+        );
+        ensure!(
+            seeded.report().clusters.len() == cached_clusters,
+            "the seed still serves its clusters"
+        );
+    }
+    ensure!(
+        seeded.take_deferred_acknowledgements().len() == 1,
+        "one path holds one pending version"
+    );
+    let _pending = seeded.acknowledgement(buffer(LATEST_VERSION));
+
+    let _delta = seeded.refresh_full()?;
+    ensure!(!seeded.is_seed_only(), "the pass has installed");
+    ensure!(
+        seeded.report().clusters.is_empty(),
+        "the replay analysed the emptied buffer, leaving the clone without a partner"
+    );
+    let replayed = seeded.take_deferred_acknowledgements();
+    ensure!(
+        replayed.len() == 1
+            && replayed.first().map(|buffer| buffer.version) == Some(LATEST_VERSION)
+            && replayed.first().map(|buffer| &buffer.path) == Some(&path),
+        "the pass acknowledges the latest version exactly once: {replayed:?}"
+    );
+    ensure!(
+        seeded.take_deferred_acknowledgements().is_empty(),
+        "an acknowledgement is delivered once"
+    );
+    ensure!(
+        seeded.acknowledgement(buffer(LATEST_VERSION)).is_some(),
+        "after the seed window a change is acknowledged by its own report"
     );
     Ok(())
 }

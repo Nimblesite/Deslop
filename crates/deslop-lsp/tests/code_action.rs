@@ -22,6 +22,10 @@ use serde_json::{json, Value};
 
 use crate::common;
 
+/// Lines typed above the first clone and never saved.
+const UNSAVED_LINES: &str = "// first unsaved line\n// second unsaved line\n";
+const UNSAVED_LINE_COUNT: u32 = 2;
+
 /// Golden files live beside this test per [AUTOFIX-EXTRACT-TESTING].
 fn golden(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -151,6 +155,78 @@ fn csharp_type1_fixture_offers_and_applies_extract_action() -> Result<()> {
         "applied buffer must match the shared golden.\n--- applied ---\n{applied}"
     );
     Ok(())
+}
+
+/// [LIVE-OPEN-BUFFERS] [AUTOFIX-EXTRACT-CODE-ACTION] Offsets, range and edits
+/// all describe the unsaved text the report analysed, never the file on disk.
+#[test]
+fn unsaved_lines_above_a_clone_shift_the_extract_edit_with_them() -> Result<()> {
+    let mut session = FixtureSession::open("csharp-extract-type1")?;
+    let uri = session.file_uri("InvoiceMath.cs")?;
+    let saved_actions = session.wait_for_actions("InvoiceMath.cs", (4, 6))?;
+    ensure!(!saved_actions.is_empty(), "the saved file offers an action");
+    let saved = fs::read_to_string(session.workspace.path().join("InvoiceMath.cs"))?;
+    let unsaved = format!("{UNSAVED_LINES}{saved}");
+    let open = common::notification(
+        "textDocument/didOpen",
+        &json!({"textDocument": {
+            "uri": uri.as_str(), "languageId": "csharp", "version": 1, "text": unsaved,
+        }}),
+    )?;
+    common::write_frame(&mut session.stdin, &open)?;
+    let shifted = (4 + UNSAVED_LINE_COUNT, 6 + UNSAVED_LINE_COUNT);
+    let edits = wait_for_extract_at(&mut session, shifted, UNSAVED_LINE_COUNT)?;
+    let applied = apply_text_edits(&unsaved, &edits)?;
+    let golden = fs::read_to_string(golden("InvoiceMath.applied.cs")).context("golden")?;
+    ensure!(
+        applied == format!("{UNSAVED_LINES}{golden}"),
+        "the edit must apply to the unsaved text.\n--- applied ---\n{applied}"
+    );
+    Ok(())
+}
+
+/// Polls until the extract action's edits sit below the unsaved lines, which
+/// proves the analysis of the unsaved text has reached the report.
+fn wait_for_extract_at(
+    session: &mut FixtureSession,
+    lines: (u32, u32),
+    first_line: u32,
+) -> Result<Vec<Value>> {
+    let params = session.code_action_params("InvoiceMath.cs", lines)?;
+    let deadline = Instant::now()
+        .checked_add(ANALYSIS_TIMEOUT)
+        .unwrap_or_else(Instant::now);
+    loop {
+        let response = session.call("textDocument/codeAction", &params)?;
+        let edits = extract_edits(&response);
+        let below = |edit: &Value| {
+            edit.pointer("/range/start/line").and_then(Value::as_u64) >= Some(u64::from(first_line))
+        };
+        if !edits.is_empty() && edits.iter().all(below) {
+            return Ok(edits);
+        }
+        ensure!(
+            Instant::now() < deadline,
+            "no extract action addressed the unsaved text within {ANALYSIS_TIMEOUT:?}: {response}"
+        );
+        std::thread::sleep(POLL_INTERVAL);
+    }
+}
+
+/// The text edits of the first `refactor.extract` action in `response`.
+fn extract_edits(response: &Value) -> Vec<Value> {
+    response
+        .pointer("/result")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .find(|action| action.pointer("/kind").and_then(Value::as_str) == Some("refactor.extract"))
+        .and_then(|action| action.pointer("/edit/changes"))
+        .and_then(Value::as_object)
+        .and_then(|changes| changes.values().next())
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default()
 }
 
 /// Compact end-to-end scenario shared by the Rust and Python cases

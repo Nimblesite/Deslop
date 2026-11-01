@@ -6,10 +6,11 @@ use std::{
 
 use deslop_core::{
     live::{
-        read_report_snapshot, report_for_file_in, AnalysisState, EmbeddingProgress,
-        EmbeddingProgressReporter, LiveApi, LiveService,
+        read_analysed_buffers, read_report_snapshot, report_for_file_in, AnalysisState,
+        EmbeddingProgress, EmbeddingProgressReporter, LiveApi, LiveService,
     },
     report::Report,
+    OpenBuffers,
 };
 use tokio::sync::Mutex;
 use tower_lsp::{
@@ -81,6 +82,8 @@ pub struct LspBackend {
     /// held by an in-flight `apply_changes` pass, so Deslop can never
     /// freeze the editor ([LSP-NON-INTERFERENCE]).
     report_snapshot: Arc<RwLock<Arc<Report>>>,
+    /// Lock-free open buffers that report analysed ([LIVE-OPEN-BUFFERS]).
+    analysed_buffers: Arc<RwLock<Arc<OpenBuffers>>>,
     /// Retains the cold pass state for `initialized()`, including refresh errors
     /// that predate the editor's notification handlers ([LIVE-CACHE-SEED-READINESS]).
     startup_state: Arc<Mutex<AnalysisState>>,
@@ -141,6 +144,7 @@ impl LspBackend {
         // ([LSP-NON-INTERFERENCE]).
         let root = session.root().to_path_buf();
         let report_snapshot = session.report_snapshot_handle();
+        let analysed_buffers = session.analysed_buffers_handle();
         let exclusion = session.exclusion_handle();
         let session = Arc::new(Mutex::new(session));
         let service = Arc::new(LiveService::new(Arc::clone(&session)));
@@ -187,6 +191,7 @@ impl LspBackend {
             observability,
             workspace_root: root,
             report_snapshot,
+            analysed_buffers,
             startup_state,
             diagnostics,
         })
@@ -395,22 +400,20 @@ impl LanguageServer for LspBackend {
         let Some(path) = url_to_path(&params.text_document.uri) else {
             return Ok(None);
         };
-        // [AUTOFIX-EXTRACT-CODE-ACTION] The action is computed against
-        // the same on-disk state the watcher-driven report describes;
-        // a stale buffer makes the editor reject the apply and the
-        // action is re-offered on the next compute cycle
-        // ([AUTOFIX-EXTRACT-WORKSPACE-EDIT]).
-        let Ok(source) = std::fs::read(&path) else {
-            return Ok(None);
-        };
         // [LSP-NON-INTERFERENCE-NONBLOCKING] Lock-free snapshot read —
         // never the session mutex.
         let report = read_report_snapshot(&self.report_snapshot);
+        // [AUTOFIX-EXTRACT-CODE-ACTION] [LIVE-OPEN-BUFFERS] The action is
+        // computed against the text that report analysed: the open buffer
+        // when the editor holds one, otherwise the file on disk.
+        let Ok(source) = read_analysed_buffers(&self.analysed_buffers).read(&path) else {
+            return Ok(None);
+        };
         let actions = code_action::build_for_range(
             &report,
             &path,
             &params.text_document.uri,
-            &source,
+            &source.bytes,
             params.range,
         );
         Ok((!actions.is_empty()).then_some(actions))

@@ -8,6 +8,7 @@ use super::*;
 const HOOK_SIDES: [&str; 2] = ["Before.ts", "After.ts"];
 const HOOK_TYPES: [&str; 2] = ["BeforeShutdown", "AfterShutdown"];
 const HOOK_METHODS: [&str; 2] = ["beforeShutdown", "afterShutdown"];
+const UNRELATED_METHODS: [&str; 2] = ["startJob", "cancelJob"];
 const WHOLE_MODULE_START: u64 = 1;
 const ONE_MODULE_CLONE: usize = 1;
 const COMPLETE_DUPLICATION: f64 = 100.0;
@@ -154,6 +155,17 @@ fn changed_operations_on_the_same_contract_keep_only_the_shared_work() -> Result
     let report = configured_hook_report(
         &[HOOK_TYPES[0]; 2],
         &HOOK_METHODS,
+        (POSITIVE_GUARD, GUARDED_CONJUNCTION),
+    )?;
+    assert_only_the_shared_dispatcher_work_is_copied(&report)
+}
+
+/// A contract rename explains only a method named after that contract.
+#[test]
+fn a_renamed_contract_cannot_excuse_an_unrelated_operation() -> Result<()> {
+    let report = configured_hook_report(
+        &HOOK_TYPES,
+        &UNRELATED_METHODS,
         (POSITIVE_GUARD, GUARDED_CONJUNCTION),
     )?;
     assert_only_the_shared_dispatcher_work_is_copied(&report)

@@ -8,6 +8,8 @@
 
 use std::path::Path;
 
+use crate::wire_generated::AnalysedBuffer;
+
 use super::{errors::LiveError, session::AnalysisSession};
 use crate::{delta::ReportDelta, pipeline::BufferEdit};
 
@@ -45,6 +47,27 @@ impl AnalysisSession {
             });
         }
         self.apply_changes(&[path.to_path_buf()])
+    }
+
+    /// The acknowledgement a buffer change has earned. In the seed window the
+    /// change is only queued, so the report still describes the older text:
+    /// the version is held back for [`Self::take_deferred_acknowledgements`].
+    pub fn acknowledgement(&mut self, buffer: AnalysedBuffer) -> Option<AnalysedBuffer> {
+        if !self.is_seed_only() {
+            return Some(buffer);
+        }
+        let _previous = self
+            .deferred_acknowledgements
+            .insert(buffer.path, buffer.version);
+        None
+    }
+
+    /// Buffers whose seed-window edits the cold pass has now replayed.
+    pub fn take_deferred_acknowledgements(&mut self) -> Vec<AnalysedBuffer> {
+        std::mem::take(&mut self.deferred_acknowledgements)
+            .into_iter()
+            .map(|(path, version)| AnalysedBuffer { path, version })
+            .collect()
     }
 
     /// Forgets the editor's copy of `path` and re-analyses the file from
