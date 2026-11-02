@@ -340,6 +340,86 @@ const PY_REPEATED_ASSERTIONS: &str = r#"class AdminTests(TestCase):
         self.assertNotContains(response, "Add another Inner2")
         self.assertNotContains(response, 'id="id_inner2_set-TOTAL_FORMS"')
 "#;
+const PHP_CLIENT_ROWS: &str = r#"<?php
+class ClientTest
+{
+    public function invalidOptions()
+    {
+        yield 'on_headers' => [
+            ['on_headers' => 'not a callable'],
+            'Passing string to request option "on_headers" is invalid; expected callable.',
+        ];
+
+        yield 'on_stats' => [
+            ['on_stats' => 'not a callable'],
+            'Passing string to request option "on_stats" is invalid; expected callable.',
+        ];
+
+        yield 'on_trailers' => [
+            ['on_trailers' => 'not a callable'],
+            'Passing string to request option "on_trailers" is invalid; expected callable.',
+        ];
+
+        yield 'on_progress' => [
+            ['on_progress' => 'not a callable'],
+            'Passing string to request option "on_progress" is invalid; expected callable.',
+        ];
+
+    }
+
+    public function otherOptions()
+    {
+        yield 'timeout' => [
+            ['timeout' => 'soon'],
+            'Timeout must be a number.',
+        ];
+
+        yield 'verify' => [
+            ['verify' => 'maybe'],
+            'Verify must be a boolean.',
+        ];
+
+        yield 'proxy' => [
+            ['proxy' => 'nowhere'],
+            'Proxy must be an array.',
+        ];
+
+        yield 'auth' => [
+            ['auth' => 'nobody'],
+            'Auth must be a list.',
+        ];
+
+    }
+}
+"#;
+const PHP_POOL_ROWS: &str = r#"<?php
+class PoolTest
+{
+    public function invalidOptions()
+    {
+        yield 'on_headers' => [
+            ['on_headers' => 'not-a-callable'],
+            'Passing string to request option "on_headers" is invalid; expected callable.',
+        ];
+
+        yield 'on_stats' => [
+            ['on_stats' => 'not-a-callable'],
+            'Passing string to request option "on_stats" is invalid; expected callable.',
+        ];
+
+        yield 'on_trailers' => [
+            ['on_trailers' => 'not-a-callable'],
+            'Passing string to request option "on_trailers" is invalid; expected callable.',
+        ];
+
+        yield 'on_progress' => [
+            ['on_progress' => 'not-a-callable'],
+            'Passing string to request option "on_progress" is invalid; expected callable.',
+        ];
+
+    }
+}
+"#;
 const GO_LOGIC_LEFT: &str = r"package left
 
 func apply(order Order) int {
@@ -571,5 +651,19 @@ fn assertions_pasted_within_a_file_are_still_clones() -> Result<()> {
         &[("tests.py", PY_REPEATED_ASSERTIONS)],
         "tests.py",
         "tests.py",
+    )
+}
+
+// guzzle's ClientTest.php and PoolTest.php: the copy stays beside an unrelated table.
+#[test]
+fn a_copied_table_is_not_hidden_by_an_unrelated_one() -> Result<()> {
+    assert_cluster_spans(
+        "php-rows",
+        &[
+            ("ClientTest.php", PHP_CLIENT_ROWS),
+            ("PoolTest.php", PHP_POOL_ROWS),
+        ],
+        "ClientTest.php",
+        "PoolTest.php",
     )
 }

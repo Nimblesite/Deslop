@@ -20,11 +20,16 @@ use crate::ast::{named_children, ByteRange};
 
 /// The fewest rows that make a run.
 const MIN_ROWS: usize = 2;
-/// Members sharing one in this many of the smaller one's strings are copies.
-const COPY_OVERLAP_DENOMINATOR: usize = 2;
+/// The fewest strings a member must hold before sharing them shows a copy.
+const MIN_COPY_STRINGS: usize = 4;
+/// Two members are copies when this share of the smaller one's strings, as a
+/// fraction, also appears in the larger.
+const COPY_SHARE_NUMERATOR: usize = 3;
+/// See [`COPY_SHARE_NUMERATOR`].
+const COPY_SHARE_DENOMINATOR: usize = 4;
 
 /// Returns true when every member is a run of data rows, the members are not
-/// all the same bytes, and they are not all copies of one another.
+/// all the same bytes, and no two of them are copies of one another.
 pub(super) fn is_data_row_cluster(snippets: &[Snippet<'_>]) -> bool {
     snippets.len() >= MIN_ROWS
         && snippets.iter().all(covers_data_rows)
@@ -32,23 +37,27 @@ pub(super) fn is_data_row_cluster(snippets: &[Snippet<'_>]) -> bool {
         && !members_are_copies(snippets)
 }
 
-/// True when every pair of members holds mostly the same strings: a table
-/// copied and then edited, which the exact-bytes escape hatch cannot see.
+/// True when any two members hold mostly the same strings: a table copied and
+/// then edited, which the exact-bytes escape hatch cannot see. One unrelated
+/// member must not hide the copy beside it.
 pub(super) fn members_are_copies(snippets: &[Snippet<'_>]) -> bool {
     let payloads: Vec<BTreeSet<&[u8]>> = snippets.iter().map(member_payloads).collect();
-    payloads.iter().enumerate().all(|(index, left)| {
+    payloads.iter().enumerate().any(|(index, left)| {
         payloads
             .iter()
             .skip(index.saturating_add(1))
-            .all(|right| mostly_shared(left, right))
+            .any(|right| mostly_shared(left, right))
     })
 }
 
 /// True when the smaller member's strings are mostly in the larger: a table
 /// grown or trimmed after copying shares little of the larger one's strings.
 fn mostly_shared(left: &BTreeSet<&[u8]>, right: &BTreeSet<&[u8]>) -> bool {
+    let smaller = left.len().min(right.len());
     let shared = left.intersection(right).count();
-    shared.saturating_mul(COPY_OVERLAP_DENOMINATOR) >= left.len().min(right.len())
+    smaller >= MIN_COPY_STRINGS
+        && shared.saturating_mul(COPY_SHARE_DENOMINATOR)
+            >= smaller.saturating_mul(COPY_SHARE_NUMERATOR)
 }
 
 /// The string literals inside one member's range.

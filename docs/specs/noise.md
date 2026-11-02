@@ -136,7 +136,7 @@ A cluster is suppressed when every member covers at least two whole sibling rows
 
 A call's arguments and a record's fields are not rows, because they say what one thing is, so a repeated call or struct value is judged by the other rules.
 
-A copied table stays visible. Exact copies escape through [CLONE-NOISE-VERBATIM-SUBGROUP] even inside one file, and a table copied and then edited stays when, for every pair of members, at least half of the smaller member's strings also appear in the larger.
+A copied table stays visible. Exact copies escape through [CLONE-NOISE-VERBATIM-SUBGROUP] even inside one file, and a table copied and then edited stays when any two members hold at least four strings and three quarters of the smaller one's strings also appear in the larger, so one unrelated member cannot hide the copy beside it.
 
 #### For AI
 
@@ -238,7 +238,7 @@ Properties, a constructor that only stores its parameters, and getters that only
 
 ### [CLONE-NOISE-GO-FIXTURE-TEST] Fixture-driven tests
 
-A Go integration test often binds its whole scenario to one string, passes it to the harness and asserts on the output. What the test does is in the string, so two such tests share only the harness calls. A cluster is suppressed when every member is a whole `Test…` function of that form and the members are not copies ([CLONE-NOISE-DATA-ROWS]). A loop, branch or computed argument keeps the cluster. Implemented in `cluster_filters/go_fixture_test.rs`; pinned by `go_tests_differing_only_in_their_fixture_are_not_clones` and `go_tests_holding_logic_are_still_clones`.
+A Go integration test often binds its whole scenario to one string, passes it to the harness and asserts on the output. What the test does is in the string, so two such tests share only the harness calls. A cluster is suppressed when every member is a whole `Test…` function of that form and no two members are copies ([CLONE-NOISE-DATA-ROWS]). A loop, branch or computed argument keeps the cluster. Implemented in `cluster_filters/go_fixture_test.rs`; pinned by `go_tests_differing_only_in_their_fixture_are_not_clones` and `go_tests_holding_logic_are_still_clones`.
 
 ## [CLONE-NOISE-PERFORMANCE] Performance
 
