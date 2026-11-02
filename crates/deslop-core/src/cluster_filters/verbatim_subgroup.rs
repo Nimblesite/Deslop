@@ -47,12 +47,7 @@ use std::{
 };
 
 use super::{
-    collect_snippets,
-    data_rows::{edited_copy_families, members_are_copies},
-    family::restrict,
-    is_noise_pattern,
-    snippets::ParseCache,
-    spans_multiple_files, uniform_language, NoiseFilter,
+    family::restrict, is_noise_pattern, snippets::ParseCache, spans_multiple_files, NoiseFilter,
 };
 use crate::{fingerprint::Fingerprint, pair::FusedCluster, state::FileId};
 
