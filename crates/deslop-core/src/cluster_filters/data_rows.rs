@@ -29,7 +29,7 @@ const COPY_SHARE_NUMERATOR: usize = 3;
 const COPY_SHARE_DENOMINATOR: usize = 4;
 
 /// Returns true when every member is a run of data rows, the members are not
-/// all the same bytes, and no two of them are copies of one another.
+/// all the same bytes, and they are not all copies of one another.
 pub(super) fn is_data_row_cluster(snippets: &[Snippet<'_>]) -> bool {
     snippets.len() >= MIN_ROWS
         && snippets.iter().all(covers_data_rows)
@@ -37,17 +37,39 @@ pub(super) fn is_data_row_cluster(snippets: &[Snippet<'_>]) -> bool {
         && !members_are_copies(snippets)
 }
 
-/// True when any two members hold mostly the same strings: a table copied and
-/// then edited, which the exact-bytes escape hatch cannot see. One unrelated
-/// member must not hide the copy beside it.
+/// True when every pair of members holds mostly the same strings: a table
+/// copied and then edited, which the exact-bytes escape hatch cannot see.
 pub(super) fn members_are_copies(snippets: &[Snippet<'_>]) -> bool {
     let payloads: Vec<BTreeSet<&[u8]>> = snippets.iter().map(member_payloads).collect();
-    payloads.iter().enumerate().any(|(index, left)| {
+    payloads.iter().enumerate().all(|(index, left)| {
         payloads
             .iter()
             .skip(index.saturating_add(1))
-            .any(|right| mostly_shared(left, right))
+            .all(|right| mostly_shared(left, right))
     })
+}
+
+/// Groups members into families of edited copies, as positions in `snippets`.
+/// A family has at least two members. One unrelated member shares a cluster
+/// with a copy without being part of it, so the copy is split out, not kept
+/// whole ([CLONE-NOISE-DATA-ROWS]).
+pub(super) fn edited_copy_families(snippets: &[Snippet<'_>]) -> Vec<Vec<usize>> {
+    let payloads: Vec<BTreeSet<&[u8]>> = snippets.iter().map(member_payloads).collect();
+    let mut families: Vec<Vec<usize>> = Vec::new();
+    for (position, payload) in payloads.iter().enumerate() {
+        let (mut joined, rest): (Vec<_>, Vec<_>) = families.into_iter().partition(|family| {
+            family
+                .iter()
+                .filter_map(|member| payloads.get(*member))
+                .any(|other| mostly_shared(payload, other))
+        });
+        let mut family: Vec<usize> = joined.drain(..).flatten().collect();
+        family.push(position);
+        families = rest;
+        families.push(family);
+    }
+    families.retain(|family| family.len() >= MIN_ROWS);
+    families
 }
 
 /// True when the smaller member's strings are mostly in the larger: a table

@@ -136,11 +136,11 @@ A cluster is suppressed when every member covers at least two whole sibling rows
 
 A call's arguments and a record's fields are not rows, because they say what one thing is, so a repeated call or struct value is judged by the other rules.
 
-A copied table stays visible. Exact copies escape through [CLONE-NOISE-VERBATIM-SUBGROUP] even inside one file, and a table copied and then edited stays when any two members hold at least four strings and three quarters of the smaller one's strings also appear in the larger, so one unrelated member cannot hide the copy beside it.
+A copied table stays visible. Exact copies escape through [CLONE-NOISE-VERBATIM-SUBGROUP] even inside one file, and a table copied and then edited stays too. Two members count as edited copies when each holds at least four strings and three quarters of the smaller one's strings also appear in the larger. A cluster of nothing but edited copies is left alone. Otherwise the copies are split into their own clusters and everything else is dropped, the way [CLONE-NOISE-VERBATIM-SUBGROUP] treats exact copies, so an unrelated member neither hides a copy nor is published with it.
 
 #### For AI
 
-Implemented in `cluster_filters/data_rows.rs` (`is_data_row_cluster`, `members_are_copies`). Pinned by `crates/deslop/tests/cli/detection/data_rows.rs`, including the real django table in `fixtures/data-rows-edited-table`.
+Implemented in `cluster_filters/data_rows.rs` (`is_data_row_cluster`, `members_are_copies`, `edited_copy_families`) and `verbatim_subgroup.rs` (`split_edited_copies`). Pinned by `crates/deslop/tests/cli/detection/data_rows.rs`, including the real django table in `fixtures/data-rows-edited-table`.
 
 ## [CLONE-NOISE-PYTHON] Python idioms
 
@@ -238,7 +238,7 @@ Properties, a constructor that only stores its parameters, and getters that only
 
 ### [CLONE-NOISE-GO-FIXTURE-TEST] Fixture-driven tests
 
-A Go integration test often binds its whole scenario to one string, passes it to the harness and asserts on the output. What the test does is in the string, so two such tests share only the harness calls. A cluster is suppressed when every member is a whole `Test…` function of that form and no two members are copies ([CLONE-NOISE-DATA-ROWS]). A loop, branch or computed argument keeps the cluster. Implemented in `cluster_filters/go_fixture_test.rs`; pinned by `go_tests_differing_only_in_their_fixture_are_not_clones` and `go_tests_holding_logic_are_still_clones`.
+A Go integration test often binds its whole scenario to one string, passes it to the harness and asserts on the output. What the test does is in the string, so two such tests share only the harness calls. A cluster is suppressed when every member is a whole `Test…` function of that form and the members are not all copies ([CLONE-NOISE-DATA-ROWS]). A loop, branch or computed argument keeps the cluster. Implemented in `cluster_filters/go_fixture_test.rs`; pinned by `go_tests_differing_only_in_their_fixture_are_not_clones` and `go_tests_holding_logic_are_still_clones`.
 
 ## [CLONE-NOISE-PERFORMANCE] Performance
 
