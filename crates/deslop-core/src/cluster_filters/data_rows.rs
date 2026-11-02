@@ -91,7 +91,7 @@ fn is_data_row_run(parent: Node<'_>, range: ByteRange, source: &[u8]) -> bool {
     }
     let rows: Vec<Node<'_>> = named_children(parent)
         .into_iter()
-        .filter(|child| node_intersects_range(*child, range) && !is_comment(*child))
+        .filter(|child| node_intersects_range(*child, range) && !is_trivia(*child))
         .map(unwrap_row)
         .collect();
     let is_run = rows.len() >= MIN_ROWS
@@ -114,9 +114,19 @@ fn largest_child<'tree>(rows: &[Node<'tree>]) -> Option<Node<'tree>> {
         .max_by_key(|row| row.end_byte().saturating_sub(row.start_byte()))
 }
 
-/// True for a comment between rows.
-fn is_comment(node: Node<'_>) -> bool {
-    node.kind().contains("comment")
+/// True for what a run may hold beside its rows: comments, and a closing
+/// `return` of plain names, which says nothing about the rows above it.
+fn is_trivia(node: Node<'_>) -> bool {
+    node.kind().contains("comment") || (node.kind() == "return_statement" && returns_names(node))
+}
+
+/// True when a subtree holds only names and `nil`-like leaves.
+fn returns_names(node: Node<'_>) -> bool {
+    named_children(node).into_iter().all(|child| {
+        child.kind() == "identifier"
+            || child.kind() == "nil"
+            || (child.kind() == "expression_list" && returns_names(child))
+    })
 }
 
 /// Strips single-child wrappers such as an expression statement.

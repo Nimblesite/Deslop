@@ -55,6 +55,7 @@ func init() {
 		[]string{"relref"},
 		[][2]string{},
 	)
+	return ns, nil
 }
 "#;
 const JS_OBJECT_ROWS: &str = r"const attributes = [
