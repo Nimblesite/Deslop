@@ -18,6 +18,174 @@
         "src/Composer/Util/ConfigValidator.php:190-197",
         "src/Composer/Util/ConfigValidator.php:201-208"
       ]
+    },
+    {
+      "why": "Byte-identical 8-line mock-setup block (getDistType→'pear', isDev→true) inside two test methods that are themselves wholesale copies of one another (testInstallPreferenceWithoutPreferenceDev vs testInstallPreferenceWithoutMatchDev).",
+      "verified": "diff -u of the two 8-line ranges returned no output (byte-identical); surrounding methods read in the file differ only in later mock values.",
+      "type": "Type I",
+      "occurrences": [
+        "tests/Composer/Test/Downloader/DownloadManagerTest.php:915-922",
+        "tests/Composer/Test/Downloader/DownloadManagerTest.php:827-834"
+      ]
+    },
+    {
+      "why": "The entire ForgejoTest class is a copy of GitHubTest: same test methods, same mock helpers, systematically renamed (GitHub→Forgejo, github-oauth→forgejo-token, github.com→codeberg.org) with Forgejo's extra username handling added.",
+      "verified": "diff -u GitHubTest.php:21-131 vs ForgejoTest.php:18-132: every hunk is a rename (class/vars/URLs/config keys) or the added username property/ask lines and a different constructor arg; the three mock-helper methods are byte-identical apart from 'github-oauth.'→'forgejo-token.'.",
+      "type": "Type III",
+      "occurrences": [
+        "tests/Composer/Test/Util/GitHubTest.php:21-131",
+        "tests/Composer/Test/Util/ForgejoTest.php:18-132"
+      ]
+    },
+    {
+      "why": "FossilDownloaderTest's testUpdate/testRemove/testGetInstallationSource are copies of HgDownloaderTest's: same mock chains, same process->expects lists, same prepare/update/cleanup calls, adapted from hg to fossil.",
+      "verified": "diff -u FossilDownloaderTest.php:98-161 vs HgDownloaderTest.php:97-153: hg↔fossil command renames, 'trunk'/'ref' literals, mock-order swap, and the touch() vs Filesystem::ensureDirectoryExists prologue; testGetInstallationSource and the whole testRemove tail are byte-identical.",
+      "type": "Type III",
+      "occurrences": [
+        "tests/Composer/Test/Downloader/FossilDownloaderTest.php:98-161",
+        "tests/Composer/Test/Downloader/HgDownloaderTest.php:97-153"
+      ]
+    },
+    {
+      "why": "checkComposerRepo and checkHttp in DiagnoseCommand are the same 35-line method copied within the file; only the method name, the https check expression and the URL expression differ — the rest, including the long TLS warning string, is byte-identical.",
+      "verified": "diff -u DiagnoseCommand.php:365-399 vs 326-360: three changed lines (signature, str_starts_with($url,'https://') vs $proto==='https', get($url) vs get($proto.'://repo.packagist.org/packages.json')); all other 32 lines identical.",
+      "type": "Type III",
+      "occurrences": [
+        "src/Composer/Command/DiagnoseCommand.php:365-399",
+        "src/Composer/Command/DiagnoseCommand.php:326-360"
+      ]
+    },
+    {
+      "why": "Twelve-line option-definition block in RemoveCommand is a copy of RequireCommand's: ten lines byte-identical, the other two differ only in option name and help-text literals.",
+      "verified": "diff -u RemoveCommand.php:50-61 vs RequireCommand.php:87-98: one line differs by help-text literal ('with explicit dependencies' vs 'except those that are root requirements'), and the last line pairs 'no-update-with-dependencies' with 'with-dependencies' (name + literal only).",
+      "occurrences": [
+        "src/Composer/Command/RemoveCommand.php:50-61",
+        "src/Composer/Command/RequireCommand.php:87-98"
+      ]
+    },
+    {
+      "why": "DependsCommand and ProhibitsCommand are whole-class copies: identical configure()/execute() structure with names, aliases, descriptions and help text renamed, plus one added InputArgument and a 'true' literal in ProhibitsCommand.",
+      "verified": "diff -u DependsCommand.php:23-58 vs ProhibitsCommand.php:23-59: renames throughout; added InputArgument(CONSTRAINT) line and doExecute($input, $output, true); the recursive/tree/locked option trio and class skeleton byte-identical.",
+      "type": "Type III",
+      "occurrences": [
+        "src/Composer/Command/DependsCommand.php:23-58",
+        "src/Composer/Command/ProhibitsCommand.php:23-59"
+      ]
+    },
+    {
+      "why": "Six-line option block in RemoveCommand copied from UpdateCommand's: five of six lines byte-identical (no-install, no-audit, audit-format, no-security-blocking, no-blocking); the remaining line is a different option name plus description literal.",
+      "verified": "diff -u RemoveCommand.php:51-56 vs UpdateCommand.php:65-70: only the first line differs ('no-update' option vs 'lock' option, name and help literal); lines 2-6 identical.",
+      "occurrences": [
+        "src/Composer/Command/RemoveCommand.php:51-56",
+        "src/Composer/Command/UpdateCommand.php:65-70"
+      ]
+    },
+    {
+      "why": "testNotUsingDowngradingWithReferences is a copy of testDowngradeShowsAppropriateMessage in the same file: same old/new package mocks, same downloader dance; version literals and the Upgrading/Downgrading message differ, and the Downgrade test adds three mock statements.",
+      "verified": "diff -u GitDownloaderTest.php:589-629 vs 541-587: literal swaps ('dev-ref'→'1.2.0.0', '{Upgrading .*}'→'{Downgrading .*}') plus two added getFullPrettyVersion mock chains; the process/io/fs/downloader tail is byte-identical.",
+      "type": "Type III",
+      "occurrences": [
+        "tests/Composer/Test/Downloader/GitDownloaderTest.php:589-629",
+        "tests/Composer/Test/Downloader/GitDownloaderTest.php:541-587"
+      ]
+    },
+    {
+      "why": "Twelve-line package mock block (getSourceReference/getSourceUrls/getSourceUrl/getPrettyVersion with the 40-char hash and example.com URL) byte-identical in two test methods; this exact block occurs only at these two places in the file.",
+      "verified": "diff -u GitDownloaderTest.php:105-116 vs 141-152 returned no output (byte-identical over 12 lines); grep shows the hash value appears at exactly these two mock sites (other uses are command expectations).",
+      "type": "Type I",
+      "occurrences": [
+        "tests/Composer/Test/Downloader/GitDownloaderTest.php:105-116",
+        "tests/Composer/Test/Downloader/GitDownloaderTest.php:141-152"
+      ]
+    },
+    {
+      "why": "plugin-v9's Plugin.php fixture is plugin-v2's Plugin2.php with one systematic change: the class name and every 'v2' literal changed to 'v9'. Nothing else differs.",
+      "verified": "diff -u Plugin2.php:9-27 vs Plugin.php:11-29: five changed lines, all class name or the v2/v9 literal; statements line up one for one.",
+      "type": "Type II",
+      "occurrences": [
+        "tests/Composer/Test/Plugin/Fixtures/plugin-v2/Installer/Plugin2.php:9-27",
+        "tests/Composer/Test/Plugin/Fixtures/plugin-v9/Installer/Plugin.php:11-29"
+      ]
+    },
+    {
+      "why": "Two sibling AutoloadGeneratorTest regions (the '_14' and '_15' dump tests) are the same 51-line test copied: identical file_put_contents prologue, dump call, three expected-autoload heredocs with the same generated headers, and identical asserts; only the fixture paths, mapping literals and suffix differ.",
+      "verified": "diff -u AutoloadGeneratorTest.php:1637-1687 vs 1787-1837: heredoc scaffolding, headers and both assert lines byte-identical; all differences are path/class-name literals, '_14'→'_15', and the classmap entries (one array entry exists on each side only).",
+      "occurrences": [
+        "tests/Composer/Test/Autoload/AutoloadGeneratorTest.php:1637-1687",
+        "tests/Composer/Test/Autoload/AutoloadGeneratorTest.php:1787-1837"
+      ]
+    },
+    {
+      "why": "Nine-line package mock block (getSourceReference/getSourceUrls/getSourceUrl all with the composer GitHub URL) byte-identical between two test methods.",
+      "verified": "diff -u GitDownloaderTest.php:253-261 vs 390-398 returned no output (byte-identical over 9 lines).",
+      "type": "Type I",
+      "occurrences": [
+        "tests/Composer/Test/Downloader/GitDownloaderTest.php:253-261",
+        "tests/Composer/Test/Downloader/GitDownloaderTest.php:390-398"
+      ]
+    },
+    {
+      "why": "Eight-line mock block (getDistType→'pear', isDev→false) byte-identical in two install-preference tests from the same copied test family.",
+      "verified": "diff -u DownloadManagerTest.php:871-878 vs 1059-1066 returned no output (byte-identical over 8 lines).",
+      "type": "Type I",
+      "occurrences": [
+        "tests/Composer/Test/Downloader/DownloadManagerTest.php:871-878",
+        "tests/Composer/Test/Downloader/DownloadManagerTest.php:1059-1066"
+      ]
+    },
+    {
+      "why": "InputOption is a twin of InputArgument: same private $suggestedValues property and docblock, and a complete() method byte-identical except one word in the error string ('option' vs 'argument'); the constructor keeps the same body plus an added shortcut parameter and validation block.",
+      "verified": "diff -u InputArgument.php:31-69 vs InputOption.php:31-72: property+docblock identical; complete() identical apart from the one literal; constructor adds $shortcut and the acceptValue() guard if-block.",
+      "type": "Type III",
+      "occurrences": [
+        "src/Composer/Console/Input/InputArgument.php:31-69",
+        "src/Composer/Console/Input/InputOption.php:31-72"
+      ]
+    },
+    {
+      "why": "Two sibling repository-filter tests share a copied http-mock fixture: eleven of twelve lines byte-identical, the twelfth differing only in the config key/value ('api-url' => '/api/filter' vs 'summary-url' => '/lists/all/summary.json').",
+      "verified": "diff -u ComposerRepositoryTest.php:1093-1104 vs 734-745: single changed line, an array key and value literal; URL, metadata-url, filter block and options line identical.",
+      "type": "Type II",
+      "occurrences": [
+        "tests/Composer/Test/Repository/ComposerRepositoryTest.php:1093-1104",
+        "tests/Composer/Test/Repository/ComposerRepositoryTest.php:734-745"
+      ]
+    },
+    {
+      "why": "Both regions are two-member runs of the same copy-pasted download-test template: the downloader mock, manager mock-builder and download-call blocks are byte-identical; only mock values differ and region B adds the isDev mock and a docblock.",
+      "verified": "diff -u DownloadManagerTest.php:260-332 vs 820-903: hunks only swap literals (null/'git'/'pear', 'dist'/'source', true/false) and add the isDev mock chains; roughly half the lines are byte-identical.",
+      "type": "Type III",
+      "occurrences": [
+        "tests/Composer/Test/Downloader/DownloadManagerTest.php:260-332",
+        "tests/Composer/Test/Downloader/DownloadManagerTest.php:820-903"
+      ]
+    },
+    {
+      "why": "Identical eight-line setAutoload fixture (same psr-0/psr-4/classmap map) in two tests of AutoloadGeneratorTest.",
+      "verified": "diff -u AutoloadGeneratorTest.php:327-334 vs 298-305 returned no output (byte-identical over 8 lines).",
+      "type": "Type I",
+      "occurrences": [
+        "tests/Composer/Test/Autoload/AutoloadGeneratorTest.php:327-334",
+        "tests/Composer/Test/Autoload/AutoloadGeneratorTest.php:298-305"
+      ]
+    },
+    {
+      "why": "autoload_psr4_2.php is a copy of autoload_psr4.php: ten of eleven lines byte-identical including the whole namespace map; the only change is one extra dirname() level for $baseDir.",
+      "verified": "diff -u autoload_psr4_2.php:1-11 vs autoload_psr4.php:1-11: one changed line — dirname(dirname($vendorDir)) vs dirname($vendorDir).",
+      "type": "Type III",
+      "occurrences": [
+        "tests/Composer/Test/Autoload/Fixtures/autoload_psr4_2.php:1-11",
+        "tests/Composer/Test/Autoload/Fixtures/autoload_psr4.php:1-11"
+      ]
+    },
+    {
+      "why": "The entry-filtering guard block (isset/continue, constraint->matches/continue, append) is copied between FilterListEntryBuilder and FilterListProviderSet; byte-identical apart from the $result→$filters rename and the foreach wrapper it sits in.",
+      "verified": "diff -u FilterListEntryBuilder.php:69-77 vs FilterListProviderSet.php:146-156: the nine inner lines match token for token modulo indentation and the one variable name; region B adds the foreach statement.",
+      "type": "Type III",
+      "occurrences": [
+        "src/Composer/FilterList/FilterListEntryBuilder.php:69-77",
+        "src/Composer/FilterList/FilterListProvider/FilterListProviderSet.php:146-156"
+      ]
     }
   ],
   "clearly_out": [
@@ -67,6 +235,142 @@
       "occurrences": [
         "src/Composer/Installer/PackageEvent.php:41-78",
         "src/Composer/Plugin/PreFileDownloadEvent.php:62-74"
+      ]
+    },
+    {
+      "why": "These are different adjacent cases of one funding-provider switch, not two copies of a region.",
+      "verified": "Diffed two 15-line ranges; every case label and provider URL differs, with only the repeated case/break syntax shared.",
+      "occurrences": [
+        "src/Composer/Repository/Vcs/GitHubDriver.php:267-281",
+        "src/Composer/Repository/Vcs/GitHubDriver.php:282-296"
+      ]
+    },
+    {
+      "why": "Two three-line runs of InputOption definitions listing entirely different options (no-security-blocking/no-blocking/update-no-dev vs lock/no-install/no-audit); only the constructor shape is shared.",
+      "verified": "diff -u RequireCommand.php:92-94 vs UpdateCommand.php:65-67: every option name and help text differs.",
+      "occurrences": [
+        "src/Composer/Command/RequireCommand.php:92-94",
+        "src/Composer/Command/UpdateCommand.php:65-67"
+      ]
+    },
+    {
+      "why": "Two PHPUnit mock chains with nothing in common: different test files, different mocked methods (getSourceUrls vs getNames), different return values. Only the expects/method/will skeleton matches.",
+      "verified": "diff -u HgDownloaderTest.php:67-69 vs SuggestedPackagesReporterTest.php:226-228: every content token differs.",
+      "occurrences": [
+        "tests/Composer/Test/Downloader/HgDownloaderTest.php:67-69",
+        "tests/Composer/Test/Installer/SuggestedPackagesReporterTest.php:226-228"
+      ]
+    },
+    {
+      "why": "Different commands defining different flags: the shared 'no-dev' line carries a different description, and 'lock' vs 'locked' are different options with different help texts.",
+      "verified": "diff -u CheckPlatformReqsCommand.php:32-33 vs LicensesCommand.php:41-42: both lines differ in help-text literal; second lines differ in option name too.",
+      "occurrences": [
+        "src/Composer/Command/CheckPlatformReqsCommand.php:32-33",
+        "src/Composer/Command/LicensesCommand.php:41-42"
+      ]
+    },
+    {
+      "why": "Completely unrelated option definitions (author/type vs no-secure-http/keep-vcs); nothing but the InputOption constructor skeleton is shared.",
+      "verified": "diff -u InitCommand.php:56-57 vs CreateProjectCommand.php:90-91: every option name, mode and help text differs.",
+      "occurrences": [
+        "src/Composer/Command/InitCommand.php:56-57",
+        "src/Composer/Command/CreateProjectCommand.php:90-91"
+      ]
+    },
+    {
+      "why": "A list of package metadata key names versus a perforce command-line expectation array — the two regions have nothing to do with each other beyond both being arrays of strings.",
+      "verified": "diff -u ArrayDumper.php:116-126 vs PerforceTest.php:131: no common content at all.",
+      "occurrences": [
+        "src/Composer/Package/Dumper/ArrayDumper.php:116-126",
+        "tests/Composer/Test/Util/PerforceTest.php:131-131"
+      ]
+    },
+    {
+      "why": "Unrelated option definitions (dev-only/no-dev-only vs type/format); only the constructor shape is shared.",
+      "verified": "diff -u BumpCommand.php:48-49 vs SearchCommand.php:40-41: every option name, shortcut and help text differs.",
+      "occurrences": [
+        "src/Composer/Command/BumpCommand.php:48-49",
+        "src/Composer/Command/SearchCommand.php:40-41"
+      ]
+    },
+    {
+      "why": "setRequires test data for different packages with different links, constraints and formatting; only the call shape is shared.",
+      "verified": "diff -u SolverTest.php:741-742 vs 833-838: different variables, package names, constraints and array layout throughout.",
+      "occurrences": [
+        "tests/Composer/Test/DependencyResolver/SolverTest.php:741-742",
+        "tests/Composer/Test/DependencyResolver/SolverTest.php:833-838"
+      ]
+    },
+    {
+      "why": "Property-declaration scaffolding from two unrelated classes: every property name, visibility and docblock type differs; only the docblock-plus-property layout is shared.",
+      "verified": "diff -u FilterListEntry.php:27-57 vs AutoloadGeneratorTest.php:61-94: no common members.",
+      "occurrences": [
+        "src/Composer/FilterList/FilterListEntry.php:27-57",
+        "tests/Composer/Test/Autoload/AutoloadGeneratorTest.php:61-94"
+      ]
+    },
+    {
+      "why": "PoolBuilder's state fields and AutoloadGeneratorTest's fixture fields are unrelated declarations.",
+      "verified": "Diffed 32 and 39 lines; nearly every field and docblock differs, with only declaration syntax shared.",
+      "occurrences": [
+        "src/Composer/DependencyResolver/PoolBuilder.php:47-78",
+        "tests/Composer/Test/Autoload/AutoloadGeneratorTest.php:56-94"
+      ]
+    },
+    {
+      "why": "Property lists of ValidatingArrayLoader vs Solver — every member differs; pure declaration-layout skeleton.",
+      "verified": "diff -u ValidatingArrayLoader.php:39-49 vs Solver.php:32-45: no common members.",
+      "occurrences": [
+        "src/Composer/Package/Loader/ValidatingArrayLoader.php:39-49",
+        "src/Composer/DependencyResolver/Solver.php:32-45"
+      ]
+    },
+    {
+      "why": "Test-class fixture properties vs SecurityAdvisory entity fields — unrelated members, different visibility; only the docblock/property layout is shared.",
+      "verified": "diff -u AutoloadGeneratorTest.php:66-94 vs SecurityAdvisory.php:24-54: no common members.",
+      "occurrences": [
+        "tests/Composer/Test/Autoload/AutoloadGeneratorTest.php:66-94",
+        "src/Composer/Advisory/SecurityAdvisory.php:24-54"
+      ]
+    },
+    {
+      "why": "Two import runs with zero shared lines: BaseCommand's Symfony Completion/Table/Input imports versus BufferIO's QuestionHelper/StreamOutput/StringInput imports — unrelated import runs.",
+      "verified": "diff -u BaseCommand.php:34-39 vs BufferIO.php:16-21: no line matches.",
+      "occurrences": [
+        "src/Composer/Command/BaseCommand.php:34-39",
+        "src/Composer/IO/BufferIO.php:16-21"
+      ]
+    },
+    {
+      "why": "These are different filesystem test-data rows, not copied implementation code.",
+      "verified": "Diffed two three-line ranges; every path, boolean, and expected value differs.",
+      "occurrences": [
+        "tests/Composer/Test/Util/FilesystemTest.php:68-70",
+        "tests/Composer/Test/Util/FilesystemTest.php:98-100"
+      ]
+    },
+    {
+      "why": "Unrelated option definitions (no-check-all/check-lock vs author/type); nothing shared but the constructor skeleton.",
+      "verified": "diff -u ValidateCommand.php:44-45 vs InitCommand.php:56-57: every option name and help text differs.",
+      "occurrences": [
+        "src/Composer/Command/ValidateCommand.php:44-45",
+        "src/Composer/Command/InitCommand.php:56-57"
+      ]
+    },
+    {
+      "why": "Protected-property lists of VcsRepository vs Installer — different members throughout; only the declaration pattern is shared.",
+      "verified": "diff -u VcsRepository.php:46-60 vs Installer.php:104-140: no common members beyond layout.",
+      "occurrences": [
+        "src/Composer/Repository/VcsRepository.php:46-60",
+        "src/Composer/Installer.php:104-140"
+      ]
+    },
+    {
+      "why": "Request and PoolOptimizer declare different fields for different purposes.",
+      "verified": "Diffed 11 against 26 lines; field names, visibility, types, and docblocks differ.",
+      "occurrences": [
+        "src/Composer/DependencyResolver/Request.php:44-54",
+        "src/Composer/DependencyResolver/PoolOptimizer.php:34-59"
       ]
     }
   ],
@@ -153,6 +457,97 @@
       "occurrences": [
         "src/Composer/Command/AuditCommand.php:118-125",
         "src/Composer/Command/LicensesCommand.php:68-72"
+      ]
+    },
+    {
+      "why": "The fixture scaffolding overlaps, but the ranges have ragged boundaries and different returned mappings.",
+      "occurrences": [
+        "tests/Composer/Test/Autoload/Fixtures/autoload_main.php:1-11",
+        "tests/Composer/Test/Autoload/Fixtures/autoload_main5.php:5-10"
+      ]
+    },
+    {
+      "why": "Two identical option declarations are too short to judge as a firm clone rather than repeated command scaffolding.",
+      "occurrences": [
+        "src/Composer/Command/RemoveCommand.php:68-69",
+        "src/Composer/Command/UpdateCommand.php:80-81"
+      ]
+    },
+    {
+      "why": "Two identical option declarations are short framework scaffolding.",
+      "occurrences": [
+        "src/Composer/Command/ScriptAliasCommand.php:61-62",
+        "src/Composer/Command/RunScriptCommand.php:60-61"
+      ]
+    },
+    {
+      "why": "Only three lines of test setup are involved, with different paths and filenames.",
+      "occurrences": [
+        "tests/Composer/Test/Installer/BinaryInstallerTest.php:432-434",
+        "tests/Composer/Test/Installer/BinaryInstallerTest.php:399-401"
+      ]
+    },
+    {
+      "why": "The redirect check is copied, but one selected range also contains a blank line and redirect counter, leaving ragged boundaries around a three-line idiom.",
+      "occurrences": [
+        "src/Composer/Util/RemoteFilesystem.php:688-692",
+        "src/Composer/Util/Http/CurlDownloader.php:625-627"
+      ]
+    },
+    {
+      "why": "Two short dependency-test setup lines differ in package variables and package names.",
+      "occurrences": [
+        "tests/Composer/Test/DependencyResolver/SolverTest.php:664-665",
+        "tests/Composer/Test/DependencyResolver/SolverTest.php:645-646"
+      ]
+    },
+    {
+      "why": "Two identical assertion lines are too short for a firm clone verdict.",
+      "occurrences": [
+        "tests/Composer/Test/Policy/IgnorePackageRuleTest.php:100-101",
+        "tests/Composer/Test/Policy/IgnorePackageRuleTest.php:37-38"
+      ]
+    },
+    {
+      "why": "Two identical assertion lines are repeated test scaffolding rather than a firm clone region.",
+      "occurrences": [
+        "tests/Composer/Test/Policy/IgnorePackageRuleTest.php:34-35",
+        "tests/Composer/Test/Policy/IgnorePackageRuleTest.php:60-61"
+      ]
+    },
+    {
+      "why": "Three lines of configuration test setup differ in their merge values and are too short for certainty.",
+      "occurrences": [
+        "tests/Composer/Test/ConfigTest.php:148-150",
+        "tests/Composer/Test/ConfigTest.php:157-159"
+      ]
+    },
+    {
+      "why": "Four lines of command-test scaffolding differ in the invoked command and options.",
+      "occurrences": [
+        "tests/Composer/Test/Command/HomeCommandTest.php:52-55",
+        "tests/Composer/Test/Command/FundCommandTest.php:53-56"
+      ]
+    },
+    {
+      "why": "The cache-write block is identical but only three lines long.",
+      "occurrences": [
+        "src/Composer/Repository/Vcs/GitLabDriver.php:162-164",
+        "src/Composer/Repository/Vcs/GitHubDriver.php:175-177"
+      ]
+    },
+    {
+      "why": "A single identical tree-character replacement line is too short for a firm verdict.",
+      "occurrences": [
+        "src/Composer/Command/ShowCommand.php:1571-1571",
+        "src/Composer/Command/BaseDependencyCommand.php:291-291"
+      ]
+    },
+    {
+      "why": "Only a three-line mock expectation is shared, with a different receiver variable.",
+      "occurrences": [
+        "tests/Composer/Test/Downloader/GitDownloaderTest.php:393-395",
+        "tests/Composer/Test/Downloader/GitDownloaderTest.php:606-608"
       ]
     }
   ]
