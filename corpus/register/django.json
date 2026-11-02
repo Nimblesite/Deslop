@@ -81,9 +81,160 @@
         "tests/migrations/test_commands.py:1973-1987",
         "tests/migrations/test_commands.py:1895-1909"
       ]
+    },
+    {
+      "why": "Two adjacent 11-line Selenium blocks that are the same code with a systematic rename: from_box/peter/lisa/remove_link → to_box/jason/john/choose_link, statement for statement.",
+      "verified": "diff -u admin_widgets/tests.py:1442-1452 vs 1455-1465: every changed token is one of the four renamed identifiers; structure and comments identical.",
+      "type": "Type II",
+      "occurrences": [
+        "tests/admin_widgets/tests.py:1442-1452",
+        "tests/admin_widgets/tests.py:1455-1465"
+      ]
+    },
+    {
+      "why": "The same 8-line repr-assertion block appears twice inside test_query_representation, byte-identical, once for the %-dict parameter style and once for the tuple style.",
+      "verified": "diff -u raw_query/tests.py:260-267 vs 249-256 returned no output (byte-identical over 8 lines).",
+      "type": "Type I",
+      "occurrences": [
+        "tests/raw_query/tests.py:260-267",
+        "tests/raw_query/tests.py:249-256"
+      ]
+    },
+    {
+      "why": "Sibling backend tests share the identical create-Article/retrieve/set-reporter_id-30 setup prologue, byte-identical apart from indentation and the a→a1 variable name.",
+      "verified": "diff -u backends/tests.py:719-726 vs 638-645: only indentation (with-block) and a/a1 differ; all literals including headline, date and reporter_id identical.",
+      "type": "Type II",
+      "occurrences": [
+        "tests/backends/tests.py:719-726",
+        "tests/backends/tests.py:638-645"
+      ]
+    },
+    {
+      "why": "Two sibling multiple-database tests assert the exact same UserProfile flavor state with a byte-identical 8-line assertion block (chocolate on default; crunchy frog and spring surprise on other).",
+      "verified": "diff -u multiple_database/tests.py:939-946 vs 922-929 returned no output (byte-identical over 8 lines).",
+      "type": "Type I",
+      "occurrences": [
+        "tests/multiple_database/tests.py:939-946",
+        "tests/multiple_database/tests.py:922-929"
+      ]
+    },
+    {
+      "why": "The identical 18-line expected-relations data block (BasePerson and Relation relation lists, all None) is repeated verbatim in two expectation dicts in results.py.",
+      "verified": "diff -u results.py:546-563 vs 588-605 returned no output (byte-identical over 18 lines).",
+      "type": "Type I",
+      "occurrences": [
+        "tests/model_meta/results.py:546-563",
+        "tests/model_meta/results.py:588-605"
+      ]
+    },
+    {
+      "why": "Inside one test method, the same 7-line HTTP request/assert sequence is repeated for the keep-alive and close headers; only the Connection header literal differs.",
+      "verified": "diff -u servers/tests.py:265-271 vs 273-279: single literal 'keep-alive' vs 'close'; the other six lines byte-identical.",
+      "type": "Type II",
+      "occurrences": [
+        "tests/servers/tests.py:265-271",
+        "tests/servers/tests.py:273-279"
+      ]
     }
   ],
-  "clearly_out": [],
+  "clearly_out": [
+    {
+      "why": "assertEqual chains over unrelated subjects (widget options dict in one file, admin filter choices dict in another); nothing but the call shape matches.",
+      "verified": "diff -u test_choicewidget.py:53-56 vs admin_filters/tests.py:1721-1723: no common content.",
+      "occurrences": [
+        "tests/forms_tests/widget_tests/test_choicewidget.py:53-56",
+        "tests/admin_filters/tests.py:1721-1723"
+      ]
+    },
+    {
+      "why": "Header-lookup asserts versus META asserts in different test modules: different dictionaries, different keys, different expected values.",
+      "verified": "diff -u requests_tests/tests.py:1472-1474 vs test_client_regress/tests.py:1410-1412: no common content.",
+      "occurrences": [
+        "tests/requests_tests/tests.py:1472-1474",
+        "tests/test_client_regress/tests.py:1410-1412"
+      ]
+    },
+    {
+      "why": "These are unrelated command-line argument definitions sharing only argparse syntax.",
+      "verified": "Diffed two 11-line ranges; all argument names, destinations, actions, and help strings differ.",
+      "occurrences": [
+        "tests/runtests.py:548-558",
+        "tests/runtests.py:650-660"
+      ]
+    },
+    {
+      "why": "runtests.py CLI flags versus ogrinspect command flags — different files, different flags, different help texts; only the add_argument skeleton matches.",
+      "verified": "diff -u runtests.py:669-679 vs ogrinspect.py:100-109: no common content.",
+      "occurrences": [
+        "tests/runtests.py:669-679",
+        "django/contrib/gis/management/commands/ogrinspect.py:100-109"
+      ]
+    },
+    {
+      "why": "Slug and IPv4 validation data rows test different validators and inputs.",
+      "verified": "Diffed two five-line ranges; every validator name and input literal differs, leaving only tuple syntax.",
+      "occurrences": [
+        "tests/validators/tests.py:343-347",
+        "tests/validators/tests.py:367-371"
+      ]
+    },
+    {
+      "why": "Template debug state and cookie attributes are unrelated dictionaries and expected values.",
+      "verified": "Diffed two four-line ranges; every receiver, key, and expected value differs.",
+      "occurrences": [
+        "tests/template_backends/test_jinja2.py:129-132",
+        "tests/responses/test_cookie.py:132-135"
+      ]
+    },
+    {
+      "why": "Two mail.outbox assertion runs from unrelated tests (password-reset email body versus broken-link email subject); only the len(mail.outbox) line is shared.",
+      "verified": "diff -u test_views.py:168-170 vs middleware/tests.py:405-407: two of three lines differ entirely in subject and dict lookups.",
+      "occurrences": [
+        "tests/auth_tests/test_views.py:168-170",
+        "tests/middleware/tests.py:405-407"
+      ]
+    },
+    {
+      "why": "A tuple of invalid decimal strings versus a tuple of ordinal suffixes — unrelated values in unrelated test modules; only the tuple-of-strings shape matches.",
+      "verified": "diff -u test_decimalfield.py:64-81 vs humanize_tests/tests.py:64-81: no common values.",
+      "occurrences": [
+        "tests/forms_tests/field_tests/test_decimalfield.py:64-81",
+        "tests/humanize_tests/tests.py:64-81"
+      ]
+    },
+    {
+      "why": "The migration ALTER_OPTION_KEYS constant versus a date-format specifier list — unrelated lists of strings in unrelated files.",
+      "verified": "diff -u models.py:818-830 vs test_dateformat.py:200: no common content.",
+      "occurrences": [
+        "django/db/migrations/operations/models.py:818-830",
+        "tests/utils_tests/test_dateformat.py:200-200"
+      ]
+    },
+    {
+      "why": "Model definitions with unrelated fields: GroupMember's person/group FKs versus A3's lookuperror FKs; only the class-with-ForeignKeys skeleton is shared.",
+      "verified": "diff -u test_relative_fields.py:313-318 vs lookuperror_a/models.py:8-18: different classes, fields and FK targets.",
+      "occurrences": [
+        "tests/invalid_models_tests/test_relative_fields.py:313-318",
+        "tests/migrations/migrations_test_apps/lookuperror_a/models.py:8-18"
+      ]
+    },
+    {
+      "why": "assertHTMLEqual checks in the test-utils tests versus record_unapplied calls in the migration command tests — nothing in common.",
+      "verified": "diff -u test_utils/tests.py:725-735 vs test_commands.py:1363-1365: no common content.",
+      "occurrences": [
+        "tests/test_utils/tests.py:725-735",
+        "tests/migrations/test_commands.py:1363-1365"
+      ]
+    },
+    {
+      "why": "Two objects.create lines for unrelated models with unrelated fields and values in unrelated test modules.",
+      "verified": "diff -u custom_lookups/tests.py:656-657 vs admin_views/tests.py:827-828: no common content.",
+      "occurrences": [
+        "tests/custom_lookups/tests.py:656-657",
+        "tests/admin_views/tests.py:827-828"
+      ]
+    }
+  ],
   "not_clear": [
     {
       "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
@@ -1316,7 +1467,181 @@
         "tests/admin_inlines/models.py:244-267",
         "tests/select_related/models.py:46-62"
       ]
+    },
+    {
+      "why": "Two identical cache assertions are too short for a firm clone verdict.",
+      "occurrences": [
+        "tests/cache/tests.py:637-638",
+        "tests/cache/tests.py:654-655"
+      ]
+    },
+    {
+      "why": "Three deconstruction assertions share a test pattern but concern different fields and keyword arguments.",
+      "occurrences": [
+        "tests/field_deconstruction/tests.py:494-496",
+        "tests/field_deconstruction/tests.py:509-511"
+      ]
+    },
+    {
+      "why": "Three generic-view assertions use different object names and templates.",
+      "occurrences": [
+        "tests/generic_views/test_detail.py:133-135",
+        "tests/generic_views/test_detail.py:126-128"
+      ]
+    },
+    {
+      "why": "Two identical choice assertions are short repeated test scaffolding.",
+      "occurrences": [
+        "tests/admin_filters/tests.py:1294-1295",
+        "tests/admin_filters/tests.py:1275-1276"
+      ]
+    },
+    {
+      "why": "Two identical mail assertions are too short for a firm verdict.",
+      "occurrences": [
+        "tests/admin_views/test_actions.py:232-233",
+        "tests/admin_views/test_actions.py:358-359"
+      ]
+    },
+    {
+      "why": "Six lines of widget-test scaffolding differ only in the expected input markup.",
+      "occurrences": [
+        "tests/forms_tests/widget_tests/test_passwordinput.py:47-52",
+        "tests/forms_tests/widget_tests/test_fileinput.py:47-52"
+      ]
+    },
+    {
+      "why": "Three identical model-field declaration lines are too short for certainty.",
+      "occurrences": [
+        "tests/migrations/test_autodetector.py:1746-1748",
+        "tests/migrations/test_autodetector.py:1787-1789"
+      ]
+    },
+    {
+      "why": "Four identical backend-test lines may simply be repeated test scaffolding.",
+      "occurrences": [
+        "tests/backends/tests.py:365-368",
+        "tests/backends/tests.py:330-333"
+      ]
+    },
+    {
+      "why": "Four identical expected-choice rows are a short data fragment.",
+      "occurrences": [
+        "tests/model_forms/test_modelchoicefield.py:146-149",
+        "tests/model_forms/test_modelchoicefield.py:428-431"
+      ]
+    },
+    {
+      "why": "Four identical form-error assertions are short test scaffolding.",
+      "occurrences": [
+        "tests/forms_tests/tests/test_error_messages.py:60-63",
+        "tests/forms_tests/tests/test_error_messages.py:89-92"
+      ]
+    },
+    {
+      "why": "Two identical query assertions are too short for a firm clone verdict.",
+      "occurrences": [
+        "tests/queries/tests.py:3706-3707",
+        "tests/queries/tests.py:3714-3715"
+      ]
+    },
+    {
+      "why": "Three geometry-test lines vary both the boolean state and expected WKT.",
+      "occurrences": [
+        "tests/gis_tests/gdal_tests/test_geom.py:821-823",
+        "tests/gis_tests/gdal_tests/test_geom.py:818-820"
+      ]
+    },
+    {
+      "why": "Three identical generic-view assertions are too short for certainty.",
+      "occurrences": [
+        "tests/generic_views/test_list.py:80-82",
+        "tests/generic_views/test_list.py:56-58"
+      ]
+    },
+    {
+      "why": "Only three substantive request-setup lines are shared, with a blank-line difference.",
+      "occurrences": [
+        "tests/servers/test_basehttp.py:54-57",
+        "tests/servers/test_basehttp.py:30-32"
+      ]
+    },
+    {
+      "why": "Two identical password-field assertions are too short for a firm verdict.",
+      "occurrences": [
+        "tests/auth_tests/test_forms.py:985-986",
+        "tests/auth_tests/test_forms.py:853-854"
+      ]
+    },
+    {
+      "why": "Two identical model-admin setup/assertion lines are short test scaffolding.",
+      "occurrences": [
+        "tests/modeladmin/tests.py:342-343",
+        "tests/modeladmin/tests.py:365-366"
+      ]
+    },
+    {
+      "why": "Three identical choice assertions are too short for certainty.",
+      "occurrences": [
+        "tests/admin_filters/tests.py:1990-1992",
+        "tests/admin_filters/tests.py:1371-1373"
+      ]
+    },
+    {
+      "why": "The identical validation block is only five lines of common test assertions.",
+      "occurrences": [
+        "tests/model_forms/tests.py:1158-1162",
+        "tests/model_forms/tests.py:1194-1198"
+      ]
+    },
+    {
+      "why": "Three data rows are shared, but the first range adds one row and the selected fragment is very short.",
+      "occurrences": [
+        "tests/postgres_tests/test_aggregates.py:467-470",
+        "tests/postgres_tests/test_aggregates.py:171-173"
+      ]
+    },
+    {
+      "why": "The six-line formset validation block is identical but remains a short assertion idiom.",
+      "occurrences": [
+        "tests/generic_relations/test_forms.py:339-344",
+        "tests/model_formsets/tests.py:2313-2318"
+      ]
+    },
+    {
+      "why": "Two database-count assertions differ in one expected count and are too short for certainty.",
+      "occurrences": [
+        "tests/multiple_database/tests.py:1721-1722",
+        "tests/multiple_database/tests.py:1715-1716"
+      ]
+    },
+    {
+      "why": "Two hasher assertions differ only in the expected upgrade boolean and are too short for a firm verdict.",
+      "occurrences": [
+        "tests/auth_tests/test_hashers.py:737-738",
+        "tests/auth_tests/test_hashers.py:732-733"
+      ]
+    },
+    {
+      "why": "The template tests share setup/error-check scaffolding but test different tags and syntax errors with different boundaries.",
+      "occurrences": [
+        "tests/template_tests/syntax_tests/i18n/test_blocktranslate.py:454-484",
+        "tests/template_tests/syntax_tests/i18n/test_translate.py:165-181"
+      ]
+    },
+    {
+      "why": "Four model-form test lines differ in the file versus image field and expected filename.",
+      "occurrences": [
+        "tests/model_forms/tests.py:2837-2840",
+        "tests/model_forms/tests.py:2656-2659"
+      ]
+    },
+    {
+      "why": "Two identical geometry-construction lines are too short for certainty.",
+      "occurrences": [
+        "tests/gis_tests/gdal_tests/test_geom.py:391-392",
+        "tests/gis_tests/gdal_tests/test_geom.py:434-435"
+      ]
     }
-  ],
-  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 200 candidates at this commit and no pair was called CLEARLY OUT by all of them. 10 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing."
+  ]
 }

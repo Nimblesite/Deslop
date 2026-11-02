@@ -34,6 +34,7 @@ pub fn is_import_boilerplate_carrier(language: &str, kind: &str) -> bool {
         "dart" => dart_carrier(kind),
         "javascript" | "typescript" | "tsx" | "osprey" | "osprey-ml" => ecmascript_carrier(kind),
         "go" => go_carrier(kind),
+        "php" => php_carrier(kind),
         _ => false,
     }
 }
@@ -142,6 +143,21 @@ fn ecmascript_carrier(kind: &str) -> bool {
     matches!(kind, "import_statement")
 }
 
+/// PHP opening tag and `use` import carriers.
+fn php_carrier(kind: &str) -> bool {
+    matches!(kind, "php_tag" | "namespace_use_declaration")
+}
+
+/// A statement-form `namespace` or `declare` is PHP prologue. Its braced form
+/// wraps real code, which must keep its fingerprints.
+fn is_php_prologue_statement(node: &NormalizedNode) -> bool {
+    matches!(node.kind, "namespace_definition" | "declare_statement")
+        && !node
+            .children
+            .iter()
+            .any(|child| child.kind == "compound_statement")
+}
+
 /// The clause every Go file opens with.
 const GO_PACKAGE_CLAUSE: &str = "package_clause";
 
@@ -169,6 +185,7 @@ fn is_language_specific_boilerplate_subtree(language: &str, node: &NormalizedNod
     match language {
         "python" => is_python_prologue_subtree(node),
         "javascript" | "typescript" | "tsx" => is_ecmascript_reexport(node),
+        "php" => is_php_prologue_statement(node),
         _ => false,
     }
 }

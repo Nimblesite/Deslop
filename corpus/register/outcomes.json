@@ -1617,6 +1617,84 @@
       "repo": "composer",
       "verdict": "clearly_in",
       "occurrences": [
+        "src/Composer/Command/DependsCommand.php:23-58",
+        "src/Composer/Command/ProhibitsCommand.php:23-59"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Composer/Command/DiagnoseCommand.php:326-360",
+        "src/Composer/Command/DiagnoseCommand.php:365-399"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Composer/Command/RemoveCommand.php:50-61",
+        "src/Composer/Command/RequireCommand.php:87-98"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Composer/Command/RemoveCommand.php:51-56",
+        "src/Composer/Command/UpdateCommand.php:65-70"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Composer/Console/Input/InputArgument.php:31-69",
+        "src/Composer/Console/Input/InputOption.php:31-72"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "src/Composer/FilterList/FilterListEntryBuilder.php:69-77",
+        "src/Composer/FilterList/FilterListProvider/FilterListProviderSet.php:146-156"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_in",
+      "occurrences": [
         "src/Composer/Util/ConfigValidator.php:190-197",
         "src/Composer/Util/ConfigValidator.php:201-208"
       ],
@@ -1624,6 +1702,253 @@
       "since": "2026-10-22T21:05:36.093Z",
       "engine": "deslop (binary a8ddd29da036)",
       "commit": "4e7c7df5ebee54d42509113c83d0ac9670460781",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Composer/Test/Autoload/AutoloadGeneratorTest.php:1637-1687",
+        "tests/Composer/Test/Autoload/AutoloadGeneratorTest.php:1787-1837"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Composer/Test/Autoload/AutoloadGeneratorTest.php:298-305",
+        "tests/Composer/Test/Autoload/AutoloadGeneratorTest.php:327-334"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Composer/Test/Autoload/Fixtures/autoload_psr4.php:1-11",
+        "tests/Composer/Test/Autoload/Fixtures/autoload_psr4_2.php:1-11"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Composer/Test/Downloader/DownloadManagerTest.php:1059-1066",
+        "tests/Composer/Test/Downloader/DownloadManagerTest.php:871-878"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Composer/Test/Downloader/DownloadManagerTest.php:260-332",
+        "tests/Composer/Test/Downloader/DownloadManagerTest.php:820-903"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Composer/Test/Downloader/DownloadManagerTest.php:827-834",
+        "tests/Composer/Test/Downloader/DownloadManagerTest.php:915-922"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Composer/Test/Downloader/FossilDownloaderTest.php:98-161",
+        "tests/Composer/Test/Downloader/HgDownloaderTest.php:97-153"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Composer/Test/Downloader/GitDownloaderTest.php:105-116",
+        "tests/Composer/Test/Downloader/GitDownloaderTest.php:141-152"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Composer/Test/Downloader/GitDownloaderTest.php:253-261",
+        "tests/Composer/Test/Downloader/GitDownloaderTest.php:390-398"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Composer/Test/Downloader/GitDownloaderTest.php:541-587",
+        "tests/Composer/Test/Downloader/GitDownloaderTest.php:589-629"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Composer/Test/Plugin/Fixtures/plugin-v2/Installer/Plugin2.php:9-27",
+        "tests/Composer/Test/Plugin/Fixtures/plugin-v9/Installer/Plugin.php:11-29"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Composer/Test/Repository/ComposerRepositoryTest.php:1093-1104",
+        "tests/Composer/Test/Repository/ComposerRepositoryTest.php:734-745"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Composer/Test/Util/ForgejoTest.php:18-132",
+        "tests/Composer/Test/Util/GitHubTest.php:21-131"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/Composer/Advisory/SecurityAdvisory.php:24-54",
+        "tests/Composer/Test/Autoload/AutoloadGeneratorTest.php:66-94"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/Composer/Command/BaseCommand.php:34-39",
+        "src/Composer/IO/BufferIO.php:16-21"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/Composer/Command/BumpCommand.php:48-49",
+        "src/Composer/Command/SearchCommand.php:40-41"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/Composer/Command/CheckPlatformReqsCommand.php:32-33",
+        "src/Composer/Command/LicensesCommand.php:41-42"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/Composer/Command/CreateProjectCommand.php:90-91",
+        "src/Composer/Command/InitCommand.php:56-57"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/Composer/Command/InitCommand.php:56-57",
+        "src/Composer/Command/ValidateCommand.php:44-45"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
       "version": null
     },
     {
@@ -1643,13 +1968,104 @@
       "repo": "composer",
       "verdict": "clearly_out",
       "occurrences": [
+        "src/Composer/Command/RequireCommand.php:92-94",
+        "src/Composer/Command/UpdateCommand.php:65-67"
+      ],
+      "outcome": "fail",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/Composer/DependencyResolver/PoolBuilder.php:47-78",
+        "tests/Composer/Test/Autoload/AutoloadGeneratorTest.php:56-94"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/Composer/DependencyResolver/PoolOptimizer.php:34-59",
+        "src/Composer/DependencyResolver/Request.php:44-54"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/Composer/DependencyResolver/Solver.php:32-45",
+        "src/Composer/Package/Loader/ValidatingArrayLoader.php:39-49"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/Composer/FilterList/FilterListEntry.php:27-57",
+        "tests/Composer/Test/Autoload/AutoloadGeneratorTest.php:61-94"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/Composer/Installer.php:104-140",
+        "src/Composer/Repository/VcsRepository.php:46-60"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_out",
+      "occurrences": [
         "src/Composer/Installer/PackageEvent.php:41-78",
         "src/Composer/Plugin/PreFileDownloadEvent.php:62-74"
       ],
-      "outcome": "fail",
-      "since": "2026-10-31T00:40:17.882Z",
-      "engine": "deslop@c53641f4474c",
-      "commit": "c53641f4474c390cbd0378f56976621e0e297c6f",
+      "outcome": "pass",
+      "since": "2026-11-01T23:31:49.918Z",
+      "engine": "deslop@e66786a42470",
+      "commit": "e66786a42470a610969ef7b7a9101af1253fafa4",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/Composer/Package/Dumper/ArrayDumper.php:116-126",
+        "tests/Composer/Test/Util/PerforceTest.php:131-131"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
       "version": null
     },
     {
@@ -1682,13 +2098,52 @@
       "repo": "composer",
       "verdict": "clearly_out",
       "occurrences": [
+        "src/Composer/Repository/Vcs/GitHubDriver.php:267-281",
+        "src/Composer/Repository/Vcs/GitHubDriver.php:282-296"
+      ],
+      "outcome": "fail",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_out",
+      "occurrences": [
         "tests/Composer/Test/DependencyResolver/PoolTest.php:1-19",
         "tests/Composer/Test/Policy/MalwarePolicyConfigTest.php:1-19"
       ],
+      "outcome": "pass",
+      "since": "2026-11-01T23:31:49.918Z",
+      "engine": "deslop@e66786a42470",
+      "commit": "e66786a42470a610969ef7b7a9101af1253fafa4",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tests/Composer/Test/DependencyResolver/SolverTest.php:741-742",
+        "tests/Composer/Test/DependencyResolver/SolverTest.php:833-838"
+      ],
       "outcome": "fail",
-      "since": "2026-10-31T00:40:17.882Z",
-      "engine": "deslop@c53641f4474c",
-      "commit": "c53641f4474c390cbd0378f56976621e0e297c6f",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tests/Composer/Test/Downloader/HgDownloaderTest.php:67-69",
+        "tests/Composer/Test/Installer/SuggestedPackagesReporterTest.php:226-228"
+      ],
+      "outcome": "fail",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
       "version": null
     },
     {
@@ -1698,10 +2153,23 @@
         "tests/Composer/Test/EventDispatcher/EventDispatcherTest.php:25-29",
         "tests/Composer/Test/Package/Loader/ValidatingArrayLoaderTest.php:15-19"
       ],
-      "outcome": "fail",
-      "since": "2026-10-31T00:40:17.882Z",
-      "engine": "deslop@c53641f4474c",
-      "commit": "c53641f4474c390cbd0378f56976621e0e297c6f",
+      "outcome": "pass",
+      "since": "2026-11-01T23:31:49.918Z",
+      "engine": "deslop@e66786a42470",
+      "commit": "e66786a42470a610969ef7b7a9101af1253fafa4",
+      "version": null
+    },
+    {
+      "repo": "composer",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tests/Composer/Test/Util/FilesystemTest.php:68-70",
+        "tests/Composer/Test/Util/FilesystemTest.php:98-100"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
       "version": null
     },
     {
@@ -1932,10 +2400,10 @@
         "dio_test/lib/src/test/headers_tests.dart:49-51",
         "plugins/web_adapter/test/cors_preflight_test.dart:203-206"
       ],
-      "outcome": "fail",
-      "since": "2026-10-31T00:40:17.882Z",
-      "engine": "deslop@c53641f4474c",
-      "commit": "c53641f4474c390cbd0378f56976621e0e297c6f",
+      "outcome": "pass",
+      "since": "2026-11-01T23:31:49.918Z",
+      "engine": "deslop@e66786a42470",
+      "commit": "e66786a42470a610969ef7b7a9101af1253fafa4",
       "version": null
     },
     {
@@ -1962,6 +2430,32 @@
       "since": "2026-10-22T21:05:36.093Z",
       "engine": "deslop (binary a8ddd29da036)",
       "commit": "4e7c7df5ebee54d42509113c83d0ac9670460781",
+      "version": null
+    },
+    {
+      "repo": "django",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/admin_widgets/tests.py:1442-1452",
+        "tests/admin_widgets/tests.py:1455-1465"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "django",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/backends/tests.py:638-645",
+        "tests/backends/tests.py:719-726"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
       "version": null
     },
     {
@@ -2046,6 +2540,58 @@
       "repo": "django",
       "verdict": "clearly_in",
       "occurrences": [
+        "tests/model_meta/results.py:546-563",
+        "tests/model_meta/results.py:588-605"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "django",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/multiple_database/tests.py:922-929",
+        "tests/multiple_database/tests.py:939-946"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "django",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/raw_query/tests.py:249-256",
+        "tests/raw_query/tests.py:260-267"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "django",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/servers/tests.py:265-271",
+        "tests/servers/tests.py:273-279"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "django",
+      "verdict": "clearly_in",
+      "occurrences": [
         "tests/timezones/tests.py:212-230",
         "tests/timezones/tests.py:493-511"
       ],
@@ -2053,6 +2599,162 @@
       "since": "2026-10-22T21:05:36.093Z",
       "engine": "deslop (binary a8ddd29da036)",
       "commit": "4e7c7df5ebee54d42509113c83d0ac9670460781",
+      "version": null
+    },
+    {
+      "repo": "django",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "django/contrib/gis/management/commands/ogrinspect.py:100-109",
+        "tests/runtests.py:669-679"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "django",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "django/db/migrations/operations/models.py:818-830",
+        "tests/utils_tests/test_dateformat.py:200-200"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "django",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tests/admin_filters/tests.py:1721-1723",
+        "tests/forms_tests/widget_tests/test_choicewidget.py:53-56"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "django",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tests/admin_views/tests.py:827-828",
+        "tests/custom_lookups/tests.py:656-657"
+      ],
+      "outcome": "fail",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "django",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tests/auth_tests/test_views.py:168-170",
+        "tests/middleware/tests.py:405-407"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "django",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tests/forms_tests/field_tests/test_decimalfield.py:64-81",
+        "tests/humanize_tests/tests.py:64-81"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "django",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tests/invalid_models_tests/test_relative_fields.py:313-318",
+        "tests/migrations/migrations_test_apps/lookuperror_a/models.py:8-18"
+      ],
+      "outcome": "fail",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "django",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tests/migrations/test_commands.py:1363-1365",
+        "tests/test_utils/tests.py:725-735"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "django",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tests/requests_tests/tests.py:1472-1474",
+        "tests/test_client_regress/tests.py:1410-1412"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "django",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tests/responses/test_cookie.py:132-135",
+        "tests/template_backends/test_jinja2.py:129-132"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "django",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tests/runtests.py:548-558",
+        "tests/runtests.py:650-660"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "django",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tests/validators/tests.py:343-347",
+        "tests/validators/tests.py:367-371"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
       "version": null
     },
     {
@@ -2413,10 +3115,10 @@
         "tests/Giraffe.Tests/EndpointRoutingTests.fs:18-24",
         "tests/Giraffe.Tests/EndpointRoutingTests.fs:180-186"
       ],
-      "outcome": "fail",
-      "since": "2026-10-31T00:40:17.882Z",
-      "engine": "deslop@c53641f4474c",
-      "commit": "c53641f4474c390cbd0378f56976621e0e297c6f",
+      "outcome": "pass",
+      "since": "2026-11-01T23:31:49.918Z",
+      "engine": "deslop@e66786a42470",
+      "commit": "e66786a42470a610969ef7b7a9101af1253fafa4",
       "version": null
     },
     {
@@ -2475,6 +3177,19 @@
       "repo": "guzzle",
       "verdict": "clearly_in",
       "occurrences": [
+        "src/Handler/CurlFactory.php:849-859",
+        "src/Handler/CurlFactory.php:864-874"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
         "tests/AuthMiddlewareTest.php:218-233",
         "tests/AuthMiddlewareTest.php:259-274"
       ],
@@ -2501,6 +3216,32 @@
       "repo": "guzzle",
       "verdict": "clearly_in",
       "occurrences": [
+        "tests/AuthMiddlewareTest.php:482-513",
+        "tests/AuthMiddlewareTest.php:874-897"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/ClientTest.php:1137-1144",
+        "tests/ClientTest.php:998-1005"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
         "tests/ClientTest.php:1598-1631",
         "tests/Handler/CurlMultiHandlerTest.php:4098-4131"
       ],
@@ -2508,6 +3249,19 @@
       "since": "2026-10-22T21:05:36.093Z",
       "engine": "deslop (binary a8ddd29da036)",
       "commit": "4e7c7df5ebee54d42509113c83d0ac9670460781",
+      "version": null
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/ClientTest.php:2109-2122",
+        "tests/PoolTest.php:429-442"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
       "version": null
     },
     {
@@ -2553,6 +3307,71 @@
       "repo": "guzzle",
       "verdict": "clearly_in",
       "occurrences": [
+        "tests/Exception/ClientExceptionTest.php:20-40",
+        "tests/Exception/ServerExceptionTest.php:20-40"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Exception/ConnectExceptionTest.php:1-35",
+        "tests/Exception/NetworkTimeoutExceptionTest.php:1-36"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Exception/ConnectExceptionTest.php:12-35",
+        "tests/Exception/NetworkTimeoutExceptionTest.php:12-36"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Exception/ConnectTimeoutExceptionTest.php:21-35",
+        "tests/Exception/NetworkTimeoutExceptionTest.php:21-35"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Exception/ServerExceptionTest.php:20-40",
+        "tests/Exception/TooManyRedirectsExceptionTest.php:19-37"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
         "tests/Handler/CurlFactoryTest.php:10182-10219",
         "tests/Handler/ProxyEnvTest.php:198-235"
       ],
@@ -2566,6 +3385,32 @@
       "repo": "guzzle",
       "verdict": "clearly_in",
       "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:1119-1128",
+        "tests/Handler/StreamHandlerTest.php:4972-4981"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:6447-6467",
+        "tests/Handler/CurlFactoryTest.php:6477-6496"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
         "tests/Handler/CurlFactoryTest.php:6475-6487",
         "tests/Handler/CurlFactoryTest.php:6757-6769"
       ],
@@ -2573,6 +3418,58 @@
       "since": "2026-10-22T21:05:36.093Z",
       "engine": "deslop (binary a8ddd29da036)",
       "commit": "4e7c7df5ebee54d42509113c83d0ac9670460781",
+      "version": null
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:8852-8857",
+        "tests/Handler/CurlFactoryTest.php:9173-9178"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:8968-8991",
+        "tests/Handler/CurlFactoryTest.php:9292-9323"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:9172-9179",
+        "tests/Handler/CurlFactoryTest.php:9728-9735"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:9437-9442",
+        "tests/Handler/StreamHandlerTest.php:3677-3682"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
       "version": null
     },
     {
@@ -2599,6 +3496,45 @@
       "since": "2026-10-22T21:05:36.093Z",
       "engine": "deslop (binary a8ddd29da036)",
       "commit": "4e7c7df5ebee54d42509113c83d0ac9670460781",
+      "version": null
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:2144-2206",
+        "tests/Handler/CurlMultiHandlerTest.php:2208-2257"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:3108-3117",
+        "tests/Handler/CurlMultiHandlerTest.php:3395-3404"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:3661-3676",
+        "tests/Handler/CurlMultiHandlerTest.php:3693-3706"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
       "version": null
     },
     {
@@ -2654,6 +3590,175 @@
       "version": null
     },
     {
+      "repo": "guzzle",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/Handler/CurlVersion.php:18-59",
+        "src/RequestOptions.php:236-393"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/Handler/CurlVersion.php:24-59",
+        "src/RequestOptions.php:225-370"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/Multiplexing.php:19-23",
+        "src/RequestOptions.php:236-356"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "src/Multiplexing.php:19-23",
+        "src/TransportSharing.php:9-13"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tests/ClientTest.php:2009-2027",
+        "tests/PoolTest.php:429-447"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tests/Exception/ServerExceptionTest.php:5-10",
+        "tests/Handler/StreamHandlerTest.php:5-10"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:2684-2685",
+        "tests/Handler/CurlFactoryTest.php:326-327"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "guzzle",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tests/ProxyOptionsTest.php:109-115",
+        "tests/ProxyOptionsTest.php:326-332"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "common/paths/path_test.go:55-76",
+        "helpers/path_test.go:113-134"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "hugolib/cascade_test.go:73-89",
+        "markup/goldmark/goldmark_integration_test.go:335-351"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "markup/markup_config/config_test.go:60-66",
+        "markup/markup_config/config_test.go:73-79"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "navigation/menu.go:179-193",
+        "resources/page/taxonomy.go:148-162"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "navigation/menu.go:215-233",
+        "resources/page/pages_sort.go:160-172"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
       "repo": "hugo",
       "verdict": "clearly_in",
       "occurrences": [
@@ -2670,6 +3775,32 @@
       "repo": "hugo",
       "verdict": "clearly_in",
       "occurrences": [
+        "resources/page/pagegroup_test.go:276-284",
+        "resources/page/pagegroup_test.go:447-455"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "resources/page/pagegroup_test.go:350-358",
+        "resources/page/pagegroup_test.go:399-407"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_in",
+      "occurrences": [
         "tpl/collections/collections.go:195-227",
         "tpl/collections/collections.go:355-387"
       ],
@@ -2677,6 +3808,58 @@
       "since": "2026-10-22T21:05:36.093Z",
       "engine": "deslop (binary a8ddd29da036)",
       "commit": "4e7c7df5ebee54d42509113c83d0ac9670460781",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tpl/collections/index.go:123-128",
+        "tpl/internal/go_templates/texttemplate/funcs.go:161-166"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tpl/internal/go_templates/htmltemplate/exec_test.go:354-358",
+        "tpl/internal/go_templates/texttemplate/exec_test.go:360-364"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tpl/urls/urls.go:107-119",
+        "tpl/urls/urls.go:93-104"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "commands/server.go:545-546",
+        "commands/server.go:550-551"
+      ],
+      "outcome": "fail",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
       "version": null
     },
     {
@@ -2696,13 +3879,78 @@
       "repo": "hugo",
       "verdict": "clearly_out",
       "occurrences": [
+        "common/urls/baseURL_test.go:79-80",
+        "resources/resource_transformers/tocss/dartsass/dartsass_integration_test.go:361-362"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
         "config/allconfig/allconfig_integration_test.go:135-166",
         "tpl/transform/transform_integration_test.go:353-381"
       ],
+      "outcome": "pass",
+      "since": "2026-11-01T23:31:49.918Z",
+      "engine": "deslop@e66786a42470",
+      "commit": "e66786a42470a610969ef7b7a9101af1253fafa4",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "config/allconfig/allconfig_integration_test.go:17-48",
+        "config/allconfig/allconfig_integration_test.go:76-84"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "htesting/test_helpers_test.go:25-27",
+        "hugofs/glob_test.go:75-78"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "hugolib/content_map_test.go:55-67",
+        "hugolib/content_map_test.go:79-82"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "hugolib/disableKinds_test.go:175-176",
+        "resources/image_test.go:304-306"
+      ],
       "outcome": "fail",
-      "since": "2026-10-31T00:40:17.882Z",
-      "engine": "deslop@c53641f4474c",
-      "commit": "c53641f4474c390cbd0378f56976621e0e297c6f",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
       "version": null
     },
     {
@@ -2722,13 +3970,169 @@
       "repo": "hugo",
       "verdict": "clearly_out",
       "occurrences": [
+        "hugolib/page__meta_test.go:24-47",
+        "hugolib/site_output_test.go:657-689"
+      ],
+      "outcome": "fail",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "hugolib/pagebundler_test.go:285-286",
+        "resources/image_test.go:394-395"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "hugolib/pagebundler_test.go:381-418",
+        "hugolib/site_output_test.go:489-543"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "hugolib/site_test.go:958-967",
+        "resources/page/permalinks_test.go:43-48"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "hugolib/site_url_test.go:114-115",
+        "tpl/partials/partials_integration_test.go:298-299"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "hugolib/testhelpers_test.go:531-533",
+        "langs/i18n/translationProvider.go:55-57"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "media/config_test.go:68-69",
+        "resources/images/config_test.go:38-39"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "resources/page/pagemeta/page_frontmatter_test.go:165-172",
+        "tpl/internal/go_templates/htmltemplate/css_test.go:220-227"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "resources/page/pagemeta/pagemeta_test.go:110-112",
+        "tpl/internal/go_templates/texttemplate/exec_test.go:1311-1313"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
         "tpl/collections/init.go:151-164",
         "tpl/urls/init.go:47-58"
       ],
-      "outcome": "fail",
-      "since": "2026-10-31T00:40:17.882Z",
-      "engine": "deslop@c53641f4474c",
-      "commit": "c53641f4474c390cbd0378f56976621e0e297c6f",
+      "outcome": "pass",
+      "since": "2026-11-01T23:31:49.918Z",
+      "engine": "deslop@e66786a42470",
+      "commit": "e66786a42470a610969ef7b7a9101af1253fafa4",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tpl/internal/go_templates/htmltemplate/css_test.go:78-85",
+        "tpl/internal/go_templates/htmltemplate/html_test.go:60-67"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tpl/internal/go_templates/htmltemplate/css_test.go:93-99",
+        "tpl/internal/go_templates/htmltemplate/escape_test.go:1141-1174"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tpl/internal/go_templates/htmltemplate/exec_test.go:471-486",
+        "tpl/internal/go_templates/htmltemplate/exec_test.go:569-578"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
       "version": null
     },
     {
@@ -2738,10 +4142,36 @@
         "tpl/internal/go_templates/htmltemplate/exec_test.go:497-500",
         "tpl/internal/go_templates/htmltemplate/exec_test.go:664-668"
       ],
+      "outcome": "pass",
+      "since": "2026-11-01T23:31:49.918Z",
+      "engine": "deslop@e66786a42470",
+      "commit": "e66786a42470a610969ef7b7a9101af1253fafa4",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tpl/internal/go_templates/htmltemplate/exec_test.go:507-514",
+        "tpl/internal/go_templates/texttemplate/exec_test.go:615-622"
+      ],
       "outcome": "fail",
-      "since": "2026-10-31T00:40:17.882Z",
-      "engine": "deslop@c53641f4474c",
-      "commit": "c53641f4474c390cbd0378f56976621e0e297c6f",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tpl/internal/go_templates/htmltemplate/exec_test.go:532-539",
+        "tpl/internal/go_templates/texttemplate/exec_test.go:443-452"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
       "version": null
     },
     {
@@ -2751,10 +4181,10 @@
         "tpl/internal/go_templates/texttemplate/exec_test.go:605-611",
         "tpl/internal/go_templates/texttemplate/exec_test.go:618-624"
       ],
-      "outcome": "fail",
-      "since": "2026-10-31T00:40:17.882Z",
-      "engine": "deslop@c53641f4474c",
-      "commit": "c53641f4474c390cbd0378f56976621e0e297c6f",
+      "outcome": "pass",
+      "since": "2026-11-01T23:31:49.918Z",
+      "engine": "deslop@e66786a42470",
+      "commit": "e66786a42470a610969ef7b7a9101af1253fafa4",
       "version": null
     },
     {
@@ -2764,10 +4194,36 @@
         "tpl/lang/init.go:35-52",
         "tpl/strings/init.go:51-69"
       ],
+      "outcome": "pass",
+      "since": "2026-11-01T23:31:49.918Z",
+      "engine": "deslop@e66786a42470",
+      "commit": "e66786a42470a610969ef7b7a9101af1253fafa4",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tpl/tplimpl/templatestore_integration_test.go:1076-1114",
+        "tpl/tplimpl/templatestore_integration_test.go:908-925"
+      ],
       "outcome": "fail",
-      "since": "2026-10-31T00:40:17.882Z",
-      "engine": "deslop@c53641f4474c",
-      "commit": "c53641f4474c390cbd0378f56976621e0e297c6f",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "version": null
+    },
+    {
+      "repo": "hugo",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "tpl/tplimpl/templatestore_integration_test.go:1438-1461",
+        "tpl/tplimpl/templatestore_integration_test.go:367-394"
+      ],
+      "outcome": "fail",
+      "since": "2026-11-02T01:31:12.995Z",
+      "engine": "deslop@f3bb59490f9b",
+      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
       "version": null
     },
     {
@@ -3596,10 +5052,10 @@
         "fixtures/attribute-behavior/src/attributes.js:1019-1030",
         "fixtures/attribute-behavior/src/attributes.js:1941-1952"
       ],
-      "outcome": "fail",
-      "since": "2026-10-31T00:40:17.882Z",
-      "engine": "deslop@c53641f4474c",
-      "commit": "c53641f4474c390cbd0378f56976621e0e297c6f",
+      "outcome": "pass",
+      "since": "2026-11-01T23:31:49.918Z",
+      "engine": "deslop@e66786a42470",
+      "commit": "e66786a42470a610969ef7b7a9101af1253fafa4",
       "version": null
     },
     {

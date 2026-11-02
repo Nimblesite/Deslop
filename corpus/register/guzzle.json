@@ -153,10 +153,232 @@
         "tests/AuthMiddlewareTest.php:218-233",
         "tests/AuthMiddlewareTest.php:259-274"
       ]
+    },
+    {
+      "why": "addConflictingCurlOption and addSupportedCurlOption are the same function written twice: identical guard (defined check, constant lookup, is_int check) with a $replacement parameter and value added in the conflicting variant.",
+      "verified": "diff -u CurlFactory.php:864-874 vs 849-859: only the function name, the added ?string $replacement parameter, and $options[$value] = $replacement vs = true differ.",
+      "type": "Type III",
+      "occurrences": [
+        "src/Handler/CurlFactory.php:864-874",
+        "src/Handler/CurlFactory.php:849-859"
+      ]
+    },
+    {
+      "why": "Two sibling ResponseTransferException tests share the identical finish/create/wait/catch block; the second simply omits one assertInstanceOf line.",
+      "verified": "diff -u CurlFactoryTest.php:6447-6467 vs 6477-6496: single removed line (assertInstanceOf(ResponseException::class, $e)); all other 20 lines byte-identical.",
+      "type": "Type III",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:6447-6467",
+        "tests/Handler/CurlFactoryTest.php:6477-6496"
+      ]
+    },
+    {
+      "why": "Byte-identical eight-line mock/factory/client construction block (base_uri plus REQUEST_FACTORY/URI_FACTORY options) in two sibling ClientTest tests.",
+      "verified": "diff -u ClientTest.php:998-1005 vs 1137-1144 returned no output (byte-identical over 8 lines).",
+      "type": "Type I",
+      "occurrences": [
+        "tests/ClientTest.php:998-1005",
+        "tests/ClientTest.php:1137-1144"
+      ]
+    },
+    {
+      "why": "The two proxy-tunnel isolation tests are the same test with literals changed: same handler setup, same Closure::bind isolate call, same FRESH_CONNECT/FORBID_REUSE asserts; the first additionally sets and re-checks the owner property.",
+      "verified": "diff -u CurlMultiHandlerTest.php:3661-3676 vs 3693-3706: signature literals ('sig-a'/'sig-b', map contents), one removed setMultiProperty line and one removed final assert; the isolate-closure and both curl asserts byte-identical.",
+      "type": "Type III",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:3661-3676",
+        "tests/Handler/CurlMultiHandlerTest.php:3693-3706"
+      ]
+    },
+    {
+      "why": "testCanCloseFromProgressCallbackAfterNestedTick is testCanCloseFromProgressCallback adapted: same server enqueue, handler, progress-closure-closes-handler pattern, deadline loop and HandlerClosedException assertions, with the callback rewritten for the nested tick and the progressCalls counter and BadMethodCall tail dropped.",
+      "verified": "diff -u CurlMultiHandlerTest.php:2144-2206 vs 2208-2257: the try/finally skeleton, deadline loop and catch blocks are byte-identical; differences are the simplified callback body and removed counter asserts/tail.",
+      "type": "Type III",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:2144-2206",
+        "tests/Handler/CurlMultiHandlerTest.php:2208-2257"
+      ]
+    },
+    {
+      "why": "The two request-body-failure tests are copies: identical CurlFactory/FnStream/PUT-request setup shape and a byte-identical six-line catch block; the second swaps the failing stream method (getSize timeout vs rewind throw) and adds a rewindCalled check.",
+      "verified": "diff -u CurlFactoryTest.php:8968-8991 vs 9292-9323: exception literals differ, B adds getSize/rewind closures and trailing assert; the catch block's five shared assert lines are byte-identical.",
+      "type": "Type III",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:8968-8991",
+        "tests/Handler/CurlFactoryTest.php:9292-9323"
+      ]
+    },
+    {
+      "why": "Two rejection-verification blocks that match line for line apart from the $promise→$second rename and one property name ('delays' vs 'deferredAdds'); the catch with its 'Unable to add the cURL handle' message is identical.",
+      "verified": "diff -u CurlMultiHandlerTest.php:3395-3404 vs 3108-3117: every changed token is an identifier; eight of ten lines byte-identical.",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:3395-3404",
+        "tests/Handler/CurlMultiHandlerTest.php:3108-3117"
+      ]
+    },
+    {
+      "why": "NetworkTimeoutExceptionTest is ConnectExceptionTest with the class under test renamed and the sibling-class negation swapped; the whole testHasRequest body is otherwise byte-identical.",
+      "verified": "diff -u NetworkTimeoutExceptionTest.php:12-36 vs ConnectExceptionTest.php:12-35: class names, one assertNotInstanceOf target and a blank line are all that differ.",
+      "occurrences": [
+        "tests/Exception/NetworkTimeoutExceptionTest.php:12-36",
+        "tests/Exception/ConnectExceptionTest.php:12-35"
+      ]
+    },
+    {
+      "why": "ConnectTimeoutExceptionTest's testHasRequest is NetworkTimeoutExceptionTest's with the exception class renamed and the sibling-negation lines adjusted; everything else, including the 'foo' message and previous checks, is identical.",
+      "verified": "diff -u ConnectTimeoutExceptionTest.php:21-35 vs NetworkTimeoutExceptionTest.php:21-35: exception class names and the swapped assertNotInstanceOf targets; equal statement counts throughout.",
+      "occurrences": [
+        "tests/Exception/ConnectTimeoutExceptionTest.php:21-35",
+        "tests/Exception/NetworkTimeoutExceptionTest.php:21-35"
+      ]
+    },
+    {
+      "why": "The ten-line requestTransportSharingOptionProvider, name and body, is defined byte-identically in both handler test files.",
+      "verified": "diff -u StreamHandlerTest.php:4972-4981 vs CurlFactoryTest.php:1119-1128 returned no output (byte-identical over 10 lines).",
+      "type": "Type I",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:4972-4981",
+        "tests/Handler/CurlFactoryTest.php:1119-1128"
+      ]
+    },
+    {
+      "why": "TooManyRedirectsExceptionTest is ServerExceptionTest adapted: same testHasRequestAndResponse with the class and status code changed; the Server variant adds the BadResponseException and getCode asserts.",
+      "verified": "diff -u ServerExceptionTest.php:20-40 vs TooManyRedirectsExceptionTest.php:19-37: renames (Server→TooManyRedirects), 500→302 literals, and two asserts present only in A.",
+      "type": "Type III",
+      "occurrences": [
+        "tests/Exception/ServerExceptionTest.php:20-40",
+        "tests/Exception/TooManyRedirectsExceptionTest.php:19-37"
+      ]
+    },
+    {
+      "why": "The six-line response-write-timeout assert chain — including the specific 'Timed out while writing the response body' message — is byte-identical in the stream-handler and curl-handler twins of the same test.",
+      "verified": "diff -u StreamHandlerTest.php:3677-3682 vs CurlFactoryTest.php:9437-9442 returned no output (byte-identical over 6 lines); enclosing tests read in both files are the same scenario per handler.",
+      "type": "Type I",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:3677-3682",
+        "tests/Handler/CurlFactoryTest.php:9437-9442"
+      ]
+    },
+    {
+      "why": "Six-line 'Timed out while reading the request body' assert chain byte-identical between two sibling tests in CurlFactoryTest.",
+      "verified": "diff -u CurlFactoryTest.php:9173-9178 vs 8852-8857 returned no output (byte-identical over 6 lines).",
+      "type": "Type I",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:9173-9178",
+        "tests/Handler/CurlFactoryTest.php:8852-8857"
+      ]
+    },
+    {
+      "why": "The whole NetworkTimeoutExceptionTest file is ConnectExceptionTest with the class renamed and the sibling-negation lines swapped — same imports, same testHasRequest, same assertions.",
+      "verified": "diff -u NetworkTimeoutExceptionTest.php:1-36 vs ConnectExceptionTest.php:1-35: class names, one swapped assertNotInstanceOf pair and a blank line are all that differ.",
+      "type": "Type III",
+      "occurrences": [
+        "tests/Exception/NetworkTimeoutExceptionTest.php:1-36",
+        "tests/Exception/ConnectExceptionTest.php:1-35"
+      ]
+    },
+    {
+      "why": "The request-exception catch block is copied with a different timeout message and a following finally clause.",
+      "verified": "Diffed two eight-line ranges; writing versus reading changes in the message and the closing brace becomes } finally {.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:9728-9735",
+        "tests/Handler/CurlFactoryTest.php:9172-9179"
+      ]
+    },
+    {
+      "why": "The two digest body-rewind tests are copies: same throwing-rewind FnStream construction, same MockHandler/401-challenge/client/try-catch shape, and the identical 'Digest authentication failed because the request body could not be rewound' assertion; the stale-retry variant adds body capture and a second challenge.",
+      "verified": "diff -u AuthMiddlewareTest.php:482-513 vs 874-897: shared rewind closure, client line and catch block byte-identical; differences are the stream decoration method, challenge literals and the added $bodies tracking.",
+      "type": "Type III",
+      "occurrences": [
+        "tests/AuthMiddlewareTest.php:482-513",
+        "tests/AuthMiddlewareTest.php:874-897"
+      ]
+    },
+    {
+      "why": "ClientExceptionTest is ServerExceptionTest with the class renamed and the status code literals changed (500→404); all eleven assertions are otherwise identical.",
+      "verified": "diff -u ServerExceptionTest.php:20-40 vs ClientExceptionTest.php:20-40: class name and two numeric literals only.",
+      "type": "Type II",
+      "occurrences": [
+        "tests/Exception/ServerExceptionTest.php:20-40",
+        "tests/Exception/ClientExceptionTest.php:20-40"
+      ]
+    },
+    {
+      "why": "The same three invalid-callable provider rows (on_headers, on_stats, on_trailers with identical expected messages) appear in both files, differing only in the filler literal 'not-a-callable' vs 'not a callable'.",
+      "verified": "diff -u PoolTest.php:429-442 vs ClientTest.php:2109-2122: three changed lines, each the invalid-value literal only; messages and keys identical.",
+      "type": "Type II",
+      "occurrences": [
+        "tests/PoolTest.php:429-442",
+        "tests/ClientTest.php:2109-2122"
+      ]
     }
   ],
-  "clearly_out": [],
-  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 200 candidates at this commit and no pair was called CLEARLY OUT by all of them. 3 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing.",
+  "clearly_out": [
+    {
+      "why": "The assertions reject unrelated proxy-authorization and transfer/expect headers.",
+      "verified": "Diffed two two-line ranges; all header names and values differ, leaving only assertion syntax.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:2684-2685",
+        "tests/Handler/CurlFactoryTest.php:326-327"
+      ]
+    },
+    {
+      "why": "Data-provider rows with entirely different content: IPv6 literal bracket forms versus malformed CIDR ranges; only the row shape is shared.",
+      "verified": "diff -u ProxyOptionsTest.php:109-115 vs 326-332: no common values.",
+      "occurrences": [
+        "tests/ProxyOptionsTest.php:109-115",
+        "tests/ProxyOptionsTest.php:326-332"
+      ]
+    },
+    {
+      "why": "Private cURL version constants are unrelated to the public request-option documentation block.",
+      "verified": "Diffed 36 against 146 lines; constants, comments, purpose, and range sizes differ without copied statements.",
+      "occurrences": [
+        "src/Handler/CurlVersion.php:24-59",
+        "src/RequestOptions.php:225-370"
+      ]
+    },
+    {
+      "why": "Two enum-style constant sets whose only shared line is NONE='none' (a naming convention); every other constant differs.",
+      "verified": "diff -u Multiplexing.php:19-23 vs TransportSharing.php:9-13: one shared line (NONE), four differing lines each.",
+      "occurrences": [
+        "src/Multiplexing.php:19-23",
+        "src/TransportSharing.php:9-13"
+      ]
+    },
+    {
+      "why": "Import runs from different namespaces with zero shared lines (BadResponse/Request/Response/Server vs Connect/ConnectTimeout/InvalidArgument/Network) — unrelated import runs.",
+      "verified": "diff -u ServerExceptionTest.php:5-10 vs StreamHandlerTest.php:5-10: no line matches.",
+      "occurrences": [
+        "tests/Exception/ServerExceptionTest.php:5-10",
+        "tests/Handler/StreamHandlerTest.php:5-10"
+      ]
+    },
+    {
+      "why": "cURL capability version constants and request-option declarations are unrelated regions.",
+      "verified": "Diffed 42 against 158 lines; no copied statements or documentation blocks are present.",
+      "occurrences": [
+        "src/Handler/CurlVersion.php:18-59",
+        "src/RequestOptions.php:236-393"
+      ]
+    },
+    {
+      "why": "A five-line enum is not a copy of a 121-line request-option documentation sequence.",
+      "verified": "Diffed 5 against 121 lines; the regions have different constants, scale, and purpose.",
+      "occurrences": [
+        "src/Multiplexing.php:19-23",
+        "src/RequestOptions.php:236-356"
+      ]
+    },
+    {
+      "why": "Different rows of the two files' invalid-option providers (connect_timeout/crypto_method vs on_headers/on_stats): same yield-row shape, entirely different options and expected types.",
+      "verified": "diff -u ClientTest.php:2009-2027 vs PoolTest.php:429-447: every option name and message differs.",
+      "occurrences": [
+        "tests/ClientTest.php:2009-2027",
+        "tests/PoolTest.php:429-447"
+      ]
+    }
+  ],
   "not_clear": [
     {
       "why": "Session-cookie variants with extra Domain fields.",
@@ -1977,6 +2199,153 @@
       "occurrences": [
         "tests/Handler/StreamHandlerTest.php:5043-5052",
         "tests/Handler/StreamHandlerTest.php:5316-5326"
+      ]
+    },
+    {
+      "why": "Two client setup/request lines differ only in HTTP versus HTTPS and are too short for certainty.",
+      "occurrences": [
+        "tests/RedirectMiddlewareTest.php:959-960",
+        "tests/RedirectMiddlewareTest.php:881-882"
+      ]
+    },
+    {
+      "why": "Three transfer-stat assertions use a different variable and indentation.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:9454-9456",
+        "tests/Handler/CurlFactoryTest.php:7866-7868"
+      ]
+    },
+    {
+      "why": "Three exception assertions differ only in the expected message and are too short for a firm verdict.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:9257-9259",
+        "tests/Handler/CurlFactoryTest.php:8842-8844"
+      ]
+    },
+    {
+      "why": "Three identical exception assertions are short repeated test scaffolding.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:9131-9133",
+        "tests/Handler/CurlFactoryTest.php:9258-9260"
+      ]
+    },
+    {
+      "why": "Two header assertions differ in header names and one expected length.",
+      "occurrences": [
+        "tests/Handler/EasyHandleTest.php:200-201",
+        "tests/Handler/EasyHandleTest.php:98-99"
+      ]
+    },
+    {
+      "why": "Three assertions overlap, but one range includes catch/finally boundaries and the messages differ.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:6170-6174",
+        "tests/AuthMiddlewareTest.php:927-929"
+      ]
+    },
+    {
+      "why": "Two identical body assertions are too short for a firm verdict.",
+      "occurrences": [
+        "tests/ClientTest.php:974-975",
+        "tests/ClientTest.php:786-787"
+      ]
+    },
+    {
+      "why": "Two identical response-body/header assertions are too short for certainty.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:1771-1772",
+        "tests/Handler/StreamHandlerTest.php:1799-1800"
+      ]
+    },
+    {
+      "why": "Three assertions are shared, but the ranges have different catch/finally boundaries and one adds a timeout assertion.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:9540-9544",
+        "tests/Handler/StreamHandlerTest.php:3958-3961"
+      ]
+    },
+    {
+      "why": "Three URI assertions differ only in the factory input and are too short for certainty.",
+      "occurrences": [
+        "tests/RedirectMiddlewareTest.php:191-193",
+        "tests/RedirectMiddlewareTest.php:172-174"
+      ]
+    },
+    {
+      "why": "The short server setup differs by one gotStats initialization.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:3548-3553",
+        "tests/Handler/StreamHandlerTest.php:3576-3582"
+      ]
+    },
+    {
+      "why": "Two authorization-header assertions use different nonce/count values.",
+      "occurrences": [
+        "tests/AuthMiddlewareTest.php:1431-1432",
+        "tests/AuthMiddlewareTest.php:212-213"
+      ]
+    },
+    {
+      "why": "Only a four-line catch fragment is shared, with one side opening a finally clause.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:4334-4337",
+        "tests/Handler/CurlFactoryTest.php:4251-4254"
+      ]
+    },
+    {
+      "why": "Four exception assertions differ in request variable and message.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:9084-9087",
+        "tests/Handler/CurlFactoryTest.php:9794-9797"
+      ]
+    },
+    {
+      "why": "Two identical overflow assertions are too short for a firm verdict.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:6540-6541",
+        "tests/Handler/CurlFactoryTest.php:6591-6592"
+      ]
+    },
+    {
+      "why": "Only three lines of elapsed-time and promise assertion code are shared.",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:363-365",
+        "tests/Handler/CurlMultiHandlerTest.php:331-333"
+      ]
+    },
+    {
+      "why": "Four identical exception assertions are short test scaffolding.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:8843-8846",
+        "tests/Handler/CurlFactoryTest.php:9086-9089"
+      ]
+    },
+    {
+      "why": "Two identical URI/Host assertions are too short for certainty.",
+      "occurrences": [
+        "tests/ClientTest.php:3221-3222",
+        "tests/ClientTest.php:3131-3132"
+      ]
+    },
+    {
+      "why": "Two identical body-rewind exception assertions are too short for a firm verdict.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:8523-8524",
+        "tests/Handler/CurlFactoryTest.php:8528-8529"
+      ]
+    },
+    {
+      "why": "Three identical cookie assertions are too short for certainty.",
+      "occurrences": [
+        "tests/Cookie/CookieJarTest.php:768-770",
+        "tests/Cookie/FileCookieJarTest.php:214-216"
+      ]
+    },
+    {
+      "why": "Four identical server setup lines are a short test fixture fragment.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:7845-7848",
+        "tests/Handler/CurlFactoryTest.php:8288-8291"
       ]
     }
   ]

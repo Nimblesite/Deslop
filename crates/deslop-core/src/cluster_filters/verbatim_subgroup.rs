@@ -52,9 +52,12 @@ use super::{
 use crate::{fingerprint::Fingerprint, pair::FusedCluster, state::FileId};
 
 mod copy_families;
+/// Edited copies of a data table ([CLONE-NOISE-DATA-ROWS]).
+mod edited_copies;
 #[cfg(test)]
 use copy_families::verbatim_families;
 use copy_families::{copy_keys, families_for};
+use edited_copies::{is_edited_copy, split_edited_copies};
 
 /// Smallest byte-identical family worth keeping, counted in *distinct
 /// occurrences*: one lone occurrence is not a duplicate of anything.
@@ -319,17 +322,20 @@ fn split_one<S: BuildHasher>(
     file_languages: &HashMap<FileId, &'static str, S>,
     cache: &ParseCache,
 ) -> Option<Vec<FusedCluster>> {
-    let keys = families_for(fused, fingerprints, sources, file_languages, cache)?;
-    let families = splittable_families(fused, fingerprints, keys)?;
-    let members = resolved_members(fused, fingerprints)?;
-    let filter = is_noise_pattern(&members, sources, file_languages, cache)?;
-    let keepable: Vec<FusedCluster> = families
-        .iter()
-        .filter(|family| is_copied_family(family, fingerprints, filter))
-        .map(|family| restrict(fused, family))
-        .collect();
-    // Keep unsplittable noise until reporting can account for its suppression.
-    (!keepable.is_empty()).then_some(keepable)
+    let keys = families_for(fused, fingerprints, sources, file_languages, cache);
+    keys.and_then(|keys| {
+        let families = splittable_families(fused, fingerprints, keys)?;
+        let members = resolved_members(fused, fingerprints)?;
+        let filter = is_noise_pattern(&members, sources, file_languages, cache)?;
+        let keepable: Vec<FusedCluster> = families
+            .iter()
+            .filter(|family| is_copied_family(family, fingerprints, filter))
+            .map(|family| restrict(fused, family))
+            .collect();
+        // Keep unsplittable noise until reporting can account for its suppression.
+        (!keepable.is_empty()).then_some(keepable)
+    })
+    .or_else(|| split_edited_copies(fused, fingerprints, sources, file_languages, cache))
 }
 
 /// Keep families with multiple distinct locations, excluding an already homogeneous component.
@@ -436,6 +442,9 @@ pub(crate) fn escapes_as_copy<S: BuildHasher>(
     file_languages: &HashMap<FileId, &'static str, S>,
     cache: &ParseCache,
 ) -> bool {
+    if filter == NoiseFilter::DataRows && is_edited_copy(members, sources, file_languages, cache) {
+        return true;
+    }
     let Some(keys) = copy_keys(members, sources, file_languages, cache) else {
         return false;
     };

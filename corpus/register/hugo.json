@@ -27,6 +27,96 @@
         "tpl/collections/collections.go:195-227",
         "tpl/collections/collections.go:355-387"
       ]
+    },
+    {
+      "why": "menu.go's sorter block is pages_sort.go's with a systematic rename: Len/Swap/Less over ms.menu instead of ps.pages, the identical 'Less is part of sort.Interface...' comment verbatim, and the same Limit method on Menu instead of Pages; menu.go adds a Sort method.",
+      "verified": "diff -u pages_sort.go:160-172 vs menu.go:215-233: every changed token is a receiver/field/type name (ps.pages↔ms.menu, Pages↔Menu); B adds the Sort method.",
+      "type": "Type III",
+      "occurrences": [
+        "resources/page/pages_sort.go:160-172",
+        "navigation/menu.go:215-233"
+      ]
+    },
+    {
+      "why": "The benchmark harness (IntegrationTestConfig, N builders via NewIntegrationTestBuilder, ResetTimer, build loop) is copied between the goldmark and cascade benchmarks; the core lines are identical modulo the hugolib. package qualifier, with a different closure wrapper.",
+      "verified": "diff -u goldmark_integration_test.go:335-351 vs cascade_test.go:73-89: wrapper line differs (runBenchmark closure vs b.Run(\"Kind\", ...)), three identifiers lose the hugolib. qualifier, remaining 13 lines byte-identical.",
+      "type": "Type III",
+      "occurrences": [
+        "markup/goldmark/goldmark_integration_test.go:335-351",
+        "hugolib/cascade_test.go:73-89"
+      ]
+    },
+    {
+      "why": "Five exec-test rows ('empty with int/string/slice/struct/field') are byte-identical between the texttemplate and htmltemplate test tables — matching slices of the two vendored template packages' near-wholesale-copied test files (~1900 lines each, ~512 differing lines overall).",
+      "verified": "diff -u texttemplate/exec_test.go:360-364 vs htmltemplate/exec_test.go:354-358 returned no output (byte-identical over 5 lines); file-level diff shows the two files share most of their content.",
+      "type": "Type I",
+      "occurrences": [
+        "tpl/internal/go_templates/texttemplate/exec_test.go:360-364",
+        "tpl/internal/go_templates/htmltemplate/exec_test.go:354-358"
+      ]
+    },
+    {
+      "why": "Two pagegroup tests contain the identical nine-line setup-and-expectation block (qt.New, preparePageGroupTestPages, and the exact same expected PagesGroup with dates 2012-04/03/01 and page indices).",
+      "verified": "diff -u pagegroup_test.go:350-358 vs 399-407 returned no output (byte-identical over 9 lines).",
+      "type": "Type I",
+      "occurrences": [
+        "resources/page/pagegroup_test.go:350-358",
+        "resources/page/pagegroup_test.go:399-407"
+      ]
+    },
+    {
+      "why": "The orderedTaxonomySorter block (struct, oiBy closure type, Sort method) is the menuSorter block with a systematic rename — taxonomy/menu, oiBy/menuEntryBy, OrderedTaxonomyEntry/MenuEntry — including both comments verbatim.",
+      "verified": "diff -u taxonomy.go:148-162 vs menu.go:179-193: every changed token is an identifier of the taxonomy↔menu family; comments and structure identical.",
+      "type": "Type II",
+      "occurrences": [
+        "resources/page/taxonomy.go:148-162",
+        "navigation/menu.go:179-193"
+      ]
+    },
+    {
+      "why": "Ref and RelRef are twin methods in urls.go: the twelve-line bodies match statement for statement with only Ref↔RelRef renames (method name, error message, final call).",
+      "verified": "diff -u urls.go:93-104 vs 107-119: three renames (function name, error literal, pp.Ref↔pp.RelRef) and a blank line; everything else byte-identical.",
+      "type": "Type II",
+      "occurrences": [
+        "tpl/urls/urls.go:93-104",
+        "tpl/urls/urls.go:107-119"
+      ]
+    },
+    {
+      "why": "Another pair of pagegroup tests sharing the identical nine-line setup-and-expectation block (same expected PagesGroup: 2012-01/03/04 with the same page indices).",
+      "verified": "diff -u pagegroup_test.go:276-284 vs 447-455 returned no output (byte-identical over 9 lines).",
+      "type": "Type I",
+      "occurrences": [
+        "resources/page/pagegroup_test.go:276-284",
+        "resources/page/pagegroup_test.go:447-455"
+      ]
+    },
+    {
+      "why": "TestMakePathRelative is defined with the same name, body, test data and error strings in both packages; the only change is helpers.MakePathRelative → the package-local makePathRelative.",
+      "verified": "diff -u helpers/path_test.go:113-134 vs common/paths/path_test.go:55-76: two call sites lose the helpers. qualifier; all other 20 lines byte-identical.",
+      "type": "Type II",
+      "occurrences": [
+        "helpers/path_test.go:113-134",
+        "common/paths/path_test.go:55-76"
+      ]
+    },
+    {
+      "why": "Inside one test, the same seven-line nested markup config map is set twice with only the typographer boolean flipped (legacy bool decode tested both ways).",
+      "verified": "diff -u config_test.go:73-79 vs 60-66: single literal true↔false; other six lines byte-identical (read in the file: both blocks sit in the 'Decode legacy typographer' subtest).",
+      "type": "Type II",
+      "occurrences": [
+        "markup/markup_config/config_test.go:73-79",
+        "markup/markup_config/config_test.go:60-66"
+      ]
+    },
+    {
+      "why": "The six-line reflect nil-value guard, including the error message 'value is nil; should be of type %s', is byte-identical in tpl/collections/index.go and the vendored texttemplate funcs.go.",
+      "verified": "diff -u index.go:123-128 vs funcs.go:161-166 returned no output (byte-identical over 6 lines).",
+      "type": "Type I",
+      "occurrences": [
+        "tpl/collections/index.go:123-128",
+        "tpl/internal/go_templates/texttemplate/funcs.go:161-166"
+      ]
     }
   ],
   "clearly_out": [
@@ -84,6 +174,182 @@
       "occurrences": [
         "config/allconfig/allconfig_integration_test.go:135-166",
         "tpl/transform/transform_integration_test.go:353-381"
+      ]
+    },
+    {
+      "why": "Exec-test rows for unrelated features (parens/if tests vs slice tests) from the two vendored template packages; only the table-row shape is shared.",
+      "verified": "diff -u texttemplate/exec_test.go:443-452 vs htmltemplate/exec_test.go:532-539: every test name, template and expectation differs.",
+      "occurrences": [
+        "tpl/internal/go_templates/texttemplate/exec_test.go:443-452",
+        "tpl/internal/go_templates/htmltemplate/exec_test.go:532-539"
+      ]
+    },
+    {
+      "why": "Go-version extraction and glob collection assertions test unrelated functions and values.",
+      "verified": "Diffed 3 against 4 lines; no assertion content is shared beyond c.Assert syntax.",
+      "occurrences": [
+        "htesting/test_helpers_test.go:25-27",
+        "hugofs/glob_test.go:75-78"
+      ]
+    },
+    {
+      "why": "WithContent calls building entirely different test fixtures (output-format front matter variants vs bundles and sections); only the WithContent/front-matter convention matches.",
+      "verified": "diff -u site_output_test.go:489-543 vs pagebundler_test.go:381-418: no shared paths or content.",
+      "occurrences": [
+        "hugolib/site_output_test.go:489-543",
+        "hugolib/pagebundler_test.go:381-418"
+      ]
+    },
+    {
+      "why": "Two-line assert pairs about unrelated things (partialCached circular error vs section RelPermalink).",
+      "verified": "diff -u partials_integration_test.go:298-299 vs site_url_test.go:114-115: no common content.",
+      "occurrences": [
+        "tpl/partials/partials_integration_test.go:298-299",
+        "hugolib/site_url_test.go:114-115"
+      ]
+    },
+    {
+      "why": "Two integration tests sharing only the t.Parallel/files/Test/AssertFileContent convention; content, layouts and assertions differ throughout.",
+      "verified": "diff -u site_output_test.go:657-689 vs page__meta_test.go:24-47: no common content beyond the scaffolding.",
+      "occurrences": [
+        "hugolib/site_output_test.go:657-689",
+        "hugolib/page__meta_test.go:24-47"
+      ]
+    },
+    {
+      "why": "Three-line method-call runs about unrelated things (writing file pairs vs registering unmarshal funcs).",
+      "verified": "diff -u testhelpers_test.go:531-533 vs translationProvider.go:55-57: no common content.",
+      "occurrences": [
+        "hugolib/testhelpers_test.go:531-533",
+        "langs/i18n/translationProvider.go:55-57"
+      ]
+    },
+    {
+      "why": "Exec-test rows for different features from the two vendored files: index tests paired against range tests — the paired slices do not correspond to each other.",
+      "verified": "diff -u htmltemplate/exec_test.go:507-514 vs texttemplate/exec_test.go:615-622: every row differs.",
+      "occurrences": [
+        "tpl/internal/go_templates/htmltemplate/exec_test.go:507-514",
+        "tpl/internal/go_templates/texttemplate/exec_test.go:615-622"
+      ]
+    },
+    {
+      "why": "Assert pairs about unrelated subjects (imaging resample filter vs media type suffixes).",
+      "verified": "diff -u images/config_test.go:38-39 vs media/config_test.go:68-69: no common content.",
+      "occurrences": [
+        "resources/images/config_test.go:38-39",
+        "media/config_test.go:68-69"
+      ]
+    },
+    {
+      "why": "CSS-injection test rows versus content-format mapping rows — entirely different test data; only the two-column row shape matches.",
+      "verified": "diff -u css_test.go:220-227 vs page_frontmatter_test.go:165-172: no common content.",
+      "occurrences": [
+        "tpl/internal/go_templates/htmltemplate/css_test.go:220-227",
+        "resources/page/pagemeta/page_frontmatter_test.go:165-172"
+      ]
+    },
+    {
+      "why": "Template escaping errors and CSS escape data have no copied content.",
+      "verified": "Diffed 34 against 7 lines; structure, inputs, outputs, and range sizes differ.",
+      "occurrences": [
+        "tpl/internal/go_templates/htmltemplate/escape_test.go:1141-1174",
+        "tpl/internal/go_templates/htmltemplate/css_test.go:93-99"
+      ]
+    },
+    {
+      "why": "These flag declarations configure unrelated server options.",
+      "verified": "Diffed two two-line ranges; every destination, flag name, default, and description differs.",
+      "occurrences": [
+        "commands/server.go:550-551",
+        "commands/server.go:545-546"
+      ]
+    },
+    {
+      "why": "Two integration tests sharing the files/for-range-N/Test/AssertFileContent convention with entirely different fixtures and assertions.",
+      "verified": "diff -u templatestore_integration_test.go:1438-1461 vs 367-394: no common content beyond the scaffolding.",
+      "occurrences": [
+        "tpl/tplimpl/templatestore_integration_test.go:1438-1461",
+        "tpl/tplimpl/templatestore_integration_test.go:367-394"
+      ]
+    },
+    {
+      "why": "These are different content fixture paths and values with no duplicated block.",
+      "verified": "Diffed 13 against 4 lines; all WithContent calls and the multiline front matter differ.",
+      "occurrences": [
+        "hugolib/content_map_test.go:55-67",
+        "hugolib/content_map_test.go:79-82"
+      ]
+    },
+    {
+      "why": "Assert pairs about unrelated subjects (resized image permalink/width vs headless bundle title/permalink).",
+      "verified": "diff -u image_test.go:394-395 vs pagebundler_test.go:285-286: no common content.",
+      "occurrences": [
+        "resources/image_test.go:394-395",
+        "hugolib/pagebundler_test.go:285-286"
+      ]
+    },
+    {
+      "why": "Assert pairs about unrelated subjects (base URL host vs dartsass parse errors).",
+      "verified": "diff -u baseURL_test.go:79-80 vs dartsass_integration_test.go:361-362: no common content.",
+      "occurrences": [
+        "common/urls/baseURL_test.go:79-80",
+        "resources/resource_transformers/tocss/dartsass/dartsass_integration_test.go:361-362"
+      ]
+    },
+    {
+      "why": "HTML-stripping test rows versus CSS escape-sequence rows — entirely different test data.",
+      "verified": "diff -u html_test.go:60-67 vs css_test.go:78-85: no common content.",
+      "occurrences": [
+        "tpl/internal/go_templates/htmltemplate/html_test.go:60-67",
+        "tpl/internal/go_templates/htmltemplate/css_test.go:78-85"
+      ]
+    },
+    {
+      "why": "Two integration tests sharing only the files/Test/AssertFileContent convention; goat-diagram fixtures versus layout-selection fixtures.",
+      "verified": "diff -u templatestore_integration_test.go:1076-1114 vs 908-925: no common content beyond the scaffolding.",
+      "occurrences": [
+        "tpl/tplimpl/templatestore_integration_test.go:1076-1114",
+        "tpl/tplimpl/templatestore_integration_test.go:908-925"
+      ]
+    },
+    {
+      "why": "A short logging fixture is not a copy of a long multilingual mount fixture merely because both call the same builder.",
+      "verified": "Diffed 9 against 32 lines; fixture contents differ substantially and only baseURL plus builder calls overlap.",
+      "occurrences": [
+        "config/allconfig/allconfig_integration_test.go:76-84",
+        "config/allconfig/allconfig_integration_test.go:17-48"
+      ]
+    },
+    {
+      "why": "Exec-test rows about map equality versus date-parsing rows — entirely different test data from unrelated packages.",
+      "verified": "diff -u exec_test.go:1311-1313 vs pagemeta_test.go:110-112: no common content.",
+      "occurrences": [
+        "tpl/internal/go_templates/texttemplate/exec_test.go:1311-1313",
+        "resources/page/pagemeta/pagemeta_test.go:110-112"
+      ]
+    },
+    {
+      "why": "Assert triples about unrelated subjects (image resize success vs disabled categories permalink).",
+      "verified": "diff -u image_test.go:304-306 vs disableKinds_test.go:175-176: no common content.",
+      "occurrences": [
+        "resources/image_test.go:304-306",
+        "hugolib/disableKinds_test.go:175-176"
+      ]
+    },
+    {
+      "why": "Range/with cases and printf/HTML/JavaScript/URL cases are unrelated template test rows.",
+      "verified": "Diffed 10 against 16 lines; test names, templates, expected values, and boundaries differ.",
+      "occurrences": [
+        "tpl/internal/go_templates/htmltemplate/exec_test.go:569-578",
+        "tpl/internal/go_templates/htmltemplate/exec_test.go:471-486"
+      ]
+    },
+    {
+      "why": "Permalink pattern cases and content reference cases have different inputs, shapes, and purposes.",
+      "verified": "Diffed 6 against 10 lines; all data rows differ and only table-row syntax is shared.",
+      "occurrences": [
+        "resources/page/permalinks_test.go:43-48",
+        "hugolib/site_test.go:958-967"
       ]
     }
   ],
@@ -156,6 +422,55 @@
       "occurrences": [
         "resources/resource/resources_test.go:79-83",
         "resources/resource/resources_test.go:91-95"
+      ]
+    },
+    {
+      "why": "The short config-decoding setup overlaps, but the TOML fixture and decoded variable differ.",
+      "occurrences": [
+        "modules/config_test.go:157-166",
+        "modules/config_test.go:136-150"
+      ]
+    },
+    {
+      "why": "A single map literal is contained in a longer row of similar test data, making the selected fragment too short and ragged.",
+      "occurrences": [
+        "tpl/collections/where_test.go:342-342",
+        "tpl/collections/where_test.go:338-338"
+      ]
+    },
+    {
+      "why": "Two identical path assertions are too short for a firm clone verdict.",
+      "occurrences": [
+        "common/paths/pathparser_test.go:165-166",
+        "common/paths/pathparser_test.go:156-157"
+      ]
+    },
+    {
+      "why": "One identical encoding test-data row is too short for certainty.",
+      "occurrences": [
+        "tpl/encoding/encoding_test.go:94-94",
+        "tpl/encoding/encoding_test.go:91-91"
+      ]
+    },
+    {
+      "why": "Three lines of integer conversion error handling differ in variables and error text.",
+      "occurrences": [
+        "tpl/strings/strings.go:268-270",
+        "tpl/strings/strings.go:342-344"
+      ]
+    },
+    {
+      "why": "Two identical parser assertions are too short for a firm verdict.",
+      "occurrences": [
+        "common/paths/pathparser_test.go:408-409",
+        "common/paths/pathparser_test.go:430-431"
+      ]
+    },
+    {
+      "why": "Three identical content-comparison assertions are too short for a firm clone verdict.",
+      "occurrences": [
+        "deploy/deploy_test.go:492-494",
+        "deploy/deploy_test.go:478-480"
       ]
     }
   ]

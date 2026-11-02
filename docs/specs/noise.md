@@ -128,6 +128,20 @@ The pair is admitted whole or not at all: fail any of these terms and both state
 
 The sequence form requires **every** position to vary. A sequence mixing varying calls with invariant ones is not payload: the invariant calls are shared logic the members genuinely duplicate, so the cluster stays visible. Two tests that fetch different URLs and then run the same four assertions — one varying call, four invariant — are a Type-2 clone, while scaffolding has nothing left once its literals are removed.
 
+### [CLONE-NOISE-DATA-ROWS] Runs of data rows
+
+A table repeats one row shape with different values, so any window of its rows normalises to the same subtree as another window, or as an unrelated table. Test tables, registration calls, attribute lists and expectation runs all look like this. Nothing can be extracted from two windows that only share the shape of a row.
+
+A cluster is suppressed when every member covers at least two whole sibling rows with the same kind, cell count and leading name, none holds logic, no two are the same bytes, and they hold at least one string. A comment, or a closing `return` of plain names, may sit among the rows. A wrapper around a table is read through to its rows, so a whole table counts too, but a function or method is never read as its body.
+
+A call's arguments and a record's fields are not rows, because they say what one thing is, so a repeated call or struct value is judged by the other rules.
+
+A copied table stays visible. Exact copies escape through [CLONE-NOISE-VERBATIM-SUBGROUP] even inside one file, and a table copied and then edited stays too. Two members count as edited copies when each holds at least four strings and three quarters of the smaller one's strings also appear in the larger. A cluster of nothing but edited copies is left alone. Otherwise the copies are split into their own clusters and everything else is dropped, the way [CLONE-NOISE-VERBATIM-SUBGROUP] treats exact copies, so an unrelated member neither hides a copy nor is published with it.
+
+#### For AI
+
+Implemented in `cluster_filters/data_rows.rs` (`is_data_row_cluster`, `members_are_copies`, `edited_copy_families`) and `verbatim_subgroup.rs` (`split_edited_copies`). Pinned by `crates/deslop/tests/cli/detection/data_rows.rs`, including the real django table in `fixtures/data-rows-edited-table`.
+
 ## [CLONE-NOISE-PYTHON] Python idioms
 
 ### [CLONE-NOISE-PY-ALL-EXPORTS] `__all__` export lists
@@ -213,6 +227,18 @@ A dispatch `match` routes distinct command keys to distinct handlers, but after 
 
 ### [CLONE-NOISE-RUST-STRUCT-FIELDS] Struct field-declaration runs
 A struct's field list encodes a data model's *shape*, not extractable duplicate logic: after identifier, type, and literal normalisation `pub a: Option<String>` collapses to the same subtree as `pub b: Option<String>`, so unrelated runs of distinct fields — and whole structs that are nothing but such fields — can be admitted and closed on shape alone on serde-heavy or polyglot repositories, dominating the duplication metric with matches no refactor can remove. A component is convicted when every member covers only Rust struct field declarations — a run of sibling fields inside one `field_declaration_list`, or one or more whole `struct_item`s whose in-range body is nothing but `field_declaration` nodes (their `#[derive]` / `#[serde]` attributes and doc comments are trivia) — and at least two members differ in raw bytes. The byte-divergence guard keeps a verbatim copy-pasted struct visible as a genuine clone. This is the Rust counterpart of the Dart class-field filter ([CLONE-NOISE-DART-DATA-TABLE-LITERAL]); see GH #224.
+
+## [CLONE-NOISE-PHP] PHP idioms
+
+### [CLONE-NOISE-PHP-ACCESSORS] Value-class scaffolding
+
+Properties, a constructor that only stores its parameters, and getters that only return fields share one shape in every small PHP value class, and hold no logic to extract. A cluster is suppressed when every member covers only these forms and two members differ in bytes. Any other statement keeps the cluster. Implemented in `cluster_filters/php_accessors.rs`; pinned by `php_value_classes_are_not_clones` and `php_constructors_holding_logic_are_still_clones`.
+
+## [CLONE-NOISE-GO] Go idioms
+
+### [CLONE-NOISE-GO-FIXTURE-TEST] Fixture-driven tests
+
+A Go integration test often binds its whole scenario to one string, passes it to the harness and asserts on the output. What the test does is in the string, so two such tests share only the harness calls. A cluster is suppressed when every member is a whole `Test…` function of that form and the members are not all copies ([CLONE-NOISE-DATA-ROWS]). A loop, branch or computed argument keeps the cluster. Implemented in `cluster_filters/go_fixture_test.rs`; pinned by `go_tests_differing_only_in_their_fixture_are_not_clones` and `go_tests_holding_logic_are_still_clones`.
 
 ## [CLONE-NOISE-PERFORMANCE] Performance
 

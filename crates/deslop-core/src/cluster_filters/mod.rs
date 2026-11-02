@@ -109,6 +109,15 @@
 //!   module-level `let NAME = <literal>` bindings. Suppressed only when
 //!   the members differ in raw bytes (a verbatim copy survives).
 //!
+//! - [CLONE-NOISE-DATA-ROWS] — a window of table rows normalises to the
+//!   same subtree as any other window of rows with the same shape. Rows
+//!   holding no logic are data, not extractable duplication.
+//! - [CLONE-NOISE-PHP-ACCESSORS] — properties, constructors storing their
+//!   parameters and getters returning them share one shape in every PHP
+//!   value class.
+//! - [CLONE-NOISE-GO-FIXTURE-TEST] — Go tests whose scenario is one string
+//!   share only the harness calls around it.
+//!
 //! The filter is purely additive: it never re-routes a `nearly_identical`
 //! cluster as `identical`, only suppresses noise. Any cluster whose
 //! member sources cannot be parsed (missing language plug-in, partial
@@ -119,13 +128,16 @@ mod calls;
 mod constant_table;
 mod contract_index;
 mod dart;
+mod data_rows;
 mod declaration_family;
 mod ecmascript;
 mod family;
 mod forwarding;
 mod fsharp_scaffolding;
+mod go_fixture_test;
 mod node_search;
 mod override_marker;
+mod php_accessors;
 mod polymorphic;
 mod python;
 mod python_class_shapes;
@@ -227,11 +239,13 @@ fn run_noise_checks<S: BuildHasher>(
     let signature_only = || is_signature_only_cluster(snippets, cache);
     let literal_calls = || calls::is_literal_variation_call_cluster(snippets, cache);
     let constant_table = || constant_table::is_constant_table_cluster(snippets);
-    let checks: [(NoiseFilter, &dyn Fn() -> bool); 4] = [
+    let data_rows = || data_rows::is_data_row_cluster(snippets);
+    let checks: [(NoiseFilter, &dyn Fn() -> bool); 5] = [
         (NoiseFilter::Polymorphic, &polymorphic),
         (NoiseFilter::SignatureOnly, &signature_only),
         (NoiseFilter::LiteralCalls, &literal_calls),
         (NoiseFilter::ConstantTable, &constant_table),
+        (NoiseFilter::DataRows, &data_rows),
     ];
     for (filter, check) in checks {
         if let Some(fired) = timed(filter, check, snippets.len(), cache) {
@@ -291,6 +305,8 @@ pub(crate) enum NoiseFilter {
     LiteralCalls,
     /// The constant-table filter.
     ConstantTable,
+    /// The data-row filter ([CLONE-NOISE-DATA-ROWS]).
+    DataRows,
     /// The language-specific idiom filters.
     LanguageSpecific,
     /// The Python sibling-cell filter, named apart from the rest of the
@@ -308,6 +324,7 @@ impl NoiseFilter {
             Self::SignatureOnly => "signature_only",
             Self::LiteralCalls => "literal_calls",
             Self::ConstantTable => "constant_table",
+            Self::DataRows => "data_rows",
             Self::LanguageSpecific => "language_specific",
             Self::PyCollectionSiblingCells => "py_collection_sibling_cells",
         }
@@ -323,9 +340,10 @@ impl NoiseFilter {
     /// node. Asking a family that is single-file by construction to span
     /// two files is a question with one answer, and it closed the escape
     /// hatch on that route permanently
-    /// ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL]).
+    /// ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL]). A data-row
+    /// window never repeats by accident, so a same-file repeat is a paste too.
     pub(crate) const fn demands_cross_file_copy(self) -> bool {
-        !matches!(self, Self::PyCollectionSiblingCells)
+        !matches!(self, Self::PyCollectionSiblingCells | Self::DataRows)
     }
 }
 
@@ -344,6 +362,8 @@ fn language_specific_noise(
             || dart::is_dart_widget_scaffold_cluster(snippets))
         .then_some(generic),
         "fsharp" => fsharp_scaffolding::is_import_scaffolding_cluster(snippets).then_some(generic),
+        "go" => go_fixture_test::is_fixture_test_cluster(snippets).then_some(generic),
+        "php" => php_accessors::is_accessor_scaffold_cluster(snippets).then_some(generic),
         "python" => python_noise(snippets),
         "rust" => rust_noise(snippets).then_some(generic),
         "javascript" | "typescript" | "tsx" => {
