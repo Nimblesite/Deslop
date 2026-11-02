@@ -7,16 +7,19 @@ use super::{distinct_locations, resolved_members, MIN_FAMILY_OCCURRENCES};
 use crate::{
     cluster_filters::{
         collect_snippets,
-        data_rows::{edited_copy_families, members_are_copies},
+        data_rows::{edited_copy_families, is_data_row_cluster, members_are_copies},
         family::restrict,
-        is_noise_pattern,
         snippets::ParseCache,
-        uniform_language, NoiseFilter,
+        uniform_language,
     },
     fingerprint::Fingerprint,
     pair::FusedCluster,
     state::FileId,
 };
+
+/// A two-member cluster is either a copy, which is never convicted, or holds
+/// none, so only a larger one can have a copy to split out.
+const MIN_SPLITTABLE_MEMBERS: usize = 3;
 
 /// Whether these members are nothing but edited copies of one another: the
 /// cluster [`split_edited_copies`] publishes ([CLONE-NOISE-DATA-ROWS]).
@@ -40,13 +43,15 @@ pub(super) fn split_edited_copies<S: BuildHasher>(
     file_languages: &HashMap<FileId, &'static str, S>,
     cache: &ParseCache,
 ) -> Option<Vec<FusedCluster>> {
-    let members = resolved_members(fused, fingerprints)?;
-    let filter = is_noise_pattern(&members, sources, file_languages, cache)?;
-    if filter != NoiseFilter::DataRows {
+    if fused.members.len() < MIN_SPLITTABLE_MEMBERS {
         return None;
     }
+    let members = resolved_members(fused, fingerprints)?;
     let language = uniform_language(&members, file_languages)?;
     let snippets = collect_snippets(&members, sources, language, cache)?;
+    if !is_data_row_cluster(&snippets) {
+        return None;
+    }
     let families: Vec<FusedCluster> = edited_copy_families(&snippets)
         .iter()
         .map(|family| {
