@@ -132,7 +132,7 @@ The sequence form requires **every** position to vary. A sequence mixing varying
 
 A table repeats one row shape with different values, so any window of its rows normalises to the same subtree as another window, or as an unrelated table. Test tables, registration calls, attribute lists and expectation runs all look like this. Nothing can be extracted from two windows that only share the shape of a row.
 
-A cluster is suppressed when every member covers at least two whole sibling rows with the same kind, cell count and leading name, none holds logic, no two are the same bytes, and they hold at least one string. A comment, or a closing `return` of plain names, may sit among the rows. A wrapper around a table is read through to its rows, so a whole table counts too, but a function is never read as its body.
+A cluster is suppressed when every member covers at least two whole sibling rows with the same kind, cell count and leading name, none holds logic, no two are the same bytes, and they hold at least one string. A comment, or a closing `return` of plain names, may sit among the rows. A wrapper around a table is read through to its rows, so a whole table counts too, but a function or method is never read as its body.
 
 A call's arguments and a record's fields are not rows, because they say what one thing is, so a repeated call or struct value is judged by the other rules.
 

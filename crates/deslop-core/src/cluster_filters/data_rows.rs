@@ -210,9 +210,11 @@ fn holds_logic(node: Node<'_>) -> bool {
         || named_children(node).into_iter().any(holds_logic)
 }
 
-/// Function bodies, blocks and computed expressions, in every grammar.
+/// Functions, methods, blocks and computed expressions, in every grammar.
 fn is_logic_kind(kind: &str) -> bool {
     kind.contains("function")
+        || kind.contains("method")
+        || kind.contains("constructor")
         || kind.contains("lambda")
         || kind.contains("closure")
         || kind.contains("block")
