@@ -276,8 +276,8 @@ fn additive_code_lens_carries_deslops_own_jump_command_not_definition() -> Resul
 fn refresh_command_re_evaluates_the_corpus_after_an_edit() -> Result<()> {
     // [LSP-COMMANDS] Create the alias before the watcher starts and write
     // outside its root. That usually keeps an automatic pass out of the way,
-    // but CI has seen one land first, so the count is held to the passes that
-    // actually ran: only a refresh that was the sole pass must report the removal.
+    // but CI has seen one land first, so the removal is read from the delta
+    // across every pass since the edit: whichever ran, it must be reported.
     let workspace = copy_fixture(CSHARP_FIXTURE)?;
     let external = tempfile::tempdir()?;
     let alpha = external.path().join(ALPHA_FILE);
@@ -296,6 +296,20 @@ fn refresh_command_re_evaluates_the_corpus_after_an_edit() -> Result<()> {
     let params = json!({ "command": REFRESH_COMMAND });
     let response = call(&mut stdin, &mut stdout, EXECUTE_COMMAND, &params)?;
     assert_refresh_removed_clone(&response, edited_at)?;
+    let since_edit = call(
+        &mut stdin,
+        &mut stdout,
+        REPORT_DELTA,
+        &json!({ "since_generation": edited_at }),
+    )?;
+    let removed = since_edit
+        .pointer("/result/clusters_removed")
+        .and_then(Value::as_array)
+        .map_or(0, Vec::len);
+    assert!(
+        removed >= 1,
+        "editing Alpha.cs away from Beta.cs must report the clone's removal: {since_edit}"
+    );
     let report = call(&mut stdin, &mut stdout, REPORT_GET, &json!({}))?;
     assert_eq!(
         cluster_count(&report),
@@ -313,7 +327,6 @@ fn pointer_u64(value: &Value, pointer: &str) -> Result<u64> {
 }
 
 fn assert_refresh_removed_clone(response: &Value, edited_at: u64) -> Result<()> {
-    let removed = pointer_u64(response, "/result/clustersRemoved")?;
     let generation = pointer_u64(response, "/result/generation")?;
     assert!(
         generation > edited_at,
@@ -323,10 +336,6 @@ fn assert_refresh_removed_clone(response: &Value, edited_at: u64) -> Result<()> 
         pointer_u64(response, "/result/worstMass")?,
         NO_MASS,
         "nothing duplicated remains to rank: {response}"
-    );
-    assert!(
-        removed >= 1 || generation > edited_at.saturating_add(1),
-        "as the only pass after the edit, the refresh must report the removal: {response}"
     );
     Ok(())
 }
