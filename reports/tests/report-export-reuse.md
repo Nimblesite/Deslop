@@ -8,7 +8,7 @@ Unchanged report exports must reuse existing completed calculations across JSON,
 - [x] Add a black-box CLI scenario with populated duplicate output
 - [x] Execute the new test and reproduce analysis on unchanged input
 - [ ] Obtain the failing-test acknowledgment required by fix-bug Step 4
-- [ ] Verify the VS Code live HTML path with a focused scenario
+- [x] Verify the editor server export path with a focused real-binary scenario; extension-host reproduction remains pending
 - [ ] Implement reuse and validate invalidation
 - [ ] Run the required full suite
 
@@ -206,3 +206,7 @@ test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 607 filtered out
 
 error: test failed, to rerun pass `-p deslop --test suite`
 ```
+
+## Editor server follow-up
+
+The current source build and a separate instance of the installed VS Code server both preserve report fields and generation on repeated HTML/JSON exports; the scenario also deletes a source and checks reuse of the changed snapshot. Commands, test code, and captured outputs are in [live-report-export-reuse.md](live-report-export-reuse.md). This narrows the reported editor symptom without claiming extension-host reproduction.

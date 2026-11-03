@@ -53,6 +53,8 @@ mod live_bursts;
 mod live_osprey;
 #[path = "live/osprey_unparsed.rs"]
 mod live_osprey_unparsed;
+#[path = "live/report_exports.rs"]
+mod live_report_exports;
 #[path = "lsp_embedding_determinism.rs"]
 mod lsp_embedding_determinism;
 #[path = "lsp_workspace_scoping.rs"]
