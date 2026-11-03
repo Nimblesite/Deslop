@@ -13,6 +13,7 @@ function report(): Report {
   return emptyReport({
     tool_version: "v",
     files_analysed: 5,
+    files_skipped: [],
     cache_stats: { hits: 1, misses: 2 },
     metrics: repoMetrics({
       analysed_loc: 200,

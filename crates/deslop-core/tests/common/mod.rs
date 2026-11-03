@@ -483,6 +483,7 @@ impl ReportFixture {
             registry: &self.registry,
             file_languages: &self.file_languages,
             files_analysed: self.sources.len(),
+            files_skipped: Vec::new(),
             min_nodes: 15,
             scan_root: &self.scan_root,
             exclusion: &exclusion,

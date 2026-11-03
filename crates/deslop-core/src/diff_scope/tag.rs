@@ -223,6 +223,7 @@ mod tests {
             tool_version: "test".to_owned(),
             min_nodes: 30,
             files_analysed: 2,
+            files_skipped: Vec::new(),
             clusters_hidden: 0,
             cache_stats: crate::wire_generated::CacheStats::default(),
             metrics: crate::report_metrics::RepoMetrics::empty(),

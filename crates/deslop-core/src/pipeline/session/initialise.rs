@@ -80,11 +80,15 @@ impl PipelineSession {
         let store = build_store(&mut corpus, &discovery.files, &root);
         let mut live_paths = LivePaths::default();
         let mut file_languages: HashMap<FileId, &'static str> = HashMap::new();
-        for discovered in &discovery.files {
+        let analysed = discovery
+            .files
+            .iter()
+            .filter(|discovered| !corpus.skipped.contains_key(&discovered.path));
+        for discovered in analysed {
             let _prev = live_paths.insert(discovered.file_id, discovered.path.clone());
             let _prev_language = file_languages.insert(discovered.file_id, discovered.language);
         }
-        let files_analysed = discovery.files.len();
+        let files_analysed = live_paths.len();
         let mut session = Self {
             osprey_projects: discovery.projects,
             root,
@@ -104,6 +108,7 @@ impl PipelineSession {
             analysed_lines: corpus.analysed_lines,
             boilerplate_ranges: corpus.boilerplate_ranges,
             files_analysed,
+            skipped_files: std::mem::take(&mut corpus.skipped),
             diff_scope: None,
         };
         // [LIVE-OPEN-BUFFERS] Overlay editor text before rendering or embedding.

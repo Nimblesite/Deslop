@@ -15,7 +15,7 @@ use std::{
 use super::{
     super::{
         config::{EmbeddingSettings, PipelineConfig},
-        corpus::{log_skip_too_deep, parse_one_file, parser_for_language, CorpusBuildState},
+        corpus::{parse_one_file, parser_for_language, skip_reason, CorpusBuildState},
         open_buffers::{canonicalise_path, OpenBuffers},
     },
     PipelineSession,
@@ -132,15 +132,12 @@ impl PipelineSession {
             buffers,
         ) {
             Ok(parsed) => parsed,
-            // A pathologically deep file must not crash the long-lived
-            // server: drop it and keep serving, the same way an
-            // excluded path is handled above. Real parser errors propagate.
-            Err(CoreError::AstTooDeep { language, limit }) => {
-                log_skip_too_deep(language, limit);
-                return Ok(self.drop_path(&absolute));
-            }
-            Err(other) => return Err(other),
+            // [LANG-CAND-OSPREY-UNPARSED] A file that cannot be analysed,
+            // including one mid-edit, must not take down the long-lived
+            // server: drop it, name it, and keep serving.
+            Err(error) => return Ok(self.skip_path(absolute, skip_reason(error)?)),
         };
+        let _recovered = self.skipped_files.remove(&absolute);
         if self
             .sources
             .get(&file_id)
@@ -229,14 +226,40 @@ impl PipelineSession {
         })
     }
 
+    /// [LANG-CAND-OSPREY-UNPARSED] Moves `absolute` out of the corpus and onto
+    /// the skip list. Re-saving a file that stays broken for the same reason
+    /// changes nothing.
+    fn skip_path(&mut self, absolute: PathBuf, reason: String) -> CorpusEffect {
+        if self.skipped_files.get(&absolute) == Some(&reason) {
+            return CorpusEffect::Untouched;
+        }
+        let _evicted = self.drop_path(&absolute);
+        let _previous = self.skipped_files.insert(absolute, reason);
+        CorpusEffect::Mutated
+    }
+
+    /// [LANG-CAND-OSPREY-UNPARSED] Every tracked file at or under `prefix`,
+    /// analysed or skipped.
+    fn tracked_descendants(&self, prefix: &Path) -> Vec<PathBuf> {
+        let skipped = self
+            .skipped_files
+            .keys()
+            .filter(|path| path.starts_with(prefix))
+            .cloned();
+        self.live_paths
+            .descendants(prefix)
+            .into_iter()
+            .chain(skipped)
+            .collect()
+    }
+
     /// [LIVE-WATCHER-RESCAN] Evicts only indexed members absent from the reconciled subtree.
     fn drop_absent_descendants(
         &mut self,
         directory: &Path,
         present: &BTreeSet<PathBuf>,
     ) -> CorpusEffect {
-        self.live_paths
-            .descendants(directory)
+        self.tracked_descendants(directory)
             .iter()
             .filter(|path| !present.contains(*path))
             .fold(CorpusEffect::Untouched, |effect, path| {
@@ -289,6 +312,11 @@ impl PipelineSession {
         for path in &doomed {
             let _effect = self.drop_path(path);
         }
+        let exclusion = &self.exclusion;
+        let ignore_matcher = &self.ignore_matcher;
+        self.skipped_files.retain(|path, _| {
+            !exclusion.is_excluded(path, None) && !ignore_matcher.is_ignored(path)
+        });
         doomed.len()
     }
 
@@ -324,7 +352,7 @@ impl PipelineSession {
     /// [`CorpusEffect::Untouched`].
     pub(super) fn drop_subtree(&mut self, prefix: &Path) -> CorpusEffect {
         self.ignore_matcher.remove_subtree(prefix);
-        let doomed = self.live_paths.descendants(prefix);
+        let doomed = self.tracked_descendants(prefix);
         doomed.iter().fold(CorpusEffect::Untouched, |effect, path| {
             effect.merge(self.drop_path(path))
         })
@@ -333,8 +361,9 @@ impl PipelineSession {
     /// Removes a path from every in-memory map, reporting whether it was
     /// present to begin with.
     pub(super) fn drop_path(&mut self, absolute: &Path) -> CorpusEffect {
+        let was_skipped = self.skipped_files.remove(absolute).is_some();
         let Some(file_id) = self.live_paths.file_id(absolute) else {
-            return CorpusEffect::Untouched;
+            return CorpusEffect::from_touched(was_skipped);
         };
         let _removed_path = self.live_paths.remove(file_id);
         let _removed_records = self.store.remove(file_id);

@@ -5,7 +5,12 @@
 //! fingerprints plus the per-file source bytes the embedding pass will
 //! reuse.
 
-use std::{collections::HashMap, fs, path::Path, time::Instant};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fs,
+    path::{Path, PathBuf},
+    time::Instant,
+};
 
 use super::{
     config::PipelineConfig,
@@ -42,6 +47,7 @@ pub use registry::{
     build_extension_map, default_parsers, language_for_path, language_ids, parser_for_language,
     watched_source_extensions,
 };
+pub use shards::skip_reason;
 use shards::{absorb_file_work, parallel_file_work, serial_file_work, AbsorbTarget, PassState};
 pub use stats::{CorpusBuildState, CorpusBuildStats};
 
@@ -86,6 +92,9 @@ pub struct FingerprintCorpus {
     pub analysed_lines: AnalysedLines,
     /// Import/prologue byte ranges suppressed from clone fingerprints.
     pub boilerplate_ranges: Vec<BoilerplateRange>,
+    /// [LANG-CAND-OSPREY-UNPARSED] Files left out because they cannot be
+    /// analysed, each with its reason.
+    pub skipped: BTreeMap<PathBuf, String>,
 }
 
 /// Parses every discovered file and collects its structural + sibling
@@ -185,6 +194,7 @@ fn fingerprint_corpus_with_workers(
             workers,
         )?;
         pass_state.build.absorb(&shard_state.build);
+        pass_state.skipped = std::mem::take(&mut shard_state.skipped);
         pass_state.cache_stats.hits = pass_state
             .cache_stats
             .hits
@@ -195,6 +205,7 @@ fn fingerprint_corpus_with_workers(
             .saturating_add(shard_state.cache_stats.misses);
         fingerprints_running = target.fingerprints_running;
     }
+    corpus.skipped = std::mem::take(&mut pass_state.skipped);
     corpus.cache_stats.hits = corpus
         .cache_stats
         .hits
@@ -462,14 +473,6 @@ fn fingerprints_for(
         build.add_fingerprint_kinds(exact_count, fingerprints.len().saturating_sub(exact_count));
     }
     fingerprints
-}
-
-/// Logs that a pathologically deep file is being skipped. Shared by
-/// the batch corpus loop and the live session ([`super::session`]) so the
-/// "skip, don't crash" decision carries one message. Logs only the language
-/// id and depth limit — never a path, per the project logging rules.
-pub fn log_skip_too_deep(language: &'static str, limit: usize) {
-    tracing::warn!(language, limit, "skipping file: AST nests too deep");
 }
 
 /// Reads a source file into bytes.

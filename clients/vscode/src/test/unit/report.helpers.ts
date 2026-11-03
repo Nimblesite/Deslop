@@ -21,6 +21,7 @@ export function reportWithClusters(
   return emptyReport({
     tool_version: "v",
     files_analysed: 1,
+    files_skipped: [],
     metrics: repoMetrics({ clusters_total: clusters.length, ...metricsOverrides }),
     // The engine stamps the ranking onto the report it publishes, so a
     // fixture report carries it too ([RANK-MASS-SUM]).

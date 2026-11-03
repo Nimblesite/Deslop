@@ -27,7 +27,7 @@ pub use crate::cluster_filters::ParseCache;
 pub use crate::wire_generated::{
     CacheStats, ContentMeasurement, EmbeddingProvenance, PairClassification, PairComparison,
     PairComparisonParams, PairEndpoint, PairEvidence, PairTextIdentity, Report, ReportCluster,
-    ReportOccurrence,
+    ReportOccurrence, SkippedFile,
 };
 
 /// Default occurrence cap applied by [`Report::truncate_for_wire`].
@@ -86,6 +86,9 @@ pub struct ReportInputs<'a, S: BuildHasher> {
     pub file_languages: &'a HashMap<FileId, &'static str, S>,
     /// Number of analysed files.
     pub files_analysed: usize,
+    /// [LANG-CAND-OSPREY-UNPARSED] Files left out because they cannot be
+    /// analysed, in path order.
+    pub files_skipped: Vec<SkippedFile>,
     /// Configured subtree node floor.
     pub min_nodes: u32,
     /// Absolute scan root.
@@ -212,6 +215,7 @@ pub fn render_report<S: BuildHasher + Sync>(inputs: ReportInputs<'_, S>) -> Repo
         tool_version: crate::version().to_owned(),
         min_nodes: inputs.min_nodes,
         files_analysed: inputs.files_analysed,
+        files_skipped: inputs.files_skipped,
         clusters_hidden,
         cache_stats: inputs.cache_stats,
         metrics,

@@ -51,6 +51,8 @@ mod lifecycle;
 mod live_bursts;
 #[path = "live/osprey.rs"]
 mod live_osprey;
+#[path = "live/osprey_unparsed.rs"]
+mod live_osprey_unparsed;
 #[path = "lsp_embedding_determinism.rs"]
 mod lsp_embedding_determinism;
 #[path = "lsp_workspace_scoping.rs"]

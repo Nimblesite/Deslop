@@ -267,6 +267,14 @@ export const REPORT_TYPE_CONFIG = {
     tupleVariants: ["Summary", "Full"],
     variantDocs: { Summary: "Slim mass-only cluster row.", Full: "Full mass-only cluster record." },
   },
+  SkippedFile: {
+    docs: "[LANG-CAND-OSPREY-UNPARSED] A file left out of the analysis, and why.",
+    derives: ["Debug", "Clone", "PartialEq", "Eq", "Serialize", "Deserialize"],
+    fieldDocs: {
+      path: "Scan-root-relative path.",
+      reason: "Why the file could not be analysed.",
+    },
+  },
   DuplicatesPage: {
     docs: "One paginated mass-ranked clone-cluster page.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
@@ -278,6 +286,7 @@ export const REPORT_TYPE_CONFIG = {
       tool_version: "Producer version.",
       generation: "Live generation.",
       files_analysed: "Analysed file count.",
+      files_skipped: "Files left out because they cannot be analysed, in path order.",
       min_nodes: "Configured subtree floor.",
       clusters_hidden: "Fully hidden cluster count.",
       embedding_provenance: "Embedding provider provenance, if used for pair admission.",
@@ -336,12 +345,13 @@ export const REPORT_TYPE_CONFIG = {
       literal_findings_hidden: "usize",
       literal_max_findings: "usize",
     },
-    fieldSerdeAttrs: { clusters_outside_diff: ["default", 'skip_serializing_if = "Option::is_none"'], routing: ["default"] },
+    fieldSerdeAttrs: { files_skipped: ["default"], clusters_outside_diff: ["default", 'skip_serializing_if = "Option::is_none"'], routing: ["default"] },
     tsOptional: ["clusters_outside_diff"],
     fieldDocs: {
       tool_version: "Producer version.",
       min_nodes: "Configured subtree floor.",
       files_analysed: "Analysed file count.",
+      files_skipped: "Files left out because they cannot be analysed, in path order.",
       clusters_hidden: "Fully hidden clone-cluster count.",
       cache_stats: "Incremental-cache telemetry.",
       metrics: "Repository duplication metrics.",

@@ -71,6 +71,7 @@ fn report_with_cluster(path: &Path, spans: OccurrenceSpans) -> Report {
         tool_version: "test".to_owned(),
         min_nodes: 30,
         files_analysed: 1,
+        files_skipped: Vec::new(),
         clusters_hidden: 0,
         cache_stats: CacheStats::default(),
         metrics: RepoMetrics::default(),

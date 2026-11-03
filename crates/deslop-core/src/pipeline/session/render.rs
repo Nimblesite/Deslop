@@ -141,6 +141,16 @@ impl PipelineSession {
             registry: &self.registry,
             file_languages: &self.file_languages,
             files_analysed: self.files_analysed,
+            files_skipped: self
+                .skipped_files
+                .iter()
+                .map(|(path, reason)| crate::report::SkippedFile {
+                    path: super::store::relative_path_key(path, &self.root)
+                        .display()
+                        .to_string(),
+                    reason: reason.clone(),
+                })
+                .collect(),
             min_nodes: self.min_nodes,
             scan_root: &self.root,
             exclusion: &self.exclusion,

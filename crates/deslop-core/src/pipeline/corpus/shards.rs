@@ -5,11 +5,15 @@
 //! (`cold_corpus_is_identical_for_any_worker_count`). Split from the
 //! parent module, which owns corpus assembly and the cache path.
 
-use std::{collections::HashMap, time::Instant};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::PathBuf,
+    time::Instant,
+};
 
 use super::{
-    fingerprint_cache_for, load_or_parse_file, log_corpus_progress, log_skip_too_deep,
-    parser_for_language, read_source, CorpusBuildState, FingerprintCorpus,
+    fingerprint_cache_for, load_or_parse_file, log_corpus_progress, parser_for_language,
+    read_source, CorpusBuildState, FingerprintCorpus,
 };
 use crate::{
     boilerplate::collect_import_boilerplate_ranges,
@@ -36,7 +40,7 @@ pub(super) fn serial_file_work(
 ) -> Result<Vec<Option<FileWork>>, CoreError> {
     let mut work: Vec<Option<FileWork>> = Vec::with_capacity(ordered.len());
     for discovered in ordered {
-        work.push(process_one_file(
+        work.push(process_or_skip(
             discovered,
             parsers,
             cache_base,
@@ -139,7 +143,9 @@ pub(super) fn parallel_file_work(
                 // retention, so this shard state stays empty.
                 let mut state = PassState::default();
                 for discovered in chunk {
-                    let outcome = process_one_file(
+                    // A failed shard fails the build; its counters die
+                    // with it.
+                    shard_files.push(process_or_skip(
                         discovered,
                         parsers,
                         cache_path,
@@ -147,19 +153,7 @@ pub(super) fn parallel_file_work(
                         min_nodes_config,
                         min_nodes_usize,
                         &mut state,
-                    );
-                    match outcome {
-                        Ok(one) => shard_files.push(one),
-                        // A pathologically deep file is skipped, not
-                        // fatal; genuine errors fail the shard.
-                        Err(CoreError::AstTooDeep { language, limit }) => {
-                            log_skip_too_deep(language, limit);
-                            shard_files.push(None);
-                        }
-                        // A failed shard fails the build; its
-                        // counters die with it.
-                        Err(other) => return Err(other),
-                    }
+                    )?);
                 }
                 Ok((shard_files, state))
             }));
@@ -172,6 +166,7 @@ pub(super) fn parallel_file_work(
             })??;
             shards.push(shard_files);
             state_out.build.absorb(&state.build);
+            state_out.skipped.extend(state.skipped);
             state_out.cache_stats.hits = state_out
                 .cache_stats
                 .hits
@@ -239,6 +234,57 @@ pub(super) struct PassState {
     pub(super) cache_stats: CacheStats,
     /// Live blob retention (incremental builds only).
     pub(super) blobs: LiveBlobs,
+    /// [LANG-CAND-OSPREY-UNPARSED] Files that cannot be analysed, with why.
+    pub(super) skipped: BTreeMap<PathBuf, String>,
+}
+
+/// [LANG-CAND-OSPREY-UNPARSED] The reason a file that cannot be analysed is
+/// skipped, or the error back when the failure is not about that one file.
+/// Shared by the batch corpus loop and the live session
+/// ([`super::super::session`]) so one broken file never costs the rest of the
+/// scan or the long-lived server. Logs only the language — never a path,
+/// per the project logging rules.
+///
+/// # Errors
+///
+/// Returns `error` unchanged unless it is [`CoreError::AstTooDeep`] or
+/// [`CoreError::ParseFailed`].
+pub fn skip_reason(error: CoreError) -> Result<String, CoreError> {
+    match &error {
+        CoreError::AstTooDeep { language, .. } | CoreError::ParseFailed { language } => {
+            tracing::warn!(language, %error, "skipping file that cannot be analysed");
+            Ok(error.to_string())
+        }
+        _ => Err(error),
+    }
+}
+
+/// [`process_one_file`], recording a file that cannot be analysed instead of
+/// failing the pass over it ([LANG-CAND-OSPREY-UNPARSED]).
+fn process_or_skip(
+    discovered: &DiscoveredFile,
+    parsers: &[Box<dyn LanguageParser>],
+    cache_base: &std::path::Path,
+    incremental: bool,
+    min_nodes_config: u32,
+    min_nodes: usize,
+    state: &mut PassState,
+) -> Result<Option<FileWork>, CoreError> {
+    process_one_file(
+        discovered,
+        parsers,
+        cache_base,
+        incremental,
+        min_nodes_config,
+        min_nodes,
+        state,
+    )
+    .or_else(|error| {
+        let _previous = state
+            .skipped
+            .insert(discovered.path.clone(), skip_reason(error)?);
+        Ok(None)
+    })
 }
 
 /// Reads, parses, and folds one file, returning its products or `None`
