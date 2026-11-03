@@ -2,6 +2,7 @@
   "tool_version": "0.0.0-dev",
   "min_nodes": 16,
   "files_analysed": 5,
+  "files_skipped": [],
   "clusters_hidden": 0,
   "cache_stats": {
     "hits": 0,
