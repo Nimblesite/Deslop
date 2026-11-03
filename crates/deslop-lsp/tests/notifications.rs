@@ -23,6 +23,9 @@ pub(crate) type FrameResult = std::result::Result<serde_json::Value, String>;
 #[path = "notifications/ipc.rs"]
 mod ipc;
 
+#[path = "notifications/pair_compare.rs"]
+mod pair_compare;
+
 /// Accepts normal VS Code notifications without tower-lsp fallback
 /// warnings.
 #[test]

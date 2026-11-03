@@ -19,6 +19,6 @@ An unfinished declaration must not remove findings for intact neighboring functi
 Completed duplication analysis does not avoid this request: `PipelineSession::measure_pair` reparses the two files, regenerates candidate anchors across the workspace through `comparison_anchor_pairs`, constructs fresh measurement indices, and requests fresh embeddings when a provider is active. These are confirmed code paths; their individual contributions to the observed latency have not yet been measured.
 
 - [x] Identify the engine request on the diff opening path.
-- [ ] Reproduce comparison responsiveness with deterministic synchronization and the real engine.
+- [x] Reproduce repeated discovery with the real engine after report completion: `completed_discovery_is_reused_by_repeated_pair_comparisons` asserts the engine's endpoint echoes and admitted verdict for three requests, including reversal, then fails because discovery ran four times instead of once.
 - [ ] Confirm the failure with the user as required by the invoked skill.
 - [ ] Implement and verify responsive comparisons and truthful verdicts.
