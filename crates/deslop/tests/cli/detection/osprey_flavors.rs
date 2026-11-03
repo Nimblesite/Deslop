@@ -110,11 +110,11 @@ fn a_too_deep_file_is_skipped_visibly_and_the_scan_continues() -> Result<()> {
     let json = fs::read_to_string(with_ext(&prefix, "json"))?;
     let report: serde_json::Value = serde_json::from_str(&json)?;
     assert_eq!(
-        report["files_analysed"].as_u64(),
+        field(&report, "files_analysed").as_u64(),
         Some(PYTHON_FILES.len() as u64)
     );
     assert_eq!(
-        report["files_skipped"],
+        *field(&report, "files_skipped"),
         serde_json::json!([{ "path": TOO_DEEP_FILE, "reason": TOO_DEEP_REASON }]),
     );
     let clusters = report_clusters(&json)?;
@@ -234,14 +234,17 @@ fn foreign_markers_leave_ordinary_python_analysable() -> Result<()> {
 fn assert_skips(json: &str, analysed: usize, skipped: &[&str]) -> Result<()> {
     let report: serde_json::Value = serde_json::from_str(json)?;
     assert_eq!(
-        report["files_analysed"].as_u64(),
+        field(&report, "files_analysed").as_u64(),
         u64::try_from(analysed).ok()
     );
     let expected: Vec<serde_json::Value> = skipped
         .iter()
         .map(|path| serde_json::json!({ "path": path, "reason": ML_PARSE_ERROR }))
         .collect();
-    assert_eq!(report["files_skipped"], serde_json::Value::Array(expected));
+    assert_eq!(
+        *field(&report, "files_skipped"),
+        serde_json::Value::Array(expected)
+    );
     Ok(())
 }
 
