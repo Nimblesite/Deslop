@@ -5,7 +5,12 @@
 //! fingerprints plus the per-file source bytes the embedding pass will
 //! reuse.
 
-use std::{collections::HashMap, fs, path::Path, time::Instant};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fs,
+    path::{Path, PathBuf},
+    time::Instant,
+};
 
 use super::{
     config::PipelineConfig,
@@ -86,6 +91,9 @@ pub struct FingerprintCorpus {
     pub analysed_lines: AnalysedLines,
     /// Import/prologue byte ranges suppressed from clone fingerprints.
     pub boilerplate_ranges: Vec<BoilerplateRange>,
+    /// [LANG-CAND-OSPREY-UNPARSED] Files left out because they cannot be
+    /// analysed, each with its reason.
+    pub skipped: BTreeMap<PathBuf, String>,
 }
 
 /// Parses every discovered file and collects its structural + sibling
@@ -185,6 +193,7 @@ fn fingerprint_corpus_with_workers(
             workers,
         )?;
         pass_state.build.absorb(&shard_state.build);
+        pass_state.skipped = std::mem::take(&mut shard_state.skipped);
         pass_state.cache_stats.hits = pass_state
             .cache_stats
             .hits
@@ -195,6 +204,7 @@ fn fingerprint_corpus_with_workers(
             .saturating_add(shard_state.cache_stats.misses);
         fingerprints_running = target.fingerprints_running;
     }
+    corpus.skipped = std::mem::take(&mut pass_state.skipped);
     corpus.cache_stats.hits = corpus
         .cache_stats
         .hits
@@ -464,12 +474,25 @@ fn fingerprints_for(
     fingerprints
 }
 
-/// Logs that a pathologically deep file is being skipped. Shared by
-/// the batch corpus loop and the live session ([`super::session`]) so the
-/// "skip, don't crash" decision carries one message. Logs only the language
-/// id and depth limit — never a path, per the project logging rules.
-pub fn log_skip_too_deep(language: &'static str, limit: usize) {
-    tracing::warn!(language, limit, "skipping file: AST nests too deep");
+/// [LANG-CAND-OSPREY-UNPARSED] The reason a file that cannot be analysed is
+/// skipped, or the error back when the failure is not about that one file.
+/// Shared by the batch corpus loop and the live session
+/// ([`super::session`]) so one broken file never costs the rest of the
+/// scan or the long-lived server. Logs only the language — never a path,
+/// per the project logging rules.
+///
+/// # Errors
+///
+/// Returns `error` unchanged unless it is [`CoreError::AstTooDeep`] or
+/// [`CoreError::ParseFailed`].
+pub fn skip_reason(error: CoreError) -> Result<String, CoreError> {
+    match &error {
+        CoreError::AstTooDeep { language, .. } | CoreError::ParseFailed { language } => {
+            tracing::warn!(language, %error, "skipping file that cannot be analysed");
+            Ok(error.to_string())
+        }
+        _ => Err(error),
+    }
 }
 
 /// Reads a source file into bytes.

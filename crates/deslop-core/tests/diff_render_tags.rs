@@ -156,6 +156,7 @@ fn report(
         tool_version: "test".to_owned(),
         min_nodes: 3,
         files_analysed: 6,
+        files_skipped: Vec::new(),
         clusters_hidden: 0,
         cache_stats: CacheStats::default(),
         metrics: metrics(diff),

@@ -111,6 +111,7 @@ pub fn fixture_report(clusters: Vec<ReportCluster>) -> Report {
         tool_version: crate::version().to_owned(),
         min_nodes: 4,
         files_analysed: clusters.len(),
+        files_skipped: Vec::new(),
         clusters_hidden: 0,
         cache_stats: CacheStats::default(),
         metrics: RepoMetrics::default(),

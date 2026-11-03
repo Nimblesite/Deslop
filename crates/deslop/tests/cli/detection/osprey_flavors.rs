@@ -20,6 +20,9 @@ const CONFIG_FILE: &str = ".deslop.toml";
 const EXCLUDED_CONFIG: &str = "[defaults]\nexclude = [\"tools.py\"]\n";
 const MALFORMED_ML: &str = "describe value =\n    if value > then\n        value +\n";
 const ML_PARSE_ERROR: &str = "tree-sitter failed to produce a parse tree for osprey-ml";
+const ML_THIRD_COPY: &str = "gamma.ospml";
+const ML_FILES_ANALYSED: usize = 2;
+const SKIPPED_HEADLINE: &str = "1 file skipped";
 const MANIFEST: &str = "osprey.toml";
 const LEADING_MARKER: &str = "# osprey: flavor=python\n";
 const LATE_MARKER: &str = "\n# osprey: flavor=python\n";
@@ -53,12 +56,54 @@ fn detects_identical_osprey_ml_functions() -> Result<()> {
     assert_flavor(ML_FIXTURE, ML_FILES, ML_LANGUAGE, true)
 }
 
+/// [LANG-CAND-OSPREY-UNPARSED] One unparseable file never costs the rest of the scan: the file is
+/// named with its reason, left out of the counts, and every other file is still reported.
 #[test]
-fn malformed_osprey_ml_returns_a_visible_error() -> Result<()> {
+fn malformed_osprey_ml_is_skipped_visibly_and_the_scan_continues() -> Result<()> {
     let (tmp, root) = seeded_fixture_root(ML_FIXTURE)?;
+    let source = fs::read_to_string(root.join(ML_FILES[0]))?;
+    fs::write(root.join(ML_THIRD_COPY), source)?;
     fs::write(root.join(ML_FILES[0]), MALFORMED_ML)?;
-    let stderr = scan_failure(&root, tmp.path())?;
+
+    let prefix = tmp.path().join(REPORT_OUTPUT_STEM);
+    let assert = deslop_command(&root, &prefix)?
+        .args([MIN_NODES_FLAG, MIN_NODES])
+        .assert()
+        .success();
+    let stderr = String::from_utf8(assert.get_output().stderr.clone())?;
     assert_contains(&stderr, ML_PARSE_ERROR, "malformed ML is explicit");
+    assert_contains(&stderr, ML_FILES[0], "the skipped file is named");
+    assert_contains(&stderr, SKIPPED_HEADLINE, "the skip count is stated");
+
+    let json = fs::read_to_string(with_ext(&prefix, "json"))?;
+    assert_skips(&json, ML_FILES_ANALYSED, &[ML_FILES[0]])?;
+    let clusters = report_clusters(&json)?;
+    assert_eq!(clusters.len(), 1, "the two remaining copies still cluster");
+    let cluster = require_cluster_spanning(&clusters, ML_FILES[1], ML_THIRD_COPY)?;
+    let occurrences = require_array(cluster, "/occurrences", "surviving cluster")?;
+    assert_eq!(occurrences.len(), ML_FILES_ANALYSED, "only parsed files");
+    Ok(())
+}
+
+/// [LANG-CAND-OSPREY-UNPARSED] A repository holding nothing but broken ML still finishes clean.
+#[test]
+fn a_repository_of_only_malformed_osprey_ml_still_reports() -> Result<()> {
+    let (tmp, root) = seeded_fixture_root(ML_FIXTURE)?;
+    for file in ML_FILES {
+        fs::write(root.join(file), MALFORMED_ML)?;
+    }
+    let json = scan_flavor_root(&root, tmp.path())?;
+    assert_skips(&json, 0, &ML_FILES)?;
+    assert_eq!(report_clusters(&json)?.len(), 0, "nothing parsed, no clusters");
+    Ok(())
+}
+
+/// [LANG-CAND-OSPREY-UNPARSED] A clean scan reports an empty skip list, not a missing one.
+#[test]
+fn a_clean_osprey_ml_scan_skips_nothing() -> Result<()> {
+    let (tmp, root) = seeded_fixture_root(ML_FIXTURE)?;
+    let json = scan_flavor_root(&root, tmp.path())?;
+    assert_skips(&json, ML_FILES.len(), &[])?;
     Ok(())
 }
 
@@ -127,6 +172,18 @@ fn foreign_markers_leave_ordinary_python_analysable() -> Result<()> {
     for marker in FOREIGN_PYTHON_MARKERS {
         assert_comment_selection(marker, NO_TEXT, PYTHON_LANGUAGE)?;
     }
+    Ok(())
+}
+
+/// Assert the analysed count and, in path order, every skipped file with its reason.
+fn assert_skips(json: &str, analysed: usize, skipped: &[&str]) -> Result<()> {
+    let report: serde_json::Value = serde_json::from_str(json)?;
+    assert_eq!(report["files_analysed"].as_u64(), u64::try_from(analysed).ok());
+    let expected: Vec<serde_json::Value> = skipped
+        .iter()
+        .map(|path| serde_json::json!({ "path": path, "reason": ML_PARSE_ERROR }))
+        .collect();
+    assert_eq!(report["files_skipped"], serde_json::Value::Array(expected));
     Ok(())
 }
 

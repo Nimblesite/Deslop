@@ -19,7 +19,7 @@ mod snippet_matches;
 mod store;
 
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -114,6 +114,9 @@ pub struct PipelineSession {
     pub(super) boilerplate_ranges: Vec<BoilerplateRange>,
     /// Files analysed in the most recent generation.
     pub(super) files_analysed: usize,
+    /// [LANG-CAND-OSPREY-UNPARSED] Files currently left out of the corpus
+    /// because they cannot be analysed, each with its reason.
+    pub(super) skipped_files: BTreeMap<PathBuf, String>,
     /// Verified diff scope when the session was initialised with a
     /// diff ([CLI-ARG-DIFF]). Every render tags against it.
     pub(super) diff_scope: Option<crate::diff_scope::DiffScope>,

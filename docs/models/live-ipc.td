@@ -351,10 +351,16 @@ type RoutingTuning {
   shape_only_max_content: Float
 }
 
+type SkippedFile {
+  path: String
+  reason: String
+}
+
 type Report {
   tool_version: String
   min_nodes: Int
   files_analysed: Int
+  files_skipped: List<SkippedFile>
   clusters_hidden: Int
   cache_stats: CacheStats
   metrics: RepoMetrics
@@ -555,6 +561,7 @@ type DuplicatesPage {
   tool_version: String
   generation: Int
   files_analysed: Int
+  files_skipped: List<SkippedFile>
   min_nodes: Int
   clusters_hidden: Int
   embedding_provenance: Option<EmbeddingProvenance>

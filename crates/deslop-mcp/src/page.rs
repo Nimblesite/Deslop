@@ -86,6 +86,7 @@ pub fn build_page(
         tool_version: report.tool_version.clone(),
         generation,
         files_analysed: report.files_analysed,
+        files_skipped: report.files_skipped.clone(),
         min_nodes: report.min_nodes,
         clusters_hidden: report.clusters_hidden,
         embedding_provenance: report.embedding_provenance.clone(),

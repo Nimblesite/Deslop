@@ -11,6 +11,8 @@ use super::{theme::Theme, ColorChoice};
 
 /// Number of clusters shown in the stderr summary.
 const TOP_CLUSTERS_IN_SUMMARY: usize = 10;
+/// Skipped files listed on stderr; the report lists them all.
+const SKIPPED_FILES_IN_SUMMARY: usize = 10;
 /// Maximum distinct file names listed inline in a cluster row.
 const MAX_FILE_COUNT_SUMMARY_SEGMENTS: usize = 3;
 
@@ -21,6 +23,7 @@ pub fn summary(color: ColorChoice, report: &Report, technical: bool) {
     write_headline(&theme, report);
     write_diff_delta_line(&theme, report);
     write_hidden_line(&theme, report);
+    write_skipped_lines(&theme, report);
     write_cache_line(&theme, report, technical);
     write_provenance_line(&theme, report, technical);
     if report.clusters.is_empty() {
@@ -76,6 +79,26 @@ fn write_hidden_line(theme: &Theme, report: &Report) {
         reset = theme.reset,
         hidden = report.clusters_hidden,
     );
+}
+
+/// [LANG-CAND-OSPREY-UNPARSED] Names what the numbers above leave out.
+fn write_skipped_lines(theme: &Theme, report: &Report) {
+    let count = report.files_skipped.len();
+    if count == 0 {
+        return;
+    }
+    let noun = if count == 1 { "file" } else { "files" };
+    eprintln!(
+        "  {bold}{count} {noun} skipped{reset} because deslop could not analyse them:",
+        bold = theme.bold,
+        reset = theme.reset,
+    );
+    for skipped in report.files_skipped.iter().take(SKIPPED_FILES_IN_SUMMARY) {
+        eprintln!("    {}: {}", skipped.path, skipped.reason);
+    }
+    if count > SKIPPED_FILES_IN_SUMMARY {
+        eprintln!("    ...and {} more in the report", count - SKIPPED_FILES_IN_SUMMARY);
+    }
 }
 
 /// Empty-body closer.

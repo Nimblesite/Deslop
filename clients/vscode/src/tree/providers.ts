@@ -389,6 +389,7 @@ export class SessionProvider extends LifecycleAwareProvider {
     rows.push(
       new SessionFieldNode("Cache", cache),
       new SessionFieldNode("Files analysed", String(report.files_analysed)),
+      new SessionFieldNode("Files skipped", String(report.files_skipped.length)),
       new SessionFieldNode("State", state),
     );
     return rows;
