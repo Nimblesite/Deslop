@@ -106,12 +106,17 @@ impl LanguageParser for OspreyParser {
             return super::python::PythonParser::new().parse_and_normalize(source, file_id);
         }
         let tree = parse_source(self.id(), &self.grammar(), source)?;
-        if self.syntax == Syntax::Ml && tree.root_node().has_error() {
-            return Err(CoreError::ParseFailed {
-                language: self.id(),
-            });
+        match (&self.syntax, tree.root_node().has_error()) {
+            (Syntax::Ml, true) => {
+                // [LANG-CAND-OSPREY-RECOVERY] Rejecting the entire file discarded
+                // intact neighboring clones during incomplete edits.
+                #[allow(clippy::panic)]
+                {
+                    panic!("accuracy quarantine: Osprey ML whole-file error rejection removed because it hides intact duplicates; implement verified grammar recovery");
+                }
+            }
+            _ => build_normalised_root(&tree, file_id, normalise_kind, self.id()),
         }
-        build_normalised_root(&tree, file_id, normalise_kind, self.id())
     }
 }
 
