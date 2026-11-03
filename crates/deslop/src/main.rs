@@ -3,7 +3,7 @@
 //! Thin shell over `deslop-core`. Parses args, initialises tracing
 //! (to a timestamped log file by default; see [`logging`]), prints a
 //! human-readable preamble + summary on stderr (see [`summary`]),
-//! and either runs the pipeline or re-renders an existing JSON report
+//! and either reuses validated calculations, runs the pipeline, or re-renders an existing JSON report
 //! (`--from-report`). Always emits the canonical JSON plus derived
 //! text and HTML views unless suppressed ([OUTPUT-SCHEMA-JSON]).
 
@@ -11,6 +11,7 @@ mod compare;
 mod diff_input;
 mod logging;
 mod output;
+mod report_cache;
 mod rerun;
 mod summary;
 
@@ -225,7 +226,8 @@ struct SuppressFlags {
 /// rationale as [`SuppressFlags`].
 #[derive(Debug, clap::Args)]
 struct BehaviourFlags {
-    /// Disable the on-disk fingerprint cache ([PIPELINE-INCREMENTAL]).
+    /// Disable completed-report reuse and the on-disk fingerprint cache
+    /// ([OUTPUT-REPORT-REUSE], [PIPELINE-INCREMENTAL]).
     /// The cache is **on by default**: the pipeline caches parsed AST +
     /// fingerprints under `<root>/.deslop/cache/fingerprints/...` keyed
     /// by `(language, tool_version, min_nodes, content_hash)`, so the
@@ -496,6 +498,13 @@ fn produce_report(
     }
     let provider = configured_provider(args, mode)?;
     let provider_ref: Option<&dyn deslop_core::EmbeddingProvider> = provider.as_deref();
+    let cached = report_cache::ReportCache::capture(args, mode, provider_ref, diff)?;
+    if let Some(report) = cached.as_ref().and_then(report_cache::ReportCache::load) {
+        return Ok(PipelineOutcome {
+            report,
+            delta: None,
+        });
+    }
     let embedding = || EmbeddingSettings {
         mode,
         provider: provider_ref,
@@ -514,6 +523,9 @@ fn produce_report(
     let adds = parse_rerun_adds(&args.rerun_add)?;
     let touched = assemble_touched(args, &adds);
     if touched.is_empty() {
+        if let Some(cache) = cached {
+            cache.store_if_current(args, mode, provider_ref, diff, &initial);
+        }
         return Ok(PipelineOutcome {
             report: initial,
             delta: None,

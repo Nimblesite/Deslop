@@ -407,6 +407,7 @@ version = "0.0.0-dev"
 dependencies = [
  "anyhow",
  "assert_cmd",
+ "blake3",
  "clap",
  "deslop-core",
  "deslop-test-support",

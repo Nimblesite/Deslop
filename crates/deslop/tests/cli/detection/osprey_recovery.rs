@@ -53,8 +53,9 @@ fn assert_intact_occurrence(occurrence: &Value) -> Result<()> {
         field(occurrence, "language").as_str(),
         Some(EXPECTED_LANGUAGE)
     );
-    let source = occurrence_source(&fixture(FIXTURE), occurrence)
-        .expect("the reported occurrence must resolve to the intact fixture function");
+    let source = occurrence_source(&fixture(FIXTURE), occurrence).ok_or_else(|| {
+        anyhow::anyhow!("the reported occurrence must resolve to the intact fixture function")
+    })?;
     assert_eq!(source, fs::read(fixture(FIXTURE).join(FILES[0]))?);
     Ok(())
 }

@@ -274,6 +274,7 @@ fn technical_mode_surfaces_raw_cache_stats_line() -> Result<()> {
         &tmp.path().join("first"),
         &[MIN_NODES_FLAG, MIN_NODES_VALUE],
     )?;
+    crate::common::incremental::clear_completed_report(&scan_root)?;
     let mut second = deslop_command(&scan_root, &tmp.path().join("second"))?;
     let assertion = second
         .args([
