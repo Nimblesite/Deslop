@@ -96,11 +96,9 @@ fn write_skipped_lines(theme: &Theme, report: &Report) {
     for skipped in report.files_skipped.iter().take(SKIPPED_FILES_IN_SUMMARY) {
         eprintln!("    {}: {}", skipped.path, skipped.reason);
     }
-    if count > SKIPPED_FILES_IN_SUMMARY {
-        eprintln!(
-            "    ...and {} more in the report",
-            count - SKIPPED_FILES_IN_SUMMARY
-        );
+    let unlisted = count.saturating_sub(SKIPPED_FILES_IN_SUMMARY);
+    if unlisted > 0 {
+        eprintln!("    ...and {unlisted} more in the report");
     }
 }
 

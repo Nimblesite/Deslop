@@ -47,6 +47,7 @@ pub use registry::{
     build_extension_map, default_parsers, language_for_path, language_ids, parser_for_language,
     watched_source_extensions,
 };
+pub use shards::skip_reason;
 use shards::{absorb_file_work, parallel_file_work, serial_file_work, AbsorbTarget, PassState};
 pub use stats::{CorpusBuildState, CorpusBuildStats};
 
@@ -472,27 +473,6 @@ fn fingerprints_for(
         build.add_fingerprint_kinds(exact_count, fingerprints.len().saturating_sub(exact_count));
     }
     fingerprints
-}
-
-/// [LANG-CAND-OSPREY-UNPARSED] The reason a file that cannot be analysed is
-/// skipped, or the error back when the failure is not about that one file.
-/// Shared by the batch corpus loop and the live session
-/// ([`super::session`]) so one broken file never costs the rest of the
-/// scan or the long-lived server. Logs only the language — never a path,
-/// per the project logging rules.
-///
-/// # Errors
-///
-/// Returns `error` unchanged unless it is [`CoreError::AstTooDeep`] or
-/// [`CoreError::ParseFailed`].
-pub fn skip_reason(error: CoreError) -> Result<String, CoreError> {
-    match &error {
-        CoreError::AstTooDeep { language, .. } | CoreError::ParseFailed { language } => {
-            tracing::warn!(language, %error, "skipping file that cannot be analysed");
-            Ok(error.to_string())
-        }
-        _ => Err(error),
-    }
 }
 
 /// Reads a source file into bytes.

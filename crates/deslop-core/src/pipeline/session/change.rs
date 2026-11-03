@@ -135,7 +135,7 @@ impl PipelineSession {
             // [LANG-CAND-OSPREY-UNPARSED] A file that cannot be analysed,
             // including one mid-edit, must not take down the long-lived
             // server: drop it, name it, and keep serving.
-            Err(error) => return self.skip_path(absolute, skip_reason(error)?),
+            Err(error) => return Ok(self.skip_path(absolute, skip_reason(error)?)),
         };
         let _recovered = self.skipped_files.remove(&absolute);
         if self
@@ -229,13 +229,13 @@ impl PipelineSession {
     /// [LANG-CAND-OSPREY-UNPARSED] Moves `absolute` out of the corpus and onto
     /// the skip list. Re-saving a file that stays broken for the same reason
     /// changes nothing.
-    fn skip_path(&mut self, absolute: PathBuf, reason: String) -> Result<CorpusEffect, CoreError> {
+    fn skip_path(&mut self, absolute: PathBuf, reason: String) -> CorpusEffect {
         if self.skipped_files.get(&absolute) == Some(&reason) {
-            return Ok(CorpusEffect::Untouched);
+            return CorpusEffect::Untouched;
         }
         let _evicted = self.drop_path(&absolute);
         let _previous = self.skipped_files.insert(absolute, reason);
-        Ok(CorpusEffect::Mutated)
+        CorpusEffect::Mutated
     }
 
     /// [LANG-CAND-OSPREY-UNPARSED] Every tracked file at or under `prefix`,

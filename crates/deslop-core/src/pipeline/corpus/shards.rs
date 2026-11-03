@@ -13,7 +13,7 @@ use std::{
 
 use super::{
     fingerprint_cache_for, load_or_parse_file, log_corpus_progress, parser_for_language,
-    read_source, skip_reason, CorpusBuildState, FingerprintCorpus,
+    read_source, CorpusBuildState, FingerprintCorpus,
 };
 use crate::{
     boilerplate::collect_import_boilerplate_ranges,
@@ -236,6 +236,27 @@ pub(super) struct PassState {
     pub(super) blobs: LiveBlobs,
     /// [LANG-CAND-OSPREY-UNPARSED] Files that cannot be analysed, with why.
     pub(super) skipped: BTreeMap<PathBuf, String>,
+}
+
+/// [LANG-CAND-OSPREY-UNPARSED] The reason a file that cannot be analysed is
+/// skipped, or the error back when the failure is not about that one file.
+/// Shared by the batch corpus loop and the live session
+/// ([`super::super::session`]) so one broken file never costs the rest of the
+/// scan or the long-lived server. Logs only the language — never a path,
+/// per the project logging rules.
+///
+/// # Errors
+///
+/// Returns `error` unchanged unless it is [`CoreError::AstTooDeep`] or
+/// [`CoreError::ParseFailed`].
+pub fn skip_reason(error: CoreError) -> Result<String, CoreError> {
+    match &error {
+        CoreError::AstTooDeep { language, .. } | CoreError::ParseFailed { language } => {
+            tracing::warn!(language, %error, "skipping file that cannot be analysed");
+            Ok(error.to_string())
+        }
+        _ => Err(error),
+    }
 }
 
 /// [`process_one_file`], recording a file that cannot be analysed instead of
