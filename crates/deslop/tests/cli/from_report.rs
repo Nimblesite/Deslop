@@ -4,6 +4,9 @@ use crate::common::IDENTICAL_TITLE;
 #[path = "from_report/include.rs"]
 mod include;
 
+#[path = "from_report/reuse.rs"]
+mod reuse;
+
 /// Writes `report_body` to `<tmp>/<file_name>`, runs the CLI in
 /// `--from-report` replay mode over it (adding `--no-color` when
 /// requested), and asserts the run succeeds. The shared setup for the
