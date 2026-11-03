@@ -89,7 +89,7 @@ fn write_skipped_lines(theme: &Theme, report: &Report) {
     }
     let noun = if count == 1 { "file" } else { "files" };
     eprintln!(
-        "  {bold}{count} {noun} skipped{reset} because deslop could not analyse them:",
+        "  {bold}{count} {noun} skipped{reset} (could not be analysed):",
         bold = theme.bold,
         reset = theme.reset,
     );
@@ -97,7 +97,10 @@ fn write_skipped_lines(theme: &Theme, report: &Report) {
         eprintln!("    {}: {}", skipped.path, skipped.reason);
     }
     if count > SKIPPED_FILES_IN_SUMMARY {
-        eprintln!("    ...and {} more in the report", count - SKIPPED_FILES_IN_SUMMARY);
+        eprintln!(
+            "    ...and {} more in the report",
+            count - SKIPPED_FILES_IN_SUMMARY
+        );
     }
 }
 

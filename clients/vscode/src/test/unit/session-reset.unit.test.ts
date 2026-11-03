@@ -43,6 +43,7 @@ function report(clusterId: string, path: string): Report {
   return emptyReport({
     tool_version: "tool-v1",
     files_analysed: 1,
+    files_skipped: [],
     metrics: {
       analysed_loc: 100,
       duplicated_loc: 10,

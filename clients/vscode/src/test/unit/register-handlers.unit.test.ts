@@ -44,6 +44,7 @@ function storeWith(clusters: ReportCluster[]): ReportStore {
   const report: Report = emptyReport({
     tool_version: "v",
     files_analysed: 2,
+    files_skipped: [],
     metrics: repoMetrics({ clusters_total: clusters.length }),
     clusters,
   });

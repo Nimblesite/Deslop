@@ -8,7 +8,7 @@ import { cluster, labelText, report, sessionPanel, storeWith, treeStore } from "
 
 const STRING_TYPE_NAME = "string";
 const EMBEDDING_MODEL_LABEL = "Embedding model";
-const SESSION_ROW_COUNT = 4;
+const SESSION_ROW_COUNT = 5;
 
 /** No LSP client resolved — the panel reports a stopped session. */
 const NO_CLIENT = (): LanguageClient | undefined => undefined;
@@ -31,7 +31,7 @@ suite("SessionProvider", () => {
   test("omits internal report format fields from the human session panel (#118)", () => {
     const nodes = sessionPanel(treeStore([cluster("a", 1, "/f")]), NO_CLIENT).getChildren();
     const labels = nodes.map(labelText);
-    assert.deepEqual(labels, [EMBEDDING_MODEL_LABEL, "Cache", "Files analysed", "State"]);
+    assert.deepEqual(labels, [EMBEDDING_MODEL_LABEL, "Cache", "Files analysed", "Files skipped", "State"]);
     assert.equal(nodes.length, SESSION_ROW_COUNT);
     assert.ok(labels.includes(EMBEDDING_MODEL_LABEL));
     assert.ok(labels.includes("Files analysed"));

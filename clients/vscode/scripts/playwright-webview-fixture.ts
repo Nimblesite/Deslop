@@ -105,6 +105,7 @@ export const sampleReport = {
   tool_version: "playwright-smoke",
   min_nodes: 5,
   files_analysed: 4,
+  files_skipped: [],
   clusters_hidden: 0,
   cache_stats: { hits: 7, misses: 2 },
   routing: FIXTURE_ROUTING,

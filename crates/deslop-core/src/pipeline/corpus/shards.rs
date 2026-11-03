@@ -12,8 +12,8 @@ use std::{
 };
 
 use super::{
-    fingerprint_cache_for, load_or_parse_file, log_corpus_progress, skip_reason,
-    parser_for_language, read_source, CorpusBuildState, FingerprintCorpus,
+    fingerprint_cache_for, load_or_parse_file, log_corpus_progress, parser_for_language,
+    read_source, skip_reason, CorpusBuildState, FingerprintCorpus,
 };
 use crate::{
     boilerplate::collect_import_boilerplate_ranges,

@@ -146,6 +146,9 @@ fn write_header(out: &mut String, report: &Report) {
         clusters = report.metrics.clusters_total,
         hidden = report.clusters_hidden,
     );
+    for skipped in &report.files_skipped {
+        let _ = writeln!(out, "skipped {}: {}", skipped.path, skipped.reason);
+    }
 }
 
 /// Writes the embedding provenance line when the pass ran.

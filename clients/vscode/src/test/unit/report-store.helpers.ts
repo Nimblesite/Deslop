@@ -27,6 +27,7 @@ export function emptyReport(overrides: Partial<Report> = {}): Report {
     tool_version: "tool-v1",
     min_nodes: 30,
     files_analysed: 0,
+    files_skipped: [],
     clusters_hidden: 0,
     cache_stats: { hits: 0, misses: 0 },
     metrics: metrics(),

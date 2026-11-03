@@ -23,6 +23,9 @@ const ML_PARSE_ERROR: &str = "tree-sitter failed to produce a parse tree for osp
 const ML_THIRD_COPY: &str = "gamma.ospml";
 const ML_FILES_ANALYSED: usize = 2;
 const SKIPPED_HEADLINE: &str = "1 file skipped";
+const TOO_DEEP_FILE: &str = "deep.py";
+const TOO_DEEP_NESTING: usize = 700;
+const TOO_DEEP_REASON: &str = "python source nests deeper than the 500-level AST depth limit";
 const MANIFEST: &str = "osprey.toml";
 const LEADING_MARKER: &str = "# osprey: flavor=python\n";
 const LATE_MARKER: &str = "\n# osprey: flavor=python\n";
@@ -85,6 +88,54 @@ fn malformed_osprey_ml_is_skipped_visibly_and_the_scan_continues() -> Result<()>
     Ok(())
 }
 
+/// [LANG-CAND-OSPREY-UNPARSED] A file nesting past the depth limit is skipped on the default
+/// incremental path too, and every report format says so.
+#[test]
+fn a_too_deep_file_is_skipped_visibly_and_the_scan_continues() -> Result<()> {
+    let (tmp, root) = seeded_fixture_root(PYTHON_FIXTURE)?;
+    let nesting = TOO_DEEP_NESTING;
+    let source = format!("x = {}1{}\n", "[".repeat(nesting), "]".repeat(nesting));
+    fs::write(root.join(TOO_DEEP_FILE), source)?;
+
+    let prefix = tmp.path().join(REPORT_OUTPUT_STEM);
+    let assert = deslop_command(&root, &prefix)?
+        .args([MIN_NODES_FLAG, MIN_NODES])
+        .assert()
+        .success();
+    let stderr = String::from_utf8(assert.get_output().stderr.clone())?;
+    assert_contains(&stderr, SKIPPED_HEADLINE, "the skip count is stated");
+    let line = format!("{TOO_DEEP_FILE}: {TOO_DEEP_REASON}");
+    assert_contains(&stderr, &line, "stderr names the file and reason");
+
+    let json = fs::read_to_string(with_ext(&prefix, "json"))?;
+    let report: serde_json::Value = serde_json::from_str(&json)?;
+    assert_eq!(
+        report["files_analysed"].as_u64(),
+        Some(PYTHON_FILES.len() as u64)
+    );
+    assert_eq!(
+        report["files_skipped"],
+        serde_json::json!([{ "path": TOO_DEEP_FILE, "reason": TOO_DEEP_REASON }]),
+    );
+    let clusters = report_clusters(&json)?;
+    let _spans = require_cluster_spanning(&clusters, PYTHON_FILES[0], PYTHON_FILES[1])?;
+
+    let text = fs::read_to_string(with_ext(&prefix, "txt"))?;
+    assert_contains(
+        &text,
+        &format!("skipped {line}"),
+        "the text report names it",
+    );
+    let html = fs::read_to_string(with_ext(&prefix, "html"))?;
+    assert_contains(
+        &html,
+        "<dt>Files skipped</dt><dd>1</dd>",
+        "the HTML report counts it",
+    );
+    assert_contains(&html, TOO_DEEP_REASON, "the HTML report explains it");
+    Ok(())
+}
+
 /// [LANG-CAND-OSPREY-UNPARSED] A repository holding nothing but broken ML still finishes clean.
 #[test]
 fn a_repository_of_only_malformed_osprey_ml_still_reports() -> Result<()> {
@@ -94,7 +145,11 @@ fn a_repository_of_only_malformed_osprey_ml_still_reports() -> Result<()> {
     }
     let json = scan_flavor_root(&root, tmp.path())?;
     assert_skips(&json, 0, &ML_FILES)?;
-    assert_eq!(report_clusters(&json)?.len(), 0, "nothing parsed, no clusters");
+    assert_eq!(
+        report_clusters(&json)?.len(),
+        0,
+        "nothing parsed, no clusters"
+    );
     Ok(())
 }
 
@@ -178,7 +233,10 @@ fn foreign_markers_leave_ordinary_python_analysable() -> Result<()> {
 /// Assert the analysed count and, in path order, every skipped file with its reason.
 fn assert_skips(json: &str, analysed: usize, skipped: &[&str]) -> Result<()> {
     let report: serde_json::Value = serde_json::from_str(json)?;
-    assert_eq!(report["files_analysed"].as_u64(), u64::try_from(analysed).ok());
+    assert_eq!(
+        report["files_analysed"].as_u64(),
+        u64::try_from(analysed).ok()
+    );
     let expected: Vec<serde_json::Value> = skipped
         .iter()
         .map(|path| serde_json::json!({ "path": path, "reason": ML_PARSE_ERROR }))

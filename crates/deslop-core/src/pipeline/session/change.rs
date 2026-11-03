@@ -15,7 +15,7 @@ use std::{
 use super::{
     super::{
         config::{EmbeddingSettings, PipelineConfig},
-        corpus::{parse_one_file, skip_reason, parser_for_language, CorpusBuildState},
+        corpus::{parse_one_file, parser_for_language, skip_reason, CorpusBuildState},
         open_buffers::{canonicalise_path, OpenBuffers},
     },
     PipelineSession,
@@ -314,8 +314,9 @@ impl PipelineSession {
         }
         let exclusion = &self.exclusion;
         let ignore_matcher = &self.ignore_matcher;
-        self.skipped_files
-            .retain(|path, _| !exclusion.is_excluded(path, None) && !ignore_matcher.is_ignored(path));
+        self.skipped_files.retain(|path, _| {
+            !exclusion.is_excluded(path, None) && !ignore_matcher.is_ignored(path)
+        });
         doomed.len()
     }
 

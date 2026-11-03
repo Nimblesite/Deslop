@@ -46,6 +46,7 @@ function report(clusters: ReportCluster[] = [cluster()]): Report {
   return emptyReport({
     tool_version: "test",
     files_analysed: 2,
+    files_skipped: [],
     metrics: repoMetrics({ clusters_total: clusters.length }),
     clusters,
   });

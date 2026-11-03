@@ -131,6 +131,7 @@ export function report(
   return emptyReport({
     tool_version: "v",
     files_analysed: 5,
+    files_skipped: [],
     cache_stats: { hits: 1, misses: 2 },
     metrics: metrics({ clusters_total: clusters.length, ...metricsOverride }),
     schema_doc: "docs",

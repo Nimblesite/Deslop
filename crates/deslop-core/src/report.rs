@@ -25,9 +25,9 @@ use hidden::{log_hidden_cluster, materialise_with_visibility, NOISE_TOTALS_RUN_S
 /// carries it ([CLONE-NOISE-REPARSE-CACHE]).
 pub use crate::cluster_filters::ParseCache;
 pub use crate::wire_generated::{
-    CacheStats, ContentMeasurement, SkippedFile, EmbeddingProvenance, PairClassification, PairComparison,
+    CacheStats, ContentMeasurement, EmbeddingProvenance, PairClassification, PairComparison,
     PairComparisonParams, PairEndpoint, PairEvidence, PairTextIdentity, Report, ReportCluster,
-    ReportOccurrence,
+    ReportOccurrence, SkippedFile,
 };
 
 /// Default occurrence cap applied by [`Report::truncate_for_wire`].

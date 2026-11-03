@@ -18,19 +18,39 @@ pub fn write_run_details(out: &mut String, report: &Report, escape: fn(&str) -> 
          <dl>\
          <dt>Tool</dt><dd>{tool}</dd>\
          <dt>Files analysed</dt><dd>{files}</dd>\
+         <dt>Files skipped</dt><dd>{skipped}</dd>\
          <dt>Visible groups</dt><dd>{visible}</dd>\
          <dt>Hidden groups</dt><dd>{hidden}</dd>\
          <dt>Embeddings</dt><dd>{embeddings}</dd>\
          </dl>",
         tool = escape(&report.tool_version),
         files = report.files_analysed,
+        skipped = report.files_skipped.len(),
         visible = report.clusters.len(),
         hidden = report.clusters_hidden,
         embeddings = escape(&format_provenance(report)),
     );
+    write_skipped_files(out, report, escape);
     write_boilerplate_hints(out, report, escape);
     write_schema(out, report, escape);
     let _ = write!(out, "</details>");
+}
+
+/// [LANG-CAND-OSPREY-UNPARSED] Every file the figures above leave out, and why.
+fn write_skipped_files(out: &mut String, report: &Report, escape: fn(&str) -> String) {
+    if report.files_skipped.is_empty() {
+        return;
+    }
+    let _ = write!(out, "<h3>Skipped files</h3><ul>");
+    for skipped in &report.files_skipped {
+        let _ = write!(
+            out,
+            "<li><code>{path}</code>: {reason}</li>",
+            path = escape(&skipped.path),
+            reason = escape(&skipped.reason),
+        );
+    }
+    let _ = write!(out, "</ul>");
 }
 
 /// Low-noise import/prologue hygiene hints.
