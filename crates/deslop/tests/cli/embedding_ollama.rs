@@ -422,6 +422,7 @@ fn ollama_incremental_plus_embeddings_second_run_hits_both_caches() -> Result<()
         "first incremental run must register both files as misses",
     )?;
 
+    crate::common::incremental::clear_completed_report(&scan_root)?;
     run_ollama_scan(&scan_root, &tmp.path().join("second"), "15", "required")?;
     let second_json = load_report_json(&tmp.path().join("second.json"))?;
     assert_cache_counters(

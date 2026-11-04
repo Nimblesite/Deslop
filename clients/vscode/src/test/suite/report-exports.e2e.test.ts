@@ -21,7 +21,7 @@ suite("report exports", () => {
     assert.ok(expected.clusters.some((cluster) => cluster.occurrence_count >= MINIMUM_OCCURRENCES));
     const before = await generation(client);
     for (let click = 0; click < REPEATED_CLICKS; click += 1) {
-      await vscode.commands.executeCommand(OPEN_HTML);
+      await openHtmlTab();
       assert.deepEqual(await client.sendRequest<Report>(REPORT_GET), expected);
       assert.equal(await generation(client), before, "HTML export must not refresh analysis");
       const tabs = vscode.window.tabGroups.all.flatMap((group) => group.tabs);
@@ -34,4 +34,20 @@ async function generation(client: LanguageClient): Promise<number> {
   const delta = await client.sendRequest<ReportDelta | null>(REPORT_DELTA, { since_generation: 0 });
   assert.ok(delta, "real LSP must return the current generation");
   return delta.to_generation;
+}
+
+async function openHtmlTab(): Promise<void> {
+  await vscode.commands.executeCommand(OPEN_HTML);
+  if (hasHtmlTab()) return;
+  await new Promise<void>((resolve) => {
+    const changed = vscode.window.tabGroups.onDidChangeTabs(() => {
+      if (!hasHtmlTab()) return;
+      changed.dispose();
+      resolve();
+    });
+  });
+}
+
+function hasHtmlTab(): boolean {
+  return vscode.window.tabGroups.all.some((group) => group.tabs.some((tab) => tab.label === HTML_TITLE));
 }
