@@ -10,7 +10,10 @@ use super::{super::store::relative_path_key, StageLedger};
 use crate::{
     ast::NormalizedNode,
     buckets::ClusterKind,
-    cluster::{build_ranked_fused_clusters, Cluster, ClusterBuildInputs, ClusterKindJudge},
+    cluster::{
+        collapse_ranked_clusters, materialise_clusters, Cluster, ClusterBuildInputs,
+        ClusterKindJudge,
+    },
     content::{tree_index_of, ContentMeasurer},
     fingerprint::Fingerprint,
     overlap::endpoint_count_bound,
@@ -364,7 +367,6 @@ impl PipelineSession {
     ) -> Vec<Cluster> {
         let paths = self.report_paths(fingerprints);
         let started = Instant::now();
-        let mut findings = Vec::new();
         let eligible = eligible_information(
             information,
             fingerprints,
@@ -373,18 +375,25 @@ impl PipelineSession {
             &self.file_languages,
             self.exclusion.routing().nearly_identical_min_shape,
         );
-        for (fused_clusters, clones) in [(clones, true), (eligible.as_slice(), false)] {
-            let kinds = KindFilter { judge, clones };
-            findings.extend(build_ranked_fused_clusters(&ClusterBuildInputs {
-                fingerprints,
-                fused_clusters,
-                trees,
-                sources: &self.sources,
-                file_languages: &self.file_languages,
-                file_paths: &paths,
-                kinds: &kinds,
-            }));
-        }
+        // [PIPELINE-CLUSTER-SUBSUME] Both sides of the clone/information
+        // boundary are materialised under their own kind judge, then
+        // resolved as one set of views: a shape-only fragment nested in an
+        // admitted near-miss is absorbed by it instead of published beside it.
+        let views: Vec<Cluster> = [(clones, true), (eligible.as_slice(), false)]
+            .into_iter()
+            .flat_map(|(fused_clusters, clones)| {
+                materialise_clusters(&ClusterBuildInputs {
+                    fingerprints,
+                    fused_clusters,
+                    trees,
+                    sources: &self.sources,
+                    file_languages: &self.file_languages,
+                    file_paths: &paths,
+                    kinds: &KindFilter { judge, clones },
+                })
+            })
+            .collect();
+        let findings = collapse_ranked_clusters(views, &self.sources);
         ledger.record("ranked_build", clones.len(), findings.len(), started);
         findings
     }
