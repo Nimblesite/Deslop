@@ -33,11 +33,9 @@ fn detects_renamed_osprey_effect_handlers() -> Result<()> {
 /// The fixture's two files form the top-ranked cluster of the expected kind.
 fn assert_top_pair(fixture_name: &str, kind: &str) -> Result<()> {
     let json = run_min_nodes(fixture_name, MIN_NODES)?;
-    assert_type2_report(&json, FIRST_FILE, SECOND_FILE)?;
-    let clusters = report_clusters(&json)?;
-    let cluster = require_cluster_spanning(&clusters, FIRST_FILE, SECOND_FILE)?;
-    assert_eq!(field(cluster, "rank").as_u64(), Some(EXPECTED_RANK));
-    assert_eq!(field(cluster, "kind").as_str(), Some(kind));
+    let cluster = require_type2_cluster(&json, FIRST_FILE, SECOND_FILE)?;
+    assert_eq!(field(&cluster, "rank").as_u64(), Some(EXPECTED_RANK));
+    assert_eq!(field(&cluster, "kind").as_str(), Some(kind));
     Ok(())
 }
 
@@ -67,11 +65,9 @@ fn interpolation_ast() -> Result<String> {
 #[test]
 fn osprey_file_removal_updates_the_live_report() -> Result<()> {
     let (json, delta) = removal_report()?;
-    assert_type2_report(&json, FIRST_FILE, SECOND_FILE)?;
-    let clusters = report_clusters(&json)?;
-    let cluster = require_cluster_spanning(&clusters, FIRST_FILE, SECOND_FILE)?;
+    let cluster = require_type2_cluster(&json, FIRST_FILE, SECOND_FILE)?;
     let removed = require_array(&delta, "/clusters_removed", "Osprey delta")?;
-    assert!(removed.iter().any(|id| id == field(cluster, "id")));
+    assert!(removed.iter().any(|id| id == field(&cluster, "id")));
     assert_eq!(
         require_array(&delta, "/clusters_added", "Osprey delta")?.as_slice(),
         NO_ADDED_CLUSTERS

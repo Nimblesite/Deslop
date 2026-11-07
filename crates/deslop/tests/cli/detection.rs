@@ -1,6 +1,7 @@
 use super::support::*;
 use crate::common::{
     go_scope::*,
+    occurrence_line_span, per_file_metrics, row_for_path,
     signals::{assert_no_pair_surface_on_cluster, has_verbatim_pair},
 };
 

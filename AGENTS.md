@@ -32,7 +32,8 @@ Deslop is a duplicate-code detector. **Accuracy-audit mode:** one measure outran
 - **Tokens:** check file size first, `Grep` over `Read`, `offset`/`limit`, smallest diff. Delete dead code, unused imports, stale comments.
 - **Headlines only.** Replies are a status line: result, the number that moved, the file path. ❌ restating the request, narrating steps, repeating report tables. 🛑 blocker, 🔴 regression/failing gate, ✅ pass.
 - **Too Many Cooks** for file locking and agent messaging.
-- ❌ closing GitHub issues unless asked. Delete every temp file you write.
+- **Close a GitHub issue only after verifying the fix on the officially released version** (Marketplace/Homebrew/Scoop build, never a dev build; ❌ auto-close via PR), with the test process — version, steps, inputs, observed result — documented on the ticket.
+- Delete every temp file you write.
 - Files < 500 LOC, functions < 20 LOC. **Named constants, not literals** — in tests too; every threshold is a config-overridable default.
 - **Spec IDs, not issue numbers.** Hierarchical, non-numeric (`[GROUP-TOPIC-DETAIL]`), cited in spec, code and tests so `grep [RANK-` finds all three. Same-group sections sit adjacent. Only explicit regression tests may cite a GitHub issue.
 - **Global state** lives in `crates/deslop-core/src/state.rs` (one equivalent file per other language).
@@ -40,7 +41,7 @@ Deslop is a duplicate-code detector. **Accuracy-audit mode:** one measure outran
 - **Auto-memory is off.** Durable rules = reviewed changes to this file.
 - **VSIX is the only distribution**, plus Homebrew/Scoop for the CLI. Build output under `target/`; ❌ `cargo install --path crates/deslop-*`.
 - **Docs point external MCP clients at the absolute VSIX path** `~/.vscode/extensions/nimblesite.deslop-live-<VERSION>-<platform>/bin/<platform>/deslop-mcp` (Windows likewise); a `PATH` binary drifts off the wire contract. Bare `deslop-mcp` = Homebrew/Scoop only.
-- **Logging = `tracing` only**, ❌ `println!`/`eprintln!`. Structured fields (`tracing::info!(file_count = 42)`); log entry/exit of significant operations, counts and hashes — **never** file contents, user paths or secrets. Reports → stdout or `--output <path>`, not logs.
+- **Structured logging through `tracing` only** (❌ `println!`/`eprintln!`): the sink is configuration, never code. Log with fields (`tracing::info!(file_count = 42)`) at the entry/exit of significant operations — counts and hashes, **never** file contents, user paths or secrets. Reports are output (stdout or `--output <path>`), not logs.
 - **"Deslop.live"** = the whole reactive loop: watcher → scheduler → session → broadcast → UI refresh.
 
 ## Testing — the accuracy enforcement surface
@@ -60,14 +61,14 @@ Deslop is a duplicate-code detector. **Accuracy-audit mode:** one measure outran
 
 ## 🛑 Accuracy quarantine — tests outrank code
 
-A red test that pins a false positive/negative is worth more than code that *might* be right. When you find code that could produce one, whatever your task:
+A red test that pins a false positive/negative beats code that might be right. When you find code that could produce one, whatever your task:
 
 1. 🛑 **STOP.**
-2. **Delete the code.** Replace it with a `panic!` saying what it did and why it went; allow `panic = "deny"` on that line only. A panic is found in seconds, a silent false negative never — this is the one place panics are mandated.
-3. **Write the test that now fails** — assert cluster, occurrence count, file paths, bucket and ranking order. A test that still passes when the detector goes blind asserts nothing.
-4. **Report:** file, defect, failing test, what you removed. Then wait.
+2. **Delete the code.** Replace it with a `panic!` saying what it did and why; allow `panic = "deny"` on that line only. A panic is found in seconds, a silent false negative never — the one place panics are mandated.
+3. **Write the test that now fails:** assert cluster, occurrence count, file paths, bucket and ranking order. A test that passes when the detector goes blind asserts nothing.
+4. **Report** file, defect, failing test and what you removed, then wait.
 
-Once the user acknowledges, write a **fresh implementation** that turns the test green. ❌ patching or working around the deleted code.
+After the user acknowledges, write a **fresh implementation** that turns the test green. ❌ patching or working around the deleted code.
 
 ## Version comparison — the corpus run
 
@@ -75,31 +76,22 @@ Once the user acknowledges, write a **fresh implementation** that turns the test
 
 ## Documentation
 
-- Cross-reference spec IDs across tests, code, specs and plans; each spec section has a unique hierarchical, non-numeric ID.
-- Code, specs and tests must agree. Where they don't, STOP and report.
-- Specs are for humans first: jargon goes in a separate "For AI" section. Remove fluff that specifies nothing.
-- PR documentation tight and human-readable (except the AI section). Prose wraps naturally.
+- 🔗 Cross-reference spec IDs across tests, code, specs and plans; each spec section has a unique hierarchical, non-numeric ID.
+- ⚖️ Code, specs and tests must agree. Where they don't, 🛑 STOP and report.
+- 🤖 Routinely update `site/src/docs/for-ai.md` with instructions for agents using Deslop.
+- 🧑 Specs are for humans first: jargon goes in a separate "For AI" section. ✂️ Remove fluff that specifies nothing.
+- 📝 PR documentation tight and human-readable (except the AI section). Prose wraps naturally.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    discover[Discover files] --> parse[Per-language parse<br/>tree-sitter]
-    parse --> normalize[Normalize AST]
-    normalize --> fingerprint[Fingerprint subtrees]
-    fingerprint --> cluster[Cluster]
-    cluster --> lsh[Token LSH]
-    lsh --> embed[Embeddings<br/>hybrid]
-    embed --> fuse[Fuse signals]
-    fuse --> rank[Rank]
-    rank --> render[Render report]
+    discover[Discover] --> parse[tree-sitter parse] --> normalize[Normalize AST] --> fingerprint[Fingerprint] --> cluster[Cluster] --> lsh[Token LSH] --> embed[Embeddings] --> fuse[Fuse] --> rank[Rank] --> render[Render]
 ```
 
-Every stage can lose accuracy: normalization that strips too much manufactures false positives, too little manufactures false negatives. Ranking changes change every report — new assertions, not adjusted ones.
+Every stage can lose accuracy: over-normalizing manufactures false positives, under-normalizing false negatives. Ranking changes change every report — new assertions, not adjusted ones.
 
-**Build** `make ci` · **Test** `make test` · **Lint** `make lint`. 7 AgentPMO make targets; repo-specific targets sit below a horizontal marker. Debug one test: `cargo test <name> -- --nocapture`.
-
-Paths, pipeline-stage detail and the `lspkit` migration map: [docs/repo-index.md](docs/repo-index.md) — read only when locating something.
+`make ci` · `make test` · `make lint`; debug one test with `cargo test <name> -- --nocapture`. Paths and stage detail: [docs/repo-index.md](docs/repo-index.md), read only when locating something.
 
 ## UI and audience
 

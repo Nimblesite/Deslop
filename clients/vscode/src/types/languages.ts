@@ -25,6 +25,8 @@ const EXTENSION_LANGUAGE: Record<string, string> = {
   fsx: FSHARP_LANGUAGE_ID,
   php: "php",
   go: "go",
+  c: "c",
+  h: "c",
 };
 
 /** Every source extension the registry resolves, without the leading dot,
@@ -59,6 +61,7 @@ const LANGUAGE_DISPLAY: Record<string, string> = {
   fsharp: "F#",
   php: "PHP",
   go: "Go",
+  c: "C",
 };
 
 /** Human display name for a language id used in group headings and
@@ -94,4 +97,5 @@ export const ANALYSED_LANGUAGE_IDS: readonly string[] = [
   FSHARP_LANGUAGE_ID,
   "php",
   "go",
+  "c",
 ];

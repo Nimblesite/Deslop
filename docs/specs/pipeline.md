@@ -57,6 +57,10 @@ Implemented in `fingerprint.rs` (`is_viewless_root`). Pinned by `python_inherite
 
 Token signatures use the bottom-up fold [PIPELINE-SIGNATURE-FOLD] and fingerprint-scoped fallback [PIPELINE-SIGNATURE-FALLBACK], specified in [signatures.md](signatures.md).
 
+#### [PIPELINE-FINGERPRINT-SIBLING-HOST] A loop header is not a run of statements
+
+Sibling windows ([DECISION-TYPE3-TWO-PASS]) are runs of two to eight neighbouring statements or declarations under one parent. In C, C#, JavaScript, TypeScript, Dart and PHP a `for_statement` holds its initialiser, condition and update as direct children beside the body, so a window over those children is either the bare header — `for (int i = 0; i < n; i++)` is an idiom every loop in the file shares, not a copy — or the header plus the body, which the `for_statement` subtree already fingerprints at the same extent. Neither adds evidence, so no window is emitted over a `for_statement`'s children; windows inside the body, and windows that include the whole loop as one sibling, are unaffected. Go wraps the three clauses in a `for_clause` and never formed such a window. Found when two C loops that shared nothing but `for (int index = 0; index < count; index++)` published as a nearly identical pair. Implemented in `sibling.rs` (`hosts_sibling_windows`); pinned by `c_headers_are_analysed_without_manufacturing_clusters`.
+
 ### [PIPELINE-CLUSTER-EXACT] Exact subtree clustering
 Group `NormalizedNode` fingerprints by `hash` to propose exact candidate pairs. This covers Type-1 and normalized Type-2 deterministically in O(n). A hash bucket is not a cluster: each concrete pair must still pass [FUSED-STRATEGY-BOUNDED-MAX]. Candidate pairs are language-scoped by default per [CONFIG-CROSS-LANGUAGE]; the exact same hash may still be compared across languages when `.deslop.toml` opts into cross-language comparison.
 

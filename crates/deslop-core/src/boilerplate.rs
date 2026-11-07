@@ -197,6 +197,28 @@ fn is_language_specific_boilerplate_subtree(language: &str, node: &NormalizedNod
         "python" => is_python_prologue_subtree(node),
         "javascript" | "typescript" | "tsx" => is_ecmascript_reexport(node),
         "php" => is_php_prologue_statement(node),
+        "c" => is_c_prototype(node),
+        _ => false,
+    }
+}
+
+/// [LANG-CAND-C-PROTOTYPE] A function prototype is a `declaration` whose
+/// declarator is a `function_declarator` (possibly behind a
+/// `pointer_declarator`) and which has no body. After normalisation every
+/// one-argument prototype is the same shape, so a header listing `sqrt`,
+/// `exp` and `log` would otherwise cluster with any other header listing
+/// three unrelated functions. The declaration is a promise about a body
+/// that lives elsewhere; the body is the evidence.
+fn is_c_prototype(node: &NormalizedNode) -> bool {
+    node.kind == "declaration" && node.children.iter().any(is_c_function_declarator)
+}
+
+/// The `function_declarator` of a prototype, unwrapping pointer-returning
+/// declarators such as `const char *name(int)`.
+fn is_c_function_declarator(node: &NormalizedNode) -> bool {
+    match node.kind {
+        "function_declarator" => true,
+        "pointer_declarator" => node.children.iter().any(is_c_function_declarator),
         _ => false,
     }
 }

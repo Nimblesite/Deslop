@@ -188,6 +188,18 @@ pub(super) fn cluster_file_basenames(
         .collect()
 }
 
+/// Asserts the Type-2 report shape and returns the cluster spanning both
+/// files: the opening move of every per-language `*-small` test.
+pub(super) fn require_type2_cluster(
+    json: &str,
+    first_file: &str,
+    second_file: &str,
+) -> Result<serde_json::Value> {
+    assert_type2_report(json, first_file, second_file)?;
+    let clusters = report_clusters(json)?;
+    Ok(require_cluster_spanning(&clusters, first_file, second_file)?.clone())
+}
+
 /// Finds the cluster spanning both `first_file` and `second_file`, or
 /// fails with the full cluster dump so the report shape is visible.
 pub(super) fn require_cluster_spanning<'a>(

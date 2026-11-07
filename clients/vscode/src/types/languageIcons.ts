@@ -19,6 +19,7 @@ const LANGUAGE_MARKS: Readonly<Record<string, LanguageMark>> = {
   fsharp: { label: "F#", color: "#9bb5ec" },
   php: { label: "php", color: "#bcb5e9" },
   go: { label: "Go", color: "#72d4e4" },
+  c: { label: "C", color: "#9fb4d0" },
 };
 const UNKNOWN_MARK: LanguageMark = { label: "?", color: "#b8bec8" };
 const ICON_SIZE = 24;

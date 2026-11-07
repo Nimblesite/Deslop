@@ -23,7 +23,7 @@ Install from the **VS Code Marketplace**:
 - **Command line:** `code --install-extension nimblesite.deslop-live`
 - **Browser:** open the [Deslop.live Marketplace page](https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live) and hit **Install**.
 
-Then open a supported source file (`.cs`, `.rs`, `.py`, `.dart`, `.js`, `.mjs`, `.cjs`, `.jsx`, `.ts`, `.tsx`, `.php`, `.fs`, `.fsx`, `.go`, or `.osp`). The live bubble is active immediately, and the **Top Offenders** tree populates as the file watcher fires.
+Then open a supported source file (`.cs`, `.rs`, `.py`, `.dart`, `.js`, `.mjs`, `.cjs`, `.jsx`, `.ts`, `.tsx`, `.php`, `.fs`, `.fsx`, `.go`, `.c`, `.h`, or `.osp`). The live bubble is active immediately, and the **Top Offenders** tree populates as the file watcher fires.
 
 The extension bundles native binaries for `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, and `win32-x64` — the right one is selected for you automatically.
 

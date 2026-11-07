@@ -758,6 +758,15 @@ fn debug_ast_dump_matches_committed_golden_go() -> Result<()> {
     assert_ast_golden("ast-golden-go", "Sample.go")
 }
 
+// [LANG-CAND-C] golden: identifier / field / type / label / primitive
+// collapse, literal collapse (number, char with escape, string content,
+// concatenated string wrapper kept), comment drop, and the preprocessor
+// nodes kept structural so [LANG-CAND-C-PREPROC] can suppress them.
+#[test]
+fn debug_ast_dump_matches_committed_golden_c() -> Result<()> {
+    assert_ast_golden("ast-golden-c", "Sample.c")
+}
+
 // [LANG-CAND-JAVASCRIPT] golden: Sample.jsx proves the plain JavaScript
 // grammar's JSX path normalises identically — and pins that JSX text AND
 // html_character_reference entities (`&amp;`, `&copy;`) both collapse to

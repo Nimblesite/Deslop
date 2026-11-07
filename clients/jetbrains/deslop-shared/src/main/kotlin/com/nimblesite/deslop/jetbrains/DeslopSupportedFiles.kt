@@ -29,6 +29,7 @@ object DeslopSupportedFiles {
         "php" to LanguageInfo("PHP", setOf("php")),
         "fsharp" to LanguageInfo("F#", setOf("fs", "fsx")),
         "go" to LanguageInfo("Go", setOf("go")),
+        "c" to LanguageInfo("C", setOf("c", "h")),
     )
 
     /** Display name for a path whose extension is not one Deslop analyses. */
