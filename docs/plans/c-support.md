@@ -16,6 +16,7 @@ Implements [LANG-CAND-C], [LANG-CAND-C-PREPROC] and [LANG-CAND-C-PROTOTYPE]; the
 - `primitive_type` collapses with identifiers (parity with C# `predefined_type`, Rust `primitive_type`).
 - Macro definitions are scaffolding, never clone evidence: the grammar cannot see inside them.
 - Function prototypes are scaffolding ([LANG-CAND-C-PROTOTYPE]): found as a false positive when the dev build scanned Osprey's `compiler/runtime` (`klee/include/math.h` clustered with `hunt_mock_tests.h`). Fixture: `c-headers/math_shim.h` + `clock_shim.h`.
+- Function-pointer variables are not prototypes ([LANG-CAND-C-PROTOTYPE]): the adversarial pi review (zai/glm-5.3) found two files' copied `int (*on_open)(...)` hook tables reported nothing. Fixture: `c-function-pointers`.
 - A flat C `for` header is never a sibling window ([PIPELINE-FINGERPRINT-SIBLING-HOST]): two loops in `c-headers/util.c` sharing only `for (int index = 0; index < count; index++)` paired as nearly identical.
 
 ## Osprey

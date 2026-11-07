@@ -35,6 +35,13 @@ const CLEANUP_OPEN_FAILURE_SECOND: (u64, u64) = (20, 25);
 /// the same order inside one file.
 const CLEANUP_TAIL_FIRST: (u64, u64) = (32, 34);
 const CLEANUP_TAIL_SECOND: (u64, u64) = (44, 46);
+const POINTERS_FIXTURE: &str = "c-function-pointers";
+const POINTERS_MIN_NODES: &str = "8";
+const POINTERS_FIRST: &str = "hooks_alpha.c";
+const POINTERS_SECOND: &str = "hooks_beta.c";
+const POINTERS_HEADER: &str = "hooks.h";
+/// The four function-pointer variables both files copied, by row.
+const POINTERS_TABLE: (u64, u64) = (3, 6);
 const LANGUAGE_LABEL: &str = "C";
 const LANGUAGE_ID: &str = "c";
 const NO_CLUSTERS: &[Value] = &[];
@@ -200,4 +207,26 @@ fn copied_c_error_paths_and_cleanup_tails_are_reported() -> Result<()> {
         (CLEANUP_FIRST, CLEANUP_TAIL_FIRST),
         (CLEANUP_FIRST, CLEANUP_TAIL_SECOND),
     )
+}
+
+// [LANG-CAND-C-PROTOTYPE] `int (*on_open)(const char *, int);` declares a
+// variable that holds a function pointer, not a function: the declarator is
+// parenthesised. Two files that copied the same hook table are a real clone,
+// while `hooks.h` (prototypes only) still contributes nothing.
+#[test]
+fn copied_c_function_pointer_tables_are_reported_but_prototypes_are_not() -> Result<()> {
+    let json = run_min_nodes(POINTERS_FIXTURE, POINTERS_MIN_NODES)?;
+    let clusters = report_clusters(&json)?;
+    require_cluster_with_spans(
+        &clusters,
+        (POINTERS_FIRST, POINTERS_TABLE),
+        (POINTERS_SECOND, POINTERS_TABLE),
+    )?;
+    for cluster in &clusters {
+        assert!(
+            !cluster_file_basenames(cluster).contains(POINTERS_HEADER),
+            "a header of prototypes is scaffolding, never a clone: {cluster:#}"
+        );
+    }
+    Ok(())
 }

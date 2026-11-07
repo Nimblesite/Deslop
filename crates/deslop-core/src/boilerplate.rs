@@ -214,10 +214,16 @@ fn is_c_prototype(node: &NormalizedNode) -> bool {
 }
 
 /// The `function_declarator` of a prototype, unwrapping pointer-returning
-/// declarators such as `const char *name(int)`.
+/// declarators such as `const char *name(int)`. A function declarator whose
+/// own declarator is parenthesised — `int (*on_open)(int)` — names a
+/// variable holding a function pointer, not a function: it is data the
+/// author wrote, so a copied table of them is clone evidence.
 fn is_c_function_declarator(node: &NormalizedNode) -> bool {
     match node.kind {
-        "function_declarator" => true,
+        "function_declarator" => !node
+            .children
+            .iter()
+            .any(|child| child.kind == "parenthesized_declarator"),
         "pointer_declarator" => node.children.iter().any(is_c_function_declarator),
         _ => false,
     }
