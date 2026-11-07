@@ -44,8 +44,10 @@ judge next.
 | dart | bloc, dio | more passes on dio |
 | php | guzzle, composer | more passes on composer |
 | fsharp | FSharp.Data, giraffe (no agreed CLEARLY IN yet) | another pass on giraffe, which is still queued |
+| osprey | none | a first pass on the Osprey repository, queued; it also yields C pairs from the runtime |
+| c | none | first passes on jq and hiredis, both queued at visibly different sizes |
 
-Every one of the nine languages now has a register. Python and TypeScript still rest on a single repository, and the second repositories above were judged on a short pass, so depth is what the next passes buy, not breadth. `corpus/judging-queue.json` still holds giraffe, because its register has no agreed CLEARLY IN. `corpus_commit_pins.rs` fails whenever the queue is empty, by design.
+Every language except Osprey and C has a register; both are queued for a first pass. Python and TypeScript still rest on a single repository, and the second repositories above were judged on a short pass, so depth is what the next passes buy, not breadth. `corpus/judging-queue.json` still holds giraffe, because its register has no agreed CLEARLY IN. `corpus_commit_pins.rs` fails whenever the queue is empty, by design.
 
 A CLEARLY IN may pin a clone type (`Type I` to `Type IV`); blank accepts any type. See
 `docs/specs/corpus.md` §[CORPUS-REGISTER-TYPE].

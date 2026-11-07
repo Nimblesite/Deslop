@@ -7,6 +7,27 @@
       "sha": "279fe3a30c27bd647d2655745f71190c74bdd749",
       "language": "fsharp",
       "why": "F# is judged on FSharp.Data alone, a large library of type providers. Giraffe is a small web framework of handlers and routing combinators, so the F# register gains a repository of visibly different size and style."
+    },
+    {
+      "name": "Osprey",
+      "url": "https://github.com/Nimblesite/osprey.git",
+      "sha": "1b3ba2b16eebca0fbae7baf0823eac2b69870ae5",
+      "language": "osprey",
+      "why": "Osprey has no register at all. Its own repository is the largest body of hand-written Osprey there is: compiler examples, the hunt and LLM packages in both the default `.osp` and ML `.ospml` flavours, and a hand-written C runtime, so one pass also gives C its first judged pairs."
+    },
+    {
+      "name": "jq",
+      "url": "https://github.com/jqlang/jq.git",
+      "sha": "5c001b18d7237cce1fdba63608732163f978dd23",
+      "language": "c",
+      "why": "C has no register. jq is a mid-sized hand-written C program, an interpreter with its own parser, bytecode compiler and allocator, full of the error-path and cleanup ladders C duplicates by copying."
+    },
+    {
+      "name": "hiredis",
+      "url": "https://github.com/redis/hiredis.git",
+      "sha": "5bb7f030f6631b243438cf0fdd3be84352b905bb",
+      "language": "c",
+      "why": "A small C client library of a visibly different size and style from jq: protocol readers, sync and async connection paths and adapters for several event loops, which repeat set-up and teardown by design."
     }
   ]
 }
