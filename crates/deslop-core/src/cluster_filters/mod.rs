@@ -608,7 +608,8 @@ fn snippet_body_shape_when_signature_only<'src>(
 /// declarations for the purpose of polymorphism detection.
 pub(super) const fn function_kinds(language: &str) -> &'static [&'static str] {
     match language.as_bytes() {
-        b"python" => &["function_definition"],
+        // Python and C each have one function form exposing a `body` field.
+        b"python" | b"c" => &["function_definition"],
         b"csharp" => &["method_declaration", "local_function_statement"],
         b"rust" => &["function_item"],
         // Dart `function_declaration`/`method_declaration` both expose a
@@ -640,8 +641,6 @@ pub(super) const fn function_kinds(language: &str) -> &'static [&'static str] {
         // the signature-only and polymorphic-signature filters
         // can compare bodies after a signature-only structural match.
         b"go" => &["function_declaration", "method_declaration", "func_literal"],
-        // C has one function form; it exposes a `body` field.
-        b"c" => &["function_definition"],
         _ => &[],
     }
 }

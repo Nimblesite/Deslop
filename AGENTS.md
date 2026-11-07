@@ -4,21 +4,6 @@ Deslop is a duplicate-code detector. **Accuracy-audit mode:** one measure outran
 
 > **Every reported cluster is a real duplicate, every real duplicate is reported, and every figure (percentages included) is a transparent, accurate calculation.**
 
-## 🛑 Accuracy quarantine — tests outrank code
-
-A failing test that pins a bug is worth more than code that *might* produce a false positive/negative. Unproven code is a liability; a red test in the tree is a correct outcome.
-
-When you find code that could cause a false positive or false negative, whatever you were sent to do:
-
-1. 🛑 **STOP** the current task.
-2. **Delete the defective code**; replace it with a `panic!` documenting what it did and why it was removed. Allow `panic = "deny"` on that line only.
-3. **Write a test that fails because the code is missing.** Assert cluster, occurrence count, file paths, bucket and ranking order — a test that passes when the detector goes blind asserts nothing.
-4. **Tell the user:** file, defect, failing test, what you removed.
-
-**Next:** replace the panic with a **fresh, real implementation** that turns the test green — only after the user acknowledges. ❌ patching or working around the deleted code.
-
-Panics are banned for control flow and errors but **mandated** here: a panic is found in seconds, a silent false negative never is.
-
 ## Invariants
 
 - 🛑 **Never kill a VS Code process**, including browser-hosted instances.
@@ -30,25 +15,32 @@ Panics are banned for control flow and errors but **mandated** here: a panic is 
 - **Bugs follow the [fix-bug skill](.claude/skills/fix-bug/SKILL.md):** root cause, replace broken code, ❌ a duplicate path beside it.
 - **IPC wire models are generated from [typeDiagram](https://typediagram.dev/docs/language-reference.html)** — never hand-written or committed.
 
+## Rust
+
+- ❌ `unwrap()`/`expect()` in production; tests may `expect` with a message.
+- ❌ `panic!`/`todo!`/`unimplemented!`/`unreachable!` for control flow or errors — return `Result<T, E>`. Mandated only for the quarantine.
+- ❌ `unsafe {}` (`unsafe_code = "deny"`). Public items carry `///` docs (`missing_docs = "deny"`).
+- `thiserror` in `deslop-core`; `anyhow` in the `deslop` binary.
+- Pattern matching over casting. Expressions over statements. Iterator chains over loops. Early return with `?`. Descriptive names — single letters only in closures.
+
 ## Workflow
 
 - **Act autonomously.** ❌ stopping for confirmation except where the quarantine says STOP. Record assumptions, continue.
-- **Pis do legwork only; you own their output.** Review and fix it.
+- **Offload legwork (repetitive, bounded work) to pi agents**, exact ids in this precedence: `kimi-coding/k3.1-pro-highspeed` (UI) → `zai/glm-5.3` (scoped implementation/reviews) → `zai/glm-5.3-flash` (fixtures, test expansion) → `deepseek/deepseek-flash` (oracles/tests); `deepseek/deepseek-v4-pro` only for narrow audits. `pi auth check --model <id>` first; out of credit → next. Register each pi on Too Many Cooks (`PiDeslop<Task>N`), run with a timeout, monitor its log, remove it after exit. **You own its output:** verify, correct, record model/date/result in `~/Documents/Code/PiNotes`.
 - **Aggressively DRY.** A duplication detector's codebase must be exemplary: run deslop on itself routinely.
 - **A+ bar.** Fix substandard code now, never defer.
-- **Tokens:** check file size first, `Grep` over `Read`, `offset`/`limit`, smallest diff. Delete dead code, unused imports, stale comments; call out irrelevant context.
-- **Headlines only.** Replies are a status line: result, the number that moved, the file path. ❌ restating the request, narrating steps, repeating report tables. Mark criticals: 🛑 blocker, 🔴 regression/failing gate, ✅ pass.
-- **Too Many Cooks** for file locking and agent messaging when available.
-- ❌ closing GitHub issues (even from PRs) unless asked.
-- **Clean up:** delete every temp file you write.
-- Files < 500 LOC, functions < 20 LOC. **Named constants, not literals** — in tests too. Every threshold is a named default the user can override in config.
-- **Spec IDs, not issue numbers.** Hierarchical, non-numeric (`[GROUP-TOPIC]`, `[GROUP-TOPIC-DETAIL]`), cited in spec, code and tests so `grep [RANK-` finds all three. Same-group sections sit adjacent. Only explicit regression tests may cite a GitHub issue.
+- **Tokens:** check file size first, `Grep` over `Read`, `offset`/`limit`, smallest diff. Delete dead code, unused imports, stale comments.
+- **Headlines only.** Replies are a status line: result, the number that moved, the file path. ❌ restating the request, narrating steps, repeating report tables. 🛑 blocker, 🔴 regression/failing gate, ✅ pass.
+- **Too Many Cooks** for file locking and agent messaging.
+- ❌ closing GitHub issues unless asked. Delete every temp file you write.
+- Files < 500 LOC, functions < 20 LOC. **Named constants, not literals** — in tests too; every threshold is a config-overridable default.
+- **Spec IDs, not issue numbers.** Hierarchical, non-numeric (`[GROUP-TOPIC-DETAIL]`), cited in spec, code and tests so `grep [RANK-` finds all three. Same-group sections sit adjacent. Only explicit regression tests may cite a GitHub issue.
 - **Global state** lives in `crates/deslop-core/src/state.rs` (one equivalent file per other language).
 - **Dependency versions stay in sync** across `Cargo.toml`, `.github/workflows/ci.yml`, `.devcontainer/`.
 - **Auto-memory is off.** Durable rules = reviewed changes to this file.
 - **VSIX is the only distribution**, plus Homebrew/Scoop for the CLI. Build output under `target/`; ❌ `cargo install --path crates/deslop-*`.
-- **Docs point external MCP clients at the absolute VSIX path** `~/.vscode/extensions/nimblesite.deslop-live-<VERSION>-<platform>/bin/<platform>/deslop-mcp` (Windows equivalent likewise); a `PATH` binary drifts off the wire contract. Bare `deslop-mcp` = Homebrew/Scoop only.
-- **Logging = `tracing` only**, ❌ `println!`/`eprintln!`. Structured fields (`tracing::info!(file_count = 42)`); log entry/exit of significant operations; log counts and hashes, **never** file contents, user paths or secrets. Reports → stdout or `--output <path>`, not logs.
+- **Docs point external MCP clients at the absolute VSIX path** `~/.vscode/extensions/nimblesite.deslop-live-<VERSION>-<platform>/bin/<platform>/deslop-mcp` (Windows likewise); a `PATH` binary drifts off the wire contract. Bare `deslop-mcp` = Homebrew/Scoop only.
+- **Logging = `tracing` only**, ❌ `println!`/`eprintln!`. Structured fields (`tracing::info!(file_count = 42)`); log entry/exit of significant operations, counts and hashes — **never** file contents, user paths or secrets. Reports → stdout or `--output <path>`, not logs.
 - **"Deslop.live"** = the whole reactive loop: watcher → scheduler → session → broadcast → UI refresh.
 
 ## Testing — the accuracy enforcement surface
@@ -66,17 +58,20 @@ Panics are banned for control flow and errors but **mandated** here: a panic is 
 - **Deterministic.** ❌ `sleep`, timing dependencies, random state.
 - **Coverage thresholds live in `coverage-thresholds.json`** at the repo root — never env vars, GitHub variables or CI YAML. Monotonic ⬆️ (−1% rounding allowance); below = pipeline fails.
 
+## 🛑 Accuracy quarantine — tests outrank code
+
+A red test that pins a false positive/negative is worth more than code that *might* be right. When you find code that could produce one, whatever your task:
+
+1. 🛑 **STOP.**
+2. **Delete the code.** Replace it with a `panic!` saying what it did and why it went; allow `panic = "deny"` on that line only. A panic is found in seconds, a silent false negative never — this is the one place panics are mandated.
+3. **Write the test that now fails** — assert cluster, occurrence count, file paths, bucket and ranking order. A test that still passes when the detector goes blind asserts nothing.
+4. **Report:** file, defect, failing test, what you removed. Then wait.
+
+Once the user acknowledges, write a **fresh implementation** that turns the test green. ❌ patching or working around the deleted code.
+
 ## Version comparison — the corpus run
 
 "Compare to version X" means **only** `scripts/compare-versions.sh <X> HEAD` ([CORPUS-SCORE-COMPARE]): both builds scored against `corpus/register/`. It writes `compare-<UTC>.md` + `.json` ([CORPUS-REPORT]), `INDEX.md` and per-repo `SUMMARY.md` under `.corpus/version-compare/reports/`. Point the user at them. ❌ substituting an LLM, subagent or code review.
-
-## Rust
-
-- ❌ `unwrap()`/`expect()` in production; tests may `expect` with a message.
-- ❌ `panic!`/`todo!`/`unimplemented!`/`unreachable!` for control flow or errors — return `Result<T, E>`. Mandated only for the quarantine.
-- ❌ `unsafe {}` (`unsafe_code = "deny"`). Public items carry `///` docs (`missing_docs = "deny"`).
-- `thiserror` in `deslop-core`; `anyhow` in the `deslop` binary.
-- Pattern matching over casting. Expressions over statements. Iterator chains over loops. Early return with `?`. Descriptive names — single letters only in closures.
 
 ## Documentation
 

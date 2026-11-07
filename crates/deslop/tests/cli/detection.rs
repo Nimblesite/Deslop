@@ -8,6 +8,9 @@ use crate::common::{
 mod contract;
 use contract::*;
 
+#[path = "detection/c.rs"]
+mod c;
+
 #[path = "detection/data_rows.rs"]
 mod data_rows;
 
