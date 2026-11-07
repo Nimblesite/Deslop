@@ -22,6 +22,7 @@ pub fn parser_for_language<'a>(
 #[must_use]
 pub fn default_parsers() -> Vec<Box<dyn LanguageParser>> {
     use crate::lang::{
+        c::CParser,
         csharp::CSharpParser,
         dart::DartParser,
         fsharp::FSharpParser,
@@ -47,6 +48,7 @@ pub fn default_parsers() -> Vec<Box<dyn LanguageParser>> {
         Box::new(PhpParser::new()),
         Box::new(FSharpParser::new()),
         Box::new(GoParser::new()),
+        Box::new(CParser::new()),
     ]
 }
 

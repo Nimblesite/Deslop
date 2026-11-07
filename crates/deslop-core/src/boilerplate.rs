@@ -34,6 +34,7 @@ pub fn is_import_boilerplate_carrier(language: &str, kind: &str) -> bool {
         "dart" => dart_carrier(kind),
         "javascript" | "typescript" | "tsx" | "osprey" | "osprey-ml" => ecmascript_carrier(kind),
         "go" => go_carrier(kind),
+        "c" => c_carrier(kind),
         "php" => php_carrier(kind),
         _ => false,
     }
@@ -167,6 +168,16 @@ const GO_PACKAGE_CLAUSE: &str = "package_clause";
 /// analogue of C# `using` directives.
 fn go_carrier(kind: &str) -> bool {
     kind == GO_PACKAGE_CLAUSE || kind == "import_declaration"
+}
+
+/// [LANG-CAND-C-PREPROC] `#include` is an import; `#define` bodies are
+/// opaque `preproc_arg` leaves the grammar never parses, so two unrelated
+/// macros would fingerprint identically — neither is clone evidence.
+fn c_carrier(kind: &str) -> bool {
+    matches!(
+        kind,
+        "preproc_include" | "preproc_def" | "preproc_function_def"
+    )
 }
 
 /// Returns true when `kind` is the clause `language` requires every file to

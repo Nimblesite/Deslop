@@ -840,6 +840,14 @@ mod tests {
                 vec!["...", "(", ")", ",", "{", "}", ":="],
             ),
             (
+                "c",
+                tree_sitter_c::LANGUAGE.into(),
+                "int f(int *p, int n) { int c = *p + n; c -= 1; \
+                 if (c < 2 && c != 0) { c *= 2; } return -c; }\n",
+                vec!["+", "-=", "<", "&&", "!=", "*=", "-"],
+                vec!["(", ")", ",", "{", "}", ";", "*"],
+            ),
+            (
                 "python",
                 tree_sitter_python::LANGUAGE.into(),
                 "def f(a, b):\n    c = a + b\n    c -= 1\n    \

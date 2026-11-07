@@ -124,6 +124,22 @@ pub(super) const TABLE_GRAMMARS: &[(&str, TableGrammar)] = &[
         },
     ),
     (
+        "c",
+        TableGrammar {
+            declarations: &["init_declarator"],
+            collections: &["initializer_list"],
+            literals: &[
+                "string_literal",
+                "concatenated_string",
+                "number_literal",
+                "char_literal",
+                "true",
+                "false",
+            ],
+            logic: &["call_expression"],
+        },
+    ),
+    (
         "dart",
         TableGrammar {
             declarations: &[

@@ -157,7 +157,7 @@ jobs:
       - name: Verify grammar pins
         run: |
           set -euo pipefail
-          for dep in tree-sitter tree-sitter-c-sharp tree-sitter-rust tree-sitter-python tree-sitter-dart tree-sitter-typescript tree-sitter-javascript tree-sitter-php tree-sitter-fsharp tree-sitter-go; do
+          for dep in tree-sitter tree-sitter-c-sharp tree-sitter-rust tree-sitter-python tree-sitter-dart tree-sitter-typescript tree-sitter-javascript tree-sitter-php tree-sitter-fsharp tree-sitter-go tree-sitter-c; do
             line=$(grep -E "^${dep} = " Cargo.toml || true)
             if [ -z "${line}" ]; then
               echo "MISSING PIN: ${dep} must appear in workspace.dependencies"

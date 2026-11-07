@@ -210,8 +210,9 @@ impl PipelineSession {
         // A config or ignore-rule edit re-scopes rendering itself (hide
         // patterns, thresholds), not just the file set, so it always
         // re-renders even when no file enters or leaves the corpus.
-        let mut effect =
-            CorpusEffect::from_touched(changed.iter().any(|path| reshapes_corpus(path, &watched)));
+        let mut effect = CorpusEffect::from_touched(changed.iter().any(|path| {
+            reshapes_corpus(path, &watched) && self.scopes_admitted_tree(path, &watched)
+        }));
         if effect == CorpusEffect::Mutated {
             self.refresh_exclusion(&mut stats, &embedding, buffers)?;
         }
@@ -407,6 +408,37 @@ fn reshapes_corpus(path: &Path, watched: &[PathBuf]) -> bool {
         || path
             .file_name()
             .is_some_and(|name| name == crate::lang::osprey_selection::MANIFEST)
+}
+
+impl PipelineSession {
+    /// [LIVE-CONFIG-LIVE] True when a corpus-scoping file governs files the
+    /// walker could reach. Watched configs and root-level files always do;
+    /// an ignore rule or `osprey.toml` below the root whose own location is
+    /// excluded, or whose directory is ignored, hidden or excluded, never
+    /// does, because discovery admits nothing beside it — so its churn (git
+    /// worktrees, E2E scratch trees) must not re-render.
+    fn scopes_admitted_tree(&self, path: &Path, watched: &[PathBuf]) -> bool {
+        if is_config_path(path, watched) {
+            return true;
+        }
+        let absolute = self.canonicalise_reference(path);
+        let Some(directory) = absolute.parent() else {
+            return false;
+        };
+        directory == self.root
+            || (directory.starts_with(&self.root)
+                && !self.exclusion.is_excluded(&absolute, None)
+                && !directory
+                    .ancestors()
+                    .take_while(|ancestor| *ancestor != self.root)
+                    .any(|ancestor| self.prunes_directory(ancestor)))
+    }
+
+    /// True when discovery would never descend into `directory`.
+    fn prunes_directory(&self, directory: &Path) -> bool {
+        self.exclusion.is_excluded(directory, None)
+            || self.ignore_matcher.is_ignored_directory(directory)
+    }
 }
 
 /// Resolves the exclusion config using the session's override path or

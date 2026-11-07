@@ -640,6 +640,8 @@ pub(super) const fn function_kinds(language: &str) -> &'static [&'static str] {
         // the signature-only and polymorphic-signature filters
         // can compare bodies after a signature-only structural match.
         b"go" => &["function_declaration", "method_declaration", "func_literal"],
+        // C has one function form; it exposes a `body` field.
+        b"c" => &["function_definition"],
         _ => &[],
     }
 }

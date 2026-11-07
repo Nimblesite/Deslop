@@ -119,6 +119,19 @@ impl IgnoreMatcher {
     /// `path` must be absolute and canonicalised against the same root.
     #[must_use]
     pub fn is_ignored(&self, path: &Path) -> bool {
+        self.ignores(path, false)
+    }
+
+    /// [LIVE-CONFIG-LIVE] Directory twin of [`Self::is_ignored`]: `true` when
+    /// the walker would prune the directory `path` itself, so directory-only
+    /// rules such as `/target/` apply.
+    #[must_use]
+    pub fn is_ignored_directory(&self, path: &Path) -> bool {
+        self.ignores(path, true)
+    }
+
+    /// Shared rule evaluation for files and directories.
+    fn ignores(&self, path: &Path, is_dir: bool) -> bool {
         if self.has_hidden_component(path) {
             return true;
         }
@@ -129,7 +142,7 @@ impl IgnoreMatcher {
             .filter_map(|directory| self.matchers.get(directory))
             .flatten()
             .fold(false, |ignored, matcher| {
-                match matcher.matched_path_or_any_parents(path, false) {
+                match matcher.matched_path_or_any_parents(path, is_dir) {
                     Match::Ignore(_) => true,
                     Match::Whitelist(_) => false,
                     Match::None => ignored,

@@ -19,6 +19,7 @@ use crate::{
     state::FileId,
 };
 
+pub mod c;
 pub mod csharp;
 mod csharp_merge;
 pub mod dart;
