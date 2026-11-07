@@ -49,17 +49,15 @@ pub(in crate::content) fn pair_rename_is_consistent<S: BuildHasher>(
         identity = mapping.identity,
         "rename consistency mapping"
     );
-    if scope.core && mapping.identity < mapping.renamed {
-        // Accuracy quarantine ([FUSED-SHARED-SUBTREE-CORE]): the core was excused
-        // from the vocabulary clause on the claim that the rescue's overlap and
-        // token floors vouch for vocabulary, but both measure `__ident__`-collapsed
-        // kinds. It admitted a lopsided window of renamed Osprey handlers whose
-        // aligned pair the clause refuses (`osprey_vocabulary`).
-        #[allow(clippy::panic)]
-        {
-            panic!("accuracy quarantine: rescued-core vocabulary excusal removed; it admits a different vocabulary over one shape");
-        }
-    }
+    // Accuracy quarantine ([FUSED-SHARED-SUBTREE-CORE]): the core was excused
+    // from the vocabulary clause on the claim that the rescue's overlap and
+    // token floors vouch for vocabulary, but both measure `__ident__`-collapsed
+    // kinds. It admitted a lopsided window of renamed Osprey handlers whose
+    // aligned pair the clause refuses (`osprey_vocabulary`).
+    assert!(
+        !(scope.core && mapping.identity < mapping.renamed),
+        "accuracy quarantine: rescued-core vocabulary excusal removed; it admits a different vocabulary over one shape"
+    );
     mapping.constrained == mapping.explained
         && mapping.corroborated > 0
         && mapping.identity >= mapping.renamed
