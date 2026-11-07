@@ -38,6 +38,7 @@ tree-sitter-javascript = "=0.25.0"
 tree-sitter-php = "=0.24.2"
 tree-sitter-fsharp = "=0.3.12"
 tree-sitter-go = "=0.25.0"
+tree-sitter-c = "=0.24.2"
 # [LANG-CAND-OSPREY] Both native grammars share one immutable upstream delivery.
 tree-sitter-osprey = { git = "https://github.com/Nimblesite/osprey", rev = "865f0469acaec12ba7e448491fc9ec2cc877d57c" }
 tree-sitter-osprey-ml = { git = "https://github.com/Nimblesite/osprey", rev = "865f0469acaec12ba7e448491fc9ec2cc877d57c" }
