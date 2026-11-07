@@ -164,7 +164,12 @@ fn require_cluster_with_spans(
     anyhow::ensure!(
         found,
         "expected a cluster pairing {}:{}-{} with {}:{}-{}; got {clusters:#?}",
-        first.0, first.1 .0, first.1 .1, second.0, second.1 .0, second.1 .1
+        first.0,
+        first.1 .0,
+        first.1 .1,
+        second.0,
+        second.1 .0,
+        second.1 .1
     );
     Ok(())
 }
