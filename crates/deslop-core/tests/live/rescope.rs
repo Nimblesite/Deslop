@@ -70,11 +70,20 @@ fn scoping_files_outside_the_corpus_never_republish_the_report() -> Result<()> {
     let mut session = live_session(root)?;
     let baseline = session.report();
     let baseline_generation = session.generation();
-    assert_eq!(baseline.files_analysed, WORKSPACE_FILE_COUNT, "only Alpha.cs and Beta.cs are in scope");
-    assert!(!baseline.clusters.is_empty(), "the fixture's clone pair must cluster");
+    assert_eq!(
+        baseline.files_analysed, WORKSPACE_FILE_COUNT,
+        "only Alpha.cs and Beta.cs are in scope"
+    );
+    assert!(
+        !baseline.clusters.is_empty(),
+        "the fixture's clone pair must cluster"
+    );
 
     for round in 1..=ROUNDS {
-        assert!(touch_round(&mut session, &planted, round)?, "round {round}: delta must be empty");
+        assert!(
+            touch_round(&mut session, &planted, round)?,
+            "round {round}: delta must be empty"
+        );
         assert_eq!(
             session.generation(),
             baseline_generation,
@@ -83,28 +92,54 @@ fn scoping_files_outside_the_corpus_never_republish_the_report() -> Result<()> {
     }
     let after = session.report();
     assert_eq!(after.files_analysed, WORKSPACE_FILE_COUNT);
-    assert_eq!(after.clusters, baseline.clusters, "the kept report must be the baseline report");
+    assert_eq!(
+        after.clusters, baseline.clusters,
+        "the kept report must be the baseline report"
+    );
 
     // The control: a root manifest is in scope and must still re-render.
     let manifest = root.join(OSPREY_MANIFEST);
     fs::write(&manifest, "# root manifest\n").context("write root manifest")?;
-    let _manifest_delta = session.apply_changes(&[manifest]).context("apply root manifest")?;
-    assert_eq!(session.generation(), baseline_generation.saturating_add(1), "a root osprey.toml re-scopes the corpus");
+    let _manifest_delta = session
+        .apply_changes(&[manifest])
+        .context("apply root manifest")?;
+    assert_eq!(
+        session.generation(),
+        baseline_generation.saturating_add(1),
+        "a root osprey.toml re-scopes the corpus"
+    );
     assert_eq!(session.report().files_analysed, WORKSPACE_FILE_COUNT);
 
     // The control: dropping the root ignore rule re-admits ignored/Skipped.cs.
     let ignore = root.join(".ignore");
     fs::write(&ignore, "").context("clear .ignore")?;
-    let _ignore_delta = session.apply_changes(&[ignore]).context("apply root .ignore")?;
-    assert_eq!(session.generation(), baseline_generation.saturating_add(2), "a root .ignore edit re-scopes the corpus");
+    let _ignore_delta = session
+        .apply_changes(&[ignore])
+        .context("apply root .ignore")?;
+    assert_eq!(
+        session.generation(),
+        baseline_generation.saturating_add(2),
+        "a root .ignore edit re-scopes the corpus"
+    );
     let readmitted = session.report();
-    assert_eq!(readmitted.files_analysed, READMITTED_FILE_COUNT, "ignored/Skipped.cs must rejoin the corpus");
+    assert_eq!(
+        readmitted.files_analysed, READMITTED_FILE_COUNT,
+        "ignored/Skipped.cs must rejoin the corpus"
+    );
     assert!(
         occurrences_with_component(&readmitted, IGNORED_DIR) > 0,
         "the re-admitted copy of Alpha.cs must join a cluster: {:?}",
         readmitted.clusters,
     );
-    assert_eq!(occurrences_with_component(&readmitted, EXCLUDED_DIR), 0, "excluded/ stays out");
-    assert_eq!(occurrences_with_component(&readmitted, HIDDEN_DIR), 0, "hidden directories stay out");
+    assert_eq!(
+        occurrences_with_component(&readmitted, EXCLUDED_DIR),
+        0,
+        "excluded/ stays out"
+    );
+    assert_eq!(
+        occurrences_with_component(&readmitted, HIDDEN_DIR),
+        0,
+        "hidden directories stay out"
+    );
     Ok(())
 }
