@@ -28,6 +28,55 @@
       "sha": "5bb7f030f6631b243438cf0fdd3be84352b905bb",
       "language": "c",
       "why": "A small C client library of a visibly different size and style from jq: protocol readers, sync and async connection paths and adapters for several event loops, which repeat set-up and teardown by design."
+    },
+    {
+      "name": "clap",
+      "url": "https://github.com/clap-rs/clap.git",
+      "sha": "ec93e71255c0b833a34f50662a3fdb22f53f6ded",
+      "language": "rust",
+      "why": "Rust has one CLEARLY OUT across three registers. clap is a large argument-parsing library with derive macros and many builder variants, a different shape from ripgrep's search code and tokio's runtime."
+    },
+    {
+      "name": "trpc",
+      "url": "https://github.com/trpc/trpc.git",
+      "sha": "b9b460ad186ed6940ad044bdef521c7ca37f2528",
+      "language": "typescript",
+      "why": "TypeScript has no CLEARLY OUT at all. tRPC is a typed RPC monorepo of adapters and client links that repeat set-up per framework, so a pass can rule on look-alikes that are not copies."
+    },
+    {
+      "name": "riverpod",
+      "url": "https://github.com/rrousselGit/riverpod.git",
+      "sha": "7a02bedc149ef35311d856993e5bb76e528dd036",
+      "language": "dart",
+      "why": "Dart has one CLEARLY OUT. Riverpod is a provider framework with many parallel provider families and generated-code tests, a different style from bloc and dio."
+    },
+    {
+      "name": "MediatR",
+      "url": "https://github.com/jbogard/MediatR.git",
+      "sha": "771a5ae2448960b60cbc1d6af35518366fe78058",
+      "language": "csharp",
+      "why": "C# rests on Polly plus a short serilog pass. MediatR is a small mediator library with parallel request, notification and stream handler pipelines, a visibly smaller size."
+    },
+    {
+      "name": "httpx",
+      "url": "https://github.com/encode/httpx.git",
+      "sha": "b5addb64f0161ff6bfe94c124ef76f6a1fba5254",
+      "language": "python",
+      "why": "Python's CLEARLY IN rests on click and django. httpx is a mid-sized HTTP client whose sync and async transports mirror each other, a classic near-copy hunting ground."
+    },
+    {
+      "name": "Argu",
+      "url": "https://github.com/fsprojects/Argu.git",
+      "sha": "8dcad5bab1f49dd1eaac77ef9895daa0c9ca5744",
+      "language": "fsharp",
+      "why": "F# has 13 CLEARLY IN, all from FSharp.Data, and giraffe has none agreed. Argu is a small, idiomatic argument parser, a third size and style."
+    },
+    {
+      "name": "libuv",
+      "url": "https://github.com/libuv/libuv.git",
+      "sha": "9e40720a0cdfd99970eacc43b39fa1404c6df38d",
+      "language": "c",
+      "why": "A large C library beside jq and hiredis: per-platform implementations of the same event-loop primitives under src/unix and src/win, where some repetition is required and some is copied."
     }
   ]
 }
