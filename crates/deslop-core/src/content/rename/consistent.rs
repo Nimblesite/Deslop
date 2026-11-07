@@ -8,7 +8,8 @@ use std::{
 
 use super::{
     super::frontier::{frontiers_aligned, leaf_bytes, population, MemberContent, Population},
-    literal_echoes, literal_positions, rename_mapping,
+    affirming_literal_count, literal_echoes, literal_positions, rename_mapping, LiteralEchoes,
+    RenameMapping,
 };
 use crate::{content::PairScope, state::FileId};
 
@@ -26,8 +27,13 @@ use crate::{content::PairScope, state::FileId};
 /// over one shape — the scaffolding the gate exists to refuse, where
 /// nothing outside the substitution vouches.
 ///
-/// [FUSED-SHARED-SUBTREE-CORE] The rescued-core excusal from the
-/// vocabulary clause is quarantined: see the panic below.
+/// [FUSED-SHARED-SUBTREE-CORE] The aligned core of a rescued pair is
+/// asked the vocabulary clause only through its literals: the rescue's
+/// overlap and token floors measure `__ident__`-collapsed kinds and vouch
+/// for nothing about names, and a near-miss method that renames every
+/// local keeps nothing by the count. A core is excused unless aligned
+/// literal positions exist and none affirms the copy — the #134 stride
+/// condition under which the rename axis is already zero.
 pub(in crate::content) fn pair_rename_is_consistent<S: BuildHasher>(
     canonical: &MemberContent,
     member: &MemberContent,
@@ -37,30 +43,40 @@ pub(in crate::content) fn pair_rename_is_consistent<S: BuildHasher>(
     if !frontiers_aligned(canonical, member) {
         return false;
     }
+    let positions = literal_positions(canonical, member);
+    let echoes = literal_echoes(canonical, member, sources, &positions);
     let mapping = rename_mapping(
         &population(&canonical.keys, &member.keys, Population::Identifier),
-        &corroboration(canonical, member, sources),
+        &corroboration(canonical, member, sources, &echoes),
     );
+    let affirming = affirming_literal_count(&positions, &echoes);
     tracing::trace!(
         constrained = mapping.constrained,
         explained = mapping.explained,
         renamed = mapping.renamed,
         corroborated = mapping.corroborated,
         identity = mapping.identity,
+        aligned_literals = positions.len(),
+        affirming_literals = affirming,
+        core = scope.core,
         "rename consistency mapping"
-    );
-    // Accuracy quarantine ([FUSED-SHARED-SUBTREE-CORE]): the core was excused
-    // from the vocabulary clause on the claim that the rescue's overlap and
-    // token floors vouch for vocabulary, but both measure `__ident__`-collapsed
-    // kinds. It admitted a lopsided window of renamed Osprey handlers whose
-    // aligned pair the clause refuses (`osprey_vocabulary`).
-    assert!(
-        !(scope.core && mapping.identity < mapping.renamed),
-        "accuracy quarantine: rescued-core vocabulary excusal removed; it admits a different vocabulary over one shape"
     );
     mapping.constrained == mapping.explained
         && mapping.corroborated > 0
-        && mapping.identity >= mapping.renamed
+        && keeps_its_vocabulary(scope, &mapping, positions.len(), affirming)
+}
+
+/// The vocabulary clause: a copy keeps at least as many names as it
+/// renames. A rescued core is excused unless its aligned literals exist
+/// and none is preserved or echoed ([FUSED-SHARED-SUBTREE-CORE]).
+fn keeps_its_vocabulary(
+    scope: PairScope,
+    mapping: &RenameMapping,
+    aligned_literals: usize,
+    affirming_literals: usize,
+) -> bool {
+    let literals_vouch = aligned_literals == 0 || affirming_literals > 0;
+    (scope.core && literals_vouch) || mapping.identity >= mapping.renamed
 }
 
 /// Corroboration per substituted identifier pair: literal echoes of the
@@ -70,9 +86,9 @@ fn corroboration<S: BuildHasher>(
     canonical: &MemberContent,
     member: &MemberContent,
     sources: &HashMap<FileId, Vec<u8>, S>,
+    echoes: &LiteralEchoes,
 ) -> BTreeMap<(u64, u64), usize> {
-    let positions = literal_positions(canonical, member);
-    let mut counts = literal_echoes(canonical, member, sources, &positions).per_substitution;
+    let mut counts = echoes.per_substitution.clone();
     for (keys, siblings) in transformation_siblings(canonical, member, sources) {
         let slot = counts.entry(keys).or_insert(0_usize);
         *slot = slot.saturating_add(siblings);
