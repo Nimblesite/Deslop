@@ -9,7 +9,7 @@
 # human entry points and are the only ones `make help` lists.
 # =============================================================================
 
-.PHONY: build dup-gate test test-ollama lint fmt clean ci ci-ollama setup help deployment-verify coverage coverage-run coverage-report _ci-analyze _ci-contract-tests _ci-build _ci-gate _ci-test _ci-test-rust _ci-test-vsix vsix-package vsix-rebuild android-studio-rebuild android-studio-rebuild-reinstall typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-node-modules _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-coverage-check _vsix-webview-coverage _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
+.PHONY: site _site-build _site-node-modules build dup-gate test test-ollama lint fmt clean ci ci-ollama setup help deployment-verify coverage coverage-run coverage-report _ci-analyze _ci-contract-tests _ci-build _ci-gate _ci-test _ci-test-rust _ci-test-vsix vsix-package vsix-rebuild android-studio-rebuild android-studio-rebuild-reinstall typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-node-modules _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-coverage-check _vsix-webview-coverage _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
 
 _JETBRAINS_DIR := clients/jetbrains
 
@@ -915,6 +915,17 @@ _android-studio-uninstall:
 	 fi
 
 ## help: List all available targets
+# site: Serve the Eleventy website locally with live reload.
+site: _site-node-modules
+	cd site && npm run dev
+
+# _site-build: Production build into site/_site (regenerates issues data).
+_site-build: _site-node-modules
+	cd site && npm run build
+
+_site-node-modules:
+	@test -d site/node_modules || (cd site && npm ci --no-audit --no-fund)
+
 help:
 	@echo "Standard targets:"
 	@echo "  build          - Compile/assemble all artifacts"
@@ -928,6 +939,7 @@ help:
 	@echo "Repo-specific targets:"
 	@echo "  typediagram-gen        - Regenerate wire-format IPC models from docs/models/*.td"
 	@echo "  deployment-verify      - Validate deployment manifest and built binary contracts"
+	@echo "  site                   - Serve the website locally with live reload"
 	@echo "  test-ollama            - Ollama-gated Rust + VSIX tests (never in CI)"
 	@echo "  score-gate             - Score this build against the judged clone registers (what CI runs)"
 	@echo "  score-corpus           - Score every judged register; append the run to the tracked history"
