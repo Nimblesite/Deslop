@@ -18,7 +18,7 @@ const representativeRoutes = [
 
 // Every English blog post appears in the feed; the Chinese translations do not.
 // Bump this when a post is added so the feed cannot silently lose an entry.
-const ENGLISH_BLOG_POST_COUNT = 11;
+const ENGLISH_BLOG_POST_COUNT = 12;
 
 const isInScope = (pathname) => !pathname.startsWith("/issues/") && pathname !== "/issues/";
 

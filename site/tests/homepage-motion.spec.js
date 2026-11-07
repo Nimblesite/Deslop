@@ -3,7 +3,7 @@ import { advanceTo, expectScene, openMotion, reelPosition, OPENING_SECONDS, REEL
 
 // [SITE-HOME-VIDEO] The homepage reel loops Deslop's headlines in the page, behind one faint pause icon.
 const DESKTOP = { width: 1440, height: 900 };
-const LANGUAGES = ["C#", "Rust", "Python", "Dart", "JavaScript", "TypeScript", "PHP", "F#", "Go"];
+const LANGUAGES = ["C", "C#", "Rust", "Python", "Dart", "JavaScript", "TypeScript", "PHP", "F#", "Go"];
 const RANKS = ["1", "2", "3", "4"];
 const CHAT = ["Agent I'll write a total() helper.", "Deslop Similar code already exists.", "Agent Then I'll reuse it."];
 const TWO_MATCHES = ["", ""];

@@ -9,7 +9,7 @@ tags:
   - duplicate-code
   - ai-generated-code
 category: engineering
-description: "Find duplicate code in C repositories with tree-sitter structural analysis: renamed functions, copied error-path ladders and cleanup tails, ranked worst first, with live LSP and MCP feedback."
+description: "Find duplicate code in C with tree-sitter structural analysis: renamed functions, copied error-path ladders and cleanup tails, ranked worst first, with live LSP and MCP feedback."
 excerpt: "Deslop now understands C. It parses .c and .h syntax trees, sees through renamed identifiers and swapped types, treats macros and prototypes as scaffolding, and reports the copied error-path ladders that hand-written runtimes grow."
 heroImage: "/assets/img/blog/find-duplicate-code-c.webp"
 heroImageWidth: "1600"
