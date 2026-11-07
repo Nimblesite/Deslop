@@ -14,7 +14,7 @@ Ordinary `.py` files remain Python unless a leading parsed comment `# osprey: fl
 
 Project source roots default to `src` when that directory exists, otherwise the manifest directory; explicit `source_roots` replaces that default. Nested projects take precedence. Saved manifest changes must flow through watcher, scheduler, session, broadcast and UI. Report occurrences and file metrics retain the selected parser identity under [REPORT-CONTEXT-CLUSTER]. Cross-flavor clone equivalence is not established by sharing a display name or normalization helper.
 
-Implemented by `crates/deslop-core/src/lang/osprey.rs` and `osprey_selection.rs`; exercised through the CLI in `crates/deslop/tests/cli/detection/osprey.rs` and `osprey_flavors.rs`, with real LSP/MCP coverage in `crates/deslop-mcp/tests/languages/osprey.rs`. Development status and delivery constraints live in [the integration plan](../plans/osprey-support.md). Osprey receives a gold bird icon and prominent registry placement under [VSIX-LANGUAGE-ICONS]; language identity never alters clone scores or ranking. Osprey's Python parser does not inherit Python refactoring actions.
+Implemented by `crates/deslop-core/src/lang/osprey.rs` and `osprey_selection.rs`; exercised through the CLI in `crates/deslop/tests/cli/detection/osprey.rs` and `osprey_flavors.rs`, with real LSP/MCP coverage in `crates/deslop-mcp/tests/languages/osprey.rs`. Development status and delivery constraints live in [the integration plan](../plans/osprey-support.md). Osprey receives the official Osprey icon and prominent registry placement under [VSIX-LANGUAGE-ICONS]; language identity never alters clone scores or ranking. Osprey's Python parser does not inherit Python refactoring actions.
 
 ## [LANG-CAND-C] C
 

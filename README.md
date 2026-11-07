@@ -97,7 +97,7 @@ implementations across a repository.
 All three surfaces use the same analysis engine. The worst offenders come first
 so the report starts with the cleanup that matters most.
 
-Supported languages: C, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, Go, and Osprey (`.osp`, native `.ospml`, and explicitly selected `.py`). See the [Osprey guide](site/src/docs/osprey.md) for syntax flavors, Python opt-in rules and integration status, and [Osprey Gets the Crown](site/src/blog/osprey-first-class.md) for the introduction.
+Supported languages: C, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, Go, and Osprey (`.osp`, native `.ospml`, and explicitly selected `.py`). See the [Osprey guide](site/src/docs/osprey.md) for syntax flavors, Python opt-in rules and integration status, and [Osprey in Deslop](site/src/blog/osprey-first-class.md) for the introduction.
 
 ## Connect a coding agent
 

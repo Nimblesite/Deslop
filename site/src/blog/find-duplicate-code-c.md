@@ -13,12 +13,12 @@ description: "Find duplicate code in C with tree-sitter structural analysis: ren
 excerpt: "Deslop now understands C. It parses .c and .h syntax trees, sees through renamed identifiers and swapped types, treats macros and prototypes as scaffolding, and reports the copied error-path ladders that hand-written runtimes grow."
 heroImage: "/assets/img/blog/find-duplicate-code-c.webp"
 heroImageWidth: "1600"
-heroImageHeight: "900"
-heroImageAlt: "The C language icon beside the words C gets structural eyes, on Deslop's language spotlight card."
+heroImageHeight: "840"
+heroImageAlt: "Two cyan glass paths converge into one shared structure against a midnight-blue background."
 ogImage: "/assets/img/blog/find-duplicate-code-c-og.jpg"
 ogImageWidth: "1200"
 ogImageHeight: "630"
-ogImageAlt: "Deslop language spotlight card announcing duplicate detection for .c and .h files."
+ogImageAlt: "Cyan control-flow paths merge into a shared crystalline junction."
 ---
 
 C support runs through the same structural pipeline as every other Deslop language: tree-sitter parsing instead of regex, identifier and literal normalization instead of raw line matching, worst-offender-first ranking, and live LSP and MCP feedback while the code is changing. `.c` and `.h` files are discovered, parsed with [`tree-sitter-c`](https://github.com/tree-sitter/tree-sitter-c), and fed into the shared fingerprint, sibling-window, token and ranking stages described in [How It Works](/docs/how-it-works/).
@@ -51,6 +51,18 @@ A copied function with every local renamed and a buffer size changed is still th
 ## What it does report
 
 The fixture written for Osprey's request holds two loaders in two files. Each opens a handle, allocates, reads, and checks every step with a copied log-free-return rung. Deslop reports the shared rung across the two files as **Nearly identical code**, and inside one file it reports the short-read error path and the destructor releasing the same resources in the same order as **Identical code**. Those are the two findings a reviewer wants: the copy that will drift between files, and the cleanup sequence that should be one function.
+
+## Find duplicate C functions and copy-paste blocks
+
+Start with the whole repository so matching blocks in separate `.c` and `.h` files can be compared. Review both identical functions and near-duplicates with renamed variables or changed constants. A useful match can be a repeated block inside a larger function, such as the error handling shared by two loaders.
+
+For each finding, compare the occurrences side by side. Check the return values, resource ownership, pointer lifetimes and side effects before extracting a shared function. Similar structure is a reason to review the code. Deciding what to share also requires understanding its behavior.
+
+## Refactor duplicated cleanup code safely
+
+A cleanup helper should make ownership explicit. Identify which function owns each allocation or file handle, and which failure paths have already released it. Pass the resources the helper needs and preserve the order of cleanup operations. Consolidating two copied error paths must preserve each caller's error code and logging behavior.
+
+After the extraction, run the project's tests and scan again. Review the remaining clusters for smaller repeated blocks that the first refactor exposed. Keeping this loop small makes it easier to spot a changed failure path or a resource released twice.
 
 ## Prevention beats the cleanup sprint
 

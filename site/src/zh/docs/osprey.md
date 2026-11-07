@@ -12,7 +12,7 @@ lang: zh
 
 # Osprey 支持
 
-Deslop 使用 tree-sitter 分析 Osprey，并通过 CLI、实时编辑器和 MCP 工具共用的同一个 Rust 引擎发送检测结果。在语言分组和报告视图中，Osprey 显示为一只戴着金色王冠的鸟。入门介绍请阅读 [Osprey Gets the Crown](/blog/osprey-first-class/)（英文）。
+Deslop 使用 tree-sitter 分析 Osprey，并通过 CLI、实时编辑器和 MCP 工具共用的同一个 Rust 引擎发送检测结果。在语言分组和报告视图中，Osprey 显示为官方青色 Osprey 图标。入门介绍请阅读 [Osprey in Deslop](/blog/osprey-first-class/)（英文）。
 
 ## 语法支持
 

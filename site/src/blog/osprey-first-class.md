@@ -1,6 +1,6 @@
 ---
 layout: layouts/blog.njk
-title: "Osprey Gets the Crown: Effects, Handlers and Fewer Copies"
+title: "Osprey in Deslop: Effects, Handlers and Fewer Copies"
 date: 2026-10-25
 author: Christian Findlay
 tags:
@@ -9,20 +9,20 @@ tags:
   - algebraic-effects
   - duplicate-code
 category: engineering
-description: "Osprey gets native tree-sitter analysis in Deslop, live duplicate findings, agent checks, and a gold crowned bird in the UI."
-excerpt: "Effects. Reusable handlers. Inferred types. Native compilation. Osprey has our attention—and now it has native duplicate detection and a crown."
-heroImage: "/assets/img/blog/osprey-crown.webp"
+description: "Osprey gets native tree-sitter analysis in Deslop, live duplicate findings, agent checks, and the official cyan Osprey icon in the UI."
+excerpt: "Effects. Reusable handlers. Inferred types. Native compilation. Osprey has our attention—and now it has native duplicate detection with its official visual identity."
+heroImage: "/assets/img/blog/osprey-first-class.webp"
 heroImageWidth: "1600"
 heroImageHeight: "840"
-heroImageAlt: "Osprey's gold crowned bird above the words Osprey gets the crown."
-ogImage: "/assets/img/blog/osprey-crown-og.jpg"
+heroImageAlt: "A luminous cyan wing-shaped branching structure suspended in midnight-blue space."
+ogImage: "/assets/img/blog/osprey-first-class-og.jpg"
 ogImageWidth: "1200"
 ogImageHeight: "630"
 ---
 
-Osprey gets the crown. A functional language built around algebraic effects, inferred types and native compilation deserves tools that understand its code. Deslop now reads all three Osprey flavors: default `.osp`, native ML `.ospml`, and explicitly selected Python syntax. It finds copied structure and brings the findings into the editor and the agent workflow.
+A functional language built around algebraic effects, inferred types and native compilation deserves tools that understand its code. Deslop now reads all three Osprey flavors: default `.osp`, native ML `.ospml`, and explicitly selected Python syntax. It finds copied structure and brings the findings into the editor and the agent workflow.
 
-And yes: it gets a gold crowned bird in the UI. We have favourites.
+The language groups and report views use Osprey’s official cyan bird.
 
 ## The language worth making a fuss about
 
@@ -55,7 +55,7 @@ Deslop keeps Osprey's effects, handler arms, patterns, types and expressions as 
 
 String interpolation gets proper attention. The code inside `${...}` remains code: a conditional stays a conditional, and addition stays distinct from subtraction. This matters in a language where a concise expression can contain substantial application logic.
 
-Comments and imports do not count as copied implementation. Findings use the same measured ranking as other languages, so the largest duplication problems remain at the top. The crown is presentation; the evidence decides the score.
+Comments and imports do not count as copied implementation. Findings use the same measured ranking as other languages, so the largest duplication problems remain at the top. The evidence determines the score.
 
 ## When a useful handler becomes six copies
 
@@ -85,7 +85,7 @@ Osprey has default braces syntax, ML layout syntax and a Python-looking surface.
 
 All three flavors have verified CLI fixtures and real LSP/MCP language-label checks. A leading `# osprey: flavor=python` comment, an explicit `python_sources` entry or a Python project entry opts a `.py` file into Osprey. Ordinary Python files keep their Python identity, and Osprey's Python surface does not inherit ordinary Python's automatic extraction actions.
 
-Native ML `.ospml` uses a grammar verified against Osprey's real source corpus and independent structural checks. Layout, interpolation expressions, and flat-versus-curried calls remain visible syntax. The three parser identities stay distinct in caches and reports, even though the interface gives them the same crowned bird. Cross-flavor clone equivalence is not claimed.
+Native ML `.ospml` uses a grammar verified against Osprey's real source corpus and independent structural checks. Layout, interpolation expressions, and flat-versus-curried calls remain visible syntax. The three parser identities stay distinct in caches and reports, even though the interface gives them the same official Osprey icon. Cross-flavor clone equivalence is not claimed.
 
 The [Osprey support guide](/docs/osprey/) has the configuration details and current integration status. These changes describe the development tree; check your installed Deslop version before expecting them in an older VSIX.
 
@@ -93,4 +93,4 @@ The [Osprey support guide](/docs/osprey/) has the configuration details and curr
 
 Effects that make dependencies explicit. Handlers you can keep and reuse. Types the checker works out. Native compilation. Osprey brings a compelling combination, and we want its tooling to match that ambition.
 
-Explore [Osprey](https://www.ospreylang.dev/), then [install Deslop](/docs/) and put the crowned bird to work.
+Explore [Osprey](https://www.ospreylang.dev/), then [install Deslop](/docs/) and put it to work.
