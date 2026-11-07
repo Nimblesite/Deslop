@@ -8,7 +8,7 @@ import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 import { parseCompareUri } from "../compare/provider";
 import { compareTitle, measurePair, PAIR_COMPARE_METHOD } from "../compare/title";
-import type { PairComparison, PairEvidence, ReportCluster, ReportOccurrence } from "../types/report";
+import type { PairComparison, PairEndpoint, PairEvidence, ReportCluster, ReportOccurrence } from "../types/report";
 import { sleep } from "./suite/helpers";
 
 /** The custom URI scheme both sides of every compare diff live under. */
@@ -68,8 +68,8 @@ export async function diffDocuments(input: vscode.TabInputTextDiff): Promise<Dif
 /** The engine's own answer for exactly these two endpoints, over the real LSP. */
 export async function pairEvidence(
   client: LanguageClient,
-  left: ReportOccurrence,
-  right: ReportOccurrence,
+  left: PairEndpoint,
+  right: PairEndpoint,
 ): Promise<PairEvidence> {
   const comparison = await client.sendRequest<PairComparison>(PAIR_COMPARE_METHOD, {
     left: { path: left.path, start_byte: left.start_byte, end_byte: left.end_byte },
@@ -80,7 +80,7 @@ export async function pairEvidence(
   return comparison.evidence;
 }
 
-export function assertDiffEndpoints(input: vscode.TabInputTextDiff, left: ReportOccurrence, right: ReportOccurrence): void {
+export function assertDiffEndpoints(input: vscode.TabInputTextDiff, left: PairEndpoint, right: PairEndpoint): void {
   assert.equal(input.original.scheme, COMPARE_SCHEME);
   assert.equal(input.modified.scheme, COMPARE_SCHEME);
   const original = parseCompareUri(input.original);
@@ -95,7 +95,7 @@ export function assertDiffEndpoints(input: vscode.TabInputTextDiff, left: Report
 }
 
 /** Opens `left` vs `right` through `deslop.comparePair`, checks the endpoints and returns the diff. */
-export async function comparePairExplicitly(left: ReportOccurrence, right: ReportOccurrence): Promise<OpenedDiff> {
+export async function comparePairExplicitly(left: PairEndpoint, right: PairEndpoint): Promise<OpenedDiff> {
   await vscode.commands.executeCommand(CLOSE_ALL_EDITORS);
   await vscode.commands.executeCommand(COMPARE_PAIR, left, right);
   const diff = await waitForDiff();

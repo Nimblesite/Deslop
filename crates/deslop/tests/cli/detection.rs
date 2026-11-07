@@ -24,6 +24,9 @@ mod osprey_flavors;
 #[path = "detection/osprey_recovery.rs"]
 mod osprey_recovery;
 
+#[path = "detection/osprey_vocabulary.rs"]
+mod osprey_vocabulary;
+
 #[path = "detection/prologue.rs"]
 mod prologue;
 use prologue::{assert_no_cross_file_prologue_cluster, occurrence_source};
