@@ -26,6 +26,7 @@ Deslop is a duplicate-code detector. **Accuracy-audit mode:** one measure outran
 ## Workflow
 
 - **Act autonomously.** ❌ stopping for confirmation except where the quarantine says STOP. Record assumptions, continue.
+- 📖 **RTFM.** Before asking the user what Deslop *should* do, `grep` `docs/specs/` for the rule (spec IDs, fixture names, the measured axis) and read it. The spec decides; tests and code answer to it. Ask only when the spec is silent or contradicts code/tests — and then quote the section you read.
 - **Offload legwork (repetitive, bounded work) to pi agents**, exact ids in this precedence: `kimi-coding/k3.1-pro-highspeed` (UI) → `zai/glm-5.3` (scoped implementation/reviews) → `zai/glm-5.3-flash` (fixtures, test expansion) → `deepseek/deepseek-flash` (oracles/tests); `deepseek/deepseek-v4-pro` only for narrow audits. `pi auth check --model <id>` first; out of credit → next. Register each pi on Too Many Cooks (`PiDeslop<Task>N`), run with a timeout, monitor its log, remove it after exit. **You own its output:** verify, correct, record model/date/result in `~/Documents/Code/PiNotes`.
 - **Aggressively DRY.** A duplication detector's codebase must be exemplary: run deslop on itself routinely.
 - **A+ bar.** Fix substandard code now, never defer.
