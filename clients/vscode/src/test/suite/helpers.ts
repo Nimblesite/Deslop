@@ -8,7 +8,7 @@ import type { Report, ReportCluster } from "../../types/report";
 // The command the extension registers only once the LSP has served a
 // report — its presence is the observable "the live pipeline is up".
 const OPEN_CLUSTER_COMMAND = "deslop.openCluster";
-const REPORT_GET_METHOD = "deslop/reportGet";
+export const REPORT_GET_METHOD = "deslop/reportGet";
 // A cluster needs two occurrences before it can be navigated or compared.
 const MULTI_OCCURRENCE_MINIMUM = 2;
 const POLL_INTERVAL_MS = 250;

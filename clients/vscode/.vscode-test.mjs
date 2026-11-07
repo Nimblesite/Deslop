@@ -12,6 +12,7 @@ import { vscodeTestUserDataDir } from "./scripts/vscode-test-user-data-dir.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = path.join(here, "out", "test", "fixtures", "csharp-small");
+const ospreyFixture = path.join(here, "out", "test", "fixtures", "osprey-pairs");
 // Keeps VS Code's IPC socket inside the 103-byte kernel cap however deep
 // this checkout sits — see scripts/vscode-test-user-data-dir.mjs.
 // [VSIX-TESTING-COVERAGE] Root hook that dumps the host's coverage table.
@@ -36,6 +37,27 @@ export default defineConfig({
         DESLOP_TEST_FIXTURE: fixture,
         // [VSIX-BUNDLED-BINARY-TESTS] Clear the override env so resolution
         // falls to ${extensionPath}/bin/<platform>/ — proves the bundle.
+        [COVERAGE_DIR_ENV]: coverageDir,
+        DESLOP_BINARY_DIR: "",
+        DESLOP_LSP_PATH: "",
+        DESLOP_MCP_PATH: "",
+      },
+      mocha: {
+        ui: "tdd",
+        timeout: 60_000,
+        bail: true,
+        require: [COVERAGE_HOOK],
+      },
+    },
+    {
+      // [VSIX-PAIR-COMPARE] [LANG-CAND-OSPREY] Pair comparison over a
+      // workspace holding both Osprey flavors.
+      label: "osprey",
+      files: ["out/test/osprey/**/*.test.js"],
+      workspaceFolder: ospreyFixture,
+      launchArgs,
+      env: {
+        DESLOP_TEST_FIXTURE: ospreyFixture,
         [COVERAGE_DIR_ENV]: coverageDir,
         DESLOP_BINARY_DIR: "",
         DESLOP_LSP_PATH: "",

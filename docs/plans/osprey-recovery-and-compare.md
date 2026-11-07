@@ -22,3 +22,12 @@ Completed duplication analysis does not avoid this request: `PipelineSession::me
 - [x] Reproduce repeated discovery with the real engine after report completion: `completed_discovery_is_reused_by_repeated_pair_comparisons` asserts the engine's endpoint echoes and admitted verdict for three requests, including reversal, then fails because discovery ran four times instead of once.
 - [ ] Confirm the failure with the user as required by the invoked skill.
 - [ ] Implement and verify responsive comparisons and truthful verdicts.
+
+## [VSIX-PAIR-COMPARE] Osprey pair comparison suite
+
+`clients/vscode/src/test/osprey/osprey-pairs.e2e.test.ts` (launch label `osprey`, fixture `src/test/fixtures/osprey-pairs`) drives both Osprey flavors through the real engine, LSP and native diff.
+
+- [x] Workspace reports 6 files, 0 skipped, 3 clusters (two identical, one loosely similar).
+- [x] One-click compare of identical `.osp` and `.ospml` copies: byte-identical verdict, equal documents, whole-file ranges.
+- [ ] 🛑 Accuracy quarantine: renamed effect handlers. The reported pair is misaligned: `drafts.osp` spans effect + function + handler `let` (`[51..380]`), `notes.osp` spans doc comment + effect + function (`[0..298]`), so the notes side never shows its `let disconnected` handler. Meanwhile the aligned whole-file pair is rejected by the content gate with `rename_consistency` 0 despite consistent renames. The failing test pins the defect; the code that picks the window is not yet located.
+- [ ] Reversed pair symmetry (same test file; blocked behind the failure above by mocha `bail`).
