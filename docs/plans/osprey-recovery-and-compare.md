@@ -25,9 +25,9 @@ Completed duplication analysis does not avoid this request: `PipelineSession::me
 
 ## [VSIX-PAIR-COMPARE] Osprey pair comparison suite
 
-`clients/vscode/src/test/osprey/osprey-pairs.e2e.test.ts` (launch label `osprey`, fixture `src/test/fixtures/osprey-pairs`) drives both Osprey flavors through the real engine, LSP and native diff.
+`clients/vscode/src/test/osprey/osprey-pairs.e2e.test.ts` (launch label `osprey`, fixture `src/test/fixtures/osprey-pairs`) and `crates/deslop/tests/cli/detection/osprey_vocabulary.rs` (fixture `osprey-renamed-handlers`) drive both Osprey flavors through the real engine.
 
-- [x] Workspace reports 6 files, 0 skipped, 3 clusters (two identical, one loosely similar).
-- [x] One-click compare of identical `.osp` and `.ospml` copies: byte-identical verdict, equal documents, whole-file ranges.
-- [ ] 🛑 Accuracy quarantine: renamed effect handlers. The reported pair is misaligned: `drafts.osp` spans effect + function + handler `let` (`[51..380]`), `notes.osp` spans doc comment + effect + function (`[0..298]`), so the notes side never shows its `let disconnected` handler. Meanwhile the aligned whole-file pair is rejected by the content gate with `rename_consistency` 0 despite consistent renames. The failing test pins the defect; the code that picks the window is not yet located.
-- [ ] Reversed pair symmetry (same test file; blocked behind the failure above by mocha `bail`).
+- [x] Workspace reports 6 files, 0 skipped; identical `.osp` and `.ospml` copies compare as byte-identical with equal documents.
+- [x] Assertions follow the spec: `drafts.osp`/`notes.osp` keep 5 names, rename 8 and preserve no literal, so [FUSED-CONTENT-GATE-RENAME] refuses the aligned pair, and [FUSED-SHARED-SUBTREE-CORE] ("if the core is not a copy the wider view cannot be one") refuses the lopsided window `drafts [51..380]` vs `notes [0..298]` in both orders.
+- [x] 🛑 Accuracy quarantine. The lopsided window was admitted through the shared-subtree rescue: its aligned core passed `pair_rename_is_consistent` because `PairScope::core` excused it from the vocabulary clause. The spec justifies the excusal by saying the rescue's overlap and token floors vouch for vocabulary, but both floors measure `__ident__`-collapsed kinds (pipeline.md, fused.md "The token echo is shape evidence too"), so they cannot. The excusal in `content/rename/consistent.rs` is replaced by a panic; `osprey_vocabulary` fails at it.
+- [ ] Spec decision, then a fresh implementation: what keeps a Type-3 near-miss that renames every local (`type3_enclosing_method`, `python-type3`) while refusing a rescued core that is a different vocabulary over one shape.

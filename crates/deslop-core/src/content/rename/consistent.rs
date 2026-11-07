@@ -26,11 +26,8 @@ use crate::{content::PairScope, state::FileId};
 /// over one shape — the scaffolding the gate exists to refuse, where
 /// nothing outside the substitution vouches.
 ///
-/// The aligned core of a rescued pair is excused from that last clause
-/// and no other ([FUSED-SHARED-SUBTREE-CORE], [`PairScope::core`]):
-/// the rescue's ordered-overlap and token floors already vouch for its
-/// vocabulary, and a near-miss method that renames every local keeps
-/// nothing by this count.
+/// [FUSED-SHARED-SUBTREE-CORE] The rescued-core excusal from the
+/// vocabulary clause is quarantined: see the panic below.
 pub(in crate::content) fn pair_rename_is_consistent<S: BuildHasher>(
     canonical: &MemberContent,
     member: &MemberContent,
@@ -52,9 +49,20 @@ pub(in crate::content) fn pair_rename_is_consistent<S: BuildHasher>(
         identity = mapping.identity,
         "rename consistency mapping"
     );
+    if scope.core && mapping.identity < mapping.renamed {
+        // Accuracy quarantine ([FUSED-SHARED-SUBTREE-CORE]): the core was excused
+        // from the vocabulary clause on the claim that the rescue's overlap and
+        // token floors vouch for vocabulary, but both measure `__ident__`-collapsed
+        // kinds. It admitted a lopsided window of renamed Osprey handlers whose
+        // aligned pair the clause refuses (`osprey_vocabulary`).
+        #[allow(clippy::panic)]
+        {
+            panic!("accuracy quarantine: rescued-core vocabulary excusal removed; it admits a different vocabulary over one shape");
+        }
+    }
     mapping.constrained == mapping.explained
         && mapping.corroborated > 0
-        && (scope.core || mapping.identity >= mapping.renamed)
+        && mapping.identity >= mapping.renamed
 }
 
 /// Corroboration per substituted identifier pair: literal echoes of the
