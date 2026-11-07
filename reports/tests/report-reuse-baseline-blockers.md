@@ -159,3 +159,7 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
     notifications::pair_compare::completed_discovery_is_reused_by_repeated_pair_comparisons
 test result: FAILED. 94 passed; 3 failed; 1 ignored; 0 measured; 0 filtered out; finished in 22.45s
 ```
+
+## Osprey ML recovery (2026-11-08)
+
+The quarantine panic is replaced by `intact_root` ([LANG-CAND-OSPREY-RECOVERY]). `cli::detection::osprey_flavors` passes; `cli::detection::osprey_recovery` remains red: the recovered `describe` occurrence spans `[0..85]` against the 84-byte fixture because the pinned ML grammar (Nimblesite/osprey `865f0469`) ends a declaration's block at the zero-width `_dedent` placed after the following blank line. Fix belongs in the grammar's layout scanner; see `docs/plans/osprey-recovery-and-compare.md`.
