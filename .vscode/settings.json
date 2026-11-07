@@ -10,5 +10,24 @@
   "deslop.embedding.model": "nomic-embed-text",
   "deslop.topOffenders.splitByLanguage": true,
   "deslop.topOffenders.sortBy": "path",
-  "deslop.topOffenders.groupBy": "kind"
+  "deslop.topOffenders.groupBy": "kind",
+  "commandtree.excludePatterns": [
+    "**/node_modules/**",
+    "**/.vscode-test/**",
+    "**/vendor/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/out/**",
+    "**/bin/**",
+    "**/obj/**",
+    "**/.git/**",
+    "**/coverage/**",
+    "**/__pycache__/**",
+    "**/.venv/**",
+    "**/target/**",
+    "**/.gradle/**",
+    "**/.idea/**",
+    "**/test/fixtures/**",
+    "**/.corpus/**"
+  ]
 }

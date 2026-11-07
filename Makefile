@@ -9,7 +9,7 @@
 # human entry points and are the only ones `make help` lists.
 # =============================================================================
 
-.PHONY: website-serve _website-build _website-node-modules build _dup-gate test _test-ollama lint fmt clean ci _ci-ollama setup help _deployment-verify coverage _coverage-run _coverage-report _ci-analyze _ci-contract-tests _ci-build _ci-gate _ci-test _ci-test-rust _ci-test-vsix _vsix-package vsix-rebuild _android-studio-rebuild _android-studio-rebuild-reinstall _typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-node-modules _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-coverage-check _vsix-webview-coverage _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
+.PHONY: website-serve website-build _website-node-modules build _dup-gate test _test-ollama lint fmt clean ci _ci-ollama setup help _deployment-verify coverage _coverage-run _coverage-report _ci-analyze _ci-contract-tests _ci-build _ci-gate _ci-test _ci-test-rust _ci-test-vsix _vsix-package vsix-rebuild _android-studio-rebuild _android-studio-rebuild-reinstall _typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-node-modules _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-coverage-check _vsix-webview-coverage _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
 
 _JETBRAINS_DIR := clients/jetbrains
 
@@ -919,8 +919,8 @@ _android-studio-uninstall:
 website-serve: _website-node-modules
 	cd site && npm run dev
 
-# _website-build: Production build into site/_site (regenerates issues data).
-_website-build: _website-node-modules
+# website-build: Production build into site/_site (regenerates issues data).
+website-build: _website-node-modules
 	cd site && npm run build
 
 _website-node-modules:
@@ -938,6 +938,7 @@ help:
 	@echo ""
 	@echo "Repo-specific targets:"
 	@echo "  website-serve          - Serve the website locally with live reload"
+	@echo "  website-build          - Build the website into site/_site"
 	@echo "  score-gate             - Score this build against the judged clone registers (what CI runs)"
 	@echo "  compare                - Compare the last release against HEAD across every register"
 	@echo "  test-corpus            - Accuracy + resource gate against pinned real repositories"
