@@ -2,7 +2,7 @@
 
 ## [SITE-HOME-VIDEO] Homepage motion reel
 
-The English and Chinese homepages open with the same short animation of what Deslop does. It plays five translated headlines in order: find duplicate code, nine languages, worst offenders first, stop coding agents from creating more, and live in VS Code. Then it loops.
+The English and Chinese homepages open with the same short animation of what Deslop does. It plays five translated headlines in order: find duplicate code, the supported languages, worst offenders first, stop coding agents from creating more, and live in VS Code. Then it loops.
 
 The reel is always in the first screen. It sits beside the headline on wide screens and above it once the hero stacks. The stage is wide on desktop and tablets and square on phones, and its type scales with the stage.
 

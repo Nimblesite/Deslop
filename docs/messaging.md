@@ -29,11 +29,11 @@ They do not belong in the primary website message.
 
 ### Short description
 
-Deslop finds duplicate functions and repeated code across C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, Go and Osprey. It ranks what to remove first and tells coding agents when similar code already exists.
+Deslop finds duplicate functions and repeated code across C, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, Go and Osprey. It ranks what to remove first and tells coding agents when similar code already exists.
 
 ### Homepage lead
 
-**Find duplicate code across ten languages.**
+**Find duplicate code across C, C#, Rust, Python, TypeScript, Go, Osprey and more.**
 
 Deslop ranks what to remove first and tells your coding agent when similar code
 already exists.
@@ -52,7 +52,7 @@ the reader arrived looking for agent tooling, not for a linter:
 Use these ideas in this order. Most surfaces need only the first three.
 
 1. **Find duplicate code.**
-2. **Works across ten programming languages.**
+2. **Works across C, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, Go and Osprey.**
 3. **Ranks what is worth removing first.**
 4. **Tells coding agents when similar code already exists.**
 5. **Updates live in the editor.**
@@ -208,9 +208,9 @@ one entity are worse than none.
 
 When space allows, use the full list exactly once:
 
-> C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, Go and Osprey.
+> C, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, Go and Osprey.
 
-When space is tight, say **ten programming languages** and link to the full list. Osprey's syntax flavors count as one language family; the [Osprey guide](../site/src/docs/osprey.md) states their verification boundaries. Do not imply support for every language. Java and C/C++ are roadmap languages, not shipping languages.
+When space is tight, name a few languages and link to the full list. Never state a language count: it goes stale the moment a parser ships. Osprey's syntax flavors count as one language family; the [Osprey guide](../site/src/docs/osprey.md) states their verification boundaries. Do not imply support for every language. Java and C++ are roadmap languages, not shipping languages.
 
 ## The agent message
 
@@ -307,7 +307,7 @@ Use present tense for capabilities that ship now:
 
 - finds duplicate code and duplicate functions;
 - ranks the worst offenders first;
-- supports the ten listed languages;
+- supports the listed languages;
 - updates as the repository changes;
 - warns developers in the editor;
 - lets agents check proposed code for similarity;
@@ -323,8 +323,8 @@ is to find, rank, compare, and prevent it. Use **goal**, **direction**, or
 Good Deslop copy answers three questions immediately:
 
 1. What does it do? **Finds duplicate code.**
-2. Where does it work? **Across ten programming languages, live in the
-   editor.**
+2. Where does it work? **Across C, C#, Rust, Python, TypeScript, Go, Osprey and
+   more, live in the editor.**
 3. Why is it different? **It also tells coding agents when the code already
    exists.**
 

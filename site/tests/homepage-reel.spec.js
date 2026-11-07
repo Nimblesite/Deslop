@@ -24,7 +24,7 @@ const CHINESE_NAME = "Deslop 能做什么";
 const CHINESE_CHAT = ["智能体 我来写一个 total() 辅助函数。", "Deslop 相似代码已经存在。", "智能体 那我就复用它。"];
 const CHINESE_SCENES = [
   { id: "find", at: SCENE_SECONDS.find, headline: "查找重复代码。" },
-  { id: "languages", at: SCENE_SECONDS.languages, headline: "覆盖九种语言。" },
+  { id: "languages", at: SCENE_SECONDS.languages, headline: "覆盖你的全部语言。" },
   { id: "rank", at: SCENE_SECONDS.rank, headline: "最严重的重复排在最前。" },
   { id: "agents", at: SCENE_SECONDS.agents, headline: "阻止编码智能体制造更多重复。", items: [[".motion-reel__chat p", CHINESE_CHAT]] },
   { id: "brand", at: SCENE_SECONDS.brand, headline: "在 VS Code 中实时分析。" },

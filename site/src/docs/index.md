@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: Getting Started — Install Deslop and find duplicate code
-description: Install Deslop to find duplicate code in ten languages. Get live VS Code warnings, MCP checks for coding agents, and the CLI in one extension.
+description: Install Deslop to find duplicate code in C, C#, Rust, Python, TypeScript, Go, Osprey and more. Live VS Code warnings, MCP checks for coding agents and the CLI in one extension.
 eleventyNavigation:
   key: Getting Started
   order: 1
@@ -11,7 +11,7 @@ docsGroup: start
 
 # Getting Started
 
-**Deslop finds duplicate code across ten languages, ranks what to remove first, and tells your coding agent when similar code already exists.** It runs on your workspace and updates as you type — Claude Code, Cursor, Copilot, Continue, Codex, and your editor all read the same live analysis.
+**Deslop finds duplicate code across C, C#, Rust, Python, Dart, JavaScript, TypeScript, PHP, F#, Go and Osprey, ranks what to remove first, and tells your coding agent when similar code already exists.** It runs on your workspace and updates as you type — Claude Code, Cursor, Copilot, Continue, Codex, and your editor all read the same live analysis.
 
 The preferred way to install it is the **VS Code extension**. One install bundles all three surfaces: live editor warnings, the check agents call before writing code, and the CLI.
 

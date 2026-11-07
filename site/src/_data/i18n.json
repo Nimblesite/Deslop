@@ -69,7 +69,7 @@
     "reel": {
       "label": "What Deslop does",
       "find": "Find duplicate code.",
-      "languages": "Nine languages.",
+      "languages": "All your languages.",
       "rank": "Worst offenders first.",
       "agents": "Stop coding agents from creating more.",
       "brand": "Live in VS Code.",
@@ -176,7 +176,7 @@
     "reel": {
       "label": "Deslop 能做什么",
       "find": "查找重复代码。",
-      "languages": "覆盖九种语言。",
+      "languages": "覆盖你的全部语言。",
       "rank": "最严重的重复排在最前。",
       "agents": "阻止编码智能体制造更多重复。",
       "brand": "在 VS Code 中实时分析。",

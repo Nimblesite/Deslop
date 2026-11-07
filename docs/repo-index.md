@@ -33,7 +33,7 @@ Reference material for agents. Read it when you need to locate something — it 
 - **Fingerprinting** operates on AST subtrees, not lines. Minimum node count is configurable.
 - **Ranking** weights clone size × clone count × spanned LOC, worst offenders first.
 
-Languages: C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, Go, and all three Osprey flavors (`.osp`, native `.ospml`, and explicitly selected `.py`). Ordinary `.py` remains Python. All three Osprey identities have CLI and real LSP/MCP language-label coverage. See [language contracts](specs/languages.md), [Osprey integration](plans/osprey-support.md), the [user guide](../site/src/docs/osprey.md) and [launch article](../site/src/blog/osprey-first-class.md) for selection rules and delivery constraints. Detection and ranking ship today; dedup actions are roadmap.
+Languages: C, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, Go, and all three Osprey flavors (`.osp`, native `.ospml`, and explicitly selected `.py`). Ordinary `.py` remains Python. All three Osprey identities have CLI and real LSP/MCP language-label coverage. See [language contracts](specs/languages.md), [Osprey integration](plans/osprey-support.md), the [user guide](../site/src/docs/osprey.md) and [launch article](../site/src/blog/osprey-first-class.md) for selection rules and delivery constraints. Detection and ranking ship today; dedup actions are roadmap.
 
 ## Migration to `lspkit`
 

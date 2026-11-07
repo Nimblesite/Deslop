@@ -18,7 +18,7 @@ Deslop 使用 tree-sitter 解析源代码，寻找候选副本，检查内容，
 
 ## 寻找候选副本
 
-支持 C#、Rust、Python、Dart、JavaScript、TypeScript/TSX、PHP、F#、Go 和 Osprey。默认遵循 `.gitignore`，排除依赖目录和构建产物。详见[配置](/zh/docs/configuration/)。
+支持 C、C#、Rust、Python、Dart、JavaScript、TypeScript/TSX、PHP、F#、Go 和 Osprey。默认遵循 `.gitignore`，排除依赖目录和构建产物。详见[配置](/zh/docs/configuration/)。
 
 Osprey 的 `.osp` 语法、Python 风格的显式选择规则及原生 ML 集成状态，详见 [Osprey 支持指南（英文）](/docs/osprey/)。
 
