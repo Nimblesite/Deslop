@@ -126,7 +126,7 @@
   text-decoration: none;
 }
 .btn-primary:hover,
-.btn-discord:hover { transform: scale(1.05); }
+.btn-discord:hover { transform: translateY(-2px); }
 
 .btn-primary {
   background: linear-gradient(to right, var(--primary), var(--primary-container));

@@ -11,11 +11,11 @@ docsGroup: start
 
 # Getting Started
 
-**Deslop finds duplicate code across C, C#, Rust, Python, Dart, JavaScript, TypeScript, PHP, F#, Go and Osprey, ranks what to remove first, and tells your coding agent when similar code already exists.** It runs on your workspace and updates as you type — Claude Code, Cursor, Copilot, Continue, Codex, and your editor all read the same live analysis.
+**Find duplicate code, see what to remove first, and help your coding agent reuse existing code.** Deslop updates as you type. Your editor and coding agents read the same live analysis across C, C#, Rust, Python, Dart, JavaScript, TypeScript, PHP, F#, Go and Osprey.
 
-The preferred way to install it is the **VS Code extension**. One install bundles all three surfaces: live editor warnings, the check agents call before writing code, and the CLI.
+Start with the **VS Code extension**. One install includes live editor warnings, MCP checks for coding agents, and the CLI.
 
-## Install (preferred) — VS Code extension
+## Install the VS Code extension
 
 Install from the **VS Code Marketplace**:
 
