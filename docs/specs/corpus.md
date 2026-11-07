@@ -94,7 +94,7 @@ Registers live in `corpus/register/<name>.json`, pinned to the commit they were 
 
 **Three verdicts.** CLEARLY IN is an obvious clone — failing to report it is a false negative. CLEARLY OUT is a pairing that would be plainly wrong — reporting it is a false positive. NOT CLEAR is everything carrying a shred of doubt; it is recorded so nobody re-litigates it and it asserts nothing. Most pairs are NOT CLEAR, and that is the healthy outcome: the register is worth something because it is small and unarguable.
 
-**The judge never sees this codebase.** Judging happens in a folder built outside this repository by `make judging-folder`, holding one directory per repository — the target source, two reports labelled A and B by a sealed coin flip, and candidate pairs rendered as source only — no rank, no mass, no band, no node count, no provenance. Loading any Deslop source or spec into the judge's context is contamination: the pass aborts and every verdict from it is discarded. The full protocol is `.agents/skills/clone-register-prepare` (preparer) and `.agents/skills/judge-clone-pairs` (judge).
+**The judge never sees this codebase.** Judging happens in a folder built outside this repository by `make _judging-folder`, holding one directory per repository — the target source, two reports labelled A and B by a sealed coin flip, and candidate pairs rendered as source only — no rank, no mass, no band, no node count, no provenance. Loading any Deslop source or spec into the judge's context is contamination: the pass aborts and every verdict from it is discarded. The full protocol is `.agents/skills/clone-register-prepare` (preparer) and `.agents/skills/judge-clone-pairs` (judge).
 
 **One predicate, both directions.** An entry is *matched* when some published cluster shows a distinct visible source location overlapping each listed range. One broad occurrence spanning both ranges, or two identical records of that location, do not show a pair. Occurrences with missing or inverted line coordinates cannot match. A matched CLEARLY IN is correct and an unmatched one is a false negative; a matched CLEARLY OUT is a false positive and an unmatched one is correct. Overlap rather than exact line equality is what makes the assertion non-fragile — it survives extent drift, rank movement, band movement and occurrence-count changes, and breaks only when the engine stops pairing two regions it must pair, or starts pairing two it must not.
 
@@ -133,7 +133,7 @@ The register is built up over time, never in one pass. The shape it is growing t
 
 - **Two to three repositories per language, of visibly different size.** A single repository teaches the register that language's house style, not the language. A small library and a large application disagree about what repetition is normal, and the register needs both.
 - **Roughly 100 CLEARLY IN and 100 CLEARLY OUT entries per repository.** Reaching that takes several judging passes at different seeds; a pass that yields a dozen firm verdicts out of two hundred candidates is doing well, not badly.
-- **About 200 candidates per repository per pass, as a ceiling.** Past that a repository stops paying for the time. `scripts/corpus/register-workspace.mjs` caps the draw there. `make judging-folder JUDGING_CANDIDATES=<n>` asks for a shorter pass, from 1 up to that ceiling; anything else is refused rather than clamped.
+- **About 200 candidates per repository per pass, as a ceiling.** Past that a repository stops paying for the time. `scripts/corpus/register-workspace.mjs` caps the draw there. `make _judging-folder JUDGING_CANDIDATES=<n>` asks for a shorter pass, from 1 up to that ceiling; anything else is refused rather than clamped.
 
 **Breadth beats depth.** When the choice is another pass on a repository already judged versus a first pass on a language with no register at all, the new language wins. A false positive that only appears in Kotlin is invisible until some Kotlin is judged, however deep the Python register goes.
 
@@ -143,7 +143,7 @@ Two rules hold at every size. **The register never grows by relaxing certainty**
 
 ### [CORPUS-REGISTER-WORKSPACE] The folder a judge is handed
 
-`make judging-folder` produces one folder, and that folder is the whole of what a judge gets. It holds three things and nothing else:
+`make _judging-folder` produces one folder, and that folder is the whole of what a judge gets. It holds three things and nothing else:
 
 - **The repositories.** Each checked out at its pinned commit, source only, no git history.
 - **The reports.** Two pair lists per repository, cut down to which regions were grouped together. Rank, band, mass, node and occurrence counts, thresholds, timings, versions and cache statistics are all the engine's opinion of itself, and every one of them is stripped. The two lists are labelled A and B by a coin flip, and neither letter means "newer".
@@ -164,7 +164,7 @@ Built by `scripts/corpus/prepare-judging.sh` and `scripts/corpus/register-worksp
 
 A repository cannot become a register until a judge has ruled on its pairs, and a judge cannot rule on pairs until a comparison has produced two reports for it. Left there, the corpus could never grow: the comparison would only ever scan repositories that already have a register.
 
-`corpus/judging-queue.json` breaks that circle. It lists repositories waiting on a first pass — url, commit id, language, and why this one — and the comparison scans everything in it alongside the registers. Each queued repository then gets a workspace from `make judging-folder` exactly like a judged one.
+`corpus/judging-queue.json` breaks that circle. It lists repositories waiting on a first pass — url, commit id, language, and why this one — and the comparison scans everything in it alongside the registers. Each queued repository then gets a workspace from `make _judging-folder` exactly like a judged one.
 
 A repository leaves the queue once its register holds at least one CLEARLY IN. Until then it may already have a register holding only the CLEARLY OUT and NOT CLEAR pairs its judges agreed on. That is better than nothing, but it cannot catch a missed clone, so the repository stays queued for another pass, and the comparison scans it once, as its register. `crates/deslop/tests/corpus_commit_pins.rs` asserts that a queued repository's register holds no CLEARLY IN, and `crates/deslop/tests/corpus_register_contract.rs` asserts that a register with no CLEARLY IN is still queued, so the queue drains rather than growing a second copy of the corpus. Entries are pinned to a full commit id for the same reason a register is: the judge and the scan have to read one identical tree.
 
@@ -258,7 +258,7 @@ A register with no entries scores **nothing**, never 100%. Being asked no questi
 
 **Unaccepted failures and regressions fail the run.** A newly judged false negative or false positive fails even when it has never passed before. Only a judged pair explicitly recorded as failing is tolerated. A pair that has passed once must keep passing.
 
-**The record only tightens.** Every run writes the record back. A fixed pair and a newly judged passing pair go on record as passing, and a pair its register no longer judges leaves the record. A regression is never written over the pass it broke, and a repository the run did not scan keeps its entries untouched. A failing pair goes on record only through `make accept-corpus-failures RUN=<run.json>`, which re-scores a finished run without scanning again and records its unrecorded failures as failing. It never moves a passing pair to failing: a regression is fixed, never accepted. Accepting is the admission that a defect shipped, and it shows in the diff for review.
+**The record only tightens.** Every run writes the record back. A fixed pair and a newly judged passing pair go on record as passing, and a pair its register no longer judges leaves the record. A regression is never written over the pass it broke, and a repository the run did not scan keeps its entries untouched. A failing pair goes on record only through `make _accept-corpus-failures RUN=<run.json>`, which re-scores a finished run without scanning again and records its unrecorded failures as failing. It never moves a passing pair to failing: a regression is fixed, never accepted. Accepting is the admission that a defect shipped, and it shows in the diff for review.
 
 **CI refuses an uncommitted change.** The `corpus-score` job fails when its run changed the record. A fix left off the record would keep the pair on record as failing, and its next regression would pass as the old tolerated defect.
 
@@ -298,7 +298,7 @@ Implemented by `resolve_targets` in `scripts/corpus/score-gate.sh`, `require_jud
 
 ### [CORPUS-REPORT] Every corpus run writes the same report
 
-Whichever way the corpus is run — `make score-gate`, `make compare`, `make test-corpus`, `make test-corpus-ci`, or one `corpus_*` test on its own — it ends in the same markdown and JSON scorecard, rendered by `crates/deslop-test-support/src/corpus_score/run.rs`. Each one reports, per repository and for the whole run:
+Whichever way the corpus is run — `make score-gate`, `make compare`, `make test-corpus`, `make _test-corpus-ci`, or one `corpus_*` test on its own — it ends in the same markdown and JSON scorecard, rendered by `crates/deslop-test-support/src/corpus_score/run.rs`. Each one reports, per repository and for the whole run:
 
 - **accuracy** — the clone-register score where a register judges the repository ([CORPUS-SCORE]), and the curated checks where a corpus test ran them ([CORPUS-REPORT-CHECKS]);
 - **wall time**, **CPU time**, **peak CPU** and **peak memory** ([CORPUS-MEASURE]).
@@ -312,9 +312,9 @@ A repository with no register is still listed. Its accuracy is its curated check
 | Run | Scorecard |
 |---|---|
 | `make score-gate` | `.corpus/score-gate/score-gate-2026-09-27T03-35-02Z.md` |
-| `make score-corpus` | `.corpus/score-gate/score-corpus-2026-09-27T03-35-02Z.md` |
+| `make _score-corpus` | `.corpus/score-gate/score-corpus-2026-09-27T03-35-02Z.md` |
 | `make compare` | `.corpus/version-compare/reports/compare-2026-09-27T03-35-02Z.md` |
-| a `corpus_*` test, alone or under `make test-corpus` / `make test-corpus-ci` | `.corpus/test-corpus/corpus_flutter_dart-2026-09-27T03-35-02Z.md` |
+| a `corpus_*` test, alone or under `make test-corpus` / `make _test-corpus-ci` | `.corpus/test-corpus/corpus_flutter_dart-2026-09-27T03-35-02Z.md` |
 
 Each markdown scorecard has a `.json` twin of the same name. A corpus test is named by the test itself — libtest runs each test on a thread carrying its name — so the name cannot drift from a copy typed at a call site.
 
@@ -328,7 +328,7 @@ Each markdown scorecard has a `.json` twin of the same name. A corpus test is na
 
 ### [CORPUS-HISTORY] The whole judged corpus, tracked run over run
 
-`make score-corpus` (`scripts/corpus/score-gate.sh --all-judged`) scans every register that judges at least one pair CLEARLY IN or CLEARLY OUT, and no repository without judgments. `--list-judged-targets` prints that list without building or scanning. CI does not run it: the CI gate stays the slice in [CORPUS-SCORE-GATE-SLICE].
+`make _score-corpus` (`scripts/corpus/score-gate.sh --all-judged`) scans every register that judges at least one pair CLEARLY IN or CLEARLY OUT, and no repository without judgments. `--list-judged-targets` prints that list without building or scanning. CI does not run it: the CI gate stays the slice in [CORPUS-SCORE-GATE-SLICE].
 
 **Read it in `corpus/history/HISTORY.md`.** The page is rendered again from every run record each time a run is added, and is never edited by hand. Newest run first, it has:
 
@@ -361,7 +361,7 @@ Every recorded result names the commit of the engine that produced it, in full, 
 `corpus/known-failures.json` records checks that already fail, each mapped to a tracked issue.
 
 - **Locally, `make test-corpus` ignores the file entirely** and fails on everything. Local runs stay honest.
-- **`make test-corpus-ci` reads it** and fails only on checks *not* recorded — that is the regression gate, and it is what the scheduled workflow runs.
+- **`make _test-corpus-ci` reads it** and fails only on checks *not* recorded — that is the regression gate, and it is what the scheduled workflow runs.
 - Adding an entry is admitting a defect shipped. Fixing it and deleting the entry is the only correct exit. Widening a ceiling or deleting an assertion to clear an entry is prohibited.
 - Check ids are rank-independent by construction: ranks move between runs while [PIPELINE-DETERMINISM] is unmet, so a rank-bearing key would churn the baseline into uselessness.
 

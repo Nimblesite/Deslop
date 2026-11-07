@@ -13,7 +13,7 @@ The judge works in an isolated workspace and never loads this codebase. Read
 `.agents/skills/clone-register-prepare` before building or filing anything here.
 
 - Build the folder a judge is handed — repositories, reports and the judging skill:
-  `make judging-folder`
+  `make _judging-folder`
 - Judge it (fresh session, outside this repo): `.agents/skills/judge-clone-pairs`
 - Score the current build and gate on it: `make score-gate`
 - Compare two engines against the registers: `scripts/compare-versions.sh`
@@ -58,7 +58,7 @@ run that produced them.
 "Queued" means `corpus/judging-queue.json`: the comparison scans those repositories so a
 first pass has reports to draw candidates from. Each gets a register here when its verdicts come back, and leaves the queue once that register holds a CLEARLY IN. See `docs/specs/corpus.md` §[CORPUS-REGISTER-QUEUE].
 
-Verdicts reach these files only through `make merge-verdicts JUDGED_DIRS="<folder> <folder>"`.
+Verdicts reach these files only through `make _merge-verdicts JUDGED_DIRS="<folder> <folder>"`.
 It imports **only** the pairs every source agrees on — these registers included. Anything a
 source disagrees on, or is not confident about, is left out and listed in
 `docs/reports/verdict-merge.md`. See §[CORPUS-REGISTER-MERGE].

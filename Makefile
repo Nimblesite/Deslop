@@ -9,7 +9,7 @@
 # human entry points and are the only ones `make help` lists.
 # =============================================================================
 
-.PHONY: site _site-build _site-node-modules build dup-gate test test-ollama lint fmt clean ci ci-ollama setup help deployment-verify coverage coverage-run coverage-report _ci-analyze _ci-contract-tests _ci-build _ci-gate _ci-test _ci-test-rust _ci-test-vsix vsix-package vsix-rebuild android-studio-rebuild android-studio-rebuild-reinstall typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-node-modules _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-coverage-check _vsix-webview-coverage _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
+.PHONY: website-serve _website-build _website-node-modules build _dup-gate test _test-ollama lint fmt clean ci _ci-ollama setup help _deployment-verify coverage _coverage-run _coverage-report _ci-analyze _ci-contract-tests _ci-build _ci-gate _ci-test _ci-test-rust _ci-test-vsix _vsix-package vsix-rebuild _android-studio-rebuild _android-studio-rebuild-reinstall _typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-node-modules _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-coverage-check _vsix-webview-coverage _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
 
 _JETBRAINS_DIR := clients/jetbrains
 
@@ -67,14 +67,14 @@ build:
 	@echo "==> Building..."
 	cargo build --release --workspace
 
-## typediagram-gen: Regenerate wire-format Rust IPC models from
+## _typediagram-gen: Regenerate wire-format Rust IPC models from
 ##                  `docs/models/*.td` via the typediagram CLI. The
 ##                  generated file is gitignored; cargo's build.rs
 ##                  invokes this same script automatically, so manual
 ##                  invocation is only needed when iterating on the
 ##                  .td spec or the generator script itself.
-typediagram-gen:
-	@echo "==> typediagram-gen: regenerating IPC models from docs/models/live-ipc.td"
+_typediagram-gen:
+	@echo "==> _typediagram-gen: regenerating IPC models from docs/models/live-ipc.td"
 	node scripts/typediagram/generate.mjs
 
 ## test: Fail-fast tests + coverage + per-crate threshold enforcement.
@@ -109,7 +109,7 @@ typediagram-gen:
 ##       to `make coverage`, which owns its own cache and runs in parallel,
 ##       so this target is a cache hit against the release build every
 ##       other gate already uses and the suite reports in minutes.
-test: _delete-path-binaries typediagram-gen
+test: _delete-path-binaries _typediagram-gen
 	@echo "==> Testing (fail-fast, release profile)..."
 	cargo test --release --workspace --all-targets --features $(_TEST_FEATURES)
 
@@ -176,18 +176,18 @@ _coverage_check:
 ##       tests by name substring, and [TEST-SELECTION-SKIP]: every `#[ignore]`
 ##       must carry a category, an issue, a spec id and a plan. It also proves
 ##       the composite-action step scanner still finds every `run` body, since
-##       the shell-injection gate in `deployment-verify` reads through it.
+##       the shell-injection gate in `_deployment-verify` reads through it.
 ##       clippy runs `--all-targets`, which now covers the corpus suite too: `#[ignore]`
 ##       keeps it compiled and linted where `required-features` had removed
 ##       it from the build entirely. Commit 77bcbaed5 left it uncompilable
 ##       for exactly that reason.
-##       Depends on typediagram-gen so the wire-generated module exists
+##       Depends on _typediagram-gen so the wire-generated module exists
 ##       before clippy parses the workspace on a fresh checkout.
 lint: _ci-analyze _ci-contract-tests
 
 # _ci-analyze: Read-only analyzers only. CI runs this before the build; test
 #   harness self-tests live in _ci-contract-tests and run in the test phase.
-_ci-analyze: typediagram-gen
+_ci-analyze: _typediagram-gen
 	@echo "==> Linting..."
 	cargo clippy --release --all-targets --workspace --features $(_TEST_FEATURES) -- -D warnings
 	@bash scripts/repository/taxonomy-gate.sh
@@ -246,11 +246,11 @@ _ci-contract-tests: _vsix-node-modules
 	@node --test scripts/typediagram-gen.test.mjs
 
 ## fmt: Format all code in-place. Pass CHECK=1 for read-only check (CI use).
-##      Depends on typediagram-gen because rustfmt walks the module tree
+##      Depends on _typediagram-gen because rustfmt walks the module tree
 ##      and refuses to run when `mod wire_generated;` cannot resolve. The
 ##      generated file is gitignored per CLAUDE.md, so on a clean CI
 ##      checkout it must be produced before fmt walks the sources.
-fmt: typediagram-gen
+fmt: _typediagram-gen
 	@echo "==> Formatting$(if $(CHECK), (check mode),)..."
 	@_fmt_out=$$(cargo fmt --all$(if $(CHECK), --check,) 2>&1); _fmt_rc=$$?; \
 	 echo "$$_fmt_out" | grep -v "unstable features are only available in nightly channel" || true; \
@@ -276,7 +276,7 @@ clean:
 ##       3. `_ci-test` — the Rust suite, the VSIX suites and coverage, in
 ##          parallel, executing what phase 1 built.
 ##
-##     Ollama-gated suites are excluded; they run via `make ci-ollama`.
+##     Ollama-gated suites are excluded; they run via `make _ci-ollama`.
 ci:
 	@$(MAKE) _ci-build
 	@$(MAKE) _ci-gate
@@ -285,7 +285,7 @@ ci:
 ## setup: Post-create dev environment setup (used by devcontainer).
 ##        Version pin for `typediagram` must match `.github/workflows/ci.yml`
 ##        per CLAUDE.md dependency-pinning rules. The CLI is required by
-##        `make typediagram-gen` and the deslop-core `build.rs` on every
+##        `make _typediagram-gen` and the deslop-core `build.rs` on every
 ##        cargo build, so a fresh devcontainer needs it on PATH.
 setup:
 	@echo "==> Setting up development environment..."
@@ -319,18 +319,18 @@ _ci-build:
 #   seconds of work against a report, so they run before any suite: a
 #   duplication or deployment regression should not wait behind the tests.
 _ci-gate:
-	@$(MAKE) dup-gate
-	@$(MAKE) deployment-verify
+	@$(MAKE) _dup-gate
+	@$(MAKE) _deployment-verify
 
 # _ci-test: Phase 3 — run every suite exactly once, instrumented for coverage.
-#   `coverage-report` is deliberately excluded: it is phase 4 and runs only
+#   `_coverage-report` is deliberately excluded: it is phase 4 and runs only
 #   after all collectors complete.
 _ci-test:
 	@$(MAKE) -j2 _ci-test-rust _ci-test-vsix
 
 # _ci-test-rust: The Rust half of phase 3.
 _ci-test-rust:
-	@$(MAKE) coverage-run
+	@$(MAKE) _coverage-run
 
 # _ci-test-vsix: The VSIX half of phase 3 — extension-host and webview
 #   coverage collection plus the standalone HTML-report Playwright check.
@@ -339,7 +339,7 @@ _ci-test-vsix:
 	@$(MAKE) _vsix-webview-coverage
 	@$(MAKE) _vsix-playwright-html
 
-## test-shard: [TEST-SELECTION] One optional slice of the release suite for
+## _test-shard: [TEST-SELECTION] One optional slice of the release suite for
 ##             local diagnosis. `make test` remains the whole
 ##             suite and is what a developer runs. The split is over test
 ##             *binaries*, never test names — `cargo test --skip` matches a
@@ -352,8 +352,8 @@ _ci-test-vsix:
 ##             `deslop`'s. libtest already runs that binary's tests across
 ##             every core, so a shard is worth having for the crates it can
 ##             actually separate, not for balance.
-##             Usage: `make test-shard SHARD=1 SHARDS=4`.
-test-shard: _delete-path-binaries typediagram-gen
+##             Usage: `make _test-shard SHARD=1 SHARDS=4`.
+_test-shard: _delete-path-binaries _typediagram-gen
 	@echo "==> Testing shard $(SHARD)/$(SHARDS) (fail-fast, release profile)..."
 	@node scripts/repository/test-shards.mjs --shard $(SHARD) --of $(SHARDS) --features $(_TEST_FEATURES)
 
@@ -385,15 +385,15 @@ test-shard: _delete-path-binaries typediagram-gen
 ##           Carries `_delete-path-binaries` for the same reason `test`
 ##           does: this target runs the suite, and a Deslop binary leaked
 ##           onto PATH would shadow the built one.
-coverage: coverage-run coverage-report
+coverage: _coverage-run _coverage-report
 
-coverage-run: _delete-path-binaries typediagram-gen
+_coverage-run: _delete-path-binaries _typediagram-gen
 	@echo "==> Coverage test collection (instrumented release)..."
 	rustup component add llvm-tools-preview 2>/dev/null || true
 	cargo llvm-cov clean --workspace
 	cargo llvm-cov --release --workspace --all-targets --features $(_TEST_FEATURES) --no-report
 
-coverage-report:
+_coverage-report:
 	@echo "==> Coverage calculation and threshold enforcement..."
 	@_rust_ignore=$$(jq -r '.rust.ignore_filename_regex' "$(_COVERAGE_THRESHOLDS_FILE)"); \
 	 cargo llvm-cov --release --features $(_TEST_FEATURES) report \
@@ -401,15 +401,15 @@ coverage-report:
 	    --lcov --output-path lcov.info
 	@$(MAKE) _coverage_check RUST_LCOV=lcov.info
 
-## test-ollama: [TEST-SELECTION] The VSIX `.vscode-test-ollama.mjs` suite —
+## _test-ollama: [TEST-SELECTION] The VSIX `.vscode-test-ollama.mjs` suite —
 ##              the only tests that need a real daemon on 127.0.0.1:11434
 ##              with `nomic-embed-text` pulled. The Rust embedding suites are
 ##              hermetic (mock server / dead endpoint) and run in `make test`;
 ##              they were never daemon-gated, only name-filtered (gh #412).
-test-ollama: _vsix-test-ollama
+_test-ollama: _vsix-test-ollama
 
-## ci-ollama: `make ci` plus `make test-ollama`.
-ci-ollama: ci test-ollama
+## _ci-ollama: `make ci` plus `make _test-ollama`.
+_ci-ollama: ci _test-ollama
 
 ## test-corpus: [CORPUS-*] Accuracy + resource suite against real public repos
 ##              pinned by `corpus/*.json`. Clones into git-ignored `.corpus/`
@@ -429,14 +429,14 @@ test-corpus:
 	cargo build --release --bin deslop
 	cargo test --release -p deslop --test corpus_repos -- --ignored --nocapture --test-threads=1
 
-## test-corpus-ci: `make test-corpus` in baseline mode — failures already
+## _test-corpus-ci: `make test-corpus` in baseline mode — failures already
 ##                 recorded in `corpus/known-failures.json` are reported but
 ##                 do not fail the run; anything new does. Used by the
 ##                 scheduled corpus workflow so tracked defects stay visible
 ##                 without blocking. Local `make test-corpus` ignores the
 ##                 baseline and stays strictly red.
-test-corpus-ci: export DESLOP_CORPUS_BASELINE = 1
-test-corpus-ci:
+_test-corpus-ci: export DESLOP_CORPUS_BASELINE = 1
+_test-corpus-ci:
 	node scripts/corpus/fetch-corpus.mjs $(CORPUS_REPOS)
 	cargo build --release --bin deslop
 	@cargo test --release -p deslop --test corpus_repos -- --ignored --list > $(CORPUS_NAMES)
@@ -463,14 +463,14 @@ test-corpus-ci:
 	 if [ $$fail -ne 0 ]; then echo "==> corpus: NEW failures (see [NEW] lines above)"; fi; \
 	 exit $$fail
 
-## test-corpus-ci-full: `make test-corpus-ci` over the WHOLE corpus — every
+## _test-corpus-ci-full: `make _test-corpus-ci` over the WHOLE corpus — every
 ##                      pinned repository and every test in the suite. Needs
 ##                      >16 GB (#166) and about 20 minutes. This is what the
 ##                      corpus workflow's `full` dispatch runs, so the names
 ##                      live here and the workflow names none of its own.
-test-corpus-ci-full: CORPUS_REPOS = $(CORPUS_REPOS_FULL)
-test-corpus-ci-full: CORPUS_TESTS = $(CORPUS_TESTS_FULL)
-test-corpus-ci-full: test-corpus-ci
+_test-corpus-ci-full: CORPUS_REPOS = $(CORPUS_REPOS_FULL)
+_test-corpus-ci-full: CORPUS_TESTS = $(CORPUS_TESTS_FULL)
+_test-corpus-ci-full: _test-corpus-ci
 
 # Where the recipe above parks libtest's own list of the names it will answer
 # to, so a selector that resolves to nothing fails loudly instead of passing
@@ -505,7 +505,7 @@ CORPUS_MIN_TESTS = 1
 CORPUS_REPOS ?= tokio nest
 CORPUS_TESTS ?= corpus_tokio_rust corpus_nest_typescript corpus_determinism_nest_typescript
 
-# The whole corpus, for `test-corpus-ci-full`. A second copy of these lists in
+# The whole corpus, for `_test-corpus-ci-full`. A second copy of these lists in
 # the workflow YAML is how the `full` dispatch came to pass the substring
 # `corpus_` into an `--exact` loop and scan nothing at all.
 CORPUS_REPOS_FULL = flutter jellyfin tokio django react nest laravel hugo fsharp tornado
@@ -521,8 +521,8 @@ CORPUS_TESTS_FULL = corpus_flutter_dart corpus_jellyfin_csharp corpus_tokio_rust
 #   duplication climbs past it. `make ci` runs this, so a green local run means a
 #   green gate in CI; the workflow calls this same target rather than repeating
 #   the command, so the two can never drift.
-## dup-gate: Fail when this repo's own duplication exceeds .deslop.toml.
-dup-gate: build
+## _dup-gate: Fail when this repo's own duplication exceeds .deslop.toml.
+_dup-gate: build
 	@echo "==> Duplication gate (.deslop.toml [threshold])..."
 	./target/release/deslop . --no-color
 
@@ -549,8 +549,8 @@ score-gate:
 #   corpus/history/runs/ with every judged pair's outcome, each repository's
 #   cost, the machine, the commit and the release version, and
 #   corpus/history/HISTORY.md is rendered again. Commit both.
-## score-corpus: Score every judged register and record the run in the history.
-score-corpus:
+## _score-corpus: Score every judged register and record the run in the history.
+_score-corpus:
 	./scripts/corpus/score-gate.sh --all-judged
 
 # [CORPUS-SCORE-OUTCOMES] Puts every judged pair a corpus run failed, and the
@@ -559,9 +559,9 @@ score-corpus:
 #   beside its reports. It re-scores that run without scanning again, and it
 #   never moves a pair on record as passing to failing: a regression is fixed,
 #   never accepted.
-## accept-corpus-failures: Record a corpus run's unrecorded failures as known.
-accept-corpus-failures:
-	@test -n "$(RUN)" || { echo "usage: make accept-corpus-failures RUN=<run.json>" >&2; exit 2; }
+## _accept-corpus-failures: Record a corpus run's unrecorded failures as known.
+_accept-corpus-failures:
+	@test -n "$(RUN)" || { echo "usage: make _accept-corpus-failures RUN=<run.json>" >&2; exit 2; }
 	cargo run --release --quiet -p deslop-test-support --bin corpus-score -- \
 	  score "$(RUN)" --out .corpus/accept --name accept --accept-failures
 
@@ -582,21 +582,21 @@ compare:
 JUDGING_DIR ?= $(HOME)/clone-judging
 #   JUDGING_CANDIDATES asks for a shorter pass than the 200-candidate ceiling.
 JUDGING_CANDIDATES ?=
-## judging-folder: Build the blinded folder a clone judge works through.
-judging-folder:
+## _judging-folder: Build the blinded folder a clone judge works through.
+_judging-folder:
 	JUDGING_CANDIDATES=$(JUDGING_CANDIDATES) ./scripts/corpus/prepare-judging.sh $(JUDGING_DIR)
 
-## merge-verdicts: Fold judged verdicts back into the clone registers. Takes
+## _merge-verdicts: Fold judged verdicts back into the clone registers. Takes
 ##                 two or more judging folders. Imports ONLY the pairs every
 ##                 source agrees on — the registers included; everything else
 ##                 is left out and listed in docs/reports/verdict-merge.md.
-merge-verdicts:
+_merge-verdicts:
 	@test -n "$(JUDGED_DIRS)" || { echo "set JUDGED_DIRS to two or more judging folders"; exit 1; }
 	@node scripts/corpus/merge-verdicts.mjs $(JUDGED_DIRS)
 
 # [DEPLOY-CI-GATES] CI/release deployment-drift gate: manifest schema, binary
 #   version contracts, release-workflow gates, and the verifier proof suite.
-## deployment-verify: Validate deployment manifest and built binary contracts.
+## _deployment-verify: Validate deployment manifest and built binary contracts.
 ##                    Also runs the verifier proof suite which builds fake
 ##                    binaries and plugin zips violating each Shipwright
 ##                    contract rule and asserts every verifier rejects them.
@@ -605,7 +605,7 @@ merge-verdicts:
 ##                    action's own step body against the freshly built CLI in
 ##                    both gate directions — the self-test's runner leg cannot,
 ##                    since it installs a published release ([ACTION-GATE]).
-deployment-verify: build
+_deployment-verify: build
 	node scripts/deployment/verify-deployment-manifest.mjs shipwright.json
 	node scripts/deployment/verify-deployment-binaries.mjs shipwright.json target/release
 	node scripts/release/verify-release-workflow-gates.mjs .github/workflows/release.yml
@@ -663,9 +663,9 @@ _vsix-node-modules:
 
 # _vsix-build: Build deslop-lsp + deslop-mcp + VSIX bundle + webview UI.
 #   Depends on `_vsix-install` so a cold CI checkout has the webview-ui +
-#   extension Node deps needed for esbuild bundling, and on `typediagram-gen`
+#   extension Node deps needed for esbuild bundling, and on `_typediagram-gen`
 #   so the gitignored wire-generated.ts exists before tsc runs.
-_vsix-build: _vsix-install typediagram-gen
+_vsix-build: _vsix-install _typediagram-gen
 	cargo build --release -p deslop-lsp -p deslop-mcp -p deslop
 	cd clients/vscode/webview-ui && npm run typecheck && npm run build
 	cd clients/vscode && npm run build
@@ -677,7 +677,7 @@ _vsix-test: _delete-path-binaries _vsix-install _vsix-build _vsix-stage-bundled-
 # _vsix-test-ollama: Run the Ollama-gated VSIX e2e suite (csharp-type4 fixture,
 #   provider=ollama, model=nomic-embed-text). NEVER runs in `make ci` /
 #   `make _vsix-test`. Requires a local Ollama daemon and the model pulled.
-#   Reached through the public `make test-ollama` umbrella.
+#   Reached through the public `make _test-ollama` umbrella.
 _vsix-test-ollama: _delete-path-binaries _vsix-install _vsix-build _vsix-stage-bundled-binaries
 	cd clients/vscode && npm run test:ollama
 
@@ -715,13 +715,13 @@ _vsix-coverage-check:
 	cd clients/vscode && npm run coverage:extension:check
 	cd clients/vscode && npm run coverage:webview:check
 
-## vsix-package: Build the .vsix artifact (does not publish).
+## _vsix-package: Build the .vsix artifact (does not publish).
 ##               Stages the host-platform deslop-lsp + deslop-mcp + deslop
 ##               binaries into clients/vscode/bin/<platform>/ and produces a
 ##               platform-specific VSIX via `vsce package --target`
 ##               ([VSIX-BINARY-VERSIONING]). CI stages every supported platform;
 ##               locally we only have the host toolchain so we only stage that one.
-vsix-package: _delete-path-binaries _vsix-install _vsix-build _vsix-stage-and-package
+_vsix-package: _delete-path-binaries _vsix-install _vsix-build _vsix-stage-and-package
 
 # [DEPLOY-EXTENSION-BUNDLED-TESTS] Stage binaries into the extension bundle so
 #   VSIX tests run against bundled binaries, never a PATH-visible build.
@@ -733,7 +733,7 @@ _vsix-stage-bundled-binaries:
 	   Linux-x86_64)   _platform=linux-x64 ;; \
 	   Linux-aarch64)  _platform=linux-arm64 ;; \
 	   MINGW*-x86_64|MSYS*-x86_64|CYGWIN*-x86_64) _platform=win32-x64 ;; \
-	   *) echo "FAIL: unsupported host $$_uname_s-$$_uname_m for vsix-package"; exit 1 ;; \
+	   *) echo "FAIL: unsupported host $$_uname_s-$$_uname_m for _vsix-package"; exit 1 ;; \
 	 esac; \
 	 case "$$_platform" in win32-*) _ext=.exe ;; *) _ext= ;; esac; \
 	 _dest=clients/vscode/bin/$$_platform; \
@@ -800,7 +800,7 @@ vsix-rebuild:
 	@$(MAKE) _kill-deslop-processes
 	@$(MAKE) clean
 	@$(MAKE) _vsix-clean
-	@$(MAKE) vsix-package
+	@$(MAKE) _vsix-package
 	@$(MAKE) _vsix-install-code
 	@$(MAKE) _delete-path-binaries
 	@echo "==> vsix-rebuild done. Reload the VS Code window to pick up the new extension."
@@ -821,8 +821,8 @@ _jetbrains-verify:
 # _jetbrains-package: CI/release packaging gate — build the JetBrains plugin zip
 #   (single LSP4IJ artifact), verify project/structure, and assert the packaged
 #   artifact via scripts/deployment/verify-jetbrains-package.mjs. Headless (no IDE install);
-#   invoked by .github/workflows/ci.yml. Local devs use android-studio-rebuild or
-#   android-studio-rebuild-reinstall to actually load the plugin into the IDE.
+#   invoked by .github/workflows/ci.yml. Local devs use _android-studio-rebuild or
+#   _android-studio-rebuild-reinstall to actually load the plugin into the IDE.
 _jetbrains-package: _jetbrains-build
 	@$(MAKE) _jetbrains-verify
 	node scripts/deployment/verify-jetbrains-package.mjs
@@ -841,30 +841,30 @@ _jetbrains-real-binary-test:
 	cd $(_JETBRAINS_DIR) && DESLOP_LSP_REAL_BINARY="$(CURDIR)/target/release/deslop-lsp" \
 	  $(GRADLE) :deslop-shared:test --no-daemon --rerun-tasks
 
-## android-studio-rebuild: Rebuild the Android Studio (LSP4IJ) plugin and install
+## _android-studio-rebuild: Rebuild the Android Studio (LSP4IJ) plugin and install
 ##                         it (macOS). Kills stale Deslop processes, builds the
 ##                         plugin zip via _jetbrains-build (host deslop-lsp
 ##                         bundled), and installs it into Android Studio with its
 ##                         required LSP4IJ dependency. For a full clean + uninstall
 ##                         first, use android-studio-rebuild-reinstall.
-android-studio-rebuild:
+_android-studio-rebuild:
 	@$(MAKE) _kill-deslop-processes
 	@$(MAKE) _jetbrains-build
 	@$(MAKE) _android-studio-install
 	@echo "==> Restart Android Studio to load the rebuilt plugin."
 
-## android-studio-rebuild-reinstall: Full clean + uninstall + rebuild + reinstall
+## _android-studio-rebuild-reinstall: Full clean + uninstall + rebuild + reinstall
 ##                         of the Android Studio (LSP4IJ) plugin — the JetBrains
 ##                         analogue of vsix-rebuild (macOS). Kills stale Deslop
 ##                         processes, cleans every build artifact, uninstalls the
 ##                         currently installed plugin from Android Studio, then
 ##                         rebuilds and reinstalls it via android-studio-rebuild.
 ##                         Use when "why isn't my change showing up" strikes.
-android-studio-rebuild-reinstall:
+_android-studio-rebuild-reinstall:
 	@$(MAKE) _kill-deslop-processes
 	@$(MAKE) clean
 	@$(MAKE) _android-studio-uninstall
-	@$(MAKE) android-studio-rebuild
+	@$(MAKE) _android-studio-rebuild
 
 # _android-studio-install: Install the freshly built plugin into the newest
 #   Android Studio config on this Mac, plus its LSP4IJ dependency (pinned to the
@@ -915,15 +915,15 @@ _android-studio-uninstall:
 	 fi
 
 ## help: List all available targets
-# site: Serve the Eleventy website locally with live reload.
-site: _site-node-modules
+# website-serve: Serve the Eleventy website locally with live reload.
+website-serve: _website-node-modules
 	cd site && npm run dev
 
-# _site-build: Production build into site/_site (regenerates issues data).
-_site-build: _site-node-modules
+# _website-build: Production build into site/_site (regenerates issues data).
+_website-build: _website-node-modules
 	cd site && npm run build
 
-_site-node-modules:
+_website-node-modules:
 	@test -d site/node_modules || (cd site && npm ci --no-audit --no-fund)
 
 help:
@@ -933,25 +933,14 @@ help:
 	@echo "  lint           - All linters/analyzers (read-only, no formatting)"
 	@echo "  fmt            - Format all code in-place (CHECK=1 for read-only CI check)"
 	@echo "  clean          - Remove build artifacts"
-	@echo "  ci             - fmt + lint + rust test + build + deployment-verify + VSIX coverage + HTML-report CSS"
+	@echo "  ci             - fmt + lint + rust test + build + deployment verify + VSIX coverage + HTML-report CSS"
 	@echo "  setup          - Post-create dev environment setup"
 	@echo ""
 	@echo "Repo-specific targets:"
-	@echo "  typediagram-gen        - Regenerate wire-format IPC models from docs/models/*.td"
-	@echo "  deployment-verify      - Validate deployment manifest and built binary contracts"
-	@echo "  site                   - Serve the website locally with live reload"
-	@echo "  test-ollama            - Ollama-gated Rust + VSIX tests (never in CI)"
+	@echo "  website-serve          - Serve the website locally with live reload"
 	@echo "  score-gate             - Score this build against the judged clone registers (what CI runs)"
-	@echo "  score-corpus           - Score every judged register; append the run to the tracked history"
 	@echo "  compare                - Compare the last release against HEAD across every register"
-	@echo "  judging-folder         - Build the blinded repos+reports+skill folder for a clone judge"
-	@echo "  merge-verdicts         - Import verdicts every source agrees on (JUDGED_DIRS=\"a b\")"
 	@echo "  test-corpus            - Accuracy + resource gate against pinned real repositories"
-	@echo "  test-corpus-ci         - test-corpus in baseline mode (reports tracked defects)"
-	@echo "  ci-ollama              - make ci plus make test-ollama"
-	@echo "  vsix-package           - Build the platform-specific .vsix artifact + deployment gate"
 	@echo "  vsix-rebuild           - Nuke + rebuild + repackage + install the VSIX from scratch"
-	@echo "  android-studio-rebuild - Rebuild + install the Android Studio (LSP4IJ) plugin (macOS)"
-	@echo "  android-studio-rebuild-reinstall - Clean + uninstall + rebuild + reinstall the plugin (macOS)"
 	@echo ""
 	@echo "Internal '_'-prefixed targets (CI steps / plumbing) are hidden; read the Makefile for them."

@@ -223,8 +223,8 @@ test("[CORPUS-REGISTER-WORKSPACE] nothing in the folder names this project", () 
 
 test("[CORPUS-REGISTER-WORKSPACE] the folder is built by one command, outside this repository", () => {
   assert.ok(
-    makefile.includes("judging-folder:") && makefile.includes(PREPARER),
-    `\`make judging-folder\` must run ${PREPARER}; a folder built by hand is built differently each time`,
+    makefile.includes("_judging-folder:") && makefile.includes(PREPARER),
+    `\`make _judging-folder\` must run ${PREPARER}; a folder built by hand is built differently each time`,
   );
   assert.ok(
     preparerScript.includes('WORK_DIR="$(dirname "$COMPARE_REPORTS")"') &&
@@ -296,7 +296,7 @@ test("[CORPUS-REGISTER-WORKSPACE] a candidate count past the ceiling or below on
   }
 });
 
-test("[CORPUS-REGISTER-WORKSPACE] make judging-folder passes the candidate count through", () => {
+test("[CORPUS-REGISTER-WORKSPACE] make _judging-folder passes the candidate count through", () => {
   assert.ok(
     makefile.includes("JUDGING_CANDIDATES") && preparerScript.includes("--candidates"),
     "a short pass is chosen once, on the command line, and reaches every workspace",

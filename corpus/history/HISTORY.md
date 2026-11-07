@@ -1,6 +1,6 @@
 # Corpus run history
 
-Every `make score-corpus` run over the whole judged corpus, newest first ([CORPUS-HISTORY]). Each run is tied to the commit it was built from, and to its release version when the commit is a tagged release. This page is rendered from the records in `corpus/history/runs/` each time a run is added — never edit it by hand. A run fails only when a judged pair that passed before fails now.
+Every `make _score-corpus` run over the whole judged corpus, newest first ([CORPUS-HISTORY]). Each run is tied to the commit it was built from, and to its release version when the commit is a tagged release. This page is rendered from the records in `corpus/history/runs/` each time a run is added — never edit it by hand. A run fails only when a judged pair that passed before fails now.
 
 ## Runs
 

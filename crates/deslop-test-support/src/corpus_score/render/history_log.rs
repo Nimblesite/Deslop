@@ -12,7 +12,7 @@ use crate::corpus_score::{
 };
 
 /// What the document says before any run is recorded.
-const NO_RUNS: &str = "No run is recorded yet. `make score-corpus` records one.";
+const NO_RUNS: &str = "No run is recorded yet. `make _score-corpus` records one.";
 /// A run, or a repository, that kept to its judgments, and one that did not.
 const PASSED: &str = "✅ passed";
 /// See [`PASSED`].
@@ -54,7 +54,7 @@ pub fn history_log(runs: &[RunRecord]) -> String {
     let mut lines = vec![
         "# Corpus run history".to_owned(),
         String::new(),
-        "Every `make score-corpus` run over the whole judged corpus, newest first ([CORPUS-HISTORY]). \
+        "Every `make _score-corpus` run over the whole judged corpus, newest first ([CORPUS-HISTORY]). \
          Each run is tied to the commit it was built from, and to its release version when the \
          commit is a tagged release. This page is rendered from the records in \
          `corpus/history/runs/` each time a run is added — never edit it by hand. A run fails \

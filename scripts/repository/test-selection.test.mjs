@@ -72,7 +72,7 @@ const MODULE_SEPARATOR = "::";
 // `corpus_` into an `--exact` loop and scan nothing.
 const CORPUS_WORKFLOW = ".github/workflows/corpus.yml";
 const CORPUS_WORKFLOW_STEP = "Run corpus suite";
-const CORPUS_MAKE_TARGETS = ["test-corpus-ci", "test-corpus-ci-full"];
+const CORPUS_MAKE_TARGETS = ["_test-corpus-ci", "_test-corpus-ci-full"];
 
 // The exact substrings the release gate used to filter on. Each names hermetic
 // tests: the Ollama suites drive an in-process mock server or a deliberately
@@ -251,7 +251,7 @@ test("[TEST-SELECTION-SKIP] the corpus target is still declared and still built"
 });
 
 test("[TEST-SELECTION-SKIP] the corpus targets select by --ignored, never by name", () => {
-  for (const target of ["test-corpus", "test-corpus-ci"]) {
+  for (const target of ["test-corpus", "_test-corpus-ci"]) {
     const args = words(recipe(target));
     assert.ok(
       args.includes(IGNORED_FLAG),
@@ -271,10 +271,10 @@ test("[TEST-SELECTION-SKIP] the corpus targets select by --ignored, never by nam
 });
 
 test("[TEST-SELECTION-SKIP] the scheduled slice matches test names exactly", () => {
-  const args = words(recipe("test-corpus-ci"));
+  const args = words(recipe("_test-corpus-ci"));
   assert.ok(
     args.includes(EXACT_FLAG),
-    "`make test-corpus-ci` runs a resource-bounded slice named in CORPUS_TESTS, so it must pass " +
+    "`make _test-corpus-ci` runs a resource-bounded slice named in CORPUS_TESTS, so it must pass " +
       `${EXACT_FLAG}. Without it libtest matches each name as a substring: renaming a test makes ` +
       "the filter select nothing, and a run that executes zero tests reports green (gh #412).",
   );
@@ -284,7 +284,7 @@ test("[TEST-SELECTION-SKIP] the scheduled slice matches test names exactly", () 
   // the recipe must count what actually ran and fail when the count is short.
   assert.ok(
     args.includes(MINIMUM_REFERENCE),
-    "`make test-corpus-ci` must reach the run-count floor through " +
+    "`make _test-corpus-ci` must reach the run-count floor through " +
       `\`${MINIMUM_REFERENCE}\`: a corpus run that executes no test has proved nothing, and ` +
       "libtest still exits 0 (gh #412)",
   );

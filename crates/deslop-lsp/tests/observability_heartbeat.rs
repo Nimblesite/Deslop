@@ -150,7 +150,7 @@ fn the_required_test_matrix_enables_the_profiling_feature() {
         "`deslop-lsp/profiling` is off, so \
          `profile_dir_writes_non_empty_firefox_profile_on_shutdown` was \
          not compiled and did not run. Run the suite through the \
-         Makefile — `make test`, `make test-shard` or `make coverage` — \
+         Makefile — `make test`, `make _test-shard` or `make coverage` — \
          which pass `_TEST_FEATURES`. If the feature was deliberately \
          dropped from that set, the gated test must become a plain \
          `#[ignore = \"..\"]` in the same change so the \

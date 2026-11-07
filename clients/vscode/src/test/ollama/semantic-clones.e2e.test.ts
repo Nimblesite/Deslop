@@ -1,5 +1,5 @@
 // Ollama-gated VSIX e2e suite. NEVER runs in CI — wired only through
-// `make vsix-test-ollama` / `make test-ollama`. Requires a live Ollama
+// `make vsix-test-ollama` / `make _test-ollama`. Requires a live Ollama
 // daemon at 127.0.0.1:11434 with `nomic-embed-text` pulled.
 //
 // Proves that the VSIX path (real VS Code → real deslop-lsp → real
