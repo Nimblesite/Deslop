@@ -13,6 +13,7 @@ Deslop is a duplicate-code detector. **Accuracy-audit mode:** one measure outran
 - **Core calculations live only in Rust.** Duplication maths in TypeScript (or anywhere else) = hard violation. Scripts/utilities exempt.
 - ❌ placeholders, silent no-ops, legacy code, lint suppressions (`#[allow(clippy::...)]`). Proper error types; fix the code.
 - **Bugs follow the [fix-bug skill](.claude/skills/fix-bug/SKILL.md):** root cause, replace broken code, ❌ a duplicate path beside it.
+- 🛑 **Never work around a bug outside this repo** (grammars, dependencies, Osprey). Log it on the owner's GitHub repo, demand the fix over Too Many Cooks, bump the pin when it lands. The test stays red until then.
 - **IPC wire models are generated from [typeDiagram](https://typediagram.dev/docs/language-reference.html)** — never hand-written or committed.
 
 ## Rust
