@@ -230,3 +230,57 @@ fn copied_c_function_pointer_tables_are_reported_but_prototypes_are_not() -> Res
     }
     Ok(())
 }
+
+const WHOLE_FILE_FIXTURE: &str = "c-whole-file-extent";
+const WHOLE_FILE_MIN_NODES: &str = "30";
+const WHOLE_FILE_FIRST: &str = "print_array.c";
+const WHOLE_FILE_SECOND: &str = "print_object.c";
+/// Both cJSON test files open with the same three `#include` rows.
+const WHOLE_FILE_INCLUDE_ROWS: (u64, u64) = (23, 25);
+/// `assert_print_array` and `assert_print_object` both start on row 27.
+const WHOLE_FILE_HELPER_START: u64 = 27;
+/// The row each file's `main` opens on.
+const WHOLE_FILE_MAIN_FIRST: u64 = 90;
+const WHOLE_FILE_MAIN_SECOND: u64 = 91;
+
+// [LANG-CAND-C-PREPROC] [PIPELINE-CLUSTER-EXACT-SCOPE] Two cJSON test files
+// (MIT, pinned at 6d9f2443) share a copied assert helper. The occurrences of
+// one cluster must describe corresponding code: one side may not be the
+// whole translation unit — `#include` block and `main` included — while its
+// partner is a three-function run that stops before its own `main`.
+#[test]
+fn c_cluster_occurrences_never_pair_a_whole_file_with_a_function_run() -> Result<()> {
+    let json = run_min_nodes(WHOLE_FILE_FIXTURE, WHOLE_FILE_MIN_NODES)?;
+    let clusters = report_clusters(&json)?;
+    let helper = clusters.iter().any(|cluster| {
+        [WHOLE_FILE_FIRST, WHOLE_FILE_SECOND].iter().all(|file| {
+            spans_in(cluster, file)
+                .iter()
+                .any(|(start, _)| *start == WHOLE_FILE_HELPER_START)
+        })
+    });
+    assert!(helper, "the copied assert helpers pair from row 27: {clusters:#?}");
+    for cluster in &clusters {
+        for file in [WHOLE_FILE_FIRST, WHOLE_FILE_SECOND] {
+            for (start, end) in spans_in(cluster, file) {
+                assert!(
+                    !(WHOLE_FILE_INCLUDE_ROWS.0..=WHOLE_FILE_INCLUDE_ROWS.1).contains(&start),
+                    "{file}:{start}-{end} opens on the #include block: {cluster:#}"
+                );
+            }
+        }
+        let reaches = |file: &str, main: u64| {
+            spans_in(cluster, file).iter().any(|(_, end)| *end >= main)
+        };
+        let first = !spans_in(cluster, WHOLE_FILE_FIRST).is_empty();
+        let second = !spans_in(cluster, WHOLE_FILE_SECOND).is_empty();
+        if first && second {
+            assert_eq!(
+                reaches(WHOLE_FILE_FIRST, WHOLE_FILE_MAIN_FIRST),
+                reaches(WHOLE_FILE_SECOND, WHOLE_FILE_MAIN_SECOND),
+                "one occurrence takes in its file's main and its partner does not: {cluster:#}"
+            );
+        }
+    }
+    Ok(())
+}
