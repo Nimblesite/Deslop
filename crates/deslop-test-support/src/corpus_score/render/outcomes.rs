@@ -4,8 +4,8 @@
 //! pairs answered wrongly are listed again, with why, under the defects that
 //! follow.
 
-use super::Scorecard;
 use super::cells::{header, row};
+use super::Scorecard;
 use crate::corpus_score::outcomes::{Outcome, PairOutcome, Standing, OUTCOMES_PATH};
 
 /// What the section says when no repository in the run has a clone register.

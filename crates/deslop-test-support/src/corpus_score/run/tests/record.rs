@@ -74,7 +74,8 @@ const MIXED_FIXED_ROW: &str = "| flutter | clearly_in | `src/one.rs:10-20` + `sr
                                ✅ pass | fixed — commit the record |";
 const MIXED_REGRESSED_ROW: &str = "| flutter | clearly_in | `src/three.rs:50-60` + \
                                    `src/two.rs:70-80` | 🔴 fail | 🔴 regressed — fails the run |";
-const MIXED_FIXED_LINE: &str = "- ✅ **FIXED** flutter — `src/one.rs:10-20` + `src/two.rs:30-40` — \
+const MIXED_FIXED_LINE: &str =
+    "- ✅ **FIXED** flutter — `src/one.rs:10-20` + `src/two.rs:30-40` — \
                                 fixed; on record as failing since 2026-10-01T00:00:00Z";
 const EVERY_PAIR_RESULT_MARK: &str = "| flutter | clearly_in | ";
 
@@ -417,11 +418,22 @@ fn a_fixed_pair_never_offsets_a_regression_and_every_result_is_listed() -> Resul
     let root = root.path();
     write(root, REGISTER, &two_pair_register())?;
     let failing = entry(REPO, &the_ranges(), "fail", FIRST_RUN, ENGINE_LABEL);
-    let passing = entry(REPO, &[THIRD_RANGE, FOURTH_RANGE], "pass", FIRST_RUN, ENGINE_LABEL);
+    let passing = entry(
+        REPO,
+        &[THIRD_RANGE, FOURTH_RANGE],
+        "pass",
+        FIRST_RUN,
+        ENGINE_LABEL,
+    );
     seed(root, &json!([failing, passing.clone()]))?;
 
     let mixed = scored(root, SECOND_RUN, &report(&the_pair()), STRICT)?;
-    let standings: Vec<Standing> = mixed.card.outcomes.iter().map(|pair| pair.standing).collect();
+    let standings: Vec<Standing> = mixed
+        .card
+        .outcomes
+        .iter()
+        .map(|pair| pair.standing)
+        .collect();
     assert_eq!(
         standings,
         [Standing::Fixed, Standing::Regressed],
@@ -440,7 +452,10 @@ fn a_fixed_pair_never_offsets_a_regression_and_every_result_is_listed() -> Resul
         MIXED_FIXED_ROW,
         MIXED_REGRESSED_ROW,
     ] {
-        assert!(markdown.contains(line), "the scorecard must carry `{line}`:\n{markdown}");
+        assert!(
+            markdown.contains(line),
+            "the scorecard must carry `{line}`:\n{markdown}"
+        );
     }
     assert_eq!(
         markdown.matches(EVERY_PAIR_RESULT_MARK).count(),
