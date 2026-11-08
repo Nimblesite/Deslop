@@ -178,7 +178,13 @@ impl PipelineSession {
         let stage_started = Instant::now();
         let recovery_input = pairs.len();
         let shape_families = cluster_by_transitive_closure(&pairs);
-        self.recover_copy_pairs(&mut pairs, &shape_families, fingerprints, trees, parse_cache);
+        self.recover_copy_pairs(
+            &mut pairs,
+            &shape_families,
+            fingerprints,
+            trees,
+            parse_cache,
+        );
         ledger.record(
             "shape_families_and_copy_recovery",
             recovery_input,

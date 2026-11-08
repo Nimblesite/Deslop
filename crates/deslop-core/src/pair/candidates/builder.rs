@@ -203,10 +203,7 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
     /// with nobody — a run of string literals hashes the same in every
     /// grammar, so a C file's list once silenced an Osprey file's copies.
     fn pair_bucket_per_language(&mut self, run: &[usize]) {
-        let Some(languages) = self
-            .file_languages
-            .filter(|_| !self.allow_cross_language)
-        else {
+        let Some(languages) = self.file_languages.filter(|_| !self.allow_cross_language) else {
             self.pair_bucket(run);
             return;
         };

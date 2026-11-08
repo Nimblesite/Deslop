@@ -168,13 +168,7 @@ fn recovered<W: CopyWeld + Send>(
     open: &(impl Fn() -> W + Sync),
     existing: &[CandidatePair],
 ) -> Vec<CandidatePair> {
-    recovered_pairs(
-        families,
-        fingerprints,
-        open,
-        existing,
-        &AtomicUsize::new(0),
-    )
+    recovered_pairs(families, fingerprints, open, existing, &AtomicUsize::new(0))
 }
 
 // A complete shape family cannot contain a missing copy edge, while a
@@ -193,7 +187,12 @@ fn recovery_walks_only_families_with_a_missing_pair() {
         recovery_workload(&families, &fingerprints),
         EXPECTED_WORKLOAD
     );
-    let pairs = recovered(&families, &fingerprints, &|| welding_everything(&probes), &[]);
+    let pairs = recovered(
+        &families,
+        &fingerprints,
+        &|| welding_everything(&probes),
+        &[],
+    );
     let expected: Vec<(usize, usize)> = OPEN_CHAIN_RECOVERED
         .iter()
         .chain(OPEN_CHAIN_RECOVERED)
