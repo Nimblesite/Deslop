@@ -11,7 +11,7 @@ use crate::{
     },
     state::FileId,
 };
-use tree_sitter::{Node, Tree};
+use tree_sitter::Tree;
 
 /// Stable Osprey language identifier.
 pub(crate) const LANGUAGE_ID: &str = "osprey";
@@ -112,7 +112,7 @@ impl LanguageParser for OspreyParser {
         }
         let tree = parse_source(self.id(), &self.grammar(), source)?;
         if self.syntax == Syntax::Ml {
-            return intact_root(&tree, source, file_id, self.id());
+            return intact_root(&tree, file_id, self.id());
         }
         build_normalised_root(&tree, file_id, normalise_kind, self.id())
     }
@@ -126,7 +126,6 @@ impl LanguageParser for OspreyParser {
 /// ([LANG-CAND-OSPREY-UNPARSED]).
 fn intact_root(
     tree: &Tree,
-    source: &[u8],
     file_id: FileId,
     language: &'static str,
 ) -> Result<NormalizedNode, CoreError> {
@@ -135,64 +134,21 @@ fn intact_root(
     let children = root
         .named_children(&mut cursor)
         .filter(|declaration| !declaration.has_error())
-        .map(|declaration| intact_declaration(declaration, source, file_id, language))
+        .map(|declaration| {
+            normalise_node(
+                declaration,
+                file_id,
+                normalise_kind,
+                language,
+                TOP_LEVEL_DEPTH,
+            )
+        })
         .filter_map(Result::transpose)
         .collect::<Result<Vec<_>, _>>()?;
     if children.is_empty() && root.has_error() {
         return Err(CoreError::ParseFailed { language });
     }
     Ok(file_root(root, children, file_id))
-}
-
-/// One error-free top-level declaration, ending where its own text ends.
-fn intact_declaration(
-    declaration: Node<'_>,
-    source: &[u8],
-    file_id: FileId,
-    language: &'static str,
-) -> Result<Option<NormalizedNode>, CoreError> {
-    let normalised = normalise_node(
-        declaration,
-        file_id,
-        normalise_kind,
-        language,
-        TOP_LEVEL_DEPTH,
-    )?;
-    Ok(normalised.map(|mut node| {
-        node.byte_range.end = declaration_end(declaration, source);
-        node
-    }))
-}
-
-/// [LANG-CAND-OSPREY-RECOVERY] The line break closing a declaration's last
-/// token. The ML grammar's layout tokens are zero-width and sit after every
-/// blank line that follows, so the parse's own end swallows those blank
-/// lines and moves whenever a declaration is added below.
-fn declaration_end(declaration: Node<'_>, source: &[u8]) -> usize {
-    let last_token = last_token_end(declaration);
-    source
-        .get(last_token..declaration.end_byte())
-        .and_then(|layout| layout.iter().position(|byte| *byte == b'\n'))
-        .map_or(declaration.end_byte(), |offset| {
-            last_token.saturating_add(offset).saturating_add(1)
-        })
-}
-
-/// The end of the last token under `node` that spans any source.
-fn last_token_end(node: Node<'_>) -> usize {
-    let mut current = node;
-    while let Some(child) = (0..current.child_count())
-        .rev()
-        .filter_map(|index| {
-            u32::try_from(index)
-                .ok()
-                .and_then(|index| current.child(index))
-        })
-        .find(|child| child.end_byte() > child.start_byte())
-    {
-        current = child;
-    }
-    current.end_byte()
 }
 
 /// Preserve expression descendants, including those inside interpolation.
