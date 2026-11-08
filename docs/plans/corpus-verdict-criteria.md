@@ -45,7 +45,7 @@ A pair with ≥ 70 % of statements aligned and edits confined to ≤ 2 contiguou
 - [x] Queue 18 more repositories so each supported language has two to four of different sizes (`corpus/judging-queue.json`, 28 queued).
 - [x] Judging folders `~/clone-judging-claude` and `~/clone-judging-codex` (identical; 28 repositories, 5,576 candidates, including all 1,000 requeued NOT CLEAR pairs drawn first), built from the last comparison's reports under the corrected skill.
 - [ ] Two independent judge sessions, then `make _merge-verdicts`.
-- [ ] When the running `make compare` finishes, build a second folder pair for the 18 newly queued repositories.
+- [x] Second folder pair for the 18 newly queued repositories: `~/clone-judging-queued-claude` and `~/clone-judging-queued-codex` (identical, 3,422 candidates), from `compare-2026-11-08T04-10-47Z`.
 - [x] Remove the contradictions from the judging skill (`.agents/skills/judge-clone-pairs/SKILL.md`), the workspace candidate text (`scripts/corpus/register-workspace.mjs`) and `docs/specs/corpus.md` [CORPUS-REGISTER]: a fixed six-real-line bar, no test or scaffolding exemption for `Type I`/`Type II`, ragged boundaries filed as CLEARLY IN around a qualifying core.
 - [ ] Write the measurement as a test-support binary in Rust: `crates/deslop-test-support/src/corpus_score/criteria.rs`. It tokenises with the workspace's tree-sitter grammars but uses none of the pipeline's normalisation, fingerprinting or clustering. Each threshold is a named, config-overridable constant.
 - [ ] Add fixtures for every tier boundary: exactly 5 and exactly 6 lines; one inconsistent rename; overlapping ranges; import-only blocks; a 29 % and a 31 % alignment.
