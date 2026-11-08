@@ -186,8 +186,10 @@ fn has_large_group(family: &FusedCluster, fingerprints: &[Fingerprint]) -> bool 
         .any(|members| members.len() >= PARALLEL_GROUP_MEMBERS)
 }
 
-/// A family with at least one large hash group: large groups are walked
-/// in parallel batches, the rest one member at a time.
+/// A family with at least one large hash group: its large groups are
+/// walked in parallel batches and its small groups, which recover
+/// independently, are dealt to workers in chunks; the pairs come back
+/// in hash-group order either way ([PIPELINE-DETERMINISM]).
 fn large_family_pairs<W: CopyWeld + Send>(
     family: &FusedCluster,
     fingerprints: &[Fingerprint],
@@ -195,22 +197,55 @@ fn large_family_pairs<W: CopyWeld + Send>(
     existing: &[CandidatePair],
     probed: &Probed,
 ) -> Vec<CandidatePair> {
-    recovery_hash_groups(family, fingerprints)
+    let groups = recovery_hash_groups(family, fingerprints);
+    let small: Vec<(usize, &[usize])> = groups
         .iter()
-        .flat_map(|members| {
-            if members.len() >= PARALLEL_GROUP_MEMBERS {
-                let workers = crate::shard::worker_count(
-                    members.len(),
-                    PARALLEL_GROUP_MIN_MEMBERS_PER_WORKER,
-                );
-                return parallel_group_pairs(members, pool, workers, existing, probed);
+        .enumerate()
+        .filter(|(_, members)| members.len() < PARALLEL_GROUP_MEMBERS)
+        .map(|(index, members)| (index, members.as_slice()))
+        .collect();
+    let mut by_group: Vec<Vec<CandidatePair>> = vec![Vec::new(); groups.len()];
+    for (index, pairs) in small_group_pairs(&small, pool, existing, probed) {
+        if let Some(slot) = by_group.get_mut(index) {
+            *slot = pairs;
+        }
+    }
+    for (index, members) in groups.iter().enumerate() {
+        if members.len() >= PARALLEL_GROUP_MEMBERS {
+            let workers =
+                crate::shard::worker_count(members.len(), PARALLEL_GROUP_MIN_MEMBERS_PER_WORKER);
+            if let Some(slot) = by_group.get_mut(index) {
+                *slot = parallel_group_pairs(members, pool, workers, existing, probed);
             }
-            let mut weld = pool.lease();
-            let pairs = connected_hash_pairs(members, &mut weld, existing, probed);
-            pool.release([weld]);
-            pairs
-        })
-        .collect()
+        }
+    }
+    by_group.into_iter().flatten().collect()
+}
+
+/// The welded pairs of each small hash group, keyed by the group's
+/// index, with the groups dealt to workers in chunks.
+fn small_group_pairs<W: CopyWeld + Send>(
+    groups: &[(usize, &[usize])],
+    pool: &WeldPool<'_, W>,
+    existing: &[CandidatePair],
+    probed: &Probed,
+) -> Vec<(usize, Vec<CandidatePair>)> {
+    let workers = crate::shard::worker_count(groups.len(), RECOVERY_SHARD_MIN_FAMILIES);
+    let (chunks, welds) = crate::shard::map_chunks(
+        groups.chunks(RECOVERY_CHUNK_FAMILIES),
+        workers,
+        || pool.lease(),
+        |weld, chunk: &[(usize, &[usize])]| {
+            chunk
+                .iter()
+                .map(|&(index, members)| {
+                    (index, connected_hash_pairs(members, weld, existing, probed))
+                })
+                .collect::<Vec<(usize, Vec<CandidatePair>)>>()
+        },
+    );
+    pool.release(welds);
+    chunks.into_iter().flatten().collect()
 }
 
 /// Only equal hashes can add structural edges, so a family is walked one

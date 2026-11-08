@@ -17,7 +17,10 @@ use super::{candidate_exists, CopyWeld, Probed};
 use crate::pair::CandidatePair;
 
 /// Members probed against the existing components in one parallel batch.
-const PROBE_BATCH_MEMBERS: usize = 64;
+/// Settling a batch probes its members against one another on one
+/// thread, so a batch stays small enough that this never dominates the
+/// parallel probing before it.
+const PROBE_BATCH_MEMBERS: usize = 16;
 /// Probes per claimed chunk inside a batch.
 const PROBE_CHUNK_TASKS: usize = 32;
 

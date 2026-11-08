@@ -4,7 +4,7 @@ use std::{collections::HashMap, hash::BuildHasher, sync::Arc};
 
 use super::{
     frontier::member_content, has_hard_contradiction, measure_core_contents, pair_contradiction,
-    pair_evidence, ContentEvidence, MemberContent, PairScope,
+    pair_evidence, pair_gate_evidence, ContentEvidence, MemberContent, PairScope,
 };
 use crate::{ast::NormalizedNode, fingerprint::Fingerprint, state::FileId};
 
@@ -126,6 +126,17 @@ impl ContentPair {
         scope: PairScope,
     ) -> ContentEvidence {
         pair_evidence(self.whole_refs(), sources, scope)
+    }
+
+    /// Measures the whole pair for the gate's verdict at `floor`, stopping
+    /// at the first decisive axis ([FUSED-CONTENT-GATE-ORDER]).
+    pub(crate) fn gate<S: BuildHasher>(
+        &self,
+        sources: &HashMap<FileId, Vec<u8>, S>,
+        scope: PairScope,
+        floor: f64,
+    ) -> ContentEvidence {
+        pair_gate_evidence(self.whole_refs(), sources, scope, floor)
     }
 
     /// Measures shared aligned code with the same resolved whole frontiers.
@@ -325,6 +336,44 @@ mod tests {
         );
         assert_evidence_eq(pair.whole(&sources, whole_scope), uncached_whole);
         assert_evidence_eq(pair.core(&core, &sources, core_scope), uncached_core);
+        Ok(())
+    }
+
+    // [FUSED-CONTENT-GATE-ORDER] The gate's ordered measurement reaches
+    // the full measurement's verdict at every floor, for a pair agreement
+    // alone decides and for one only the rename axes can decide.
+    #[test]
+    fn gate_measurement_matches_whole_verdict_at_every_floor() -> Result<(), String> {
+        const FLOORS: [f64; 5] = [0.0, 0.5, 0.7, 0.85, 1.0];
+        let (tree, fingerprints) = fixture()?;
+        let first = fingerprints.first().ok_or("first endpoint exists")?;
+        let last = fingerprints.last().ok_or("last endpoint exists")?;
+        let trees = HashMap::from([(tree.file_id, &tree)]);
+        let (sources, languages) = inputs(tree.file_id);
+        let scope = PairScope {
+            same_file: true,
+            interior: false,
+            core: false,
+        };
+        let mut measurer = ContentMeasurer::default();
+        for (left, right) in [(first, first), (first, last), (last, first)] {
+            let pair = measurer.pair((left, right), &trees, &sources, &languages);
+            let whole = pair.whole(&sources, scope);
+            for floor in FLOORS {
+                let gate = pair.gate(&sources, scope, floor);
+                assert_eq!(gate.clears(floor), whole.clears(floor), "floor {floor}");
+                assert_eq!(gate.measured, whole.measured);
+                assert_eq!(gate.contradiction, whole.contradiction);
+                assert_eq!(gate.agreement.to_bits(), whole.agreement.to_bits());
+                if !whole.clears(floor) {
+                    assert_eq!(gate.consistent_rename, whole.consistent_rename);
+                    assert_eq!(
+                        gate.rename_consistency.to_bits(),
+                        whole.rename_consistency.to_bits()
+                    );
+                }
+            }
+        }
         Ok(())
     }
 

@@ -7,9 +7,8 @@ use std::{
 };
 
 use super::{
-    super::frontier::{frontiers_aligned, leaf_bytes, population, MemberContent, Population},
-    affirming_literal_count, literal_echoes, literal_positions, rename_mapping, LiteralEchoes,
-    RenameMapping,
+    super::frontier::{leaf_bytes, MemberContent, Population},
+    affirming_literal_count, rename_mapping, LiteralEchoes, RenameInputs, RenameMapping,
 };
 use crate::{content::PairScope, state::FileId};
 
@@ -34,22 +33,23 @@ use crate::{content::PairScope, state::FileId};
 /// local keeps nothing by the count. A core is excused unless aligned
 /// literal positions exist and none affirms the copy — the #134 stride
 /// condition under which the rename axis is already zero.
-pub(in crate::content) fn pair_rename_is_consistent<S: BuildHasher>(
+pub(super) fn is_consistent<S: BuildHasher>(
     canonical: &MemberContent,
     member: &MemberContent,
     sources: &HashMap<FileId, Vec<u8>, S>,
     scope: PairScope,
+    inputs: &RenameInputs,
 ) -> bool {
-    if !frontiers_aligned(canonical, member) {
-        return false;
-    }
-    let positions = literal_positions(canonical, member);
-    let echoes = literal_echoes(canonical, member, sources, &positions);
+    let RenameInputs {
+        positions,
+        echoes,
+        identifiers,
+    } = inputs;
     let mapping = rename_mapping(
-        &population(&canonical.keys, &member.keys, Population::Identifier),
-        &corroboration(canonical, member, sources, &echoes),
+        identifiers,
+        &corroboration(canonical, member, sources, echoes),
     );
-    let affirming = affirming_literal_count(&positions, &echoes);
+    let affirming = affirming_literal_count(positions, echoes);
     tracing::trace!(
         constrained = mapping.constrained,
         explained = mapping.explained,

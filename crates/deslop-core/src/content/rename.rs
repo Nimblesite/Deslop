@@ -62,7 +62,57 @@ mod corroboration;
 
 pub(super) use corroboration::{Corroboration, ModalBijection};
 
-pub(super) use consistent::pair_rename_is_consistent;
+/// Both rename axes of one pair — the Type-2 evidence and the
+/// contradiction-free rename test — from one reading of the aligned
+/// frontiers ([FUSED-CONTENT-GATE-ORDER]). The pair is `(0.0, false)`
+/// when the frontiers do not align.
+pub(super) fn rename_axes<S: BuildHasher>(
+    canonical: &MemberContent,
+    member: &MemberContent,
+    sources: &HashMap<FileId, Vec<u8>, S>,
+    scope: PairScope,
+) -> (f64, bool) {
+    RenameInputs::measure(canonical, member, sources).map_or((0.0, false), |inputs| {
+        (
+            rename_consistency(&inputs, scope),
+            consistent::is_consistent(canonical, member, sources, scope, &inputs),
+        )
+    })
+}
+
+/// What every rename measure reads of one aligned pair, measured once:
+/// the aligned literal positions, the literal echoes of the identifier
+/// bijection, and the aligned identifier key pairs.
+pub(super) struct RenameInputs {
+    /// Aligned positions where both members carry a literal.
+    positions: Vec<LiteralPosition>,
+    /// Literal echoes of bijection-explained identifier substitutions.
+    echoes: LiteralEchoes,
+    /// Aligned identifier key pairs.
+    identifiers: Vec<(u64, u64)>,
+}
+
+impl RenameInputs {
+    /// The inputs of an aligned pair; `None` when the frontiers do not
+    /// align, so no rename can be read at all.
+    fn measure<S: BuildHasher>(
+        canonical: &MemberContent,
+        member: &MemberContent,
+        sources: &HashMap<FileId, Vec<u8>, S>,
+    ) -> Option<Self> {
+        if !frontiers_aligned(canonical, member) {
+            return None;
+        }
+        let positions = literal_positions(canonical, member);
+        let identifiers = population(&canonical.keys, &member.keys, Population::Identifier);
+        let echoes = literal_echoes(canonical, member, sources, &positions, &identifiers);
+        Some(Self {
+            positions,
+            echoes,
+            identifiers,
+        })
+    }
+}
 
 /// Type-2 rename evidence between two members ([TECH-PMATCH-BAKER]): one
 /// pooled coverage over the pair's constrained identifier positions and
@@ -97,25 +147,15 @@ pub(super) use consistent::pair_rename_is_consistent;
 /// and each echo raises the anchor mass and corroborates its
 /// substitution, so completing a rename can never score below leaving
 /// it half-finished (`rename_literal_monotonicity.rs`).
-pub(super) fn pair_rename_consistency<S: BuildHasher>(
-    canonical: Option<&MemberContent>,
-    member: Option<&MemberContent>,
-    sources: &HashMap<FileId, Vec<u8>, S>,
-    scope: PairScope,
-) -> f64 {
-    let (Some(canonical), Some(member)) = (canonical, member) else {
-        return 0.0;
-    };
-    if !frontiers_aligned(canonical, member) {
-        return 0.0;
-    }
-    let positions = literal_positions(canonical, member);
-    let echoes = literal_echoes(canonical, member, sources, &positions);
-    let mapping = rename_mapping(
-        &population(&canonical.keys, &member.keys, Population::Identifier),
-        &echoes.per_substitution,
-    );
-    let literals = LiteralEvidence::measure(&positions, &echoes, &mapping);
+/// Measured here from the pair's shared [`RenameInputs`].
+fn rename_consistency(inputs: &RenameInputs, scope: PairScope) -> f64 {
+    let RenameInputs {
+        positions,
+        echoes,
+        identifiers,
+    } = inputs;
+    let mapping = rename_mapping(identifiers, &echoes.per_substitution);
+    let literals = LiteralEvidence::measure(positions, echoes, &mapping);
     if literals.affirming == 0 && literals.constrained > 0 {
         return 0.0;
     }
