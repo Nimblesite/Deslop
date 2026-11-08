@@ -5,6 +5,19 @@
       "repo": "axios",
       "verdict": "clearly_in",
       "occurrences": [
+        "test/helpers/server.js:13-52",
+        "test/unit/adapters/http.js:65-104"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-08T01:53:50.850Z",
+      "engine": "deslop (binary 9a4b5b4805c3)",
+      "commit": "cd153cbcb9c9ab2732216e77bbedc65cfac1a734",
+      "version": null
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
         "test/module/test.js:80-92",
         "test/module/test.js:94-106"
       ],
@@ -590,6 +603,19 @@
       "repo": "axios",
       "verdict": "clearly_in",
       "occurrences": [
+        "test/unit/adapters/fetch.js:131-189",
+        "test/unit/adapters/fetch.js:205-264"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-08T01:53:50.850Z",
+      "engine": "deslop (binary 9a4b5b4805c3)",
+      "commit": "cd153cbcb9c9ab2732216e77bbedc65cfac1a734",
+      "version": null
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
         "test/unit/adapters/fetch.js:132-152",
         "test/unit/adapters/fetch.js:206-226"
       ],
@@ -707,6 +733,19 @@
       "repo": "axios",
       "verdict": "clearly_in",
       "occurrences": [
+        "test/unit/adapters/http.js:1958-2014",
+        "test/unit/adapters/http.js:2016-2074"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-08T01:53:50.850Z",
+      "engine": "deslop (binary 9a4b5b4805c3)",
+      "commit": "cd153cbcb9c9ab2732216e77bbedc65cfac1a734",
+      "version": null
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
         "test/unit/adapters/http.js:1960-1979",
         "test/unit/adapters/http.js:2018-2038"
       ],
@@ -714,6 +753,32 @@
       "since": "2026-10-22T21:05:36.093Z",
       "engine": "deslop (binary a8ddd29da036)",
       "commit": "4e7c7df5ebee54d42509113c83d0ac9670460781",
+      "version": null
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/unit/adapters/http.js:2196-2209",
+        "test/unit/adapters/http.js:969-982"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-08T01:53:50.850Z",
+      "engine": "deslop (binary 9a4b5b4805c3)",
+      "commit": "cd153cbcb9c9ab2732216e77bbedc65cfac1a734",
+      "version": null
+    },
+    {
+      "repo": "axios",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "index.d.ts:197-206",
+        "index.d.ts:218-227"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-08T01:53:50.850Z",
+      "engine": "deslop (binary 9a4b5b4805c3)",
+      "commit": "cd153cbcb9c9ab2732216e77bbedc65cfac1a734",
       "version": null
     },
     {
@@ -1585,6 +1650,19 @@
       "since": "2026-10-22T21:05:36.093Z",
       "engine": "deslop (binary a8ddd29da036)",
       "commit": "4e7c7df5ebee54d42509113c83d0ac9670460781",
+      "version": null
+    },
+    {
+      "repo": "cobra",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "doc/md_docs.go:32-49",
+        "doc/rest_docs.go:30-49"
+      ],
+      "outcome": "pass",
+      "since": "2026-11-08T01:53:50.850Z",
+      "engine": "deslop (binary 9a4b5b4805c3)",
+      "commit": "cd153cbcb9c9ab2732216e77bbedc65cfac1a734",
       "version": null
     },
     {
