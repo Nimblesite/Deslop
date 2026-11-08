@@ -37,6 +37,12 @@ const CLONE_KINDS = ["identical", "nearly_identical", "structural_only", "loosel
 const BYTE_IDENTICAL_TEXT = "byte_identical";
 const DIFFERENT_TEXT = "different";
 const CONTENT_REJECTION = "rejected: pair fails content corroboration";
+const LSH_REJECTION = "rejected: pair fails the LSH-only guards";
+// [FUSED-SHARED-SUBTREE] The rescue's floors (pair.rs SHARED_SUBTREE_MIN_OVERLAP/_JACCARD)
+// and the LSH-only token floor an unrescued pair must clear instead (LSH_ONLY_MIN_JACCARD).
+const RESCUE_MIN_OVERLAP = 0.75;
+const RESCUE_MIN_TOKEN_JACCARD = 0.65;
+const LSH_ONLY_MIN_TOKEN_JACCARD = 0.9;
 const FULL_SCORE = 1;
 const REPORT_TIMEOUT_MS = 30_000;
 // The handler files' retained extents: drafts' `//!` line comment is not part of
@@ -98,11 +104,24 @@ async function assertIdenticalFilesCompare(
   assert.equal(shown.original.trim(), wholeFile(path.basename(canonical.path)).trim(), "the clone is the whole file");
 }
 
-function assertRefused(evidence: PairEvidence, what: string): void {
+function assertRefused(evidence: PairEvidence, what: string, reason: string): void {
   assert.equal(evidence.admitted, false, `${what} is not admitted: ${evidence.explanation}`);
   assert.ok(!evidence.classification, `${what} carries no clone kind: ${String(evidence.classification)}`);
   assert.equal(evidence.text_identity, DIFFERENT_TEXT, `${what} differ by more than whitespace`);
-  assert.equal(evidence.explanation, CONTENT_REJECTION, `${what} fails content corroboration`);
+  assert.equal(evidence.explanation, reason, `${what} is refused for its first failed guard`);
+}
+
+// The lopsided window clears every rescue floor, so only its aligned core can
+// refuse the rescue. Unrescued it is an LSH-only pair, and its token overlap is
+// below that path's floor: the engine names that guard, never a content failure
+// its own `content_ok` contradicts.
+function assertCoreRefusedRescue(evidence: PairEvidence, what: string): void {
+  assertRefused(evidence, what, LSH_REJECTION);
+  assert.ok(evidence.structural >= RESCUE_MIN_OVERLAP, `${what} clears the rescue overlap floor: ${evidence.structural}`);
+  assert.ok(evidence.token_jaccard >= RESCUE_MIN_TOKEN_JACCARD, `${what} clears the rescue token floor: ${evidence.token_jaccard}`);
+  assert.ok(evidence.token_jaccard < LSH_ONLY_MIN_TOKEN_JACCARD, `${what} is below the LSH-only floor: ${evidence.token_jaccard}`);
+  assert.equal(evidence.content_ok, true, `${what} is not refused on whole-pair content`);
+  assert.equal(evidence.rename_consistency, 0, `${what} preserves no literal (#134 stride family)`);
 }
 
 suite("Osprey pair comparison", () => {
@@ -144,7 +163,7 @@ suite("Osprey pair comparison", () => {
   test("comparing the two renamed effect handlers whole shows both files under the engine's refusal", async () => {
     const diff = await comparePairExplicitly(DRAFTS_WHOLE, NOTES_WHOLE);
     const evidence = await pairEvidence(client, DRAFTS_WHOLE, NOTES_WHOLE);
-    assertRefused(evidence, "the whole handlers");
+    assertRefused(evidence, "the whole handlers", CONTENT_REJECTION);
     assert.equal(evidence.structural, FULL_SCORE, "the handlers share their whole normalised shape");
     assert.equal(evidence.token_jaccard, FULL_SCORE, "the handlers share every normalised token");
     assert.equal(evidence.rename_consistency, 0, "no literal survives, so the rename axis is zero (#134 stride family)");
@@ -164,10 +183,10 @@ suite("Osprey pair comparison", () => {
     // whole pair minus a declaration; if the core is not a copy the wider view
     // cannot be one (`cluster_extent_alignment`: one function against two).
     const forward = await pairEvidence(client, DRAFTS_WHOLE, NOTES_WITHOUT_HANDLER);
-    assertRefused(forward, "drafts whole against notes without its handler");
+    assertCoreRefusedRescue(forward, "drafts whole against notes without its handler");
     const diff = await comparePairExplicitly(NOTES_WITHOUT_HANDLER, DRAFTS_WHOLE);
     const reversed = await pairEvidence(client, NOTES_WITHOUT_HANDLER, DRAFTS_WHOLE);
-    assertRefused(reversed, "the same lopsided pair reversed");
+    assertCoreRefusedRescue(reversed, "the same lopsided pair reversed");
     assert.equal(reversed.structural, forward.structural, "structure is symmetric");
     assert.equal(reversed.token_jaccard, forward.token_jaccard, "token overlap is symmetric");
     assert.equal(diff.label, compareTitle(NOTES_WITHOUT_HANDLER, DRAFTS_WHOLE, reversed));
