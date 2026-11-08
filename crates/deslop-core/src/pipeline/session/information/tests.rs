@@ -305,7 +305,8 @@ fn recovery_measures_only_families_with_a_missing_pair() {
         recovery_workload(&families, &fingerprints),
         EXPECTED_WORKLOAD
     );
-    let groups: Vec<_> = recovery_groups(&families, &fingerprints, &judge, &[]).collect();
+    let groups: Vec<_> =
+        recovery_groups(&families, &fingerprints, &judge, &[], &AtomicUsize::new(0)).collect();
     assert_eq!(groups.len(), EXPECTED_GROUPS);
     assert!(groups.iter().all(|members| members == OPEN_CHAIN));
     assert_eq!(judge.0.load(Ordering::Relaxed), EXPECTED_CALLS);
@@ -319,7 +320,8 @@ fn recovery_judges_only_equal_hash_members_of_a_mixed_shape_family() {
         fingerprints: &fingerprints,
         calls: AtomicUsize::new(0),
     };
-    let groups: Vec<_> = recovery_groups(&families, &fingerprints, &judge, &[]).collect();
+    let groups: Vec<_> =
+        recovery_groups(&families, &fingerprints, &judge, &[], &AtomicUsize::new(0)).collect();
     assert_eq!(groups, vec![FIRST_GROUP.to_vec(), SECOND_GROUP.to_vec()]);
     assert_eq!(
         recovery_workload(&families, &fingerprints),
@@ -348,7 +350,14 @@ fn recovery_walks_a_copied_bucket_in_linear_verdicts() {
         fingerprints: &fingerprints,
         calls: AtomicUsize::new(0),
     };
-    let groups: Vec<_> = recovery_groups(&families, &fingerprints, &judge, &existing).collect();
+    let groups: Vec<_> = recovery_groups(
+        &families,
+        &fingerprints,
+        &judge,
+        &existing,
+        &AtomicUsize::new(0),
+    )
+    .collect();
     let expected: Vec<Vec<usize>> = (2..COPY_BUCKET_MEMBERS)
         .map(|member| vec![COPY_BUCKET_SECOND, member])
         .collect();
@@ -374,7 +383,14 @@ fn recovery_skips_an_existing_equal_hash_edge() {
         calls: AtomicUsize::new(0),
     };
     let existing = [existing_candidate(EXISTING_HASH_PAIR)];
-    let groups: Vec<_> = recovery_groups(&families, &fingerprints, &judge, &existing).collect();
+    let groups: Vec<_> = recovery_groups(
+        &families,
+        &fingerprints,
+        &judge,
+        &existing,
+        &AtomicUsize::new(0),
+    )
+    .collect();
     assert_eq!(groups, vec![FIRST_GROUP.to_vec()]);
     assert_eq!(judge.calls.load(Ordering::Relaxed), ONE_NEW_PAIR);
 }
@@ -392,7 +408,14 @@ fn recovery_skips_a_candidate_absent_from_family_edges() {
     let mut pending = existing_candidate(EXISTING_HASH_PAIR);
     pending.score.structural = NO_SCORE;
     pending.score.token_jaccard = crate::pair::SHARED_SUBTREE_MIN_JACCARD;
-    let groups: Vec<_> = recovery_groups(&families, &fingerprints, &judge, &[pending]).collect();
+    let groups: Vec<_> = recovery_groups(
+        &families,
+        &fingerprints,
+        &judge,
+        &[pending],
+        &AtomicUsize::new(0),
+    )
+    .collect();
     assert_eq!(groups, vec![FIRST_GROUP.to_vec()]);
     assert_eq!(judge.calls.load(Ordering::Relaxed), ONE_NEW_PAIR);
 }
@@ -408,8 +431,14 @@ fn recovery_keeps_a_missing_nontransitive_copy() {
         .copied()
         .map(existing_candidate)
         .collect();
-    let recovered: Vec<_> =
-        recovery_groups(&families, &fingerprints, &RelationJudge, &existing).collect();
+    let recovered: Vec<_> = recovery_groups(
+        &families,
+        &fingerprints,
+        &RelationJudge,
+        &existing,
+        &AtomicUsize::new(0),
+    )
+    .collect();
     let recovered_edges = recoverable_edges(&recovered, &fingerprints);
     assert!(recovered_edges.contains(&OLD_RECOVERABLE_EDGE));
     assert!(NONTRANSITIVE_EXISTING
@@ -427,7 +456,8 @@ fn hash_partition_preserves_old_recoverable_edges_with_nontransitive_kinds() {
         .into_iter()
         .map(|(members, _kind)| members)
         .collect();
-    let partitioned: Vec<_> = recovery_groups(&families, &fingerprints, &judge, &[]).collect();
+    let partitioned: Vec<_> =
+        recovery_groups(&families, &fingerprints, &judge, &[], &AtomicUsize::new(0)).collect();
     let old_edges = recoverable_edges(&original, &fingerprints);
     let new_edges = recoverable_edges(&partitioned, &fingerprints);
     assert!(old_edges.contains(&OLD_RECOVERABLE_EDGE));

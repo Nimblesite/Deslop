@@ -3,6 +3,7 @@
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     path::PathBuf,
+    sync::atomic::{AtomicUsize, Ordering},
     time::Instant,
 };
 
@@ -168,6 +169,7 @@ fn connected_hash_pairs(
     members: &[usize],
     judge: &dyn ClusterKindJudge,
     existing: &[CandidatePair],
+    judged: &AtomicUsize,
 ) -> Vec<Vec<usize>> {
     let mut components: Vec<Vec<usize>> = Vec::new();
     let mut pairs = Vec::new();
@@ -175,10 +177,13 @@ fn connected_hash_pairs(
         let mut joined = Vec::new();
         for (index, component) in components.iter().enumerate() {
             let copy = component.iter().copied().find(|&other| {
-                !candidate_exists(existing, other, member)
-                    && judge
-                        .kind(&[other, member])
-                        .is_some_and(ClusterKind::is_clone)
+                if candidate_exists(existing, other, member) {
+                    return false;
+                }
+                let _previous = judged.fetch_add(1, Ordering::Relaxed);
+                judge
+                    .kind(&[other, member])
+                    .is_some_and(ClusterKind::is_clone)
             });
             if let Some(other) = copy {
                 pairs.push(vec![other, member]);
@@ -227,6 +232,7 @@ fn family_recovery_groups(
     fingerprints: &[Fingerprint],
     judge: &dyn ClusterKindJudge,
     existing: &[CandidatePair],
+    judged: &AtomicUsize,
 ) -> Vec<Vec<usize>> {
     let groups = recovery_hash_groups(family, fingerprints);
     if groups.len() == 1
@@ -238,7 +244,7 @@ fn family_recovery_groups(
     }
     groups
         .iter()
-        .flat_map(|members| connected_hash_pairs(members, judge, existing))
+        .flat_map(|members| connected_hash_pairs(members, judge, existing, judged))
         .collect()
 }
 
@@ -248,11 +254,14 @@ fn recovery_groups<'a>(
     fingerprints: &'a [Fingerprint],
     judge: &'a dyn ClusterKindJudge,
     existing: &'a [CandidatePair],
+    judged: &'a AtomicUsize,
 ) -> impl Iterator<Item = Vec<usize>> + 'a {
     families
         .iter()
         .filter(|family| has_missing_pair(family))
-        .flat_map(|family| family_recovery_groups(family, fingerprints, judge, existing))
+        .flat_map(move |family| {
+            family_recovery_groups(family, fingerprints, judge, existing, judged)
+        })
 }
 
 /// Unique valid edges must fill every possible member pair before we skip.
@@ -357,9 +366,14 @@ impl PipelineSession {
     ) {
         log_recovery_workload(families, fingerprints);
         pairs.sort_unstable_by_key(|pair| (pair.left, pair.right));
-        let groups = recovery_groups(families, fingerprints, judge, pairs);
+        let judged = AtomicUsize::new(0);
+        let groups = recovery_groups(families, fingerprints, judge, pairs, &judged);
         let recovered = self.build_missing_copy_pairs(fingerprints, groups, pairs);
-        tracing::debug!(recovered = recovered.len(), "copy edges recovered");
+        tracing::info!(
+            recovered = recovered.len(),
+            judged = judged.load(Ordering::Relaxed),
+            "copy edges recovered"
+        );
         pairs.extend(recovered);
     }
 
