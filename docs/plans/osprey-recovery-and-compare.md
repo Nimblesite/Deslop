@@ -20,8 +20,8 @@ Completed duplication analysis does not avoid this request: `PipelineSession::me
 
 - [x] Identify the engine request on the diff opening path.
 - [x] Reproduce repeated discovery with the real engine after report completion: `completed_discovery_is_reused_by_repeated_pair_comparisons` asserts the engine's endpoint echoes and admitted verdict for three requests, including reversal, then fails because discovery ran four times instead of once.
-- [ ] Confirm the failure with the user as required by the invoked skill.
-- [ ] Implement and verify responsive comparisons and truthful verdicts.
+- [x] Confirm the failure with the user as required by the invoked skill (user goal, 2026-11-08).
+- [x] Implement and verify responsive comparisons and truthful verdicts: pair comparisons reuse completed discovery's exact-copy anchors (`session/anchors.rs`), so `completed_discovery_is_reused_by_repeated_pair_comparisons` sees one discovery across three requests and the Osprey suite asserts each title is the engine's verdict.
 
 ## [VSIX-PAIR-COMPARE] Osprey pair comparison suite
 
