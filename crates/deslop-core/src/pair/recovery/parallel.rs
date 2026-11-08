@@ -59,21 +59,21 @@ impl<'a, W> WeldPool<'a, W> {
 }
 
 /// Disjoint sets over `0..n`, used to settle one batch.
-struct DisjointSets {
+pub(super) struct DisjointSets {
     /// Parent of each node; a root is its own parent.
     parent: Vec<usize>,
 }
 
 impl DisjointSets {
     /// `count` singleton sets.
-    fn new(count: usize) -> Self {
+    pub(super) fn new(count: usize) -> Self {
         Self {
             parent: (0..count).collect(),
         }
     }
 
     /// The root of `node`'s set, compressing the path behind it.
-    fn find(&mut self, node: usize) -> usize {
+    pub(super) fn find(&mut self, node: usize) -> usize {
         let mut root = node;
         while let Some(&parent) = self.parent.get(root).filter(|&&parent| parent != root) {
             root = parent;
@@ -89,7 +89,7 @@ impl DisjointSets {
     }
 
     /// Merges the sets of `left` and `right`.
-    fn union(&mut self, left: usize, right: usize) {
+    pub(super) fn union(&mut self, left: usize, right: usize) {
         let (left, right) = (self.find(left), self.find(right));
         if left != right {
             if let Some(parent) = self.parent.get_mut(right) {

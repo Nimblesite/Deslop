@@ -403,21 +403,14 @@ fn components_of(
     pairs: &[CandidatePair],
     existing: &[CandidatePair],
 ) -> BTreeSet<Vec<usize>> {
-    let mut parent: Vec<usize> = (0..members.len()).collect();
-    fn find(parent: &mut [usize], node: usize) -> usize {
-        let mut root = node;
-        while parent[root] != root {
-            root = parent[root];
-        }
-        root
-    }
+    let mut sets = super::parallel::DisjointSets::new(members.len());
     for pair in pairs.iter().chain(existing) {
-        let (left, right) = (find(&mut parent, pair.left), find(&mut parent, pair.right));
-        parent[left] = right;
+        sets.union(pair.left, pair.right);
     }
-    let mut groups: std::collections::BTreeMap<usize, Vec<usize>> = Default::default();
+    let mut groups: std::collections::BTreeMap<usize, Vec<usize>> =
+        std::collections::BTreeMap::new();
     for &member in members {
-        groups.entry(find(&mut parent, member)).or_default().push(member);
+        groups.entry(sets.find(member)).or_default().push(member);
     }
     groups.into_values().collect()
 }
