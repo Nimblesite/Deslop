@@ -4,7 +4,7 @@
 
 Implement [LANG-CAND-OSPREY] with Osprey's tree-sitter grammar for `.osp`, preserving effects, handlers, patterns and interpolation expressions through the shared discovery, cache, incremental session, ranking and rendering paths. Verify through the CLI fixtures and the real LSP/MCP language-label contract. Language registration must also reach VS Code activation, editor synchronization and JetBrains file matching.
 
-Both native grammar dependencies use the published Osprey revision `865f0469acaec12ba7e448491fc9ec2cc877d57c` in `Cargo.toml`. Builds must resolve these dependencies without a sibling Osprey checkout. Remote deployment is deferred by the user.
+Both native grammar dependencies use the Osprey revision `e82980cf11b9b45c957957d88f3427bb6caefbf0` (carries the Nimblesite/osprey#374 layout-range fix) in `Cargo.toml`. Builds must resolve these dependencies without a sibling Osprey checkout. Remote deployment is deferred by the user.
 
 ## All three source flavors
 
