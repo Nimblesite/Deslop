@@ -13,6 +13,8 @@
 ##
 ## JUDGING_CANDIDATES asks for a shorter pass than the 200-candidate ceiling.
 ## COMPARE_REPORTS names the comparison to draw from, when it is not the default.
+## NOMINATIONS_DIR holds optional <slug>.json nomination files; one marked
+## `requeued` puts every listed pair in the draw first [CORPUS-REGISTER-CRITERIA].
 ##
 ## With no names, every repository in the comparison is prepared. The folder must
 ## be OUTSIDE this repository — a judge who can walk up into this source is
@@ -79,11 +81,14 @@ to walk up into the source that produced the reports" ;; esac
     is_commit_id "$sha" || die "$slug is pinned by '$sha', which is not a commit id"
     checkout="$(prepare_target_repo "$url" "$sha")"
     log "workspace for $slug ($language) at $(short_sha "$sha")"
+    local nominations=()
+    [ -n "${NOMINATIONS_DIR:-}" ] && [ -f "$NOMINATIONS_DIR/$slug.json" ] \
+      && nominations=(--nominations "$NOMINATIONS_DIR/$slug.json")
     node "$REPO_ROOT/scripts/corpus/register-workspace.mjs" \
       --workspace "$root/$slug" --source "$checkout" \
       --report-one "$report_a" --report-two "$report_b" \
       --url "$url" --sha "$sha" --seed "$seed" --keys "$root.keys" \
-      ${NOMINATIONS_DIR:+--nominations "$NOMINATIONS_DIR/$slug.json"} \
+      ${nominations[@]+"${nominations[@]}"} \
       ${JUDGING_CANDIDATES:+--candidates "$JUDGING_CANDIDATES"}
   done < <(compare_targets "$@")
 
