@@ -18,10 +18,9 @@ use crate::{
     embedding::EmbeddingPair, fingerprint::Fingerprint, lsh::SignatureLookup, state::FileId,
 };
 
-/// Bucket members below which the canonical star already carries every
-/// within-file pair, so [`PairBuilder::pair_within_files`] has nothing
-/// to add: with two members the star *is* the only pair there is.
-const BUCKET_MIN_MEMBERS_FOR_WITHIN_FILE_PAIRS: usize = 3;
+/// Bucket size from which [`PairBuilder::log_large_bucket`] reports the
+/// bucket: below it, within-file pairing is cheap enough not to matter.
+const LARGE_BUCKET_LOG_FLOOR: usize = 1000;
 /// Equal Merkle hashes supply complete structural evidence and no embedding evidence.
 const STRUCTURAL_COPY_EVIDENCE: (f64, f64) = (1.0, 0.0);
 
@@ -75,10 +74,6 @@ pub(super) struct PairBuilder<'corpus, S: BuildHasher> {
     /// retained pair averages a dozen emissions on a corpus-scale run
     /// — pushing every one again is gigabytes of dead entries).
     kept_keys: std::collections::HashSet<u64>,
-    /// Scratch `(file, member)` buffer reused by
-    /// [`Self::pair_within_files`], so grouping one bucket by file costs
-    /// no allocation of its own ([PERF-FLUTTER-TODO-MEMORY]).
-    by_file: Vec<(FileId, usize)>,
 }
 
 impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
@@ -128,7 +123,6 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
             kept: Vec::new(),
             evidence: HashMap::new(),
             kept_keys: std::collections::HashSet::new(),
-            by_file: Vec::new(),
         }
     }
 
@@ -158,6 +152,8 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
             .collect();
         tagged.sort_unstable();
         let mut run_start = 0_usize;
+        let mut buckets = 0_u64;
+        let mut largest_bucket = 0_usize;
         while let Some((run_hash, _)) = tagged.get(run_start).copied() {
             let run_end = tagged
                 .get(run_start.saturating_add(1)..)
@@ -173,9 +169,45 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
                 .iter()
                 .map(|(_, index)| *index)
                 .collect();
+            buckets = buckets.saturating_add(1);
+            largest_bucket = largest_bucket.max(run.len());
+            self.log_large_bucket(&run);
             self.pair_bucket(&run);
             run_start = run_end;
         }
+        tracing::info!(
+            buckets,
+            largest_bucket,
+            evidence = self.evidence.len(),
+            "structural buckets paired"
+        );
+    }
+
+    /// Reports one bucket at or above [`LARGE_BUCKET_LOG_FLOOR`] members:
+    /// its size, how many files it spans and where its first member sits,
+    /// so a quadratic within-file pairing can be traced to its source.
+    fn log_large_bucket(&self, run: &[usize]) {
+        if run.len() < LARGE_BUCKET_LOG_FLOOR {
+            return;
+        }
+        let Some(first) = run.first().and_then(|index| self.fingerprints.get(*index)) else {
+            return;
+        };
+        let files = run
+            .iter()
+            .filter_map(|index| self.fingerprints.get(*index))
+            .map(|entry| entry.file_id)
+            .collect::<std::collections::HashSet<_>>()
+            .len();
+        tracing::info!(
+            members = run.len(),
+            files,
+            first_file = ?first.file_id,
+            first_start = first.byte_range.start,
+            first_end = first.byte_range.end,
+            node_count = first.node_count,
+            "large structural bucket"
+        );
     }
 
     /// Pairs one structural-hash bucket ([FUSED-CANDIDATE-BUCKET-STAR]):
@@ -183,8 +215,10 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
     /// that shares the first member's file with the bucket's first
     /// member in another file, so no member of a bucket that spans files
     /// is judged on a within-file pair alone. Members that share a file
-    /// are then paired with each other by [`Self::pair_within_files`],
-    /// which is what the star owes a bucket no other file reaches.
+    /// are not paired with each other here: copy recovery
+    /// ([FUSED-CANDIDATE-BUCKET-RECOVERY]) adds the pairs an unrelated
+    /// first member hid, within a file as across files, at a cost that
+    /// grows with the copies found rather than with the bucket squared.
     fn pair_bucket(&mut self, run: &[usize]) {
         let Some(&canonical) = run.first() else {
             return;
@@ -201,49 +235,6 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
                 self.add_evidence(other, foreign, 1.0, 0.0);
             }
         }
-        self.pair_within_files(run);
-    }
-
-    /// Pairs every two members of `run` that share a file
-    /// ([FUSED-CANDIDATE-BUCKET-STAR]).
-    ///
-    /// The star is only sound when the pair each member is judged on can
-    /// pass, and inside one file there is no lower-floor scope to borrow
-    /// that soundness from: the within-file content floor decides every
-    /// pair, and which member sorts first is an accident of write order.
-    /// A bucket holding one member that *differs* ahead of a
-    /// byte-identical copy therefore judged the copy only against the
-    /// member that differs, and one unrelated sibling deleted an exact
-    /// duplicate from the report. Recall may not depend on what else
-    /// happens to share the shape, and no member of the bucket can tell
-    /// in advance which partner its content will vouch for, so within a
-    /// file the bucket is completely paired.
-    ///
-    /// Members are grouped through the builder's reused scratch buffer
-    /// rather than a per-bucket map: the historical
-    /// `HashMap<hash, Vec<index>>` here is what
-    /// [PERF-FLUTTER-TODO-MEMORY] removed from the pass above.
-    fn pair_within_files(&mut self, run: &[usize]) {
-        if run.len() < BUCKET_MIN_MEMBERS_FOR_WITHIN_FILE_PAIRS {
-            return;
-        }
-        let mut grouped = std::mem::take(&mut self.by_file);
-        grouped.clear();
-        grouped.extend(run.iter().filter_map(|index| {
-            self.fingerprints
-                .get(*index)
-                .map(|entry| (entry.file_id, *index))
-        }));
-        grouped.sort_unstable();
-        for (offset, &(file_id, member)) in grouped.iter().enumerate() {
-            for &(other_file, other) in grouped.get(offset.saturating_add(1)..).unwrap_or(&[]) {
-                if other_file != file_id {
-                    break;
-                }
-                self.add_evidence(member, other, 1.0, 0.0);
-            }
-        }
-        self.by_file = grouped;
     }
 
     /// Merges the embedding ANN pairs, recording each measured cosine
@@ -262,7 +253,6 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
     /// pairs in deterministic key order.
     pub(super) fn finish(mut self) -> Vec<CandidatePair> {
         drop(std::mem::take(&mut self.kept_keys));
-        drop(std::mem::take(&mut self.by_file));
         self.kept
             .sort_unstable_by_key(|pair| (pair.left, pair.right));
         self.kept.shrink_to_fit();

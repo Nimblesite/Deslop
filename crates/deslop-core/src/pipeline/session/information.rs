@@ -157,31 +157,57 @@ fn clone_groups(members: &[usize], judge: &dyn ClusterKindJudge) -> Vec<Vec<usiz
         .collect()
 }
 
-/// Mixed families need direct pair proofs: a greedy group can hide a clone
-/// when an earlier cross-hash member consumes its possible reference.
-fn certified_hash_pairs(
+/// [FUSED-CANDIDATE-BUCKET-RECOVERY] Recovery exists to connect copies, so
+/// a mixed family's same-hash members are walked in order and each one is
+/// judged against the members of every component it is not yet in, stopping
+/// at that component's first copy. Every judged copy is emitted, so a chain
+/// of nontransitive copies still joins link by link, while a bucket of `n`
+/// copies costs about `n` verdicts instead of `n(n-1)/2` (gh #506: a
+/// generated parser table of 1,549 same-shape windows asked 10.4M).
+fn connected_hash_pairs(
     members: &[usize],
     judge: &dyn ClusterKindJudge,
     existing: &[CandidatePair],
 ) -> Vec<Vec<usize>> {
-    members
-        .iter()
-        .enumerate()
-        .flat_map(|(offset, left)| {
-            members
-                .iter()
-                .skip(offset.saturating_add(1))
-                .filter_map(move |right| {
-                    if candidate_exists(existing, *left, *right) {
-                        return None;
-                    }
-                    judge
-                        .kind(&[*left, *right])
-                        .filter(|kind| kind.is_clone())
-                        .map(|_kind| vec![*left, *right])
-                })
-        })
-        .collect()
+    let mut components: Vec<Vec<usize>> = Vec::new();
+    let mut pairs = Vec::new();
+    for &member in members {
+        let mut joined = Vec::new();
+        for (index, component) in components.iter().enumerate() {
+            let copy = component.iter().copied().find(|&other| {
+                !candidate_exists(existing, other, member)
+                    && judge
+                        .kind(&[other, member])
+                        .is_some_and(ClusterKind::is_clone)
+            });
+            if let Some(other) = copy {
+                pairs.push(vec![other, member]);
+                joined.push(index);
+            }
+        }
+        join_components(&mut components, &joined, member);
+    }
+    pairs
+}
+
+/// Merges the components `member` was found to be a copy in, with `member`
+/// appended, into the first of them; a member that copied nothing starts
+/// its own component.
+fn join_components(components: &mut Vec<Vec<usize>>, joined: &[usize], member: usize) {
+    let Some((&first, rest)) = joined.split_first() else {
+        components.push(vec![member]);
+        return;
+    };
+    let mut merged = vec![member];
+    for &index in rest.iter().rev() {
+        if index < components.len() {
+            merged.append(&mut components.remove(index));
+        }
+    }
+    if let Some(target) = components.get_mut(first) {
+        target.append(&mut merged);
+        target.sort_unstable();
+    }
 }
 
 /// Existing candidates retain their original evidence; recovery cannot
@@ -194,7 +220,8 @@ fn candidate_exists(existing: &[CandidatePair], left: usize, right: usize) -> bo
 }
 
 /// Keep the original greedy fold for a single-hash family; mixed families
-/// measure every same-hash pair so a nontransitive clone cannot disappear.
+/// walk each same-hash group for connectivity so a nontransitive clone
+/// cannot disappear and a large bucket is not judged pair by pair.
 fn family_recovery_groups(
     family: &FusedCluster,
     fingerprints: &[Fingerprint],
@@ -211,7 +238,7 @@ fn family_recovery_groups(
     }
     groups
         .iter()
-        .flat_map(|members| certified_hash_pairs(members, judge, existing))
+        .flat_map(|members| connected_hash_pairs(members, judge, existing))
         .collect()
 }
 
@@ -260,8 +287,9 @@ fn unique_valid_edges(family: &FusedCluster) -> usize {
         .len()
 }
 
-/// [PERF-FLUTTER-TODO-OBSERVABILITY] Count the potentially measured pairs
-/// without logging source paths or contents.
+/// [PERF-FLUTTER-TODO-OBSERVABILITY] Count the same-hash pairs in reach of
+/// recovery without logging source paths or contents; the connectivity walk
+/// judges far fewer than this when the members are copies.
 fn recovery_workload(
     families: &[FusedCluster],
     fingerprints: &[Fingerprint],
@@ -286,11 +314,11 @@ fn log_recovery_workload(families: &[FusedCluster], fingerprints: &[Fingerprint]
     if !tracing::enabled!(tracing::Level::INFO) {
         return;
     }
-    let (eligible, comparisons, max_members) = recovery_workload(families, fingerprints);
+    let (eligible, pairs_in_reach, max_members) = recovery_workload(families, fingerprints);
     tracing::info!(
         families = families.len(),
         eligible,
-        comparisons,
+        pairs_in_reach,
         max_members,
         "copy recovery workload"
     );

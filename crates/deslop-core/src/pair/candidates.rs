@@ -31,6 +31,10 @@ use crate::{
 /// The insertion-time admission builder ([PERF-FLUTTER-TODO-PAIRS]).
 mod builder;
 
+#[cfg(test)]
+#[path = "candidates/tests.rs"]
+mod tests;
+
 /// [CLONE-KIND-FOLD] Builds missing copy edges through the ordinary construction guards.
 /// `existing` is sorted by endpoint pair; recovered groups add only exact structural matches.
 pub(crate) fn missing_structural_pairs<S: BuildHasher>(

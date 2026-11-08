@@ -72,6 +72,14 @@ const INFO_EQUAL_HASH_MEMBERS: &[usize] = &[0, 2];
 const INFO_FAMILY_COUNT: usize = 3;
 const INFO_ELIGIBLE_COUNT: usize = 2;
 const HASH_FOURTH: [u8; 32] = [4; 32];
+/// A same-hash bucket large enough that pair-by-pair certification would be
+/// unmistakable: 400 members are 79,800 pairs.
+const COPY_BUCKET_MEMBERS: usize = 400;
+/// The bucket's second member, the first whose pairs are not already the star.
+const COPY_BUCKET_SECOND: usize = 1;
+/// The star centre's edges already exist and the second member starts the
+/// component, so neither costs a verdict.
+const COPY_BUCKET_UNJUDGED: usize = 2;
 
 struct CountingJudge(AtomicUsize);
 
@@ -322,6 +330,37 @@ fn recovery_judges_only_equal_hash_members_of_a_mixed_shape_family() {
         )
     );
     assert_eq!(judge.calls.load(Ordering::Relaxed), EXPECTED_HASH_GROUPS);
+}
+
+// [FUSED-CANDIDATE-BUCKET-RECOVERY] A mixed family holding one bucket of
+// copies behind an unrelated star centre is recovered in about one verdict
+// per member, not one per pair (gh #506).
+#[test]
+fn recovery_walks_a_copied_bucket_in_linear_verdicts() {
+    let mut hashes = vec![HASH_FIRST; COPY_BUCKET_MEMBERS];
+    hashes.push(HASH_SECOND);
+    let fingerprints = fixture_fingerprints(&hashes);
+    let members: Vec<usize> = (0..hashes.len()).collect();
+    let star: Vec<(usize, usize)> = (1..hashes.len()).map(|member| (0, member)).collect();
+    let families = [family(&members, &star)];
+    let existing: Vec<_> = star.iter().copied().map(existing_candidate).collect();
+    let judge = HashAwareJudge {
+        fingerprints: &fingerprints,
+        calls: AtomicUsize::new(0),
+    };
+    let groups: Vec<_> = recovery_groups(&families, &fingerprints, &judge, &existing).collect();
+    let expected: Vec<Vec<usize>> = (2..COPY_BUCKET_MEMBERS)
+        .map(|member| vec![COPY_BUCKET_SECOND, member])
+        .collect();
+    assert_eq!(
+        groups, expected,
+        "every copy joins through the first member whose star edge is not already a candidate"
+    );
+    assert_eq!(
+        judge.calls.load(Ordering::Relaxed),
+        COPY_BUCKET_MEMBERS - COPY_BUCKET_UNJUDGED,
+        "a bucket of copies is walked, not certified pair by pair"
+    );
 }
 
 // [FUSED-CANDIDATE-BUCKET-RECOVERY] A pre-existing shape-family edge
