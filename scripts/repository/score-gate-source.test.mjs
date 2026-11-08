@@ -232,6 +232,11 @@ test("[CORPUS-SCORE-GATE-SHARD] CI scores every gate repository in its own paral
   );
   assert.ok(job.includes("matrix: ${{ fromJSON(needs.corpus-targets.outputs.matrix) }}"), `\`${JOB}\` must fan out over the gate's matrix`);
   assert.ok(job.includes("fail-fast: false"), "one failing repository must not cancel the others' scorecards");
+  const summary = job.indexOf('run: cat .corpus/score-gate/score-gate-*.md >> "$GITHUB_STEP_SUMMARY"');
+  assert.ok(
+    summary > 0 && job.slice(job.lastIndexOf("- name:", summary), summary).includes("if: always()"),
+    "every shard must list every judged pair's result on the run page, pass or fail",
+  );
   assert.ok(job.includes(`run: ${SCRIPT} "\${{ matrix.spec }}"`), "each shard scores exactly its own repository");
   const matrix = JSON.parse(execFileSync("bash", [SCRIPT, "--list-ci-matrix"], { cwd: repoRoot, encoding: "utf8" }));
   const specs = execFileSync("bash", [SCRIPT, "--list-default-targets"], { cwd: repoRoot, encoding: "utf8" })

@@ -68,6 +68,16 @@ const REGRESSED_LINE: &str = "> - 🔴 **flutter** — `false negative`: `src/on
                               `src/two.rs:30-40`: regressed; on record as passing since \
                               2026-10-01T00:00:00Z";
 
+/// The every-judged-pair rows of a run that fixed the fixture pair and lost
+/// the second one, and the cell only a listed pair carries.
+const MIXED_FIXED_ROW: &str = "| flutter | clearly_in | `src/one.rs:10-20` + `src/two.rs:30-40` | \
+                               ✅ pass | fixed — commit the record |";
+const MIXED_REGRESSED_ROW: &str = "| flutter | clearly_in | `src/three.rs:50-60` + \
+                                   `src/two.rs:70-80` | 🔴 fail | 🔴 regressed — fails the run |";
+const MIXED_FIXED_LINE: &str = "- ✅ **FIXED** flutter — `src/one.rs:10-20` + `src/two.rs:30-40` — \
+                                fixed; on record as failing since 2026-10-01T00:00:00Z";
+const EVERY_PAIR_RESULT_MARK: &str = "| flutter | clearly_in | ";
+
 /// The fixture's one judged pair, in the order the record keeps it.
 fn the_ranges() -> [&'static str; 2] {
     [FIRST_RANGE, SECOND_RANGE]
@@ -397,6 +407,53 @@ fn a_pair_its_register_drops_leaves_the_record_and_other_repositories_keep_their
         "the fixed pair goes on record as passing, the pair the register no longer judges \
          leaves the record, and a repository this run never scored keeps its entry — all in \
          one stable order"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_fixed_pair_never_offsets_a_regression_and_every_result_is_listed() -> Result<()> {
+    let root = tempfile::tempdir()?;
+    let root = root.path();
+    write(root, REGISTER, &two_pair_register())?;
+    let failing = entry(REPO, &the_ranges(), "fail", FIRST_RUN, ENGINE_LABEL);
+    let passing = entry(REPO, &[THIRD_RANGE, FOURTH_RANGE], "pass", FIRST_RUN, ENGINE_LABEL);
+    seed(root, &json!([failing, passing.clone()]))?;
+
+    let mixed = scored(root, SECOND_RUN, &report(&the_pair()), STRICT)?;
+    let standings: Vec<Standing> = mixed.card.outcomes.iter().map(|pair| pair.standing).collect();
+    assert_eq!(
+        standings,
+        [Standing::Fixed, Standing::Regressed],
+        "the scan reports the pair on record as failing and drops the pair on record as passing"
+    );
+    assert!(
+        !mixed.card.verdict.passed(),
+        "one pair gained and one pair lost leave the score unchanged, and the run still fails: \
+         every pair is held to its own record"
+    );
+    let markdown = &mixed.markdown;
+    for line in [
+        FAILED_HEADING,
+        RECORD_FAIL,
+        MIXED_FIXED_LINE,
+        MIXED_FIXED_ROW,
+        MIXED_REGRESSED_ROW,
+    ] {
+        assert!(markdown.contains(line), "the scorecard must carry `{line}`:\n{markdown}");
+    }
+    assert_eq!(
+        markdown.matches(EVERY_PAIR_RESULT_MARK).count(),
+        mixed.card.outcomes.len(),
+        "every judged pair is listed with its result, once:\n{markdown}"
+    );
+    assert_eq!(
+        recorded(root)?,
+        json!([
+            entry(REPO, &the_ranges(), "pass", SECOND_RUN, ENGINE_LABEL),
+            passing
+        ]),
+        "the fix goes on record and the regression never overwrites the pass it broke"
     );
     Ok(())
 }

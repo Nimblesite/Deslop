@@ -256,6 +256,8 @@ A register with no entries scores **nothing**, never 100%. Being asked no questi
 | wrong | not recorded | not on record | **fails** until explicitly accepted |
 | wrong | passing | regressed | **fails** |
 
+**Every pair stands alone.** No count, score or net figure gates the run: one regressed or unrecorded pair fails it however many other pairs the same run fixed (`a_fixed_pair_never_offsets_a_regression_and_every_result_is_listed`). A fixed pair changes the record, and CI fails until that record is committed, so a gain is never silent either. Every scorecard ends its record section with **Every judged pair**: one row per scored pair with its result and its standing.
+
 **Unaccepted failures and regressions fail the run.** A newly judged false negative or false positive fails even when it has never passed before. Only a judged pair explicitly recorded as failing is tolerated. A pair that has passed once must keep passing.
 
 **The record only tightens.** Every run writes the record back. A fixed pair and a newly judged passing pair go on record as passing, and a pair its register no longer judges leaves the record. A regression is never written over the pass it broke, and a repository the run did not scan keeps its entries untouched. A failing pair goes on record only through `make _accept-corpus-failures RUN=<run.json>`, which re-scores a finished run without scanning again and records its unrecorded failures as failing. It never moves a passing pair to failing: a regression is fixed, never accepted. Accepting is the admission that a defect shipped, and it shows in the diff for review.
@@ -277,7 +279,7 @@ The default `score-gate.sh` slice is exactly the registers that judge at least 5
 
 ### [CORPUS-SCORE-GATE-SHARD] CI scores each gate repository in parallel
 
-CI builds the engine and the scorer once (`corpus-targets`), publishes both as one artifact, and fans `corpus-score` out as a matrix from `score-gate.sh --list-ci-matrix`: one job per slice repository, `fail-fast: false`, each running `score-gate.sh <that repository>` with `SCORE_GATE_PREBUILT=1`. Scoring one repository leaves every other repository's record untouched ([CORPUS-SCORE-OUTCOMES]), so each shard holds its own pairs to the record and fails on a regression or an unrecorded failure. Any failing shard fails `corpus-score`, which the aggregate `ci` job requires. A local run never uses prebuilt binaries ([CORPUS-HISTORY-SOURCE]).
+CI builds the engine and the scorer once (`corpus-targets`), publishes both as one artifact, and fans `corpus-score` out as a matrix from `score-gate.sh --list-ci-matrix`: one job per slice repository, `fail-fast: false`, each running `score-gate.sh <that repository>` with `SCORE_GATE_PREBUILT=1`. Scoring one repository leaves every other repository's record untouched ([CORPUS-SCORE-OUTCOMES]), so each shard holds its own pairs to the record and fails on a regression or an unrecorded failure. Any failing shard fails `corpus-score`, which the aggregate `ci` job requires. Each shard writes its scorecard to the job summary, so every judged pair's result and standing is listed on the run page, pass or fail. A local run never uses prebuilt binaries ([CORPUS-HISTORY-SOURCE]).
 
 ### [CORPUS-SCORE-GATE-JUDGED] The gate scans judged repositories, and fails when it judged nothing
 

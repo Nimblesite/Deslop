@@ -493,6 +493,10 @@ jobs:
             echo "::error::corpus/register/outcomes.json changed on this run. Run make score-gate and commit the record."
             exit 1
           fi
+      # [CORPUS-SCORE-OUTCOMES] Every judged pair's result, on the run page.
+      - name: List every judged pair's result
+        if: always()
+        run: cat .corpus/score-gate/score-gate-*.md >> "$GITHUB_STEP_SUMMARY"
       # The scorecard is uploaded whether the gate passed or failed: a failing
       # run is exactly when someone needs to read which judged pair broke.
       - name: Upload the scorecard
