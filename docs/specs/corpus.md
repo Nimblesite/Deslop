@@ -183,7 +183,7 @@ What counts as not agreeing, each named after the comparison that found it:
 - `clearly_in/clearly_out` — one judge's CLEARLY IN against another's CLEARLY OUT. A claim about the source that cannot be half true.
 - `clearly_in/not_clear`, `clearly_out/not_clear` — one judge committed where another would not.
 - `occurrences_mismatch` — the ranges a judge filed against a candidate number are not the ranges `candidates/pairs.json` associates with it. A set comparison between two files that must agree; the report prints both range lists and infers nothing about why they differ.
-- `register_conflict` — an earlier pass and this one read the same lines differently.
+- `register_conflict` — an earlier pass and this one read the same lines differently, one of them firmly. A standing NOT CLEAR is not a conflict: it asserts nothing, so when every new source agrees on CLEARLY IN or CLEARLY OUT the pair is promoted out of `not_clear` and counted as `pairs_promoted` ([CORPUS-REGISTER-CRITERIA]; `a standing NOT CLEAR is promoted when every new judge agrees on a firm verdict` in `scripts/repository/verdict-merge.test.mjs`).
 - `duplicate_pair` — the draw showed one pair of regions under two candidate numbers, and they were answered differently.
 - `incomplete_independent_passes` — one or more supplied folders omitted the pair or repeated its ruling; no verdict from that candidate is imported.
 

@@ -218,7 +218,8 @@ const voteTypes = (verdict, candidate, occurrences, votes, out) => {
 const record = (candidate, honest, verdict, occurrences, standing, out) => {
   const already = standing.get(key(occurrences));
   const votes = honest.map((ruling) => ({ source: ruling.judge, type: typeOf(ruling) }));
-  if (already) {
+  const promotes = already?.from === FROM_REGISTER && already.verdict === NOT_CLEAR && verdict !== NOT_CLEAR;
+  if (already && !promotes) {
     if (already.verdict === verdict) {
       const prior = already.from === FROM_REGISTER ? [{ source: FROM_REGISTER, type: already.type }] : [];
       voteTypes(verdict, candidate, occurrences, [...prior, ...votes], out);
@@ -247,6 +248,7 @@ const record = (candidate, honest, verdict, occurrences, standing, out) => {
     return;
   }
   out.added[verdict].push(entryFor(verdict, prose, occurrences));
+  if (promotes) out.promoted.add(key(occurrences));
   standing.set(key(occurrences), { verdict, from: candidate });
   voteTypes(verdict, candidate, occurrences, votes, out);
 };
@@ -254,6 +256,8 @@ const record = (candidate, honest, verdict, occurrences, standing, out) => {
 /// Every verdict the register already holds, keyed by pair, with its type. The
 /// register is read as one more judge: a standing entry the new passes
 /// contradict is a disagreement, not an update, and its type is one more vote.
+/// A standing NOT CLEAR asserts nothing, so it never opposes a firm verdict
+/// every new source agrees on: that pair is promoted ([CORPUS-REGISTER-CRITERIA]).
 const standingVerdicts = (register) =>
   new Map(
     VERDICTS.flatMap((verdict) =>
@@ -288,7 +292,7 @@ const typed = (entries, settled) =>
 
 /// The register as it will be written: original fields first, then each verdict
 /// list with this pass's agreed entries appended.
-const rewrite = (register, added, settled) => {
+const rewrite = (register, added, settled, promoted) => {
   const merged = {};
   for (const field of REGISTER_FIELDS) {
     if (register[field] !== undefined) merged[field] = register[field];
@@ -298,7 +302,8 @@ const rewrite = (register, added, settled) => {
   if (register.clearly_out_status && merged.clearly_out.length === 0) {
     merged.clearly_out_status = register.clearly_out_status;
   }
-  merged[NOT_CLEAR] = [...(register[NOT_CLEAR] ?? []), ...added[NOT_CLEAR]];
+  const kept = (register[NOT_CLEAR] ?? []).filter((entry) => !promoted.has(key(entry.occurrences)));
+  merged[NOT_CLEAR] = [...kept, ...added[NOT_CLEAR]];
   return merged;
 };
 
@@ -314,6 +319,7 @@ export const mergePass = ({ register, pairs, passes, expectedJudges = passes.len
     restated: [],
     typeVotes: new Map(),
     untyped: [],
+    promoted: new Set(),
   };
   const standing = standingVerdicts(register);
   const ordered = [...byCandidate(passes)].sort((left, right) => left[0] - right[0]);
@@ -323,5 +329,5 @@ export const mergePass = ({ register, pairs, passes, expectedJudges = passes.len
     out.added[verdict] = out.added[verdict].filter((entry) => !disputed.has(key(entry.occurrences)));
   }
   const settled = settleTypes(out);
-  return { ...out, merged: rewrite(register, out.added, settled), judges: passes.length };
+  return { ...out, merged: rewrite(register, out.added, settled, out.promoted), judges: passes.length };
 };

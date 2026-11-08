@@ -378,3 +378,31 @@ test("opposed verdicts on the same pair in one pass leave neither verdict in the
   assert.deepEqual(register.clearly_out, [], "the later verdict is disputed too");
   assert.match(read(REPORT), /duplicate_pair/);
 });
+
+/// [CORPUS-REGISTER-CRITERIA] A standing NOT CLEAR asserts nothing, so it never
+/// votes against a later firm verdict: when every new judge agrees, the pair is
+/// promoted out of `not_clear` into the verdict they gave, once.
+test("a standing NOT CLEAR is promoted when every new judge agrees on a firm verdict", () => {
+  const root = mkdtempSync(join(tmpdir(), "verdict-merge-promote-"));
+  fixtureRoot(root);
+  const path = join(root, REGISTER_DIR, JUDGED_REGISTER);
+  const standing = JSON.parse(readFileSync(path, "utf8"));
+  standing.not_clear = [1, 3].map((candidate) => ({ why: STANDING_NOTE, occurrences: at(candidate) }));
+  write(path, standing);
+  const pass = { clearly_in: [scored(1)], clearly_out: [scored(3)], not_clear: [] };
+  const folders = [FIRST_JUDGE, SECOND_JUDGE].map((judge) => judgingFolder(root, judge, { [JUDGED]: pass }));
+  const { status, json, read } = run(root, folders);
+  assert.equal(status, 0, "a promotion is agreement, not a dispute");
+  const register = json(join(REGISTER_DIR, JUDGED_REGISTER));
+  const holds = (verdict, candidate) =>
+    register[verdict].filter((entry) => JSON.stringify(entry.occurrences) === JSON.stringify(at(candidate))).length;
+  assert.equal(holds("clearly_in", 1), 1, "candidate 1 is now CLEARLY IN, filed once");
+  assert.equal(holds("not_clear", 1), 0, "and no longer NOT CLEAR");
+  assert.equal(holds("clearly_out", 3), 1, "candidate 3 is now CLEARLY OUT, filed once");
+  assert.equal(holds("not_clear", 3), 0, "and no longer NOT CLEAR");
+  assert.equal(register.clearly_in[1].why, WHY, "the promoting judges' own words are filed");
+  assert.deepEqual(register.clearly_in[0].occurrences, STANDING, "the standing CLEARLY IN is untouched");
+  assert.ok(read(REPORT).includes("| pairs_promoted | 2 |"), "the report counts both promotions");
+  assert.ok(read(REPORT).includes("| pairs_left_out | 0 |"), "no register conflict is reported");
+  rmSync(root, { recursive: true, force: true });
+});

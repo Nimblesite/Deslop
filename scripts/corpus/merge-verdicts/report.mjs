@@ -125,6 +125,9 @@ const table = (headers, rows) =>
 export const disagreementCount = (repos) => allRows(repos).length;
 
 /// How many pairs the merge imported, counted off the entries it wrote.
+/// Standing NOT CLEAR pairs every new source settled firmly.
+const promotedCount = (repos) => repos.reduce((total, repo) => total + repo.result.promoted.size, 0);
+
 const importedCount = (repos) =>
   repos.reduce(
     (total, repo) =>
@@ -153,6 +156,7 @@ export const render = ({ sources, repos }) => {
 | judges | ${[...judges, "register"].join(", ")} |
 | repositories | ${repos.length} |
 | pairs_imported | ${importedCount(repos)} |
+| pairs_promoted | ${promotedCount(repos)} |
 | pairs_left_out | ${rows.length} |
 | types_unspecified | ${untyped.length} |
 
