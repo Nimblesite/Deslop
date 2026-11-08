@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: Getting Started — Install Deslop and find duplicate code
-description: Install Deslop to find duplicate code in ten languages. Get live VS Code warnings, MCP checks for coding agents, and the CLI in one extension.
+description: Install Deslop to find duplicate code in C, C#, Rust, Python, TypeScript, Go, Osprey and more. Live VS Code warnings, MCP checks for coding agents and the CLI in one extension.
 eleventyNavigation:
   key: Getting Started
   order: 1
@@ -11,11 +11,11 @@ docsGroup: start
 
 # Getting Started
 
-**Deslop finds duplicate code across ten languages, ranks what to remove first, and tells your coding agent when similar code already exists.** It runs on your workspace and updates as you type — Claude Code, Cursor, Copilot, Continue, Codex, and your editor all read the same live analysis.
+**Find duplicate code, see what to remove first, and help your coding agent reuse existing code.** Deslop updates as you type. Your editor and coding agents read the same live analysis across C, C#, Rust, Python, Dart, JavaScript, TypeScript, PHP, F#, Go and Osprey.
 
-The preferred way to install it is the **VS Code extension**. One install bundles all three surfaces: live editor warnings, the check agents call before writing code, and the CLI.
+Start with the **VS Code extension**. One install includes live editor warnings, MCP checks for coding agents, and the CLI.
 
-## Install (preferred) — VS Code extension
+## Install the VS Code extension
 
 Install from the **VS Code Marketplace**:
 
@@ -23,17 +23,13 @@ Install from the **VS Code Marketplace**:
 - **Command line:** `code --install-extension nimblesite.deslop-live`
 - **Browser:** open the [Deslop.live Marketplace page](https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live) and hit **Install**.
 
-Then open a supported source file (`.cs`, `.rs`, `.py`, `.dart`, `.js`, `.mjs`, `.cjs`, `.jsx`, `.ts`, `.tsx`, `.php`, `.fs`, `.fsx`, `.go`, or `.osp`). The live bubble is active immediately, and the **Top Offenders** tree populates as the file watcher fires.
+Then open a supported source file (`.cs`, `.rs`, `.py`, `.dart`, `.js`, `.mjs`, `.cjs`, `.jsx`, `.ts`, `.tsx`, `.php`, `.fs`, `.fsx`, `.go`, `.c`, `.h`, or `.osp`). The live bubble is active immediately, and the **Top Offenders** tree populates as the file watcher fires.
 
 The extension bundles native binaries for `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, and `win32-x64` — the right one is selected for you automatically.
 
 <figure>
-  <a href="/assets/img/screenshot.webp">
-    <img src="/assets/img/screenshot.webp"
-         alt="The Deslop VS Code extension on a live workspace: a worst-first Top Offenders tree and a per-folder Duplication breakdown in the sidebar, a live clone warning at the cursor, and a Compare diff against the canonical occurrence."
-         width="2560" height="1492" loading="lazy" decoding="async">
-  </a>
-  <figcaption>The extension on a live workspace — worst-first clusters and a per-folder duplication breakdown in the sidebar, a live clone warning at the cursor, and a Compare diff against the canonical copy. <a href="/docs/vscode-cluster-panel/">Full panel-by-panel walkthrough →</a></figcaption>
+  <a href="/assets/img/screenshot.webp"><img src="/assets/img/screenshot.webp" alt="Deslop analysing a two-file C# demo: a duplicate cluster with both locations and canonical comparison actions." width="3200" height="1800" loading="lazy" decoding="async"></a>
+  <figcaption>A real two-file demo analysed by the packaged extension. Open a finding, inspect its locations, then compare the copies.</figcaption>
 </figure>
 
 > **Offline or air-gapped?** Grab the `.vsix` from the [Releases page](/releases/) or the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest), then install it via **Extensions panel → `…` menu → Install from VSIX…**.

@@ -712,6 +712,8 @@ suite("tree menu renderers", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-fence-"));
     const expected: ReadonlyArray<readonly [string, string]> = [
       ["main.go", "go"],
+      ["main.c", "c"],
+      ["engine.h", "c"],
       ["Model.php", "php"],
       ["Tests.fs", "fsharp"],
       ["Widget.dart", "dart"],

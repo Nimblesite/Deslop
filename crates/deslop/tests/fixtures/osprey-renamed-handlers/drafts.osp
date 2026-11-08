@@ -1,0 +1,9 @@
+//! Persist a draft through the chosen capability.
+effect Drafts { save: fn(string, string) -> Result<int, Error> }
+fn saveDraft(path: string, text: string) = match perform Drafts.save(path, text) {
+    Success count => if count > 0 { "Saved" } else { "Empty" }
+    Error { message } => "Retry"
+}
+let offline = handler Drafts {
+    save path text => Error { message: "offline" }
+}

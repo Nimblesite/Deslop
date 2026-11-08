@@ -4,11 +4,14 @@ use crate::{
     ast::NormalizedNode,
     error::CoreError,
     lang::{
-        shared::{build_normalised_root, normalise_kind_with, parse_source},
+        shared::{
+            build_normalised_root, file_root, normalise_kind_with, normalise_node, parse_source,
+        },
         LanguageParser,
     },
     state::FileId,
 };
+use tree_sitter::Tree;
 
 /// Stable Osprey language identifier.
 pub(crate) const LANGUAGE_ID: &str = "osprey";
@@ -20,6 +23,8 @@ pub(crate) const ML_LANGUAGE_ID: &str = "osprey-ml";
 const EXTENSIONS: &[&str] = &["osp"];
 /// Native layout-flavor extension.
 const ML_EXTENSIONS: &[&str] = &["ospml"];
+/// Nesting depth of a file's top-level declarations below `__file__`.
+const TOP_LEVEL_DEPTH: usize = 2;
 
 /// A source surface with its own native CST and cache identity.
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -106,13 +111,44 @@ impl LanguageParser for OspreyParser {
             return super::python::PythonParser::new().parse_and_normalize(source, file_id);
         }
         let tree = parse_source(self.id(), &self.grammar(), source)?;
-        if self.syntax == Syntax::Ml && tree.root_node().has_error() {
-            return Err(CoreError::ParseFailed {
-                language: self.id(),
-            });
+        if self.syntax == Syntax::Ml {
+            return intact_root(&tree, file_id, self.id());
         }
         build_normalised_root(&tree, file_id, normalise_kind, self.id())
     }
+}
+
+/// [LANG-CAND-OSPREY-RECOVERY] The file root over only the top-level
+/// declarations tree-sitter parsed without error. An unfinished
+/// declaration drops out whole, so no match is ever invented inside
+/// erroneous syntax, while every intact neighbor keeps its findings. A
+/// file with errors and no intact declaration stays a visible skip
+/// ([LANG-CAND-OSPREY-UNPARSED]).
+fn intact_root(
+    tree: &Tree,
+    file_id: FileId,
+    language: &'static str,
+) -> Result<NormalizedNode, CoreError> {
+    let root = tree.root_node();
+    let mut cursor = root.walk();
+    let children = root
+        .named_children(&mut cursor)
+        .filter(|declaration| !declaration.has_error())
+        .map(|declaration| {
+            normalise_node(
+                declaration,
+                file_id,
+                normalise_kind,
+                language,
+                TOP_LEVEL_DEPTH,
+            )
+        })
+        .filter_map(Result::transpose)
+        .collect::<Result<Vec<_>, _>>()?;
+    if children.is_empty() && root.has_error() {
+        return Err(CoreError::ParseFailed { language });
+    }
+    Ok(file_root(root, children, file_id))
 }
 
 /// Preserve expression descendants, including those inside interpolation.

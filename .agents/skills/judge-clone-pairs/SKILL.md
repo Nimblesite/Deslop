@@ -67,14 +67,18 @@ Never carry a verdict across a contamination boundary. Never "keep the good ones
 |---|---|---|
 | **CLEARLY IN** | An obvious clone. No reasonable engineer would say otherwise. | Certainty. |
 | **CLEARLY OUT** | Putting these two regions together is plainly wrong. | Certainty. |
-| **NOT CLEAR** | Anything carrying a shred of doubt. | None — it asserts nothing. |
+| **NOT CLEAR** | Anything the rules below do not settle. | None — it asserts nothing. |
 
 **Most candidates are NOT CLEAR. That is the expected, healthy outcome.** Out of two
 hundred and fifty candidates, a dozen firm verdicts is a good pass. The value of this
 work comes from being small and unarguable, never from volume.
 
-> **If you hesitate, it is NOT CLEAR.** If you find yourself building an argument for a
-> verdict, you have already answered: the argument is the doubt.
+> **The diff decides first.** A pair the measured rules below settle is settled, whatever
+> it looks like. Only where they are silent: if you hesitate, it is NOT CLEAR, and if you
+> find yourself building an argument for a verdict, the argument is the doubt.
+
+**Counting lines.** A *real line* is a line of the diffed range that is neither blank nor
+only a comment. **Six real lines** is the bar every rule below uses.
 
 ## How to judge one candidate
 
@@ -83,9 +87,15 @@ itself — not only the rendered excerpt — so you see what surrounds them.
 
 **CLEARLY IN** — you would say, without hesitating, *"someone copied this."*
 
-- Byte-identical spans of real length in two places.
-- The same code with one systematic rename applied throughout (`Foo`→`FooAsync`,
-  `Required`→`Dirname`, `--debug`→`--no-debug`) and nothing else changed.
+- Two non-overlapping ranges of at least six real lines whose diff, ignoring whitespace
+  and comments, is empty (`Type I`).
+- The same, except every difference is one consistent renaming of names, literals or
+  type names applied throughout (`Foo`→`FooAsync`, `Required`→`Dirname`,
+  `--debug`→`--no-debug`, `'./esm'`→`'./cjs'`) and the statements line up one for one
+  (`Type II`).
+- **Where the code lives changes nothing.** Tests, fixtures, typings checks, examples and
+  framework-shaped code meet these two rules exactly like production code. Whether a copy
+  is worth refactoring is not the question; whether it is a copy is.
 - A sync/async, or generic/non-generic, twin of the same routine.
 - The same named function defined in two files that do not share it.
 
@@ -100,10 +110,11 @@ each other."*
 
 **NOT CLEAR** — everything else, and specifically:
 
-- Scaffolding that genuinely repeats but is the idiom the framework invites
-  (`invoke`, `assert`, `assert`).
-- Two- and three-line idioms.
-- Pairs whose *content* is duplicated but whose *boundaries* are ragged.
+- Repeated idioms shorter than six real lines (`invoke`, `assert`, `assert`).
+- Edited copies (`Type III`) and same-behaviour rewrites (`Type IV`) you cannot call
+  without hesitating. Before deciding, count the statements that line up unchanged and
+  the edited blocks between them, and write both counts in the note.
+- Two ranges with no shared run of six real lines that pass the CLEARLY IN rules.
 
 ### The clone type — every CLEARLY IN names one
 
@@ -122,11 +133,13 @@ Spell the label exactly as written in the first column — `Type I`, `Type II`, 
 
 ### Two traps
 
-- **Repetition is not the question.** Test scaffolding is often genuinely repeated *and*
-  genuinely NOT CLEAR. Both are true at once.
-- **A ragged boundary is not a wrong pair.** If two regions really do share copied code
-  but the start or end line is off, that is a real clone with a bad boundary — it is not
-  CLEARLY OUT. Record it as NOT CLEAR and say so in the note.
+- **Short repetition is not the question.** A three-line `arrange/act/assert` repeated
+  forty times is NOT CLEAR. Twenty identical lines are CLEARLY IN, in a test or anywhere
+  else. The six-real-line bar is the only line between the two.
+- **A ragged boundary is not a wrong pair.** If the two ranges contain a copied core that
+  meets the CLEARLY IN rules by itself, file CLEARLY IN with the candidate's ranges
+  unchanged, and name the core's exact lines in `verified`. If no such core exists, it is
+  NOT CLEAR. A ragged boundary never makes a pair CLEARLY OUT.
 
 ## Verify before you write
 
@@ -198,7 +211,9 @@ the files and say where they are.
 - **Judging from the excerpt.** The excerpt is an index, not the evidence.
 - **Reasoning from where a candidate appeared.** That is voting for a list, not reading code.
 - **Filing a boundary complaint as CLEARLY OUT.** See the traps above.
-- **Filing idiomatic scaffolding as CLEARLY IN** because it really is repeated.
+- **Filing an idiom below six real lines as CLEARLY IN** because it really is repeated.
+- **Filing a six-line `Type I` or `Type II` copy as NOT CLEAR** because it sits in a test or
+  looks like scaffolding.
 - **Chasing volume.** Ten unarguable verdicts beat two hundred arguable ones.
 - **Softening a verdict later to make something pass.** If a verdict is ever contradicted,
   either the contradiction is right or the verdict was never certain — and re-deciding

@@ -1,8 +1,8 @@
 {
   "title": "Deslop",
-  "description": "Find duplicate code in nine languages. Deslop ranks what to remove first and tells your coding agent when similar code already exists — live in VS Code.",
+  "description": "Find duplicate code in C, C#, Rust, Python, TypeScript, Go, Osprey and more. Deslop ranks what to remove first and tells your coding agent when similar code already exists — live in VS Code.",
   "url": "https://deslop.live",
-  "discord": "https://discord.gg/HUrTkEVR",
+  "discord": "https://discord.gg/sTGZut9d9x",
   "stylesheet": "/assets/css/styles.css",
   "author": "Christian Findlay",
   "ogImage": "/assets/img/og-card.png",

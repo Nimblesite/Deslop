@@ -4,7 +4,7 @@ use deslop_core::lang::shared::OPERATOR_KIND_PREFIX;
 
 use super::support::*;
 use crate::common::{
-    incremental::assert_cache_stats,
+    incremental::{assert_cache_stats, clear_completed_report},
     store::{blob_bytes, blob_paths},
 };
 
@@ -13,6 +13,9 @@ use crate::common::{
 /// process succeeded, and returns the JSON report body as a string.
 /// Centralises the run-and-read shape shared by the cache tests.
 fn run_incremental_pass(scan_root: &Path, output_prefix: &Path) -> Result<String> {
+    // [OUTPUT-REPORT-REUSE] These cases isolate the fingerprint cache below the
+    // completed-report cache; retain every hit/miss assertion on a real scan.
+    clear_completed_report(scan_root)?;
     let mut cmd = deslop_command(scan_root, output_prefix)?;
     let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     Ok(fs::read_to_string(with_ext(output_prefix, "json"))?)
@@ -753,6 +756,15 @@ fn debug_ast_dump_matches_committed_golden_fsharp() -> Result<()> {
 #[test]
 fn debug_ast_dump_matches_committed_golden_go() -> Result<()> {
     assert_ast_golden("ast-golden-go", "Sample.go")
+}
+
+// [LANG-CAND-C] golden: identifier / field / type / label / primitive
+// collapse, literal collapse (number, char with escape, string content,
+// concatenated string wrapper kept), comment drop, and the preprocessor
+// nodes kept structural so [LANG-CAND-C-PREPROC] can suppress them.
+#[test]
+fn debug_ast_dump_matches_committed_golden_c() -> Result<()> {
+    assert_ast_golden("ast-golden-c", "Sample.c")
 }
 
 // [LANG-CAND-JAVASCRIPT] golden: Sample.jsx proves the plain JavaScript

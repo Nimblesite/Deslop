@@ -9,7 +9,7 @@ copy-pastes.
 [Documentation](https://deslop.live/docs/) ·
 [Releases](https://deslop.live/releases/)
 
-[![Deslop showing ranked duplicate-code clusters, an inline warning, and a side-by-side comparison in VS Code.](site/src/assets/img/screenshot.webp)](https://deslop.live/docs/vscode-cluster-panel/)
+[![Deslop showing a duplicate cluster, its two locations and canonical comparison actions.](site/src/assets/img/screenshot.webp)](https://deslop.live/docs/vscode-cluster-panel/)
 
 ## Install in your IDE
 
@@ -97,7 +97,7 @@ implementations across a repository.
 All three surfaces use the same analysis engine. The worst offenders come first
 so the report starts with the cleanup that matters most.
 
-Supported languages: C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, Go, and Osprey (`.osp`, native `.ospml`, and explicitly selected `.py`). See the [Osprey guide](site/src/docs/osprey.md) for syntax flavors, Python opt-in rules and integration status, and [Osprey Gets the Crown](site/src/blog/osprey-first-class.md) for the introduction.
+Supported languages: C, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, Go, and Osprey (`.osp`, native `.ospml`, and explicitly selected `.py`). See the [Osprey guide](site/src/docs/osprey.md) for syntax flavors, Python opt-in rules and integration status, and [Osprey in Deslop](site/src/blog/osprey-first-class.md) for the introduction.
 
 ## Connect a coding agent
 

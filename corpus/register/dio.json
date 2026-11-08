@@ -28,120 +28,23 @@
         "dio_test/lib/src/test/headers_tests.dart:49-51",
         "plugins/web_adapter/test/cors_preflight_test.dart:203-206"
       ]
+    },
+    {
+      "why": "One region declares DioException's fields (requestOptions, response, type, error, stackTrace) and the other RequestOptions' (followRedirects, maxRedirects, persistentConnection, requestEncoder, responseDecoder); every name, type and doc differs and only the Dart doc-comment-plus-field skeleton is shared — plainly not a copy.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- dio/lib/src/dio_exception.dart:214-228\n+++ dio/lib/src/options.dart:508-529\n@@ -1,15 +1,22 @@\n-  final RequestOptions requestOptions;\n+  bool? followRedirects;\n \n-  /// Response info, it may be `null` if the request can't reach to the\n-  /// HTTP server, for example, occurring a DNS error, network is not available.\n-  final Response? response;\n+  /// The maximum number of redirects when [followRedirects] is `true`.\n+  /// [RedirectException] will be thrown if redirects exceeded the limit.\n+  ///\n+  /// Defaults to 5.\n+  int? maxRedirects;\n \n-  final DioExceptionType type;\n+  /// See [HttpClientRequest.persistentConnection].\n+  ///\n+  /// Defaults to true.\n+  bool? persistentConnection;\n \n-  /// The original error/exception object;\n-  /// It's usually not null when `type` is [DioExceptionType.unknown].\n-  final Object? error;\n+  /// The type of a request encoding callback.\n+  ///\n+  /// Defaults to [Utf8Encoder].\n+  RequestEncoder? requestEncoder;\n \n-  /// The stacktrace of the original error/exception object;\n-  /// It's usually not null when `type` is [DioExceptionType.unknown].\n-  final StackTrace stackTrace;\n+  /// The type of a response decoding callback.\n+  ///\n+  /// Defaults to [Utf8Decoder].\n+  ResponseDecoder? responseDecoder;\n",
+      "occurrences": [
+        "dio/lib/src/options.dart:508-529",
+        "dio/lib/src/dio_exception.dart:214-228"
+      ]
+    },
+    {
+      "why": "Response's fields (requestOptions, statusCode, statusMessage, headers, isRedirect) share no member, type or doc with RequestOptions' fields (data, path, cancelToken, progress callbacks) — only the syntactic skeleton of documented field declarations.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- dio/lib/src/response.dart:33-49\n+++ dio/lib/src/options.dart:680-694\n@@ -1,17 +1,15 @@\n-  RequestOptions requestOptions;\n+  dynamic data;\n \n-  /// The HTTP status code for the response.\n-  ///\n-  /// This can be null if the response was constructed manually.\n-  int? statusCode;\n+  /// Defines the path of the request. If it starts with \"http(s)\",\n+  /// [baseUrl] will be ignored. Otherwise, it will be combined and resolved\n+  /// with the [baseUrl].\n+  String path;\n \n-  /// Returns the reason phrase associated with the status code.\n-  String? statusMessage;\n+  /// {@macro dio.CancelToken}\n+  CancelToken? cancelToken;\n \n-  /// Headers for the response.\n-  Headers headers;\n+  /// {@macro dio.options.ProgressCallback}\n+  ProgressCallback? onReceiveProgress;\n \n-  /// Whether the response has been redirected.\n-  ///\n-  /// The field rely on the implementation of the adapter.\n-  bool isRedirect;\n+  /// {@macro dio.options.ProgressCallback}\n+  ProgressCallback? onSendProgress;\n",
+      "occurrences": [
+        "dio/lib/src/options.dart:680-694",
+        "dio/lib/src/response.dart:33-49"
+      ]
     }
   ],
-  "not_clear": [
-    {
-      "why": "These are repeated option assertions with only the object name changed; the selected material is ordinary test scaffolding.",
-      "occurrences": [
-        "dio/test/options_test.dart:102-106",
-        "dio/test/options_test.dart:75-79"
-      ]
-    },
-    {
-      "why": "Both spans initialize the same logging test harness with different flag combinations. That repeated setup does not make a substantive clone certain.",
-      "occurrences": [
-        "dio/test/interceptor_test.dart:1174-1192",
-        "dio/test/interceptor_test.dart:1323-1341"
-      ]
-    },
-    {
-      "why": "The selected code is an exception matcher reused in related status-code tests, with a fixed code replaced by the loop variable.",
-      "occurrences": [
-        "dio_test/lib/src/test/status_code_tests.dart:43-53",
-        "dio_test/lib/src/test/status_code_tests.dart:20-30"
-      ]
-    },
-    {
-      "why": "The same option fields are declared in nullable public options and resolved request options, with different initialization and documentation. Shared data declarations leave doubt about a clone verdict.",
-      "occurrences": [
-        "dio/lib/src/options.dart:492-529",
-        "dio/lib/src/options.dart:814-821"
-      ]
-    },
-    {
-      "why": "The repeated interceptor configuration and one assertion are test scaffolding for different logging flags.",
-      "occurrences": [
-        "dio/test/interceptor_test.dart:1230-1245",
-        "dio/test/interceptor_test.dart:1328-1343"
-      ]
-    },
-    {
-      "why": "This is the same response-construction setup for object and array JSON test inputs; the selected ranges omit their assertions.",
-      "occurrences": [
-        "dio/test/transformer_test.dart:93-106",
-        "dio/test/transformer_test.dart:112-125"
-      ]
-    },
-    {
-      "why": "Only three routine option assertions are selected, with the tested variable renamed.",
-      "occurrences": [
-        "dio/test/options_test.dart:102-104",
-        "dio/test/options_test.dart:75-77"
-      ]
-    },
-    {
-      "why": "This is the short request-and-two-assertions logging idiom, with different expected output and booleans.",
-      "occurrences": [
-        "dio/test/interceptor_test.dart:1218-1221",
-        "dio/test/interceptor_test.dart:1368-1371"
-      ]
-    },
-    {
-      "why": "Only a two-line POST-and-assert idiom repeats, apart from indentation.",
-      "occurrences": [
-        "plugins/http2_adapter/test/http2_test.dart:81-82",
-        "plugins/http2_adapter/test/http2_test.dart:112-113"
-      ]
-    },
-    {
-      "why": "Both operators use the conventional identity/type/field equality pattern. The deep collection comparison differs from ordinary field equality; copying is not certain.",
-      "occurrences": [
-        "plugins/cookie_manager/test/cookies_persistance_test.dart:46-52",
-        "dio/lib/src/parameter.dart:26-32"
-      ]
-    },
-    {
-      "why": "These three assertions repeat apart from indentation, but are a short HTTP response-checking idiom.",
-      "occurrences": [
-        "dio_test/lib/src/test/http_method_tests.dart:176-178",
-        "dio_test/lib/src/test/http_method_tests.dart:160-162"
-      ]
-    },
-    {
-      "why": "These are two-line examples demonstrating the same generic call with different response types.",
-      "occurrences": [
-        "example_dart/lib/generic.dart:20-21",
-        "example_dart/lib/generic.dart:16-17"
-      ]
-    },
-    {
-      "why": "The field lists intentionally represent the same options in public and resolved forms, changing nullability and initialization. There is no substantive routine in these ranges.",
-      "occurrences": [
-        "dio/lib/src/options.dart:487-524",
-        "dio/lib/src/options.dart:813-820"
-      ]
-    },
-    {
-      "why": "Two timeout assertions recur with different values, while the second range also includes a method assertion. The short scaffolding and uneven boundaries leave doubt.",
-      "occurrences": [
-        "dio/test/options_test.dart:103-104",
-        "dio/test/options_timeout_integration_test.dart:118-120"
-      ]
-    },
-    {
-      "why": "These are corresponding option-field declarations with different nullability, late initialization, and documentation; declarations alone leave doubt about calling this copied code.",
-      "occurrences": [
-        "dio/lib/src/options.dart:815-822",
-        "dio/lib/src/options.dart:497-535"
-      ]
-    },
-    {
-      "why": "The exact repeated span creates a cancellation token and schedules its cancellation; this is short shared test setup.",
-      "occurrences": [
-        "plugins/native_dio_adapter/test/conversion_layer_adapter_test.dart:93-99",
-        "plugins/native_dio_adapter/test/conversion_layer_adapter_test.dart:69-75"
-      ]
-    }
-  ]
+  "not_clear": []
 }

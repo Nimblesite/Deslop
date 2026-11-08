@@ -7,9 +7,9 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import { LanguageClient } from "vscode-languageclient/node";
 import type { ExtensionApi } from "../../extension";
-import { parseCompareUri } from "../../compare/provider";
-import { compareTitle, INDENTATION_ONLY_VERDICT, measurePair, PAIR_COMPARE_METHOD } from "../../compare/title";
-import { kindTitle, type PairComparison, type PairEvidence, type ReportCluster, type ReportOccurrence } from "../../types/report";
+import { INDENTATION_ONLY_VERDICT } from "../../compare/title";
+import { kindTitle, type ReportCluster } from "../../types/report";
+import { compareWithCanonicalOneClick, linesWithoutIndentation, waitForDiffTab } from "../compare.helpers";
 import {
   deleteRange,
   editThenRestore,
@@ -33,9 +33,6 @@ const NEARLY_IDENTICAL_KIND = "nearly_identical";
 // ASCII-whitespace folding, so a re-indented copy is Identical even
 // though its bytes differ.
 const IDENTICAL_KIND = "identical";
-const CLOSE_ALL_EDITORS = "workbench.action.closeAllEditors";
-const COMPARE_WITH_CANONICAL = "deslop.compareWithCanonical";
-const LINE_BREAK = "\n";
 
 function waitForRelativePathCluster(client: LanguageClient): Promise<ReportCluster> {
   return waitForCluster(
@@ -43,81 +40,6 @@ function waitForRelativePathCluster(client: LanguageClient): Promise<ReportClust
     (candidate) => candidate.occurrences.some((occurrence) => !path.isAbsolute(occurrence.path)),
     "no relative-path cluster in LSP report",
   );
-}
-
-interface OpenedDiff {
-  readonly label: string;
-  readonly input: vscode.TabInputTextDiff;
-}
-
-async function waitForDiff(): Promise<OpenedDiff> {
-  // Under coverage instrumentation `vscode.diff` can take >2s to materialise
-  // a TabInputTextDiff after closeAllEditors. 10s matches the rest of this
-  // suite's wait helpers and absorbs that variance.
-  for (let i = 0; i < 100; i += 1) {
-    for (const group of vscode.window.tabGroups.all) {
-      for (const tab of group.tabs) {
-        if (tab.input instanceof vscode.TabInputTextDiff) return { label: tab.label, input: tab.input };
-      }
-    }
-    await sleep(100);
-  }
-  throw new Error("compare command did not open a diff tab");
-}
-
-async function waitForDiffTab(): Promise<vscode.TabInputTextDiff> {
-  return (await waitForDiff()).input;
-}
-
-// The engine's own answer for exactly these two endpoints, over the real LSP.
-async function pairEvidence(
-  client: LanguageClient,
-  left: ReportOccurrence,
-  right: ReportOccurrence,
-): Promise<PairEvidence> {
-  const comparison = await client.sendRequest<PairComparison>(PAIR_COMPARE_METHOD, {
-    left: { path: left.path, start_byte: left.start_byte, end_byte: left.end_byte },
-    right: { path: right.path, start_byte: right.start_byte, end_byte: right.end_byte },
-  });
-  const measured = await measurePair(client, left, right);
-  assert.deepEqual(measured, comparison.evidence, "measurePair preserves the real engine's evidence for these exact endpoints");
-  return comparison.evidence;
-}
-
-function assertDiffEndpoints(input: vscode.TabInputTextDiff, left: ReportOccurrence, right: ReportOccurrence): void {
-  const original = parseCompareUri(input.original);
-  const modified = parseCompareUri(input.modified);
-  assert.equal(original.sourcePath, left.path);
-  assert.equal(original.startByte, left.start_byte);
-  assert.equal(original.endByte, left.end_byte);
-  assert.equal(modified.sourcePath, right.path);
-  assert.equal(modified.startByte, right.start_byte);
-  assert.equal(modified.endByte, right.end_byte);
-  assert.notEqual(input.original.toString(), input.modified.toString());
-}
-
-// One click on a peer: the canonical range lands on the left, the clicked
-// occurrence on the right, and the title names both files and repeats the
-// engine's verdict on that exact pair ([VSIX-PAIR-COMPARE]).
-async function compareWithCanonicalOneClick(
-  client: LanguageClient,
-  cluster: ReportCluster,
-): Promise<{ diff: OpenedDiff; canonical: ReportOccurrence; peer: ReportOccurrence; evidence: PairEvidence }> {
-  const [canonical, peer] = cluster.occurrences;
-  assert.ok(canonical && peer, "cluster must expose a canonical occurrence and a peer");
-  await vscode.commands.executeCommand(CLOSE_ALL_EDITORS);
-  await vscode.commands.executeCommand(COMPARE_WITH_CANONICAL, cluster.id, peer);
-  const diff = await waitForDiff();
-  assertDiffEndpoints(diff.input, canonical, peer);
-  const evidence = await pairEvidence(client, canonical, peer);
-  assert.equal(diff.label, compareTitle(canonical, peer, evidence), "the title is the engine's verdict on this pair");
-  assert.ok(diff.label.includes(path.basename(canonical.path)), `title names the canonical file: ${diff.label}`);
-  assert.ok(diff.label.includes(path.basename(peer.path)), `title names the peer file: ${diff.label}`);
-  return { diff, canonical, peer, evidence };
-}
-
-function linesWithoutIndentation(text: string): string[] {
-  return text.split(LINE_BREAK).map((line) => line.trimStart());
 }
 
 suite("cluster navigation", () => {

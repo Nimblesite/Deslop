@@ -42,10 +42,10 @@ function recipe(target) {
 }
 
 test("[CI-DESLOP] the gate runs the binary this workspace builds", () => {
-  const { header, body } = recipe("dup-gate");
+  const { header, body } = recipe("_dup-gate");
   assert.equal(
     header,
-    "dup-gate: build",
+    "_dup-gate: build",
     "dup-gate must depend on `build`, so the gate can never measure with a stale or absent binary",
   );
   assert.ok(
@@ -72,9 +72,9 @@ test("[CI-DESLOP] that binary is compiled from this tree, not downloaded", () =>
 
 test("[CI-DESLOP] CI builds first, then gates with what it built", () => {
   const buildAt = ciWorkflow.findIndex((line) => line.trim() === "run: make build");
-  const gateAt = ciWorkflow.findIndex((line) => line.trim() === "run: make dup-gate");
+  const gateAt = ciWorkflow.findIndex((line) => line.trim() === "run: make _dup-gate");
   assert.ok(buildAt >= 0, "ci.yml no longer runs `make build`");
-  assert.ok(gateAt >= 0, "ci.yml no longer runs `make dup-gate`; the duplication gate is the CLI, not an action");
+  assert.ok(gateAt >= 0, "ci.yml no longer runs `make _dup-gate`; the duplication gate is the CLI, not an action");
   assert.ok(gateAt > buildAt, "the duplication gate must run after the build, so it measures the freshly built binary");
 });
 

@@ -34,6 +34,7 @@ pub fn is_import_boilerplate_carrier(language: &str, kind: &str) -> bool {
         "dart" => dart_carrier(kind),
         "javascript" | "typescript" | "tsx" | "osprey" | "osprey-ml" => ecmascript_carrier(kind),
         "go" => go_carrier(kind),
+        "c" => c_carrier(kind),
         "php" => php_carrier(kind),
         _ => false,
     }
@@ -169,6 +170,16 @@ fn go_carrier(kind: &str) -> bool {
     kind == GO_PACKAGE_CLAUSE || kind == "import_declaration"
 }
 
+/// [LANG-CAND-C-PREPROC] `#include` is an import; `#define` bodies are
+/// opaque `preproc_arg` leaves the grammar never parses, so two unrelated
+/// macros would fingerprint identically — neither is clone evidence.
+fn c_carrier(kind: &str) -> bool {
+    matches!(
+        kind,
+        "preproc_include" | "preproc_def" | "preproc_function_def"
+    )
+}
+
 /// Returns true when `kind` is the clause `language` requires every file to
 /// open with — Go's `package` clause. An import is a line the author chose
 /// and may have copied along with the code below it; this clause is dictated
@@ -186,6 +197,34 @@ fn is_language_specific_boilerplate_subtree(language: &str, node: &NormalizedNod
         "python" => is_python_prologue_subtree(node),
         "javascript" | "typescript" | "tsx" => is_ecmascript_reexport(node),
         "php" => is_php_prologue_statement(node),
+        "c" => is_c_prototype(node),
+        _ => false,
+    }
+}
+
+/// [LANG-CAND-C-PROTOTYPE] A function prototype is a `declaration` whose
+/// declarator is a `function_declarator` (possibly behind a
+/// `pointer_declarator`) and which has no body. After normalisation every
+/// one-argument prototype is the same shape, so a header listing `sqrt`,
+/// `exp` and `log` would otherwise cluster with any other header listing
+/// three unrelated functions. The declaration is a promise about a body
+/// that lives elsewhere; the body is the evidence.
+fn is_c_prototype(node: &NormalizedNode) -> bool {
+    node.kind == "declaration" && node.children.iter().any(is_c_function_declarator)
+}
+
+/// The `function_declarator` of a prototype, unwrapping pointer-returning
+/// declarators such as `const char *name(int)`. A function declarator whose
+/// own declarator is parenthesised — `int (*on_open)(int)` — names a
+/// variable holding a function pointer, not a function: it is data the
+/// author wrote, so a copied table of them is clone evidence.
+fn is_c_function_declarator(node: &NormalizedNode) -> bool {
+    match node.kind {
+        "function_declarator" => !node
+            .children
+            .iter()
+            .any(|child| child.kind == "parenthesized_declarator"),
+        "pointer_declarator" => node.children.iter().any(is_c_function_declarator),
         _ => false,
     }
 }

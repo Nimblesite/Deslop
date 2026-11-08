@@ -35,7 +35,7 @@ fn main() -> Result<(), String> {
         Ok(status) if status.success() => Ok(()),
         Ok(status) => Err(format!(
             "typediagram-gen failed: node exited with status {status}. \
-             Run `make typediagram-gen` to reproduce."
+             Run `make _typediagram-gen` to reproduce."
         )),
         Err(error) => Err(format!(
             "typediagram-gen failed to spawn node: {error}. \

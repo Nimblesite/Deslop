@@ -72,6 +72,7 @@ mod survivor;
 /// Stage records ([PIPELINE-OBSERVABILITY-STAGES]).
 mod tally;
 use kernel::{resolve, Region};
+pub(crate) use survivor::holds_shape_only;
 use tally::SubsumeTally;
 
 /// Collapses redundant clusters that cover the same physical bytes.
@@ -114,7 +115,7 @@ fn file_set_groups(clusters: &[Cluster]) -> BTreeMap<Vec<FileId>, Vec<usize>> {
 }
 
 /// The distinct files a view names, in a canonical order.
-fn file_set(members: &[Fingerprint]) -> Vec<FileId> {
+pub(crate) fn file_set(members: &[Fingerprint]) -> Vec<FileId> {
     let mut files: Vec<FileId> = members.iter().map(|member| member.file_id).collect();
     files.sort_unstable();
     files.dedup();

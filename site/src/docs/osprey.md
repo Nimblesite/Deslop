@@ -11,7 +11,7 @@ docsGroup: guides
 
 # Osprey support
 
-Deslop analyses Osprey with tree-sitter and sends findings through the same Rust engine used by the CLI, live editor and MCP tools. Osprey receives a gold crowned bird in the language groups and report views. Start with [Osprey Gets the Crown](/blog/osprey-first-class/) for an introduction.
+Deslop analyses Osprey with tree-sitter and sends findings through the same Rust engine used by the CLI, live editor and MCP tools. Osprey receives the official cyan Osprey icon in the language groups and report views. Start with [Osprey in Deslop](/blog/osprey-first-class/) for an introduction.
 
 ## Syntax support
 
@@ -57,6 +57,6 @@ The project `flavor` setting accepts `default`, `ml` or `python` and overrides t
 
 ## Language identity in reports
 
-The engine distinguishes `osprey`, `osprey-ml` and `osprey-python` in parser and cache identities. Occurrences and file metrics carry the selected language so clients can distinguish Osprey Python from ordinary Python even though both use `.py`. The interface groups the three identities as Osprey and uses the same crowned icon.
+The engine distinguishes `osprey`, `osprey-ml` and `osprey-python` in parser and cache identities. Occurrences and file metrics carry the selected language so clients can distinguish Osprey Python from ordinary Python even though both use `.py`. The interface groups the three identities as Osprey and uses the same official Osprey icon.
 
 Sharing a language family does not establish cross-flavor clone equivalence. Automatic Python refactoring actions are not inherited by Osprey's Python flavor. Invalid ML syntax produces a visible parse error rather than a report based on a partial syntax tree.

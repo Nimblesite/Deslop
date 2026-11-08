@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: 快速开始 — 安装 Deslop 并查找重复代码
-description: 安装 Deslop，在十种编程语言中查找重复代码。一个 VS Code 扩展即可获得实时警告、面向编码智能体的 MCP 检查和 CLI。
+description: 安装 Deslop，在 C、C#、Rust、Python、TypeScript、Go、Osprey 等语言中查找重复代码。一个 VS Code 扩展即可获得实时警告、面向编码智能体的 MCP 检查和 CLI。
 eleventyNavigation:
   key: 快速开始
   order: 1
@@ -12,7 +12,7 @@ lang: zh
 
 # 快速开始
 
-**Deslop 在十种编程语言中查找重复代码，按影响程度排列最值得移除的重复，并在相似代码已经存在时告诉你的编码智能体。** 它运行于你的工作区，并随你的输入实时更新 —— Claude Code、Cursor、Copilot、Continue、Codex 以及你的编辑器读取的都是同一份实时分析。
+**Deslop 在 C、C#、Rust、Python、Dart、JavaScript、TypeScript、PHP、F#、Go 和 Osprey 中查找重复代码，按影响程度排列最值得移除的重复，并在相似代码已经存在时告诉你的编码智能体。** 它运行于你的工作区，并随你的输入实时更新 —— Claude Code、Cursor、Copilot、Continue、Codex 以及你的编辑器读取的都是同一份实时分析。
 
 安装它的首选方式是 **VS Code 扩展**。一次安装即可获得全部三个接口面：实时编辑器警告、智能体写代码前所做的那次检查，以及 CLI。
 
@@ -24,17 +24,13 @@ lang: zh
 - **命令行：** `code --install-extension nimblesite.deslop-live`
 - **浏览器：** 打开 [Deslop.live Marketplace 页面](https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live) 并点击**安装**。
 
-随后打开一个受支持的源文件（`.cs`、`.rs`、`.py`、`.dart`、`.js`、`.mjs`、`.cjs`、`.jsx`、`.ts`、`.tsx`、`.php`、`.fs`、`.fsx` `.go` 或 `.osp`）。实时气泡会立即生效，并且随着文件监视器触发，**Top Offenders** 树状视图会随之填充。
+随后打开一个受支持的源文件（`.cs`、`.rs`、`.py`、`.dart`、`.js`、`.mjs`、`.cjs`、`.jsx`、`.ts`、`.tsx`、`.php`、`.fs`、`.fsx`、`.go`、`.c`、`.h` 或 `.osp`）。实时气泡会立即生效，并且随着文件监视器触发，**Top Offenders** 树状视图会随之填充。
 
 该扩展捆绑了面向 `darwin-arm64`、`darwin-x64`、`linux-x64`、`linux-arm64` 和 `win32-x64` 的原生二进制文件 —— 系统会自动为你选择正确的那一个。
 
 <figure>
-  <a href="/assets/img/screenshot.webp">
-    <img src="/assets/img/screenshot.webp"
-         alt="Deslop VS Code 扩展正在分析实时工作区：侧边栏中以最严重优先排序的 Top Offenders 树与按目录划分的 Duplication 占比，编辑器中光标处的实时克隆警告，以及与规范出现位置的 Compare 差异对比。"
-         width="2560" height="1492" loading="lazy" decoding="async">
-  </a>
-  <figcaption>实时工作区中的扩展——侧边栏里以最严重优先排序的克隆簇与按目录划分的重复占比、光标处的实时克隆警告，以及与规范副本的 Compare 差异对比。<a href="/zh/docs/vscode-cluster-panel/">逐面板完整解读 →</a></figcaption>
+  <a href="/assets/img/screenshot.webp"><img src="/assets/img/screenshot.webp" alt="Deslop 分析双文件 C# 示例：重复代码簇、两个位置和规范副本比较操作。" width="3200" height="1800" loading="lazy" decoding="async"></a>
+  <figcaption>打包扩展分析的真实双文件示例。打开结果、查看位置，然后比较副本。</figcaption>
 </figure>
 
 > **离线或隔离网络环境？** 从[发布页](/zh/releases/)或[最新的 GitHub release](https://github.com/Nimblesite/Deslop/releases/latest) 获取 `.vsix`，并通过**扩展面板 → `…` 菜单 → 从 VSIX 安装…**进行安装。

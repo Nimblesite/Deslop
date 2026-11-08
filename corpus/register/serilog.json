@@ -45,94 +45,36 @@
         "test/Serilog.PerformanceTests/Support/DictionaryMessageTemplateCache.cs:4-50",
         "src/Serilog/Core/Pipeline/MessageTemplateCache.cs:18-73"
       ]
+    },
+    {
+      "why": "The _sinks field, guard constructor, and the entire exception-aggregating Emit loop are duplicated across two files with no shared base class; the diff shows only the constructor identifier and one blank line differing.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- src/Serilog/Core/Sinks/DisposingAggregateSink.cs:22-49\n+++ src/Serilog/Core/Sinks/AggregateSink.cs:19-47\n@@ -1,8 +1,9 @@\n     readonly ILogEventSink[] _sinks;\n \n-    public DisposingAggregateSink(IEnumerable<ILogEventSink> sinks)\n+    public AggregateSink(IEnumerable<ILogEventSink> sinks)\n     {\n         Guard.AgainstNull(sinks);\n+\n         _sinks = sinks.ToArray();\n     }\n \n",
+      "type": "Type II",
+      "occurrences": [
+        "src/Serilog/Core/Sinks/AggregateSink.cs:19-47",
+        "src/Serilog/Core/Sinks/DisposingAggregateSink.cs:22-49"
+      ]
+    },
+    {
+      "why": "The diff differs on the declaration line alone (FormatDateTimeValue/DateTime → FormatDateTimeOffsetValue/DateTimeOffset); the entire stackalloc/TryFormat/\"O\"-fallback body, including both #if branches, is identical. A pure systematic rename of real production formatting logic.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- src/Serilog/Formatting/Json/JsonValueFormatter.cs:469-484\n+++ src/Serilog/Formatting/Json/JsonValueFormatter.cs:486-501\n@@ -1,4 +1,4 @@\n-    static void FormatDateTimeValue(DateTime value, TextWriter output)\n+    static void FormatDateTimeOffsetValue(DateTimeOffset value, TextWriter output)\n     {\n         output.Write('\\\"');\n \n",
+      "type": "Type II",
+      "occurrences": [
+        "src/Serilog/Formatting/Json/JsonValueFormatter.cs:469-484",
+        "src/Serilog/Formatting/Json/JsonValueFormatter.cs:486-501"
+      ]
+    },
+    {
+      "why": "The complete ProjectedDestructuringPolicy class repeats its guards, projection and conversion logic; the second removes the named-argument label destructureObjects:, a syntax change beyond renaming.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- src/Serilog/Policies/ProjectedDestructuringPolicy.cs:17-42\n+++ test/Serilog.Tests/Configuration/LoggerConfigurationTests.cs:136-161\n@@ -1,26 +1,26 @@\n-class ProjectedDestructuringPolicy : IDestructuringPolicy\n-{\n-    readonly Func<Type, bool> _canApply;\n-    readonly Func<object, object> _projection;\n+    class ProjectedDestructuringPolicy : IDestructuringPolicy\n+    {\n+        readonly Func<Type, bool> _canApply;\n+        readonly Func<object, object> _projection;\n \n-    public ProjectedDestructuringPolicy(Func<Type, bool> canApply, Func<object, object> projection)\n-    {\n-        _canApply = Guard.AgainstNull(canApply);\n-        _projection = Guard.AgainstNull(projection);\n-    }\n-\n-    public bool TryDestructure(object value, ILogEventPropertyValueFactory propertyValueFactory, [NotNullWhen(true)] out LogEventPropertyValue? result)\n-    {\n-        Guard.AgainstNull(value);\n-\n-        if (!_canApply(value.GetType()))\n+        public ProjectedDestructuringPolicy(Func<Type, bool> canApply, Func<object, object> projection)\n         {\n-            result = null;\n-            return false;\n+            _canApply = Guard.AgainstNull(canApply);\n+            _projection = Guard.AgainstNull(projection);\n         }\n \n-        var projected = _projection(value);\n-        result = propertyValueFactory.CreatePropertyValue(projected, destructureObjects: true);\n-        return true;\n+        public bool TryDestructure(object value, ILogEventPropertyValueFactory propertyValueFactory, [NotNullWhen(true)] out LogEventPropertyValue? result)\n+        {\n+            Guard.AgainstNull(value);\n+\n+            if (!_canApply(value.GetType()))\n+            {\n+                result = null;\n+                return false;\n+            }\n+\n+            var projected = _projection(value);\n+            result = propertyValueFactory.CreatePropertyValue(projected, true);\n+            return true;\n+        }\n     }\n-}\n",
+      "type": "Type III",
+      "occurrences": [
+        "src/Serilog/Policies/ProjectedDestructuringPolicy.cs:17-42",
+        "test/Serilog.Tests/Configuration/LoggerConfigurationTests.cs:136-161"
+      ]
     }
   ],
   "clearly_out": [],
-  "not_clear": [
-    {
-      "why": "These short tests follow the convert-and-assert-array pattern for integer and string elements; the repetition is ordinary test scaffolding.",
-      "occurrences": [
-        "test/Serilog.Tests/Settings/SettingValueConversionsTests.cs:49-56",
-        "test/Serilog.Tests/Settings/SettingValueConversionsTests.cs:33-40"
-      ]
-    },
-    {
-      "why": "The log-level overload pattern repeats, but the ranges start inside one member and stop at a feature directive inside another. The boundaries are ragged.",
-      "occurrences": [
-        "src/Serilog/ILogger.cs:1185-1217",
-        "src/Serilog/ILogger.cs:708-740"
-      ]
-    },
-    {
-      "why": "Only three lines constructing a parser and test event are selected, with a different template format string.",
-      "occurrences": [
-        "test/Serilog.Tests/Formatting/Json/JsonFormatterTests.cs:256-258",
-        "test/Serilog.Tests/Formatting/Json/JsonFormatterTests.cs:228-230"
-      ]
-    },
-    {
-      "why": "Each method contains one forwarding call. The static/instance and log-level differences do not make this tiny wrapper idiom a certain substantive clone.",
-      "occurrences": [
-        "src/Serilog/Log.cs:380-383",
-        "src/Serilog/Core/Logger.cs:1049-1052"
-      ]
-    },
-    {
-      "why": "Only one identical template-list initialization expression is selected.",
-      "occurrences": [
-        "test/Serilog.PerformanceTests/MessageTemplateCacheBenchmark/MessageTemplateCacheBenchmark_Cached.cs:22-22",
-        "test/Serilog.PerformanceTests/MessageTemplateCacheBenchmark/MessageTemplateCacheBenchmark_Leaking.cs:22-22"
-      ]
-    },
-    {
-      "why": "Each six-line test contains only a conversion and an assertion, using different subclass fixtures. That short test idiom leaves doubt.",
-      "occurrences": [
-        "test/Serilog.Tests/Capturing/PropertyValueConverterTests.cs:461-466",
-        "test/Serilog.Tests/Capturing/PropertyValueConverterTests.cs:468-473"
-      ]
-    },
-    {
-      "why": "Only a two-line extract-and-assert pattern repeats for two event properties.",
-      "occurrences": [
-        "test/Serilog.Tests/Core/LoggerTests.cs:407-408",
-        "test/Serilog.Tests/Core/LoggerTests.cs:405-406"
-      ]
-    },
-    {
-      "why": "These are single assertions for two properties; a one-line assertion idiom is insufficient for a firm verdict.",
-      "occurrences": [
-        "test/Serilog.Tests/Capturing/PropertyValueConverterTests.cs:303-303",
-        "test/Serilog.Tests/Capturing/PropertyValueConverterTests.cs:302-302"
-      ]
-    },
-    {
-      "why": "These few lines repeat child-logger construction and disposal setup for different overloads; the assertions are outside the selected ranges.",
-      "occurrences": [
-        "test/Serilog.Tests/Core/ChildLoggerDisposalTests.cs:55-59",
-        "test/Serilog.Tests/Core/ChildLoggerDisposalTests.cs:68-72"
-      ]
-    },
-    {
-      "why": "Only three lines of a format-and-fallback idiom are selected, without the controlling condition, and the format specifier changes.",
-      "occurrences": [
-        "src/Serilog/Formatting/Json/JsonValueFormatter.cs:344-346",
-        "src/Serilog/Formatting/Json/JsonValueFormatter.cs:476-478"
-      ]
-    },
-    {
-      "why": "These conditional-compilation cases each contain only a tuple conversion and type assertion. The short test idiom leaves doubt despite matching input.",
-      "occurrences": [
-        "test/Serilog.Tests/Capturing/PropertyValueConverterTests.cs:391-396",
-        "test/Serilog.Tests/Capturing/PropertyValueConverterTests.cs:382-387"
-      ]
-    },
-    {
-      "why": "The Information/Fatal forwarding pattern repeats, but the ranges start inside an overload and stop before the last member's directives and terminator. These are ragged fragments.",
-      "occurrences": [
-        "src/Serilog/ILogger.cs:804-838",
-        "src/Serilog/ILogger.cs:1281-1315"
-      ]
-    }
-  ],
-  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 20 candidates at this commit and no pair was called CLEARLY OUT by all of them. 0 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing."
+  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 20 candidates at this commit and no pair was called CLEARLY OUT by all of them. 0 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing.",
+  "not_clear": []
 }

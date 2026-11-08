@@ -63,25 +63,28 @@ impl PipelineSession {
         provider: Option<&dyn EmbeddingProvider>,
     ) -> Result<PairEvidence, CoreError> {
         let trees = self.trees_for_pair(pair)?;
-        let pairs = self.comparison_anchor_pairs();
-        let mut axes = PairAxes::new(&trees, self, &pairs);
+        let mut axes = PairAxes::new(&trees, self, self.comparison_anchor_pairs());
         let embedding_cos = self.embedding_cos(pair, provider)?;
         let measurements = self.measure_axes(pair, &mut axes, embedding_cos, WHOLE_ENDPOINTS);
         Ok(self.build_evidence(pair, measurements))
     }
 
-    /// [FUSED-SHARED-SUBTREE] Explicit comparisons use discovery's exact-copy anchors.
-    fn comparison_anchor_pairs(&self) -> Vec<CandidatePair> {
-        let signatures = self.store.signatures();
-        crate::pair::candidate_pairs_for_language_policy(
-            self.store.fingerprints(),
-            &signatures,
-            &crate::lsh::BandCollisionSource::new(&signatures),
-            &[],
-            None,
-            &self.file_languages,
-            self.exclusion.allows_cross_language_comparison(),
-        )
+    /// [FUSED-SHARED-SUBTREE] Explicit comparisons use discovery's
+    /// exact-copy anchors, discovering them only before the first render.
+    fn comparison_anchor_pairs(&self) -> &[CandidatePair] {
+        let fingerprints = self.store.fingerprints();
+        self.store.anchors().get_or_discover(fingerprints, || {
+            let signatures = self.store.signatures();
+            crate::pair::candidate_pairs_for_language_policy(
+                fingerprints,
+                &signatures,
+                &crate::lsh::BandCollisionSource::new(&signatures),
+                &[],
+                None,
+                &self.file_languages,
+                self.exclusion.allows_cross_language_comparison(),
+            )
+        })
     }
 
     /// Measures structural, token, and raw-content evidence beside the

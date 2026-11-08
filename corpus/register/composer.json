@@ -186,6 +186,15 @@
         "src/Composer/FilterList/FilterListEntryBuilder.php:69-77",
         "src/Composer/FilterList/FilterListProvider/FilterListProviderSet.php:146-156"
       ]
+    },
+    {
+      "why": "autoload_static_functions.php and autoload_static_functions_with_include_paths.php are the same 28-line file.",
+      "verified": "extracted both ranges from source/, stripped indentation, blank lines and comment-only lines, then line- and token-diffed: byte-identical over 21 code lines (raw ranges identical too)",
+      "type": "Type I",
+      "occurrences": [
+        "tests/Composer/Test/Autoload/Fixtures/autoload_static_functions.php:1-28",
+        "tests/Composer/Test/Autoload/Fixtures/autoload_static_functions_with_include_paths.php:1-28"
+      ]
     }
   ],
   "clearly_out": [
@@ -372,183 +381,15 @@
         "src/Composer/DependencyResolver/Request.php:44-54",
         "src/Composer/DependencyResolver/PoolOptimizer.php:34-59"
       ]
+    },
+    {
+      "why": "VCS driver bookkeeping is paired with configuration-source fields. The declared members have different roles and share only PHP member syntax.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- src/Composer/Repository/VcsRepository.php:58-72\n+++ src/Composer/Config.php:115-129\n@@ -1,15 +1,15 @@\n-    protected $httpDownloader;\n-    /** @var ProcessExecutor */\n-    protected $processExecutor;\n+    private $repositories;\n+    /** @var ConfigSourceInterface */\n+    private $configSource;\n+    /** @var ConfigSourceInterface */\n+    private $authConfigSource;\n+    /** @var ConfigSourceInterface|null */\n+    private $localAuthConfigSource = null;\n     /** @var bool */\n-    protected $branchErrorOccurred = false;\n-    /** @var array<string, class-string<VcsDriverInterface>> */\n-    private $drivers;\n-    /** @var ?VcsDriverInterface */\n-    private $driver;\n-    /** @var ?VersionCacheInterface */\n-    private $versionCache;\n-    /** @var list<string> */\n-    private $emptyReferences = [];\n-    /** @var array<'tags'|'branches', array<string, TransportException>> */\n-    private $versionTransportExceptions = [];\n+    private $useEnvironment;\n+    /** @var array<string, true> */\n+    private $warnedHosts = [];\n+    /** @var array<string, true> */\n+    private $sslVerifyWarnedHosts = [];\n+    /** @var array<string, string> */\n+    private $sourceOfConfigValue = [];\n",
+      "occurrences": [
+        "src/Composer/Repository/VcsRepository.php:58-72",
+        "src/Composer/Config.php:115-129"
+      ]
     }
   ],
-  "not_clear": [
-    {
-      "why": "The commands genuinely share several option declarations, but each span includes a different selection of command-specific options and starts at a different point in configuration.",
-      "occurrences": [
-        "src/Composer/Command/InstallCommand.php:37-66",
-        "src/Composer/Command/CreateProjectCommand.php:73-101"
-      ]
-    },
-    {
-      "why": "These are runs of trivial property getters and setters. The accessor idiom repeats, but the selected properties do not even align as source/dist counterparts.",
-      "occurrences": [
-        "src/Composer/Package/Package.php:309-351",
-        "src/Composer/Package/Package.php:223-265"
-      ]
-    },
-    {
-      "why": "The repeated lines configure a PHPUnit package mock; changing the development flag selects the opposite test case. This is ordinary test scaffolding.",
-      "occurrences": [
-        "tests/Composer/Test/Downloader/DownloadManagerTest.php:1006-1018",
-        "tests/Composer/Test/Downloader/DownloadManagerTest.php:1054-1066"
-      ]
-    },
-    {
-      "why": "The bytes repeat, but they are package-mock setup for two related tests, and both ranges end at the start of another mock's setup.",
-      "occurrences": [
-        "tests/Composer/Test/Downloader/DownloadManagerTest.php:650-670",
-        "tests/Composer/Test/Downloader/DownloadManagerTest.php:594-614"
-      ]
-    },
-    {
-      "why": "Only three dependency assignments from constructors are selected; this is a short initialization idiom.",
-      "occurrences": [
-        "src/Composer/Util/GitHub.php:47-49",
-        "src/Composer/Util/Bitbucket.php:51-53"
-      ]
-    },
-    {
-      "why": "These few lines create dated package fixtures and invoke a filter. The repeated test setup is too small and conventional for certainty.",
-      "occurrences": [
-        "tests/Composer/Test/DependencyResolver/CooldownPoolFilterTest.php:237-241",
-        "tests/Composer/Test/DependencyResolver/CooldownPoolFilterTest.php:103-107"
-      ]
-    },
-    {
-      "why": "This is a three-line find-and-assert idiom applied to two package names.",
-      "occurrences": [
-        "tests/Composer/Test/Repository/ArrayRepositoryTest.php:66-68",
-        "tests/Composer/Test/Repository/ArrayRepositoryTest.php:62-64"
-      ]
-    },
-    {
-      "why": "The token-storage code is closely related, but the selected spans disagree about including the final return and store different token structures. The boundaries leave doubt.",
-      "occurrences": [
-        "src/Composer/Util/Forgejo.php:95-99",
-        "src/Composer/Util/GitHub.php:168-174"
-      ]
-    },
-    {
-      "why": "Only three entries of longer expected Git command sequences are selected, including a changed remote operation.",
-      "occurrences": [
-        "tests/Composer/Test/Downloader/GitDownloaderTest.php:124-126",
-        "tests/Composer/Test/Downloader/GitDownloaderTest.php:177-179"
-      ]
-    },
-    {
-      "why": "Only the standard three-line load-a-fixture setup is selected, with a different fixture directory.",
-      "occurrences": [
-        "tests/Composer/Test/Repository/PathRepositoryTest.php:57-59",
-        "tests/Composer/Test/Repository/PathRepositoryTest.php:45-47"
-      ]
-    },
-    {
-      "why": "The VCS support checks share substantial local-path logic, but one range cuts off before deep probing while the other includes a whole body and its final return.",
-      "occurrences": [
-        "src/Composer/Repository/Vcs/HgDriver.php:219-239",
-        "src/Composer/Repository/Vcs/FossilDriver.php:228-252"
-      ]
-    },
-    {
-      "why": "The lock-file guard repeats, but one range includes its outer branch and complete return while the other starts inside the branch and stops before package retrieval.",
-      "occurrences": [
-        "src/Composer/Command/AuditCommand.php:118-125",
-        "src/Composer/Command/LicensesCommand.php:68-72"
-      ]
-    },
-    {
-      "why": "The fixture scaffolding overlaps, but the ranges have ragged boundaries and different returned mappings.",
-      "occurrences": [
-        "tests/Composer/Test/Autoload/Fixtures/autoload_main.php:1-11",
-        "tests/Composer/Test/Autoload/Fixtures/autoload_main5.php:5-10"
-      ]
-    },
-    {
-      "why": "Two identical option declarations are too short to judge as a firm clone rather than repeated command scaffolding.",
-      "occurrences": [
-        "src/Composer/Command/RemoveCommand.php:68-69",
-        "src/Composer/Command/UpdateCommand.php:80-81"
-      ]
-    },
-    {
-      "why": "Two identical option declarations are short framework scaffolding.",
-      "occurrences": [
-        "src/Composer/Command/ScriptAliasCommand.php:61-62",
-        "src/Composer/Command/RunScriptCommand.php:60-61"
-      ]
-    },
-    {
-      "why": "Only three lines of test setup are involved, with different paths and filenames.",
-      "occurrences": [
-        "tests/Composer/Test/Installer/BinaryInstallerTest.php:432-434",
-        "tests/Composer/Test/Installer/BinaryInstallerTest.php:399-401"
-      ]
-    },
-    {
-      "why": "The redirect check is copied, but one selected range also contains a blank line and redirect counter, leaving ragged boundaries around a three-line idiom.",
-      "occurrences": [
-        "src/Composer/Util/RemoteFilesystem.php:688-692",
-        "src/Composer/Util/Http/CurlDownloader.php:625-627"
-      ]
-    },
-    {
-      "why": "Two short dependency-test setup lines differ in package variables and package names.",
-      "occurrences": [
-        "tests/Composer/Test/DependencyResolver/SolverTest.php:664-665",
-        "tests/Composer/Test/DependencyResolver/SolverTest.php:645-646"
-      ]
-    },
-    {
-      "why": "Two identical assertion lines are too short for a firm clone verdict.",
-      "occurrences": [
-        "tests/Composer/Test/Policy/IgnorePackageRuleTest.php:100-101",
-        "tests/Composer/Test/Policy/IgnorePackageRuleTest.php:37-38"
-      ]
-    },
-    {
-      "why": "Two identical assertion lines are repeated test scaffolding rather than a firm clone region.",
-      "occurrences": [
-        "tests/Composer/Test/Policy/IgnorePackageRuleTest.php:34-35",
-        "tests/Composer/Test/Policy/IgnorePackageRuleTest.php:60-61"
-      ]
-    },
-    {
-      "why": "Three lines of configuration test setup differ in their merge values and are too short for certainty.",
-      "occurrences": [
-        "tests/Composer/Test/ConfigTest.php:148-150",
-        "tests/Composer/Test/ConfigTest.php:157-159"
-      ]
-    },
-    {
-      "why": "Four lines of command-test scaffolding differ in the invoked command and options.",
-      "occurrences": [
-        "tests/Composer/Test/Command/HomeCommandTest.php:52-55",
-        "tests/Composer/Test/Command/FundCommandTest.php:53-56"
-      ]
-    },
-    {
-      "why": "The cache-write block is identical but only three lines long.",
-      "occurrences": [
-        "src/Composer/Repository/Vcs/GitLabDriver.php:162-164",
-        "src/Composer/Repository/Vcs/GitHubDriver.php:175-177"
-      ]
-    },
-    {
-      "why": "A single identical tree-character replacement line is too short for a firm verdict.",
-      "occurrences": [
-        "src/Composer/Command/ShowCommand.php:1571-1571",
-        "src/Composer/Command/BaseDependencyCommand.php:291-291"
-      ]
-    },
-    {
-      "why": "Only a three-line mock expectation is shared, with a different receiver variable.",
-      "occurrences": [
-        "tests/Composer/Test/Downloader/GitDownloaderTest.php:393-395",
-        "tests/Composer/Test/Downloader/GitDownloaderTest.php:606-608"
-      ]
-    }
-  ]
+  "not_clear": []
 }

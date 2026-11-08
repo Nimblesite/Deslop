@@ -141,8 +141,8 @@ const stratify = (one, two, nominated) => {
   );
 };
 
-const draw = (strata, random, limit) => {
-  const drawn = new Map();
+const draw = (strata, random, limit, first = []) => {
+  const drawn = new Map(first.slice(0, limit).map((group) => [group.id, group]));
   while (drawn.size < limit && strata.some((stratum) => stratum.length > 0)) {
     for (const stratum of strata) {
       if (stratum.length === 0 || drawn.size >= limit) continue;
@@ -171,8 +171,9 @@ const renderCandidate = (sourceDir, candidate) =>
     "",
     "Two regions of `source/`. Read both **in the files themselves**, diff them, then",
     "record CLEARLY IN, CLEARLY OUT or NOT CLEAR in `verdicts.json` with the diff you",
-    "ran. If you hesitate, it is NOT CLEAR. A CLEARLY IN also names its clone type,",
-    "`Type I` to `Type IV`, as defined in `JUDGING.md`.",
+    "ran. The measured rules in `JUDGING.md` decide first; where they are silent and you",
+    "hesitate, it is NOT CLEAR. A CLEARLY IN also names its clone type, `Type I` to",
+    "`Type IV`, as defined in `JUDGING.md`.",
     "",
     ...candidate.regions.map((region) => renderRegion(sourceDir, region)),
   ].join("\n");
@@ -259,10 +260,14 @@ const writeCandidates = (root, sourceDir, candidates) => {
 /// Pairs proposed from the source alone, in the same neutral shape as a
 /// published group. Absent is normal on a first pass; the file is written by
 /// readers who have seen no report at all.
+/// [CORPUS-REGISTER-CRITERIA] A nominations file marked `requeued` carries
+/// pairs already judged once and cleared for a fresh reading; every one is
+/// drawn before the stratified sample fills the remaining places.
 const readNominations = (path) => {
-  if (!path) return [];
-  return JSON.parse(readFileSync(path, "utf8"))
-    .pairs.map((pair, index) => ({
+  if (!path) return { groups: [], requeued: false };
+  const file = JSON.parse(readFileSync(path, "utf8"));
+  const groups = file.pairs
+    .map((pair, index) => ({
       id: `${NOMINATION_PREFIX}${index}`,
       regions: pair.regions.map(({ path: file, start_line, end_line }) => ({
         path: file,
@@ -271,6 +276,7 @@ const readNominations = (path) => {
       })),
     }))
     .filter((group) => group.regions.length >= REGIONS_PER_CANDIDATE);
+  return { groups, requeued: file.requeued === true };
 };
 
 /// One `--flag value` pair per option, so nine arguments cannot silently shift
@@ -340,8 +346,10 @@ writeFileSync(
   ),
 );
 
-const nominated = readNominations(options.get("nominations"));
-const candidates = draw(stratify(one, two, nominated), random, limit);
+const nominations = readNominations(options.get("nominations"));
+const nominated = nominations.requeued ? [] : nominations.groups;
+const requeued = nominations.requeued ? nominations.groups : [];
+const candidates = draw(stratify(one, two, nominated), random, limit, requeued);
 writeFileSync(join(root, "PINNED.txt"), `${url}\n${sha}\n`);
 writeFileSync(
   join(root, "verdicts.json"),
@@ -359,8 +367,8 @@ assertNoLeak([
 console.log(`workspace ready: ${root}`);
 console.log(
   `  ${candidates.length} candidates drawn from ` +
-    `${new Set([...one, ...two, ...nominated].map((group) => group.id)).size} available pairs ` +
-    `(${nominated.length} proposed from the source alone) · seed ${seed}`,
+    `${new Set([...one, ...two, ...nominated, ...requeued].map((group) => group.id)).size} available pairs ` +
+    `(${nominated.length} proposed from the source alone, ${requeued.length} requeued) · seed ${seed}`,
 );
 console.log(`  protocol installed at ${join(judgeRoot, PROTOCOL_IN_ROOT)}`);
 console.log("  no generated file names the producer");

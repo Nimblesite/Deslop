@@ -280,7 +280,17 @@ pub fn build_normalised_root(
 ) -> Result<NormalizedNode, CoreError> {
     let root = tree.root_node();
     let children = normalise_children(root, FILE_KIND, file_id, normalise_kind, language, 1)?;
-    Ok(NormalizedNode {
+    Ok(file_root(root, children, file_id))
+}
+
+/// The synthetic `__file__` root over already-normalised top-level
+/// `children`, spanning only what they retained.
+pub(super) fn file_root(
+    root: Node<'_>,
+    children: Vec<NormalizedNode>,
+    file_id: FileId,
+) -> NormalizedNode {
+    NormalizedNode {
         kind: FILE_KIND,
         byte_range: retained_span(&children).unwrap_or(ByteRange {
             start: root.start_byte(),
@@ -288,7 +298,7 @@ pub fn build_normalised_root(
         }),
         children,
         file_id,
-    })
+    }
 }
 
 /// The extent of the nodes normalisation actually kept
@@ -318,7 +328,7 @@ fn retained_span(children: &[NormalizedNode]) -> Option<ByteRange> {
 /// `depth` exceeds [`MAX_AST_DEPTH`] — the depth guard bounds every
 /// downstream recursive walk by rejecting the file at its single
 /// construction chokepoint.
-fn normalise_node(
+pub(super) fn normalise_node(
     node: Node<'_>,
     file_id: FileId,
     normalise_kind: fn(&str) -> Option<&'static str>,
@@ -838,6 +848,14 @@ mod tests {
                  if c < 2 && c != 0 { c *= 2 }; return -c }\n",
                 vec!["+", "-=", "<", "&&", "!=", "*=", "-"],
                 vec!["...", "(", ")", ",", "{", "}", ":="],
+            ),
+            (
+                "c",
+                tree_sitter_c::LANGUAGE.into(),
+                "int f(int *p, int n) { int c = p[0] + n; int *q = &c; c -= 1; \
+                 if (c < 2 && c != 0) { c *= 2; } return -c + q[0]; }\n",
+                vec!["+", "-=", "<", "&&", "!=", "*=", "-", "&"],
+                vec!["(", ")", ",", "{", "}", ";", "*"],
             ),
             (
                 "python",

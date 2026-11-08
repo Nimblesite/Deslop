@@ -1,7 +1,7 @@
 ---
 layout: layouts/base.njk
-title: "在 10 种编程语言中查找重复代码 | Deslop"
-description: "在包括 Osprey 在内的十种编程语言中查找重复代码。Deslop 按影响程度排列最值得移除的重复，并在编码智能体写出另一个副本前告诉它已有相似代码。"
+title: "在 C、C#、Rust、Python 等语言中查找重复代码 | Deslop"
+description: "在 C、C#、Rust、Python、TypeScript、Go、Osprey 等语言中查找重复代码。Deslop 按影响程度排列最值得移除的重复，并在编码智能体写出另一个副本前告诉它已有相似代码。"
 permalink: /zh/
 lang: zh
 ---
@@ -19,9 +19,9 @@ lang: zh
   "downloadUrl": "https://marketplace.visualstudio.com/items?itemName=Nimblesite.deslop-live",
   "softwareHelp": "https://deslop.live/zh/docs/",
   "license": "https://github.com/Nimblesite/Deslop/blob/main/LICENSE",
-  "description": "在 Osprey、C#、Rust、Python、Dart、JavaScript、TypeScript/TSX、PHP、F# 和 Go 中查找重复代码。Deslop 把最严重的问题排在前面，并在相似代码已经存在时告诉编码智能体。",
+  "description": "在 Osprey、C、C#、Rust、Python、Dart、JavaScript、TypeScript/TSX、PHP、F# 和 Go 中查找重复代码。Deslop 把最严重的问题排在前面，并在相似代码已经存在时告诉编码智能体。",
   "featureList": [
-    "检测 Osprey、C#、Rust、Python、Dart、JavaScript、TypeScript/TSX、PHP、F# 和 Go 中的重复代码",
+    "检测 Osprey、C、C#、Rust、Python、Dart、JavaScript、TypeScript/TSX、PHP、F# 和 Go 中的重复代码",
     "按影响程度排列重复代码，并提供用于比较的规范出现位置",
     "VS Code 实时警告与面向编码智能体的 MCP 相似性检查"
   ],
@@ -41,48 +41,39 @@ lang: zh
       <div class="eyebrow-chip"><span>实时重复代码分析</span></div>
       <h1>
         查找重复代码
-        <em>覆盖十种编程语言。</em>
+        <em>覆盖整个代码库。</em>
       </h1>
       <p class="hero__lede">
-        Deslop 可在 <strong>Osprey、C#、Rust、Python、Dart、JavaScript、TypeScript/TSX、PHP、F# 和 Go</strong> 中查找重复函数和反复出现的源代码。它按影响程度排列最值得移除的重复，并在相似代码已经存在时告诉你的编码智能体。
+        查找重复代码、比较副本，确定优先移除的部分。在 VS Code 中实时运行，并连接你的编码智能体。
       </p>
       <div class="hero__cta">
         <a href="vscode:extension/Nimblesite.deslop-live" class="btn-primary">为 VS Code 安装 Deslop</a>
+        <a href="#demo" class="btn-secondary">观看演示</a>
       </div>
       <p class="hero__sublede">
         一个扩展即可获得<a href="/zh/docs/vscode-cluster-panel/">实时编辑器警告</a>、<a href="/zh/docs/ai-integration/">面向编码智能体的 MCP 检查</a>和 <a href="/zh/docs/">CLI</a>。
       </p>
     </div>
 
-    <div class="hero__right">
-      {% include "partials/reel.njk" %}
+    <div class="hero__right" id="demo">
+    {% set demoLabel = "Deslop 产品演示：在 VS Code 中实时标记重复代码，并按影响程度排列最严重的重复。" %}
+    {% set demoTrackLabel = "英语字幕" %}
+    {% set demoFallback = "你的浏览器无法播放此视频，可以改为下载：" %}
+    {% include "partials/product-demo.njk" %}
     </div>
-  </section>
-
-  <section class="showcase">
-    <div class="showcase__head">
-      <div class="eyebrow-chip"><span>在你的编辑器中</span></div>
-      <h2 class="showcase__title">先看最值得移除的重复。</h2>
-      <p class="showcase__lede">重复代码簇按影响程度排序，并以一个规范副本作为比较锚点。你的编辑器和编码智能体读取同一份实时分析。</p>
-    </div>
-    <figure class="showcase__figure">
-      <img src="/assets/img/screenshot.webp"
-           alt="Deslop VS Code 扩展正在真实工作区中排列重复代码簇，并显示实时警告和并排的规范副本比较。"
-           width="2560" height="1492" loading="lazy" decoding="async">
-    </figure>
     <ol class="showcase__legend">
       <li class="showcase__cell">
-        <span class="showcase__pos">左 · 侧边栏</span>
+        <span class="showcase__pos">01 · 查找</span>
         <strong>最严重的问题优先</strong>
         <p>影响最大的重复代码簇始终排在顶部。</p>
       </li>
       <li class="showcase__cell">
-        <span class="showcase__pos">中 · 编辑器</span>
-        <strong>实时重复警告</strong>
-        <p>比较匹配项、打开代码簇，或复制上下文供 AI 使用。</p>
+        <span class="showcase__pos">02 · 查看</span>
+        <strong>查看每个副本</strong>
+        <p>打开代码簇，查看出现位置和规范副本。</p>
       </li>
       <li class="showcase__cell">
-        <span class="showcase__pos">右 · 差异对比</span>
+        <span class="showcase__pos">03 · 比较对比</span>
         <strong>规范副本比较</strong>
         <p>重构前并排检查两个副本。</p>
       </li>

@@ -215,6 +215,7 @@ pub(crate) fn run_capturing_bytes(
     store: Store,
     extra_args: &[&str],
 ) -> Result<(Vec<u8>, ReuseCounters)> {
+    clear_completed_report(scan_root)?;
     fs::create_dir_all(out_dir)?;
     let output = out_dir.join("report");
     let mut cmd = Command::cargo_bin("deslop")?;
@@ -227,6 +228,16 @@ pub(crate) fn run_capturing_bytes(
     let bytes = fs::read(output.with_extension("json"))?;
     let counters = ReuseCounters::from_log(&read_single_log(out_dir)?)?;
     Ok((bytes, counters))
+}
+
+/// [OUTPUT-REPORT-REUSE] Isolates fingerprint-store measurements from report reuse.
+pub(crate) fn clear_completed_report(scan_root: &Path) -> Result<()> {
+    let completed = scan_root.join(".deslop/cache/completed-report.bin");
+    match fs::remove_file(completed) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.into()),
+    }
 }
 
 /// [`run_capturing_bytes`] with the parse store on and the report parsed.

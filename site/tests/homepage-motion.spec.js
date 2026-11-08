@@ -1,153 +1,62 @@
-import { expect, test } from "@playwright/test";
-import { advanceTo, expectScene, openMotion, reelPosition, OPENING_SECONDS, REEL_NAME, SCENE_SECONDS } from "./helpers/motion.js";
+import { expect, test } from '@playwright/test';
 
-// [SITE-HOME-VIDEO] The homepage reel loops Deslop's headlines in the page, behind one faint pause icon.
-const DESKTOP = { width: 1440, height: 900 };
-const LANGUAGES = ["C#", "Rust", "Python", "Dart", "JavaScript", "TypeScript", "PHP", "F#", "Go"];
-const RANKS = ["1", "2", "3", "4"];
-const CHAT = ["Agent I'll write a total() helper.", "Deslop Similar code already exists.", "Agent Then I'll reuse it."];
-const TWO_MATCHES = ["", ""];
-const FOUR_BARS = ["", "", "", ""];
-const SCENES = [
-  { id: "find", at: SCENE_SECONDS.find, headline: "Find duplicate code.", items: [[".motion-reel__copy b", TWO_MATCHES]] },
-  { id: "languages", at: SCENE_SECONDS.languages, headline: "Nine languages.", items: [["li", LANGUAGES]] },
-  { id: "rank", at: SCENE_SECONDS.rank, headline: "Worst offenders first.", items: [["li", RANKS], ["li i", FOUR_BARS]] },
-  { id: "agents", at: SCENE_SECONDS.agents, headline: "Stop coding agents from creating more.", items: [[".motion-reel__chat p", CHAT]] },
-  { id: "brand", at: SCENE_SECONDS.brand, headline: "Live in VS Code.", items: [[".motion-reel__wordmark", ["Deslop"]]] },
-];
-const FIRST = 0;
-const LANGUAGES_SCENE = '[data-scene="languages"]';
-const ENTERING_SECONDS = 5.2;
-const PLAY = "Play animation";
-const PAUSE = "Pause animation";
-const ONE_CONTROL = 1;
-const NO_MEDIA = 0;
-const NO_TEXT = "";
-const FAINT = "0.4";
-const HOLD_SECONDS = 5;
-const HOLD_MILLISECONDS = HOLD_SECONDS * 1000;
-const FRAME_DIGITS = 1;
-const STILL_DIGITS = 6;
-const HIDDEN = 0;
-const VISIBLE = 1;
-const SETTLED = 0;
-const REEL_TEXT = "rgb(238, 238, 238)";
-const REEL_SURFACE = "rgb(23, 23, 23)";
-const THEME_CONTROL = "Toggle dark mode";
+// [SITE-HOME-VIDEO] The narrated demo replaces the automatic marketing reel.
+const DEMO = '.hero video';
+const SEEK_SECONDS = 12;
+const END_MARGIN_SECONDS = 0.2;
+const CAPTION_COUNT = 3;
 
-function entry(scene) {
-  return scene.evaluate((element) => {
-    const style = getComputedStyle(element);
-    return { opacity: Number(style.opacity), lift: new DOMMatrixReadOnly(style.transform).m42 };
-  });
-}
-
-async function setTabHidden(page, hidden) {
-  await page.evaluate((value) => {
-    Object.defineProperty(document, "hidden", { configurable: true, get: () => value });
-    document.dispatchEvent(new Event("visibilitychange"));
-  }, hidden);
-}
-
-async function expectHeld(page, reel, seconds) {
-  await expect(reel).toHaveAttribute("data-playing", "false");
-  await page.clock.runFor(HOLD_MILLISECONDS);
-  expect(await reelPosition(reel)).toBeCloseTo(seconds, STILL_DIGITS);
-}
-
-async function expectRunning(page, reel, seconds) {
-  await expect(reel).toHaveAttribute("data-playing", "true");
-  await page.clock.runFor(HOLD_MILLISECONDS);
-  expect(await reelPosition(reel)).toBeCloseTo(seconds + HOLD_SECONDS, FRAME_DIGITS);
-}
-
-async function expectPauseAndResume(page, reel, control) {
-  await control.click();
-  await expect(control).toHaveAccessibleName(PLAY);
-  const pausedAt = await reelPosition(reel);
-  await expectHeld(page, reel, pausedAt);
-  await control.click();
-  await expect(control).toHaveAccessibleName(PAUSE);
-  await expectRunning(page, reel, pausedAt);
-}
-
-test("the homepage reel plays every headline in order, loops and pauses from one faint icon", async ({ page }) => {
-  await page.setViewportSize(DESKTOP);
-  const reel = await openMotion(page);
-  const control = reel.getByRole("button");
-  await expect(reel).toHaveAttribute("data-playing", "true");
-  expect(await reelPosition(reel)).toBe(OPENING_SECONDS);
-  await expect(reel.locator("video, audio, input")).toHaveCount(NO_MEDIA);
-  await expect(control).toHaveCount(ONE_CONTROL);
-  await expect(control).toHaveAccessibleName(PAUSE);
-  await expect(control).toHaveText(NO_TEXT);
-  await expect(control).toHaveCSS("opacity", FAINT);
-  for (const scene of [...SCENES, SCENES[FIRST]]) {
-    await advanceTo(page, reel, scene.at);
-    await expectScene(reel, scene);
-  }
-  await expectPauseAndResume(page, reel, control);
+test('the real demo plays, pauses, seeks, exposes captions and stops at its end', async ({ page }) => {
+  await page.goto('/');
+  const video = page.locator(DEMO);
+  expect(await video.evaluate(element => element.paused)).toBe(true);
+  await video.evaluate(element => { element.muted = true; return element.play(); });
+  await expect.poll(() => video.evaluate(element => element.currentTime)).toBeGreaterThan(0);
+  await video.evaluate(element => element.pause());
+  expect(await video.evaluate(element => element.paused)).toBe(true);
+  await expect.poll(() => video.evaluate(element => element.buffered.length ? element.buffered.end(element.buffered.length - 1) : 0)).toBeGreaterThan(SEEK_SECONDS);
+  await video.evaluate((element, seconds) => new Promise(resolve => {
+    element.textTracks[0].mode = 'showing';
+    element.addEventListener('seeked', resolve, { once: true });
+    element.currentTime = seconds;
+  }), SEEK_SECONDS);
+  await expect.poll(() => video.evaluate(element => element.seeking)).toBe(false);
+  await expect.poll(() => video.evaluate(element => element.textTracks[0].cues?.length)).toBe(CAPTION_COUNT);
+  const captions = await video.evaluate(element => Array.from(element.textTracks[0].cues, cue => cue.text));
+  expect(captions[0]).toContain('Find duplicate code');
+  expect(captions[1]).toContain('canonical');
+  expect(captions[2]).toContain('Compare the copies side by side');
+  expect(await video.evaluate(element => element.currentTime)).toBeCloseTo(SEEK_SECONDS);
+  await video.evaluate(element => element.play());
+  await expect.poll(() => video.evaluate(element => element.currentTime)).toBeGreaterThan(SEEK_SECONDS);
+  await video.evaluate((element, margin) => { element.currentTime = element.duration - margin; }, END_MARGIN_SECONDS);
+  await expect.poll(() => video.evaluate(element => element.ended)).toBe(true);
+  expect(await video.evaluate(element => element.loop)).toBe(false);
 });
 
-test("each scene rises into place as it fades in", async ({ page }) => {
-  const reel = await openMotion(page);
-  await expect(reel).toHaveAttribute("data-playing", "true");
-  await advanceTo(page, reel, ENTERING_SECONDS);
-  const { opacity, lift } = await entry(reel.locator(LANGUAGES_SCENE));
-  expect(opacity).toBeGreaterThan(HIDDEN);
-  expect(opacity).toBeLessThan(VISIBLE);
-  expect(lift).toBeGreaterThan(SETTLED);
-});
-
-test("reduced motion holds the finished opening scene until the visitor presses play, then scenes only fade", async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  const reel = await openMotion(page);
-  const control = reel.getByRole("button");
-  await expect(control).toHaveAccessibleName(PLAY);
-  await expectHeld(page, reel, OPENING_SECONDS);
-  await expectScene(reel, SCENES[FIRST]);
-  await control.click();
-  await expect(reel).toHaveAttribute("data-playing", "true");
-  await advanceTo(page, reel, ENTERING_SECONDS);
-  const { opacity, lift } = await entry(reel.locator(LANGUAGES_SCENE));
-  expect(opacity).toBeGreaterThan(HIDDEN);
-  expect(opacity).toBeLessThan(VISIBLE);
-  expect(lift).toBe(SETTLED);
-});
-
-test("the reel stops off screen and in a hidden tab, then resumes where it stopped", async ({ page }) => {
-  const reel = await openMotion(page);
-  await expect(reel).toHaveAttribute("data-playing", "true");
-  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-  const parkedAt = await reelPosition(reel);
-  await expectHeld(page, reel, parkedAt);
-  await page.evaluate(() => window.scrollTo(0, 0));
-  await expect(reel).toHaveAttribute("data-playing", "true");
-  await setTabHidden(page, true);
-  await expectHeld(page, reel, parkedAt);
-  await setTabHidden(page, false);
-  await expectRunning(page, reel, parkedAt);
-});
-
-test("the dark reel remains readable in both website themes", async ({ page }) => {
-  const reel = await openMotion(page);
-  await advanceTo(page, reel, SCENE_SECONDS.agents);
-  const headline = reel.locator('[data-scene="agents"] .motion-reel__headline');
-  const message = reel.locator('[data-scene="agents"] .motion-reel__chat p').first();
-  for (const theme of ["initial", "toggled"]) {
-    await expect(headline, theme).toHaveCSS("color", REEL_TEXT);
-    await expect(message, theme).toHaveCSS("color", REEL_TEXT);
-    await expect(message, theme).toHaveCSS("background-color", REEL_SURFACE);
-    await page.getByRole("button", { name: THEME_CONTROL }).click();
+test('reduced motion keeps both themes still until playback is requested', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const colorScheme of ['dark', 'light']) {
+    await page.emulateMedia({ colorScheme });
+    await page.goto('/');
+    const video = page.locator(DEMO);
+    expect(await video.evaluate(element => ({paused:element.paused,time:element.currentTime,autoplay:element.autoplay}))).toEqual({paused:true,time:0,autoplay:false});
+    await expect(video).toHaveAttribute('poster', '/assets/img/deslop-demo-poster.webp');
+    await expect(video).toHaveAttribute('controls', '');
+    await expect(page.locator('.hero h1')).toBeVisible();
   }
 });
 
-test.describe("without JavaScript", () => {
+test.describe('without JavaScript', () => {
   test.use({ javaScriptEnabled: false });
-  test("the finished opening scene stands still with no dead control", async ({ page }) => {
-    await page.goto("/");
-    const reel = page.getByRole("figure", { name: REEL_NAME });
-    await expectScene(reel, SCENES[FIRST]);
-    await expect(reel.locator("button")).toBeHidden();
+  test('the actual demo retains native controls, captions and a download fallback', async ({ page }) => {
+    await page.goto('/');
+    const video = page.locator(DEMO);
+    await expect(video).toBeVisible();
+    await expect(video).toHaveAttribute('controls', '');
+    await expect(video.locator('source')).toHaveAttribute('src', '/assets/video/deslop-demo.mp4');
+    await expect(video.locator('track')).toHaveAttribute('src', '/assets/video/deslop-demo.vtt');
+    await expect(video.locator('a')).toHaveAttribute('href', '/assets/video/deslop-demo.mp4');
+    await expect(page.locator('.hero__cta a').first()).toHaveAttribute('href', 'vscode:extension/Nimblesite.deslop-live');
   });
 });

@@ -94,7 +94,7 @@ layout: layouts/base.njk
         <div class="docs-breadcrumb">
           <a href="{{ langPrefix }}/docs/">{{ "nav.docs" | t(currentLang) | default("Docs") }}</a>
           <span class="material-symbols-outlined">chevron_right</span>
-          <span class="docs-breadcrumb__current">{{ title | default("Introduction") }}</span>
+          <span class="docs-breadcrumb__current">{{ eleventyNavigation.title | default(eleventyNavigation.key) | default(title) | default("Introduction") }}</span>
         </div>
       </header>
 

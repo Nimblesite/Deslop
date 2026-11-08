@@ -18,6 +18,7 @@
 
 use std::path::{Path, PathBuf};
 
+use super::anchors::ComparisonAnchors;
 use crate::{fingerprint::Fingerprint, lsh::Signature, state::FileId};
 
 /// One live file's span of the flat storage: its identity, its sort
@@ -62,6 +63,8 @@ pub(super) struct CorpusStore {
     /// population into one vector
     /// ([PERF-FLUTTER-TODO-MEMORY]).
     signatures: Vec<Vec<Signature>>,
+    /// Discovery's exact-copy anchors over these fingerprints.
+    anchors: ComparisonAnchors,
 }
 
 impl CorpusStore {
@@ -78,7 +81,18 @@ impl CorpusStore {
             entries,
             fingerprints,
             signatures,
+            anchors: ComparisonAnchors::default(),
         }
+    }
+
+    /// This generation's exact-copy anchors ([VSIX-PAIR-COMPARE]).
+    pub(super) fn anchors(&self) -> &ComparisonAnchors {
+        &self.anchors
+    }
+
+    /// Forgets the anchors when the language policy changes.
+    pub(super) fn forget_anchors(&mut self) {
+        self.anchors.forget();
     }
 
     /// Inserts — or, for a live file, replaces — `file_id`'s records,
@@ -91,6 +105,7 @@ impl CorpusStore {
         path_key: PathBuf,
         cached: crate::fpcache::CachedFile,
     ) {
+        self.anchors.forget();
         let _replaced = self.remove(file_id);
         let position = self
             .entries
@@ -120,6 +135,7 @@ impl CorpusStore {
     /// Removes `file_id`'s records, closing its span in every flat
     /// vector. Returns whether the file was present.
     pub(super) fn remove(&mut self, file_id: FileId) -> bool {
+        self.anchors.forget();
         let Some(position) = self.position_of(file_id) else {
             return false;
         };

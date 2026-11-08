@@ -7,6 +7,8 @@
 /// Shared fixture helpers, declared once for every suite below.
 mod common;
 
+#[path = "live/rescope.rs"]
+mod live_rescope;
 #[path = "live/scope.rs"]
 mod live_scope;
 

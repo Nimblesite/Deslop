@@ -191,7 +191,7 @@ function declaredPlatformsMatchTheBuildMatrix() {
 }
 
 // A contract nobody runs proves nothing: a merge on this branch dropped this
-// suite from `make deployment-verify` and every assertion above went quiet
+// suite from `make _deployment-verify` and every assertion above went quiet
 // without a single red test.
 function thisSuiteRunsInTheDeploymentVerifyTarget() {
   const makefile = readFileSync(resolve(repoRoot, "Makefile"), "utf8");

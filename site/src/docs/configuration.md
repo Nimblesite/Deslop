@@ -73,7 +73,7 @@ imports = "report"
 
 ## `[language.<name>]`
 
-Per-language overlays. The name is the parser's language id: `csharp`, `rust`, `python`, `dart`, `javascript`, `typescript`, `tsx`, `php`, `fsharp`, or `go`. Patterns here **extend** the defaults — they never replace them — so a `.cs` file is tested against `defaults.exclude` **plus** `language.csharp.exclude`.
+Per-language overlays. The name is the parser's language id: `csharp`, `rust`, `python`, `dart`, `javascript`, `typescript`, `tsx`, `php`, `fsharp`, `go`, or `c`. Patterns here **extend** the defaults — they never replace them — so a `.cs` file is tested against `defaults.exclude` **plus** `language.csharp.exclude`.
 
 ```toml
 [language.csharp]

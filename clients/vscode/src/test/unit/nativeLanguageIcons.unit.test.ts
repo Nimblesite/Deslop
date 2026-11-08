@@ -32,7 +32,7 @@ suite("native Osprey artwork", () => {
       assert.equal(node.iconPath.toString(), vscode.Uri.parse(languageIconUri(LANGUAGE)).toString());
     }
   });
-  test("language groups, files, occurrences and metrics share the crowned icon", () => {
+  test("language groups, files, occurrences and metrics share the official Osprey icon", () => {
     const finding = cluster(CLUSTER_ID, MASS, SOURCE_PATH);
     const occurrence = finding.occurrences[FIRST];
     assert.ok(occurrence);

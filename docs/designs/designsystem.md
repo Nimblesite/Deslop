@@ -37,8 +37,8 @@ The system uses a dual-font strategy to balance UI clarity with technical author
  
 ### Typographic Hierarchy
 *   **Display (Large/Medium):** Use for "Impact Stats" (e.g., "4.2GB Saved"). These should be tightly tracked and bold to convey authority.
-*   **Primary Navigation:** Use JetBrains Mono at `0.9375rem` (`type-nav`). This matches the default body size and must not shrink at responsive breakpoints.
-*   **Secondary Navigation:** Use JetBrains Mono at `0.875rem` (`type-label-md`) for sidebars, breadcrumbs, pagination, language controls, footer links, and compact action links.
+*   **Primary Navigation:** Use Inter at `1rem` (`--type-nav`) for header destinations.
+*   **Secondary Navigation:** Use Inter at `0.9375rem` (`--type-nav-secondary`) for sidebar links and compact navigation; group labels use `0.875rem` (`--type-nav-label`).
 *   **Label (Small):** Use JetBrains Mono at `0.75rem` (`type-label-sm`) for group headings, eyebrows, metadata, and status tags. Do not use micro type below this size for navigation.
 *   **Body:** Inter at `0.9375rem` (`type-body-md`) is the default UI workhorse. Compact supporting copy may use `0.875rem`; long-form prose may use `1.0625rem`. Keep line heights tight (1.4) in dense UI and relaxed (1.6–1.75) for reading.
  
@@ -88,3 +88,19 @@ Instead of traditional cards, use "Terminal Blocks."
 *   **Don't use "Soft" UI:** Avoid large corner radii (keep to `sm` or `none`). Avoid vibrant blues or greens that look like consumer SaaS.
 *   **Don't use 1px Dividers:** If you feel the need to separate two things, use a 16px or 24px gap or a subtle background shift. Lines are a sign of weak hierarchy.
 *   **Don't hide complexity:** This is a tool for developers. Show the SHA-256 hashes, show the millisecond timings. Professionalism comes from transparency, not over-simplification.
+
+## Navigation [SITE-NAV-HIERARCHY]
+
+Use Inter for primary links and sidebar rows, with sentence-case group labels. Keep header links beside the language and theme controls within a 90rem shell. Controls have at least 44px hit areas. Documentation links expose the current page with `aria-current`.
+
+Top navigation slots and sidebar rows are visibly contained: every destination sits on a restrained tonal surface (`--surface-container-low` at rest, one step higher on hover) with the 4px radius (`--radius-md`). The current page is an accent-mixed tonal fill at medium (600) weight — never underlines or inset bars. Type is one coherent scale: 16px for the top bar (`--type-nav`), 15px for sidebar rows, breadcrumbs and compact controls (`--type-nav-secondary`), and 14px for group labels (`--type-nav-label`).
+
+Documentation uses a 17rem sidebar with quiet group headings, plus/minus indicators and individually highlighted links. Breadcrumbs use short navigation titles. Open sections retain their state when the sidebar collapses. Mobile drawers retain 48px rows, a theme-aware scrim, and Escape dismissal.
+
+Use the shared 120–280ms motion tokens for color changes, section reveals and drawers. Buttons and article cards lift by 2px on hover. Reduced-motion preferences suppress transitions and animation. Resting navigation text uses opaque neutral tokens in both themes.
+
+Verified by `site/tests/navigation.spec.js` and `site/tests/homepage-layout.spec.js`. Styles live in `site/src/assets/css/base.css` and `prose.css`.
+
+## Product demonstration [SITE-DEMO-VIDEO]
+
+The homepage combines its introduction, narrated recording and three workflow steps in one compact hero. The actual demo replaces the former animated marketing panel; there is no separate showcase section or viewport-height spacer. Desktop gives the demo more width than the copy; mobile stacks copy, demo and steps. Use the shared player on both language variants, native controls, an explicit poster, English captions, `playsinline` and `preload="none"`; playback starts on request. Screenshots must show actual measured demo data and describe the screen they depict. MP4 and GIF assets use Git LFS, and site CI plus Pages must fetch LFS objects before building. The Marketplace README leads with a short silent GIF and links to the narrated version.

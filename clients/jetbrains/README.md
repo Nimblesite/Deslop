@@ -43,7 +43,7 @@ That composes `_jetbrains-build` (builds the zip), `_jetbrains-verify`
 plugin (plus its LSP4IJ dependency) in one step on macOS, use:
 
 ```bash
-make android-studio-rebuild
+make _android-studio-rebuild
 ```
 
 The individual steps behind those two targets, runnable on their own when

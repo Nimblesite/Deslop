@@ -29,6 +29,7 @@ pub use identity::encode_short_id;
 use identity::{name_clusters, Unnamed};
 use scope::DeclarationScopes;
 use subsume::collapse_cross_cluster_overlap;
+pub(crate) use subsume::{file_set, holds_shape_only};
 
 /// Source occurrences with an established clone or informational relation.
 #[derive(Debug, Clone)]

@@ -64,99 +64,23 @@
         "fixtures/attribute-behavior/src/attributes.js:1941-1952",
         "fixtures/attribute-behavior/src/attributes.js:1019-1030"
       ]
+    },
+    {
+      "why": "One range is a color palette of hex literals with color-scale comments, the other is a DOM-attribute-to-camelCase mapping; the diff shows zero shared content beyond key/value object syntax, so pairing them is plainly wrong.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- compiler/apps/playground/colors.js:15-22\n+++ packages/react-dom-bindings/src/shared/possibleStandardNames.js:439-446\n@@ -1,8 +1,8 @@\n-  'primary-dark': '#F6F7F9', // gray-5\n-  secondary: '#404756', // gray-70\n-  'secondary-dark': '#EBECF0', // gray-10\n-  link: '#087EA4', // blue-50\n-  'link-dark': '#149ECA', // blue-40\n-  syntax: '#EBECF0', // gray-10\n-  wash: '#FFFFFF',\n-  'wash-dark': '#23272F', // gray-90\n+  'unicode-bidi': 'unicodeBidi',\n+  unicoderange: 'unicodeRange',\n+  'unicode-range': 'unicodeRange',\n+  unitsperem: 'unitsPerEm',\n+  'units-per-em': 'unitsPerEm',\n+  unselectable: 'unselectable',\n+  valphabetic: 'vAlphabetic',\n+  'v-alphabetic': 'vAlphabetic',\n",
+      "occurrences": [
+        "compiler/apps/playground/colors.js:15-22",
+        "packages/react-dom-bindings/src/shared/possibleStandardNames.js:439-446"
+      ]
+    },
+    {
+      "why": "Two dictionary slices with fully disjoint keys and values (fill*/flood* vs v-hanging through v-mathematical); they share only the 'key: value' entry syntax that every line of the table uses.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- packages/react-dom-bindings/src/shared/possibleStandardNames.js:236-243\n+++ packages/react-dom-bindings/src/shared/possibleStandardNames.js:458-465\n@@ -1,8 +1,8 @@\n-  'fill-opacity': 'fillOpacity',\n-  fillrule: 'fillRule',\n-  'fill-rule': 'fillRule',\n-  filter: 'filter',\n-  filterres: 'filterRes',\n-  filterunits: 'filterUnits',\n-  floodopacity: 'floodOpacity',\n-  'flood-opacity': 'floodOpacity',\n+  'v-hanging': 'vHanging',\n+  videographic: 'vIdeographic',\n+  'v-ideographic': 'vIdeographic',\n+  viewbox: 'viewBox',\n+  viewtarget: 'viewTarget',\n+  visibility: 'visibility',\n+  vmathematical: 'vMathematical',\n+  'v-mathematical': 'vMathematical',\n",
+      "occurrences": [
+        "packages/react-dom-bindings/src/shared/possibleStandardNames.js:236-243",
+        "packages/react-dom-bindings/src/shared/possibleStandardNames.js:458-465"
+      ]
     }
   ],
-  "not_clear": [
-    {
-      "why": "These four lines are the same module-loading setup at different nesting levels, not a substantive routine.",
-      "occurrences": [
-        "packages/react-dom/src/events/__tests__/DOMPluginEventSystem-test.internal.js:79-82",
-        "packages/react-dom/src/events/__tests__/DOMPluginEventSystem-test.internal.js:3023-3026"
-      ]
-    },
-    {
-      "why": "This is the repeated act/log/rendered-output assertion pattern for incrementing a counter, with different expected counts.",
-      "occurrences": [
-        "packages/react-reconciler/src/__tests__/useEffectEvent-test.js:572-579",
-        "packages/react-reconciler/src/__tests__/useEffectEvent-test.js:424-435"
-      ]
-    },
-    {
-      "why": "The host configurations share many path entries, but select different bundler-specific modules and additional files. This declarative configuration leaves doubt about a firm clone verdict.",
-      "occurrences": [
-        "scripts/shared/inlinedHostConfigs.js:199-232",
-        "scripts/shared/inlinedHostConfigs.js:530-561"
-      ]
-    },
-    {
-      "why": "Only three identical lines of a ternary fixture are selected. Even with matching surrounding code, these ranges are too short for a firm verdict.",
-      "occurrences": [
-        "compiler/packages/babel-plugin-react-compiler/src/__tests__/fixtures/compiler/propagate-scope-deps-hir-fork/ssa-renaming-unconditional-ternary.js:5-7",
-        "compiler/packages/babel-plugin-react-compiler/src/__tests__/fixtures/compiler/ssa-renaming-unconditional-ternary.js:4-6"
-      ]
-    },
-    {
-      "why": "This exact block configures the outer parent's event callbacks in related propagation tests; it is repeated test setup rather than an unarguable substantive clone.",
-      "occurrences": [
-        "packages/react-dom/src/__tests__/ReactDOMEventPropagation-test.js:2527-2535",
-        "packages/react-dom/src/__tests__/ReactDOMEventPropagation-test.js:2344-2352"
-      ]
-    },
-    {
-      "why": "These are three short console-output lines with changed browser names, and each range includes the next browser's heading.",
-      "occurrences": [
-        "scripts/devtools/build-and-test.js:103-105",
-        "scripts/devtools/build-and-test.js:106-108"
-      ]
-    },
-    {
-      "why": "Both fragments use the normal create-root, render, and assert-attribute test pattern for different HTML elements and attributes.",
-      "occurrences": [
-        "packages/react-dom/src/__tests__/ReactDOMComponent-test.js:661-667",
-        "packages/react-dom/src/__tests__/ReactDOMComponent-test.js:671-677"
-      ]
-    },
-    {
-      "why": "Only three lines of a larger blocked-stylesheet fixture are selected, with different fixture values.",
-      "occurrences": [
-        "packages/react-dom/src/__tests__/ReactDOMFloat-test.js:972-974",
-        "packages/react-dom/src/__tests__/ReactDOMFloat-test.js:1240-1242"
-      ]
-    },
-    {
-      "why": "These are two-line assertions about previous and next props for different lifecycle methods.",
-      "occurrences": [
-        "packages/react-reconciler/src/__tests__/ReactIncremental-test.js:2404-2405",
-        "packages/react-reconciler/src/__tests__/ReactIncremental-test.js:2421-2422"
-      ]
-    },
-    {
-      "why": "The rule-test objects share expected-diagnostic scaffolding, while their hooks and property-access expressions differ. This remains a related test pattern with doubt.",
-      "occurrences": [
-        "packages/eslint-plugin-react-hooks/__tests__/ESLintRuleExhaustiveDeps-test.js:3239-3266",
-        "packages/eslint-plugin-react-hooks/__tests__/ESLintRuleExhaustiveDeps-test.js:1601-1628"
-      ]
-    },
-    {
-      "why": "The repeated context and tiny logging Child component are setup shared by two provider tests.",
-      "occurrences": [
-        "packages/react-reconciler/src/__tests__/ReactNewContext-test.js:994-1001",
-        "packages/react-reconciler/src/__tests__/ReactNewContext-test.js:962-969"
-      ]
-    },
-    {
-      "why": "Only the two-line create-root-and-render idiom is selected.",
-      "occurrences": [
-        "packages/react-devtools-shared/src/__tests__/profilingCache-test.js:1144-1145",
-        "packages/react-devtools-shared/src/__tests__/profilingCache-test.js:1176-1177"
-      ]
-    },
-    {
-      "why": "Both fragments initialize the devtools test globals and import React modules, with different extra imports. This is test setup with uneven selected boundaries.",
-      "occurrences": [
-        "packages/react-devtools-shared/src/__tests__/storeStressTestConcurrent-test.js:24-30",
-        "packages/react-devtools-shared/src/__tests__/inspectedElement-test.js:54-60"
-      ]
-    }
-  ]
+  "not_clear": []
 }

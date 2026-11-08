@@ -1,6 +1,6 @@
 # CLI invocation & terminal UX
 
-The `deslop` binary (`crates/deslop`) is the one-shot, cold-cache surface — a thin shell over `deslop-core` used for CI gates and audits. This file specifies its invocation contract and its terminal UX: the human-readable preamble and summary on stderr, colour and logging controls, and the derived output formats. Exit codes and the JSON schema are owned by [pipeline.md §EXIT-CODES](pipeline.md) and [pipeline.md §OUTPUT-SCHEMA-JSON](pipeline.md); this file governs everything the operator sees and types.
+The `deslop` binary (`crates/deslop`) is the one-shot surface — a thin shell over `deslop-core` used for CI gates and audits. This file specifies its invocation contract and its terminal UX: the human-readable preamble and summary on stderr, colour and logging controls, and the derived output formats. Exit codes and the JSON schema are owned by [pipeline.md §EXIT-CODES](pipeline.md) and [pipeline.md §OUTPUT-SCHEMA-JSON](pipeline.md); this file governs everything the operator sees and types.
 
 ## [CLI-INVOCATION] Invocation
 
@@ -48,6 +48,13 @@ This is the CLI half of the surface the LSP serves as `pair/compare` ([live.md](
 
 ### [OUTPUT-FORMAT-DERIVED] Derived output formats
 The canonical JSON report ([pipeline.md §OUTPUT-SCHEMA-JSON](pipeline.md)) is the single source of truth; the text and HTML reports are **derived views** rendered from the same in-memory `Report`, so the three never drift. A default run writes all three (`<base>.json`, `<base>.txt`, `<base>.html`), where `<base>` defaults to `<scan-root>/.deslop/deslop-report` ([pipeline.md §OUTPUT-DIR](pipeline.md)) and `--output <PATH_PREFIX>` overrides it. `--nojson`, `--notext`, and `--nohtml` suppress individual formats; suppressing all three is rejected as an error (a silent run is never useful). `--from-report <file>` skips analysis entirely and re-renders the derived text and HTML straight from an existing canonical JSON, which doubles as the round-trip test of the JSON schema's deserialization path.
+
+### [OUTPUT-REPORT-REUSE] Reuse completed calculations
+Requesting JSON, text, or HTML over unchanged inputs reuses the completed report instead of rebuilding fingerprints, pairs, clusters, rankings, or metrics. Changing the output filename or enabled formats does not invalidate the calculations. The CLI validates the discovered file membership, selected parser identities and source bytes, configuration, minimum node count, diff, embedding provider revision, runtime Deslop policy, and producer executable before accepting a saved result; preserving a source timestamp does not conceal an edit. Language selection may read syntax while validating the corpus. Sources added, deleted, renamed, excluded or reclassified invalidate reuse. A corrupt or incompatible entry is a miss, never a partial report.
+
+The retained `cache_stats` describe the analysis that produced the snapshot, just as with `--from-report`; they do not claim that the exporting invocation consulted the fingerprint store. An info-level `reusing completed report calculations` event identifies reuse. The workspace retains one atomically replaced, checksummed completed-report entry at `.deslop/cache/completed-report.bin`, so repeated scans do not accumulate report-cache files. Inputs are checked again before persistence; a changing tree is not cached. `--no-incremental` and `[analysis] incremental = false` disable this cache as well as fingerprint persistence. Explicit `--rerun-*` requests require a mutable analysis session and perform their requested analysis.
+
+VS Code's Open HTML Report command reads the current live report through `deslop.lsp.renderHtmlReport`; HTML and native JSON exports preserve the live generation when inputs are unchanged. Coverage lives in `crates/deslop/tests/cli/from_report/{reuse,freshness}.rs` and `crates/deslop-lsp/tests/live/report_exports.rs`; the implementation is `crates/deslop/src/report_cache.rs` and the existing LSP export commands.
 
 ## [CLI-TERMINAL-UX] Terminal UX
 

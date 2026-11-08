@@ -1,7 +1,7 @@
 //! [CORPUS-CI] [TEST-SELECTION-SKIP] The scheduled corpus gate must select
 //! tests that exist.
 //!
-//! `make test-corpus-ci` hands every name in the Makefile's `CORPUS_TESTS` to
+//! `make _test-corpus-ci` hands every name in the Makefile's `CORPUS_TESTS` to
 //! libtest's `--exact` filter. `--exact` matches a whole test name or nothing,
 //! and libtest exits 0 when a filter selects nothing. A stale, misspelled or
 //! over-qualified name therefore makes the scheduled corpus workflow report

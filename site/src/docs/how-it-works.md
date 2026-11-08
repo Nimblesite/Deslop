@@ -17,7 +17,7 @@ This guide covers [0.35.0](/releases/).
 
 ## Find candidate copies
 
-Deslop supports C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, Go and Osprey. It respects `.gitignore` and excludes dependency trees and build artifacts by default. See [Configuration](/docs/configuration/#built-in-rules-always-on) for exclusions.
+Deslop supports C, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, Go and Osprey. It respects `.gitignore` and excludes dependency trees and build artifacts by default. See [Configuration](/docs/configuration/#built-in-rules-always-on) for exclusions.
 
 For Osprey's `.osp` syntax, Python-flavor opt-in and the native ML integration status, see [Osprey support](/docs/osprey/).
 

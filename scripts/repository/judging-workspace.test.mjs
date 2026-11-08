@@ -223,8 +223,8 @@ test("[CORPUS-REGISTER-WORKSPACE] nothing in the folder names this project", () 
 
 test("[CORPUS-REGISTER-WORKSPACE] the folder is built by one command, outside this repository", () => {
   assert.ok(
-    makefile.includes("judging-folder:") && makefile.includes(PREPARER),
-    `\`make judging-folder\` must run ${PREPARER}; a folder built by hand is built differently each time`,
+    makefile.includes("_judging-folder:") && makefile.includes(PREPARER),
+    `\`make _judging-folder\` must run ${PREPARER}; a folder built by hand is built differently each time`,
   );
   assert.ok(
     preparerScript.includes('WORK_DIR="$(dirname "$COMPARE_REPORTS")"') &&
@@ -296,9 +296,41 @@ test("[CORPUS-REGISTER-WORKSPACE] a candidate count past the ceiling or below on
   }
 });
 
-test("[CORPUS-REGISTER-WORKSPACE] make judging-folder passes the candidate count through", () => {
+test("[CORPUS-REGISTER-WORKSPACE] make _judging-folder passes the candidate count through", () => {
   assert.ok(
     makefile.includes("JUDGING_CANDIDATES") && preparerScript.includes("--candidates"),
     "a short pass is chosen once, on the command line, and reaches every workspace",
+  );
+});
+
+/// [CORPUS-REGISTER-CRITERIA] Pairs cleared for a fresh reading are requeued in
+/// a nominations file marked `requeued`; every one becomes a candidate, ahead
+/// of the stratified draw, and the judge still sees only numbered regions.
+const REQUEUED_SPANS = [[150, 154, 170, 174], [160, 165, 180, 185], [190, 192, 195, 197]];
+const CANDIDATE_LIMIT = "4";
+
+test("[CORPUS-REGISTER-CRITERIA] every requeued pair is drawn before the stratified sample", () => {
+  const files = fixture();
+  const nominations = join(files.base, "requeued.json");
+  const pairs = REQUEUED_SPANS.map(([a, b, c, d]) => ({
+    regions: [
+      { path: SOURCE_FILE, start_line: a, end_line: b },
+      { path: SOURCE_FILE, start_line: c, end_line: d },
+    ],
+  }));
+  writeFileSync(nominations, JSON.stringify({ requeued: true, pairs }));
+  const output = build(files, undefined, ["--nominations", nominations, "--candidates", CANDIDATE_LIMIT]);
+  const drawn = JSON.parse(readFileSync(join(files.base, "folder", REPO, "candidates", "pairs.json"), "utf8"));
+  const key = (ranges) => [...ranges].sort().join(" ");
+  const drawnKeys = new Set(drawn.pairs.map((pair) => key(pair.occurrences)));
+  assert.equal(drawn.pairs.length, Number(CANDIDATE_LIMIT), "the ceiling still holds");
+  for (const [a, b, c, d] of REQUEUED_SPANS) {
+    const ranges = [`${SOURCE_FILE}:${a}-${b}`, `${SOURCE_FILE}:${c}-${d}`];
+    assert.ok(drawnKeys.has(key(ranges)), `requeued pair ${ranges.join(" / ")} must be a candidate`);
+  }
+  assert.match(output, /3 requeued/, "the build log counts the requeued pairs");
+  assert.ok(
+    !readFileSync(join(files.base, "folder", REPO, "candidates", "pairs.json"), "utf8").includes("requeued"),
+    "nothing tells the judge which candidates were requeued",
   );
 });

@@ -1,12 +1,16 @@
 use super::support::*;
 use crate::common::{
     go_scope::*,
+    occurrence_line_span, per_file_metrics, row_for_path,
     signals::{assert_no_pair_surface_on_cluster, has_verbatim_pair},
 };
 
 #[path = "detection/contract.rs"]
 mod contract;
 use contract::*;
+
+#[path = "detection/c.rs"]
+mod c;
 
 #[path = "detection/data_rows.rs"]
 mod data_rows;
@@ -16,6 +20,12 @@ mod osprey;
 
 #[path = "detection/osprey_flavors.rs"]
 mod osprey_flavors;
+
+#[path = "detection/osprey_recovery.rs"]
+mod osprey_recovery;
+
+#[path = "detection/osprey_vocabulary.rs"]
+mod osprey_vocabulary;
 
 #[path = "detection/prologue.rs"]
 mod prologue;

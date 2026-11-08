@@ -409,6 +409,7 @@ fn grammar_for(language: &str) -> Option<tree_sitter::Language> {
         "fsharp" => Some(tree_sitter_fsharp::LANGUAGE_FSHARP.into()),
         "go" => Some(tree_sitter_go::LANGUAGE.into()),
         "php" => Some(tree_sitter_php::LANGUAGE_PHP.into()),
+        "c" => Some(tree_sitter_c::LANGUAGE.into()),
         _ => None,
     }
 }

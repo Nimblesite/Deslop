@@ -1,8 +1,6 @@
 /* ─────────── Mobile ─────────── */
 @media (max-width: 768px) {
   .nav { padding: var(--space-3) var(--space-4); }
-  .hero { padding: var(--space-16) var(--space-4); gap: var(--space-12); }
-  .hero h1 { font-size: clamp(2rem, 9vw, 3rem); }
   .footer-grid { padding-bottom: var(--space-8); }
   .logo,
   .skip-link:focus,

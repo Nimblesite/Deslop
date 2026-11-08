@@ -1,7 +1,7 @@
 ---
 layout: layouts/base.njk
-title: "Find Duplicate Code Across 10 Programming Languages | Deslop"
-description: "Find duplicate code in ten languages, including Osprey. Deslop ranks what to remove first and tells your coding agent when similar code already exists — live in VS Code."
+title: "Find Duplicate Code in C, C#, Rust, Python and More | Deslop"
+description: "Find duplicate code in C, C#, Rust, Python, TypeScript, Go, Osprey and more. Deslop ranks what to remove first and tells coding agents when similar code exists — live in VS Code."
 ---
 
 {% block head %}
@@ -17,9 +17,9 @@ description: "Find duplicate code in ten languages, including Osprey. Deslop ran
   "downloadUrl": "https://marketplace.visualstudio.com/items?itemName=Nimblesite.deslop-live",
   "softwareHelp": "https://deslop.live/docs/",
   "license": "https://github.com/Nimblesite/Deslop/blob/main/LICENSE",
-  "description": "Find duplicate code in Osprey, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, and Go. Deslop ranks the worst offenders first and tells coding agents when similar code already exists.",
+  "description": "Find duplicate code in Osprey, C, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, and Go. Deslop ranks the worst offenders first and tells coding agents when similar code already exists.",
   "featureList": [
-    "Duplicate-code detection for Osprey, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, and Go",
+    "Duplicate-code detection for Osprey, C, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, and Go",
     "Worst-first ranking with a canonical occurrence for comparison",
     "Live VS Code warnings and MCP similarity checks for coding agents"
   ],
@@ -39,48 +39,39 @@ description: "Find duplicate code in ten languages, including Osprey. Deslop ran
       <div class="eyebrow-chip"><span>Live duplicate-code analysis</span></div>
       <h1>
         Find duplicate code
-        <em>across ten languages.</em>
+        <em>across your codebase.</em>
       </h1>
       <p class="hero__lede">
-        Deslop finds duplicate functions and repeated source code in <strong>Osprey, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, and Go</strong>. It ranks what to remove first and tells your coding agent when similar code already exists.
+        Find repeated code, compare the copies, and see what to remove first. Live in VS Code and connected to your coding agent.
       </p>
       <div class="hero__cta">
         <a href="vscode:extension/Nimblesite.deslop-live" class="btn-primary">Install Deslop for VS Code</a>
+        <a href="#demo" class="btn-secondary">Watch the demo</a>
       </div>
       <p class="hero__sublede">
         One extension bundles <a href="/docs/vscode-cluster-panel/">live editor warnings</a>, <a href="/docs/ai-integration/">MCP checks for coding agents</a>, and the <a href="/docs/">CLI</a>.
       </p>
     </div>
 
-    <div class="hero__right">
-      {% include "partials/reel.njk" %}
+    <div class="hero__right" id="demo">
+    {% set demoLabel = "Deslop product demo: duplicate code flagged live in VS Code, worst offenders ranked first." %}
+    {% set demoTrackLabel = "English captions" %}
+    {% set demoFallback = "Your browser cannot play this video. Download it instead:" %}
+    {% include "partials/product-demo.njk" %}
     </div>
-  </section>
-
-  <section class="showcase">
-    <div class="showcase__head">
-      <div class="eyebrow-chip"><span>In your editor</span></div>
-      <h2 class="showcase__title">See what to remove first.</h2>
-      <p class="showcase__lede">Duplicate-code clusters are ranked by impact and anchored to one copy for comparison. Your editor and coding agent read the same live analysis.</p>
-    </div>
-    <figure class="showcase__figure">
-      <img src="/assets/img/screenshot.webp"
-           alt="The Deslop VS Code extension ranking duplicate-code clusters in a real workspace, showing a live warning and a side-by-side canonical comparison."
-           width="2560" height="1492" loading="lazy" decoding="async">
-    </figure>
     <ol class="showcase__legend">
       <li class="showcase__cell">
-        <span class="showcase__pos">Left · sidebar</span>
+        <span class="showcase__pos">01 · Find</span>
         <strong>Worst offenders first</strong>
         <p>The highest-impact duplicate-code clusters stay at the top.</p>
       </li>
       <li class="showcase__cell">
-        <span class="showcase__pos">Centre · editor</span>
-        <strong>Live duplicate warning</strong>
-        <p>Compare the match, open its cluster, or copy the context for AI.</p>
+        <span class="showcase__pos">02 · Inspect</span>
+        <strong>Every copy in context</strong>
+        <p>Open the cluster to review its locations and canonical copy.</p>
       </li>
       <li class="showcase__cell">
-        <span class="showcase__pos">Right · diff</span>
+        <span class="showcase__pos">03 · Compare</span>
         <strong>Canonical comparison</strong>
         <p>Review both copies side by side before you refactor.</p>
       </li>

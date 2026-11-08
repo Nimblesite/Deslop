@@ -122,7 +122,7 @@ jobs:
             clients/vscode/webview-ui/package-lock.json
 
       # `typediagram` CLI is the wire-format generator invoked by both
-      # `make typediagram-gen` and the deslop-core build.rs on every
+      # `make _typediagram-gen` and the deslop-core build.rs on every
       # `cargo build`. Pinned to keep CI / devcontainer / Makefile in
       # sync per CLAUDE.md dependency-pinning rules.
       - name: Install typediagram
@@ -157,7 +157,7 @@ jobs:
       - name: Verify grammar pins
         run: |
           set -euo pipefail
-          for dep in tree-sitter tree-sitter-c-sharp tree-sitter-rust tree-sitter-python tree-sitter-dart tree-sitter-typescript tree-sitter-javascript tree-sitter-php tree-sitter-fsharp tree-sitter-go; do
+          for dep in tree-sitter tree-sitter-c-sharp tree-sitter-rust tree-sitter-python tree-sitter-dart tree-sitter-typescript tree-sitter-javascript tree-sitter-php tree-sitter-fsharp tree-sitter-go tree-sitter-c; do
             line=$(grep -E "^${dep} = " Cargo.toml || true)
             if [ -z "${line}" ]; then
               echo "MISSING PIN: ${dep} must appear in workspace.dependencies"
@@ -208,7 +208,7 @@ jobs:
             clients/vscode/webview-ui/package-lock.json
 
       # `typediagram` CLI is the wire-format generator invoked by both
-      # `make typediagram-gen` and the deslop-core build.rs on every
+      # `make _typediagram-gen` and the deslop-core build.rs on every
       # `cargo build`. Pinned to keep CI / devcontainer / Makefile in
       # sync per CLAUDE.md dependency-pinning rules.
       - name: Install typediagram
@@ -309,7 +309,7 @@ jobs:
             clients/vscode/webview-ui/package-lock.json
 
       # See the build job — typediagram is required by build.rs and by
-      # `make coverage-run`'s own `typediagram-gen` prerequisite.
+      # `make _coverage-run`'s own `typediagram-gen` prerequisite.
       - name: Install typediagram
         run: npm install -g typediagram@0.11.0
 
@@ -332,7 +332,7 @@ jobs:
             ${{ runner.os }}-cargo-cov-
 
       - name: Run Rust tests with coverage collection
-        run: make coverage-run
+        run: make _coverage-run
 
       # [CI-COVERAGE-ONCE] Never `if: always()`: a rerun reads a failed attempt's artifact.
       - name: Upload raw Rust coverage
@@ -389,10 +389,10 @@ jobs:
       # (failing CI) the moment repo-wide duplication climbs past it. The
       # threshold is the single source of truth — never hardcoded here.
       - name: Duplication gate (deslop)
-        run: make dup-gate
+        run: make _dup-gate
 
       - name: Deployment manifest and binary gates
-        run: make deployment-verify
+        run: make _deployment-verify
       # [CI-COVERAGE-ONCE] Never `if: always()`: a rerun reads a failed attempt's artifact.
       - name: Upload raw repository coverage
         uses: actions/upload-artifact@v7
@@ -585,7 +585,7 @@ jobs:
           merge-multiple: true
 
       - name: Calculate Rust coverage
-        run: make coverage-report
+        run: make _coverage-report
 
       - name: Enforce VSIX coverage (extension host + webview)
         run: make _vsix-coverage-check
@@ -831,7 +831,7 @@ jobs:
         run: make _vsix-webview-coverage
 
       - name: vsix-package deployment gate
-        run: make vsix-package
+        run: make _vsix-package
 
       # [CI-COVERAGE-ONCE] Never `if: always()`: a rerun reads a failed attempt's artifact.
       - name: Upload VSIX coverage
@@ -915,6 +915,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          lfs: true
 
       - uses: actions/setup-node@v7
         with:

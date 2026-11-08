@@ -4,7 +4,7 @@ Parser rollout status and remaining language work.
 
 ## [LANG-SHIPPED] Shipped baseline
 
-C#, Rust, Python, JavaScript/TypeScript (including JSX/TSX), Dart, PHP, F#, and Go parse, normalize, and cluster through [PIPELINE-LANG-TRAIT]. Grammar pins remain in `Cargo.toml`. The restored per-language contracts are in [languages.md](../specs/languages.md); the parser registry is `crates/deslop-core/src/lang/mod.rs` and the fixture suites sit under `crates/deslop/tests/`.
+C#, C, Rust, Python, JavaScript/TypeScript (including JSX/TSX), Dart, PHP, F#, Osprey, and Go parse, normalize, and cluster through [PIPELINE-LANG-TRAIT]. Grammar pins remain in `Cargo.toml`. The restored per-language contracts are in [languages.md](../specs/languages.md); the parser registry is `crates/deslop-core/src/lang/mod.rs` and the fixture suites sit under `crates/deslop/tests/`.
 
 ## TODO
 

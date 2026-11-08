@@ -21,7 +21,10 @@ mod session;
 mod signatures;
 
 pub use config::{EmbeddingSettings, PipelineConfig};
-pub use corpus::{default_parsers, language_for_path, language_ids, watched_source_extensions};
+pub use corpus::{
+    build_extension_map, default_parsers, language_for_path, language_ids,
+    watched_source_extensions,
+};
 pub(crate) use corpus::{parser_for_language, read_source};
 pub(crate) use open_buffers::canonical_key as canonical_source_path;
 pub use open_buffers::{BufferEdit, OpenBuffers, SourceBytes};

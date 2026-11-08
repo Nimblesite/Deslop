@@ -64,10 +64,10 @@ So the separation is physical, not a matter of discipline.
 
 ```bash
 make compare            # two engines over every register and everything queued for judging
-make judging-folder     # clone the repos, blind the reports, install the judge's skill
+make _judging-folder     # clone the repos, blind the reports, install the judge's skill
 ```
 
-`make judging-folder` builds `~/clone-judging` (override with `JUDGING_DIR`). One
+`make _judging-folder` builds `~/clone-judging` (override with `JUDGING_DIR`). One
 workspace per repository the last comparison scanned, and nothing in it names this
 project:
 
@@ -104,7 +104,7 @@ scripts/corpus/prepare-judging.sh ~/clone-judging 1 click
 For a short pass — a first look at a new repository, say — ask for fewer candidates. The ceiling of 200 still holds:
 
 ```bash
-make judging-folder JUDGING_CANDIDATES=20
+make _judging-folder JUDGING_CANDIDATES=20
 ```
 
 To build from a comparison written somewhere other than `.corpus/version-compare` (for instance one run over only the queued repositories, so it does not overwrite another run's reports), point `COMPARE_REPORTS` at its `reports/` directory.

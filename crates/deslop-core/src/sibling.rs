@@ -84,7 +84,7 @@ fn walk<'tree>(
 ) {
     let current_boilerplate =
         inside_boilerplate || is_boilerplate(language, node) || is_literal_data_subtree(node);
-    if !current_boilerplate {
+    if !current_boilerplate && hosts_sibling_windows(node) {
         emit_windows(&node.children, min_nodes, out, language, scratch);
     }
     for child in &node.children {
@@ -97,6 +97,21 @@ fn walk<'tree>(
             scratch,
         );
     }
+}
+
+/// The C-family `for` whose initialiser, condition and update sit as
+/// direct children beside the body (C, C#, JavaScript, TypeScript, Dart,
+/// PHP). Go wraps the three in one `for_clause`, so it never reaches here.
+const FLAT_HEADER_FOR_STATEMENT: &str = "for_statement";
+
+/// [PIPELINE-FINGERPRINT-SIBLING-HOST] A window is a run of statements or
+/// declarations. The children of a flat-header `for` are three clauses of
+/// one statement plus its body: a window over them is either the loop
+/// header alone — `for (int i = 0; i < n; i++)` is an idiom, not a copy —
+/// or header-plus-body, which the `for_statement` subtree already
+/// fingerprints. Neither adds evidence, so no window forms there.
+fn hosts_sibling_windows(node: &NormalizedNode) -> bool {
+    node.kind != FLAT_HEADER_FOR_STATEMENT
 }
 
 /// Returns `true` when every element of `hashes` is identical.

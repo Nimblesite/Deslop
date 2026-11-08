@@ -1,4 +1,5 @@
 // [VSIX-LANGUAGE-ICONS] Every language appears across all webview surfaces.
+import { createHash } from "node:crypto";
 import { test, expect } from "@playwright/test";
 import { loadView, postHostMessage, sampleReport, screenshotDir, type ViewKind } from "./playwright-webview-fixture";
 import { LANGUAGES, SOURCE_EXTENSIONS, languageForPath, languageDisplayName } from "../src/types/languages";
@@ -11,6 +12,8 @@ const SVG_SIZE = 24;
 const REPORT_MESSAGE = "report/snapshot";
 const SELECT_MESSAGE = "select/cluster";
 const OSPREY = "osprey";
+const OSPREY_SHA256 = "ce94ff11f7041d412c4cb6b1d32f3ee5685506fb0a602b0734758c8bfdffb03e";
+const PNG_PREFIX = "data:image/png;base64,";
 const OSPREY_FLAVORS = ["osprey-ml", "osprey-python"];
 
 for (const view of VIEWS) {
@@ -25,7 +28,15 @@ for (const view of VIEWS) {
       await expect(icon).toHaveAttribute("aria-label", languageDisplayName(language));
       await expect(icon.locator("svg")).toHaveAttribute("viewBox", `0 0 ${SVG_SIZE} ${SVG_SIZE}`);
       await expect(icon.locator("svg")).toBeVisible();
-      if (language === OSPREY) await page.screenshot({ path: `${screenshotDir}/osprey-${view}.png` });
+      if (language === OSPREY) {
+        const href = await icon.locator("image").getAttribute("href");
+        expect(href?.startsWith(PNG_PREFIX)).toBe(true);
+        const digest = createHash("sha256").update(Buffer.from(href!.slice(PNG_PREFIX.length), "base64")).digest("hex");
+        expect(digest).toBe(OSPREY_SHA256);
+        await page.screenshot({ path: `${screenshotDir}/osprey-${view}.png` });
+      } else {
+        await expect(icon.locator("path")).toBeVisible();
+      }
     }
     for (const flavor of OSPREY_FLAVORS) {
       const snapshot = reportForLanguage(OSPREY, flavor);

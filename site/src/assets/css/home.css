@@ -1,48 +1,32 @@
-/* ─────────── Hero (Kinetic Asymmetry) ─────────── */
+/* Homepage introduction and product demonstration. */
 .home { width: 100%; }
 
+/* [SITE-HOME-VIDEO] Copy, the actual demo and its three steps share one hero. */
 .hero {
-  position: relative;
-  padding: var(--space-24) var(--space-6);
+  padding: var(--space-12) var(--space-6);
   max-width: var(--max-width);
   margin-inline: auto;
   width: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: var(--space-16);
-  align-items: flex-start;
-}
-
-/* The hero owns the first screen, so the copy and the product shot are centred
-   on one line inside it rather than stacked against the top edge. */
-@media (min-width: 1024px) {
-  .hero {
-    flex-direction: row;
-    align-items: center;
-    min-height: calc(100dvh - var(--header-height));
-  }
-}
-
-/* One gap governs the whole column — the elements carry no margins of their
-   own, so chip, headline, lede, CTA and sublede sit on a single rhythm. */
-.hero__left {
-  flex: 1;
-  z-index: 10;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  display: grid;
   gap: var(--space-8);
+  align-items: center;
+}
+.hero__left {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-6);
 }
 .hero .hero__left > * { margin: 0; }
-@media (min-width: 1024px) { .hero__left { max-width: 42rem; } }
-
-.hero__right { flex: 1; width: 100%; position: relative; }
-
-/* [SITE-HOME-VIDEO] Once the hero stacks, the motion reel leads the page above the headline. */
-@media (max-width: 1023.98px) {
-  .hero { padding-top: var(--space-6); }
-  .hero__right { order: -1; }
+.hero__right { min-width: 0; width: 100%; scroll-margin-top: calc(var(--header-height) + var(--space-6)); }
+.hero__right .showcase__figure { margin: 0; }
+.hero > .showcase__legend { grid-column: 1 / -1; margin: 0; }
+@media (min-width: 1024px) {
+  .hero { grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); column-gap: var(--space-10); }
+}
+@media (max-width: 767px) {
+  .hero { padding-top: var(--space-8); gap: var(--space-6); }
 }
 
 .eyebrow-chip {
@@ -62,7 +46,7 @@
 
 .hero h1 {
   font-weight: 900;
-  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  font-size: clamp(2.25rem, 4vw, 3.5rem);
   letter-spacing: -0.04em;
   line-height: 1.05;
 }
@@ -89,8 +73,7 @@
   max-width: 40rem;
 }
 
-.hero__sublede a,
-.showcase__lede a {
+.hero__sublede a {
   color: var(--on-surface);
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -126,7 +109,7 @@
   text-decoration: none;
 }
 .btn-primary:hover,
-.btn-discord:hover { transform: scale(1.05); }
+.btn-discord:hover { transform: translateY(-2px); }
 
 .btn-primary {
   background: linear-gradient(to right, var(--primary), var(--primary-container));
@@ -135,27 +118,15 @@
 }
 .btn-primary:hover { color: var(--on-primary-container); }
 
-/* ─────────── Product showcase (extension screenshot + panel legend) ─────────── */
-.showcase {
-  padding: var(--space-8) var(--space-6) var(--space-24);
-  max-width: var(--max-width);
-  margin-inline: auto;
-  width: 100%;
-}
-.showcase__head { max-width: 44rem; margin-bottom: var(--space-10); }
-.showcase__title,
-.community__title,
-.editors__title {
+/* Product demo and workflow */
+.community__title, .editors__title {
   font-weight: 900;
   font-size: clamp(1.75rem, 4vw, 2.75rem);
   letter-spacing: -0.03em;
   line-height: 1.1;
 }
-.showcase__title,
-.editors__title { margin: var(--space-4) 0 var(--space-4); }
-.showcase__lede,
-.community__lede,
-.editors__lede {
+.editors__title { margin: var(--space-4) 0; }
+.community__lede, .editors__lede {
   color: var(--on-surface-variant);
   font-size: clamp(1rem, 1.5vw, 1.125rem);
   line-height: 1.6;
@@ -166,7 +137,7 @@
   overflow: hidden;
   box-shadow: 0 20px 40px rgba(14, 14, 14, 0.6);
 }
-.showcase__figure img { display: block; width: 100%; height: auto; }
+.showcase__figure img, .showcase__figure video { display: block; width: 100%; height: auto; }
 .showcase__legend {
   display: grid;
   grid-template-columns: 1fr;

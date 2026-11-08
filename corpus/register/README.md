@@ -13,7 +13,7 @@ The judge works in an isolated workspace and never loads this codebase. Read
 `.agents/skills/clone-register-prepare` before building or filing anything here.
 
 - Build the folder a judge is handed — repositories, reports and the judging skill:
-  `make judging-folder`
+  `make _judging-folder`
 - Judge it (fresh session, outside this repo): `.agents/skills/judge-clone-pairs`
 - Score the current build and gate on it: `make score-gate`
 - Compare two engines against the registers: `scripts/compare-versions.sh`
@@ -44,8 +44,10 @@ judge next.
 | dart | bloc, dio | more passes on dio |
 | php | guzzle, composer | more passes on composer |
 | fsharp | FSharp.Data, giraffe (no agreed CLEARLY IN yet) | another pass on giraffe, which is still queued |
+| osprey | none | a first pass on the Osprey repository, queued; it also yields C pairs from the runtime |
+| c | none | first passes on jq and hiredis, both queued at visibly different sizes |
 
-Every one of the nine languages now has a register. Python and TypeScript still rest on a single repository, and the second repositories above were judged on a short pass, so depth is what the next passes buy, not breadth. `corpus/judging-queue.json` still holds giraffe, because its register has no agreed CLEARLY IN. `corpus_commit_pins.rs` fails whenever the queue is empty, by design.
+Every language except Osprey and C has a register; both are queued for a first pass. Python and TypeScript still rest on a single repository, and the second repositories above were judged on a short pass, so depth is what the next passes buy, not breadth. `corpus/judging-queue.json` still holds giraffe, because its register has no agreed CLEARLY IN. `corpus_commit_pins.rs` fails whenever the queue is empty, by design.
 
 A CLEARLY IN may pin a clone type (`Type I` to `Type IV`); blank accepts any type. See
 `docs/specs/corpus.md` §[CORPUS-REGISTER-TYPE].
@@ -56,7 +58,7 @@ run that produced them.
 "Queued" means `corpus/judging-queue.json`: the comparison scans those repositories so a
 first pass has reports to draw candidates from. Each gets a register here when its verdicts come back, and leaves the queue once that register holds a CLEARLY IN. See `docs/specs/corpus.md` §[CORPUS-REGISTER-QUEUE].
 
-Verdicts reach these files only through `make merge-verdicts JUDGED_DIRS="<folder> <folder>"`.
+Verdicts reach these files only through `make _merge-verdicts JUDGED_DIRS="<folder> <folder>"`.
 It imports **only** the pairs every source agrees on — these registers included. Anything a
 source disagrees on, or is not confident about, is left out and listed in
 `docs/reports/verdict-merge.md`. See §[CORPUS-REGISTER-MERGE].

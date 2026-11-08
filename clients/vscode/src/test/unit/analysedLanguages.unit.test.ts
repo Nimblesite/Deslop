@@ -38,8 +38,8 @@ function activationSuffixes(prefix: string): string[] {
     .sort();
 }
 
-suite("analysed language registry covers F#, PHP and Go", () => {
-  test("F#, PHP and Go editor ids are analysed (hover + inlay attach)", () => {
+suite("analysed language registry covers F#, PHP, Go and C", () => {
+  test("F#, PHP, Go and C editor ids are analysed (hover + inlay attach)", () => {
     assert.ok(
       ANALYSED_LANGUAGE_IDS.includes("fsharp"),
       "fsharp must be an analysed language or the F# hover card never registers",
@@ -53,28 +53,40 @@ suite("analysed language registry covers F#, PHP and Go", () => {
       "go must be an analysed language or the LSP never syncs .go buffers, " +
         "which kills the live loop, the hover card and the inlay bubble for Go",
     );
+    assert.ok(
+      ANALYSED_LANGUAGE_IDS.includes("c"),
+      "c must be an analysed language or the LSP never syncs .c/.h buffers, " +
+        "which kills the live loop, the hover card and the inlay bubble for C",
+    );
   });
 
-  test("F#, PHP and Go source extensions resolve to their language id", () => {
+  test("F#, PHP, Go and C source extensions resolve to their language id", () => {
     assert.equal(languageForPath("/repo/Tests.fs"), "fsharp");
     assert.equal(languageForPath("/repo/Script.fsx"), "fsharp");
     assert.equal(languageForPath("/repo/Model.php"), "php");
     assert.equal(languageForPath("/repo/cmd/server/main.go"), "go");
     assert.equal(languageForPath("/repo/cmd/server/MAIN.GO"), "go");
+    assert.equal(languageForPath("/repo/src/main.c"), "c");
+    assert.equal(languageForPath("/repo/include/ENGINE.H"), "c");
   });
 
-  test("F#, PHP and Go carry human display names", () => {
+  test("F#, PHP, Go and C carry human display names", () => {
     assert.equal(languageDisplayName("fsharp"), "F#");
     assert.equal(languageDisplayName("php"), "PHP");
     assert.equal(languageDisplayName("go"), "Go");
+    assert.equal(languageDisplayName("c"), "C");
   });
 
-  test("Go is offered as a filter option in the report webview", () => {
+  test("Go and C are offered as filter options in the report webview", () => {
     // The `<select>` in webview-ui maps over LANGUAGES; a language absent
     // here is unfilterable even once its clusters are in the report.
     assert.ok(
       LANGUAGES.includes("go"),
       `Go must be a filterable language, got ${JSON.stringify(LANGUAGES)}`,
+    );
+    assert.ok(
+      LANGUAGES.includes("c"),
+      `C must be a filterable language, got ${JSON.stringify(LANGUAGES)}`,
     );
   });
 

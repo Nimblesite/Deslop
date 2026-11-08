@@ -92,10 +92,10 @@ jobs:
         run: |
           set -o pipefail
           if [ "${{ inputs.full }}" = "true" ]; then
-            make test-corpus-ci-full 2>&1 | tee corpus-output.txt
+            make _test-corpus-ci-full 2>&1 | tee corpus-output.txt
           else
             echo "PARTIAL=1" >> "$GITHUB_ENV"
-            make test-corpus-ci 2>&1 | tee corpus-output.txt
+            make _test-corpus-ci 2>&1 | tee corpus-output.txt
           fi
 
       - name: Publish report

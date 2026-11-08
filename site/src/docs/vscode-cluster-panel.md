@@ -22,6 +22,11 @@ The panel shows a group of code occurrences and lets you inspect the actual copi
 
 Canonical means the reference used for navigation, not the best implementation. The diff title identifies both ranges and the engine's verdict for that pair, including exact-byte or indentation-only matches. Two ranges can be in the same file.
 
+<figure>
+  <a href="/assets/img/deslop-compare.webp"><img src="/assets/img/deslop-compare.webp" alt="VS Code comparing the two C# copies side by side, with renamed namespaces and classes highlighted." width="3200" height="1800" loading="lazy" decoding="async"></a>
+  <figcaption>The native diff editor compares the canonical copy with another occurrence in the demo workspace.</figcaption>
+</figure>
+
 ## Read the finding
 
 The **clone kind** distinguishes Identical code, Nearly identical code, Similar code, optional Same behavior, different code, and informational Same shape, different content. [How It Works](/docs/how-it-works/#read-the-categories) explains the Type I–IV mapping.
@@ -37,6 +42,11 @@ Structural, token, content and embedding measurements describe a pair. They appe
 **Top Offenders** groups findings by **Clone Category**, **Folder**, **Language**, **File** or **No Grouping**. Clones stay in descending mass order. One grouping menu replaces separate language and sorting controls.
 
 **Duplication** shows workspace, folder and file percentages from the same engine calculation used in reports. **Session** shows analysis state and embedding settings. The views refresh with the live analysis.
+
+<figure>
+  <a href="/assets/img/deslop-source.webp"><img src="/assets/img/deslop-source.webp" alt="Deslop findings and duplication breakdown beside the C# source file in VS Code." width="3200" height="1800" loading="lazy" decoding="async"></a>
+  <figcaption>The same two-file fixture, with live findings beside its source.</figcaption>
+</figure>
 
 Help buttons open formatted explanations on hover or keyboard focus. **Escape** dismisses help; technical details stay collapsed until needed.
 

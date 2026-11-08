@@ -24,7 +24,7 @@ import { recipeBlocks } from "../lib/makefile.mjs";
 
 /// The target that collects coverage, and the two commands whose order is the
 /// whole contract.
-const COLLECT_TARGET = "coverage-run";
+const COLLECT_TARGET = "_coverage-run";
 const CLEAN_COMMAND = "cargo llvm-cov clean --workspace";
 const COLLECT_COMMAND = "cargo llvm-cov --release --workspace --all-targets";
 
@@ -68,7 +68,7 @@ test("[CI-COVERAGE-ISOLATION] the clean is never narrowed to the profiles", () =
 });
 
 test("[CI-COVERAGE-ISOLATION] reporting stays a separate command over the cleaned collection", () => {
-  const blocks = recipeBlocks("coverage-report");
+  const blocks = recipeBlocks("_coverage-report");
   assert.equal(blocks.length, 1, "Makefile must declare exactly one `coverage-report` recipe");
   assert.ok(
     blocks[0].body.includes("cargo llvm-cov") && blocks[0].body.includes("report"),
