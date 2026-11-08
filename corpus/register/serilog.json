@@ -45,9 +45,36 @@
         "test/Serilog.PerformanceTests/Support/DictionaryMessageTemplateCache.cs:4-50",
         "src/Serilog/Core/Pipeline/MessageTemplateCache.cs:18-73"
       ]
+    },
+    {
+      "why": "The _sinks field, guard constructor, and the entire exception-aggregating Emit loop are duplicated across two files with no shared base class; the diff shows only the constructor identifier and one blank line differing.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- src/Serilog/Core/Sinks/DisposingAggregateSink.cs:22-49\n+++ src/Serilog/Core/Sinks/AggregateSink.cs:19-47\n@@ -1,8 +1,9 @@\n     readonly ILogEventSink[] _sinks;\n \n-    public DisposingAggregateSink(IEnumerable<ILogEventSink> sinks)\n+    public AggregateSink(IEnumerable<ILogEventSink> sinks)\n     {\n         Guard.AgainstNull(sinks);\n+\n         _sinks = sinks.ToArray();\n     }\n \n",
+      "type": "Type II",
+      "occurrences": [
+        "src/Serilog/Core/Sinks/AggregateSink.cs:19-47",
+        "src/Serilog/Core/Sinks/DisposingAggregateSink.cs:22-49"
+      ]
+    },
+    {
+      "why": "The diff differs on the declaration line alone (FormatDateTimeValue/DateTime → FormatDateTimeOffsetValue/DateTimeOffset); the entire stackalloc/TryFormat/\"O\"-fallback body, including both #if branches, is identical. A pure systematic rename of real production formatting logic.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- src/Serilog/Formatting/Json/JsonValueFormatter.cs:469-484\n+++ src/Serilog/Formatting/Json/JsonValueFormatter.cs:486-501\n@@ -1,4 +1,4 @@\n-    static void FormatDateTimeValue(DateTime value, TextWriter output)\n+    static void FormatDateTimeOffsetValue(DateTimeOffset value, TextWriter output)\n     {\n         output.Write('\\\"');\n \n",
+      "type": "Type II",
+      "occurrences": [
+        "src/Serilog/Formatting/Json/JsonValueFormatter.cs:469-484",
+        "src/Serilog/Formatting/Json/JsonValueFormatter.cs:486-501"
+      ]
+    },
+    {
+      "why": "The complete ProjectedDestructuringPolicy class repeats its guards, projection and conversion logic; the second removes the named-argument label destructureObjects:, a syntax change beyond renaming.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- src/Serilog/Policies/ProjectedDestructuringPolicy.cs:17-42\n+++ test/Serilog.Tests/Configuration/LoggerConfigurationTests.cs:136-161\n@@ -1,26 +1,26 @@\n-class ProjectedDestructuringPolicy : IDestructuringPolicy\n-{\n-    readonly Func<Type, bool> _canApply;\n-    readonly Func<object, object> _projection;\n+    class ProjectedDestructuringPolicy : IDestructuringPolicy\n+    {\n+        readonly Func<Type, bool> _canApply;\n+        readonly Func<object, object> _projection;\n \n-    public ProjectedDestructuringPolicy(Func<Type, bool> canApply, Func<object, object> projection)\n-    {\n-        _canApply = Guard.AgainstNull(canApply);\n-        _projection = Guard.AgainstNull(projection);\n-    }\n-\n-    public bool TryDestructure(object value, ILogEventPropertyValueFactory propertyValueFactory, [NotNullWhen(true)] out LogEventPropertyValue? result)\n-    {\n-        Guard.AgainstNull(value);\n-\n-        if (!_canApply(value.GetType()))\n+        public ProjectedDestructuringPolicy(Func<Type, bool> canApply, Func<object, object> projection)\n         {\n-            result = null;\n-            return false;\n+            _canApply = Guard.AgainstNull(canApply);\n+            _projection = Guard.AgainstNull(projection);\n         }\n \n-        var projected = _projection(value);\n-        result = propertyValueFactory.CreatePropertyValue(projected, destructureObjects: true);\n-        return true;\n+        public bool TryDestructure(object value, ILogEventPropertyValueFactory propertyValueFactory, [NotNullWhen(true)] out LogEventPropertyValue? result)\n+        {\n+            Guard.AgainstNull(value);\n+\n+            if (!_canApply(value.GetType()))\n+            {\n+                result = null;\n+                return false;\n+            }\n+\n+            var projected = _projection(value);\n+            result = propertyValueFactory.CreatePropertyValue(projected, true);\n+            return true;\n+        }\n     }\n-}\n",
+      "type": "Type III",
+      "occurrences": [
+        "src/Serilog/Policies/ProjectedDestructuringPolicy.cs:17-42",
+        "test/Serilog.Tests/Configuration/LoggerConfigurationTests.cs:136-161"
+      ]
     }
   ],
   "clearly_out": [],
-  "not_clear": [],
-  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 20 candidates at this commit and no pair was called CLEARLY OUT by all of them. 0 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing."
+  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 20 candidates at this commit and no pair was called CLEARLY OUT by all of them. 0 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing.",
+  "not_clear": []
 }

@@ -169,9 +169,26 @@
         "integration/microservices/src/app.controller.ts:99-117",
         "integration/microservices/src/tcp-tls/app.controller.ts:112-130"
       ]
+    },
+    {
+      "why": "The two complete interceptor files align statement for statement — identical import block, type alias, DI constructor and Promise-wrapped multer intercept — differing only by the Files→File rename, the dropped maxCount parameter and its argument in array()→single(). The dropped parameter/argument goes beyond a rename, so this is a modified copy.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- packages/platform-express/multer/interceptors/files.interceptor.ts:1-70\n+++ packages/platform-express/multer/interceptors/file.interceptor.ts:1-67\n@@ -17,16 +17,13 @@\n type MulterInstance = any;\n \n /**\n- *\n  * @param fieldName\n- * @param maxCount\n  * @param localOptions\n  *\n  * @publicApi\n  */\n-export function FilesInterceptor(\n+export function FileInterceptor(\n   fieldName: string,\n-  maxCount?: number,\n   localOptions?: MulterOptions,\n ): Type<NestInterceptor> {\n   class MixinInterceptor implements NestInterceptor {\n@@ -50,7 +47,7 @@\n       const ctx = context.switchToHttp();\n \n       await new Promise<void>((resolve, reject) =>\n-        this.multer.array(fieldName, maxCount)(\n+        this.multer.single(fieldName)(\n           ctx.getRequest(),\n           ctx.getResponse(),\n           (err: any) => {\n",
+      "type": "Type III",
+      "occurrences": [
+        "packages/platform-express/multer/interceptors/file.interceptor.ts:1-67",
+        "packages/platform-express/multer/interceptors/files.interceptor.ts:1-70"
+      ]
     }
   ],
-  "clearly_out": [],
-  "not_clear": [],
-  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 200 candidates at this commit and no pair was called CLEARLY OUT by all of them. 2 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing."
+  "clearly_out": [
+    {
+      "why": "The diff shows every exported module path differs; the only shared element is the `export * from` barrel syntax itself, which is framework idiom, plus one side-effect import only in B.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- packages/common/decorators/core/index.ts:1-14\n+++ packages/microservices/index.ts:7-21\n@@ -1,14 +1,15 @@\n-export * from './bind.decorator';\n-export * from './catch.decorator';\n-export * from './controller.decorator';\n-export * from './dependencies.decorator';\n-export * from './exception-filters.decorator';\n-export * from './inject.decorator';\n-export * from './injectable.decorator';\n-export * from './optional.decorator';\n-export * from './set-metadata.decorator';\n-export * from './use-guards.decorator';\n-export * from './use-interceptors.decorator';\n-export * from './use-pipes.decorator';\n-export * from './apply-decorators';\n-export * from './version.decorator';\n+import 'reflect-metadata';\n+\n+export * from './client';\n+export * from './ctx-host';\n+export * from './decorators';\n+export * from './enums';\n+export * from './events';\n+export * from './exceptions';\n+export * from './helpers';\n+export * from './interfaces';\n+export * from './module';\n+export * from './nest-microservice';\n+export * from './record-builders';\n+export * from './server';\n+export * from './tokens';\n",
+      "occurrences": [
+        "packages/common/decorators/core/index.ts:1-14",
+        "packages/microservices/index.ts:7-21"
+      ]
+    }
+  ],
+  "not_clear": []
 }

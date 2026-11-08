@@ -249,9 +249,58 @@
         "packages/zod/src/v4/mini/tests/codec.test.ts:27-42",
         "packages/zod/src/v4/classic/tests/codec.test.ts:24-39"
       ]
+    },
+    {
+      "why": "The two OG-image routes share the identical imagePrefix ternary, identical style objects, the identical commented-out Zod <p> and breadcrumbs JSX, identical 1200x630 ImageResponse and catch block — plainly one route copied and adapted to the other Next.js router. The description guard, path const and active-vs-commented breadcrumbs are statements added/removed/modified beyond renames.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- packages/docs/app/og.png/route.tsx:15-106\n+++ packages/docs/pages/api/_og.tsx:32-125\n@@ -1,12 +1,15 @@\n-export async function GET(request: Request) {\n+export default async function (request: NextRequest) {\n   try {\n     const { searchParams } = new URL(request.url);\n     const imagePrefix = process.env.VERCEL_URL ? `https://zod.dev` : \"http://localhost:3000\";\n \n     // Get dynamic params\n     const title = searchParams.get(\"title\") || \"Zod Documentation\";\n-    // a long title wraps to three or more lines, and the description would push the footer off the canvas\n-    const description = title.length > 60 ? null : searchParams.get(\"description\");\n+    const description = searchParams.get(\"description\"); // || \"TypeScript-first schema validation with static type inference\";\n+    const path = searchParams.get(\"path\");\n+\n+    // Format breadcrumbs from path\n+    // const breadcrumbs = path.split(\"/\").map((crumb) => crumb.toUpperCase());\n \n     return new ImageResponse(\n       <div\n@@ -25,14 +28,14 @@\n       >\n         {/* Logo in upper right corner */}\n         <div\n-          tw=\"absolute top-[52px] right-[60px]\"\n+          tw=\"absolute top-[60px] right-[60px]\"\n           style={{\n             display: \"flex\",\n             alignItems: \"center\",\n             justifyContent: \"center\",\n           }}\n         >\n-          <img width=\"150\" height=\"125\" alt=\"Zod logo\" src={`${imagePrefix}/logo/logo.png`} />\n+          <img width=\"200\" height=\"165\" alt=\"Zod logo\" src={`${imagePrefix}/logo/logo.png`} />\n         </div>\n \n         {/* Main content */}\n@@ -41,20 +44,19 @@\n           {/* <p tw=\"text-4xl font-bold tracking-tight text-white m-0 leading-none mb-6 border-b border-gray-700 pb-4\">\n             Zod\n           </p> */}\n-          <h1 tw=\"text-7xl font-bold tracking-tight text-white m-0 leading-tight\">{title}</h1>\n+          <h1 tw=\"text-8xl font-bold tracking-tight text-white m-0 leading-none\">{title}</h1>\n           {description ? <p tw=\"text-2xl text-gray-300 mt-6 max-w-4xl\">{description}</p> : null}\n         </div>\n \n         {/* Bottom section with divider */}\n         <div tw=\"flex flex-col w-full \">\n           {/* Divider line */}\n-          <div tw=\"w-full h-px bg-gray-700 mb-[48px]\" />\n+          <div tw=\"w-full h-px bg-gray-700 mb-[45px]\" />\n \n           {/* Bottom row with breadcrumbs and project info */}\n-          <div tw=\"flex justify-between items-center w-full\">\n+          <div tw=\"flex justify-between items-center w-full \">\n             {/* Breadcrumbs */}\n-            <p> </p>\n-            {/* {path ? (\n+            {path ? (\n               <div tw=\"flex items-center gap-3\">\n                 <div tw=\"flex items-center font-mono \">\n                   <span tw=\"text-gray-300 text-3xl font-mono\">{path}</span>\n@@ -62,7 +64,7 @@\n               </div>\n             ) : (\n               <div />\n-            )} */}\n+            )}\n \n             {/* Project name */}\n             <div tw=\"flex items-center \">\n",
+      "type": "Type III",
+      "occurrences": [
+        "packages/docs/app/og.png/route.tsx:15-106",
+        "packages/docs/pages/api/_og.tsx:32-125"
+      ]
     }
   ],
-  "clearly_out": [],
-  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 200 candidates at this commit and no pair was called CLEARLY OUT by all of them. 0 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing.",
+  "clearly_out": [
+    {
+      "why": "The two table slices share no key and no value; their only commonality is the `key: \"value\",` object-entry syntax, which is a language requirement, not copied content.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- packages/docs/next.config.mjs:106-113\n+++ packages/docs/next.config.mjs:165-172\n@@ -1,8 +1,8 @@\n-          \"dates-1\": \"dates\",\n-          \"zod-enums\": \"enums\",\n-          \"native-enums\": \"enums\",\n-          optionals: \"optionals\",\n-          nullables: \"nullables\",\n-          optional: \"optionals\",\n-          nullable: \"nullables\",\n-          nullish: \"nullish\",\n+          \"validating-during-transform\": \"transforms\",\n+          \"relationship-to-refinements\": \"transforms\",\n+          \"async-transforms\": \"transforms\",\n+          default: \"defaults\",\n+          catch: \"catch\",\n+          array: \"arrays\",\n+          promise: \"promises\",\n+          or: \"unions\",\n",
+      "occurrences": [
+        "packages/docs/next.config.mjs:106-113",
+        "packages/docs/next.config.mjs:165-172"
+      ]
+    },
+    {
+      "why": "Two runs of the same redirects lookup with entirely different keys and values (enums/optionals/nullables vs transforms/defaults/arrays); they share only the mapping-entry syntax required by the config format, and the diff returns no matching lines.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- packages/docs/next.config.mjs:107-116\n+++ packages/docs/next.config.mjs:166-173\n@@ -1,10 +1,8 @@\n-          \"zod-enums\": \"enums\",\n-          \"native-enums\": \"enums\",\n-          optionals: \"optionals\",\n-          nullables: \"nullables\",\n-          optional: \"optionals\",\n-          nullable: \"nullables\",\n-          nullish: \"nullish\",\n-\n-          // objects\n-          objects: \"objects\",\n+          \"relationship-to-refinements\": \"transforms\",\n+          \"async-transforms\": \"transforms\",\n+          default: \"defaults\",\n+          catch: \"catch\",\n+          array: \"arrays\",\n+          promise: \"promises\",\n+          or: \"unions\",\n+          and: \"intersections\",\n",
+      "occurrences": [
+        "packages/docs/next.config.mjs:107-116",
+        "packages/docs/next.config.mjs:166-173"
+      ]
+    },
+    {
+      "why": "The two slices of the redirect map share no keys, values, or logic — one lists enums/optionals/objects entries, the other transforms/defaults/containers — their only commonality is key-value object-literal syntax.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- packages/docs/next.config.mjs:108-117\n+++ packages/docs/next.config.mjs:167-174\n@@ -1,10 +1,8 @@\n-          \"native-enums\": \"enums\",\n-          optionals: \"optionals\",\n-          nullables: \"nullables\",\n-          optional: \"optionals\",\n-          nullable: \"nullables\",\n-          nullish: \"nullish\",\n-\n-          // objects\n-          objects: \"objects\",\n-          shape: \"shape\",\n+          \"async-transforms\": \"transforms\",\n+          default: \"defaults\",\n+          catch: \"catch\",\n+          array: \"arrays\",\n+          promise: \"promises\",\n+          or: \"unions\",\n+          and: \"intersections\",\n+          brand: \"branded-types\",\n",
+      "occurrences": [
+        "packages/docs/next.config.mjs:108-117",
+        "packages/docs/next.config.mjs:167-174"
+      ]
+    },
+    {
+      "why": "Every entry differs between the two windows: entirely disjoint redirect keys and values, sharing only the `key: \"value\",` object-entry syntax.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- packages/docs/next.config.mjs:143-150\n+++ packages/docs/next.config.mjs:163-170\n@@ -1,8 +1,8 @@\n-          intersections: \"intersections\",\n-          \"recursive-types\": \"recursive-objects\",\n-          \"zodtype-with-zodeffects\": \"recursive-objects\",\n-          \"json-type\": \"json\",\n-          \"cyclical-objects\": \"recursive-objects\",\n-          promises: \"promises\",\n-          instanceof: \"instanceof\",\n-          functions: \"functions\",\n+          transform: \"transforms\",\n+          \"chaining-order\": \"transforms\",\n+          \"validating-during-transform\": \"transforms\",\n+          \"relationship-to-refinements\": \"transforms\",\n+          \"async-transforms\": \"transforms\",\n+          default: \"defaults\",\n+          catch: \"catch\",\n+          array: \"arrays\",\n",
+      "occurrences": [
+        "packages/docs/next.config.mjs:143-150",
+        "packages/docs/next.config.mjs:163-170"
+      ]
+    },
+    {
+      "why": "Two non-overlapping windows of the same redirect map; the diff returns zero common lines and the ranges share only the `\"key\": \"value\",` entry syntax. These are different entries, not copies.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- packages/docs/next.config.mjs:164-171\n+++ packages/docs/next.config.mjs:144-151\n@@ -1,8 +1,8 @@\n-          \"chaining-order\": \"transforms\",\n-          \"validating-during-transform\": \"transforms\",\n-          \"relationship-to-refinements\": \"transforms\",\n-          \"async-transforms\": \"transforms\",\n-          default: \"defaults\",\n-          catch: \"catch\",\n-          array: \"arrays\",\n-          promise: \"promises\",\n+          \"recursive-types\": \"recursive-objects\",\n+          \"zodtype-with-zodeffects\": \"recursive-objects\",\n+          \"json-type\": \"json\",\n+          \"cyclical-objects\": \"recursive-objects\",\n+          promises: \"promises\",\n+          instanceof: \"instanceof\",\n+          functions: \"functions\",\n+          preprocess: \"preprocess\",\n",
+      "occurrences": [
+        "packages/docs/next.config.mjs:144-151",
+        "packages/docs/next.config.mjs:164-171"
+      ]
+    }
+  ],
   "not_clear": []
 }

@@ -73,9 +73,18 @@
         "tokio/src/fs/file/tests.rs:617-635",
         "tokio/src/fs/file/tests.rs:651-669"
       ]
+    },
+    {
+      "why": "The same 35-line cache-line alignment cfg_attr block, down to the Go source link, is copied onto Core and ScheduledIo.",
+      "verified": "extracted both ranges from source/, stripped indentation, blank lines and comment-only lines, then line- and token-diffed: byte-identical over 35 code lines (raw ranges identical too)",
+      "type": "Type I",
+      "occurrences": [
+        "tokio/src/runtime/io/scheduled_io.rs:39-100",
+        "tokio/src/runtime/task/core.rs:63-124"
+      ]
     }
   ],
   "clearly_out": [],
-  "not_clear": [],
-  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 200 candidates at this commit and no pair was called CLEARLY OUT by all of them. 3 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing."
+  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 200 candidates at this commit and no pair was called CLEARLY OUT by all of them. 3 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing.",
+  "not_clear": []
 }

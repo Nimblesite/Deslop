@@ -51,7 +51,15 @@
       ]
     }
   ],
-  "clearly_out": [],
-  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 200 candidates at this commit and no pair was called CLEARLY OUT by all of them. 0 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing.",
+  "clearly_out": [
+    {
+      "why": "The two adjacent table slices (html..janet vs json..k) share no type name or glob — the diff is a full rewrite of every literal. Only the mandatory row format is common, which is the table's requirement, not a copy.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- crates/ignore/src/default_types.rs:112-116\n+++ crates/ignore/src/default_types.rs:121-125\n@@ -1,5 +1,5 @@\n-    (&[\"html\"], &[\"*.htm\", \"*.html\", \"*.ejs\"]),\n-    (&[\"hurl\"], &[\"*.hurl\"]),\n-    (&[\"hy\"], &[\"*.hy\"]),\n-    (&[\"idris\"], &[\"*.idr\", \"*.lidr\"]),\n-    (&[\"janet\"], &[\"*.janet\"]),\n+    (&[\"json\"], &[\"*.json\", \"composer.lock\", \"*.sarif\"]),\n+    (&[\"jsonl\"], &[\"*.jsonl\"]),\n+    (&[\"julia\"], &[\"*.jl\"]),\n+    (&[\"jupyter\"], &[\"*.ipynb\", \"*.jpynb\"]),\n+    (&[\"k\"], &[\"*.k\"]),\n",
+      "occurrences": [
+        "crates/ignore/src/default_types.rs:112-116",
+        "crates/ignore/src/default_types.rs:121-125"
+      ]
+    }
+  ],
   "not_clear": []
 }
