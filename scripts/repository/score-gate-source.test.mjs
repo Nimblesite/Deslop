@@ -15,7 +15,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -42,8 +42,12 @@ const COUNT_ALLOWANCES = ["score-thresholds", "maximum_false", "minimum_score_pe
 /// The CI step that refuses a record the run changed but nobody committed.
 const RECORD_CHECK = `git status --porcelain -- ${OUTCOMES}`;
 const REGISTER_DIR = "corpus/register";
-const POLLY_REGISTER = `${REGISTER_DIR}/polly.json`;
-const FSHARP_REGISTER = `${REGISTER_DIR}/fsharp.data.json`;
+const CSHARP_REGISTER = `${REGISTER_DIR}/benchmarkdotnet.json`;
+const FSHARP_REGISTER = `${REGISTER_DIR}/fsharpplus.json`;
+/// [CORPUS-SCORE-GATE-SLICE] A register joins the CI gate once it judges this
+/// many pairs CLEARLY IN or CLEARLY OUT, and only then.
+const GATE_MINIMUM_JUDGED = 50;
+const judgedCount = (register) => register.clearly_in.length + (register.clearly_out?.length ?? 0);
 /// Repositories queued for a first judging pass: scanned by the wide
 /// comparison so they can be judged, never by the gate, which can only score
 /// what a judge has already ruled on.
@@ -145,12 +149,12 @@ const assertDefaultTargetMatchesRegister = (registerPath, repository) => {
   );
 };
 
-test("[CORPUS-SCORE-GATE-SLICE] the default gate scans pinned C# pairs in Polly", () => {
-  assertDefaultTargetMatchesRegister(POLLY_REGISTER, "Polly");
+test("[CORPUS-SCORE-GATE-SLICE] the default gate scans pinned C# pairs in BenchmarkDotNet", () => {
+  assertDefaultTargetMatchesRegister(CSHARP_REGISTER, "BenchmarkDotNet");
 });
 
-test("[CORPUS-SCORE-GATE-SLICE] the default gate scans pinned F# pairs in FSharp.Data", () => {
-  assertDefaultTargetMatchesRegister(FSHARP_REGISTER, "FSharp.Data");
+test("[CORPUS-SCORE-GATE-SLICE] the default gate scans pinned F# pairs in FSharpPlus", () => {
+  assertDefaultTargetMatchesRegister(FSHARP_REGISTER, "FSharpPlus");
 });
 
 test("[CORPUS-SCORE] the CI slice is pinned by its registers, not by a repeated commit", () => {
@@ -197,19 +201,44 @@ test("[CORPUS-PIN] every scanned repository is pinned to a commit id, never a ve
   }
 });
 
-test("[CORPUS-REGISTER-COVERAGE] every register in the CI slice judges a real body of pairs", () => {
+test("[CORPUS-SCORE-GATE-SLICE] the CI slice is exactly every register judging 50+ pairs", () => {
   /// A register that judges a handful of pairs cannot distinguish an engine
-  /// that improved from one that got lucky. See docs/specs/corpus.md.
-  const MINIMUM_JUDGED = 15;
-  for (const name of ciSlice()) {
-    const judged = JSON.parse(read(`${REGISTER_DIR}/${name}.json`));
-    const total = judged.clearly_in.length + (judged.clearly_out?.length ?? 0);
-    assert.ok(
-      total >= MINIMUM_JUDGED,
-      `${name} judges ${total} pair(s); the floor is ${MINIMUM_JUDGED}. A register this thin ` +
-        `scores an engine on luck, and one wrong verdict moves the percentage double digits`,
+  /// that improved from one that got lucky; one that judges many and is left
+  /// out lets its regressions merge. See docs/specs/corpus.md.
+  const slice = new Set(ciSlice());
+  const registers = readdirSync(resolve(repoRoot, REGISTER_DIR))
+    .filter((file) => file.endsWith(".json") && file !== "outcomes.json")
+    .map((file) => [file.slice(0, -".json".length), JSON.parse(read(`${REGISTER_DIR}/${file}`))]);
+  for (const [name, register] of registers) {
+    const total = judgedCount(register);
+    assert.equal(
+      slice.has(name),
+      total >= GATE_MINIMUM_JUDGED,
+      slice.has(name)
+        ? `${name} judges ${total} pair(s), under the gate floor of ${GATE_MINIMUM_JUDGED}`
+        : `${name} judges ${total} pairs but is missing from DEFAULT_SLICE, so CI lets its regressions merge`,
     );
   }
+  for (const name of slice) {
+    assert.ok(registers.some(([file]) => file === name), `DEFAULT_SLICE names \`${name}\`, which has no register`);
+  }
+});
+
+test("[CORPUS-SCORE-GATE-SHARD] CI scores every gate repository in its own parallel job", () => {
+  const job = ciWorkflow.slice(ciWorkflow.indexOf(`  ${JOB}:`), ciWorkflow.indexOf("\n  coverage:"));
+  assert.ok(
+    ciWorkflow.includes(`run: echo "matrix=$(${SCRIPT} --list-ci-matrix)" >> "$GITHUB_OUTPUT"`),
+    "the matrix must come from score-gate.sh, so the workflow and the script name the same repositories",
+  );
+  assert.ok(job.includes("matrix: ${{ fromJSON(needs.corpus-targets.outputs.matrix) }}"), `\`${JOB}\` must fan out over the gate's matrix`);
+  assert.ok(job.includes("fail-fast: false"), "one failing repository must not cancel the others' scorecards");
+  assert.ok(job.includes(`run: ${SCRIPT} "\${{ matrix.spec }}"`), "each shard scores exactly its own repository");
+  const matrix = JSON.parse(execFileSync("bash", [SCRIPT, "--list-ci-matrix"], { cwd: repoRoot, encoding: "utf8" }));
+  const specs = execFileSync("bash", [SCRIPT, "--list-default-targets"], { cwd: repoRoot, encoding: "utf8" })
+    .trim().split("\n");
+  assert.deepEqual(matrix.include.map(({ spec }) => spec), specs, "the matrix holds the default slice, in order");
+  assert.equal(new Set(matrix.include.map(({ name }) => name)).size, specs.length, "every shard has its own name");
+  assert.equal(specs.length, ciSlice().length, "one shard per slice repository");
 });
 
 test("[CORPUS-SCORE] one command runs the CI corpus, and one runs the comparison", () => {

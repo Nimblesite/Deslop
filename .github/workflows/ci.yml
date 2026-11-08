@@ -401,21 +401,20 @@ jobs:
           path: coverage/repository/raw
           retention-days: 1
 
-  # [CORPUS-SCORE] The accuracy gate. Scans a small slice of register-backed
-  # repositories with the release binary this workflow just built, scores every
-  # judged pair against `corpus/register/`, and fails the moment a pair
-  # regresses or fails without being on record as failing in
-  # `corpus/register/outcomes.json` ([CORPUS-SCORE-OUTCOMES]). Cluster totals
-  # and duplication percentages are printed as description and gate nothing.
-  #
-  # The slice is deliberately the two smallest judged repositories, so the job
-  # finishes in seconds; the full register runs under `compare-versions.sh`.
-  corpus-score:
-    name: Corpus accuracy score
+  # [CORPUS-SCORE] [CORPUS-SCORE-GATE-SHARD] The accuracy gate, prepared once.
+  # Builds the scorer on top of the release build, publishes the engine and
+  # scorer as one small artifact, and lists the gate's repositories — every
+  # register judging 50+ pairs ([CORPUS-SCORE-GATE-SLICE]) — as the matrix
+  # `corpus-score` fans out over. The list comes from score-gate.sh itself, so
+  # the script and the workflow can never name different repositories.
+  corpus-targets:
+    name: Corpus targets
     needs: [changes, build]
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      matrix: ${{ steps.targets.outputs.matrix }}
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -434,8 +433,55 @@ jobs:
             crates/deslop-core/src/wire_generated.rs
             clients/vscode/src/types/wire-generated.ts
           key: ${{ runner.os }}-cargo-release-${{ github.sha }}
+      - name: Build the engine and the scorer
+        run: |
+          cargo build --release --bin deslop
+          cargo build --release -p deslop-test-support --bin corpus-score
+      - name: Upload the engine and the scorer
+        uses: actions/upload-artifact@v7
+        with:
+          name: corpus-binaries
+          path: |
+            target/release/deslop
+            target/release/corpus-score
+          retention-days: 1
+      - name: List the gate's repositories
+        id: targets
+        run: echo "matrix=$(scripts/corpus/score-gate.sh --list-ci-matrix)" >> "$GITHUB_OUTPUT"
+
+  # [CORPUS-SCORE] The accuracy gate. One parallel job per gate repository
+  # scans it with the release binary this workflow built, scores every judged
+  # pair against `corpus/register/`, and fails the moment a pair regresses or
+  # fails without being on record as failing in
+  # `corpus/register/outcomes.json` ([CORPUS-SCORE-OUTCOMES]). Any failing
+  # shard fails `corpus-score`, which the aggregate `ci` job requires. Cluster
+  # totals and duplication percentages are printed as description and gate
+  # nothing.
+  corpus-score:
+    name: Corpus accuracy score (${{ matrix.name }})
+    needs: [changes, corpus-targets]
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.corpus-targets.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.x"
+      - name: Download the engine and the scorer
+        uses: actions/download-artifact@v8
+        with:
+          name: corpus-binaries
+          path: target/release
+      - name: Make the downloaded binaries executable
+        run: chmod +x target/release/deslop target/release/corpus-score
       - name: Score the corpus against the clone registers
-        run: scripts/corpus/score-gate.sh
+        env:
+          SCORE_GATE_PREBUILT: "1"
+        run: scripts/corpus/score-gate.sh "${{ matrix.spec }}"
       # [CORPUS-SCORE-OUTCOMES] The run writes the judged pair record back. A
       # fixed or newly judged pair changes it, and that change must be
       # committed: a fix left off the record keeps the pair on record as
@@ -453,7 +499,7 @@ jobs:
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: corpus-scorecard
+          name: corpus-scorecard-${{ matrix.name }}
           path: |
             .corpus/score-gate/score-gate-*.md
             .corpus/score-gate/score-gate-*.json

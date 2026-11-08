@@ -993,6 +993,19 @@
       "repo": "benchmarkdotnet",
       "verdict": "clearly_in",
       "occurrences": [
+        "src/BenchmarkDotNet/Toolchains/InProcess/Emit/Implementation/Emitters/AsyncCoreEmitter.cs:147-156",
+        "src/BenchmarkDotNet/Toolchains/InProcess/Emit/Implementation/Emitters/AsyncEnumerableCoreEmitter.cs:554-561"
+      ],
+      "outcome": "fail",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "benchmarkdotnet",
+      "verdict": "clearly_in",
+      "occurrences": [
         "src/BenchmarkDotNet/Toolchains/InProcess/Emit/Implementation/Emitters/AsyncCoreEmitter.cs:156-168",
         "src/BenchmarkDotNet/Toolchains/InProcess/Emit/Implementation/Emitters/AsyncStateMachineEmitter.cs:501-531"
       ],
@@ -1205,6 +1218,19 @@
         "tests/BenchmarkDotNet.Analyzers.Tests/AnalyzerTests/Attributes/GeneralParameterAttributesAnalyzerTests.cs:897-965"
       ],
       "outcome": "pass",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "benchmarkdotnet",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/BenchmarkDotNet.Analyzers.Tests/AnalyzerTests/Attributes/ParamsAttributeAnalyzerTests.cs:1027-1037",
+        "tests/BenchmarkDotNet.Analyzers.Tests/AnalyzerTests/Attributes/ParamsAttributeAnalyzerTests.cs:1329-1339"
+      ],
+      "outcome": "fail",
       "since": "2026-11-08T06:47:26.057Z",
       "engine": "deslop@1dc218c8774f",
       "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
@@ -3567,6 +3593,19 @@
       "repo": "console",
       "verdict": "clearly_in",
       "occurrences": [
+        "Tests/Completion/Output/FishCompletionOutputTest.php:1-33",
+        "Tests/Completion/Output/ZshCompletionOutputTest.php:1-33"
+      ],
+      "outcome": "fail",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "console",
+      "verdict": "clearly_in",
+      "occurrences": [
         "Tests/DependencyInjection/AddConsoleCommandPassTest.php:135-147",
         "Tests/DependencyInjection/AddConsoleCommandPassTest.php:97-109"
       ],
@@ -3623,6 +3662,19 @@
         "Tests/DependencyInjection/RegisterCommandArgumentLocatorsPassTest.php:365-372"
       ],
       "outcome": "pass",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "console",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "Tests/DependencyInjection/RemoveEmptyCommandArgumentLocatorsPassTest.php:116-125",
+        "Tests/DependencyInjection/RemoveEmptyCommandArgumentLocatorsPassTest.php:59-68"
+      ],
+      "outcome": "fail",
       "since": "2026-11-08T06:47:26.057Z",
       "engine": "deslop@1dc218c8774f",
       "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
@@ -4468,6 +4520,19 @@
         "pkgs/core/src/locale/tr/_lib/match/index.ts:107-151"
       ],
       "outcome": "pass",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "date-fns",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "pkgs/core/src/locale/kk/_lib/formatRelative/index.ts:52-64",
+        "pkgs/core/src/locale/mk/_lib/formatRelative/index.ts:82-94"
+      ],
+      "outcome": "fail",
       "since": "2026-11-08T06:47:26.057Z",
       "engine": "deslop@1dc218c8774f",
       "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
@@ -5465,6 +5530,19 @@
       "repo": "express",
       "verdict": "clearly_in",
       "occurrences": [
+        "test/app.param.js:275-282",
+        "test/app.param.js:99-106"
+      ],
+      "outcome": "fail",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "express",
+      "verdict": "clearly_in",
+      "occurrences": [
         "test/app.param.js:306-320",
         "test/app.param.js:71-85"
       ],
@@ -5543,6 +5621,19 @@
       "repo": "express",
       "verdict": "clearly_in",
       "occurrences": [
+        "test/app.router.js:119-129",
+        "test/app.router.js:95-105"
+      ],
+      "outcome": "fail",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "express",
+      "verdict": "clearly_in",
+      "occurrences": [
         "test/app.router.js:437-449",
         "test/app.router.js:491-503"
       ],
@@ -5573,6 +5664,19 @@
         "test/app.router.js:892-899"
       ],
       "outcome": "pass",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "express",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/app.use.js:144-149",
+        "test/app.use.js:193-198"
+      ],
+      "outcome": "fail",
       "since": "2026-11-08T06:47:26.057Z",
       "engine": "deslop@1dc218c8774f",
       "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
@@ -5807,6 +5911,19 @@
         "test/express.raw.js:330-359"
       ],
       "outcome": "pass",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "express",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/express.json.js:515-540",
+        "test/express.text.js:372-397"
+      ],
+      "outcome": "fail",
       "since": "2026-11-08T06:47:26.057Z",
       "engine": "deslop@1dc218c8774f",
       "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
@@ -6353,6 +6470,19 @@
         "test/res.cookie.js:217-229"
       ],
       "outcome": "pass",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "express",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "test/res.jsonp.js:164-171",
+        "test/res.jsonp.js:335-342"
+      ],
+      "outcome": "fail",
       "since": "2026-11-08T06:47:26.057Z",
       "engine": "deslop@1dc218c8774f",
       "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
@@ -8234,6 +8364,19 @@
       "repo": "fscheck",
       "verdict": "clearly_in",
       "occurrences": [
+        "examples/FsCheck.Examples.CSharp/Program.cs:13-26",
+        "examples/FsCheck.Examples.MsTest/ClassesToTest/EnumerableExtensions.cs:10-23"
+      ],
+      "outcome": "fail",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "fscheck",
+      "verdict": "clearly_in",
+      "occurrences": [
         "examples/FsCheck.Examples.MsTest/ClassesToTest/Doc.cs:45-60",
         "examples/FsCheck.Examples.MsTest/ClassesToTest/Doc.cs:62-77"
       ],
@@ -9222,6 +9365,19 @@
       "repo": "fsharpplus",
       "verdict": "clearly_in",
       "occurrences": [
+        "src/FSharpPlus/Data/NonEmptyList.fs:57-76",
+        "src/FSharpPlus/Data/NonEmptySet.fs:66-83"
+      ],
+      "outcome": "fail",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "fsharpplus",
+      "verdict": "clearly_in",
+      "occurrences": [
         "src/FSharpPlus/Data/Option.fs:1-101",
         "src/FSharpPlus/Data/ValueOption.fs:1-102"
       ],
@@ -9603,6 +9759,19 @@
         "tests/FSharpPlusFable.Tests/FSharpTests/General/Util.fs:211-255"
       ],
       "outcome": "pass",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "fsharpplus",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tests/FSharpPlus.Tests/General.fs:51-63",
+        "tests/FSharpPlusFable.Tests/FSharpTests/General/Util.fs:46-58"
+      ],
+      "outcome": "fail",
       "since": "2026-11-08T06:47:26.057Z",
       "engine": "deslop@1dc218c8774f",
       "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
@@ -10643,6 +10812,32 @@
         "routes_test.go:911-942"
       ],
       "outcome": "pass",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "gin",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tree.go:764-799",
+        "tree.go:848-871"
+      ],
+      "outcome": "fail",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "gin",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "tree.go:861-871",
+        "tree.go:877-887"
+      ],
+      "outcome": "fail",
       "since": "2026-11-08T06:47:26.057Z",
       "engine": "deslop@1dc218c8774f",
       "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
@@ -11930,6 +12125,19 @@
         "pkgs/http2/test/transport_test.dart:445-478"
       ],
       "outcome": "pass",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "http",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "pkgs/http_client_conformance_tests/lib/src/abort_tests.dart:167-174",
+        "pkgs/http_client_conformance_tests/lib/src/abort_tests.dart:225-233"
+      ],
+      "outcome": "fail",
       "since": "2026-11-08T06:47:26.057Z",
       "engine": "deslop@1dc218c8774f",
       "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
@@ -14474,6 +14682,19 @@
       "repo": "newtonsoft.json",
       "verdict": "clearly_in",
       "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/ShouldSerializeTests.cs:588-599",
+        "Src/Newtonsoft.Json.Tests/Serialization/ShouldSerializeTests.cs:609-620"
+      ],
+      "outcome": "fail",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "newtonsoft.json",
+      "verdict": "clearly_in",
+      "occurrences": [
         "Src/Newtonsoft.Json.Tests/TestObjects/EnumerableClass.cs:1-34",
         "Src/Newtonsoft.Json.Tests/TestObjects/GenericIEnumerableWithImplicitConversion.cs:1-34"
       ],
@@ -15053,6 +15274,19 @@
       "since": "2026-10-22T21:05:36.093Z",
       "engine": "deslop (binary a8ddd29da036)",
       "commit": "4e7c7df5ebee54d42509113c83d0ac9670460781",
+      "version": null
+    },
+    {
+      "repo": "rayon",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "rayon-core/src/broadcast/test.rs:163-168",
+        "rayon-core/src/broadcast/test.rs:201-206"
+      ],
+      "outcome": "fail",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
       "version": null
     },
     {
@@ -17958,6 +18192,19 @@
       "repo": "viper",
       "verdict": "clearly_in",
       "occurrences": [
+        "internal/encoding/dotenv/codec_test.go:24-55",
+        "internal/encoding/toml/codec_test.go:66-97"
+      ],
+      "outcome": "fail",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "viper",
+      "verdict": "clearly_in",
+      "occurrences": [
         "internal/encoding/dotenv/map_utils.go:12-41",
         "viper.go:1996-2025"
       ],
@@ -18092,6 +18339,19 @@
         "viper.go:1940-1952"
       ],
       "outcome": "pass",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "viper",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "viper.go:539-553",
+        "viper.go:572-587"
+      ],
+      "outcome": "fail",
       "since": "2026-11-08T06:47:26.057Z",
       "engine": "deslop@1dc218c8774f",
       "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
@@ -18855,6 +19115,19 @@
       "repo": "vite",
       "verdict": "clearly_in",
       "occurrences": [
+        "playground/assets/__tests__/encoded-base/assets-encoded-base.spec.ts:178-205",
+        "playground/assets/__tests__/relative-base/assets-relative-base.spec.ts:191-218"
+      ],
+      "outcome": "fail",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "vite",
+      "verdict": "clearly_in",
+      "occurrences": [
         "playground/assets/__tests__/encoded-base/assets-encoded-base.spec.ts:232-269",
         "playground/assets/__tests__/url-base/assets-url-base.spec.ts:234-271"
       ],
@@ -19180,6 +19453,32 @@
       "repo": "vite",
       "verdict": "clearly_in",
       "occurrences": [
+        "playground/multiple-entrypoints/entrypoints/a10.js:20-31",
+        "playground/multiple-entrypoints/entrypoints/a11.js:19-30"
+      ],
+      "outcome": "fail",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "vite",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "playground/multiple-entrypoints/entrypoints/a12.js:18-28",
+        "playground/multiple-entrypoints/entrypoints/a8.js:22-32"
+      ],
+      "outcome": "fail",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "vite",
+      "verdict": "clearly_in",
+      "occurrences": [
         "playground/multiple-entrypoints/entrypoints/a15.js:1-19",
         "playground/multiple-entrypoints/entrypoints/a16.js:1-18"
       ],
@@ -19463,6 +19762,19 @@
       "version": null
     },
     {
+      "repo": "vite",
+      "verdict": "clearly_out",
+      "occurrences": [
+        "packages/vite/src/types/chokidar.d.ts:77-92",
+        "packages/vite/src/types/ws.d.ts:262-271"
+      ],
+      "outcome": "fail",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
       "repo": "zlib",
       "verdict": "clearly_in",
       "occurrences": [
@@ -19570,6 +19882,19 @@
       "repo": "zlib",
       "verdict": "clearly_in",
       "occurrences": [
+        "contrib/infback9/infback9.c:334-342",
+        "infback.c:294-302"
+      ],
+      "outcome": "fail",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "zlib",
+      "verdict": "clearly_in",
+      "occurrences": [
         "contrib/infback9/infback9.c:518-537",
         "infback.c:486-510"
       ],
@@ -19613,6 +19938,19 @@
         "contrib/infback9/infback9.c:97-105"
       ],
       "outcome": "pass",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "zlib",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "contrib/infback9/inftree9.c:228-236",
+        "contrib/infback9/inftree9.c:302-310"
+      ],
+      "outcome": "fail",
       "since": "2026-11-08T06:47:26.057Z",
       "engine": "deslop@1dc218c8774f",
       "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
@@ -19986,10 +20324,62 @@
       "repo": "zlib",
       "verdict": "clearly_in",
       "occurrences": [
+        "examples/zpipe.c:40-48",
+        "examples/zpipe.c:96-104"
+      ],
+      "outcome": "fail",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "zlib",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "gzread.c:426-433",
+        "gzread.c:552-559"
+      ],
+      "outcome": "fail",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "zlib",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "gzread.c:426-442",
+        "gzread.c:517-533"
+      ],
+      "outcome": "fail",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "zlib",
+      "verdict": "clearly_in",
+      "occurrences": [
         "gzread.c:705-713",
         "gzwrite.c:703-713"
       ],
       "outcome": "pass",
+      "since": "2026-11-08T06:47:26.057Z",
+      "engine": "deslop@1dc218c8774f",
+      "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",
+      "version": null
+    },
+    {
+      "repo": "zlib",
+      "verdict": "clearly_in",
+      "occurrences": [
+        "gzwrite.c:271-281",
+        "gzwrite.c:298-308"
+      ],
+      "outcome": "fail",
       "since": "2026-11-08T06:47:26.057Z",
       "engine": "deslop@1dc218c8774f",
       "commit": "1dc218c8774f4f74611228a46fcd85e2e8909bfe",

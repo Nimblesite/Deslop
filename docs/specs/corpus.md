@@ -271,9 +271,13 @@ A register with no entries scores **nothing**, never 100%. Being asked no questi
 - Implemented in `crates/deslop-test-support/src/corpus_score/outcomes.rs` (`standings`, `record`), `run.rs` (`write_scorecard`, `Scoring`) and `render/outcomes.rs`. `corpus-score score --gate` exits non-zero on an `unrecorded` or `regressed` pair (`Standing::fails_the_run`) or any failed curated check; `--accept-failures` cannot be combined with it.
 - Pinned end to end by `corpus_score/run/tests/record.rs`, over the file on disk by `every_recorded_pair_is_a_pair_its_register_judges` and `the_record_holds_one_outcome_per_pair_in_one_stable_order_and_nothing_else` in `crates/deslop/tests/corpus_register_contract.rs`, and in CI wiring by `scripts/repository/score-gate-source.test.mjs`.
 
-### [CORPUS-SCORE-GATE-SLICE] The default gate covers judged languages
+### [CORPUS-SCORE-GATE-SLICE] The default gate covers every register judging 50+ pairs
 
-The default `score-gate.sh` slice includes Polly and FSharp.Data so every push checks judged C# and F# pairs alongside the existing Python, Go, JavaScript and Rust registers. `--list-default-targets` prints each target's URL, exact judged commit and language directly from its register without building or scanning. `scripts/repository/score-gate-source.test.mjs` checks both resolved targets and keeps the [CORPUS-REGISTER-COVERAGE] floor of 15 judged pairs for every slice member. FSharp.Data cleared that floor through two independent source-only judging passes; only consensus verdicts entered its register, while disagreements stayed out of the gate. A language with fewer firm verdicts needs more independent judging before it enters the default gate; lowering the floor would make an accuracy claim rest on too little evidence.
+The default `score-gate.sh` slice is exactly the registers that judge at least 50 pairs CLEARLY IN or CLEARLY OUT — today fifteen, covering JavaScript, TypeScript, C#, F#, Go, Rust, Dart, PHP, Python and C. A register under 50 judgments is scored by `make compare` and `make _score-corpus` but does not gate CI: too few verdicts score an engine on luck. A register that reaches 50 joins the slice; `scripts/repository/score-gate-source.test.mjs` fails until it does, and fails if a thinner register is added. `--list-default-targets` prints each target's URL, exact judged commit and language directly from its register without building or scanning.
+
+### [CORPUS-SCORE-GATE-SHARD] CI scores each gate repository in parallel
+
+CI builds the engine and the scorer once (`corpus-targets`), publishes both as one artifact, and fans `corpus-score` out as a matrix from `score-gate.sh --list-ci-matrix`: one job per slice repository, `fail-fast: false`, each running `score-gate.sh <that repository>` with `SCORE_GATE_PREBUILT=1`. Scoring one repository leaves every other repository's record untouched ([CORPUS-SCORE-OUTCOMES]), so each shard holds its own pairs to the record and fails on a regression or an unrecorded failure. Any failing shard fails `corpus-score`, which the aggregate `ci` job requires. A local run never uses prebuilt binaries ([CORPUS-HISTORY-SOURCE]).
 
 ### [CORPUS-SCORE-GATE-JUDGED] The gate scans judged repositories, and fails when it judged nothing
 
@@ -328,7 +332,7 @@ Each markdown scorecard has a `.json` twin of the same name. A corpus test is na
 
 ### [CORPUS-HISTORY] The whole judged corpus, tracked run over run
 
-`make _score-corpus` (`scripts/corpus/score-gate.sh --all-judged`) scans every register that judges at least one pair CLEARLY IN or CLEARLY OUT, and no repository without judgments. `--list-judged-targets` prints that list without building or scanning. CI does not run it: the CI gate stays the slice in [CORPUS-SCORE-GATE-SLICE].
+`make _score-corpus` (`scripts/corpus/score-gate.sh --all-judged`) scans every register that judges at least one pair CLEARLY IN or CLEARLY OUT, and no repository without judgments. `--list-judged-targets` prints that list without building or scanning. CI does not run it: the CI gate is the slice in [CORPUS-SCORE-GATE-SLICE], sharded per [CORPUS-SCORE-GATE-SHARD].
 
 **Read it in `corpus/history/HISTORY.md`.** The page is rendered again from every run record each time a run is added, and is never edited by hand. Newest run first, it has:
 
