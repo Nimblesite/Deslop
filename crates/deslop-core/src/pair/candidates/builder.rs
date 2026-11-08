@@ -5,7 +5,10 @@
 //! Split from the parent module, which owns the entry points and the
 //! shared endpoint helpers.
 
-use std::{collections::HashMap, hash::BuildHasher};
+use std::{
+    collections::{BTreeMap, HashMap},
+    hash::BuildHasher,
+};
 
 use super::{
     super::{
@@ -77,35 +80,17 @@ pub(super) struct PairBuilder<'corpus, S: BuildHasher> {
 }
 
 impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
-    /// Adds a confirmed copy star without materialising every pair in its shape bucket.
-    pub(super) fn add_missing_structural_pairs(
-        &mut self,
-        members: &[usize],
-        existing: &[CandidatePair],
-    ) {
-        let Some((&canonical, rest)) = members.split_first() else {
-            return;
-        };
-        let (structural, embedding) = STRUCTURAL_COPY_EVIDENCE;
-        for &member in rest {
-            let key = order(canonical, member);
-            if self.missing_structural_pair(key, existing) {
-                self.add_evidence(key.0, key.1, structural, embedding);
-            }
+    /// [FUSED-CANDIDATE-BUCKET-RECOVERY] The structural pair two
+    /// Merkle-equal members would have entered as, through the same
+    /// construction guards as discovery; `None` for unequal hashes or a
+    /// pair the guards refuse.
+    pub(super) fn structural_pair(&self, left: usize, right: usize) -> Option<CandidatePair> {
+        if !self.merkle_equal(left, right) {
+            return None;
         }
-    }
-
-    /// Existing candidates retain all their recorded evidence and are never reconstructed.
-    fn missing_structural_pair(&self, key: (usize, usize), existing: &[CandidatePair]) -> bool {
-        let (Some(left), Some(right)) =
-            (self.fingerprints.get(key.0), self.fingerprints.get(key.1))
-        else {
-            return false;
-        };
-        left.hash == right.hash
-            && existing
-                .binary_search_by_key(&key, |pair| (pair.left, pair.right))
-                .is_err()
+        let (structural, embedding) = STRUCTURAL_COPY_EVIDENCE;
+        let pair = self.construct_pair(order(left, right), structural, embedding)?;
+        self.gate(&pair).then_some(pair)
     }
 
     /// Builder over one corpus view.
@@ -172,7 +157,7 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
             buckets = buckets.saturating_add(1);
             largest_bucket = largest_bucket.max(run.len());
             self.log_large_bucket(&run);
-            self.pair_bucket(&run);
+            self.pair_bucket_per_language(&run);
             run_start = run_end;
         }
         tracing::info!(
@@ -208,6 +193,34 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
             node_count = first.node_count,
             "large structural bucket"
         );
+    }
+
+    /// [FUSED-CANDIDATE-BUCKET-STAR] Draws the star inside the population
+    /// the language policy admits. With cross-language comparison off, a
+    /// bucket spanning languages is one star per language: a centre in
+    /// another language has no admissible edge to anyone, and a single
+    /// star from it would leave every other language's members paired
+    /// with nobody — a run of string literals hashes the same in every
+    /// grammar, so a C file's list once silenced an Osprey file's copies.
+    fn pair_bucket_per_language(&mut self, run: &[usize]) {
+        let Some(languages) = self
+            .file_languages
+            .filter(|_| !self.allow_cross_language)
+        else {
+            self.pair_bucket(run);
+            return;
+        };
+        let mut by_language: BTreeMap<Option<&'static str>, Vec<usize>> = BTreeMap::new();
+        for &index in run {
+            let language = self
+                .fingerprints
+                .get(index)
+                .and_then(|entry| languages.get(&entry.file_id).copied());
+            by_language.entry(language).or_default().push(index);
+        }
+        for members in by_language.values() {
+            self.pair_bucket(members);
+        }
     }
 
     /// Pairs one structural-hash bucket ([FUSED-CANDIDATE-BUCKET-STAR]):

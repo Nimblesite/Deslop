@@ -33,6 +33,8 @@ use crate::{
     state::FileId,
 };
 
+#[path = "copy_recovery.rs"]
+mod copy_recovery;
 #[path = "information.rs"]
 mod information;
 
@@ -107,14 +109,8 @@ impl PipelineSession {
             &embedding_outcome.pairs,
             &pairs,
         );
-        let (fused_clusters, shape_families, informational_candidates) = self.partition_and_split(
-            fingerprints,
-            pairs,
-            &trees,
-            &parse_cache,
-            &mut ledger,
-            &judge,
-        );
+        let (fused_clusters, shape_families, informational_candidates) =
+            self.partition_and_split(fingerprints, pairs, &trees, &parse_cache, &mut ledger);
         let clusters = self.ranked_clusters(
             fingerprints,
             &fused_clusters,
@@ -170,7 +166,6 @@ impl PipelineSession {
         trees: &[crate::ast::NormalizedNode],
         parse_cache: &ParseCache,
         ledger: &mut StageLedger,
-        judge: &dyn crate::cluster::ClusterKindJudge,
     ) -> (
         Vec<crate::pair::FusedCluster>,
         Vec<Vec<crate::fingerprint::Fingerprint>>,
@@ -183,7 +178,7 @@ impl PipelineSession {
         let stage_started = Instant::now();
         let recovery_input = pairs.len();
         let shape_families = cluster_by_transitive_closure(&pairs);
-        self.recover_copy_pairs(&mut pairs, &shape_families, fingerprints, judge);
+        self.recover_copy_pairs(&mut pairs, &shape_families, fingerprints, trees, parse_cache);
         ledger.record(
             "shape_families_and_copy_recovery",
             recovery_input,

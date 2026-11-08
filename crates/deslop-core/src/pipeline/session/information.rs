@@ -1,12 +1,6 @@
 //! [CLONE-BUCKETS-STRUCTURAL-ONLY] Build informational findings separately from clones.
 
-use std::{
-    collections::{BTreeMap, HashMap, HashSet},
-    num::NonZeroUsize,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-    time::Instant,
-};
+use std::{collections::HashMap, path::PathBuf, time::Instant};
 
 use super::{super::store::relative_path_key, StageLedger};
 use crate::{
@@ -16,7 +10,7 @@ use crate::{
     content::{tree_index_of, ContentMeasurer},
     fingerprint::Fingerprint,
     overlap::endpoint_count_bound,
-    pair::{missing_structural_pairs, CandidatePair, FusedCluster},
+    pair::FusedCluster,
     pipeline::PipelineSession,
     state::FileId,
 };
@@ -29,18 +23,6 @@ struct KindFilter<'a> {
     clones: bool,
 }
 
-/// A connected pair already has its only edge; larger complete components
-/// likewise have no missing relation for copy recovery to discover.
-const MIN_RECOVERY_MEMBERS: usize = 3;
-/// Fewest incomplete families per worker worth sharding recovery for
-/// ([`crate::shard::worker_count`]).
-const RECOVERY_SHARD_MIN_FAMILIES: NonZeroUsize = match NonZeroUsize::new(64) {
-    Some(floor) => floor,
-    None => NonZeroUsize::MIN,
-};
-/// Incomplete families per claimed chunk: one family of thousands of
-/// same-hash members must not hold the stage open on one worker.
-const RECOVERY_CHUNK_FAMILIES: usize = 8;
 /// A pair connects two distinct member indices.
 const PAIR_ENDPOINTS: usize = 2;
 
@@ -142,224 +124,6 @@ fn same_shape_pair_is_exact(
             .exact_frontier_match(sources)
 }
 
-/// [FUSED-CANDIDATE-BUCKET-RECOVERY] Only equal hashes can add structural edges.
-fn recovery_hash_groups(family: &FusedCluster, fingerprints: &[Fingerprint]) -> Vec<Vec<usize>> {
-    let mut by_hash: BTreeMap<[u8; 32], Vec<usize>> = BTreeMap::new();
-    for &member in &family.members {
-        if let Some(fingerprint) = fingerprints.get(member) {
-            by_hash.entry(fingerprint.hash).or_default().push(member);
-        } else {
-            tracing::error!(member, "copy recovery member outside fingerprint corpus");
-        }
-    }
-    by_hash
-        .into_values()
-        .filter(|members| members.len() >= PAIR_ENDPOINTS)
-        .collect()
-}
-
-/// [CLONE-KIND-FOLD] Avoid kind measurements on complete families and on
-/// cross-hash pairs that recovery cannot add.
-fn clone_groups(members: &[usize], judge: &dyn ClusterKindJudge) -> Vec<Vec<usize>> {
-    judge
-        .groups(members)
-        .into_iter()
-        .filter_map(|(members, kind)| kind.is_clone().then_some(members))
-        .collect()
-}
-
-/// [FUSED-CANDIDATE-BUCKET-RECOVERY] Recovery exists to connect copies, so
-/// a mixed family's same-hash members are walked in order and each one is
-/// judged against the members of every component it is not yet in, stopping
-/// at that component's first copy. Every judged copy is emitted, so a chain
-/// of nontransitive copies still joins link by link, while a bucket of `n`
-/// copies costs about `n` verdicts instead of `n(n-1)/2` (gh #506: a
-/// generated parser table of 1,549 same-shape windows asked 10.4M).
-fn connected_hash_pairs(
-    members: &[usize],
-    judge: &dyn ClusterKindJudge,
-    existing: &[CandidatePair],
-    judged: &AtomicUsize,
-) -> Vec<Vec<usize>> {
-    let mut components: Vec<Vec<usize>> = Vec::new();
-    let mut pairs = Vec::new();
-    for &member in members {
-        let mut joined = Vec::new();
-        for (index, component) in components.iter().enumerate() {
-            let copy = component.iter().copied().find(|&other| {
-                if candidate_exists(existing, other, member) {
-                    return false;
-                }
-                let _previous = judged.fetch_add(1, Ordering::Relaxed);
-                judge
-                    .kind(&[other, member])
-                    .is_some_and(ClusterKind::is_clone)
-            });
-            if let Some(other) = copy {
-                pairs.push(vec![other, member]);
-                joined.push(index);
-            }
-        }
-        join_components(&mut components, &joined, member);
-    }
-    pairs
-}
-
-/// Merges the components `member` was found to be a copy in, with `member`
-/// appended, into the first of them; a member that copied nothing starts
-/// its own component.
-fn join_components(components: &mut Vec<Vec<usize>>, joined: &[usize], member: usize) {
-    let Some((&first, rest)) = joined.split_first() else {
-        components.push(vec![member]);
-        return;
-    };
-    let mut merged = vec![member];
-    for &index in rest.iter().rev() {
-        if index < components.len() {
-            merged.append(&mut components.remove(index));
-        }
-    }
-    if let Some(target) = components.get_mut(first) {
-        target.append(&mut merged);
-        target.sort_unstable();
-    }
-}
-
-/// Existing candidates retain their original evidence; recovery cannot
-/// reconstruct them, so their clone verdict is unnecessary here.
-fn candidate_exists(existing: &[CandidatePair], left: usize, right: usize) -> bool {
-    let key = (left.min(right), left.max(right));
-    existing
-        .binary_search_by_key(&key, |pair| (pair.left, pair.right))
-        .is_ok()
-}
-
-/// Keep the original greedy fold for a single-hash family; mixed families
-/// walk each same-hash group for connectivity so a nontransitive clone
-/// cannot disappear and a large bucket is not judged pair by pair.
-fn family_recovery_groups(
-    family: &FusedCluster,
-    fingerprints: &[Fingerprint],
-    judge: &dyn ClusterKindJudge,
-    existing: &[CandidatePair],
-    judged: &AtomicUsize,
-) -> Vec<Vec<usize>> {
-    let groups = recovery_hash_groups(family, fingerprints);
-    if groups.len() == 1
-        && groups
-            .first()
-            .is_some_and(|members| members.len() == family.members.len())
-    {
-        return clone_groups(&family.members, judge);
-    }
-    groups
-        .iter()
-        .flat_map(|members| connected_hash_pairs(members, judge, existing, judged))
-        .collect()
-}
-
-/// The clone-certified groups or pairs that may add structural edges.
-/// Families recover independently, so they are dealt to workers in
-/// chunks and the groups reassembled in family order
-/// ([PIPELINE-DETERMINISM]); every verdict is the judge's, whichever
-/// worker asked for it.
-fn recovery_groups<'a>(
-    families: &'a [FusedCluster],
-    fingerprints: &'a [Fingerprint],
-    judge: &'a dyn ClusterKindJudge,
-    existing: &'a [CandidatePair],
-    judged: &'a AtomicUsize,
-) -> impl Iterator<Item = Vec<usize>> + 'a {
-    let incomplete: Vec<&FusedCluster> = families
-        .iter()
-        .filter(|family| has_missing_pair(family))
-        .collect();
-    let workers = crate::shard::worker_count(incomplete.len(), RECOVERY_SHARD_MIN_FAMILIES);
-    let (chunks, _states) = crate::shard::map_chunks(
-        incomplete.chunks(RECOVERY_CHUNK_FAMILIES),
-        workers,
-        || (),
-        |(), chunk: &[&FusedCluster]| {
-            chunk
-                .iter()
-                .flat_map(|family| {
-                    family_recovery_groups(family, fingerprints, judge, existing, judged)
-                })
-                .collect::<Vec<Vec<usize>>>()
-        },
-    );
-    chunks.into_iter().flatten()
-}
-
-/// Unique valid edges must fill every possible member pair before we skip.
-fn has_missing_pair(family: &FusedCluster) -> bool {
-    let count = family.members.len();
-    if count < MIN_RECOVERY_MEMBERS {
-        return false;
-    }
-    let Some(expected) = count
-        .checked_mul(count.saturating_sub(1))
-        .map(|edges| edges / PAIR_ENDPOINTS)
-    else {
-        return true;
-    };
-    if family.edges.len() < expected {
-        return true;
-    }
-    unique_valid_edges(family) < expected
-}
-
-/// Ignore duplicate, self, and out-of-component edges before skipping work.
-fn unique_valid_edges(family: &FusedCluster) -> usize {
-    let members: HashSet<_> = family.members.iter().copied().collect();
-    family
-        .edges
-        .iter()
-        .filter(|edge| {
-            edge.left != edge.right && members.contains(&edge.left) && members.contains(&edge.right)
-        })
-        .map(|edge| (edge.left.min(edge.right), edge.left.max(edge.right)))
-        .collect::<HashSet<_>>()
-        .len()
-}
-
-/// [PERF-FLUTTER-TODO-OBSERVABILITY] Count the same-hash pairs in reach of
-/// recovery without logging source paths or contents; the connectivity walk
-/// judges far fewer than this when the members are copies.
-fn recovery_workload(
-    families: &[FusedCluster],
-    fingerprints: &[Fingerprint],
-) -> (usize, usize, usize) {
-    families
-        .iter()
-        .filter(|family| has_missing_pair(family))
-        .flat_map(|family| recovery_hash_groups(family, fingerprints))
-        .fold((0, 0, 0), |(groups, pairs, largest), members| {
-            let count = members.len();
-            let comparisons = count.saturating_mul(count.saturating_sub(1)) / PAIR_ENDPOINTS;
-            (
-                groups.saturating_add(1),
-                pairs.saturating_add(comparisons),
-                largest.max(count),
-            )
-        })
-}
-
-/// Emits one count-only event before a potentially expensive fold.
-fn log_recovery_workload(families: &[FusedCluster], fingerprints: &[Fingerprint]) {
-    if !tracing::enabled!(tracing::Level::INFO) {
-        return;
-    }
-    let (eligible, pairs_in_reach, max_members) = recovery_workload(families, fingerprints);
-    tracing::info!(
-        families = families.len(),
-        eligible,
-        pairs_in_reach,
-        max_members,
-        "copy recovery workload"
-    );
-}
-
 impl ClusterKindJudge for KindFilter<'_> {
     fn kind(&self, members: &[usize]) -> Option<ClusterKind> {
         self.judge
@@ -383,44 +147,6 @@ impl ClusterKindJudge for KindFilter<'_> {
 }
 
 impl PipelineSession {
-    /// [CLONE-KIND-FOLD] An unrelated star centre cannot erase copies among its neighbours.
-    pub(super) fn recover_copy_pairs(
-        &self,
-        pairs: &mut Vec<CandidatePair>,
-        families: &[FusedCluster],
-        fingerprints: &[Fingerprint],
-        judge: &dyn ClusterKindJudge,
-    ) {
-        log_recovery_workload(families, fingerprints);
-        pairs.sort_unstable_by_key(|pair| (pair.left, pair.right));
-        let judged = AtomicUsize::new(0);
-        let groups = recovery_groups(families, fingerprints, judge, pairs, &judged);
-        let recovered = self.build_missing_copy_pairs(fingerprints, groups, pairs);
-        tracing::info!(
-            recovered = recovered.len(),
-            judged = judged.load(Ordering::Relaxed),
-            "copy edges recovered"
-        );
-        pairs.extend(recovered);
-    }
-
-    /// Uses the same candidate constructor and language policy as initial discovery.
-    fn build_missing_copy_pairs(
-        &self,
-        fingerprints: &[Fingerprint],
-        groups: impl Iterator<Item = Vec<usize>>,
-        existing: &[CandidatePair],
-    ) -> Vec<CandidatePair> {
-        missing_structural_pairs(
-            fingerprints,
-            &self.store.signatures(),
-            groups,
-            existing,
-            &self.file_languages,
-            self.exclusion.allows_cross_language_comparison(),
-        )
-    }
-
     /// Informational shapes cannot displace real copies during overlap suppression.
     pub(super) fn ranked_clusters(
         &self,

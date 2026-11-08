@@ -35,25 +35,37 @@ mod builder;
 #[path = "candidates/tests.rs"]
 mod tests;
 
-/// [CLONE-KIND-FOLD] Builds missing copy edges through the ordinary construction guards.
-/// `existing` is sorted by endpoint pair; recovered groups add only exact structural matches.
-pub(crate) fn missing_structural_pairs<S: BuildHasher>(
-    fingerprints: &[Fingerprint],
-    signatures: &dyn SignatureLookup,
-    groups: impl Iterator<Item = Vec<usize>>,
-    existing: &[CandidatePair],
-    languages: &HashMap<FileId, &'static str, S>,
-    allow_cross_language: bool,
-) -> Vec<CandidatePair> {
-    let mut builder = PairBuilder::new(
-        fingerprints,
-        signatures,
-        Some(languages),
-        allow_cross_language,
-    );
-    groups.for_each(|members| builder.add_missing_structural_pairs(&members, existing));
-    builder.flush_evidence();
-    builder.finish()
+/// [FUSED-CANDIDATE-BUCKET-RECOVERY] Builds the pairs copy recovery
+/// proposes through the ordinary construction guards, so a recovered
+/// pair is exactly the candidate discovery would have retained.
+pub(crate) struct CopyProbe<'corpus, S: BuildHasher> {
+    /// The discovery builder, used for construction only.
+    builder: PairBuilder<'corpus, S>,
+}
+
+impl<'corpus, S: BuildHasher> CopyProbe<'corpus, S> {
+    /// A probe over one corpus view under the scan's language policy.
+    pub(crate) fn new(
+        fingerprints: &'corpus [Fingerprint],
+        signatures: &'corpus dyn SignatureLookup,
+        languages: &'corpus HashMap<FileId, &'static str, S>,
+        allow_cross_language: bool,
+    ) -> Self {
+        Self {
+            builder: PairBuilder::new(
+                fingerprints,
+                signatures,
+                Some(languages),
+                allow_cross_language,
+            ),
+        }
+    }
+
+    /// The structural pair of two Merkle-equal members, or `None` when
+    /// the hashes differ or the construction guards refuse it.
+    pub(crate) fn structural_pair(&self, left: usize, right: usize) -> Option<CandidatePair> {
+        self.builder.structural_pair(left, right)
+    }
 }
 
 /// A source of LSH band-collision pairs. Abstract so the batch render can

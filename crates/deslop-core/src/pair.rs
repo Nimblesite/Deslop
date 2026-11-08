@@ -16,14 +16,20 @@ use crate::fingerprint::Fingerprint;
 
 /// Candidate-pair construction helpers kept separate from closure clustering.
 mod candidates;
-pub(crate) use candidates::missing_structural_pairs;
+pub(crate) use candidates::CopyProbe;
 pub use candidates::{candidate_pairs, candidate_pairs_for_language_policy, LshPairs};
 
 /// Pair-content admission guard applied before transitive closure.
 mod content_gate;
 mod echo;
-pub(crate) use content_gate::{apply_pair_content_gate, async_core_satisfies_content};
+pub(crate) use content_gate::{
+    apply_pair_content_gate, async_core_satisfies_content, GateShared, PairGate,
+};
 pub(crate) use echo::ExactClones;
+
+/// [FUSED-CANDIDATE-BUCKET-RECOVERY] The copy pairs a bucket's star hides.
+mod recovery;
+pub(crate) use recovery::{recover_copy_pairs, GatedCopyWeld};
 
 /// Transitive-closure clustering over surviving pairs.
 mod closure;

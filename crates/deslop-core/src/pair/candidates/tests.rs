@@ -5,7 +5,9 @@
 //! and a 2,290 s content gate. Copy recovery, not enumeration, now adds
 //! the pairs an unrelated first member hides.
 
-use super::{candidate_pairs, CandidatePair, LshPairs};
+use std::collections::HashMap;
+
+use super::{candidate_pairs, candidate_pairs_for_language_policy, CandidatePair, LshPairs};
 use crate::{
     ast::ByteRange,
     fingerprint::Fingerprint,
@@ -29,6 +31,16 @@ const SPANNING_FILES: [usize; 3] = [0, 0, 1];
 /// The spanning bucket's star plus the cross-file pair every same-file
 /// member is owed: `(0,1)`, `(0,2)` and `(1,2)`.
 const SPANNING_PAIRS: [(usize, usize); 3] = [(0, 1), (0, 2), (1, 2)];
+/// A bucket whose first member is written in another language: one C
+/// file, then three windows of one Python file.
+const LANGUAGE_FILES: [(&str, &str); 2] = [("table.c", "c"), ("rows.py", "python")];
+/// Members in index order: the C window first, then the Python windows.
+const LANGUAGE_MEMBERS: [usize; 4] = [0, 1, 1, 1];
+/// The Python star, drawn from the first Python member; the C window has
+/// no admissible edge and is nobody's centre.
+const PYTHON_STAR: [(usize, usize); 2] = [(1, 2), (1, 3)];
+/// Cross-language comparison is off by default ([CONFIG-CROSS-LANGUAGE]).
+const CROSS_LANGUAGE_OFF: bool = false;
 
 fn member(file_id: FileId, position: usize) -> Fingerprint {
     let start = position.saturating_mul(MEMBER_BYTES);
@@ -90,6 +102,47 @@ fn a_same_file_bucket_is_a_star_not_a_clique() {
     assert_eq!(
         pairs, expected,
         "one file of {SAME_FILE_MEMBERS} same-shape members must pair as a star from the first member"
+    );
+}
+
+/// [FUSED-CANDIDATE-BUCKET-STAR] A bucket spanning languages is one star
+/// per language when cross-language comparison is off: a centre in
+/// another language would be refused on every edge, and the members of
+/// each remaining language would never be paired at all.
+#[test]
+fn a_bucket_whose_first_member_is_another_language_still_stars_each_language() {
+    let mut registry = FileRegistry::new();
+    let files: Vec<FileId> = LANGUAGE_FILES
+        .iter()
+        .map(|(path, _)| registry.register((*path).into()))
+        .collect();
+    let languages: HashMap<FileId, &'static str> = files
+        .iter()
+        .copied()
+        .zip(LANGUAGE_FILES.iter().map(|(_, language)| *language))
+        .collect();
+    let fingerprints: Vec<Fingerprint> = LANGUAGE_MEMBERS
+        .iter()
+        .enumerate()
+        .filter_map(|(position, file)| files.get(*file).map(|file| member(*file, position)))
+        .collect();
+    let signatures = vec![ZEROED_SIGNATURE; fingerprints.len()];
+    let index = SignatureIndex::from_segments([signatures.as_slice()]);
+    let no_lsh_pairs: Vec<(usize, usize)> = Vec::new();
+    let pairs = candidate_pairs_for_language_policy(
+        &fingerprints,
+        &index,
+        &no_lsh_pairs,
+        &[],
+        None,
+        &languages,
+        CROSS_LANGUAGE_OFF,
+    );
+    let keys: Vec<(usize, usize)> = pairs.iter().map(|pair| (pair.left, pair.right)).collect();
+    assert_eq!(
+        keys,
+        PYTHON_STAR.to_vec(),
+        "the Python windows must be paired among themselves although a C window sorts first"
     );
 }
 
