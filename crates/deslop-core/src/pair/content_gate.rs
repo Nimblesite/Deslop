@@ -11,7 +11,7 @@ use crate::{
     buckets::{CONTENT_PROMOTE_FLOOR, CONTENT_SUPPORT_FLOOR},
     cluster::scope::DeclarationScopes,
     cluster_filters::{is_embedding_role_mismatch, ParseCache},
-    content::{ContentContradiction, ContentEvidence, ContentMeasurer, PairScope},
+    content::{ContentEvidence, ContentMeasurer, PairScope},
     fingerprint::Fingerprint,
     state::FileId,
 };
@@ -213,13 +213,14 @@ fn gate_verdict<L: BuildHasher>(
     }
     let interior = gate.shared.scopes.enclosing(left).is_some()
         && gate.shared.scopes.enclosing(right).is_some();
-    let evidence = content_pair.whole(
+    let evidence = content_pair.gate(
         gate.shared.sources,
         PairScope {
             same_file: left.file_id == right.file_id,
             interior,
             core: false,
         },
+        floor,
     );
     GateVerdict::Measured {
         verified_async_core: async_core_satisfies_content(
@@ -245,10 +246,7 @@ pub(crate) fn async_core_satisfies_content(
         && whole.measured
         && overlap >= FUSED_THRESHOLD
         && token_jaccard >= SATURATING_TOKEN_FLOOR
-        && matches!(
-            whole.contradiction,
-            ContentContradiction::None | ContentContradiction::CallTargetAsyncEdit
-        )
+        && whole.clears_contradiction()
 }
 
 /// Records one content verdict so a surprising admission or refusal is

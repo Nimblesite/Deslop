@@ -73,11 +73,18 @@ impl ContentEvidence {
     #[must_use]
     pub fn clears(self, floor: f64) -> bool {
         self.measured
-            && matches!(
-                self.contradiction,
-                ContentContradiction::None | ContentContradiction::CallTargetAsyncEdit
-            )
+            && self.clears_contradiction()
             && (self.consistent_rename || self.support() >= floor)
+    }
+
+    /// Whether no contradiction vetoes admission outright: a changed
+    /// operator or call target does, an async call-selector edit does not.
+    #[must_use]
+    pub fn clears_contradiction(self) -> bool {
+        matches!(
+            self.contradiction,
+            ContentContradiction::None | ContentContradiction::CallTargetAsyncEdit
+        )
     }
 
     /// Returns explicit evidence for an unresolved pair.
@@ -240,6 +247,40 @@ pub(crate) struct PairScope {
     pub(crate) core: bool,
 }
 
+/// Builds the gate's evidence for two resolved content frontiers
+/// ([FUSED-CONTENT-GATE-ORDER]): the axes are measured cheapest and most
+/// decisive first, and the rename axes — the costly ones — only when a
+/// hard contradiction has not already refused the pair and agreement
+/// alone has not already cleared `floor`. The verdict `clears` reads is
+/// identical to the full measurement's; a skipped rename axis is left
+/// at its unmeasured value, and the literal share, which no gate reads,
+/// is never measured here.
+fn pair_gate_evidence<S: BuildHasher>(
+    pair: Option<(&MemberContent, &MemberContent)>,
+    sources: &HashMap<FileId, Vec<u8>, S>,
+    scope: PairScope,
+    floor: f64,
+) -> ContentEvidence {
+    let Some((left, right)) = pair else {
+        return ContentEvidence::unmeasured();
+    };
+    let contradiction =
+        pair_contradiction(left, right, sources).unwrap_or(ContentContradiction::None);
+    let mut evidence = ContentEvidence {
+        agreement: pair_agreement(Some(left), Some(right)),
+        measured: true,
+        contradiction,
+        ..ContentEvidence::unmeasured()
+    };
+    if evidence.clears(floor) || !evidence.clears_contradiction() {
+        return evidence;
+    }
+    let (rename_consistency, consistent) = rename::rename_axes(left, right, sources, scope);
+    evidence.rename_consistency = rename_consistency;
+    evidence.consistent_rename = contradiction == ContentContradiction::None && consistent;
+    evidence
+}
+
 /// Builds pair evidence from two resolved content frontiers.
 fn pair_evidence<S: BuildHasher>(
     pair: Option<(&MemberContent, &MemberContent)>,
@@ -252,16 +293,11 @@ fn pair_evidence<S: BuildHasher>(
 
     let contradiction =
         pair_contradiction(left, right, sources).unwrap_or(ContentContradiction::None);
+    let (rename_consistency, consistent) = rename::rename_axes(left, right, sources, scope);
     ContentEvidence {
         agreement: pair_agreement(Some(left), Some(right)),
-        rename_consistency: rename::pair_rename_consistency(
-            Some(left),
-            Some(right),
-            sources,
-            scope,
-        ),
-        consistent_rename: contradiction == ContentContradiction::None
-            && rename::pair_rename_is_consistent(left, right, sources, scope),
+        rename_consistency,
+        consistent_rename: contradiction == ContentContradiction::None && consistent,
         literal_fraction: pair_literal_fraction(left, right),
         measured: true,
         contradiction,
