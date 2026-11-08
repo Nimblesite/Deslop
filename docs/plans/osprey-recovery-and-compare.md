@@ -8,7 +8,7 @@ An unfinished declaration must not remove findings for intact neighboring functi
 - [x] Confirm the new black-box test fails against the original implementation: expected one intact clone cluster, reported zero.
 - [x] Quarantine the defective rejection and confirm the test fails at the quarantine; the clean baseline passes the same cluster, range, bucket and rank assertions first.
 - [x] Obtain acknowledgment required by the accuracy quarantine and fix-bug skill (user goal, 2026-11-08).
-- [ ] Repair the upstream Osprey grammar with construct-specific fixtures and update the pin. Blocker: the ML scanner (`tree-sitter-osprey-ml/src/scanner.c`, `skip_layout_space` + `emit`) places the zero-width `_dedent` after every following blank line, so `describe` spans `[0..85]` when a blank line and another declaration follow it, but `[0..84]` at end of file. `osprey_recovery` stays red on that byte until the scanner ends layout tokens at the first line break. The Osprey repo is owned by its own agents, so the grammar fix is theirs.
+- [x] Pin declaration ranges without the upstream grammar: the ML scanner (`tree-sitter-osprey-ml/src/scanner.c`, `skip_layout_space` + `emit`) places its zero-width `_dedent` after every following blank line, so `describe` spanned `[0..85]` before a blank line and another declaration but `[0..84]` at end of file. `osprey.rs::declaration_end` ends each top-level declaration at the line break closing its last source-bearing token; `osprey_recovery` is green. The scanner defect remains Osprey's to fix.
 - [x] Implement recovery without inventing matches inside erroneous syntax: `osprey.rs::intact_root` keeps only error-free top-level declarations; a file with no intact declaration stays a visible skip.
 - [ ] Verify the real LSP edit/recovery cycle and run required gates.
 
@@ -20,8 +20,9 @@ Completed duplication analysis does not avoid this request: `PipelineSession::me
 
 - [x] Identify the engine request on the diff opening path.
 - [x] Reproduce repeated discovery with the real engine after report completion: `completed_discovery_is_reused_by_repeated_pair_comparisons` asserts the engine's endpoint echoes and admitted verdict for three requests, including reversal, then fails because discovery ran four times instead of once.
-- [ ] Confirm the failure with the user as required by the invoked skill.
-- [ ] Implement and verify responsive comparisons and truthful verdicts.
+- [x] Confirm the failure with the user as required by the invoked skill (user goal, 2026-11-08).
+- [x] Reuse discovery: `session/anchors.rs` keeps each generation's Merkle-equal discovery pairs; render publishes them, every store splice and policy reload forgets them, and `comparison_anchor_pairs` reads them. `completed_discovery_is_reused_by_repeated_pair_comparisons` is green.
+- [ ] Show both ranges while the engine measurement is pending: `openCompareDiff` still awaits `measurePair`.
 
 ## [VSIX-PAIR-COMPARE] Osprey pair comparison suite
 
