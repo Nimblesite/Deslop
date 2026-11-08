@@ -852,9 +852,9 @@ mod tests {
             (
                 "c",
                 tree_sitter_c::LANGUAGE.into(),
-                "int f(int *p, int n) { int c = *p + n; c -= 1; \
-                 if (c < 2 && c != 0) { c *= 2; } return -c; }\n",
-                vec!["+", "-=", "<", "&&", "!=", "*=", "-"],
+                "int f(int *p, int n) { int c = p[0] + n; int *q = &c; c -= 1; \
+                 if (c < 2 && c != 0) { c *= 2; } return -c + q[0]; }\n",
+                vec!["+", "-=", "<", "&&", "!=", "*=", "-", "&"],
                 vec!["(", ")", ",", "{", "}", ";", "*"],
             ),
             (
