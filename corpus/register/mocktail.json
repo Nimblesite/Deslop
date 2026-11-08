@@ -1,0 +1,483 @@
+{
+  "name": "mocktail",
+  "language": "dart",
+  "url": "https://github.com/felangel/mocktail.git",
+  "sha": "d6a96e15b9203d33af61083e02e8c40ac07192d6",
+  "protocol": {
+    "spec": "docs/specs/corpus.md",
+    "spec_section": "[CORPUS-REGISTER]",
+    "judging_skill": ".agents/skills/judge-clone-pairs/SKILL.md",
+    "preparer_skill": ".agents/skills/clone-register-prepare/SKILL.md"
+  },
+  "clearly_in": [
+    {
+      "why": "The code beginning with `expect(` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: packages/mocktail/test/mockito_compat/capture_test.dart:129-138 and packages/mocktail/test/mockito_compat/capture_test.dart:113-122; 10 and 10 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"43\", \"42\"], [\"42\", \"43\"]]. Raw core diff:\n--- packages/mocktail/test/mockito_compat/capture_test.dart:129-138\n+++ packages/mocktail/test/mockito_compat/capture_test.dart:113-122\n@@ -9 +9 @@\n-        equals([43, 42, 44, 45]),\n+        equals([42, 43, 44, 45]),\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- packages/mocktail/test/mockito_compat/capture_test.dart:129-138\n+++ packages/mocktail/test/mockito_compat/capture_test.dart:113-122\n@@ -7,4 +7,4 @@\n           ),\n         ).captured,\n-        equals([43, 42, 44, 45]),\n+        equals([42, 43, 44, 45]),\n       );",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/capture_test.dart:129-138",
+        "packages/mocktail/test/mockito_compat/capture_test.dart:113-122"
+      ]
+    },
+    {
+      "why": "The code beginning with `testWidgets('network image renders correctly (blue)', (tester) async {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: packages/mocktail_image_network/test/mocktail_image_network_test.dart:183-201 and packages/mocktail_image_network/test/mocktail_image_network_test.dart:163-181; 19 and 19 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"'network image renders correctly (blue)'\", \"'network image renders correctly (green)'\"], [\"blueSquare\", \"greenSquare\"], [\"'''iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFUlEQVR42mNkYPj/n4EIwDiqkL4KAVIQE/f1/NxEAAAAAElFTkSuQmCC'''\", \"'''iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFElEQVR42mNk+A+ERADGUYX0VQgAXAYT9xTSUocAAAAASUVORK5CYII='''\"], [\"'mock_blue_network_image.png'\", \"'mock_green_network_image.png'\"]]. Raw core diff:\n--- packages/mocktail_image_network/test/mocktail_image_network_test.dart:183-201\n+++ packages/mocktail_image_network/test/mocktail_image_network_test.dart:163-181\n@@ -1,3 +1,3 @@\n-    testWidgets('network image renders correctly (blue)', (tester) async {\n-      final blueSquare = base64Decode(\n-        '''iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFUlEQVR42mNkYPj/n4EIwDiqkL4KAVIQE/f1/NxEAAAAAElFTkSuQmCC''',\n+    testWidgets('network image renders correctly (green)', (tester) async {\n+      final greenSquare = base64Decode(\n+        '''iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFElEQVR42mNk+A+ERADGUYX0VQgAXAYT9xTSUocAAAAASUVORK5CYII=''',\n@@ -14 +14 @@\n-            matchesGoldenFile('mock_blue_network_image.png'),\n+            matchesGoldenFile('mock_green_network_image.png'),\n@@ -17 +17 @@\n-        imageBytes: blueSquare,\n+        imageBytes: greenSquare,\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- packages/mocktail_image_network/test/mocktail_image_network_test.dart:183-201\n+++ packages/mocktail_image_network/test/mocktail_image_network_test.dart:163-181\n@@ -1,5 +1,5 @@\n-    testWidgets('network image renders correctly (blue)', (tester) async {\n-      final blueSquare = base64Decode(\n-        '''iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFUlEQVR42mNkYPj/n4EIwDiqkL4KAVIQE/f1/NxEAAAAAElFTkSuQmCC''',\n+    testWidgets('network image renders correctly (green)', (tester) async {\n+      final greenSquare = base64Decode(\n+        '''iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFElEQVR42mNk+A+ERADGUYX0VQgAXAYT9xTSUocAAAAASUVORK5CYII=''',\n       );\n       await mockNetworkImages(\n@@ -12,8 +12,8 @@\n           await expectLater(\n             find.byType(Image),\n-            matchesGoldenFile('mock_blue_network_image.png'),\n+            matchesGoldenFile('mock_green_network_image.png'),\n           );\n         },\n-        imageBytes: blueSquare,\n+        imageBytes: greenSquare,\n       );\n     });",
+      "type": "Type II",
+      "occurrences": [
+        "packages/mocktail_image_network/test/mocktail_image_network_test.dart:183-201",
+        "packages/mocktail_image_network/test/mocktail_image_network_test.dart:163-181"
+      ]
+    },
+    {
+      "why": "The code beginning with `T captureAny<T>({String? named, Matcher? that}) {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: packages/mocktail/lib/src/_register_matcher.dart:113-120 and packages/mocktail/lib/src/_register_matcher.dart:103-110; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"captureAny\", \"any\"], [\"true\", \"false\"]]. Raw core diff:\n--- packages/mocktail/lib/src/_register_matcher.dart:113-120\n+++ packages/mocktail/lib/src/_register_matcher.dart:103-110\n@@ -1 +1 @@\n-T captureAny<T>({String? named, Matcher? that}) {\n+T any<T>({String? named, Matcher? that}) {\n@@ -4 +4 @@\n-    capture: true,\n+    capture: false,\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- packages/mocktail/lib/src/_register_matcher.dart:113-120\n+++ packages/mocktail/lib/src/_register_matcher.dart:103-110\n@@ -1,6 +1,6 @@\n-T captureAny<T>({String? named, Matcher? that}) {\n+T any<T>({String? named, Matcher? that}) {\n   return _registerMatcher(\n     that ?? anything,\n-    capture: true,\n+    capture: false,\n     named: named,\n     argumentMatcher: named != null ? 'anyNamed' : 'any',",
+      "type": "Type II",
+      "occurrences": [
+        "packages/mocktail/lib/src/_register_matcher.dart:113-120",
+        "packages/mocktail/lib/src/_register_matcher.dart:103-110"
+      ]
+    },
+    {
+      "why": "The code beginning with `await untilCalled(` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: packages/mocktail/test/mockito_compat/until_called_test.dart:130-144 and packages/mocktail/test/mockito_compat/until_called_test.dart:284-298; 14 and 14 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:130-144",
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:284-298"
+      ]
+    },
+    {
+      "why": "The code beginning with `await untilCalled(` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: packages/mocktail/test/mockito_compat/until_called_test.dart:351-367 and packages/mocktail/test/mockito_compat/until_called_test.dart:185-201; 16 and 16 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:351-367",
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:185-201"
+      ]
+    },
+    {
+      "why": "The code beginning with `test('should capture invocations with named arguments', () {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: packages/mocktail/test/mockito_compat/capture_test.dart:112-120 and packages/mocktail/test/mockito_compat/capture_test.dart:128-136; 9 and 9 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- packages/mocktail/test/mockito_compat/capture_test.dart:109-123\n+++ packages/mocktail/test/mockito_compat/capture_test.dart:125-139\n@@ -1,5 +1,5 @@\n-    test('should capture invocations with named arguments', () {\n+    test('should capture invocations with out-of-order named arguments', () {\n       mock\n-        ..methodWithTwoNamedArgs(1, y: 42, z: 43)\n+        ..methodWithTwoNamedArgs(1, z: 42, y: 43)\n         ..methodWithTwoNamedArgs(1, y: 44, z: 45);\n       expect(\n@@ -11,5 +11,5 @@\n           ),\n         ).captured,\n-        equals([42, 43, 44, 45]),\n+        equals([43, 42, 44, 45]),\n       );\n     });",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/capture_test.dart:109-123",
+        "packages/mocktail/test/mockito_compat/capture_test.dart:125-139"
+      ]
+    },
+    {
+      "why": "The code beginning with `test('waits for method with two named args', () async {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: packages/mocktail/test/mockito_compat/until_called_test.dart:278-284 and packages/mocktail/test/mockito_compat/until_called_test.dart:345-351; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- packages/mocktail/test/mockito_compat/until_called_test.dart:274-299\n+++ packages/mocktail/test/mockito_compat/until_called_test.dart:340-368\n@@ -1,6 +1,7 @@\n-      test('waits for method with two named args', () async {\n+      test('waits for function with named parameters', () async {\n         streamController.add(CallMethodsEvent());\n         verifyNever(\n-          () => mock.methodWithTwoNamedArgs(\n+          () => mock.typeParameterizedNamedFn(\n+            any(),\n             any(),\n             y: any(named: 'y'),\n@@ -10,5 +11,6 @@\n \n         await untilCalled(\n-          () => mock.methodWithTwoNamedArgs(\n+          () => mock.typeParameterizedNamedFn(\n+            any(),\n             any(),\n             y: any(named: 'y'),\n@@ -18,5 +20,6 @@\n \n         verify(\n-          () => mock.methodWithTwoNamedArgs(\n+          () => mock.typeParameterizedNamedFn(\n+            any(),\n             any(),\n             y: any(named: 'y'),",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:274-299",
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:340-368"
+      ]
+    },
+    {
+      "why": "The code beginning with `try {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: packages/mocktail/test/mockito_compat/verify_test.dart:232-247 and packages/mocktail/test/mockito_compat/verify_test.dart:264-279; 16 and 16 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"'One verify call has been stored'\", \"'2 verify calls have been stored.'\"]]. Raw core diff:\n--- packages/mocktail/test/mockito_compat/verify_test.dart:232-247\n+++ packages/mocktail/test/mockito_compat/verify_test.dart:264-279\n@@ -12 +12 @@\n-              'One verify call has been stored',\n+              '2 verify calls have been stored.',\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- packages/mocktail/test/mockito_compat/verify_test.dart:232-247\n+++ packages/mocktail/test/mockito_compat/verify_test.dart:264-279\n@@ -10,5 +10,5 @@\n             contains(\n               'Verification appears to be in progress. '\n-              'One verify call has been stored',\n+              '2 verify calls have been stored.',\n             ),\n           ),",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/verify_test.dart:232-247",
+        "packages/mocktail/test/mockito_compat/verify_test.dart:264-279"
+      ]
+    },
+    {
+      "why": "The code beginning with `() async {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: packages/mocktail/test/mocktail_test.dart:339-346 and packages/mocktail/test/mocktail_test.dart:314-321; 8 and 8 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- packages/mocktail/test/mocktail_test.dart:326-351\n+++ packages/mocktail/test/mocktail_test.dart:308-323\n@@ -1,15 +1,8 @@\n-        () async {\n+    test('captureAny captures any positional and named argument', () async {\n       when(\n-        () => foo.asyncValueWithNamedAndPositionalArgs(\n-          any(),\n-          y: any(named: 'y'),\n-        ),\n+        () => foo.asyncValueWithNamedAndPositionalArgs(1, y: 2),\n       ).thenAnswer((_) => Future.value(10));\n       expect(\n         await foo.asyncValueWithNamedAndPositionalArgs(1, y: 2),\n-        equals(10),\n-      );\n-      expect(\n-        await foo.asyncValueWithNamedAndPositionalArgs(10, y: 42),\n         equals(10),\n       );\n@@ -20,7 +13,4 @@\n         ),\n       ).captured;\n-      expect(\n-        captured,\n-        equals([1, 2, 10, 42]),\n-      );\n+      expect(captured, equals([1, 2]));\n     });",
+      "occurrences": [
+        "packages/mocktail/test/mocktail_test.dart:326-351",
+        "packages/mocktail/test/mocktail_test.dart:308-323"
+      ]
+    },
+    {
+      "why": "The code beginning with `final call2 = Stub.lastInvocation;` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: packages/mocktail/test/mockito_compat/invocation_matcher_test.dart:95-106 and packages/mocktail/test/mockito_compat/invocation_matcher_test.dart:113-124; 11 and 11 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"true\", \"false\"], [\"'Expected: set value=? <true> '\", \"'Expected: set value=? <false> '\"], [\"'Which: Does not match get value'\", \"'Which: Does not match set value=? <true>'\"]]. Raw core diff:\n--- packages/mocktail/test/mockito_compat/invocation_matcher_test.dart:95-106\n+++ packages/mocktail/test/mockito_compat/invocation_matcher_test.dart:113-124\n@@ -2 +2 @@\n-      stub.value = true;\n+      stub.value = false;\n@@ -9 +9 @@\n-        RegExp('Expected: set value=? <true> '\n+        RegExp('Expected: set value=? <false> '\n@@ -11 +11 @@\n-            'Which: Does not match get value'),\n+            'Which: Does not match set value=? <true>'),\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- packages/mocktail/test/mockito_compat/invocation_matcher_test.dart:95-106\n+++ packages/mocktail/test/mockito_compat/invocation_matcher_test.dart:113-124\n@@ -1,4 +1,4 @@\n       final call2 = Stub.lastInvocation;\n-      stub.value = true;\n+      stub.value = false;\n       final call3 = Stub.lastInvocation;\n       shouldPass(call1, isInvocation(call2));\n@@ -7,6 +7,6 @@\n         isInvocation(call3),\n         // RegExp needed because of https://github.com/dart-lang/sdk/issues/33565\n-        RegExp('Expected: set value=? <true> '\n+        RegExp('Expected: set value=? <false> '\n             \"Actual: <Instance of '${call3.runtimeType}'> \"\n-            'Which: Does not match get value'),\n+            'Which: Does not match set value=? <true>'),\n       );",
+      "type": "Type II",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/invocation_matcher_test.dart:95-106",
+        "packages/mocktail/test/mockito_compat/invocation_matcher_test.dart:113-124"
+      ]
+    },
+    {
+      "why": "The code beginning with `final client = HttpClient()..autoUncompress = false;` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: packages/mocktail_image_network/test/mocktail_image_network_test.dart:55-65 and packages/mocktail_image_network/test/mocktail_image_network_test.dart:100-110; 7 and 7 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"greenPixel\", \"bluePixel\"]]. Raw core diff:\n--- packages/mocktail_image_network/test/mocktail_image_network_test.dart:55-65\n+++ packages/mocktail_image_network/test/mocktail_image_network_test.dart:100-110\n@@ -11 +11 @@\n-          expect(data, equals(greenPixel));\n+          expect(data, equals(bluePixel));\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- packages/mocktail_image_network/test/mocktail_image_network_test.dart:55-65\n+++ packages/mocktail_image_network/test/mocktail_image_network_test.dart:100-110\n@@ -9,3 +9,3 @@\n           await Future<void>.delayed(Duration.zero);\n \n-          expect(data, equals(greenPixel));\n+          expect(data, equals(bluePixel));",
+      "type": "Type II",
+      "occurrences": [
+        "packages/mocktail_image_network/test/mocktail_image_network_test.dart:55-65",
+        "packages/mocktail_image_network/test/mocktail_image_network_test.dart:100-110"
+      ]
+    }
+  ],
+  "clearly_out": [],
+  "not_clear": [
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "packages/mocktail_image_network/test/mocktail_image_network_test.dart:100-102",
+        "packages/mocktail_image_network/test/mocktail_image_network_test.dart:55-57"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "packages/mocktail/test/matcher_test.dart:12-15",
+        "packages/mocktail/test/matcher_test.dart:58-61"
+      ]
+    },
+    {
+      "why": "The fragments around `String? typeParameterizedNamedFn(` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 3.",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:25-31",
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:18-24"
+      ]
+    },
+    {
+      "why": "The fragments around `when(` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 3.",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/mockito_test.dart:166-172",
+        "packages/mocktail/test/mockito_compat/capture_test.dart:98-104"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/generated_mocks_test.dart:65-68",
+        "packages/mocktail/test/mockito_compat/generated_mocks_test.dart:37-40"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "packages/mocktail_image_network/test/mocktail_image_network_test.dart:19-25",
+        "packages/mocktail_image_network/test/mocktail_image_network_test.dart:57-63"
+      ]
+    },
+    {
+      "why": "The fragments around `test('when asyncValueWithPositionalArg (any)', () async {` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "packages/mocktail/test/mocktail_test.dart:157-167",
+        "packages/mocktail/test/mocktail_test.dart:131-137"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "packages/mocktail/lib/src/mocktail.dart:626-629",
+        "packages/mocktail/lib/src/mocktail.dart:422-425"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/mockito_test.dart:334-335",
+        "packages/mocktail/test/mockito_compat/mockito_test.dart:364-365"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "packages/mocktail/test/mocktail_test.dart:132-135",
+        "packages/mocktail/test/mocktail_test.dart:140-144"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "packages/mocktail/test/mocktail_test.dart:217-218",
+        "packages/mocktail/test/mocktail_test.dart:223-224"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/verify_test.dart:224-231",
+        "packages/mocktail/test/mockito_compat/verify_test.dart:633-640"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "packages/mocktail/lib/src/_real_call.dart:55-55",
+        "packages/mocktail/lib/src/_real_call.dart:67-68"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:305-307",
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:150-152"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 7 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "packages/mocktail/test/mocktail_test.dart:460-464",
+        "packages/mocktail/test/mocktail_test.dart:484-490"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "packages/mocktail/test/mocktail_test.dart:509-510",
+        "packages/mocktail/example/main.dart:62-63"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 7 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "packages/mocktail/test/mocktail_test.dart:472-476",
+        "packages/mocktail/test/mocktail_test.dart:492-498"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:87-89",
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:230-232"
+      ]
+    },
+    {
+      "why": "The fragments around `String? methodWithListArgs(List<int>? x) => 'Real';` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 5; edited blocks in the comment/whitespace-normalized line diff: 3.",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:11-17",
+        "packages/mocktail/test/mockito_compat/verify_test.dart:11-18"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/verify_test.dart:20-23",
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:32-35"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/verify_test.dart:633-636",
+        "packages/mocktail/test/mockito_compat/verify_test.dart:254-257"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/capture_test.dart:7-9",
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:10-12"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "packages/mocktail/test/mocktail_test.dart:405-406",
+        "packages/mocktail/test/mocktail_test.dart:399-400"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "packages/mocktail/test/mocktail_test.dart:239-240",
+        "packages/mocktail/test/mocktail_test.dart:250-251"
+      ]
+    },
+    {
+      "why": "The fragments around `expectFail(` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/verify_test.dart:171-181",
+        "packages/mocktail/test/mockito_compat/verify_test.dart:182-189"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "packages/mocktail_image_network/test/mocktail_image_network_test.dart:138-141",
+        "packages/mocktail_image_network/example/test/image_test.dart:8-12"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/mockito_test.dart:8-9",
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:10-11"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/mockito_test.dart:7-9",
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:9-11"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "packages/mocktail/test/mocktail_test.dart:467-468",
+        "packages/mocktail/test/mocktail_test.dart:461-462"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/generated_mocks_test.dart:47-50",
+        "packages/mocktail/test/mockito_compat/mockito_test.dart:191-194"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "packages/mocktail/test/matcher_test.dart:208-210",
+        "packages/mocktail/test/matcher_test.dart:197-199"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/capture_test.dart:8-10",
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:11-14"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:381-385",
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:212-218"
+      ]
+    },
+    {
+      "why": "The fragments around `expectFail(` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 3.",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/verify_test.dart:111-117",
+        "packages/mocktail/test/mockito_compat/verify_test.dart:104-110"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "packages/mocktail/test/mocktail_test.dart:144-145",
+        "packages/mocktail/test/mocktail_test.dart:165-166"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "packages/mocktail/test/mocktail_test.dart:369-370",
+        "packages/mocktail/test/mocktail_test.dart:363-364"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:332-337",
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:174-179"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/mockito_test.dart:231-232",
+        "packages/mocktail/test/mockito_compat/mockito_test.dart:82-83"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:257-259",
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:111-113"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:95-97",
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:239-241"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "packages/mocktail/test/mocktail_test.dart:474-475",
+        "packages/mocktail/test/mocktail_test.dart:496-497"
+      ]
+    },
+    {
+      "why": "The fragments around `when(` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 3.",
+      "occurrences": [
+        "packages/mocktail/test/mocktail_test.dart:244-249",
+        "packages/mocktail/test/mocktail_test.dart:299-304"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:314-316",
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:158-160"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "packages/mocktail/test/mocktail_test.dart:143-145",
+        "packages/mocktail/test/mocktail_test.dart:164-166"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "packages/mocktail/test/matcher_test.dart:187-189",
+        "packages/mocktail/test/matcher_test.dart:195-197"
+      ]
+    },
+    {
+      "why": "The fragments around `test('when asyncValueWithNamedArgs (1 any matchers)', () async {` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "packages/mocktail/test/mocktail_test.dart:235-241",
+        "packages/mocktail/test/mocktail_test.dart:243-252"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "packages/mocktail/lib/src/_invocation_matcher.dart:39-42",
+        "packages/mocktail/lib/src/_invocation_matcher.dart:47-50"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/mockito_test.dart:376-377",
+        "packages/mocktail/test/mockito_compat/mockito_test.dart:347-348"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "packages/mocktail/test/mocktail_test.dart:181-182",
+        "packages/mocktail/test/mocktail_test.dart:189-190"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 6 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "packages/mocktail/test/matcher_test.dart:186-192",
+        "packages/mocktail/test/matcher_test.dart:203-211"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/mockito_test.dart:355-359",
+        "packages/mocktail/test/mockito_compat/mockito_test.dart:325-329"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:103-105",
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:248-250"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:119-124",
+        "packages/mocktail/test/mockito_compat/until_called_test.dart:266-271"
+      ]
+    }
+  ],
+  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 73 candidates at this commit and no pair was called CLEARLY OUT by all of them. 0 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing."
+}

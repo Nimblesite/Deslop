@@ -16,6 +16,7 @@
 ## Example: scripts/corpus/score-gate.sh
 ## Inspect: scripts/corpus/score-gate.sh --list-default-targets
 ##          scripts/corpus/score-gate.sh --list-judged-targets
+##          scripts/corpus/score-gate.sh --list-ci-matrix
 ##
 ## `--all-judged` scans every register that judges at least one pair — the
 ## whole judged corpus, and no repository without judgments — and holds it to
@@ -31,8 +32,8 @@
 ## locally, it refuses a working tree with uncommitted changes and rebuilds the
 ## engine and the scorer from nothing before it scans anything.
 ##
-## With no targets it scans the default slice: judged repositories across the
-## core languages, each pinned to the exact commit its register was judged at,
+## With no targets it scans the default slice: every register judging 50+ pairs,
+## each pinned to the exact commit its register was judged at,
 ## which is what CI runs. Checkouts live under `.corpus/score-gate/`
 ## (git-ignored); every run writes its own scorecard,
 ## `.corpus/score-gate/score-gate-<UTC timestamp>.md` and `.json`, so no run
@@ -40,15 +41,17 @@
 
 set -euo pipefail
 
-# [CORPUS-SCORE-GATE-SLICE] The CI slice, named by register. Each repository carries a
-# substantive judged body of pairs. The rest of the corpus is scored by
-# `make compare`. Widening this list is deliberate and costs CI time.
+# [CORPUS-SCORE-GATE-SLICE] The CI slice, named by register: every register
+# that judges at least 50 pairs CLEARLY IN or CLEARLY OUT, and no other. CI
+# scans each one in its own parallel job. The rest of the corpus is scored by
+# `make compare`. A register that crosses 50 judgments joins this list;
+# `scripts/repository/score-gate-source.test.mjs` fails until it does.
 #
 # [CORPUS-PIN] The url and the COMMIT are read from each register rather than
 # repeated here: a register is judged at one commit, and a slice pinned anywhere
 # else — a tag above all, which upstream can re-cut — would score the engine
 # against source the judge never read. The scorer refuses that outright.
-DEFAULT_SLICE=(click cobra axios deslop polly fsharp.data)
+DEFAULT_SLICE=(axios benchmarkdotnet console date-fns express fastapi fsharpplus gin http monolog rayon serde viper vite zlib)
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 WORK_DIR="${SCORE_GATE_WORK_DIR:-$REPO_ROOT/.corpus/score-gate}"
@@ -69,6 +72,17 @@ usage() { grep '^## ' "${BASH_SOURCE[0]}" | cut -c4-; }
 # ---------------------------------------------------------------------------
 # build: compile the engine and the scorer from the working tree.
 build() {
+  if [ -n "${SCORE_GATE_PREBUILT:-}" ]; then
+    # [CORPUS-SCORE-GATE-SHARD] A CI shard runs the engine and scorer the
+    # workflow's own build job compiled from this commit; a local run never
+    # skips the rebuild ([CORPUS-HISTORY-SOURCE]).
+    is_local && die "SCORE_GATE_PREBUILT is for CI shards; a local run rebuilds from nothing"
+    [ -x "$BINARY" ] || die "prebuilt engine missing at $BINARY"
+    [ -x "$SCORER" ] || die "prebuilt scorer missing at $SCORER"
+    log "using the engine and scorer this workflow built"
+    return
+  fi
+  command -v cargo >/dev/null || die "cargo not on PATH"
   if is_local; then
     log "rebuilding ${REBUILT_PACKAGES[*]} from nothing"
     local package clean_args=()
@@ -162,13 +176,27 @@ resolve_targets() {
   parse_targets "${specs[@]}"
 }
 
+# ---------------------------------------------------------------------------
+# ci-matrix: [CORPUS-SCORE-GATE-SHARD] the default slice as the GitHub Actions
+# matrix CI fans out over — one `{name, spec}` per repository, one line of JSON.
+ci_matrix() {
+  local listing
+  listing="$(register_targets "$REPO_ROOT" "${DEFAULT_SLICE[@]}")" || die "cannot list the default slice"
+  node -e '
+    const specs = process.argv[1].split("\n").filter(Boolean);
+    if (specs.length === 0) throw new Error("the gate lists no repository");
+    const include = specs.map((spec) => ({ name: spec.split("#")[0].split("/").pop().replace(/[.]git$/, ""), spec }));
+    process.stdout.write(`${JSON.stringify({ include })}\n`);
+  ' "$listing"
+}
+
 main() {
   case "${1:-}" in
     -h | --help) usage; exit 0 ;;
     --list-default-targets) register_targets "$REPO_ROOT" "${DEFAULT_SLICE[@]}"; exit 0 ;;
     --list-judged-targets) judged_targets "$REPO_ROOT"; exit 0 ;;
+    --list-ci-matrix) ci_matrix; exit 0 ;;
   esac
-  command -v cargo >/dev/null || die "cargo not on PATH"
   command -v node >/dev/null || die "node not on PATH"
   if is_local; then require_clean_tree "$REPO_ROOT"; fi
   read_source
