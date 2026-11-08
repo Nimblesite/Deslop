@@ -91,11 +91,11 @@ Instead of traditional cards, use "Terminal Blocks."
 
 ## Navigation [SITE-NAV-HIERARCHY]
 
-Use Inter for primary links and sidebar rows, with sentence-case group labels. Keep header links beside the language and theme controls within a 90rem shell. Controls have at least 44px hit areas. Documentation links expose the current page with `aria-current`.
+Use Inter for primary links and sidebar rows, with sentence-case group labels. Center desktop destinations within a 90rem shell, with branding on the left and language and theme controls on the right. Controls have at least 44px hit areas. Documentation links expose the current page with `aria-current`.
 
-Top navigation slots and sidebar rows are visibly contained: every destination sits on a restrained tonal surface (`--surface-container-low` at rest, one step higher on hover) with the 4px radius (`--radius-md`). The current page is an accent-mixed tonal fill at medium (600) weight — never underlines or inset bars. Type is one coherent scale: 16px for the top bar (`--type-nav`), 15px for sidebar rows, breadcrumbs and compact controls (`--type-nav-secondary`), and 14px for group labels (`--type-nav-label`).
+Desktop destinations share one bordered surface. The current section uses a solid neutral fill and medium (600) weight. Sidebar rows sit directly on the panel and gain a fill on hover or selection. Primary links in the mobile drawer use individual tonal surfaces with a 4px radius. Type is one coherent scale: 16px for the top bar (`--type-nav`), 15px for sidebar rows, breadcrumbs and compact controls (`--type-nav-secondary`), and 14px for group labels (`--type-nav-label`).
 
-Documentation uses a 17rem sidebar with quiet group headings, plus/minus indicators and individually highlighted links. Breadcrumbs use short navigation titles. Open sections retain their state when the sidebar collapses. Mobile drawers retain 48px rows, a theme-aware scrim, and Escape dismissal.
+Documentation uses a 17rem sidebar with section dividers, quiet headings and chevrons. Sections start expanded on every page and can be collapsed individually. The same primary links move into the docs drawer at mobile widths. Breadcrumbs use short navigation titles. Open sections retain their state when the sidebar collapses. Mobile drawers retain 48px rows, a theme-aware scrim, and Escape dismissal.
 
 Use the shared 120–280ms motion tokens for color changes, section reveals and drawers. Buttons and article cards lift by 2px on hover. Reduced-motion preferences suppress transitions and animation. Resting navigation text uses opaque neutral tokens in both themes.
 

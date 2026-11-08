@@ -6,17 +6,9 @@
   <button type="button" class="docs-sidebar__collapse" data-docs-sidebar-collapse aria-controls="docs-sidebar" aria-label="Collapse documentation sidebar" aria-expanded="true">
     <span aria-hidden="true">‹</span>
   </button>
-  <nav class="docs-sidebar__site-nav" aria-label="Site">
-    <a href="{{ langPrefix }}/" class="docs-sidebar__link">{{ "nav.home" | t(currentLang) | default("Home") }}</a>
-    {% for item in navigation.main %}
-    {% set navUrl = item.url %}
-    {% if not item.external and not item.noLangPrefix and currentLang != defaultLanguage %}{% set navUrl = item.url | altLangUrl('en', currentLang) %}{% endif %}
-    <a href="{{ navUrl }}" class="docs-sidebar__link"{% if item.external %} target="_blank" rel="noopener noreferrer"{% endif %}>{% if item.i18nKey and currentLang != defaultLanguage %}{{ item.i18nKey | t(currentLang) | default(item.text) }}{% else %}{{ item.text }}{% endif %}</a>
-    {% endfor %}
-  </nav>
   <nav class="docs-sidebar__nav" aria-label="Documentation">
     {% for group in navigation.docsGroups %}
-    <details class="docs-nav-group" data-docs-group="{{ group.id }}"{% if docsGroup == group.id %} data-current open{% endif %}>
+    <details class="docs-nav-group" data-docs-group="{{ group.id }}" open{% if docsGroup == group.id %} data-current{% endif %}>
       <summary class="docs-nav-group__summary">{{ group.i18nKey | t(currentLang) | default(group.id) }}</summary>
       <div class="docs-nav-group__items">
       {% for entry in navPages %}

@@ -4,7 +4,7 @@ import { expect, test } from '@playwright/test';
 const DESKTOP = { width: 1440, height: 900 };
 const MOBILE = { width: 390, height: 844 };
 const MIN_TARGET = 44;
-const MAX_HEADER_GAP = 32;
+const CENTER_TOLERANCE = 1;
 const SLOT_RADIUS = "4px";
 const TRANSPARENT = "rgba(0, 0, 0, 0)";
 
@@ -36,12 +36,12 @@ async function slotStyle(page, selector) {
 
 async function expectDesktop(page) {
   await expectTargets(page, '.nav-link, .lang-link, .theme-toggle');
-  const gap = await page.evaluate(() => {
-    const links = document.querySelector('.nav-links').getBoundingClientRect();
-    const actions = document.querySelector('.nav-actions').getBoundingClientRect();
-    return actions.left - links.right;
+  const centerOffset = await page.locator('.nav-links').evaluate(element => {
+    const { left, width } = element.getBoundingClientRect();
+    return Math.abs(left + width / 2 - innerWidth / 2);
   });
-  expect(gap, 'navigation and utilities form one group').toBeLessThanOrEqual(MAX_HEADER_GAP);
+  expect(centerOffset, 'primary navigation is centered independently of utilities')
+    .toBeLessThanOrEqual(CENTER_TOLERANCE);
 }
 
 test('desktop navigation has accessible targets and current-page states', async ({ page }) => {
@@ -50,9 +50,15 @@ test('desktop navigation has accessible targets and current-page states', async 
     await page.goto('/docs/');
     await page.evaluate(value => document.documentElement.dataset.theme = value, theme);
     await expectDesktop(page);
+    await expect(page.locator('.nav-link.active')).toHaveAttribute('aria-current', 'page');
     await expect(page.locator('.docs-sidebar__link.is-active')).toHaveAttribute('aria-current', 'page');
     const guides = page.locator('[data-docs-group="guides"]');
+    for (const group of await page.locator('.docs-nav-group').all()) {
+      await expect(group).toHaveAttribute('open', '');
+    }
     await guides.locator('summary').focus();
+    await page.keyboard.press('Enter');
+    await expect(guides).not.toHaveAttribute('open', '');
     await page.keyboard.press('Enter');
     await expect(guides).toHaveAttribute('open', '');
     await expectTargets(page, '.docs-sidebar__link:visible, .docs-nav-group__summary');
@@ -63,29 +69,26 @@ test('desktop navigation has accessible targets and current-page states', async 
   }
 });
 
-/* [SITE-NAV-HIERARCHY] Menu slots are contained tonal surfaces — never the
-   underlines and inset bars. Active state is a
-   restrained fill plus medium weight; containment is a 4px radius slot that is
-   visible at rest in both themes. */
-test('menu slots are contained tonal fills without underline or bar markers', async ({ page }) => {
+test('desktop destinations share one surface and drawer rows retain their own slots', async ({ page }) => {
   await page.setViewportSize(DESKTOP);
   for (const theme of ['dark', 'light']) {
     await page.goto('/docs/');
     await page.evaluate(value => document.documentElement.dataset.theme = value, theme);
 
+    const group = await slotStyle(page, '.nav-links');
+    expect(group.background, `${theme}: desktop nav has a shared surface`).not.toBe(TRANSPARENT);
     const headerSlot = await slotStyle(page, '.nav-link:not(.active)');
-    expect(headerSlot.background, `${theme}: top nav slot sits on a tonal surface`).not.toBe(TRANSPARENT);
-    expect(headerSlot.radius, `${theme}: top nav slot uses the 4px radius`).toBe(SLOT_RADIUS);
+    expect(headerSlot.background, `${theme}: inactive links show the shared surface`).toBe(TRANSPARENT);
 
     const activeHeader = await slotStyle(page, '.nav-link.active');
     expect(activeHeader.boxShadow, `${theme}: active top nav has no underline`).toBe('none');
     expect(activeHeader.borderBottom, `${theme}: active top nav has no underline border`).toBe('0px');
     expect(activeHeader.background, `${theme}: active top nav is a tonal fill`).not.toBe(TRANSPARENT);
-    expect(activeHeader.background, `${theme}: active top nav fill differs from rest`).not.toBe(headerSlot.background);
+    expect(activeHeader.background, `${theme}: active top nav fill differs from rest`).not.toBe(group.background);
     expect(activeHeader.fontWeight, `${theme}: active top nav uses medium weight`).toBe('600');
 
     const sidebarRow = await slotStyle(page, '.docs-sidebar__link:not(.is-active)');
-    expect(sidebarRow.background, `${theme}: sidebar row sits on a tonal surface`).not.toBe(TRANSPARENT);
+    expect(sidebarRow.background, `${theme}: resting sidebar rows blend into the panel`).toBe(TRANSPARENT);
     expect(sidebarRow.radius, `${theme}: sidebar row uses the 4px radius`).toBe(SLOT_RADIUS);
 
     const activeRow = await slotStyle(page, '.docs-sidebar__link.is-active');
@@ -109,15 +112,27 @@ test('menu slots are contained tonal fills without underline or bar markers', as
 test('mobile navigation fits and respects reduced motion', async ({ page }) => {
   await page.setViewportSize(MOBILE);
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  for (const route of ['/', '/docs/', '/zh/docs/']) {
+  for (const route of ['/', '/docs/', '/docs/for-ai/', '/zh/docs/']) {
     await page.goto(route);
     await expectTargets(page, '.lang-link, .theme-toggle, .mobile-menu-toggle');
     await page.locator('.mobile-menu-toggle').click();
     await expect(page.locator('body')).toHaveClass(/menu-open/);
     const drawer = page.locator(route === '/' ? '.nav-links' : '.docs-sidebar');
+    const siteLinks = drawer.locator('.nav-link');
+    await expect(siteLinks).toHaveCount(3);
+    await expect(page.locator('.nav-link')).toHaveCount(3);
+    for (const group of await drawer.locator('.docs-nav-group').all()) {
+      await expect(group).toHaveAttribute('open', '');
+    }
     await expect(drawer).toHaveCSS('transition-duration', '1e-05s');
-    expect(await drawer.evaluate(element => element.getBoundingClientRect().right)).toBeLessThanOrEqual(MOBILE.width);
+    await expect.poll(async () => (await drawer.boundingBox()).x).toBe(0);
+    const bounds = await drawer.boundingBox();
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(MOBILE.width);
+    await expect(siteLinks.first()).toBeInViewport();
     await page.keyboard.press('Escape');
     await expect(page.locator('body')).not.toHaveClass(/menu-open/);
   }
+  await page.setViewportSize(DESKTOP);
+  await expect(page.locator('.site-header .nav-link')).toHaveCount(3);
+  await expect(page.locator('.docs-sidebar .nav-link')).toHaveCount(0);
 });

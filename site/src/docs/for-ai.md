@@ -92,6 +92,8 @@ Both install `deslop`, `deslop-lsp` and `deslop-mcp` onto `PATH` at the same ver
 
 Every MCP answer comes from the editor's live analysis, which updates as files change. There is no batch step. Each tool describes itself in `tools/list`; this is how they fit together:
 
+<div class="mcp-tool-table">
+
 | Tool | Use it to |
 | --- | --- |
 | `find-similar` | Ask, **before writing code**, whether equivalent code already exists. Pass a `snippet` and `language`, or a `path` with `start_byte` and `end_byte`. Read `clusters` and also `existing`: places where the snippet's code already appears once, outside any cluster. An empty `clusters` with a non-empty `existing` means you are about to create a duplicate. |
@@ -102,6 +104,8 @@ Every MCP answer comes from the editor's live analysis, which updates as files c
 | `rescan` | Force a refresh, optionally limited to `paths` you just changed, when the analysis looks behind your edits. |
 | `session` | Check the workspace `root`, settings and cache state. Never call `set-embedding-model` unless the user explicitly asks for that model. |
 | `schema-doc` | Get the meaning of every field. Call it once per session. |
+
+</div>
 
 Responses are capped in size. Follow `page.next_offset` with the same filters while `has_more` is true. `truncated: true` means a budget omitted requested rows or occurrences; read `next_action`. A cluster with `occurrences_truncated: true` needs `cluster-by-id` occurrence paging. If a byte cap leaves zero rows and a cursor cannot advance, request a small summary with `include_per_file: false` instead of repeating the same call. A changing generation means the workspace changed during your inventory; restart paging if you need a consistent snapshot.
 

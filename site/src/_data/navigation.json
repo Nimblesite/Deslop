@@ -67,56 +67,9 @@
           "url": "/docs/"
         },
         {
-          "text": "How It Works",
-          "i18nKey": "footer.howItWorks",
-          "url": "/docs/how-it-works/"
-        },
-        {
           "text": "AI Agents",
           "i18nKey": "footer.aiIntegration",
           "url": "/docs/ai-integration/"
-        },
-        {
-          "text": "For AI",
-          "i18nKey": "footer.forAI",
-          "url": "/docs/for-ai/"
-        },
-        {
-          "text": "VS Code",
-          "i18nKey": "footer.clusterPanel",
-          "url": "/docs/vscode-cluster-panel/"
-        },
-        {
-          "text": "Configuration",
-          "i18nKey": "footer.configuration",
-          "url": "/docs/configuration/"
-        },
-        {
-          "text": "GitHub Action",
-          "i18nKey": "footer.githubAction",
-          "url": "/docs/github-action/"
-        },
-        {
-          "text": "Research",
-          "i18nKey": "footer.research",
-          "url": "/docs/research-background/"
-        },
-        {
-          "text": "Releases",
-          "i18nKey": "footer.releases",
-          "url": "/releases/"
-        },
-        {
-          "text": "Issue graph",
-          "i18nKey": "docsNav.interactiveGraph",
-          "url": "/issues/",
-          "noLangPrefix": true
-        },
-        {
-          "text": "Issue planner",
-          "i18nKey": "docsNav.issuePlanner",
-          "url": "/issues/planner/",
-          "noLangPrefix": true
         }
       ]
     },
@@ -153,11 +106,6 @@
         {
           "text": "GitHub",
           "url": "https://github.com/Nimblesite/Deslop"
-        },
-        {
-          "text": "GitHub Releases",
-          "i18nKey": "footer.githubReleases",
-          "url": "https://github.com/Nimblesite/Deslop/releases"
         },
         {
           "text": "RSS",
