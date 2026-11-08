@@ -1,0 +1,1010 @@
+{
+  "name": "newtonsoft.json",
+  "language": "csharp",
+  "url": "https://github.com/JamesNK/Newtonsoft.Json.git",
+  "sha": "52fa3aef1f2cadcd3a3f874251eddc98d3efbbaa",
+  "protocol": {
+    "spec": "docs/specs/corpus.md",
+    "spec_section": "[CORPUS-REGISTER]",
+    "judging_skill": ".agents/skills/judge-clone-pairs/SKILL.md",
+    "preparer_skill": ".agents/skills/clone-register-prepare/SKILL.md"
+  },
+  "clearly_in": [
+    {
+      "why": "The code beginning with `StringBuilder sb = new StringBuilder();` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/JsonTextWriterAsyncTests.cs:600-617 and Src/Newtonsoft.Json.Tests/JsonTextWriterAsyncTests.cs:521-538; 16 and 16 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json.Tests/JsonTextWriterAsyncTests.cs:600-643\n+++ Src/Newtonsoft.Json.Tests/JsonTextWriterAsyncTests.cs:521-552\n@@ -17,19 +17,7 @@\n                 await jsonWriter.WriteValueAsync(\"500 gigabyte hard drive\");\n                 await jsonWriter.WriteValueAsync(\"200 gigabyte hard drive\");\n-                await jsonWriter.WriteEndAsync();\n                 await jsonWriter.WriteEndObjectAsync();\n                 Assert.AreEqual(WriteState.Start, jsonWriter.WriteState);\n             }\n-\n-            // {\n-            //   \"CPU\": \"Intel\",\n-            //   \"PSU\": \"500W\",\n-            //   \"Drives\": [\n-            //     \"DVD read/writer\"\n-            //     /*(broken)*/,\n-            //     \"500 gigabyte hard drive\",\n-            //     \"200 gigabyte hard drive\"\n-            //   ]\n-            // }\n \n             string expected = @\"{",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/JsonTextWriterAsyncTests.cs:600-643",
+        "Src/Newtonsoft.Json.Tests/JsonTextWriterAsyncTests.cs:521-552"
+      ]
+    },
+    {
+      "why": "The code beginning with `Assert.AreEqual(JsonToken.StartObject, jsonTextReader.TokenType);` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/JsonTextReaderTests/MiscTests.cs:141-150 and Src/Newtonsoft.Json.Tests/JsonTextReaderTests/MiscTests.cs:165-174; 8 and 8 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/JsonTextReaderTests/MiscTests.cs:141-150",
+        "Src/Newtonsoft.Json.Tests/JsonTextReaderTests/MiscTests.cs:165-174"
+      ]
+    },
+    {
+      "why": "The code beginning with `private string nameField;` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/Serialization/ShouldSerializeTests.cs:609-620 and Src/Newtonsoft.Json.Tests/Serialization/ShouldSerializeTests.cs:588-599; 10 and 10 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/ShouldSerializeTests.cs:609-620",
+        "Src/Newtonsoft.Json.Tests/Serialization/ShouldSerializeTests.cs:588-599"
+      ]
+    },
+    {
+      "why": "The code beginning with `reader.Schema = JsonSchema.Parse(schemaJson);` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/JsonValidatingReaderTests.cs:159-168 and Src/Newtonsoft.Json.Tests/JsonValidatingReaderTests.cs:1056-1065; 7 and 7 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"StartArray\", \"StartObject\"], [\"String\", \"PropertyName\"], [\"\\\"pie\\\"\", \"\\\"name\\\"\"]]. Raw core diff:\n--- Src/Newtonsoft.Json.Tests/JsonValidatingReaderTests.cs:159-168\n+++ Src/Newtonsoft.Json.Tests/JsonValidatingReaderTests.cs:1056-1065\n@@ -4 +4 @@\n-            Assert.AreEqual(JsonToken.StartArray, reader.TokenType);\n+            Assert.AreEqual(JsonToken.StartObject, reader.TokenType);\n@@ -7,2 +7,2 @@\n-            Assert.AreEqual(JsonToken.String, reader.TokenType);\n-            Assert.AreEqual(\"pie\", reader.Value.ToString());\n+            Assert.AreEqual(JsonToken.PropertyName, reader.TokenType);\n+            Assert.AreEqual(\"name\", reader.Value.ToString());\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json.Tests/JsonValidatingReaderTests.cs:159-169\n+++ Src/Newtonsoft.Json.Tests/JsonValidatingReaderTests.cs:1056-1066\n@@ -2,10 +2,10 @@\n \n             Assert.IsTrue(reader.Read());\n-            Assert.AreEqual(JsonToken.StartArray, reader.TokenType);\n+            Assert.AreEqual(JsonToken.StartObject, reader.TokenType);\n+\n+            Assert.IsTrue(reader.Read());\n+            Assert.AreEqual(JsonToken.PropertyName, reader.TokenType);\n+            Assert.AreEqual(\"name\", reader.Value.ToString());\n \n             Assert.IsTrue(reader.Read());\n             Assert.AreEqual(JsonToken.String, reader.TokenType);\n-            Assert.AreEqual(\"pie\", reader.Value.ToString());\n-\n-            Assert.IsTrue(reader.Read());\n-            Assert.AreEqual(JsonToken.String, reader.TokenType);",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/JsonValidatingReaderTests.cs:159-169",
+        "Src/Newtonsoft.Json.Tests/JsonValidatingReaderTests.cs:1056-1066"
+      ]
+    },
+    {
+      "why": "The code beginning with `JObject o1 = new JObject { { \"Name\", 1 } };` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/Linq/JsonPath/JPathExecuteTests.cs:848-855 and Src/Newtonsoft.Json.Tests/Linq/JsonPath/JPathExecuteTests.cs:831-838; 7 and 7 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"\\\"$..*\\\"\", \"\\\"$..Name\\\"\"], [\"9\", \"4\"]]. Raw core diff:\n--- Src/Newtonsoft.Json.Tests/Linq/JsonPath/JPathExecuteTests.cs:848-855\n+++ Src/Newtonsoft.Json.Tests/Linq/JsonPath/JPathExecuteTests.cs:831-838\n@@ -6 +6 @@\n-            IList<JToken> t = a.SelectTokens(\"$..*\").ToList();\n+            IList<JToken> t = a.SelectTokens(\"$..Name\").ToList();\n@@ -8 +8 @@\n-            Assert.AreEqual(9, t.Count);\n+            Assert.AreEqual(4, t.Count);\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json.Tests/Linq/JsonPath/JPathExecuteTests.cs:848-855\n+++ Src/Newtonsoft.Json.Tests/Linq/JsonPath/JPathExecuteTests.cs:831-838\n@@ -4,5 +4,5 @@\n             JArray a = new JArray(o1, o2, o3);\n \n-            IList<JToken> t = a.SelectTokens(\"$..*\").ToList();\n+            IList<JToken> t = a.SelectTokens(\"$..Name\").ToList();\n             Assert.IsNotNull(t);\n-            Assert.AreEqual(9, t.Count);\n+            Assert.AreEqual(4, t.Count);",
+      "type": "Type II",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Linq/JsonPath/JPathExecuteTests.cs:848-855",
+        "Src/Newtonsoft.Json.Tests/Linq/JsonPath/JPathExecuteTests.cs:831-838"
+      ]
+    },
+    {
+      "why": "The code beginning with `public class Employee` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/Documentation/Samples/Serializer/ErrorHandlingAttribute.cs:45-76 and Src/Newtonsoft.Json.Tests/Documentation/SerializationTests.cs:289-320; 26 and 26 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"Types\", \"SerializationErrorHandlingAttributeObject\"], [\"Employee\", \"PersonError\"]]. Raw core diff:\n--- Src/Newtonsoft.Json.Tests/Documentation/Samples/Serializer/ErrorHandlingAttribute.cs:45-76\n+++ Src/Newtonsoft.Json.Tests/Documentation/SerializationTests.cs:289-320\n@@ -1,2 +1,2 @@\n-        #region Types\n-        public class Employee\n+        #region SerializationErrorHandlingAttributeObject\n+        public class PersonError\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json.Tests/Documentation/Samples/Serializer/ErrorHandlingAttribute.cs:45-76\n+++ Src/Newtonsoft.Json.Tests/Documentation/SerializationTests.cs:289-320\n@@ -1,4 +1,4 @@\n-        #region Types\n-        public class Employee\n+        #region SerializationErrorHandlingAttributeObject\n+        public class PersonError\n         {\n             private List<string> _roles;",
+      "type": "Type II",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Documentation/Samples/Serializer/ErrorHandlingAttribute.cs:45-76",
+        "Src/Newtonsoft.Json.Tests/Documentation/SerializationTests.cs:289-320"
+      ]
+    },
+    {
+      "why": "The code beginning with `{` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/Documentation/TraceWriterTests.cs:139-146 and Src/Newtonsoft.Json.Tests/Serialization/TraceWriterTests.cs:285-292; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json.Tests/Documentation/TraceWriterTests.cs:135-171\n+++ Src/Newtonsoft.Json.Tests/Serialization/TraceWriterTests.cs:285-305\n@@ -1,6 +1,2 @@\n-        {\n-            #region MemoryTraceWriterExample\n-            Staff staff = new Staff();\n-            staff.Name = \"Arnie Admin\";\n             staff.Roles = new List<string> { \"Administrator\" };\n             staff.StartDate = new DateTime(2000, 12, 12, 12, 12, 12, DateTimeKind.Utc);\n@@ -12,5 +8,4 @@\n                 new JsonSerializerSettings { TraceWriter = traceWriter, Converters = { new JavaScriptDateTimeConverter() } });\n \n-            Console.WriteLine(traceWriter);\n             // 2012-11-11T12:08:42.761 Info Started serializing Newtonsoft.Json.Tests.Serialization.Staff. Path ''.\n             // 2012-11-11T12:08:42.785 Info Started serializing System.DateTime with converter Newtonsoft.Json.Converters.JavaScriptDateTimeConverter. Path 'StartDate'.\n@@ -19,19 +14,8 @@\n             // 2012-11-11T12:08:42.798 Info Finished serializing System.Collections.Generic.List`1[System.String]. Path 'Roles'.\n             // 2012-11-11T12:08:42.799 Info Finished serializing Newtonsoft.Json.Tests.Serialization.Staff. Path ''.\n-            // 2013-05-18T21:38:11.255 Verbose Serialized JSON: \n-            // {\n-            //   \"Name\": \"Arnie Admin\",\n-            //   \"StartDate\": new Date(\n-            //     976623132000\n-            //   ),\n-            //   \"Roles\": [\n-            //     \"Administrator\"\n-            //   ]\n-            // }\n-            #endregion\n \n             MemoryTraceWriter memoryTraceWriter = (MemoryTraceWriter)traceWriter;\n+            string output = memoryTraceWriter.ToString();\n \n-            Assert.AreEqual(916, memoryTraceWriter.ToString().Length);\n+            Assert.AreEqual(916, output.Length);\n             Assert.AreEqual(7, memoryTraceWriter.GetTraceMessages().Count());\n-        }",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Documentation/TraceWriterTests.cs:135-171",
+        "Src/Newtonsoft.Json.Tests/Serialization/TraceWriterTests.cs:285-305"
+      ]
+    },
+    {
+      "why": "The code beginning with `{` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: Src/Newtonsoft.Json/JsonTextReader.Async.cs:1647-1669 and Src/Newtonsoft.Json/JsonTextReader.cs:574-595; 18 and 18 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n--- Src/Newtonsoft.Json/JsonTextReader.Async.cs:1647-1669\n+++ Src/Newtonsoft.Json/JsonTextReader.cs:574-595\n@@ -7 +6,0 @@\n-\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json/JsonTextReader.Async.cs:1567-1675\n+++ Src/Newtonsoft.Json/JsonTextReader.cs:497-601\n@@ -1,2 +1,3 @@\n+        public override byte[]? ReadAsBytes()\n         {\n             EnsureBuffer();\n@@ -8,5 +9,5 @@\n             {\n                 case State.PostValue:\n-                    if (await ParsePostValueAsync(true, cancellationToken).ConfigureAwait(false))\n+                    if (ParsePostValue(true))\n                     {\n                         return null;\n@@ -26,31 +27,28 @@\n                         {\n                             case '\\0':\n-                                if (await ReadNullCharAsync(cancellationToken).ConfigureAwait(false))\n+                                if (ReadNullChar())\n                                 {\n                                     SetToken(JsonToken.None, null, false);\n                                     return null;\n                                 }\n-\n                                 break;\n                             case '\"':\n                             case '\\'':\n-                                await ParseStringAsync(currentChar, ReadType.ReadAsBytes, cancellationToken).ConfigureAwait(false);\n+                                ParseString(currentChar, ReadType.ReadAsBytes);\n                                 byte[]? data = (byte[]?)Value;\n                                 if (isWrapped)\n                                 {\n-                                    await ReaderReadAndAssertAsync(cancellationToken).ConfigureAwait(false);\n+                                    ReaderReadAndAssert();\n                                     if (TokenType != JsonToken.EndObject)\n                                     {\n                                         throw JsonReaderException.Create(this, \"Error reading bytes. Unexpected token: {0}.\".FormatWith(CultureInfo.InvariantCulture, TokenType));\n                                     }\n-\n                                     SetToken(JsonToken.Bytes, data, false);\n                                 }\n-\n                                 return data;\n                             case '{':\n                                 _charPos++;\n                                 SetToken(JsonToken.StartObject);\n-                                await ReadIntoWrappedTypeObjectAsync(cancellationToken).ConfigureAwait(false);\n+                                ReadIntoWrappedTypeObject();\n                                 isWrapped = true;\n                                 break;\n@@ -58,10 +56,10 @@\n                                 _charPos++;\n                                 SetToken(JsonToken.StartArray);\n-                                return await ReadArrayIntoByteArrayAsync(cancellationToken).ConfigureAwait(false);\n+                                return ReadArrayIntoByteArray();\n                             case 'n':\n-                                await HandleNullAsync(cancellationToken).ConfigureAwait(false);\n+                                HandleNull();\n                                 return null;\n                             case '/':\n-                                await ParseCommentAsync(false, cancellationToken).ConfigureAwait(false);\n+                                ParseComment(false);\n                                 break;\n                             case ',':\n@@ -75,8 +73,7 @@\n                                     return null;\n                                 }\n-\n                                 throw CreateUnexpectedCharacterException(currentChar);\n                             case StringUtils.CarriageReturn:\n-                                await ProcessCarriageReturnAsync(false, cancellationToken).ConfigureAwait(false);\n+                                ProcessCarriageReturn(false);\n                                 break;\n                             case StringUtils.LineFeed:\n@@ -85,5 +82,4 @@\n                             case ' ':\n                             case StringUtils.Tab:\n-\n                                 // eat\n                                 _charPos++;\n@@ -102,5 +98,5 @@\n                     }\n                 case State.Finished:\n-                    await ReadFinishedAsync(cancellationToken).ConfigureAwait(false);\n+                    ReadFinished();\n                     return null;\n                 default:",
+      "occurrences": [
+        "Src/Newtonsoft.Json/JsonTextReader.Async.cs:1567-1675",
+        "Src/Newtonsoft.Json/JsonTextReader.cs:497-601"
+      ]
+    },
+    {
+      "why": "The code beginning with `public class DynamicContractResolver : DefaultContractResolver` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/Serialization/ContractResolverTests.cs:56-75 and Src/Newtonsoft.Json.Tests/Documentation/SerializationTests.cs:881-900; 15 and 15 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n--- Src/Newtonsoft.Json.Tests/Serialization/ContractResolverTests.cs:56-75\n+++ Src/Newtonsoft.Json.Tests/Documentation/SerializationTests.cs:881-900\n@@ -1,3 +1,3 @@\n-    public class DynamicContractResolver : DefaultContractResolver\n-    {\n-        private readonly char _startingWithChar;\n+        public class DynamicContractResolver : DefaultContractResolver\n+        {\n+            private readonly char _startingWithChar;\n@@ -5,3 +5,15 @@\n-        public DynamicContractResolver(char startingWithChar)\n-        {\n-            _startingWithChar = startingWithChar;\n+            public DynamicContractResolver(char startingWithChar)\n+            {\n+                _startingWithChar = startingWithChar;\n+            }\n+\n+            protected override IList<JsonProperty> CreateProperties(Type type, MemberSerialization memberSerialization)\n+            {\n+                IList<JsonProperty> properties = base.CreateProperties(type, memberSerialization);\n+\n+                // only serializer properties that start with the specified character\n+                properties =\n+                    properties.Where(p => p.PropertyName.StartsWith(_startingWithChar.ToString())).ToList();\n+\n+                return properties;\n+            }\n@@ -9,12 +20,0 @@\n-\n-        protected override IList<JsonProperty> CreateProperties(Type type, MemberSerialization memberSerialization)\n-        {\n-            IList<JsonProperty> properties = base.CreateProperties(type, memberSerialization);\n-\n-            // only serializer properties that start with the specified character\n-            properties =\n-                properties.Where(p => p.PropertyName.StartsWith(_startingWithChar.ToString())).ToList();\n-\n-            return properties;\n-        }\n-    }\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json.Tests/Serialization/ContractResolverTests.cs:56-86\n+++ Src/Newtonsoft.Json.Tests/Documentation/SerializationTests.cs:881-909\n@@ -1,31 +1,29 @@\n-    public class DynamicContractResolver : DefaultContractResolver\n-    {\n-        private readonly char _startingWithChar;\n+        public class DynamicContractResolver : DefaultContractResolver\n+        {\n+            private readonly char _startingWithChar;\n \n-        public DynamicContractResolver(char startingWithChar)\n-        {\n-            _startingWithChar = startingWithChar;\n+            public DynamicContractResolver(char startingWithChar)\n+            {\n+                _startingWithChar = startingWithChar;\n+            }\n+\n+            protected override IList<JsonProperty> CreateProperties(Type type, MemberSerialization memberSerialization)\n+            {\n+                IList<JsonProperty> properties = base.CreateProperties(type, memberSerialization);\n+\n+                // only serializer properties that start with the specified character\n+                properties =\n+                    properties.Where(p => p.PropertyName.StartsWith(_startingWithChar.ToString())).ToList();\n+\n+                return properties;\n+            }\n         }\n \n-        protected override IList<JsonProperty> CreateProperties(Type type, MemberSerialization memberSerialization)\n+        public class Book\n         {\n-            IList<JsonProperty> properties = base.CreateProperties(type, memberSerialization);\n-\n-            // only serializer properties that start with the specified character\n-            properties =\n-                properties.Where(p => p.PropertyName.StartsWith(_startingWithChar.ToString())).ToList();\n-\n-            return properties;\n+            public string BookName { get; set; }\n+            public decimal BookPrice { get; set; }\n+            public string AuthorName { get; set; }\n+            public int AuthorAge { get; set; }\n+            public string AuthorCountry { get; set; }\n         }\n-    }\n-\n-    public class EscapedPropertiesContractResolver : DefaultContractResolver\n-    {\n-        public string PropertyPrefix { get; set; }\n-        public string PropertySuffix { get; set; }\n-\n-        protected override string ResolvePropertyName(string propertyName)\n-        {\n-            return base.ResolvePropertyName(PropertyPrefix + propertyName + PropertySuffix);\n-        }\n-    }",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/ContractResolverTests.cs:56-86",
+        "Src/Newtonsoft.Json.Tests/Documentation/SerializationTests.cs:881-909"
+      ]
+    },
+    {
+      "why": "The code beginning with `if (objA is BigInteger integerA)` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: Src/Newtonsoft.Json/Linq/JValue.cs:303-312 and Src/Newtonsoft.Json/Linq/JValue.cs:278-287; 10 and 10 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n--- Src/Newtonsoft.Json/Linq/JValue.cs:303-312\n+++ Src/Newtonsoft.Json/Linq/JValue.cs:278-287\n@@ -8,2 +8,2 @@\n-                        return -CompareBigInteger(integerB, objA);\n-                    }\n+                            return -CompareBigInteger(integerB, objA);\n+                        }\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json/Linq/JValue.cs:303-312\n+++ Src/Newtonsoft.Json/Linq/JValue.cs:278-287\n@@ -6,5 +6,5 @@\n                     if (objB is BigInteger integerB)\n                     {\n-                        return -CompareBigInteger(integerB, objA);\n-                    }\n+                            return -CompareBigInteger(integerB, objA);\n+                        }\n #endif",
+      "type": "Type I",
+      "occurrences": [
+        "Src/Newtonsoft.Json/Linq/JValue.cs:303-312",
+        "Src/Newtonsoft.Json/Linq/JValue.cs:278-287"
+      ]
+    },
+    {
+      "why": "The code beginning with `[JsonObject(MemberSerialization.OptIn)]` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/Documentation/SerializationTests.cs:135-187 and Src/Newtonsoft.Json.Tests/Documentation/Samples/Serializer/SerializationCallbackAttributes.cs:45-97; 37 and 37 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json.Tests/Documentation/SerializationTests.cs:113-231\n+++ Src/Newtonsoft.Json.Tests/Documentation/Samples/Serializer/SerializationCallbackAttributes.cs:43-142\n@@ -1,24 +1,4 @@\n-        #region SerializationAttributes\n-        [JsonObject(MemberSerialization.OptIn)]\n-        public class Person\n-        {\n-            // \"John Smith\"\n-            [JsonProperty]\n-            public string Name { get; set; }\n-\n-            // \"2000-12-15T22:11:03\"\n-            [JsonProperty]\n-            public DateTime BirthDate { get; set; }\n-\n-            // new Date(976918263055)\n-            [JsonProperty]\n-            public DateTime LastModified { get; set; }\n-\n-            // not serialized because mode is opt-in\n-            public string Department { get; set; }\n-        }\n-        #endregion\n-\n-        #region SerializationCallbacksObject\n+    {\n+        #region Types\n         public class SerializationEventTestObject\n         {\n@@ -74,7 +54,7 @@\n \n         [Test]\n-        public void SerializationCallbacksExample()\n+        public void Example()\n         {\n-            #region SerializationCallbacksExample\n+            #region Usage\n             SerializationEventTestObject obj = new SerializationEventTestObject();\n \n@@ -116,4 +96,5 @@\n             #endregion\n \n-            Assert.AreEqual(11, obj.Member1);\n+            Assert.AreEqual(\"This value was set after deserialization.\", obj.Member4);\n         }\n+    }",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Documentation/SerializationTests.cs:113-231",
+        "Src/Newtonsoft.Json.Tests/Documentation/Samples/Serializer/SerializationCallbackAttributes.cs:43-142"
+      ]
+    },
+    {
+      "why": "The code beginning with `[Test]` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:135-148 and Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:221-234; 10 and 10 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:112-285\n+++ Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:198-371\n@@ -1,4 +1,4 @@\n         [Test]\n-        public async Task ReadGuid_BytesAsync()\n+        public void ReadGuid_Bytes()\n         {\n             byte[] data = HexToBytes(\"1D-00-00-00-05-30-00-10-00-00-00-04-D7-EE-21-D8-5C-4B-C9-43-8A-C2-69-28-E5-79-B7-05-00\");\n@@ -8,18 +8,18 @@\n             reader.ReadRootValueAsArray = true;\n \n-            Assert.IsTrue(await reader.ReadAsync());\n+            Assert.IsTrue(reader.Read());\n             Assert.AreEqual(JsonToken.StartArray, reader.TokenType);\n \n             Guid g = new Guid(\"D821EED7-4B5C-43C9-8AC2-6928E579B705\");\n \n-            Assert.IsTrue(await reader.ReadAsync());\n+            Assert.IsTrue(reader.Read());\n             Assert.AreEqual(JsonToken.Bytes, reader.TokenType);\n             Assert.AreEqual(g, reader.Value);\n             Assert.AreEqual(typeof(Guid), reader.ValueType);\n \n-            Assert.IsTrue(await reader.ReadAsync());\n+            Assert.IsTrue(reader.Read());\n             Assert.AreEqual(JsonToken.EndArray, reader.TokenType);\n \n-            Assert.IsFalse(await reader.ReadAsync());\n+            Assert.IsFalse(reader.Read());\n             Assert.AreEqual(JsonToken.None, reader.TokenType);\n \n@@ -36,5 +36,5 @@\n \n         [Test]\n-        public async Task ReadDoubleAsync()\n+        public void ReadDouble()\n         {\n             byte[] data = HexToBytes(\"10-00-00-00-01-30-00-8F-C2-F5-28-5C-FF-58-40-00\");\n@@ -44,21 +44,21 @@\n             reader.ReadRootValueAsArray = true;\n \n-            Assert.IsTrue(await reader.ReadAsync());\n+            Assert.IsTrue(reader.Read());\n             Assert.AreEqual(JsonToken.StartArray, reader.TokenType);\n \n-            Assert.IsTrue(await reader.ReadAsync());\n+            Assert.IsTrue(reader.Read());\n             Assert.AreEqual(JsonToken.Float, reader.TokenType);\n             Assert.AreEqual(99.99d, reader.Value);\n             Assert.AreEqual(typeof(double), reader.ValueType);\n \n-            Assert.IsTrue(await reader.ReadAsync());\n+            Assert.IsTrue(reader.Read());\n             Assert.AreEqual(JsonToken.EndArray, reader.TokenType);\n \n-            Assert.IsFalse(await reader.ReadAsync());\n+            Assert.IsFalse(reader.Read());\n             Assert.AreEqual(JsonToken.None, reader.TokenType);\n         }\n \n         [Test]\n-        public async Task ReadDouble_DecimalAsync()\n+        public void ReadDouble_Decimal()\n         {\n             byte[] data = HexToBytes(\"10-00-00-00-01-30-00-8F-C2-F5-28-5C-FF-58-40-00\");\n@@ -69,21 +69,21 @@\n             reader.ReadRootValueAsArray = true;\n \n-            Assert.IsTrue(await reader.ReadAsync());\n+            Assert.IsTrue(reader.Read());\n             Assert.AreEqual(JsonToken.StartArray, reader.TokenType);\n \n-            Assert.IsTrue(await reader.ReadAsync());\n+            Assert.IsTrue(reader.Read());\n             Assert.AreEqual(JsonToken.Float, reader.TokenType);\n             Assert.AreEqual(99.99m, reader.Value);\n             Assert.AreEqual(typeof(decimal), reader.ValueType);\n \n-            Assert.IsTrue(await reader.ReadAsync());\n+            Assert.IsTrue(reader.Read());\n             Assert.AreEqual(JsonToken.EndArray, reader.TokenType);\n \n-            Assert.IsFalse(await reader.ReadAsync());\n+            Assert.IsFalse(reader.Read());\n             Assert.AreEqual(JsonToken.None, reader.TokenType);\n         }\n \n         [Test]\n-        public async Task ReadValuesAsync()\n+        public void ReadValues()\n         {\n             byte[] data = HexToBytes(\"8C-00-00-00-12-30-00-FF-FF-FF-FF-FF-FF-FF-7F-12-31-00-FF-FF-FF-FF-FF-FF-FF-7F-10-32-00-FF-FF-FF-7F-10-33-00-FF-FF-FF-7F-10-34-00-FF-00-00-00-10-35-00-7F-00-00-00-02-36-00-02-00-00-00-61-00-01-37-00-00-00-00-00-00-00-F0-45-01-38-00-FF-FF-FF-FF-FF-FF-EF-7F-01-39-00-00-00-00-E0-FF-FF-EF-47-08-31-30-00-01-05-31-31-00-05-00-00-00-02-00-01-02-03-04-09-31-32-00-40-C5-E2-BA-E3-00-00-00-09-31-33-00-40-C5-E2-BA-E3-00-00-00-00\");\n@@ -94,81 +94,81 @@\n             reader.DateTimeKindHandling = DateTimeKind.Utc;\n \n-            Assert.IsTrue(await reader.ReadAsync());\n+            Assert.IsTrue(reader.Read());\n             Assert.AreEqual(JsonToken.StartArray, reader.TokenType);\n \n-            Assert.IsTrue(await reader.ReadAsync());\n+            Assert.IsTrue(reader.Read());\n             Assert.AreEqual(JsonToken.Integer, reader.TokenType);\n             Assert.AreEqual(long.MaxValue, reader.Value);\n             Assert.AreEqual(typeof(long), reader.ValueType);\n \n-            Assert.IsTrue(await reader.ReadAsync());\n+            Assert.IsTrue(reader.Read());\n             Assert.AreEqual(JsonToken.Integer, reader.TokenType);\n             Assert.AreEqual(long.MaxValue, reader.Value);\n             Assert.AreEqual(typeof(long), reader.ValueType);\n \n-            Assert.IsTrue(await reader.ReadAsync());\n+            Assert.IsTrue(reader.Read());\n             Assert.AreEqual(JsonToken.Integer, reader.TokenType);\n             Assert.AreEqual((long)int.MaxValue, reader.Value);\n             Assert.AreEqual(typeof(long), reader.ValueType);\n \n-            Assert.IsTrue(await reader.ReadAsync());\n+            Assert.IsTrue(reader.Read());\n             Assert.AreEqual(JsonToken.Integer, reader.TokenType);\n             Assert.AreEqual((long)int.MaxValue, reader.Value);\n             Assert.AreEqual(typeof(long), reader.ValueType);\n \n-            Assert.IsTrue(await reader.ReadAsync());\n+            Assert.IsTrue(reader.Read());\n             Assert.AreEqual(JsonToken.Integer, reader.TokenType);\n             Assert.AreEqual((long)byte.MaxValue, reader.Value);\n             Assert.AreEqual(typeof(long), reader.ValueType);\n \n-            Assert.IsTrue(await reader.ReadAsync());\n+            Assert.IsTrue(reader.Read());\n             Assert.AreEqual(JsonToken.Integer, reader.TokenType);\n             Assert.AreEqual((long)sbyte.MaxValue, reader.Value);\n             Assert.AreEqual(typeof(long), reader.ValueType);\n \n-            Assert.IsTrue(await reader.ReadAsync());\n+            Assert.IsTrue(reader.Read());\n             Assert.AreEqual(JsonToken.String, reader.TokenType);\n             Assert.AreEqual(\"a\", reader.Value);\n             Assert.AreEqual(typeof(string), reader.ValueType);\n \n-            Assert.IsTrue(await reader.ReadAsync());\n+            Assert.IsTrue(reader.Read());\n             Assert.AreEqual(JsonToken.Float, reader.TokenType);\n             Assert.AreEqual((double)decimal.MaxValue, reader.Value);\n             Assert.AreEqual(typeof(double), reader.ValueType);\n \n-            Assert.IsTrue(await reader.ReadAsync());\n+            Assert.IsTrue(reader.Read());\n             Assert.AreEqual(JsonToken.Float, reader.TokenType);\n-            Assert.AreEqual(double.MaxValue, reader.Value);\n+            Assert.AreEqual((double)double.MaxValue, reader.Value);\n             Assert.AreEqual(typeof(double), reader.ValueType);\n \n-            Assert.IsTrue(await reader.ReadAsync());\n+            Assert.IsTrue(reader.Read());\n             Assert.AreEqual(JsonToken.Float, reader.TokenType);\n             Assert.AreEqual((double)float.MaxValue, reader.Value);\n             Assert.AreEqual(typeof(double), reader.ValueType);\n \n-            Assert.IsTrue(await reader.ReadAsync());\n+            Assert.IsTrue(reader.Read());\n             Assert.AreEqual(JsonToken.Boolean, reader.TokenType);\n             Assert.AreEqual(true, reader.Value);\n             Assert.AreEqual(typeof(bool), reader.ValueType);\n \n-            Assert.IsTrue(await reader.ReadAsync());\n+            Assert.IsTrue(reader.Read());\n             Assert.AreEqual(JsonToken.Bytes, reader.TokenType);\n             CollectionAssert.AreEquivalent(new byte[] { 0, 1, 2, 3, 4 }, (byte[])reader.Value);\n             Assert.AreEqual(typeof(byte[]), reader.ValueType);\n \n-            Assert.IsTrue(await reader.ReadAsync());\n+            Assert.IsTrue(reader.Read());\n             Assert.AreEqual(JsonToken.Date, reader.TokenType);\n             Assert.AreEqual(new DateTime(2000, 12, 29, 12, 30, 0, DateTimeKind.Utc), reader.Value);\n             Assert.AreEqual(typeof(DateTime), reader.ValueType);\n \n-            Assert.IsTrue(await reader.ReadAsync());\n+            Assert.IsTrue(reader.Read());\n             Assert.AreEqual(JsonToken.Date, reader.TokenType);\n             Assert.AreEqual(new DateTime(2000, 12, 29, 12, 30, 0, DateTimeKind.Utc), reader.Value);\n             Assert.AreEqual(typeof(DateTime), reader.ValueType);\n \n-            Assert.IsTrue(await reader.ReadAsync());\n+            Assert.IsTrue(reader.Read());\n             Assert.AreEqual(JsonToken.EndArray, reader.TokenType);\n \n-            Assert.IsFalse(await reader.ReadAsync());\n+            Assert.IsFalse(reader.Read());\n             Assert.AreEqual(JsonToken.None, reader.TokenType);\n         }",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:112-285",
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:198-371"
+      ]
+    },
+    {
+      "why": "The code beginning with `StringBuilder sb = new StringBuilder();` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:1013-1019 and Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:1167-1173; 6 and 6 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"125\", \"127\"]]. Raw core diff:\n--- Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:1013-1019\n+++ Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:1167-1173\n@@ -2,2 +2,2 @@\n-            sb.Append('1', 125);\n-            sb.Append(Euro, 5); //last char of the eruo at the end of the boundry.\n+            sb.Append('1', 127); //first char of euro at the end of the boundry.\n+            sb.Append(Euro, 5);\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:1013-1019\n+++ Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:1167-1173\n@@ -1,5 +1,5 @@\n             StringBuilder sb = new StringBuilder();\n-            sb.Append('1', 125);\n-            sb.Append(Euro, 5); //last char of the eruo at the end of the boundry.\n+            sb.Append('1', 127); //first char of euro at the end of the boundry.\n+            sb.Append(Euro, 5);\n             sb.Append('1', 128);\n             sb.Append(Euro);",
+      "type": "Type II",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:1013-1019",
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:1167-1173"
+      ]
+    },
+    {
+      "why": "The code beginning with `[Test]` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ReadTests.cs:782-802 and Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ReadAsyncTests.cs:765-785; 19 and 19 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ReadTests.cs:757-845\n+++ Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ReadAsyncTests.cs:740-828\n@@ -1,4 +1,4 @@\n         [Test]\n-        public void ReadAsDecimalFrench()\n+        public async Task ReadAsDecimalFrenchAsync()\n         {\n             string json = @\"{\"\"decimal\"\":\"\"9,99\"\"}\";\n@@ -7,21 +7,21 @@\n             reader.Culture = new CultureInfo(\"fr-FR\");\n \n-            Assert.IsTrue(reader.Read());\n+            Assert.IsTrue(await reader.ReadAsync());\n             Assert.AreEqual(JsonToken.StartObject, reader.TokenType);\n \n-            Assert.IsTrue(reader.Read());\n+            Assert.IsTrue(await reader.ReadAsync());\n             Assert.AreEqual(JsonToken.PropertyName, reader.TokenType);\n \n-            decimal? d = reader.ReadAsDecimal();\n+            decimal? d = await reader.ReadAsDecimalAsync();\n             Assert.AreEqual(JsonToken.Float, reader.TokenType);\n             Assert.AreEqual(typeof(decimal), reader.ValueType);\n             Assert.AreEqual(9.99m, d);\n \n-            Assert.IsTrue(reader.Read());\n+            Assert.IsTrue(await reader.ReadAsync());\n             Assert.AreEqual(JsonToken.EndObject, reader.TokenType);\n         }\n \n         [Test]\n-        public void ReadBufferOnControlChar()\n+        public async Task ReadBufferOnControlCharAsync()\n         {\n             string json = @\"[\n@@ -45,13 +45,13 @@\n             for (int i = 0; i < 13; i++)\n             {\n-                reader.Read();\n+                await reader.ReadAsync();\n             }\n \n-            Assert.IsTrue(reader.Read());\n+            Assert.IsTrue(await reader.ReadAsync());\n             Assert.AreEqual(new DateTime(631136448000000000), reader.Value);\n         }\n \n         [Test]\n-        public void ReadBufferOnEndComment()\n+        public async Task ReadBufferOnEndCommentAsync()\n         {\n             string json = @\"/*comment*/ { /*comment*/\n@@ -73,17 +73,17 @@\n             for (int i = 0; i < 26; i++)\n             {\n-                Assert.IsTrue(reader.Read());\n+                Assert.IsTrue(await reader.ReadAsync());\n             }\n \n-            Assert.IsTrue(reader.Read());\n+            Assert.IsTrue(await reader.ReadAsync());\n             Assert.AreEqual(JsonToken.Comment, reader.TokenType);\n \n-            Assert.IsFalse(reader.Read());\n+            Assert.IsFalse(await reader.ReadAsync());\n         }\n \n         [Test]\n-        public void ReadAsDouble_Null()\n+        public async Task ReadAsDouble_NullAsync()\n         {\n             JsonTextReader reader = new JsonTextReader(new StringReader(\"null\"));\n-            Assert.AreEqual(null, reader.ReadAsDouble());\n+            Assert.AreEqual(null, await reader.ReadAsDoubleAsync());\n         }",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ReadTests.cs:757-845",
+        "Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ReadAsyncTests.cs:740-828"
+      ]
+    },
+    {
+      "why": "The code beginning with `[Test]` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/Linq/MergeTests.cs:308-328 and Src/Newtonsoft.Json.Tests/Linq/MergeTests.cs:516-536; 20 and 20 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json.Tests/Linq/MergeTests.cs:306-353\n+++ Src/Newtonsoft.Json.Tests/Linq/MergeTests.cs:514-558\n@@ -1,4 +1,4 @@\n         [Test]\n-        public void ConcatArray()\n+        public void UnionArrays()\n         {\n             var left = (JObject)JToken.FromObject(new\n@@ -22,5 +22,5 @@\n             left.Merge(right, new JsonMergeSettings\n             {\n-                MergeArrayHandling = MergeArrayHandling.Concat\n+                MergeArrayHandling = MergeArrayHandling.Union\n             });\n \n@@ -29,7 +29,4 @@\n             StringAssert.AreEqual(@\"{\n   \"\"Array1\"\": [\n-    {\n-      \"\"Property1\"\": 1\n-    },\n     {\n       \"\"Property1\"\": 1",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Linq/MergeTests.cs:306-353",
+        "Src/Newtonsoft.Json.Tests/Linq/MergeTests.cs:514-558"
+      ]
+    },
+    {
+      "why": "The code beginning with `public string? Version => _declaration.Version;` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs:174-186 and Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs:420-432; 11 and 11 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"_declaration\", \"Declaration\"]]. Raw core diff:\n--- Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs:174-186\n+++ Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs:420-432\n@@ -1 +1 @@\n-        public string? Version => _declaration.Version;\n+        public string? Version => Declaration.Version;\n@@ -5,2 +5,2 @@\n-            get => _declaration.Encoding;\n-            set => _declaration.Encoding = value;\n+            get => Declaration.Encoding;\n+            set => Declaration.Encoding = value;\n@@ -11,2 +11,2 @@\n-            get => _declaration.Standalone;\n-            set => _declaration.Standalone = value;\n+            get => Declaration.Standalone;\n+            set => Declaration.Standalone = value;\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs:174-186\n+++ Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs:420-432\n@@ -1,13 +1,13 @@\n-        public string? Version => _declaration.Version;\n+        public string? Version => Declaration.Version;\n \n         public string? Encoding\n         {\n-            get => _declaration.Encoding;\n-            set => _declaration.Encoding = value;\n+            get => Declaration.Encoding;\n+            set => Declaration.Encoding = value;\n         }\n \n         public string? Standalone\n         {\n-            get => _declaration.Standalone;\n-            set => _declaration.Standalone = value;\n+            get => Declaration.Standalone;\n+            set => Declaration.Standalone = value;\n         }",
+      "type": "Type II",
+      "occurrences": [
+        "Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs:174-186",
+        "Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs:420-432"
+      ]
+    },
+    {
+      "why": "The code beginning with `case JsonToken.None:` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: Src/Newtonsoft.Json/Linq/JContainer.cs:821-899 and Src/Newtonsoft.Json/Linq/JContainer.Async.cs:82-160; 73 and 73 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"r\", \"reader\"]]. Raw core diff:\n--- Src/Newtonsoft.Json/Linq/JContainer.cs:821-899\n+++ Src/Newtonsoft.Json/Linq/JContainer.Async.cs:82-160\n@@ -39 +39 @@\n-                        JConstructor constructor = new JConstructor(r.Value!.ToString()!);\n+                        JConstructor constructor = new JConstructor(reader.Value!.ToString()!);\n@@ -58 +58 @@\n-                        JValue v = new JValue(r.Value);\n+                        JValue v = new JValue(reader.Value);\n@@ -65 +65 @@\n-                            v = JValue.CreateComment(r.Value!.ToString());\n+                            v = JValue.CreateComment(reader.Value!.ToString());\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json/Linq/JContainer.cs:821-899\n+++ Src/Newtonsoft.Json/Linq/JContainer.Async.cs:82-160\n@@ -37,5 +37,5 @@\n                         break;\n                     case JsonToken.StartConstructor:\n-                        JConstructor constructor = new JConstructor(r.Value!.ToString()!);\n+                        JConstructor constructor = new JConstructor(reader.Value!.ToString()!);\n                         constructor.SetLineInfo(lineInfo, settings);\n                         parent.Add(constructor);\n@@ -56,5 +56,5 @@\n                     case JsonToken.Boolean:\n                     case JsonToken.Bytes:\n-                        JValue v = new JValue(r.Value);\n+                        JValue v = new JValue(reader.Value);\n                         v.SetLineInfo(lineInfo, settings);\n                         parent.Add(v);\n@@ -63,5 +63,5 @@\n                         if (settings != null && settings.CommentHandling == CommentHandling.Load)\n                         {\n-                            v = JValue.CreateComment(r.Value!.ToString());\n+                            v = JValue.CreateComment(reader.Value!.ToString());\n                             v.SetLineInfo(lineInfo, settings);\n                             parent.Add(v);",
+      "type": "Type II",
+      "occurrences": [
+        "Src/Newtonsoft.Json/Linq/JContainer.cs:821-899",
+        "Src/Newtonsoft.Json/Linq/JContainer.Async.cs:82-160"
+      ]
+    },
+    {
+      "why": "The code beginning with `Assert.IsTrue(await reader.ReadAsync());` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:468-477 and Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:323-332; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"\\\"1234£56\\\"\", \"\\\"c\\\"\"]]. Raw core diff:\n--- Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:468-477\n+++ Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:323-332\n@@ -3 +3 @@\n-            Assert.AreEqual(\"1234£56\", reader.Value);\n+            Assert.AreEqual(\"c\", reader.Value);\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:468-477\n+++ Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:323-332\n@@ -1,5 +1,5 @@\n             Assert.IsTrue(await reader.ReadAsync());\n             Assert.AreEqual(JsonToken.String, reader.TokenType);\n-            Assert.AreEqual(\"1234£56\", reader.Value);\n+            Assert.AreEqual(\"c\", reader.Value);\n             Assert.AreEqual(typeof(string), reader.ValueType);\n ",
+      "type": "Type II",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:468-477",
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:323-332"
+      ]
+    },
+    {
+      "why": "The code beginning with `byte[] data = HexToBytes(\"31-00-00-00-02-30-00-25-00-00-00-64-38-32-31-65-65-64-37-2D-34-62-35-63-2D-34-33-63-39-2D-38-61-63-32-2D-36-39-32-38-65-35-3` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:81-88 and Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:115-122; 6 and 6 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"\\\"31-00-00-00-02-30-00-25-00-00-00-64-38-32-31-65-65-64-37-2D-34-62-35-63-2D-34-33-63-39-2D-38-61-63-32-2D-36-39-32-38-65-35-37-39-62-37-30-35-00-00\\\"\", \"\\\"1D-00-00-00-05-30-00-10-00-00-00-04-D7-EE-21-D8-5C-4B-C9-43-8A-C2-69-28-E5-79-B7-05-00\\\"\"]]. Raw core diff:\n--- Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:81-88\n+++ Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:115-122\n@@ -1 +1 @@\n-            byte[] data = HexToBytes(\"31-00-00-00-02-30-00-25-00-00-00-64-38-32-31-65-65-64-37-2D-34-62-35-63-2D-34-33-63-39-2D-38-61-63-32-2D-36-39-32-38-65-35-37-39-62-37-30-35-00-00\");\n+            byte[] data = HexToBytes(\"1D-00-00-00-05-30-00-10-00-00-00-04-D7-EE-21-D8-5C-4B-C9-43-8A-C2-69-28-E5-79-B7-05-00\");\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:81-88\n+++ Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:115-122\n@@ -1,3 +1,3 @@\n-            byte[] data = HexToBytes(\"31-00-00-00-02-30-00-25-00-00-00-64-38-32-31-65-65-64-37-2D-34-62-35-63-2D-34-33-63-39-2D-38-61-63-32-2D-36-39-32-38-65-35-37-39-62-37-30-35-00-00\");\n+            byte[] data = HexToBytes(\"1D-00-00-00-05-30-00-10-00-00-00-04-D7-EE-21-D8-5C-4B-C9-43-8A-C2-69-28-E5-79-B7-05-00\");\n \n             MemoryStream ms = new MemoryStream(data);",
+      "type": "Type II",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:81-88",
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:115-122"
+      ]
+    },
+    {
+      "why": "The code beginning with `string json = @\"{\"\"Offset\"\":\"\"\\/Date(946708260000-0631)\\/\"\"}\";` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ReadAsyncTests.cs:589-600 and Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ReadAsyncTests.cs:526-537; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"@\\\"{\\\"\\\"Offset\\\"\\\":\\\"\\\"\\\\/Date(946708260000-0631)\\\\/\\\"\\\"}\\\"\", \"@\\\"{\\\"\\\"Offset\\\"\\\":\\\"\\\"\\\\/Date(946706400000-0600)\\\\/\\\"\\\"}\\\"\"]]. Raw core diff:\n--- Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ReadAsyncTests.cs:589-600\n+++ Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ReadAsyncTests.cs:526-537\n@@ -1 +1 @@\n-            string json = @\"{\"\"Offset\"\":\"\"\\/Date(946708260000-0631)\\/\"\"}\";\n+            string json = @\"{\"\"Offset\"\":\"\"\\/Date(946706400000-0600)\\/\"\"}\";\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ReadAsyncTests.cs:589-600\n+++ Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ReadAsyncTests.cs:526-537\n@@ -1,3 +1,3 @@\n-            string json = @\"{\"\"Offset\"\":\"\"\\/Date(946708260000-0631)\\/\"\"}\";\n+            string json = @\"{\"\"Offset\"\":\"\"\\/Date(946706400000-0600)\\/\"\"}\";\n \n             JsonTextReader reader = new JsonTextReader(new StringReader(json));",
+      "type": "Type II",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ReadAsyncTests.cs:589-600",
+        "Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ReadAsyncTests.cs:526-537"
+      ]
+    },
+    {
+      "why": "The code beginning with `[Test]` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:1073-1081 and Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:1096-1104; 7 and 7 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:1064-1086\n+++ Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:1088-1109\n@@ -1,10 +1,9 @@\n         [Test]\n-        public void UnspecifiedDateTimeKindHandling()\n+        public void LocalDateTimeKindHandling()\n         {\n-            DateTime value = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Unspecified);\n+            DateTime value = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Local);\n \n             MemoryStream ms = new MemoryStream();\n             BsonWriter writer = new BsonWriter(ms);\n-            writer.DateTimeKindHandling = DateTimeKind.Unspecified;\n \n             writer.WriteStartObject();\n@@ -18,5 +17,5 @@\n             BsonReader reader;\n \n-            reader = new BsonReader(new MemoryStream(bson), false, DateTimeKind.Unspecified);\n+            reader = new BsonReader(new MemoryStream(bson), false, DateTimeKind.Local);\n             o = (JObject)JToken.ReadFrom(reader);\n             Assert.AreEqual(value, (DateTime)o[\"DateTime\"]);",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:1064-1086",
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:1088-1109"
+      ]
+    },
+    {
+      "why": "The code beginning with `[Test]` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/Serialization/TimeOnlyTests.cs:64-98 and Src/Newtonsoft.Json.Tests/Serialization/DateOnlyTests.cs:55-89; 28 and 28 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"TimeOnly\", \"DateOnly\"], [\"t\", \"d\"], [\"@\\\"\\\"\\\"00:00:00\\\"\\\"\\\"\", \"@\\\"\\\"\\\"0001-01-01\\\"\\\"\\\"\"], [\"@\\\"\\\"\\\"23:59:59.9999999\\\"\\\"\\\"\", \"@\\\"\\\"\\\"9999-12-31\\\"\\\"\\\"\"]]. Raw core diff:\n--- Src/Newtonsoft.Json.Tests/Serialization/TimeOnlyTests.cs:64-98\n+++ Src/Newtonsoft.Json.Tests/Serialization/DateOnlyTests.cs:55-89\n@@ -4,2 +4,2 @@\n-            TimeOnly t = default;\n-            string json = JsonConvert.SerializeObject(t, Formatting.Indented);\n+            DateOnly d = default;\n+            string json = JsonConvert.SerializeObject(d, Formatting.Indented);\n@@ -7 +7 @@\n-            Assert.AreEqual(@\"\"\"00:00:00\"\"\", json);\n+            Assert.AreEqual(@\"\"\"0001-01-01\"\"\", json);\n@@ -13,2 +13,2 @@\n-            TimeOnly t = TimeOnly.MaxValue;\n-            string json = JsonConvert.SerializeObject(t, Formatting.Indented);\n+            DateOnly d = DateOnly.MaxValue;\n+            string json = JsonConvert.SerializeObject(d, Formatting.Indented);\n@@ -16 +16 @@\n-            Assert.AreEqual(@\"\"\"23:59:59.9999999\"\"\", json);\n+            Assert.AreEqual(@\"\"\"9999-12-31\"\"\", json);\n@@ -22,2 +22,2 @@\n-            TimeOnly t = TimeOnly.MinValue;\n-            string json = JsonConvert.SerializeObject(t, Formatting.Indented);\n+            DateOnly d = DateOnly.MinValue;\n+            string json = JsonConvert.SerializeObject(d, Formatting.Indented);\n@@ -25 +25 @@\n-            Assert.AreEqual(@\"\"\"00:00:00\"\"\", json);\n+            Assert.AreEqual(@\"\"\"0001-01-01\"\"\", json);\n@@ -31,2 +31,2 @@\n-            TimeOnly? t = default;\n-            string json = JsonConvert.SerializeObject(t, Formatting.Indented);\n+            DateOnly? d = default;\n+            string json = JsonConvert.SerializeObject(d, Formatting.Indented);\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json.Tests/Serialization/TimeOnlyTests.cs:64-98\n+++ Src/Newtonsoft.Json.Tests/Serialization/DateOnlyTests.cs:55-89\n@@ -2,8 +2,8 @@\n         public void SerializeDefault()\n         {\n-            TimeOnly t = default;\n-            string json = JsonConvert.SerializeObject(t, Formatting.Indented);\n+            DateOnly d = default;\n+            string json = JsonConvert.SerializeObject(d, Formatting.Indented);\n \n-            Assert.AreEqual(@\"\"\"00:00:00\"\"\", json);\n+            Assert.AreEqual(@\"\"\"0001-01-01\"\"\", json);\n         }\n \n@@ -11,8 +11,8 @@\n         public void SerializeMaxValue()\n         {\n-            TimeOnly t = TimeOnly.MaxValue;\n-            string json = JsonConvert.SerializeObject(t, Formatting.Indented);\n+            DateOnly d = DateOnly.MaxValue;\n+            string json = JsonConvert.SerializeObject(d, Formatting.Indented);\n \n-            Assert.AreEqual(@\"\"\"23:59:59.9999999\"\"\", json);\n+            Assert.AreEqual(@\"\"\"9999-12-31\"\"\", json);\n         }\n \n@@ -20,8 +20,8 @@\n         public void SerializeMinValue()\n         {\n-            TimeOnly t = TimeOnly.MinValue;\n-            string json = JsonConvert.SerializeObject(t, Formatting.Indented);\n+            DateOnly d = DateOnly.MinValue;\n+            string json = JsonConvert.SerializeObject(d, Formatting.Indented);\n \n-            Assert.AreEqual(@\"\"\"00:00:00\"\"\", json);\n+            Assert.AreEqual(@\"\"\"0001-01-01\"\"\", json);\n         }\n \n@@ -29,6 +29,6 @@\n         public void SerializeNullable_Null()\n         {\n-            TimeOnly? t = default;\n-            string json = JsonConvert.SerializeObject(t, Formatting.Indented);\n+            DateOnly? d = default;\n+            string json = JsonConvert.SerializeObject(d, Formatting.Indented);\n \n             Assert.AreEqual(\"null\", json);",
+      "type": "Type II",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/TimeOnlyTests.cs:64-98",
+        "Src/Newtonsoft.Json.Tests/Serialization/DateOnlyTests.cs:55-89"
+      ]
+    },
+    {
+      "why": "The code beginning with `JArray a =` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/Linq/JTokenTests.cs:886-899 and Src/Newtonsoft.Json.Tests/Linq/JTokenTests.cs:836-849; 12 and 12 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Linq/JTokenTests.cs:886-899",
+        "Src/Newtonsoft.Json.Tests/Linq/JTokenTests.cs:836-849"
+      ]
+    },
+    {
+      "why": "The code beginning with `Assert.AreEqual(typeof(string), reader.ValueType);` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:389-395 and Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:326-332; 6 and 6 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"PropertyName\", \"Float\"]]. Raw core diff:\n--- Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:389-395\n+++ Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:326-332\n@@ -7 +7 @@\n-            Assert.AreEqual(JsonToken.PropertyName, reader.TokenType);\n+            Assert.AreEqual(JsonToken.Float, reader.TokenType);\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:387-395\n+++ Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:324-332\n@@ -1,3 +1,3 @@\n-            Assert.AreEqual(typeof(string), reader.ValueType);\n+            Assert.AreEqual(typeof(long), reader.ValueType);\n \n             Assert.IsTrue(reader.Read());\n@@ -7,3 +7,3 @@\n \n             Assert.IsTrue(reader.Read());\n-            Assert.AreEqual(JsonToken.PropertyName, reader.TokenType);\n+            Assert.AreEqual(JsonToken.Float, reader.TokenType);",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:387-395",
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:324-332"
+      ]
+    },
+    {
+      "why": "The code beginning with `CheckNotNull(outer, \"outer\");` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: Src/Newtonsoft.Json/Utilities/LinqBridge.cs:1752-1758 and Src/Newtonsoft.Json/Utilities/LinqBridge.cs:1797-1803; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "Src/Newtonsoft.Json/Utilities/LinqBridge.cs:1752-1758",
+        "Src/Newtonsoft.Json/Utilities/LinqBridge.cs:1797-1803"
+      ]
+    },
+    {
+      "why": "The code beginning with `jsonWriter.Formatting = Formatting.Indented;` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/JsonTextWriterTest.cs:599-607 and Src/Newtonsoft.Json.Tests/JsonTextWriterTest.cs:647-655; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"DefaultValue\", \"String\"]]. Raw core diff:\n--- Src/Newtonsoft.Json.Tests/JsonTextWriterTest.cs:599-607\n+++ Src/Newtonsoft.Json.Tests/JsonTextWriterTest.cs:647-655\n@@ -2 +2 @@\n-                jsonWriter.FloatFormatHandling = FloatFormatHandling.DefaultValue;\n+                jsonWriter.FloatFormatHandling = FloatFormatHandling.String;\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json.Tests/JsonTextWriterTest.cs:599-607\n+++ Src/Newtonsoft.Json.Tests/JsonTextWriterTest.cs:647-655\n@@ -1,4 +1,4 @@\n                 jsonWriter.Formatting = Formatting.Indented;\n-                jsonWriter.FloatFormatHandling = FloatFormatHandling.DefaultValue;\n+                jsonWriter.FloatFormatHandling = FloatFormatHandling.String;\n \n                 jsonWriter.WriteStartArray();",
+      "type": "Type II",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/JsonTextWriterTest.cs:599-607",
+        "Src/Newtonsoft.Json.Tests/JsonTextWriterTest.cs:647-655"
+      ]
+    },
+    {
+      "why": "The code beginning with `var movie = new MovieWithJsonObjectNullValueHandlingIgnore` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/Serialization/NullValueHandlingTests.cs:135-143 and Src/Newtonsoft.Json.Tests/Serialization/NullValueHandlingTests.cs:156-164; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"MovieWithJsonObjectNullValueHandlingIgnore\", \"MovieWithJsonObjectNullValueHandlingInclude\"], [\"ignored\", \"included\"], [\"Include\", \"Ignore\"]]. Raw core diff:\n--- Src/Newtonsoft.Json.Tests/Serialization/NullValueHandlingTests.cs:135-143\n+++ Src/Newtonsoft.Json.Tests/Serialization/NullValueHandlingTests.cs:156-164\n@@ -1 +1 @@\n-            var movie = new MovieWithJsonObjectNullValueHandlingIgnore\n+            var movie = new MovieWithJsonObjectNullValueHandlingInclude\n@@ -6,2 +6,2 @@\n-            \n-            string ignored = JsonConvert.SerializeObject(movie,\n+\n+            string included = JsonConvert.SerializeObject(movie,\n@@ -9 +9 @@\n-                new JsonSerializerSettings { NullValueHandling = NullValueHandling.Include });\n+                new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore });\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json.Tests/Serialization/NullValueHandlingTests.cs:135-143\n+++ Src/Newtonsoft.Json.Tests/Serialization/NullValueHandlingTests.cs:156-164\n@@ -1,9 +1,9 @@\n-            var movie = new MovieWithJsonObjectNullValueHandlingIgnore\n+            var movie = new MovieWithJsonObjectNullValueHandlingInclude\n             {\n                 Name = \"Bad Boys III\",\n                 Description = \"It's no Bad Boys\"\n             };\n-            \n-            string ignored = JsonConvert.SerializeObject(movie,\n+\n+            string included = JsonConvert.SerializeObject(movie,\n                 Formatting.Indented,\n-                new JsonSerializerSettings { NullValueHandling = NullValueHandling.Include });\n+                new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore });",
+      "type": "Type II",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/NullValueHandlingTests.cs:135-143",
+        "Src/Newtonsoft.Json.Tests/Serialization/NullValueHandlingTests.cs:156-164"
+      ]
+    },
+    {
+      "why": "The code beginning with `[Test]` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ReadTests.cs:514-530 and Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ReadTests.cs:580-596; 13 and 13 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ReadTests.cs:508-530\n+++ Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ReadTests.cs:574-596\n@@ -1,7 +1,7 @@\n #if !NET20\n         [Test]\n-        public void ReadAsDateTimeOffset()\n+        public void ReadAsDateTimeOffsetHoursOnly()\n         {\n-            string json = \"{\\\"Offset\\\":\\\"\\\\/Date(946663200000+0600)\\\\/\\\"}\";\n+            string json = \"{\\\"Offset\\\":\\\"\\\\/Date(946663200000+06)\\\\/\\\"}\";\n \n             JsonTextReader reader = new JsonTextReader(new StringReader(json));",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ReadTests.cs:508-530",
+        "Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ReadTests.cs:574-596"
+      ]
+    },
+    {
+      "why": "The code beginning with `Assert.AreEqual(JsonToken.String, reader.TokenType);` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/JsonTextReaderTests/MiscTests.cs:211-219 and Src/Newtonsoft.Json.Tests/JsonTextReaderTests/MiscTests.cs:904-912; 7 and 7 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"PropertyName\", \"Comment\"], [\"String\", \"EndObject\"], [\"\\\"recipe_text\\\"\", \"\\\"comment \\\"\"]]. Raw core diff:\n--- Src/Newtonsoft.Json.Tests/JsonTextReaderTests/MiscTests.cs:211-219\n+++ Src/Newtonsoft.Json.Tests/JsonTextReaderTests/MiscTests.cs:904-912\n@@ -2 +2 @@\n-            Assert.AreEqual(JsonToken.PropertyName, reader.TokenType);\n+            Assert.AreEqual(JsonToken.Comment, reader.TokenType);\n@@ -5 +5 @@\n-            Assert.AreEqual(JsonToken.String, reader.TokenType);\n+            Assert.AreEqual(JsonToken.EndObject, reader.TokenType);\n@@ -8,2 +8,2 @@\n-            Assert.AreEqual(JsonToken.PropertyName, reader.TokenType);\n-            Assert.AreEqual(\"recipe_text\", reader.Value);\n+            Assert.AreEqual(JsonToken.Comment, reader.TokenType);\n+            Assert.AreEqual(\"comment \", reader.Value);\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json.Tests/JsonTextReaderTests/MiscTests.cs:209-219\n+++ Src/Newtonsoft.Json.Tests/JsonTextReaderTests/MiscTests.cs:902-912\n@@ -1,11 +1,11 @@\n-            Assert.AreEqual(JsonToken.String, reader.TokenType);\n+            Assert.AreEqual(JsonToken.EndArray, reader.TokenType);\n \n             Assert.IsTrue(reader.Read());\n-            Assert.AreEqual(JsonToken.PropertyName, reader.TokenType);\n+            Assert.AreEqual(JsonToken.Comment, reader.TokenType);\n \n             Assert.IsTrue(reader.Read());\n-            Assert.AreEqual(JsonToken.String, reader.TokenType);\n+            Assert.AreEqual(JsonToken.EndObject, reader.TokenType);\n \n             Assert.IsTrue(reader.Read());\n-            Assert.AreEqual(JsonToken.PropertyName, reader.TokenType);\n-            Assert.AreEqual(\"recipe_text\", reader.Value);\n+            Assert.AreEqual(JsonToken.Comment, reader.TokenType);\n+            Assert.AreEqual(\"comment \", reader.Value);",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/JsonTextReaderTests/MiscTests.cs:209-219",
+        "Src/Newtonsoft.Json.Tests/JsonTextReaderTests/MiscTests.cs:902-912"
+      ]
+    },
+    {
+      "why": "The code beginning with `[Test]` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:568-595 and Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:539-566; 21 and 21 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"ReadCodeAsync\", \"ReadRegexAsync\"], [\"\\\"1A-00-00-00-0D-63-6F-64-65-00-0B-00-00-00-49-20-61-6D-20-63-6F-64-65-21-00-00\\\"\", \"\\\"15-00-00-00-0B-72-65-67-65-78-00-74-65-73-74-00-67-69-6D-00-00\\\"\"], [\"\\\"code\\\"\", \"\\\"regex\\\"\"], [\"@\\\"I am code!\\\"\", \"@\\\"/test/gim\\\"\"]]. Raw core diff:\n--- Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:568-595\n+++ Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:539-566\n@@ -2 +2 @@\n-        public async Task ReadCodeAsync()\n+        public async Task ReadRegexAsync()\n@@ -4 +4 @@\n-            string hexdoc = \"1A-00-00-00-0D-63-6F-64-65-00-0B-00-00-00-49-20-61-6D-20-63-6F-64-65-21-00-00\";\n+            string hexdoc = \"15-00-00-00-0B-72-65-67-65-78-00-74-65-73-74-00-67-69-6D-00-00\";\n@@ -16 +16 @@\n-            Assert.AreEqual(\"code\", reader.Value);\n+            Assert.AreEqual(\"regex\", reader.Value);\n@@ -20 +20 @@\n-            Assert.AreEqual(@\"I am code!\", reader.Value);\n+            Assert.AreEqual(@\"/test/gim\", reader.Value);\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:568-595\n+++ Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:539-566\n@@ -1,6 +1,6 @@\n         [Test]\n-        public async Task ReadCodeAsync()\n+        public async Task ReadRegexAsync()\n         {\n-            string hexdoc = \"1A-00-00-00-0D-63-6F-64-65-00-0B-00-00-00-49-20-61-6D-20-63-6F-64-65-21-00-00\";\n+            string hexdoc = \"15-00-00-00-0B-72-65-67-65-78-00-74-65-73-74-00-67-69-6D-00-00\";\n \n             byte[] data = HexToBytes(hexdoc);\n@@ -14,9 +14,9 @@\n             Assert.IsTrue(await reader.ReadAsync());\n             Assert.AreEqual(JsonToken.PropertyName, reader.TokenType);\n-            Assert.AreEqual(\"code\", reader.Value);\n+            Assert.AreEqual(\"regex\", reader.Value);\n \n             Assert.IsTrue(await reader.ReadAsync());\n             Assert.AreEqual(JsonToken.String, reader.TokenType);\n-            Assert.AreEqual(@\"I am code!\", reader.Value);\n+            Assert.AreEqual(@\"/test/gim\", reader.Value);\n             Assert.AreEqual(typeof(string), reader.ValueType);\n ",
+      "type": "Type II",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:568-595",
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:539-566"
+      ]
+    },
+    {
+      "why": "The code beginning with `using System.Collections.Generic;` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/TestObjects/EnumerableClass.cs:1-34 and Src/Newtonsoft.Json.Tests/TestObjects/GenericIEnumerableWithImplicitConversion.cs:1-34; 10 and 10 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"EnumerableClass\", \"GenericIEnumerableWithImplicitConversion\"], [\"string\", \"ClassWithImplicitOperator\"]]. Raw core diff:\n--- Src/Newtonsoft.Json.Tests/TestObjects/EnumerableClass.cs:1-34\n+++ Src/Newtonsoft.Json.Tests/TestObjects/GenericIEnumerableWithImplicitConversion.cs:1-34\n@@ -30 +30 @@\n-    public class EnumerableClass\n+    public class GenericIEnumerableWithImplicitConversion\n@@ -32 +32 @@\n-        public IEnumerable<string> Enumerable { get; set; }\n+        public IEnumerable<ClassWithImplicitOperator> Enumerable { get; set; }\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json.Tests/TestObjects/EnumerableClass.cs:1-34\n+++ Src/Newtonsoft.Json.Tests/TestObjects/GenericIEnumerableWithImplicitConversion.cs:1-34\n@@ -28,7 +28,7 @@\n namespace Newtonsoft.Json.Tests.TestObjects\n {\n-    public class EnumerableClass\n+    public class GenericIEnumerableWithImplicitConversion\n     {\n-        public IEnumerable<string> Enumerable { get; set; }\n+        public IEnumerable<ClassWithImplicitOperator> Enumerable { get; set; }\n     }\n }",
+      "type": "Type II",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/TestObjects/EnumerableClass.cs:1-34",
+        "Src/Newtonsoft.Json.Tests/TestObjects/GenericIEnumerableWithImplicitConversion.cs:1-34"
+      ]
+    },
+    {
+      "why": "The code beginning with `byte[] data = HexToBytes(hexdoc);` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:814-824 and Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:698-708; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"\\\"oid\\\"\", \"\\\"regex\\\"\"]]. Raw core diff:\n--- Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:814-824\n+++ Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:698-708\n@@ -11 +11 @@\n-            Assert.AreEqual(\"oid\", reader.Value);\n+            Assert.AreEqual(\"regex\", reader.Value);\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:814-824\n+++ Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:698-708\n@@ -9,3 +9,3 @@\n             Assert.IsTrue(reader.Read());\n             Assert.AreEqual(JsonToken.PropertyName, reader.TokenType);\n-            Assert.AreEqual(\"oid\", reader.Value);\n+            Assert.AreEqual(\"regex\", reader.Value);",
+      "type": "Type II",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:814-824",
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:698-708"
+      ]
+    },
+    {
+      "why": "The code beginning with `public override void Close()` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: Src/Newtonsoft.Json/JsonTextReader.cs:2605-2618 and Src/Newtonsoft.Json/JsonTextWriter.cs:193-206; 13 and 13 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"_chars\", \"_writeBuffer\"], [\"CloseInput\", \"CloseOutput\"], [\"_reader\", \"_writer\"]]. Raw core diff:\n--- Src/Newtonsoft.Json/JsonTextReader.cs:2605-2618\n+++ Src/Newtonsoft.Json/JsonTextWriter.cs:193-206\n@@ -1 +1 @@\n-            if (_chars != null)\n+            if (_writeBuffer != null)\n@@ -3,2 +3,2 @@\n-                BufferUtils.ReturnBuffer(_arrayPool, _chars);\n-                _chars = null;\n+                BufferUtils.ReturnBuffer(_arrayPool, _writeBuffer);\n+                _writeBuffer = null;\n@@ -7 +7 @@\n-            if (CloseInput)\n+            if (CloseOutput)\n@@ -10 +10 @@\n-                _reader?.Close();\n+                _writer?.Close();\n@@ -12 +12 @@\n-                _reader?.Dispose();\n+                _writer?.Dispose();\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json/JsonTextReader.cs:2601-2621\n+++ Src/Newtonsoft.Json/JsonTextWriter.cs:191-207\n@@ -1,21 +1,17 @@\n-        public override void Close()\n+        private void CloseBufferAndWriter()\n         {\n-            base.Close();\n-\n-            if (_chars != null)\n+            if (_writeBuffer != null)\n             {\n-                BufferUtils.ReturnBuffer(_arrayPool, _chars);\n-                _chars = null;\n+                BufferUtils.ReturnBuffer(_arrayPool, _writeBuffer);\n+                _writeBuffer = null;\n             }\n \n-            if (CloseInput)\n+            if (CloseOutput)\n             {\n #if HAVE_STREAM_READER_WRITER_CLOSE\n-                _reader?.Close();\n+                _writer?.Close();\n #else\n-                _reader?.Dispose();\n+                _writer?.Dispose();\n #endif\n             }\n-\n-            _stringBuffer.Clear(_arrayPool);\n         }",
+      "occurrences": [
+        "Src/Newtonsoft.Json/JsonTextReader.cs:2601-2621",
+        "Src/Newtonsoft.Json/JsonTextWriter.cs:191-207"
+      ]
+    },
+    {
+      "why": "The code beginning with `[Test]` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:7316-7329 and Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:7333-7346; 11 and 11 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"SerializeDictionaryWithStructKey\", \"SerializeDictionaryWithStructKey_Custom\"], [\"Size\", \"TypeConverterSize\"]]. Raw core diff:\n--- Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:7316-7329\n+++ Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:7333-7346\n@@ -2 +2 @@\n-        public void SerializeDictionaryWithStructKey()\n+        public void SerializeDictionaryWithStructKey_Custom()\n@@ -5 +5 @@\n-                new Dictionary<Size, Size> { { new Size(1, 2), new Size(3, 4) } }\n+                new Dictionary<TypeConverterSize, TypeConverterSize> { { new TypeConverterSize(1, 2), new TypeConverterSize(3, 4) } }\n@@ -10 +10 @@\n-            Dictionary<Size, Size> d = JsonConvert.DeserializeObject<Dictionary<Size, Size>>(json);\n+            Dictionary<TypeConverterSize, TypeConverterSize> d = JsonConvert.DeserializeObject<Dictionary<TypeConverterSize, TypeConverterSize>>(json);\n@@ -12,2 +12,2 @@\n-            Assert.AreEqual(new Size(1, 2), d.Keys.First());\n-            Assert.AreEqual(new Size(3, 4), d.Values.First());\n+            Assert.AreEqual(new TypeConverterSize(1, 2), d.Keys.First());\n+            Assert.AreEqual(new TypeConverterSize(3, 4), d.Values.First());\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:7316-7329\n+++ Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:7333-7346\n@@ -1,14 +1,14 @@\n         [Test]\n-        public void SerializeDictionaryWithStructKey()\n+        public void SerializeDictionaryWithStructKey_Custom()\n         {\n             string json = JsonConvert.SerializeObject(\n-                new Dictionary<Size, Size> { { new Size(1, 2), new Size(3, 4) } }\n+                new Dictionary<TypeConverterSize, TypeConverterSize> { { new TypeConverterSize(1, 2), new TypeConverterSize(3, 4) } }\n             );\n \n             Assert.AreEqual(@\"{\"\"1, 2\"\":\"\"3, 4\"\"}\", json);\n \n-            Dictionary<Size, Size> d = JsonConvert.DeserializeObject<Dictionary<Size, Size>>(json);\n+            Dictionary<TypeConverterSize, TypeConverterSize> d = JsonConvert.DeserializeObject<Dictionary<TypeConverterSize, TypeConverterSize>>(json);\n \n-            Assert.AreEqual(new Size(1, 2), d.Keys.First());\n-            Assert.AreEqual(new Size(3, 4), d.Values.First());\n+            Assert.AreEqual(new TypeConverterSize(1, 2), d.Keys.First());\n+            Assert.AreEqual(new TypeConverterSize(3, 4), d.Values.First());\n         }",
+      "type": "Type II",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:7316-7329",
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:7333-7346"
+      ]
+    }
+  ],
+  "clearly_out": [],
+  "not_clear": [
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Linq/JObjectTests.cs:333-335",
+        "Src/Newtonsoft.Json.Tests/Linq/JObjectTests.cs:568-570"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:1874-1877",
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:2400-2403"
+      ]
+    },
+    {
+      "why": "The fragments around `if (value is BigInteger integer)` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 5.",
+      "occurrences": [
+        "Src/Newtonsoft.Json/JsonWriter.Async.cs:715-727",
+        "Src/Newtonsoft.Json/Linq/JValue.Async.cs:90-103"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerCollectionsTests.cs:1800-1805",
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerCollectionsTests.cs:1786-1791"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Linq/DynamicTests.cs:656-660",
+        "Src/Newtonsoft.Json.Tests/Linq/DynamicTests.cs:646-650"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 6 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Benchmarks/SerializeComparisonBenchmarks.cs:262-267",
+        "Src/Newtonsoft.Json.Tests/JsonTextWriterAsyncTests.cs:1408-1414"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Linq/JsonPath/JPathExecuteTests.cs:1477-1478",
+        "Src/Newtonsoft.Json.Tests/Linq/JsonPath/JPathExecuteTests.cs:410-412"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:922-925",
+        "Src/Newtonsoft.Json.Tests/Bson/BsonWriterAsyncTests.cs:143-146"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/CamelCasePropertyNamesContractResolverTests.cs:69-70",
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:3853-3854"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/TraceWriterTests.cs:1186-1189",
+        "Src/Newtonsoft.Json.Tests/Linq/JTokenWriterTest.cs:347-350"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/JsonTextReaderTests/MiscAsyncTests.cs:927-932",
+        "Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ReadAsyncTests.cs:1639-1644"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/PreserveReferencesHandlingTests.cs:981-987",
+        "Src/Newtonsoft.Json.Tests/Bson/BsonWriterTests.cs:378-382"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerCollectionsTests.cs:1613-1616",
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerCollectionsTests.cs:1786-1789"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Linq/JsonPath/JPathParseTests.cs:525-527",
+        "Src/Newtonsoft.Json.Tests/Linq/JsonPath/JPathParseTests.cs:398-400"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/SerializationErrorHandlingTests.cs:435-437",
+        "Src/Newtonsoft.Json.Tests/Serialization/SerializationErrorHandlingTests.cs:345-347"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:5086-5088",
+        "Src/Newtonsoft.Json.Tests/Serialization/ExtensionDataTests.cs:918-920"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Bson/BsonWriterAsyncTests.cs:303-307",
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:922-925"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/JsonTextReaderTests/MiscAsyncTests.cs:1025-1028",
+        "Src/Newtonsoft.Json.Tests/JsonTextReaderTests/MiscAsyncTests.cs:1003-1006"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 14 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/MetadataPropertyHandlingTests.cs:297-302",
+        "Src/Newtonsoft.Json.Tests/Serialization/MetadataPropertyHandlingTests.cs:259-274"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ParseTests.cs:482-484",
+        "Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ParseTests.cs:469-471"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/JsonValidatingReaderTests.cs:984-986",
+        "Src/Newtonsoft.Json.Tests/JsonValidatingReaderTests.cs:1065-1067"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/ConstructorHandlingTests.cs:126-128",
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:2562-2564"
+      ]
+    },
+    {
+      "why": "The fragments around `Assert.AreEqual(0.0000025d, reader.Value);` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/JsonTextReaderTests/MiscTests.cs:961-968",
+        "Src/Newtonsoft.Json.Tests/JsonTextReaderTests/FloatTests.cs:358-365"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Documentation/Samples/Serializer/DeserializeObject.cs:67-73",
+        "Src/Newtonsoft.Json.Tests/Documentation/Samples/Serializer/CustomJsonConverter.cs:132-138"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:4390-4390",
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:4391-4391"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/MissingMemberHandlingTests.cs:53-56",
+        "Src/Newtonsoft.Json.Tests/Linq/DynamicTests.cs:830-833"
+      ]
+    },
+    {
+      "why": "The fragments around `CircularDictionary circularDictionary = JsonConvert.DeserializeObject<CircularDictionary>(json,` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 3.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/PreserveReferencesHandlingTests.cs:270-277",
+        "Src/Newtonsoft.Json.Tests/Serialization/ConstructorHandlingTests.cs:91-98"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Issues/Issue1445.cs:46-48",
+        "Src/Newtonsoft.Json.Tests/DemoTests.cs:621-623"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Linq/JTokenTests.cs:562-563",
+        "Src/Newtonsoft.Json.Tests/Linq/JTokenTests.cs:584-585"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Linq/JObjectTests.cs:966-968",
+        "Src/Newtonsoft.Json.Tests/Linq/JObjectTests.cs:1207-1209"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Linq/JTokenWriterAsyncTests.cs:357-361",
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:834-837"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Documentation/SerializationTests.cs:673-681",
+        "Src/Newtonsoft.Json.Tests/Serialization/FSharpTests.cs:91-94"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:4964-4966",
+        "Src/Newtonsoft.Json.Tests/Serialization/DefaultValueHandlingTests.cs:194-196"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Linq/JTokenTests.cs:533-533",
+        "Src/Newtonsoft.Json.Tests/Linq/JTokenTests.cs:535-535"
+      ]
+    },
+    {
+      "why": "The fragments around `[AttributeUsage(AttributeTargets.Property, Inherited = false)]` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 3.",
+      "occurrences": [
+        "Src/Newtonsoft.Json/Utilities/FeatureSwitchDefinitionAttribute.cs:16-35",
+        "Src/Newtonsoft.Json/Utilities/NullableAttributes.cs:35-46"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:2411-2416",
+        "Src/Newtonsoft.Json.Tests/Documentation/SerializationTests.cs:75-90"
+      ]
+    },
+    {
+      "why": "The fragments around `[Test]` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 3.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Linq/JTokenTests.cs:1000-1008",
+        "Src/Newtonsoft.Json.Tests/Linq/JObjectTests.cs:1354-1362"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/ExtensionDataTests.cs:727-732",
+        "Src/Newtonsoft.Json.Tests/Serialization/ExtensionDataTests.cs:752-757"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Converters/DiscriminatedUnionConverterTests.cs:160-163",
+        "Src/Newtonsoft.Json.Tests/Converters/StringEnumConverterTests.cs:836-840"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 25 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Issues/Issue2444.cs:54-57",
+        "Src/Newtonsoft.Json.Tests/Converters/DataSetConverterTests.cs:247-273"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Bson/BsonWriterAsyncTests.cs:196-200",
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:922-925"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Linq/JArrayTests.cs:73-76",
+        "Src/Newtonsoft.Json.Tests/Linq/JObjectTests.cs:874-878"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:4385-4387",
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:4388-4390"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/TraceWriterTests.cs:1144-1148",
+        "Src/Newtonsoft.Json.Tests/JsonTextWriterTest.cs:255-258"
+      ]
+    },
+    {
+      "why": "The fragments around `[Test]` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 4.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:371-381",
+        "Src/Newtonsoft.Json.Tests/Linq/JsonPath/JPathParseTests.cs:533-543"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:2243-2246",
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:2411-2415"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerCollectionsTests.cs:264-268",
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerCollectionsTests.cs:233-237"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ReadTests.cs:1409-1411",
+        "Src/Newtonsoft.Json.Tests/Linq/JTokenReaderTest.cs:286-288"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/ImmutableCollectionsTests.cs:194-196",
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerCollectionsTests.cs:641-643"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:8171-8172",
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:8180-8181"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:243-246",
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:316-319"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/ModernNumericTests.cs:131-132",
+        "Src/Newtonsoft.Json.Tests/Serialization/ModernNumericTests.cs:97-98"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Bson/BsonWriterTests.cs:495-497",
+        "Src/Newtonsoft.Json.Tests/Serialization/SerializationErrorHandlingTests.cs:771-773"
+      ]
+    },
+    {
+      "why": "The fragments around `Person person = new Person` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Documentation/Samples/Serializer/SerializeContractResolver.cs:61-79",
+        "Src/Newtonsoft.Json.Tests/Documentation/Samples/Serializer/CustomContractResolver.cs:87-94"
+      ]
+    },
+    {
+      "why": "The fragments around `var m2 = JsonConvert.DeserializeObject<MemberConverterClass>(json, new JsonSerializerSettings` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 3.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:2491-2497",
+        "Src/Newtonsoft.Json.Tests/Serialization/DefaultValueHandlingTests.cs:458-464"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:922-925",
+        "Src/Newtonsoft.Json.Tests/Serialization/TraceWriterTests.cs:1110-1114"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/DefaultValueHandlingTests.cs:346-350",
+        "Src/Newtonsoft.Json.Tests/TestObjects/SubWithContractNewProperties.cs:41-46"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (56 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Converters/DataSetConverterTests.cs:411-469",
+        "Src/Newtonsoft.Json.Tests/Converters/DataTableConverterTests.cs:400-404"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Bson/BsonWriterAsyncTests.cs:56-60",
+        "Src/Newtonsoft.Json.Tests/JsonTextWriterAsyncTests.cs:361-365"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Utilities/ExpressionReflectionDelegateFactoryTests.cs:168-168",
+        "Src/Newtonsoft.Json.Tests/Utilities/ExpressionReflectionDelegateFactoryTests.cs:320-320"
+      ]
+    },
+    {
+      "why": "The fragments around `StringAssert.AreEqual(@\"[` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Converters/UnixDateTimeConverterTests.cs:241-247",
+        "Src/Newtonsoft.Json.Tests/Serialization/TypeNameHandlingTests.cs:1663-1672"
+      ]
+    },
+    {
+      "why": "The fragments around `c.Name = \"James\";` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 3.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/TraceWriterTests.cs:1009-1018",
+        "Src/Newtonsoft.Json.Tests/Serialization/CamelCaseNamingStrategyTests.cs:167-182"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (7 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Documentation/Samples/Serializer/DeserializeConstructorHandling.cs:82-91",
+        "Src/Newtonsoft.Json.Tests/Documentation/Samples/Serializer/DeserializeObject.cs:67-73"
+      ]
+    },
+    {
+      "why": "The fragments around `InMemoryTraceWriter traceWriter = new InMemoryTraceWriter` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/TraceWriterTests.cs:956-966",
+        "Src/Newtonsoft.Json.Tests/Documentation/Samples/Serializer/DeserializeWithDependencyInjection.cs:128-140"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/ShouldSerializeTests.cs:356-359",
+        "Src/Newtonsoft.Json.Tests/Issues/Issue1796.cs:56-60"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 3.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/MetadataPropertyHandlingTests.cs:297-302",
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:6339-6344"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:922-925",
+        "Src/Newtonsoft.Json.Tests/Bson/BsonWriterAsyncTests.cs:277-281"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:341-343",
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderTests.cs:316-318"
+      ]
+    },
+    {
+      "why": "The fragments around `await bs.WriteEndAsync();` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 6; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:948-957",
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:927-938"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 7 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Issues/Issue1353.cs:50-52",
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:4576-4584"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/JsonValidatingReaderTests.cs:168-170",
+        "Src/Newtonsoft.Json.Tests/JsonValidatingReaderTests.cs:128-130"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerCollectionsTests.cs:1506-1509",
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerCollectionsTests.cs:1597-1600"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:7088-7090",
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:7083-7085"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Bson/BsonWriterAsyncTests.cs:166-169",
+        "Src/Newtonsoft.Json.Tests/Bson/BsonWriterAsyncTests.cs:396-400"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (9 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Converters/BinaryConverterTests.cs:168-178",
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerCollectionsTests.cs:319-323"
+      ]
+    },
+    {
+      "why": "The fragments around `{` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 3.",
+      "occurrences": [
+        "Src/Newtonsoft.Json/Utilities/FeatureSwitchDefinitionAttribute.cs:7-36",
+        "Src/Newtonsoft.Json/Utilities/NullableAttributes.cs:35-46"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Linq/JTokenReaderAsyncTests.cs:455-458",
+        "Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ReadAsyncTests.cs:463-466"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:964-967",
+        "Src/Newtonsoft.Json.Tests/Serialization/ReflectionAttributeProviderTests.cs:115-118"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (8 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/SerializationErrorHandlingTests.cs:145-152",
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:3933-3937"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerCollectionsTests.cs:135-141",
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerCollectionsTests.cs:120-126"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Linq/JsonPath/JPathParseTests.cs:715-716",
+        "Src/Newtonsoft.Json.Tests/Linq/JsonPath/JPathParseTests.cs:706-707"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:3850-3852",
+        "Src/Newtonsoft.Json.Tests/Converters/JavaScriptDateTimeConverterTests.cs:252-253"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerCollectionsTests.cs:433-436",
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerCollectionsTests.cs:379-382"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:1247-1250",
+        "Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ReadAsyncTests.cs:1319-1321"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 8; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json/Schema/JsonSchema.cs:57-72",
+        "Src/Newtonsoft.Json/Utilities/UnconditionalSuppressMessageAttribute.cs:48-85"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:4389-4391",
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:4344-4346"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/JsonTextWriterAsyncTests.cs:161-164",
+        "Src/Newtonsoft.Json.Tests/JsonTextWriterAsyncTests.cs:404-407"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Bson/BsonReaderAsyncTests.cs:922-925",
+        "Src/Newtonsoft.Json.Tests/Bson/BsonWriterAsyncTests.cs:290-294"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/TestObjects/PreserveReferencesCallbackTestObject.cs:76-78",
+        "Src/Newtonsoft.Json.Tests/TestObjects/ISerializableTestObject.cs:65-67"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/JsonTextReaderTests/MiscAsyncTests.cs:370-374",
+        "Src/Newtonsoft.Json.Tests/JsonTextReaderTests/MiscAsyncTests.cs:358-362"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Linq/JObjectTests.cs:683-684",
+        "Src/Newtonsoft.Json.Tests/Linq/JObjectTests.cs:686-687"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (6 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:3126-3132",
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerCollectionsTests.cs:1800-1805"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Linq/AnnotationsTests.cs:435-437",
+        "Src/Newtonsoft.Json.Tests/Linq/AnnotationsTests.cs:395-397"
+      ]
+    },
+    {
+      "why": "The fragments around `c.Age = 27;` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 3.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/TraceWriterTests.cs:1010-1018",
+        "Src/Newtonsoft.Json.Tests/Serialization/CamelCaseNamingStrategyTests.cs:167-182"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Linq/MergeTests.cs:615-617",
+        "Src/Newtonsoft.Json.Tests/Linq/MergeTests.cs:611-613"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/TraceWriterTests.cs:1087-1089",
+        "Src/Newtonsoft.Json.Tests/Serialization/TraceWriterTests.cs:1132-1134"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Benchmarks/SerializeComparisonBenchmarks.cs:195-198",
+        "Src/Newtonsoft.Json.Tests/Serialization/TraceWriterTests.cs:1133-1138"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ReadTests.cs:662-666",
+        "Src/Newtonsoft.Json.Tests/JsonTextReaderTests/ReadAsyncTests.cs:670-674"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Serialization/TraceWriterTests.cs:1110-1114",
+        "Src/Newtonsoft.Json.Tests/Bson/BsonWriterAsyncTests.cs:277-281"
+      ]
+    },
+    {
+      "why": "The fragments around `{` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "Src/Newtonsoft.Json.Tests/Converters/RegexConverterTests.cs:316-322",
+        "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs:5809-5819"
+      ]
+    }
+  ],
+  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 200 candidates at this commit and no pair was called CLEARLY OUT by all of them. 16 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing."
+}

@@ -1,0 +1,1331 @@
+{
+  "name": "monolog",
+  "language": "php",
+  "url": "https://github.com/Seldaek/monolog.git",
+  "sha": "3bed304b1905fed5c30d172872f4d890cbb03c6a",
+  "protocol": {
+    "spec": "docs/specs/corpus.md",
+    "spec_section": "[CORPUS-REGISTER]",
+    "judging_skill": ".agents/skills/judge-clone-pairs/SKILL.md",
+    "preparer_skill": ".agents/skills/clone-register-prepare/SKILL.md"
+  },
+  "clearly_in": [
+    {
+      "why": "The code beginning with `public function getHandler(LogRecord|null $record = null): HandlerInterface` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: src/Monolog/Handler/FilterHandler.php:153-164 and src/Monolog/Handler/SamplingHandler.php:81-92; 11 and 11 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "src/Monolog/Handler/FilterHandler.php:153-164",
+        "src/Monolog/Handler/SamplingHandler.php:81-92"
+      ]
+    },
+    {
+      "why": "The code beginning with `$handler->handle($this->getRecord(Level::Warning));` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: tests/Monolog/Handler/FingersCrossedHandlerTest.php:225-230 and tests/Monolog/Handler/FingersCrossedHandlerTest.php:209-214; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "tests/Monolog/Handler/FingersCrossedHandlerTest.php:225-230",
+        "tests/Monolog/Handler/FingersCrossedHandlerTest.php:209-214"
+      ]
+    },
+    {
+      "why": "The code beginning with `public function testWriteContent()` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/Monolog/Handler/LogmaticHandlerTest.php:37-46 and tests/Monolog/Handler/LogEntriesHandlerTest.php:37-46; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"'/testToken {\\\"message\\\":\\\"Critical write test\\\",\\\"context\\\":{},\\\"level\\\":500,\\\"level_name\\\":\\\"CRITICAL\\\",\\\"channel\\\":\\\"test\\\",\\\"datetime\\\":\\\"(.*)\\\",\\\"extra\\\":{},\\\"hostname\\\":\\\"testHostname\\\",\\\"appname\\\":\\\"testAppname\\\",\\\"@marker\\\":\\\\[\\\"sourcecode\\\",\\\"php\\\"\\\\]}/'\", \"'/testToken \\\\[\\\\d{4}-\\\\d{2}-\\\\d{2}T\\\\d{2}:\\\\d{2}:\\\\d{2}\\\\.\\\\d{6}\\\\+00:00\\\\] test.CRITICAL: Critical write test/'\"]]. Raw core diff:\n--- tests/Monolog/Handler/LogmaticHandlerTest.php:37-46\n+++ tests/Monolog/Handler/LogEntriesHandlerTest.php:37-46\n@@ -9 +9 @@\n-        $this->assertMatchesRegularExpression('/testToken {\"message\":\"Critical write test\",\"context\":{},\"level\":500,\"level_name\":\"CRITICAL\",\"channel\":\"test\",\"datetime\":\"(.*)\",\"extra\":{},\"hostname\":\"testHostname\",\"appname\":\"testAppname\",\"@marker\":\\[\"sourcecode\",\"php\"\\]}/', $content);\n+        $this->assertMatchesRegularExpression('/testToken \\[\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}\\+00:00\\] test.CRITICAL: Critical write test/', $content);\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/LogmaticHandlerTest.php:37-46\n+++ tests/Monolog/Handler/LogEntriesHandlerTest.php:37-46\n@@ -7,4 +7,4 @@\n         $content = fread($this->res, 1024);\n \n-        $this->assertMatchesRegularExpression('/testToken {\"message\":\"Critical write test\",\"context\":{},\"level\":500,\"level_name\":\"CRITICAL\",\"channel\":\"test\",\"datetime\":\"(.*)\",\"extra\":{},\"hostname\":\"testHostname\",\"appname\":\"testAppname\",\"@marker\":\\[\"sourcecode\",\"php\"\\]}/', $content);\n+        $this->assertMatchesRegularExpression('/testToken \\[\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}\\+00:00\\] test.CRITICAL: Critical write test/', $content);\n     }",
+      "type": "Type II",
+      "occurrences": [
+        "tests/Monolog/Handler/LogmaticHandlerTest.php:37-46",
+        "tests/Monolog/Handler/LogEntriesHandlerTest.php:37-46"
+      ]
+    },
+    {
+      "why": "The code beginning with `$this->webhookUrl = $webhookUrl;` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: src/Monolog/Handler/SlackWebhookHandler.php:72-80 and src/Monolog/Handler/SlackHandler.php:81-89; 9 and 9 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/Monolog/Handler/SlackWebhookHandler.php:70-80\n+++ src/Monolog/Handler/SlackHandler.php:81-89\n@@ -1,4 +1,2 @@\n-        $this->webhookUrl = $webhookUrl;\n-\n         $this->slackRecord = new SlackRecord(\n             $channel,",
+      "occurrences": [
+        "src/Monolog/Handler/SlackWebhookHandler.php:70-80",
+        "src/Monolog/Handler/SlackHandler.php:81-89"
+      ]
+    },
+    {
+      "why": "The code beginning with `public function testConstructorShouldWorkWithRedis()` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/Monolog/Handler/RedisHandlerTest.php:45-53 and tests/Monolog/Handler/RedisPubSubHandlerTest.php:47-55; 8 and 8 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/RedisHandlerTest.php:25-67\n+++ tests/Monolog/Handler/RedisPubSubHandlerTest.php:21-68\n@@ -1,2 +1,8 @@\n+    public function testConstructorShouldWorkWithPredis()\n+    {\n+        $redis = $this->createMock('Predis\\Client');\n+        $this->assertInstanceof('Monolog\\Handler\\RedisPubSubHandler', new RedisPubSubHandler($redis, 'key'));\n+    }\n+\n     public function testConstructorShouldWorkWithRedis()\n     {\n@@ -6,5 +12,5 @@\n \n         $redis = $this->createMock('Redis');\n-        $this->assertInstanceof('Monolog\\Handler\\RedisHandler', new RedisHandler($redis, 'key'));\n+        $this->assertInstanceof('Monolog\\Handler\\RedisPubSubHandler', new RedisPubSubHandler($redis, 'key'));\n     }\n \n@@ -14,9 +20,9 @@\n         $redis->expects($this->atLeastOnce())\n             ->method('__call')\n-            ->with(self::equalTo('rpush'), self::equalTo(['key', 'test']));\n+            ->with(self::equalTo('publish'), self::equalTo(['key', 'test']));\n \n-        $record = $this->getRecord(Level::Warning, 'test', ['data' => new \\stdClass, 'foo' => 34]);\n+        $record = $this->getRecord(Level::Warning, 'test', ['data' => new \\stdClass(), 'foo' => 34]);\n \n-        $handler = new RedisHandler($redis, 'key');\n+        $handler = new RedisPubSubHandler($redis, 'key');\n         $handler->setFormatter(new LineFormatter(\"%message%\"));\n         $handler->handle($record);\n@@ -29,14 +35,13 @@\n         }\n \n-        $redis = $this->createPartialMock('Redis', ['rPush']);\n+        $redis = $this->createPartialMock('Redis', ['publish']);\n \n-        // Redis uses rPush\n         $redis->expects($this->once())\n-            ->method('rPush')\n+            ->method('publish')\n             ->with('key', 'test');\n \n-        $record = $this->getRecord(Level::Warning, 'test', ['data' => new \\stdClass, 'foo' => 34]);\n+        $record = $this->getRecord(Level::Warning, 'test', ['data' => new \\stdClass(), 'foo' => 34]);\n \n-        $handler = new RedisHandler($redis, 'key');\n+        $handler = new RedisPubSubHandler($redis, 'key');\n         $handler->setFormatter(new LineFormatter(\"%message%\"));\n         $handler->handle($record);",
+      "occurrences": [
+        "tests/Monolog/Handler/RedisHandlerTest.php:25-67",
+        "tests/Monolog/Handler/RedisPubSubHandlerTest.php:21-68"
+      ]
+    },
+    {
+      "why": "The code beginning with `public function testProcessorsDoNotInterfereBetweenHandlers()` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/Monolog/Handler/GroupHandlerTest.php:127-138 and tests/Monolog/Handler/FallbackGroupHandlerTest.php:148-159; 9 and 9 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/GroupHandlerTest.php:121-152\n+++ tests/Monolog/Handler/FallbackGroupHandlerTest.php:142-173\n@@ -1,7 +1,7 @@\n     public function testProcessorsDoNotInterfereBetweenHandlers()\n     {\n-        $t1 = new TestHandler();\n+        $t1 = new ExceptionTestHandler();\n         $t2 = new TestHandler();\n-        $handler = new GroupHandler([$t1, $t2]);\n+        $handler = new FallbackGroupHandler([$t1, $t2]);\n \n         $t1->pushProcessor(function (LogRecord $record) {\n@@ -17,7 +17,7 @@\n     public function testProcessorsDoNotInterfereBetweenHandlersWithBatch()\n     {\n-        $t1 = new TestHandler();\n+        $t1 = new ExceptionTestHandler();\n         $t2 = new TestHandler();\n-        $handler = new GroupHandler([$t1, $t2]);\n+        $handler = new FallbackGroupHandler([$t1, $t2]);\n \n         $t1->pushProcessor(function (LogRecord $record) {",
+      "occurrences": [
+        "tests/Monolog/Handler/GroupHandlerTest.php:121-152",
+        "tests/Monolog/Handler/FallbackGroupHandlerTest.php:142-173"
+      ]
+    },
+    {
+      "why": "The code beginning with `public function testFormatWithFileAndLine()` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/Monolog/Formatter/GelfMessageFormatterTest.php:62-67 and tests/Monolog/Formatter/GelfMessageFormatterTest.php:128-133; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Formatter/GelfMessageFormatterTest.php:61-78\n+++ tests/Monolog/Formatter/GelfMessageFormatterTest.php:127-148\n@@ -1,3 +1,3 @@\n-    public function testFormatWithFileAndLine()\n+    public function testFormatWithContextContainingException()\n     {\n         $formatter = new GelfMessageFormatter();\n@@ -6,7 +6,10 @@\n             'log',\n             channel: 'meh',\n-            context: ['from' => 'logger'],\n+            context: ['from' => 'logger', 'exception' => [\n+                'class' => '\\Exception',\n+                'file'  => '/some/file/in/dir.php:56',\n+                'trace' => ['/some/file/1.php:23', '/some/file/2.php:3'],\n+            ]],\n             datetime: new \\DateTimeImmutable(\"@0\"),\n-            extra: ['file' => 'test', 'line' => 14, 0 => 'foo'],\n         );\n \n@@ -14,5 +17,6 @@\n \n         $this->assertInstanceOf('Gelf\\Message', $message);\n-        $this->assertEquals('test', $message->getAdditional('file'));\n-        $this->assertEquals(14, $message->getAdditional('line'));\n+\n+        $this->assertEquals(\"/some/file/in/dir.php\", $message->getAdditional('file'));\n+        $this->assertEquals(\"56\", $message->getAdditional('line'));\n     }",
+      "occurrences": [
+        "tests/Monolog/Formatter/GelfMessageFormatterTest.php:61-78",
+        "tests/Monolog/Formatter/GelfMessageFormatterTest.php:127-148"
+      ]
+    },
+    {
+      "why": "The code beginning with `public static function rotationTests()` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/Monolog/Handler/RotatingFileHandlerTest.php:178-194 and tests/Monolog/Handler/RotatingFileHandlerTest.php:254-270; 16 and 16 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/RotatingFileHandlerTest.php:177-214\n+++ tests/Monolog/Handler/RotatingFileHandlerTest.php:253-290\n@@ -1,3 +1,3 @@\n-    public static function rotationTests()\n+    public static function rotationWithFolderByDateTests()\n     {\n         $now = time();\n@@ -17,22 +17,22 @@\n         return [\n             'Rotation is triggered when the file of the current hour is not present'\n-                => [true, RotatingFileHandler::FILE_PER_HOUR, $hourCallback],\n+                => [true, 'Y/m/d/H', $hourCallback],\n             'Rotation is not triggered when the file of the current hour is already present'\n-                => [false, RotatingFileHandler::FILE_PER_HOUR, $hourCallback],\n+                => [false, 'Y/m/d/H', $hourCallback],\n \n             'Rotation is triggered when the file of the current day is not present'\n-                => [true, RotatingFileHandler::FILE_PER_DAY, $dayCallback],\n+                => [true, 'Y/m/d', $dayCallback],\n             'Rotation is not triggered when the file of the current day is already present'\n-                => [false, RotatingFileHandler::FILE_PER_DAY, $dayCallback],\n+                => [false, 'Y/m/d', $dayCallback],\n \n             'Rotation is triggered when the file of the current month is not present'\n-                => [true, RotatingFileHandler::FILE_PER_MONTH, $monthCallback],\n+                => [true, 'Y/m', $monthCallback],\n             'Rotation is not triggered when the file of the current month is already present'\n-                => [false, RotatingFileHandler::FILE_PER_MONTH, $monthCallback],\n+                => [false, 'Y/m', $monthCallback],\n \n             'Rotation is triggered when the file of the current year is not present'\n-                => [true, RotatingFileHandler::FILE_PER_YEAR, $yearCallback],\n+                => [true, 'Y', $yearCallback],\n             'Rotation is not triggered when the file of the current year is already present'\n-                => [false, RotatingFileHandler::FILE_PER_YEAR, $yearCallback],\n+                => [false, 'Y', $yearCallback],\n         ];\n     }",
+      "occurrences": [
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:177-214",
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:253-290"
+      ]
+    },
+    {
+      "why": "The code beginning with `$message = $formatter->format($record);` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/Monolog/Formatter/GelfMessageFormatterTest.php:95-105 and tests/Monolog/Formatter/GelfMessageFormatterTest.php:180-190; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"'_ctxt_from'\", \"'_EXTkey'\"], [\"'logger'\", \"'pair'\"], [\"'_ctxt_trueBool'\", \"'_EXTtrueBool'\"], [\"'_ctxt_falseBool'\", \"'_EXTfalseBool'\"]]. Raw core diff:\n--- tests/Monolog/Formatter/GelfMessageFormatterTest.php:95-105\n+++ tests/Monolog/Formatter/GelfMessageFormatterTest.php:180-190\n@@ -7,5 +7,5 @@\n-        $this->assertArrayHasKey('_ctxt_from', $message_array);\n-        $this->assertEquals('logger', $message_array['_ctxt_from']);\n-        $this->assertArrayHasKey('_ctxt_trueBool', $message_array);\n-        $this->assertEquals(1, $message_array['_ctxt_trueBool']);\n-        $this->assertArrayHasKey('_ctxt_falseBool', $message_array);\n+        $this->assertArrayHasKey('_EXTkey', $message_array);\n+        $this->assertEquals('pair', $message_array['_EXTkey']);\n+        $this->assertArrayHasKey('_EXTtrueBool', $message_array);\n+        $this->assertEquals(1, $message_array['_EXTtrueBool']);\n+        $this->assertArrayHasKey('_EXTfalseBool', $message_array);\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Formatter/GelfMessageFormatterTest.php:95-105\n+++ tests/Monolog/Formatter/GelfMessageFormatterTest.php:180-190\n@@ -5,7 +5,7 @@\n         $message_array = $message->toArray();\n \n-        $this->assertArrayHasKey('_ctxt_from', $message_array);\n-        $this->assertEquals('logger', $message_array['_ctxt_from']);\n-        $this->assertArrayHasKey('_ctxt_trueBool', $message_array);\n-        $this->assertEquals(1, $message_array['_ctxt_trueBool']);\n-        $this->assertArrayHasKey('_ctxt_falseBool', $message_array);\n+        $this->assertArrayHasKey('_EXTkey', $message_array);\n+        $this->assertEquals('pair', $message_array['_EXTkey']);\n+        $this->assertArrayHasKey('_EXTtrueBool', $message_array);\n+        $this->assertEquals(1, $message_array['_EXTtrueBool']);\n+        $this->assertArrayHasKey('_EXTfalseBool', $message_array);",
+      "type": "Type II",
+      "occurrences": [
+        "tests/Monolog/Formatter/GelfMessageFormatterTest.php:95-105",
+        "tests/Monolog/Formatter/GelfMessageFormatterTest.php:180-190"
+      ]
+    },
+    {
+      "why": "The code beginning with `$reflectionProperty = new \\ReflectionProperty('\\Monolog\\Handler\\SocketHandler', 'connectionString');` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/Monolog/Handler/InsightOpsHandlerTest.php:70-80 and tests/Monolog/Handler/LogmaticHandlerTest.php:74-84; 10 and 10 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"'\\\\Monolog\\\\Handler\\\\SocketHandler'\", \"'Monolog\\\\Handler\\\\SocketHandler'\"], [\"resource\", \"res\"]]. Raw core diff:\n--- tests/Monolog/Handler/InsightOpsHandlerTest.php:70-80\n+++ tests/Monolog/Handler/LogmaticHandlerTest.php:74-84\n@@ -1 +1 @@\n-        $reflectionProperty = new \\ReflectionProperty('\\Monolog\\Handler\\SocketHandler', 'connectionString');\n+        $reflectionProperty = new \\ReflectionProperty('Monolog\\Handler\\SocketHandler', 'connectionString');\n@@ -6 +6 @@\n-            ->willReturn($this->resource);\n+            ->willReturn($this->res);\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/InsightOpsHandlerTest.php:70-80\n+++ tests/Monolog/Handler/LogmaticHandlerTest.php:74-84\n@@ -1,8 +1,8 @@\n-        $reflectionProperty = new \\ReflectionProperty('\\Monolog\\Handler\\SocketHandler', 'connectionString');\n+        $reflectionProperty = new \\ReflectionProperty('Monolog\\Handler\\SocketHandler', 'connectionString');\n         $reflectionProperty->setValue($this->handler, 'localhost:1234');\n \n         $this->handler->expects($this->any())\n             ->method('fsockopen')\n-            ->willReturn($this->resource);\n+            ->willReturn($this->res);\n         $this->handler->expects($this->any())\n             ->method('streamSetTimeout')",
+      "occurrences": [
+        "tests/Monolog/Handler/InsightOpsHandlerTest.php:70-80",
+        "tests/Monolog/Handler/LogmaticHandlerTest.php:74-84"
+      ]
+    },
+    {
+      "why": "The code beginning with `class GroupHandlerTest extends \\Monolog\\Test\\MonologTestCase` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/Monolog/Handler/GroupHandlerTest.php:98-119 and tests/Monolog/Handler/WhatFailureGroupHandlerTest.php:98-119; 20 and 20 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/GroupHandlerTest.php:17-153\n+++ tests/Monolog/Handler/WhatFailureGroupHandlerTest.php:17-172\n@@ -1,6 +1,6 @@\n-class GroupHandlerTest extends \\Monolog\\Test\\MonologTestCase\n+class WhatFailureGroupHandlerTest extends \\Monolog\\Test\\MonologTestCase\n {\n     /**\n-     * @covers Monolog\\Handler\\GroupHandler::__construct\n+     * @covers Monolog\\Handler\\WhatFailureGroupHandler::__construct\n      */\n     public function testConstructorOnlyTakesHandler()\n@@ -8,15 +8,15 @@\n         $this->expectException(\\InvalidArgumentException::class);\n \n-        new GroupHandler([new TestHandler(), \"foo\"]);\n+        new WhatFailureGroupHandler([new TestHandler(), \"foo\"]);\n     }\n \n     /**\n-     * @covers Monolog\\Handler\\GroupHandler::__construct\n-     * @covers Monolog\\Handler\\GroupHandler::handle\n+     * @covers Monolog\\Handler\\WhatFailureGroupHandler::__construct\n+     * @covers Monolog\\Handler\\WhatFailureGroupHandler::handle\n      */\n     public function testHandle()\n     {\n         $testHandlers = [new TestHandler(), new TestHandler()];\n-        $handler = new GroupHandler($testHandlers);\n+        $handler = new WhatFailureGroupHandler($testHandlers);\n         $handler->handle($this->getRecord(Level::Debug));\n         $handler->handle($this->getRecord(Level::Info));\n@@ -29,10 +29,10 @@\n \n     /**\n-     * @covers Monolog\\Handler\\GroupHandler::handleBatch\n+     * @covers Monolog\\Handler\\WhatFailureGroupHandler::handleBatch\n      */\n     public function testHandleBatch()\n     {\n         $testHandlers = [new TestHandler(), new TestHandler()];\n-        $handler = new GroupHandler($testHandlers);\n+        $handler = new WhatFailureGroupHandler($testHandlers);\n         $handler->handleBatch([$this->getRecord(Level::Debug), $this->getRecord(Level::Info)]);\n         foreach ($testHandlers as $test) {\n@@ -44,10 +44,10 @@\n \n     /**\n-     * @covers Monolog\\Handler\\GroupHandler::isHandling\n+     * @covers Monolog\\Handler\\WhatFailureGroupHandler::isHandling\n      */\n     public function testIsHandling()\n     {\n         $testHandlers = [new TestHandler(Level::Error), new TestHandler(Level::Warning)];\n-        $handler = new GroupHandler($testHandlers);\n+        $handler = new WhatFailureGroupHandler($testHandlers);\n         $this->assertTrue($handler->isHandling($this->getRecord(Level::Error)));\n         $this->assertTrue($handler->isHandling($this->getRecord(Level::Warning)));\n@@ -56,10 +56,10 @@\n \n     /**\n-     * @covers Monolog\\Handler\\GroupHandler::handle\n+     * @covers Monolog\\Handler\\WhatFailureGroupHandler::handle\n      */\n     public function testHandleUsesProcessors()\n     {\n         $test = new TestHandler();\n-        $handler = new GroupHandler([$test]);\n+        $handler = new WhatFailureGroupHandler([$test]);\n         $handler->pushProcessor(function ($record) {\n             $record->extra['foo'] = true;\n@@ -74,10 +74,10 @@\n \n     /**\n-     * @covers Monolog\\Handler\\GroupHandler::handle\n+     * @covers Monolog\\Handler\\WhatFailureGroupHandler::handleBatch\n      */\n     public function testHandleBatchUsesProcessors()\n     {\n         $testHandlers = [new TestHandler(), new TestHandler()];\n-        $handler = new GroupHandler($testHandlers);\n+        $handler = new WhatFailureGroupHandler($testHandlers);\n         $handler->pushProcessor(function ($record) {\n             $record->extra['foo'] = true;\n@@ -103,9 +103,28 @@\n     }\n \n+    /**\n+     * @covers Monolog\\Handler\\WhatFailureGroupHandler::handle\n+     */\n+    public function testHandleException()\n+    {\n+        $test = new TestHandler();\n+        $exception = new ExceptionTestHandler();\n+        $handler = new WhatFailureGroupHandler([$exception, $test, $exception]);\n+        $handler->pushProcessor(function ($record) {\n+            $record->extra['foo'] = true;\n+\n+            return $record;\n+        });\n+        $handler->handle($this->getRecord(Level::Warning));\n+        $this->assertTrue($test->hasWarningRecords());\n+        $records = $test->getRecords();\n+        $this->assertTrue($records[0]['extra']['foo']);\n+    }\n+\n     public function testProcessorsDoNotInterfereBetweenHandlers()\n     {\n         $t1 = new TestHandler();\n         $t2 = new TestHandler();\n-        $handler = new GroupHandler([$t1, $t2]);\n+        $handler = new WhatFailureGroupHandler([$t1, $t2]);\n \n         $t1->pushProcessor(function (LogRecord $record) {\n@@ -123,5 +142,5 @@\n         $t1 = new TestHandler();\n         $t2 = new TestHandler();\n-        $handler = new GroupHandler([$t1, $t2]);\n+        $handler = new WhatFailureGroupHandler([$t1, $t2]);\n \n         $t1->pushProcessor(function (LogRecord $record) {",
+      "occurrences": [
+        "tests/Monolog/Handler/GroupHandlerTest.php:17-153",
+        "tests/Monolog/Handler/WhatFailureGroupHandlerTest.php:17-172"
+      ]
+    },
+    {
+      "why": "The code beginning with `$server = [` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: tests/Monolog/Processor/WebProcessorTest.php:63-70 and tests/Monolog/Processor/WebProcessorTest.php:50-57; 8 and 8 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "tests/Monolog/Processor/WebProcessorTest.php:63-70",
+        "tests/Monolog/Processor/WebProcessorTest.php:50-57"
+      ]
+    },
+    {
+      "why": "The code beginning with `public function testHandleBatch()` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/Monolog/Handler/WhatFailureGroupHandlerTest.php:49-119 and tests/Monolog/Handler/GroupHandlerTest.php:49-119; 56 and 56 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"WhatFailureGroupHandler\", \"GroupHandler\"]]. Raw core diff:\n--- tests/Monolog/Handler/WhatFailureGroupHandlerTest.php:49-119\n+++ tests/Monolog/Handler/GroupHandlerTest.php:49-119\n@@ -4 +4 @@\n-        $handler = new WhatFailureGroupHandler($testHandlers);\n+        $handler = new GroupHandler($testHandlers);\n@@ -14 +14 @@\n-     * @covers Monolog\\Handler\\WhatFailureGroupHandler::isHandling\n+     * @covers Monolog\\Handler\\GroupHandler::isHandling\n@@ -19 +19 @@\n-        $handler = new WhatFailureGroupHandler($testHandlers);\n+        $handler = new GroupHandler($testHandlers);\n@@ -26 +26 @@\n-     * @covers Monolog\\Handler\\WhatFailureGroupHandler::handle\n+     * @covers Monolog\\Handler\\GroupHandler::handle\n@@ -31 +31 @@\n-        $handler = new WhatFailureGroupHandler([$test]);\n+        $handler = new GroupHandler([$test]);\n@@ -44 +44 @@\n-     * @covers Monolog\\Handler\\WhatFailureGroupHandler::handleBatch\n+     * @covers Monolog\\Handler\\GroupHandler::handle\n@@ -49 +49 @@\n-        $handler = new WhatFailureGroupHandler($testHandlers);\n+        $handler = new GroupHandler($testHandlers);\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/WhatFailureGroupHandlerTest.php:49-119\n+++ tests/Monolog/Handler/GroupHandlerTest.php:49-119\n@@ -2,5 +2,5 @@\n     {\n         $testHandlers = [new TestHandler(), new TestHandler()];\n-        $handler = new WhatFailureGroupHandler($testHandlers);\n+        $handler = new GroupHandler($testHandlers);\n         $handler->handleBatch([$this->getRecord(Level::Debug), $this->getRecord(Level::Info)]);\n         foreach ($testHandlers as $test) {\n@@ -12,10 +12,10 @@\n \n     /**\n-     * @covers Monolog\\Handler\\WhatFailureGroupHandler::isHandling\n+     * @covers Monolog\\Handler\\GroupHandler::isHandling\n      */\n     public function testIsHandling()\n     {\n         $testHandlers = [new TestHandler(Level::Error), new TestHandler(Level::Warning)];\n-        $handler = new WhatFailureGroupHandler($testHandlers);\n+        $handler = new GroupHandler($testHandlers);\n         $this->assertTrue($handler->isHandling($this->getRecord(Level::Error)));\n         $this->assertTrue($handler->isHandling($this->getRecord(Level::Warning)));\n@@ -24,10 +24,10 @@\n \n     /**\n-     * @covers Monolog\\Handler\\WhatFailureGroupHandler::handle\n+     * @covers Monolog\\Handler\\GroupHandler::handle\n      */\n     public function testHandleUsesProcessors()\n     {\n         $test = new TestHandler();\n-        $handler = new WhatFailureGroupHandler([$test]);\n+        $handler = new GroupHandler([$test]);\n         $handler->pushProcessor(function ($record) {\n             $record->extra['foo'] = true;\n@@ -42,10 +42,10 @@\n \n     /**\n-     * @covers Monolog\\Handler\\WhatFailureGroupHandler::handleBatch\n+     * @covers Monolog\\Handler\\GroupHandler::handle\n      */\n     public function testHandleBatchUsesProcessors()\n     {\n         $testHandlers = [new TestHandler(), new TestHandler()];\n-        $handler = new WhatFailureGroupHandler($testHandlers);\n+        $handler = new GroupHandler($testHandlers);\n         $handler->pushProcessor(function ($record) {\n             $record->extra['foo'] = true;",
+      "type": "Type II",
+      "occurrences": [
+        "tests/Monolog/Handler/WhatFailureGroupHandlerTest.php:49-119",
+        "tests/Monolog/Handler/GroupHandlerTest.php:49-119"
+      ]
+    },
+    {
+      "why": "The code beginning with `public function testEscapesScriptEndTagInMessage()` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/Monolog/Handler/BrowserConsoleHandlerTest.php:146-160 and tests/Monolog/Handler/BrowserConsoleHandlerTest.php:162-178; 12 and 12 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"testEscapesScriptEndTagInMessage\", \"testEscapesHtmlCommentScriptOpenInMessage\"], [\"'Search for </script><script>alert(document.domain)</script> completed'\", \"'<!--<script>'\"], [\"\\\"%cSearch for \\\\u003C/script\\\\u003E\\\\u003Cscript\\\\u003Ealert(document.domain)\\\\u003C/script\\\\u003E completed\\\"\", \"\\\"%c\\\\u003C!--\\\\u003Cscript\\\\u003E\\\"\"]]. Raw core diff:\n--- tests/Monolog/Handler/BrowserConsoleHandlerTest.php:146-160\n+++ tests/Monolog/Handler/BrowserConsoleHandlerTest.php:162-178\n@@ -1 +1 @@\n-    public function testEscapesScriptEndTagInMessage()\n+    public function testEscapesHtmlCommentScriptOpenInMessage()\n@@ -6 +6,3 @@\n-        $handler->handle($this->getRecord(Level::Debug, 'Search for </script><script>alert(document.domain)</script> completed'));\n+        // this one needs no slash at all, it puts the HTML tokenizer in script data double escaped\n+        // state where the handler's own </script> no longer closes the element\n+        $handler->handle($this->getRecord(Level::Debug, '<!--<script>'));\n@@ -10 +12 @@\n-c.debug(\"%cSearch for \\u003C/script\\u003E\\u003Cscript\\u003Ealert(document.domain)\\u003C/script\\u003E completed\", \"font-weight: normal\");\n+c.debug(\"%c\\u003C!--\\u003Cscript\\u003E\", \"font-weight: normal\");\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/BrowserConsoleHandlerTest.php:146-160\n+++ tests/Monolog/Handler/BrowserConsoleHandlerTest.php:162-178\n@@ -1,12 +1,14 @@\n-    public function testEscapesScriptEndTagInMessage()\n+    public function testEscapesHtmlCommentScriptOpenInMessage()\n     {\n         $handler = new BrowserConsoleHandler();\n         $handler->setFormatter($this->getIdentityFormatter());\n \n-        $handler->handle($this->getRecord(Level::Debug, 'Search for </script><script>alert(document.domain)</script> completed'));\n+        // this one needs no slash at all, it puts the HTML tokenizer in script data double escaped\n+        // state where the handler's own </script> no longer closes the element\n+        $handler->handle($this->getRecord(Level::Debug, '<!--<script>'));\n \n         $expected = <<<'EOF'\n (function (c) {if (c && c.groupCollapsed) {\n-c.debug(\"%cSearch for \\u003C/script\\u003E\\u003Cscript\\u003Ealert(document.domain)\\u003C/script\\u003E completed\", \"font-weight: normal\");\n+c.debug(\"%c\\u003C!--\\u003Cscript\\u003E\", \"font-weight: normal\");\n }})(console);\n EOF;",
+      "occurrences": [
+        "tests/Monolog/Handler/BrowserConsoleHandlerTest.php:146-160",
+        "tests/Monolog/Handler/BrowserConsoleHandlerTest.php:162-178"
+      ]
+    },
+    {
+      "why": "The code beginning with `) {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: src/Monolog/Handler/FlowdockHandler.php:55-62 and src/Monolog/Handler/SlackHandler.php:72-79; 8 and 8 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/Monolog/Handler/FlowdockHandler.php:48-64\n+++ src/Monolog/Handler/SlackHandler.php:66-79\n@@ -1,9 +1,8 @@\n-    ) {\n         if (!\\extension_loaded('openssl')) {\n-            throw new MissingExtensionException('The OpenSSL PHP extension is required to use the FlowdockHandler');\n+            throw new MissingExtensionException('The OpenSSL PHP extension is required to use the SlackHandler');\n         }\n \n         parent::__construct(\n-            'ssl://api.flowdock.com:443',\n+            'ssl://slack.com:443',\n             $level,\n             $bubble,\n@@ -14,4 +13,2 @@\n             $chunkSize\n         );\n-        $this->apiToken = $apiToken;\n-    }",
+      "occurrences": [
+        "src/Monolog/Handler/FlowdockHandler.php:48-64",
+        "src/Monolog/Handler/SlackHandler.php:66-79"
+      ]
+    },
+    {
+      "why": "The code beginning with `public function setFormatter(FormatterInterface $formatter): HandlerInterface` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: src/Monolog/Handler/SlackWebhookHandler.php:115-129 and src/Monolog/Handler/SlackHandler.php:177-191; 12 and 12 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "src/Monolog/Handler/SlackWebhookHandler.php:115-129",
+        "src/Monolog/Handler/SlackHandler.php:177-191"
+      ]
+    },
+    {
+      "why": "The code beginning with `public function testSetFormatter()` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/Monolog/Handler/ElasticaHandlerTest.php:88-100 and tests/Monolog/Handler/ElasticsearchHandlerTest.php:61-73; 12 and 12 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"ElasticaHandler\", \"ElasticsearchHandler\"], [\"ElasticaFormatter\", \"ElasticsearchFormatter\"], [\"'Monolog\\\\Formatter\\\\ElasticaFormatter'\", \"'Monolog\\\\Formatter\\\\ElasticsearchFormatter'\"], [\"testSetFormatterAcceptsAWrappedElasticaFormatter\", \"testSetFormatterInvalid\"]]. Raw core diff:\n--- tests/Monolog/Handler/ElasticaHandlerTest.php:88-100\n+++ tests/Monolog/Handler/ElasticsearchHandlerTest.php:61-73\n@@ -3,2 +3,2 @@\n-        $handler = new ElasticaHandler($this->client);\n-        $formatter = new ElasticaFormatter('index_new', 'type_new');\n+        $handler = new ElasticsearchHandler($this->client);\n+        $formatter = new ElasticsearchFormatter('index_new', 'type_new');\n@@ -6 +6 @@\n-        $this->assertInstanceOf('Monolog\\Formatter\\ElasticaFormatter', $handler->getFormatter());\n+        $this->assertInstanceOf('Monolog\\Formatter\\ElasticsearchFormatter', $handler->getFormatter());\n@@ -11 +11 @@\n-    public function testSetFormatterAcceptsAWrappedElasticaFormatter()\n+    public function testSetFormatterInvalid()\n@@ -13 +13 @@\n-        $handler = new ElasticaHandler($this->client);\n+        $handler = new ElasticsearchHandler($this->client);\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/ElasticaHandlerTest.php:88-106\n+++ tests/Monolog/Handler/ElasticsearchHandlerTest.php:61-80\n@@ -1,19 +1,20 @@\n     public function testSetFormatter()\n     {\n-        $handler = new ElasticaHandler($this->client);\n-        $formatter = new ElasticaFormatter('index_new', 'type_new');\n+        $handler = new ElasticsearchHandler($this->client);\n+        $formatter = new ElasticsearchFormatter('index_new', 'type_new');\n         $handler->setFormatter($formatter);\n-        $this->assertInstanceOf('Monolog\\Formatter\\ElasticaFormatter', $handler->getFormatter());\n+        $this->assertInstanceOf('Monolog\\Formatter\\ElasticsearchFormatter', $handler->getFormatter());\n         $this->assertEquals('index_new', $handler->getFormatter()->getIndex());\n         $this->assertEquals('type_new', $handler->getFormatter()->getType());\n     }\n \n-    public function testSetFormatterAcceptsAWrappedElasticaFormatter()\n+    public function testSetFormatterInvalid()\n     {\n-        $handler = new ElasticaHandler($this->client);\n-        $formatter = new RedactingFormatter(new ElasticaFormatter('index_new', 'type_new'));\n+        $handler = new ElasticsearchHandler($this->client);\n+        $formatter = new NormalizerFormatter();\n+\n+        $this->expectException(\\InvalidArgumentException::class);\n+        $this->expectExceptionMessage('ElasticsearchHandler is only compatible with ElasticsearchFormatter');\n+\n         $handler->setFormatter($formatter);\n-\n-        // the wrapper must be kept, otherwise no redaction would happen\n-        $this->assertSame($formatter, $handler->getFormatter());\n     }",
+      "occurrences": [
+        "tests/Monolog/Handler/ElasticaHandlerTest.php:88-106",
+        "tests/Monolog/Handler/ElasticsearchHandlerTest.php:61-80"
+      ]
+    },
+    {
+      "why": "The code beginning with `$handler2 = $this->createMock('Monolog\\Handler\\HandlerInterface');` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/Monolog/LoggerTest.php:458-464 and tests/Monolog/LoggerTest.php:427-433; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/LoggerTest.php:458-467\n+++ tests/Monolog/LoggerTest.php:427-436\n@@ -6,5 +6,5 @@\n         $handler2->expects($this->once())\n             ->method('handle')\n-            ->willReturn(true);\n+            ->willReturn(false);\n \n         $logger->pushHandler($handler2);",
+      "occurrences": [
+        "tests/Monolog/LoggerTest.php:458-467",
+        "tests/Monolog/LoggerTest.php:427-436"
+      ]
+    },
+    {
+      "why": "The code beginning with `protected function toRollbarLevel(Level $level): string` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: src/Monolog/Handler/RollbarHandler.php:62-73 and src/Monolog/Formatter/ChromePHPFormatter.php:30-41; 12 and 12 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"'debug'\", \"'log'\"], [\"'warning'\", \"'warn'\"], [\"'critical'\", \"'error'\"]]. Raw core diff:\n--- src/Monolog/Handler/RollbarHandler.php:62-73\n+++ src/Monolog/Formatter/ChromePHPFormatter.php:30-41\n@@ -3 +3 @@\n-            Level::Debug     => 'debug',\n+            Level::Debug     => 'log',\n@@ -6 +6 @@\n-            Level::Warning   => 'warning',\n+            Level::Warning   => 'warn',\n@@ -8,3 +8,3 @@\n-            Level::Critical  => 'critical',\n-            Level::Alert     => 'critical',\n-            Level::Emergency => 'critical',\n+            Level::Critical  => 'error',\n+            Level::Alert     => 'error',\n+            Level::Emergency => 'error',\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/Monolog/Handler/RollbarHandler.php:61-73\n+++ src/Monolog/Formatter/ChromePHPFormatter.php:29-41\n@@ -1,13 +1,13 @@\n-    protected function toRollbarLevel(Level $level): string\n+    private function toWildfireLevel(Level $level): string\n     {\n         return match ($level) {\n-            Level::Debug     => 'debug',\n+            Level::Debug     => 'log',\n             Level::Info      => 'info',\n             Level::Notice    => 'info',\n-            Level::Warning   => 'warning',\n+            Level::Warning   => 'warn',\n             Level::Error     => 'error',\n-            Level::Critical  => 'critical',\n-            Level::Alert     => 'critical',\n-            Level::Emergency => 'critical',\n+            Level::Critical  => 'error',\n+            Level::Alert     => 'error',\n+            Level::Emergency => 'error',\n         };\n     }",
+      "occurrences": [
+        "src/Monolog/Handler/RollbarHandler.php:61-73",
+        "src/Monolog/Formatter/ChromePHPFormatter.php:29-41"
+      ]
+    },
+    {
+      "why": "The code beginning with `$handler->setFormatter(new \\Monolog\\Formatter\\ChromePHPFormatter());` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/Monolog/Handler/SyslogUdpHandlerTest.php:40-47 and tests/Monolog/Handler/SyslogUdpHandlerTest.php:92-99; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/SyslogUdpHandlerTest.php:34-54\n+++ tests/Monolog/Handler/SyslogUdpHandlerTest.php:87-106\n@@ -1,8 +1,7 @@\n         $handler->setFormatter(new \\Monolog\\Formatter\\ChromePHPFormatter());\n \n-        $time = '2014-01-07T12:34:56+00:00';\n-        $socket = $this->getMockBuilder('Monolog\\Handler\\SyslogUdp\\UdpSocket')\n+        $socket = $this->getMockBuilder('\\Monolog\\Handler\\SyslogUdp\\UdpSocket')\n+            ->setConstructorArgs(['lol', 999])\n             ->onlyMethods(['write'])\n-            ->setConstructorArgs(['lol'])\n             ->getMock();\n \n@@ -13,6 +12,6 @@\n             ->willReturnCallback(function () use ($matcher, $time, $host, $pid) {\n                 match ($matcher->numberOfInvocations()) {\n-                    1 => $this->equalTo(\"lol\") && $this->equalTo(\"<\".(LOG_AUTHPRIV + LOG_WARNING).\">1 $time $host php $pid - - \"),\n-                    2 => $this->equalTo(\"hej\") && $this->equalTo(\"<\".(LOG_AUTHPRIV + LOG_WARNING).\">1 $time $host php $pid - - \"),\n+                    1 => $this->equalTo(\"lol\") && $this->equalTo(\"<\".(LOG_AUTHPRIV + LOG_WARNING).\">$time $host php[$pid]: \"),\n+                    2 => $this->equalTo(\"hej\") && $this->equalTo(\"<\".(LOG_AUTHPRIV + LOG_WARNING).\">$time $host php[$pid]: \"),\n                     default => $this->assertTrue(true)\n                 };",
+      "occurrences": [
+        "tests/Monolog/Handler/SyslogUdpHandlerTest.php:34-54",
+        "tests/Monolog/Handler/SyslogUdpHandlerTest.php:87-106"
+      ]
+    },
+    {
+      "why": "The code beginning with `$formatterMock = $this->getMockBuilder('Monolog\\Formatter\\NormalizerFormatter')` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/Monolog/Handler/ZendMonitorHandlerTest.php:44-54 and tests/Monolog/Handler/FrankenPhpHandlerTest.php:79-89; 9 and 9 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"$zendMonitor\", \"$handler\"]]. Raw core diff:\n--- tests/Monolog/Handler/ZendMonitorHandlerTest.php:44-54\n+++ tests/Monolog/Handler/FrankenPhpHandlerTest.php:79-89\n@@ -9 +9 @@\n-        $zendMonitor->expects($this->once())\n+        $handler->expects($this->once())\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/ZendMonitorHandlerTest.php:44-54\n+++ tests/Monolog/Handler/FrankenPhpHandlerTest.php:79-89\n@@ -7,5 +7,5 @@\n             ->willReturn($formatterResult);\n \n-        $zendMonitor->expects($this->once())\n+        $handler->expects($this->once())\n             ->method('getDefaultFormatter')\n             ->willReturn($formatterMock);",
+      "type": "Type II",
+      "occurrences": [
+        "tests/Monolog/Handler/ZendMonitorHandlerTest.php:44-54",
+        "tests/Monolog/Handler/FrankenPhpHandlerTest.php:79-89"
+      ]
+    },
+    {
+      "why": "The code beginning with `<?php declare(strict_types=1);` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/Monolog/Processor/MemoryPeakUsageProcessorTest.php:1-40 and tests/Monolog/Processor/MemoryUsageProcessorTest.php:1-40; 20 and 20 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"MemoryPeakUsageProcessorTest\", \"MemoryUsageProcessorTest\"], [\"MemoryPeakUsageProcessor\", \"MemoryUsageProcessor\"], [\"'memory_peak_usage'\", \"'memory_usage'\"]]. Raw core diff:\n--- tests/Monolog/Processor/MemoryPeakUsageProcessorTest.php:1-40\n+++ tests/Monolog/Processor/MemoryUsageProcessorTest.php:1-40\n@@ -14 +14 @@\n-class MemoryPeakUsageProcessorTest extends \\Monolog\\Test\\MonologTestCase\n+class MemoryUsageProcessorTest extends \\Monolog\\Test\\MonologTestCase\n@@ -17 +17 @@\n-     * @covers Monolog\\Processor\\MemoryPeakUsageProcessor::__invoke\n+     * @covers Monolog\\Processor\\MemoryUsageProcessor::__invoke\n@@ -22 +22 @@\n-        $processor = new MemoryPeakUsageProcessor();\n+        $processor = new MemoryUsageProcessor();\n@@ -24,2 +24,2 @@\n-        $this->assertArrayHasKey('memory_peak_usage', $record->extra);\n-        $this->assertMatchesRegularExpression('#[0-9.]+ (M|K)?B$#', $record->extra['memory_peak_usage']);\n+        $this->assertArrayHasKey('memory_usage', $record->extra);\n+        $this->assertMatchesRegularExpression('#[0-9.]+ (M|K)?B$#', $record->extra['memory_usage']);\n@@ -29 +29 @@\n-     * @covers Monolog\\Processor\\MemoryPeakUsageProcessor::__invoke\n+     * @covers Monolog\\Processor\\MemoryUsageProcessor::__invoke\n@@ -34 +34 @@\n-        $processor = new MemoryPeakUsageProcessor(true, false);\n+        $processor = new MemoryUsageProcessor(true, false);\n@@ -36,3 +36,3 @@\n-        $this->assertArrayHasKey('memory_peak_usage', $record->extra);\n-        $this->assertIsInt($record->extra['memory_peak_usage']);\n-        $this->assertGreaterThan(0, $record->extra['memory_peak_usage']);\n+        $this->assertArrayHasKey('memory_usage', $record->extra);\n+        $this->assertIsInt($record->extra['memory_usage']);\n+        $this->assertGreaterThan(0, $record->extra['memory_usage']);\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Processor/MemoryPeakUsageProcessorTest.php:1-40\n+++ tests/Monolog/Processor/MemoryUsageProcessorTest.php:1-40\n@@ -12,29 +12,29 @@\n namespace Monolog\\Processor;\n \n-class MemoryPeakUsageProcessorTest extends \\Monolog\\Test\\MonologTestCase\n+class MemoryUsageProcessorTest extends \\Monolog\\Test\\MonologTestCase\n {\n     /**\n-     * @covers Monolog\\Processor\\MemoryPeakUsageProcessor::__invoke\n+     * @covers Monolog\\Processor\\MemoryUsageProcessor::__invoke\n      * @covers Monolog\\Processor\\MemoryProcessor::formatBytes\n      */\n     public function testProcessor()\n     {\n-        $processor = new MemoryPeakUsageProcessor();\n+        $processor = new MemoryUsageProcessor();\n         $record = $processor($this->getRecord());\n-        $this->assertArrayHasKey('memory_peak_usage', $record->extra);\n-        $this->assertMatchesRegularExpression('#[0-9.]+ (M|K)?B$#', $record->extra['memory_peak_usage']);\n+        $this->assertArrayHasKey('memory_usage', $record->extra);\n+        $this->assertMatchesRegularExpression('#[0-9.]+ (M|K)?B$#', $record->extra['memory_usage']);\n     }\n \n     /**\n-     * @covers Monolog\\Processor\\MemoryPeakUsageProcessor::__invoke\n+     * @covers Monolog\\Processor\\MemoryUsageProcessor::__invoke\n      * @covers Monolog\\Processor\\MemoryProcessor::formatBytes\n      */\n     public function testProcessorWithoutFormatting()\n     {\n-        $processor = new MemoryPeakUsageProcessor(true, false);\n+        $processor = new MemoryUsageProcessor(true, false);\n         $record = $processor($this->getRecord());\n-        $this->assertArrayHasKey('memory_peak_usage', $record->extra);\n-        $this->assertIsInt($record->extra['memory_peak_usage']);\n-        $this->assertGreaterThan(0, $record->extra['memory_peak_usage']);\n+        $this->assertArrayHasKey('memory_usage', $record->extra);\n+        $this->assertIsInt($record->extra['memory_usage']);\n+        $this->assertGreaterThan(0, $record->extra['memory_usage']);\n     }\n }",
+      "type": "Type II",
+      "occurrences": [
+        "tests/Monolog/Processor/MemoryPeakUsageProcessorTest.php:1-40",
+        "tests/Monolog/Processor/MemoryUsageProcessorTest.php:1-40"
+      ]
+    },
+    {
+      "why": "The code beginning with `$formatter = new LogstashFormatter('test');` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/Monolog/Formatter/LogstashFormatterTest.php:76-86 and tests/Monolog/Formatter/LogstashFormatterTest.php:106-116; 10 and 10 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Formatter/LogstashFormatterTest.php:76-89\n+++ tests/Monolog/Formatter/LogstashFormatterTest.php:106-119\n@@ -11,4 +11,4 @@\n         $message = json_decode($formatter->format($record), true);\n \n-        $this->assertArrayHasKey('context', $message);\n-        $this->assertArrayHasKey('from', $message['context']);\n+        $this->assertArrayHasKey('extra', $message);\n+        $this->assertArrayHasKey('key', $message['extra']);",
+      "occurrences": [
+        "tests/Monolog/Formatter/LogstashFormatterTest.php:76-89",
+        "tests/Monolog/Formatter/LogstashFormatterTest.php:106-119"
+      ]
+    },
+    {
+      "why": "The code beginning with `public function testNotBubblingWhenTheHandlerReturnsTrue()` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/Monolog/LoggerTest.php:456-464 and tests/Monolog/LoggerTest.php:425-433; 7 and 7 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/LoggerTest.php:444-470\n+++ tests/Monolog/LoggerTest.php:412-439\n@@ -1,3 +1,3 @@\n-    public function testNotBubblingWhenTheHandlerReturnsTrue()\n+    public function testBubblingWhenTheHandlerReturnsFalse()\n     {\n         $logger = new Logger(__METHOD__);\n@@ -8,7 +8,8 @@\n             ->willReturn(true);\n \n-        $handler1->expects($this->never())\n+        $handler1->expects($this->once())\n             ->method('handle')\n-        ;\n+            ->willReturn(false);\n+\n         $logger->pushHandler($handler1);\n \n@@ -20,5 +21,5 @@\n         $handler2->expects($this->once())\n             ->method('handle')\n-            ->willReturn(true);\n+            ->willReturn(false);\n \n         $logger->pushHandler($handler2);",
+      "occurrences": [
+        "tests/Monolog/LoggerTest.php:444-470",
+        "tests/Monolog/LoggerTest.php:412-439"
+      ]
+    },
+    {
+      "why": "The code beginning with `if ($depth > $this->maxNormalizeDepth) {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: src/Monolog/Formatter/JsonFormatter.php:172-190 and src/Monolog/Formatter/NormalizerFormatter.php:209-227; 15 and 15 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n--- src/Monolog/Formatter/JsonFormatter.php:172-190\n+++ src/Monolog/Formatter/NormalizerFormatter.php:209-227\n@@ -2 +2 @@\n-            return 'Over '.$this->maxNormalizeDepth.' levels deep, aborting normalization';\n+            return 'Over ' . $this->maxNormalizeDepth . ' levels deep, aborting normalization';\n@@ -11 +11 @@\n-                    $normalized['...'] = 'Over '.$this->maxNormalizeItemCount.' items ('.\\count($data).' total), aborting normalization';\n+                    $normalized['...'] = 'Over ' . $this->maxNormalizeItemCount . ' items ('.\\count($data).' total), aborting normalization';\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/Monolog/Formatter/JsonFormatter.php:172-190\n+++ src/Monolog/Formatter/NormalizerFormatter.php:209-231\n@@ -1,4 +1,4 @@\n         if ($depth > $this->maxNormalizeDepth) {\n-            return 'Over '.$this->maxNormalizeDepth.' levels deep, aborting normalization';\n+            return 'Over ' . $this->maxNormalizeDepth . ' levels deep, aborting normalization';\n         }\n \n@@ -9,5 +9,5 @@\n             foreach ($data as $key => $value) {\n                 if ($count++ > $this->maxNormalizeItemCount) {\n-                    $normalized['...'] = 'Over '.$this->maxNormalizeItemCount.' items ('.\\count($data).' total), aborting normalization';\n+                    $normalized['...'] = 'Over ' . $this->maxNormalizeItemCount . ' items ('.\\count($data).' total), aborting normalization';\n                     break;\n                 }\n@@ -18,2 +18,6 @@\n             return $normalized;\n         }\n+\n+        if ($data instanceof \\DateTimeInterface) {\n+            return $this->formatDate($data);\n+        }",
+      "occurrences": [
+        "src/Monolog/Formatter/JsonFormatter.php:172-190",
+        "src/Monolog/Formatter/NormalizerFormatter.php:209-231"
+      ]
+    },
+    {
+      "why": "The code beginning with `public function testFormatWithExtraV1()` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/Monolog/Formatter/LogstashFormatterTest.php:105-116 and tests/Monolog/Formatter/LogstashFormatterTest.php:75-86; 11 and 11 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Formatter/LogstashFormatterTest.php:104-129\n+++ tests/Monolog/Formatter/LogstashFormatterTest.php:74-99\n@@ -1,3 +1,3 @@\n-    public function testFormatWithExtraV1()\n+    public function testFormatWithContextV1()\n     {\n         $formatter = new LogstashFormatter('test');\n@@ -13,14 +13,14 @@\n         $message = json_decode($formatter->format($record), true);\n \n-        $this->assertArrayHasKey('extra', $message);\n-        $this->assertArrayHasKey('key', $message['extra']);\n-        $this->assertEquals('pair', $message['extra']['key']);\n+        $this->assertArrayHasKey('context', $message);\n+        $this->assertArrayHasKey('from', $message['context']);\n+        $this->assertEquals('logger', $message['context']['from']);\n \n         // Test with extraPrefix\n-        $formatter = new LogstashFormatter('test', null, 'EXTRA');\n+        $formatter = new LogstashFormatter('test', null, 'extra', 'CTX');\n         $message = json_decode($formatter->format($record), true);\n \n-        $this->assertArrayHasKey('EXTRA', $message);\n-        $this->assertArrayHasKey('key', $message['EXTRA']);\n-        $this->assertEquals('pair', $message['EXTRA']['key']);\n+        $this->assertArrayHasKey('CTX', $message);\n+        $this->assertArrayHasKey('from', $message['CTX']);\n+        $this->assertEquals('logger', $message['CTX']['from']);\n     }",
+      "occurrences": [
+        "tests/Monolog/Formatter/LogstashFormatterTest.php:104-129",
+        "tests/Monolog/Formatter/LogstashFormatterTest.php:74-99"
+      ]
+    },
+    {
+      "why": "The code beginning with `class InsightOpsHandler extends SocketHandler` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: src/Monolog/Handler/InsightOpsHandler.php:54-74 and src/Monolog/Handler/LogEntriesHandler.php:48-68; 17 and 17 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/Monolog/Handler/InsightOpsHandler.php:23-74\n+++ src/Monolog/Handler/LogEntriesHandler.php:20-68\n@@ -1,10 +1,10 @@\n-class InsightOpsHandler extends SocketHandler\n+class LogEntriesHandler extends SocketHandler\n {\n     protected string $logToken;\n \n     /**\n-     * @param string $token  Log token supplied by InsightOps\n-     * @param string $region Region where InsightOps account is hosted. Could be 'us' or 'eu'.\n-     * @param bool   $useSSL Whether or not SSL encryption should be used\n+     * @param string $token  Log token supplied by LogEntries\n+     * @param bool   $useSSL Whether or not SSL encryption should be used.\n+     * @param string $host   Custom hostname to send the data to if needed\n      *\n      * @throws MissingExtensionException If SSL encryption is set to true and OpenSSL is missing\n@@ -12,8 +12,8 @@\n     public function __construct(\n         string $token,\n-        string $region = 'us',\n         bool $useSSL = true,\n         $level = Level::Debug,\n         bool $bubble = true,\n+        string $host = 'data.logentries.com',\n         bool $persistent = false,\n         float $timeout = 0.0,\n@@ -23,11 +23,8 @@\n     ) {\n         if ($useSSL && !\\extension_loaded('openssl')) {\n-            throw new MissingExtensionException('The OpenSSL PHP plugin is required to use SSL encrypted connection for InsightOpsHandler');\n+            throw new MissingExtensionException('The OpenSSL PHP plugin is required to use SSL encrypted connection for LogEntriesHandler');\n         }\n \n-        $endpoint = $useSSL\n-            ? 'ssl://' . $region . '.data.logs.insight.rapid7.com:443'\n-            : $region . '.data.logs.insight.rapid7.com:80';\n-\n+        $endpoint = $useSSL ? 'ssl://' . $host . ':443' : $host . ':80';\n         parent::__construct(\n             $endpoint,",
+      "occurrences": [
+        "src/Monolog/Handler/InsightOpsHandler.php:23-74",
+        "src/Monolog/Handler/LogEntriesHandler.php:20-68"
+      ]
+    },
+    {
+      "why": "The code beginning with `$formatted = $formatter->normalizeValue([` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/Monolog/Formatter/NormalizerFormatterTest.php:125-141 and tests/Monolog/Formatter/NormalizerFormatterTest.php:105-121; 15 and 15 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"'{\\\"bar\\\":{\\\"biz\\\":\\\"baz\\\"},\\\"foo\\\":\\\"world\\\"}'\", \"'world'\"]]. Raw core diff:\n--- tests/Monolog/Formatter/NormalizerFormatterTest.php:125-141\n+++ tests/Monolog/Formatter/NormalizerFormatterTest.php:105-121\n@@ -15 +15 @@\n-                'detail' => '{\"bar\":{\"biz\":\"baz\"},\"foo\":\"world\"}',\n+                'detail' => 'world',\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Formatter/NormalizerFormatterTest.php:125-141\n+++ tests/Monolog/Formatter/NormalizerFormatterTest.php:105-121\n@@ -13,5 +13,5 @@\n                 'faultcode' => 'foo',\n                 'faultactor' => 'hello',\n-                'detail' => '{\"bar\":{\"biz\":\"baz\"},\"foo\":\"world\"}',\n+                'detail' => 'world',\n             ],\n         ], $formatted);",
+      "occurrences": [
+        "tests/Monolog/Formatter/NormalizerFormatterTest.php:125-141",
+        "tests/Monolog/Formatter/NormalizerFormatterTest.php:105-121"
+      ]
+    },
+    {
+      "why": "The code beginning with `private $res;` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/Monolog/Handler/FlowdockHandlerTest.php:26-43 and tests/Monolog/Handler/SlackHandlerTest.php:28-45; 14 and 14 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"FlowdockHandler\", \"SlackHandler\"]]. Raw core diff:\n--- tests/Monolog/Handler/FlowdockHandlerTest.php:26-43\n+++ tests/Monolog/Handler/SlackHandlerTest.php:28-45\n@@ -3 +3 @@\n-    private FlowdockHandler $handler;\n+    private SlackHandler $handler;\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/FlowdockHandlerTest.php:26-43\n+++ tests/Monolog/Handler/SlackHandlerTest.php:28-45\n@@ -1,5 +1,5 @@\n     private $res;\n \n-    private FlowdockHandler $handler;\n+    private SlackHandler $handler;\n \n     public function setUp(): void",
+      "type": "Type II",
+      "occurrences": [
+        "tests/Monolog/Handler/FlowdockHandlerTest.php:26-43",
+        "tests/Monolog/Handler/SlackHandlerTest.php:28-45"
+      ]
+    },
+    {
+      "why": "The code beginning with `class WhatFailureGroupHandler extends GroupHandler` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: src/Monolog/Handler/WhatFailureGroupHandler.php:39-60 and src/Monolog/Handler/FallbackGroupHandler.php:40-61; 16 and 16 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/Monolog/Handler/WhatFailureGroupHandler.php:23-80\n+++ src/Monolog/Handler/FallbackGroupHandler.php:24-68\n@@ -1,3 +1,3 @@\n-class WhatFailureGroupHandler extends GroupHandler\n+class FallbackGroupHandler extends GroupHandler\n {\n     /**\n@@ -9,10 +9,10 @@\n             $record = $this->processRecord($record);\n         }\n-\n         foreach ($this->handlers as $handler) {\n             try {\n                 $handler->handle(clone $record);\n-            } catch (Throwable) {\n-                // What failure?\n+                break;\n+            } catch (Throwable $e) {\n+                // What throwable?\n             }\n         }\n@@ -37,20 +37,7 @@\n             try {\n                 $handler->handleBatch(array_map(fn ($record) => clone $record, $records));\n-            } catch (Throwable) {\n-                // What failure?\n-            }\n-        }\n-    }\n-\n-    /**\n-     * {@inheritDoc}\n-     */\n-    public function close(): void\n-    {\n-        foreach ($this->handlers as $handler) {\n-            try {\n-                $handler->close();\n-            } catch (\\Throwable $e) {\n-                // What failure?\n+                break;\n+            } catch (Throwable $e) {\n+                // What throwable?\n             }\n         }",
+      "occurrences": [
+        "src/Monolog/Handler/WhatFailureGroupHandler.php:23-80",
+        "src/Monolog/Handler/FallbackGroupHandler.php:24-68"
+      ]
+    },
+    {
+      "why": "The code beginning with `class FrankenPhpHandler extends AbstractProcessingHandler` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: src/Monolog/Handler/FrankenPhpHandler.php:91-100 and src/Monolog/Handler/ZendMonitorHandler.php:81-90; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/Monolog/Handler/FrankenPhpHandler.php:28-100\n+++ src/Monolog/Handler/ZendMonitorHandler.php:25-90\n@@ -1,12 +1,12 @@\n-class FrankenPhpHandler extends AbstractProcessingHandler\n+class ZendMonitorHandler extends AbstractProcessingHandler\n {\n     /**\n-     * @throws MissingExtensionException If frankenphp_log() is not available\n+     * @throws MissingExtensionException\n      */\n     public function __construct(int|string|Level $level = Level::Debug, bool $bubble = true)\n     {\n-        if (!\\function_exists('frankenphp_log')) {\n+        if (!\\function_exists('zend_monitor_custom_event')) {\n             throw new MissingExtensionException(\n-                'You must run this handler under FrankenPHP, the frankenphp_log() function is not available'\n+                'You must have Zend Server installed with Zend Monitor enabled in order to use this handler'\n             );\n         }\n@@ -16,28 +16,17 @@\n \n     /**\n-     * Translates Monolog log levels to FrankenPHP's slog-based levels.\n-     *\n-     * slog's docs state its gap of 4 between named levels matches OpenTelemetry's SeverityNumber\n-     * mapping, converted by subtracting 9. Applying that same subtraction to OpenTelemetry's own\n-     * Syslog severity mapping for the 4 extra RFC 5424 levels slog has no constant for keeps this\n-     * scale traceable to that spec instead of an arbitrary choice.\n-     *\n-     * FrankenPHP feeds these through zapslog, which buckets everything >= Error into \"error\", so\n-     * above Error only the level_name context key tells the Monolog levels apart.\n-     *\n-     * @see https://pkg.go.dev/log/slog#hdr-Levels\n-     * @see https://opentelemetry.io/docs/specs/otel/logs/data-model-appendix/\n+     * Translates Monolog log levels to ZendMonitor levels.\n      */\n-    protected function toFrankenPhpLevel(Level $level): int\n+    protected function toZendMonitorLevel(Level $level): int\n     {\n         return match ($level) {\n-            Level::Debug => \\FRANKENPHP_LOG_LEVEL_DEBUG,\n-            Level::Info => \\FRANKENPHP_LOG_LEVEL_INFO,\n-            Level::Notice => 1,\n-            Level::Warning => \\FRANKENPHP_LOG_LEVEL_WARN,\n-            Level::Error => \\FRANKENPHP_LOG_LEVEL_ERROR,\n-            Level::Critical => 9,\n-            Level::Alert => 10,\n-            Level::Emergency => 12,\n+            Level::Debug     => \\ZEND_MONITOR_EVENT_SEVERITY_INFO,\n+            Level::Info      => \\ZEND_MONITOR_EVENT_SEVERITY_INFO,\n+            Level::Notice    => \\ZEND_MONITOR_EVENT_SEVERITY_INFO,\n+            Level::Warning   => \\ZEND_MONITOR_EVENT_SEVERITY_WARNING,\n+            Level::Error     => \\ZEND_MONITOR_EVENT_SEVERITY_ERROR,\n+            Level::Critical  => \\ZEND_MONITOR_EVENT_SEVERITY_ERROR,\n+            Level::Alert     => \\ZEND_MONITOR_EVENT_SEVERITY_ERROR,\n+            Level::Emergency => \\ZEND_MONITOR_EVENT_SEVERITY_ERROR,\n         };\n     }\n@@ -48,18 +37,22 @@\n     protected function write(LogRecord $record): void\n     {\n-        $this->writeFrankenPhpLog($record->message, $this->toFrankenPhpLevel($record->level), $record->formatted);\n+        $this->writeZendMonitorCustomEvent(\n+            $record->level->getName(),\n+            $record->message,\n+            $record->formatted,\n+            $this->toZendMonitorLevel($record->level)\n+        );\n     }\n \n     /**\n-     * @param array<mixed> $context Displayed as structured attributes alongside the message\n+     * Write to Zend Monitor Events\n+     * @param string       $type      Text displayed in \"Class Name (custom)\" field\n+     * @param string       $message   Text displayed in \"Error String\"\n+     * @param array<mixed> $formatted Displayed in Custom Variables tab\n+     * @param int          $severity  Set the event severity level (-1,0,1)\n      */\n-    protected function writeFrankenPhpLog(string $message, int $level, array $context): void\n+    protected function writeZendMonitorCustomEvent(string $type, string $message, array $formatted, int $severity): void\n     {\n-        // frankenphp_log() merges $context into the same JSON object it already fills with \"msg\",\n-        // \"level\" and \"ts\", so drop Monolog's duplicates of those three. level_name still carries\n-        // the Monolog level name, which slog's own severity cannot express.\n-        unset($context['message'], $context['level'], $context['datetime']);\n-\n-        \\frankenphp_log($message, $level, $context);\n+        zend_monitor_custom_event($type, $message, $formatted, $severity);\n     }\n ",
+      "occurrences": [
+        "src/Monolog/Handler/FrankenPhpHandler.php:28-100",
+        "src/Monolog/Handler/ZendMonitorHandler.php:25-90"
+      ]
+    },
+    {
+      "why": "The code beginning with `private function formatRecordWithExceptionInContext(JsonFormatter $formatter, \\Throwable $exception): string` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/Monolog/Formatter/JsonFormatterTest.php:268-273 and tests/Monolog/Formatter/NormalizerFormatterTest.php:604-609; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Formatter/JsonFormatterTest.php:267-278\n+++ tests/Monolog/Formatter/NormalizerFormatterTest.php:603-613\n@@ -1,3 +1,3 @@\n-    private function formatRecordWithExceptionInContext(JsonFormatter $formatter, \\Throwable $exception): string\n+    private function formatRecordWithExceptionInContext(NormalizerFormatter $formatter, \\Throwable $exception): array\n     {\n         $message = $formatter->format($this->getRecord(\n@@ -6,5 +6,4 @@\n             channel: 'core',\n             context: ['exception' => $exception],\n-            datetime: new \\DateTimeImmutable('2022-02-22 00:00:00'),\n         ));\n ",
+      "occurrences": [
+        "tests/Monolog/Formatter/JsonFormatterTest.php:267-278",
+        "tests/Monolog/Formatter/NormalizerFormatterTest.php:603-613"
+      ]
+    },
+    {
+      "why": "The code beginning with `foreach ($extra as $key => $val) {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: src/Monolog/Formatter/GelfMessageFormatter.php:117-128 and src/Monolog/Formatter/GelfMessageFormatter.php:130-141; 11 and 11 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"$extra\", \"$context\"], [\"extraPrefix\", \"contextPrefix\"]]. Raw core diff:\n--- src/Monolog/Formatter/GelfMessageFormatter.php:117-128\n+++ src/Monolog/Formatter/GelfMessageFormatter.php:130-141\n@@ -1 +1 @@\n-        foreach ($extra as $key => $val) {\n+        foreach ($context as $key => $val) {\n@@ -5 +5 @@\n-            $len = \\strlen($this->extraPrefix . $key . $val);\n+            $len = \\strlen($this->contextPrefix . $key . $val);\n@@ -7 +7 @@\n-                $message->setAdditional($this->extraPrefix . $key, Utils::substr((string) $val, 0, $this->maxLength));\n+                $message->setAdditional($this->contextPrefix . $key, Utils::substr((string) $val, 0, $this->maxLength));\n@@ -11 +11 @@\n-            $message->setAdditional($this->extraPrefix . $key, $val);\n+            $message->setAdditional($this->contextPrefix . $key, $val);\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/Monolog/Formatter/GelfMessageFormatter.php:117-128\n+++ src/Monolog/Formatter/GelfMessageFormatter.php:130-141\n@@ -1,12 +1,12 @@\n-        foreach ($extra as $key => $val) {\n+        foreach ($context as $key => $val) {\n             $key = (string) preg_replace('#[^\\w.-]#', '-', (string) $key);\n             $val = \\is_bool($val) ? ($val ? 1 : 0) : $val;\n             $val = \\is_scalar($val) || null === $val ? $val : $this->toJson($val);\n-            $len = \\strlen($this->extraPrefix . $key . $val);\n+            $len = \\strlen($this->contextPrefix . $key . $val);\n             if ($len > $this->maxLength) {\n-                $message->setAdditional($this->extraPrefix . $key, Utils::substr((string) $val, 0, $this->maxLength));\n+                $message->setAdditional($this->contextPrefix . $key, Utils::substr((string) $val, 0, $this->maxLength));\n \n                 continue;\n             }\n-            $message->setAdditional($this->extraPrefix . $key, $val);\n+            $message->setAdditional($this->contextPrefix . $key, $val);\n         }",
+      "type": "Type II",
+      "occurrences": [
+        "src/Monolog/Formatter/GelfMessageFormatter.php:117-128",
+        "src/Monolog/Formatter/GelfMessageFormatter.php:130-141"
+      ]
+    },
+    {
+      "why": "The code beginning with `public function testIgnoresRecursiveObjectReferences()` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/Monolog/Formatter/NormalizerFormatterTest.php:210-221 and tests/Monolog/Formatter/NormalizerFormatterTest.php:244-255; 10 and 10 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Formatter/NormalizerFormatterTest.php:200-227\n+++ tests/Monolog/Formatter/NormalizerFormatterTest.php:238-261\n@@ -1,10 +1,6 @@\n-    public function testIgnoresRecursiveObjectReferences()\n+    public function testToJsonIgnoresInvalidTypes()\n     {\n-        // set up the recursion\n-        $foo = new \\stdClass();\n-        $bar = new \\stdClass();\n-\n-        $foo->bar = $bar;\n-        $bar->foo = $foo;\n+        // set up the invalid data\n+        $resource = fopen(__FILE__, 'r');\n \n         // set an error handler to assert that the error is not raised anymore\n@@ -21,8 +17,8 @@\n         $formatter = new NormalizerFormatter();\n         $reflMethod = new \\ReflectionMethod($formatter, 'toJson');\n-        $res = $reflMethod->invoke($formatter, [$foo, $bar], true);\n+        $res = $reflMethod->invoke($formatter, [$resource], true);\n \n         restore_error_handler();\n \n-        $this->assertEquals('[{\"bar\":{\"foo\":null}},{\"foo\":{\"bar\":null}}]', $res);\n+        $this->assertEquals('[null]', $res);\n     }",
+      "occurrences": [
+        "tests/Monolog/Formatter/NormalizerFormatterTest.php:200-227",
+        "tests/Monolog/Formatter/NormalizerFormatterTest.php:238-261"
+      ]
+    },
+    {
+      "why": "The code beginning with `public function testStylingMultiple()` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/Monolog/Handler/BrowserConsoleHandlerTest.php:49-57 and tests/Monolog/Handler/BrowserConsoleHandlerTest.php:33-41; 7 and 7 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"testStylingMultiple\", \"testStyling\"], [\"'foo[[bar]]{color: red}[[baz]]{color: blue}'\", \"'foo[[bar]]{color: red}'\"]]. Raw core diff:\n--- tests/Monolog/Handler/BrowserConsoleHandlerTest.php:49-57\n+++ tests/Monolog/Handler/BrowserConsoleHandlerTest.php:33-41\n@@ -1 +1 @@\n-    public function testStylingMultiple()\n+    public function testStyling()\n@@ -6 +6 @@\n-        $handler->handle($this->getRecord(Level::Debug, 'foo[[bar]]{color: red}[[baz]]{color: blue}'));\n+        $handler->handle($this->getRecord(Level::Debug, 'foo[[bar]]{color: red}'));\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/BrowserConsoleHandlerTest.php:49-63\n+++ tests/Monolog/Handler/BrowserConsoleHandlerTest.php:33-47\n@@ -1,12 +1,12 @@\n-    public function testStylingMultiple()\n+    public function testStyling()\n     {\n         $handler = new BrowserConsoleHandler();\n         $handler->setFormatter($this->getIdentityFormatter());\n \n-        $handler->handle($this->getRecord(Level::Debug, 'foo[[bar]]{color: red}[[baz]]{color: blue}'));\n+        $handler->handle($this->getRecord(Level::Debug, 'foo[[bar]]{color: red}'));\n \n         $expected = <<<EOF\n (function (c) {if (c && c.groupCollapsed) {\n-c.debug(\"%cfoo%cbar%c%cbaz%c\", \"font-weight: normal\", \"color: red\", \"font-weight: normal\", \"color: blue\", \"font-weight: normal\");\n+c.debug(\"%cfoo%cbar%c\", \"font-weight: normal\", \"color: red\", \"font-weight: normal\");\n }})(console);\n EOF;",
+      "occurrences": [
+        "tests/Monolog/Handler/BrowserConsoleHandlerTest.php:49-63",
+        "tests/Monolog/Handler/BrowserConsoleHandlerTest.php:33-47"
+      ]
+    },
+    {
+      "why": "The code beginning with `class LogmaticHandlerTest extends \\Monolog\\Test\\MonologTestCase` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/Monolog/Handler/LogmaticHandlerTest.php:70-86 and tests/Monolog/Handler/LogEntriesHandlerTest.php:70-86; 15 and 15 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/LogmaticHandlerTest.php:20-86\n+++ tests/Monolog/Handler/LogEntriesHandlerTest.php:20-86\n@@ -1,3 +1,3 @@\n-class LogmaticHandlerTest extends \\Monolog\\Test\\MonologTestCase\n+class LogEntriesHandlerTest extends \\Monolog\\Test\\MonologTestCase\n {\n     /**\n@@ -6,5 +6,5 @@\n     private $res;\n \n-    private LogmaticHandler&MockObject $handler;\n+    private LogEntriesHandler&MockObject $handler;\n \n     public function tearDown(): void\n@@ -24,5 +24,5 @@\n         $content = fread($this->res, 1024);\n \n-        $this->assertMatchesRegularExpression('/testToken {\"message\":\"Critical write test\",\"context\":{},\"level\":500,\"level_name\":\"CRITICAL\",\"channel\":\"test\",\"datetime\":\"(.*)\",\"extra\":{},\"hostname\":\"testHostname\",\"appname\":\"testAppname\",\"@marker\":\\[\"sourcecode\",\"php\"\\]}/', $content);\n+        $this->assertMatchesRegularExpression('/testToken \\[\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}\\+00:00\\] test.CRITICAL: Critical write test/', $content);\n     }\n \n@@ -40,5 +40,5 @@\n         $content = fread($this->res, 1024);\n \n-        $this->assertMatchesRegularExpression('/testToken {\"message\":\"test\",\"context\":{},\"level\":300,\"level_name\":\"WARNING\",\"channel\":\"test\",\"datetime\":\"(.*)\",\"extra\":{},\"hostname\":\"testHostname\",\"appname\":\"testAppname\",\"@marker\":\\[\"sourcecode\",\"php\"\\]}/', $content);\n+        $this->assertMatchesRegularExpression('/(testToken \\[\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}\\+00:00\\] .* \\[\\] \\[\\]\\n){3}/', $content);\n     }\n \n@@ -46,7 +46,7 @@\n     {\n         $useSSL = \\extension_loaded('openssl');\n-        $args = ['testToken', 'testHostname', 'testAppname', $useSSL, Level::Debug, true];\n+        $args = ['testToken', $useSSL, Level::Debug, true];\n         $this->res = fopen('php://memory', 'a');\n-        $this->handler = $this->getMockBuilder('Monolog\\Handler\\LogmaticHandler')\n+        $this->handler = $this->getMockBuilder('Monolog\\Handler\\LogEntriesHandler')\n             ->setConstructorArgs($args)\n             ->onlyMethods(['fsockopen', 'streamSetTimeout', 'closeSocket'])",
+      "occurrences": [
+        "tests/Monolog/Handler/LogmaticHandlerTest.php:20-86",
+        "tests/Monolog/Handler/LogEntriesHandlerTest.php:20-86"
+      ]
+    },
+    {
+      "why": "The code beginning with `private function createHandler($token = 'myToken')` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/Monolog/Handler/FlowdockHandlerTest.php:71-85 and tests/Monolog/Handler/SlackHandlerTest.php:137-151; 13 and 13 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/FlowdockHandlerTest.php:66-88\n+++ tests/Monolog/Handler/SlackHandlerTest.php:132-154\n@@ -1,7 +1,7 @@\n-    private function createHandler($token = 'myToken')\n+    private function createHandler($token = 'myToken', $channel = 'channel1', $username = 'Monolog', $useAttachment = true, $iconEmoji = null, $useShortAttachment = false, $includeExtra = false)\n     {\n-        $constructorArgs = [$token, Level::Debug];\n+        $constructorArgs = [$token, $channel, $username, $useAttachment, $iconEmoji, Level::Debug, true, $useShortAttachment, $includeExtra];\n         $this->res = fopen('php://memory', 'a');\n-        $this->handler = $this->getMockBuilder('Monolog\\Handler\\FlowdockHandler')\n+        $this->handler = $this->getMockBuilder('Monolog\\Handler\\SlackHandler')\n             ->setConstructorArgs($constructorArgs)\n             ->onlyMethods(['fsockopen', 'streamSetTimeout', 'closeSocket'])\n@@ -20,4 +20,4 @@\n             ->method('closeSocket');\n \n-        $this->handler->setFormatter(new FlowdockFormatter('test_source', 'source@test.com'));\n+        $this->handler->setFormatter($this->getIdentityFormatter());\n     }",
+      "occurrences": [
+        "tests/Monolog/Handler/FlowdockHandlerTest.php:66-88",
+        "tests/Monolog/Handler/SlackHandlerTest.php:132-154"
+      ]
+    },
+    {
+      "why": "The code beginning with `<?php declare(strict_types=1);` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: src/Monolog/Processor/MemoryUsageProcessor.php:1-39 and src/Monolog/Processor/MemoryPeakUsageProcessor.php:1-39; 15 and 15 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"MemoryUsageProcessor\", \"MemoryPeakUsageProcessor\"], [\"memory_get_usage\", \"memory_get_peak_usage\"], [\"'memory_usage'\", \"'memory_peak_usage'\"]]. Raw core diff:\n--- src/Monolog/Processor/MemoryUsageProcessor.php:1-39\n+++ src/Monolog/Processor/MemoryPeakUsageProcessor.php:1-39\n@@ -17 +17 @@\n- * Injects memory_get_usage in all records\n+ * Injects memory_get_peak_usage in all records\n@@ -22 +22 @@\n-class MemoryUsageProcessor extends MemoryProcessor\n+class MemoryPeakUsageProcessor extends MemoryProcessor\n@@ -29 +29 @@\n-        $usage = memory_get_usage($this->realUsage);\n+        $usage = memory_get_peak_usage($this->realUsage);\n@@ -35 +35 @@\n-        $record->extra['memory_usage'] = $usage;\n+        $record->extra['memory_peak_usage'] = $usage;\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/Monolog/Processor/MemoryUsageProcessor.php:1-39\n+++ src/Monolog/Processor/MemoryPeakUsageProcessor.php:1-39\n@@ -15,10 +15,10 @@\n \n /**\n- * Injects memory_get_usage in all records\n+ * Injects memory_get_peak_usage in all records\n  *\n  * @see Monolog\\Processor\\MemoryProcessor::__construct() for options\n  * @author Rob Jensen\n  */\n-class MemoryUsageProcessor extends MemoryProcessor\n+class MemoryPeakUsageProcessor extends MemoryProcessor\n {\n     /**\n@@ -27,5 +27,5 @@\n     public function __invoke(LogRecord $record): LogRecord\n     {\n-        $usage = memory_get_usage($this->realUsage);\n+        $usage = memory_get_peak_usage($this->realUsage);\n \n         if ($this->useFormatting) {\n@@ -33,5 +33,5 @@\n         }\n \n-        $record->extra['memory_usage'] = $usage;\n+        $record->extra['memory_peak_usage'] = $usage;\n \n         return $record;",
+      "type": "Type II",
+      "occurrences": [
+        "src/Monolog/Processor/MemoryUsageProcessor.php:1-39",
+        "src/Monolog/Processor/MemoryPeakUsageProcessor.php:1-39"
+      ]
+    },
+    {
+      "why": "The code beginning with `public function testWarning()` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/Monolog/Handler/GelfHandlerTest.php:72-91 and tests/Monolog/Handler/GelfHandlerTest.php:51-70; 17 and 17 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"testWarning\", \"testDebug\"], [\"Warning\", \"Debug\"], [\"\\\"A test warning message\\\"\", \"\\\"A test debug message\\\"\"], [\"4\", \"7\"]]. Raw core diff:\n--- tests/Monolog/Handler/GelfHandlerTest.php:72-91\n+++ tests/Monolog/Handler/GelfHandlerTest.php:51-70\n@@ -1 +1 @@\n-    public function testWarning()\n+    public function testDebug()\n@@ -3 +3 @@\n-        $record = $this->getRecord(Level::Warning, \"A test warning message\");\n+        $record = $this->getRecord(Level::Debug, \"A test debug message\");\n@@ -6 +6 @@\n-            ->setLevel(4)\n+            ->setLevel(7)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/GelfHandlerTest.php:72-91\n+++ tests/Monolog/Handler/GelfHandlerTest.php:51-70\n@@ -1,8 +1,8 @@\n-    public function testWarning()\n+    public function testDebug()\n     {\n-        $record = $this->getRecord(Level::Warning, \"A test warning message\");\n+        $record = $this->getRecord(Level::Debug, \"A test debug message\");\n         $expectedMessage = new Message();\n         $expectedMessage\n-            ->setLevel(4)\n+            ->setLevel(7)\n             ->setAdditional('facility', 'test')\n             ->setShortMessage($record->message)",
+      "type": "Type II",
+      "occurrences": [
+        "tests/Monolog/Handler/GelfHandlerTest.php:72-91",
+        "tests/Monolog/Handler/GelfHandlerTest.php:51-70"
+      ]
+    },
+    {
+      "why": "The code beginning with `$record = $this->getRecord(Level::Warning, 'test', ['data' => new \\stdClass, 'foo' => 34]);` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/Monolog/Handler/AmqpHandlerTest.php:105-118 and tests/Monolog/Handler/AmqpHandlerTest.php:48-61; 13 and 13 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/AmqpHandlerTest.php:105-132\n+++ tests/Monolog/Handler/AmqpHandlerTest.php:48-72\n@@ -13,9 +13,6 @@\n                 'extra' => [],\n             ],\n-            'log',\n             'warning.test',\n-            false,\n-            false,\n-            null,\n+            0,\n             [\n                 'delivery_mode' => 2,",
+      "occurrences": [
+        "tests/Monolog/Handler/AmqpHandlerTest.php:105-132",
+        "tests/Monolog/Handler/AmqpHandlerTest.php:48-72"
+      ]
+    },
+    {
+      "why": "The code beginning with `$args = ['testToken', $useSSL, Level::Debug, true];` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/Monolog/Handler/LogEntriesHandlerTest.php:68-75 and tests/Monolog/Handler/FlowdockHandlerTest.php:69-76; 7 and 7 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"'Monolog\\\\Handler\\\\LogEntriesHandler'\", \"'Monolog\\\\Handler\\\\FlowdockHandler'\"], [\"$args\", \"$constructorArgs\"]]. Raw core diff:\n--- tests/Monolog/Handler/LogEntriesHandlerTest.php:68-75\n+++ tests/Monolog/Handler/FlowdockHandlerTest.php:69-76\n@@ -2,2 +2,2 @@\n-        $this->handler = $this->getMockBuilder('Monolog\\Handler\\LogEntriesHandler')\n-            ->setConstructorArgs($args)\n+        $this->handler = $this->getMockBuilder('Monolog\\Handler\\FlowdockHandler')\n+            ->setConstructorArgs($constructorArgs)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/LogEntriesHandlerTest.php:67-75\n+++ tests/Monolog/Handler/FlowdockHandlerTest.php:69-76\n@@ -1,6 +1,5 @@\n-        $args = ['testToken', $useSSL, Level::Debug, true];\n         $this->res = fopen('php://memory', 'a');\n-        $this->handler = $this->getMockBuilder('Monolog\\Handler\\LogEntriesHandler')\n-            ->setConstructorArgs($args)\n+        $this->handler = $this->getMockBuilder('Monolog\\Handler\\FlowdockHandler')\n+            ->setConstructorArgs($constructorArgs)\n             ->onlyMethods(['fsockopen', 'streamSetTimeout', 'closeSocket'])\n             ->getMock();",
+      "occurrences": [
+        "tests/Monolog/Handler/LogEntriesHandlerTest.php:67-75",
+        "tests/Monolog/Handler/FlowdockHandlerTest.php:69-76"
+      ]
+    },
+    {
+      "why": "The code beginning with `private $res;` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/Monolog/Handler/LogmaticHandlerTest.php:25-62 and tests/Monolog/Handler/LogEntriesHandlerTest.php:25-62; 29 and 29 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"LogmaticHandler\", \"LogEntriesHandler\"], [\"'/testToken {\\\"message\\\":\\\"Critical write test\\\",\\\"context\\\":{},\\\"level\\\":500,\\\"level_name\\\":\\\"CRITICAL\\\",\\\"channel\\\":\\\"test\\\",\\\"datetime\\\":\\\"(.*)\\\",\\\"extra\\\":{},\\\"hostname\\\":\\\"testHostname\\\",\\\"appname\\\":\\\"testAppname\\\",\\\"@marker\\\":\\\\[\\\"sourcecode\\\",\\\"php\\\"\\\\]}/'\", \"'/testToken \\\\[\\\\d{4}-\\\\d{2}-\\\\d{2}T\\\\d{2}:\\\\d{2}:\\\\d{2}\\\\.\\\\d{6}\\\\+00:00\\\\] test.CRITICAL: Critical write test/'\"], [\"'/testToken {\\\"message\\\":\\\"test\\\",\\\"context\\\":{},\\\"level\\\":300,\\\"level_name\\\":\\\"WARNING\\\",\\\"channel\\\":\\\"test\\\",\\\"datetime\\\":\\\"(.*)\\\",\\\"extra\\\":{},\\\"hostname\\\":\\\"testHostname\\\",\\\"appname\\\":\\\"testAppname\\\",\\\"@marker\\\":\\\\[\\\"sourcecode\\\",\\\"php\\\"\\\\]}/'\", \"'/(testToken \\\\[\\\\d{4}-\\\\d{2}-\\\\d{2}T\\\\d{2}:\\\\d{2}:\\\\d{2}\\\\.\\\\d{6}\\\\+00:00\\\\] .* \\\\[\\\\] \\\\[\\\\]\\\\n){3}/'\"]]. Raw core diff:\n--- tests/Monolog/Handler/LogmaticHandlerTest.php:25-62\n+++ tests/Monolog/Handler/LogEntriesHandlerTest.php:25-62\n@@ -3 +3 @@\n-    private LogmaticHandler&MockObject $handler;\n+    private LogEntriesHandler&MockObject $handler;\n@@ -21 +21 @@\n-        $this->assertMatchesRegularExpression('/testToken {\"message\":\"Critical write test\",\"context\":{},\"level\":500,\"level_name\":\"CRITICAL\",\"channel\":\"test\",\"datetime\":\"(.*)\",\"extra\":{},\"hostname\":\"testHostname\",\"appname\":\"testAppname\",\"@marker\":\\[\"sourcecode\",\"php\"\\]}/', $content);\n+        $this->assertMatchesRegularExpression('/testToken \\[\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}\\+00:00\\] test.CRITICAL: Critical write test/', $content);\n@@ -37 +37 @@\n-        $this->assertMatchesRegularExpression('/testToken {\"message\":\"test\",\"context\":{},\"level\":300,\"level_name\":\"WARNING\",\"channel\":\"test\",\"datetime\":\"(.*)\",\"extra\":{},\"hostname\":\"testHostname\",\"appname\":\"testAppname\",\"@marker\":\\[\"sourcecode\",\"php\"\\]}/', $content);\n+        $this->assertMatchesRegularExpression('/(testToken \\[\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}\\+00:00\\] .* \\[\\] \\[\\]\\n){3}/', $content);\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/LogmaticHandlerTest.php:25-62\n+++ tests/Monolog/Handler/LogEntriesHandlerTest.php:25-62\n@@ -1,5 +1,5 @@\n     private $res;\n \n-    private LogmaticHandler&MockObject $handler;\n+    private LogEntriesHandler&MockObject $handler;\n \n     public function tearDown(): void\n@@ -19,5 +19,5 @@\n         $content = fread($this->res, 1024);\n \n-        $this->assertMatchesRegularExpression('/testToken {\"message\":\"Critical write test\",\"context\":{},\"level\":500,\"level_name\":\"CRITICAL\",\"channel\":\"test\",\"datetime\":\"(.*)\",\"extra\":{},\"hostname\":\"testHostname\",\"appname\":\"testAppname\",\"@marker\":\\[\"sourcecode\",\"php\"\\]}/', $content);\n+        $this->assertMatchesRegularExpression('/testToken \\[\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}\\+00:00\\] test.CRITICAL: Critical write test/', $content);\n     }\n \n@@ -35,4 +35,4 @@\n         $content = fread($this->res, 1024);\n \n-        $this->assertMatchesRegularExpression('/testToken {\"message\":\"test\",\"context\":{},\"level\":300,\"level_name\":\"WARNING\",\"channel\":\"test\",\"datetime\":\"(.*)\",\"extra\":{},\"hostname\":\"testHostname\",\"appname\":\"testAppname\",\"@marker\":\\[\"sourcecode\",\"php\"\\]}/', $content);\n+        $this->assertMatchesRegularExpression('/(testToken \\[\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}\\+00:00\\] .* \\[\\] \\[\\]\\n){3}/', $content);\n     }",
+      "type": "Type II",
+      "occurrences": [
+        "tests/Monolog/Handler/LogmaticHandlerTest.php:25-62",
+        "tests/Monolog/Handler/LogEntriesHandlerTest.php:25-62"
+      ]
+    },
+    {
+      "why": "The code beginning with `if (PHP_VERSION_ID < 80400) {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/Monolog/Formatter/NormalizerFormatterTest.php:530-541 and tests/Monolog/Formatter/NormalizerFormatterTest.php:463-474; 9 and 9 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Formatter/NormalizerFormatterTest.php:530-542\n+++ tests/Monolog/Formatter/NormalizerFormatterTest.php:463-474\n@@ -11,3 +11,2 @@\n \n         $formatter = new NormalizerFormatter();\n-        $formatter->setBasePath(DIRECTORY_SEPARATOR);",
+      "occurrences": [
+        "tests/Monolog/Formatter/NormalizerFormatterTest.php:530-542",
+        "tests/Monolog/Formatter/NormalizerFormatterTest.php:463-474"
+      ]
+    },
+    {
+      "why": "The code beginning with `$handler->setFormatter($this->getIdentityFormatter());` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/Monolog/Handler/FirePHPHandlerTest.php:57-63 and tests/Monolog/Handler/FirePHPHandlerTest.php:34-40; 7 and 7 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/FirePHPHandlerTest.php:48-63\n+++ tests/Monolog/Handler/FirePHPHandlerTest.php:29-40\n@@ -1,10 +1,6 @@\n+        $handler = new TestFirePHPHandler;\n         $handler->setFormatter($this->getIdentityFormatter());\n         $handler->handle($this->getRecord(Level::Debug));\n         $handler->handle($this->getRecord(Level::Warning));\n-\n-        $handler2 = new TestFirePHPHandler;\n-        $handler2->setFormatter($this->getIdentityFormatter());\n-        $handler2->handle($this->getRecord(Level::Debug));\n-        $handler2->handle($this->getRecord(Level::Warning));\n \n         $expected = [",
+      "occurrences": [
+        "tests/Monolog/Handler/FirePHPHandlerTest.php:48-63",
+        "tests/Monolog/Handler/FirePHPHandlerTest.php:29-40"
+      ]
+    },
+    {
+      "why": "The code beginning with `if (\\count($record->extra) > 0) {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: src/Monolog/Formatter/HtmlFormatter.php:102-109 and src/Monolog/Formatter/HtmlFormatter.php:94-101; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"extra\", \"context\"], [\"'Extra'\", \"'Context'\"]]. Raw core diff:\n--- src/Monolog/Formatter/HtmlFormatter.php:102-109\n+++ src/Monolog/Formatter/HtmlFormatter.php:94-101\n@@ -1 +1 @@\n-        if (\\count($record->extra) > 0) {\n+        if (\\count($record->context) > 0) {\n@@ -3 +3 @@\n-            foreach ($record->extra as $key => $value) {\n+            foreach ($record->context as $key => $value) {\n@@ -7 +7 @@\n-            $output .= $this->addRow('Extra', $embeddedTable, false);\n+            $output .= $this->addRow('Context', $embeddedTable, false);\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/Monolog/Formatter/HtmlFormatter.php:102-109\n+++ src/Monolog/Formatter/HtmlFormatter.php:94-101\n@@ -1,8 +1,8 @@\n-        if (\\count($record->extra) > 0) {\n+        if (\\count($record->context) > 0) {\n             $embeddedTable = '<table cellspacing=\"1\" width=\"100%\">';\n-            foreach ($record->extra as $key => $value) {\n+            foreach ($record->context as $key => $value) {\n                 $embeddedTable .= $this->addRow((string) $key, $this->convertToString($value));\n             }\n             $embeddedTable .= '</table>';\n-            $output .= $this->addRow('Extra', $embeddedTable, false);\n+            $output .= $this->addRow('Context', $embeddedTable, false);\n         }",
+      "type": "Type II",
+      "occurrences": [
+        "src/Monolog/Formatter/HtmlFormatter.php:102-109",
+        "src/Monolog/Formatter/HtmlFormatter.php:94-101"
+      ]
+    },
+    {
+      "why": "The code beginning with `public function testExceptionIsThrownIfCannotSetTimeout()` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/Monolog/Handler/SocketHandlerTest.php:121-131 and tests/Monolog/Handler/SocketHandlerTest.php:95-105; 9 and 9 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"testExceptionIsThrownIfCannotSetTimeout\", \"testExceptionIsThrownOnFsockopenError\"], [\"'streamSetTimeout'\", \"'fsockopen'\"]]. Raw core diff:\n--- tests/Monolog/Handler/SocketHandlerTest.php:121-131\n+++ tests/Monolog/Handler/SocketHandlerTest.php:95-105\n@@ -1 +1 @@\n-    public function testExceptionIsThrownIfCannotSetTimeout()\n+    public function testExceptionIsThrownOnFsockopenError()\n@@ -3 +3 @@\n-        $this->setMockHandler(['streamSetTimeout']);\n+        $this->setMockHandler(['fsockopen']);\n@@ -5 +5 @@\n-            ->method('streamSetTimeout')\n+            ->method('fsockopen')\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/SocketHandlerTest.php:121-131\n+++ tests/Monolog/Handler/SocketHandlerTest.php:95-105\n@@ -1,7 +1,7 @@\n-    public function testExceptionIsThrownIfCannotSetTimeout()\n+    public function testExceptionIsThrownOnFsockopenError()\n     {\n-        $this->setMockHandler(['streamSetTimeout']);\n+        $this->setMockHandler(['fsockopen']);\n         $this->handler->expects($this->once())\n-            ->method('streamSetTimeout')\n+            ->method('fsockopen')\n             ->willReturn(false);\n ",
+      "type": "Type II",
+      "occurrences": [
+        "tests/Monolog/Handler/SocketHandlerTest.php:121-131",
+        "tests/Monolog/Handler/SocketHandlerTest.php:95-105"
+      ]
+    },
+    {
+      "why": "The code beginning with `private function toWildfireLevel(Level $level): string` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: src/Monolog/Formatter/WildfireFormatter.php:42-54 and src/Monolog/Formatter/ChromePHPFormatter.php:29-41; 13 and 13 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"'LOG'\", \"'log'\"], [\"'INFO'\", \"'info'\"], [\"'WARN'\", \"'warn'\"], [\"'ERROR'\", \"'error'\"]]. Raw core diff:\n--- src/Monolog/Formatter/WildfireFormatter.php:42-54\n+++ src/Monolog/Formatter/ChromePHPFormatter.php:29-41\n@@ -4,8 +4,8 @@\n-            Level::Debug     => 'LOG',\n-            Level::Info      => 'INFO',\n-            Level::Notice    => 'INFO',\n-            Level::Warning   => 'WARN',\n-            Level::Error     => 'ERROR',\n-            Level::Critical  => 'ERROR',\n-            Level::Alert     => 'ERROR',\n-            Level::Emergency => 'ERROR',\n+            Level::Debug     => 'log',\n+            Level::Info      => 'info',\n+            Level::Notice    => 'info',\n+            Level::Warning   => 'warn',\n+            Level::Error     => 'error',\n+            Level::Critical  => 'error',\n+            Level::Alert     => 'error',\n+            Level::Emergency => 'error',\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/Monolog/Formatter/WildfireFormatter.php:42-54\n+++ src/Monolog/Formatter/ChromePHPFormatter.php:29-41\n@@ -2,12 +2,12 @@\n     {\n         return match ($level) {\n-            Level::Debug     => 'LOG',\n-            Level::Info      => 'INFO',\n-            Level::Notice    => 'INFO',\n-            Level::Warning   => 'WARN',\n-            Level::Error     => 'ERROR',\n-            Level::Critical  => 'ERROR',\n-            Level::Alert     => 'ERROR',\n-            Level::Emergency => 'ERROR',\n+            Level::Debug     => 'log',\n+            Level::Info      => 'info',\n+            Level::Notice    => 'info',\n+            Level::Warning   => 'warn',\n+            Level::Error     => 'error',\n+            Level::Critical  => 'error',\n+            Level::Alert     => 'error',\n+            Level::Emergency => 'error',\n         };\n     }",
+      "type": "Type II",
+      "occurrences": [
+        "src/Monolog/Formatter/WildfireFormatter.php:42-54",
+        "src/Monolog/Formatter/ChromePHPFormatter.php:29-41"
+      ]
+    },
+    {
+      "why": "The code beginning with `public function testRotationWithFolderByDate($createFile, $dateFormat, $timeCallback)` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/Monolog/Handler/RotatingFileHandlerTest.php:241-251 and tests/Monolog/Handler/RotatingFileHandlerTest.php:165-175; 9 and 9 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/RotatingFileHandlerTest.php:224-251\n+++ tests/Monolog/Handler/RotatingFileHandlerTest.php:148-175\n@@ -1,19 +1,19 @@\n-    #[DataProvider('rotationWithFolderByDateTests')]\n-    public function testRotationWithFolderByDate($createFile, $dateFormat, $timeCallback)\n+    #[DataProvider('rotationTests')]\n+    public function testRotation($createFile, $dateFormat, $timeCallback)\n     {\n-        $old1 = $this->createDeep(__DIR__.'/Fixtures/'.date($dateFormat, $timeCallback(-1)).'/foo.rot');\n-        $old2 = $this->createDeep(__DIR__.'/Fixtures/'.date($dateFormat, $timeCallback(-2)).'/foo.rot');\n-        $old3 = $this->createDeep(__DIR__.'/Fixtures/'.date($dateFormat, $timeCallback(-3)).'/foo.rot');\n-        $old4 = $this->createDeep(__DIR__.'/Fixtures/'.date($dateFormat, $timeCallback(-4)).'/foo.rot');\n+        touch($old1 = __DIR__.'/Fixtures/foo-'.date($dateFormat, $timeCallback(-1)).'.rot');\n+        touch($old2 = __DIR__.'/Fixtures/foo-'.date($dateFormat, $timeCallback(-2)).'.rot');\n+        touch($old3 = __DIR__.'/Fixtures/foo-'.date($dateFormat, $timeCallback(-3)).'.rot');\n+        touch($old4 = __DIR__.'/Fixtures/foo-'.date($dateFormat, $timeCallback(-4)).'.rot');\n \n-        $log = __DIR__.'/Fixtures/'.date($dateFormat).'/foo.rot';\n+        $log = __DIR__.'/Fixtures/foo-'.date($dateFormat).'.rot';\n \n         if ($createFile) {\n-            $this->createDeep($log);\n+            touch($log);\n         }\n \n         $handler = new RotatingFileHandler(__DIR__.'/Fixtures/foo.rot', 2);\n         $handler->setFormatter($this->getIdentityFormatter());\n-        $handler->setFilenameFormat('{date}/{filename}', $dateFormat);\n+        $handler->setFilenameFormat('{filename}-{date}', $dateFormat);\n         $handler->handle($this->getRecord());\n ",
+      "occurrences": [
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:224-251",
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:148-175"
+      ]
+    },
+    {
+      "why": "The code beginning with `public function testNormalizeHandleLargeArraysWithExactly1000Items()` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: tests/Monolog/Formatter/NormalizerFormatterTest.php:263-293 and tests/Monolog/Formatter/JsonFormatterTest.php:307-337; 26 and 26 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "tests/Monolog/Formatter/NormalizerFormatterTest.php:263-293",
+        "tests/Monolog/Formatter/JsonFormatterTest.php:307-337"
+      ]
+    },
+    {
+      "why": "The code beginning with `$handler = new RotatingFileHandler(__DIR__.'/Fixtures/foo.rot', 2);` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: tests/Monolog/Handler/RotatingFileHandlerTest.php:367-373 and tests/Monolog/Handler/RotatingFileHandlerTest.php:162-169; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n--- tests/Monolog/Handler/RotatingFileHandlerTest.php:367-373\n+++ tests/Monolog/Handler/RotatingFileHandlerTest.php:162-169\n@@ -4,0 +5 @@\n+\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/RotatingFileHandlerTest.php:367-373\n+++ tests/Monolog/Handler/RotatingFileHandlerTest.php:162-169\n@@ -3,4 +3,5 @@\n         $handler->setFilenameFormat('{filename}-{date}', $dateFormat);\n         $handler->handle($this->getRecord());\n+\n         $handler->close();\n ",
+      "type": "Type I",
+      "occurrences": [
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:367-373",
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:162-169"
+      ]
+    },
+    {
+      "why": "The code beginning with `public function testHandleUsesProcessors()` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/Monolog/Handler/GroupHandlerTest.php:80-95 and tests/Monolog/Handler/FallbackGroupHandlerTest.php:100-115; 11 and 11 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n--- tests/Monolog/Handler/GroupHandlerTest.php:80-95\n+++ tests/Monolog/Handler/FallbackGroupHandlerTest.php:100-115\n@@ -13 +13 @@\n-     * @covers Monolog\\Handler\\GroupHandler::handle\n+     * @covers Monolog\\Handler\\FallbackGroupHandler::handleBatch\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/GroupHandlerTest.php:76-119\n+++ tests/Monolog/Handler/FallbackGroupHandlerTest.php:96-140\n@@ -2,5 +2,5 @@\n     {\n         $test = new TestHandler();\n-        $handler = new GroupHandler([$test]);\n+        $handler = new FallbackGroupHandler([$test]);\n         $handler->pushProcessor(function ($record) {\n             $record->extra['foo'] = true;\n@@ -15,10 +15,12 @@\n \n     /**\n-     * @covers Monolog\\Handler\\GroupHandler::handle\n+     * @covers Monolog\\Handler\\FallbackGroupHandler::handleBatch\n      */\n     public function testHandleBatchUsesProcessors()\n     {\n-        $testHandlers = [new TestHandler(), new TestHandler()];\n-        $handler = new GroupHandler($testHandlers);\n+        $testHandlerOne = new ExceptionTestHandler();\n+        $testHandlerTwo = new TestHandler();\n+        $testHandlers = [$testHandlerOne, $testHandlerTwo];\n+        $handler = new FallbackGroupHandler($testHandlers);\n         $handler->pushProcessor(function ($record) {\n             $record->extra['foo'] = true;\n@@ -32,13 +34,12 @@\n         });\n         $handler->handleBatch([$this->getRecord(Level::Debug), $this->getRecord(Level::Info)]);\n-        foreach ($testHandlers as $test) {\n-            $this->assertTrue($test->hasDebugRecords());\n-            $this->assertTrue($test->hasInfoRecords());\n-            $this->assertCount(2, $test->getRecords());\n-            $records = $test->getRecords();\n-            $this->assertTrue($records[0]['extra']['foo']);\n-            $this->assertTrue($records[1]['extra']['foo']);\n-            $this->assertTrue($records[0]['extra']['foo2']);\n-            $this->assertTrue($records[1]['extra']['foo2']);\n-        }\n+        $this->assertEmpty($testHandlerOne->getRecords());\n+        $this->assertTrue($testHandlerTwo->hasDebugRecords());\n+        $this->assertTrue($testHandlerTwo->hasInfoRecords());\n+        $this->assertCount(2, $testHandlerTwo->getRecords());\n+        $records = $testHandlerTwo->getRecords();\n+        $this->assertTrue($records[0]['extra']['foo']);\n+        $this->assertTrue($records[1]['extra']['foo']);\n+        $this->assertTrue($records[0]['extra']['foo2']);\n+        $this->assertTrue($records[1]['extra']['foo2']);\n     }",
+      "occurrences": [
+        "tests/Monolog/Handler/GroupHandlerTest.php:76-119",
+        "tests/Monolog/Handler/FallbackGroupHandlerTest.php:96-140"
+      ]
+    },
+    {
+      "why": "The code beginning with `public function testPsrLevelPassthruOnClose()` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/Monolog/Handler/FingersCrossedHandlerTest.php:271-282 and tests/Monolog/Handler/FingersCrossedHandlerTest.php:255-266; 12 and 12 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"testPsrLevelPassthruOnClose\", \"testPassthruOnClose\"], [\"LogLevel\", \"Level\"], [\"INFO\", \"Info\"]]. Raw core diff:\n--- tests/Monolog/Handler/FingersCrossedHandlerTest.php:271-282\n+++ tests/Monolog/Handler/FingersCrossedHandlerTest.php:255-266\n@@ -1 +1 @@\n-    public function testPsrLevelPassthruOnClose()\n+    public function testPassthruOnClose()\n@@ -4 +4 @@\n-        $handler = new FingersCrossedHandler($test, new ErrorLevelActivationStrategy(Level::Warning), 0, true, true, LogLevel::INFO);\n+        $handler = new FingersCrossedHandler($test, new ErrorLevelActivationStrategy(Level::Warning), 0, true, true, Level::Info);\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/FingersCrossedHandlerTest.php:271-282\n+++ tests/Monolog/Handler/FingersCrossedHandlerTest.php:255-266\n@@ -1,6 +1,6 @@\n-    public function testPsrLevelPassthruOnClose()\n+    public function testPassthruOnClose()\n     {\n         $test = new TestHandler();\n-        $handler = new FingersCrossedHandler($test, new ErrorLevelActivationStrategy(Level::Warning), 0, true, true, LogLevel::INFO);\n+        $handler = new FingersCrossedHandler($test, new ErrorLevelActivationStrategy(Level::Warning), 0, true, true, Level::Info);\n         $handler->handle($this->getRecord(Level::Debug));\n         $handler->handle($this->getRecord(Level::Info));",
+      "occurrences": [
+        "tests/Monolog/Handler/FingersCrossedHandlerTest.php:271-282",
+        "tests/Monolog/Handler/FingersCrossedHandlerTest.php:255-266"
+      ]
+    },
+    {
+      "why": "The code beginning with `public function testHandleBatchUsesProcessors()` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/Monolog/Handler/GroupHandlerTest.php:98-108 and tests/Monolog/Handler/FallbackGroupHandlerTest.php:120-130; 9 and 9 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/GroupHandlerTest.php:94-135\n+++ tests/Monolog/Handler/FallbackGroupHandlerTest.php:114-156\n@@ -1,6 +1,8 @@\n     public function testHandleBatchUsesProcessors()\n     {\n-        $testHandlers = [new TestHandler(), new TestHandler()];\n-        $handler = new GroupHandler($testHandlers);\n+        $testHandlerOne = new ExceptionTestHandler();\n+        $testHandlerTwo = new TestHandler();\n+        $testHandlers = [$testHandlerOne, $testHandlerTwo];\n+        $handler = new FallbackGroupHandler($testHandlers);\n         $handler->pushProcessor(function ($record) {\n             $record->extra['foo'] = true;\n@@ -14,21 +16,20 @@\n         });\n         $handler->handleBatch([$this->getRecord(Level::Debug), $this->getRecord(Level::Info)]);\n-        foreach ($testHandlers as $test) {\n-            $this->assertTrue($test->hasDebugRecords());\n-            $this->assertTrue($test->hasInfoRecords());\n-            $this->assertCount(2, $test->getRecords());\n-            $records = $test->getRecords();\n-            $this->assertTrue($records[0]['extra']['foo']);\n-            $this->assertTrue($records[1]['extra']['foo']);\n-            $this->assertTrue($records[0]['extra']['foo2']);\n-            $this->assertTrue($records[1]['extra']['foo2']);\n-        }\n+        $this->assertEmpty($testHandlerOne->getRecords());\n+        $this->assertTrue($testHandlerTwo->hasDebugRecords());\n+        $this->assertTrue($testHandlerTwo->hasInfoRecords());\n+        $this->assertCount(2, $testHandlerTwo->getRecords());\n+        $records = $testHandlerTwo->getRecords();\n+        $this->assertTrue($records[0]['extra']['foo']);\n+        $this->assertTrue($records[1]['extra']['foo']);\n+        $this->assertTrue($records[0]['extra']['foo2']);\n+        $this->assertTrue($records[1]['extra']['foo2']);\n     }\n \n     public function testProcessorsDoNotInterfereBetweenHandlers()\n     {\n-        $t1 = new TestHandler();\n+        $t1 = new ExceptionTestHandler();\n         $t2 = new TestHandler();\n-        $handler = new GroupHandler([$t1, $t2]);\n+        $handler = new FallbackGroupHandler([$t1, $t2]);\n \n         $t1->pushProcessor(function (LogRecord $record) {",
+      "occurrences": [
+        "tests/Monolog/Handler/GroupHandlerTest.php:94-135",
+        "tests/Monolog/Handler/FallbackGroupHandlerTest.php:114-156"
+      ]
+    },
+    {
+      "why": "The code beginning with `public function __construct(Client|Client8 $client, array $options = [], int|string|Level $level = Level::Debug, bool $bubble = true)` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: src/Monolog/Handler/ElasticsearchHandler.php:103-117 and src/Monolog/Handler/ElasticaHandler.php:78-92; 7 and 7 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/Monolog/Handler/ElasticsearchHandler.php:82-152\n+++ src/Monolog/Handler/ElasticaHandler.php:66-125\n@@ -1,3 +1,3 @@\n-    public function __construct(Client|Client8 $client, array $options = [], int|string|Level $level = Level::Debug, bool $bubble = true)\n+    public function __construct(Client $client, array $options = [], int|string|Level $level = Level::Debug, bool $bubble = true)\n     {\n         parent::__construct($level, $bubble);\n@@ -5,19 +5,10 @@\n         $this->options = array_merge(\n             [\n-                'index'        => 'monolog', // Elastic index name\n-                'type'         => '_doc',    // Elastic document type\n-                'ignore_error' => false,     // Suppress Elasticsearch exceptions\n-                'op_type'      => 'index',   // Elastic op_type (index or create) (https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-index_.html#docs-index-api-op_type)\n+                'index'          => 'monolog',      // Elastic index name\n+                'type'           => 'record',       // Elastic document type\n+                'ignore_error'   => false,          // Suppress Elastica exceptions\n             ],\n             $options\n         );\n-\n-        if ($client instanceof Client8 || $client::VERSION[0] === '7') {\n-            $this->needsType = false;\n-            // force the type to _doc for ES8/ES7\n-            $this->options['type'] = '_doc';\n-        } else {\n-            $this->needsType = true;\n-        }\n     }\n \n@@ -35,14 +26,12 @@\n     public function setFormatter(FormatterInterface $formatter): HandlerInterface\n     {\n-        if (Utils::unwrapFormatter($formatter) instanceof ElasticsearchFormatter) {\n+        if (Utils::unwrapFormatter($formatter) instanceof ElasticaFormatter) {\n             return parent::setFormatter($formatter);\n         }\n \n-        throw new InvalidArgumentException('ElasticsearchHandler is only compatible with ElasticsearchFormatter');\n+        throw new \\InvalidArgumentException('ElasticaHandler is only compatible with ElasticaFormatter');\n     }\n \n     /**\n-     * Getter options\n-     *\n      * @return mixed[]\n      *\n@@ -59,5 +48,5 @@\n     protected function getDefaultFormatter(): FormatterInterface\n     {\n-        return new ElasticsearchFormatter($this->options['index'], $this->options['type']);\n+        return new ElasticaFormatter($this->options['index'], $this->options['type']);\n     }\n ",
+      "occurrences": [
+        "src/Monolog/Handler/ElasticsearchHandler.php:82-152",
+        "src/Monolog/Handler/ElasticaHandler.php:66-125"
+      ]
+    },
+    {
+      "why": "The code beginning with `public function getHandler(LogRecord|null $record = null): HandlerInterface` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: src/Monolog/Handler/SamplingHandler.php:81-120 and src/Monolog/Handler/FingersCrossedHandler.php:202-241; 28 and 28 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "src/Monolog/Handler/SamplingHandler.php:81-120",
+        "src/Monolog/Handler/FingersCrossedHandler.php:202-241"
+      ]
+    },
+    {
+      "why": "The code beginning with `public function testSetFormatterInvalid()` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/Monolog/Handler/ElasticaHandlerTest.php:121-130 and tests/Monolog/Handler/ElasticsearchHandlerTest.php:71-80; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"ElasticaHandler\", \"ElasticsearchHandler\"], [\"'ElasticaHandler is only compatible with ElasticaFormatter'\", \"'ElasticsearchHandler is only compatible with ElasticsearchFormatter'\"]]. Raw core diff:\n--- tests/Monolog/Handler/ElasticaHandlerTest.php:121-130\n+++ tests/Monolog/Handler/ElasticsearchHandlerTest.php:71-80\n@@ -3 +3 @@\n-        $handler = new ElasticaHandler($this->client);\n+        $handler = new ElasticsearchHandler($this->client);\n@@ -7 +7 @@\n-        $this->expectExceptionMessage('ElasticaHandler is only compatible with ElasticaFormatter');\n+        $this->expectExceptionMessage('ElasticsearchHandler is only compatible with ElasticsearchFormatter');\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/ElasticaHandlerTest.php:121-130\n+++ tests/Monolog/Handler/ElasticsearchHandlerTest.php:71-80\n@@ -1,9 +1,9 @@\n     public function testSetFormatterInvalid()\n     {\n-        $handler = new ElasticaHandler($this->client);\n+        $handler = new ElasticsearchHandler($this->client);\n         $formatter = new NormalizerFormatter();\n \n         $this->expectException(\\InvalidArgumentException::class);\n-        $this->expectExceptionMessage('ElasticaHandler is only compatible with ElasticaFormatter');\n+        $this->expectExceptionMessage('ElasticsearchHandler is only compatible with ElasticsearchFormatter');\n \n         $handler->setFormatter($formatter);",
+      "type": "Type II",
+      "occurrences": [
+        "tests/Monolog/Handler/ElasticaHandlerTest.php:121-130",
+        "tests/Monolog/Handler/ElasticsearchHandlerTest.php:71-80"
+      ]
+    },
+    {
+      "why": "The code beginning with `public function testScalarsAndNullBypassMaxNormalizeDepth()` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/Monolog/Formatter/JsonFormatterTest.php:177-185 and tests/Monolog/Formatter/NormalizerFormatterTest.php:338-346; 7 and 7 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Formatter/JsonFormatterTest.php:174-195\n+++ tests/Monolog/Formatter/NormalizerFormatterTest.php:335-355\n@@ -1,5 +1,5 @@\n     public function testScalarsAndNullBypassMaxNormalizeDepth()\n     {\n-        $formatter = new JsonFormatter(JsonFormatter::BATCH_MODE_JSON, false);\n+        $formatter = new NormalizerFormatter();\n         $formatter->setMaxNormalizeDepth(1);\n \n@@ -12,11 +12,10 @@\n         ]));\n \n-        $decoded = json_decode($formatted, true);\n-        $this->assertSame('value', $decoded['context']['scalar']);\n-        $this->assertSame(42, $decoded['context']['int']);\n-        $this->assertNull($decoded['context']['null']);\n+        $this->assertSame('value', $formatted['context']['scalar']);\n+        $this->assertSame(42, $formatted['context']['int']);\n+        $this->assertNull($formatted['context']['null']);\n         $this->assertSame(\n             'Over 1 levels deep, aborting normalization',\n-            $decoded['context']['nested']\n+            $formatted['context']['nested']\n         );\n     }",
+      "occurrences": [
+        "tests/Monolog/Formatter/JsonFormatterTest.php:174-195",
+        "tests/Monolog/Formatter/NormalizerFormatterTest.php:335-355"
+      ]
+    },
+    {
+      "why": "The code beginning with `foreach ([true, false] as $microseconds) {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/Monolog/LoggerTest.php:563-576 and tests/Monolog/LoggerTest.php:586-599; 13 and 13 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/LoggerTest.php:563-576\n+++ tests/Monolog/LoggerTest.php:585-599\n@@ -1,2 +1,3 @@\n+        date_default_timezone_set('CET');\n         foreach ([true, false] as $microseconds) {\n             $logger = new Logger('foo');",
+      "occurrences": [
+        "tests/Monolog/LoggerTest.php:563-576",
+        "tests/Monolog/LoggerTest.php:585-599"
+      ]
+    },
+    {
+      "why": "The code beginning with `$handler->handle($this->getRecord(Level::Debug));` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: tests/Monolog/Handler/DeduplicationHandlerTest.php:27-34 and tests/Monolog/Handler/BufferHandlerTest.php:131-136; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n--- tests/Monolog/Handler/DeduplicationHandlerTest.php:27-34\n+++ tests/Monolog/Handler/BufferHandlerTest.php:131-136\n@@ -3 +2,0 @@\n-\n@@ -5 +3,0 @@\n-\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/Monolog/Handler/DeduplicationHandlerTest.php:27-34\n+++ tests/Monolog/Handler/BufferHandlerTest.php:131-136\n@@ -1,7 +1,5 @@\n         $handler->handle($this->getRecord(Level::Debug));\n         $handler->handle($this->getRecord(Level::Info));\n-\n         $handler->flush();\n-\n         $this->assertTrue($test->hasInfoRecords());\n         $this->assertTrue($test->hasDebugRecords());",
+      "type": "Type I",
+      "occurrences": [
+        "tests/Monolog/Handler/DeduplicationHandlerTest.php:27-34",
+        "tests/Monolog/Handler/BufferHandlerTest.php:131-136"
+      ]
+    }
+  ],
+  "clearly_out": [],
+  "not_clear": [
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/Monolog/Formatter/NormalizerFormatterTest.php:669-671",
+        "tests/Monolog/Formatter/NormalizerFormatterTest.php:721-723"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/Monolog/Formatter/LineFormatter.php:149-149",
+        "src/Monolog/Formatter/LineFormatter.php:168-168"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/LogMonsterHandlerTest.php:97-99",
+        "tests/Monolog/Handler/LogMonsterHandlerTest.php:83-86"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/Monolog/Handler/SyslogUdpHandlerTest.php:115-116",
+        "tests/Monolog/Handler/SyslogUdpHandlerTest.php:125-126"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Formatter/LineFormatterTest.php:238-238",
+        "tests/Monolog/Formatter/NormalizerFormatterTest.php:124-124"
+      ]
+    },
+    {
+      "why": "The fragments around `$this->assertTrue($handler->hasRecords($level));` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/TestHandlerTest.php:39-46",
+        "tests/Monolog/Handler/TestHandlerTest.php:27-33"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:230-230",
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:227-227"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "src/Monolog/Logger.php:600-603",
+        "src/Monolog/Logger.php:652-655"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/Slack/SlackRecordTest.php:211-213",
+        "tests/Monolog/Handler/Slack/SlackRecordTest.php:205-207"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 12 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Formatter/JsonFormatterTest.php:48-48",
+        "tests/Monolog/Formatter/JsonFormatterTest.php:64-75"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/BufferHandlerTest.php:160-162",
+        "tests/Monolog/Handler/FingersCrossedHandlerTest.php:46-48"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:409-411",
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:530-532"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/Monolog/SignalHandlerTest.php:184-187",
+        "tests/Monolog/SignalHandlerTest.php:103-106"
+      ]
+    },
+    {
+      "why": "The fragments around `protected function toFrankenPhpLevel(Level $level): int` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "src/Monolog/Handler/FrankenPhpHandler.php:58-70",
+        "src/Monolog/Formatter/GelfMessageFormatter.php:52-64"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:472-472",
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:522-522"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/BufferHandlerTest.php:117-119",
+        "tests/Monolog/Handler/FingersCrossedHandlerTest.php:68-70"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/Monolog/RegistryTest.php:132-135",
+        "tests/Monolog/RegistryTest.php:147-150"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/SignalHandlerTest.php:119-121",
+        "tests/Monolog/SignalHandlerTest.php:109-111"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/Monolog/LoggerTest.php:200-204",
+        "tests/Monolog/LoggerTest.php:220-224"
+      ]
+    },
+    {
+      "why": "The fragments around `public function testClockIsUsedWhenMicrosecondTimestampsAreDisabled()` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 5; edited blocks in the comment/whitespace-normalized line diff: 4.",
+      "occurrences": [
+        "tests/Monolog/LoggerTest.php:730-741",
+        "tests/Monolog/LoggerTest.php:606-616"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/Monolog/SignalHandlerTest.php:194-196",
+        "tests/Monolog/SignalHandlerTest.php:120-122"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/DeduplicationHandlerTest.php:43-47",
+        "tests/Monolog/Handler/DeduplicationHandlerTest.php:23-27"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:520-520",
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:522-522"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/Monolog/Handler/NullHandlerTest.php:36-37",
+        "tests/Monolog/Handler/NullHandlerTest.php:40-41"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/GroupHandlerTest.php:110-112",
+        "tests/Monolog/Handler/FallbackGroupHandlerTest.php:132-134"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/Monolog/Formatter/LineFormatter.php:294-296",
+        "src/Monolog/Formatter/NormalizerFormatter.php:316-318"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/Monolog/Formatter/JsonFormatterTest.php:47-48",
+        "tests/Monolog/Formatter/JsonFormatterTest.php:78-79"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/BufferHandlerTest.php:29-31",
+        "tests/Monolog/Handler/BufferHandlerTest.php:87-89"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/Monolog/Handler/Slack/SlackRecordTest.php:274-276",
+        "tests/Monolog/Handler/Slack/SlackRecordTest.php:227-229"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:473-473",
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:521-521"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/StreamHandlerTest.php:75-79",
+        "tests/Monolog/Handler/StreamHandlerTest.php:85-89"
+      ]
+    },
+    {
+      "why": "The fragments around `public function testSweepsSecretsHiddenInsideNormalizedObjects()` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 3.",
+      "occurrences": [
+        "tests/Monolog/Formatter/RedactingFormatterTest.php:83-101",
+        "tests/Monolog/Formatter/RedactingFormatterTest.php:279-291"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/DeduplicationHandlerTest.php:114-115",
+        "tests/Monolog/Handler/DeduplicationHandlerTest.php:91-92"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/Monolog/Handler/SyslogHandler.php:41-44",
+        "src/Monolog/Handler/SyslogUdpHandler.php:66-69"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:569-571",
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:139-141"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/ElasticaHandlerTest.php:143-144",
+        "tests/Monolog/Handler/ElasticsearchHandlerTest.php:95-96"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/AbstractProcessingHandlerTest.php:37-37",
+        "tests/Monolog/Handler/AbstractHandlerTest.php:53-53"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/Monolog/LoggerTest.php:974-975",
+        "tests/Monolog/LoggerTest.php:954-955"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:95-95",
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:94-94"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:434-434",
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:435-435"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/FallbackGroupHandlerTest.php:47-49",
+        "tests/Monolog/Handler/FallbackGroupHandlerTest.php:30-32"
+      ]
+    },
+    {
+      "why": "The fragments around `$record = $this->getRecord();` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/Monolog/Handler/MongoDBHandlerTest.php:65-71",
+        "tests/Monolog/Handler/CouchDBHandlerTest.php:22-28"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Formatter/SyslogFormatterTest.php:85-89",
+        "tests/Monolog/Formatter/SyslogFormatterTest.php:94-98"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/LoggerTest.php:732-733",
+        "tests/Monolog/LoggerTest.php:717-718"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/BrowserConsoleHandlerTest.php:52-54",
+        "tests/Monolog/Handler/BrowserConsoleHandlerTest.php:165-169"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/Monolog/Handler/ElasticsearchHandlerTest.php:137-137",
+        "tests/Monolog/Handler/ElasticaHandlerTest.php:192-192"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Formatter/JsonFormatterTest.php:234-239",
+        "tests/Monolog/Formatter/JsonFormatterTest.php:219-224"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/FrankenPhpHandlerE2ETest.php:78-79",
+        "tests/Monolog/Handler/FrankenPhpHandlerE2ETest.php:67-68"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/BufferHandlerTest.php:86-88",
+        "tests/Monolog/Handler/FingersCrossedHandlerTest.php:259-261"
+      ]
+    },
+    {
+      "why": "The fragments around `$record = $this->getRecord(` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/Monolog/Formatter/LogstashFormatterTest.php:107-116",
+        "tests/Monolog/Formatter/GelfMessageFormatterTest.php:86-95"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/Monolog/Processor/ProcessIdProcessorTest.php:21-23",
+        "tests/Monolog/Processor/UidProcessorTest.php:21-23"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/Monolog/Handler/BufferHandlerTest.php:65-68",
+        "tests/Monolog/Handler/BufferHandlerTest.php:129-132"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Formatter/JsonFormatterTest.php:341-346",
+        "tests/Monolog/Formatter/NormalizerFormatterTest.php:635-640"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/PsrHandlerTest.php:53-57",
+        "tests/Monolog/Handler/GelfHandlerTest.php:114-118"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/Monolog/Handler/FingersCrossedHandlerTest.php:176-179",
+        "tests/Monolog/Handler/FingersCrossedHandlerTest.php:191-194"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Formatter/LogstashFormatterTest.php:162-164",
+        "tests/Monolog/Formatter/LogstashFormatterTest.php:45-47"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 5; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/Monolog/LoggerTest.php:994-1000",
+        "tests/Monolog/LoggerTest.php:108-114"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/SignalHandlerTest.php:186-188",
+        "tests/Monolog/SignalHandlerTest.php:75-77"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/Monolog/Handler/DeduplicationHandlerTest.php:96-98",
+        "tests/Monolog/Handler/DeduplicationHandlerTest.php:150-152"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:368-370",
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:163-165"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/Monolog/LoggerTest.php:458-461",
+        "tests/Monolog/LoggerTest.php:479-482"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/RedisHandlerTest.php:21-22",
+        "tests/Monolog/Handler/RedisPubSubHandlerTest.php:33-34"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/SlackHandlerTest.php:49-54",
+        "tests/Monolog/Handler/FlowdockHandlerTest.php:47-52"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/Monolog/Handler/SlackWebhookHandlerTest.php:106-108",
+        "tests/Monolog/Handler/SlackWebhookHandlerTest.php:34-36"
+      ]
+    },
+    {
+      "why": "The fragments around `$message = ['message' => $record->message];` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 3.",
+      "occurrences": [
+        "src/Monolog/Formatter/WildfireFormatter.php:72-84",
+        "src/Monolog/Formatter/ChromePHPFormatter.php:55-64"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (14 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/Monolog/Formatter/JsonFormatterTest.php:62-75",
+        "tests/Monolog/Formatter/JsonFormatterTest.php:77-79"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:151-151",
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:152-152"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/InsightOpsHandlerTest.php:41-46",
+        "tests/Monolog/Handler/PushoverHandlerTest.php:72-76"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Formatter/RedactingFormatterTest.php:303-304",
+        "tests/Monolog/Formatter/RedactingFormatterTest.php:133-134"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Formatter/MongoDBFormatterTest.php:235-236",
+        "tests/Monolog/Formatter/MongoDBFormatterTest.php:108-109"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/OverflowHandlerTest.php:84-86",
+        "tests/Monolog/Handler/OverflowHandlerTest.php:80-82"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/Monolog/Utils.php:315-317",
+        "src/Monolog/Utils.php:318-320"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Formatter/LineFormatterTest.php:267-269",
+        "tests/Monolog/Formatter/LineFormatterTest.php:275-277"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:552-556",
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:530-534"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (7 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 3.",
+      "occurrences": [
+        "tests/Monolog/Formatter/LineFormatterTest.php:104-110",
+        "tests/Monolog/Formatter/NormalizerFormatterTest.php:25-28"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/LogMonsterHandlerTest.php:24-26",
+        "tests/Monolog/Handler/BufferHandlerTest.php:129-131"
+      ]
+    },
+    {
+      "why": "The fragments around `touch($old2 = __DIR__.'/Fixtures/foo-'.date('Y-m-d', time() - 2 * 86400).'.rot');` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 6; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:548-556",
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:472-484"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "src/Monolog/Handler/LogglyHandler.php:82-84",
+        "src/Monolog/Handler/TelegramBotHandler.php:282-285"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/Monolog/Handler/RedisPubSubHandlerTest.php:44-48",
+        "tests/Monolog/Handler/RedisPubSubHandlerTest.php:63-67"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Formatter/LogstashFormatterTest.php:116-118",
+        "tests/Monolog/Formatter/LogstashFormatterTest.php:124-126"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/Slack/SlackRecordTest.php:179-182",
+        "tests/Monolog/Handler/Slack/SlackRecordTest.php:173-176"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/Monolog/LoggerTest.php:421-427",
+        "tests/Monolog/LoggerTest.php:352-358"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/FlowdockHandlerTest.php:52-54",
+        "tests/Monolog/Handler/SlackHandlerTest.php:54-54"
+      ]
+    },
+    {
+      "why": "The fragments around `public function __construct(string $eventName, string $secretKey, int|string|Level $level = Level::Error, bool $bubble = true)` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 3.",
+      "occurrences": [
+        "src/Monolog/Handler/IFTTTHandler.php:40-50",
+        "src/Monolog/Handler/LogglyHandler.php:43-59"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/BrowserConsoleHandlerTest.php:127-131",
+        "tests/Monolog/Handler/BrowserConsoleHandlerTest.php:84-88"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:471-473",
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:547-549"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/Monolog/Handler/TelegramBotHandlerTest.php:131-133",
+        "tests/Monolog/Handler/TelegramBotHandlerTest.php:112-114"
+      ]
+    },
+    {
+      "why": "The fragments around `$formatter = new GelfMessageFormatter();` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/Monolog/Formatter/GelfMessageFormatterTest.php:85-95",
+        "tests/Monolog/Formatter/GelfMessageFormatterTest.php:63-73"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 5; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/Monolog/Handler/FingersCrossedHandlerTest.php:178-182",
+        "tests/Monolog/Handler/FingersCrossedHandlerTest.php:162-166"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/Monolog/Handler/SlackHandlerTest.php:80-84",
+        "tests/Monolog/Handler/SlackHandlerTest.php:112-115"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/Monolog/Handler/NativeMailerHandler.php:165-167",
+        "src/Monolog/Handler/NativeMailerHandler.php:151-153"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Formatter/JsonFormatterTest.php:209-210",
+        "tests/Monolog/Formatter/JsonFormatterTest.php:187-188"
+      ]
+    },
+    {
+      "why": "The fragments around `'ban' => [` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Formatter/ScalarFormatterTest.php:66-72",
+        "tests/Monolog/Formatter/NormalizerFormatterTest.php:74-79"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/Monolog/Handler/StreamHandlerTest.php:221-221",
+        "tests/Monolog/Handler/StreamHandlerTest.php:251-251"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/BufferHandlerTest.php:95-98",
+        "tests/Monolog/Handler/BufferHandlerTest.php:90-93"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/AbstractProcessingHandlerTest.php:37-37",
+        "tests/Monolog/Handler/AbstractProcessingHandlerTest.php:27-27"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/Slack/SlackRecordTest.php:204-205",
+        "tests/Monolog/Handler/Slack/SlackRecordTest.php:213-214"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Formatter/LineFormatterTest.php:243-243",
+        "tests/Monolog/Formatter/LineFormatterTest.php:232-232"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/FilterHandlerTest.php:26-28",
+        "tests/Monolog/Handler/FallbackGroupHandlerTest.php:88-90"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (6 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "src/Monolog/Handler/SamplingHandler.php:65-71",
+        "src/Monolog/Handler/FilterHandler.php:122-126"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/InsightOpsHandlerTest.php:62-64",
+        "tests/Monolog/Handler/LogEntriesHandlerTest.php:66-68"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/Slack/SlackRecordTest.php:274-278",
+        "tests/Monolog/Handler/Slack/SlackRecordTest.php:318-322"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/FingersCrossedHandlerTest.php:68-71",
+        "tests/Monolog/Handler/FingersCrossedHandlerTest.php:49-52"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "src/Monolog/Handler/FingersCrossed/ErrorLevelActivationStrategy.php:26-36",
+        "src/Monolog/Handler/NullHandler.php:29-39"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/StreamHandlerTest.php:35-37",
+        "tests/Monolog/Handler/BrowserConsoleHandlerTest.php:86-88"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 13 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Formatter/NormalizerFormatterTest.php:170-174",
+        "tests/Monolog/Formatter/LineFormatterTest.php:248-260"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/Monolog/LoggerTest.php:180-181",
+        "tests/Monolog/LoggerTest.php:207-208"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/AbstractProcessingHandlerTest.php:55-56",
+        "tests/Monolog/Handler/AbstractProcessingHandlerTest.php:64-65"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/BufferHandlerTest.php:151-155",
+        "tests/Monolog/Handler/WhatFailureGroupHandlerTest.php:85-88"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Formatter/LogglyFormatterTest.php:34-36",
+        "tests/Monolog/Formatter/GoogleCloudLoggingFormatterTest.php:45-48"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/Monolog/Handler/ChromePHPHandlerTest.php:34-36",
+        "tests/Monolog/Handler/ChromePHPHandlerTest.php:120-122"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Formatter/NormalizerFormatterTest.php:359-364",
+        "tests/Monolog/Formatter/JsonFormatterTest.php:220-224"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/Monolog/Handler/PushoverHandlerTest.php:84-90",
+        "tests/Monolog/Handler/SlackHandlerTest.php:101-105"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/AbstractHandlerTest.php:28-29",
+        "tests/Monolog/Handler/AbstractHandlerTest.php:33-34"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:547-551",
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:471-477"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/Monolog/Formatter/RedactingFormatterTest.php:315-320",
+        "tests/Monolog/Formatter/LineFormatterTest.php:195-196"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:557-559",
+        "tests/Monolog/Handler/RotatingFileHandlerTest.php:512-514"
+      ]
+    }
+  ],
+  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 200 candidates at this commit and no pair was called CLEARLY OUT by all of them. 5 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing."
+}

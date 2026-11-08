@@ -1,0 +1,1381 @@
+{
+  "name": "gin",
+  "language": "go",
+  "url": "https://github.com/gin-gonic/gin.git",
+  "sha": "0f09c3a9b4626d9fe9979cf4d0521d6ae32ab646",
+  "protocol": {
+    "spec": "docs/specs/corpus.md",
+    "spec_section": "[CORPUS-REGISTER]",
+    "judging_skill": ".agents/skills/judge-clone-pairs/SKILL.md",
+    "preparer_skill": ".agents/skills/clone-register-prepare/SKILL.md"
+  },
+  "clearly_in": [
+    {
+      "why": "The code beginning with `assert.Equal(t, \"form\", b.Name())` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: binding/binding_test.go:876-886 and binding/binding_test.go:1178-1188; 10 and 10 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"\\\"form\\\"\", \"\\\"query\\\"\"]]. Raw core diff:\n--- binding/binding_test.go:876-886\n+++ binding/binding_test.go:1178-1188\n@@ -1 +1 @@\n-\tassert.Equal(t, \"form\", b.Name())\n+\tassert.Equal(t, \"query\", b.Name())\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- binding/binding_test.go:876-886\n+++ binding/binding_test.go:1178-1188\n@@ -1,3 +1,3 @@\n-\tassert.Equal(t, \"form\", b.Name())\n+\tassert.Equal(t, \"query\", b.Name())\n \n \tobj := FooBarStruct{}",
+      "type": "Type II",
+      "occurrences": [
+        "binding/binding_test.go:876-886",
+        "binding/binding_test.go:1178-1188"
+      ]
+    },
+    {
+      "why": "The code beginning with `w = PerformRequest(router, http.MethodGet, \"/path/\")` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: routes_test.go:296-303 and routes_test.go:227-237; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"\\\"/path/\\\"\", \"\\\"/path\\\"\"], [\"StatusNotFound\", \"StatusOK\"], [\"\\\"/path2\\\"\", \"\\\"/path2/\\\"\"], [\"\\\"/path3/\\\"\", \"\\\"/path3\\\"\"], [\"\\\"/path4\\\"\", \"\\\"/path4/\\\"\"]]. Raw core diff:\n--- routes_test.go:296-303\n+++ routes_test.go:227-237\n@@ -1,8 +1,11 @@\n-\tw = PerformRequest(router, http.MethodGet, \"/path/\")\n-\tassert.Equal(t, http.StatusNotFound, w.Code)\n-\tw = PerformRequest(router, http.MethodGet, \"/path2\")\n-\tassert.Equal(t, http.StatusNotFound, w.Code)\n-\tw = PerformRequest(router, http.MethodPost, \"/path3/\")\n-\tassert.Equal(t, http.StatusNotFound, w.Code)\n-\tw = PerformRequest(router, http.MethodPut, \"/path4\")\n-\tassert.Equal(t, http.StatusNotFound, w.Code)\n+\tw = PerformRequest(router, http.MethodGet, \"/path\")\n+\tassert.Equal(t, http.StatusOK, w.Code)\n+\n+\tw = PerformRequest(router, http.MethodGet, \"/path2/\")\n+\tassert.Equal(t, http.StatusOK, w.Code)\n+\n+\tw = PerformRequest(router, http.MethodPost, \"/path3\")\n+\tassert.Equal(t, http.StatusOK, w.Code)\n+\n+\tw = PerformRequest(router, http.MethodPut, \"/path4/\")\n+\tassert.Equal(t, http.StatusOK, w.Code)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- routes_test.go:296-303\n+++ routes_test.go:227-237\n@@ -1,8 +1,11 @@\n-\tw = PerformRequest(router, http.MethodGet, \"/path/\")\n-\tassert.Equal(t, http.StatusNotFound, w.Code)\n-\tw = PerformRequest(router, http.MethodGet, \"/path2\")\n-\tassert.Equal(t, http.StatusNotFound, w.Code)\n-\tw = PerformRequest(router, http.MethodPost, \"/path3/\")\n-\tassert.Equal(t, http.StatusNotFound, w.Code)\n-\tw = PerformRequest(router, http.MethodPut, \"/path4\")\n-\tassert.Equal(t, http.StatusNotFound, w.Code)\n+\tw = PerformRequest(router, http.MethodGet, \"/path\")\n+\tassert.Equal(t, http.StatusOK, w.Code)\n+\n+\tw = PerformRequest(router, http.MethodGet, \"/path2/\")\n+\tassert.Equal(t, http.StatusOK, w.Code)\n+\n+\tw = PerformRequest(router, http.MethodPost, \"/path3\")\n+\tassert.Equal(t, http.StatusOK, w.Code)\n+\n+\tw = PerformRequest(router, http.MethodPut, \"/path4/\")\n+\tassert.Equal(t, http.StatusOK, w.Code)",
+      "type": "Type II",
+      "occurrences": [
+        "routes_test.go:296-303",
+        "routes_test.go:227-237"
+      ]
+    },
+    {
+      "why": "The code beginning with `handleRecovery := func(c *Context, err any) {` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: recovery_test.go:203-214 and recovery_test.go:273-284; 10 and 10 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"CustomRecoveryWithWriter\", \"RecoveryWithWriter\"], [\"buffer\", \"DefaultErrorWriter\"]]. Raw core diff:\n--- recovery_test.go:203-214\n+++ recovery_test.go:273-284\n@@ -5 +5 @@\n-\trouter.Use(CustomRecoveryWithWriter(buffer, handleRecovery))\n+\trouter.Use(RecoveryWithWriter(DefaultErrorWriter, handleRecovery))\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- recovery_test.go:203-214\n+++ recovery_test.go:272-284\n@@ -1,7 +1,8 @@\n+\tDefaultErrorWriter = buffer\n \thandleRecovery := func(c *Context, err any) {\n \t\terrBuffer.WriteString(err.(string))\n \t\tc.AbortWithStatus(http.StatusBadRequest)\n \t}\n-\trouter.Use(CustomRecoveryWithWriter(buffer, handleRecovery))\n+\trouter.Use(RecoveryWithWriter(DefaultErrorWriter, handleRecovery))\n \trouter.GET(\"/recovery\", func(_ *Context) {\n \t\tpanic(\"Oops, Houston, we have a problem\")",
+      "occurrences": [
+        "recovery_test.go:203-214",
+        "recovery_test.go:272-284"
+      ]
+    },
+    {
+      "why": "The code beginning with `func TestFormBindingFail(t *testing.T) {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: binding/binding_test.go:914-922 and binding/binding_test.go:935-943; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"TestFormBindingFail\", \"TestFormPostBindingFail\"], [\"Form\", \"FormPost\"], [\"\\\"form\\\"\", \"\\\"form-urlencoded\\\"\"]]. Raw core diff:\n--- binding/binding_test.go:914-922\n+++ binding/binding_test.go:935-943\n@@ -1,3 +1,3 @@\n-func TestFormBindingFail(t *testing.T) {\n-\tb := Form\n-\tassert.Equal(t, \"form\", b.Name())\n+func TestFormPostBindingFail(t *testing.T) {\n+\tb := FormPost\n+\tassert.Equal(t, \"form-urlencoded\", b.Name())\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- binding/binding_test.go:914-922\n+++ binding/binding_test.go:935-943\n@@ -1,5 +1,5 @@\n-func TestFormBindingFail(t *testing.T) {\n-\tb := Form\n-\tassert.Equal(t, \"form\", b.Name())\n+func TestFormPostBindingFail(t *testing.T) {\n+\tb := FormPost\n+\tassert.Equal(t, \"form-urlencoded\", b.Name())\n \n \tobj := FooBarStruct{}",
+      "type": "Type II",
+      "occurrences": [
+        "binding/binding_test.go:914-922",
+        "binding/binding_test.go:935-943"
+      ]
+    },
+    {
+      "why": "The code beginning with `b := Query` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: binding/binding_test.go:1205-1214 and binding/binding_test.go:1037-1046; 9 and 9 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"Query\", \"Form\"], [\"\\\"query\\\"\", \"\\\"form\\\"\"], [\"FooStructForBoolType\", \"FooStructForTimeTypeFailLocation\"]]. Raw core diff:\n--- binding/binding_test.go:1205-1214\n+++ binding/binding_test.go:1037-1046\n@@ -1,2 +1,2 @@\n-\tb := Query\n-\tassert.Equal(t, \"query\", b.Name())\n+\tb := Form\n+\tassert.Equal(t, \"form\", b.Name())\n@@ -4 +4 @@\n-\tobj := FooStructForBoolType{}\n+\tobj := FooStructForTimeTypeFailLocation{}\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- binding/binding_test.go:1205-1214\n+++ binding/binding_test.go:1037-1046\n@@ -1,6 +1,6 @@\n-\tb := Query\n-\tassert.Equal(t, \"query\", b.Name())\n+\tb := Form\n+\tassert.Equal(t, \"form\", b.Name())\n \n-\tobj := FooStructForBoolType{}\n+\tobj := FooStructForTimeTypeFailLocation{}\n \treq := requestWithBody(method, path, body)\n \tif method == http.MethodPost {",
+      "type": "Type II",
+      "occurrences": [
+        "binding/binding_test.go:1205-1214",
+        "binding/binding_test.go:1037-1046"
+      ]
+    },
+    {
+      "why": "The code beginning with `func testFormBinding(t *testing.T, method, path, badPath, body, badBody string) {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: binding/binding_test.go:879-884 and binding/binding_test.go:863-868; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- binding/binding_test.go:874-892\n+++ binding/binding_test.go:858-872\n@@ -1,7 +1,7 @@\n-func testFormBinding(t *testing.T, method, path, badPath, body, badBody string) {\n+func testFormBindingEmbeddedStruct(t *testing.T, method, path, badPath, body, badBody string) {\n \tb := Form\n \tassert.Equal(t, \"form\", b.Name())\n \n-\tobj := FooBarStruct{}\n+\tobj := QueryTest{}\n \treq := requestWithBody(method, path, body)\n \tif method == http.MethodPost {\n@@ -10,10 +10,6 @@\n \terr := b.Bind(req, &obj)\n \trequire.NoError(t, err)\n-\tassert.Equal(t, \"bar\", obj.Foo)\n-\tassert.Equal(t, \"foo\", obj.Bar)\n-\n-\tobj = FooBarStruct{}\n-\treq = requestWithBody(method, badPath, badBody)\n-\terr = JSON.Bind(req, &obj)\n-\trequire.Error(t, err)\n+\tassert.Equal(t, 1, obj.Page)\n+\tassert.Equal(t, 2, obj.Size)\n+\tassert.Equal(t, \"test-appkey\", obj.Appkey)\n }",
+      "occurrences": [
+        "binding/binding_test.go:874-892",
+        "binding/binding_test.go:858-872"
+      ]
+    },
+    {
+      "why": "The code beginning with `func TestMiddlewareNoMethodDisabled(t *testing.T) {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: middleware_test.go:118-157 and middleware_test.go:81-116; 33 and 33 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"TestMiddlewareNoMethodDisabled\", \"TestMiddlewareNoMethodEnabled\"], [\"false\", \"true\"], [\"StatusNotFound\", \"StatusMethodNotAllowed\"], [\"\\\"AC X DB\\\"\", \"\\\"ACEGHFDB\\\"\"]]. Raw core diff:\n--- middleware_test.go:118-157\n+++ middleware_test.go:81-116\n@@ -1 +1 @@\n-func TestMiddlewareNoMethodDisabled(t *testing.T) {\n+func TestMiddlewareNoMethodEnabled(t *testing.T) {\n@@ -4,4 +4 @@\n-\n-\t// NoMethod disabled\n-\trouter.HandleMethodNotAllowed = false\n-\n+\trouter.HandleMethodNotAllowed = true\n@@ -33 +29,0 @@\n-\n@@ -38,2 +34,2 @@\n-\tassert.Equal(t, http.StatusNotFound, w.Code)\n-\tassert.Equal(t, \"AC X DB\", signature)\n+\tassert.Equal(t, http.StatusMethodNotAllowed, w.Code)\n+\tassert.Equal(t, \"ACEGHFDB\", signature)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- middleware_test.go:118-157\n+++ middleware_test.go:81-116\n@@ -1,9 +1,6 @@\n-func TestMiddlewareNoMethodDisabled(t *testing.T) {\n+func TestMiddlewareNoMethodEnabled(t *testing.T) {\n \tsignature := \"\"\n \trouter := New()\n-\n-\t// NoMethod disabled\n-\trouter.HandleMethodNotAllowed = false\n-\n+\trouter.HandleMethodNotAllowed = true\n \trouter.Use(func(c *Context) {\n \t\tsignature += \"A\"\n@@ -31,10 +28,9 @@\n \t\tsignature += \" XX \"\n \t})\n-\n \t// RUN\n \tw := PerformRequest(router, http.MethodGet, \"/\")\n \n \t// TEST\n-\tassert.Equal(t, http.StatusNotFound, w.Code)\n-\tassert.Equal(t, \"AC X DB\", signature)\n+\tassert.Equal(t, http.StatusMethodNotAllowed, w.Code)\n+\tassert.Equal(t, \"ACEGHFDB\", signature)\n }",
+      "type": "Type II",
+      "occurrences": [
+        "middleware_test.go:118-157",
+        "middleware_test.go:81-116"
+      ]
+    },
+    {
+      "why": "The code beginning with `func TestMappingCustomSliceUri(t *testing.T) {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: binding/form_mapping_test.go:616-663 and binding/form_mapping_test.go:865-912; 42 and 42 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"TestMappingCustomSliceUri\", \"TestMappingCustomSliceUnmarshalTextUri\"], [\"customPath\", \"customPathUnmarshalText\"], [\"`uri:\\\"path\\\"`\", \"`uri:\\\"path,parser=encoding.TextUnmarshaler\\\"`\"], [\"TestMappingCustomSliceForm\", \"TestMappingCustomSliceUnmarshalTextForm\"], [\"`form:\\\"path\\\"`\", \"`form:\\\"path,parser=encoding.TextUnmarshaler\\\"`\"], [\"TestMappingCustomSliceStopsWhenError\", \"TestMappingCustomSliceUnmarshalTextStopsWhenError\"], [\"TestMappingCustomSliceOfSliceUri\", \"TestMappingCustomSliceOfSliceUnmarshalTextUri\"], [\"`uri:\\\"path\\\" collection_format:\\\"csv\\\"`\", \"`uri:\\\"path,parser=encoding.TextUnmarshaler\\\" collection_format:\\\"csv\\\"`\"], [\"TestMappingCustomSliceOfSliceForm\", \"TestMappingCustomSliceOfSliceUnmarshalTextForm\"], [\"`form:\\\"path\\\" collection_format:\\\"csv\\\"`\", \"`form:\\\"path,parser=encoding.TextUnmarshaler\\\" collection_format:\\\"csv\\\"`\"]]. Raw core diff:\n--- binding/form_mapping_test.go:616-663\n+++ binding/form_mapping_test.go:865-912\n@@ -1 +1 @@\n-func TestMappingCustomSliceUri(t *testing.T) {\n+func TestMappingCustomSliceUnmarshalTextUri(t *testing.T) {\n@@ -3 +3 @@\n-\t\tFileData customPath `uri:\"path\"`\n+\t\tFileData customPathUnmarshalText `uri:\"path,parser=encoding.TextUnmarshaler\"`\n@@ -12 +12 @@\n-func TestMappingCustomSliceForm(t *testing.T) {\n+func TestMappingCustomSliceUnmarshalTextForm(t *testing.T) {\n@@ -14 +14 @@\n-\t\tFileData customPath `form:\"path\"`\n+\t\tFileData customPathUnmarshalText `form:\"path,parser=encoding.TextUnmarshaler\"`\n@@ -23 +23 @@\n-func TestMappingCustomSliceStopsWhenError(t *testing.T) {\n+func TestMappingCustomSliceUnmarshalTextStopsWhenError(t *testing.T) {\n@@ -25 +25 @@\n-\t\tFileData customPath `form:\"path\"`\n+\t\tFileData customPathUnmarshalText `form:\"path,parser=encoding.TextUnmarshaler\"`\n@@ -32 +32 @@\n-func TestMappingCustomSliceOfSliceUri(t *testing.T) {\n+func TestMappingCustomSliceOfSliceUnmarshalTextUri(t *testing.T) {\n@@ -34 +34 @@\n-\t\tFileData []customPath `uri:\"path\" collection_format:\"csv\"`\n+\t\tFileData []customPathUnmarshalText `uri:\"path,parser=encoding.TextUnmarshaler\" collection_format:\"csv\"`\n@@ -38 +38 @@\n-\tassert.Equal(t, []customPath{{\"bar\", \"foo\"}, {\"bar\", \"foo\", \"spam\"}}, s.FileData)\n+\tassert.Equal(t, []customPathUnmarshalText{{\"bar\", \"foo\"}, {\"bar\", \"foo\", \"spam\"}}, s.FileData)\n@@ -41 +41 @@\n-func TestMappingCustomSliceOfSliceForm(t *testing.T) {\n+func TestMappingCustomSliceOfSliceUnmarshalTextForm(t *testing.T) {\n@@ -43 +43 @@\n-\t\tFileData []customPath `form:\"path\" collection_format:\"csv\"`\n+\t\tFileData []customPathUnmarshalText `form:\"path,parser=encoding.TextUnmarshaler\" collection_format:\"csv\"`\n@@ -47 +47 @@\n-\tassert.Equal(t, []customPath{{\"bar\", \"foo\"}, {\"bar\", \"foo\", \"spam\"}}, s.FileData)\n+\tassert.Equal(t, []customPathUnmarshalText{{\"bar\", \"foo\"}, {\"bar\", \"foo\", \"spam\"}}, s.FileData)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- binding/form_mapping_test.go:616-663\n+++ binding/form_mapping_test.go:865-912\n@@ -1,5 +1,5 @@\n-func TestMappingCustomSliceUri(t *testing.T) {\n+func TestMappingCustomSliceUnmarshalTextUri(t *testing.T) {\n \tvar s struct {\n-\t\tFileData customPath `uri:\"path\"`\n+\t\tFileData customPathUnmarshalText `uri:\"path,parser=encoding.TextUnmarshaler\"`\n \t}\n \terr := mappingByPtr(&s, formSource{\"path\": {`bar/foo`}}, \"uri\")\n@@ -10,7 +10,7 @@\n }\n \n-func TestMappingCustomSliceForm(t *testing.T) {\n+func TestMappingCustomSliceUnmarshalTextForm(t *testing.T) {\n \tvar s struct {\n-\t\tFileData customPath `form:\"path\"`\n+\t\tFileData customPathUnmarshalText `form:\"path,parser=encoding.TextUnmarshaler\"`\n \t}\n \terr := mappingByPtr(&s, formSource{\"path\": {`bar/foo`}}, \"form\")\n@@ -21,7 +21,7 @@\n }\n \n-func TestMappingCustomSliceStopsWhenError(t *testing.T) {\n+func TestMappingCustomSliceUnmarshalTextStopsWhenError(t *testing.T) {\n \tvar s struct {\n-\t\tFileData customPath `form:\"path\"`\n+\t\tFileData customPathUnmarshalText `form:\"path,parser=encoding.TextUnmarshaler\"`\n \t}\n \terr := mappingByPtr(&s, formSource{\"path\": {\"invalid\"}}, \"form\")\n@@ -30,19 +30,19 @@\n }\n \n-func TestMappingCustomSliceOfSliceUri(t *testing.T) {\n+func TestMappingCustomSliceOfSliceUnmarshalTextUri(t *testing.T) {\n \tvar s struct {\n-\t\tFileData []customPath `uri:\"path\" collection_format:\"csv\"`\n+\t\tFileData []customPathUnmarshalText `uri:\"path,parser=encoding.TextUnmarshaler\" collection_format:\"csv\"`\n \t}\n \terr := mappingByPtr(&s, formSource{\"path\": {\"bar/foo,bar/foo/spam\"}}, \"uri\")\n \trequire.NoError(t, err)\n-\tassert.Equal(t, []customPath{{\"bar\", \"foo\"}, {\"bar\", \"foo\", \"spam\"}}, s.FileData)\n+\tassert.Equal(t, []customPathUnmarshalText{{\"bar\", \"foo\"}, {\"bar\", \"foo\", \"spam\"}}, s.FileData)\n }\n \n-func TestMappingCustomSliceOfSliceForm(t *testing.T) {\n+func TestMappingCustomSliceOfSliceUnmarshalTextForm(t *testing.T) {\n \tvar s struct {\n-\t\tFileData []customPath `form:\"path\" collection_format:\"csv\"`\n+\t\tFileData []customPathUnmarshalText `form:\"path,parser=encoding.TextUnmarshaler\" collection_format:\"csv\"`\n \t}\n \terr := mappingByPtr(&s, formSource{\"path\": {\"bar/foo,bar/foo/spam\"}}, \"form\")\n \trequire.NoError(t, err)\n-\tassert.Equal(t, []customPath{{\"bar\", \"foo\"}, {\"bar\", \"foo\", \"spam\"}}, s.FileData)\n+\tassert.Equal(t, []customPathUnmarshalText{{\"bar\", \"foo\"}, {\"bar\", \"foo\", \"spam\"}}, s.FileData)\n }",
+      "type": "Type II",
+      "occurrences": [
+        "binding/form_mapping_test.go:616-663",
+        "binding/form_mapping_test.go:865-912"
+      ]
+    },
+    {
+      "why": "The code beginning with `func TestRouteParamsByNameWithExtraSlash(t *testing.T) {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: routes_test.go:372-388 and routes_test.go:339-355; 14 and 14 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- routes_test.go:366-396\n+++ routes_test.go:334-363\n@@ -1,8 +1,7 @@\n-func TestRouteParamsByNameWithExtraSlash(t *testing.T) {\n+func TestRouteParamsByName(t *testing.T) {\n \tname := \"\"\n \tlastName := \"\"\n \twild := \"\"\n \trouter := New()\n-\trouter.RemoveExtraSlash = true\n \trouter.GET(\"/test/:name/:last_name/*wild\", func(c *Context) {\n \t\tname = c.Params.ByName(\"name\")\n@@ -23,5 +22,5 @@\n \t})\n \n-\tw := PerformRequest(router, http.MethodGet, \"//test//john//smith//is//super//great\")\n+\tw := PerformRequest(router, http.MethodGet, \"/test/john/smith/is/super/great\")\n \n \tassert.Equal(t, http.StatusOK, w.Code)",
+      "occurrences": [
+        "routes_test.go:366-396",
+        "routes_test.go:334-363"
+      ]
+    },
+    {
+      "why": "The code beginning with `c, err := net.Dial(\"tcp\", listener.Addr().String())` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: gin_integration_test.go:326-336 and gin_integration_test.go:359-369; 10 and 10 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "gin_integration_test.go:326-336",
+        "gin_integration_test.go:359-369"
+      ]
+    },
+    {
+      "why": "The code beginning with `var s structFull` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: binding/form_mapping_benchmark_test.go:33-43 and binding/form_mapping_benchmark_test.go:56-66; 10 and 10 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"structFull\", \"structName\"]]. Raw core diff:\n--- binding/form_mapping_benchmark_test.go:33-43\n+++ binding/form_mapping_benchmark_test.go:56-66\n@@ -1 +1 @@\n-\tvar s structFull\n+\tvar s structName\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- binding/form_mapping_benchmark_test.go:33-43\n+++ binding/form_mapping_benchmark_test.go:56-66\n@@ -1,3 +1,3 @@\n-\tvar s structFull\n+\tvar s structName\n \tfor b.Loop() {\n \t\terr := mapForm(&s, form)",
+      "type": "Type II",
+      "occurrences": [
+        "binding/form_mapping_benchmark_test.go:33-43",
+        "binding/form_mapping_benchmark_test.go:56-66"
+      ]
+    },
+    {
+      "why": "The code beginning with `router.GET(\"/test/:name/:last_name/*wild\", func(c *Context) {` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: routes_test.go:339-355 and routes_test.go:372-388; 14 and 14 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "routes_test.go:339-355",
+        "routes_test.go:372-388"
+      ]
+    },
+    {
+      "why": "The code beginning with `{` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: context_test.go:2760-2770 and context_test.go:2742-2754; 11 and 11 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"bodyB\", \"bodyA\"], [\"Error\", \"NoError\"], [\"NotEqual\", \"Equal\"], [\"NoError\", \"Error\"], [\"Equal\", \"NotEqual\"]]. Raw core diff:\n--- context_test.go:2760-2770\n+++ context_test.go:2742-2754\n@@ -4 +4 @@\n-\t\t\t\thttp.MethodPost, \"http://example.com\", strings.NewReader(tt.bodyB),\n+\t\t\t\thttp.MethodPost, \"http://example.com\", strings.NewReader(tt.bodyA),\n@@ -5,0 +6,2 @@\n+\t\t\t// When it binds to typeA and typeB, it finds the body is\n+\t\t\t// not typeB but typeA.\n@@ -7,2 +9,2 @@\n-\t\t\trequire.Error(t, c.ShouldBindBodyWith(&objA, tt.bindingA))\n-\t\t\tassert.NotEqual(t, typeA{\"FOO\"}, objA)\n+\t\t\trequire.NoError(t, c.ShouldBindBodyWith(&objA, tt.bindingA))\n+\t\t\tassert.Equal(t, typeA{\"FOO\"}, objA)\n@@ -10,2 +12,2 @@\n-\t\t\trequire.NoError(t, c.ShouldBindBodyWith(&objB, tt.bindingB))\n-\t\t\tassert.Equal(t, typeB{\"BAR\"}, objB)\n+\t\t\trequire.Error(t, c.ShouldBindBodyWith(&objB, tt.bindingB))\n+\t\t\tassert.NotEqual(t, typeB{\"BAR\"}, objB)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- context_test.go:2757-2771\n+++ context_test.go:2742-2754\n@@ -1,15 +1,13 @@\n-\t\t{\n-\t\t\t// When it binds to typeA and typeB, it finds the body is\n-\t\t\t// not typeA but typeB.\n \t\t\tw := httptest.NewRecorder()\n \t\t\tc, _ := CreateTestContext(w)\n \t\t\tc.Request, _ = http.NewRequest(\n-\t\t\t\thttp.MethodPost, \"http://example.com\", strings.NewReader(tt.bodyB),\n+\t\t\t\thttp.MethodPost, \"http://example.com\", strings.NewReader(tt.bodyA),\n \t\t\t)\n+\t\t\t// When it binds to typeA and typeB, it finds the body is\n+\t\t\t// not typeB but typeA.\n \t\t\tobjA := typeA{}\n-\t\t\trequire.Error(t, c.ShouldBindBodyWith(&objA, tt.bindingA))\n-\t\t\tassert.NotEqual(t, typeA{\"FOO\"}, objA)\n+\t\t\trequire.NoError(t, c.ShouldBindBodyWith(&objA, tt.bindingA))\n+\t\t\tassert.Equal(t, typeA{\"FOO\"}, objA)\n \t\t\tobjB := typeB{}\n-\t\t\trequire.NoError(t, c.ShouldBindBodyWith(&objB, tt.bindingB))\n-\t\t\tassert.Equal(t, typeB{\"BAR\"}, objB)\n-\t\t}\n+\t\t\trequire.Error(t, c.ShouldBindBodyWith(&objB, tt.bindingB))\n+\t\t\tassert.NotEqual(t, typeB{\"BAR\"}, objB)",
+      "occurrences": [
+        "context_test.go:2757-2771",
+        "context_test.go:2742-2754"
+      ]
+    },
+    {
+      "why": "The code beginning with `assert.Contains(t, buffer.String(), \"panic recovered\")` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: recovery_test.go:285-296 and recovery_test.go:62-73; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"StatusBadRequest\", \"StatusInternalServerError\"]]. Raw core diff:\n--- recovery_test.go:285-296\n+++ recovery_test.go:62-73\n@@ -11 +11 @@\n-\tassert.Equal(t, http.StatusBadRequest, w.Code)\n+\tassert.Equal(t, http.StatusInternalServerError, w.Code)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- recovery_test.go:285-296\n+++ recovery_test.go:62-73\n@@ -9,4 +9,4 @@\n \tw = PerformRequest(router, http.MethodGet, \"/recovery\")\n \t// TEST\n-\tassert.Equal(t, http.StatusBadRequest, w.Code)\n+\tassert.Equal(t, http.StatusInternalServerError, w.Code)\n \tassert.Contains(t, buffer.String(), \"GET /recovery\")",
+      "type": "Type II",
+      "occurrences": [
+        "recovery_test.go:285-296",
+        "recovery_test.go:62-73"
+      ]
+    },
+    {
+      "why": "The code beginning with `func TestLogger(t *testing.T) {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: logger_test.go:26-84 and logger_test.go:90-148; 48 and 48 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- logger_test.go:22-84\n+++ logger_test.go:86-148\n@@ -1,6 +1,6 @@\n-func TestLogger(t *testing.T) {\n+func TestLoggerWithConfig(t *testing.T) {\n \tbuffer := new(strings.Builder)\n \trouter := New()\n-\trouter.Use(LoggerWithWriter(buffer))\n+\trouter.Use(LoggerWithConfig(LoggerConfig{Output: buffer}))\n \trouter.GET(\"/example\", func(c *Context) {})\n \trouter.POST(\"/example\", func(c *Context) {})",
+      "occurrences": [
+        "logger_test.go:22-84",
+        "logger_test.go:86-148"
+      ]
+    },
+    {
+      "why": "The code beginning with `func (c *Context) JSON(code int, obj any) {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: context.go:1259-1279 and context.go:1288-1305; 12 and 12 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"JSON\", \"YAML\"], [\"AsciiJSON\", \"TOML\"], [\"PureJSON\", \"ProtoBuf\"], [\"XML\", \"BSON\"]]. Raw core diff:\n--- context.go:1259-1279\n+++ context.go:1288-1305\n@@ -1,2 +1,2 @@\n-func (c *Context) JSON(code int, obj any) {\n-\tc.Render(code, render.JSON{Data: obj})\n+func (c *Context) YAML(code int, obj any) {\n+\tc.Render(code, render.YAML{Data: obj})\n@@ -5,4 +5,3 @@\n-// AsciiJSON serializes the given struct as JSON into the response body with unicode to ASCII string.\n-// It also sets the Content-Type as \"application/json\".\n-func (c *Context) AsciiJSON(code int, obj any) {\n-\tc.Render(code, render.AsciiJSON{Data: obj})\n+// TOML serializes the given struct as TOML into the response body.\n+func (c *Context) TOML(code int, obj any) {\n+\tc.Render(code, render.TOML{Data: obj})\n@@ -11,4 +10,3 @@\n-// PureJSON serializes the given struct as JSON into the response body.\n-// PureJSON, unlike JSON, does not replace special html characters with their unicode entities.\n-func (c *Context) PureJSON(code int, obj any) {\n-\tc.Render(code, render.PureJSON{Data: obj})\n+// ProtoBuf serializes the given struct as ProtoBuf into the response body.\n+func (c *Context) ProtoBuf(code int, obj any) {\n+\tc.Render(code, render.ProtoBuf{Data: obj})\n@@ -17,4 +15,3 @@\n-// XML serializes the given struct as XML into the response body.\n-// It also sets the Content-Type as \"application/xml\".\n-func (c *Context) XML(code int, obj any) {\n-\tc.Render(code, render.XML{Data: obj})\n+// BSON serializes the given struct as BSON into the response body.\n+func (c *Context) BSON(code int, obj any) {\n+\tc.Render(code, render.BSON{Data: obj})\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- context.go:1259-1279\n+++ context.go:1288-1305\n@@ -1,21 +1,18 @@\n-func (c *Context) JSON(code int, obj any) {\n-\tc.Render(code, render.JSON{Data: obj})\n+func (c *Context) YAML(code int, obj any) {\n+\tc.Render(code, render.YAML{Data: obj})\n }\n \n-// AsciiJSON serializes the given struct as JSON into the response body with unicode to ASCII string.\n-// It also sets the Content-Type as \"application/json\".\n-func (c *Context) AsciiJSON(code int, obj any) {\n-\tc.Render(code, render.AsciiJSON{Data: obj})\n+// TOML serializes the given struct as TOML into the response body.\n+func (c *Context) TOML(code int, obj any) {\n+\tc.Render(code, render.TOML{Data: obj})\n }\n \n-// PureJSON serializes the given struct as JSON into the response body.\n-// PureJSON, unlike JSON, does not replace special html characters with their unicode entities.\n-func (c *Context) PureJSON(code int, obj any) {\n-\tc.Render(code, render.PureJSON{Data: obj})\n+// ProtoBuf serializes the given struct as ProtoBuf into the response body.\n+func (c *Context) ProtoBuf(code int, obj any) {\n+\tc.Render(code, render.ProtoBuf{Data: obj})\n }\n \n-// XML serializes the given struct as XML into the response body.\n-// It also sets the Content-Type as \"application/xml\".\n-func (c *Context) XML(code int, obj any) {\n-\tc.Render(code, render.XML{Data: obj})\n+// BSON serializes the given struct as BSON into the response body.\n+func (c *Context) BSON(code int, obj any) {\n+\tc.Render(code, render.BSON{Data: obj})\n }",
+      "type": "Type II",
+      "occurrences": [
+        "context.go:1259-1279",
+        "context.go:1288-1305"
+      ]
+    },
+    {
+      "why": "The code beginning with `return fmt.Sprintf(\"[FORMATTER TEST] %v | %3d | %13v | %15s | %-7s %s\\n%s\",` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: logger_test.go:196-204 and logger_test.go:161-169; 9 and 9 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"\\\"[FORMATTER TEST] %v | %3d | %13v | %15s | %-7s %s\\\\n%s\\\"\", \"\\\"[FORMATTER TEST] %v | %3d | %13v | %15s | %-7s %#v\\\\n%s\\\"\"]]. Raw core diff:\n--- logger_test.go:196-204\n+++ logger_test.go:161-169\n@@ -1,9 +1,9 @@\n-\t\t\treturn fmt.Sprintf(\"[FORMATTER TEST] %v | %3d | %13v | %15s | %-7s %s\\n%s\",\n-\t\t\t\tparam.TimeStamp.Format(\"2006/01/02 - 15:04:05\"),\n-\t\t\t\tparam.StatusCode,\n-\t\t\t\tparam.Latency,\n-\t\t\t\tparam.ClientIP,\n-\t\t\t\tparam.Method,\n-\t\t\t\tparam.Path,\n-\t\t\t\tparam.ErrorMessage,\n-\t\t\t)\n+\t\treturn fmt.Sprintf(\"[FORMATTER TEST] %v | %3d | %13v | %15s | %-7s %#v\\n%s\",\n+\t\t\tparam.TimeStamp.Format(\"2006/01/02 - 15:04:05\"),\n+\t\t\tparam.StatusCode,\n+\t\t\tparam.Latency,\n+\t\t\tparam.ClientIP,\n+\t\t\tparam.Method,\n+\t\t\tparam.Path,\n+\t\t\tparam.ErrorMessage,\n+\t\t)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- logger_test.go:196-204\n+++ logger_test.go:161-169\n@@ -1,9 +1,9 @@\n-\t\t\treturn fmt.Sprintf(\"[FORMATTER TEST] %v | %3d | %13v | %15s | %-7s %s\\n%s\",\n-\t\t\t\tparam.TimeStamp.Format(\"2006/01/02 - 15:04:05\"),\n-\t\t\t\tparam.StatusCode,\n-\t\t\t\tparam.Latency,\n-\t\t\t\tparam.ClientIP,\n-\t\t\t\tparam.Method,\n-\t\t\t\tparam.Path,\n-\t\t\t\tparam.ErrorMessage,\n-\t\t\t)\n+\t\treturn fmt.Sprintf(\"[FORMATTER TEST] %v | %3d | %13v | %15s | %-7s %#v\\n%s\",\n+\t\t\tparam.TimeStamp.Format(\"2006/01/02 - 15:04:05\"),\n+\t\t\tparam.StatusCode,\n+\t\t\tparam.Latency,\n+\t\t\tparam.ClientIP,\n+\t\t\tparam.Method,\n+\t\t\tparam.Path,\n+\t\t\tparam.ErrorMessage,\n+\t\t)",
+      "type": "Type II",
+      "occurrences": [
+        "logger_test.go:196-204",
+        "logger_test.go:161-169"
+      ]
+    },
+    {
+      "why": "The code beginning with `func TestRenderHTMLDebugFiles(t *testing.T) {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: render/render_test.go:664-678 and render/render_test.go:685-699; 13 and 13 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- render/render_test.go:659-678\n+++ render/render_test.go:680-699\n@@ -1,7 +1,7 @@\n-func TestRenderHTMLDebugFiles(t *testing.T) {\n+func TestRenderHTMLDebugGlob(t *testing.T) {\n \tw := httptest.NewRecorder()\n \thtmlRender := HTMLDebug{\n-\t\tFiles:      []string{\"../testdata/template/hello.tmpl\"},\n-\t\tGlob:       \"\",\n+\t\tFiles:      nil,\n+\t\tGlob:       \"../testdata/template/hello*\",\n \t\tFileSystem: nil,\n \t\tPatterns:   nil,",
+      "occurrences": [
+        "render/render_test.go:659-678",
+        "render/render_test.go:680-699"
+      ]
+    },
+    {
+      "why": "The code beginning with `func TestLoadHTMLFSFuncMap(t *testing.T) {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: gin_test.go:417-435 and gin_test.go:350-368; 17 and 17 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"TestLoadHTMLFSFuncMap\", \"TestLoadHTMLFSDebugMode\"], [\"TestMode\", \"DebugMode\"], [\"\\\"/raw\\\"\", \"\\\"/test\\\"\"], [\"\\\"Date: 2017/07/01\\\"\", \"\\\"<h1>Hello world</h1>\\\"\"]]. Raw core diff:\n--- gin_test.go:417-435\n+++ gin_test.go:350-368\n@@ -1 +1 @@\n-func TestLoadHTMLFSFuncMap(t *testing.T) {\n+func TestLoadHTMLFSDebugMode(t *testing.T) {\n@@ -4 +4 @@\n-\t\tTestMode,\n+\t\tDebugMode,\n@@ -12 +12 @@\n-\tres, err := http.Get(ts.URL + \"/raw\")\n+\tres, err := http.Get(ts.URL + \"/test\")\n@@ -18 +18 @@\n-\tassert.Equal(t, \"Date: 2017/07/01\", string(resp))\n+\tassert.Equal(t, \"<h1>Hello world</h1>\", string(resp))\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- gin_test.go:417-435\n+++ gin_test.go:350-368\n@@ -1,6 +1,6 @@\n-func TestLoadHTMLFSFuncMap(t *testing.T) {\n+func TestLoadHTMLFSDebugMode(t *testing.T) {\n \tts := setupHTMLFiles(\n \t\tt,\n-\t\tTestMode,\n+\t\tDebugMode,\n \t\tfalse,\n \t\tfunc(router *Engine) {\n@@ -10,5 +10,5 @@\n \tdefer ts.Close()\n \n-\tres, err := http.Get(ts.URL + \"/raw\")\n+\tres, err := http.Get(ts.URL + \"/test\")\n \tif err != nil {\n \t\tt.Error(err)\n@@ -16,4 +16,4 @@\n \n \tresp, _ := io.ReadAll(res.Body)\n-\tassert.Equal(t, \"Date: 2017/07/01\", string(resp))\n+\tassert.Equal(t, \"<h1>Hello world</h1>\", string(resp))\n }",
+      "type": "Type II",
+      "occurrences": [
+        "gin_test.go:417-435",
+        "gin_test.go:350-368"
+      ]
+    },
+    {
+      "why": "The code beginning with `func TestContextAbortWithStatusPureJSON(t *testing.T) {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: context_test.go:2076-2100 and context_test.go:2050-2074; 20 and 20 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"TestContextAbortWithStatusPureJSON\", \"TestContextAbortWithStatusJSON\"], [\"AbortWithStatusPureJSON\", \"AbortWithStatusJSON\"]]. Raw core diff:\n--- context_test.go:2076-2100\n+++ context_test.go:2050-2074\n@@ -1 +1 @@\n-func TestContextAbortWithStatusPureJSON(t *testing.T) {\n+func TestContextAbortWithStatusJSON(t *testing.T) {\n@@ -10 +10 @@\n-\tc.AbortWithStatusPureJSON(http.StatusUnsupportedMediaType, in)\n+\tc.AbortWithStatusJSON(http.StatusUnsupportedMediaType, in)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- context_test.go:2076-2100\n+++ context_test.go:2050-2074\n@@ -1,3 +1,3 @@\n-func TestContextAbortWithStatusPureJSON(t *testing.T) {\n+func TestContextAbortWithStatusJSON(t *testing.T) {\n \tw := httptest.NewRecorder()\n \tc, _ := CreateTestContext(w)\n@@ -8,5 +8,5 @@\n \tin.Foo = \"fooValue\"\n \n-\tc.AbortWithStatusPureJSON(http.StatusUnsupportedMediaType, in)\n+\tc.AbortWithStatusJSON(http.StatusUnsupportedMediaType, in)\n \n \tassert.Equal(t, abortIndex, c.index)",
+      "type": "Type II",
+      "occurrences": [
+        "context_test.go:2076-2100",
+        "context_test.go:2050-2074"
+      ]
+    },
+    {
+      "why": "The code beginning with `func TestIssue4818_skippedNodesOverflow_Panic(t *testing.T) {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: routes_test.go:881-896 and routes_test.go:912-927; 15 and 15 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- routes_test.go:880-906\n+++ routes_test.go:911-942\n@@ -1,3 +1,3 @@\n-func TestIssue4818_skippedNodesOverflow_Panic(t *testing.T) {\n+func TestIssue4818_MethodNotAllowedStillWorks(t *testing.T) {\n \trouter := New()\n \trouter.HandleMethodNotAllowed = true\n@@ -17,11 +17,16 @@\n \trouter.OPTIONS(\"/b/clients/:p1/g/:p4\", h)\n \n-\treq := httptest.NewRequest(http.MethodPost, \"/b/clients/42\", nil)\n+\t// PATCH /b/clients/42/g is registered under GET but not under PATCH\n+\t// -> HandleMethodNotAllowed should yield 405 with an Allow header.\n+\treq := httptest.NewRequest(http.MethodPatch, \"/b/clients/42/g\", nil)\n \tw := httptest.NewRecorder()\n \trouter.ServeHTTP(w, req)\n \n-\t// Must not panic; path matches no route, so 404 is the correct outcome.\n-\tif w.Code != http.StatusNotFound {\n-\t\tt.Fatalf(\"expected 404, got %d (a panic would have aborted the test)\", w.Code)\n+\tif w.Code != http.StatusMethodNotAllowed {\n+\t\tt.Fatalf(\"expected 405, got %d\", w.Code)\n+\t}\n+\tallow := w.Header().Get(\"Allow\")\n+\tif allow == \"\" {\n+\t\tt.Fatal(\"expected Allow header to be set for 405\")\n \t}\n }",
+      "occurrences": [
+        "routes_test.go:880-906",
+        "routes_test.go:911-942"
+      ]
+    },
+    {
+      "why": "The code beginning with `type msgpackBinding struct{}` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: binding/msgpack.go:17-29 and binding/yaml.go:15-27; 10 and 10 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"msgpackBinding\", \"yamlBinding\"], [\"\\\"msgpack\\\"\", \"\\\"yaml\\\"\"], [\"decodeMsgPack\", \"decodeYAML\"]]. Raw core diff:\n--- binding/msgpack.go:17-29\n+++ binding/yaml.go:15-27\n@@ -1 +1 @@\n-type msgpackBinding struct{}\n+type yamlBinding struct{}\n@@ -3,2 +3,2 @@\n-func (msgpackBinding) Name() string {\n-\treturn \"msgpack\"\n+func (yamlBinding) Name() string {\n+\treturn \"yaml\"\n@@ -7,2 +7,2 @@\n-func (msgpackBinding) Bind(req *http.Request, obj any) error {\n-\treturn decodeMsgPack(req.Body, obj)\n+func (yamlBinding) Bind(req *http.Request, obj any) error {\n+\treturn decodeYAML(req.Body, obj)\n@@ -11,2 +11,2 @@\n-func (msgpackBinding) BindBody(body []byte, obj any) error {\n-\treturn decodeMsgPack(bytes.NewReader(body), obj)\n+func (yamlBinding) BindBody(body []byte, obj any) error {\n+\treturn decodeYAML(bytes.NewReader(body), obj)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- binding/msgpack.go:17-29\n+++ binding/yaml.go:15-27\n@@ -1,13 +1,13 @@\n-type msgpackBinding struct{}\n+type yamlBinding struct{}\n \n-func (msgpackBinding) Name() string {\n-\treturn \"msgpack\"\n+func (yamlBinding) Name() string {\n+\treturn \"yaml\"\n }\n \n-func (msgpackBinding) Bind(req *http.Request, obj any) error {\n-\treturn decodeMsgPack(req.Body, obj)\n+func (yamlBinding) Bind(req *http.Request, obj any) error {\n+\treturn decodeYAML(req.Body, obj)\n }\n \n-func (msgpackBinding) BindBody(body []byte, obj any) error {\n-\treturn decodeMsgPack(bytes.NewReader(body), obj)\n+func (yamlBinding) BindBody(body []byte, obj any) error {\n+\treturn decodeYAML(bytes.NewReader(body), obj)\n }",
+      "type": "Type II",
+      "occurrences": [
+        "binding/msgpack.go:17-29",
+        "binding/yaml.go:15-27"
+      ]
+    },
+    {
+      "why": "The code beginning with `func (xmlBinding) BindBody(body []byte, obj any) error {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: binding/xml.go:24-34 and binding/toml.go:25-35; 10 and 10 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"xmlBinding\", \"tomlBinding\"], [\"decodeXML\", \"decodeToml\"], [\"xml\", \"toml\"]]. Raw core diff:\n--- binding/xml.go:24-34\n+++ binding/toml.go:25-35\n@@ -1,2 +1,2 @@\n-func (xmlBinding) BindBody(body []byte, obj any) error {\n-\treturn decodeXML(bytes.NewReader(body), obj)\n+func (tomlBinding) BindBody(body []byte, obj any) error {\n+\treturn decodeToml(bytes.NewReader(body), obj)\n@@ -5,2 +5,2 @@\n-func decodeXML(r io.Reader, obj any) error {\n-\tdecoder := xml.NewDecoder(r)\n+func decodeToml(r io.Reader, obj any) error {\n+\tdecoder := toml.NewDecoder(r)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- binding/xml.go:24-34\n+++ binding/toml.go:25-35\n@@ -1,8 +1,8 @@\n-func (xmlBinding) BindBody(body []byte, obj any) error {\n-\treturn decodeXML(bytes.NewReader(body), obj)\n+func (tomlBinding) BindBody(body []byte, obj any) error {\n+\treturn decodeToml(bytes.NewReader(body), obj)\n }\n \n-func decodeXML(r io.Reader, obj any) error {\n-\tdecoder := xml.NewDecoder(r)\n+func decodeToml(r io.Reader, obj any) error {\n+\tdecoder := toml.NewDecoder(r)\n \tif err := decoder.Decode(obj); err != nil {\n \t\treturn err",
+      "type": "Type II",
+      "occurrences": [
+        "binding/xml.go:24-34",
+        "binding/toml.go:25-35"
+      ]
+    },
+    {
+      "why": "The code beginning with `testRoot, _ := os.Getwd()` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: routes_test.go:475-485 and routes_test.go:440-450; 10 and 10 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "routes_test.go:475-485",
+        "routes_test.go:440-450"
+      ]
+    },
+    {
+      "why": "The code beginning with `func TestLoadHTMLGlobTestMode(t *testing.T) {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: gin_test.go:123-141 and gin_test.go:143-161; 17 and 17 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"TestLoadHTMLGlobTestMode\", \"TestLoadHTMLGlobReleaseMode\"], [\"TestMode\", \"ReleaseMode\"]]. Raw core diff:\n--- gin_test.go:123-141\n+++ gin_test.go:143-161\n@@ -1 +1 @@\n-func TestLoadHTMLGlobTestMode(t *testing.T) {\n+func TestLoadHTMLGlobReleaseMode(t *testing.T) {\n@@ -4 +4 @@\n-\t\tTestMode,\n+\t\tReleaseMode,\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- gin_test.go:123-141\n+++ gin_test.go:143-161\n@@ -1,6 +1,6 @@\n-func TestLoadHTMLGlobTestMode(t *testing.T) {\n+func TestLoadHTMLGlobReleaseMode(t *testing.T) {\n \tts := setupHTMLFiles(\n \t\tt,\n-\t\tTestMode,\n+\t\tReleaseMode,\n \t\tfalse,\n \t\tfunc(router *Engine) {",
+      "type": "Type II",
+      "occurrences": [
+        "gin_test.go:123-141",
+        "gin_test.go:143-161"
+      ]
+    },
+    {
+      "why": "The code beginning with `idxc := rb[0]` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: tree.go:877-887 and tree.go:861-871; 11 and 11 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n--- tree.go:877-887\n+++ tree.go:861-871\n@@ -1,9 +1,7 @@\n-\t\t\t\t\tidxc := rb[0]\n-\t\t\t\t\tfor i, c := range []byte(n.indices) {\n-\t\t\t\t\t\tif c == idxc {\n-\t\t\t\t\t\t\tif out := n.children[i].findCaseInsensitivePathRec(\n-\t\t\t\t\t\t\t\tpath, ciPath, rb, fixTrailingSlash,\n-\t\t\t\t\t\t\t); out != nil {\n-\t\t\t\t\t\t\t\treturn out\n-\t\t\t\t\t\t\t}\n-\t\t\t\t\t\t\tbreak\n+\t\t\t\tidxc := rb[0]\n+\t\t\t\tfor i, c := range []byte(n.indices) {\n+\t\t\t\t\tif c == idxc {\n+\t\t\t\t\t\tif out := n.children[i].findCaseInsensitivePathRec(\n+\t\t\t\t\t\t\tpath, ciPath, rb, fixTrailingSlash,\n+\t\t\t\t\t\t); out != nil {\n+\t\t\t\t\t\t\treturn out\n@@ -10,0 +9 @@\n+\t\t\t\t\t\tbreak\n@@ -11,0 +11 @@\n+\t\t\t\t}\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tree.go:877-887\n+++ tree.go:861-871\n@@ -1,11 +1,11 @@\n-\t\t\t\t\tidxc := rb[0]\n-\t\t\t\t\tfor i, c := range []byte(n.indices) {\n-\t\t\t\t\t\tif c == idxc {\n-\t\t\t\t\t\t\tif out := n.children[i].findCaseInsensitivePathRec(\n-\t\t\t\t\t\t\t\tpath, ciPath, rb, fixTrailingSlash,\n-\t\t\t\t\t\t\t); out != nil {\n-\t\t\t\t\t\t\t\treturn out\n-\t\t\t\t\t\t\t}\n-\t\t\t\t\t\t\tbreak\n+\t\t\t\tidxc := rb[0]\n+\t\t\t\tfor i, c := range []byte(n.indices) {\n+\t\t\t\t\tif c == idxc {\n+\t\t\t\t\t\tif out := n.children[i].findCaseInsensitivePathRec(\n+\t\t\t\t\t\t\tpath, ciPath, rb, fixTrailingSlash,\n+\t\t\t\t\t\t); out != nil {\n+\t\t\t\t\t\t\treturn out\n \t\t\t\t\t\t}\n+\t\t\t\t\t\tbreak\n \t\t\t\t\t}\n+\t\t\t\t}",
+      "type": "Type I",
+      "occurrences": [
+        "tree.go:877-887",
+        "tree.go:861-871"
+      ]
+    },
+    {
+      "why": "The code beginning with `assert.Equal(t, \"application/json; charset=utf-8\", w1.Header().Get(\"Content-Type\"))` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: render/render_test.go:87-99 and render/render_test.go:124-136; 11 and 11 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"\\\"application/json; charset=utf-8\\\"\", \"\\\"application/javascript; charset=utf-8\\\"\"], [\"SecureJSON\", \"JsonpJSON\"], [\"\\\"while(1);\\\"\", \"\\\"x\\\"\"], [\"\\\"while(1);[{\\\\\\\"foo\\\\\\\":\\\\\\\"bar\\\\\\\"},{\\\\\\\"bar\\\\\\\":\\\\\\\"foo\\\\\\\"}]\\\"\", \"\\\"x([{\\\\\\\"foo\\\\\\\":\\\\\\\"bar\\\\\\\"},{\\\\\\\"bar\\\\\\\":\\\\\\\"foo\\\\\\\"}]);\\\"\"]]. Raw core diff:\n--- render/render_test.go:87-99\n+++ render/render_test.go:124-136\n@@ -1 +1 @@\n-\tassert.Equal(t, \"application/json; charset=utf-8\", w1.Header().Get(\"Content-Type\"))\n+\tassert.Equal(t, \"application/javascript; charset=utf-8\", w1.Header().Get(\"Content-Type\"))\n@@ -10 +10 @@\n-\terr2 := (SecureJSON{\"while(1);\", datas}).Render(w2)\n+\terr2 := (JsonpJSON{\"x\", datas}).Render(w2)\n@@ -12,2 +12,2 @@\n-\tassert.Equal(t, \"while(1);[{\\\"foo\\\":\\\"bar\\\"},{\\\"bar\\\":\\\"foo\\\"}]\", w2.Body.String())\n-\tassert.Equal(t, \"application/json; charset=utf-8\", w2.Header().Get(\"Content-Type\"))\n+\tassert.Equal(t, \"x([{\\\"foo\\\":\\\"bar\\\"},{\\\"bar\\\":\\\"foo\\\"}]);\", w2.Body.String())\n+\tassert.Equal(t, \"application/javascript; charset=utf-8\", w2.Header().Get(\"Content-Type\"))\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- render/render_test.go:87-99\n+++ render/render_test.go:124-136\n@@ -1,3 +1,3 @@\n-\tassert.Equal(t, \"application/json; charset=utf-8\", w1.Header().Get(\"Content-Type\"))\n+\tassert.Equal(t, \"application/javascript; charset=utf-8\", w1.Header().Get(\"Content-Type\"))\n \n \tw2 := httptest.NewRecorder()\n@@ -8,6 +8,6 @@\n \t}}\n \n-\terr2 := (SecureJSON{\"while(1);\", datas}).Render(w2)\n+\terr2 := (JsonpJSON{\"x\", datas}).Render(w2)\n \trequire.NoError(t, err2)\n-\tassert.Equal(t, \"while(1);[{\\\"foo\\\":\\\"bar\\\"},{\\\"bar\\\":\\\"foo\\\"}]\", w2.Body.String())\n-\tassert.Equal(t, \"application/json; charset=utf-8\", w2.Header().Get(\"Content-Type\"))\n+\tassert.Equal(t, \"x([{\\\"foo\\\":\\\"bar\\\"},{\\\"bar\\\":\\\"foo\\\"}]);\", w2.Body.String())\n+\tassert.Equal(t, \"application/javascript; charset=utf-8\", w2.Header().Get(\"Content-Type\"))",
+      "type": "Type II",
+      "occurrences": [
+        "render/render_test.go:87-99",
+        "render/render_test.go:124-136"
+      ]
+    },
+    {
+      "why": "The code beginning with `func TestContextRenderRedirectWithAbsolutePath(t *testing.T) {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: context_test.go:1782-1792 and context_test.go:1794-1804; 9 and 9 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"TestContextRenderRedirectWithAbsolutePath\", \"TestContextRenderRedirectWith201\"], [\"StatusFound\", \"StatusCreated\"], [\"\\\"http://google.com\\\"\", \"\\\"/resource\\\"\"]]. Raw core diff:\n--- context_test.go:1782-1792\n+++ context_test.go:1794-1804\n@@ -1 +1 @@\n-func TestContextRenderRedirectWithAbsolutePath(t *testing.T) {\n+func TestContextRenderRedirectWith201(t *testing.T) {\n@@ -6 +6 @@\n-\tc.Redirect(http.StatusFound, \"http://google.com\")\n+\tc.Redirect(http.StatusCreated, \"/resource\")\n@@ -9,2 +9,2 @@\n-\tassert.Equal(t, http.StatusFound, w.Code)\n-\tassert.Equal(t, \"http://google.com\", w.Header().Get(\"Location\"))\n+\tassert.Equal(t, http.StatusCreated, w.Code)\n+\tassert.Equal(t, \"/resource\", w.Header().Get(\"Location\"))\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- context_test.go:1782-1792\n+++ context_test.go:1794-1804\n@@ -1,11 +1,11 @@\n-func TestContextRenderRedirectWithAbsolutePath(t *testing.T) {\n+func TestContextRenderRedirectWith201(t *testing.T) {\n \tw := httptest.NewRecorder()\n \tc, _ := CreateTestContext(w)\n \n \tc.Request, _ = http.NewRequest(http.MethodPost, \"http://example.com\", nil)\n-\tc.Redirect(http.StatusFound, \"http://google.com\")\n+\tc.Redirect(http.StatusCreated, \"/resource\")\n \tc.Writer.WriteHeaderNow()\n \n-\tassert.Equal(t, http.StatusFound, w.Code)\n-\tassert.Equal(t, \"http://google.com\", w.Header().Get(\"Location\"))\n+\tassert.Equal(t, http.StatusCreated, w.Code)\n+\tassert.Equal(t, \"/resource\", w.Header().Get(\"Location\"))\n }",
+      "type": "Type II",
+      "occurrences": [
+        "context_test.go:1782-1792",
+        "context_test.go:1794-1804"
+      ]
+    },
+    {
+      "why": "The code beginning with `var rv rune` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: tree.go:848-871 and tree.go:764-799; 22 and 22 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n--- tree.go:848-871\n+++ tree.go:764-799\n@@ -1,0 +2,4 @@\n+\n+\t\t\t\t// Find rune start.\n+\t\t\t\t// Runes are up to 4 byte long,\n+\t\t\t\t// -4 would definitely be another rune.\n@@ -4,0 +9 @@\n+\t\t\t\t\t\t// read rune from cached path\n@@ -9,0 +15 @@\n+\t\t\t\t// Calculate lowercase bytes of current rune\n@@ -11,0 +18,2 @@\n+\n+\t\t\t\t// Skip already processed bytes\n@@ -15,0 +24 @@\n+\t\t\t\t\t// Lowercase matches\n@@ -16,0 +26,3 @@\n+\t\t\t\t\t\t// must use a recursive approach since both the\n+\t\t\t\t\t\t// uppercase byte and the lowercase byte might exist\n+\t\t\t\t\t\t// as an index\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tree.go:848-871\n+++ tree.go:764-799\n@@ -1,6 +1,11 @@\n \t\t\t\tvar rv rune\n+\n+\t\t\t\t// Find rune start.\n+\t\t\t\t// Runes are up to 4 byte long,\n+\t\t\t\t// -4 would definitely be another rune.\n \t\t\t\tvar off int\n \t\t\t\tfor max_ := min(npLen, 3); off < max_; off++ {\n \t\t\t\t\tif i := npLen - off; utf8.RuneStart(oldPath[i]) {\n+\t\t\t\t\t\t// read rune from cached path\n \t\t\t\t\t\trv, _ = utf8.DecodeRuneInString(oldPath[i:])\n \t\t\t\t\t\tbreak\n@@ -8,11 +13,18 @@\n \t\t\t\t}\n \n+\t\t\t\t// Calculate lowercase bytes of current rune\n \t\t\t\tlo := unicode.ToLower(rv)\n \t\t\t\tutf8.EncodeRune(rb[:], lo)\n+\n+\t\t\t\t// Skip already processed bytes\n \t\t\t\trb = shiftNRuneBytes(rb, off)\n \n \t\t\t\tidxc := rb[0]\n \t\t\t\tfor i, c := range []byte(n.indices) {\n+\t\t\t\t\t// Lowercase matches\n \t\t\t\t\tif c == idxc {\n+\t\t\t\t\t\t// must use a recursive approach since both the\n+\t\t\t\t\t\t// uppercase byte and the lowercase byte might exist\n+\t\t\t\t\t\t// as an index\n \t\t\t\t\t\tif out := n.children[i].findCaseInsensitivePathRec(\n \t\t\t\t\t\t\tpath, ciPath, rb, fixTrailingSlash,",
+      "type": "Type I",
+      "occurrences": [
+        "tree.go:848-871",
+        "tree.go:764-799"
+      ]
+    },
+    {
+      "why": "The code beginning with `func TestContextBindHeader(t *testing.T) {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: context_test.go:2431-2451 and context_test.go:2601-2621; 18 and 18 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"TestContextBindHeader\", \"TestContextShouldBindHeader\"], [\"BindHeader\", \"ShouldBindHeader\"]]. Raw core diff:\n--- context_test.go:2431-2451\n+++ context_test.go:2601-2621\n@@ -1 +1 @@\n-func TestContextBindHeader(t *testing.T) {\n+func TestContextShouldBindHeader(t *testing.T) {\n@@ -16 +16 @@\n-\trequire.NoError(t, c.BindHeader(&testHeader))\n+\trequire.NoError(t, c.ShouldBindHeader(&testHeader))\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- context_test.go:2431-2451\n+++ context_test.go:2601-2621\n@@ -1,3 +1,3 @@\n-func TestContextBindHeader(t *testing.T) {\n+func TestContextShouldBindHeader(t *testing.T) {\n \tw := httptest.NewRecorder()\n \tc, _ := CreateTestContext(w)\n@@ -14,5 +14,5 @@\n \t}\n \n-\trequire.NoError(t, c.BindHeader(&testHeader))\n+\trequire.NoError(t, c.ShouldBindHeader(&testHeader))\n \tassert.Equal(t, 8000, testHeader.Rate)\n \tassert.Equal(t, \"music\", testHeader.Domain)",
+      "type": "Type II",
+      "occurrences": [
+        "context_test.go:2431-2451",
+        "context_test.go:2601-2621"
+      ]
+    },
+    {
+      "why": "The code beginning with `instance := htmlRender.Instance(\"hello.tmpl\", map[string]any{` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: render/render_test.go:669-677 and render/render_test.go:622-630; 7 and 7 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"\\\"hello.tmpl\\\"\", \"\\\"t\\\"\"], [\"\\\"thinkerou\\\"\", \"\\\"alexandernyquist\\\"\"], [\"\\\"<h1>Hello thinkerou</h1>\\\"\", \"\\\"Hello alexandernyquist\\\"\"]]. Raw core diff:\n--- render/render_test.go:669-677\n+++ render/render_test.go:622-630\n@@ -1,2 +1,2 @@\n-\tinstance := htmlRender.Instance(\"hello.tmpl\", map[string]any{\n-\t\t\"name\": \"thinkerou\",\n+\tinstance := htmlRender.Instance(\"t\", map[string]any{\n+\t\t\"name\": \"alexandernyquist\",\n@@ -8 +8 @@\n-\tassert.Equal(t, \"<h1>Hello thinkerou</h1>\", w.Body.String())\n+\tassert.Equal(t, \"Hello alexandernyquist\", w.Body.String())\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- render/render_test.go:669-677\n+++ render/render_test.go:622-630\n@@ -1,4 +1,4 @@\n-\tinstance := htmlRender.Instance(\"hello.tmpl\", map[string]any{\n-\t\t\"name\": \"thinkerou\",\n+\tinstance := htmlRender.Instance(\"t\", map[string]any{\n+\t\t\"name\": \"alexandernyquist\",\n \t})\n \n@@ -6,4 +6,4 @@\n \n \trequire.NoError(t, err)\n-\tassert.Equal(t, \"<h1>Hello thinkerou</h1>\", w.Body.String())\n+\tassert.Equal(t, \"Hello alexandernyquist\", w.Body.String())\n \tassert.Equal(t, \"text/html; charset=utf-8\", w.Header().Get(\"Content-Type\"))",
+      "type": "Type II",
+      "occurrences": [
+        "render/render_test.go:669-677",
+        "render/render_test.go:622-630"
+      ]
+    },
+    {
+      "why": "The code beginning with `tree := &node{}` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tree_test.go:1073-1082 and tree_test.go:1033-1042; 9 and 9 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tree_test.go:1067-1091\n+++ tree_test.go:1023-1052\n@@ -1,8 +1,12 @@\n \ttree := &node{}\n \n-\t// Another variant: param route + static route under same prefix\n+\t// Setup routes that create a node with both static children and a wildcard child.\n+\t// This configuration previously caused a panic (\"invalid node type\") in\n+\t// findCaseInsensitivePathRec because it accessed children[0] instead of the\n+\t// wildcard child (which is always at the end of the children array).\n+\t// See: https://github.com/gin-gonic/gin/issues/2959\n \troutes := [...]string{\n-\t\t\"/prefix/:id\",\n-\t\t\"/prefix/xxx\",\n+\t\t\"/aa/aa\",\n+\t\t\"/:bb/aa\",\n \t}\n \n@@ -16,10 +20,11 @@\n \t}\n \n-\t// Should NOT panic even for paths that don't match any route\n-\tout, found := tree.findCaseInsensitivePath(\"/prefix/a/b/c\", true)\n+\t// These lookups previously panicked with \"invalid node type\" because\n+\t// findCaseInsensitivePathRec picked children[0] (a static node) instead\n+\t// of the wildcard child at the end of the array.\n+\tout, found := tree.findCaseInsensitivePath(\"/aa\", true)\n \tif found {\n-\t\tt.Errorf(\"Expected no match for '/prefix/a/b/c', but got: %s\", string(out))\n+\t\tt.Errorf(\"Expected no match for '/aa', but got: %s\", string(out))\n \t}\n \n-\t// Exact match should still work\n-\tout, found = tree.findCaseInsensitivePath(\"/prefix/xxx\", true)\n+\tout, found = tree.findCaseInsensitivePath(\"/aa/aa/aa/aa\", true)",
+      "occurrences": [
+        "tree_test.go:1067-1091",
+        "tree_test.go:1023-1052"
+      ]
+    },
+    {
+      "why": "The code beginning with `func testFormBindingForTimeNotFormat(t *testing.T, method, path, badPath, body, badBody string) {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: binding/binding_test.go:1000-1016 and binding/binding_test.go:982-998; 15 and 15 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"testFormBindingForTimeNotFormat\", \"testFormBindingForTimeNotUnixFormat\"], [\"FooStructForTimeTypeNotFormat\", \"FooStructForTimeTypeNotUnixFormat\"]]. Raw core diff:\n--- binding/binding_test.go:1000-1016\n+++ binding/binding_test.go:982-998\n@@ -1 +1 @@\n-func testFormBindingForTimeNotFormat(t *testing.T, method, path, badPath, body, badBody string) {\n+func testFormBindingForTimeNotUnixFormat(t *testing.T, method, path, badPath, body, badBody string) {\n@@ -5 +5 @@\n-\tobj := FooStructForTimeTypeNotFormat{}\n+\tobj := FooStructForTimeTypeNotUnixFormat{}\n@@ -13 +13 @@\n-\tobj = FooStructForTimeTypeNotFormat{}\n+\tobj = FooStructForTimeTypeNotUnixFormat{}\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- binding/binding_test.go:1000-1016\n+++ binding/binding_test.go:982-998\n@@ -1,7 +1,7 @@\n-func testFormBindingForTimeNotFormat(t *testing.T, method, path, badPath, body, badBody string) {\n+func testFormBindingForTimeNotUnixFormat(t *testing.T, method, path, badPath, body, badBody string) {\n \tb := Form\n \tassert.Equal(t, \"form\", b.Name())\n \n-\tobj := FooStructForTimeTypeNotFormat{}\n+\tobj := FooStructForTimeTypeNotUnixFormat{}\n \treq := requestWithBody(method, path, body)\n \tif method == http.MethodPost {\n@@ -11,5 +11,5 @@\n \trequire.Error(t, err)\n \n-\tobj = FooStructForTimeTypeNotFormat{}\n+\tobj = FooStructForTimeTypeNotUnixFormat{}\n \treq = requestWithBody(method, badPath, badBody)\n \terr = JSON.Bind(req, &obj)",
+      "type": "Type II",
+      "occurrences": [
+        "binding/binding_test.go:1000-1016",
+        "binding/binding_test.go:982-998"
+      ]
+    },
+    {
+      "why": "The code beginning with `func TestResponseWriterHijackAfterWrite(t *testing.T) {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: response_writer_test.go:186-201 and response_writer_test.go:249-263; 15 and 15 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n--- response_writer_test.go:186-201\n+++ response_writer_test.go:249-263\n@@ -10 +9,0 @@\n-\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- response_writer_test.go:166-221\n+++ response_writer_test.go:225-280\n@@ -1,6 +1,6 @@\n-func TestResponseWriterHijackAfterWrite(t *testing.T) {\n+func TestResponseWriterHijackAfterWriteHeaderNow(t *testing.T) {\n \ttests := []struct {\n \t\tname                      string\n-\t\taction                    func(w ResponseWriter) error // Action to perform before hijacking\n+\t\taction                    func(w ResponseWriter) error\n \t\texpectWrittenBeforeHijack bool\n \t\texpectHijackSuccess       bool\n@@ -9,14 +9,18 @@\n \t}{\n \t\t{\n-\t\t\tname:                      \"hijack before write should succeed\",\n-\t\t\taction:                    func(w ResponseWriter) error { return nil },\n-\t\t\texpectWrittenBeforeHijack: false,\n-\t\t\texpectHijackSuccess:       true,\n-\t\t\texpectWrittenAfterHijack:  true, // Hijack itself marks the writer as written\n+\t\t\tname: \"hijack after WriteHeaderNow only should succeed (websocket pattern)\",\n+\t\t\taction: func(w ResponseWriter) error {\n+\t\t\t\tw.WriteHeaderNow() // Simulate websocket.Accept() behavior\n+\t\t\t\treturn nil\n+\t\t\t},\n+\t\t\texpectWrittenBeforeHijack: true,\n+\t\t\texpectHijackSuccess:       true, // NEW BEHAVIOR: allow hijack after just header write\n+\t\t\texpectWrittenAfterHijack:  true,\n \t\t\texpectError:               nil,\n \t\t},\n \t\t{\n-\t\t\tname: \"hijack after write should fail\",\n+\t\t\tname: \"hijack after WriteHeaderNow + Write should fail\",\n \t\t\taction: func(w ResponseWriter) error {\n+\t\t\t\tw.WriteHeaderNow()\n \t\t\t\t_, err := w.Write([]byte(\"test\"))\n \t\t\t\treturn err\n@@ -28,5 +32,4 @@\n \t\t},\n \t}\n-\n \tfor _, tc := range tests {\n \t\tt.Run(tc.name, func(t *testing.T) {\n@@ -36,18 +39,15 @@\n \t\t\tw := ResponseWriter(writer)\n \n-\t\t\t// Check initial state\n-\t\t\tassert.False(t, w.Written(), \"should not be written initially\")\n-\n-\t\t\t// Perform pre-hijack action\n \t\t\trequire.NoError(t, tc.action(w), \"unexpected error during pre-hijack action\")\n \n-\t\t\t// Check state before hijacking\n \t\t\tassert.Equal(t, tc.expectWrittenBeforeHijack, w.Written(), \"unexpected w.Written() state before hijack\")\n \n-\t\t\t// Attempt to hijack\n \t\t\t_, _, hijackErr := w.Hijack()\n \n-\t\t\t// Check results\n-\t\t\trequire.ErrorIs(t, hijackErr, tc.expectError, \"unexpected error from Hijack()\")\n+\t\t\tif tc.expectError == nil {\n+\t\t\t\trequire.NoError(t, hijackErr, \"expected hijack to succeed\")\n+\t\t\t} else {\n+\t\t\t\trequire.ErrorIs(t, hijackErr, tc.expectError, \"unexpected error from Hijack()\")\n+\t\t\t}\n \t\t\tassert.Equal(t, tc.expectHijackSuccess, hijacker.hijacked, \"unexpected hijacker.hijacked state\")\n \t\t\tassert.Equal(t, tc.expectWrittenAfterHijack, w.Written(), \"unexpected w.Written() state after hijack\")",
+      "occurrences": [
+        "response_writer_test.go:166-221",
+        "response_writer_test.go:225-280"
+      ]
+    },
+    {
+      "why": "The code beginning with `compareFunc(t, router.allNoRoute[1], middleware0)` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: gin_test.go:510-518 and gin_test.go:589-597; 7 and 7 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"allNoRoute\", \"allNoMethod\"], [\"noRoute\", \"noMethod\"]]. Raw core diff:\n--- gin_test.go:510-518\n+++ gin_test.go:589-597\n@@ -1 +1 @@\n-\tcompareFunc(t, router.allNoRoute[1], middleware0)\n+\tcompareFunc(t, router.allNoMethod[1], middleware0)\n@@ -4 +4 @@\n-\tassert.Len(t, router.allNoRoute, 3)\n+\tassert.Len(t, router.allNoMethod, 3)\n@@ -6 +6 @@\n-\tassert.Len(t, router.noRoute, 1)\n+\tassert.Len(t, router.noMethod, 1)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- gin_test.go:510-518\n+++ gin_test.go:589-597\n@@ -1,8 +1,8 @@\n-\tcompareFunc(t, router.allNoRoute[1], middleware0)\n+\tcompareFunc(t, router.allNoMethod[1], middleware0)\n \n \trouter.Use(middleware1)\n-\tassert.Len(t, router.allNoRoute, 3)\n+\tassert.Len(t, router.allNoMethod, 3)\n \tassert.Len(t, router.Handlers, 2)\n-\tassert.Len(t, router.noRoute, 1)\n+\tassert.Len(t, router.noMethod, 1)\n \n \tcompareFunc(t, router.Handlers[0], middleware2)",
+      "type": "Type II",
+      "occurrences": [
+        "gin_test.go:510-518",
+        "gin_test.go:589-597"
+      ]
+    },
+    {
+      "why": "The code beginning with `router := New()` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: gin_integration_test.go:69-80 and gin_integration_test.go:213-224; 9 and 9 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"\\\"http://localhost:8080/example\\\"\", \"\\\"http://localhost:3123/example\\\"\"], [\"\\\":8080\\\"\", \"\\\":3123\\\"\"]]. Raw core diff:\n--- gin_integration_test.go:69-80\n+++ gin_integration_test.go:213-224\n@@ -8 +8 @@\n-\terr := waitForServerReady(\"http://localhost:8080/example\", 10)\n+\terr := waitForServerReady(\"http://localhost:3123/example\", 10)\n@@ -11,2 +11,2 @@\n-\trequire.Error(t, router.Run(\":8080\"))\n-\ttestRequest(t, \"http://localhost:8080/example\")\n+\trequire.Error(t, router.Run(\":3123\"))\n+\ttestRequest(t, \"http://localhost:3123/example\")\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- gin_integration_test.go:69-80\n+++ gin_integration_test.go:213-224\n@@ -6,7 +6,7 @@\n \n \t// Wait for server to be ready with exponential backoff\n-\terr := waitForServerReady(\"http://localhost:8080/example\", 10)\n+\terr := waitForServerReady(\"http://localhost:3123/example\", 10)\n \trequire.NoError(t, err, \"server should start successfully\")\n \n-\trequire.Error(t, router.Run(\":8080\"))\n-\ttestRequest(t, \"http://localhost:8080/example\")\n+\trequire.Error(t, router.Run(\":3123\"))\n+\ttestRequest(t, \"http://localhost:3123/example\")",
+      "type": "Type II",
+      "occurrences": [
+        "gin_integration_test.go:69-80",
+        "gin_integration_test.go:213-224"
+      ]
+    },
+    {
+      "why": "The code beginning with `func TestMappingCustomUnmarshalParamHexWithFormTag(t *testing.T) {` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: binding/form_mapping_test.go:508-531 and binding/form_mapping_test.go:756-777; 20 and 20 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"TestMappingCustomUnmarshalParamHexWithFormTag\", \"TestMappingCustomUnmarshalTextHexUri\"], [\"Foo\", \"Field\"], [\"customUnmarshalParamHex\", \"customUnmarshalTextHex\"], [\"`form:\\\"foo\\\"`\", \"`uri:\\\"field,parser=encoding.TextUnmarshaler\\\"`\"], [\"\\\"foo\\\"\", \"\\\"field\\\"\"], [\"\\\"form\\\"\", \"\\\"uri\\\"\"], [\"TestMappingCustomUnmarshalParamHexWithURITag\", \"TestMappingCustomUnmarshalTextHexForm\"], [\"`uri:\\\"foo\\\"`\", \"`form:\\\"field,parser=encoding.TextUnmarshaler\\\"`\"], [\"\\\"uri\\\"\", \"\\\"form\\\"\"], [\"TestMappingCustomUnmarshalParamHexDefault\", \"TestMappingCustomUnmarshalTextHexDefault\"], [\"`form:\\\"foo,default=f5\\\"`\", \"`form:\\\"field,default=f5,parser=encoding.TextUnmarshaler\\\"`\"]]. Raw core diff:\n--- binding/form_mapping_test.go:508-531\n+++ binding/form_mapping_test.go:756-777\n@@ -1 +1 @@\n-func TestMappingCustomUnmarshalParamHexWithFormTag(t *testing.T) {\n+func TestMappingCustomUnmarshalTextHexUri(t *testing.T) {\n@@ -3 +3 @@\n-\t\tFoo customUnmarshalParamHex `form:\"foo\"`\n+\t\tField customUnmarshalTextHex `uri:\"field,parser=encoding.TextUnmarshaler\"`\n@@ -5 +5 @@\n-\terr := mappingByPtr(&s, formSource{\"foo\": {`f5`}}, \"form\")\n+\terr := mappingByPtr(&s, formSource{\"field\": {`f5`}}, \"uri\")\n@@ -7,2 +7 @@\n-\n-\tassert.EqualValues(t, 245, s.Foo)\n+\tassert.EqualValues(t, 245, s.Field)\n@@ -11 +10 @@\n-func TestMappingCustomUnmarshalParamHexWithURITag(t *testing.T) {\n+func TestMappingCustomUnmarshalTextHexForm(t *testing.T) {\n@@ -13 +12 @@\n-\t\tFoo customUnmarshalParamHex `uri:\"foo\"`\n+\t\tField customUnmarshalTextHex `form:\"field,parser=encoding.TextUnmarshaler\"`\n@@ -15 +14 @@\n-\terr := mappingByPtr(&s, formSource{\"foo\": {`f5`}}, \"uri\")\n+\terr := mappingByPtr(&s, formSource{\"field\": {`f5`}}, \"form\")\n@@ -17,2 +16 @@\n-\n-\tassert.EqualValues(t, 245, s.Foo)\n+\tassert.EqualValues(t, 245, s.Field)\n@@ -21 +19 @@\n-func TestMappingCustomUnmarshalParamHexDefault(t *testing.T) {\n+func TestMappingCustomUnmarshalTextHexDefault(t *testing.T) {\n@@ -23 +21 @@\n-\t\tFoo customUnmarshalParamHex `form:\"foo,default=f5\"`\n+\t\tField customUnmarshalTextHex `form:\"field,default=f5,parser=encoding.TextUnmarshaler\"`\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- binding/form_mapping_test.go:508-542\n+++ binding/form_mapping_test.go:756-787\n@@ -1,33 +1,30 @@\n-func TestMappingCustomUnmarshalParamHexWithFormTag(t *testing.T) {\n+func TestMappingCustomUnmarshalTextHexUri(t *testing.T) {\n \tvar s struct {\n-\t\tFoo customUnmarshalParamHex `form:\"foo\"`\n+\t\tField customUnmarshalTextHex `uri:\"field,parser=encoding.TextUnmarshaler\"`\n \t}\n-\terr := mappingByPtr(&s, formSource{\"foo\": {`f5`}}, \"form\")\n+\terr := mappingByPtr(&s, formSource{\"field\": {`f5`}}, \"uri\")\n \trequire.NoError(t, err)\n-\n-\tassert.EqualValues(t, 245, s.Foo)\n+\tassert.EqualValues(t, 245, s.Field)\n }\n \n-func TestMappingCustomUnmarshalParamHexWithURITag(t *testing.T) {\n+func TestMappingCustomUnmarshalTextHexForm(t *testing.T) {\n \tvar s struct {\n-\t\tFoo customUnmarshalParamHex `uri:\"foo\"`\n+\t\tField customUnmarshalTextHex `form:\"field,parser=encoding.TextUnmarshaler\"`\n \t}\n-\terr := mappingByPtr(&s, formSource{\"foo\": {`f5`}}, \"uri\")\n+\terr := mappingByPtr(&s, formSource{\"field\": {`f5`}}, \"form\")\n \trequire.NoError(t, err)\n-\n-\tassert.EqualValues(t, 245, s.Foo)\n+\tassert.EqualValues(t, 245, s.Field)\n }\n \n-func TestMappingCustomUnmarshalParamHexDefault(t *testing.T) {\n+func TestMappingCustomUnmarshalTextHexDefault(t *testing.T) {\n \tvar s struct {\n-\t\tFoo customUnmarshalParamHex `form:\"foo,default=f5\"`\n+\t\tField customUnmarshalTextHex `form:\"field,default=f5,parser=encoding.TextUnmarshaler\"`\n \t}\n-\terr := mappingByPtr(&s, formSource{\"foo\": {}}, \"form\")\n+\terr := mappingByPtr(&s, formSource{\"field1\": {}}, \"form\")\n \trequire.NoError(t, err)\n-\n-\tassert.EqualValues(t, 0xf5, s.Foo)\n+\tassert.EqualValues(t, 0xf5, s.Field)\n }\n \n-type customUnmarshalParamType struct {\n+type customUnmarshalTextType struct {\n \tProtocol string\n \tPath     string",
+      "occurrences": [
+        "binding/form_mapping_test.go:508-542",
+        "binding/form_mapping_test.go:756-787"
+      ]
+    },
+    {
+      "why": "The code beginning with `router.NoMethod(func(c *Context) {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: middleware_test.go:135-155 and middleware_test.go:95-114; 17 and 17 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"StatusNotFound\", \"StatusMethodNotAllowed\"]]. Raw core diff:\n--- middleware_test.go:135-155\n+++ middleware_test.go:95-114\n@@ -16 +15,0 @@\n-\n@@ -21 +20 @@\n-\tassert.Equal(t, http.StatusNotFound, w.Code)\n+\tassert.Equal(t, http.StatusMethodNotAllowed, w.Code)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- middleware_test.go:135-155\n+++ middleware_test.go:95-114\n@@ -14,8 +14,7 @@\n \t\tsignature += \" XX \"\n \t})\n-\n \t// RUN\n \tw := PerformRequest(router, http.MethodGet, \"/\")\n \n \t// TEST\n-\tassert.Equal(t, http.StatusNotFound, w.Code)\n+\tassert.Equal(t, http.StatusMethodNotAllowed, w.Code)",
+      "type": "Type II",
+      "occurrences": [
+        "middleware_test.go:135-155",
+        "middleware_test.go:95-114"
+      ]
+    },
+    {
+      "why": "The code beginning with `handleRecovery := func(c *Context, err any) {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: recovery_test.go:208-217 and recovery_test.go:278-287; 8 and 8 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- recovery_test.go:203-217\n+++ recovery_test.go:273-287\n@@ -3,5 +3,5 @@\n \t\tc.AbortWithStatus(http.StatusBadRequest)\n \t}\n-\trouter.Use(CustomRecoveryWithWriter(buffer, handleRecovery))\n+\trouter.Use(RecoveryWithWriter(DefaultErrorWriter, handleRecovery))\n \trouter.GET(\"/recovery\", func(_ *Context) {\n \t\tpanic(\"Oops, Houston, we have a problem\")",
+      "occurrences": [
+        "recovery_test.go:203-217",
+        "recovery_test.go:273-287"
+      ]
+    },
+    {
+      "why": "The code beginning with `func TestLoggerWithConfigSkippingPaths(t *testing.T) {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: logger_test.go:425-434 and logger_test.go:407-416; 8 and 8 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- logger_test.go:418-434\n+++ logger_test.go:403-416\n@@ -1,9 +1,6 @@\n-func TestLoggerWithConfigSkippingPaths(t *testing.T) {\n+func TestLoggerWithWriterSkippingPaths(t *testing.T) {\n \tbuffer := new(strings.Builder)\n \trouter := New()\n-\trouter.Use(LoggerWithConfig(LoggerConfig{\n-\t\tOutput:    buffer,\n-\t\tSkipPaths: []string{\"/skipped\"},\n-\t}))\n+\trouter.Use(LoggerWithWriter(buffer, \"/skipped\"))\n \trouter.GET(\"/logged\", func(c *Context) {})\n \trouter.GET(\"/skipped\", func(c *Context) {})",
+      "occurrences": [
+        "logger_test.go:418-434",
+        "logger_test.go:403-416"
+      ]
+    },
+    {
+      "why": "The code beginning with `router.Use(CustomRecovery(handleRecovery))` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: recovery_test.go:242-253 and recovery_test.go:54-65; 10 and 10 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"CustomRecovery\", \"RecoveryWithWriter\"], [\"handleRecovery\", \"buffer\"], [\"StatusBadRequest\", \"StatusInternalServerError\"]]. Raw core diff:\n--- recovery_test.go:242-253\n+++ recovery_test.go:54-65\n@@ -1 +1 @@\n-\trouter.Use(CustomRecovery(handleRecovery))\n+\trouter.Use(RecoveryWithWriter(buffer))\n@@ -8 +8 @@\n-\tassert.Equal(t, http.StatusBadRequest, w.Code)\n+\tassert.Equal(t, http.StatusInternalServerError, w.Code)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- recovery_test.go:242-253\n+++ recovery_test.go:54-65\n@@ -1,3 +1,3 @@\n-\trouter.Use(CustomRecovery(handleRecovery))\n+\trouter.Use(RecoveryWithWriter(buffer))\n \trouter.GET(\"/recovery\", func(_ *Context) {\n \t\tpanic(\"Oops, Houston, we have a problem\")\n@@ -6,5 +6,5 @@\n \tw := PerformRequest(router, http.MethodGet, \"/recovery\")\n \t// TEST\n-\tassert.Equal(t, http.StatusBadRequest, w.Code)\n+\tassert.Equal(t, http.StatusInternalServerError, w.Code)\n \tassert.Contains(t, buffer.String(), \"panic recovered\")\n \tassert.Contains(t, buffer.String(), \"Oops, Houston, we have a problem\")",
+      "occurrences": [
+        "recovery_test.go:242-253",
+        "recovery_test.go:54-65"
+      ]
+    },
+    {
+      "why": "The code beginning with `func TestRouterGroupRouteOK(t *testing.T) {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: routes_test.go:163-174 and routes_test.go:189-200; 12 and 12 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"TestRouterGroupRouteOK\", \"TestRouteNotOK2\"], [\"testRouteOK\", \"testRouteNotOK2\"]]. Raw core diff:\n--- routes_test.go:163-174\n+++ routes_test.go:189-200\n@@ -1,11 +1,11 @@\n-func TestRouterGroupRouteOK(t *testing.T) {\n-\ttestRouteOK(http.MethodGet, t)\n-\ttestRouteOK(http.MethodPost, t)\n-\ttestRouteOK(http.MethodPut, t)\n-\ttestRouteOK(http.MethodPatch, t)\n-\ttestRouteOK(http.MethodHead, t)\n-\ttestRouteOK(http.MethodOptions, t)\n-\ttestRouteOK(http.MethodDelete, t)\n-\ttestRouteOK(http.MethodConnect, t)\n-\ttestRouteOK(http.MethodTrace, t)\n-\ttestRouteOK(MethodQuery, t)\n+func TestRouteNotOK2(t *testing.T) {\n+\ttestRouteNotOK2(http.MethodGet, t)\n+\ttestRouteNotOK2(http.MethodPost, t)\n+\ttestRouteNotOK2(http.MethodPut, t)\n+\ttestRouteNotOK2(http.MethodPatch, t)\n+\ttestRouteNotOK2(http.MethodHead, t)\n+\ttestRouteNotOK2(http.MethodOptions, t)\n+\ttestRouteNotOK2(http.MethodDelete, t)\n+\ttestRouteNotOK2(http.MethodConnect, t)\n+\ttestRouteNotOK2(http.MethodTrace, t)\n+\ttestRouteNotOK2(MethodQuery, t)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- routes_test.go:163-174\n+++ routes_test.go:189-200\n@@ -1,12 +1,12 @@\n-func TestRouterGroupRouteOK(t *testing.T) {\n-\ttestRouteOK(http.MethodGet, t)\n-\ttestRouteOK(http.MethodPost, t)\n-\ttestRouteOK(http.MethodPut, t)\n-\ttestRouteOK(http.MethodPatch, t)\n-\ttestRouteOK(http.MethodHead, t)\n-\ttestRouteOK(http.MethodOptions, t)\n-\ttestRouteOK(http.MethodDelete, t)\n-\ttestRouteOK(http.MethodConnect, t)\n-\ttestRouteOK(http.MethodTrace, t)\n-\ttestRouteOK(MethodQuery, t)\n+func TestRouteNotOK2(t *testing.T) {\n+\ttestRouteNotOK2(http.MethodGet, t)\n+\ttestRouteNotOK2(http.MethodPost, t)\n+\ttestRouteNotOK2(http.MethodPut, t)\n+\ttestRouteNotOK2(http.MethodPatch, t)\n+\ttestRouteNotOK2(http.MethodHead, t)\n+\ttestRouteNotOK2(http.MethodOptions, t)\n+\ttestRouteNotOK2(http.MethodDelete, t)\n+\ttestRouteNotOK2(http.MethodConnect, t)\n+\ttestRouteNotOK2(http.MethodTrace, t)\n+\ttestRouteNotOK2(MethodQuery, t)\n }",
+      "type": "Type II",
+      "occurrences": [
+        "routes_test.go:163-174",
+        "routes_test.go:189-200"
+      ]
+    },
+    {
+      "why": "The code beginning with `f, err := os.CreateTemp(testRoot, \"\")` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: routes_test.go:441-453 and routes_test.go:476-487; 10 and 10 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n--- routes_test.go:441-453\n+++ routes_test.go:476-487\n@@ -11 +10,0 @@\n-\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- routes_test.go:441-453\n+++ routes_test.go:476-487\n@@ -9,5 +9,4 @@\n \n \tdir, filename := filepath.Split(f.Name())\n-\n \t// SETUP gin\n \trouter := New()",
+      "type": "Type I",
+      "occurrences": [
+        "routes_test.go:441-453",
+        "routes_test.go:476-487"
+      ]
+    },
+    {
+      "why": "The code beginning with `route.UseRawPath = true` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: routes_test.go:739-753 and routes_test.go:759-773; 11 and 11 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"UseRawPath\", \"UnescapePathValues\"], [\"true\", \"false\"], [\"\\\"Some/Other/Project\\\"\", \"\\\"Some%2FOther%2FProject\\\"\"], [\"\\\"222\\\"\", \"\\\"333\\\"\"], [\"\\\"/project/Some%2FOther%2FProject/build/222\\\"\", \"\\\"/project/Some%2FOther%2FProject/build/333\\\"\"]]. Raw core diff:\n--- routes_test.go:739-753\n+++ routes_test.go:759-773\n@@ -1 +1 @@\n-\troute.UseRawPath = true\n+\troute.UnescapePathValues = false\n@@ -10,2 +10,2 @@\n-\t\tassert.Equal(t, \"Some/Other/Project\", name)\n-\t\tassert.Equal(t, \"222\", num)\n+\t\tassert.Equal(t, \"Some%2FOther%2FProject\", name)\n+\t\tassert.Equal(t, \"333\", num)\n@@ -14 +14 @@\n-\tw := PerformRequest(route, http.MethodPost, \"/project/Some%2FOther%2FProject/build/222\")\n+\tw := PerformRequest(route, http.MethodPost, \"/project/Some%2FOther%2FProject/build/333\")\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- routes_test.go:739-753\n+++ routes_test.go:759-773\n@@ -1,3 +1,3 @@\n-\troute.UseRawPath = true\n+\troute.UnescapePathValues = false\n \n \troute.POST(\"/project/:name/build/:num\", func(c *Context) {\n@@ -8,8 +8,8 @@\n \t\tassert.Equal(t, num, c.Param(\"num\"))\n \n-\t\tassert.Equal(t, \"Some/Other/Project\", name)\n-\t\tassert.Equal(t, \"222\", num)\n+\t\tassert.Equal(t, \"Some%2FOther%2FProject\", name)\n+\t\tassert.Equal(t, \"333\", num)\n \t})\n \n-\tw := PerformRequest(route, http.MethodPost, \"/project/Some%2FOther%2FProject/build/222\")\n+\tw := PerformRequest(route, http.MethodPost, \"/project/Some%2FOther%2FProject/build/333\")\n \tassert.Equal(t, http.StatusOK, w.Code)",
+      "type": "Type II",
+      "occurrences": [
+        "routes_test.go:739-753",
+        "routes_test.go:759-773"
+      ]
+    },
+    {
+      "why": "The code beginning with `type TimeEx struct {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: binding/json_test.go:113-131 and binding/json_test.go:169-187; 16 and 16 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"TimeEx\", \"TimePointerEx\"], [\"te\", \"tpe\"], [\"timeType\", \"timePointerType\"], [\"defaultTimeCodec\", \"defaultTimePointerCodec\"], [\"timeCodec\", \"timePointerCodec\"]]. Raw core diff:\n--- binding/json_test.go:113-131\n+++ binding/json_test.go:169-187\n@@ -1 +1 @@\n-type TimeEx struct {\n+type TimePointerEx struct {\n@@ -5,3 +5,3 @@\n-func (te *TimeEx) CreateDecoder(typ reflect2.Type) jsoniter.ValDecoder {\n-\tif typ == timeType {\n-\t\treturn defaultTimeCodec\n+func (tpe *TimePointerEx) CreateDecoder(typ reflect2.Type) jsoniter.ValDecoder {\n+\tif typ == timePointerType {\n+\t\treturn defaultTimePointerCodec\n@@ -12,3 +12,3 @@\n-func (te *TimeEx) CreateEncoder(typ reflect2.Type) jsoniter.ValEncoder {\n-\tif typ == timeType {\n-\t\treturn defaultTimeCodec\n+func (tpe *TimePointerEx) CreateEncoder(typ reflect2.Type) jsoniter.ValEncoder {\n+\tif typ == timePointerType {\n+\t\treturn defaultTimePointerCodec\n@@ -19 +19 @@\n-type timeCodec struct{}\n+type timePointerCodec struct{}\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- binding/json_test.go:113-131\n+++ binding/json_test.go:169-187\n@@ -1,19 +1,19 @@\n-type TimeEx struct {\n+type TimePointerEx struct {\n \tjsoniter.DummyExtension\n }\n \n-func (te *TimeEx) CreateDecoder(typ reflect2.Type) jsoniter.ValDecoder {\n-\tif typ == timeType {\n-\t\treturn defaultTimeCodec\n+func (tpe *TimePointerEx) CreateDecoder(typ reflect2.Type) jsoniter.ValDecoder {\n+\tif typ == timePointerType {\n+\t\treturn defaultTimePointerCodec\n \t}\n \treturn nil\n }\n \n-func (te *TimeEx) CreateEncoder(typ reflect2.Type) jsoniter.ValEncoder {\n-\tif typ == timeType {\n-\t\treturn defaultTimeCodec\n+func (tpe *TimePointerEx) CreateEncoder(typ reflect2.Type) jsoniter.ValEncoder {\n+\tif typ == timePointerType {\n+\t\treturn defaultTimePointerCodec\n \t}\n \treturn nil\n }\n \n-type timeCodec struct{}\n+type timePointerCodec struct{}",
+      "type": "Type II",
+      "occurrences": [
+        "binding/json_test.go:113-131",
+        "binding/json_test.go:169-187"
+      ]
+    },
+    {
+      "why": "The code beginning with `ts := setupHTMLFiles(` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: gin_test.go:164-172 and gin_test.go:124-132; 9 and 9 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"DebugMode\", \"TestMode\"], [\"true\", \"false\"]]. Raw core diff:\n--- gin_test.go:164-172\n+++ gin_test.go:124-132\n@@ -3,2 +3,2 @@\n-\t\tDebugMode,\n-\t\ttrue,\n+\t\tTestMode,\n+\t\tfalse,\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- gin_test.go:164-172\n+++ gin_test.go:124-132\n@@ -1,6 +1,6 @@\n \tts := setupHTMLFiles(\n \t\tt,\n-\t\tDebugMode,\n-\t\ttrue,\n+\t\tTestMode,\n+\t\tfalse,\n \t\tfunc(router *Engine) {\n \t\t\trouter.LoadHTMLGlob(\"./testdata/template/*\")",
+      "type": "Type II",
+      "occurrences": [
+        "gin_test.go:164-172",
+        "gin_test.go:124-132"
+      ]
+    },
+    {
+      "why": "The code beginning with `func TestMappingCustomStructTypeWithFormTag(t *testing.T) {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: binding/form_mapping_test.go:555-603 and binding/form_mapping_test.go:802-850; 41 and 41 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"TestMappingCustomStructTypeWithFormTag\", \"TestMappingCustomStructTypeUnmarshalTextForm\"], [\"customUnmarshalParamType\", \"customUnmarshalTextType\"], [\"`form:\\\"data\\\"`\", \"`form:\\\"data,parser=encoding.TextUnmarshaler\\\"`\"], [\"TestMappingCustomStructTypeWithURITag\", \"TestMappingCustomStructTypeUnmarshalTextUri\"], [\"`uri:\\\"data\\\"`\", \"`uri:\\\"data,parser=encoding.TextUnmarshaler\\\"`\"], [\"TestMappingCustomPointerStructTypeWithFormTag\", \"TestMappingCustomPointerStructTypeUnmarshalTextForm\"], [\"TestMappingCustomPointerStructTypeWithURITag\", \"TestMappingCustomPointerStructTypeUnmarshalTextUri\"], [\"customPath\", \"customPathUnmarshalText\"]]. Raw core diff:\n--- binding/form_mapping_test.go:555-603\n+++ binding/form_mapping_test.go:802-850\n@@ -1 +1 @@\n-func TestMappingCustomStructTypeWithFormTag(t *testing.T) {\n+func TestMappingCustomStructTypeUnmarshalTextForm(t *testing.T) {\n@@ -3 +3 @@\n-\t\tFileData customUnmarshalParamType `form:\"data\"`\n+\t\tFileData customUnmarshalTextType `form:\"data,parser=encoding.TextUnmarshaler\"`\n@@ -13 +13 @@\n-func TestMappingCustomStructTypeWithURITag(t *testing.T) {\n+func TestMappingCustomStructTypeUnmarshalTextUri(t *testing.T) {\n@@ -15 +15 @@\n-\t\tFileData customUnmarshalParamType `uri:\"data\"`\n+\t\tFileData customUnmarshalTextType `uri:\"data,parser=encoding.TextUnmarshaler\"`\n@@ -25 +25 @@\n-func TestMappingCustomPointerStructTypeWithFormTag(t *testing.T) {\n+func TestMappingCustomPointerStructTypeUnmarshalTextForm(t *testing.T) {\n@@ -27 +27 @@\n-\t\tFileData *customUnmarshalParamType `form:\"data\"`\n+\t\tFileData *customUnmarshalTextType `form:\"data,parser=encoding.TextUnmarshaler\"`\n@@ -37 +37 @@\n-func TestMappingCustomPointerStructTypeWithURITag(t *testing.T) {\n+func TestMappingCustomPointerStructTypeUnmarshalTextUri(t *testing.T) {\n@@ -39 +39 @@\n-\t\tFileData *customUnmarshalParamType `uri:\"data\"`\n+\t\tFileData *customUnmarshalTextType `uri:\"data,parser=encoding.TextUnmarshaler\"`\n@@ -49 +49 @@\n-type customPath []string\n+type customPathUnmarshalText []string\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- binding/form_mapping_test.go:555-603\n+++ binding/form_mapping_test.go:802-850\n@@ -1,5 +1,5 @@\n-func TestMappingCustomStructTypeWithFormTag(t *testing.T) {\n+func TestMappingCustomStructTypeUnmarshalTextForm(t *testing.T) {\n \tvar s struct {\n-\t\tFileData customUnmarshalParamType `form:\"data\"`\n+\t\tFileData customUnmarshalTextType `form:\"data,parser=encoding.TextUnmarshaler\"`\n \t}\n \terr := mappingByPtr(&s, formSource{\"data\": {`file:/foo:happiness`}}, \"form\")\n@@ -11,7 +11,7 @@\n }\n \n-func TestMappingCustomStructTypeWithURITag(t *testing.T) {\n+func TestMappingCustomStructTypeUnmarshalTextUri(t *testing.T) {\n \tvar s struct {\n-\t\tFileData customUnmarshalParamType `uri:\"data\"`\n+\t\tFileData customUnmarshalTextType `uri:\"data,parser=encoding.TextUnmarshaler\"`\n \t}\n \terr := mappingByPtr(&s, formSource{\"data\": {`file:/foo:happiness`}}, \"uri\")\n@@ -23,7 +23,7 @@\n }\n \n-func TestMappingCustomPointerStructTypeWithFormTag(t *testing.T) {\n+func TestMappingCustomPointerStructTypeUnmarshalTextForm(t *testing.T) {\n \tvar s struct {\n-\t\tFileData *customUnmarshalParamType `form:\"data\"`\n+\t\tFileData *customUnmarshalTextType `form:\"data,parser=encoding.TextUnmarshaler\"`\n \t}\n \terr := mappingByPtr(&s, formSource{\"data\": {`file:/foo:happiness`}}, \"form\")\n@@ -35,7 +35,7 @@\n }\n \n-func TestMappingCustomPointerStructTypeWithURITag(t *testing.T) {\n+func TestMappingCustomPointerStructTypeUnmarshalTextUri(t *testing.T) {\n \tvar s struct {\n-\t\tFileData *customUnmarshalParamType `uri:\"data\"`\n+\t\tFileData *customUnmarshalTextType `uri:\"data,parser=encoding.TextUnmarshaler\"`\n \t}\n \terr := mappingByPtr(&s, formSource{\"data\": {`file:/foo:happiness`}}, \"uri\")\n@@ -47,3 +47,3 @@\n }\n \n-type customPath []string\n+type customPathUnmarshalText []string",
+      "type": "Type II",
+      "occurrences": [
+        "binding/form_mapping_test.go:555-603",
+        "binding/form_mapping_test.go:802-850"
+      ]
+    },
+    {
+      "why": "The code beginning with `defer ts.Close()` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: gin_test.go:399-414 and gin_test.go:172-187; 13 and 13 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "gin_test.go:399-414",
+        "gin_test.go:172-187"
+      ]
+    },
+    {
+      "why": "The code beginning with `func TestEngineHandleContextNoRouteWithGroupMiddleware(t *testing.T) {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: gin_test.go:760-775 and gin_test.go:795-809; 13 and 13 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n--- gin_test.go:760-775\n+++ gin_test.go:795-809\n@@ -13 +12,0 @@\n-\t// Access a non-existent route to trigger NoRoute -> HandleContext\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- gin_test.go:746-779\n+++ gin_test.go:781-816\n@@ -1,16 +1,16 @@\n-func TestEngineHandleContextNoRouteWithGroupMiddleware(t *testing.T) {\n-\t// Scenario from issue #1848:\n-\t// - Engine with no global middleware (gin.New())\n-\t// - A group with middleware\n-\t// - A route in that group\n-\t// - NoRoute handler that redirects via HandleContext\n-\t// The group middleware should run exactly once per HandleContext call,\n-\t// not accumulate across redirects.\n+func TestEngineHandleContextNoRouteWithEngineMiddleware(t *testing.T) {\n+\t// When engine middleware exists and NoRoute redirects via HandleContext,\n+\t// verify the handlers run the expected number of times.\n \n-\tvar middlewareCount, handlerCount int64\n+\tvar engineMwCount, groupMwCount, handlerCount int64\n \n \tr := New()\n+\tr.Use(func(c *Context) {\n+\t\tatomic.AddInt64(&engineMwCount, 1)\n+\t\tc.Next()\n+\t})\n+\n \tgrp := r.Group(\"\", func(c *Context) {\n-\t\tatomic.AddInt64(&middlewareCount, 1)\n+\t\tatomic.AddInt64(&groupMwCount, 1)\n \t\tc.Next()\n \t})\n@@ -25,10 +25,12 @@\n \t})\n \n-\t// Access a non-existent route to trigger NoRoute -> HandleContext\n \tw := PerformRequest(r, \"GET\", \"/nonexistent\")\n \tassert.Equal(t, http.StatusOK, w.Code)\n \tassert.Equal(t, \"ok\", w.Body.String())\n-\t// Middleware and handler should each run exactly once\n-\tassert.Equal(t, int64(1), atomic.LoadInt64(&middlewareCount))\n+\t// Handler and group middleware should each run once (from HandleContext)\n \tassert.Equal(t, int64(1), atomic.LoadInt64(&handlerCount))\n+\tassert.Equal(t, int64(1), atomic.LoadInt64(&groupMwCount))\n+\t// Engine middleware runs twice: once for the NoRoute chain, once for the HandleContext chain\n+\t// This is expected behavior since HandleContext re-enters the full handler chain\n+\tassert.Equal(t, int64(2), atomic.LoadInt64(&engineMwCount))\n }",
+      "occurrences": [
+        "gin_test.go:746-779",
+        "gin_test.go:781-816"
+      ]
+    },
+    {
+      "why": "The code beginning with `const Package = \"encoding/json\"` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: codec/json/json.go:15-41 and codec/json/go_json.go:16-42; 20 and 20 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"\\\"encoding/json\\\"\", \"\\\"github.com/goccy/go-json\\\"\"], [\"jsonApi\", \"gojsonApi\"]]. Raw core diff:\n--- codec/json/json.go:15-41\n+++ codec/json/go_json.go:16-42\n@@ -1 +1 @@\n-const Package = \"encoding/json\"\n+const Package = \"github.com/goccy/go-json\"\n@@ -4 +4 @@\n-\tAPI = jsonApi{}\n+\tAPI = gojsonApi{}\n@@ -7 +7 @@\n-type jsonApi struct{}\n+type gojsonApi struct{}\n@@ -9 +9 @@\n-func (j jsonApi) Marshal(v any) ([]byte, error) {\n+func (j gojsonApi) Marshal(v any) ([]byte, error) {\n@@ -13 +13 @@\n-func (j jsonApi) Unmarshal(data []byte, v any) error {\n+func (j gojsonApi) Unmarshal(data []byte, v any) error {\n@@ -17 +17 @@\n-func (j jsonApi) MarshalIndent(v any, prefix, indent string) ([]byte, error) {\n+func (j gojsonApi) MarshalIndent(v any, prefix, indent string) ([]byte, error) {\n@@ -21 +21 @@\n-func (j jsonApi) NewEncoder(writer io.Writer) Encoder {\n+func (j gojsonApi) NewEncoder(writer io.Writer) Encoder {\n@@ -25 +25 @@\n-func (j jsonApi) NewDecoder(reader io.Reader) Decoder {\n+func (j gojsonApi) NewDecoder(reader io.Reader) Decoder {\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- codec/json/json.go:15-41\n+++ codec/json/go_json.go:16-42\n@@ -1,27 +1,27 @@\n-const Package = \"encoding/json\"\n+const Package = \"github.com/goccy/go-json\"\n \n func init() {\n-\tAPI = jsonApi{}\n+\tAPI = gojsonApi{}\n }\n \n-type jsonApi struct{}\n+type gojsonApi struct{}\n \n-func (j jsonApi) Marshal(v any) ([]byte, error) {\n+func (j gojsonApi) Marshal(v any) ([]byte, error) {\n \treturn json.Marshal(v)\n }\n \n-func (j jsonApi) Unmarshal(data []byte, v any) error {\n+func (j gojsonApi) Unmarshal(data []byte, v any) error {\n \treturn json.Unmarshal(data, v)\n }\n \n-func (j jsonApi) MarshalIndent(v any, prefix, indent string) ([]byte, error) {\n+func (j gojsonApi) MarshalIndent(v any, prefix, indent string) ([]byte, error) {\n \treturn json.MarshalIndent(v, prefix, indent)\n }\n \n-func (j jsonApi) NewEncoder(writer io.Writer) Encoder {\n+func (j gojsonApi) NewEncoder(writer io.Writer) Encoder {\n \treturn json.NewEncoder(writer)\n }\n \n-func (j jsonApi) NewDecoder(reader io.Reader) Decoder {\n+func (j gojsonApi) NewDecoder(reader io.Reader) Decoder {\n \treturn json.NewDecoder(reader)\n }",
+      "type": "Type II",
+      "occurrences": [
+        "codec/json/json.go:15-41",
+        "codec/json/go_json.go:16-42"
+      ]
+    },
+    {
+      "why": "The code beginning with `func TestRenderHTMLTemplateError(t *testing.T) {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: render/render_test.go:734-745 and render/render_test.go:747-758; 10 and 10 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"TestRenderHTMLTemplateError\", \"TestRenderHTMLTemplateExecuteError\"], [\"`Hello {{if .name}}{{.name.DoesNotExist}}{{end}}`\", \"`Hello {{.name.invalid}}`\"]]. Raw core diff:\n--- render/render_test.go:734-745\n+++ render/render_test.go:747-758\n@@ -1 +1 @@\n-func TestRenderHTMLTemplateError(t *testing.T) {\n+func TestRenderHTMLTemplateExecuteError(t *testing.T) {\n@@ -3 +3 @@\n-\ttempl := template.Must(template.New(\"t\").Parse(`Hello {{if .name}}{{.name.DoesNotExist}}{{end}}`))\n+\ttempl := template.Must(template.New(\"t\").Parse(`Hello {{.name.invalid}}`))\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- render/render_test.go:734-745\n+++ render/render_test.go:747-758\n@@ -1,5 +1,5 @@\n-func TestRenderHTMLTemplateError(t *testing.T) {\n+func TestRenderHTMLTemplateExecuteError(t *testing.T) {\n \tw := httptest.NewRecorder()\n-\ttempl := template.Must(template.New(\"t\").Parse(`Hello {{if .name}}{{.name.DoesNotExist}}{{end}}`))\n+\ttempl := template.Must(template.New(\"t\").Parse(`Hello {{.name.invalid}}`))\n \n \thtmlRender := HTMLProduction{Template: templ}",
+      "type": "Type II",
+      "occurrences": [
+        "render/render_test.go:734-745",
+        "render/render_test.go:747-758"
+      ]
+    },
+    {
+      "why": "The code beginning with `func (yamlBinding) Name() string {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: binding/yaml.go:17-27 and binding/xml.go:16-26; 9 and 9 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"yamlBinding\", \"xmlBinding\"], [\"\\\"yaml\\\"\", \"\\\"xml\\\"\"], [\"decodeYAML\", \"decodeXML\"]]. Raw core diff:\n--- binding/yaml.go:17-27\n+++ binding/xml.go:16-26\n@@ -1,2 +1,2 @@\n-func (yamlBinding) Name() string {\n-\treturn \"yaml\"\n+func (xmlBinding) Name() string {\n+\treturn \"xml\"\n@@ -5,2 +5,2 @@\n-func (yamlBinding) Bind(req *http.Request, obj any) error {\n-\treturn decodeYAML(req.Body, obj)\n+func (xmlBinding) Bind(req *http.Request, obj any) error {\n+\treturn decodeXML(req.Body, obj)\n@@ -9,2 +9,2 @@\n-func (yamlBinding) BindBody(body []byte, obj any) error {\n-\treturn decodeYAML(bytes.NewReader(body), obj)\n+func (xmlBinding) BindBody(body []byte, obj any) error {\n+\treturn decodeXML(bytes.NewReader(body), obj)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- binding/yaml.go:17-27\n+++ binding/xml.go:16-26\n@@ -1,11 +1,11 @@\n-func (yamlBinding) Name() string {\n-\treturn \"yaml\"\n+func (xmlBinding) Name() string {\n+\treturn \"xml\"\n }\n \n-func (yamlBinding) Bind(req *http.Request, obj any) error {\n-\treturn decodeYAML(req.Body, obj)\n+func (xmlBinding) Bind(req *http.Request, obj any) error {\n+\treturn decodeXML(req.Body, obj)\n }\n \n-func (yamlBinding) BindBody(body []byte, obj any) error {\n-\treturn decodeYAML(bytes.NewReader(body), obj)\n+func (xmlBinding) BindBody(body []byte, obj any) error {\n+\treturn decodeXML(bytes.NewReader(body), obj)\n }",
+      "type": "Type II",
+      "occurrences": [
+        "binding/yaml.go:17-27",
+        "binding/xml.go:16-26"
+      ]
+    },
+    {
+      "why": "The code beginning with `w2 := PerformRequest(router, http.MethodGet, \"/result\")` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: routes_test.go:458-468 and routes_test.go:492-502; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"\\\"/result\\\"\", \"\\\"/result_fs\\\"\"]]. Raw core diff:\n--- routes_test.go:458-468\n+++ routes_test.go:492-502\n@@ -1 +1 @@\n-\tw2 := PerformRequest(router, http.MethodGet, \"/result\")\n+\tw2 := PerformRequest(router, http.MethodGet, \"/result_fs\")\n@@ -9 +9 @@\n-\tw4 := PerformRequest(router, http.MethodHead, \"/result\")\n+\tw4 := PerformRequest(router, http.MethodHead, \"/result_fs\")\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- routes_test.go:458-468\n+++ routes_test.go:492-502\n@@ -1,3 +1,3 @@\n-\tw2 := PerformRequest(router, http.MethodGet, \"/result\")\n+\tw2 := PerformRequest(router, http.MethodGet, \"/result_fs\")\n \n \tassert.Equal(t, w, w2)\n@@ -7,5 +7,5 @@\n \n \tw3 := PerformRequest(router, http.MethodHead, \"/using_static/\"+filename)\n-\tw4 := PerformRequest(router, http.MethodHead, \"/result\")\n+\tw4 := PerformRequest(router, http.MethodHead, \"/result_fs\")\n \n \tassert.Equal(t, w3, w4)",
+      "type": "Type II",
+      "occurrences": [
+        "routes_test.go:458-468",
+        "routes_test.go:492-502"
+      ]
+    },
+    {
+      "why": "The code beginning with `func TestMappingCustomArrayUnmarshalTextUri(t *testing.T) {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: binding/form_mapping_test.go:942-988 and binding/form_mapping_test.go:692-738; 40 and 40 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"TestMappingCustomArrayUnmarshalTextUri\", \"TestMappingCustomArrayUri\"], [\"objectIDUnmarshalText\", \"objectID\"], [\"`uri:\\\"id,parser=encoding.TextUnmarshaler\\\"`\", \"`uri:\\\"id\\\"`\"], [\"convertToOidUnmarshalText\", \"convertTo\"], [\"TestMappingCustomArrayUnmarshalTextForm\", \"TestMappingCustomArrayForm\"], [\"`form:\\\"id,parser=encoding.TextUnmarshaler\\\"`\", \"`form:\\\"id\\\"`\"], [\"TestMappingCustomArrayOfArrayUnmarshalTextUri\", \"TestMappingCustomArrayOfArrayUri\"], [\"`uri:\\\"ids,parser=encoding.TextUnmarshaler\\\" collection_format:\\\"csv\\\"`\", \"`uri:\\\"ids\\\" collection_format:\\\"csv\\\"`\"], [\"TestMappingCustomArrayOfArrayUnmarshalTextForm\", \"TestMappingCustomArrayOfArrayForm\"], [\"`form:\\\"ids,parser=encoding.TextUnmarshaler\\\" collection_format:\\\"csv\\\"`\", \"`form:\\\"ids\\\" collection_format:\\\"csv\\\"`\"]]. Raw core diff:\n--- binding/form_mapping_test.go:942-988\n+++ binding/form_mapping_test.go:692-738\n@@ -1 +1 @@\n-func TestMappingCustomArrayUnmarshalTextUri(t *testing.T) {\n+func TestMappingCustomArrayUri(t *testing.T) {\n@@ -3 +3 @@\n-\t\tFileData objectIDUnmarshalText `uri:\"id,parser=encoding.TextUnmarshaler\"`\n+\t\tFileData objectID `uri:\"id\"`\n@@ -9 +9 @@\n-\texpected, _ := convertToOidUnmarshalText(val)\n+\texpected, _ := convertTo(val)\n@@ -13 +13 @@\n-func TestMappingCustomArrayUnmarshalTextForm(t *testing.T) {\n+func TestMappingCustomArrayForm(t *testing.T) {\n@@ -15 +15 @@\n-\t\tFileData objectIDUnmarshalText `form:\"id,parser=encoding.TextUnmarshaler\"`\n+\t\tFileData objectID `form:\"id\"`\n@@ -21 +21 @@\n-\texpected, _ := convertToOidUnmarshalText(val)\n+\texpected, _ := convertTo(val)\n@@ -25,3 +25,3 @@\n-func TestMappingCustomArrayOfArrayUnmarshalTextUri(t *testing.T) {\n-\tid1, _ := convertToOidUnmarshalText(`664a062ac74a8ad104e0e80e`)\n-\tid2, _ := convertToOidUnmarshalText(`664a062ac74a8ad104e0e80f`)\n+func TestMappingCustomArrayOfArrayUri(t *testing.T) {\n+\tid1, _ := convertTo(`664a062ac74a8ad104e0e80e`)\n+\tid2, _ := convertTo(`664a062ac74a8ad104e0e80f`)\n@@ -30 +30 @@\n-\t\tFileData []objectIDUnmarshalText `uri:\"ids,parser=encoding.TextUnmarshaler\" collection_format:\"csv\"`\n+\t\tFileData []objectID `uri:\"ids\" collection_format:\"csv\"`\n@@ -34 +34 @@\n-\tassert.Equal(t, []objectIDUnmarshalText{id1, id2}, s.FileData)\n+\tassert.Equal(t, []objectID{id1, id2}, s.FileData)\n@@ -37,3 +37,3 @@\n-func TestMappingCustomArrayOfArrayUnmarshalTextForm(t *testing.T) {\n-\tid1, _ := convertToOidUnmarshalText(`664a062ac74a8ad104e0e80e`)\n-\tid2, _ := convertToOidUnmarshalText(`664a062ac74a8ad104e0e80f`)\n+func TestMappingCustomArrayOfArrayForm(t *testing.T) {\n+\tid1, _ := convertTo(`664a062ac74a8ad104e0e80e`)\n+\tid2, _ := convertTo(`664a062ac74a8ad104e0e80f`)\n@@ -42 +42 @@\n-\t\tFileData []objectIDUnmarshalText `form:\"ids,parser=encoding.TextUnmarshaler\" collection_format:\"csv\"`\n+\t\tFileData []objectID `form:\"ids\" collection_format:\"csv\"`\n@@ -46 +46 @@\n-\tassert.Equal(t, []objectIDUnmarshalText{id1, id2}, s.FileData)\n+\tassert.Equal(t, []objectID{id1, id2}, s.FileData)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- binding/form_mapping_test.go:942-988\n+++ binding/form_mapping_test.go:692-738\n@@ -1,5 +1,5 @@\n-func TestMappingCustomArrayUnmarshalTextUri(t *testing.T) {\n+func TestMappingCustomArrayUri(t *testing.T) {\n \tvar s struct {\n-\t\tFileData objectIDUnmarshalText `uri:\"id,parser=encoding.TextUnmarshaler\"`\n+\t\tFileData objectID `uri:\"id\"`\n \t}\n \tval := `664a062ac74a8ad104e0e80f`\n@@ -7,11 +7,11 @@\n \trequire.NoError(t, err)\n \n-\texpected, _ := convertToOidUnmarshalText(val)\n+\texpected, _ := convertTo(val)\n \tassert.Equal(t, expected, s.FileData)\n }\n \n-func TestMappingCustomArrayUnmarshalTextForm(t *testing.T) {\n+func TestMappingCustomArrayForm(t *testing.T) {\n \tvar s struct {\n-\t\tFileData objectIDUnmarshalText `form:\"id,parser=encoding.TextUnmarshaler\"`\n+\t\tFileData objectID `form:\"id\"`\n \t}\n \tval := `664a062ac74a8ad104e0e80f`\n@@ -19,29 +19,29 @@\n \trequire.NoError(t, err)\n \n-\texpected, _ := convertToOidUnmarshalText(val)\n+\texpected, _ := convertTo(val)\n \tassert.Equal(t, expected, s.FileData)\n }\n \n-func TestMappingCustomArrayOfArrayUnmarshalTextUri(t *testing.T) {\n-\tid1, _ := convertToOidUnmarshalText(`664a062ac74a8ad104e0e80e`)\n-\tid2, _ := convertToOidUnmarshalText(`664a062ac74a8ad104e0e80f`)\n+func TestMappingCustomArrayOfArrayUri(t *testing.T) {\n+\tid1, _ := convertTo(`664a062ac74a8ad104e0e80e`)\n+\tid2, _ := convertTo(`664a062ac74a8ad104e0e80f`)\n \n \tvar s struct {\n-\t\tFileData []objectIDUnmarshalText `uri:\"ids,parser=encoding.TextUnmarshaler\" collection_format:\"csv\"`\n+\t\tFileData []objectID `uri:\"ids\" collection_format:\"csv\"`\n \t}\n \terr := mappingByPtr(&s, formSource{\"ids\": {`664a062ac74a8ad104e0e80e,664a062ac74a8ad104e0e80f`}}, \"uri\")\n \trequire.NoError(t, err)\n-\tassert.Equal(t, []objectIDUnmarshalText{id1, id2}, s.FileData)\n+\tassert.Equal(t, []objectID{id1, id2}, s.FileData)\n }\n \n-func TestMappingCustomArrayOfArrayUnmarshalTextForm(t *testing.T) {\n-\tid1, _ := convertToOidUnmarshalText(`664a062ac74a8ad104e0e80e`)\n-\tid2, _ := convertToOidUnmarshalText(`664a062ac74a8ad104e0e80f`)\n+func TestMappingCustomArrayOfArrayForm(t *testing.T) {\n+\tid1, _ := convertTo(`664a062ac74a8ad104e0e80e`)\n+\tid2, _ := convertTo(`664a062ac74a8ad104e0e80f`)\n \n \tvar s struct {\n-\t\tFileData []objectIDUnmarshalText `form:\"ids,parser=encoding.TextUnmarshaler\" collection_format:\"csv\"`\n+\t\tFileData []objectID `form:\"ids\" collection_format:\"csv\"`\n \t}\n \terr := mappingByPtr(&s, formSource{\"ids\": {`664a062ac74a8ad104e0e80e,664a062ac74a8ad104e0e80f`}}, \"form\")\n \trequire.NoError(t, err)\n-\tassert.Equal(t, []objectIDUnmarshalText{id1, id2}, s.FileData)\n+\tassert.Equal(t, []objectID{id1, id2}, s.FileData)\n }",
+      "type": "Type II",
+      "occurrences": [
+        "binding/form_mapping_test.go:942-988",
+        "binding/form_mapping_test.go:692-738"
+      ]
+    },
+    {
+      "why": "The code beginning with `t.Logf(\"testing: %s\", tt.name)` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: context_test.go:2933-2943 and context_test.go:2869-2879; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"typeYAML\", \"typeXML\"], [\"`yaml:\\\"foo\\\" binding:\\\"required\\\"`\", \"`xml:\\\"foo\\\" binding:\\\"required\\\"`\"], [\"objYAML\", \"objXML\"]]. Raw core diff:\n--- context_test.go:2933-2943\n+++ context_test.go:2869-2879\n@@ -8,2 +8,2 @@\n-\t\ttype typeYAML struct {\n-\t\t\tFoo string `yaml:\"foo\" binding:\"required\"`\n+\t\ttype typeXML struct {\n+\t\t\tFoo string `xml:\"foo\" binding:\"required\"`\n@@ -11 +11 @@\n-\t\tobjYAML := typeYAML{}\n+\t\tobjXML := typeXML{}\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- context_test.go:2933-2943\n+++ context_test.go:2869-2879\n@@ -6,6 +6,6 @@\n \t\tc.Request, _ = http.NewRequest(http.MethodPost, \"/\", bytes.NewBufferString(tt.body))\n \n-\t\ttype typeYAML struct {\n-\t\t\tFoo string `yaml:\"foo\" binding:\"required\"`\n+\t\ttype typeXML struct {\n+\t\t\tFoo string `xml:\"foo\" binding:\"required\"`\n \t\t}\n-\t\tobjYAML := typeYAML{}\n+\t\tobjXML := typeXML{}",
+      "type": "Type II",
+      "occurrences": [
+        "context_test.go:2933-2943",
+        "context_test.go:2869-2879"
+      ]
+    },
+    {
+      "why": "The code beginning with `router.Use(RecoveryWithWriter(DefaultErrorWriter, handleRecovery))` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: recovery_test.go:277-288 and recovery_test.go:207-218; 10 and 10 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"RecoveryWithWriter\", \"CustomRecoveryWithWriter\"], [\"DefaultErrorWriter\", \"buffer\"]]. Raw core diff:\n--- recovery_test.go:277-288\n+++ recovery_test.go:207-218\n@@ -1 +1 @@\n-\trouter.Use(RecoveryWithWriter(DefaultErrorWriter, handleRecovery))\n+\trouter.Use(CustomRecoveryWithWriter(buffer, handleRecovery))\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- recovery_test.go:277-288\n+++ recovery_test.go:207-218\n@@ -1,3 +1,3 @@\n-\trouter.Use(RecoveryWithWriter(DefaultErrorWriter, handleRecovery))\n+\trouter.Use(CustomRecoveryWithWriter(buffer, handleRecovery))\n \trouter.GET(\"/recovery\", func(_ *Context) {\n \t\tpanic(\"Oops, Houston, we have a problem\")",
+      "occurrences": [
+        "recovery_test.go:277-288",
+        "recovery_test.go:207-218"
+      ]
+    },
+    {
+      "why": "The code beginning with `require.NoError(t, err)` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: context_test.go:224-231 and context_test.go:159-166; 8 and 8 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "context_test.go:224-231",
+        "context_test.go:159-166"
+      ]
+    },
+    {
+      "why": "The code beginning with `w := httptest.NewRecorder()` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: context_test.go:1922-1929 and context_test.go:1863-1870; 7 and 7 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"MIMEBSON\", \"MIMETOML\"]]. Raw core diff:\n--- context_test.go:1922-1929\n+++ context_test.go:1863-1870\n@@ -6 +6 @@\n-\t\tOffered: []string{MIMEBSON, MIMEXML, MIMEJSON, MIMEYAML, MIMEYAML2},\n+\t\tOffered: []string{MIMETOML, MIMEXML, MIMEJSON, MIMEYAML, MIMEYAML2},\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- context_test.go:1922-1929\n+++ context_test.go:1863-1870\n@@ -4,5 +4,5 @@\n \n \tc.Negotiate(http.StatusOK, Negotiate{\n-\t\tOffered: []string{MIMEBSON, MIMEXML, MIMEJSON, MIMEYAML, MIMEYAML2},\n+\t\tOffered: []string{MIMETOML, MIMEXML, MIMEJSON, MIMEYAML, MIMEYAML2},\n \t\tData:    H{\"foo\": \"bar\"},\n \t})",
+      "type": "Type II",
+      "occurrences": [
+        "context_test.go:1922-1929",
+        "context_test.go:1863-1870"
+      ]
+    },
+    {
+      "why": "The code beginning with `const Package = \"github.com/bytedance/sonic\"` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: codec/json/sonic.go:16-44 and codec/json/jsoniter.go:16-44; 21 and 21 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"\\\"github.com/bytedance/sonic\\\"\", \"\\\"github.com/json-iterator/go\\\"\"], [\"sonicApi\", \"jsoniterApi\"], [\"sonic\", \"jsoniter\"], [\"ConfigStd\", \"ConfigCompatibleWithStandardLibrary\"]]. Raw core diff:\n--- codec/json/sonic.go:16-44\n+++ codec/json/jsoniter.go:16-44\n@@ -1 +1 @@\n-const Package = \"github.com/bytedance/sonic\"\n+const Package = \"github.com/json-iterator/go\"\n@@ -4 +4 @@\n-\tAPI = sonicApi{}\n+\tAPI = jsoniterApi{}\n@@ -7 +7 @@\n-var json = sonic.ConfigStd\n+var json = jsoniter.ConfigCompatibleWithStandardLibrary\n@@ -9 +9 @@\n-type sonicApi struct{}\n+type jsoniterApi struct{}\n@@ -11 +11 @@\n-func (j sonicApi) Marshal(v any) ([]byte, error) {\n+func (j jsoniterApi) Marshal(v any) ([]byte, error) {\n@@ -15 +15 @@\n-func (j sonicApi) Unmarshal(data []byte, v any) error {\n+func (j jsoniterApi) Unmarshal(data []byte, v any) error {\n@@ -19 +19 @@\n-func (j sonicApi) MarshalIndent(v any, prefix, indent string) ([]byte, error) {\n+func (j jsoniterApi) MarshalIndent(v any, prefix, indent string) ([]byte, error) {\n@@ -23 +23 @@\n-func (j sonicApi) NewEncoder(writer io.Writer) Encoder {\n+func (j jsoniterApi) NewEncoder(writer io.Writer) Encoder {\n@@ -27 +27 @@\n-func (j sonicApi) NewDecoder(reader io.Reader) Decoder {\n+func (j jsoniterApi) NewDecoder(reader io.Reader) Decoder {\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- codec/json/sonic.go:16-44\n+++ codec/json/jsoniter.go:16-44\n@@ -1,29 +1,29 @@\n-const Package = \"github.com/bytedance/sonic\"\n+const Package = \"github.com/json-iterator/go\"\n \n func init() {\n-\tAPI = sonicApi{}\n+\tAPI = jsoniterApi{}\n }\n \n-var json = sonic.ConfigStd\n+var json = jsoniter.ConfigCompatibleWithStandardLibrary\n \n-type sonicApi struct{}\n+type jsoniterApi struct{}\n \n-func (j sonicApi) Marshal(v any) ([]byte, error) {\n+func (j jsoniterApi) Marshal(v any) ([]byte, error) {\n \treturn json.Marshal(v)\n }\n \n-func (j sonicApi) Unmarshal(data []byte, v any) error {\n+func (j jsoniterApi) Unmarshal(data []byte, v any) error {\n \treturn json.Unmarshal(data, v)\n }\n \n-func (j sonicApi) MarshalIndent(v any, prefix, indent string) ([]byte, error) {\n+func (j jsoniterApi) MarshalIndent(v any, prefix, indent string) ([]byte, error) {\n \treturn json.MarshalIndent(v, prefix, indent)\n }\n \n-func (j sonicApi) NewEncoder(writer io.Writer) Encoder {\n+func (j jsoniterApi) NewEncoder(writer io.Writer) Encoder {\n \treturn json.NewEncoder(writer)\n }\n \n-func (j sonicApi) NewDecoder(reader io.Reader) Decoder {\n+func (j jsoniterApi) NewDecoder(reader io.Reader) Decoder {\n \treturn json.NewDecoder(reader)\n }",
+      "type": "Type II",
+      "occurrences": [
+        "codec/json/sonic.go:16-44",
+        "codec/json/jsoniter.go:16-44"
+      ]
+    },
+    {
+      "why": "The code beginning with `router.GET(\"/login\", func(c *Context) {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: auth_test.go:106-118 and auth_test.go:126-138; 11 and 11 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"\\\"Basic realm=\\\\\\\"Authorization Required\\\\\\\"\\\"\", \"\\\"Basic realm=\\\\\\\"My Custom \\\\\\\\\\\\\\\"Realm\\\\\\\\\\\\\\\"\\\\\\\"\\\"\"]]. Raw core diff:\n--- auth_test.go:106-118\n+++ auth_test.go:126-138\n@@ -13 +13 @@\n-\tassert.Equal(t, \"Basic realm=\\\"Authorization Required\\\"\", w.Header().Get(\"WWW-Authenticate\"))\n+\tassert.Equal(t, \"Basic realm=\\\"My Custom \\\\\\\"Realm\\\\\\\"\\\"\", w.Header().Get(\"WWW-Authenticate\"))\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- auth_test.go:106-118\n+++ auth_test.go:126-138\n@@ -11,3 +11,3 @@\n \tassert.False(t, called)\n \tassert.Equal(t, http.StatusUnauthorized, w.Code)\n-\tassert.Equal(t, \"Basic realm=\\\"Authorization Required\\\"\", w.Header().Get(\"WWW-Authenticate\"))\n+\tassert.Equal(t, \"Basic realm=\\\"My Custom \\\\\\\"Realm\\\\\\\"\\\"\", w.Header().Get(\"WWW-Authenticate\"))",
+      "type": "Type II",
+      "occurrences": [
+        "auth_test.go:106-118",
+        "auth_test.go:126-138"
+      ]
+    },
+    {
+      "why": "The code beginning with `const (` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: binding/binding_nomsgpack.go:21-73 and binding/binding.go:23-76; 23 and 23 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n--- binding/binding_nomsgpack.go:21-73\n+++ binding/binding.go:23-76\n@@ -35 +35,2 @@\n-\t// If the received type is not a struct, any validation should be skipped and nil must be returned.\n+\t// If the received type is a slice|array, the validation should be performed travel on every element.\n+\t// If the received type is not a struct or slice|array, any validation should be skipped and nil must be returned.\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- binding/binding_nomsgpack.go:12-87\n+++ binding/binding.go:12-91\n@@ -8,4 +8,6 @@\n \tMIMEMultipartPOSTForm = \"multipart/form-data\"\n \tMIMEPROTOBUF          = \"application/x-protobuf\"\n+\tMIMEMSGPACK           = \"application/x-msgpack\"\n+\tMIMEMSGPACK2          = \"application/msgpack\"\n \tMIMEYAML              = \"application/x-yaml\"\n \tMIMEYAML2             = \"application/yaml\"\n@@ -42,5 +44,6 @@\n type StructValidator interface {\n \t// ValidateStruct can receive any kind of type and it should never panic, even if the configuration is not right.\n-\t// If the received type is not a struct, any validation should be skipped and nil must be returned.\n+\t// If the received type is a slice|array, the validation should be performed travel on every element.\n+\t// If the received type is not a struct or slice|array, any validation should be skipped and nil must be returned.\n \t// If the received type is a struct or pointer to a struct, the validation should be performed.\n \t// If the struct is not valid or the validation itself fails, a descriptive error should be returned.\n@@ -61,16 +64,17 @@\n // present in the request to struct instances.\n var (\n-\tJSON          = jsonBinding{}\n-\tXML           = xmlBinding{}\n-\tForm          = formBinding{}\n-\tQuery         = queryBinding{}\n-\tFormPost      = formPostBinding{}\n-\tFormMultipart = formMultipartBinding{}\n-\tProtoBuf      = protobufBinding{}\n-\tYAML          = yamlBinding{}\n-\tUri           = uriBinding{}\n-\tHeader        = headerBinding{}\n-\tTOML          = tomlBinding{}\n-\tPlain         = plainBinding{}\n+\tJSON          BindingBody = jsonBinding{}\n+\tXML           BindingBody = xmlBinding{}\n+\tForm          Binding     = formBinding{}\n+\tQuery         Binding     = queryBinding{}\n+\tFormPost      Binding     = formPostBinding{}\n+\tFormMultipart Binding     = formMultipartBinding{}\n+\tProtoBuf      BindingBody = protobufBinding{}\n+\tMsgPack       BindingBody = msgpackBinding{}\n+\tYAML          BindingBody = yamlBinding{}\n+\tUri           BindingUri  = uriBinding{}\n+\tHeader        Binding     = headerBinding{}\n+\tPlain         BindingBody = plainBinding{}\n+\tTOML          BindingBody = tomlBinding{}\n \tBSON          BindingBody = bsonBinding{}\n )",
+      "occurrences": [
+        "binding/binding_nomsgpack.go:12-87",
+        "binding/binding.go:12-91"
+      ]
+    },
+    {
+      "why": "The code beginning with `b := Query` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: binding/binding_test.go:1177-1187 and binding/binding_test.go:895-905; 10 and 10 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"Query\", \"Form\"], [\"\\\"query\\\"\", \"\\\"form\\\"\"], [\"FooBarStruct\", \"FooDefaultBarStruct\"]]. Raw core diff:\n--- binding/binding_test.go:1177-1187\n+++ binding/binding_test.go:895-905\n@@ -1,2 +1,2 @@\n-\tb := Query\n-\tassert.Equal(t, \"query\", b.Name())\n+\tb := Form\n+\tassert.Equal(t, \"form\", b.Name())\n@@ -4 +4 @@\n-\tobj := FooBarStruct{}\n+\tobj := FooDefaultBarStruct{}\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- binding/binding_test.go:1177-1187\n+++ binding/binding_test.go:895-905\n@@ -1,6 +1,6 @@\n-\tb := Query\n-\tassert.Equal(t, \"query\", b.Name())\n+\tb := Form\n+\tassert.Equal(t, \"form\", b.Name())\n \n-\tobj := FooBarStruct{}\n+\tobj := FooDefaultBarStruct{}\n \treq := requestWithBody(method, path, body)\n \tif method == http.MethodPost {",
+      "type": "Type II",
+      "occurrences": [
+        "binding/binding_test.go:1177-1187",
+        "binding/binding_test.go:895-905"
+      ]
+    },
+    {
+      "why": "The code beginning with `func createFormFilesMultipartRequest(t *testing.T) *http.Request {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: binding/binding_test.go:532-543 and binding/binding_test.go:557-568; 10 and 10 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- binding/binding_test.go:531-554\n+++ binding/binding_test.go:556-579\n@@ -1,3 +1,3 @@\n-func createFormFilesMultipartRequest(t *testing.T) *http.Request {\n+func createFormFilesMultipartRequestFail(t *testing.T) *http.Request {\n \tboundary := \"--testboundary\"\n \tbody := new(bytes.Buffer)\n@@ -12,5 +12,5 @@\n \trequire.NoError(t, err)\n \tdefer f.Close()\n-\tfw, err1 := mw.CreateFormFile(\"file\", \"form.go\")\n+\tfw, err1 := mw.CreateFormFile(\"file_foo\", \"form_foo.go\")\n \trequire.NoError(t, err1)\n \t_, err = io.Copy(fw, f)",
+      "occurrences": [
+        "binding/binding_test.go:531-554",
+        "binding/binding_test.go:556-579"
+      ]
+    },
+    {
+      "why": "The code beginning with `func TestContextShouldBindBodyWithPlain(t *testing.T) {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: context_test.go:3033-3060 and context_test.go:2776-2803; 28 and 28 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- context_test.go:3032-3105\n+++ context_test.go:2775-2837\n@@ -1,3 +1,3 @@\n-func TestContextShouldBindBodyWithPlain(t *testing.T) {\n+func TestContextShouldBindBodyWithJSON(t *testing.T) {\n \tfor _, tt := range []struct {\n \t\tname        string\n@@ -28,9 +28,4 @@\n \t\t\tbody:        `foo=FOO`,\n \t\t},\n-\t\t{\n-\t\t\tname:        \" JSON & Plain-BODY \",\n-\t\t\tbindingBody: binding.Plain,\n-\t\t\tbody:        `foo=FOO`,\n-\t\t},\n \t} {\n \t\tt.Logf(\"testing: %s\", tt.name)\n@@ -45,10 +40,4 @@\n \t\t}\n \t\tobjJSON := typeJSON{}\n-\n-\t\tif tt.bindingBody == binding.Plain {\n-\t\t\tbody := \"\"\n-\t\t\trequire.NoError(t, c.ShouldBindBodyWithPlain(&body))\n-\t\t\tassert.Equal(t, \"foo=FOO\", body)\n-\t\t}\n \n \t\tif tt.bindingBody == binding.JSON {",
+      "occurrences": [
+        "context_test.go:3032-3105",
+        "context_test.go:2775-2837"
+      ]
+    },
+    {
+      "why": "The code beginning with `func (r TOML) Render(w http.ResponseWriter) error {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: render/toml.go:21-31 and render/yaml.go:21-31; 9 and 9 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"TOML\", \"YAML\"], [\"toml\", \"yaml\"]]. Raw core diff:\n--- render/toml.go:21-31\n+++ render/yaml.go:21-31\n@@ -1 +1 @@\n-func (r TOML) Render(w http.ResponseWriter) error {\n+func (r YAML) Render(w http.ResponseWriter) error {\n@@ -4 +4 @@\n-\tbytes, err := toml.Marshal(r.Data)\n+\tbytes, err := yaml.Marshal(r.Data)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- render/toml.go:21-31\n+++ render/yaml.go:21-31\n@@ -1,6 +1,6 @@\n-func (r TOML) Render(w http.ResponseWriter) error {\n+func (r YAML) Render(w http.ResponseWriter) error {\n \tr.WriteContentType(w)\n \n-\tbytes, err := toml.Marshal(r.Data)\n+\tbytes, err := yaml.Marshal(r.Data)\n \tif err != nil {\n \t\treturn err",
+      "type": "Type II",
+      "occurrences": [
+        "render/toml.go:21-31",
+        "render/yaml.go:21-31"
+      ]
+    },
+    {
+      "why": "The code beginning with `func TestRecoveryWithWriterWithCustomRecovery(t *testing.T) {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: recovery_test.go:278-300 and recovery_test.go:243-265; 15 and 15 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- recovery_test.go:268-301\n+++ recovery_test.go:234-265\n@@ -1,3 +1,2 @@\n-func TestRecoveryWithWriterWithCustomRecovery(t *testing.T) {\n \terrBuffer := new(strings.Builder)\n \tbuffer := new(strings.Builder)\n@@ -8,5 +7,5 @@\n \t\tc.AbortWithStatus(http.StatusBadRequest)\n \t}\n-\trouter.Use(RecoveryWithWriter(DefaultErrorWriter, handleRecovery))\n+\trouter.Use(CustomRecovery(handleRecovery))\n \trouter.GET(\"/recovery\", func(_ *Context) {\n \t\tpanic(\"Oops, Houston, we have a problem\")\n@@ -32,3 +31,2 @@\n \n \tSetMode(TestMode)\n-}",
+      "occurrences": [
+        "recovery_test.go:268-301",
+        "recovery_test.go:234-265"
+      ]
+    },
+    {
+      "why": "The code beginning with `func TestBindingFormEmbeddedStruct2(t *testing.T) {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: binding/binding_test.go:253-263 and binding/binding_test.go:241-251; 10 and 10 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"TestBindingFormEmbeddedStruct2\", \"TestBindingForm2\"], [\"testFormBindingEmbeddedStruct\", \"testFormBinding\"], [\"\\\"/?page=1&size=2&appkey=test-appkey\\\"\", \"\\\"/?foo=bar&bar=foo\\\"\"], [\"TestBindingFormDefaultValue\", \"TestBindingFormEmbeddedStruct\"], [\"testFormBindingDefaultValue\", \"testFormBindingEmbeddedStruct\"], [\"\\\"foo=bar\\\"\", \"\\\"page=1&size=2&appkey=test-appkey\\\"\"]]. Raw core diff:\n--- binding/binding_test.go:253-263\n+++ binding/binding_test.go:241-251\n@@ -1,3 +1,3 @@\n-func TestBindingFormEmbeddedStruct2(t *testing.T) {\n-\ttestFormBindingEmbeddedStruct(t, http.MethodGet,\n-\t\t\"/?page=1&size=2&appkey=test-appkey\", \"/?bar2=foo\",\n+func TestBindingForm2(t *testing.T) {\n+\ttestFormBinding(t, http.MethodGet,\n+\t\t\"/?foo=bar&bar=foo\", \"/?bar2=foo\",\n@@ -7,2 +7,2 @@\n-func TestBindingFormDefaultValue(t *testing.T) {\n-\ttestFormBindingDefaultValue(t, http.MethodPost,\n+func TestBindingFormEmbeddedStruct(t *testing.T) {\n+\ttestFormBindingEmbeddedStruct(t, http.MethodPost,\n@@ -10 +10 @@\n-\t\t\"foo=bar\", \"bar2=foo\")\n+\t\t\"page=1&size=2&appkey=test-appkey\", \"bar2=foo\")\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- binding/binding_test.go:253-263\n+++ binding/binding_test.go:241-251\n@@ -1,11 +1,11 @@\n-func TestBindingFormEmbeddedStruct2(t *testing.T) {\n-\ttestFormBindingEmbeddedStruct(t, http.MethodGet,\n-\t\t\"/?page=1&size=2&appkey=test-appkey\", \"/?bar2=foo\",\n+func TestBindingForm2(t *testing.T) {\n+\ttestFormBinding(t, http.MethodGet,\n+\t\t\"/?foo=bar&bar=foo\", \"/?bar2=foo\",\n \t\t\"\", \"\")\n }\n \n-func TestBindingFormDefaultValue(t *testing.T) {\n-\ttestFormBindingDefaultValue(t, http.MethodPost,\n+func TestBindingFormEmbeddedStruct(t *testing.T) {\n+\ttestFormBindingEmbeddedStruct(t, http.MethodPost,\n \t\t\"/\", \"/\",\n-\t\t\"foo=bar\", \"bar2=foo\")\n+\t\t\"page=1&size=2&appkey=test-appkey\", \"bar2=foo\")\n }",
+      "occurrences": [
+        "binding/binding_test.go:253-263",
+        "binding/binding_test.go:241-251"
+      ]
+    },
+    {
+      "why": "The code beginning with `type mockFileSystem struct {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: fs_test.go:13-19 and internal/fs/fs_test.go:13-19; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- fs_test.go:13-49\n+++ internal/fs/fs_test.go:13-49\n@@ -7,5 +7,5 @@\n }\n \n-func TestOnlyFilesFS_Open(t *testing.T) {\n+func TestFileSystem_Open(t *testing.T) {\n \tvar testFile *os.File\n \tmockFS := &mockFileSystem{\n@@ -14,13 +14,13 @@\n \t\t},\n \t}\n-\tfs := &OnlyFilesFS{FileSystem: mockFS}\n+\tfs := &FileSystem{mockFS}\n \n \tfile, err := fs.Open(\"foo\")\n \n \trequire.NoError(t, err)\n-\tassert.Equal(t, testFile, file.(neutralizedReaddirFile).File)\n+\tassert.Equal(t, testFile, file)\n }\n \n-func TestOnlyFilesFS_Open_err(t *testing.T) {\n+func TestFileSystem_Open_err(t *testing.T) {\n \ttestError := errors.New(\"mock\")\n \tmockFS := &mockFileSystem{\n@@ -29,5 +29,5 @@\n \t\t},\n \t}\n-\tfs := &OnlyFilesFS{FileSystem: mockFS}\n+\tfs := &FileSystem{mockFS}\n \n \tfile, err := fs.Open(\"foo\")",
+      "occurrences": [
+        "fs_test.go:13-49",
+        "internal/fs/fs_test.go:13-49"
+      ]
+    },
+    {
+      "why": "The code beginning with `func TestCustomRecovery(t *testing.T) {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: recovery_test.go:243-266 and recovery_test.go:278-301; 16 and 16 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- recovery_test.go:233-266\n+++ recovery_test.go:268-301\n@@ -1,3 +1,3 @@\n-func TestCustomRecovery(t *testing.T) {\n+func TestRecoveryWithWriterWithCustomRecovery(t *testing.T) {\n \terrBuffer := new(strings.Builder)\n \tbuffer := new(strings.Builder)\n@@ -8,5 +8,5 @@\n \t\tc.AbortWithStatus(http.StatusBadRequest)\n \t}\n-\trouter.Use(CustomRecovery(handleRecovery))\n+\trouter.Use(RecoveryWithWriter(DefaultErrorWriter, handleRecovery))\n \trouter.GET(\"/recovery\", func(_ *Context) {\n \t\tpanic(\"Oops, Houston, we have a problem\")",
+      "occurrences": [
+        "recovery_test.go:233-266",
+        "recovery_test.go:268-301"
+      ]
+    },
+    {
+      "why": "The code beginning with `func Default(method, contentType string) Binding {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: binding/binding.go:115-127 and binding/binding_nomsgpack.go:109-121; 12 and 12 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- binding/binding.go:95-127\n+++ binding/binding_nomsgpack.go:91-121\n@@ -1,4 +1,4 @@\n func Default(method, contentType string) Binding {\n-\tif method == http.MethodGet {\n+\tif method == \"GET\" {\n \t\treturn Form\n \t}\n@@ -11,12 +11,10 @@\n \tcase MIMEPROTOBUF:\n \t\treturn ProtoBuf\n-\tcase MIMEMSGPACK, MIMEMSGPACK2:\n-\t\treturn MsgPack\n \tcase MIMEYAML, MIMEYAML2:\n \t\treturn YAML\n+\tcase MIMEMultipartPOSTForm:\n+\t\treturn FormMultipart\n \tcase MIMETOML:\n \t\treturn TOML\n-\tcase MIMEMultipartPOSTForm:\n-\t\treturn FormMultipart\n \tcase MIMEBSON:\n \t\treturn BSON",
+      "occurrences": [
+        "binding/binding.go:95-127",
+        "binding/binding_nomsgpack.go:91-121"
+      ]
+    }
+  ],
+  "clearly_out": [],
+  "not_clear": [
+    {
+      "why": "The fragments around `func TestNewOptionFunc(t *testing.T) {` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 7; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "gin_test.go:993-1008",
+        "gin_test.go:1010-1025"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "logger.go:177-178",
+        "logger.go:181-182"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "routes_test.go:311-312",
+        "logger_test.go:425-426"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "context_file_test.go:21-23",
+        "context_test.go:93-95"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "binding/binding_test.go:1074-1077",
+        "binding/binding_test.go:987-990"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "routes_test.go:590-592",
+        "routes_test.go:553-555"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "gin_integration_test.go:600-603",
+        "gin_integration_test.go:475-478"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "auth_test.go:56-59",
+        "auth_test.go:60-63"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "binding/binding_test.go:883-885",
+        "binding/binding_test.go:1185-1187"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "context_test.go:1776-1779",
+        "context_test.go:1799-1803"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "gin.go:313-314",
+        "gin.go:302-303"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "context_test.go:1833-1835",
+        "context_test.go:1848-1850"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "context_test.go:3154-3157",
+        "context_test.go:3182-3185"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "benchmarks_test.go:46-48",
+        "benchmarks_test.go:38-40"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "binding/binding_test.go:1315-1317",
+        "binding/binding_test.go:1331-1333"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "binding/validate_test.go:163-168",
+        "binding/validate_test.go:115-118"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "render/render_test.go:383-385",
+        "context_test.go:1744-1748"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "render/html.go:78-80",
+        "gin.go:317-317"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "binding/binding_test.go:698-702",
+        "binding/binding_test.go:644-648"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "binding/binding_test.go:1227-1229",
+        "binding/binding_test.go:1286-1288"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "context_test.go:1481-1483",
+        "context_test.go:1246-1248"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "render/render_test.go:456-457",
+        "context_test.go:1495-1496"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "routes_test.go:687-689",
+        "routes_test.go:700-703"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "gin_test.go:507-510",
+        "gin_test.go:586-589"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "routergroup_test.go:25-27",
+        "routergroup_test.go:32-34"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "logger_test.go:90-91",
+        "routes_test.go:207-208"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "render/render_test.go:193-195",
+        "render/render_test.go:814-816"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "auth_test.go:17-21",
+        "auth_test.go:49-53"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "context_test.go:1973-1974",
+        "context_test.go:2605-2606"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "binding/form_mapping_test.go:314-315",
+        "binding/form_mapping_test.go:295-296"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "context_test.go:3149-3150",
+        "context_test.go:3199-3200"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "recovery_test.go:24-27",
+        "recovery_test.go:82-85"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "context_test.go:3692-3694",
+        "context_test.go:3689-3691"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "gin_test.go:726-729",
+        "gin_integration_test.go:395-398"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "context_test.go:3761-3764",
+        "context_test.go:3781-3784"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "context_test.go:1468-1469",
+        "render/render_test.go:629-630"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "render/render_test.go:455-457",
+        "render/render_test.go:599-601"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "context_test.go:1858-1859",
+        "context_test.go:1710-1711"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "context_test.go:3166-3171",
+        "context_test.go:3160-3165"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "context_test.go:1247-1248",
+        "context_test.go:1482-1483"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "routes_test.go:465-469",
+        "routes_test.go:499-503"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 5; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "binding/form_mapping_test.go:415-419",
+        "binding/form_mapping_test.go:359-363"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "context_test.go:1233-1235",
+        "context_test.go:1207-1209"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "logger_test.go:171-175",
+        "logger_test.go:426-429"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "context_test.go:3159-3161",
+        "context_test.go:3154-3156"
+      ]
+    },
+    {
+      "why": "The fragments around `assert.Len(t, router.allNoMethod, 3)` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "gin_test.go:592-599",
+        "gin_test.go:503-510"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tree_test.go:896-898",
+        "tree_test.go:888-890"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "binding/form_mapping_test.go:464-466",
+        "binding/form_mapping_test.go:471-473"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "render/render_test.go:27-31",
+        "render/render_test.go:346-350"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "binding/binding_msgpack_test.go:43-46",
+        "binding/binding_test.go:1347-1350"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "gin_test.go:486-489",
+        "gin_test.go:539-542"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "context_test.go:3171-3172",
+        "context_test.go:3176-3177"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "routes_test.go:317-318",
+        "routes_test.go:267-268"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "context_test.go:988-990",
+        "context_test.go:1088-1090"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "routes_test.go:927-933",
+        "routes_test.go:960-964"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "binding/form_mapping_test.go:760-761",
+        "binding/form_mapping_test.go:806-807"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "routes_test.go:254-256",
+        "routes_test.go:274-276"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "gin_integration_test.go:56-59",
+        "gin_integration_test.go:51-54"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "binding/form_mapping_test.go:329-333",
+        "binding/form_mapping_test.go:396-400"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "mode_test.go:58-62",
+        "mode_test.go:52-56"
+      ]
+    },
+    {
+      "why": "The fragments around `func testBodyBinding(t *testing.T, b Binding, name, path, badPath, body, badBody string) {` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 7; edited blocks in the comment/whitespace-normalized line diff: 4.",
+      "occurrences": [
+        "binding/binding_test.go:1217-1230",
+        "binding/binding_test.go:1272-1289"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "binding/binding_test.go:1252-1255",
+        "binding/binding_test.go:437-440"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "render/render_test.go:39-40",
+        "context_test.go:1180-1181"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "context_test.go:259-261",
+        "context_test.go:237-239"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "context_test.go:3108-3109",
+        "context_test.go:2355-2356"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "auth_test.go:59-61",
+        "auth_test.go:63-65"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "context_test.go:100-102",
+        "context_file_test.go:28-30"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "gin_integration_test.go:213-217",
+        "gin_integration_test.go:235-239"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "gin_integration_test.go:603-604",
+        "gin_integration_test.go:605-606"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "context_test.go:1135-1137",
+        "context_test.go:3206-3208"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tree_test.go:210-210",
+        "tree_test.go:211-211"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "context_test.go:1873-1874",
+        "context_test.go:1723-1724"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "routes_test.go:157-160",
+        "utils_test.go:50-52"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "context_test.go:1465-1467",
+        "context_test.go:1479-1481"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "routergroup_test.go:94-95",
+        "routergroup_test.go:90-91"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "binding/binding_msgpack_test.go:44-46",
+        "binding/binding_test.go:384-386"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "logger_test.go:391-394",
+        "logger_test.go:395-398"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 5; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "binding/binding_test.go:532-537",
+        "binding/binding_test.go:582-587"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "routes_test.go:603-606",
+        "routes_test.go:626-629"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "gin_integration_test.go:242-246",
+        "gin_integration_test.go:76-80"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "render/render_test.go:278-281",
+        "render/render_test.go:36-40"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "context_test.go:1277-1278",
+        "context_test.go:3375-3376"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "binding/binding_test.go:1145-1147",
+        "binding/binding_test.go:700-702"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "response_writer_test.go:331-334",
+        "response_writer_test.go:339-342"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "mode_test.go:34-35",
+        "mode_test.go:26-27"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "mode_test.go:37-39",
+        "mode_test.go:29-31"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "context.go:1234-1236",
+        "context.go:1298-1300"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "render/render_test.go:676-677",
+        "render/render_test.go:697-698"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "routes_test.go:324-326",
+        "routes_test.go:223-225"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "context_test.go:3193-3195",
+        "context_test.go:3188-3190"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "gin.go:329-330",
+        "render/html.go:84-87"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "gin_test.go:541-544",
+        "gin_test.go:507-510"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "context_test.go:1746-1747",
+        "context_test.go:1916-1917"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "binding/form_mapping_test.go:1143-1144",
+        "binding/form_mapping_test.go:1137-1138"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "logger_test.go:366-370",
+        "logger_test.go:352-356"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (7 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "routergroup_test.go:150-156",
+        "context_test.go:1809-1810"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "gin.go:52-52",
+        "gin.go:53-53"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "routes_test.go:276-278",
+        "routes_test.go:244-246"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tree_test.go:274-274",
+        "tree_test.go:273-273"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "routes_test.go:628-630",
+        "benchmarks_test.go:116-118"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "gin_integration_test.go:473-476",
+        "gin_integration_test.go:385-388"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 8 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "gin_test.go:1109-1114",
+        "gin_test.go:1148-1158"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "binding/form_mapping_test.go:115-118",
+        "binding/binding_test.go:868-870"
+      ]
+    },
+    {
+      "why": "The fragments around `require.NoError(t, err)` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "binding/binding_msgpack_test.go:46-52",
+        "binding/binding_test.go:1350-1357"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "render/render_msgpack_test.go:57-59",
+        "binding/json_test.go:34-36"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "routes_test.go:259-260",
+        "routes_test.go:255-256"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "context_test.go:3388-3389",
+        "context_test.go:3397-3398"
+      ]
+    },
+    {
+      "why": "The fragments around `req.Header.Add(\"Content-Type\", MIMEPROTOBUF)` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 3.",
+      "occurrences": [
+        "binding/binding_test.go:1348-1356",
+        "binding/binding_msgpack_test.go:44-52"
+      ]
+    }
+  ],
+  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 200 candidates at this commit and no pair was called CLEARLY OUT by all of them. 0 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing."
+}

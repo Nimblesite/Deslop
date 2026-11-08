@@ -1,0 +1,1359 @@
+{
+  "name": "flask",
+  "language": "python",
+  "url": "https://github.com/pallets/flask.git",
+  "sha": "49943b5a94413a530761350f04e896f76e8d620e",
+  "protocol": {
+    "spec": "docs/specs/corpus.md",
+    "spec_section": "[CORPUS-REGISTER]",
+    "judging_skill": ".agents/skills/judge-clone-pairs/SKILL.md",
+    "preparer_skill": ".agents/skills/clone-register-prepare/SKILL.md"
+  },
+  "clearly_in": [
+    {
+      "why": "The code beginning with `@app.route(\"/error\")` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/test_user_error_handler.py:229-235 and tests/test_user_error_handler.py:47-53; 6 and 6 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"\\\"/error\\\"\", \"\\\"/keyerror\\\"\"], [\"do_error\", \"key_error\"]]. Raw core diff:\n--- tests/test_user_error_handler.py:229-235\n+++ tests/test_user_error_handler.py:47-53\n@@ -1,3 +1,3 @@\n-        @app.route(\"/error\")\n-        def do_error():\n-            raise KeyError()\n+    @app.route(\"/keyerror\")\n+    def key_error():\n+        raise KeyError()\n@@ -5,3 +5,3 @@\n-        @app.route(\"/abort\")\n-        def do_abort():\n-            flask.abort(500)\n+    @app.route(\"/abort\")\n+    def do_abort():\n+        flask.abort(500)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_user_error_handler.py:229-235\n+++ tests/test_user_error_handler.py:47-53\n@@ -1,7 +1,7 @@\n-        @app.route(\"/error\")\n-        def do_error():\n-            raise KeyError()\n+    @app.route(\"/keyerror\")\n+    def key_error():\n+        raise KeyError()\n \n-        @app.route(\"/abort\")\n-        def do_abort():\n-            flask.abort(500)\n+    @app.route(\"/abort\")\n+    def do_abort():\n+        flask.abort(500)",
+      "type": "Type II",
+      "occurrences": [
+        "tests/test_user_error_handler.py:229-235",
+        "tests/test_user_error_handler.py:47-53"
+      ]
+    },
+    {
+      "why": "The code beginning with `assert client.get(\"/\").data == b\"GET\"` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: tests/test_basic.py:180-187 and tests/test_basic.py:142-149; 8 and 8 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "tests/test_basic.py:180-187",
+        "tests/test_basic.py:142-149"
+      ]
+    },
+    {
+      "why": "The code beginning with `@t.overload` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: src/flask/sansio/app.py:714-719 and src/flask/sansio/app.py:773-778; 6 and 6 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"template_test\", \"template_global\"], [\"T_template_test\", \"T_template_global\"]]. Raw core diff:\n--- src/flask/sansio/app.py:714-719\n+++ src/flask/sansio/app.py:773-778\n@@ -2 +2 @@\n-    def template_test(self, name: T_template_test) -> T_template_test: ...\n+    def template_global(self, name: T_template_global) -> T_template_global: ...\n@@ -4 +4 @@\n-    def template_test(\n+    def template_global(\n@@ -6 +6 @@\n-    ) -> t.Callable[[T_template_test], T_template_test]: ...\n+    ) -> t.Callable[[T_template_global], T_template_global]: ...\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/flask/sansio/app.py:714-719\n+++ src/flask/sansio/app.py:773-778\n@@ -1,6 +1,6 @@\n     @t.overload\n-    def template_test(self, name: T_template_test) -> T_template_test: ...\n+    def template_global(self, name: T_template_global) -> T_template_global: ...\n     @t.overload\n-    def template_test(\n+    def template_global(\n         self, name: str | None = None\n-    ) -> t.Callable[[T_template_test], T_template_test]: ...\n+    ) -> t.Callable[[T_template_global], T_template_global]: ...",
+      "type": "Type II",
+      "occurrences": [
+        "src/flask/sansio/app.py:714-719",
+        "src/flask/sansio/app.py:773-778"
+      ]
+    },
+    {
+      "why": "The code beginning with `if t.TYPE_CHECKING:  # pragma: no cover` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: src/flask/app.py:63-76 and src/flask/sansio/app.py:44-57; 11 and 11 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/flask/app.py:55-76\n+++ src/flask/sansio/app.py:37-57\n@@ -1,9 +1,8 @@\n if t.TYPE_CHECKING:  # pragma: no cover\n-    from _typeshed.wsgi import StartResponse\n-    from _typeshed.wsgi import WSGIEnvironment\n+    from werkzeug.wrappers import Response as BaseResponse\n \n-    from .testing import FlaskClient\n-    from .testing import FlaskCliRunner\n-    from .typing import HeadersValue\n+    from ..testing import FlaskClient\n+    from ..testing import FlaskCliRunner\n+    from .blueprints import Blueprint\n \n T_shell_context_processor = t.TypeVar(",
+      "occurrences": [
+        "src/flask/app.py:55-76",
+        "src/flask/sansio/app.py:37-57"
+      ]
+    },
+    {
+      "why": "The code beginning with `assert sorted(rv.allow) == [\"GET\", \"HEAD\", \"OPTIONS\"]` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: tests/test_basic.py:183-190 and tests/test_basic.py:145-152; 8 and 8 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "tests/test_basic.py:183-190",
+        "tests/test_basic.py:145-152"
+      ]
+    },
+    {
+      "why": "The code beginning with `app.register_blueprint(bp, url_prefix=\"/py\")` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: tests/test_blueprints.py:433-440 and tests/test_blueprints.py:483-490; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "tests/test_blueprints.py:433-440",
+        "tests/test_blueprints.py:483-490"
+      ]
+    },
+    {
+      "why": "The code beginning with `@app.route(\"/\", subdomain=\"<company_id>\")` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/test_testing.py:310-320 and tests/test_testing.py:327-337; 8 and 8 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_testing.py:309-320\n+++ tests/test_testing.py:326-337\n@@ -1,3 +1,3 @@\n-    @app.route(\"/\", subdomain=\"<company_id>\")\n+    @app.route(\"/<company_id>\")\n     def view(company_id):\n         return company_id",
+      "occurrences": [
+        "tests/test_testing.py:309-320",
+        "tests/test_testing.py:326-337"
+      ]
+    },
+    {
+      "why": "The code beginning with `def boolean(value):` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/test_blueprints.py:626-633 and tests/test_blueprints.py:643-650; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_blueprints.py:622-633\n+++ tests/test_blueprints.py:639-650\n@@ -1,6 +1,6 @@\n-    def boolean(value):\n+    @bp.app_template_test(\"boolean\")\n+    def is_boolean(value):\n         return isinstance(value, bool)\n \n-    bp.add_app_template_test(boolean)\n     app.register_blueprint(bp, url_prefix=\"/py\")\n ",
+      "occurrences": [
+        "tests/test_blueprints.py:622-633",
+        "tests/test_blueprints.py:639-650"
+      ]
+    },
+    {
+      "why": "The code beginning with `@parent.before_request` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/test_blueprints.py:943-961 and tests/test_blueprints.py:923-941; 15 and 15 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"parent\", \"app\"], [\"parent_before2\", \"app_before2\"], [\"\\\"parent_2\\\"\", \"\\\"app_2\\\"\"], [\"parent_teardown2\", \"app_teardown2\"], [\"parent_ctx\", \"app_ctx\"], [\"\\\"parent\\\"\", \"\\\"app\\\"\"], [\"child\", \"parent\"], [\"child_before1\", \"parent_before1\"], [\"\\\"child_1\\\"\", \"\\\"parent_1\\\"\"], [\"child_teardown1\", \"parent_teardown1\"]]. Raw core diff:\n--- tests/test_blueprints.py:943-961\n+++ tests/test_blueprints.py:923-941\n@@ -0,0 +1,12 @@\n+    @app.before_request\n+    def app_before2():\n+        flask.g.setdefault(\"seen\", []).append(\"app_2\")\n+\n+    @app.teardown_request\n+    def app_teardown2(e=None):\n+        assert flask.g.seen.pop() == \"app_2\"\n+\n+    @app.context_processor\n+    def app_ctx():\n+        return dict(key=\"app\")\n+\n@@ -2,2 +14,2 @@\n-    def parent_before2():\n-        flask.g.setdefault(\"seen\", []).append(\"parent_2\")\n+    def parent_before1():\n+        flask.g.setdefault(\"seen\", []).append(\"parent_1\")\n@@ -6,14 +18,2 @@\n-    def parent_teardown2(e=None):\n-        assert flask.g.seen.pop() == \"parent_2\"\n-\n-    @parent.context_processor\n-    def parent_ctx():\n-        return dict(key=\"parent\")\n-\n-    @child.before_request\n-    def child_before1():\n-        flask.g.setdefault(\"seen\", []).append(\"child_1\")\n-\n-    @child.teardown_request\n-    def child_teardown1(e=None):\n-        assert flask.g.seen.pop() == \"child_1\"\n+    def parent_teardown1(e=None):\n+        assert flask.g.seen.pop() == \"parent_1\"\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_blueprints.py:943-961\n+++ tests/test_blueprints.py:923-941\n@@ -1,19 +1,19 @@\n+    @app.before_request\n+    def app_before2():\n+        flask.g.setdefault(\"seen\", []).append(\"app_2\")\n+\n+    @app.teardown_request\n+    def app_teardown2(e=None):\n+        assert flask.g.seen.pop() == \"app_2\"\n+\n+    @app.context_processor\n+    def app_ctx():\n+        return dict(key=\"app\")\n+\n     @parent.before_request\n-    def parent_before2():\n-        flask.g.setdefault(\"seen\", []).append(\"parent_2\")\n+    def parent_before1():\n+        flask.g.setdefault(\"seen\", []).append(\"parent_1\")\n \n     @parent.teardown_request\n-    def parent_teardown2(e=None):\n-        assert flask.g.seen.pop() == \"parent_2\"\n-\n-    @parent.context_processor\n-    def parent_ctx():\n-        return dict(key=\"parent\")\n-\n-    @child.before_request\n-    def child_before1():\n-        flask.g.setdefault(\"seen\", []).append(\"child_1\")\n-\n-    @child.teardown_request\n-    def child_teardown1(e=None):\n-        assert flask.g.seen.pop() == \"child_1\"\n+    def parent_teardown1(e=None):\n+        assert flask.g.seen.pop() == \"parent_1\"",
+      "occurrences": [
+        "tests/test_blueprints.py:943-961",
+        "tests/test_blueprints.py:923-941"
+      ]
+    },
+    {
+      "why": "The code beginning with `rv = client.head(\"/\")` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: tests/test_basic.py:146-153 and tests/test_basic.py:184-191; 8 and 8 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "tests/test_basic.py:146-153",
+        "tests/test_basic.py:184-191"
+      ]
+    },
+    {
+      "why": "The code beginning with `app.config.update(APPLICATION_ROOT=\"/foo\")` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/test_basic.py:281-289 and tests/test_basic.py:303-311; 7 and 7 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"\\\"/foo\\\"\", \"\\\"/bar\\\"\"], [\"\\\"http://example.com:8080/foo\\\"\", \"\\\"http://example.com:8080/\\\"\"], [\"\\\"path=/foo\\\"\", \"\\\"path=/bar\\\"\"]]. Raw core diff:\n--- tests/test_basic.py:281-289\n+++ tests/test_basic.py:303-311\n@@ -1 +1 @@\n-    app.config.update(APPLICATION_ROOT=\"/foo\")\n+    app.config.update(APPLICATION_ROOT=\"/bar\")\n@@ -8,2 +8,2 @@\n-    rv = client.get(\"/\", \"http://example.com:8080/foo\")\n-    assert \"path=/foo\" in rv.headers[\"set-cookie\"].lower()\n+    rv = client.get(\"/\", \"http://example.com:8080/\")\n+    assert \"path=/bar\" in rv.headers[\"set-cookie\"].lower()\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_basic.py:281-289\n+++ tests/test_basic.py:303-311\n@@ -1,3 +1,3 @@\n-    app.config.update(APPLICATION_ROOT=\"/foo\")\n+    app.config.update(APPLICATION_ROOT=\"/bar\")\n \n     @app.route(\"/\")\n@@ -6,4 +6,4 @@\n         return \"Hello World\"\n \n-    rv = client.get(\"/\", \"http://example.com:8080/foo\")\n-    assert \"path=/foo\" in rv.headers[\"set-cookie\"].lower()\n+    rv = client.get(\"/\", \"http://example.com:8080/\")\n+    assert \"path=/bar\" in rv.headers[\"set-cookie\"].lower()",
+      "type": "Type II",
+      "occurrences": [
+        "tests/test_basic.py:281-289",
+        "tests/test_basic.py:303-311"
+      ]
+    },
+    {
+      "why": "The code beginning with `def test_template_test_with_template(app, client):` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/test_templating.py:308-315 and tests/test_templating.py:335-342; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_templating.py:305-315\n+++ tests/test_templating.py:332-342\n@@ -1,5 +1,5 @@\n-def test_template_test_with_template(app, client):\n-    @app.template_test()\n-    def boolean(value):\n+def test_template_test_with_name_and_template(app, client):\n+    @app.template_test(\"boolean\")\n+    def is_boolean(value):\n         return isinstance(value, bool)\n ",
+      "occurrences": [
+        "tests/test_templating.py:305-315",
+        "tests/test_templating.py:332-342"
+      ]
+    },
+    {
+      "why": "The code beginning with `def test_create(client, auth, app):` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: examples/tutorial/tests/test_blog.py:46-52 and examples/tutorial/tests/test_blog.py:57-63; 6 and 6 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"test_create\", \"test_update\"], [\"\\\"/create\\\"\", \"\\\"/1/update\\\"\"], [\"\\\"created\\\"\", \"\\\"updated\\\"\"]]. Raw core diff:\n--- examples/tutorial/tests/test_blog.py:46-52\n+++ examples/tutorial/tests/test_blog.py:57-63\n@@ -1 +1 @@\n-def test_create(client, auth, app):\n+def test_update(client, auth, app):\n@@ -3,2 +3,2 @@\n-    assert client.get(\"/create\").status_code == 200\n-    client.post(\"/create\", data={\"title\": \"created\", \"body\": \"\"})\n+    assert client.get(\"/1/update\").status_code == 200\n+    client.post(\"/1/update\", data={\"title\": \"updated\", \"body\": \"\"})\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- examples/tutorial/tests/test_blog.py:46-54\n+++ examples/tutorial/tests/test_blog.py:57-65\n@@ -1,9 +1,9 @@\n-def test_create(client, auth, app):\n+def test_update(client, auth, app):\n     auth.login()\n-    assert client.get(\"/create\").status_code == 200\n-    client.post(\"/create\", data={\"title\": \"created\", \"body\": \"\"})\n+    assert client.get(\"/1/update\").status_code == 200\n+    client.post(\"/1/update\", data={\"title\": \"updated\", \"body\": \"\"})\n \n     with app.app_context():\n         db = get_db()\n-        count = db.execute(\"SELECT COUNT(id) FROM post\").fetchone()[0]\n-        assert count == 2\n+        post = db.execute(\"SELECT * FROM post WHERE id = 1\").fetchone()\n+        assert post[\"title\"] == \"updated\"",
+      "occurrences": [
+        "examples/tutorial/tests/test_blog.py:46-54",
+        "examples/tutorial/tests/test_blog.py:57-65"
+      ]
+    },
+    {
+      "why": "The code beginning with `def test_static_url_path():` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/test_basic.py:1435-1443 and tests/test_basic.py:1446-1454; 7 and 7 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"test_static_url_path\", \"test_static_url_path_with_ending_slash\"], [\"\\\"/foo\\\"\", \"\\\"/foo/\\\"\"]]. Raw core diff:\n--- tests/test_basic.py:1435-1443\n+++ tests/test_basic.py:1446-1454\n@@ -1,2 +1,2 @@\n-def test_static_url_path():\n-    app = flask.Flask(__name__, static_url_path=\"/foo\")\n+def test_static_url_path_with_ending_slash():\n+    app = flask.Flask(__name__, static_url_path=\"/foo/\")\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_basic.py:1435-1443\n+++ tests/test_basic.py:1446-1454\n@@ -1,4 +1,4 @@\n-def test_static_url_path():\n-    app = flask.Flask(__name__, static_url_path=\"/foo\")\n+def test_static_url_path_with_ending_slash():\n+    app = flask.Flask(__name__, static_url_path=\"/foo/\")\n     app.testing = True\n ",
+      "type": "Type II",
+      "occurrences": [
+        "tests/test_basic.py:1435-1443",
+        "tests/test_basic.py:1446-1454"
+      ]
+    },
+    {
+      "why": "The code beginning with `rv = client.post(\"/\")` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: tests/test_basic.py:143-150 and tests/test_basic.py:181-188; 8 and 8 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "tests/test_basic.py:143-150",
+        "tests/test_basic.py:181-188"
+      ]
+    },
+    {
+      "why": "The code beginning with `app.config[\"PROPAGATE_EXCEPTIONS\"] = True` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/test_appctx.py:92-101 and tests/test_appctx.py:115-124; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"Exception\", \"ValueError\"]]. Raw core diff:\n--- tests/test_appctx.py:92-101\n+++ tests/test_appctx.py:115-124\n@@ -10 +10 @@\n-        raise Exception(\"dummy\")\n+        raise ValueError(\"dummy\")\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_appctx.py:92-101\n+++ tests/test_appctx.py:115-124\n@@ -8,3 +8,3 @@\n     @app.route(\"/\")\n     def index():\n-        raise Exception(\"dummy\")\n+        raise ValueError(\"dummy\")",
+      "type": "Type II",
+      "occurrences": [
+        "tests/test_appctx.py:92-101",
+        "tests/test_appctx.py:115-124"
+      ]
+    },
+    {
+      "why": "The code beginning with `def test_template_test_with_template(app, client):` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/test_blueprints.py:591-600 and tests/test_blueprints.py:641-650; 7 and 7 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_blueprints.py:586-600\n+++ tests/test_blueprints.py:636-650\n@@ -1,7 +1,7 @@\n-def test_template_test_with_template(app, client):\n+def test_template_test_with_name_and_template(app, client):\n     bp = flask.Blueprint(\"bp\", __name__)\n \n-    @bp.app_template_test()\n-    def boolean(value):\n+    @bp.app_template_test(\"boolean\")\n+    def is_boolean(value):\n         return isinstance(value, bool)\n ",
+      "occurrences": [
+        "tests/test_blueprints.py:586-600",
+        "tests/test_blueprints.py:636-650"
+      ]
+    },
+    {
+      "why": "The code beginning with `@app.teardown_request` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/test_blueprints.py:927-945 and tests/test_blueprints.py:947-965; 15 and 15 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"app\", \"parent\"], [\"app_teardown2\", \"parent_teardown2\"], [\"\\\"app_2\\\"\", \"\\\"parent_2\\\"\"], [\"app_ctx\", \"parent_ctx\"], [\"\\\"app\\\"\", \"\\\"parent\\\"\"], [\"parent\", \"child\"], [\"parent_before1\", \"child_before1\"], [\"\\\"parent_1\\\"\", \"\\\"child_1\\\"\"], [\"parent_teardown1\", \"child_teardown1\"], [\"parent_before2\", \"child_before2\"], [\"\\\"parent_2\\\"\", \"\\\"child_2\\\"\"]]. Raw core diff:\n--- tests/test_blueprints.py:927-945\n+++ tests/test_blueprints.py:947-965\n@@ -1,3 +1,3 @@\n-    @app.teardown_request\n-    def app_teardown2(e=None):\n-        assert flask.g.seen.pop() == \"app_2\"\n+    @parent.teardown_request\n+    def parent_teardown2(e=None):\n+        assert flask.g.seen.pop() == \"parent_2\"\n@@ -5,3 +5,3 @@\n-    @app.context_processor\n-    def app_ctx():\n-        return dict(key=\"app\")\n+    @parent.context_processor\n+    def parent_ctx():\n+        return dict(key=\"parent\")\n@@ -9,3 +9,3 @@\n-    @parent.before_request\n-    def parent_before1():\n-        flask.g.setdefault(\"seen\", []).append(\"parent_1\")\n+    @child.before_request\n+    def child_before1():\n+        flask.g.setdefault(\"seen\", []).append(\"child_1\")\n@@ -13,3 +13,3 @@\n-    @parent.teardown_request\n-    def parent_teardown1(e=None):\n-        assert flask.g.seen.pop() == \"parent_1\"\n+    @child.teardown_request\n+    def child_teardown1(e=None):\n+        assert flask.g.seen.pop() == \"child_1\"\n@@ -17,3 +17,3 @@\n-    @parent.before_request\n-    def parent_before2():\n-        flask.g.setdefault(\"seen\", []).append(\"parent_2\")\n+    @child.before_request\n+    def child_before2():\n+        flask.g.setdefault(\"seen\", []).append(\"child_2\")\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_blueprints.py:927-945\n+++ tests/test_blueprints.py:947-965\n@@ -1,19 +1,19 @@\n-    @app.teardown_request\n-    def app_teardown2(e=None):\n-        assert flask.g.seen.pop() == \"app_2\"\n+    @parent.teardown_request\n+    def parent_teardown2(e=None):\n+        assert flask.g.seen.pop() == \"parent_2\"\n \n-    @app.context_processor\n-    def app_ctx():\n-        return dict(key=\"app\")\n+    @parent.context_processor\n+    def parent_ctx():\n+        return dict(key=\"parent\")\n \n-    @parent.before_request\n-    def parent_before1():\n-        flask.g.setdefault(\"seen\", []).append(\"parent_1\")\n+    @child.before_request\n+    def child_before1():\n+        flask.g.setdefault(\"seen\", []).append(\"child_1\")\n \n-    @parent.teardown_request\n-    def parent_teardown1(e=None):\n-        assert flask.g.seen.pop() == \"parent_1\"\n+    @child.teardown_request\n+    def child_teardown1(e=None):\n+        assert flask.g.seen.pop() == \"child_1\"\n \n-    @parent.before_request\n-    def parent_before2():\n-        flask.g.setdefault(\"seen\", []).append(\"parent_2\")\n+    @child.before_request\n+    def child_before2():\n+        flask.g.setdefault(\"seen\", []).append(\"child_2\")",
+      "occurrences": [
+        "tests/test_blueprints.py:927-945",
+        "tests/test_blueprints.py:947-965"
+      ]
+    },
+    {
+      "why": "The code beginning with `@parent.before_request` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/test_blueprints.py:935-953 and tests/test_blueprints.py:955-973; 15 and 15 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"parent\", \"child\"], [\"parent_before1\", \"child_before1\"], [\"\\\"parent_1\\\"\", \"\\\"child_1\\\"\"], [\"parent_teardown1\", \"child_teardown1\"], [\"parent_before2\", \"child_before2\"], [\"\\\"parent_2\\\"\", \"\\\"child_2\\\"\"], [\"parent_teardown2\", \"child_teardown2\"], [\"parent_ctx\", \"child_ctx\"], [\"\\\"parent\\\"\", \"\\\"child\\\"\"]]. Raw core diff:\n--- tests/test_blueprints.py:935-953\n+++ tests/test_blueprints.py:955-973\n@@ -1,3 +1,3 @@\n-    @parent.before_request\n-    def parent_before1():\n-        flask.g.setdefault(\"seen\", []).append(\"parent_1\")\n+    @child.before_request\n+    def child_before1():\n+        flask.g.setdefault(\"seen\", []).append(\"child_1\")\n@@ -5,3 +5,3 @@\n-    @parent.teardown_request\n-    def parent_teardown1(e=None):\n-        assert flask.g.seen.pop() == \"parent_1\"\n+    @child.teardown_request\n+    def child_teardown1(e=None):\n+        assert flask.g.seen.pop() == \"child_1\"\n@@ -9,3 +9,3 @@\n-    @parent.before_request\n-    def parent_before2():\n-        flask.g.setdefault(\"seen\", []).append(\"parent_2\")\n+    @child.before_request\n+    def child_before2():\n+        flask.g.setdefault(\"seen\", []).append(\"child_2\")\n@@ -13,3 +13,3 @@\n-    @parent.teardown_request\n-    def parent_teardown2(e=None):\n-        assert flask.g.seen.pop() == \"parent_2\"\n+    @child.teardown_request\n+    def child_teardown2(e=None):\n+        assert flask.g.seen.pop() == \"child_2\"\n@@ -17,3 +17,3 @@\n-    @parent.context_processor\n-    def parent_ctx():\n-        return dict(key=\"parent\")\n+    @child.context_processor\n+    def child_ctx():\n+        return dict(key=\"child\")\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_blueprints.py:935-953\n+++ tests/test_blueprints.py:955-973\n@@ -1,19 +1,19 @@\n-    @parent.before_request\n-    def parent_before1():\n-        flask.g.setdefault(\"seen\", []).append(\"parent_1\")\n+    @child.before_request\n+    def child_before1():\n+        flask.g.setdefault(\"seen\", []).append(\"child_1\")\n \n-    @parent.teardown_request\n-    def parent_teardown1(e=None):\n-        assert flask.g.seen.pop() == \"parent_1\"\n+    @child.teardown_request\n+    def child_teardown1(e=None):\n+        assert flask.g.seen.pop() == \"child_1\"\n \n-    @parent.before_request\n-    def parent_before2():\n-        flask.g.setdefault(\"seen\", []).append(\"parent_2\")\n+    @child.before_request\n+    def child_before2():\n+        flask.g.setdefault(\"seen\", []).append(\"child_2\")\n \n-    @parent.teardown_request\n-    def parent_teardown2(e=None):\n-        assert flask.g.seen.pop() == \"parent_2\"\n+    @child.teardown_request\n+    def child_teardown2(e=None):\n+        assert flask.g.seen.pop() == \"child_2\"\n \n-    @parent.context_processor\n-    def parent_ctx():\n-        return dict(key=\"parent\")\n+    @child.context_processor\n+    def child_ctx():\n+        return dict(key=\"child\")",
+      "type": "Type II",
+      "occurrences": [
+        "tests/test_blueprints.py:935-953",
+        "tests/test_blueprints.py:955-973"
+      ]
+    },
+    {
+      "why": "The code beginning with `def __getattr__(name: str) -> t.Any:` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: src/flask/globals.py:65-77 and src/flask/ctx.py:528-540; 11 and 11 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"\\\"request_ctx\\\"\", \"\\\"RequestContext\\\"\"], [\"\\\"'request_ctx' has merged with 'app_ctx', and will be removed\\\"\", \"\\\"'RequestContext' has merged with 'AppContext', and will be removed\\\"\"], [\"\\\" in Flask 4.0. Use 'app_ctx' instead.\\\"\", \"\\\" in Flask 4.0. Use 'AppContext' instead.\\\"\"], [\"app_ctx\", \"AppContext\"]]. Raw core diff:\n--- src/flask/globals.py:65-77\n+++ src/flask/ctx.py:528-540\n@@ -4 +4 @@\n-    if name == \"request_ctx\":\n+    if name == \"RequestContext\":\n@@ -6,2 +6,2 @@\n-            \"'request_ctx' has merged with 'app_ctx', and will be removed\"\n-            \" in Flask 4.0. Use 'app_ctx' instead.\",\n+            \"'RequestContext' has merged with 'AppContext', and will be removed\"\n+            \" in Flask 4.0. Use 'AppContext' instead.\",\n@@ -11 +11 @@\n-        return app_ctx\n+        return AppContext\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/flask/globals.py:65-77\n+++ src/flask/ctx.py:528-540\n@@ -2,12 +2,12 @@\n     import warnings\n \n-    if name == \"request_ctx\":\n+    if name == \"RequestContext\":\n         warnings.warn(\n-            \"'request_ctx' has merged with 'app_ctx', and will be removed\"\n-            \" in Flask 4.0. Use 'app_ctx' instead.\",\n+            \"'RequestContext' has merged with 'AppContext', and will be removed\"\n+            \" in Flask 4.0. Use 'AppContext' instead.\",\n             DeprecationWarning,\n             stacklevel=2,\n         )\n-        return app_ctx\n+        return AppContext\n \n     raise AttributeError(name)",
+      "type": "Type II",
+      "occurrences": [
+        "src/flask/globals.py:65-77",
+        "src/flask/ctx.py:528-540"
+      ]
+    },
+    {
+      "why": "The code beginning with `@app.route(\"/\")` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/test_helpers.py:274-279 and tests/test_helpers.py:230-235; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_helpers.py:274-284\n+++ tests/test_helpers.py:230-240\n@@ -6,5 +6,5 @@\n                 yield \"!\"\n \n-            return flask.Response(flask.stream_with_context(Wrapper(generate())))\n+            return flask.Response(flask.stream_with_context(generate()))\n \n         rv = client.get(\"/?name=World\")",
+      "occurrences": [
+        "tests/test_helpers.py:274-284",
+        "tests/test_helpers.py:230-240"
+      ]
+    },
+    {
+      "why": "The code beginning with `@parent.context_processor` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/test_blueprints.py:951-969 and tests/test_blueprints.py:931-949; 15 and 15 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"parent\", \"app\"], [\"parent_ctx\", \"app_ctx\"], [\"\\\"parent\\\"\", \"\\\"app\\\"\"], [\"child\", \"parent\"], [\"child_before1\", \"parent_before1\"], [\"\\\"child_1\\\"\", \"\\\"parent_1\\\"\"], [\"child_teardown1\", \"parent_teardown1\"], [\"child_before2\", \"parent_before2\"], [\"\\\"child_2\\\"\", \"\\\"parent_2\\\"\"], [\"child_teardown2\", \"parent_teardown2\"]]. Raw core diff:\n--- tests/test_blueprints.py:951-969\n+++ tests/test_blueprints.py:931-949\n@@ -1,3 +1,3 @@\n-    @parent.context_processor\n-    def parent_ctx():\n-        return dict(key=\"parent\")\n+    @app.context_processor\n+    def app_ctx():\n+        return dict(key=\"app\")\n@@ -5,3 +5,3 @@\n-    @child.before_request\n-    def child_before1():\n-        flask.g.setdefault(\"seen\", []).append(\"child_1\")\n+    @parent.before_request\n+    def parent_before1():\n+        flask.g.setdefault(\"seen\", []).append(\"parent_1\")\n@@ -9,3 +9,3 @@\n-    @child.teardown_request\n-    def child_teardown1(e=None):\n-        assert flask.g.seen.pop() == \"child_1\"\n+    @parent.teardown_request\n+    def parent_teardown1(e=None):\n+        assert flask.g.seen.pop() == \"parent_1\"\n@@ -13,3 +13,3 @@\n-    @child.before_request\n-    def child_before2():\n-        flask.g.setdefault(\"seen\", []).append(\"child_2\")\n+    @parent.before_request\n+    def parent_before2():\n+        flask.g.setdefault(\"seen\", []).append(\"parent_2\")\n@@ -17,3 +17,3 @@\n-    @child.teardown_request\n-    def child_teardown2(e=None):\n-        assert flask.g.seen.pop() == \"child_2\"\n+    @parent.teardown_request\n+    def parent_teardown2(e=None):\n+        assert flask.g.seen.pop() == \"parent_2\"\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_blueprints.py:951-969\n+++ tests/test_blueprints.py:931-949\n@@ -1,19 +1,19 @@\n-    @parent.context_processor\n-    def parent_ctx():\n-        return dict(key=\"parent\")\n+    @app.context_processor\n+    def app_ctx():\n+        return dict(key=\"app\")\n \n-    @child.before_request\n-    def child_before1():\n-        flask.g.setdefault(\"seen\", []).append(\"child_1\")\n+    @parent.before_request\n+    def parent_before1():\n+        flask.g.setdefault(\"seen\", []).append(\"parent_1\")\n \n-    @child.teardown_request\n-    def child_teardown1(e=None):\n-        assert flask.g.seen.pop() == \"child_1\"\n+    @parent.teardown_request\n+    def parent_teardown1(e=None):\n+        assert flask.g.seen.pop() == \"parent_1\"\n \n-    @child.before_request\n-    def child_before2():\n-        flask.g.setdefault(\"seen\", []).append(\"child_2\")\n+    @parent.before_request\n+    def parent_before2():\n+        flask.g.setdefault(\"seen\", []).append(\"parent_2\")\n \n-    @child.teardown_request\n-    def child_teardown2(e=None):\n-        assert flask.g.seen.pop() == \"child_2\"\n+    @parent.teardown_request\n+    def parent_teardown2(e=None):\n+        assert flask.g.seen.pop() == \"parent_2\"",
+      "occurrences": [
+        "tests/test_blueprints.py:951-969",
+        "tests/test_blueprints.py:931-949"
+      ]
+    },
+    {
+      "why": "The code beginning with `T_after_request = t.TypeVar(\"T_after_request\", bound=ft.AfterRequestCallable[t.Any])` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: src/flask/sansio/scaffold.py:28-38 and src/flask/sansio/blueprints.py:18-26; 11 and 9 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"T_url_defaults\", \"T_template_filter\"], [\"\\\"T_url_defaults\\\"\", \"\\\"T_template_filter\\\"\"], [\"URLDefaultCallable\", \"TemplateFilterCallable\"], [\"T_url_value_preprocessor\", \"T_template_global\"], [\"\\\"T_url_value_preprocessor\\\"\", \"\\\"T_template_global\\\"\"], [\"URLValuePreprocessorCallable\", \"TemplateGlobalCallable\"]]. Raw core diff:\n--- src/flask/sansio/scaffold.py:28-38\n+++ src/flask/sansio/blueprints.py:18-26\n@@ -8,4 +8,2 @@\n-T_url_defaults = t.TypeVar(\"T_url_defaults\", bound=ft.URLDefaultCallable)\n-T_url_value_preprocessor = t.TypeVar(\n-    \"T_url_value_preprocessor\", bound=ft.URLValuePreprocessorCallable\n-)\n+T_template_filter = t.TypeVar(\"T_template_filter\", bound=ft.TemplateFilterCallable)\n+T_template_global = t.TypeVar(\"T_template_global\", bound=ft.TemplateGlobalCallable)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/flask/sansio/scaffold.py:28-38\n+++ src/flask/sansio/blueprints.py:18-26\n@@ -6,6 +6,4 @@\n     \"T_template_context_processor\", bound=ft.TemplateContextProcessorCallable\n )\n-T_url_defaults = t.TypeVar(\"T_url_defaults\", bound=ft.URLDefaultCallable)\n-T_url_value_preprocessor = t.TypeVar(\n-    \"T_url_value_preprocessor\", bound=ft.URLValuePreprocessorCallable\n-)\n+T_template_filter = t.TypeVar(\"T_template_filter\", bound=ft.TemplateFilterCallable)\n+T_template_global = t.TypeVar(\"T_template_global\", bound=ft.TemplateGlobalCallable)",
+      "type": "Type II",
+      "occurrences": [
+        "src/flask/sansio/scaffold.py:28-38",
+        "src/flask/sansio/blueprints.py:18-26"
+      ]
+    },
+    {
+      "why": "The code beginning with `@bp.route(\"/foo\")` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/test_blueprints.py:286-296 and tests/test_basic.py:1745-1755; 9 and 9 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"bp\", \"app\"], [\"\\\"/foo\\\"\", \"\\\"/foo/\\\"\"], [\"\\\"/bar\\\"\", \"\\\"/bar/\\\"\"], [\"foo_bar\", \"for_bar\"], [\"foo_bar_foo\", \"for_bar_foo\"]]. Raw core diff:\n--- tests/test_blueprints.py:286-296\n+++ tests/test_basic.py:1745-1755\n@@ -1 +1 @@\n-    @bp.route(\"/foo\")\n+    @app.route(\"/foo/\")\n@@ -5,2 +5,2 @@\n-    @bp.route(\"/bar\", endpoint=\"bar\")\n-    def foo_bar():\n+    @app.route(\"/bar/\", endpoint=\"bar\")\n+    def for_bar():\n@@ -9,2 +9,2 @@\n-    @bp.route(\"/bar/123\", endpoint=\"123\")\n-    def foo_bar_foo():\n+    @app.route(\"/bar/123\", endpoint=\"123\")\n+    def for_bar_foo():\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_blueprints.py:286-296\n+++ tests/test_basic.py:1745-1755\n@@ -1,11 +1,11 @@\n-    @bp.route(\"/foo\")\n+    @app.route(\"/foo/\")\n     def foo():\n         return flask.request.endpoint\n \n-    @bp.route(\"/bar\", endpoint=\"bar\")\n-    def foo_bar():\n+    @app.route(\"/bar/\", endpoint=\"bar\")\n+    def for_bar():\n         return flask.request.endpoint\n \n-    @bp.route(\"/bar/123\", endpoint=\"123\")\n-    def foo_bar_foo():\n+    @app.route(\"/bar/123\", endpoint=\"123\")\n+    def for_bar_foo():\n         return flask.request.endpoint",
+      "type": "Type II",
+      "occurrences": [
+        "tests/test_blueprints.py:286-296",
+        "tests/test_basic.py:1745-1755"
+      ]
+    },
+    {
+      "why": "The code beginning with `bp.add_app_template_test(boolean)` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/test_blueprints.py:626-633 and tests/test_blueprints.py:660-667; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_blueprints.py:625-633\n+++ tests/test_blueprints.py:659-667\n@@ -1,3 +1,3 @@\n-    bp.add_app_template_test(boolean)\n+    bp.add_app_template_test(is_boolean, \"boolean\")\n     app.register_blueprint(bp, url_prefix=\"/py\")\n ",
+      "occurrences": [
+        "tests/test_blueprints.py:625-633",
+        "tests/test_blueprints.py:659-667"
+      ]
+    },
+    {
+      "why": "The code beginning with `cleanup_stuff = []` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/test_appctx.py:58-67 and tests/test_reqctx.py:30-39; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"cleanup_stuff\", \"buffer\"], [\"teardown_appcontext\", \"teardown_request\"], [\"cleanup\", \"end_of_request\"]]. Raw core diff:\n--- tests/test_appctx.py:58-67\n+++ tests/test_reqctx.py:30-39\n@@ -1 +1 @@\n-    cleanup_stuff = []\n+    buffer = []\n@@ -3,3 +3,3 @@\n-    @app.teardown_appcontext\n-    def cleanup(exception):\n-        cleanup_stuff.append(exception)\n+    @app.teardown_request\n+    def end_of_request(exception):\n+        buffer.append(exception)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_appctx.py:58-67\n+++ tests/test_reqctx.py:30-39\n@@ -1,7 +1,7 @@\n-    cleanup_stuff = []\n+    buffer = []\n \n-    @app.teardown_appcontext\n-    def cleanup(exception):\n-        cleanup_stuff.append(exception)\n+    @app.teardown_request\n+    def end_of_request(exception):\n+        buffer.append(exception)\n \n     try:",
+      "type": "Type II",
+      "occurrences": [
+        "tests/test_appctx.py:58-67",
+        "tests/test_reqctx.py:30-39"
+      ]
+    },
+    {
+      "why": "The code beginning with `assert not rv.data  # head truncates` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/test_basic.py:148-153 and tests/test_basic.py:186-191; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_basic.py:148-153\n+++ tests/test_basic.py:186-192\n@@ -5,2 +5,3 @@\n     assert rv.status_code == 405\n     assert sorted(rv.allow) == [\"GET\", \"HEAD\", \"OPTIONS\", \"POST\"]\n+    rv = client.open(\"/options\", method=\"OPTIONS\")",
+      "occurrences": [
+        "tests/test_basic.py:148-153",
+        "tests/test_basic.py:186-192"
+      ]
+    },
+    {
+      "why": "The code beginning with `def test_child_and_parent_subdomain(app, client) -> None:` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/test_blueprints.py:1049-1057 and tests/test_blueprints.py:1030-1038; 7 and 7 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"\\\"/\\\"\", \"\\\"/child/\\\"\"], [\"\\\"parent\\\"\", \"\\\"api\\\"\"], [\"\\\"http://api.parent.example.test\\\"\", \"\\\"http://api.example.test\\\"\"]]. Raw core diff:\n--- tests/test_blueprints.py:1049-1057\n+++ tests/test_blueprints.py:1030-1038\n@@ -1 +1 @@\n-    @child.route(\"/\")\n+    @child.route(\"/child/\")\n@@ -6 +6 @@\n-    app.register_blueprint(parent, subdomain=\"parent\")\n+    app.register_blueprint(parent, subdomain=\"api\")\n@@ -8 +8 @@\n-    response = client.get(\"/\", base_url=\"http://api.parent.example.test\")\n+    response = client.get(\"/child/\", base_url=\"http://api.example.test\")\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_blueprints.py:1041-1060\n+++ tests/test_blueprints.py:1022-1038\n@@ -1,3 +1,3 @@\n-def test_child_and_parent_subdomain(app, client) -> None:\n+def test_nesting_subdomains(app, client) -> None:\n     app.subdomain_matching = True\n     app.config[\"SERVER_NAME\"] = \"example.test\"\n@@ -5,16 +5,13 @@\n \n     parent = flask.Blueprint(\"parent\", __name__)\n-    child = flask.Blueprint(\"child\", __name__, subdomain=\"api\")\n+    child = flask.Blueprint(\"child\", __name__)\n \n-    @child.route(\"/\")\n+    @child.route(\"/child/\")\n     def index():\n         return \"child\"\n \n     parent.register_blueprint(child)\n-    app.register_blueprint(parent, subdomain=\"parent\")\n+    app.register_blueprint(parent, subdomain=\"api\")\n \n-    response = client.get(\"/\", base_url=\"http://api.parent.example.test\")\n+    response = client.get(\"/child/\", base_url=\"http://api.example.test\")\n     assert response.status_code == 200\n-\n-    response = client.get(\"/\", base_url=\"http://parent.example.test\")\n-    assert response.status_code == 404",
+      "occurrences": [
+        "tests/test_blueprints.py:1041-1060",
+        "tests/test_blueprints.py:1022-1038"
+      ]
+    },
+    {
+      "why": "The code beginning with `def test_help_echo_loading_error():` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/test_cli.py:412-424 and tests/test_cli.py:397-409; 10 and 10 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"test_help_echo_loading_error\", \"test_no_command_echo_loading_error\"], [\"\\\"--help\\\"\", \"\\\"missing\\\"\"], [\"0\", \"2\"], [\"stdout\", \"stderr\"]]. Raw core diff:\n--- tests/test_cli.py:412-424\n+++ tests/test_cli.py:397-409\n@@ -1 +1 @@\n-def test_help_echo_loading_error():\n+def test_no_command_echo_loading_error():\n@@ -10,2 +10,2 @@\n-    result = runner.invoke(cli, [\"--help\"])\n-    assert result.exit_code == 0\n+    result = runner.invoke(cli, [\"missing\"])\n+    assert result.exit_code == 2\n@@ -13 +13 @@\n-    assert \"Usage:\" in result.stdout\n+    assert \"Usage:\" in result.stderr\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_cli.py:412-424\n+++ tests/test_cli.py:397-409\n@@ -1,3 +1,3 @@\n-def test_help_echo_loading_error():\n+def test_no_command_echo_loading_error():\n     from flask.cli import cli\n \n@@ -8,6 +8,6 @@\n         runner = CliRunner()\n \n-    result = runner.invoke(cli, [\"--help\"])\n-    assert result.exit_code == 0\n+    result = runner.invoke(cli, [\"missing\"])\n+    assert result.exit_code == 2\n     assert \"FLASK_APP\" in result.stderr\n-    assert \"Usage:\" in result.stdout\n+    assert \"Usage:\" in result.stderr",
+      "occurrences": [
+        "tests/test_cli.py:412-424",
+        "tests/test_cli.py:397-409"
+      ]
+    },
+    {
+      "why": "The code beginning with `def test_add_template_filter_with_template(app, client):` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/test_blueprints.py:466-473 and tests/test_blueprints.py:500-507; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_blueprints.py:459-473\n+++ tests/test_blueprints.py:493-507\n@@ -1,9 +1,9 @@\n-def test_add_template_filter_with_template(app, client):\n+def test_add_template_filter_with_name_and_template(app, client):\n     bp = flask.Blueprint(\"bp\", __name__)\n \n-    def super_reverse(s):\n+    def my_reverse(s):\n         return s[::-1]\n \n-    bp.add_app_template_filter(super_reverse)\n+    bp.add_app_template_filter(my_reverse, \"super_reverse\")\n     app.register_blueprint(bp, url_prefix=\"/py\")\n ",
+      "occurrences": [
+        "tests/test_blueprints.py:459-473",
+        "tests/test_blueprints.py:493-507"
+      ]
+    },
+    {
+      "why": "The code beginning with `def test_teardown_request_handler(app, client):` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/test_basic.py:778-793 and tests/test_basic.py:796-811; 13 and 13 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"test_teardown_request_handler\", \"test_teardown_request_handler_debug_mode\"]]. Raw core diff:\n--- tests/test_basic.py:778-793\n+++ tests/test_basic.py:796-811\n@@ -1 +1 @@\n-def test_teardown_request_handler(app, client):\n+def test_teardown_request_handler_debug_mode(app, client):\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_basic.py:778-793\n+++ tests/test_basic.py:796-811\n@@ -1,3 +1,3 @@\n-def test_teardown_request_handler(app, client):\n+def test_teardown_request_handler_debug_mode(app, client):\n     called = []\n ",
+      "type": "Type II",
+      "occurrences": [
+        "tests/test_basic.py:778-793",
+        "tests/test_basic.py:796-811"
+      ]
+    },
+    {
+      "why": "The code beginning with `def test_template_filter_with_template(app, client):` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/test_blueprints.py:431-440 and tests/test_blueprints.py:481-490; 7 and 7 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_blueprints.py:426-440\n+++ tests/test_blueprints.py:476-490\n@@ -1,7 +1,7 @@\n-def test_template_filter_with_template(app, client):\n+def test_template_filter_with_name_and_template(app, client):\n     bp = flask.Blueprint(\"bp\", __name__)\n \n-    @bp.app_template_filter()\n-    def super_reverse(s):\n+    @bp.app_template_filter(\"super_reverse\")\n+    def my_reverse(s):\n         return s[::-1]\n ",
+      "occurrences": [
+        "tests/test_blueprints.py:426-440",
+        "tests/test_blueprints.py:476-490"
+      ]
+    },
+    {
+      "why": "The code beginning with `class Module:` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/test_cli.py:63-70 and tests/test_cli.py:81-88; 7 and 7 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"create_app\", \"make_app\"]]. Raw core diff:\n--- tests/test_cli.py:63-70\n+++ tests/test_cli.py:81-88\n@@ -3 +3 @@\n-        def create_app():\n+        def make_app():\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_cli.py:63-70\n+++ tests/test_cli.py:81-88\n@@ -1,5 +1,5 @@\n     class Module:\n         @staticmethod\n-        def create_app():\n+        def make_app():\n             return Flask(\"appname\")\n ",
+      "type": "Type II",
+      "occurrences": [
+        "tests/test_cli.py:63-70",
+        "tests/test_cli.py:81-88"
+      ]
+    },
+    {
+      "why": "The code beginning with `@app.errorhandler(HTTPException)` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/test_user_error_handler.py:187-199 and tests/test_user_error_handler.py:166-178; 11 and 11 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"app\", \"bp\"], [\"catchall_exception_handler\", \"bp_exception_handler\"], [\"\\\"default\\\"\", \"\\\"bp-default\\\"\"], [\"catchall_forbidden_handler\", \"bp_forbidden_handler\"], [\"\\\"forbidden\\\"\", \"\\\"bp-forbidden\\\"\"], [\"\\\"/forbidden\\\"\", \"\\\"/undefined\\\"\"], [\"forbidden\", \"bp_registered_test\"]]. Raw core diff:\n--- tests/test_user_error_handler.py:187-199\n+++ tests/test_user_error_handler.py:166-178\n@@ -1,2 +1,2 @@\n-    @app.errorhandler(HTTPException)\n-    def catchall_exception_handler(e):\n+    @bp.errorhandler(HTTPException)\n+    def bp_exception_handler(e):\n@@ -5 +5 @@\n-        return \"default\"\n+        return \"bp-default\"\n@@ -7,2 +7,2 @@\n-    @app.errorhandler(Forbidden)\n-    def catchall_forbidden_handler(e):\n+    @bp.errorhandler(Forbidden)\n+    def bp_forbidden_handler(e):\n@@ -10 +10 @@\n-        return \"forbidden\"\n+        return \"bp-forbidden\"\n@@ -12,2 +12,2 @@\n-    @app.route(\"/forbidden\")\n-    def forbidden():\n+    @bp.route(\"/undefined\")\n+    def bp_registered_test():\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_user_error_handler.py:187-200\n+++ tests/test_user_error_handler.py:166-179\n@@ -1,14 +1,14 @@\n-    @app.errorhandler(HTTPException)\n-    def catchall_exception_handler(e):\n+    @bp.errorhandler(HTTPException)\n+    def bp_exception_handler(e):\n         assert isinstance(e, HTTPException)\n         assert isinstance(e, NotFound)\n-        return \"default\"\n+        return \"bp-default\"\n \n-    @app.errorhandler(Forbidden)\n-    def catchall_forbidden_handler(e):\n+    @bp.errorhandler(Forbidden)\n+    def bp_forbidden_handler(e):\n         assert isinstance(e, Forbidden)\n-        return \"forbidden\"\n+        return \"bp-forbidden\"\n \n-    @app.route(\"/forbidden\")\n-    def forbidden():\n-        raise Forbidden()\n+    @bp.route(\"/undefined\")\n+    def bp_registered_test():\n+        raise NotFound()",
+      "occurrences": [
+        "tests/test_user_error_handler.py:187-200",
+        "tests/test_user_error_handler.py:166-179"
+      ]
+    },
+    {
+      "why": "The code beginning with `try:` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/test_cli.py:400-408 and tests/test_cli.py:415-423; 7 and 7 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"\\\"missing\\\"\", \"\\\"--help\\\"\"], [\"2\", \"0\"]]. Raw core diff:\n--- tests/test_cli.py:400-408\n+++ tests/test_cli.py:415-423\n@@ -7,2 +7,2 @@\n-    result = runner.invoke(cli, [\"missing\"])\n-    assert result.exit_code == 2\n+    result = runner.invoke(cli, [\"--help\"])\n+    assert result.exit_code == 0\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_cli.py:400-409\n+++ tests/test_cli.py:415-424\n@@ -5,6 +5,6 @@\n         runner = CliRunner()\n \n-    result = runner.invoke(cli, [\"missing\"])\n-    assert result.exit_code == 2\n+    result = runner.invoke(cli, [\"--help\"])\n+    assert result.exit_code == 0\n     assert \"FLASK_APP\" in result.stderr\n-    assert \"Usage:\" in result.stderr\n+    assert \"Usage:\" in result.stdout",
+      "occurrences": [
+        "tests/test_cli.py:400-409",
+        "tests/test_cli.py:415-424"
+      ]
+    },
+    {
+      "why": "The code beginning with `app.add_url_rule(\"/a\", host=\"a\", endpoint=\"a\")` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/test_cli.py:513-518 and tests/test_cli.py:504-509; 6 and 6 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"host\", \"subdomain\"], [\"\\\"Host\\\"\", \"\\\"Subdomain\\\"\"]]. Raw core diff:\n--- tests/test_cli.py:513-518\n+++ tests/test_cli.py:504-509\n@@ -1,2 +1,2 @@\n-        app.add_url_rule(\"/a\", host=\"a\", endpoint=\"a\")\n-        app.add_url_rule(\"/b\", host=\"b\", endpoint=\"b\")\n+        app.add_url_rule(\"/a\", subdomain=\"a\", endpoint=\"a\")\n+        app.add_url_rule(\"/b\", subdomain=\"b\", endpoint=\"b\")\n@@ -6 +6 @@\n-        assert \"Host\" in result.output\n+        assert \"Subdomain\" in result.output\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_cli.py:513-518\n+++ tests/test_cli.py:504-509\n@@ -1,6 +1,6 @@\n-        app.add_url_rule(\"/a\", host=\"a\", endpoint=\"a\")\n-        app.add_url_rule(\"/b\", host=\"b\", endpoint=\"b\")\n+        app.add_url_rule(\"/a\", subdomain=\"a\", endpoint=\"a\")\n+        app.add_url_rule(\"/b\", subdomain=\"b\", endpoint=\"b\")\n         cli = FlaskGroup(create_app=lambda: app)\n         result = runner.invoke(cli, [\"routes\"])\n         assert result.exit_code == 0\n-        assert \"Host\" in result.output\n+        assert \"Subdomain\" in result.output",
+      "type": "Type II",
+      "occurrences": [
+        "tests/test_cli.py:513-518",
+        "tests/test_cli.py:504-509"
+      ]
+    },
+    {
+      "why": "The code beginning with `@bp.url_defaults` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/test_blueprints.py:158-167 and tests/test_blueprints.py:844-854; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"bp\", \"app\"], [\"\\\"/\\\"\", \"\\\"/<lang_code>/\\\"\"], [\"\\\".about\\\"\", \"\\\"about\\\"\"], [\"\\\"/about\\\"\", \"\\\"/<lang_code>/about\\\"\"], [\"\\\".index\\\"\", \"\\\"index\\\"\"]]. Raw core diff:\n--- tests/test_blueprints.py:158-167\n+++ tests/test_blueprints.py:844-854\n@@ -4 +4,2 @@\n-    @bp.route(\"/\")\n+    # Register route rules at the app level\n+    @app.route(\"/<lang_code>/\")\n@@ -6 +7 @@\n-        return flask.url_for(\".about\")\n+        return flask.url_for(\"about\")\n@@ -8 +9 @@\n-    @bp.route(\"/about\")\n+    @app.route(\"/<lang_code>/about\")\n@@ -10 +11 @@\n-        return flask.url_for(\".index\")\n+        return flask.url_for(\"index\")\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_blueprints.py:153-172\n+++ tests/test_blueprints.py:839-859\n@@ -1,17 +1,18 @@\n-    @bp.url_defaults\n+    @bp.app_url_defaults\n     def add_language_code(endpoint, values):\n         values.setdefault(\"lang_code\", flask.g.lang_code)\n \n-    @bp.url_value_preprocessor\n+    @bp.app_url_value_preprocessor\n     def pull_lang_code(endpoint, values):\n         flask.g.lang_code = values.pop(\"lang_code\")\n \n-    @bp.route(\"/\")\n+    # Register route rules at the app level\n+    @app.route(\"/<lang_code>/\")\n     def index():\n-        return flask.url_for(\".about\")\n+        return flask.url_for(\"about\")\n \n-    @bp.route(\"/about\")\n+    @app.route(\"/<lang_code>/about\")\n     def about():\n-        return flask.url_for(\".index\")\n+        return flask.url_for(\"index\")\n \n     app.register_blueprint(bp)",
+      "occurrences": [
+        "tests/test_blueprints.py:153-172",
+        "tests/test_blueprints.py:839-859"
+      ]
+    },
+    {
+      "why": "The code beginning with `def get_send_file_max_age(self, filename: str | None) -> int | None:` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: src/flask/blueprints.py:55-128 and src/flask/app.py:363-443; 23 and 23 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"current_app\", \"self\"], [\"\\\"utf-8\\\"\", \"None\"]]. Raw core diff:\n--- src/flask/blueprints.py:55-128\n+++ src/flask/app.py:363-443\n@@ -18 +18 @@\n-        value = current_app.config[\"SEND_FILE_MAX_AGE_DEFAULT\"]\n+        value = self.config[\"SEND_FILE_MAX_AGE_DEFAULT\"]\n@@ -51 +51 @@\n-        self, resource: str, mode: str = \"rb\", encoding: str | None = \"utf-8\"\n+        self, resource: str, mode: str = \"rb\", encoding: str | None = None\n@@ -53,3 +53,10 @@\n-        \"\"\"Open a resource file relative to :attr:`root_path` for reading. The\n-        blueprint-relative equivalent of the app's :meth:`~.Flask.open_resource`\n-        method.\n+        \"\"\"Open a resource file relative to :attr:`root_path` for reading.\n+\n+        For example, if the file ``schema.sql`` is next to the file\n+        ``app.py`` where the ``Flask`` app is defined, it can be opened\n+        with:\n+\n+        .. code-block:: python\n+\n+            with app.open_resource(\"schema.sql\") as f:\n+                conn.executescript(f.read())\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/flask/blueprints.py:55-128\n+++ src/flask/app.py:363-443\n@@ -16,5 +16,5 @@\n         .. versionadded:: 0.9\n         \"\"\"\n-        value = current_app.config[\"SEND_FILE_MAX_AGE_DEFAULT\"]\n+        value = self.config[\"SEND_FILE_MAX_AGE_DEFAULT\"]\n \n         if value is None:\n@@ -49,9 +49,16 @@\n \n     def open_resource(\n-        self, resource: str, mode: str = \"rb\", encoding: str | None = \"utf-8\"\n+        self, resource: str, mode: str = \"rb\", encoding: str | None = None\n     ) -> t.IO[t.AnyStr]:\n-        \"\"\"Open a resource file relative to :attr:`root_path` for reading. The\n-        blueprint-relative equivalent of the app's :meth:`~.Flask.open_resource`\n-        method.\n+        \"\"\"Open a resource file relative to :attr:`root_path` for reading.\n+\n+        For example, if the file ``schema.sql`` is next to the file\n+        ``app.py`` where the ``Flask`` app is defined, it can be opened\n+        with:\n+\n+        .. code-block:: python\n+\n+            with app.open_resource(\"schema.sql\") as f:\n+                conn.executescript(f.read())\n \n         :param resource: Path to the resource relative to :attr:`root_path`.",
+      "occurrences": [
+        "src/flask/blueprints.py:55-128",
+        "src/flask/app.py:363-443"
+      ]
+    },
+    {
+      "why": "The code beginning with `def add_url_rule(` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: src/flask/sansio/blueprints.py:413-420 and src/flask/sansio/scaffold.py:376-383; 8 and 8 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/flask/sansio/blueprints.py:413-420\n+++ src/flask/sansio/scaffold.py:376-441\n@@ -7,2 +7,60 @@\n         **options: t.Any,\n     ) -> None:\n+        \"\"\"Register a rule for routing incoming requests and building\n+        URLs. The :meth:`route` decorator is a shortcut to call this\n+        with the ``view_func`` argument. These are equivalent:\n+\n+        .. code-block:: python\n+\n+            @app.route(\"/\")\n+            def index():\n+                ...\n+\n+        .. code-block:: python\n+\n+            def index():\n+                ...\n+\n+            app.add_url_rule(\"/\", view_func=index)\n+\n+        See :ref:`url-route-registrations`.\n+\n+        The endpoint name for the route defaults to the name of the view\n+        function if the ``endpoint`` parameter isn't passed. An error\n+        will be raised if a function has already been registered for the\n+        endpoint.\n+\n+        The ``methods`` parameter defaults to ``[\"GET\"]``. ``HEAD`` is\n+        always added automatically, and ``OPTIONS`` is added\n+        automatically by default.\n+\n+        ``view_func`` does not necessarily need to be passed, but if the\n+        rule should participate in routing an endpoint name must be\n+        associated with a view function at some point with the\n+        :meth:`endpoint` decorator.\n+\n+        .. code-block:: python\n+\n+            app.add_url_rule(\"/\", endpoint=\"index\")\n+\n+            @app.endpoint(\"index\")\n+            def index():\n+                ...\n+\n+        If ``view_func`` has a ``required_methods`` attribute, those\n+        methods are added to the passed and automatic methods. If it\n+        has a ``provide_automatic_methods`` attribute, it is used as the\n+        default if the parameter is not passed.\n+\n+        :param rule: The URL rule string.\n+        :param endpoint: The endpoint name to associate with the rule\n+            and view function. Used when routing and building URLs.\n+            Defaults to ``view_func.__name__``.\n+        :param view_func: The view function to associate with the\n+            endpoint name.\n+        :param provide_automatic_options: Add the ``OPTIONS`` method and\n+            respond to ``OPTIONS`` requests automatically.\n+        :param options: Extra options passed to the\n+            :class:`~werkzeug.routing.Rule` object.\n+        \"\"\"\n+        raise NotImplementedError",
+      "occurrences": [
+        "src/flask/sansio/blueprints.py:413-420",
+        "src/flask/sansio/scaffold.py:376-441"
+      ]
+    },
+    {
+      "why": "The code beginning with `@bp.url_value_preprocessor` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/test_blueprints.py:158-167 and tests/test_blueprints.py:844-854; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"bp\", \"app\"], [\"\\\"/\\\"\", \"\\\"/<lang_code>/\\\"\"], [\"\\\".about\\\"\", \"\\\"about\\\"\"], [\"\\\"/about\\\"\", \"\\\"/<lang_code>/about\\\"\"], [\"\\\".index\\\"\", \"\\\"index\\\"\"]]. Raw core diff:\n--- tests/test_blueprints.py:158-167\n+++ tests/test_blueprints.py:844-854\n@@ -4 +4,2 @@\n-    @bp.route(\"/\")\n+    # Register route rules at the app level\n+    @app.route(\"/<lang_code>/\")\n@@ -6 +7 @@\n-        return flask.url_for(\".about\")\n+        return flask.url_for(\"about\")\n@@ -8 +9 @@\n-    @bp.route(\"/about\")\n+    @app.route(\"/<lang_code>/about\")\n@@ -10 +11 @@\n-        return flask.url_for(\".index\")\n+        return flask.url_for(\"index\")\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_blueprints.py:157-172\n+++ tests/test_blueprints.py:843-859\n@@ -1,13 +1,14 @@\n-    @bp.url_value_preprocessor\n+    @bp.app_url_value_preprocessor\n     def pull_lang_code(endpoint, values):\n         flask.g.lang_code = values.pop(\"lang_code\")\n \n-    @bp.route(\"/\")\n+    # Register route rules at the app level\n+    @app.route(\"/<lang_code>/\")\n     def index():\n-        return flask.url_for(\".about\")\n+        return flask.url_for(\"about\")\n \n-    @bp.route(\"/about\")\n+    @app.route(\"/<lang_code>/about\")\n     def about():\n-        return flask.url_for(\".index\")\n+        return flask.url_for(\"index\")\n \n     app.register_blueprint(bp)",
+      "occurrences": [
+        "tests/test_blueprints.py:157-172",
+        "tests/test_blueprints.py:843-859"
+      ]
+    },
+    {
+      "why": "The code beginning with `def test_request_processing(app, client):` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/test_blueprints.py:765-781 and tests/test_blueprints.py:796-812; 14 and 14 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"test_request_processing\", \"test_app_request_processing\"], [\"before_request\", \"before_app_request\"], [\"before_bp\", \"before_app\"], [\"after_request\", \"after_app_request\"], [\"after_bp\", \"after_app\"], [\"teardown_request\", \"teardown_app_request\"], [\"teardown_bp\", \"teardown_app\"]]. Raw core diff:\n--- tests/test_blueprints.py:765-781\n+++ tests/test_blueprints.py:796-812\n@@ -1 +1 @@\n-def test_request_processing(app, client):\n+def test_app_request_processing(app, client):\n@@ -5,2 +5,2 @@\n-    @bp.before_request\n-    def before_bp():\n+    @bp.before_app_request\n+    def before_app():\n@@ -9,2 +9,2 @@\n-    @bp.after_request\n-    def after_bp(response):\n+    @bp.after_app_request\n+    def after_app(response):\n@@ -15,2 +15,2 @@\n-    @bp.teardown_request\n-    def teardown_bp(exc):\n+    @bp.teardown_app_request\n+    def teardown_app(exc):\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_blueprints.py:765-793\n+++ tests/test_blueprints.py:796-832\n@@ -1,29 +1,37 @@\n-def test_request_processing(app, client):\n+def test_app_request_processing(app, client):\n     bp = flask.Blueprint(\"bp\", __name__)\n     evts = []\n \n-    @bp.before_request\n-    def before_bp():\n+    @bp.before_app_request\n+    def before_app():\n         evts.append(\"before\")\n \n-    @bp.after_request\n-    def after_bp(response):\n+    @bp.after_app_request\n+    def after_app(response):\n         response.data += b\"|after\"\n         evts.append(\"after\")\n         return response\n \n-    @bp.teardown_request\n-    def teardown_bp(exc):\n+    @bp.teardown_app_request\n+    def teardown_app(exc):\n         evts.append(\"teardown\")\n \n+    app.register_blueprint(bp)\n+\n     # Setup routes for testing\n-    @bp.route(\"/bp\")\n+    @app.route(\"/\")\n     def bp_endpoint():\n         return \"request\"\n \n-    app.register_blueprint(bp)\n+    # before first request\n+    assert evts == []\n \n-    assert evts == []\n-    rv = client.get(\"/bp\")\n-    assert rv.data == b\"request|after\"\n+    # first request\n+    resp = client.get(\"/\").data\n+    assert resp == b\"request|after\"\n     assert evts == [\"before\", \"after\", \"teardown\"]\n+\n+    # second request\n+    resp = client.get(\"/\").data\n+    assert resp == b\"request|after\"\n+    assert evts == [\"before\", \"after\", \"teardown\"] * 2",
+      "occurrences": [
+        "tests/test_blueprints.py:765-793",
+        "tests/test_blueprints.py:796-832"
+      ]
+    },
+    {
+      "why": "The code beginning with `assert rv.status_code == 405` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: tests/test_basic.py:144-151 and tests/test_basic.py:182-189; 8 and 8 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "tests/test_basic.py:144-151",
+        "tests/test_basic.py:182-189"
+      ]
+    },
+    {
+      "why": "The code beginning with `def test_multiple_inheritance(app, client):` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/test_views.py:218-227 and tests/test_views.py:237-246; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"test_multiple_inheritance\", \"test_remove_method_from_parent\"], [\"DeleteView\", \"OtherView\"], [\"delete\", \"post\"], [\"\\\"DELETE\\\"\", \"\\\"POST\\\"\"], [\"GetDeleteView\", \"View\"]]. Raw core diff:\n--- tests/test_views.py:218-227\n+++ tests/test_views.py:237-246\n@@ -1 +1 @@\n-def test_multiple_inheritance(app, client):\n+def test_remove_method_from_parent(app, client):\n@@ -6,3 +6,3 @@\n-    class DeleteView(flask.views.MethodView):\n-        def delete(self):\n-            return \"DELETE\"\n+    class OtherView(flask.views.MethodView):\n+        def post(self):\n+            return \"POST\"\n@@ -10 +10 @@\n-    class GetDeleteView(GetView, DeleteView):\n+    class View(GetView, OtherView):\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_views.py:218-234\n+++ tests/test_views.py:237-253\n@@ -1,17 +1,17 @@\n-def test_multiple_inheritance(app, client):\n+def test_remove_method_from_parent(app, client):\n     class GetView(flask.views.MethodView):\n         def get(self):\n             return \"GET\"\n \n-    class DeleteView(flask.views.MethodView):\n-        def delete(self):\n-            return \"DELETE\"\n+    class OtherView(flask.views.MethodView):\n+        def post(self):\n+            return \"POST\"\n \n-    class GetDeleteView(GetView, DeleteView):\n-        pass\n+    class View(GetView, OtherView):\n+        methods = [\"GET\"]\n \n-    app.add_url_rule(\"/\", view_func=GetDeleteView.as_view(\"index\"))\n+    app.add_url_rule(\"/\", view_func=View.as_view(\"index\"))\n \n     assert client.get(\"/\").data == b\"GET\"\n-    assert client.delete(\"/\").data == b\"DELETE\"\n-    assert sorted(GetDeleteView.methods) == [\"DELETE\", \"GET\"]\n+    assert client.post(\"/\").status_code == 405\n+    assert sorted(View.methods) == [\"GET\"]",
+      "occurrences": [
+        "tests/test_views.py:218-234",
+        "tests/test_views.py:237-253"
+      ]
+    },
+    {
+      "why": "The code beginning with `def test_add_template_test_with_template(app, client):` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/test_blueprints.py:626-633 and tests/test_blueprints.py:660-667; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_blueprints.py:619-633\n+++ tests/test_blueprints.py:653-667\n@@ -1,9 +1,9 @@\n-def test_add_template_test_with_template(app, client):\n+def test_add_template_test_with_name_and_template(app, client):\n     bp = flask.Blueprint(\"bp\", __name__)\n \n-    def boolean(value):\n+    def is_boolean(value):\n         return isinstance(value, bool)\n \n-    bp.add_app_template_test(boolean)\n+    bp.add_app_template_test(is_boolean, \"boolean\")\n     app.register_blueprint(bp, url_prefix=\"/py\")\n ",
+      "occurrences": [
+        "tests/test_blueprints.py:619-633",
+        "tests/test_blueprints.py:653-667"
+      ]
+    },
+    {
+      "why": "The code beginning with `def test_no_escaping(app, client):` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/test_templating.py:91-102 and tests/test_templating.py:71-82; 10 and 10 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"test_no_escaping\", \"test_escaping\"], [\"\\\"non_escaping_template.txt\\\"\", \"\\\"escaping_template.html\\\"\"], [\"b\\\"<p>Hello World!\\\"\", \"b\\\"&lt;p&gt;Hello World!\\\"\"]]. Raw core diff:\n--- tests/test_templating.py:91-102\n+++ tests/test_templating.py:71-82\n@@ -1 +1 @@\n-def test_no_escaping(app, client):\n+def test_escaping(app, client):\n@@ -7 +7 @@\n-            \"non_escaping_template.txt\", text=text, html=Markup(text)\n+            \"escaping_template.html\", text=text, html=Markup(text)\n@@ -12 +12 @@\n-        b\"<p>Hello World!\",\n+        b\"&lt;p&gt;Hello World!\",\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_templating.py:91-110\n+++ tests/test_templating.py:71-88\n@@ -1,3 +1,3 @@\n-def test_no_escaping(app, client):\n+def test_escaping(app, client):\n     text = \"<p>Hello World!\"\n \n@@ -5,10 +5,10 @@\n     def index():\n         return flask.render_template(\n-            \"non_escaping_template.txt\", text=text, html=Markup(text)\n+            \"escaping_template.html\", text=text, html=Markup(text)\n         )\n \n     lines = client.get(\"/\").data.splitlines()\n     assert lines == [\n-        b\"<p>Hello World!\",\n+        b\"&lt;p&gt;Hello World!\",\n         b\"<p>Hello World!\",\n         b\"<p>Hello World!\",\n@@ -16,5 +16,3 @@\n         b\"&lt;p&gt;Hello World!\",\n         b\"<p>Hello World!\",\n-        b\"<p>Hello World!\",\n-        b\"<p>Hello World!\",\n     ]",
+      "occurrences": [
+        "tests/test_templating.py:91-110",
+        "tests/test_templating.py:71-88"
+      ]
+    },
+    {
+      "why": "The code beginning with `@parent.teardown_request` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/test_blueprints.py:939-957 and tests/test_blueprints.py:919-937; 15 and 15 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"parent\", \"app\"], [\"parent_teardown1\", \"app_teardown1\"], [\"\\\"parent_1\\\"\", \"\\\"app_1\\\"\"], [\"parent_before2\", \"app_before2\"], [\"\\\"parent_2\\\"\", \"\\\"app_2\\\"\"], [\"parent_teardown2\", \"app_teardown2\"], [\"parent_ctx\", \"app_ctx\"], [\"\\\"parent\\\"\", \"\\\"app\\\"\"], [\"child\", \"parent\"], [\"child_before1\", \"parent_before1\"], [\"\\\"child_1\\\"\", \"\\\"parent_1\\\"\"]]. Raw core diff:\n--- tests/test_blueprints.py:939-957\n+++ tests/test_blueprints.py:919-937\n@@ -1,3 +1,15 @@\n-    @parent.teardown_request\n-    def parent_teardown1(e=None):\n-        assert flask.g.seen.pop() == \"parent_1\"\n+    @app.teardown_request\n+    def app_teardown1(e=None):\n+        assert flask.g.seen.pop() == \"app_1\"\n+\n+    @app.before_request\n+    def app_before2():\n+        flask.g.setdefault(\"seen\", []).append(\"app_2\")\n+\n+    @app.teardown_request\n+    def app_teardown2(e=None):\n+        assert flask.g.seen.pop() == \"app_2\"\n+\n+    @app.context_processor\n+    def app_ctx():\n+        return dict(key=\"app\")\n@@ -6,14 +18,2 @@\n-    def parent_before2():\n-        flask.g.setdefault(\"seen\", []).append(\"parent_2\")\n-\n-    @parent.teardown_request\n-    def parent_teardown2(e=None):\n-        assert flask.g.seen.pop() == \"parent_2\"\n-\n-    @parent.context_processor\n-    def parent_ctx():\n-        return dict(key=\"parent\")\n-\n-    @child.before_request\n-    def child_before1():\n-        flask.g.setdefault(\"seen\", []).append(\"child_1\")\n+    def parent_before1():\n+        flask.g.setdefault(\"seen\", []).append(\"parent_1\")\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_blueprints.py:939-957\n+++ tests/test_blueprints.py:919-937\n@@ -1,19 +1,19 @@\n-    @parent.teardown_request\n-    def parent_teardown1(e=None):\n-        assert flask.g.seen.pop() == \"parent_1\"\n+    @app.teardown_request\n+    def app_teardown1(e=None):\n+        assert flask.g.seen.pop() == \"app_1\"\n+\n+    @app.before_request\n+    def app_before2():\n+        flask.g.setdefault(\"seen\", []).append(\"app_2\")\n+\n+    @app.teardown_request\n+    def app_teardown2(e=None):\n+        assert flask.g.seen.pop() == \"app_2\"\n+\n+    @app.context_processor\n+    def app_ctx():\n+        return dict(key=\"app\")\n \n     @parent.before_request\n-    def parent_before2():\n-        flask.g.setdefault(\"seen\", []).append(\"parent_2\")\n-\n-    @parent.teardown_request\n-    def parent_teardown2(e=None):\n-        assert flask.g.seen.pop() == \"parent_2\"\n-\n-    @parent.context_processor\n-    def parent_ctx():\n-        return dict(key=\"parent\")\n-\n-    @child.before_request\n-    def child_before1():\n-        flask.g.setdefault(\"seen\", []).append(\"child_1\")\n+    def parent_before1():\n+        flask.g.setdefault(\"seen\", []).append(\"parent_1\")",
+      "occurrences": [
+        "tests/test_blueprints.py:939-957",
+        "tests/test_blueprints.py:919-937"
+      ]
+    },
+    {
+      "why": "The code beginning with `@app.teardown_request` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/test_basic.py:818-828 and tests/test_basic.py:830-840; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"teardown_request1\", \"teardown_request2\"]]. Raw core diff:\n--- tests/test_basic.py:818-828\n+++ tests/test_basic.py:830-840\n@@ -2 +2 @@\n-    def teardown_request1(exc):\n+    def teardown_request2(exc):\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/test_basic.py:818-828\n+++ tests/test_basic.py:830-840\n@@ -1,4 +1,4 @@\n     @app.teardown_request\n-    def teardown_request1(exc):\n+    def teardown_request2(exc):\n         assert type(exc) is ZeroDivisionError\n         called.append(True)",
+      "type": "Type II",
+      "occurrences": [
+        "tests/test_basic.py:818-828",
+        "tests/test_basic.py:830-840"
+      ]
+    }
+  ],
+  "clearly_out": [],
+  "not_clear": [
+    {
+      "why": "The fragments around `@bp.app_template_filter(name=\"my_reverse_custom_name_4\")` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_blueprints.py:365-371",
+        "tests/test_blueprints.py:390-396"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 5; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_blueprints.py:427-433",
+        "tests/test_blueprints.py:448-454"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_blueprints.py:608-612",
+        "tests/test_blueprints.py:511-515"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_templating.py:452-456",
+        "tests/test_templating.py:447-451"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_cli.py:497-500",
+        "tests/test_cli.py:515-518"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_basic.py:373-376",
+        "tests/test_basic.py:378-381"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_basic.py:1817-1819",
+        "tests/test_basic.py:1784-1786"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_user_error_handler.py:159-160",
+        "tests/test_user_error_handler.py:132-133"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_config.py:52-57",
+        "tests/test_config.py:80-85"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_templating.py:375-376",
+        "tests/test_blueprints.py:739-740"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_blueprints.py:740-743",
+        "tests/test_blueprints.py:744-747"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_blueprints.py:382-384",
+        "tests/test_templating.py:152-154"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_cli.py:627-628",
+        "tests/test_cli.py:624-625"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/flask/templating.py:185-197",
+        "src/flask/templating.py:140-148"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_templating.py:140-145",
+        "tests/test_templating.py:168-173"
+      ]
+    },
+    {
+      "why": "The fragments around `def test_add_template_test(app):` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 3.",
+      "occurrences": [
+        "tests/test_blueprints.py:547-557",
+        "tests/test_blueprints.py:573-583"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_blueprints.py:190-191",
+        "tests/test_blueprints.py:187-188"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "src/flask/json/tag.py:160-164",
+        "src/flask/json/tag.py:206-210"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_basic.py:1048-1052",
+        "tests/test_blueprints.py:182-185"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_templating.py:262-263",
+        "tests/test_blueprints.py:538-539"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_basic.py:53-54",
+        "tests/test_basic.py:39-40"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_blueprints.py:394-396",
+        "tests/test_blueprints.py:369-371"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_testing.py:31-36",
+        "tests/test_testing.py:19-24"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (6 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_templating.py:129-136",
+        "tests/test_blueprints.py:379-382"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 5; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_blueprints.py:608-614",
+        "tests/test_blueprints.py:587-593"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_cli.py:282-285",
+        "tests/test_cli.py:276-279"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_templating.py:418-420",
+        "tests/test_blueprints.py:178-181"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_basic.py:1204-1209",
+        "tests/test_basic.py:1198-1203"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_cli.py:638-639",
+        "tests/test_cli.py:616-617"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_basic.py:1206-1210",
+        "tests/test_basic.py:1211-1215"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_views.py:157-158",
+        "tests/test_views.py:95-96"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (6 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_user_error_handler.py:164-170",
+        "tests/test_blueprints.py:52-57"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_basic.py:773-775",
+        "tests/test_views.py:158-160"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_templating.py:290-291",
+        "tests/test_templating.py:300-301"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/flask/sansio/blueprints.py:72-77",
+        "src/flask/sansio/blueprints.py:64-70"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_instance_config.py:87-90",
+        "tests/test_instance_config.py:102-105"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_cli.py:255-258",
+        "tests/test_cli.py:267-270"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_templating.py:128-130",
+        "tests/test_blueprints.py:370-372"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_signals.py:41-44",
+        "tests/test_signals.py:17-20"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 5; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_testing.py:58-62",
+        "tests/test_testing.py:43-47"
+      ]
+    },
+    {
+      "why": "The fragments around `@app.route(\"/\")` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_basic.py:1569-1575",
+        "tests/test_basic.py:1788-1794"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_blueprints.py:298-302",
+        "tests/test_blueprints.py:340-344"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_basic.py:336-337",
+        "tests/test_basic.py:346-347"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_basic.py:350-352",
+        "tests/test_basic.py:339-341"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_blueprints.py:747-748",
+        "tests/test_templating.py:397-398"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "src/flask/sansio/blueprints.py:25-27",
+        "src/flask/sansio/app.py:48-50"
+      ]
+    },
+    {
+      "why": "The fragments around `def test_custom_jinja_env():` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_templating.py:524-532",
+        "tests/test_helpers.py:188-196"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 5; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_blueprints.py:662-667",
+        "tests/test_blueprints.py:628-633"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_blueprints.py:444-446",
+        "tests/test_templating.py:233-235"
+      ]
+    },
+    {
+      "why": "The fragments around `@app.template_test(\"boolean\")` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_templating.py:286-292",
+        "tests/test_blueprints.py:550-557"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_templating.py:144-146",
+        "tests/test_blueprints.py:378-380"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_basic.py:1197-1201",
+        "tests/test_basic.py:1203-1207"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_templating.py:270-271",
+        "tests/test_blueprints.py:542-543"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_blueprints.py:420-423",
+        "tests/test_blueprints.py:407-410"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_views.py:230-232",
+        "tests/test_views.py:269-270"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_basic.py:1594-1595",
+        "tests/test_basic.py:1587-1588"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_templating.py:469-472",
+        "tests/test_templating.py:464-467"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_templating.py:286-291",
+        "tests/test_templating.py:258-263"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_templating.py:456-460",
+        "tests/test_templating.py:451-455"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_basic.py:81-86",
+        "tests/test_basic.py:98-103"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 5; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "examples/tutorial/flaskr/blog.py:65-70",
+        "examples/tutorial/flaskr/blog.py:93-98"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_basic.py:447-451",
+        "tests/test_blueprints.py:182-184"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_basic.py:790-793",
+        "tests/test_basic.py:808-811"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_basic.py:1796-1800",
+        "tests/test_basic.py:1581-1585"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_basic.py:1859-1862",
+        "tests/test_basic.py:1875-1878"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_blueprints.py:178-182",
+        "tests/test_basic.py:1548-1553"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_cli.py:507-509",
+        "tests/test_cli.py:439-441"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_user_error_handler.py:206-210",
+        "tests/test_user_error_handler.py:155-160"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/flask/sansio/blueprints.py:70-74",
+        "src/flask/sansio/blueprints.py:62-66"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_cli.py:595-596",
+        "tests/test_cli.py:599-600"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_basic.py:180-181",
+        "tests/test_basic.py:519-521"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_signals.py:131-133",
+        "tests/test_appctx.py:189-192"
+      ]
+    },
+    {
+      "why": "The fragments around `@app.post(\"/\")` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_basic.py:239-246",
+        "tests/test_reqctx.py:227-237"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_blueprints.py:542-544",
+        "tests/test_templating.py:254-256"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_blueprints.py:80-84",
+        "tests/test_blueprints.py:865-869"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 6 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 5; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_blueprints.py:485-490",
+        "tests/test_templating.py:204-211"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_templating.py:246-247",
+        "tests/test_templating.py:280-281"
+      ]
+    },
+    {
+      "why": "The fragments around `class ChildExceptionRegistered(ParentException):` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_user_error_handler.py:68-79",
+        "tests/test_basic.py:991-1003"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_appctx.py:223-227",
+        "tests/test_appctx.py:217-221"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_blueprints.py:388-394",
+        "tests/test_blueprints.py:460-466"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/flask/json/tag.py:137-141",
+        "src/flask/json/tag.py:150-154"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_basic.py:451-453",
+        "tests/test_basic.py:438-440"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_templating.py:449-452",
+        "tests/test_templating.py:454-457"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_config.py:226-228",
+        "tests/test_config.py:230-232"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_templating.py:446-450",
+        "tests/test_templating.py:461-465"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_blueprints.py:536-539",
+        "tests/test_blueprints.py:540-543"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_basic.py:1808-1813",
+        "tests/test_basic.py:1821-1826"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_reqctx.py:107-109",
+        "tests/test_reqctx.py:135-137"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (7 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/flask/sansio/scaffold.py:549-564",
+        "src/flask/sansio/scaffold.py:591-603"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_blueprints.py:284-288",
+        "tests/test_blueprints.py:338-342"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_blueprints.py:743-744",
+        "tests/test_templating.py:386-387"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_basic.py:1476-1477",
+        "tests/test_basic.py:1467-1468"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_basic.py:326-329",
+        "tests/test_basic.py:283-286"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_reqctx.py:95-97",
+        "tests/test_reqctx.py:99-103"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_appctx.py:233-236",
+        "tests/test_appctx.py:238-241"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_blueprints.py:448-452",
+        "tests/test_blueprints.py:427-431"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_basic.py:1205-1210",
+        "tests/test_basic.py:1199-1204"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 5; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_blueprints.py:654-660",
+        "tests/test_blueprints.py:574-580"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/flask/sansio/blueprints.py:371-374",
+        "src/flask/sansio/blueprints.py:359-362"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_templating.py:172-174",
+        "tests/test_templating.py:182-184"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_blueprints.py:182-184",
+        "tests/test_basic.py:917-920"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 6 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_basic.py:1013-1018",
+        "tests/test_user_error_handler.py:89-96"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/flask/config.py:210-214",
+        "src/flask/config.py:295-300"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_blueprints.py:374-376",
+        "tests/test_templating.py:136-138"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_templating.py:397-402",
+        "tests/test_templating.py:386-391"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_basic.py:1278-1284",
+        "tests/test_basic.py:1270-1276"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "src/flask/templating.py:124-128",
+        "src/flask/templating.py:166-170"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_blueprints.py:414-420",
+        "tests/test_blueprints.py:494-500"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_signals.py:145-150",
+        "tests/test_signals.py:9-14"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/flask/templating.py:152-160",
+        "src/flask/templating.py:201-212"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_cli.py:643-646",
+        "tests/test_cli.py:621-625"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_blueprints.py:747-749",
+        "tests/test_templating.py:375-377"
+      ]
+    },
+    {
+      "why": "The fragments around `def test_explicit_head(app, client):` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 7; edited blocks in the comment/whitespace-normalized line diff: 3.",
+      "occurrences": [
+        "tests/test_views.py:166-179",
+        "tests/test_views.py:152-163"
+      ]
+    },
+    {
+      "why": "The fragments around `app = flask.Flask(__name__, subdomain_matching=True)` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_basic.py:1784-1790",
+        "tests/test_testing.py:305-311"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_blueprints.py:548-554",
+        "tests/test_blueprints.py:620-626"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_blueprints.py:92-97",
+        "tests/test_blueprints.py:28-33"
+      ]
+    },
+    {
+      "why": "The fragments around `def is_boolean(value):` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_blueprints.py:550-556",
+        "tests/test_blueprints.py:525-531"
+      ]
+    },
+    {
+      "why": "The fragments around `class Index(flask.views.View):` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_views.py:106-113",
+        "tests/test_views.py:125-132"
+      ]
+    },
+    {
+      "why": "The fragments around `app = flask.Flask(__name__, subdomain_matching=True)` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_testing.py:305-311",
+        "tests/test_basic.py:1817-1823"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_templating.py:254-255",
+        "tests/test_blueprints.py:534-535"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_basic.py:45-47",
+        "tests/test_basic.py:35-37"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/test_signals.py:28-32",
+        "tests/test_signals.py:5-9"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "examples/tutorial/flaskr/auth.py:88-91",
+        "examples/tutorial/flaskr/auth.py:54-57"
+      ]
+    },
+    {
+      "why": "The fragments around `class ChildExceptionRegistered(ParentException):` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_user_error_handler.py:68-79",
+        "tests/test_basic.py:975-985"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (6 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/flask/sansio/app.py:858-867",
+        "src/flask/sansio/app.py:827-856"
+      ]
+    },
+    {
+      "why": "The fragments around `def super_reverse(s):` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 6; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_blueprints.py:462-472",
+        "tests/test_blueprints.py:479-489"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_config.py:231-233",
+        "tests/test_config.py:227-229"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_basic.py:1270-1273",
+        "tests/test_basic.py:1278-1281"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/test_blueprints.py:553-557",
+        "tests/test_blueprints.py:567-570"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "examples/tutorial/tests/test_blog.py:12-14",
+        "examples/tutorial/tests/test_blog.py:7-9"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_blueprints.py:1069-1072",
+        "tests/test_blueprints.py:1074-1077"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_blueprints.py:531-534",
+        "tests/test_blueprints.py:535-538"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_reqctx.py:79-83",
+        "tests/test_reqctx.py:73-77"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_json.py:100-102",
+        "tests/test_json.py:128-130"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/test_basic.py:519-521",
+        "tests/test_basic.py:188-189"
+      ]
+    }
+  ],
+  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 200 candidates at this commit and no pair was called CLEARLY OUT by all of them. 0 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing."
+}
