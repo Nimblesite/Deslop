@@ -2647,10 +2647,10 @@
         "tests/admin_views/tests.py:827-828",
         "tests/custom_lookups/tests.py:656-657"
       ],
-      "outcome": "fail",
-      "since": "2026-11-02T01:31:12.995Z",
-      "engine": "deslop@f3bb59490f9b",
-      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "outcome": "pass",
+      "since": "2026-11-08T01:42:41.400Z",
+      "engine": "deslop@770d60315a1f",
+      "commit": "770d60315a1f8ed79374e023c4a2615f87befa1c",
       "version": null
     },
     {
