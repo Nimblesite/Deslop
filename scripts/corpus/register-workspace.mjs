@@ -171,8 +171,9 @@ const renderCandidate = (sourceDir, candidate) =>
     "",
     "Two regions of `source/`. Read both **in the files themselves**, diff them, then",
     "record CLEARLY IN, CLEARLY OUT or NOT CLEAR in `verdicts.json` with the diff you",
-    "ran. If you hesitate, it is NOT CLEAR. A CLEARLY IN also names its clone type,",
-    "`Type I` to `Type IV`, as defined in `JUDGING.md`.",
+    "ran. The measured rules in `JUDGING.md` decide first; where they are silent and you",
+    "hesitate, it is NOT CLEAR. A CLEARLY IN also names its clone type, `Type I` to",
+    "`Type IV`, as defined in `JUDGING.md`.",
     "",
     ...candidate.regions.map((region) => renderRegion(sourceDir, region)),
   ].join("\n");

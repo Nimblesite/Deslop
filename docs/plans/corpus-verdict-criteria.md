@@ -28,7 +28,7 @@ Test files and scaffolding get **no exemption**. An identical 84-line block is a
 
 These are the "shared syntactic skeleton" pairs the skill already calls CLEARLY OUT.
 
-**Tier 3 — ragged boundaries get re-cut, not shelved.** The skill files real copies with off-by-a-few boundaries as NOT CLEAR forever. Instead, the script trims both ranges to their longest aligned token run. If that core passes Tier 1, the core is filed as CLEARLY IN, and the original ranges stay NOT CLEAR.
+**Tier 3 — ragged boundaries are settled, not shelved.** The script finds the longest aligned token run inside both ranges. If that core passes Tier 1, the pair is CLEARLY IN with its candidate ranges unchanged (the scorer matches by overlap), and `verified` names the core's lines.
 
 **Tier 4 — Type III and Type IV stay with judges, with numbers attached.** The workspace shows each judge:
 
@@ -41,6 +41,7 @@ A pair with ≥ 70 % of statements aligned and edits confined to ≤ 2 contiguou
 
 ## Steps
 
+- [x] Remove the contradictions from the judging skill (`.agents/skills/judge-clone-pairs/SKILL.md`), the workspace candidate text (`scripts/corpus/register-workspace.mjs`) and `docs/specs/corpus.md` [CORPUS-REGISTER]: a fixed six-real-line bar, no test or scaffolding exemption for `Type I`/`Type II`, ragged boundaries filed as CLEARLY IN around a qualifying core.
 - [ ] Write the measurement as a test-support binary in Rust: `crates/deslop-test-support/src/corpus_score/criteria.rs`. It tokenises with the workspace's tree-sitter grammars but uses none of the pipeline's normalisation, fingerprinting or clustering. Each threshold is a named, config-overridable constant.
 - [ ] Add fixtures for every tier boundary: exactly 5 and exactly 6 lines; one inconsistent rename; overlapping ranges; import-only blocks; a 29 % and a 31 % alignment.
 - [ ] Dry run over the 3,334 NOT CLEAR entries and the 138 left-out pairs. Write `docs/reports/verdict-criteria-dry-run.md` from the script, with counts moved per tier and per repository and every promoted pair listed.
