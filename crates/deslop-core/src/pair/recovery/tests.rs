@@ -75,6 +75,19 @@ const SINGLE_HASH_STAR: &[(usize, usize)] = &[(0, 1), (0, 2), (0, 3)];
 /// The pairs that keep the copies together when the gate drops the
 /// star centre: each later copy welds to the first copy behind it.
 const SINGLE_HASH_RECOVERED: &[(usize, usize)] = &[(1, 2), (1, 3)];
+/// A hash group wide enough for several parallel batches, with a
+/// nontransitive weld rule so chains and merges both occur.
+const PARITY_MEMBERS: usize = 300;
+/// Members weld when their indices are congruent modulo this, or when
+/// one is the other's double — relations that chain without being
+/// transitive.
+const PARITY_MODULUS: usize = 37;
+/// A member doubled.
+const PARITY_DOUBLE: usize = 2;
+/// Every third pair of the parity fixture is already a candidate.
+const PARITY_EXISTING_STRIDE: usize = 3;
+/// Workers the parity walk is dealt to.
+const PARITY_WORKERS: usize = 4;
 
 fn fixture_fingerprints(hashes: &[[u8; 32]]) -> Vec<Fingerprint> {
     let mut registry = FileRegistry::new();
@@ -168,7 +181,7 @@ fn recovered<W: CopyWeld + Send>(
     open: &(impl Fn() -> W + Sync),
     existing: &[CandidatePair],
 ) -> Vec<CandidatePair> {
-    recovered_pairs(families, fingerprints, open, existing, &AtomicUsize::new(0))
+    recovered_pairs(families, fingerprints, open, existing, &Probed::default())
 }
 
 // A complete shape family cannot contain a missing copy edge, while a
@@ -370,5 +383,76 @@ fn the_walk_connects_everything_the_greedy_grouping_connected() {
     assert!(
         new_edges.is_superset(&old_edges),
         "the walk lost a same-hash copy the greedy grouping found: {old_edges:?} vs {new_edges:?}"
+    );
+}
+
+/// The parity fixture's weld rule.
+fn parity_welds(left: usize, right: usize) -> bool {
+    let (low, high) = (left.min(right), left.max(right));
+    low % PARITY_MODULUS == high % PARITY_MODULUS || low.saturating_mul(PARITY_DOUBLE) == high
+}
+
+fn welding_parity(left: usize, right: usize) -> Option<CandidatePair> {
+    parity_welds(left, right).then(|| candidate((left, right)))
+}
+
+/// The connected components the walk's pairs and the existing candidates
+/// induce over `members`.
+fn components_of(
+    members: &[usize],
+    pairs: &[CandidatePair],
+    existing: &[CandidatePair],
+) -> BTreeSet<Vec<usize>> {
+    let mut parent: Vec<usize> = (0..members.len()).collect();
+    fn find(parent: &mut [usize], node: usize) -> usize {
+        let mut root = node;
+        while parent[root] != root {
+            root = parent[root];
+        }
+        root
+    }
+    for pair in pairs.iter().chain(existing) {
+        let (left, right) = (find(&mut parent, pair.left), find(&mut parent, pair.right));
+        parent[left] = right;
+    }
+    let mut groups: std::collections::BTreeMap<usize, Vec<usize>> = Default::default();
+    for &member in members {
+        groups.entry(find(&mut parent, member)).or_default().push(member);
+    }
+    groups.into_values().collect()
+}
+
+// The batched parallel walk connects exactly what the one-member-at-a-time
+// walk connects, on any worker count.
+#[test]
+fn the_parallel_walk_connects_what_the_sequential_walk_connects() {
+    let members: Vec<usize> = (0..PARITY_MEMBERS).collect();
+    let existing: Vec<CandidatePair> = members
+        .iter()
+        .flat_map(|&left| (left + 1..PARITY_MEMBERS).map(move |right| (left, right)))
+        .filter(|(left, right)| parity_welds(*left, *right) && (left + right) % PARITY_EXISTING_STRIDE == 0)
+        .map(candidate)
+        .collect();
+    let sequential = connected_hash_pairs(
+        &members,
+        &mut welding_parity,
+        &existing,
+        &Probed::default(),
+    );
+    let open = || welding_parity;
+    let pool = WeldPool::new(&open);
+    let parallel = parallel_group_pairs(&members, &pool, PARITY_WORKERS, &existing, &Probed::default());
+    assert!(
+        !sequential.is_empty(),
+        "the fixture must weld something or the parity proves nothing"
+    );
+    assert_eq!(
+        components_of(&members, &parallel, &existing),
+        components_of(&members, &sequential, &existing),
+        "the parallel walk must induce the sequential walk's components"
+    );
+    assert!(
+        parallel.iter().all(|pair| parity_welds(pair.left, pair.right)),
+        "every emitted pair must be a weld"
     );
 }

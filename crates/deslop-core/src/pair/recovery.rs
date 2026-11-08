@@ -22,9 +22,13 @@ use std::{
 use super::{CandidatePair, CopyProbe, FusedCluster, PairGate};
 use crate::fingerprint::Fingerprint;
 
+#[path = "recovery/parallel.rs"]
+mod parallel;
 #[cfg(test)]
 #[path = "recovery/tests.rs"]
 mod tests;
+
+use parallel::{parallel_group_pairs, WeldPool};
 
 /// A connected pair already has its only edge; larger complete components
 /// likewise have no missing relation for copy recovery to discover.
@@ -40,6 +44,32 @@ const RECOVERY_SHARD_MIN_FAMILIES: NonZeroUsize = match NonZeroUsize::new(64) {
 const RECOVERY_CHUNK_FAMILIES: usize = 8;
 /// A pair connects two distinct member indices.
 const PAIR_ENDPOINTS: usize = 2;
+/// Members of one hash group from which the walk probes each batch of
+/// members against the existing components in parallel: below it one
+/// worker finishes the group faster than the batches can be dealt.
+const PARALLEL_GROUP_MEMBERS: usize = 256;
+/// Fewest members of a parallel group per worker
+/// ([`crate::shard::worker_count`]).
+const PARALLEL_GROUP_MIN_MEMBERS_PER_WORKER: NonZeroUsize = match NonZeroUsize::new(32) {
+    Some(floor) => floor,
+    None => NonZeroUsize::MIN,
+};
+
+/// Counts the welds asked for, across every worker.
+#[derive(Default)]
+pub(super) struct Probed(AtomicUsize);
+
+impl Probed {
+    /// One more weld asked for.
+    fn count(&self) {
+        let _previous = self.0.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Every weld asked for so far.
+    fn total(&self) -> usize {
+        self.0.load(Ordering::Relaxed)
+    }
+}
 
 /// Decides whether two Merkle-equal members weld, and builds the
 /// candidate they weld through when they do.
@@ -98,34 +128,36 @@ pub(crate) fn recover_copy_pairs<W: CopyWeld + Send>(
 ) {
     log_recovery_workload(families, fingerprints);
     pairs.sort_unstable_by_key(|pair| (pair.left, pair.right));
-    let probed = AtomicUsize::new(0);
+    let probed = Probed::default();
     let recovered = recovered_pairs(families, fingerprints, &open, pairs, &probed);
     tracing::info!(
         recovered = recovered.len(),
-        probed = probed.load(Ordering::Relaxed),
+        probed = probed.total(),
         "copy edges recovered"
     );
     pairs.extend(recovered);
 }
 
-/// The welded pairs of every incomplete family. Families recover
-/// independently, so they are dealt to workers in chunks and the pairs
-/// reassembled in family order ([PIPELINE-DETERMINISM]); every verdict is
-/// the gate's, whichever worker asked for it.
+/// The welded pairs of every incomplete family. Families whose hash
+/// groups are all small recover independently, so they are dealt to
+/// workers in chunks and the pairs reassembled in family order; a family
+/// holding a large group is walked afterwards, one group at a time, with
+/// every worker probing its batches ([PIPELINE-DETERMINISM]). Every
+/// verdict is the gate's, whichever worker asked for it.
 fn recovered_pairs<W: CopyWeld + Send>(
     families: &[FusedCluster],
     fingerprints: &[Fingerprint],
     open: &(impl Fn() -> W + Sync),
     existing: &[CandidatePair],
-    probed: &AtomicUsize,
+    probed: &Probed,
 ) -> Vec<CandidatePair> {
-    let incomplete: Vec<&FusedCluster> = families
+    let (large, small): (Vec<&FusedCluster>, Vec<&FusedCluster>) = families
         .iter()
         .filter(|family| has_missing_pair(family))
-        .collect();
-    let workers = crate::shard::worker_count(incomplete.len(), RECOVERY_SHARD_MIN_FAMILIES);
+        .partition(|family| has_large_group(family, fingerprints));
+    let workers = crate::shard::worker_count(small.len(), RECOVERY_SHARD_MIN_FAMILIES);
     let (chunks, _welds) = crate::shard::map_chunks(
-        incomplete.chunks(RECOVERY_CHUNK_FAMILIES),
+        small.chunks(RECOVERY_CHUNK_FAMILIES),
         workers,
         open,
         |weld, chunk: &[&FusedCluster]| {
@@ -135,7 +167,48 @@ fn recovered_pairs<W: CopyWeld + Send>(
                 .collect::<Vec<CandidatePair>>()
         },
     );
-    chunks.into_iter().flatten().collect()
+    let pool = WeldPool::new(open);
+    chunks
+        .into_iter()
+        .flatten()
+        .chain(large.iter().flat_map(|family| {
+            large_family_pairs(family, fingerprints, &pool, existing, probed)
+        }))
+        .collect()
+}
+
+/// Whether any hash group of `family` is large enough for the batched walk.
+fn has_large_group(family: &FusedCluster, fingerprints: &[Fingerprint]) -> bool {
+    recovery_hash_groups(family, fingerprints)
+        .iter()
+        .any(|members| members.len() >= PARALLEL_GROUP_MEMBERS)
+}
+
+/// A family with at least one large hash group: large groups are walked
+/// in parallel batches, the rest one member at a time.
+fn large_family_pairs<W: CopyWeld + Send>(
+    family: &FusedCluster,
+    fingerprints: &[Fingerprint],
+    pool: &WeldPool<'_, W>,
+    existing: &[CandidatePair],
+    probed: &Probed,
+) -> Vec<CandidatePair> {
+    recovery_hash_groups(family, fingerprints)
+        .iter()
+        .flat_map(|members| {
+            if members.len() >= PARALLEL_GROUP_MEMBERS {
+                let workers = crate::shard::worker_count(
+                    members.len(),
+                    PARALLEL_GROUP_MIN_MEMBERS_PER_WORKER,
+                );
+                return parallel_group_pairs(members, pool, workers, existing, probed);
+            }
+            let mut weld = pool.lease();
+            let pairs = connected_hash_pairs(members, &mut weld, existing, probed);
+            pool.release([weld]);
+            pairs
+        })
+        .collect()
 }
 
 /// Only equal hashes can add structural edges, so a family is walked one
@@ -145,7 +218,7 @@ fn family_pairs(
     fingerprints: &[Fingerprint],
     weld: &mut dyn CopyWeld,
     existing: &[CandidatePair],
-    probed: &AtomicUsize,
+    probed: &Probed,
 ) -> Vec<CandidatePair> {
     recovery_hash_groups(family, fingerprints)
         .iter()
@@ -179,7 +252,7 @@ fn connected_hash_pairs(
     members: &[usize],
     weld: &mut dyn CopyWeld,
     existing: &[CandidatePair],
-    probed: &AtomicUsize,
+    probed: &Probed,
 ) -> Vec<CandidatePair> {
     let mut components: Vec<Vec<usize>> = Vec::new();
     let mut pairs = Vec::new();
@@ -190,7 +263,7 @@ fn connected_hash_pairs(
                 if candidate_exists(existing, other, member) {
                     return None;
                 }
-                let _previous = probed.fetch_add(1, Ordering::Relaxed);
+                probed.count();
                 weld.weld(other, member)
             });
             if let Some(pair) = welded {
