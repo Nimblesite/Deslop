@@ -91,13 +91,25 @@ export function clusterPanelFeed(
   anchor: ClusterAnchor,
 ): ClusterPanelFeed {
   const clusters = originalMembership(canonical, visible);
-  const report = { ...visible, clusters };
   const resolved = resolveAnchoredCluster(canonical, anchor);
-  if (!resolved) return { report, selectedId: null };
-  if (clusters.includes(resolved)) return { report, selectedId: resolved.id };
-  // The projection elided the opened cluster entirely (it fell below two
-  // visible occurrences): re-inject it, in the engine's rank order.
-  const others = clusters.filter((cluster) => cluster.id !== resolved.id);
-  const restored = [resolved, ...others].sort((left, right) => left.rank - right.rank);
-  return { report: { ...visible, clusters: restored }, selectedId: resolved.id };
+  if (!resolved) return { report: { ...visible, clusters: clusters.map(withoutLocations) }, selectedId: null };
+  // The projection may have elided the opened cluster entirely (it fell below
+  // two visible occurrences): re-inject it, in the engine's rank order.
+  const listed = clusters.includes(resolved)
+    ? clusters
+    : [resolved, ...clusters.filter((cluster) => cluster.id !== resolved.id)].sort((left, right) => left.rank - right.rank);
+  return {
+    report: { ...visible, clusters: listed.map((cluster) => (cluster === resolved ? cluster : withoutLocations(cluster))) },
+    selectedId: resolved.id,
+  };
+}
+
+/**
+ * #606 Every cluster the panel does not show travels as its navigation entry
+ * only: id, rank and kind, no locations. Shipping every location in the
+ * workspace — each enriched from its source file — to draw one cluster is
+ * what held the panel on "No cluster selected." for seconds on a large repo.
+ */
+function withoutLocations(cluster: ReportCluster): ReportCluster {
+  return { ...cluster, occurrences: [] };
 }

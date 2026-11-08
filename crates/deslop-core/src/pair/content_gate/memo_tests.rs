@@ -102,18 +102,12 @@ fn gate_reuses_frontiers_across_exact_content_edges() -> Result<(), String> {
         candidate(FIRST, THIRD, &fingerprints)?,
         candidate(SECOND, THIRD, &fingerprints)?,
     ];
-    let mut content = ContentMeasurer::default();
-    apply_pair_content_gate_with_content(
-        &mut pairs,
-        &fingerprints,
-        &trees,
-        &sources,
-        &languages,
-        &ParseCache::new(),
-        &mut content,
-    );
+    let cache = ParseCache::new();
+    let shared = GateShared::new(&pairs, &fingerprints, &trees, &sources, &languages, &cache);
+    let mut gate = PairGate::new(&shared, fingerprints.len());
+    pairs.retain(|pair| gate.admits(pair, &fingerprints));
     assert_eq!(pairs.len(), EXPECTED_PAIRS);
-    assert_eq!(content.hits(), EXPECTED_REUSE);
+    assert_eq!(gate.content().hits(), EXPECTED_REUSE);
     assert_eq!(
         pairs
             .iter()
@@ -175,27 +169,20 @@ fn verdict_for(
     sources: &HashMap<FileId, Vec<u8>>,
     languages: &HashMap<FileId, &'static str>,
 ) -> Result<GateVerdict, String> {
-    let tree_index = crate::content::tree_index_of(trees);
-    let scopes = DeclarationScopes::new(trees, languages);
-    let anchors = ExactClones::whole_functions_across_files(
+    let cache = ParseCache::new();
+    let shared = GateShared::new(
         std::slice::from_ref(pair),
         fingerprints,
-        &scopes,
+        trees,
+        sources,
+        languages,
+        &cache,
     );
-    let mut content = ContentMeasurer::default();
+    let mut gate = PairGate::new(&shared, fingerprints.len());
     Ok(gate_verdict(
         pair,
         fingerprints.get(pair.left).ok_or(MISSING_ENDPOINT)?,
         fingerprints.get(pair.right).ok_or(MISSING_ENDPOINT)?,
-        &mut GateContext {
-            tree_index: &tree_index,
-            anchors: &anchors,
-            scopes: &scopes,
-            authored_scope: AuthoredScopeMemo::new(fingerprints.len()),
-            sources,
-            languages,
-            cache: &ParseCache::new(),
-            content: &mut content,
-        },
+        &mut gate,
     ))
 }

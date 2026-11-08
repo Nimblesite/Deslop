@@ -1,6 +1,9 @@
 //! Explicit endpoint-to-endpoint evidence measurement ([FUSED-PAIR-SIGNALS]).
 
-use std::collections::{hash_map::RandomState, HashMap};
+use std::{
+    collections::{hash_map::RandomState, HashMap},
+    sync::Arc,
+};
 
 use super::PipelineSession;
 use crate::{
@@ -106,10 +109,10 @@ impl PipelineSession {
         let structural = axes
             .overlap
             .overlap(pair.left.fingerprint, pair.right.fingerprint);
-        let token_jaccard = self.token_jaccard(pair, merkle_equal, &axes.trees);
+        let token_jaccard = self.token_jaccard(pair, merkle_equal, &axes.shared.trees);
         let content_pair = axes.content.pair(
             (pair.left.fingerprint, pair.right.fingerprint),
-            &axes.trees,
+            &axes.shared.trees,
             &self.sources,
             &self.file_languages,
         );
@@ -129,7 +132,7 @@ impl PipelineSession {
             },
             content,
             core: CoreCopy::Absent,
-            rescue_scope: axes.rescue.allows_rescue(
+            rescue_scope: axes.shared.rescue.allows_rescue(
                 pair.left.fingerprint,
                 pair.right.fingerprint,
                 structural,
@@ -283,22 +286,28 @@ struct PairAxes<'corpus> {
     overlap: OverlapMeasurer<'corpus>,
     /// Exact-fingerprint frontiers reused across pair comparisons.
     content: ContentMeasurer,
+    /// The read-only index every memo set measures against.
+    shared: Arc<AxesShared<'corpus>>,
+}
+
+/// The read-only half of the pair axes: the per-file tree index and the
+/// rescue scope context, built once over the whole population and shared
+/// by every worker of the cluster fold, whose memos are per worker.
+pub(super) struct AxesShared<'corpus> {
     /// `FileId → normalised root` for the content axes.
     trees: HashMap<FileId, &'corpus NormalizedNode>,
     /// Original candidate anchors preserve rescue scope and container checks.
     rescue: RescueContext<'corpus, RandomState, RandomState>,
 }
 
-impl<'corpus> PairAxes<'corpus> {
-    /// Indexes `trees` for every measurement that follows.
-    fn new(
+impl<'corpus> AxesShared<'corpus> {
+    /// Indexes `trees` and the candidate anchors once.
+    pub(super) fn new(
         trees: &'corpus [NormalizedNode],
         session: &'corpus PipelineSession,
         pairs: &[CandidatePair],
     ) -> Self {
         Self {
-            overlap: OverlapMeasurer::new(trees),
-            content: ContentMeasurer::default(),
             trees: tree_index_of(trees),
             rescue: RescueContext::new(
                 pairs,
@@ -308,6 +317,26 @@ impl<'corpus> PairAxes<'corpus> {
                 &session.file_languages,
                 usize::try_from(session.min_nodes).unwrap_or(usize::MAX),
             ),
+        }
+    }
+}
+
+impl<'corpus> PairAxes<'corpus> {
+    /// Indexes `trees` for every measurement that follows.
+    fn new(
+        trees: &'corpus [NormalizedNode],
+        session: &'corpus PipelineSession,
+        pairs: &[CandidatePair],
+    ) -> Self {
+        Self::fresh(trees, Arc::new(AxesShared::new(trees, session, pairs)))
+    }
+
+    /// Empty memos over an index already built: one set per worker.
+    fn fresh(trees: &'corpus [NormalizedNode], shared: Arc<AxesShared<'corpus>>) -> Self {
+        Self {
+            overlap: OverlapMeasurer::new(trees),
+            content: ContentMeasurer::default(),
+            shared,
         }
     }
 }

@@ -8,7 +8,7 @@ use callee::{call_shape_from_node, CalleePart};
 use tree_sitter::Node;
 
 use super::{enclosing_kind, node_search::KindSearch, parse_for, ParseCache, Snippet};
-use crate::ast::{named_children, ByteRange};
+use crate::ast::{named_children, named_children_touching, ByteRange};
 
 /// Per-argument shape extraction for the filter.
 mod args;
@@ -242,7 +242,7 @@ fn collect_call_shapes(node: Node<'_>, walk: &Walk<'_>, out: &mut Vec<CallShape>
             return;
         }
     }
-    for child in named_children(node) {
+    for child in named_children_touching(node, walk.range) {
         collect_call_shapes(child, walk, out);
     }
 }

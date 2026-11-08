@@ -1,7 +1,7 @@
 import { render } from "preact";
 import { useEffect } from "preact/hooks";
 import {
-  analysisState, clusters, focusedOccurrenceIndex, pickedOccurrence, post,
+  analysisState, clusterLoading, clusters, focusedOccurrenceIndex, pickedOccurrence, post,
   selectedCluster, selectedClusterId, severityByClusterId, shortcutHelpExpanded, wireMessagePump,
 } from "../store";
 import { GLOBAL_CSS, KIND_COLOR } from "../theme";
@@ -14,6 +14,9 @@ import { OccurrenceList } from "./OccurrenceList";
 
 const CLUSTER_ID_TOPIC = "cluster-id";
 const OPEN_OCCURRENCE_MESSAGE = "open/occurrence";
+// #606 Asks the host for the locations of the cluster `n` / `p` moved to.
+const NAVIGATE_CLUSTER_MESSAGE = "navigate/cluster";
+const LOADING_CLUSTER_TEXT = "Loading cluster…";
 const KEYDOWN_EVENT = "keydown";
 const FAINT_SEVERITY = "hint";
 const UNKNOWN_RANK = "unknown";
@@ -32,11 +35,19 @@ function ClusterApp() {
     window.addEventListener(KEYDOWN_EVENT, handleShortcut);
     return () => window.removeEventListener(KEYDOWN_EVENT, handleShortcut);
   }, []);
+  if (clusterLoading.value) return <ClusterLoading />;
   if (!cluster) return <main class="cluster-panel"><p>No cluster selected.</p></main>;
   return <main class="cluster-panel" style={{ opacity: analysisState.value.state === "errored" ? 0.5 : 1 }}>
     <ClusterHeader cluster={cluster} />
     <OccurrenceList cluster={cluster} focusedIndex={focusedIndexFor(cluster)} accent={KIND_COLOR[cluster.kind]} />
     <ClusterNavigation /><HotkeyHelp />
+  </main>;
+}
+
+// #606 Loading is shown as loading — never as an empty panel.
+function ClusterLoading() {
+  return <main class="cluster-panel" aria-busy="true">
+    <div class="cluster-loading" role="status"><span class="cluster-spinner" aria-hidden="true"></span>{LOADING_CLUSTER_TEXT}</div>
   </main>;
 }
 
@@ -106,7 +117,9 @@ function selectClusterByOffset(list: ReportCluster[], rank: number, offset: numb
   if (list.length === INITIAL_INDEX) return;
   const current = rank > INITIAL_INDEX ? rank - NEXT_OFFSET : INITIAL_INDEX;
   const next = (current + offset + list.length) % list.length;
-  selectedClusterId.value = list[next]?.id ?? null;
+  const id = list[next]?.id ?? null;
+  selectedClusterId.value = id;
+  if (id) post({ kind: NAVIGATE_CLUSTER_MESSAGE, id });
   focusedOccurrenceIndex.value = INITIAL_INDEX;
   pickedOccurrence.value = null;
 }

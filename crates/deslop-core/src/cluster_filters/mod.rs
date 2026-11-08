@@ -169,7 +169,7 @@ pub(crate) use verbatim_subgroup::{
 };
 
 use crate::{
-    ast::{named_children, ByteRange},
+    ast::{named_children, named_children_touching, ByteRange},
     fingerprint::Fingerprint,
     state::FileId,
 };
@@ -722,7 +722,7 @@ pub(crate) fn enclosing_kind<'tree>(
         if kinds.contains(&node.kind()) {
             best = Some(node);
         }
-        stack.extend(named_children(node));
+        stack.extend(named_children_touching(node, range));
     }
     best
 }

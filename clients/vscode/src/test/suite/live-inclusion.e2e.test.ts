@@ -41,7 +41,7 @@ function changeConfig(store: ReportStore, configPath: string, content: string | 
     try {
       if (content === null) fs.unlinkSync(configPath);
       else fs.writeFileSync(configPath, content);
-    } catch (error) { subscription.dispose(); reject(error); }
+    } catch (error) { subscription.dispose(); reject(error instanceof Error ? error : new Error(String(error))); }
   });
 }
 

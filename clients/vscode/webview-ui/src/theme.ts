@@ -130,6 +130,10 @@ export const GLOBAL_CSS = `
   .total-counts-caption { color: ${COLOR.onSurfaceMuted}; }
   .stale { opacity: 0.4; }
   .cluster-panel { padding: 24px clamp(16px, 4vw, 32px); max-width: 1200px; margin: auto; }
+  .cluster-loading { display: flex; align-items: center; gap: 12px; }
+  .cluster-spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: cluster-spin 0.8s linear infinite; }
+  @keyframes cluster-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .cluster-spinner { animation: none; } }
   .cluster-eyebrow, .cluster-heading, .cluster-weight, .cluster-shortcuts { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .cluster-heading { margin-top: 16px; }
   .cluster-heading h1 { font-size: 26px; line-height: 1.2; letter-spacing: -0.02em; margin: 0; }

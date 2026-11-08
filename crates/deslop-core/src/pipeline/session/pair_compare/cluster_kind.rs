@@ -4,12 +4,12 @@
 
 use std::{
     collections::{hash_map::RandomState, HashMap, HashSet},
-    sync::{Mutex, PoisonError},
+    sync::{Arc, Mutex, PoisonError},
 };
 
 use super::{
-    same_source_bytes_and_language, AdmissionFacts, Measurements, PairAxes, ResolvedEndpoint,
-    ResolvedPair,
+    same_source_bytes_and_language, AdmissionFacts, AxesShared, Measurements, PairAxes,
+    ResolvedEndpoint, ResolvedPair,
 };
 use crate::{
     ast::NormalizedNode,
@@ -111,10 +111,18 @@ pub(crate) struct ClusterKindMeasurer<'corpus> {
     /// Every live fingerprint, flat, in corpus order — the slice the
     /// cluster build indexes members into.
     fingerprints: &'corpus [Fingerprint],
-    /// The memoising measurers, shared across every cluster of the
-    /// render. Locked per pair; the build hands clusters over one at a
-    /// time.
-    axes: Mutex<PairAxes<'corpus>>,
+    /// The tree index and rescue context every worker's memos read.
+    shared: Arc<AxesShared<'corpus>>,
+    /// Normalised trees, for a worker's fresh overlap measurer.
+    trees: &'corpus [NormalizedNode],
+    /// Rescue alignments at or above the floor, as `(left, right,
+    /// score)`, replayed into every fresh memo set so no worker repeats
+    /// an alignment the rescue already ran ([FUSED-SHARED-SUBTREE-MEMO]).
+    rescued: Vec<(usize, usize, f64)>,
+    /// Idle memo sets. A measurement leases one and hands it back, so
+    /// the fold's workers never queue behind a single measurer; a worker
+    /// that finds the pool empty starts a fresh set.
+    pool: Mutex<Vec<PairAxes<'corpus>>>,
     /// Repeat classifications across recovery, grouping, and ranking.
     kinds: Mutex<PairKindMemo>,
     /// The cosines the embedding pass measured, keyed `(lower, higher)`
@@ -139,7 +147,10 @@ impl<'corpus> ClusterKindMeasurer<'corpus> {
         Self {
             session,
             fingerprints,
-            axes: Mutex::new(rank_axes(trees, session, fingerprints, pairs)),
+            shared: Arc::new(AxesShared::new(trees, session, pairs)),
+            trees,
+            rescued: rescued_exact_seed(pairs),
+            pool: Mutex::new(Vec::new()),
             kinds: Mutex::new(PairKindMemo::default()),
             embedding_cosines: embedding_pairs
                 .iter()
@@ -235,16 +246,18 @@ impl<'corpus> ClusterKindMeasurer<'corpus> {
             &self.session.sources,
             &self.session.file_languages,
             || {
-                let mut axes = self.axes.lock().unwrap_or_else(PoisonError::into_inner);
-                let PairAxes { content, trees, .. } = &mut *axes;
-                content
+                let mut axes = self.lease();
+                let matched = axes
+                    .content
                     .pair(
                         (pair.left.fingerprint, pair.right.fingerprint),
-                        trees,
+                        &axes.shared.trees,
                         &self.session.sources,
                         &self.session.file_languages,
                     )
-                    .exact_frontier_match(&self.session.sources)
+                    .exact_frontier_match(&self.session.sources);
+                self.release(axes);
+                matched
             },
         )
     }
@@ -269,11 +282,46 @@ impl<'corpus> ClusterKindMeasurer<'corpus> {
         cosine: f64,
         interior: bool,
     ) -> Option<Measurements> {
-        let mut axes = self.axes.lock().unwrap_or_else(PoisonError::into_inner);
-        if self.ruled_out_by_overlap_bound(pair, &mut axes, cosine) {
-            return None;
+        let mut axes = self.lease();
+        let measured = (!self.ruled_out_by_overlap_bound(pair, &mut axes, cosine))
+            .then(|| self.session.measure_axes(pair, &mut axes, cosine, interior));
+        self.release(axes);
+        measured
+    }
+
+    /// Takes an idle memo set, or starts a fresh one seeded with the
+    /// rescue's exact alignments. [`Self::release`] hands it back; a set
+    /// that is never released only costs the pool its reuse.
+    fn lease(&self) -> PairAxes<'corpus> {
+        let idle = self
+            .pool
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .pop();
+        idle.unwrap_or_else(|| self.fresh_axes())
+    }
+
+    /// Returns a leased memo set for the next measurement to reuse.
+    fn release(&self, axes: PairAxes<'corpus>) {
+        self.pool
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(axes);
+    }
+
+    /// A memo set that already knows every alignment the rescue ran.
+    fn fresh_axes(&self) -> PairAxes<'corpus> {
+        let mut axes = PairAxes::fresh(self.trees, Arc::clone(&self.shared));
+        for &(left, right, score) in &self.rescued {
+            if let Some((left, right)) = self
+                .fingerprints
+                .get(left)
+                .zip(self.fingerprints.get(right))
+            {
+                axes.overlap.remember_rescued_exact(left, right, score);
+            }
         }
-        Some(self.session.measure_axes(pair, &mut axes, cosine, interior))
+        axes
     }
 
     /// A below-floor bound cannot rescue the pair or meet the configured
@@ -287,7 +335,7 @@ impl<'corpus> ClusterKindMeasurer<'corpus> {
         if pair.left.fingerprint.hash == pair.right.fingerprint.hash {
             return false;
         }
-        let token = self.session.token_jaccard(pair, false, &axes.trees);
+        let token = self.session.token_jaccard(pair, false, &axes.shared.trees);
         let threshold = self.admission_threshold(pair);
         if token >= threshold || cosine >= threshold {
             return false;
@@ -321,25 +369,16 @@ impl<'corpus> ClusterKindMeasurer<'corpus> {
     }
 }
 
-/// Seeds only rescue alignments that cleared the floor; lower scores may
-/// be bounds and are never valid answers for ranked classification.
-fn rank_axes<'corpus>(
-    trees: &'corpus [NormalizedNode],
-    session: &'corpus PipelineSession,
-    fingerprints: &[Fingerprint],
-    pairs: &[CandidatePair],
-) -> PairAxes<'corpus> {
-    let mut axes = PairAxes::new(trees, session, pairs);
-    for pair in pairs {
-        if let Some((left, right)) = fingerprints
-            .get(pair.left)
-            .zip(fingerprints.get(pair.right))
-        {
-            axes.overlap
-                .remember_rescued_exact(left, right, pair.shared_subtree_overlap);
-        }
-    }
-    axes
+/// The rescue alignments worth replaying: only scores that cleared the
+/// floor; lower scores may be bounds and are never valid answers for
+/// ranked classification. `remember_rescued_exact` applies the exact
+/// rule; this keeps the replay list to the pairs it can accept.
+fn rescued_exact_seed(pairs: &[CandidatePair]) -> Vec<(usize, usize, f64)> {
+    pairs
+        .iter()
+        .filter(|pair| pair.shared_subtree_overlap >= SHARED_SUBTREE_MIN_OVERLAP)
+        .map(|pair| (pair.left, pair.right, pair.shared_subtree_overlap))
+        .collect()
 }
 
 impl ClusterKindJudge for ClusterKindMeasurer<'_> {

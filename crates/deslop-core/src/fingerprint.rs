@@ -9,7 +9,7 @@ use blake3::Hasher;
 
 use crate::{
     ast::{ByteRange, NormalizedNode},
-    boilerplate::{is_boilerplate, is_mandated_prologue},
+    boilerplate::{is_boilerplate, is_whole_file_scaffolding},
     lang::shared::{FILE_KIND, LITERAL_KIND},
     state::FileId,
 };
@@ -311,7 +311,7 @@ pub(crate) fn subtree_hash<'tree>(
 ///   file*, seeding clusters through transitive closure that describe no
 ///   duplication at all. Pinned by `deslop::issue_343_sum_clamp_saturation`.
 /// - The file carries the prologue its language mandates
-///   ([`opens_with_mandated_prologue`]). Go's `package` clause is dictated
+///   ([`holds_whole_file_scaffolding`]). Go's `package` clause is dictated
 ///   by the directory the file lives in, not chosen and copied by an
 ///   author, so a whole-file view claims it as duplication — and being the
 ///   widest range in its file it would win the same-file collapse of
@@ -320,10 +320,15 @@ pub(crate) fn subtree_hash<'tree>(
 ///   and `json_report.go:1-55` against a two-function run of its
 ///   counterpart. The root's children and the sibling pass carry the copy
 ///   instead. Pinned by the Go scope contract every Go suite calls
-///   (`deslop::common::go_scope`) and `cluster_extent_alignment`.
+///   (`deslop::common::go_scope`) and `cluster_extent_alignment`. A C
+///   translation unit holding an `#include` or `#define` is denied a view
+///   for the same reason: that scaffolding is never clone evidence, yet the
+///   whole-file view opens on it and pairs it, with everything after it,
+///   against a run of functions elsewhere. Pinned by
+///   `c_cluster_occurrences_never_pair_a_whole_file_with_a_function_run`.
 pub(crate) fn is_viewless_root(language: Option<&str>, node: &NormalizedNode) -> bool {
     node.kind == FILE_KIND
-        && (re_describes_only_child(node) || opens_with_mandated_prologue(language, node))
+        && (re_describes_only_child(node) || holds_whole_file_scaffolding(language, node))
 }
 
 /// [PIPELINE-FINGERPRINT-MERKLE-TYPE-REFERENCE] A Rust type reference has no
@@ -350,13 +355,14 @@ fn re_describes_only_child(node: &NormalizedNode) -> bool {
     matches!(node.children.as_slice(), [only] if only.byte_range == node.byte_range)
 }
 
-/// True when a top-level child of the root is the clause the language
-/// requires every file to open with ([`is_mandated_prologue`]).
-fn opens_with_mandated_prologue(language: Option<&str>, node: &NormalizedNode) -> bool {
+/// True when a top-level child of the root is scaffolding a whole-file view
+/// would claim as duplication ([`is_whole_file_scaffolding`]): Go's mandated
+/// `package` clause, or a C `#include` / `#define`.
+fn holds_whole_file_scaffolding(language: Option<&str>, node: &NormalizedNode) -> bool {
     language.is_some_and(|lang| {
         node.children
             .iter()
-            .any(|child| is_mandated_prologue(lang, child.kind))
+            .any(|child| is_whole_file_scaffolding(lang, child.kind))
     })
 }
 

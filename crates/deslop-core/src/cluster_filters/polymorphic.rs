@@ -18,7 +18,7 @@ use super::{
     parse_for, spans_multiple_files, ParseCache, Snippet,
 };
 use crate::{
-    ast::{named_children, ByteRange},
+    ast::{named_children_touching, ByteRange},
     state::FileId,
 };
 
@@ -283,7 +283,7 @@ fn scaffolding_besides_functions<'tree>(
         return true;
     }
     if shell.contains(&node.kind()) {
-        return named_children(node)
+        return named_children_touching(node, range)
             .into_iter()
             .all(|child| scaffolding_besides_functions(child, range, kinds, shell, functions));
     }

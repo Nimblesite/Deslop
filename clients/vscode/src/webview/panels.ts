@@ -8,10 +8,16 @@ import { effect, untracked } from "@preact/signals-core";
 
 import { COLOR } from "../design";
 import { reportWithDisplayLocations } from "../locations";
-import { logWarn } from "../logging";
+import { logError, logWarn } from "../logging";
 import { ReportStore } from "../reportStore";
 import { anchorForClusterId, ClusterAnchor, clusterPanelFeed } from "../clusterSelection";
 import { PairEndpoint, Report, ReportOccurrence } from "../types/report";
+
+/** The context every failed webview message is logged under. */
+export const HANDLE_MESSAGE_FAILED = "webview: handleMessage failed";
+
+/** #606 The cluster panel asks for the locations of the cluster `n` / `p` moved to. */
+const NAVIGATE_CLUSTER_MESSAGE = "navigate/cluster";
 
 type PanelKind = "cluster" | "report" | "duplication";
 
@@ -119,7 +125,7 @@ function createPanel(
 
 function wireMessages(panel: vscode.WebviewPanel, store: ReportStore): void {
   panel.webview.onDidReceiveMessage((msg: unknown) => {
-    handleMessage(store, msg).catch((err: unknown) => console.error("handleMessage failed", err));
+    handleMessage(store, msg).catch((err: unknown) => logError(err, HANDLE_MESSAGE_FAILED));
   });
 }
 
@@ -165,10 +171,11 @@ function wirePanel(
 function wireClusterFeed(
   panel: vscode.WebviewPanel,
   store: ReportStore,
-  anchor: ClusterAnchor,
+  opened: ClusterAnchor,
   pushReport: (report: Report | null) => void,
 ): vscode.Disposable {
   let ready = false;
+  let anchor = opened;
   const push = (): void => {
     if (ready) pushClusterFeed(panel, store, anchor, pushReport);
   };
@@ -180,16 +187,30 @@ function wireClusterFeed(
     void store.visibleReport.value;
     push();
   }) };
-  const once = panel.webview.onDidReceiveMessage((m: { kind?: string }) => {
-    if (m.kind !== "ready") return;
+  const once = panel.webview.onDidReceiveMessage((m: unknown) => {
+    if (messageKind(m) !== "ready") return;
     ready = true;
     push();
     once.dispose();
   });
+  // #606 `n` / `p` move the panel to a cluster it holds only as an id; the
+  // host re-anchors there and ships that cluster's locations.
+  const navigate = panel.webview.onDidReceiveMessage((m: unknown) => {
+    const id = messageKind(m) === NAVIGATE_CLUSTER_MESSAGE ? (m as { id?: unknown }).id : undefined;
+    if (typeof id !== "string") return;
+    anchor = anchorForClusterId(untracked(() => store.report.value), id);
+    push();
+  });
   panel.onDidDispose(() => {
     once.dispose();
+    navigate.dispose();
   });
   return sub;
+}
+
+/** A webview message's `kind`, or undefined for anything that is not a message. */
+function messageKind(message: unknown): unknown {
+  return message !== null && typeof message === "object" ? (message as { kind?: unknown }).kind : undefined;
 }
 
 // Pushes the snapshot + selection so the opened cluster is always resolvable,
