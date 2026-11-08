@@ -14,6 +14,9 @@
 /// Shared fixture helpers, declared once for every suite below.
 mod common;
 
+#[path = "languages/c.rs"]
+mod c_language;
+
 #[path = "languages/osprey.rs"]
 mod osprey_language;
 
