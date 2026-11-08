@@ -41,6 +41,9 @@ A pair with ≥ 70 % of statements aligned and edits confined to ≤ 2 contiguou
 
 ## Steps
 
+- [x] Let re-judging promote: the merge read a standing NOT CLEAR as a vote against any later firm verdict, so no pair could ever leave NOT CLEAR. It is now promoted when every new judge agrees (`scripts/corpus/merge-verdicts/pass.mjs`, counted as `pairs_promoted`).
+- [x] Queue 18 more repositories so each supported language has two to four of different sizes (`corpus/judging-queue.json`, 28 queued).
+- [ ] `make compare`, then `make _judging-folder JUDGING_DIR=~/clone-judging-3`, then two independent judge sessions (Claude and Codex) under the corrected skill, then `make _merge-verdicts`.
 - [x] Remove the contradictions from the judging skill (`.agents/skills/judge-clone-pairs/SKILL.md`), the workspace candidate text (`scripts/corpus/register-workspace.mjs`) and `docs/specs/corpus.md` [CORPUS-REGISTER]: a fixed six-real-line bar, no test or scaffolding exemption for `Type I`/`Type II`, ragged boundaries filed as CLEARLY IN around a qualifying core.
 - [ ] Write the measurement as a test-support binary in Rust: `crates/deslop-test-support/src/corpus_score/criteria.rs`. It tokenises with the workspace's tree-sitter grammars but uses none of the pipeline's normalisation, fingerprinting or clustering. Each threshold is a named, config-overridable constant.
 - [ ] Add fixtures for every tier boundary: exactly 5 and exactly 6 lines; one inconsistent rename; overlapping ranges; import-only blocks; a 29 % and a 31 % alignment.
