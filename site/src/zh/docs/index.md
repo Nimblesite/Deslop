@@ -14,9 +14,9 @@ lang: zh
 
 **Deslop 在 C、C#、Rust、Python、Dart、JavaScript、TypeScript、PHP、F#、Go 和 Osprey 中查找重复代码，按影响程度排列最值得移除的重复，并在相似代码已经存在时告诉你的编码智能体。** 它运行于你的工作区，并随你的输入实时更新 —— Claude Code、Cursor、Copilot、Continue、Codex 以及你的编辑器读取的都是同一份实时分析。
 
-安装它的首选方式是 **VS Code 扩展**。一次安装即可获得全部三个接口面：实时编辑器警告、智能体写代码前所做的那次检查，以及 CLI。
+从 **VS Code 扩展**开始。一次安装即可获得全部三个接口面：实时编辑器警告、智能体写代码前所做的那次检查，以及 CLI。
 
-## 安装（首选） —— VS Code 扩展
+## 安装 VS Code 扩展
 
 从 **VS Code Marketplace** 安装：
 

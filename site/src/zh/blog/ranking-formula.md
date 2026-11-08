@@ -9,7 +9,7 @@ excerpt: 当前排名使用重复质量，不再乘以旧的字节跨度因子�
 heroImage: /assets/img/blog/ranking-mass.webp
 heroImageWidth: '1600'
 heroImageHeight: '840'
-heroImageAlt: Four stacks of graphite tiles ordered largest first, with a crimson top tile on the tallest stack.
+heroImageAlt: 四叠石墨方块按从大到小排列，最高一叠顶上是一块深红色方块。
 ogImage: /assets/img/blog/ranking-mass-og.jpg
 ogImageWidth: '1200'
 ogImageHeight: '630'
