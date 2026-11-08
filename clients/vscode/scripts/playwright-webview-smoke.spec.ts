@@ -83,6 +83,15 @@ const LOADING_CLUSTER_TEXT = "Loading cluster…";
 const EMPTY_CLUSTER_TEXT = "No cluster selected.";
 const MISSING_CLUSTER_ID = "0000000000000000";
 const NEXT_CLUSTER_OFFSET = 1;
+/** Path filters and the cluster titles each keeps, matched case-insensitively against every location. */
+const PATH_FILTER_CASES: ReadonlyArray<readonly [string, readonly string[]]> = [
+  ["", [IDENTICAL_TITLE, NEARLY_IDENTICAL_TITLE, STRUCTURAL_ONLY_TITLE]],
+  ["parser_gamma", [NEARLY_IDENTICAL_TITLE]],
+  ["SRC/DART/BETA", [IDENTICAL_TITLE]],
+  [".g.dart", [STRUCTURAL_ONLY_TITLE]],
+  ["src/dart", [IDENTICAL_TITLE, NEARLY_IDENTICAL_TITLE]],
+  ["nowhere.rs", []],
+];
 const LAST_CLUSTER_INDEX = 2;
 const RUNNING_STATE = { kind: "analysis/state", state: { state: "running", started_at_ms: 1 } };
 const ERRORED_STATE = { kind: "analysis/state", state: { state: "errored", message: "engine restarting" } };
@@ -119,6 +128,26 @@ const LOADING_ORDERS: readonly LoadingOrder[] = [
     deliver: (id) => [{ kind: "report/snapshot", report: sampleReport }, { kind: "select/cluster", id }] },
 ];
 
+/** #606 The panel asked the host for exactly cluster `id`'s locations. */
+async function expectNavigatedTo(page: Page, id: string): Promise<void> {
+  await expect
+    .poll(async () => await page.evaluate(() =>
+      (window.__deslopPosts ?? []).filter((message) => message.kind === "navigate/cluster").map((message) => (message as { id?: string }).id)))
+    .toEqual([id]);
+}
+
+/** #606 Answers a navigation the way the host does: the real feed, re-anchored on `id`, over the unsaved projection. */
+async function answerNavigation(page: Page, id: string): Promise<void> {
+  const feed = clusterPanelFeed(
+    sampleReport,
+    withCanonicalUnsaved(sampleReport, SECOND_CLUSTER_INDEX),
+    anchorForClusterId(sampleReport, id),
+  );
+  expect(feed.selectedId).toBe(id);
+  await postHostMessage(page, { kind: "report/snapshot", report: feed.report });
+  await postHostMessage(page, { kind: "select/cluster", id: feed.selectedId });
+}
+
 /** The heading a cluster of `kind` renders under. */
 function kindTitleFor(kind: string): string {
   if (kind === "identical") return IDENTICAL_TITLE;
@@ -139,7 +168,8 @@ async function expectLoading(page: Page): Promise<void> {
 
 /** The cluster rendered: its heading and rows, with no spinner and no empty state. */
 async function expectLoaded(page: Page, title: string): Promise<void> {
-  await expect(page.getByRole("heading", { name: title })).toBeVisible();
+  await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
   await expect(page.getByRole("status")).toHaveCount(0);
   await expect(page.locator("main")).not.toHaveAttribute("aria-busy", "true");
   await expect(page.getByText(EMPTY_CLUSTER_TEXT)).toHaveCount(0);
@@ -204,6 +234,20 @@ test.describe("VSIX webview bundles", () => {
     await expect(page.getByRole("option", { name: excludedTitle, exact: true })).toHaveAttribute("value", excludedKind);
     await expect(page.locator(".report-cluster-row")).toHaveCount(sampleReport.clusters.length);
   });
+  test("the report's path filter keeps exactly the clusters with a matching location, in any case", async ({ page }) => {
+    await loadView(page, "report", viewports[DESKTOP_VIEWPORT_INDEX]);
+    await postHostMessage(page, { kind: "report/snapshot", report: sampleReport });
+    const rows = page.locator(".report-cluster-row");
+    await expect(rows).toHaveCount(sampleReport.clusters.length);
+    for (const [glob, expected] of PATH_FILTER_CASES) {
+      await postHostMessage(page, { kind: "filter/set", filters: { severity: null, kind: null, pathGlob: glob } });
+      await expect(rows, `pathGlob "${glob}"`).toHaveCount(expected.length);
+      for (const title of expected) {
+        await expect(rows.filter({ has: page.getByText(title, { exact: true }) }), `"${glob}" keeps ${title}`).toHaveCount(1);
+      }
+    }
+  });
+
   test("shape-only findings show information without duplication claims", async ({ page }) => {
     const viewport = viewports[DESKTOP_VIEWPORT_INDEX];
     if (!viewport) throw new Error("Missing desktop viewport");
@@ -408,6 +452,35 @@ test.describe("VSIX webview bundles", () => {
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
+  test("keyboard: ? toggles help, j / k move the focused location, Enter opens it", async ({ page }) => {
+    const errors = await loadView(page, "cluster", viewports[DESKTOP_VIEWPORT_INDEX]);
+    const cluster = sampleReport.clusters[SECOND_CLUSTER_INDEX];
+    await postHostMessage(page, { kind: "report/snapshot", report: sampleReport });
+    await postHostMessage(page, { kind: "select/cluster", id: cluster.id });
+    await expect(page.getByRole("heading", { name: NEARLY_IDENTICAL_TITLE, exact: true })).toBeVisible();
+    const help = page.getByTitle("Detailed keyboard help");
+    await expect(help).toHaveCount(0);
+    await page.keyboard.press("?");
+    await expect(help).toBeVisible();
+    await expect(help).toContainText("next / previous occurrence");
+    await page.keyboard.press("?");
+    await expect(help).toHaveCount(0);
+
+    const total = cluster.occurrences.length;
+    // From the first location, j steps forward through every location and wraps; k steps back and wraps.
+    const steps: Array<[string, number]> = [["j", 1], ["j", 2], ["j", 0], ["k", total - 1], ["k", total - 2]];
+    for (const [key, expected] of steps) {
+      await page.keyboard.press(key);
+      await clearPostedMessages(page);
+      await page.keyboard.press("Enter");
+      await expectPosted(page, "open/occurrence");
+      const opened = await page.evaluate(() =>
+        (window.__deslopPosts ?? []).filter((message) => message.kind === "open/occurrence"));
+      expect(opened, `after ${key}`).toEqual([{ kind: "open/occurrence", occurrence: cluster.occurrences[expected] }]);
+    }
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+
   test("selecting a cluster renders its detail, never the empty state (#254)", async ({ page }) => {
     // Regression #254: `severityOf` was imported type-only, so esbuild erased
     // it from the bundle; the `severityByClusterId` computed threw on the first
@@ -446,8 +519,16 @@ test.describe("VSIX webview bundles", () => {
     await postHostMessage(page, { kind: "select/cluster", id: feed.selectedId });
     await expect(page.getByRole("heading", { name: IDENTICAL_TITLE })).toBeVisible();
 
+    // #606 The panel holds every other cluster as an id only: `n` asks the
+    // host for the next cluster, shows it loading, and the host answers with
+    // the real feed re-anchored there.
+    await clearPostedMessages(page);
     await page.keyboard.press(NEXT_CLUSTER_KEY);
+    await expectNavigatedTo(page, navigated.id);
+    await expect(page.getByRole("status")).toHaveText(LOADING_CLUSTER_TEXT);
+    await answerNavigation(page, navigated.id);
     await expect(page.getByRole("heading", { name: NEARLY_IDENTICAL_TITLE })).toBeVisible();
+    await expect(page.getByRole("status")).toHaveCount(0);
 
     // Exactly one row is canonical, and it is the engine's canonical — not the
     // first member that happens to be saved.
@@ -473,8 +554,17 @@ test.describe("VSIX webview bundles", () => {
     await peers.first().click();
     await expectPostedCanonical(page, SECOND_CLUSTER_INDEX, FIRST_PEER_INDEX);
 
+    // Shortcuts never fire on a focused button, so the user first clicks the
+    // panel itself — the heading, which nothing else handles.
+    await page.getByRole("heading", { name: NEARLY_IDENTICAL_TITLE, exact: true }).click();
+    await clearPostedMessages(page);
     await page.keyboard.press(PREVIOUS_CLUSTER_KEY);
-    await expect(page.getByRole("heading", { name: IDENTICAL_TITLE })).toBeVisible();
+    await expectNavigatedTo(page, opened.id);
+    await expect(page.getByRole("status")).toHaveText(LOADING_CLUSTER_TEXT);
+    await answerNavigation(page, opened.id);
+    await expect(page.getByRole("heading", { name: IDENTICAL_TITLE, exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: NEARLY_IDENTICAL_TITLE, exact: true })).toHaveCount(0);
+    await expect(page.locator(OCCURRENCE_ROW)).toHaveCount(opened.occurrences.length);
     expect(errors, errors.join("\n")).toEqual([]);
   });
 

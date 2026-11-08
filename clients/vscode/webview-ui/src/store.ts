@@ -30,6 +30,10 @@ export const EMPTY_FILTERS: Filters = {
 
 export const report = signal<Report | null>(null);
 export const selectedClusterId = signal<string | null>(null);
+// #606 Whether the host has told this panel which cluster it shows. Until it
+// has — and until that cluster's locations have arrived — the panel is loading,
+// which is never the same as the cluster being gone.
+export const selectionReceived = signal(false);
 export const focusedOccurrenceIndex = signal(0);
 export const shortcutHelpExpanded = signal(false);
 
@@ -55,6 +59,10 @@ export const selectedCluster = computed<ReportCluster | null>(() => {
   if (!id) return null;
   return clusters.value.find((c) => c.id === id) ?? null;
 });
+
+/** #606 The cluster panel is still waiting for its cluster's locations. */
+export const clusterLoading = computed<boolean>(() =>
+  report.value === null || !selectionReceived.value || selectedCluster.value?.occurrences.length === 0);
 
 // [VSIX-PAIR-COMPARE] The occurrence row one tap picked, waiting for a second
 // tap to name the other endpoint. Cleared when the selected cluster changes.
@@ -133,6 +141,7 @@ export function applyHostMessage(message: HostMessage): void {
         break;
       case "select/cluster":
         selectedClusterId.value = message.id;
+        selectionReceived.value = true;
         pickedOccurrence.value = null;
         break;
       case "filter/set":
