@@ -2,6 +2,7 @@
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    num::NonZeroUsize,
     path::PathBuf,
     sync::atomic::{AtomicUsize, Ordering},
     time::Instant,
@@ -31,6 +32,15 @@ struct KindFilter<'a> {
 /// A connected pair already has its only edge; larger complete components
 /// likewise have no missing relation for copy recovery to discover.
 const MIN_RECOVERY_MEMBERS: usize = 3;
+/// Fewest incomplete families per worker worth sharding recovery for
+/// ([`crate::shard::worker_count`]).
+const RECOVERY_SHARD_MIN_FAMILIES: NonZeroUsize = match NonZeroUsize::new(64) {
+    Some(floor) => floor,
+    None => NonZeroUsize::MIN,
+};
+/// Incomplete families per claimed chunk: one family of thousands of
+/// same-hash members must not hold the stage open on one worker.
+const RECOVERY_CHUNK_FAMILIES: usize = 8;
 /// A pair connects two distinct member indices.
 const PAIR_ENDPOINTS: usize = 2;
 
@@ -249,6 +259,10 @@ fn family_recovery_groups(
 }
 
 /// The clone-certified groups or pairs that may add structural edges.
+/// Families recover independently, so they are dealt to workers in
+/// chunks and the groups reassembled in family order
+/// ([PIPELINE-DETERMINISM]); every verdict is the judge's, whichever
+/// worker asked for it.
 fn recovery_groups<'a>(
     families: &'a [FusedCluster],
     fingerprints: &'a [Fingerprint],
@@ -256,12 +270,25 @@ fn recovery_groups<'a>(
     existing: &'a [CandidatePair],
     judged: &'a AtomicUsize,
 ) -> impl Iterator<Item = Vec<usize>> + 'a {
-    families
+    let incomplete: Vec<&FusedCluster> = families
         .iter()
         .filter(|family| has_missing_pair(family))
-        .flat_map(move |family| {
-            family_recovery_groups(family, fingerprints, judge, existing, judged)
-        })
+        .collect();
+    let workers = crate::shard::worker_count(incomplete.len(), RECOVERY_SHARD_MIN_FAMILIES);
+    let (chunks, _states) = crate::shard::map_chunks(
+        incomplete.chunks(RECOVERY_CHUNK_FAMILIES),
+        workers,
+        || (),
+        |(), chunk: &[&FusedCluster]| {
+            chunk
+                .iter()
+                .flat_map(|family| {
+                    family_recovery_groups(family, fingerprints, judge, existing, judged)
+                })
+                .collect::<Vec<Vec<usize>>>()
+        },
+    );
+    chunks.into_iter().flatten()
 }
 
 /// Unique valid edges must fill every possible member pair before we skip.
