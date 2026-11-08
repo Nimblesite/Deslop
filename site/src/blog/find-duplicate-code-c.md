@@ -11,14 +11,14 @@ tags:
 category: engineering
 description: "Find duplicate code in C with tree-sitter structural analysis: renamed functions, copied error-path ladders and cleanup tails, ranked worst first, with live LSP and MCP feedback."
 excerpt: "Deslop now understands C. It parses .c and .h syntax trees, sees through renamed identifiers and swapped types, treats macros and prototypes as scaffolding, and reports the copied error-path ladders that hand-written runtimes grow."
-heroImage: "/assets/img/blog/find-duplicate-code-c.webp"
+heroImage: "/assets/img/blog/c-structural-dedup.webp"
 heroImageWidth: "1600"
 heroImageHeight: "840"
-heroImageAlt: "Two cyan glass paths converge into one shared structure against a midnight-blue background."
-ogImage: "/assets/img/blog/find-duplicate-code-c-og.jpg"
+heroImageAlt: "Two matching graphite components become one silver component on a charcoal surface with a crimson accent."
+ogImage: "/assets/img/blog/c-structural-dedup-og.jpg"
 ogImageWidth: "1200"
 ogImageHeight: "630"
-ogImageAlt: "Cyan control-flow paths merge into a shared crystalline junction."
+ogImageAlt: "Duplicate graphite components consolidated into one silver component, in Deslop charcoal and crimson."
 ---
 
 C support runs through the same structural pipeline as every other Deslop language: tree-sitter parsing instead of regex, identifier and literal normalization instead of raw line matching, worst-offender-first ranking, and live LSP and MCP feedback while the code is changing. `.c` and `.h` files are discovered, parsed with [`tree-sitter-c`](https://github.com/tree-sitter/tree-sitter-c), and fed into the shared fingerprint, sibling-window, token and ranking stages described in [How It Works](/docs/how-it-works/).
