@@ -27,7 +27,7 @@
   left: 0;
   bottom: 0;
   width: min(20rem, 84vw);
-  background: var(--surface-container-low);
+  background: var(--surface);
   box-shadow: var(--shadow-lg);
   transform: translateX(-100%);
   transition: transform var(--dur) var(--ease), width var(--dur) var(--ease);
@@ -116,13 +116,17 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
 .docs-nav-group__summary:hover,
 .docs-sidebar__collapse:hover { color: var(--on-surface); background: var(--surface-container-low); }
 .docs-nav-group__items { padding: var(--space-1) 0 var(--space-3); display: grid; gap: var(--space-1); }
+/* [SITE-NAV-HIERARCHY] Sidebar rows are contained tonal slots on the surface
+   column: visible at rest, one step higher on hover, and the current page is
+   an accent-mixed fill at medium weight — no inset left bar. */
 .docs-sidebar__link {
   display: flex;
   align-items: center;
   min-height: 3rem;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
+  background: var(--surface-container-low);
+  border-radius: var(--radius-md);
   color: var(--on-surface-variant);
   font-family: var(--font-body);
   line-height: 1.4;
@@ -135,14 +139,13 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
   transition: color var(--dur) var(--ease);
 }
 .docs-sidebar__link:hover {
-  background: var(--surface-container-low);
+  background: var(--surface-container-high);
   color: var(--on-surface);
 }
 .docs-sidebar__link.is-active {
-  background: color-mix(in srgb, var(--primary) 9%, var(--surface-container-low));
-  box-shadow: inset 2px 0 var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface-container-high));
   color: var(--on-surface);
-  font-weight: 700;
+  font-weight: 600;
 }
 .docs-sidebar__link--child { padding-left: var(--space-10); }
 .docs-sidebar__label { font-family: inherit; }
@@ -160,7 +163,7 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
   font-size: var(--type-nav-secondary);
   font-weight: 700;
   padding: var(--space-2);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   transition: background var(--dur) var(--ease);
 }
 .docs-sidebar__cta:hover { background: var(--surface-container-high); color: var(--on-surface); }

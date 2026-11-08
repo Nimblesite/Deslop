@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 const PRIMARY_NAV_FONT_SIZE = "16px";
 const SECONDARY_NAV_FONT_SIZE = "15px";
-const NAV_LABEL_FONT_SIZE = "13px";
+const NAV_LABEL_FONT_SIZE = "14px";
 
 /* [SITE-HOME-VIDEO] The hero is a single centred block: equal air above and below the copy, the motion reel sharing its centre line, and one repeated gap between every element of the copy. Tolerances absorb sub-pixel layout rounding only. */
 const HERO_CENTRING_TOLERANCE_PX = 2;

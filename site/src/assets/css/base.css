@@ -79,10 +79,11 @@
   --type-label-sm: 0.75rem;
   --type-label-md: 0.875rem;
   --type-body-md: 0.9375rem;
-  /* Navigation scale — primary bar, then secondary nav surfaces, then group labels. */
+  /* Navigation scale — 16px primary bar, 15px sidebar rows and secondary
+     surfaces, 14px group labels. One coherent control scale everywhere. */
   --type-nav: 1rem;
   --type-nav-secondary: var(--type-body-md);
-  --type-nav-label: 0.8125rem;
+  --type-nav-label: 0.875rem;
   /* Motion */
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --dur-fast: 120ms;
@@ -279,7 +280,10 @@ pre {
   align-items: center;
   margin-left: auto;
 }
-/* [SITE-NAV-HIERARCHY] One control scale across the header and docs navigation. */
+/* [SITE-NAV-HIERARCHY] One control scale across the header and docs navigation.
+   Every destination is a visibly contained slot: a restrained tonal surface at
+   rest, one step higher on hover, and an accent-mixed fill with medium weight
+   for the current page. No underlines, no inset bars. */
 .nav-link {
   display: inline-flex;
   align-items: center;
@@ -290,14 +294,15 @@ pre {
   font-size: var(--type-nav);
   color: var(--on-surface-variant);
   padding: var(--space-2) var(--space-4);
+  background: var(--surface-container-low);
   border-radius: var(--radius-md);
   transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .nav-link:hover { color: var(--on-surface); background: var(--surface-container-high); }
 .nav-link.active {
   color: var(--on-surface);
-  background: var(--surface-container-high);
-  box-shadow: inset 0 -2px var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface-container-high));
+  font-weight: 600;
 }
 /* ─── Language switcher (en ⇄ zh) ─── */
 .language-switcher { display: flex; align-items: center; }
@@ -313,7 +318,7 @@ pre {
   padding: var(--space-1) var(--space-2);
   background: var(--surface-container-low);
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .lang-link:hover { color: var(--on-surface); background: var(--surface-container-high); }
@@ -381,7 +386,7 @@ body.menu-open .drawer-scrim { opacity: 1; visibility: visible; }
     gap: var(--space-1);
     margin-left: 0;
     padding: var(--space-4);
-    background: var(--surface-container-low);
+    background: var(--surface);
     box-shadow: var(--shadow-lg);
     transform: translateX(-100%);
     transition: transform var(--dur) var(--ease);
@@ -395,13 +400,7 @@ body.menu-open .drawer-scrim { opacity: 1; visibility: visible; }
     min-height: 3rem;
     padding: var(--space-3) var(--space-4);
     font-size: var(--type-nav);
-    border-radius: var(--radius-sm);
-  }
-  .nav-link.active {
-    border-bottom: none;
-    border-radius: var(--radius-sm);
-    background: var(--surface-container-high);
-    padding-bottom: var(--space-3);
+    border-radius: var(--radius-md);
   }
   /* On docs pages the doc nav (.docs-sidebar) is the drawer, so the duplicate
      site nav in the bar is hidden — the drawer carries it instead. */
