@@ -6,11 +6,11 @@ author: Christian Findlay
 tags: posts
 description: Deslop ranks duplicate code by syntax-tree size and additional visible copies. Shape-only findings have no duplicated mass.
 excerpt: The current ranking uses duplicated mass, without the old byte-span multiplier.
-heroImage: /assets/img/blog/towards-100-percent-accuracy-header.webp
+heroImage: /assets/img/blog/ranking-mass.webp
 heroImageWidth: '1600'
-heroImageHeight: '900'
-heroImageAlt: Precision tools on a drafting table.
-ogImage: /assets/img/blog/towards-100-percent-accuracy-og.png
+heroImageHeight: '840'
+heroImageAlt: Four stacks of graphite tiles ordered largest first, with a crimson top tile on the tallest stack.
+ogImage: /assets/img/blog/ranking-mass-og.jpg
 ogImageWidth: '1200'
 ogImageHeight: '630'
 updated: '2026-09-27'

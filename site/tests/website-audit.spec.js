@@ -1,4 +1,4 @@
-import { readdir } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { expect, test } from "@playwright/test";
 import { expectAssetType } from "./helpers/assets.js";
@@ -269,12 +269,45 @@ test("internal page links and fragments resolve", async ({ page }) => {
   }
 });
 
-// [SITE-ASSET-TYPE] Motion is built in the page, so no encoded video or audio file is ever published.
+// [SITE-DEMO-VIDEO] The narrated product demo is the only published encoded media.
 const SITE_SOURCE = new URL("../src/", import.meta.url);
 const ENCODED_MEDIA = new Set([".aac", ".avi", ".flac", ".m4a", ".m4v", ".mkv", ".mov", ".mp3", ".mp4", ".ogg", ".wav", ".webm"]);
-const NO_FILES = [];
+const DEMO_MEDIA = ["assets/video/deslop-demo.mp4"];
 
-test("the site source publishes no encoded video or audio", async () => {
+test("the site publishes only the requested product demo", async () => {
   const files = await readdir(SITE_SOURCE, { recursive: true });
-  expect(files.filter((file) => ENCODED_MEDIA.has(extname(file).toLowerCase()))).toEqual(NO_FILES);
+  expect(files.filter((file) => ENCODED_MEDIA.has(extname(file).toLowerCase()))).toEqual(DEMO_MEDIA);
+});
+
+// [SITE-DEMO-VIDEO] Native controls keep narration opt-in and captions accessible.
+test("homepage demo plays on demand with captions on desktop and mobile", async ({ page }) => {
+  for (const route of ["/", "/zh/"]) {
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(route);
+      await page.locator('.hero__cta a[href="#demo"]').click();
+      const video = page.locator('.showcase video');
+      await expect(video).toBeVisible();
+      await expect(video).toHaveAttribute('controls', '');
+      await expect(video).toHaveAttribute('preload', 'none');
+      await expect(video).not.toHaveAttribute('autoplay');
+      await expect(video.locator('track')).toHaveAttribute('srclang', 'en');
+      await video.evaluate(element => { element.muted = true; return element.play(); });
+      await expect.poll(() => video.evaluate(element => element.currentTime)).toBeGreaterThan(0);
+      expect(await video.evaluate(element => element.videoWidth)).toBe(1600);
+      expect(await video.evaluate(element => element.videoHeight)).toBe(1000);
+      await video.evaluate(element => element.pause());
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    }
+  }
+});
+
+test("English articles have distinct header artwork", async ({ page }) => {
+  await page.goto('/blog/');
+  const sources = await page.locator('main img').evaluateAll(images => images.map(image => image.getAttribute('src')).filter(src => src?.includes('/blog/')));
+  expect(sources.length).toBeGreaterThan(5);
+  expect(new Set(sources).size).toBe(sources.length);
+  const contents = await Promise.all(sources.map(src => readFile(new URL(`../src${src}`, import.meta.url))));
+  const unique = new Set(contents.map(bytes => bytes.toString('base64')));
+  expect(unique.size, 'different filenames must not hide duplicate images').toBe(sources.length);
 });

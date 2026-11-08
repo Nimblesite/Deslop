@@ -1,4 +1,4 @@
-{# [SITE-HOME-VIDEO] [SITE-ASSET-TYPE] Shared JavaScript motion reel that opens the homepage with what Deslop does; encoded video is never shipped. #}
+{# [SITE-HOME-VIDEO] [SITE-ASSET-TYPE] Shared JavaScript motion reel that opens the homepage with what Deslop does; this lightweight hero animation is separate from the narrated product demo. #}
 {% set currentLang = lang | default('en') %}
 {% macro cue(scene, index, from) %}{{ (from + index * scene.step) | round(2) }}{% endmacro %}
 {% macro codeLines(lines) %}{% for line in lines %}<span class="motion-reel__line" style="--indent: {{ line.indent }}">{% for width in line.tokens %}<i style="--width: {{ width }}%"></i>{% endfor %}</span>{% endfor %}{% endmacro %}

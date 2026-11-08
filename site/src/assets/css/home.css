@@ -135,8 +135,9 @@
 }
 .btn-primary:hover { color: var(--on-primary-container); }
 
-/* ─────────── Product showcase (extension screenshot + panel legend) ─────────── */
+/* ─────────── Product demo and workflow ─────────── */
 .showcase {
+  scroll-margin-top: calc(var(--header-height) + var(--space-6));
   padding: var(--space-8) var(--space-6) var(--space-24);
   max-width: var(--max-width);
   margin-inline: auto;
@@ -166,7 +167,7 @@
   overflow: hidden;
   box-shadow: 0 20px 40px rgba(14, 14, 14, 0.6);
 }
-.showcase__figure img { display: block; width: 100%; height: auto; }
+.showcase__figure img, .showcase__figure video { display: block; width: 100%; height: auto; }
 .showcase__legend {
   display: grid;
   grid-template-columns: 1fr;

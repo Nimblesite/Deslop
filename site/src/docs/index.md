@@ -28,12 +28,8 @@ Then open a supported source file (`.cs`, `.rs`, `.py`, `.dart`, `.js`, `.mjs`, 
 The extension bundles native binaries for `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, and `win32-x64` — the right one is selected for you automatically.
 
 <figure>
-  <a href="/assets/img/screenshot.webp">
-    <img src="/assets/img/screenshot.webp"
-         alt="The Deslop VS Code extension on a live workspace: a worst-first Top Offenders tree and a per-folder Duplication breakdown in the sidebar, a live clone warning at the cursor, and a Compare diff against the canonical occurrence."
-         width="2560" height="1492" loading="lazy" decoding="async">
-  </a>
-  <figcaption>The extension on a live workspace — worst-first clusters and a per-folder duplication breakdown in the sidebar, a live clone warning at the cursor, and a Compare diff against the canonical copy. <a href="/docs/vscode-cluster-panel/">Full panel-by-panel walkthrough →</a></figcaption>
+  <a href="/assets/img/screenshot.webp"><img src="/assets/img/screenshot.webp" alt="Deslop analysing a two-file C# demo: a duplicate cluster with both locations and canonical comparison actions." width="3200" height="1800" loading="lazy" decoding="async"></a>
+  <figcaption>A real two-file demo analysed by the packaged extension. Open a finding, inspect its locations, then compare the copies.</figcaption>
 </figure>
 
 > **Offline or air-gapped?** Grab the `.vsix` from the [Releases page](/releases/) or the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest), then install it via **Extensions panel → `…` menu → Install from VSIX…**.

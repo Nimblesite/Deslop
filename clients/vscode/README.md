@@ -4,15 +4,15 @@
 
 Clone detectors such as PMD CPD, jscpd, SonarLint, and the JetBrains inspections report duplication on CI, on save, or in a panel you open on purpose. Deslop surfaces duplicates **inline, next to your cursor, as you type**, and exposes the same live analysis to the agent over MCP so it can check *before* it copy-pastes.
 
-![The Deslop VS Code extension on a live workspace: a worst-first Top Offenders tree and a per-directory Duplication breakdown in the sidebar, a live clone warning in the editor naming the canonical copy with Compare / View cluster / Copy for AI actions, and a side-by-side Compare diff against the canonical occurrence.](https://deslop.live/assets/img/screenshot.webp)
+[![Deslop demo: inspect a duplicate cluster and compare both copies in VS Code.](https://deslop.live/assets/img/deslop-demo.gif)](https://deslop.live/#demo)
 
-**One live report, three surfaces.** The screenshot above shows the extension rendering the running analysis inline:
+[Watch the narrated demo with captions](https://deslop.live/#demo).
 
-- **Sidebar (left)** — **Top Offenders** ranks every clone cluster worst-first (id, severity, plain-English bucket, expandable to occurrences); **Duplication** breaks the repo down folder-by-folder with a duplicated-percentage on every node; **Session** shows the live server and the embedding-model picker.
-- **Editor (centre)** — the LSP underlines the duplicate as you type, names the **canonical** copy used as the anchor, and offers **Compare with canonical**, **View cluster**, and **Copy for AI** right on the finding.
-- **Compare diff (right)** — VS Code's native side-by-side editor lines this occurrence up against the canonical one so you can confirm before extracting.
+![Deslop showing a real duplicate-code cluster, its two locations and canonical comparison actions.](https://deslop.live/assets/img/screenshot.webp)
 
-Every panel refreshes as you type, and the same live report backs the MCP tools your agent calls. Full panel-by-panel walkthrough: [VS Code Cluster Panel](https://deslop.live/docs/vscode-cluster-panel/).
+**Find, inspect, compare.** Top Offenders lists the findings beside your code. Open a cluster to see its locations, then compare an occurrence with its canonical copy in VS Code's native diff editor before refactoring. The demonstration uses a small two-file C# fixture analysed by the packaged extension.
+
+Every panel reads the same live analysis. Full walkthrough: [VS Code Cluster Panel](https://deslop.live/docs/vscode-cluster-panel/).
 
 ## Features
 

@@ -9,3 +9,7 @@
 # Those failures name the file, not the line endings, so they read as defects in
 # perfectly intact files and make `make ci` unrunnable on a Windows checkout.
 * text=auto eol=lf
+
+# Product videos and Marketplace animation are downloaded by site build checkouts.
+*.mp4 filter=lfs diff=lfs merge=lfs -text
+*.gif filter=lfs diff=lfs merge=lfs -text

@@ -100,3 +100,7 @@ Documentation uses a 17rem sidebar with quiet group headings, plus/minus indicat
 Use the shared 120–280ms motion tokens for color changes, section reveals and drawers. Buttons and article cards lift by 2px on hover. Reduced-motion preferences suppress transitions and animation. Resting navigation text uses opaque neutral tokens in both themes.
 
 Verified by `site/tests/navigation.spec.js` and `site/tests/homepage-layout.spec.js`. Styles live in `site/src/assets/css/base.css` and `prose.css`.
+
+## Product demonstration [SITE-DEMO-VIDEO]
+
+The homepage links directly from the hero to a narrated recording of the actual packaged extension. Use the shared player on both language variants, native controls, an explicit poster, English captions, `playsinline` and `preload="none"`; playback starts on request. The HTML hero animation remains lightweight and independent. Screenshots must show actual measured demo data and describe the screen they depict. MP4 and GIF assets use Git LFS, and site CI plus Pages must fetch LFS objects before building. The Marketplace README leads with a short silent GIF and links to the narrated version.

@@ -9,7 +9,7 @@ copy-pastes.
 [Documentation](https://deslop.live/docs/) ·
 [Releases](https://deslop.live/releases/)
 
-[![Deslop showing ranked duplicate-code clusters, an inline warning, and a side-by-side comparison in VS Code.](site/src/assets/img/screenshot.webp)](https://deslop.live/docs/vscode-cluster-panel/)
+[![Deslop showing a duplicate cluster, its two locations and canonical comparison actions.](site/src/assets/img/screenshot.webp)](https://deslop.live/docs/vscode-cluster-panel/)
 
 ## Install in your IDE
 

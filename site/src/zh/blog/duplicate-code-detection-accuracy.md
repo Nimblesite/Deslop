@@ -12,11 +12,11 @@ tags:
 category: engineering
 description: "Deslop 0.35.0 聚焦误报、漏报与不完整的克隆范围，并提供更清晰的比较和重复度指标。"
 excerpt: "找到配对只是准确性的一部分。检测器还需要报告完整副本，排除无关的相似外形，并统计正确的源代码行。"
-heroImage: "/assets/img/blog/towards-100-percent-accuracy-header.webp"
+heroImage: "/assets/img/blog/accuracy-complete-shapes.webp"
 heroImageWidth: "1600"
-heroImageHeight: "900"
-heroImageAlt: "绘图桌上的放大镜与精密测量工具。"
-ogImage: "/assets/img/blog/towards-100-percent-accuracy-og.png"
+heroImageHeight: "840"
+heroImageAlt: "两块形状匹配的石墨组件与一块不同形状的组件，展示完整结构比较。"
+ogImage: "/assets/img/blog/accuracy-complete-shapes-og.jpg"
 ogImageWidth: "1200"
 ogImageHeight: "630"
 ---

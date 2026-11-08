@@ -6,11 +6,11 @@ author: Christian Findlay
 tags: posts
 description: Deslop 按语法树大小与额外可见副本数排列重复代码。仅形状相同的结果没有重复质量。
 excerpt: 当前排名使用重复质量，不再乘以旧的字节跨度因子。
-heroImage: /assets/img/blog/towards-100-percent-accuracy-header.webp
+heroImage: /assets/img/blog/ranking-mass.webp
 heroImageWidth: '1600'
-heroImageHeight: '900'
-heroImageAlt: 绘图桌上的精密测量工具。
-ogImage: /assets/img/blog/towards-100-percent-accuracy-og.png
+heroImageHeight: '840'
+heroImageAlt: Four stacks of graphite tiles ordered largest first, with a crimson top tile on the tallest stack.
+ogImage: /assets/img/blog/ranking-mass-og.jpg
 ogImageWidth: '1200'
 ogImageHeight: '630'
 lang: zh

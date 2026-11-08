@@ -17,3 +17,7 @@ A tactile industrial still life for removing duplicate C code: two identical mat
 ## Accuracy article: distinct artwork
 
 The 0.35.0 accuracy article uses `accuracy-complete-shapes` (1600x840 and 800x420 WebP, 1200x630 JPEG), generated with the built-in imagegen tool on 2026-11-08. The earlier transparency article keeps its drafting-table illustration. Prompt: tactile macro studio view of two matching laser-cut graphite contours beside a differently shaped offcut, charcoal surface, silver edges, restrained crimson measurement marker, neutral studio lighting; no paper drafting diagram, cyan, Osprey branding, text, or logos. Every English article must have a distinct hero image; translations may share their source article artwork.
+
+## Ranking article
+
+`ranking-mass` uses a distinct built-in imagegen illustration (2026-11-08): four stacks of graphite tiles ordered tallest to shortest, crimson top tile on the largest stack, silver highlights, charcoal surface, soft neutral studio light. No words, numbers, logos, blue, cyan, or Osprey branding. Exports use the same 1600x840 / 800x420 / 1200x630 sizes. English and Chinese translations share each article's matching artwork.
