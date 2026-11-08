@@ -78,6 +78,10 @@ const OCCURRENCE_HELP_SELECTOR = '[data-doc-topic="occurrences"]';
 const HELP_HEADING = "Open and compare code";
 const HELP_TARGET_SIZE = 22;
 const HELP_ITEM_COUNT = 4;
+// #606 The cluster panel's loading state, its empty state, and an id no report holds.
+const LOADING_CLUSTER_TEXT = "Loading cluster…";
+const EMPTY_CLUSTER_TEXT = "No cluster selected.";
+const MISSING_CLUSTER_ID = "0000000000000000";
 
 // [VSIX-PAIR-COMPARE] Each comparison action names its endpoints explicitly.
 test("cluster comparison controls distinguish canonical and selected endpoints", async ({ page }) => {
@@ -294,6 +298,33 @@ test.describe("VSIX webview bundles", () => {
       await expectHealthyRender(page, errors, `duplication-${viewport.name}`);
     });
   }
+
+  test("an opening cluster panel shows a spinner until its cluster arrives, never the empty state (#606)", async ({ page }) => {
+    // #606: the panel has mounted but the host has not delivered the report
+    // yet. "No cluster selected." claims the cluster is gone while it is
+    // still loading; the user must see a loading state instead, and the
+    // empty state only after a delivered report fails to resolve the id.
+    const errors = await loadView(page, "cluster", viewports[DESKTOP_VIEWPORT_INDEX]);
+
+    const loading = page.getByRole("status");
+    await expect(loading).toBeVisible();
+    await expect(loading).toHaveText(LOADING_CLUSTER_TEXT);
+    await expect(page.getByText(EMPTY_CLUSTER_TEXT)).toHaveCount(0);
+
+    await postHostMessage(page, { kind: "select/cluster", id: sampleReport.clusters[FIRST_CLUSTER_INDEX].id });
+    await expect(loading).toBeVisible();
+    await expect(page.getByText(EMPTY_CLUSTER_TEXT)).toHaveCount(0);
+
+    await postHostMessage(page, { kind: "report/snapshot", report: sampleReport });
+    await expect(page.getByRole("heading", { name: IDENTICAL_TITLE })).toBeVisible();
+    await expect(page.getByRole("status")).toHaveCount(0);
+    await expect(page.getByText(EMPTY_CLUSTER_TEXT)).toHaveCount(0);
+
+    await postHostMessage(page, { kind: "select/cluster", id: MISSING_CLUSTER_ID });
+    await expect(page.getByText(EMPTY_CLUSTER_TEXT)).toBeVisible();
+    await expect(page.getByRole("status")).toHaveCount(0);
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
 
   test("selecting a cluster renders its detail, never the empty state (#254)", async ({ page }) => {
     // Regression #254: `severityOf` was imported type-only, so esbuild erased
