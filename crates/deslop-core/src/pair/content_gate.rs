@@ -1,6 +1,6 @@
 //! Pair-content admission guard before transitive closure ([FUSED-CONTENT-GATE]).
 
-use std::{collections::HashMap, hash::BuildHasher};
+use std::{collections::HashMap, hash::BuildHasher, num::NonZeroUsize};
 
 use super::{
     token_carried, CandidatePair, ExactClones, EMBEDDING_SUPPORT_FLOOR, FUSED_THRESHOLD,
@@ -21,6 +21,16 @@ mod verdict;
 use authored_scope::AuthoredScopeMemo;
 use verdict::GateVerdict;
 
+/// Fewest candidate edges per worker worth sharding the gate for
+/// ([`crate::shard::worker_count`]); every verdict is independent, so
+/// the kept edges are the same in the same order on any worker count
+/// ([PIPELINE-DETERMINISM]).
+const GATE_SHARD_MIN_PAIRS: NonZeroUsize = match NonZeroUsize::new(8_192) {
+    Some(floor) => floor,
+    None => NonZeroUsize::MIN,
+};
+/// Candidate edges per claimed chunk.
+const GATE_CHUNK_PAIRS: usize = 4_096;
 /// Structural overlap at which normalised shape saturates the content guard.
 const SHAPE_IDENTICAL_FLOOR: f64 = 0.99;
 /// Token overlap at which `MinHash` is echoing saturated normalised shape.
@@ -35,6 +45,7 @@ const EXACT_CONTENT_AGREEMENT: f64 = 1.0;
 /// This runs after rescue measurement, so `shared_subtree_overlap` is the
 /// measured `S` for rescue-eligible non-Merkle pairs, and before closure, so
 /// a rejected relation can never weld two component members together.
+/// Verdicts are dealt to workers in chunks and reassembled in input order.
 pub(crate) fn apply_pair_content_gate<L>(
     pairs: &mut Vec<CandidatePair>,
     fingerprints: &[Fingerprint],
@@ -43,11 +54,23 @@ pub(crate) fn apply_pair_content_gate<L>(
     languages: &HashMap<FileId, &'static str, L>,
     cache: &ParseCache,
 ) where
-    L: BuildHasher,
+    L: BuildHasher + Sync,
 {
     let shared = GateShared::new(pairs, fingerprints, trees, sources, languages, cache);
-    let mut gate = PairGate::new(&shared, fingerprints.len());
-    pairs.retain(|pair| gate.admits(pair, fingerprints));
+    let workers = crate::shard::worker_count(pairs.len(), GATE_SHARD_MIN_PAIRS);
+    let (kept, _gates) = crate::shard::map_chunks(
+        pairs.chunks(GATE_CHUNK_PAIRS),
+        workers,
+        || PairGate::new(&shared, fingerprints.len()),
+        |gate, chunk: &[CandidatePair]| {
+            chunk
+                .iter()
+                .filter(|pair| gate.admits(pair, fingerprints))
+                .copied()
+                .collect::<Vec<CandidatePair>>()
+        },
+    );
+    *pairs = kept.into_iter().flatten().collect();
 }
 
 #[cfg(test)]
