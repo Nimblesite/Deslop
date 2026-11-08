@@ -1,6 +1,10 @@
 //! Exact-fingerprint frontier reuse ([FUSED-CONTENT-GATE-MEMO]).
 
-use std::{collections::HashMap, hash::BuildHasher, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::BuildHasher,
+    sync::Arc,
+};
 
 use super::{
     frontier::member_content, has_hard_contradiction, measure_core_contents, pair_contradiction,
@@ -13,6 +17,8 @@ use crate::{ast::NormalizedNode, fingerprint::Fingerprint, state::FileId};
 pub(crate) struct ContentMeasurer {
     /// Exact endpoint identity includes file, range, shape and node mass.
     endpoints: HashMap<Fingerprint, Option<Arc<MemberContent>>>,
+    /// Recently reused endpoints retained across bounded cache rotations.
+    reused: HashSet<Fingerprint>,
     /// Cache reads observed by deterministic work-count tests.
     #[cfg(test)]
     hits: usize,
@@ -20,6 +26,8 @@ pub(crate) struct ContentMeasurer {
 
 /// Bounds retained frontiers while still admitting later endpoints to the memo.
 const CONTENT_FRONTIER_MEMO_MAX: usize = 1_024;
+/// Retained hot endpoints leave room for newly encountered frontiers.
+const CONTENT_FRONTIER_HOT_MAX: usize = CONTENT_FRONTIER_MEMO_MAX / 4;
 
 impl ContentMeasurer {
     /// Returns the endpoint's content frontier when its tree and bytes resolve.
@@ -31,6 +39,9 @@ impl ContentMeasurer {
         languages: &HashMap<FileId, &'static str, L>,
     ) -> Option<Arc<MemberContent>> {
         if let Some(cached) = self.endpoints.get(fingerprint) {
+            if self.reused.len() < CONTENT_FRONTIER_HOT_MAX {
+                let _inserted = self.reused.insert(fingerprint.clone());
+            }
             #[cfg(test)]
             {
                 self.hits = self.hits.saturating_add(1);
@@ -39,7 +50,8 @@ impl ContentMeasurer {
         }
         let measured = member_content(fingerprint, trees, sources, languages).map(Arc::new);
         if self.endpoints.len() == CONTENT_FRONTIER_MEMO_MAX {
-            self.endpoints.clear();
+            self.endpoints.retain(|key, _| self.reused.contains(key));
+            self.reused.clear();
         }
         let _ = self.endpoints.insert(fingerprint.clone(), measured.clone());
         measured
@@ -151,7 +163,7 @@ impl ContentPair {
 mod tests {
     use std::{collections::HashMap, sync::Arc};
 
-    use super::{ContentMeasurer, CONTENT_FRONTIER_MEMO_MAX};
+    use super::{ContentMeasurer, CONTENT_FRONTIER_HOT_MAX, CONTENT_FRONTIER_MEMO_MAX};
     use crate::{
         ast::{ByteRange, NormalizedNode},
         content::{measure_aligned_core, measure_pair_content_indexed, ContentEvidence, PairScope},
@@ -290,6 +302,34 @@ mod tests {
             Arc::ptr_eq(&first, &second),
             "later endpoint must be cached"
         );
+        Ok(())
+    }
+
+    // [FUSED-CONTENT-GATE-MEMO] A repeated anchor survives cold endpoints.
+    #[test]
+    fn hot_frontier_survives_cache_rotation() -> Result<(), String> {
+        let (tree, fingerprints) = fixture()?;
+        let anchor = fingerprints.first().ok_or("anchor exists")?;
+        let trees = HashMap::from([(tree.file_id, &tree)]);
+        let (sources, languages) = inputs(tree.file_id);
+        let mut measurer = ContentMeasurer::default();
+        let original = measurer
+            .member(anchor, &trees, &sources, &languages)
+            .ok_or("anchor resolves")?;
+        for ordinal in 0..CONTENT_FRONTIER_MEMO_MAX.saturating_mul(2) {
+            let mut cold = anchor.clone();
+            cold.hash[..8].copy_from_slice(&ordinal.to_le_bytes());
+            let _ = measurer.member(&cold, &trees, &sources, &languages);
+            assert!(measurer.endpoints.len() <= CONTENT_FRONTIER_MEMO_MAX);
+            assert!(measurer.reused.len() <= CONTENT_FRONTIER_HOT_MAX);
+            let reused = measurer
+                .member(anchor, &trees, &sources, &languages)
+                .ok_or("anchor still resolves")?;
+            assert!(
+                Arc::ptr_eq(&original, &reused),
+                "hot anchor was rebuilt at {ordinal}"
+            );
+        }
         Ok(())
     }
 
