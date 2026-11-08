@@ -8,14 +8,14 @@ Checks run: **8**. Failing: **0**.
 
 | gh | What was tested | Exit | Evidence |
 | --- | --- | ---: | --- |
-| #520 | Unrelated statement runs publish nothing, at every floor | 0 | test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 496 filtered out; finished in 2.32s |
-| #520 | Cluster occurrences describe one authored view | 0 | test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 490 filtered out; finished in 4.49s |
-| #520 | Root cause: a rescued pair is judged on its aligned core, and near-miss recall holds | 0 | test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 477 filtered out; finished in 46.58s |
-| #520 | Root cause: a member inside a test body is judged by the call it is | 0 | test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 188 filtered out; finished in 5.69s |
-| #521/#522/#524/#525 | Extension host: one paint table, tap-to-compare, whole-number mass | 0 | 496 passing (30s); 1 passing (59ms) |
-| #523 | A reply from another build is refused by name, not by serde | 0 | test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s |
-| #524/#525 | Rendered panel: row taps compare, mass renders whole | 0 | 8 passed (1.6s) |
-| #526 | Every cited rule identifier resolves to a written rule | 0 | test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 495 filtered out; finished in 2.04s |
+| #520 | Unrelated statement runs publish nothing, at every floor | 0 | test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 619 filtered out; finished in 1.65s |
+| #520 | Cluster occurrences describe one authored view | 0 | test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 610 filtered out; finished in 4.99s |
+| #520 | Root cause: a rescued pair is judged on its aligned core, and near-miss recall holds | 0 | test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 599 filtered out; finished in 89.57s |
+| #520 | Root cause: a member inside a test body is judged by the call it is | 0 | test result: ok. 44 passed; 0 failed; 0 ignored; 0 measured; 282 filtered out; finished in 5.47s |
+| #521/#522/#524/#525 | Extension host: one paint table, tap-to-compare, whole-number mass | 0 | 550 passing (35s); 5 passing (457ms); 1 passing (65ms) |
+| #523 | A reply from another build is refused by name, not by serde | 0 | test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s |
+| #524/#525 | Rendered panel: row taps compare, mass renders whole | 0 | (Use `node --trace-warnings ...` to show where the warning was created) |
+| #526 | Every cited rule identifier resolves to a written rule | 0 | test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 618 filtered out; finished in 2.63s |
 
 ## gh #520 — the statement-run fixture, measured on both engines
 
@@ -29,10 +29,10 @@ Checks run: **8**. Failing: **0**.
 
 ## gh #520 — the reported scan
 
-`site/tests` at default settings: `repo: 12.1% duplicated (134 / 1104 LOC, 17 clusters across 4 files)`
+`site/tests` at default settings: `repo: 7.3% duplicated (105 / 1438 LOC, 26 clusters across 5 files)`
 
 The same tree measured on both engines. A mixed-span cluster here is not by itself a defect — two copies can differ by one inserted line — so the columns are the shape, and the text report above is the figure.
 
 | engine | --min-nodes | duplication % | clusters | mixed-span clusters | cross-file clusters | mid-line occurrences |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| branch | 30 | 12.1377 | 17 | 3 | 2 | 2 |
+| branch | 30 | 7.3018 | 26 | 8 | 10 | 2 |
