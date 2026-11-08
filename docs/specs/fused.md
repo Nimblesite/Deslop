@@ -41,7 +41,7 @@ Pair evidence belongs to the two occurrences being compared. Use the strongest s
 
 #### [FUSED-CANDIDATE-BUCKET-STAR] A structural-hash bucket is paired as a star; recovery adds what the star hides
 
-Members of one structural-hash bucket are Merkle-equal, so a pair between any two of them scores `S = 1.0` and only the pair-content gate decides it. The candidate generator therefore does not emit every pair of a bucket: each member is paired with the bucket's first member, and closure carries the rest.
+Members of one structural-hash bucket are Merkle-equal, so a pair between any two of them scores `S = 1.0` and only the pair-content gate decides it — whichever pass surfaced the pair: a token band collision between two members of one bucket carries the same evidence and is never an LSH-only pair (`pair::candidates::tests::a_band_collision_between_merkle_equal_members_carries_structural_evidence`). The candidate generator therefore does not emit every pair of a bucket: each member is paired with the bucket's first member, and closure carries the rest.
 
 Every member of a bucket spanning files gets a cross-file candidate. An unrelated first member must not hide copies among the remaining members: compare their content, recover missing pairs within each copied subset, then apply the same admission checks. Recovery adds only structurally identical pairs; it does not lower any threshold. Pinned by `cli::category_members`.
 

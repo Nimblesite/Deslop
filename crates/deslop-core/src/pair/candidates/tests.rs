@@ -5,7 +5,7 @@
 //! and a 2,290 s content gate. Copy recovery, not enumeration, now adds
 //! the pairs an unrelated first member hides.
 
-use super::{candidate_pairs, CandidatePair};
+use super::{candidate_pairs, CandidatePair, LshPairs};
 use crate::{
     ast::ByteRange,
     fingerprint::Fingerprint,
@@ -21,6 +21,8 @@ const SHARED_HASH: [u8; 32] = [7; 32];
 const MEMBER_BYTES: usize = 64;
 /// Clears every admission floor on its own.
 const NODE_COUNT: usize = 40;
+/// Complete structural evidence, as a Merkle-equal pair scores.
+const STRUCTURAL_EVIDENCE: f64 = 1.0;
 /// Members of the two-file bucket, in index order: the first two share a
 /// file and the third sits in another.
 const SPANNING_FILES: [usize; 3] = [0, 0, 1];
@@ -42,13 +44,38 @@ fn member(file_id: FileId, position: usize) -> Fingerprint {
 }
 
 fn structural_pairs(fingerprints: &[Fingerprint]) -> Vec<(usize, usize)> {
+    let no_lsh_pairs: Vec<(usize, usize)> = Vec::new();
+    pairs_with_lsh(fingerprints, &no_lsh_pairs)
+        .iter()
+        .map(|pair| (pair.left, pair.right))
+        .collect()
+}
+
+fn pairs_with_lsh(fingerprints: &[Fingerprint], lsh_pairs: &dyn LshPairs) -> Vec<CandidatePair> {
     let signatures = vec![ZEROED_SIGNATURE; fingerprints.len()];
     let index = SignatureIndex::from_segments([signatures.as_slice()]);
-    let no_lsh_pairs: Vec<(usize, usize)> = Vec::new();
-    candidate_pairs(fingerprints, &index, &no_lsh_pairs, &[])
-        .iter()
-        .map(|pair: &CandidatePair| (pair.left, pair.right))
-        .collect()
+    candidate_pairs(fingerprints, &index, lsh_pairs, &[])
+}
+
+/// [FUSED-CANDIDATE-BUCKET-STAR] A band collision between two members of
+/// one bucket that the star never paired — the second and third of a
+/// three-member same-file bucket — is a structural pair, not an LSH-only
+/// one: Merkle-equal endpoints are complete structural evidence.
+#[test]
+fn a_band_collision_between_merkle_equal_members_carries_structural_evidence() {
+    let mut registry = FileRegistry::new();
+    let file = registry.register("generated.cs".into());
+    let fingerprints: Vec<Fingerprint> = (0..3).map(|position| member(file, position)).collect();
+    let collided: Vec<(usize, usize)> = vec![(1, 2)];
+    let pairs = pairs_with_lsh(&fingerprints, &collided);
+    let keys: Vec<(usize, usize)> = pairs.iter().map(|pair| (pair.left, pair.right)).collect();
+    assert_eq!(keys, vec![(0, 1), (0, 2), (1, 2)]);
+    assert!(
+        pairs
+            .iter()
+            .all(|pair| pair.score.structural == STRUCTURAL_EVIDENCE),
+        "every Merkle-equal pair scores full structural evidence: {pairs:?}"
+    );
 }
 
 #[test]

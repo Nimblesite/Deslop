@@ -309,6 +309,16 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
         cosine: f64,
     ) -> Option<CandidatePair> {
         let (left, right) = key;
+        // Merkle-equal endpoints are complete structural evidence
+        // whichever pass surfaced the pair ([FUSED-CANDIDATE-BUCKET-STAR]):
+        // a band collision between two members of one bucket is not an
+        // LSH-only pair, and must not die on the LSH-only floors while
+        // recovery treats it as already carried.
+        let structural = if self.merkle_equal(left, right) {
+            STRUCTURAL_COPY_EVIDENCE.0
+        } else {
+            structural
+        };
         let endpoint_node_counts = endpoint_node_counts(self.fingerprints, left, right);
         let mut pair = CandidatePair {
             left,
@@ -327,6 +337,14 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
         };
         self.apply_language_policy(&mut pair)?;
         Some(pair)
+    }
+
+    /// Whether both endpoints share one structural hash.
+    fn merkle_equal(&self, left: usize, right: usize) -> bool {
+        self.fingerprints
+            .get(left)
+            .zip(self.fingerprints.get(right))
+            .is_some_and(|(left, right)| left.hash == right.hash)
     }
 
     /// Applies [CONFIG-CROSS-LANGUAGE]: drops cross-language pairs when
