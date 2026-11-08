@@ -286,7 +286,7 @@ test("homepage demo plays on demand with captions on desktop and mobile", async 
       await page.setViewportSize({ width, height: 900 });
       await page.goto(route);
       await page.locator('.hero__cta a[href="#demo"]').click();
-      const video = page.locator('.showcase video');
+      const video = page.locator('.hero video');
       await expect(video).toBeVisible();
       await expect(video).toHaveAttribute('controls', '');
       await expect(video).toHaveAttribute('preload', 'none');

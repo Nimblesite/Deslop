@@ -4,54 +4,40 @@ const PRIMARY_NAV_FONT_SIZE = "16px";
 const SECONDARY_NAV_FONT_SIZE = "15px";
 const NAV_LABEL_FONT_SIZE = "14px";
 
-/* [SITE-HOME-VIDEO] The hero is a single centred block: equal air above and below the copy, the motion reel sharing its centre line, and one repeated gap between every element of the copy. Tolerances absorb sub-pixel layout rounding only. */
-const HERO_CENTRING_TOLERANCE_PX = 2;
+// [SITE-HOME-VIDEO] One compact introduction contains the real demo.
 const HERO_RHYTHM_TOLERANCE_PX = 1;
-const HERO_OVERFLOW_TOLERANCE_PX = 1;
 const HERO_COPY_ELEMENTS = 5;
-
+const MAX_HERO_HEIGHT = 850;
+const MAX_NEXT_SECTION_GAP = 80;
 test.use({ viewport: { width: 1920, height: 1080 } });
 
-test("homepage hero fills the desktop viewport exactly", async ({ page }) => {
-  await page.goto("/");
-  const heroBottom = await page
-    .locator(".hero")
-    .evaluate((element) => element.getBoundingClientRect().bottom);
-  const viewportHeight = await page.evaluate(() => window.innerHeight);
-
-  expect(
-    heroBottom,
-    "homepage hero must reach the bottom of the desktop viewport",
-  ).toBeGreaterThanOrEqual(viewportHeight);
-  expect(
-    heroBottom - viewportHeight,
-    "homepage hero must not overshoot the viewport and force a scroll",
-  ).toBeLessThanOrEqual(HERO_OVERFLOW_TOLERANCE_PX);
+test("introduction and narrated demo share one compact hero", async ({ page }) => {
+  for (const route of ['/', '/zh/']) {
+    await page.goto(route);
+    await expect(page.locator('.hero video')).toHaveCount(1);
+    await expect(page.locator('.home video')).toHaveCount(1);
+    await expect(page.locator('.home > .showcase')).toHaveCount(0);
+    await expect(page.locator('.motion-reel')).toHaveCount(0);
+    const bounds = await page.evaluate(() => {
+      const hero = document.querySelector('.hero').getBoundingClientRect();
+      const video = document.querySelector('.hero video').getBoundingClientRect();
+      const next = document.querySelector('.testimonials').getBoundingClientRect();
+      return {height:hero.height, videoBottom:video.bottom, gap:next.top-hero.bottom};
+    });
+    expect(bounds.height).toBeLessThan(MAX_HERO_HEIGHT);
+    expect(bounds.videoBottom).toBeLessThan(1080);
+    expect(bounds.gap).toBeLessThanOrEqual(MAX_NEXT_SECTION_GAP);
+  }
 });
 
-test("centres the hero copy and motion reel in the viewport", async ({ page }) => {
-  await page.goto("/");
-  const hero = await page.locator(".hero").evaluate((element) => {
-    const box = (selector) => element.querySelector(selector).getBoundingClientRect();
-    const outer = element.getBoundingClientRect();
-    const copy = box(".hero__left");
-    const reel = box(".hero__right");
-    return {
-      airAbove: copy.top - outer.top,
-      airBelow: outer.bottom - copy.bottom,
-      copyCentre: (copy.top + copy.bottom) / 2,
-      reelCentre: (reel.top + reel.bottom) / 2,
-    };
-  });
-
-  expect(
-    Math.abs(hero.airAbove - hero.airBelow),
-    `hero copy must sit centred: ${hero.airAbove}px above vs ${hero.airBelow}px below`,
-  ).toBeLessThanOrEqual(HERO_CENTRING_TOLERANCE_PX);
-  expect(
-    Math.abs(hero.copyCentre - hero.reelCentre),
-    "motion reel must share the hero copy's centre line",
-  ).toBeLessThanOrEqual(HERO_CENTRING_TOLERANCE_PX);
+test("desktop hero gives the product demonstration enough room", async ({ page }) => {
+  await page.goto('/');
+  const [copy, video] = await Promise.all([
+    page.locator('.hero__left').boundingBox(), page.locator('.hero video').boundingBox()
+  ]);
+  expect(video.x).toBeGreaterThan(copy.x + copy.width);
+  expect(video.width).toBeGreaterThan(copy.width);
+  expect(Math.abs(video.y + video.height / 2 - copy.y - copy.height / 2)).toBeLessThanOrEqual(2);
 });
 
 test("spaces every hero element on one rhythm", async ({ page }) => {

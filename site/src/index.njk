@@ -53,21 +53,12 @@ description: "Find duplicate code in C, C#, Rust, Python, TypeScript, Go, Osprey
       </p>
     </div>
 
-    <div class="hero__right">
-      {% include "partials/reel.njk" %}
-    </div>
-  </section>
-
-  <section class="showcase" id="demo">
-    <div class="showcase__head">
-      <div class="eyebrow-chip"><span>In your editor</span></div>
-      <h2 class="showcase__title">Find it. Inspect it. Compare it.</h2>
-      <p class="showcase__lede">A narrated walkthrough of the real extension, from a finding to a side-by-side comparison.</p>
-    </div>
+    <div class="hero__right" id="demo">
     {% set demoLabel = "Deslop product demo: duplicate code flagged live in VS Code, worst offenders ranked first." %}
     {% set demoTrackLabel = "English captions" %}
     {% set demoFallback = "Your browser cannot play this video. Download it instead:" %}
     {% include "partials/product-demo.njk" %}
+    </div>
     <ol class="showcase__legend">
       <li class="showcase__cell">
         <span class="showcase__pos">01 · Find</span>

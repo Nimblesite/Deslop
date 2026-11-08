@@ -28,8 +28,8 @@ const MERGED_PULL_REQUESTS = [
 ];
 
 const HOME_ROUTE = { en: "/", zh: "/zh/" };
-// [SITE-HOME-VIDEO] The motion reel lives inside the hero, so the editor showcase is the only demo section.
-const SECTION_ORDER = ["hero", "showcase", "testimonials", "editors", "community"];
+// [SITE-HOME-VIDEO] The introduction and actual product demo share one hero.
+const SECTION_ORDER = ["hero", "testimonials", "editors", "community"];
 const SECTION_HEADING = { en: "Findings that ship.", zh: "可以直接合并的发现。" };
 const SECTION_EYEBROW = { en: "Field report", zh: "实地反馈" };
 
@@ -80,7 +80,7 @@ for (const lang of ["en", "zh"]) {
     }
   });
 
-  test(`sits between the product showcase and the install band (${lang})`, async ({ page }) => {
+  test(`follows the merged product hero and precedes the install band (${lang})`, async ({ page }) => {
     await page.goto(HOME_ROUTE[lang]);
 
     const sections = await page
