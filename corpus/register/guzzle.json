@@ -377,6 +377,22 @@
         "tests/ClientTest.php:2009-2027",
         "tests/PoolTest.php:429-447"
       ]
+    },
+    {
+      "why": "One side is private libcurl version-number constants with short history comments; the other is public request-option name strings each behind a long semantics docblock. No shared names, values, or text beyond the shape of a const declaration, so pairing them is plainly wrong.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- src/Handler/CurlVersion.php:35-64\n+++ src/RequestOptions.php:236-370\n@@ -1,30 +1,135 @@\n-    private const HTTP_VERSION_REUSE_MATCH_REGRESSION = '8.11.0';\n+    public const MULTIPART = 'multipart';\n \n-    private const HTTP_VERSION_REUSE_MATCH_RESTORED = '8.13.0';\n+    /**\n+     * multiplex: (string, default=GuzzleHttp\\Multiplexing::WAIT) Controls how a\n+     * request sent through a built-in cURL handler relates to shared,\n+     * multiplexed connections: how an HTTP/2 or HTTP/3 request pursues one, or,\n+     * with Multiplexing::NONE, whether the transfer may share its connection at\n+     * all. Use Multiplexing::EAGER to avoid waiting for pending connections,\n+     * Multiplexing::WAIT to wait on libcurl-eligible pending connections with\n+     * CURLOPT_PIPEWAIT, normally to the same origin,\n+     * Multiplexing::REQUIRE_EAGER to fail unless a multiplexed protocol is\n+     * guaranteed while dialing eagerly, or Multiplexing::REQUIRE_WAIT for the\n+     * same guarantee while also waiting on pending connections. The required\n+     * modes require a handler that permits actual multiplexing, not merely a\n+     * multiplexed protocol, and are rejected on a Multiplexing::NONE handler.\n+     * The stream handler ignores EAGER and WAIT, and rejects the required\n+     * family; CurlHandler has no multi handle to multiplex over. The required\n+     * family also rejects final CURLOPT_HTTPAUTH masks that permit NTLM, which\n+     * libcurl retries over HTTP/1.1. Multiplexing::NONE disables multiplexing\n+     * for a whole handler when passed as the \"multiplex\" client configuration\n+     * option, which configures the default handler and also becomes the default\n+     * request option, or, when constructing a handler directly, as the\n+     * CurlMultiHandler \"multiplex\" constructor option. A handler configured\n+     * with Multiplexing::NONE wins over the default WAIT: default requests run\n+     * without waiting, explicitly requested wait modes are rejected as a\n+     * configuration conflict when the transfer would actually wait, and the\n+     * required modes are always rejected, because they require a handler that\n+     * permits actual multiplexing, not merely a multiplexed protocol. As a\n+     * request option value, Multiplexing::NONE guarantees the transfer does not\n+     * share its connection with any concurrent transfer. Multiplexing::NONE\n+     * does not force HTTP/1.1: on a Multiplexing::NONE handler, HTTP/2 still\n+     * negotiates and each transfer keeps its connection to itself.\n+     *\n+     * The request option value is accepted exactly where the guarantee holds\n+     * and can be verified: on a CurlMultiHandler configured with\n+     * Multiplexing::NONE, for requests whose declared protocol version is\n+     * HTTP/1.x, on CurlHandler, and on the stream handler, which never\n+     * multiplexes. An HTTP/2 or HTTP/3 request with a Multiplexing::NONE\n+     * request option is rejected on a CurlMultiHandler that permits\n+     * multiplexing. Acceptance is decided from the request's declared protocol\n+     * version, before any transport-level downgrade: an HTTP/3 request sent\n+     * through a proxy is delivered over HTTP/2 or HTTP/1.1 on the wire, but is\n+     * still rejected. On a CurlMultiHandler that permits multiplexing,\n+     * Multiplexing::NONE is also rejected with a custom \"handle_factory\", when\n+     * the handler requires persistent transport sharing (the safeguards can\n+     * require a fresh connection, which required sharing forbids), when the\n+     * request carries an Expect: 100-continue header (its 417 retries select\n+     * connections outside the safeguards; remove an explicitly supplied\n+     * header, or set the \"expect\" request option to false to prevent it being\n+     * added automatically), and combined with a raw CURLOPT_HTTPAUTH cURL\n+     * option, whose authentication retries do the same.\n+     *\n+     * On a client whose multi handler permits multiplexing, the ordinary\n+     * non-streaming default stack - both cURL handlers available and no\n+     * connection caps forcing multi-only routing - runs synchronous requests on\n+     * the CurlHandler path, which satisfies the guarantee for any protocol\n+     * version, while asynchronous requests run on the CurlMultiHandler, so an\n+     * HTTP/2 request with Multiplexing::NONE succeeds synchronously and is\n+     * rejected asynchronously on the same client. Keep-alive reuse between\n+     * consecutive transfers is unaffected, except on libcurl versions below\n+     * 7.77.0 and from 8.11.0 through 8.12.1, where an accepted HTTP/1.x request\n+     * on a multiplexing CurlMultiHandler forces a fresh connection. Custom\n+     * handlers receive the \"multiplex\" option unchanged: its semantics are\n+     * handler-defined, Guzzle does not guarantee it is honored, and a\n+     * client-level Multiplexing::NONE with a custom handler flows to it as a\n+     * default request option without client-side enforcement.\n+     */\n+    public const MULTIPLEX = 'multiplex';\n \n-    // CURL_HTTP_VERSION_2_PRIOR_KNOWLEDGE restricts the ALPN offer to h2 only\n-    // since libcurl 8.10.0, and connection reuse matching stopped handing\n-    // lower-version connections to prior-knowledge transfers in 8.14.0; below\n-    // that, a required HTTP/2 request could silently be sent over a reused\n-    // HTTP/1.1 connection.\n-    private const REQUIRED_HTTP2_MULTIPLEX_VERSION = '8.14.0';\n+    /**\n+     * on_headers: (callable(ResponseInterface, RequestInterface): mixed) A\n+     * callable that is invoked when the HTTP headers of the final response, or\n+     * a 101 Switching Protocols response, have been received but the body has\n+     * not yet begun to download. The callable is passed the response and\n+     * request as {@see ResponseInterface} and {@see RequestInterface} objects,\n+     * respectively. If it throws, the request promise is rejected with a\n+     * GuzzleHttp\\Exception\\ResponseException (a RequestException subtype)\n+     * wrapping the thrown exception. When this callback is supplied via\n+     * GuzzleHttp\\Pool's \"options\" configuration, the pool appends the request's\n+     * iterable key as a third argument.\n+     */\n+    public const ON_HEADERS = 'on_headers';\n \n-    // Version-aware connection reuse matching arrived in libcurl 8.13.0 with\n-    // an HTTP/3-only mask for CURL_HTTP_VERSION_3ONLY transfers; below that,\n-    // a required HTTP/3 request could silently ride a reused HTTP/2\n-    // connection.\n-    private const REQUIRED_HTTP3_MULTIPLEX_VERSION = '8.13.0';\n+    /**\n+     * on_stats: (callable(TransferStats): mixed) allows you to get access to\n+     * transfer statistics of a request and access the lower level transfer\n+     * details of the handler associated with your client. ``on_stats`` is a\n+     * callable that is invoked when a handler has finished sending a request.\n+     * The callback is invoked with transfer statistics about the request, the\n+     * response received, or the error encountered. Included in the data is the\n+     * total amount of time taken to send the request. Exceptions thrown by\n+     * on_stats are not wrapped by Guzzle. Built-in handlers reject non-callable\n+     * values before starting the transfer. The built-in cURL handlers release\n+     * native easy handles before invoking on_stats and invoke it per low-level\n+     * transfer attempt. When this callback is supplied via GuzzleHttp\\Pool's\n+     * \"options\" configuration, the pool appends the request's iterable key as a\n+     * second argument.\n+     */\n+    public const ON_STATS = 'on_stats';\n \n-    // curl 7.52.0 introduced HTTPS proxy support, advertised by a feature bit\n-    // (a build can meet the version yet lack the feature). Earlier libcurl\n-    // mishandles an https:// proxy: before 7.50.2 it silently downgrades to a\n-    // plaintext HTTP proxy, and 7.50.2 through 7.51 reject it at connect time.\n-    // The 7.52.0 TLS rework also shipped verification flaws in exactly this\n-    // path (CVE-2017-2629, CVE-2017-7468); the latter affects 7.52.0-7.53.1\n-    // and was fixed in 7.54.0, so TLS to a proxy is only trusted from there.\n-    private const HTTPS_PROXY_VERSION = '7.54.0';\n+    /**\n+     * on_trailers: (callable(array<string, list<string>>, ResponseInterface, RequestInterface): mixed)\n+     * A callable that is invoked exactly once when a transfer completes\n+     * successfully, with the HTTP trailer fields of the response. The callable\n+     * is passed an associative array of trailer field names mapped to lists of\n+     * field values, the response, and the request. The array is empty when the\n+     * response carried no trailer fields, and trailer field names are\n+     * lowercased and grouped case-insensitively while values keep their wire\n+     * order. The callable is never invoked for failed transfers. If it throws,\n+     * the request promise is rejected with a\n+     * GuzzleHttp\\Exception\\ResponseException (a RequestException subtype)\n+     * wrapping the thrown exception. Only the built-in cURL handlers invoke\n+     * on_trailers; the built-in stream handler rejects the option because it\n+     * cannot observe trailer fields, and the mock handler ignores it.\n+     * Malformed trailer field lines are discarded before parsing. Trailer\n+     * fields are reported separately from response headers and are never\n+     * merged into the response. When this callback is supplied via\n+     * GuzzleHttp\\Pool's \"options\" configuration, the pool appends the\n+     * request's iterable key as a fourth argument.\n+     */\n+    public const ON_TRAILERS = 'on_trailers';\n \n-    // HTTP/3 arrived in libcurl 7.66.0, but CURL_HTTP_VERSION_3ONLY only\n-    // exists from 7.88.0; requiring it keeps every HTTP/3-capable runtime\n-    // able to pin HTTP/3 with no downgrade.\n-    private const HTTP_3_VERSION = '7.88.0';\n+    /**\n+     * progress: (callable(int, int, int, int): mixed)\n+     * Defines a function to invoke when transfer progress is made. The function\n+     * accepts the following positional arguments: the total number of bytes\n+     * expected to be downloaded, the number of bytes downloaded so far, the\n+     * number of bytes expected to be uploaded, the number of bytes uploaded so\n+     * far. With the built-in cURL handlers, returning a truthy value aborts the\n+     * transfer and throwing rejects the promise with a RequestException. The\n+     * built-in stream handler ignores return values. When this callback is\n+     * supplied via GuzzleHttp\\Pool's \"options\" configuration, the pool appends\n+     * the request's iterable key as a fifth argument.\n+     */\n+    public const PROGRESS = 'progress';\n",
+      "occurrences": [
+        "src/RequestOptions.php:236-370",
+        "src/Handler/CurlVersion.php:35-64"
+      ]
+    },
+    {
+      "why": "The regions share only the `const NAME = 'literal';` declaration skeleton: public request-option name constants under option docblocks vs private libcurl version-threshold constants under CVE comments, with entirely different names, values, visibility and purpose. Unrelated declaration runs, plainly not copies.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- src/RequestOptions.php:236-356\n+++ src/Handler/CurlVersion.php:37-64\n@@ -1,121 +1,28 @@\n-    public const MULTIPART = 'multipart';\n+    private const HTTP_VERSION_REUSE_MATCH_RESTORED = '8.13.0';\n \n-    /**\n-     * multiplex: (string, default=GuzzleHttp\\Multiplexing::WAIT) Controls how a\n-     * request sent through a built-in cURL handler relates to shared,\n-     * multiplexed connections: how an HTTP/2 or HTTP/3 request pursues one, or,\n-     * with Multiplexing::NONE, whether the transfer may share its connection at\n-     * all. Use Multiplexing::EAGER to avoid waiting for pending connections,\n-     * Multiplexing::WAIT to wait on libcurl-eligible pending connections with\n-     * CURLOPT_PIPEWAIT, normally to the same origin,\n-     * Multiplexing::REQUIRE_EAGER to fail unless a multiplexed protocol is\n-     * guaranteed while dialing eagerly, or Multiplexing::REQUIRE_WAIT for the\n-     * same guarantee while also waiting on pending connections. The required\n-     * modes require a handler that permits actual multiplexing, not merely a\n-     * multiplexed protocol, and are rejected on a Multiplexing::NONE handler.\n-     * The stream handler ignores EAGER and WAIT, and rejects the required\n-     * family; CurlHandler has no multi handle to multiplex over. The required\n-     * family also rejects final CURLOPT_HTTPAUTH masks that permit NTLM, which\n-     * libcurl retries over HTTP/1.1. Multiplexing::NONE disables multiplexing\n-     * for a whole handler when passed as the \"multiplex\" client configuration\n-     * option, which configures the default handler and also becomes the default\n-     * request option, or, when constructing a handler directly, as the\n-     * CurlMultiHandler \"multiplex\" constructor option. A handler configured\n-     * with Multiplexing::NONE wins over the default WAIT: default requests run\n-     * without waiting, explicitly requested wait modes are rejected as a\n-     * configuration conflict when the transfer would actually wait, and the\n-     * required modes are always rejected, because they require a handler that\n-     * permits actual multiplexing, not merely a multiplexed protocol. As a\n-     * request option value, Multiplexing::NONE guarantees the transfer does not\n-     * share its connection with any concurrent transfer. Multiplexing::NONE\n-     * does not force HTTP/1.1: on a Multiplexing::NONE handler, HTTP/2 still\n-     * negotiates and each transfer keeps its connection to itself.\n-     *\n-     * The request option value is accepted exactly where the guarantee holds\n-     * and can be verified: on a CurlMultiHandler configured with\n-     * Multiplexing::NONE, for requests whose declared protocol version is\n-     * HTTP/1.x, on CurlHandler, and on the stream handler, which never\n-     * multiplexes. An HTTP/2 or HTTP/3 request with a Multiplexing::NONE\n-     * request option is rejected on a CurlMultiHandler that permits\n-     * multiplexing. Acceptance is decided from the request's declared protocol\n-     * version, before any transport-level downgrade: an HTTP/3 request sent\n-     * through a proxy is delivered over HTTP/2 or HTTP/1.1 on the wire, but is\n-     * still rejected. On a CurlMultiHandler that permits multiplexing,\n-     * Multiplexing::NONE is also rejected with a custom \"handle_factory\", when\n-     * the handler requires persistent transport sharing (the safeguards can\n-     * require a fresh connection, which required sharing forbids), when the\n-     * request carries an Expect: 100-continue header (its 417 retries select\n-     * connections outside the safeguards; remove an explicitly supplied\n-     * header, or set the \"expect\" request option to false to prevent it being\n-     * added automatically), and combined with a raw CURLOPT_HTTPAUTH cURL\n-     * option, whose authentication retries do the same.\n-     *\n-     * On a client whose multi handler permits multiplexing, the ordinary\n-     * non-streaming default stack - both cURL handlers available and no\n-     * connection caps forcing multi-only routing - runs synchronous requests on\n-     * the CurlHandler path, which satisfies the guarantee for any protocol\n-     * version, while asynchronous requests run on the CurlMultiHandler, so an\n-     * HTTP/2 request with Multiplexing::NONE succeeds synchronously and is\n-     * rejected asynchronously on the same client. Keep-alive reuse between\n-     * consecutive transfers is unaffected, except on libcurl versions below\n-     * 7.77.0 and from 8.11.0 through 8.12.1, where an accepted HTTP/1.x request\n-     * on a multiplexing CurlMultiHandler forces a fresh connection. Custom\n-     * handlers receive the \"multiplex\" option unchanged: its semantics are\n-     * handler-defined, Guzzle does not guarantee it is honored, and a\n-     * client-level Multiplexing::NONE with a custom handler flows to it as a\n-     * default request option without client-side enforcement.\n-     */\n-    public const MULTIPLEX = 'multiplex';\n+    // CURL_HTTP_VERSION_2_PRIOR_KNOWLEDGE restricts the ALPN offer to h2 only\n+    // since libcurl 8.10.0, and connection reuse matching stopped handing\n+    // lower-version connections to prior-knowledge transfers in 8.14.0; below\n+    // that, a required HTTP/2 request could silently be sent over a reused\n+    // HTTP/1.1 connection.\n+    private const REQUIRED_HTTP2_MULTIPLEX_VERSION = '8.14.0';\n \n-    /**\n-     * on_headers: (callable(ResponseInterface, RequestInterface): mixed) A\n-     * callable that is invoked when the HTTP headers of the final response, or\n-     * a 101 Switching Protocols response, have been received but the body has\n-     * not yet begun to download. The callable is passed the response and\n-     * request as {@see ResponseInterface} and {@see RequestInterface} objects,\n-     * respectively. If it throws, the request promise is rejected with a\n-     * GuzzleHttp\\Exception\\ResponseException (a RequestException subtype)\n-     * wrapping the thrown exception. When this callback is supplied via\n-     * GuzzleHttp\\Pool's \"options\" configuration, the pool appends the request's\n-     * iterable key as a third argument.\n-     */\n-    public const ON_HEADERS = 'on_headers';\n+    // Version-aware connection reuse matching arrived in libcurl 8.13.0 with\n+    // an HTTP/3-only mask for CURL_HTTP_VERSION_3ONLY transfers; below that,\n+    // a required HTTP/3 request could silently ride a reused HTTP/2\n+    // connection.\n+    private const REQUIRED_HTTP3_MULTIPLEX_VERSION = '8.13.0';\n \n-    /**\n-     * on_stats: (callable(TransferStats): mixed) allows you to get access to\n-     * transfer statistics of a request and access the lower level transfer\n-     * details of the handler associated with your client. ``on_stats`` is a\n-     * callable that is invoked when a handler has finished sending a request.\n-     * The callback is invoked with transfer statistics about the request, the\n-     * response received, or the error encountered. Included in the data is the\n-     * total amount of time taken to send the request. Exceptions thrown by\n-     * on_stats are not wrapped by Guzzle. Built-in handlers reject non-callable\n-     * values before starting the transfer. The built-in cURL handlers release\n-     * native easy handles before invoking on_stats and invoke it per low-level\n-     * transfer attempt. When this callback is supplied via GuzzleHttp\\Pool's\n-     * \"options\" configuration, the pool appends the request's iterable key as a\n-     * second argument.\n-     */\n-    public const ON_STATS = 'on_stats';\n+    // curl 7.52.0 introduced HTTPS proxy support, advertised by a feature bit\n+    // (a build can meet the version yet lack the feature). Earlier libcurl\n+    // mishandles an https:// proxy: before 7.50.2 it silently downgrades to a\n+    // plaintext HTTP proxy, and 7.50.2 through 7.51 reject it at connect time.\n+    // The 7.52.0 TLS rework also shipped verification flaws in exactly this\n+    // path (CVE-2017-2629, CVE-2017-7468); the latter affects 7.52.0-7.53.1\n+    // and was fixed in 7.54.0, so TLS to a proxy is only trusted from there.\n+    private const HTTPS_PROXY_VERSION = '7.54.0';\n \n-    /**\n-     * on_trailers: (callable(array<string, list<string>>, ResponseInterface, RequestInterface): mixed)\n-     * A callable that is invoked exactly once when a transfer completes\n-     * successfully, with the HTTP trailer fields of the response. The callable\n-     * is passed an associative array of trailer field names mapped to lists of\n-     * field values, the response, and the request. The array is empty when the\n-     * response carried no trailer fields, and trailer field names are\n-     * lowercased and grouped case-insensitively while values keep their wire\n-     * order. The callable is never invoked for failed transfers. If it throws,\n-     * the request promise is rejected with a\n-     * GuzzleHttp\\Exception\\ResponseException (a RequestException subtype)\n-     * wrapping the thrown exception. Only the built-in cURL handlers invoke\n-     * on_trailers; the built-in stream handler rejects the option because it\n-     * cannot observe trailer fields, and the mock handler ignores it.\n-     * Malformed trailer field lines are discarded before parsing. Trailer\n-     * fields are reported separately from response headers and are never\n-     * merged into the response. When this callback is supplied via\n-     * GuzzleHttp\\Pool's \"options\" configuration, the pool appends the\n-     * request's iterable key as a fourth argument.\n-     */\n-    public const ON_TRAILERS = 'on_trailers';\n+    // HTTP/3 arrived in libcurl 7.66.0, but CURL_HTTP_VERSION_3ONLY only\n+    // exists from 7.88.0; requiring it keeps every HTTP/3-capable runtime\n+    // able to pin HTTP/3 with no downgrade.\n+    private const HTTP_3_VERSION = '7.88.0';\n",
+      "occurrences": [
+        "src/RequestOptions.php:236-356",
+        "src/Handler/CurlVersion.php:37-64"
+      ]
     }
   ],
   "not_clear": [
@@ -2346,6 +2362,244 @@
       "occurrences": [
         "tests/Handler/CurlFactoryTest.php:7845-7848",
         "tests/Handler/CurlFactoryTest.php:8288-8291"
+      ]
+    },
+    {
+      "why": "Two adjacent two-line guard clauses of the same shape (in_array check plus sprintf'd RequestException), but checking different lists with different messages. A repeated two-line idiom within one function, not a copy.",
+      "occurrences": [
+        "src/Handler/StreamHandler.php:1149-1151",
+        "src/Handler/StreamHandler.php:1154-1156"
+      ]
+    },
+    {
+      "why": "A three-line assertStringNotContainsString idiom over the same qop/nc/cnonce literals, differing only in the asserted variable. Three-line assertion idioms stay not clear even with a single rename.",
+      "occurrences": [
+        "tests/DigestAuthIntegrationTest.php:143-145",
+        "tests/Auth/DigestAuthTest.php:75-77"
+      ]
+    },
+    {
+      "why": "Byte-identical four-line assertion list for digest nonce-count behavior, but it is an ordinary assertion sequence within the same test class. Assertion lists remain not clear even when identical.",
+      "occurrences": [
+        "tests/AuthMiddlewareTest.php:1493-1496",
+        "tests/AuthMiddlewareTest.php:1341-1344"
+      ]
+    },
+    {
+      "why": "Byte-identical two-line assertion list (assertFalse on hasHeader plus an nc=00000001 string check) that is ordinary digest-auth test scaffolding, too short to be an unarguable logic copy.",
+      "occurrences": [
+        "tests/AuthMiddlewareTest.php:1494-1495",
+        "tests/AuthMiddlewareTest.php:1735-1736"
+      ]
+    },
+    {
+      "why": "Two expectException tests whose bodies differ only in the invoked API (new Client vs Utils::chooseHandler) and a renamed test method, but the shared material is standard expect/forward parameter scaffolding around a single call. PHPUnit expectation scaffolding with parameter-array forwarding stays not clear even with matching literals.",
+      "occurrences": [
+        "tests/UtilsTest.php:174-183",
+        "tests/ClientTest.php:515-524"
+      ]
+    },
+    {
+      "why": "Ordinary assertion lists asserting different objects and values (response fields vs request fields). A difference in tested data does not lift a short assertion scaffold out of not clear.",
+      "occurrences": [
+        "tests/ClientTest.php:747-749",
+        "tests/Handler/StreamHandlerTest.php:5534-5536"
+      ]
+    },
+    {
+      "why": "Two adjacent single-line assertions in the same test differing only in the expected cookie variable and host URL. Ordinary repeated assert scaffolding, which stays not clear even with exact literal substitutions.",
+      "occurrences": [
+        "tests/Cookie/CookieJarTest.php:1222-1222",
+        "tests/Cookie/CookieJarTest.php:1223-1223"
+      ]
+    },
+    {
+      "why": "Provider rows containing the same expected cookie-field array template, differing only in the tested 'Value' ('1' vs '\"bar\"'); this is repeated test data in the natural expected-shape form, not copied logic.",
+      "occurrences": [
+        "tests/Cookie/SetCookieTest.php:735-745",
+        "tests/Cookie/SetCookieTest.php:705-715"
+      ]
+    },
+    {
+      "why": "Adjacent data-provider fixtures sharing the key schema the provider itself dictates (Name/Value/Domain/Path/Expires/...) with different cookie values. Repeated fixture structure, not copied executable logic.",
+      "occurrences": [
+        "tests/Cookie/SetCookieTest.php:764-774",
+        "tests/Cookie/SetCookieTest.php:778-788"
+      ]
+    },
+    {
+      "why": "Five byte-identical assertion lines (assertNotInstanceOf plus request/message/previous getters) closing out sibling exception tests; ordinary assertion-list scaffolding invited by the exception-hierarchy test template.",
+      "occurrences": [
+        "tests/Exception/ConnectExceptionTest.php:29-33",
+        "tests/Exception/ConnectTimeoutExceptionTest.php:30-34"
+      ]
+    },
+    {
+      "why": "These headers are not unrelated import runs: 10 of 11 lines are identical (same namespace, same GuzzleException/TransferException/Request/PSR-interface imports), differing only by NetworkException→HandlerClosedException and one added ClientExceptionInterface import. That is near-duplicate test-header scaffolding, not a plainly wrong pairing, so NOT CLEAR.",
+      "occurrences": [
+        "tests/Exception/HandlerClosedExceptionTest.php:3-13",
+        "tests/Exception/NetworkExceptionTest.php:3-13"
+      ]
+    },
+    {
+      "why": "Two boilerplate exception tests that construct with ('foo', …, 123, $prev) and assert standard exception fields, but they differ in constructor shape (request argument), the RuntimeException vs InvalidArgumentException assertion, and A's extra getRequest() statements — parallel test boilerplate, not an unarguable copy.",
+      "occurrences": [
+        "tests/Exception/InvalidArgumentExceptionTest.php:1-29",
+        "tests/Exception/TransferExceptionTest.php:1-32"
+      ]
+    },
+    {
+      "why": "Byte-identical two-line assertion pair (CURLOPT_PROXY = '' and CURLOPT_NOPROXY = '*') reused by sibling proxy-env tests. A two-line assertion idiom is not an unarguable copy, regardless of exactness.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:1923-1924",
+        "tests/Handler/CurlFactoryTest.php:1683-1684"
+      ]
+    },
+    {
+      "why": "The two adjacent tests contain byte-identical 4-line catch blocks asserting the same message and previous exception, but this is repeated arrange/call/assert scaffolding inside the same test family. Exact literal identity does not lift catch-assert-assert scaffolding to CLEARLY IN.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:4334-4337",
+        "tests/Handler/CurlFactoryTest.php:4311-4314"
+      ]
+    },
+    {
+      "why": "Byte-identical four-line catch/assert scaffold asserting the same HTTP/3 rejection; both tests exercise the same scenario and share the natural try/catch assertion idiom, which stays not clear despite the identical message.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:5497-5500",
+        "tests/Handler/CurlFactoryTest.php:5260-5263"
+      ]
+    },
+    {
+      "why": "Two assertion lines of the same shape (assertFalse on hasHeader, assertSame on getHeaderLine) but checking different headers and values on different response objects. This is a short assertion idiom on different data.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:5763-5764",
+        "tests/Handler/StreamHandlerTest.php:1433-1434"
+      ]
+    },
+    {
+      "why": "Both tests arrange a seek-throwing stream, invoke the handler and assert the resulting exception; the shared fixture and assertion pattern still leaves test-scaffolding doubt.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:6136-6177",
+        "tests/Handler/CurlFactoryTest.php:6179-6214"
+      ]
+    },
+    {
+      "why": "Two catch-block assertion lists testing different operations (factory create vs RequestFraming::bodySize) with different messages and previous-exception classes, and mismatched boundaries (one range includes the try/call lines the other lacks). Ordinary assertion scaffolding with ragged edges.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:7252-7256",
+        "tests/Handler/RequestFramingTest.php:296-303"
+      ]
+    },
+    {
+      "why": "Two catch-block assertion sequences that are largely identical but with ragged boundaries: side B additionally carries the catch line, an assertResponseInfoWasNotExposed call and the closing brace. Ordinary assertion lists with mismatched edges stay not clear.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:5444-5453",
+        "tests/Handler/CurlFactoryTest.php:7353-7365"
+      ]
+    },
+    {
+      "why": "Ten byte-identical assertion lines in two different handler tests asserting the same error contract (the 'An error was encountering while creating the response' message and TransferStats state); repeated assertion-list scaffolding dictated by the shared behavior being verified.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:5444-5453",
+        "tests/Handler/CurlFactoryTest.php:7354-7363"
+      ]
+    },
+    {
+      "why": "Two copies of the same arrange/call/assert test scaffold (fail handler closure, finish/wait try-catch, exception and stats assertion battery) with substituted property names, error constants and message strings selecting different timeout failure modes. Repeated test scaffolding with literal substitutions stays not clear even at this length.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:8940-8964",
+        "tests/Handler/CurlFactoryTest.php:9716-9740"
+      ]
+    },
+    {
+      "why": "A try/catch assertion ladder around CurlFactory::finish with systematic literal substitutions (errno constant, message string, request variable name). This is repeated arrange/assert scaffolding testing different error paths, which stays not clear.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:9717-9741",
+        "tests/Handler/CurlFactoryTest.php:8941-8965"
+      ]
+    },
+    {
+      "why": "Five byte-identical assertion lines inside a catch block verifying the same exception shape with the same 'boom while reading' literal; this is an ordinary assertion list, which stays not clear even when identical.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:9258-9262",
+        "tests/Handler/CurlFactoryTest.php:9042-9046"
+      ]
+    },
+    {
+      "why": "The repeated helpers consist of availability guards and assertions, with an additional availability helper on one side; test scaffolding leaves doubt about the whole block.",
+      "occurrences": [
+        "tests/Handler/CurlHandlerTest.php:427-462",
+        "tests/Handler/CurlMultiHandlerTest.php:4072-4120"
+      ]
+    },
+    {
+      "why": "The two adjacent close-from-on_stats tests share the flush/enqueue/tick-loop/nested-catch/finally template with a delayed→sibling rename, but the second adds a skip guard, connection-cap option, and readMultiProperty assertions to test a different queuing mechanism. Template-style test scaffolding with substantive modifications and ragged edges.",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:2493-2538",
+        "tests/Handler/CurlMultiHandlerTest.php:2540-2592"
+      ]
+    },
+    {
+      "why": "The 5 lines are byte-identical but they are an ordinary two-`assertSame` assertion list checking curl-share superglobal state — plain assertion scaffolding, which stays NOT CLEAR even with identical unusual literals.",
+      "occurrences": [
+        "tests/Handler/CurlShareHandleStateTest.php:76-80",
+        "tests/Handler/CurlShareHandleStateTest.php:456-460"
+      ]
+    },
+    {
+      "why": "A two-line assertion idiom where the first line is identical and the second differs only in the expected length literal '4' vs '3'. Short repeated assertions on different data stay not clear.",
+      "occurrences": [
+        "tests/Handler/EasyHandleTest.php:200-201",
+        "tests/Handler/EasyHandleTest.php:163-164"
+      ]
+    },
+    {
+      "why": "The same Server::flush/enqueue arrange block in one file differing only in the response body string, which is exactly the data each test exercises; repeated test-setup scaffolding.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:1010-1016",
+        "tests/Handler/StreamHandlerTest.php:53-59"
+      ]
+    },
+    {
+      "why": "A byte-identical five-line list of assertSame calls on response status/phrase/headers/body, repeated within the same test file against the same mock server fixture. Ordinary assertion-list scaffolding, not an unarguable clone.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:70-74",
+        "tests/Handler/StreamHandlerTest.php:2596-2600"
+      ]
+    },
+    {
+      "why": "Parallel sink-failure tests sharing the queueRes/FnStream::decorate/on_stats/try-catch scaffold, but the throwing closures differ ('write' with (string $data): int vs 'rewind' with (): void) and the assertion sets differ (message assertion only in A, extra not-instance and ResponseException checks in B) — adapted test scaffolding, not a verbatim copy.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:3933-3970",
+        "tests/Handler/StreamHandlerTest.php:3693-3733"
+      ]
+    },
+    {
+      "why": "Three byte-identical assertion lines (request, status 200, timeout message) repeated within the same test class for the same exception type. A short assertion-list idiom, which stays not clear.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:5364-5366",
+        "tests/Handler/StreamHandlerTest.php:5394-5396"
+      ]
+    },
+    {
+      "why": "A two-line assertSame(method)/assertSame(uri) idiom in different test files with different variables, HTTP methods, and URLs. A short assertion idiom rather than a copied region.",
+      "occurrences": [
+        "tests/RedirectMiddlewareTest.php:1165-1166",
+        "tests/Handler/StreamHandlerTest.php:876-877"
+      ]
+    },
+    {
+      "why": "A byte-identical three-line assertion idiom checking the request/URI types after a redirect, repeated within the same test class. It is ordinary assertion scaffolding, too short and idiomatic to be an unarguable copy.",
+      "occurrences": [
+        "tests/RedirectMiddlewareTest.php:354-356",
+        "tests/RedirectMiddlewareTest.php:428-430"
+      ]
+    },
+    {
+      "why": "Byte-identical 5-line run of ordinary assertions (handler callable, _curl_share_init_count, CURLSHOPT_SHARE array) that both UtilsTest checks repeat when asserting curl-share setup. This is repeated assert scaffolding, not unarguable copied logic.",
+      "occurrences": [
+        "tests/UtilsTest.php:205-209",
+        "tests/UtilsTest.php:70-74"
       ]
     }
   ]

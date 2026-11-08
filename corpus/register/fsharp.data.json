@@ -2802,6 +2802,188 @@
         "tests/FSharp.Data.Core.Tests/HtmlParser.fs:318-334",
         "tests/FSharp.Data.Core.Tests/HtmlParser.fs:282-298"
       ]
+    },
+    {
+      "why": "The overlap is the fsdocs template header (`#if FSX`/`#if IPYNB` blocks, badges, `open FSharp.Data`) that every docs script carries, while the article bodies are entirely different topics. Template boilerplate with ragged boundaries, so not a firm call either way.",
+      "occurrences": [
+        "docs/library/HtmlCssSelectors.fsx:13-48",
+        "docs/library/HtmlProvider.fsx:14-77"
+      ]
+    },
+    {
+      "why": "Two `Load` overloads whose declared ranges are just the repeated optional-parameter forwarding list (`?separators`…`?skipRows`) with only the first parameter changing (`Stream` vs `TextReader`). This is standard overload forwarding scaffolding, not a distinguishable copy.",
+      "occurrences": [
+        "src/FSharp.Data.Csv.Core/CsvFile.fs:134-142",
+        "src/FSharp.Data.Csv.Core/CsvFile.fs:104-112"
+      ]
+    },
+    {
+      "why": "The tables map the same primitive names to types, with option suffixes and Option wrappers on one side. It is unclear whether this is copied code or straightforward paired tables for the supported types.",
+      "occurrences": [
+        "src/FSharp.Data.Csv.Core/CsvInference.fs:28-35",
+        "src/FSharp.Data.Runtime.Utilities/StructuralInference.fs:439-446"
+      ]
+    },
+    {
+      "why": "Two lookup-table entries mapping \"dateonly\"/\"timeonly\" to typeof<DateOnly>/typeof<TimeOnly>, but with different TypeWrapper values (Option vs None) and different #if context in two different inference files. This is a two-line data-table idiom, too small to judge firmly.",
+      "occurrences": [
+        "src/FSharp.Data.Runtime.Utilities/StructuralInference.fs:447-450",
+        "src/FSharp.Data.Csv.Core/CsvInference.fs:39-40"
+      ]
+    },
+    {
+      "why": "Two-line slices of one ProvidedStaticParameter declaration list, differing in parameter names and defaults; the shared shape is the framework-mandated call form — a short idiom, not a demonstrable copy.",
+      "occurrences": [
+        "src/FSharp.Data.DesignTime/Json/JsonProvider.fs:180-181",
+        "src/FSharp.Data.DesignTime/Json/JsonProvider.fs:192-193"
+      ]
+    },
+    {
+      "why": "Three switch arms each from the same header-dispatch match, mapping entirely different headers; only the syntactic skeleton `| \"h\" -> req.Headers.[...] <- value` is shared — an unrelated three-line idiom.",
+      "occurrences": [
+        "src/FSharp.Data.Http/Http.fs:1756-1758",
+        "src/FSharp.Data.Http/Http.fs:1706-1708"
+      ]
+    },
+    {
+      "why": "The shared text is the repeated `EditorBrowsable`/`CompilerMessage(…,10001,…)` attribute idiom that decorates generated-code members throughout these runtimes, while the actual `ToString` and `Create` bodies and signatures differ (`Json/Path` vs `XElement`). Attribute-decoration idiom, not a firm clone or a firm non-clone.",
+      "occurrences": [
+        "src/FSharp.Data.Json.Core/JsonDocument.fs:56-72",
+        "src/FSharp.Data.Xml.Core/XmlRuntime.fs:37-52"
+      ]
+    },
+    {
+      "why": "Three-line assert runs in two different test files (CSV pass counts vs XML property names) sharing only the `|> should equal` idiom. Test assert scaffolding of this shape stays not clear.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/XmlInference.fs:120-122",
+        "tests/FSharp.Data.Core.Tests/CsvFile.fs:92-94"
+      ]
+    },
+    {
+      "why": "Two of three lines are byte-identical (`let rows = reloaded.Rows |> Seq.toArray`, `rows |> should haveLength 1`) and the third differs only in the expected array literals. This is the shared arrange/assert tail of two deliberately similar round-trip quoting tests — scaffolding, not a firm clone.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/CsvRuntimeOperations.fs:281-283",
+        "tests/FSharp.Data.Core.Tests/CsvRuntimeOperations.fs:290-292"
+      ]
+    },
+    {
+      "why": "Three `... |> should equal true` assertions in each range, but A tests `HtmlNode.hasClass` on a fragment while B tests `Map.containsKey` on parsed tables — different operations and data sharing only the assertion tail shape.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HtmlOperations.fs:50-52",
+        "tests/FSharp.Data.Core.Tests/HtmlParser.fs:596-598"
+      ]
+    },
+    {
+      "why": "Both short fragments assert that membership checks return true, using HTML classes versus schema properties. They are two/three-line testing idioms, too small for certainty.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonSchema.fs:143-145",
+        "tests/FSharp.Data.Core.Tests/HtmlOperations.fs:51-52"
+      ]
+    },
+    {
+      "why": "Two assertion tails over the same parse/getTables scaffold with the HasHeaders/Name assertions reordered and different expected rows (Column 1/1/2 vs 2/1/3). This is repeated assert scaffolding with different test data and shuffled line order.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/HtmlParser.fs:212-221",
+        "tests/FSharp.Data.Core.Tests/HtmlParser.fs:250-259"
+      ]
+    },
+    {
+      "why": "Two-line `Map.containsKey <key> <map> |> should equal true` assertions over different maps (schema properties vs parsed HTML tables) and different keys in unrelated test files. A two-line assertion idiom, not a firm clone.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonSchema.fs:144-145",
+        "tests/FSharp.Data.Core.Tests/HtmlParser.fs:597-598"
+      ]
+    },
+    {
+      "why": "The same small ITestHttpServer declaration appears on both sides, but the ranges include different surrounding import runs. The shared declaration and uneven boundaries leave the complete pair uncertain.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/Http.fs:10-19",
+        "tests/FSharp.Data.Core.Tests/XmlExtensions.fs:9-19"
+      ]
+    },
+    {
+      "why": "The 6 byte-identical lines are the ordinary arrange/call/assert body of two sibling UriResolver tests whose real difference (the UriResolver.Create setup line) sits immediately outside the extracted range; this is test scaffolding with a tuned boundary, so NOT CLEAR.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/IOTests.fs:65-70",
+        "tests/FSharp.Data.Core.Tests/IOTests.fs:75-80"
+      ]
+    },
+    {
+      "why": "Both are match-on-JsonValue test blocks asserting two elements, but the cases (`Object map` vs `Array elements`), data, failwith messages, and even boundaries (A includes the `match` line, B does not) differ. Pattern-match test scaffolding with ragged edges.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonValue.fs:765-769",
+        "tests/FSharp.Data.Core.Tests/JsonRuntime.fs:226-229"
+      ]
+    },
+    {
+      "why": "Both are the idiomatic `match .JsonValue with | JsonValue.Record props -> ... | _ -> failwith` test assertion block; only the tested property names and values differ, which is repeated scaffolding rather than an obvious copy.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonRuntime.fs:300-304",
+        "tests/FSharp.Data.Core.Tests/JsonRuntime.fs:236-240"
+      ]
+    },
+    {
+      "why": "The two lines are byte-identical (`let result = JsonSchema.validate schema value` / `result |> should equal ...Valid`), but that is the shared call-and-assert scaffolding of validate tests whose actual inputs (string vs number schema/value) differ. Exact-match test scaffolding stays NOT CLEAR.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonSchema.fs:205-206",
+        "tests/FSharp.Data.Core.Tests/JsonSchema.fs:221-222"
+      ]
+    },
+    {
+      "why": "Both are members of the same 'validate validates …' family: parse a schema, assert a valid value yields ValidationResult.Valid, then match an invalid value against Invalid _ with a failwith fallback. The surrounding context shows the whole class repeats this template (number range, required properties, null values) with different schemas, different value constructors (JsonValue.Parse vs JsonValue.String) and different messages — scaffolding the test style invites, with every specific different.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonSchema.fs:287-299",
+        "tests/FSharp.Data.Core.Tests/JsonSchema.fs:328-344"
+      ]
+    },
+    {
+      "why": "Byte-identical two-line assertion idiom (result.Contains \"\\n\" and \"  \" |> should equal true) in two serialization tests. Two lines of assertion scaffolding is too short for a firm clone verdict.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/JsonValue.fs:868-869",
+        "tests/FSharp.Data.Core.Tests/JsonValue.fs:547-548"
+      ]
+    },
+    {
+      "why": "The singularization and pluralization test blocks clearly share a word list and authorship (churches/church, classes, boys, keys, cities, heroes, houses, grouped identically), but every line differs: the function name (toSingular vs toPlural) and the operands are reversed (\"churches\" → \"church\" vs \"class\" → \"classes\"). Mirrored inverse-direction tests, not the same code copied — the argument order is swapped throughout.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/Pluralizer.fs:28-38",
+        "tests/FSharp.Data.Core.Tests/Pluralizer.fs:103-112"
+      ]
+    },
+    {
+      "why": "Both regions are the standard 'parent element with two identically-named children' fixture, differing only in the child name ('child' vs 'opt'). It is a single five-line constructor expression that any test needing this shape would produce the same way; it is as likely independent convergence on the obvious fixture as copying. A trivial fixture expression this small, in the same test file, does not support a firm verdict either way.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/XmlRuntime.fs:131-135",
+        "tests/FSharp.Data.Core.Tests/XmlRuntime.fs:191-195"
+      ]
+    },
+    {
+      "why": "Byte-identical over 5 lines, but the span is record-field scaffolding inside two branches of the same match that both construct the same Json config record: RootName/Culture are pulled from the same args positions and Encoding/ResolutionFolder/EmbeddedResource are hardcoded empty strings in both branches. The identity is largely forced by the record shape and trivial values, and the regions cut mid-record-initializer — real duplication but not an obvious copy worth a firm verdict.",
+      "occurrences": [
+        "tests/FSharp.Data.DesignTime.Tests/TypeProviderInstantiation.fs:312-316",
+        "tests/FSharp.Data.DesignTime.Tests/TypeProviderInstantiation.fs:293-297"
+      ]
+    },
+    {
+      "why": "Each side is a three-line indexed-property assertion run (`X.[i].Prop |> should equal literal`) in different test files; at this scale the shared assertion idiom dominates and the protocol bars a firm verdict.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/HtmlProvider.fs:412-414",
+        "tests/FSharp.Data.Tests/CsvProvider.fs:492-494"
+      ]
+    },
+    {
+      "why": "The inline-schema test is substantially duplicated, but the ranges continue into different provider-specific declarations and subsequent tests. Their ends include different following material, leaving ragged boundaries.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/XmlProvider.fs:1307-1346",
+        "tests/FSharp.Data.Tests/JsonProvider.fs:937-972"
+      ]
+    },
+    {
+      "why": "Two two-line assertion runs in the same test file. The second line is identical apart from the receiver name (foo.Baz vs x.Baz, both `should equal (Some 2)`), the first differs by receiver and literal (\"hello\" vs \"aa\"). That is a repeated assert idiom over the same generated Bar/Baz properties, too short and formulaic to say one was copied from the other.",
+      "occurrences": [
+        "tests/FSharp.Data.Tests/XmlProvider.fs:634-635",
+        "tests/FSharp.Data.Tests/XmlProvider.fs:671-672"
+      ]
     }
   ]
 }

@@ -449,6 +449,42 @@
         "test/unit/adapters/fetch.js:251-263",
         "test/unit/adapters/http.js:2060-2072"
       ]
+    },
+    {
+      "why": "The same named 40-line startHTTPServer routine (promise-wrapped server with buffering/throttle stream.pipeline and keepAliveTimeout) is defined separately in test/helpers/server.js and test/unit/adapters/http.js; only the declaration form and two let→var changes differ.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- test/helpers/server.js:13-52\n+++ test/unit/adapters/http.js:65-104\n@@ -1,4 +1,4 @@\n-export const startHTTPServer = (handlerOrOptions, options) => {\n+function startHTTPServer(handlerOrOptions, options) {\n \n   const {handler, useBuffering = false, rate = undefined, port = 4444, keepAlive = 1000} =\n     Object.assign(typeof handlerOrOptions === 'function' ? {\n@@ -10,13 +10,13 @@\n       try {\n         req.headers['content-length'] && res.setHeader('content-length', req.headers['content-length']);\n \n-        let dataStream = req;\n+        var dataStream = req;\n \n         if (useBuffering) {\n           dataStream = stream.Readable.from(await getStream(req));\n         }\n \n-        let streams = [dataStream];\n+        var streams = [dataStream];\n \n         if (rate) {\n           streams.push(new Throttle({rate}))\n",
+      "type": "Type III",
+      "occurrences": [
+        "test/unit/adapters/http.js:65-104",
+        "test/helpers/server.js:13-52"
+      ]
+    },
+    {
+      "why": "The download-progress test is the upload test copied whole: identical rate-limited server, async-generator stream with setTimeoutAsync(1100), sampling callback and generated expected-samples comparison, with the systematic download↔upload rename plus the added `maxRedirects: 0`.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- test/unit/adapters/fetch.js:205-264\n+++ test/unit/adapters/fetch.js:131-189\n@@ -1,4 +1,4 @@\n-      it('should support download progress capturing', async function () {\n+      it('should support upload progress capturing', async function () {\n         this.timeout(15000);\n \n         server = await startHTTPServer({\n@@ -24,22 +24,21 @@\n         const samples = [];\n \n         const {data} = await fetchAxios.post('/', readable, {\n-          onDownloadProgress: ({loaded, total, progress, bytes, download}) => {\n-            console.log(`Download Progress ${loaded} from ${total} bytes (${(progress * 100).toFixed(1)}%)`);\n+          onUploadProgress: ({loaded, total, progress, bytes, upload}) => {\n+            console.log(`Upload Progress ${loaded} from ${total} bytes (${(progress * 100).toFixed(1)}%)`);\n \n             samples.push({\n               loaded,\n               total,\n               progress,\n               bytes,\n-              download\n+              upload\n             });\n           },\n           headers: {\n             'Content-Length': contentLength\n           },\n-          responseType: 'text',\n-          maxRedirects: 0\n+          responseType: 'text'\n         });\n \n         await setTimeoutAsync(500);\n@@ -53,7 +52,7 @@\n               total: contentLength,\n               progress: (chunkLength * i) / contentLength,\n               bytes: 4,\n-              download: true\n+              upload: true\n             });\n           }\n         }()));\n",
+      "type": "Type III",
+      "occurrences": [
+        "test/unit/adapters/fetch.js:205-264",
+        "test/unit/adapters/fetch.js:131-189"
+      ]
+    },
+    {
+      "why": "The download progress test mirrors the upload test statement for statement with a systematic download↔upload rename, plus one extra maxRedirects option property on the download side — a change beyond a rename.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- test/unit/adapters/http.js:2016-2074\n+++ test/unit/adapters/http.js:1958-2014\n@@ -1,7 +1,6 @@\n-    describe('download', function () {\n-      it('should support download progress capturing', async function () {\n+    describe('upload', function () {\n+      it('should support upload progress capturing', async function () {\n         this.timeout(15000);\n-\n         server = await startHTTPServer({\n           rate: 100 * 1024\n         });\n@@ -25,21 +24,20 @@\n         const samples = [];\n \n         const {data} = await axios.post(LOCAL_SERVER_URL, readable, {\n-          onDownloadProgress: ({loaded, total, progress, bytes, download}) => {\n-            console.log('onDownloadProgress', loaded, '/', total);\n+          onUploadProgress: ({loaded, total, progress, bytes, upload}) => {\n+            console.log('onUploadProgress', loaded, '/', total);\n             samples.push({\n               loaded,\n               total,\n               progress,\n               bytes,\n-              download\n+              upload\n             });\n           },\n           headers: {\n             'Content-Length': contentLength\n           },\n-          responseType: 'text',\n-          maxRedirects: 0\n+          responseType: 'text'\n         });\n \n         assert.strictEqual(data, content);\n@@ -51,7 +49,7 @@\n               total: contentLength,\n               progress: (chunkLength * i) / contentLength,\n               bytes: 4,\n-              download: true\n+              upload: true\n             });\n           }\n         }()));\n",
+      "type": "Type III",
+      "occurrences": [
+        "test/unit/adapters/http.js:1958-2014",
+        "test/unit/adapters/http.js:2016-2074"
+      ]
+    },
+    {
+      "why": "The same stream-abort assertion block (streamError listener, pipelineAsync, assert.fail, finally check), pasted into two tests.",
+      "verified": "extracted both ranges from source/, stripped indentation, blank lines and comment-only lines, then line- and token-diffed: byte-identical over 12 code lines (raw ranges identical too)",
+      "type": "Type I",
+      "occurrences": [
+        "test/unit/adapters/http.js:2196-2209",
+        "test/unit/adapters/http.js:969-982"
+      ]
     }
   ],
   "clearly_out": [
@@ -458,6 +494,14 @@
       "occurrences": [
         "test/manual/promise.js:9-9",
         "lib/axios.js:50-60"
+      ]
+    },
+    {
+      "why": "Two TypeScript string-literal unions sharing only the `| 'x' | 'X'` declaration syntax: one lists HTTP methods, the other character encodings, with no member in common.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- index.d.ts:197-206\n+++ index.d.ts:218-227\n@@ -1,10 +1,10 @@\n-    | 'get' | 'GET'\n-    | 'delete' | 'DELETE'\n-    | 'head' | 'HEAD'\n-    | 'options' | 'OPTIONS'\n-    | 'post' | 'POST'\n-    | 'put' | 'PUT'\n-    | 'patch' | 'PATCH'\n-    | 'purge' | 'PURGE'\n-    | 'link' | 'LINK'\n-    | 'unlink' | 'UNLINK';\n+    | 'ascii' | 'ASCII'\n+    | 'ansi' | 'ANSI'\n+    | 'binary' | 'BINARY'\n+    | 'base64' | 'BASE64'\n+    | 'base64url' | 'BASE64URL'\n+    | 'hex' | 'HEX'\n+    | 'latin1' | 'LATIN1'\n+    | 'ucs-2' | 'UCS-2'\n+    | 'ucs2' | 'UCS2'\n+    | 'utf-8' | 'UTF-8'\n",
+      "occurrences": [
+        "index.d.ts:218-227",
+        "index.d.ts:197-206"
       ]
     }
   ],
@@ -1711,6 +1755,363 @@
       "occurrences": [
         "test/specs/xsrf.spec.js:86-92",
         "test/specs/xsrf.spec.js:116-122"
+      ]
+    },
+    {
+      "why": "Both helpers wrap a single git command in a try/catch. This short command-wrapper idiom remains uncertain.",
+      "occurrences": [
+        "bin/GithubAPI.js:102-107",
+        "bin/contributors.js:229-234"
+      ]
+    },
+    {
+      "why": "Module-import checks consisting of a require, a destructure, and a list of typeof assertions, with B checking several extra exports. Loading a sample and asserting types is scaffolding even where the first assertions match.",
+      "occurrences": [
+        "test/module/cjs/index.js:1-11",
+        "test/module/ts-require/index.js:3-9"
+      ]
+    },
+    {
+      "why": "Five lines of require/destructure boilerplate for module smoke tests, differing in statement order, a \"use strict\" directive, blank lines and the destructured export list. This is the common import idiom, not a firm call either way.",
+      "occurrences": [
+        "test/module/cjs/index.js:1-6",
+        "test/module/ts-require/index.js:1-5"
+      ]
+    },
+    {
+      "why": "Five identical typeof-assertion lines repeated across two module smoke-test files. Ordinary assertion lists remain not clear even when byte-identical.",
+      "occurrences": [
+        "test/module/ts-require-default/index.ts:10-14",
+        "test/module/ts/index.ts:9-13"
+      ]
+    },
+    {
+      "why": "A four-line byte-identical run of typeof-function assertions repeated across the two module test files. It is an ordinary assertion list, which stays not clear even byte-identical.",
+      "occurrences": [
+        "test/module/ts-require-default/index.ts:15-18",
+        "test/module/ts/index.ts:14-17"
+      ]
+    },
+    {
+      "why": "A three-line run of typeof assertions on axios namespace exports, byte-identical across two module test files. A three-line assertion idiom stays not clear.",
+      "occurrences": [
+        "test/module/ts-require-default/index.ts:19-21",
+        "test/module/ts/index.ts:18-20"
+      ]
+    },
+    {
+      "why": "Byte-identical six-line typeof assertion list across the two require-variant files. Ordinary assertion lists remain not clear even when exactly repeated.",
+      "occurrences": [
+        "test/module/ts-require-default/index.ts:5-10",
+        "test/module/ts-require/index.ts:5-10"
+      ]
+    },
+    {
+      "why": "Byte-identical run of typeof assertion lines, but this is an ordinary assertion list checking exported names, which is exactly the scaffolding idiom these module tests consist of. Identical assertion scaffolding across the two require-variant test files stays not clear.",
+      "occurrences": [
+        "test/module/ts-require-default/index.ts:7-11",
+        "test/module/ts-require/index.ts:7-11"
+      ]
+    },
+    {
+      "why": "Byte-identical run of three 'typeof axios.X === function' assertions shared by the module smoke-test twins. Ordinary three-line assertion idiom, not an unarguable logic copy.",
+      "occurrences": [
+        "test/module/ts-require/index.ts:22-24",
+        "test/module/ts/index.ts:21-23"
+      ]
+    },
+    {
+      "why": "Five byte-identical typeof assertion lines forming the same module smoke-test run; ordinary assertion lists stay NOT CLEAR.",
+      "occurrences": [
+        "test/module/ts-require/index.ts:8-12",
+        "test/module/ts/index.ts:7-11"
+      ]
+    },
+    {
+      "why": "Invocation-chain typings scaffold with a ragged start edge — the esm range carries an extra post block that sits outside the cjs range — plus a genuine receiver change (axios.create(config) vs instance1.create(config)).",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:214-244",
+        "test/module/typings/cjs/index.ts:195-221"
+      ]
+    },
+    {
+      "why": "The ranges repeat typing-test API calls, field assignments and promise handlers. This is routine test scaffolding, so the repeated sequence remains uncertain.",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:281-318",
+        "test/module/typings/cjs/index.ts:258-289"
+      ]
+    },
+    {
+      "why": "The interceptor register/eject block is identical except for comment text ('AxiosRequestConfig' vs 'axios.AxiosRequestConfig'), but the declared ranges are misaligned: A ends two lines later with a blank and an extra response.use statement that sits outside B's range. A real clone with a ragged end boundary, recorded not clear.",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:342-355",
+        "test/module/typings/cjs/index.ts:313-324"
+      ]
+    },
+    {
+      "why": "The overlap is a two-element Promise.resolve array and the two-line spread idiom; one side wraps it in an IIFE calling all() while the other is top-level axios.all(). Trivial literal idiom with structurally different surrounding roles and ragged boundaries.",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:387-399",
+        "test/module/typings/cjs/index.ts:349-359"
+      ]
+    },
+    {
+      "why": "Seven lines of chained-promise typings exercises whose only differences are added `: any` annotations; a short, ordinary typings scaffold rather than unarguable logic.",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:379-385",
+        "test/module/typings/esm/index.ts:425-431"
+      ]
+    },
+    {
+      "why": "Seven lines of per-method axios.post(...).then(handleResponse).catch(handleError) invocation chains mirrored between the cjs and esm typings tests; this is parameter-forwarding scaffolding the typings tests invite.",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:115-121",
+        "test/module/typings/cjs/index.ts:92-98"
+      ]
+    },
+    {
+      "why": "The adapter/Promise/XHR body is identical apart from toBe(true) vs toBe(false), but the declared ranges are ragged: B includes the it-header and asyncFlag declaration while A starts after the interceptor setup and both end at different closing lines. Real shared scaffolding with mismatched edges stays not clear.",
+      "occurrences": [
+        "test/specs/adapter.spec.js:72-95",
+        "test/specs/adapter.spec.js:36-62"
+      ]
+    },
+    {
+      "why": "The ranges share only the `expect(typeof x).toEqual(y)` assertion shape; one tests merge immutability and the other promise helpers. A difference in tested API does not make a short assertion scaffold clearly out.",
+      "occurrences": [
+        "test/specs/utils/merge.spec.js:11-14",
+        "test/specs/api.spec.js:17-18"
+      ]
+    },
+    {
+      "why": "Two assertion-list tests checking typeof for static vs instance API methods, differing by the axios/instance prefix, test name, and a swap of the options/head lines. Ordinary repeated assertion scaffolding, not an unarguable logic copy.",
+      "occurrences": [
+        "test/specs/api.spec.js:3-12",
+        "test/specs/api.spec.js:66-75"
+      ]
+    },
+    {
+      "why": "Parallel cancel-token tests whose shared range differs only by the '/foo' vs '/foo/bar' URL literal. This is deliberately mirrored arrange/call/assert test scaffolding with an exact literal substitution, which stays not clear.",
+      "occurrences": [
+        "test/specs/cancel.spec.js:20-26",
+        "test/specs/cancel.spec.js:33-39"
+      ]
+    },
+    {
+      "why": "An ordinary five-expect assertion list on error fields (config, code, request, response, isAxiosError), differing only by the error/axiosError rename and indentation. Assertion lists remain not clear even when the literals match exactly.",
+      "occurrences": [
+        "test/specs/core/AxiosError.spec.js:39-43",
+        "test/specs/core/AxiosError.spec.js:10-14"
+      ]
+    },
+    {
+      "why": "Two ordinary assertion lists testing different helpers (buildFullPath vs combineURLs) with different literal URLs and titles. Per protocol, assertion-list scaffolds testing different APIs/data stay NOT CLEAR.",
+      "occurrences": [
+        "test/specs/helpers/combineURLs.spec.js:8-14",
+        "test/specs/core/buildFullPath.spec.js:4-10"
+      ]
+    },
+    {
+      "why": "A four-line Jasmine assertion run (reject called, extracting reason via calls.first().args[0], instanceof Error, message check) that differs only in indentation. Ordinary assertion lists stay NOT CLEAR even when the literals match.",
+      "occurrences": [
+        "test/specs/requests.spec.js:175-178",
+        "test/specs/core/settle.spec.js:65-68"
+      ]
+    },
+    {
+      "why": "Three ordinary assertion lines checking an error object, with the third line testing a different property (reason.config vs reason.config.method). Assertion-list scaffolding stays NOT CLEAR even when the tested data differs.",
+      "occurrences": [
+        "test/specs/core/settle.spec.js:67-69",
+        "test/specs/requests.spec.js:177-179"
+      ]
+    },
+    {
+      "why": "The two test blocks share only the Jasmine it/getAjaxRequest/done scaffold while testing different behavior (baseURL resolution vs delete data and plain URL). Scaffold shape alone is not a copied-logic verdict.",
+      "occurrences": [
+        "test/specs/defaults.spec.js:73-93",
+        "test/specs/requests.spec.js:46-64"
+      ]
+    },
+    {
+      "why": "Both tests set a cookie, fire a request, and assert the XSRF header, but B adds an axios.create block and uses different values/instance. Repeated arrange/call/assert scaffolding with literal substitutions is not clear.",
+      "occurrences": [
+        "test/specs/xsrf.spec.js:22-31",
+        "test/specs/defaults.spec.js:95-108"
+      ]
+    },
+    {
+      "why": "Two cookie tests sharing only the write/assert scaffold with different values and test names. Ordinary assertion scaffolding stays not clear even though the tested data differs.",
+      "occurrences": [
+        "test/specs/helpers/cookies.spec.js:32-35",
+        "test/specs/helpers/cookies.spec.js:14-17"
+      ]
+    },
+    {
+      "why": "Both tests build the same data literal {'obj{}': {x: 1, y: 2}} and differ only in the test name, the toFormData options argument ({metaTokens: false} vs none), and the getAll key ('obj' vs 'obj{}'). A load-invoke-assert test with literal substitutions stays not clear.",
+      "occurrences": [
+        "test/specs/helpers/toFormData.spec.js:19-30",
+        "test/specs/helpers/toFormData.spec.js:113-124"
+      ]
+    },
+    {
+      "why": "Both are jasmine async-test scaffolds (capture response, getAjaxRequest, respondWith, setTimeout, done) but the request setup, respondWith payload and all assertions differ. Repeated arrange/call/assert scaffolding stays not clear.",
+      "occurrences": [
+        "test/specs/transform.spec.js:25-44",
+        "test/specs/instance.spec.js:108-123"
+      ]
+    },
+    {
+      "why": "Five-line interceptor registration scaffold differing in the header property, its literal value, and the opposite asyncFlag expectation (false vs true). The tested behavior differs, and this is framework setup scaffolding.",
+      "occurrences": [
+        "test/specs/interceptors.spec.js:71-75",
+        "test/specs/interceptors.spec.js:139-143"
+      ]
+    },
+    {
+      "why": "Both ranges are the standard invoke-request-then-assert-two-fields-and-done test scaffold; only the assertion order and the method/url literals differ. That is a difference in tested data, not an unarguable logic copy.",
+      "occurrences": [
+        "test/specs/interceptors.spec.js:178-184",
+        "test/specs/requests.spec.js:11-17"
+      ]
+    },
+    {
+      "why": "A five-line interceptor registration scaffold whose only differences are string literals and the synchronous flag value. Repeated test arrange/assert scaffolding stays not clear despite the literal substitutions.",
+      "occurrences": [
+        "test/specs/interceptors.spec.js:48-52",
+        "test/specs/interceptors.spec.js:31-35"
+      ]
+    },
+    {
+      "why": "Minimal request-then-assert tests sharing only `axios('/foo')` plus the getAjaxRequest/done scaffold, with different asserted fields (url vs method) and test names. Short arrange/call/assert scaffolding with a data difference stays not clear.",
+      "occurrences": [
+        "test/specs/options.spec.js:13-20",
+        "test/specs/requests.spec.js:57-64"
+      ]
+    },
+    {
+      "why": "The ranges are the framework-mandated jasmine afterEach uninstall plus a minimal request test that differs in test name and drops one url assertion. Shared test scaffolding with differing content and ragged boundaries.",
+      "occurrences": [
+        "test/specs/requests.spec.js:6-18",
+        "test/specs/options.spec.js:9-20"
+      ]
+    },
+    {
+      "why": "Seven lines of createSpy / axios.create / instance.get arrangement where the only difference is the onDownloadProgress versus onUploadProgress option name. This is repeated parameter-forwarding test scaffolding with a single renamed option, not an unarguable copy.",
+      "occurrences": [
+        "test/specs/progress.spec.js:75-81",
+        "test/specs/progress.spec.js:56-62"
+      ]
+    },
+    {
+      "why": "The resolveSpy/rejectSpy/finish pattern is the repeated rejection-test idiom in this file (a third instance is visible at line 163), and the tests diverge in real statements: B adds jasmine.Ajax uninstall/install, A adds the getAjaxRequest().then(request.abort()) block, plus a different URL. Ragged scaffolding with edges that do not line up.",
+      "occurrences": [
+        "test/specs/requests.spec.js:138-161",
+        "test/specs/requests.spec.js:111-136"
+      ]
+    },
+    {
+      "why": "Byte-identical, but the range is an ordinary assertion list (getAjaxRequest plus three expects on the Int8Array output and done). Assertion-list scaffolding stays not clear even when identical.",
+      "occurrences": [
+        "test/specs/requests.spec.js:415-421",
+        "test/specs/requests.spec.js:431-437"
+      ]
+    },
+    {
+      "why": "Promise-rejection scaffolding (fail, two expects, done) repeated between two timeout tests in the same file; the diff shows only indentation and the err.code literal (ECONNABORTED vs ETIMEDOUT), which is tested data. Repeated test arrange/call/assert scaffolding stays not clear even with exact literal substitutions.",
+      "occurrences": [
+        "test/specs/requests.spec.js:79-85",
+        "test/specs/requests.spec.js:98-104"
+      ]
+    },
+    {
+      "why": "The identical four-line getAjaxRequest/expect/done assertion tail repeated across xsrf tests. Standard test assertion scaffolding, regardless of the identical bytes.",
+      "occurrences": [
+        "test/specs/xsrf.spec.js:94-97",
+        "test/specs/xsrf.spec.js:140-143"
+      ]
+    },
+    {
+      "why": "Two four-line adapter-status tests differing in test name, the null/false assignment literal, and the error-message regex. Short arrange/assert scaffolding with literal substitutions stays not clear.",
+      "occurrences": [
+        "test/unit/adapters/adapters.js:32-35",
+        "test/unit/adapters/adapters.js:27-30"
+      ]
+    },
+    {
+      "why": "The declared ranges are only the setup preamble (this.timeout(15000), startHTTPServer({rate: 100 * 1024}), chunk/content constants) in the fetch.js and http.js progress tests, identical apart from one blank line. That is repeated test arrangement scaffolding; the ranges exclude the actual test logic.",
+      "occurrences": [
+        "test/unit/adapters/fetch.js:132-142",
+        "test/unit/adapters/http.js:1960-1969"
+      ]
+    },
+    {
+      "why": "The shared material is a two-line base64-auth assertion idiom, but A is just those 2 lines while B wraps them inside a callback-based axios.get().then() chain. Shared core with mismatched neighboring code at both edges is not clear.",
+      "occurrences": [
+        "test/unit/adapters/http.js:719-723",
+        "test/unit/adapters/fetch.js:275-276"
+      ]
+    },
+    {
+      "why": "Sibling no_proxy tests sharing the 6-line env-set, axios.get, assert, done scaffold, differing only in the no_proxy string literal and the expected data/message strings. Repeated env-setup test scaffolding with different tested data.",
+      "occurrences": [
+        "test/unit/adapters/http.js:1270-1275",
+        "test/unit/adapters/http.js:1307-1312"
+      ]
+    },
+    {
+      "why": "Same proxy-auth request/assertion scaffold, but the second copy adds a Proxy-Authorization headers block — a differing tested configuration inside ordinary test scaffolding. Not an unarguable logic copy.",
+      "occurrences": [
+        "test/unit/adapters/http.js:1341-1356",
+        "test/unit/adapters/http.js:1420-1438"
+      ]
+    },
+    {
+      "why": "These neighboring table rows share configuration structure and values but have offset boundaries. This is related test data with a ragged boundary, not certainly unrelated code.",
+      "occurrences": [
+        "test/unit/adapters/http.js:1449-1453",
+        "test/unit/adapters/http.js:1445-1449"
+      ]
+    },
+    {
+      "why": "The two timeout tests are byte-identical except timeout: '250' vs timeout: 250, and the ranges are ragged (the 'it(' header line sits inside only one range). Test scaffolding with one literal change and a boundary mismatch.",
+      "occurrences": [
+        "test/unit/adapters/http.js:231-255",
+        "test/unit/adapters/http.js:258-285"
+      ]
+    },
+    {
+      "why": "Both use the file's recurring success/failure/error-flag idiom with delayed asserts, but the tested option (maxContentLength vs timeout), error assertions, and timer values differ.",
+      "occurrences": [
+        "test/unit/adapters/http.js:235-255",
+        "test/unit/adapters/http.js:804-822"
+      ]
+    },
+    {
+      "why": "Five-line createServer/setHeader/setHeader/end/listen block is the standard test-server idiom repeated throughout this file; the differing Content-Type literal just tracks each test's data (html vs json), so this is ordinary arrange scaffolding, not unarguable logic.",
+      "occurrences": [
+        "test/unit/adapters/http.js:605-609",
+        "test/unit/adapters/http.js:576-580"
+      ]
+    },
+    {
+      "why": "Two AxiosHeaders delete-filter tests identical except the test name and the matcher literals changing from strings to regexes ('baz'→/baz=/, 'bar'→/bar=/). This is a short arrange/call/assert test scaffold with literal substitutions.",
+      "occurrences": [
+        "test/unit/core/AxiosHeaders.js:262-276",
+        "test/unit/core/AxiosHeaders.js:228-242"
+      ]
+    },
+    {
+      "why": "A byte-identical five-line arrange/assert preamble (new AxiosHeaders, set 'foo', has check) reused by sibling filter tests that then diverge on the delete argument. Repeated test scaffolding, not an unarguable clone.",
+      "occurrences": [
+        "test/unit/core/AxiosHeaders.js:263-267",
+        "test/unit/core/AxiosHeaders.js:229-233"
+      ]
+    },
+    {
+      "why": "Three executable statements of test arrangement (axios.create with the port constant, payload assignment) plus explanatory comments; identical because both SSRF tests drive the same payload — ordinary setup scaffolding with no logic to copy.",
+      "occurrences": [
+        "test/unit/regression/SNYK-JS-AXIOS-7361793.js:66-72",
+        "test/unit/regression/SNYK-JS-AXIOS-7361793.js:33-39"
       ]
     }
   ]

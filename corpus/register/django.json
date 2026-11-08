@@ -233,6 +233,14 @@
         "tests/custom_lookups/tests.py:656-657",
         "tests/admin_views/tests.py:827-828"
       ]
+    },
+    {
+      "why": "The diff is a complete replacement — collectstatic's --noinput/--ignore/--clear/--link options versus the runner's --tag/--pdb/--timing/-k options, with every flag, dest and help string differing; only the argparse add_argument skeleton is shared.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- django/contrib/staticfiles/management/commands/collectstatic.py:40-90\n+++ tests/runtests.py:644-688\n@@ -1,51 +1,45 @@\n-        parser.add_argument(\n-            \"--noinput\",\n-            \"--no-input\",\n-            action=\"store_false\",\n-            dest=\"interactive\",\n-            help=\"Do NOT prompt the user for input of any kind.\",\n-        )\n-        parser.add_argument(\n-            \"--no-post-process\",\n-            action=\"store_false\",\n-            dest=\"post_process\",\n-            help=\"Do NOT post process collected files.\",\n-        )\n-        parser.add_argument(\n-            \"-i\",\n-            \"--ignore\",\n-            action=\"append\",\n-            default=[],\n-            dest=\"ignore_patterns\",\n-            metavar=\"PATTERN\",\n-            help=\"Ignore files or directories matching this glob-style \"\n-            \"pattern. Use multiple times to ignore more.\",\n-        )\n-        parser.add_argument(\n-            \"-n\",\n-            \"--dry-run\",\n-            action=\"store_true\",\n-            help=\"Do everything except modify the filesystem.\",\n-        )\n-        parser.add_argument(\n-            \"-c\",\n-            \"--clear\",\n-            action=\"store_true\",\n-            help=\"Clear the existing files using the storage \"\n-            \"before trying to copy or link the original file.\",\n-        )\n-        parser.add_argument(\n-            \"-l\",\n-            \"--link\",\n-            action=\"store_true\",\n-            help=\"Create a symbolic link to each file instead of copying.\",\n-        )\n-        parser.add_argument(\n-            \"--no-default-ignore\",\n-            action=\"store_false\",\n-            dest=\"use_default_ignore_patterns\",\n-            help=(\n-                \"Don't ignore the common private glob-style patterns (defaults to \"\n-                \"'CVS', '.*' and '*~').\"\n-            ),\n-        )\n+    parser.add_argument(\n+        \"--tag\",\n+        dest=\"tags\",\n+        action=\"append\",\n+        help=\"Run only tests with the specified tags. Can be used multiple times.\",\n+    )\n+    parser.add_argument(\n+        \"--exclude-tag\",\n+        dest=\"exclude_tags\",\n+        action=\"append\",\n+        help=\"Do not run tests with the specified tag. Can be used multiple times.\",\n+    )\n+    parser.add_argument(\n+        \"--start-after\",\n+        dest=\"start_after\",\n+        help=\"Run tests starting after the specified top-level module.\",\n+    )\n+    parser.add_argument(\n+        \"--start-at\",\n+        dest=\"start_at\",\n+        help=\"Run tests starting at the specified top-level module.\",\n+    )\n+    parser.add_argument(\n+        \"--pdb\", action=\"store_true\", help=\"Runs the PDB debugger on error or failure.\"\n+    )\n+    parser.add_argument(\n+        \"-b\",\n+        \"--buffer\",\n+        action=\"store_true\",\n+        help=\"Discard output of passing tests.\",\n+    )\n+    parser.add_argument(\n+        \"--timing\",\n+        action=\"store_true\",\n+        help=\"Output timings, including database set up and total run time.\",\n+    )\n+    parser.add_argument(\n+        \"-k\",\n+        dest=\"test_name_patterns\",\n+        action=\"append\",\n+        help=(\n+            \"Only run test methods and classes matching test name pattern. \"\n+            \"Same as unittest -k option. Can be used multiple times.\"\n+        ),\n+    )\n",
+      "occurrences": [
+        "django/contrib/staticfiles/management/commands/collectstatic.py:40-90",
+        "tests/runtests.py:644-688"
+      ]
     }
   ],
   "not_clear": [
@@ -1641,6 +1649,174 @@
       "occurrences": [
         "tests/gis_tests/gdal_tests/test_geom.py:391-392",
         "tests/gis_tests/gdal_tests/test_geom.py:434-435"
+      ]
+    },
+    {
+      "why": "A byte-identical three-line assertion block (302 status, Widget count 1, name \"Widget 1\") repeated within one admin inline test. Assertion-list scaffolding stays not clear even when exactly identical.",
+      "occurrences": [
+        "tests/admin_views/tests.py:5397-5399",
+        "tests/admin_views/tests.py:5379-5381"
+      ]
+    },
+    {
+      "why": "A byte-identical three-line status_code/objects.count()/name assertion list repeated after two successive client.post calls in the same test. This is ordinary assertion scaffolding, not an unarguable logic copy.",
+      "occurrences": [
+        "tests/admin_views/tests.py:5503-5505",
+        "tests/admin_views/tests.py:5490-5492"
+      ]
+    },
+    {
+      "why": "The only shared structure is the Model.objects.create(...) arrangement for unrelated models with unrelated fields (Car make/model vs Permission codename/name). This two-call ORM setup idiom is too small and generic to be unarguable either way.",
+      "occurrences": [
+        "tests/auth_tests/test_migrations.py:200-209",
+        "tests/admin_widgets/tests.py:62-63"
+      ]
+    },
+    {
+      "why": "The test bodies are identical apart from the systematic text→slug rename in the update kwarg and attrgetter, including the identical expected-result list. But the test is only invoke-update-and-assert-fields scaffolding, which stays NOT CLEAR even with identical literals and a renamed field.",
+      "occurrences": [
+        "tests/expressions_case/tests.py:1161-1172",
+        "tests/expressions_case/tests.py:1121-1132"
+      ]
+    },
+    {
+      "why": "The changed/separator test groups are obvious systematic-rename parallels (DecimalField→FloatField, decimal.Decimal(\"1001.10\")→1001.10, identical input strings \"1001,10\"/\"1.001,10\"), but the declared ranges are offset: B opens with test_floatfield_localized, which has no counterpart inside A's range. Real copied material with a mismatched top edge.",
+      "occurrences": [
+        "tests/forms_tests/field_tests/test_floatfield.py:107-143",
+        "tests/forms_tests/field_tests/test_decimalfield.py:206-235"
+      ]
+    },
+    {
+      "why": "Both ranges run the same three-assert scaffold (as_table, as_ul, render(template_name_div)) but the asserted HTML is wholly different: password-match errors with username/password fields versus name/radio-button widgets. Ordinary assertion lists testing different data remain not clear rather than clearly out.",
+      "occurrences": [
+        "tests/forms_tests/tests/test_forms.py:1570-1604",
+        "tests/forms_tests/tests/test_forms.py:794-818"
+      ]
+    },
+    {
+      "why": "Both blocks chain assertHTMLEqual over as_ul/as_p/as_table/as_div, but the asserted HTML, forms, and tested behavior (help text vs hidden-field errors) are entirely different. The shared four-renderer check is the framework's testing idiom.",
+      "occurrences": [
+        "tests/forms_tests/tests/test_forms.py:4355-4388",
+        "tests/forms_tests/tests/test_forms.py:2945-2975"
+      ]
+    },
+    {
+      "why": "Both ranges run the same three assertHTMLEqual calls (str(f['language']), as_table, as_ul), but the HTML string literals differ substantially (auto_id ids, label for attributes, indentation) and side B adds a comment block. Assertion scaffolding with heavily changed literals and ragged boundaries.",
+      "occurrences": [
+        "tests/forms_tests/tests/test_forms.py:787-809",
+        "tests/forms_tests/tests/test_forms.py:824-869"
+      ]
+    },
+    {
+      "why": "The select and checkbox widget tests share the check_html call shape and the identical test_render_none docstring, but the substance — the expected <select> vs checkbox <div> HTML strings — differs entirely. Scaffold-level commonality around different tested output.",
+      "occurrences": [
+        "tests/forms_tests/widget_tests/test_selectmultiple.py:31-64",
+        "tests/forms_tests/widget_tests/test_checkboxselectmultiple.py:32-74"
+      ]
+    },
+    {
+      "why": "test_earliest and test_latest are parallel arrange/call/assert tests (create four articles, call earliest()/latest(), assert results) with a systematic rename and changed dates/expected values. This is systematically renamed test scaffolding, which stays not clear.",
+      "occurrences": [
+        "tests/get_earliest_or_latest/tests.py:22-96",
+        "tests/get_earliest_or_latest/tests.py:103-177"
+      ]
+    },
+    {
+      "why": "Byte-identical three-line status/content-language/LANGUAGE_CODE assertions shared by test_nl_path and test_nl_url. A three-line assertion idiom stays not clear even when exactly duplicated.",
+      "occurrences": [
+        "tests/i18n/patterns/tests.py:439-441",
+        "tests/i18n/patterns/tests.py:413-415"
+      ]
+    },
+    {
+      "why": "Test assertion scaffolding asserting migration counts, operation types and attributes for different operations (AlterModelManagers vs CreateModel, pony vs Pony), with one shared assertion listing the same manager names. Repeated assertion lists with differing expected values stay not clear.",
+      "occurrences": [
+        "tests/migrations/test_autodetector.py:4366-4372",
+        "tests/migrations/test_autodetector.py:1277-1283"
+      ]
+    },
+    {
+      "why": "The range is a model-field fixture list, with only the target-field variable changed. This repeated test-data scaffold remains uncertain.",
+      "occurrences": [
+        "tests/migrations/test_autodetector.py:1755-1768",
+        "tests/migrations/test_autodetector.py:1786-1799"
+      ]
+    },
+    {
+      "why": "Both spans are the standard autodetector assertion run (assertNumberMigrations, assertOperationTypes, three assertOperationAttributes) with different operation lists ([\"CreateModel\",\"RemoveField\",\"AddField\"] vs two CreateModels) and different name attributes. Repeated assertion scaffolding.",
+      "occurrences": [
+        "tests/migrations/test_autodetector.py:2395-2401",
+        "tests/migrations/test_autodetector.py:3823-3829"
+      ]
+    },
+    {
+      "why": "The exact range is a repeated model-field fixture list. This test-data scaffold remains uncertain.",
+      "occurrences": [
+        "tests/migrations/test_autodetector.py:364-372",
+        "tests/migrations/test_autodetector.py:351-359"
+      ]
+    },
+    {
+      "why": "Three-line deconstruction assertion scaffold differing only in the operation-name literal (AddField vs AlterField). Repeated arrange/assert scaffolding with a literal substitution stays NOT CLEAR.",
+      "occurrences": [
+        "tests/migrations/test_operations.py:2264-2266",
+        "tests/migrations/test_operations.py:1461-1463"
+      ]
+    },
+    {
+      "why": "Both ranges are runs of assertEqual(list(Book.objects.using(...).filter(...)...), []) blocks that differ in database alias and author name — ordinary repeated assertion scaffolding over different tested data. Assertion lists like these stay not_clear even when the data differs.",
+      "occurrences": [
+        "tests/multiple_database/tests.py:189-205",
+        "tests/multiple_database/tests.py:291-306"
+      ]
+    },
+    {
+      "why": "Two queryset-assertion blocks differing in the database alias ('default' vs 'other') and the author literal ('Mark Pilgrim' vs 'Jane Brown'). Repeated assertion scaffolding with different tested data stays NOT CLEAR.",
+      "occurrences": [
+        "tests/multiple_database/tests.py:310-325",
+        "tests/multiple_database/tests.py:198-213"
+      ]
+    },
+    {
+      "why": "Four assertEqual blocks probing default/other databases line up one-for-one, but every difference is the tested model, field and data (Person/edited__title vs User/userprofile__flavor). This is repeated assertion-list scaffolding with substituted test data.",
+      "occurrences": [
+        "tests/multiple_database/tests.py:810-845",
+        "tests/multiple_database/tests.py:560-595"
+      ]
+    },
+    {
+      "why": "The PackageNullFK block repeats the Event block's query sequence with a model rename and changed count literals (2→3, exclude 1→2), but both ranges are pure test assertion scaffolding with mid-test boundaries and adapted expected data. Not an unarguable logic copy.",
+      "occurrences": [
+        "tests/nested_foreign_keys/tests.py:50-66",
+        "tests/nested_foreign_keys/tests.py:145-169"
+      ]
+    },
+    {
+      "why": "A byte-identical two-line assertSequenceEqual/join-count idiom reused in adjacent ticket tests running the same item__tags__parent__isnull query. Two-line idioms stay not clear.",
+      "occurrences": [
+        "tests/queries/tests.py:1218-1219",
+        "tests/queries/tests.py:1185-1186"
+      ]
+    },
+    {
+      "why": "Both ranges assert get_column_collation(...) == ci_collation, but they check different models/columns (CiCharModel 'field' vs RelationModel 'field_id') and assert uniques on different tables. Ordinary assertion scaffolding in sibling collation tests.",
+      "occurrences": [
+        "tests/schema/tests.py:1586-1590",
+        "tests/schema/tests.py:1516-1520"
+      ]
+    },
+    {
+      "why": "The ranges are two- and three-line path() registration fragments sharing only the framework call shape; two- and three-line idioms stay NOT CLEAR even though every route and view differs.",
+      "occurrences": [
+        "tests/test_client/urls.py:9-10",
+        "tests/view_tests/urls.py:27-29"
+      ]
+    },
+    {
+      "why": "The methods consist of a shared validation-error fixture and equality/inequality assertions. This ordinary test scaffold remains uncertain.",
+      "occurrences": [
+        "tests/test_exceptions/test_validation_error.py:137-179",
+        "tests/test_exceptions/test_validation_error.py:321-369"
       ]
     }
   ]

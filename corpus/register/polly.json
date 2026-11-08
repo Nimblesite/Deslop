@@ -2121,6 +2121,104 @@
         "src/Polly.Shared/Retry/RetryTResultSyntaxAsync.cs:804-816",
         "src/Polly.Shared/Retry/RetryTResultSyntaxAsync.cs:167-179"
       ]
+    },
+    {
+      "why": "A two-line attribute-plus-signature fragment of forwarding overloads (generic vs non-generic), with the identical body not even inside the declared ranges. Two-line idiom.",
+      "occurrences": [
+        "src/Polly.Shared/PolicyAsync.cs:1059-1060",
+        "src/Polly.Shared/PolicyAsync.TResult.cs:507-508"
+      ]
+    },
+    {
+      "why": "Three-line generic twin of a doNothing/return-forwarding method tail. Too small and purely forwarding to be unarguable.",
+      "occurrences": [
+        "src/Polly.Shared/Timeout/TimeoutSyntax.cs:80-82",
+        "src/Polly.Shared/Timeout/TimeoutTResultSyntax.cs:81-83"
+      ]
+    },
+    {
+      "why": "Four lines of test arrange (objectToCache, key, provider construction) with only For→AsyncFor and the provider type name changed. Sync/async test arrange scaffolding.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Caching/SerializingCacheProviderSpecs.cs:97-100",
+        "src/Polly.SharedSpecs/Caching/SerializingCacheProviderAsyncSpecs.cs:99-102"
+      ]
+    },
+    {
+      "why": "The shorter test reuses the standard circuit-breaker scenario skeleton (clock freeze, breaker config, four raises, half-open, reset) with the delegate-tracking statements added/removed. That skeleton is the file's pervasive test idiom, so the copy is not unarguable.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:2073-2129",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:1420-1463"
+      ]
+    },
+    {
+      "why": "Ordinary five-line assertion list on contextData differing only in 'typeof (' spacing between the sync and async tests.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackAsyncSpecs.cs:376-380",
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:833-837"
+      ]
+    },
+    {
+      "why": "Three byte-identical arrange lines (contextData declaration plus the fallbackActionAsync lambda). Three-line idiom, not real-length copied logic.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackTResultAsyncSpecs.cs:443-445",
+        "src/Polly.SharedSpecs/Fallback/FallbackTResultAsyncSpecs.cs:466-468"
+      ]
+    },
+    {
+      "why": "Three-line sync/async execute-and-assert test tails differing in await, delegate body and returned value. Short test scaffold.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/PolicyTResultSpecs.cs:231-233",
+        "src/Polly.SharedSpecs/PolicyAsyncSpecs.cs:337-339"
+      ]
+    },
+    {
+      "why": "The five lines are byte-identical but are plain assert/call/assert test scaffolding around a context-value check, which stays not clear even with exact literals.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/RetrySpecs.cs:334-338",
+        "src/Polly.SharedSpecs/Retry/RetryForeverSpecs.cs:229-233"
+      ]
+    },
+    {
+      "why": "The same raise-result-and-assert block appears twice within one test differing only in the new_value/original_value string literals; assertion scaffolding.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/RetryTResultSpecs.cs:338-343",
+        "src/Polly.SharedSpecs/Retry/RetryTResultSpecs.cs:331-336"
+      ]
+    },
+    {
+      "why": "Same-file arrange/call/assert scaffold repeated inside one test, differing only in the 'original_value'/'new_value' string literals. Exact literal substitution in a short test scaffold stays not clear.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/RetryTResultSpecs.cs:362-367",
+        "src/Polly.SharedSpecs/Retry/RetryTResultSpecs.cs:355-360"
+      ]
+    },
+    {
+      "why": "The shared exception-predicate tests match modulo WaitAndRetryAsync/Awaiting vs WaitAndRetry/Invoking, but the ranges are ragged: region B contains an extra complete sync variant absent from A. Shared scaffolding with mismatched boundaries.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/WaitAndRetrySpecs.cs:257-295",
+        "src/Polly.SharedSpecs/Retry/WaitAndRetryAsyncSpecs.cs:184-208"
+      ]
+    },
+    {
+      "why": "Byte-identical 16-line arrange (totalTimeSlept, 1/2/3-second durations, SystemClock.SleepAsync stub) of two sibling more/less sleep-duration tests in one file. Repeated arrange scaffolding.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/WaitAndRetryAsyncSpecs.cs:281-296",
+        "src/Polly.SharedSpecs/Retry/WaitAndRetryAsyncSpecs.cs:254-269"
+      ]
+    },
+    {
+      "why": "Two identical timespan declarations plus one sync/async renamed policy construction line — a three-line test idiom, not an unarguable logic copy.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Timeout/TimeoutTResultSpecs.cs:562-564",
+        "src/Polly.SharedSpecs/Timeout/TimeoutTResultAsyncSpecs.cs:513-515"
+      ]
+    },
+    {
+      "why": "Byte-identical three lines of wrap-creation and RaiseExceptionAsync act scaffold taken from two policy-wrap-key tests whose preceding setup callbacks and following assertions differ. Short repeated test scaffolding.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Wrap/PolicyWrapContextAndKeySpecsAsync.cs:30-32",
+        "src/Polly.SharedSpecs/Wrap/PolicyWrapContextAndKeySpecsAsync.cs:55-57"
+      ]
     }
   ]
 }

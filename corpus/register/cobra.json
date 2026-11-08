@@ -177,6 +177,15 @@
         "completions_test.go:3240-3253",
         "completions_test.go:3334-3347"
       ]
+    },
+    {
+      "why": "printOptionsReST keeps printOptions's exact signature (including the unused name parameter), variable names, HasAvailableFlags guards and PrintDefaults placement; only markup literals change, and each ReST header is split into an extra WriteString call inside the copied function, adding statements on one side.",
+      "verified": "Python difflib.unified_diff of the two exact source ranges returned:\n--- doc/md_docs.go:32-49\n+++ doc/rest_docs.go:30-49\n@@ -1,18 +1,20 @@\n-func printOptions(buf *bytes.Buffer, cmd *cobra.Command, name string) error {\n+func printOptionsReST(buf *bytes.Buffer, cmd *cobra.Command, name string) error {\n \tflags := cmd.NonInheritedFlags()\n \tflags.SetOutput(buf)\n \tif flags.HasAvailableFlags() {\n-\t\tbuf.WriteString(\"### Options\\n\\n```\\n\")\n+\t\tbuf.WriteString(\"Options\\n\")\n+\t\tbuf.WriteString(\"~~~~~~~\\n\\n::\\n\\n\")\n \t\tflags.PrintDefaults()\n-\t\tbuf.WriteString(\"```\\n\\n\")\n+\t\tbuf.WriteString(\"\\n\")\n \t}\n \n \tparentFlags := cmd.InheritedFlags()\n \tparentFlags.SetOutput(buf)\n \tif parentFlags.HasAvailableFlags() {\n-\t\tbuf.WriteString(\"### Options inherited from parent commands\\n\\n```\\n\")\n+\t\tbuf.WriteString(\"Options inherited from parent commands\\n\")\n+\t\tbuf.WriteString(\"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\\n\\n::\\n\\n\")\n \t\tparentFlags.PrintDefaults()\n-\t\tbuf.WriteString(\"```\\n\\n\")\n+\t\tbuf.WriteString(\"\\n\")\n \t}\n \treturn nil\n }\n",
+      "type": "Type III",
+      "occurrences": [
+        "doc/rest_docs.go:30-49",
+        "doc/md_docs.go:32-49"
+      ]
     }
   ],
   "clearly_out": [],
@@ -1926,6 +1935,335 @@
       "occurrences": [
         "completions_test.go:857-860",
         "completions_test.go:1053-1054"
+      ]
+    },
+    {
+      "why": "Byte-identical three-line completion-arrangement idiom (init slice, AppendActiveHelp, append) repeated within one test file. Too short and idiomatic to be an unarguable clone.",
+      "occurrences": [
+        "active_help_test.go:206-208",
+        "active_help_test.go:146-148"
+      ]
+    },
+    {
+      "why": "The closure body (comps := []string{\"first\"} through return) is identical, but the declared ranges wrap it in different registration mechanisms — `childCmd.ValidArgsFunction = func(...)` versus `_ = rootCmd.RegisterFlagCompletionFunc(flagname, func(...)` — so the shared material has mismatched code at both edges. This is repeated test-completion scaffolding, not an unarguable copy of the full ranges.",
+      "occurrences": [
+        "active_help_test.go:240-246",
+        "active_help_test.go:205-211"
+      ]
+    },
+    {
+      "why": "The shared part is only the invoke/assert skeleton; the expected strings.Join contents are entirely different data (activeHelp marker message versus a flag-name list \"--persistent\", \"-p\", \"--flag\", \"-f\") and the trailing statements diverge (rootCmd.ValidArgsFunction = nil versus DisableFlagParsing reset). Ordinary assertion scaffolding testing different data stays not clear.",
+      "occurrences": [
+        "completions_test.go:2809-2828",
+        "active_help_test.go:44-57"
+      ]
+    },
+    {
+      "why": "Two lines of arrange/call differing only in the ExactArgs literal 2→3 inside an otherwise identical getCommand/executeCommand pair. Repeated test scaffolding with an exact literal substitution stays not clear.",
+      "occurrences": [
+        "args_test.go:303-304",
+        "args_test.go:327-328"
+      ]
+    },
+    {
+      "why": "The ranges pair three-line `getCommand`/`executeCommand`/assert-helper test bodies for `ExactArgs` vs `ExactValidArgs` with renamed test names and one `true`→`false` toggle. This is the args_test.go arrange/call/assert pattern with a systematic validator rename, which stays NOT CLEAR.",
+      "occurrences": [
+        "args_test.go:314-324",
+        "args_test.go:496-506"
+      ]
+    },
+    {
+      "why": "Three-line root/child/AddCommand setup differing only in the Args value (NoArgs vs ArbitraryArgs); this is the ubiquitous cobra test-setup idiom, too small to be unarguable.",
+      "occurrences": [
+        "args_test.go:402-404",
+        "command_test.go:1586-1588"
+      ]
+    },
+    {
+      "why": "A two-line idiom of registering one string flag and one bool flag where every name, shorthand and description literal differs; per protocol short idioms stay not clear.",
+      "occurrences": [
+        "bash_completions_test.go:114-115",
+        "bash_completions_test.go:264-265"
+      ]
+    },
+    {
+      "why": "Two fixture definitions of the same echo test command that agree on Use/Aliases/Short/Example strings but differ in declaration form (local `:= &Command` vs package `var ... = &cobra.Command`), a trailing period in Long, and a present vs absent Run field. This is framework command setup whose similarities are the shared dummy command's data, not an unarguable code copy.",
+      "occurrences": [
+        "doc/cmd_test.go:54-60",
+        "bash_completions_test.go:117-124"
+      ]
+    },
+    {
+      "why": "Three byte-identical lines (new(bytes.Buffer), GenBashCompletion into it, buf.String()) — the standard capture-output idiom used by both bash completion tests. Two/three-line idioms stay not clear.",
+      "occurrences": [
+        "bash_completions_test.go:282-284",
+        "bash_completions_test.go:236-238"
+      ]
+    },
+    {
+      "why": "The Len/Swap/Less triplet is the mandatory sort.Interface boilerplate every Go sortable slice requires, differing only in receiver and type name; as a three-line forced idiom it cannot be an unarguable copy.",
+      "occurrences": [
+        "doc/util.go:50-52",
+        "command.go:1322-1324"
+      ]
+    },
+    {
+      "why": "A two-line NewFlagSet/SetOutput idiom applied to c.parentsPflags vs c.pflags; this flag-set initialization pattern is too short and idiomatic to call a copy.",
+      "occurrences": [
+        "command.go:1787-1788",
+        "command.go:1904-1905"
+      ]
+    },
+    {
+      "why": "Full test bodies (command construction, executeCommand, output/error/args asserts) matching under a foo/child1 systematic rename, plus a %v versus %q verb change. The same arrange/call/assert scaffold repeats across this file's tests, so it is not an unarguable copy.",
+      "occurrences": [
+        "command_test.go:113-136",
+        "command_test.go:437-460"
+      ]
+    },
+    {
+      "why": "Three-line command-construction idiom with different variable names, Use literals, alias strings, and Run closures (emptyRun vs a shared logging closure). Framework-invited test setup, not unarguable copied logic.",
+      "occurrences": [
+        "command_test.go:2449-2451",
+        "command_test.go:1479-1481"
+      ]
+    },
+    {
+      "why": "Four-line test arrange scaffolding (create root, AddGroup, AddCommand) where the meaningful difference is the GroupID literal and a comment testing a panic path; repeated setup is not an unarguable copy.",
+      "occurrences": [
+        "command_test.go:2038-2041",
+        "command_test.go:2052-2056"
+      ]
+    },
+    {
+      "why": "Two whole test functions identical except the setter name (`SetHelpCommandGroupID` vs `SetCompletionCommandGroupID`), but the body is pure arrange/call/assert-with-panic-check scaffolding and the boundaries are mismatched (one range includes the func declaration and closing brace, the other does not).",
+      "occurrences": [
+        "command_test.go:2090-2106",
+        "command_test.go:2109-2127"
+      ]
+    },
+    {
+      "why": "Adjacent mirrored three-line bytes.Equal assertions for the out and err streams, differing only in wantErr/gotErrBytes vs wantOut/gotOutBytes and the byte literals. Standard paired-assertion idiom, not an unarguable clone.",
+      "occurrences": [
+        "command_test.go:2209-2211",
+        "command_test.go:2213-2215"
+      ]
+    },
+    {
+      "why": "Byte-identical two-line pair, but it is only the standard command-construction plus String-flag-registration idiom. Two-line idioms stay not clear regardless of exactness.",
+      "occurrences": [
+        "command_test.go:2383-2384",
+        "command_test.go:2323-2324"
+      ]
+    },
+    {
+      "why": "Two adjacent one-line sibling declarations in the same test (child1/'this' vs child2/'that') differing only in names. A single-line struct-literal idiom cannot support a firm verdict either way.",
+      "occurrences": [
+        "command_test.go:2450-2450",
+        "command_test.go:2451-2451"
+      ]
+    },
+    {
+      "why": "The shorter same-command whitelist test is contained in the child-command test plus extra root/AddCommand statements, with small literal tweaks (Use 'c' vs 'child', err.Error() vs err). Repeated arrange/call/assert scaffolding within one test family.",
+      "occurrences": [
+        "command_test.go:2509-2523",
+        "command_test.go:2549-2570"
+      ]
+    },
+    {
+      "why": "Two neighboring help-command tests whose 8-line execute/error-check/assert bodies are identical except one call flips from checkStringContains to checkStringOmits for VersionFlag. Short arrange/call/assert scaffolding with a single changed assertion stays NOT CLEAR.",
+      "occurrences": [
+        "command_test.go:2755-2762",
+        "command_test.go:2741-2748"
+      ]
+    },
+    {
+      "why": "Adjacent table rows whose only difference is the -b versus -f flag literal in otherwise identical string-slice pairs. Pure test data entries, not logic copies.",
+      "occurrences": [
+        "command_test.go:2830-2837",
+        "command_test.go:2822-2829"
+      ]
+    },
+    {
+      "why": "Two whole test bodies of build-commands, executeCommand, then assert output/error/args, matching under a systematic times/foo rename. This arrange/call/assert pattern recurs across the file's tests, so it is scaffolding rather than an unarguable copy.",
+      "occurrences": [
+        "command_test.go:469-488",
+        "command_test.go:283-302"
+      ]
+    },
+    {
+      "why": "Two structurally parallel flag tests (same IntVarP \"intf\"/\"i\"/-1, \"-i7\", assert 7) but with different command topology, different executeCommand arguments, and different assertion message wording. A test of register-flag/invoke/assert-fields shape with identical literals still stays not clear.",
+      "occurrences": [
+        "command_test.go:562-581",
+        "command_test.go:770-787"
+      ]
+    },
+    {
+      "why": "Byte-identical two-line parent/child Command construction idiom appearing in two different tests. A two-line struct-literal idiom is exactly the case the protocol keeps as NOT CLEAR.",
+      "occurrences": [
+        "command_test.go:790-791",
+        "command_test.go:967-968"
+      ]
+    },
+    {
+      "why": "A ragged two-vs-three-line setup where the constructed commands (parent vs child) and flag names ('foo' vs 'boolf') differ; only the Command-literal and Bool-registration shape is shared.",
+      "occurrences": [
+        "command_test.go:900-901",
+        "command_test.go:791-793"
+      ]
+    },
+    {
+      "why": "The same execute/expected/assert scaffold repeated with only the tested flag spelling differing in the executeCommand arguments (\"-y=\" vs \"--yaml=\", \"--text\" vs \"-y\"). Difference is purely in tested data within repeated test scaffolding.",
+      "occurrences": [
+        "completions_test.go:1122-1148",
+        "completions_test.go:1094-1120"
+      ]
+    },
+    {
+      "why": "Both ranges are the same repeated execute/assert completion-test pattern, but they exercise different inputs and expect different directives (':4' NoFileComp vs ':16' FilterDirs, 'o' vs '-s='). Scaffolding shape shared, tested data different — not clear.",
+      "occurrences": [
+        "completions_test.go:347-373",
+        "completions_test.go:1248-1273"
+      ]
+    },
+    {
+      "why": "The ranges repeat command setup followed by execute/error/output checks. This ordinary test scaffolding remains uncertain despite its length and systematic constant changes.",
+      "occurrences": [
+        "completions_test.go:1384-1486",
+        "completions_test.go:1717-1819"
+      ]
+    },
+    {
+      "why": "The repeated execute/check-error/build-expected/compare idiom appears in both tests with only the subcommand name literal changing ('daughter'/'son' vs 'child1') and identical 'one'/'two' expectations. This is the assertion pattern the completion tests invite throughout the file, not an unarguable copy.",
+      "occurrences": [
+        "completions_test.go:1500-1530",
+        "completions_test.go:1400-1430"
+      ]
+    },
+    {
+      "why": "Three-line idiom (new buffer, generate completion, read string) differing only in the receiver variable c vs rootCmd. Too short and idiomatic to be an unarguable clone.",
+      "occurrences": [
+        "completions_test.go:1616-1618",
+        "zsh_completions_test.go:26-28"
+      ]
+    },
+    {
+      "why": "The ranges repeat completion-test setup, simple prefix-filter callbacks and execute/output assertions. This test scaffold does not establish a certain clone.",
+      "occurrences": [
+        "completions_test.go:2187-2278",
+        "completions_test.go:1624-1715"
+      ]
+    },
+    {
+      "why": "Flag registration/lookup lines for entirely different flags on different commands (childCmd1 'persistent'/'nonPersistent' vs rootCmd 'requiredPersistent'/'release'); only the generic flag-setup idiom is shared.",
+      "occurrences": [
+        "completions_test.go:172-173",
+        "completions_test.go:865-867"
+      ]
+    },
+    {
+      "why": "Byte-identical 8-line root/child command setup including the ValidArgsFunction closure, but this arrange-scaffold is the shape every completions test in this file starts with, so copying cannot be unarguably separated from framework idiom.",
+      "occurrences": [
+        "completions_test.go:2045-2052",
+        "completions_test.go:1822-1829"
+      ]
+    },
+    {
+      "why": "The 19-line blocks differ only in a comment and one literal (\"--nonPersistent\" → \"-n\"), but the block is pure repeated arrange/call/assert scaffolding (executeCommand, err check, flag reset, expected join, output assert) inside the same sequential test function. Literal substitution in repeated test scaffolding stays not clear.",
+      "occurrences": [
+        "completions_test.go:192-210",
+        "completions_test.go:267-285"
+      ]
+    },
+    {
+      "why": "Both completion tests share the execute/expected/assert scaffolding, but the command setups differ (ValidArgs plus Run vs Args:nil with comments) and the expected data differs throughout (one/two vs arg1/arg2). Different tested behavior on ordinary test scaffolding.",
+      "occurrences": [
+        "completions_test.go:2850-2894",
+        "completions_test.go:2280-2321"
+      ]
+    },
+    {
+      "why": "Consecutive sub-checks in one test differing only by \"-p\" vs \"--persistent\" in the executeCommand call; the flag-reset/strings.Join-expected/compare tail is the standard completions-test scaffold.",
+      "occurrences": [
+        "completions_test.go:305-319",
+        "completions_test.go:288-302"
+      ]
+    },
+    {
+      "why": "Sibling subtests byte-identical except the subtest-name string and the []string to []Completion type in the declared func; systematically renamed compile-check scaffolding (var _ CompletionFunc, field assignment, RegisterFlagCompletionFunc call) with no logic.",
+      "occurrences": [
+        "completions_test.go:2898-2910",
+        "completions_test.go:2912-2924"
+      ]
+    },
+    {
+      "why": "The sub-test bodies are near-identical with a rename, but the differing type declaration (alias 'type X = func...' vs definition 'type X func...') is exactly the variant each sub-test exercises. The remainder is assignability-check scaffolding (var _ CompletionFunc, construct Command, RegisterFlagCompletionFunc).",
+      "occurrences": [
+        "completions_test.go:2947-2958",
+        "completions_test.go:2965-2976"
+      ]
+    },
+    {
+      "why": "Adjacent table entries with byte-identical expected output blocks whose only difference is the -h versus -v flag literal. These are test data rows in a table-driven case list.",
+      "occurrences": [
+        "completions_test.go:3457-3463",
+        "completions_test.go:3443-3449"
+      ]
+    },
+    {
+      "why": "Both ranges are the standard completions-test assertion block (`expected = strings.Join(...)` plus `t.Errorf` check) differing only in the expected flag-name string literals. This is repeated arrange/assert scaffolding with different tested data, not an unarguable logic copy.",
+      "occurrences": [
+        "completions_test.go:753-764",
+        "completions_test.go:934-945"
+      ]
+    },
+    {
+      "why": "Within one flag-completion test, two assert/execute/reset blocks differing only in a comment and the last executeCommand argument ('-' vs '-a'); the sliceFlag/arrayFlag/multiFlag resets are identical boilerplate. Short assertion scaffolding with literal substitutions stays not clear.",
+      "occurrences": [
+        "completions_test.go:820-832",
+        "completions_test.go:788-800"
+      ]
+    },
+    {
+      "why": "Three consecutive flag-registration lines for printCmd vs timesCmd with entirely different flag names, shorthands, defaults and help strings. A three-line framework idiom, not an unarguable copy.",
+      "occurrences": [
+        "doc/cmd_test.go:35-37",
+        "doc/cmd_test.go:39-41"
+      ]
+    },
+    {
+      "why": "Three lines of bullet-link formatting repeated within the same SEE ALSO output with cname/child swapped for pname/parent. The identical Sprintf format and strings.ReplaceAll are driven by the uniform markdown output shape, and a three-line format-driven fragment is too short to be unarguable.",
+      "occurrences": [
+        "doc/md_docs.go:106-108",
+        "doc/md_docs.go:88-90"
+      ]
+    },
+    {
+      "why": "Four mirrored test/benchmark functions are arrange/call/assert scaffolding (buffer, call the generator, contains/omits) with a systematic Md→RST rename. Mirrored test scaffolding stays not clear even with systematic renames, and there are small non-rename diffs (the 'unexpected' variable, %v vs %s formatting).",
+      "occurrences": [
+        "doc/rest_docs_test.go:26-112",
+        "doc/md_docs_test.go:58-125"
+      ]
+    },
+    {
+      "why": "The boundaries are ragged: side A opens with TestGenRSTNoHiddenParents (hidden-flag loop, omits assertions) while side B opens with the non-corresponding TestGenYamlDoc (contains plus a new Sprintf assertion), and the rest is the standard buffer/generate/checkStringContains doc-test idiom with statements added and removed.",
+      "occurrences": [
+        "doc/yaml_docs_test.go:27-73",
+        "doc/rest_docs_test.go:43-96"
+      ]
+    },
+    {
+      "why": "TestGenRSTTree/TestGenYamlTree and the two benchmarks are systematic rst→yaml renames of each other, but range B also embeds TestGenYamlDocRunnable which has no counterpart in A, so the complete declared ranges do not match as one copy. A real shared-shape pair with a mismatched interior boundary stays not clear.",
+      "occurrences": [
+        "doc/rest_docs_test.go:80-112",
+        "doc/yaml_docs_test.go:57-100"
+      ]
+    },
+    {
+      "why": "The span is a small map iteration that appends keys with true values. This conventional filter-and-collect idiom remains uncertain.",
+      "occurrences": [
+        "flag_groups.go:191-197",
+        "flag_groups.go:170-176"
       ]
     }
   ]

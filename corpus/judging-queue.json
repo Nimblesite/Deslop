@@ -2,13 +2,6 @@
   "why": "Repositories waiting on a first judging pass. [CORPUS-REGISTER-COVERAGE] A repository cannot become a register until a judge has ruled on its pairs, and a judge cannot rule on pairs until a comparison has produced two reports for it — so a repository that is not yet judged still has to be scanned. This file is that queue: the comparison scans every register plus everything here, and `make _judging-folder` turns each into a workspace. When the verdicts come back, the repository moves into corpus/register/ and out of this list. Every entry is pinned to a full commit id for the same reason a register is: the judge and the scan must read identical source.",
   "repositories": [
     {
-      "name": "Giraffe",
-      "url": "https://github.com/giraffe-fsharp/Giraffe.git",
-      "sha": "279fe3a30c27bd647d2655745f71190c74bdd749",
-      "language": "fsharp",
-      "why": "F# is judged on FSharp.Data alone, a large library of type providers. Giraffe is a small web framework of handlers and routing combinators, so the F# register gains a repository of visibly different size and style."
-    },
-    {
       "name": "Osprey",
       "url": "https://github.com/Nimblesite/osprey.git",
       "sha": "1b3ba2b16eebca0fbae7baf0823eac2b69870ae5",

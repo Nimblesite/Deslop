@@ -1941,6 +1941,384 @@
         "tests/test_options.py:734-742",
         "tests/test_options.py:422-430"
       ]
+    },
+    {
+      "why": "The seven-line setdefault runs differ only in the --version/--help string literals, but both ranges are cut off immediately before the callback lines, which differ structurally (kwargs[\"callback\"] = vs kwargs.setdefault(\"callback\", ...)). This param_decls/kwargs defaulting run is the boilerplate idiom every option factory in the file shares, and the ragged end edge leaves real doubt.",
+      "occurrences": [
+        "src/click/decorators.py:592-598",
+        "src/click/decorators.py:618-624"
+      ]
+    },
+    {
+      "why": "The stdout and stderr properties hold one substantive return statement differing only by the stdout_bytes/stderr_bytes attribute rename, with a longer differing docstring on stderr, and a third identical accessor sits just above at lines 289-292. A parallel one-statement accessor idiom is too small to be an unarguable logic copy.",
+      "occurrences": [
+        "src/click/testing.py:301-310",
+        "src/click/testing.py:294-299"
+      ]
+    },
+    {
+      "why": "Both use the ngettext singular/plural message idiom, but every literal and name differs ('is not {choice}' vs 'does not match the format {format}', self.choices vs self.formats) and A returns the message while B's expression sits inside a self.fail() call.",
+      "occurrences": [
+        "src/click/types.py:569-573",
+        "src/click/types.py:475-479"
+      ]
+    },
+    {
+      "why": "Two wrapper classes each just declaring an attribute and storing their wrapped file in a trivial constructor (self._file vs self.wrapped). This store-the-delegate idiom with renamed attributes is too small to be unarguable.",
+      "occurrences": [
+        "src/click/utils.py:544-547",
+        "src/click/utils.py:226-229"
+      ]
+    },
+    {
+      "why": "The shared executable core is a three-statement dict-lookup/raise/return idiom; the verbatim material is docstring text and the text variant adds parameters threaded into the opener call, so 'copied and extended' is an argument, not certainty.",
+      "occurrences": [
+        "src/click/utils.py:366-390",
+        "src/click/utils.py:349-363"
+      ]
+    },
+    {
+      "why": "Seven byte-identical lines, but they are the minimal command-definition plus invoke plus exit-code-assert scaffold that every Click test repeats.",
+      "occurrences": [
+        "tests/test_formatting.py:149-155",
+        "tests/test_arguments.py:235-241"
+      ]
+    },
+    {
+      "why": "Two ordinary assertion lists checking completely different strings in different streams/output. Short assertion scaffolding stays not clear even though the tested data differs.",
+      "occurrences": [
+        "tests/test_testing.py:775-779",
+        "tests/test_arguments.py:304-307"
+      ]
+    },
+    {
+      "why": "Parallel `test_deprecated_warning` tests where argument→option is renamed systematically (`click.argument`→`click.option`, `my_argument`→`my_option`) through a standard decorator/invoke/assert scaffold. Tests of two different APIs (Argument vs Option) with copied scaffolding stay not clear.",
+      "occurrences": [
+        "tests/test_options.py:75-94",
+        "tests/test_arguments.py:420-439"
+      ]
+    },
+    {
+      "why": "Two click command definitions for argument-ordering tests that differ only by `nargs=2` on the last argument, which is the tested configuration itself. This is standard arrange scaffolding (decorator stack plus echo loop), not an unarguable logic copy.",
+      "occurrences": [
+        "tests/test_arguments.py:464-470",
+        "tests/test_arguments.py:477-483"
+      ]
+    },
+    {
+      "why": "Both are the standard define-echoing-command, invoke, assert-output test scaffold, but the decorators (argument vs option), arguments, and assertions differ; shared skeleton is framework idiom, not copied logic.",
+      "occurrences": [
+        "tests/test_arguments.py:68-78",
+        "tests/test_options.py:847-855"
+      ]
+    },
+    {
+      "why": "Same parametrized option-test template (invoke, assert expect, the Error:/exception if-else) with letter-for-letter substitutions (--u/click.UUID/'U:' vs --s/'no value'/'S:'), scaffolding repeated across this file's option-type tests.",
+      "occurrences": [
+        "tests/test_basic.py:250-264",
+        "tests/test_basic.py:201-213"
+      ]
+    },
+    {
+      "why": "Both are parametrized CLI test bodies using the framework-invited command-define/invoke/assert pattern, but the option decorators, invoke arguments (input vs args), and assertions differ substantially. Parametrized test scaffolding.",
+      "occurrences": [
+        "tests/test_basic.py:308-314",
+        "tests/test_termui.py:1378-1390"
+      ]
+    },
+    {
+      "why": "Identical three-line help scaffold (invoke [\"--help\"], assert exit_code == 0) differing only in the asserted output string (\"Class1\" vs \"default: not found\"). Ordinary assertion list testing different data.",
+      "occurrences": [
+        "tests/test_basic.py:858-860",
+        "tests/test_options.py:2434-2436"
+      ]
+    },
+    {
+      "why": "Standard test arrange/call/assert scaffolding (@click.command decorator, def, runner.invoke) exercising unrelated features — a version option vs an envvar help check — with different decorators, names and invoke arguments.",
+      "occurrences": [
+        "tests/test_options.py:770-775",
+        "tests/test_basic.py:883-888"
+      ]
+    },
+    {
+      "why": "Both ranges are full click test functions (group + two subcommands, invoke, assert) whose only differences are the decorator (`@click.argument` vs `@click.option`) and the adapted invoke literals. This is the framework's repeated arrange/call/assert test scaffold for two different features (arguments vs options), which stays not clear even with the structure copied.",
+      "occurrences": [
+        "tests/test_chain.py:68-85",
+        "tests/test_chain.py:107-124"
+      ]
+    },
+    {
+      "why": "Both ranges are test arrange/call/assert scaffolding — decorator-registered commands calling debug(), then runner.invoke and two asserts — with renamed commands (a/b/c vs l2a/l2b/l1b) and correspondingly changed literals. Per protocol, repeated test scaffolding stays NOT CLEAR even with systematic literal substitutions.",
+      "occurrences": [
+        "tests/test_chain.py:231-245",
+        "tests/test_chain.py:175-189"
+      ]
+    },
+    {
+      "why": "Four byte-identical assertion lines repeated inside the same test after different invokes ([\"--my-help\"] vs [\"--my-help\", \"-b\"]). An ordinary repeated assertion block, which stays not clear even with exact literal match.",
+      "occurrences": [
+        "tests/test_commands.py:494-497",
+        "tests/test_commands.py:535-538"
+      ]
+    },
+    {
+      "why": "Three identical stdout/exit_code assertions after invokes with different flag arguments; ordinary assertion scaffolding whose data difference does not make it a copy.",
+      "occurrences": [
+        "tests/test_commands.py:507-510",
+        "tests/test_commands.py:524-527"
+      ]
+    },
+    {
+      "why": "Byte-identical 4-line assertion block, but it is repeated assertion scaffolding re-checking the same invariants after a different `runner.invoke` within one test. Repeated test arrange/call/assert scaffolding stays NOT CLEAR even when exactly identical.",
+      "occurrences": [
+        "tests/test_commands.py:508-511",
+        "tests/test_commands.py:525-528"
+      ]
+    },
+    {
+      "why": "Ordinary test arrangement — command with a call_on_close closure, echo, invoke — repeated with a single added ctx.exit(); this is scenario scaffolding, not unarguable logic.",
+      "occurrences": [
+        "tests/test_context.py:337-351",
+        "tests/test_context.py:358-374"
+      ]
+    },
+    {
+      "why": "Ordinary test arrange/call scaffolding — command fixture, call_on_close closure, echo, runner.invoke, assert — where one variant inserts ctx.exit(); such near-twin variant tests are standard practice, not an unarguable logic copy.",
+      "occurrences": [
+        "tests/test_context.py:339-352",
+        "tests/test_context.py:360-375"
+      ]
+    },
+    {
+      "why": "Two `test_get_context_objects*` tests whose entire 20-line body (Foo class, make_pass_decorator, group/command, invoke, assert) is identical except `ensure=True` in one call. It is a framework-invited arrange/call/assert test pair for the two decorator modes, not an unarguable logic copy.",
+      "occurrences": [
+        "tests/test_context.py:40-59",
+        "tests/test_context.py:63-82"
+      ]
+    },
+    {
+      "why": "Three-line assert/override-with-cls/assert idiom with a subcommand→subgroup and CustomCommand→CustomSubGroup rename. Small test scaffolding pattern repeated across adjacent custom-class tests.",
+      "occurrences": [
+        "tests/test_custom_classes.py:79-81",
+        "tests/test_custom_classes.py:97-99"
+      ]
+    },
+    {
+      "why": "Two mirrored runner.invoke/assert blocks exercising prefers_green vs prefers_red with the color words swapped. Repeated arrange/call/assert scaffolding with literal substitutions stays not clear even though the pattern is exact.",
+      "occurrences": [
+        "tests/test_defaults.py:159-162",
+        "tests/test_defaults.py:164-167"
+      ]
+    },
+    {
+      "why": "Three lines of invoke/exit-code/output assertion scaffolding differing only in the expected string literal. Ordinary assertion scaffolding.",
+      "occurrences": [
+        "tests/test_defaults.py:561-563",
+        "tests/test_defaults.py:378-380"
+      ]
+    },
+    {
+      "why": "Standard three-line test tail (invoke with [], assert no exception, assert expected output lines) where only the expected literal list differs. Ordinary assertion scaffolding testing different defaults.",
+      "occurrences": [
+        "tests/test_defaults.py:84-86",
+        "tests/test_defaults.py:58-60"
+      ]
+    },
+    {
+      "why": "Both ranges are ordinary expected-output assertion lists (exit code plus splitlines comparison) differing only in the '--man' vs '--help' string literal. Per protocol, short assertion-list scaffolding stays NOT CLEAR even when the tested data differs by one literal.",
+      "occurrences": [
+        "tests/test_formatting.py:243-249",
+        "tests/test_formatting.py:155-161"
+      ]
+    },
+    {
+      "why": "Two adjacent usage-error tests asserting near-identical expected output lists, differing only in the final error-message string. Ordinary assertion lists comparing framework-formatted usage output remain not clear even when the strings nearly coincide.",
+      "occurrences": [
+        "tests/test_formatting.py:192-198",
+        "tests/test_formatting.py:176-182"
+      ]
+    },
+    {
+      "why": "Both regions are arrange/call/assert scaffolds (@click.command, def cmd, runner.invoke, exit-code assert) with different decorators, an option with multiline help versus an INT argument with metavar, and different expected exit codes (0 vs 2). Generic CliRunner test idiom, not a copy argument in either direction.",
+      "occurrences": [
+        "tests/test_formatting.py:186-192",
+        "tests/test_options.py:983-998"
+      ]
+    },
+    {
+      "why": "Same command/invoke/terminal_width=60 skeleton, but the docstring under test and the asserted help-text lines differ; this is ordinary assertion lists with different tested data.",
+      "occurrences": [
+        "tests/test_formatting.py:338-364",
+        "tests/test_formatting.py:367-384"
+      ]
+    },
+    {
+      "why": "Two adjacent three-line pytest.raises tests constructing click.Option with different keyword arguments; a three-line idiom that stays NOT_CLEAR rather than clearly_out.",
+      "occurrences": [
+        "tests/test_options.py:97-99",
+        "tests/test_options.py:102-104"
+      ]
+    },
+    {
+      "why": "Two adjacent invoke/assert blocks in the same test with cli renamed to cli_alt and the alias literals changed (\" /-W\"/\"-W\" → \"-w\", final expected \"False\\n\" → \"True\\n\"). Repeated arrange/call/assert scaffolding for the two alias variants.",
+      "occurrences": [
+        "tests/test_options.py:1167-1177",
+        "tests/test_options.py:1155-1165"
+      ]
+    },
+    {
+      "why": "Two-line test idiom (build a Context, assert one help-extra dict) differing only in the command name and expected literal. This is ordinary assertion scaffolding with literal substitutions, not an unarguable logic copy.",
+      "occurrences": [
+        "tests/test_options.py:1270-1271",
+        "tests/test_options.py:1243-1244"
+      ]
+    },
+    {
+      "why": "The shared material is the parametrized-test skeleton (option via **opt_params, echo repr, regex-or-literal assert) with renamed identifiers and one extra exit_code assert on the A side. Framework-invited test scaffolding with ragged edges stays not clear.",
+      "occurrences": [
+        "tests/test_options.py:2371-2387",
+        "tests/test_options.py:2177-2194"
+      ]
+    },
+    {
+      "why": "The shared lines are command/option decorator setup, click.echo(repr(...)), and the generic invoke/exit_code asserts, while the centers genuinely differ (B adds monkeypatch.setenv and an envvar/default-expanded --with-xyz option); this is framework scaffolding around different option configurations.",
+      "occurrences": [
+        "tests/test_options.py:2865-2884",
+        "tests/test_options.py:3372-3383"
+      ]
+    },
+    {
+      "why": "The same --without-xyz/--with-xyz fixture CLI is repeated across this flag-competition test family; the two tests differ in an added docstring, the extra default_map parameter, and the `default_map=default_map` invoke kwarg.",
+      "occurrences": [
+        "tests/test_options.py:3372-3383",
+        "tests/test_options.py:2898-2909"
+      ]
+    },
+    {
+      "why": "A small kwargs-building if/elif duplicated for the a and b options within one test, with an ragged comment block present only in the first range. Three-statement idiom with ragged boundaries, and parallel setup for a compared pair is scaffolding.",
+      "occurrences": [
+        "tests/test_options.py:3296-3299",
+        "tests/test_options.py:3287-3293"
+      ]
+    },
+    {
+      "why": "Two parallel define-command/assert blocks inside one envvar test, differing only in the option decorator (`type=click.Path()` vs `envvar=\"X\"`), with ranges starting mid-block at the asserts. Repeated test scaffolding with ragged boundaries.",
+      "occurrences": [
+        "tests/test_options.py:439-445",
+        "tests/test_options.py:430-436"
+      ]
+    },
+    {
+      "why": "Two dynamic-default help tests with near-identical scaffolding, but the difference (show_default=\"current user\" vs show_default=True and the corresponding expected help text) is exactly the tested data; repeated test scaffolding stays NOT CLEAR.",
+      "occurrences": [
+        "tests/test_options.py:648-663",
+        "tests/test_options.py:631-645"
+      ]
+    },
+    {
+      "why": "These are adjacent slices of the same assertion run comparing different completion inputs (['get'] vs [] / ['set','start']), i.e. ordinary assertion-list data differences. The shared _get_words call shape alone is scaffolding, not an unarguable copy.",
+      "occurrences": [
+        "tests/test_shell_completion.py:103-105",
+        "tests/test_shell_completion.py:100-101"
+      ]
+    },
+    {
+      "why": "Both are the same arrange/call/assert test shape (logger, tiny command that warns and echoes, CliRunner invoke, exit-code assert) differing only in string literals, which the protocol keeps as scaffolding even with exact literal substitutions.",
+      "occurrences": [
+        "tests/test_stream_lifecycle.py:514-523",
+        "tests/test_stream_lifecycle.py:191-200"
+      ]
+    },
+    {
+      "why": "Byte-identical four lines, but only three code lines: one `echo_via_pager(click.style(\"hello\", fg=\"red\"), color=color)` call plus the standard capfd readouterr/assert-err idiom.",
+      "occurrences": [
+        "tests/test_termui.py:1238-1241",
+        "tests/test_termui.py:770-773"
+      ]
+    },
+    {
+      "why": "Both are wrap-and-record spy helpers that save the real stdlib function, call it, append the result and return it, but around unrelated targets (subprocess.Popen vs tempfile.NamedTemporaryFile). A repeated monkeypatch spy idiom, not an unarguable logic copy.",
+      "occurrences": [
+        "tests/test_utils/test_echo_via_pager.py:242-249",
+        "tests/test_termui.py:1274-1281"
+      ]
+    },
+    {
+      "why": "Parametrize table rows that differ in the dict key being exercised (\"flag_value\": True vs \"default\": False) while the prompt and expected tuples match. Test data rows covering different flag-typing features, not copied executable logic.",
+      "occurrences": [
+        "tests/test_termui.py:1537-1539",
+        "tests/test_termui.py:1599-1601"
+      ]
+    },
+    {
+      "why": "Two single parametrize data rows differing in default (True vs None), prompt string case, input and expected result. One line of test data, not copied code.",
+      "occurrences": [
+        "tests/test_termui.py:1651-1651",
+        "tests/test_termui.py:1624-1624"
+      ]
+    },
+    {
+      "why": "Two single-line parametrize data rows in the same table differing in 'default': True/None and 'y'/'n' values — test data tuples, not copied logic.",
+      "occurrences": [
+        "tests/test_termui.py:1656-1656",
+        "tests/test_termui.py:1667-1667"
+      ]
+    },
+    {
+      "why": "Prompt-test scaffold (prompt option, echo, invoke with 'wau wau\\n', assert output) differing only in hide_input and the expected prompt string. These are the two adjacent halves of the same test_prompts function.",
+      "occurrences": [
+        "tests/test_testing.py:116-124",
+        "tests/test_testing.py:126-134"
+      ]
+    },
+    {
+      "why": "Adjacent scaffolding defining int and float exit-command variants, differing only by systematic renames (cli_int→cli_float) and literals (1→1.0). These are repeated test command definitions the parametrized exit-code test invites.",
+      "occurrences": [
+        "tests/test_testing.py:295-304",
+        "tests/test_testing.py:284-293"
+      ]
+    },
+    {
+      "why": "Overlapping consecutive blocks in one prompt test (define command, invoke with input, assert output) with ragged boundaries between the ranges. Small repeated scaffolding idiom within the same function.",
+      "occurrences": [
+        "tests/test_testing.py:68-78",
+        "tests/test_testing.py:59-66"
+      ]
+    },
+    {
+      "why": "A four-line invoke plus three membership-asserts block whose only differences are echoed string literals ('python stdout'→'py-out', 'fd stderr'→'py-err'). That is an ordinary assertion-list scaffold with literal substitutions.",
+      "occurrences": [
+        "tests/test_testing.py:647-650",
+        "tests/test_testing.py:772-775"
+      ]
+    },
+    {
+      "why": "Ordinary assertion lists checking stream capture with different literal strings, and the boundaries are ragged (4 lines vs 3); assertion scaffolding stays not clear even with different tested data.",
+      "occurrences": [
+        "tests/test_testing.py:648-650",
+        "tests/test_testing.py:775-778"
+      ]
+    },
+    {
+      "why": "Three-line runner-construction/invoke/assert idiom differing only in the sys→fd rename and capture literal. Minimal test scaffolding, not an unarguable copy.",
+      "occurrences": [
+        "tests/test_testing.py:711-713",
+        "tests/test_testing.py:717-719"
+      ]
+    },
+    {
+      "why": "Two ordinary assertion lists over result.stdout/stderr/output checking different output strings for different capture tests. Assertion-list scaffolding, and the difference in tested data does not change that.",
+      "occurrences": [
+        "tests/test_testing.py:775-778",
+        "tests/test_testing.py:802-804"
+      ]
+    },
+    {
+      "why": "Byte-identical two-line monkeypatch setup (PAGER=cat, isatty stub) that is the standard idiom these pager tests require. A two-line idiom stays not clear despite exact identity.",
+      "occurrences": [
+        "tests/test_utils/test_echo_via_pager.py:238-239",
+        "tests/test_utils/test_echo_via_pager.py:203-204"
+      ]
     }
   ]
 }

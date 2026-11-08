@@ -1758,6 +1758,209 @@
         "examples/flutter_weather/test/weather/cubit/weather_cubit_test.dart:128-142",
         "examples/flutter_weather/test/weather/cubit/weather_cubit_test.dart:254-270"
       ]
+    },
+    {
+      "why": "Byte-identical two-line verify/verifyNever assertion pair closing two logInWithGoogle test cases in the same file. A two-line assertion idiom repeated in adjacent tests is scaffolding, not an unarguable clone.",
+      "occurrences": [
+        "examples/flutter_firebase_login/packages/authentication_repository/test/authentication_repository_test.dart:176-177",
+        "examples/flutter_firebase_login/packages/authentication_repository/test/authentication_repository_test.dart:195-196"
+      ]
+    },
+    {
+      "why": "The range is the two-line pump-and-lookup idiom (`pumpWidget(MaterialApp(home: Avatar()))` then `tester.widget<CircleAvatar>(find.byType(...))`). Byte-identical but a standard two-line test idiom.",
+      "occurrences": [
+        "examples/flutter_firebase_login/test/home/widgets/avatar_test.dart:19-20",
+        "examples/flutter_firebase_login/test/home/widgets/avatar_test.dart:32-33"
+      ]
+    },
+    {
+      "why": "Two-line tap-and-verify-bloc-add idiom with different widget types and event classes. Two-line test idioms stay not clear rather than clearly out.",
+      "occurrences": [
+        "examples/flutter_login/test/login/view/login_form_test.dart:162-163",
+        "examples/flutter_todos/test/edit_todo/view/edit_todo_page_test.dart:255-257"
+      ]
+    },
+    {
+      "why": "Three lines of unrelated one-line collection delegates (cart add/remove vs cache contains/remove) in different example projects sharing only the trivial wrapper shape. Two/three-line idiom, kept not clear.",
+      "occurrences": [
+        "examples/github_search/common_github_search/lib/src/github_cache.dart:10-12",
+        "examples/flutter_shopping_cart/lib/shopping_repository.dart:32-34"
+      ]
+    },
+    {
+      "why": "Two blocTest lines (build/act) differing only in the duration literal 1 vs 3. A two-line test idiom with a changed data value is not an unarguable copy.",
+      "occurrences": [
+        "examples/flutter_timer/test/timer/bloc/timer_bloc_test.dart:85-86",
+        "examples/flutter_timer/test/timer/bloc/timer_bloc_test.dart:73-74"
+      ]
+    },
+    {
+      "why": "createSubject/saveTodo/getTodos/verify-mock scaffold repeated across two tests with only updatedTodo→newTodo renamed. Repeated test arrange/assert scaffolding.",
+      "occurrences": [
+        "examples/flutter_todos/packages/local_storage_todos_api/test/local_storage_todos_api_test.dart:97-107",
+        "examples/flutter_todos/packages/local_storage_todos_api/test/local_storage_todos_api_test.dart:119-129"
+      ]
+    },
+    {
+      "why": "Both are the standard bloc state-test template (createSubject helper, 'supports value equality', 'props are correct') for different state classes with different fields (todos/filter/lastDeletedTodo vs completedTodos/activeTodos). Template scaffolding, not an unarguable logic copy.",
+      "occurrences": [
+        "examples/flutter_todos/test/stats/bloc/stats_state_test.dart:8-40",
+        "examples/flutter_todos/test/todos_overview/bloc/todos_overview_state_test.dart:15-51"
+      ]
+    },
+    {
+      "why": "Three byte-identical lines of the standard Mockito arrange idiom (MockResponse, statusCode 400, stubbed httpClient.get) repeated in two tests of the same file. A repeated three-line test-arrange idiom stays not clear.",
+      "occurrences": [
+        "examples/flutter_weather/packages/open_meteo_api/test/open_meteo_api_client_test.dart:138-140",
+        "examples/flutter_weather/packages/open_meteo_api/test/open_meteo_api_client_test.dart:54-56"
+      ]
+    },
+    {
+      "why": "Three-line isA<Weather>().having(...) matcher chains that differ only in the literal 63 vs 63.0; this is ordinary assertion scaffolding repeated across two tests of the same package.",
+      "occurrences": [
+        "examples/flutter_weather/packages/open_meteo_api/test/weather_test.dart:12-14",
+        "examples/flutter_weather/packages/open_meteo_api/test/open_meteo_api_client_test.dart:194-196"
+      ]
+    },
+    {
+      "why": "The onTransition bodies match modulo observer-field and covariant-type renames, but the declared ranges then diverge into an unrelated onDone (with a large doc block) versus an onEvent override, and both are two-line observer-forwarding stubs the framework invites.",
+      "occurrences": [
+        "packages/replay_bloc/lib/src/replay_bloc.dart:82-94",
+        "packages/bloc/lib/src/bloc.dart:266-300"
+      ]
+    },
+    {
+      "why": "Both ranges are assertion-chain test scaffolding, and the edges are ragged: the legacy range opens with `void main() {` plus an entire extra test and carries a trailing brace absent from the other range — shared material with mismatched edges stays NOT CLEAR.",
+      "occurrences": [
+        "packages/bloc/test/bloc_event_transformer_test_legacy.dart:43-252",
+        "packages/bloc/test/bloc_event_transformer_test.dart:93-273"
+      ]
+    },
+    {
+      "why": "Both ranges are the standard observer-test scaffold — `setUp` installing a `MockBlocObserver` as `Bloc.observer` and a test verifying `onCreate` called once — with renamed subjects (SimpleBloc vs CounterCubit) and ragged group boundaries. Framework-invited test setup stays not clear.",
+      "occurrences": [
+        "packages/bloc/test/bloc_test.dart:22-31",
+        "packages/bloc/test/cubit_test.dart:17-30"
+      ]
+    },
+    {
+      "why": "Standard bloc transition-test scaffold (collect transitions, expectLater emitsInOrder, then expect) reused with different bloc classes and differently shaped constructors. Repeated test arrange/call/assert scaffolding.",
+      "occurrences": [
+        "packages/bloc/test/bloc_test.dart:836-847",
+        "packages/bloc/test/bloc_test.dart:441-449"
+      ]
+    },
+    {
+      "why": "The expectLater/emitsInOrder-then-cascade-adds test pattern repeated with counterBloc→bloc renamed and different event sequences (decrement/increment vs two increments/two decrements). Test call scaffolding where the differing cascade is the tested data stays NOT CLEAR.",
+      "occurrences": [
+        "packages/bloc/test/bloc_test.dart:444-453",
+        "packages/bloc/test/bloc_test.dart:842-853"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical 3-line `expectedStates` literal lists (two `AsyncState` consts plus `emitsDone`) used as test data in two different tests. Identical literals inside repeated assertion scaffolding stay not clear.",
+      "occurrences": [
+        "packages/bloc/test/bloc_test.dart:788-790",
+        "packages/bloc/test/bloc_test.dart:627-629"
+      ]
+    },
+    {
+      "why": "Both classes are field containers with ordinary equality and hashCode boilerplate. That repeated class scaffolding does not establish a certain clone.",
+      "occurrences": [
+        "packages/bloc/test/transition_test.dart:31-45",
+        "packages/bloc/test/transition_test.dart:15-29"
+      ]
+    },
+    {
+      "why": "Byte-identical over 3 lines, but the shared text is the standard temp-directory/temp-file setup idiom repeated within one test file. A three-line setup idiom stays NOT CLEAR even with an exact match.",
+      "occurrences": [
+        "packages/bloc_tools/test/src/commands/lint/lint_command_test.dart:96-98",
+        "packages/bloc_tools/test/src/commands/lint/lint_command_test.dart:78-80"
+      ]
+    },
+    {
+      "why": "A two-line assertion pair (getText/lineCount expects) differing only in a string literal. Ordinary assertion list, not an unarguable copy.",
+      "occurrences": [
+        "packages/bloc_tools/test/src/lsp/text_document_test.dart:288-289",
+        "packages/bloc_tools/test/src/lsp/text_document_test.dart:350-351"
+      ]
+    },
+    {
+      "why": "Two byte-identical assertion lines (getText/lineCount expects) inside the same test file. A two-line assertion idiom repeated between tests is scaffolding, not a firm clone verdict.",
+      "occurrences": [
+        "packages/bloc_tools/test/src/lsp/text_document_test.dart:350-351",
+        "packages/bloc_tools/test/src/lsp/text_document_test.dart:413-414"
+      ]
+    },
+    {
+      "why": "Parallel 'rebuilds when provided bloc is changed' and 'overrides debugFillProperties' tests for BlocConsumer vs BlocBuilder, but the differences are substantive: the consumer version adds listener/state-tracking statements and expects a different property list in a different order. Beyond the shared pumping/expect scaffolding the regions exercise different widget behavior.",
+      "occurrences": [
+        "packages/flutter_bloc/test/bloc_consumer_test.dart:352-431",
+        "packages/flutter_bloc/test/bloc_builder_test.dart:479-545"
+      ]
+    },
+    {
+      "why": "Two parallel buildWhen/listenWhen tests sharing the same pumpWidget/increment/assert scaffold while differing in the parameter under test and the expected outcomes (e.g. `builderStates, [0, 1, 2]` vs `[0, 2]`, `listenerStates, [2]` vs `[1, 2]`). Mirrored test scaffolding with genuinely different asserted behavior stays not clear.",
+      "occurrences": [
+        "packages/flutter_bloc/test/bloc_consumer_test.dart:122-161",
+        "packages/flutter_bloc/test/bloc_consumer_test.dart:257-296"
+      ]
+    },
+    {
+      "why": "The same pumpWidget/assert scaffold testing buildWhen versus listenWhen: the identical predicate line just moves between builder and listener and the expected state lists differ accordingly. This is repeated test scaffolding whose difference is the tested behavior, not an unarguable copy.",
+      "occurrences": [
+        "packages/flutter_bloc/test/bloc_consumer_test.dart:123-161",
+        "packages/flutter_bloc/test/bloc_consumer_test.dart:258-296"
+      ]
+    },
+    {
+      "why": "Four byte-identical tap/pump action lines (toggle_theme_button, pop_button, pumpAndSettle) reused by two tests in the same file. Repeated test call scaffolding stays not clear even when exactly identical.",
+      "occurrences": [
+        "packages/flutter_bloc/test/multi_bloc_provider_test.dart:308-311",
+        "packages/flutter_bloc/test/multi_bloc_provider_test.dart:281-284"
+      ]
+    },
+    {
+      "why": "Same-file testWidgets scaffolding with an identical expected-message literal and identical error-capture/matcher chain, differing only in the create closure under test (throw vs context.read). Repeated arrange/act/assert scaffolding with identical literals stays NOT CLEAR.",
+      "occurrences": [
+        "packages/flutter_bloc/test/repository_provider_test.dart:218-252",
+        "packages/flutter_bloc/test/repository_provider_test.dart:185-216"
+      ]
+    },
+    {
+      "why": "The SingleHydratedBloc and MyHydratedCubitWithCustomStorage test groups are parallel arrange/verify scaffolds with systematic renames, but each side also has statements the other lacks (a bloc-id test and doc'd flow versus a setUp, storage constructor argument and stackTrace assertion), leaving real doubt beyond the shared mock choreography.",
+      "occurrences": [
+        "packages/hydrated_bloc/test/hydrated_bloc_test.dart:266-334",
+        "packages/hydrated_bloc/test/hydrated_cubit_test.dart:436-499"
+      ]
+    },
+    {
+      "why": "The last four tests are clean MyHydratedBloc→MyHydratedCubit renames of simple stub/construct/assert tests, but the leading storage.write-throws test is rewritten (verify onError called(2) vs fail('should throw'), milliseconds:300 vs seconds:300) and an extra deserialization test is inserted. The complete declared ranges are a mix of renamed trivial scaffolds and restructured code, so the pairing as a whole is not unarguable.",
+      "occurrences": [
+        "packages/hydrated_bloc/test/hydrated_bloc_test.dart:289-333",
+        "packages/hydrated_bloc/test/hydrated_cubit_test.dart:285-336"
+      ]
+    },
+    {
+      "why": "Two-line call-and-verify assertion idiom from parallel Bloc/Cubit test files, differing only by the systematic MyMultiHydratedBloc→MyMultiHydratedCubit rename and the 'A'/'B' literal. This is repeated test scaffolding, not an unarguable logic copy.",
+      "occurrences": [
+        "packages/hydrated_bloc/test/hydrated_cubit_test.dart:374-375",
+        "packages/hydrated_bloc/test/hydrated_bloc_test.dart:367-368"
+      ]
+    },
+    {
+      "why": "A two-line expect/verifyNever idiom differing only in the literal 0 vs 10 for the asserted state. Two-line idioms with a literal substitution stay not clear.",
+      "occurrences": [
+        "packages/hydrated_bloc/test/hydrated_mixin_test.dart:94-95",
+        "packages/hydrated_bloc/test/hydrated_mixin_test.dart:128-129"
+      ]
+    },
+    {
+      "why": "Three-line teardown/assert (`close`/`subscription.cancel`/`expect(states, const <int>[1, 2, 3, 1, 3])`) matching across files apart from the bloc→cubit rename. Even with the identical unusual list literal, this is a three-line test idiom.",
+      "occurrences": [
+        "packages/replay_bloc/test/replay_bloc_test.dart:326-328",
+        "packages/replay_bloc/test/replay_cubit_test.dart:263-265"
+      ]
     }
   ]
 }
