@@ -46,7 +46,10 @@ fn renamed_osprey_effect_handlers_report_only_their_shared_effect() -> Result<()
     assert_eq!(field(&cluster, "kind").as_str(), Some(EFFECT_KIND));
     assert_eq!(rows_in(&cluster, FIRST_FILE), vec![ALPHA_EFFECT_ROWS]);
     assert_eq!(rows_in(&cluster, SECOND_FILE), vec![BETA_EFFECT_ROWS]);
-    for clone in report_clusters(&json)?.iter().filter(|found| is_clone_kind(found)) {
+    for clone in report_clusters(&json)?
+        .iter()
+        .filter(|found| is_clone_kind(found))
+    {
         for file in [FIRST_FILE, SECOND_FILE] {
             let rows = rows_in(clone, file);
             assert!(
