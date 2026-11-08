@@ -1,16 +1,9 @@
-# Website review [SITE-AUDIT]
+# Focused keyword review [SITE-AUDIT]
 
-Review the current generated website, navigation and responsive layouts, recent documentation and blog content, and keyword evidence from Google Trends. Existing user constraints apply: preserve each language's brand, no search-research commentary in published prose, and retain LFS media.
+Scope narrowed by the user to a lightweight keyword check: preserve existing layouts and avoid a broad audit. Keep search-research commentary out of published prose.
 
-- [x] Read website-audit guidance and Google search guidelines.
-- [ ] Check AI-search readiness and recent documentation accuracy.
-- [ ] Capture Google Trends evidence and review natural keyword use.
-- [ ] Check crawling and indexing.
-- [ ] Check links and canonical URLs.
-- [ ] Check desktop/mobile navigation and layout.
-- [ ] Check structured data.
-- [ ] Check social cards and image descriptions.
-- [ ] Check unsupported claims.
-- [ ] Check design-system consistency (user CSS budget: 2,000 lines).
-- [ ] Run Playwright verification on generated pages.
-- [ ] Emit a reproducible Markdown audit report and push fixes.
+- [x] Capture actual Google Trends interest with Playwright in `reports/research/keyword-interest.md`.
+- [x] Check homepage and recent documentation/blog titles for natural use of supported phrases.
+- [x] Review Pi's bounded wording suggestions and apply only useful changes.
+- [x] Replace the Discord invite supplied by the user and verify generated links.
+- [x] Build the site, commit and push the focused changes.

@@ -9,7 +9,7 @@ tags:
   - code-quality
   - technical-debt
 category: engineering
-description: "Deslop 0.35.0 targets false matches, missed copies and incomplete clone ranges, with clearer comparisons and duplication metrics."
+description: "Deslop 0.35.0 improves duplicate code detection with clearer comparisons, code duplication metrics, and fixes for false matches, missed copies and incomplete ranges."
 excerpt: "Finding a pair is only part of accuracy. Deslop also needs to report the complete copied code, reject unrelated lookalikes and count the right lines."
 heroImage: "/assets/img/blog/accuracy-complete-shapes.webp"
 heroImageWidth: "1600"
