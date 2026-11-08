@@ -162,9 +162,8 @@ pub(crate) fn resolve_fingerprint_nodes<'tree>(
         return Some(vec![node]);
     }
     matching_fingerprint_window(node, fingerprint).or_else(|| {
-        node.children
-            .iter()
-            .find_map(|child| resolve_fingerprint_nodes(child, fingerprint))
+        node.child_covering(range)
+            .and_then(|child| resolve_fingerprint_nodes(child, fingerprint))
     })
 }
 
@@ -288,11 +287,17 @@ fn matching_fingerprint_window<'tree>(
     node: &'tree NormalizedNode,
     fingerprint: &Fingerprint,
 ) -> Option<Vec<&'tree NormalizedNode>> {
-    node.children
-        .iter()
-        .enumerate()
-        .filter(|(_, child)| child.byte_range.start == fingerprint.byte_range.start)
-        .find_map(|(first_index, _)| window_from(&node.children, first_index, fingerprint))
+    let start = fingerprint.byte_range.start;
+    let first = node
+        .children
+        .partition_point(|child| child.byte_range.start < start);
+    (first..node.children.len())
+        .take_while(|index| {
+            node.children
+                .get(*index)
+                .is_some_and(|child| child.byte_range.start == start)
+        })
+        .find_map(|first_index| window_from(&node.children, first_index, fingerprint))
 }
 
 /// Builds the exact matching child window, including zero-width siblings.

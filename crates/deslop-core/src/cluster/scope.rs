@@ -128,9 +128,8 @@ fn smallest_enclosing(
         return None;
     }
     let deeper = node
-        .children
-        .iter()
-        .find_map(|child| smallest_enclosing(child, range, kinds));
+        .child_covering(range)
+        .and_then(|child| smallest_enclosing(child, range, kinds));
     deeper.or_else(|| kinds.contains(&node.kind).then_some(node.byte_range))
 }
 
@@ -142,9 +141,8 @@ fn node_aligned_at(node: &NormalizedNode, range: ByteRange) -> bool {
     }
     node.byte_range == range
         || node
-            .children
-            .iter()
-            .any(|child| node_aligned_at(child, range))
+            .child_covering(range)
+            .is_some_and(|child| node_aligned_at(child, range))
 }
 
 /// The range of the deepest descendant of `node` whose kind is in
@@ -158,9 +156,8 @@ fn aligned_function_at(
         return None;
     }
     let deeper = node
-        .children
-        .iter()
-        .find_map(|child| aligned_function_at(child, range, kinds));
+        .child_covering(range)
+        .and_then(|child| aligned_function_at(child, range, kinds));
     deeper.or_else(|| {
         (kinds.contains(&node.kind) && node.byte_range == range).then_some(node.byte_range)
     })
@@ -196,7 +193,7 @@ fn function_run_edges(
     if *opens && *closes {
         return;
     }
-    for child in &node.children {
+    for child in node.children_touching(range) {
         function_run_edges(child, range, kinds, opens, closes);
     }
 }

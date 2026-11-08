@@ -15,6 +15,9 @@
 //! - Identifier, literal, comment, and whitespace nodes are collapsed by the
 //!   per-language normaliser so Type-2 clones (renamed variables) produce
 //!   identical trees.
+//! - `children` sit in source order and never overlap, as tree-sitter emits
+//!   them. Every descent by byte range ([`NormalizedNode::child_covering`],
+//!   [`NormalizedNode::children_touching`]) binary-searches on that order.
 
 use tree_sitter::Node;
 
@@ -117,13 +120,38 @@ impl NormalizedNode {
     /// Strict-containment descent, once `range` is known to lie inside
     /// this subtree.
     fn covering(&self, range: ByteRange) -> Option<&Self> {
-        if self.byte_range.start > range.start || self.byte_range.end < range.end {
+        if !self.byte_range.covers(range) {
             return None;
         }
-        self.children
-            .iter()
-            .find_map(|child| child.covering(range))
+        self.child_covering(range)
+            .and_then(|child| child.covering(range))
             .or(Some(self))
+    }
+
+    /// The child whose range covers `range`, by binary search: children
+    /// sit in source order and never overlap, so at most one can. A
+    /// descent through a node with thousands of children — a generated
+    /// parse table — costs its depth, not its width.
+    #[must_use]
+    pub fn child_covering(&self, range: ByteRange) -> Option<&Self> {
+        let index = self
+            .children
+            .partition_point(|child| child.byte_range.end <= range.start);
+        self.children
+            .get(index)
+            .filter(|child| child.byte_range.covers(range))
+    }
+
+    /// The children sharing at least one byte with `range`, one
+    /// contiguous run found by binary search, in source order.
+    #[must_use]
+    pub fn children_touching(&self, range: ByteRange) -> &[Self] {
+        let start = self
+            .children
+            .partition_point(|child| child.byte_range.end <= range.start);
+        let touching = self.children.get(start..).unwrap_or(&[]);
+        let count = touching.partition_point(|child| child.byte_range.start < range.end);
+        touching.get(..count).unwrap_or(&[])
     }
 
     /// Total number of nodes in this subtree, including `self`. Computed
@@ -158,10 +186,180 @@ pub(crate) fn named_children(node: Node<'_>) -> Vec<Node<'_>> {
     node.named_children(&mut cursor).collect()
 }
 
+/// Named children of `node` sharing at least one byte with `range`, in
+/// source order. One cursor pass that stops at the first child starting
+/// past `range`, materialising only the children it touches, so a
+/// range-bounded walk through a node with thousands of children costs
+/// the children before and inside the range, never a `Vec` of them all.
+/// (tree-sitter's `first_named_child_for_byte` is not used: it answers
+/// `None` when the byte falls inside an anonymous child such as a
+/// leading keyword.)
+pub(crate) fn named_children_touching(node: Node<'_>, range: ByteRange) -> Vec<Node<'_>> {
+    let mut out = Vec::new();
+    let mut cursor = node.walk();
+    if !cursor.goto_first_child() {
+        return out;
+    }
+    loop {
+        let child = cursor.node();
+        if child.start_byte() >= range.end {
+            break;
+        }
+        if child.is_named() && child.end_byte() > range.start {
+            out.push(child);
+        }
+        if !cursor.goto_next_sibling() {
+            break;
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 #[allow(clippy::missing_docs_in_private_items)]
 mod tests {
     use super::*;
+
+    /// Children in source order, as every language parser emits them.
+    const SIBLING_RANGES: [(usize, usize); 4] = [(0, 10), (10, 10), (12, 20), (30, 40)];
+    /// Inside the third sibling.
+    const INNER: ByteRange = ByteRange { start: 14, end: 18 };
+    /// Spans the second and third siblings, so no child covers it.
+    const SPANNING: ByteRange = ByteRange { start: 10, end: 20 };
+    /// Lies in the gap between the third and fourth siblings.
+    const GAP: ByteRange = ByteRange { start: 22, end: 26 };
+
+    fn parent_with_siblings() -> NormalizedNode {
+        let mut registry = crate::state::FileRegistry::new();
+        let file_id = registry.register("siblings.rs".into());
+        let child = |(start, end): (usize, usize)| NormalizedNode {
+            kind: "child",
+            children: Vec::new(),
+            byte_range: ByteRange { start, end },
+            file_id,
+        };
+        NormalizedNode {
+            kind: "parent",
+            children: SIBLING_RANGES.into_iter().map(child).collect(),
+            byte_range: ByteRange { start: 0, end: 40 },
+            file_id,
+        }
+    }
+
+    #[test]
+    fn child_covering_finds_the_one_child_by_range() {
+        let parent = parent_with_siblings();
+        assert_eq!(
+            parent.child_covering(INNER).map(|child| child.byte_range),
+            Some(ByteRange { start: 12, end: 20 })
+        );
+        assert!(parent.child_covering(SPANNING).is_none());
+        assert!(parent.child_covering(GAP).is_none());
+    }
+
+    #[test]
+    fn children_touching_is_the_run_sharing_bytes_with_the_range() {
+        let parent = parent_with_siblings();
+        let ranges = |range: ByteRange| -> Vec<(usize, usize)> {
+            parent
+                .children_touching(range)
+                .iter()
+                .map(|child| (child.byte_range.start, child.byte_range.end))
+                .collect()
+        };
+        assert_eq!(ranges(INNER), vec![(12, 20)]);
+        assert_eq!(ranges(SPANNING), vec![(12, 20)]);
+        assert_eq!(ranges(GAP), Vec::<(usize, usize)>::new());
+        // A zero-width sibling inside the range shares its position with
+        // it, exactly as `node_intersects_range` reads a raw node.
+        assert_eq!(
+            ranges(ByteRange { start: 5, end: 35 }),
+            vec![(0, 10), (10, 10), (12, 20), (30, 40)]
+        );
+    }
+
+    /// Three one-line statements; the second spans bytes 6..11.
+    const THREE_STATEMENTS: &str = "a = 1\nb = 2\nc = 3\n";
+    const SECOND_STATEMENT: ByteRange = ByteRange { start: 6, end: 11 };
+    const WHOLE_SOURCE: ByteRange = ByteRange { start: 0, end: 17 };
+    const PAST_THE_END: ByteRange = ByteRange { start: 17, end: 20 };
+
+    /// Parses `source` with `language`, or names what did not load.
+    fn parsed(
+        language: &tree_sitter::Language,
+        source: &str,
+    ) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(language)?;
+        parser
+            .parse(source, None)
+            .ok_or_else(|| "parse produced no tree".into())
+    }
+
+    #[test]
+    fn named_children_touching_matches_the_filtered_full_walk(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let tree = parsed(&tree_sitter_python::LANGUAGE.into(), THREE_STATEMENTS)?;
+        let root = tree.root_node();
+        for range in [
+            SECOND_STATEMENT,
+            WHOLE_SOURCE,
+            PAST_THE_END,
+            ByteRange { start: 3, end: 8 },
+        ] {
+            let touching: Vec<(usize, usize)> = named_children_touching(root, range)
+                .iter()
+                .map(|child| (child.start_byte(), child.end_byte()))
+                .collect();
+            let filtered: Vec<(usize, usize)> = named_children(root)
+                .into_iter()
+                .filter(|child| child.start_byte() < range.end && child.end_byte() > range.start)
+                .map(|child| (child.start_byte(), child.end_byte()))
+                .collect();
+            assert_eq!(touching, filtered, "range {range:?}");
+        }
+        assert_eq!(named_children_touching(root, SECOND_STATEMENT).len(), 1);
+        assert_eq!(named_children_touching(root, WHOLE_SOURCE).len(), 3);
+        Ok(())
+    }
+
+    /// A Flutter widget class: the Dart grammar's class body carries
+    /// annotations, declarations and punctuation in one child list.
+    const DART_WIDGET: &str = "class ExampleApp extends StatelessWidget {\n  const ExampleApp({super.key});\n  @override\n  Widget build(BuildContext context) {\n    return MaterialApp(home: Text(\"alpha\"));\n  }\n}\n";
+
+    fn assert_touching_agrees_everywhere(node: Node<'_>, range: ByteRange) {
+        let touching: Vec<(usize, usize)> = named_children_touching(node, range)
+            .iter()
+            .map(|child| (child.start_byte(), child.end_byte()))
+            .collect();
+        let filtered: Vec<(usize, usize)> = named_children(node)
+            .into_iter()
+            .filter(|child| child.start_byte() < range.end && child.end_byte() > range.start)
+            .map(|child| (child.start_byte(), child.end_byte()))
+            .collect();
+        assert_eq!(touching, filtered, "{} at {range:?}", node.kind());
+        for child in named_children(node) {
+            assert_touching_agrees_everywhere(child, range);
+        }
+    }
+
+    #[test]
+    fn named_children_touching_agrees_on_every_node_of_a_dart_class(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let tree = parsed(&tree_sitter_dart::LANGUAGE.into(), DART_WIDGET)?;
+        let whole = ByteRange {
+            start: 0,
+            end: DART_WIDGET.len(),
+        };
+        let build_method = ByteRange {
+            start: 90,
+            end: 160,
+        };
+        for range in [whole, build_method] {
+            assert_touching_agrees_everywhere(tree.root_node(), range);
+        }
+        Ok(())
+    }
 
     #[test]
     fn byte_range_len_and_is_empty_agree_across_the_boundary() {

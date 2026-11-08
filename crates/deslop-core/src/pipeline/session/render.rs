@@ -180,8 +180,16 @@ impl PipelineSession {
         // member the saturated candidates connect *before* the content
         // gate decides which edges weld. Noise conviction reads this
         // family; admission below still decides the clusters.
+        let stage_started = Instant::now();
+        let recovery_input = pairs.len();
         let shape_families = cluster_by_transitive_closure(&pairs);
         self.recover_copy_pairs(&mut pairs, &shape_families, fingerprints, judge);
+        ledger.record(
+            "shape_families_and_copy_recovery",
+            recovery_input,
+            pairs.len(),
+            stage_started,
+        );
         let content_input = pairs.len();
         let stage_started = Instant::now();
         apply_pair_content_gate(
