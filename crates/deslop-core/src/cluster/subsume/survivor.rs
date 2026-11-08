@@ -43,7 +43,7 @@ pub(super) fn covers_same_region(first: &Cluster, second: &Cluster) -> bool {
 /// A shape-only view reports no duplication, so a wider view that holds
 /// all of it, with some of it in each of its own copies, re-describes it
 /// however unevenly ([CLONE-BUCKETS-STRUCTURAL-ONLY]).
-fn holds_shape_only(outer: &Cluster, inner: &Cluster) -> bool {
+pub(crate) fn holds_shape_only(outer: &Cluster, inner: &Cluster) -> bool {
     !inner.kind.is_clone()
         && strictly_encloses(&outer.members, &inner.members)
         && outer.members.iter().all(|copy| {

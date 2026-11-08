@@ -19,7 +19,10 @@ use crate::{
 };
 
 mod hidden;
-use hidden::{log_hidden_cluster, materialise_with_visibility, NOISE_TOTALS_RUN_STAGE};
+use hidden::{
+    absorb_shape_only_into_visible_clones, log_hidden_cluster, materialise_with_visibility,
+    NOISE_TOTALS_RUN_STAGE,
+};
 
 /// The render-stage parse cache, re-exported where [`ReportInputs`]
 /// carries it ([CLONE-NOISE-REPARSE-CACHE]).
@@ -146,7 +149,7 @@ pub fn render_report<S: BuildHasher + Sync>(inputs: ReportInputs<'_, S>) -> Repo
     let started = Instant::now();
     let report_sources = ReportSources::new(inputs.sources);
     let hide = ReportHide::new(inputs.exclusion, inputs.parsers, inputs.parse_cache);
-    let materialised = materialise_all(&inputs, &report_sources, &hide);
+    let mut materialised = materialise_all(&inputs, &report_sources, &hide);
     // Every render-stage noise check has now run: `cluster_is_hidden` is
     // the only render-stage caller of the noise filters, and it is
     // reached solely from the loop above. Without this the render
@@ -158,6 +161,7 @@ pub fn render_report<S: BuildHasher + Sync>(inputs: ReportInputs<'_, S>) -> Repo
             log_hidden_cluster(cluster, "noise or role gate");
         }
     }
+    absorb_shape_only_into_visible_clones(inputs.clusters, &mut materialised);
     let visible_internal: Vec<&Cluster> = inputs
         .clusters
         .iter()

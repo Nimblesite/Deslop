@@ -14,15 +14,17 @@
 //! visibility, the language-agnostic and per-language noise patterns
 //! ([CLONE-NOISE-*]). The embedding role guard runs before closure.
 
-use std::hash::BuildHasher;
+use std::{collections::BTreeMap, hash::BuildHasher};
 
 use super::{ReportCluster, ReportInputs};
 use crate::{
+    cluster::{file_set, holds_shape_only, Cluster},
     cluster_filters::{
         escapes_as_copy, is_noise_pattern, is_single_file_declaration_family, ParseCache,
     },
     report_hide::ReportHide,
     report_render::{cluster_to_report, ReportSources},
+    state::FileId,
 };
 
 /// Decides whether one cluster must be dropped from the ranked report.
@@ -162,4 +164,51 @@ pub(crate) fn log_hidden_cluster(cluster: &ReportCluster, why: &str) {
         why,
         "cluster hidden from report",
     );
+}
+
+/// [PIPELINE-CLUSTER-SUBSUME] [CLONE-BUCKETS-STRUCTURAL-ONLY] Hides every
+/// shape-only view a *visible* clone strictly encloses, with some of it in
+/// each of the clone's copies: the clone already reports that code, read
+/// wider. Clones and shape-only views are resolved in separate passes, so
+/// this is where they meet, and it runs after the noise filters because
+/// only a published view may absorb another: a clone the filters hide
+/// releases what it would have absorbed (`type3_enclosing_method`,
+/// `python_issue_100_kwargs_ctor`).
+pub(crate) fn absorb_shape_only_into_visible_clones(
+    clusters: &[Cluster],
+    materialised: &mut [(ReportCluster, bool)],
+) {
+    let holders = visible_clones_by_file_set(clusters, materialised);
+    for (cluster, (report, hidden)) in clusters.iter().zip(materialised.iter_mut()) {
+        if *hidden || cluster.kind.is_clone() {
+            continue;
+        }
+        let absorbed = holders
+            .get(&file_set(&cluster.members))
+            .is_some_and(|outers| outers.iter().any(|outer| holds_shape_only(outer, cluster)));
+        if absorbed {
+            *hidden = true;
+            log_hidden_cluster(report, "shape-only view held by a visible clone");
+        }
+    }
+}
+
+/// Visible clones grouped by the exact set of files they name
+/// ([PIPELINE-CLUSTER-SUBSUME-FILESET]): a view can only enclose a view
+/// over its own files.
+fn visible_clones_by_file_set<'a>(
+    clusters: &'a [Cluster],
+    materialised: &[(ReportCluster, bool)],
+) -> BTreeMap<Vec<FileId>, Vec<&'a Cluster>> {
+    clusters
+        .iter()
+        .zip(materialised)
+        .filter(|(cluster, (_, hidden))| !hidden && cluster.kind.is_clone())
+        .fold(BTreeMap::new(), |mut groups, (cluster, _)| {
+            groups
+                .entry(file_set(&cluster.members))
+                .or_insert_with(Vec::new)
+                .push(cluster);
+            groups
+        })
 }

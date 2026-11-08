@@ -33,20 +33,11 @@ fn issue_45_pipeline_emits_stage_observability_events() -> Result<()> {
         ],
     );
 
-    let materialised = captured.event("clusters materialised")?;
-    assert_eq!(materialised.target, "deslop_core::cluster");
-    assert_has_fields(
-        &materialised,
-        &["input_total", "materialised", "dropped_below_min_members"],
-    );
-
-    // [PIPELINE-CLUSTER-SUBSUME] One ranked build resolves clone and
-    // shape-only views together, so one record reports what it absorbed.
     let cluster = captured.event("ranked clusters built")?;
     assert_eq!(cluster.target, "deslop_core::cluster");
     assert_has_fields(
         &cluster,
-        &["total", "input_total", "absorbed", "largest_mass"],
+        &["total", "dropped_below_min_members", "largest_mass"],
     );
 
     // The bucket distribution event is retired with the bucket surface:

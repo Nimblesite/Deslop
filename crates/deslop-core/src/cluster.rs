@@ -29,6 +29,7 @@ pub use identity::encode_short_id;
 use identity::{name_clusters, Unnamed};
 use scope::DeclarationScopes;
 use subsume::collapse_cross_cluster_overlap;
+pub(crate) use subsume::{file_set, holds_shape_only};
 
 /// Source occurrences with an established clone or informational relation.
 #[derive(Debug, Clone)]
@@ -109,58 +110,30 @@ pub struct ClusterBuildInputs<'a, L: BuildHasher> {
 }
 
 /// Builds ranked clusters from a fused-cluster list produced by
-/// [`crate::pair::cluster_by_transitive_closure`]: materialises them
-/// ([`materialise_clusters`]) and resolves their overlapping views
-/// ([`collapse_ranked_clusters`]) in one step.
+/// [`crate::pair::cluster_by_transitive_closure`]. Each `FusedCluster`
+/// references fingerprint indices; this materialises the full [`Cluster`]
+/// so ranking and rendering need not know how the cluster was discovered.
 #[must_use]
 pub fn build_ranked_fused_clusters<L: BuildHasher + Sync>(
     inputs: &ClusterBuildInputs<'_, L>,
 ) -> Vec<Cluster> {
-    collapse_ranked_clusters(materialise_clusters(inputs), inputs.sources)
-}
-
-/// Materialises every reportable fused cluster into a full [`Cluster`],
-/// so ranking and rendering need not know how the cluster was
-/// discovered. Views are not yet resolved against one another: clone
-/// and shape-only families are materialised under different kind
-/// judges and then collapsed together ([PIPELINE-CLUSTER-SUBSUME]).
-#[must_use]
-pub(crate) fn materialise_clusters<L: BuildHasher + Sync>(
-    inputs: &ClusterBuildInputs<'_, L>,
-) -> Vec<Cluster> {
-    let clusters = reportable_clusters(
+    let mut clusters = reportable_clusters(
         inputs,
         &DeclarationScopes::new(inputs.trees, inputs.file_languages),
     );
-    tracing::info!(
-        input_total = inputs.fused_clusters.len(),
-        materialised = clusters.len(),
-        dropped_below_min_members = inputs.fused_clusters.len().saturating_sub(clusters.len()),
-        "clusters materialised",
-    );
-    clusters
-}
-
-/// Ranks materialised clusters by duplicated mass and publishes one view
-/// per physical duplication ([PIPELINE-CLUSTER-SUBSUME]). Clone and
-/// shape-only views are judged together: a shape-only fragment nested
-/// inside an admitted near-miss is that duplication read narrower, and
-/// the enclosing clone survives it ([CLONE-BUCKETS-STRUCTURAL-ONLY],
-/// `type3_enclosing_method`).
-#[must_use]
-pub(crate) fn collapse_ranked_clusters(
-    mut clusters: Vec<Cluster>,
-    sources: &HashMap<FileId, Vec<u8>>,
-) -> Vec<Cluster> {
-    let input_total = clusters.len();
+    let dropped_below_min_members = inputs.fused_clusters.len().saturating_sub(clusters.len());
     clusters.sort_by(|left, right| {
         right
             .mass
             .cmp(&left.mass)
             .then_with(|| left.id.cmp(&right.id))
     });
-    let collapsed = collapse_cross_cluster_overlap(clusters, sources);
-    log_ranked_cluster_distribution(&collapsed, input_total);
+    let collapsed = collapse_cross_cluster_overlap(clusters, inputs.sources);
+    log_ranked_cluster_distribution(
+        &collapsed,
+        inputs.fused_clusters.len(),
+        dropped_below_min_members,
+    );
     collapsed
 }
 
@@ -184,12 +157,12 @@ fn reportable_clusters<L: BuildHasher + Sync>(
 }
 
 /// Emits the structured GH#45 ranked-cluster distribution summary.
-fn log_ranked_cluster_distribution(clusters: &[Cluster], input_total: usize) {
+fn log_ranked_cluster_distribution(clusters: &[Cluster], input_total: usize, dropped: usize) {
     let largest_mass = clusters.first().map_or(0, |cluster| cluster.mass);
     tracing::info!(
         total = clusters.len(),
         input_total,
-        absorbed = input_total.saturating_sub(clusters.len()),
+        dropped_below_min_members = dropped,
         largest_mass,
         "ranked clusters built",
     );
