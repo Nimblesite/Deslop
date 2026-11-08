@@ -82,6 +82,69 @@ const HELP_ITEM_COUNT = 4;
 const LOADING_CLUSTER_TEXT = "Loading cluster…";
 const EMPTY_CLUSTER_TEXT = "No cluster selected.";
 const MISSING_CLUSTER_ID = "0000000000000000";
+const NEXT_CLUSTER_OFFSET = 1;
+const LAST_CLUSTER_INDEX = 2;
+const RUNNING_STATE = { kind: "analysis/state", state: { state: "running", started_at_ms: 1 } };
+const ERRORED_STATE = { kind: "analysis/state", state: { state: "errored", message: "engine restarting" } };
+
+/** One order the host can deliver a cluster panel's first messages in. */
+interface LoadingOrder {
+  readonly name: string;
+  readonly clusterIndex: number;
+  /** Messages that arrive before the selected cluster can resolve. */
+  readonly beforeCluster: readonly unknown[];
+  /** The messages that complete the delivery of cluster `id`. */
+  readonly deliver: (id: string) => readonly unknown[];
+}
+
+const LOADING_ORDERS: readonly LoadingOrder[] = [
+  { name: "select then snapshot", clusterIndex: FIRST_CLUSTER_INDEX,
+    beforeCluster: [{ kind: "select/cluster", id: sampleReport.clusters[FIRST_CLUSTER_INDEX].id }],
+    deliver: () => [{ kind: "report/snapshot", report: sampleReport }] },
+  { name: "snapshot then select", clusterIndex: SECOND_CLUSTER_INDEX,
+    beforeCluster: [{ kind: "report/snapshot", report: sampleReport }],
+    deliver: (id) => [{ kind: "select/cluster", id }] },
+  { name: "select then delta", clusterIndex: LAST_CLUSTER_INDEX,
+    beforeCluster: [{ kind: "select/cluster", id: sampleReport.clusters[LAST_CLUSTER_INDEX].id }],
+    deliver: () => [{ kind: "report/delta", report: sampleReport }] },
+  { name: "analysis running, then select and snapshot", clusterIndex: FIRST_CLUSTER_INDEX,
+    beforeCluster: [RUNNING_STATE, { kind: "select/cluster", id: sampleReport.clusters[FIRST_CLUSTER_INDEX].id }],
+    deliver: () => [{ kind: "report/snapshot", report: sampleReport }] },
+  { name: "analysis errored, then select and snapshot", clusterIndex: SECOND_CLUSTER_INDEX,
+    beforeCluster: [ERRORED_STATE, { kind: "select/cluster", id: sampleReport.clusters[SECOND_CLUSTER_INDEX].id }],
+    deliver: () => [{ kind: "report/snapshot", report: sampleReport }] },
+  { name: "facet filter and filters first", clusterIndex: LAST_CLUSTER_INDEX,
+    beforeCluster: [{ kind: "facetFilter/set", filter: { severities: [] } },
+      { kind: "filter/set", filters: { severity: null, kind: null, pathGlob: "" } }],
+    deliver: (id) => [{ kind: "report/snapshot", report: sampleReport }, { kind: "select/cluster", id }] },
+];
+
+/** The heading a cluster of `kind` renders under. */
+function kindTitleFor(kind: string): string {
+  if (kind === "identical") return IDENTICAL_TITLE;
+  if (kind === "nearly_identical") return NEARLY_IDENTICAL_TITLE;
+  return STRUCTURAL_ONLY_TITLE;
+}
+
+/** The panel is visibly, accessibly loading — and claims nothing about the cluster. */
+async function expectLoading(page: Page): Promise<void> {
+  const loading = page.getByRole("status");
+  await expect(loading).toBeVisible();
+  await expect(loading).toHaveText(LOADING_CLUSTER_TEXT);
+  await expect(page.locator("main")).toHaveAttribute("aria-busy", "true");
+  await expect(page.getByText(EMPTY_CLUSTER_TEXT)).toHaveCount(0);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveCount(0);
+  await expect(page.locator(OCCURRENCE_ROW)).toHaveCount(0);
+}
+
+/** The cluster rendered: its heading and rows, with no spinner and no empty state. */
+async function expectLoaded(page: Page, title: string): Promise<void> {
+  await expect(page.getByRole("heading", { name: title })).toBeVisible();
+  await expect(page.getByRole("status")).toHaveCount(0);
+  await expect(page.locator("main")).not.toHaveAttribute("aria-busy", "true");
+  await expect(page.getByText(EMPTY_CLUSTER_TEXT)).toHaveCount(0);
+  await expect(page.locator(OCCURRENCE_ROW).first()).toBeVisible();
+}
 
 // [VSIX-PAIR-COMPARE] Each comparison action names its endpoints explicitly.
 test("cluster comparison controls distinguish canonical and selected endpoints", async ({ page }) => {
@@ -299,30 +362,49 @@ test.describe("VSIX webview bundles", () => {
     });
   }
 
-  test("an opening cluster panel shows a spinner until its cluster arrives, never the empty state (#606)", async ({ page }) => {
-    // #606: the panel has mounted but the host has not delivered the report
-    // yet. "No cluster selected." claims the cluster is gone while it is
-    // still loading; the user must see a loading state instead, and the
-    // empty state only after a delivered report fails to resolve the id.
+  // #606: the panel has mounted but the host has not delivered the cluster
+  // yet. "No cluster selected." claims the cluster is gone while it is still
+  // loading; the user must see a loading state instead — on every viewport,
+  // whatever order the host's messages arrive in, and through analysis
+  // running or erroring — and the empty state only once a delivered report
+  // fails to resolve the selection.
+  for (const viewport of viewports) {
+    for (const order of LOADING_ORDERS) {
+      test(`${viewport.name}: a cluster panel loading via ${order.name} shows a spinner, never the empty state (#606)`, async ({ page }) => {
+        const errors = await loadView(page, "cluster", viewport);
+        await expectLoading(page);
+
+        for (const message of order.beforeCluster) {
+          await postHostMessage(page, message);
+          await expectLoading(page);
+        }
+
+        const target = sampleReport.clusters[order.clusterIndex];
+        for (const message of order.deliver(target.id)) await postHostMessage(page, message);
+        await expectLoaded(page, kindTitleFor(target.kind));
+
+        await postHostMessage(page, { kind: "select/cluster", id: MISSING_CLUSTER_ID });
+        await expect(page.getByText(EMPTY_CLUSTER_TEXT)).toBeVisible();
+        await expect(page.getByRole("status")).toHaveCount(0);
+        await expect(page.locator("main")).not.toHaveAttribute("aria-busy", "true");
+
+        const next = sampleReport.clusters[(order.clusterIndex + NEXT_CLUSTER_OFFSET) % sampleReport.clusters.length];
+        await postHostMessage(page, { kind: "select/cluster", id: next.id });
+        await expectLoaded(page, kindTitleFor(next.kind));
+        expect(errors, errors.join("\n")).toEqual([]);
+      });
+    }
+  }
+
+  test("a report with no clusters ends the loading state with the empty state, not a spinner forever (#606)", async ({ page }) => {
     const errors = await loadView(page, "cluster", viewports[DESKTOP_VIEWPORT_INDEX]);
-
-    const loading = page.getByRole("status");
-    await expect(loading).toBeVisible();
-    await expect(loading).toHaveText(LOADING_CLUSTER_TEXT);
-    await expect(page.getByText(EMPTY_CLUSTER_TEXT)).toHaveCount(0);
-
+    await expectLoading(page);
     await postHostMessage(page, { kind: "select/cluster", id: sampleReport.clusters[FIRST_CLUSTER_INDEX].id });
-    await expect(loading).toBeVisible();
-    await expect(page.getByText(EMPTY_CLUSTER_TEXT)).toHaveCount(0);
-
-    await postHostMessage(page, { kind: "report/snapshot", report: sampleReport });
-    await expect(page.getByRole("heading", { name: IDENTICAL_TITLE })).toBeVisible();
-    await expect(page.getByRole("status")).toHaveCount(0);
-    await expect(page.getByText(EMPTY_CLUSTER_TEXT)).toHaveCount(0);
-
-    await postHostMessage(page, { kind: "select/cluster", id: MISSING_CLUSTER_ID });
+    await expectLoading(page);
+    await postHostMessage(page, { kind: "report/snapshot", report: { ...sampleReport, clusters: [] } });
     await expect(page.getByText(EMPTY_CLUSTER_TEXT)).toBeVisible();
     await expect(page.getByRole("status")).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: IDENTICAL_TITLE })).toHaveCount(0);
     expect(errors, errors.join("\n")).toEqual([]);
   });
 

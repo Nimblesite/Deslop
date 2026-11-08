@@ -24,9 +24,53 @@ const THREE_OCCURRENCES = 3;
 const CANONICAL_NODE_COUNT = 42;
 const CLEAN_PEER_COUNT = 2;
 const INITIAL_GENERATION = 1;
-/** #606 A workspace large enough that shipping it whole is the defect, and its ids' digit width. */
-const WORKSPACE_CLUSTER_COUNT = 500;
+/** #606 Workspaces from one cluster to large enough that shipping it whole is the defect. */
+const WORKSPACE_SIZES = [1, 2, 50, 500] as const;
 const CLUSTER_ID_WIDTH = 7;
+const LOCATIONS_PER_CLUSTER = 3;
+const HALF = 2;
+/** Where in the engine's rank order the opened cluster sits. */
+const OPENED_POSITIONS = [
+  { name: "worst cluster", index: (_size: number) => 0 },
+  { name: "middle cluster", index: (size: number) => Math.floor(size / HALF) },
+  { name: "last cluster", index: (size: number) => size - 1 },
+] as const;
+
+/** `size` clusters in rank order, each with its own files. */
+function workspaceOf(size: number): ReportCluster[] {
+  return Array.from({ length: size }, (_, index) => ({
+    ...clusterOf(`c${String(index).padStart(CLUSTER_ID_WIDTH, "0")}`, size - index,
+      Array.from({ length: LOCATIONS_PER_CLUSTER }, (_unused, member) => occ(`/repo/src/f${index}_${member}.cs`, member, member + TEST_THIRTY))),
+    rank: index + 1,
+  }));
+}
+
+/** The last snapshot ships `opened`'s locations — all of them — and nothing else but ids, in rank order. */
+function assertShipsOnly(fake: FakePanel, opened: ReportCluster, workspace: ReportCluster[], when: string): void {
+  const select = lastOfKind(fake.messages, "select/cluster");
+  const snapshot = lastOfKind(fake.messages, "report/snapshot");
+  assert.equal(select?.id, opened.id, `${when}: the opened cluster is selected`);
+  assert.ok(snapshot?.report, `${when}: the panel receives the opened cluster`);
+  const shipped = snapshot.report.clusters.find((cluster) => cluster.id === opened.id);
+  assert.ok(shipped, `${when}: the opened cluster is shipped`);
+  assert.deepEqual(
+    shipped.occurrences.map((occurrence) => [occurrence.path, occurrence.start_byte, occurrence.end_byte]),
+    opened.occurrences.map((occurrence) => [occurrence.path, occurrence.start_byte, occurrence.end_byte]),
+    `${when}: every location of the opened cluster is shipped, canonical first`,
+  );
+  const locations = snapshot.report.clusters.reduce((total, cluster) => total + cluster.occurrences.length, 0);
+  assert.equal(
+    locations,
+    opened.occurrences.length,
+    `${when}: opening one cluster must ship only its ${opened.occurrences.length} locations; shipped ${locations} ` +
+      `across ${snapshot.report.clusters.length} clusters`,
+  );
+  assert.deepEqual(
+    snapshot.report.clusters.map((cluster) => cluster.id),
+    [...workspace].sort((left, right) => left.rank - right.rank).map((cluster) => cluster.id),
+    `${when}: the navigation list keeps every cluster id in the engine's rank order`,
+  );
+}
 
 interface PostedMessage {
   kind?: string;
@@ -314,34 +358,42 @@ suite("cluster detail panel selection (#173)", () => {
     });
   });
 
-  test("opening one cluster ships that cluster's locations, never every location in the workspace (#606)", () => {
-    // #606: the panel showed "No cluster selected." for seconds on React
-    // because the host serialised the whole report — 10,774 clusters and
-    // 44,447 locations, each enriched by reading its source file — to show
-    // one cluster. The panel needs the opened cluster's locations; the rest
-    // of the workspace is at most a navigation list of ids.
-    const workspace = Array.from({ length: WORKSPACE_CLUSTER_COUNT }, (_, index) =>
-      clusterOf(`c${String(index).padStart(CLUSTER_ID_WIDTH, "0")}`, TEST_THIRTY - (index % TEST_THIRTY), [
-        occ(`/repo/src/a${index}.cs`, 0, 9),
-        occ(`/repo/src/b${index}.cs`, 0, 9),
-      ]));
+  // #606: the panel showed "No cluster selected." for seconds on React
+  // because the host serialised the whole report — 10,774 clusters and 44,447
+  // locations, each enriched by reading its source file — to show one cluster.
+  // The panel needs the opened cluster's locations; the rest of the workspace
+  // is at most a navigation list of ids, in the engine's rank order.
+  for (const size of WORKSPACE_SIZES) {
+    for (const position of OPENED_POSITIONS) {
+      test(`opening the ${position.name} of ${size} clusters ships only that cluster's locations (#606)`, () => {
+        const workspace = workspaceOf(size);
+        const opened = workspace[position.index(size)];
+        assert.ok(opened, "the fixture has a cluster at that position");
+        const store = storeWith(reportOf(workspace), INITIAL_GENERATION);
+
+        withClusterPanel(store, opened.id, (fake) => {
+          assertShipsOnly(fake, opened, workspace, "first push");
+
+          // A re-analysis renames every cluster id (content hashes churn) while
+          // locations stay put: the panel follows the opened cluster by its
+          // canonical location and still ships only its locations.
+          const reanalysed = workspace.map((cluster) => ({ ...cluster, id: `${cluster.id}-next` }));
+          store.setSnapshot(reportOf(reanalysed), INITIAL_GENERATION + 1);
+          const followed = reanalysed[position.index(size)];
+          assert.ok(followed);
+          assertShipsOnly(fake, followed, reanalysed, "after a re-analysis");
+        });
+      });
+    }
+  }
+
+  test("an opened cluster the dirty projection elided ships only its own locations (#606)", () => {
+    const workspace = workspaceOf(WORKSPACE_SIZES[WORKSPACE_SIZES.length - 1] ?? 1);
     const opened = clusterOf(PRIMARY_CLUSTER_ID, TEST_THIRTY, groupOccurrences);
     const store = storeWith(reportOf([opened, ...workspace]), INITIAL_GENERATION);
-
     withClusterPanel(store, PRIMARY_CLUSTER_ID, (fake) => {
-      const select = lastOfKind(fake.messages, "select/cluster");
-      const snapshot = lastOfKind(fake.messages, "report/snapshot");
-      assert.equal(select?.id, PRIMARY_CLUSTER_ID, "the opened cluster is selected");
-      assert.ok(snapshot?.report, "the panel receives the opened cluster");
-      const shipped = snapshot.report.clusters.find((cluster) => cluster.id === PRIMARY_CLUSTER_ID);
-      assert.equal(shipped?.occurrences.length, groupOccurrences.length, "every location of the opened cluster is shipped");
-      const locations = snapshot.report.clusters.reduce((total, cluster) => total + cluster.occurrences.length, 0);
-      assert.equal(
-        locations,
-        groupOccurrences.length,
-        `opening one cluster must ship only its ${groupOccurrences.length} locations; shipped ${locations} ` +
-          `across ${snapshot.report.clusters.length} clusters`,
-      );
+      store.markFileDirty(groupOccurrences[FIRST_OCCURRENCE_INDEX]?.path ?? "");
+      assertShipsOnly(fake, opened, [opened, ...workspace], "with the canonical file unsaved");
     });
   });
 
