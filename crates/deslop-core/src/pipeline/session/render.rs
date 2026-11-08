@@ -63,18 +63,12 @@ impl PipelineSession {
         let parse_cache = ParseCache::new();
         let stage_started = Instant::now();
         let lsh_source = BandCollisionSource::new(&signatures);
-        // [PERF-FLUTTER-TODO-MEMORY] The normalised trees are
-        // re-materialised from sources only when a consumer needs them
-        // — after the LSH/pair stage whose allocations are the run's
-        // other memory peak, so the tree population and the pair
-        // population never coincide. The cross-language audit mode
-        // reads trees before pairing; the default path defers to the
-        // rescue below.
         let PairingOutcome {
             trees,
             mut pairs,
             embedding_outcome,
         } = self.build_candidate_pairs(config, fingerprints, &signatures, &lsh_source)?;
+        self.store.anchors().publish(&pairs, fingerprints);
         ledger.record(
             "candidate_pairs",
             signatures.len(),

@@ -8,6 +8,7 @@
 //! optional-embedding clustering pipeline. The embedding + fingerprint
 //! caches on disk are shared with the batch path ([PIPELINE-INCREMENTAL]).
 
+mod anchors;
 mod ast_access;
 mod change;
 mod diff;
@@ -354,6 +355,7 @@ impl PipelineSession {
         let ignore_matcher = IgnoreMatcher::build_configured(&self.root, &exclusion)?;
         self.exclusion = exclusion;
         self.ignore_matcher = ignore_matcher;
+        self.store.forget_anchors();
         Ok(())
     }
 }
