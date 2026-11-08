@@ -191,6 +191,20 @@ pub fn is_mandated_prologue(language: &str, kind: &str) -> bool {
     language == "go" && kind == GO_PACKAGE_CLAUSE
 }
 
+/// [PIPELINE-FINGERPRINT-MERKLE-ROOT] [LANG-CAND-C-PREPROC] Returns true
+/// when a whole-file view in `language` that holds a top-level `kind` would
+/// claim scaffolding as duplication. C lists every `#include` as its own
+/// top-level node, so a translation unit's view always opens on the include
+/// block the boilerplate filter refuses as evidence — and, as the widest
+/// range in its file, it pairs that block and every function after it
+/// against a run of functions in another file: `print_array.c:23-100`
+/// against `print_object.c:27-83`. The root's children and the sibling pass
+/// carry the copy instead.
+#[must_use]
+pub fn is_whole_file_scaffolding(language: &str, kind: &str) -> bool {
+    is_mandated_prologue(language, kind) || (language == "c" && c_carrier(kind))
+}
+
 /// Language-specific wrappers whose children encode prologue-only syntax.
 fn is_language_specific_boilerplate_subtree(language: &str, node: &NormalizedNode) -> bool {
     match language {
