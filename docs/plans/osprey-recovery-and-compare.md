@@ -10,7 +10,7 @@ An unfinished declaration must not remove findings for intact neighboring functi
 - [x] Obtain acknowledgment required by the accuracy quarantine and fix-bug skill (user goal, 2026-11-08).
 - [x] Repair the upstream Osprey grammar with construct-specific fixtures and update the pin. The ML scanner placed the zero-width `_dedent` after following blank lines, so `describe` spanned `[0..85]`. The Osprey team fixed it as Nimblesite/osprey#374 (`e82980cf1`, DEDENT ends at the block's last line break); the pin is bumped and `osprey_recovery` is green unchanged.
 - [x] Implement recovery without inventing matches inside erroneous syntax: `osprey.rs::intact_root` keeps only error-free top-level declarations; a file with no intact declaration stays a visible skip.
-- [ ] Verify the real LSP edit/recovery cycle and run required gates.
+- [x] Verify the real LSP edit/recovery cycle and run required gates: `make test` green at b4d08e0e, Osprey VSIX suite 5/5, dev VSIX installed.
 
 ## [VSIX-PAIR-COMPARE]
 
