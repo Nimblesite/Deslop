@@ -2,21 +2,29 @@
 
 ## [LANG-CAND-OSPREY-RECOVERY] Pin provenance
 
-Deslop's `tree-sitter-osprey` and `tree-sitter-osprey-ml` pins in `Cargo.toml` point at `e82980cf1`, the fix for Nimblesite/osprey#374. That commit is only on Osprey's `qwen-prefill` branch, 74 commits ahead of main. Its route to main is Osprey PR #373, an unrelated, draft Qwen-prefill PR with red CI (`Rust workspace (rest)`, `Osprey Agent UI`).
+Deslop pins `tree-sitter-osprey` and `tree-sitter-osprey-ml` (one repository, one revision) in `Cargo.toml`.
 
-**Why this blocks:** a pin to a commit on an unmerged branch is not durable. A rebase or force-push of `qwen-prefill` orphans the revision, and once GitHub collects it, `cargo fetch` fails for every Deslop build and CI run. The grammar fix itself has no dependency on the Qwen work, so it should not wait for it.
+| Where | Pin | Reachable from Osprey main? |
+| --- | --- | --- |
+| Deslop `main` | `865f0469` | No. It has diverged from Osprey main: 168 commits ahead, 18 behind. |
+| PR #603 | `e82980cf1`, the Nimblesite/osprey#374 fix | No. It sits on `qwen-prefill`, reachable only through Osprey PR #373 (a draft with red CI). |
 
-**Rule:** per `AGENTS.md`, Deslop adds no workaround. The fix lands in Osprey, and Deslop only bumps the pin.
+A pin that is not on main is fragile. If someone force-pushes the branch, the commit becomes orphaned and `cargo fetch` eventually fails. **Deslop main already carries this risk**, so holding #603 back protects nothing. #603 is strictly better than main: it keeps the same level of risk and adds the real upstream fix, which turns `osprey_recovery` green. This is no workaround: Deslop does not vendor, patch or fork the grammar ([AGENTS.md](../../AGENTS.md)).
+
+`e82980cf1` touches only the hand-written `tree-sitter-osprey-ml/src/scanner.c` and `bindings/rust/tests.rs`. A cherry-pick onto Osprey main should not conflict with generated files.
 
 ## Steps
 
-- [x] **Ask Osprey for a grammar-only PR** (sent 2026-11-08). Message OspreyClaude2 over Too Many Cooks: cherry-pick `e82980cf1` onto a fresh branch from Osprey main, open its own PR, and merge it once that PR's CI is green. #373 then rebases onto it unchanged.
-- [ ] **Confirm on GitHub, not on a message.** Check that the cherry-picked commit is reachable from main (`gh api repos/Nimblesite/osprey/compare/main...<rev>` reports `behind` or `identical`) and that #374 is closed.
-- [ ] **Bump the pin** to the commit on main, in both `Cargo.toml` lines, then run `cargo update -p tree-sitter-osprey -p tree-sitter-osprey-ml`. Keep `docs/plans/osprey-support.md` and `reports/tests/report-reuse-baseline-blockers.md` in sync with the new revision.
-- [ ] **Run gates:** `cargo test -p deslop --test suite osprey_recovery`, then `make test`. A cherry-pick changes the commit hash but not the grammar. If either gate goes red, the cherry-pick lost something, and the problem goes back to Osprey.
-- [ ] **Commit** with the message `deps: pin Osprey grammars to main <rev> [LANG-CAND-OSPREY-RECOVERY]`, then push to the PR #603 branch.
-- [ ] **Merge Deslop PR #603 only after the pin is on Osprey main.** Until then, #603 stays open.
+- [x] Ask OspreyClaude2 over Too Many Cooks for a grammar-only PR to Osprey main: cherry-pick `e82980cf1`, and if a generated file ever conflicts, regenerate it with `tree-sitter generate` rather than hand-merging (sent 2026-11-08).
+- [x] Have the plan reviewed (pi `zai/glm-5.3`, two rounds, 2026-11-08). Accepted: main is already fragile, so merge #603 now; re-pin promptly; set an escalation deadline; widen the doc-sync gate; check the lockfile scope. Rejected: holding #603 to keep a test red. The test is green on the genuine upstream fix.
+- [ ] Merge Deslop PR #603. It improves the pin and fixes `osprey_recovery`.
+- [ ] Confirm on GitHub, not from a message: `gh api repos/Nimblesite/osprey/compare/main...<rev>` reports `behind` or `identical`, and #374 is closed.
+- [ ] Within one session of that Osprey merge, re-pin both `Cargo.toml` lines to the main commit and run `cargo update -p tree-sitter-osprey -p tree-sitter-osprey-ml`. The `Cargo.lock` diff touches only those two packages.
+- [ ] Gate: `Cargo.toml` and `Cargo.lock` contain neither `865f0469` nor `e82980cf1`. `docs/plans/osprey-support.md`, `docs/plans/osprey-recovery-and-compare.md` and `reports/tests/report-reuse-baseline-blockers.md` name the new revision.
+- [ ] Run `cargo test -p deslop --test suite osprey_recovery`, then `make test`. A red gate means the cherry-pick lost something, which goes back to Osprey.
+- [ ] Commit as `deps: pin Osprey grammars to main <rev> [LANG-CAND-OSPREY-RECOVERY]`.
+- [ ] Before any Deslop release or tag, check that the pinned revision is reachable: `gh api repos/Nimblesite/osprey/commits/<rev>`.
 
-## Fallback
+## Escalation
 
-If Osprey declines a separate PR, #603 waits for #373 to merge. Deslop does not vendor, patch or fork the grammar.
+If there is no grammar-only merge to Osprey main by **2026-11-10**, comment on Nimblesite/osprey#374 asking for it and message OspreyClaude2 again. Deslop never vendors, patches or forks the grammar.
