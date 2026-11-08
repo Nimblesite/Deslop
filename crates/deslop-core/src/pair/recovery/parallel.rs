@@ -168,14 +168,20 @@ fn settle_batch(
     for (position, &member) in batch.iter().enumerate() {
         let node = base.saturating_add(position);
         for index in 0..base {
-            if let Some(pair) = results.get(position.saturating_mul(base).saturating_add(index)).copied().flatten() {
+            if let Some(pair) = results
+                .get(position.saturating_mul(base).saturating_add(index))
+                .copied()
+                .flatten()
+            {
                 pairs.push(pair);
                 sets.union(index, node);
             }
         }
         for (earlier_position, &earlier) in batch.iter().enumerate().take(position) {
             let earlier_node = base.saturating_add(earlier_position);
-            if sets.find(earlier_node) == sets.find(node) || candidate_exists(existing, earlier, member) {
+            if sets.find(earlier_node) == sets.find(node)
+                || candidate_exists(existing, earlier, member)
+            {
                 continue;
             }
             probed.count();
@@ -185,9 +191,13 @@ fn settle_batch(
             }
         }
     }
-    let mut by_root: std::collections::BTreeMap<usize, Vec<usize>> = std::collections::BTreeMap::new();
+    let mut by_root: std::collections::BTreeMap<usize, Vec<usize>> =
+        std::collections::BTreeMap::new();
     for (index, component) in components.into_iter().enumerate() {
-        by_root.entry(sets.find(index)).or_default().extend(component);
+        by_root
+            .entry(sets.find(index))
+            .or_default()
+            .extend(component);
     }
     for (position, &member) in batch.iter().enumerate() {
         by_root
@@ -218,13 +228,7 @@ pub(super) fn parallel_group_pairs<W: CopyWeld + Send>(
     for batch in members.chunks(PROBE_BATCH_MEMBERS) {
         let results = probe_batch(batch, &components, pool, workers, existing, probed);
         components = settle_batch(
-            batch,
-            components,
-            &results,
-            &mut weld,
-            existing,
-            probed,
-            &mut pairs,
+            batch, components, &results, &mut weld, existing, probed, &mut pairs,
         );
     }
     pool.release([weld]);
