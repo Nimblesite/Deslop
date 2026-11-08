@@ -423,18 +423,22 @@ fn the_parallel_walk_connects_what_the_sequential_walk_connects() {
     let existing: Vec<CandidatePair> = members
         .iter()
         .flat_map(|&left| (left + 1..PARITY_MEMBERS).map(move |right| (left, right)))
-        .filter(|(left, right)| parity_welds(*left, *right) && (left + right) % PARITY_EXISTING_STRIDE == 0)
+        .filter(|(left, right)| {
+            parity_welds(*left, *right) && (left + right) % PARITY_EXISTING_STRIDE == 0
+        })
         .map(candidate)
         .collect();
-    let sequential = connected_hash_pairs(
+    let sequential =
+        connected_hash_pairs(&members, &mut welding_parity, &existing, &Probed::default());
+    let open = || welding_parity;
+    let pool = WeldPool::new(&open);
+    let parallel = parallel_group_pairs(
         &members,
-        &mut welding_parity,
+        &pool,
+        PARITY_WORKERS,
         &existing,
         &Probed::default(),
     );
-    let open = || welding_parity;
-    let pool = WeldPool::new(&open);
-    let parallel = parallel_group_pairs(&members, &pool, PARITY_WORKERS, &existing, &Probed::default());
     assert!(
         !sequential.is_empty(),
         "the fixture must weld something or the parity proves nothing"
@@ -445,7 +449,9 @@ fn the_parallel_walk_connects_what_the_sequential_walk_connects() {
         "the parallel walk must induce the sequential walk's components"
     );
     assert!(
-        parallel.iter().all(|pair| parity_welds(pair.left, pair.right)),
+        parallel
+            .iter()
+            .all(|pair| parity_welds(pair.left, pair.right)),
         "every emitted pair must be a weld"
     );
 }

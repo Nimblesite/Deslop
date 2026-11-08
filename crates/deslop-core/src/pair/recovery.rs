@@ -171,9 +171,11 @@ fn recovered_pairs<W: CopyWeld + Send>(
     chunks
         .into_iter()
         .flatten()
-        .chain(large.iter().flat_map(|family| {
-            large_family_pairs(family, fingerprints, &pool, existing, probed)
-        }))
+        .chain(
+            large.iter().flat_map(|family| {
+                large_family_pairs(family, fingerprints, &pool, existing, probed)
+            }),
+        )
         .collect()
 }
 
