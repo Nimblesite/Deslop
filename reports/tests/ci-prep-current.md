@@ -41,3 +41,100 @@ cargo build --release --workspace
    Compiling deslop v0.0.0-dev (/Users/christianfindlay/Documents/Code/Deslop/crates/deslop)
     Finished `release` profile [optimized] target(s) in 4m 59s
 ```
+
+## Repository contract tests
+
+Command: `NODE_V8_COVERAGE=coverage/repository/ci-prep-2026-11-10 nice -n 15 make _ci-contract-tests`. Exit status: 0.
+
+Passed tests across TAP groups: 215. Fresh raw coverage: `coverage/repository/ci-prep-2026-11-10`; thresholds are not yet calculated.
+
+```text
+# tests 52
+# pass 52
+# fail 0
+# skipped 0
+# tests 12
+# pass 12
+# fail 0
+# skipped 0
+# tests 15
+# pass 15
+# fail 0
+# skipped 0
+# tests 3
+# pass 3
+# fail 0
+# skipped 0
+# tests 4
+# pass 4
+# fail 0
+# skipped 0
+# tests 5
+# pass 5
+# fail 0
+# skipped 0
+# tests 11
+# pass 11
+# fail 0
+# skipped 0
+# tests 8
+# pass 8
+# fail 0
+# skipped 0
+# tests 8
+# pass 8
+# fail 0
+# skipped 0
+# tests 5
+# pass 5
+# fail 0
+# skipped 0
+# tests 9
+# pass 9
+# fail 0
+# skipped 0
+# tests 5
+# pass 5
+# fail 0
+# skipped 0
+# tests 4
+# pass 4
+# fail 0
+# skipped 0
+# tests 15
+# pass 15
+# fail 0
+# skipped 0
+# tests 4
+# pass 4
+# fail 0
+# skipped 0
+# tests 3
+# pass 3
+# fail 0
+# skipped 0
+# tests 11
+# pass 11
+# fail 0
+# skipped 0
+# tests 20
+# pass 20
+# fail 0
+# skipped 0
+# tests 5
+# pass 5
+# fail 0
+# skipped 0
+# tests 9
+# pass 9
+# fail 0
+# skipped 0
+# tests 3
+# pass 3
+# fail 0
+# skipped 0
+# tests 4
+# pass 4
+# fail 0
+# skipped 0
+```
