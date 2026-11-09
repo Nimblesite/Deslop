@@ -31,6 +31,13 @@ language routes, including responsive geometry, playback, seeking, captions,
 chapters and transcript expansion. `scripts/videos/check-doc-films.mjs --complete`
 requires all ten topics to have imported deliveries and verification receipts.
 
+## [SITE-NAV-FONTS] Reliable navigation icons
+
+The navigation's Material Symbols font ships with the website, including its
+upstream license. Icons must remain available when external font services are
+unreachable. `site/tests/navigation-fonts.spec.js` verifies that behavior with
+both external font endpoints blocked.
+
 ## [SITE-ASSET-TYPE] Declared media types match served assets
 
 Every referenced script, stylesheet, image and social card is served successfully
