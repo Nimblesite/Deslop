@@ -15,7 +15,7 @@ use std::{
 
 use anyhow::{anyhow, ensure, Context, Result};
 use common::{
-    array_field, call_tool, initialized_mcp, lsp_workspace_with_socket, str_field,
+    array_field, call_tool, initialized_mcp, lsp_child::lsp_workspace_with_socket, str_field,
     structured_content, McpHandle,
 };
 use serde_json::{json, Value};

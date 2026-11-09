@@ -8,8 +8,8 @@ use deslop_core::{report::ReportCluster, Report};
 use serde_json::{json, Value};
 
 use crate::common::{
-    array_field, call_tool, copied_fixture, initialized_mcp, spawn_lsp_and_initialize, u64_field,
-    ChildKillOnDrop,
+    array_field, call_tool, copied_fixture, initialized_mcp, lsp_child::spawn_lsp_and_initialize,
+    u64_field, ChildKillOnDrop,
 };
 
 const LONG_COMPONENT: &str = "workspace";

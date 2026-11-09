@@ -12,7 +12,7 @@ use std::{fs, time::Duration};
 
 use anyhow::{ensure, Context, Result};
 use common::{
-    call_tool, cluster_ids, copied_fixture, initialized_mcp, lsp_workspace_with_socket,
+    call_tool, cluster_ids, copied_fixture, initialized_mcp, lsp_child::lsp_workspace_with_socket,
     spawn_lsp_and_wait_for_socket, structured_content, u64_field, wait_for_path, McpHandle,
     SOCKET_TIMEOUT,
 };

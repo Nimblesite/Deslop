@@ -43,8 +43,7 @@ use std::{
 use anyhow::{anyhow, ensure, Context, Result};
 use lsp_child::drain_in_background;
 pub use lsp_child::{
-    lsp_workspace_with_socket, spawn_lsp_and_initialize, spawn_lsp_and_wait_for_socket,
-    spawn_lsp_with_args, wait_for_path, ChildKillOnDrop,
+    spawn_lsp_and_wait_for_socket, spawn_lsp_with_args, wait_for_path, ChildKillOnDrop,
 };
 #[cfg(unix)]
 pub use pids::{
