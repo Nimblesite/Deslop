@@ -75,7 +75,7 @@ fn spawn_mcp_with_killable_parent(root: &Path) -> Result<(McpParent, u32)> {
 }
 
 #[test]
-fn exits_when_launching_parent_disappears_with_stdio_open_issue_102() -> Result<()> {
+fn exits_when_launching_parent_disappears_with_stdio_open() -> Result<()> {
     let (mut parent, mcp_pid) = spawn_mcp_with_killable_parent(fixture_root())?;
     ensure!(mcp_pid > 1, "mcp pid must be monitorable");
     assert_ne!(

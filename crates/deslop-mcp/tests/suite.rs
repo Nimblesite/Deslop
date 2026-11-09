@@ -32,7 +32,7 @@ mod query_pagination;
 #[path = "query/recovery.rs"]
 mod query_recovery;
 
-#[path = "cli.rs"]
+#[path = "cli/mod.rs"]
 mod cli;
 #[path = "dart_generated_fp_over_mcp.rs"]
 mod dart_generated_fp_over_mcp;
