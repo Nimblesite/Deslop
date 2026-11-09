@@ -144,3 +144,38 @@ Passed tests across TAP groups: 215. Fresh raw coverage: `coverage/repository/ci
 Source commit: `79102ef0`. Command: `NODE_V8_COVERAGE=coverage/repository/ci-phases nice -n 15 make _ci-contract-tests`. Exit status: 0.
 
 The full contract suite passed 216 tests across 23 TAP groups, including the real-Make coverage-phase success/failure regression. Failed tests: 0.
+
+## Upstream grammar pin: remote CI
+
+Commit: `5f8a0e6100f9e2e92af751a0b8282310746c9a21`. [Workflow run](https://github.com/Nimblesite/Deslop/actions/runs/42720123053). Conclusion: `success`. This run predates the local coverage-phase and workflow-concurrency changes.
+
+| Job | Result |
+| --- | --- |
+| Detect changes | success |
+| security | success |
+| Format + analyzers | success |
+| Rust tests + coverage collection | success |
+| Build release | success |
+| Windows tests + coverage collection | success |
+| Repository tests + coverage collection | success |
+| Website build | success |
+| VSIX tests + coverage | success |
+| JetBrains package gate | success |
+| Corpus targets | success |
+| Corpus accuracy score (fastapi) | success |
+| Corpus accuracy score (serde) | success |
+| Corpus accuracy score (http) | success |
+| Corpus accuracy score (vite) | success |
+| Corpus accuracy score (viper) | success |
+| Corpus accuracy score (FSharpPlus) | success |
+| Corpus accuracy score (console) | success |
+| Corpus accuracy score (gin) | success |
+| Corpus accuracy score (date-fns) | success |
+| Corpus accuracy score (express) | success |
+| Corpus accuracy score (zlib) | success |
+| Corpus accuracy score (monolog) | success |
+| Corpus accuracy score (rayon) | success |
+| Corpus accuracy score (axios) | success |
+| Corpus accuracy score (BenchmarkDotNet) | success |
+| Calculate coverage + thresholds | success |
+| CI | success |
