@@ -1,6 +1,6 @@
 # Documentation film delivery status
 
-3 of 10 documentation pages have imported media, captions, chapters, poster, LFS rules and a verification receipt.
+4 of 10 documentation pages have imported media, captions, chapters, poster, LFS rules and a verification receipt.
 
 | Page | Delivery | Duration | LFS rule |
 | --- | --- | --- | --- |
@@ -9,7 +9,7 @@
 | configuration.md | Imported | 1:19 | Yes |
 | for-ai.md | Incomplete | Pending | Pending |
 | github-action.md | Incomplete | Pending | Pending |
-| how-it-works.md | Incomplete | Pending | Pending |
+| how-it-works.md | Imported | 1:27 | Yes |
 | index.md | Imported | 1:23 | Yes |
 | osprey.md | Incomplete | Pending | Pending |
 | research-background.md | Incomplete | Pending | Pending |
