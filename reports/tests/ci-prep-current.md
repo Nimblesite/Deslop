@@ -26,3 +26,18 @@ env/PATH write lint: 8 files clean
 ```
 
 Remaining gates are tracked in [the CI plan](../../docs/plans/ci-prep-2026-11-10.md).
+
+## Release workspace build
+
+Command: `CARGO_BUILD_JOBS=1 nice -n 15 make build`. Exit status: 0.
+
+```text
+==> Building...
+cargo build --release --workspace
+   Compiling deslop-core v0.0.0-dev (/Users/christianfindlay/Documents/Code/Deslop/crates/deslop-core)
+   Compiling deslop-test-support v0.0.0-dev (/Users/christianfindlay/Documents/Code/Deslop/crates/deslop-test-support)
+   Compiling deslop-lsp v0.0.0-dev (/Users/christianfindlay/Documents/Code/Deslop/crates/deslop-lsp)
+   Compiling deslop-mcp v0.0.0-dev (/Users/christianfindlay/Documents/Code/Deslop/crates/deslop-mcp)
+   Compiling deslop v0.0.0-dev (/Users/christianfindlay/Documents/Code/Deslop/crates/deslop)
+    Finished `release` profile [optimized] target(s) in 4m 59s
+```
