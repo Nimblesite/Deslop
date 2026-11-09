@@ -30,6 +30,13 @@ const UNSTAMPED_ENGINE_VERSION: &str = "unknown (reply carries no tool_version)"
 const RESULT_FIELD: &str = "result";
 /// The envelope field holding a reply's error.
 const ERROR_FIELD: &str = "error";
+/// The envelope field naming the `deslop-mcp` that ships beside the
+/// replying `deslop-lsp`, so a stale registration can be pointed at it.
+const BUNDLED_MCP_FIELD: &str = "deslop_mcp";
+/// The remedy every refusal carries.
+const REINSTALL: &str = "reinstall the Deslop VSIX so deslop-mcp and deslop-lsp ship from one bundle, then re-run the analysis";
+/// How the remedy names this binary when its own path cannot be read.
+const THIS_BINARY: &str = "this deslop-mcp";
 /// Why a reply envelope with no producer stamp is refused.
 const UNSTAMPED_ENVELOPE: &str = "the reply carries no tool_version stamp, which every reply from this build carries, so deslop-lsp comes from an older build";
 
@@ -63,7 +70,10 @@ pub(super) fn refuse_foreign_envelope(
             UNSTAMPED_ENVELOPE.to_owned(),
         ),
     };
-    Err(with_error_answer(refusal, envelope))
+    Err(with_registration(
+        with_error_answer(refusal, envelope),
+        envelope,
+    ))
 }
 
 /// Adds what another build answered when its reply was an error, so a
@@ -77,6 +87,7 @@ fn with_error_answer(refusal: BackendError, envelope: &Value) -> BackendError {
                 engine_version,
                 endpoint,
                 detail,
+                remedy,
             },
             Some(error),
         ) => BackendError::WireMismatch {
@@ -85,9 +96,48 @@ fn with_error_answer(refusal: BackendError, envelope: &Value) -> BackendError {
             engine_version,
             endpoint,
             detail: format!("{detail}; it answered with the error {error}").into_boxed_str(),
+            remedy,
         },
         (refusal, _) => refusal,
     }
+}
+
+/// [MCP-IPC-WIRE-MISMATCH] Names the registration to change when the
+/// reply says which `deslop-mcp` ships beside its `deslop-lsp`: after a
+/// VSIX upgrade an agent still launches the old bundle's binary by
+/// absolute path, and reinstalling alone never rewrites that path.
+fn with_registration(refusal: BackendError, envelope: &Value) -> BackendError {
+    let bundled = envelope.get(BUNDLED_MCP_FIELD).and_then(Value::as_str);
+    match (refusal, bundled) {
+        (
+            BackendError::WireMismatch {
+                method,
+                mcp_version,
+                engine_version,
+                endpoint,
+                detail,
+                ..
+            },
+            Some(bundled),
+        ) => BackendError::WireMismatch {
+            method,
+            mcp_version,
+            engine_version,
+            endpoint,
+            detail,
+            remedy: registration_remedy(bundled).into_boxed_str(),
+        },
+        (refusal, _) => refusal,
+    }
+}
+
+/// The remedy naming both the bundled `deslop-mcp` and this stale one.
+fn registration_remedy(bundled: &str) -> String {
+    let this = std::env::current_exe().map_or_else(
+        |_| THIS_BINARY.to_owned(),
+        |path| format!("{:?}", path.display().to_string()),
+    );
+    format!("{REINSTALL}; or point your agent's MCP server at {bundled:?}, the deslop-mcp that ships with this deslop-lsp, instead of {this}")
 }
 
 /// Decodes one IPC `result` into `T`, refusing a reply produced by
@@ -150,10 +200,13 @@ fn mismatch(
     detail: String,
 ) -> BackendError {
     BackendError::WireMismatch {
-        method: method.to_owned(),
-        mcp_version: crate::version().to_owned(),
-        engine_version: engine_version.unwrap_or_else(|| UNSTAMPED_ENGINE_VERSION.to_owned()),
-        endpoint: endpoint.to_path_buf(),
+        method: method.into(),
+        mcp_version: crate::version(),
+        engine_version: engine_version
+            .unwrap_or_else(|| UNSTAMPED_ENGINE_VERSION.to_owned())
+            .into_boxed_str(),
+        endpoint: endpoint.into(),
         detail: detail.into_boxed_str(),
+        remedy: REINSTALL.into(),
     }
 }

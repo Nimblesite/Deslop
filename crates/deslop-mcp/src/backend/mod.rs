@@ -75,19 +75,23 @@ pub enum BackendError {
     /// endpoint, what was found and the remedy, so an agent can act on
     /// it instead of guessing at a raw field error.
     #[error(
-        "deslop-mcp {mcp_version} cannot read the {method:?} reply from deslop-lsp {engine_version} at {endpoint:?}: {detail}. The two binaries are from different Deslop builds — reinstall the Deslop VSIX so deslop-mcp and deslop-lsp ship from one bundle, then re-run the analysis."
+        "deslop-mcp {mcp_version} cannot read the {method:?} reply from deslop-lsp {engine_version} at {endpoint:?}: {detail}. The two binaries are from different Deslop builds — {remedy}."
     )]
     WireMismatch {
         /// The IPC method whose reply was refused.
-        method: String,
+        method: Box<str>,
         /// This binary's version.
-        mcp_version: String,
+        mcp_version: &'static str,
         /// The version stamped on the reply, or a note that it carried none.
-        engine_version: String,
+        engine_version: Box<str>,
         /// The IPC endpoint the reply came from.
-        endpoint: PathBuf,
+        endpoint: Box<Path>,
         /// What was found: the foreign version, or the decode failure.
         detail: Box<str>,
+        /// What to do: reinstall the bundle, and, when the reply names the
+        /// `deslop-mcp` shipped beside its `deslop-lsp`, the exact
+        /// registration to change.
+        remedy: Box<str>,
     },
 }
 
