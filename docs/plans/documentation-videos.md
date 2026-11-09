@@ -49,3 +49,7 @@ SHA-256 hashes are in its `sources/` directory. Preview frames were rendered
 and visually inspected before narration. The first publish rejected an
 intermediate quality setting of 20; the recipe now uses the supported maximum
 of 18. Final video review and delivery remain outstanding.
+
+Reviewed production scripts live in Videos under `projects/deslop/videos/docs-*/`.
+Superseded pi drafts were removed after review; model outcomes and corrections
+are recorded in PiNotes/2026-11-09-deslop-doc-video-scripts.md.
