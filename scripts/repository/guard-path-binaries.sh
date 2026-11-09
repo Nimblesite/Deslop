@@ -1,178 +1,70 @@
 #!/usr/bin/env bash
-# PATH scrub for Deslop's own executables. [DEPLOY-EXTERNAL-MCP-CONSUMER]
+# PATH guard for Deslop's own executables. [DEPLOY-EXTENSION-BUNDLED-TESTS]
 #
-# The VSIX is the only legitimate distribution surface. The VS Code extension,
-# Claude Code MCP, Codex MCP, and every other host must resolve `deslop`,
-# `deslop-lsp`, and `deslop-mcp` from the unpacked VSIX `bin/<platform>/`
-# directory by absolute path. A copy left on PATH by `cargo install` or a
-# package manager shadows the Shipwright-versioned bundle and drifts analysis
-# off the wire contract, so `make test` and every `_vsix-*` target scrub first.
+# Tests run the binaries bundled in the extension, by absolute path. A
+# `deslop` resolved from PATH (a Homebrew, Scoop or curl-installer copy, or a
+# forbidden `cargo install`) would mask a missing or stale bundle. So every test
+# recipe puts this guard directory first on PATH: each name resolves to a stub
+# that refuses to run and says why, and a test that reaches for PATH fails
+# loudly instead of passing on another build.
 #
-# Issue #474: this scrub used to detect with `command -v`, which reports only a
-# *resolvable executable*. A `~/.local/bin/deslop-mcp` symlink pointing at a
-# deleted `deslop-live-0.15.0-darwin-arm64` bundle is not resolvable, so the
-# scrub never saw it, deleted nothing, and still exited 0 — a gate reporting
-# success while the very name it exists to remove sat on disk. Detection now
-# walks PATH itself and tests `-L` (the link, dangling or not) as well as `-f`,
-# and the exit status comes from re-running that detector after the deletions.
+# Nothing here uninstalls or deletes anything (#611). Homebrew, Scoop and the
+# curl installer are the supported PATH channels for the agents on this machine
+# ([DEPLOY-EXTERNAL-MCP-CONSUMER]). The scrub this replaces removed them, and
+# every agent's MCP server then failed to start, in every project.
 #
-# Detection uses bash builtins only, never `tr` or `sort`: a scrub that has to
-# find helper programs on PATH cannot be trusted to report honestly about that
-# same PATH. Written for bash 3.2, the version macOS ships — no associative
-# arrays, no `mapfile`.
+# Written for bash 3.2, the version macOS ships.
 #
-# Usage:
-#   scrub-path-binaries.sh           delete every shadowing entry; non-zero if one survives
-#   scrub-path-binaries.sh --list    print what is shadowing, delete nothing; non-zero if any
+# Usage: guard-path-binaries.sh <guard-dir>
+#   Writes the stubs into <guard-dir>, then fails unless every name resolves
+#   to its stub on the current PATH.
 
 set -euo pipefail
 
-# Executables the VSIX bundles, and which must never be resolvable elsewhere.
+# Executables the VSIX bundles, which a test must never resolve from PATH.
 BINARY_NAMES=(deslop deslop-lsp deslop-mcp)
 
-# Windows hosts spell the same names with an extension.
-BINARY_SUFFIXES=("" ".exe")
+# The arguments this script takes: exactly the guard directory.
+EXPECTED_ARGUMENTS=1
 
-# Deletions can race a package manager writing the name back, and a name the
-# scrub cannot remove at all must not spin forever; give up after this many
-# rounds and fail loudly with whatever survived.
-MAX_ATTEMPTS=10
+# Status for a call that names no guard directory.
+USAGE_STATUS=2
 
-# Every directory on PATH, one per line. An empty PATH field means "." in
-# POSIX, so it is emitted as such rather than silently dropped.
-path_directories() {
-  local IFS=':'
-  local -a fields=()
-  read -ra fields <<< "${PATH:-}"
-  local field
-  for field in ${fields[@]+"${fields[@]}"}; do
-    printf '%s\n' "${field:-.}"
+# Why a stub refused, for the test log that shows it.
+REFUSAL="refused: tests run the extension's bundled binaries by absolute path, never from PATH ([DEPLOY-EXTENSION-BUNDLED-TESTS])."
+
+# A POSIX stub and a cmd.exe stub for `$2`, written into directory `$1`.
+write_stubs() {
+  local directory="$1" name="$2"
+  printf '#!/bin/sh\necho "%s: %s" >&2\nexit 1\n' "$name" "$REFUSAL" > "$directory/$name"
+  chmod +x "$directory/$name"
+  printf '@echo %s: %s 1>&2\r\n@exit /b 1\r\n' "$name" "$REFUSAL" > "$directory/$name.cmd"
+}
+
+# Fails, naming each culprit, unless every name resolves to its stub in `$1`.
+assert_guarded() {
+  local directory="$1" name resolved failed=0
+  hash -r 2>/dev/null || true
+  for name in "${BINARY_NAMES[@]}"; do
+    resolved="$(command -v "$name" 2>/dev/null || true)"
+    if [ "$resolved" != "$directory/$name" ]; then
+      echo "FAIL: $name resolves to '${resolved:-nothing}', not the guard $directory/$name."
+      failed=1
+    fi
   done
-}
-
-# True when "$1" already appears among the remaining arguments.
-contains() {
-  local needle="$1"
-  shift
-  local item
-  for item in ${@+"$@"}; do
-    if [ "$item" = "$needle" ]; then return 0; fi
-  done
-  return 1
-}
-
-# True when `$1` is a name that shadows the bundled binary. A dangling symlink
-# counts — that is the whole point of #474 — and so does a regular file that
-# happens not to be executable. A directory (or a symlink to one) does not:
-# it can never be executed, so removing it would be outside this gate's remit.
-is_shadowing() {
-  local candidate="$1"
-  if [ -d "$candidate" ]; then return 1; fi
-  if [ -L "$candidate" ] || [ -f "$candidate" ]; then return 0; fi
-  return 1
-}
-
-# Every shadowing path on PATH, in PATH order, without repeats.
-shadowing_paths() {
-  local -a found=()
-  local directory name suffix candidate
-  while IFS= read -r directory; do
-    for name in "${BINARY_NAMES[@]}"; do
-      for suffix in "${BINARY_SUFFIXES[@]}"; do
-        candidate="$directory/$name$suffix"
-        if is_shadowing "$candidate" && ! contains "$candidate" ${found[@]+"${found[@]}"}; then
-          found+=("$candidate")
-        fi
-      done
-    done
-  done < <(path_directories)
-  if [ "${#found[@]}" -gt 0 ]; then printf '%s\n' "${found[@]}"; fi
-}
-
-# Removes the copies a package manager owns, before walking PATH.
-uninstall_packaged() {
-  if command -v brew >/dev/null 2>&1; then
-    brew uninstall --force deslop >/dev/null 2>&1 || true
+  if [ "$failed" -ne 0 ]; then
+    echo "Put $directory first on PATH for every test recipe (the Makefile's GUARDED_PATH)."
+    return 1
   fi
-  local name
-  for name in "${BINARY_NAMES[@]}"; do
-    cargo uninstall "$name" >/dev/null 2>&1 || true
-    if [ -n "${HOME:-}" ]; then
-      rm -f "$HOME/.cargo/bin/$name" "$HOME/.cargo/bin/$name.exe" || true
-    fi
-  done
 }
 
-# Explains what survived and what the developer has to do about it.
-report_survivors() {
-  echo "FAIL: these PATH entries still shadow the VSIX-bundled binaries:"
-  printf '  %s\n' "$@"
-  echo "Remove them before running tests; extension tests must use bundled binaries by absolute path."
-  echo "Re-check with: bash scripts/repository/scrub-path-binaries.sh --list"
-}
+if [ "$#" -ne "$EXPECTED_ARGUMENTS" ] || [ -z "$1" ]; then
+  echo "usage: $0 <guard-dir>" >&2
+  exit "$USAGE_STATUS"
+fi
 
-# Reads the detector's output into the `remaining` array in the caller's scope.
-collect_shadowing() {
-  remaining=()
-  local candidate
-  while IFS= read -r candidate; do
-    remaining+=("$candidate")
-  done < <(shadowing_paths)
-}
-
-# Deletes until PATH is clear, or fails with everything that survived.
-scrub() {
-  local attempt=0 candidate
-  local -a remaining=()
-  while :; do
-    collect_shadowing
-    if [ "${#remaining[@]}" -eq 0 ]; then return 0; fi
-    if [ "$attempt" -ge "$MAX_ATTEMPTS" ]; then
-      report_survivors "${remaining[@]}"
-      return 1
-    fi
-    for candidate in "${remaining[@]}"; do
-      echo "    deleting $candidate"
-      rm -f "$candidate" || true
-    done
-    hash -r 2>/dev/null || true
-    attempt=$((attempt + 1))
-  done
-}
-
-# Second, independent check: nothing may resolve as a command either, which
-# also catches a shell function or builtin shadowing the name.
-assert_nothing_resolves() {
-  local name found
-  for name in "${BINARY_NAMES[@]}"; do
-    found="$(command -v "$name" 2>/dev/null || true)"
-    if [ -n "$found" ]; then
-      report_survivors "$found"
-      return 1
-    fi
-  done
-}
-
-# Prints what is shadowing right now, and fails if anything is.
-list_shadowing() {
-  local -a remaining=()
-  collect_shadowing
-  if [ "${#remaining[@]}" -eq 0 ]; then return 0; fi
-  printf '%s\n' "${remaining[@]}"
-  return 1
-}
-
-case "${1:-}" in
-  --list) list_shadowing ;;
-  "")
-    echo "==> Removing Deslop binaries from PATH..."
-    uninstall_packaged
-    scrub
-    assert_nothing_resolves
-    echo "    PATH is clear of ${BINARY_NAMES[*]}"
-    ;;
-  *)
-    echo "usage: $0 [--list]" >&2
-    exit 2
-    ;;
-esac
+mkdir -p "$1"
+GUARD_DIR="$(cd "$1" && pwd)"
+for binary in "${BINARY_NAMES[@]}"; do write_stubs "$GUARD_DIR" "$binary"; done
+assert_guarded "$GUARD_DIR"
+echo "==> PATH guard: ${BINARY_NAMES[*]} resolve to $GUARD_DIR"

@@ -1,227 +1,223 @@
-// PATH-scrub contract. [DEPLOY-EXTERNAL-MCP-CONSUMER]
+// PATH-guard contract. [DEPLOY-EXTENSION-BUNDLED-TESTS] [DEPLOY-EXTERNAL-MCP-CONSUMER]
 //
-// Issue #474: `_delete-path-binaries` detected leaked binaries with
-// `command -v`, which reports only a resolvable executable. A
-// `~/.local/bin/deslop-mcp` symlink pointing at a deleted VSIX bundle is not
-// resolvable, so the scrub saw nothing, removed nothing, and exited 0 — the
-// gate reported success while the shadowing name it exists to remove was
-// still on disk. These tests drive the real script against a fixture PATH.
-//
-// The make target is never run here: it uninstalls the developer's real
-// binaries. Every spawn below replaces the environment wholesale, so the
-// script can only ever see the fixture directory plus the system tools it
-// needs, and `assertSystemPathIsClean` fails the test rather than letting a
-// real install fall inside the blast radius. Run with `node --test`.
+// Tests must run the extension's bundled binaries, so a `deslop` on PATH must
+// never answer for them. The scrub that used to enforce this uninstalled the
+// Homebrew copy and deleted the curl installer's, which every agent on the
+// machine was using (#611). The guard instead puts refusing stubs first on
+// PATH and leaves every install alone. These tests drive the real script
+// against a fixture PATH and HOME; nothing outside the fixture is touched.
+// Run with `node --test`.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, lstatSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 import { repoRoot } from "../lib/repo-root.mjs";
-import { recipeBlocks } from "../lib/makefile.mjs";
-import { hostPath, posixShell, shellPath } from "../lib/posix-shell.mjs";
+import { makefileLines, recipeBlocks, variableValue } from "../lib/makefile.mjs";
+import { posixShell, shellPath } from "../lib/posix-shell.mjs";
 
-/** The scrub under test, and the target that must delegate to it. */
-const SCRIPT = resolve(repoRoot, "scripts/repository/scrub-path-binaries.sh");
-const SCRUB_TARGET = "_delete-path-binaries";
-const SCRIPT_INVOCATION = "bash scripts/repository/scrub-path-binaries.sh";
+/** The guard under test, the target that runs it, and the prefix every test recipe carries. */
+const SCRIPT = resolve(repoRoot, "scripts/repository/guard-path-binaries.sh");
+const GUARD_TARGET = "_guard-path-binaries";
+const SCRIPT_INVOCATION = "bash scripts/repository/guard-path-binaries.sh";
+const GUARDED_PATH = "$(GUARDED_PATH)";
+const GUARD_DIR_VARIABLE = "PATH_GUARD_DIR";
+const GUARDED_PATH_VARIABLE = "GUARDED_PATH";
 
-/** Absolute bash: the 3.2 build macOS ships, or Git Bash on Windows. A bare
- * name would find WSL's bash on Windows, which sees a different filesystem. */
+/** Every make target that runs a test suite, and so must run behind the guard. */
+const TEST_TARGETS = ["test", "_test-shard", "_coverage-run", "_vsix-test", "_vsix-test-ollama", "_vsix-coverage"];
+
+/** Commands that remove a user's install. The guard and the Makefile run none of them. */
+const DESTRUCTIVE_COMMANDS = ["brew uninstall", "cargo uninstall", "scoop uninstall", "_delete-path-binaries"];
+
+/** Absolute bash: the 3.2 build macOS ships, or Git Bash on Windows. */
 const BASH = posixShell();
-
-/** The scrub as the shell must name it — bash opens the script by this path. */
 const SCRIPT_FOR_SHELL = shellPath(SCRIPT);
 
-/** Query mode: print what shadows, delete nothing, fail if anything does. */
-const LIST_FLAG = "--list";
-
-/** System directories supplying `rm`; never a place Deslop is installed. */
+/** System directories supplying `mkdir`, `chmod` and `cat`; never a place Deslop is installed. */
 const SYSTEM_PATH = "/usr/bin:/bin";
 
-/** Names that must never resolve anywhere but the unpacked VSIX. */
+/** Names the extension bundles, which no test may resolve from PATH. */
 const BINARY_NAMES = ["deslop", "deslop-lsp", "deslop-mcp"];
 
-/** Executable mode for a staged fixture binary, and a non-executable one. */
+/** What a stub says, so a refused call in a test log explains itself. */
+const REFUSAL_RULE = "[DEPLOY-EXTENSION-BUNDLED-TESTS]";
+
+/** Exit statuses: success, a stub's refusal or a failed check, and a usage error. */
+const OK = 0;
+const REFUSED = 1;
+const USAGE = 2;
+
 const EXECUTABLE_MODE = 0o755;
-const READ_ONLY_MODE = 0o644;
+const INSTALLED_BODY = "#!/bin/sh\necho installed-copy\n";
 
 /** True when the name exists as a directory entry, dangling links included. */
 function entryExists(path) {
   return lstatSync(path, { throwIfNoEntry: false }) !== undefined;
 }
 
-/** True when the name resolves to something real (a dangling link does not). */
-function targetExists(path) {
-  const stats = lstatSync(path, { throwIfNoEntry: false });
-  if (stats === undefined) return false;
-  return !stats.isSymbolicLink() || entryExistsThroughLink(path);
-}
-
-function entryExistsThroughLink(path) {
-  return spawnSync(BASH, ["-c", `[ -e "${path}" ]`], { env: { PATH: SYSTEM_PATH } }).status === 0;
-}
-
-/** Refuses to run the scrub if a real Deslop install sits in the system path. */
-function assertSystemPathIsClean() {
-  for (const directory of SYSTEM_PATH.split(":")) {
-    for (const name of BINARY_NAMES) {
-      // The system directories are named the way the *shell* names them, so
-      // this must open them the way the host does. Left untranslated on
-      // Windows it looks under the drive root, finds nothing, and passes
-      // without having examined the shell's real /usr/bin at all.
-      const path = join(hostPath(directory), name);
-      assert.equal(entryExists(path), false, `${path} exists — refusing to run the scrub over a real install`);
-    }
-  }
-}
-
-/** A throwaway PATH directory and HOME, isolated from the developer's own. */
+/** A throwaway root holding the guard directory, a HOME, and a brew call log. */
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), "deslop-scrub-"));
-  const binDir = join(root, "bin");
+  const root = mkdtempSync(join(tmpdir(), "deslop-guard-"));
   const homeDir = join(root, "home");
-  mkdirSync(binDir);
   mkdirSync(homeDir);
-  return { root, binDir, homeDir };
+  const brewLog = join(root, "brew-calls.log");
+  writeFileSync(brewLog, "");
+  return { root, homeDir, brewLog, guardDir: join(root, "path-guard") };
 }
 
-/** Runs the scrub with nothing but the fixture directory and the system tools. */
-function runScrub({ binDir, homeDir }, args = [], { withSystemTools = true } = {}) {
-  assertSystemPathIsClean();
-  const fixtureEntry = shellPath(binDir);
-  const path = withSystemTools ? `${fixtureEntry}:${SYSTEM_PATH}` : fixtureEntry;
-  return spawnSync(BASH, [SCRIPT_FOR_SHELL, ...args], {
-    encoding: "utf8",
-    env: { PATH: path, HOME: shellPath(homeDir) },
-  });
-}
-
-/** What `command -v` — the detection #474 relied on — reports for a name. */
-function commandVee({ binDir, homeDir }, name) {
-  const result = spawnSync(BASH, ["-c", `command -v ${name} || true`], {
-    encoding: "utf8",
-    env: { PATH: `${shellPath(binDir)}:${SYSTEM_PATH}`, HOME: shellPath(homeDir) },
-  });
-  return result.stdout.trim();
-}
-
-/** How the scrub prints `path` — it names what it found in the shell's own
- * spelling, which is the only spelling the operator can paste back. */
-function asPrinted(path) {
-  return shellPath(path);
-}
-
-/** Stages a symlink to a bundle path that was deleted — the #474 leftover. */
-function stageDanglingLink(fixtureDirs, name) {
-  const link = join(fixtureDirs.binDir, name);
-  symlinkSync(join(fixtureDirs.root, "deslop-live-0.15.0-darwin-arm64", "bin", name), link);
-  return link;
-}
-
-/** Stages a real file on the fixture PATH. */
-function stageFile(fixtureDirs, name, mode) {
-  const path = join(fixtureDirs.binDir, name);
-  writeFileSync(path, "#!/bin/sh\nexit 0\n");
-  chmodSync(path, mode);
+/** Writes an executable `name` into `directory` with `body`. */
+function stageExecutable(directory, name, body = INSTALLED_BODY) {
+  mkdirSync(directory, { recursive: true });
+  const path = join(directory, name);
+  writeFileSync(path, body);
+  chmodSync(path, EXECUTABLE_MODE);
   return path;
 }
 
-test("[#474] a dangling symlink is invisible to command -v — the detection the scrub relied on", () => {
+/** A Homebrew prefix whose `brew` logs every call, and the curl installer's `~/.local/bin`, each holding all three binaries. */
+function stageReleaseLockedInstalls(dirs) {
+  const brewPrefix = join(dirs.root, "homebrew", "bin");
+  const curlBin = join(dirs.homeDir, ".local", "bin");
+  stageExecutable(brewPrefix, "brew", `#!/bin/sh\necho "$*" >> "${shellPath(dirs.brewLog)}"\n`);
+  const installed = [brewPrefix, curlBin].flatMap((directory) =>
+    BINARY_NAMES.map((name) => stageExecutable(directory, name)));
+  return { installed, brewPrefix, curlBin };
+}
+
+/** PATH for the shell: `entries` in order, then the system tools. */
+function shellPathOf(entries) {
+  return [...entries.map((entry) => shellPath(entry)), SYSTEM_PATH].join(":");
+}
+
+/** Runs the guard over `dirs.guardDir` with `pathEntries` on PATH. */
+function runGuard(dirs, pathEntries, args = [dirs.guardDir]) {
+  return spawnSync(BASH, [SCRIPT_FOR_SHELL, ...args.map((arg) => shellPath(arg))], {
+    encoding: "utf8",
+    env: { PATH: shellPathOf(pathEntries), HOME: shellPath(dirs.homeDir) },
+  });
+}
+
+/** Runs `script` in bash with `pathEntries` on PATH. */
+function inShell(dirs, pathEntries, script) {
+  return spawnSync(BASH, ["-c", script], {
+    encoding: "utf8",
+    env: { PATH: shellPathOf(pathEntries), HOME: shellPath(dirs.homeDir) },
+  });
+}
+
+/** Asserts every release-locked binary is still there, byte for byte. */
+function assertInstallsSurvive(installed, when) {
+  for (const binary of installed) {
+    assert.equal(entryExists(binary), true, `${when}: ${binary} must survive the guard`);
+    assert.equal(readFileSync(binary, "utf8"), INSTALLED_BODY, `${when}: ${binary} must be unchanged`);
+  }
+}
+
+test("every Deslop name resolves to a guard stub that refuses to run and says why", () => {
   const dirs = fixture();
-  const link = stageDanglingLink(dirs, "deslop-mcp");
-  assert.equal(entryExists(link), true, "the leftover name is on PATH");
-  assert.equal(targetExists(link), false, "and it points at a bundle that no longer exists");
-  assert.equal(commandVee(dirs, "deslop-mcp"), "", "command -v reports nothing — this is why the scrub used to pass");
+  const guarded = runGuard(dirs, [dirs.guardDir]);
+  assert.equal(guarded.status, OK, `guard failed: ${guarded.stdout}${guarded.stderr}`);
+  assert.ok(guarded.stdout.includes(`deslop deslop-lsp deslop-mcp resolve to ${shellPath(dirs.guardDir)}`), guarded.stdout);
+  for (const name of BINARY_NAMES) {
+    const resolved = inShell(dirs, [dirs.guardDir], `command -v ${name}`);
+    assert.equal(resolved.stdout.trim(), shellPath(join(dirs.guardDir, name)), `${name} resolves to its stub`);
+    const called = inShell(dirs, [dirs.guardDir], `${name} --version`);
+    assert.equal(called.status, REFUSED, `${name} on PATH must refuse to run`);
+    assert.equal(called.stdout, "", `${name} must not print a version as if it ran`);
+    assert.ok(called.stderr.startsWith(`${name}: refused`), `${name} names itself: ${called.stderr}`);
+    assert.ok(called.stderr.includes(REFUSAL_RULE), `${name} cites the rule: ${called.stderr}`);
+    assert.ok(existsSync(join(dirs.guardDir, `${name}.cmd`)), `${name}.cmd guards cmd.exe and PowerShell callers`);
+  }
+  assert.deepEqual(readdirSync(dirs.guardDir).sort(), BINARY_NAMES.flatMap((name) => [name, `${name}.cmd`]).sort());
 });
 
-test("[#474] --list reports the dangling symlink and exits non-zero", () => {
+test("[#611] the guard never uninstalls or deletes a Homebrew or curl-installer deslop, and still shadows both", () => {
   const dirs = fixture();
-  const link = stageDanglingLink(dirs, "deslop-mcp");
-  const listed = runScrub(dirs, [LIST_FLAG]);
-  assert.equal(listed.stdout.trim(), asPrinted(link), "the shadowing path must be named exactly");
-  assert.equal(listed.status, 1, "a shadowed PATH must fail closed, not report clean");
+  const { installed, brewPrefix, curlBin } = stageReleaseLockedInstalls(dirs);
+  for (const run of ["first run", "second run"]) {
+    const guarded = runGuard(dirs, [dirs.guardDir, brewPrefix, curlBin]);
+    assert.equal(guarded.status, OK, `${run}: guard failed: ${guarded.stdout}${guarded.stderr}`);
+    assert.equal(readFileSync(dirs.brewLog, "utf8"), "", `${run}: the guard must never call brew`);
+    assert.ok(!guarded.stdout.includes("deleting"), `${run}: the guard deleted something: ${guarded.stdout}`);
+    assertInstallsSurvive(installed, run);
+    for (const name of BINARY_NAMES) {
+      const resolved = inShell(dirs, [dirs.guardDir, brewPrefix, curlBin], `command -v ${name}`);
+      assert.equal(resolved.stdout.trim(), shellPath(join(dirs.guardDir, name)), `${run}: ${name} hits the guard first`);
+    }
+  }
+  const brewCopy = inShell(dirs, [brewPrefix], "deslop-mcp");
+  assert.equal(brewCopy.stdout.trim(), "installed-copy", "the agent's Homebrew deslop-mcp still runs outside the guard");
 });
 
-test("[#474] the scrub deletes the dangling symlink and only then reports success", () => {
+test("the guard fails closed, naming each culprit, when a Deslop binary resolves ahead of it, and deletes nothing", () => {
   const dirs = fixture();
-  const link = stageDanglingLink(dirs, "deslop-mcp");
-  const scrubbed = runScrub(dirs);
-  assert.equal(scrubbed.status, 0, `scrub failed: ${scrubbed.stdout}${scrubbed.stderr}`);
-  assert.ok(scrubbed.stdout.includes(`deleting ${asPrinted(link)}`), "the scrub must say what it removed");
-  assert.ok(scrubbed.stdout.includes("PATH is clear of deslop deslop-lsp deslop-mcp"), "and confirm the result");
-  assert.equal(entryExists(link), false, "the leftover must be gone, not merely unreported");
-  assert.equal(runScrub(dirs, [LIST_FLAG]).status, 0, "a re-check must now find nothing");
+  const { installed, brewPrefix, curlBin } = stageReleaseLockedInstalls(dirs);
+  for (const ahead of [brewPrefix, curlBin]) {
+    const guarded = runGuard(dirs, [ahead, dirs.guardDir]);
+    assert.equal(guarded.status, REFUSED, `a PATH copy ahead of the guard must fail the gate: ${guarded.stdout}`);
+    for (const name of BINARY_NAMES) {
+      assert.ok(guarded.stdout.includes(`FAIL: ${name} resolves to '${shellPath(join(ahead, name))}'`), guarded.stdout);
+    }
+    assert.ok(guarded.stdout.includes("GUARDED_PATH"), "the failure names the fix");
+    assertInstallsSurvive(installed, `copy ahead in ${ahead}`);
+  }
+  assert.equal(readFileSync(dirs.brewLog, "utf8"), "", "a failing check must not call brew either");
 });
 
-test("[#474] the scrub fails closed when a shadowing name survives deletion", () => {
+test("the guard fails closed when it is not on PATH at all", () => {
   const dirs = fixture();
-  const link = stageDanglingLink(dirs, "deslop-mcp");
-  // Without the system directories the script cannot reach `rm`, so deletion
-  // cannot succeed. The contract is that this exits non-zero and names the
-  // survivor — never that it shrugs and reports a clean PATH.
-  const scrubbed = runScrub(dirs, [], { withSystemTools: false });
-  assert.equal(scrubbed.status, 1, "a scrub that cannot remove a shadowing name must fail");
-  assert.ok(scrubbed.stdout.includes("FAIL: these PATH entries still shadow"), "and explain what is wrong");
-  assert.ok(scrubbed.stdout.includes(asPrinted(link)), "naming every survivor");
-  assert.equal(entryExists(link), true, "the survivor is genuinely still on PATH");
+  const guarded = runGuard(dirs, []);
+  assert.equal(guarded.status, REFUSED);
+  for (const name of BINARY_NAMES) assert.ok(guarded.stdout.includes(`FAIL: ${name} resolves to 'nothing'`), guarded.stdout);
 });
 
-test("the scrub removes an executable and a non-executable leftover alike", () => {
+test("[#474] a dangling leftover ahead of the guard cannot run, so the guard holds and leaves it alone", () => {
   const dirs = fixture();
-  const executable = stageFile(dirs, "deslop", EXECUTABLE_MODE);
-  const inert = stageFile(dirs, "deslop-lsp", READ_ONLY_MODE);
-  const listed = runScrub(dirs, [LIST_FLAG]);
-  assert.deepEqual(listed.stdout.trim().split("\n").sort(), [executable, inert].map(asPrinted).sort());
-  assert.equal(listed.status, 1);
-  assert.equal(commandVee(dirs, "deslop"), asPrinted(executable), "an executable copy is exactly what command -v did catch");
-  const scrubbed = runScrub(dirs);
-  assert.equal(scrubbed.status, 0, `scrub failed: ${scrubbed.stdout}${scrubbed.stderr}`);
-  assert.equal(entryExists(executable), false);
-  assert.equal(entryExists(inert), false);
+  const leftovers = join(dirs.root, "leftovers");
+  mkdirSync(leftovers);
+  const link = join(leftovers, "deslop-mcp");
+  symlinkSync(join(dirs.root, "deslop-live-0.15.0-darwin-arm64", "bin", "deslop-mcp"), link);
+  const guarded = runGuard(dirs, [leftovers, dirs.guardDir]);
+  assert.equal(guarded.status, OK, `a dangling link executes nothing: ${guarded.stdout}`);
+  assert.equal(entryExists(link), true, "the guard deletes nothing, not even a dangling link");
+  const called = inShell(dirs, [leftovers, dirs.guardDir], "deslop-mcp");
+  assert.equal(called.status, REFUSED, "the call falls through the dead link to the guard");
 });
 
-test("a directory named after a binary is left alone — it can never shadow an executable", () => {
+test("missing or extra arguments are rejected before anything is written", () => {
   const dirs = fixture();
-  const directory = join(dirs.binDir, "deslop");
-  mkdirSync(directory);
-  const linkToDirectory = join(dirs.binDir, "deslop-lsp");
-  symlinkSync(directory, linkToDirectory);
-  assert.equal(runScrub(dirs, [LIST_FLAG]).stdout, "", "neither entry can be executed, so neither is a leak");
-  assert.equal(runScrub(dirs, [LIST_FLAG]).status, 0);
-  const scrubbed = runScrub(dirs);
-  assert.equal(scrubbed.status, 0, `scrub failed: ${scrubbed.stdout}${scrubbed.stderr}`);
-  assert.equal(entryExists(directory), true, "the scrub must not delete a directory it cannot be shadowed by");
-  assert.equal(entryExists(linkToDirectory), true);
+  for (const args of [[], ["", ""], [dirs.guardDir, dirs.root], [""]]) {
+    const rejected = runGuard(dirs, [dirs.guardDir], args);
+    assert.equal(rejected.status, USAGE, `args ${JSON.stringify(args)} must be a usage error`);
+    assert.ok(rejected.stderr.includes("<guard-dir>"), "usage names the one argument");
+  }
+  assert.equal(entryExists(dirs.guardDir), false, "a rejected call writes no guard");
 });
 
-test("an already-clean PATH scrubs to success and lists nothing", () => {
-  const dirs = fixture();
-  assert.equal(runScrub(dirs, [LIST_FLAG]).stdout, "");
-  assert.equal(runScrub(dirs, [LIST_FLAG]).status, 0);
-  const scrubbed = runScrub(dirs);
-  assert.equal(scrubbed.status, 0, `scrub failed: ${scrubbed.stdout}${scrubbed.stderr}`);
-  assert.ok(scrubbed.stdout.includes("PATH is clear of deslop deslop-lsp deslop-mcp"));
+test("the Makefile runs every test suite behind the guard", () => {
+  const [guard, ...others] = recipeBlocks(GUARD_TARGET);
+  assert.ok(guard, `the Makefile declares ${GUARD_TARGET}`);
+  assert.equal(others.length, 0, `exactly one ${GUARD_TARGET} recipe`);
+  assert.ok(guard.body.includes(`${GUARDED_PATH} ${SCRIPT_INVOCATION} "$(${GUARD_DIR_VARIABLE})"`), guard.body);
+  assert.ok(variableValue(GUARD_DIR_VARIABLE).length > 0, `${GUARD_DIR_VARIABLE} is declared`);
+  assert.ok(variableValue(GUARDED_PATH_VARIABLE).includes(`$(${GUARD_DIR_VARIABLE}):$$PATH`), "GUARDED_PATH puts the guard first");
+  for (const target of TEST_TARGETS) {
+    const blocks = recipeBlocks(target);
+    assert.ok(blocks.length > 0, `${target} is declared`);
+    assert.ok(blocks.some((block) => block.header.includes(GUARD_TARGET)), `${target} depends on ${GUARD_TARGET}`);
+    assert.ok(blocks.some((block) => block.body.includes(GUARDED_PATH)), `${target} runs its suite under ${GUARDED_PATH}`);
+  }
 });
 
-test("an unknown argument is rejected rather than silently scrubbing", () => {
-  const rejected = runScrub(fixture(), ["--delete-everything"]);
-  assert.equal(rejected.status, 2, "an unrecognised mode must not fall through to the destructive path");
-  assert.ok(rejected.stderr.includes(LIST_FLAG), "usage must name the only supported flag");
-});
-
-test(`[#474] ${SCRUB_TARGET} delegates to the script these tests drive`, () => {
-  const blocks = recipeBlocks(SCRUB_TARGET);
-  assert.equal(blocks.length, 1, `the Makefile must declare exactly one ${SCRUB_TARGET} recipe; found ${blocks.length}`);
-  assert.ok(
-    blocks[0].body.includes(SCRIPT_INVOCATION),
-    `${SCRUB_TARGET} must run ${SCRIPT_INVOCATION}; an inline copy of the scrub would be untested`,
-  );
-  assert.ok(
-    !blocks[0].body.includes("command -v"),
-    "the target must not re-introduce command -v detection: it cannot see a dangling symlink (#474)",
-  );
+test("[#611] neither the guard nor any Makefile recipe removes a user's install", () => {
+  const sources = [["Makefile", makefileLines().join("\n")], [SCRIPT, readFileSync(SCRIPT, "utf8")]];
+  for (const [name, text] of sources) {
+    for (const command of DESTRUCTIVE_COMMANDS) {
+      assert.ok(!text.includes(command), `${name} must not run ${command}`);
+    }
+  }
 });
