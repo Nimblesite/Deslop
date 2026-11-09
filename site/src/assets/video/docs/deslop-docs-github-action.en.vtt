@@ -1,0 +1,13 @@
+WEBVTT
+
+00:00.400 --> 00:19.919
+The Deslop GitHub Action brings duplicate-code review into your workflow. It installs the released command-line tool, analyses the workspace and renders reports. Start with the complete workflow on the documentation page, including repository checkout, and choose whether you want measurement or a blocking gate.
+
+00:20.769 --> 00:39.185
+Pin an exact release tag. By default, that tag selects the matching command-line version, keeping the action and tool aligned. If you pin a commit or branch instead, supply the version input explicitly. The downloaded archive is checked against its published checksum before extraction.
+
+00:40.035 --> 00:58.306
+For a measurement-only run, use no fail over. To make duplication above your ceiling fail the job, set fail over, or leave it unset to honor the project configuration. The five-percent value shown is an example, not a recommendation for every codebase. Review your baseline first.
+
+00:59.156 --> 01:17.294
+Changed-code gating uses a supplied patch and the only changed option. The whole tree is still analysed; the report and gate are scoped to affected added lines. Reports and outputs help explain a breached gate. Inspect the scope as well as the percentage before deciding what to change.

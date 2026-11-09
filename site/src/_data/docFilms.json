@@ -148,5 +148,35 @@
         "text": "Open the project with Deslop or scan it from the command line. Review the ranked findings and compare their occurrences before extracting shared code. Language support does not promise automatic Osprey refactoring, cross-flavor equivalence, or interchangeable behavior. Invalid ML syntax should surface as a parse error."
       }
     ]
+  },
+  "github-action": {
+    "title": "Put review in the workflow",
+    "duration": "1:19",
+    "transcript": [
+      {
+        "title": "Put review in the workflow",
+        "seconds": 0,
+        "stamp": "0:00",
+        "text": "The Deslop GitHub Action brings duplicate-code review into your workflow. It installs the released command-line tool, analyses the workspace and renders reports. Start with the complete workflow on the documentation page, including repository checkout, and choose whether you want measurement or a blocking gate."
+      },
+      {
+        "title": "Pin the release",
+        "seconds": 20,
+        "stamp": "0:20",
+        "text": "Pin an exact release tag. By default, that tag selects the matching command-line version, keeping the action and tool aligned. If you pin a commit or branch instead, supply the version input explicitly. The downloaded archive is checked against its published checksum before extraction."
+      },
+      {
+        "title": "Measure, then choose a ceiling",
+        "seconds": 40,
+        "stamp": "0:40",
+        "text": "For a measurement-only run, use no fail over. To make duplication above your ceiling fail the job, set fail over, or leave it unset to honor the project configuration. The five-percent value shown is an example, not a recommendation for every codebase. Review your baseline first."
+      },
+      {
+        "title": "Understand the gate scope",
+        "seconds": 59,
+        "stamp": "0:59",
+        "text": "Changed-code gating uses a supplied patch and the only changed option. The whole tree is still analysed; the report and gate are scoped to affected added lines. Reports and outputs help explain a breached gate. Inspect the scope as well as the percentage before deciding what to change."
+      }
+    ]
   }
 }
