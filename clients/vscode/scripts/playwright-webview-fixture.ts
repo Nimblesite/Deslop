@@ -27,7 +27,11 @@ declare global {
 }
 
 const repoRoot = findRepoRoot(process.cwd());
-const webviewDir = path.join(repoRoot, "clients", "vscode", "media", "webview");
+/** Overrides where the webview bundles are read from, so a release VSIX's
+ * own `extension/media/webview` can be driven against the same journeys. */
+const WEBVIEW_DIR_ENV = "DESLOP_WEBVIEW_DIR";
+const webviewDir =
+  process.env[WEBVIEW_DIR_ENV] ?? path.join(repoRoot, "clients", "vscode", "media", "webview");
 export const screenshotDir = path.join(repoRoot, "target", "playwright-webview");
 
 /** The canonical occurrence of a cluster is its first ([CLONE-KIND-FOLD]). */
