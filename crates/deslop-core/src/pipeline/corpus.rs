@@ -112,8 +112,7 @@ pub fn fingerprint_corpus(
     parsers: &[Box<dyn LanguageParser>],
     config: &PipelineConfig<'_>,
 ) -> Result<FingerprintCorpus, CoreError> {
-    let workers = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
-    fingerprint_corpus_with_workers(files, parsers, config, workers)
+    fingerprint_corpus_with_workers(files, parsers, config, crate::state::worker_budget())
 }
 
 /// [`fingerprint_corpus`] with the cold-path worker count injected —
@@ -155,6 +154,11 @@ fn fingerprint_corpus_with_workers(
         ..PassState::default()
     };
     if config.incremental {
+        tracing::debug!(
+            workers = 1_usize,
+            files = ordered.len(),
+            "fingerprint_workers"
+        );
         let ordered_work = serial_file_work(
             &ordered,
             parsers,

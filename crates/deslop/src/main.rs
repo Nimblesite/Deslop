@@ -253,6 +253,11 @@ struct BehaviourFlags {
     /// `NO_COLOR` environment variable is set.
     #[arg(long)]
     no_color: bool,
+    /// [CLI-ARG-JOBS] The most worker threads any one parallel stage may
+    /// use. Defaults to every core the machine reports; lower it to scan
+    /// beside an IDE or a build. The report is the same for every value.
+    #[arg(long, value_name = "N")]
+    jobs: Option<std::num::NonZeroUsize>,
 }
 
 impl BehaviourFlags {
@@ -289,6 +294,9 @@ fn run_cli() -> Result<()> {
         return Ok(());
     }
     let args = Cli::parse_from(raw_args);
+    if let Some(jobs) = args.behaviour.jobs {
+        deslop_core::state::set_worker_budget(jobs);
+    }
     if let Some(file) = args.debug_ast.as_deref() {
         return run_debug_ast(file);
     }
@@ -305,6 +313,7 @@ fn run_cli() -> Result<()> {
         &output.log_directory(),
         args.behaviour.log_to_console,
         log_level,
+        color,
     )?;
     summary::preamble(
         color,

@@ -102,6 +102,49 @@ fn log_to_console_flag_routes_events_to_stderr() -> Result<()> {
     Ok(())
 }
 
+/// The escape byte every ANSI colour sequence starts with.
+const ESCAPE: char = '\u{1b}';
+/// The environment variable that turns colour off ([UX-COLOR-NO-COLOR-ENV]).
+const NO_COLOR_ENV: &str = "NO_COLOR";
+/// The override that forces colour on ([UX-COLOR-FORCE]), cleared so the probe is honest.
+const FORCE_COLOR_ENV: &str = "DESLOP_FORCE_COLOR";
+
+// [UX-NO-COLOR] [UX-LOG-CONSOLE] Console log lines follow the run's colour
+// policy. Written into a pipe or with colour switched off, they carry no
+// ANSI escapes, so a reader of `key=value` fields sees them whole.
+#[test]
+fn console_log_lines_carry_no_colour_when_colour_is_off() -> Result<()> {
+    for (how, flag, no_color_env) in [
+        ("--no-color", Some(NO_COLOR_FLAG), false),
+        ("NO_COLOR set", None, true),
+        ("stderr is a pipe", None, false),
+    ] {
+        let tmp = tempfile::tempdir()?;
+        let mut cmd = csharp_small_command(&tmp)?;
+        let _env = cmd.env_remove(RUST_LOG_ENV).env_remove(FORCE_COLOR_ENV);
+        let _no_color = if no_color_env {
+            cmd.env(NO_COLOR_ENV, "1")
+        } else {
+            cmd.env_remove(NO_COLOR_ENV)
+        };
+        let _args = cmd
+            .args([MIN_NODES_FLAG, MIN_NODES_VALUE, LOG_TO_CONSOLE_FLAG])
+            .args(flag);
+        let stderr = stderr_text(&cmd.assert().success())?;
+        assert_contains(
+            &stderr,
+            DESLOP_INVOKED_MESSAGE,
+            "the console sink is in use",
+        );
+        assert!(
+            !stderr.contains(ESCAPE),
+            "{how}: console log lines must carry no ANSI escapes: {:?}",
+            stderr.lines().find(|line| line.contains(ESCAPE))
+        );
+    }
+    Ok(())
+}
+
 // Implements [UX-LOG-LEVEL]: `--log-level warn` suppresses INFO
 // events. The canonical "deslop invoked" INFO message must not
 // appear in the log file when the level is raised.

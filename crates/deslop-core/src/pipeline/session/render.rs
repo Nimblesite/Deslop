@@ -328,10 +328,15 @@ impl PipelineSession {
             })
             .collect();
         jobs.sort_unstable_by_key(|(file_id, _, _)| *file_id);
-        let workers = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
+        let workers = crate::state::worker_budget();
         // `chunks_mut` demands a non-zero size — an empty corpus has no
         // jobs at all, and even one job must yield a whole shard.
         let shard = jobs.len().div_ceil(workers).max(1);
+        tracing::debug!(
+            workers = jobs.len().div_ceil(shard),
+            trees = jobs.len(),
+            "materialize_workers"
+        );
         let mut slots: Vec<Option<crate::ast::NormalizedNode>> =
             std::iter::repeat_with(|| None).take(jobs.len()).collect();
         let join_result = std::thread::scope(|scope| {

@@ -130,6 +130,11 @@ pub(super) fn parallel_file_work(
 ) -> Result<(), CoreError> {
     let min_nodes_usize = usize::try_from(config.min_nodes).unwrap_or(usize::MAX);
     let shard_size = ordered.len().div_ceil(workers.max(1)).max(1);
+    tracing::debug!(
+        workers = ordered.len().div_ceil(shard_size),
+        files = ordered.len(),
+        "fingerprint_workers"
+    );
     let incremental = config.incremental;
     let min_nodes_config = config.min_nodes;
     let mut shards: Vec<Vec<Option<FileWork>>> = Vec::with_capacity(workers);

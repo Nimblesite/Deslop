@@ -8,6 +8,7 @@
 
 use std::{
     collections::{BTreeMap, HashMap},
+    num::NonZeroUsize,
     path::{Path, PathBuf},
     sync::OnceLock,
 };
@@ -141,6 +142,28 @@ pub(crate) fn indexed_subtree_paths<Value>(
         .map(|(path, _)| path.clone())
         .collect();
     (paths, candidates_visited)
+}
+
+/// [CLI-ARG-JOBS] Process-wide worker budget: the most threads any one
+/// parallel stage of a scan may run at once. Set at most once, at process
+/// startup, from `deslop --jobs`. Unset, a stage may use every core the
+/// machine reports.
+static WORKER_BUDGET: OnceLock<NonZeroUsize> = OnceLock::new();
+
+/// Records the process-wide [CLI-ARG-JOBS] worker budget. First write
+/// wins; the budget models a startup flag, not a runtime toggle.
+pub fn set_worker_budget(workers: NonZeroUsize) {
+    let _first_write_wins = WORKER_BUDGET.set(workers);
+}
+
+/// The [CLI-ARG-JOBS] budget every parallel stage shares: the `--jobs`
+/// value when one was set, else the machine's available parallelism.
+#[must_use]
+pub fn worker_budget() -> usize {
+    WORKER_BUDGET.get().copied().map_or_else(
+        || std::thread::available_parallelism().map_or(1, NonZeroUsize::get),
+        NonZeroUsize::get,
+    )
 }
 
 /// Process-wide override of the `[ranking] structural_only` policy

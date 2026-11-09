@@ -358,12 +358,16 @@ fn apply_process_nice(nice: i32) {
     }
 }
 
-/// Initialises tracing diagnostics against `RUST_LOG`.
+/// Initialises tracing diagnostics against `RUST_LOG`. An editor reads
+/// stderr through a pipe into its log file, so log lines carry ANSI colour
+/// only on a terminal that has not opted out ([UX-NO-COLOR]); otherwise
+/// `key=value` fields would arrive split by escape codes.
 fn init_tracing() {
     let _result = tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
+        .with_ansi(deslop_core::logging_colour::stderr_wants_colour())
         .with_writer(std::io::stderr)
         .try_init();
 }
