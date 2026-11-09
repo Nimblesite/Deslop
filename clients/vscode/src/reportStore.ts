@@ -304,6 +304,16 @@ export class ReportStore implements vscode.Disposable {
     this._dirtyFiles.value = next;
   }
 
+  /**
+   * True while `path` awaits a report that acknowledges its edited version,
+   * so the visible projection is still hiding its occurrences
+   * ([VSIX-STATE-DIRTY]). A surface answering for that file is provisional
+   * until this turns false.
+   */
+  isFileDirty(path: string): boolean {
+    return this._dirtyFiles.value.has(normalisePath(path));
+  }
+
   /** [LIVE-OPEN-BUFFERS] Reveal only the editor version this report analysed. */
   private acknowledgeBuffer(buffer?: AnalysedBuffer | null): void {
     if (!buffer || this._dirtyFiles.value.get(normalisePath(buffer.path)) !== buffer.version) return;

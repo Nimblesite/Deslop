@@ -79,7 +79,10 @@ suite("LiveBubble stale-probe races", () => {
         "a snapshot settles every retraction — the freshness token must catch what the ledger cannot",
       );
 
-      await resolveProbe(requests[0], probeA);
+      // The refresh that doomed probe A re-issues it against the new
+      // revision; A's own completion is still held to the freshness guard.
+      assert.equal(requests.length, 2, "the newer snapshot re-issues the in-flight probe");
+      await resolveProbe(requests[0], probeA, true);
       assert.equal(
         capture.calls.length,
         0,
@@ -88,12 +91,10 @@ suite("LiveBubble stale-probe races", () => {
       assert.equal(capture.visible(), undefined, "no bubble may appear for the dropped cluster");
       assert.equal(capture.visibleHover(), undefined, "and no hover card either");
 
-      // Positive proof the guard discriminates rather than blinds: a fresh
-      // probe against the new snapshot still renders.
-      const probeB = bubble.probe(capture.editor, editAt(6, "bbbb"));
-      await resolveProbe(requests[1], probeB, undefined, [
-        bubbleCluster("c-other", 3),
-      ]);
+      // Positive proof the guard discriminates rather than blinds: the
+      // re-issued probe, answered against the new snapshot, still renders.
+      requests[1]?.resolve([bubbleCluster("c-other", 3)]);
+      await settled();
       assert.match(
         capture.visible() ?? "",
         new RegExp(FIXTURE_KIND_TITLE),
@@ -200,6 +201,55 @@ suite("LiveBubble probe outlived by a report refresh", () => {
       assert.match(rendered ?? "", new RegExp(FIXTURE_KIND_TITLE), "with the clone kind verdict");
       assert.match(rendered ?? "", /×\s*5/, "and the refreshed report's occurrence count");
       assert.match(rendered ?? "", /A\.cs/, "naming the canonical file");
+    });
+  });
+});
+
+suite("LiveBubble probe answered before the acknowledging refresh", () => {
+  // [VSIX-LIVE-BUBBLE] [VSIX-STATE-DIRTY] The other ordering of the same
+  // race: the probe answers first, against a projection that still hides
+  // the edited file's occurrences, so the cluster is not visible and the
+  // surface stays empty. The refresh that acknowledges the buffer then
+  // reveals the cluster — and must re-issue the probe, or the edit never
+  // gets the bubble it earned.
+  test("a probe answered while the buffer was still hidden is re-issued when the acknowledging refresh lands", async () => {
+    const { client, requests } = deferredProbeClient();
+    await withBubble({ generation: 1, client }, async ({ store, capture, bubble }) => {
+      const path = capture.editor.document.uri.fsPath;
+      const version = capture.editor.document.version;
+      store.markFileDirty(path, version);
+      assert.equal(store.isFileDirty(path), true, "the edited buffer awaits analysis");
+      assert.equal(
+        store.current.visibleReport?.clusters.length,
+        0,
+        "the projection hides the only cluster while its file is dirty",
+      );
+
+      const probeA = bubble.probe(capture.editor, editAt(0, "aaaa"));
+      await resolveProbe(requests[0], probeA);
+      assert.equal(requests.length, 1, "one probe so far");
+      assert.equal(capture.visible(), undefined, "a hidden cluster paints nothing");
+
+      assert.equal(
+        store.setSnapshot(probeReport(), 2, { path, version }),
+        true,
+        "the refresh acknowledging this buffer version is accepted",
+      );
+      assert.equal(store.isFileDirty(path), false, "the buffer is analysed");
+      assert.equal(requests.length, 2, "the acknowledging refresh re-issues the probe");
+      assert.deepEqual(requests[1]?.params, requests[0]?.params, "for the same edited range");
+
+      requests[1]?.resolve([probeCluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_MASS)]);
+      await settled();
+      const rendered = capture.visible();
+      assert.ok(rendered !== undefined, "the re-issued probe paints the bubble");
+      assert.match(rendered ?? "", new RegExp(FIXTURE_KIND_TITLE), "with the clone kind verdict");
+      assert.match(rendered ?? "", /×\s*5/, "and the acknowledged report's occurrence count");
+
+      // Settled against an analysed buffer, the probe is no longer
+      // provisional: a later unrelated refresh does not re-issue it.
+      assert.equal(store.setSnapshot(probeReport(), 3), true, "an unrelated refresh is accepted");
+      assert.equal(requests.length, 2, "an analysed edit is not re-probed on every refresh");
     });
   });
 });

@@ -62,11 +62,14 @@ interface DispatchedAt {
 // touch the UI — success *or* failure), the cancellation source that a newer
 // probe or `dispose()` fires, the budget deadline, and the world it was
 // dispatched against.
-// A dispatched probe and the edit it answers for, kept until it settles.
+// A dispatched probe and the edit it answers for. Kept while it is in flight,
+// and — when the store still hid the edited buffer at dispatch, so whatever
+// it renders is provisional — until a refresh acknowledges that buffer.
 interface PendingProbe {
   editor: vscode.TextEditor;
   change: vscode.TextDocumentContentChangeEvent;
   dispatch: ProbeDispatch;
+  provisional: boolean;
 }
 
 interface ProbeDispatch {
@@ -223,7 +226,12 @@ export class LiveBubble implements vscode.Disposable {
     const client = this.clientOf();
     if (!client) return;
     const dispatch = this.beginProbe(editor.document, change);
-    this.pendingProbe = { editor, change, dispatch };
+    this.pendingProbe = {
+      editor,
+      change,
+      dispatch,
+      provisional: this.store.isFileDirty(editor.document.uri.fsPath),
+    };
     try {
       const clusters = await client.sendRequest<ReportCluster[]>(
         REPORT_FOR_RANGE_METHOD,
@@ -284,7 +292,9 @@ export class LiveBubble implements vscode.Disposable {
   }
 
   private endProbe(dispatch: ProbeDispatch): void {
-    if (this.pendingProbe?.dispatch === dispatch) this.pendingProbe = null;
+    if (this.pendingProbe?.dispatch === dispatch && !this.pendingProbe.provisional) {
+      this.pendingProbe = null;
+    }
     dispatch.budget.dispose();
     if (this.inflight === dispatch.cancellation) this.inflight = null;
     dispatch.cancellation.dispose();
@@ -384,17 +394,22 @@ export class LiveBubble implements vscode.Disposable {
 
   // [VSIX-LIVE-BUBBLE] [LIVE-OPEN-BUFFERS] The pause that dispatches a probe
   // is the pause that makes the server re-analyse the dirty buffer, so the
-  // refreshed report routinely lands while the probe is in flight. Its answer
-  // is then stale by the store's own revision rule and `hasMovedOn` rejects
-  // it — but the edit still earned its bubble. Re-issue the same probe against
-  // the fresh report; dispatching it cancels the doomed one as any newer probe
+  // refreshed report routinely lands around the probe: while it is in flight,
+  // when `hasMovedOn` rejects its answer by the store's revision rule, or
+  // just after it answered against a projection that still hid the edited
+  // file ([VSIX-STATE-DIRTY]) and so could show nothing. Either way the edit
+  // still earned its bubble. Re-issue the same probe against the fresh
+  // report; dispatching it cancels an in-flight one as any newer probe
   // cancels its elder. A buffer edited again since is left to its own debounce.
   private reprobeOnRefresh(): void {
     // Read the signal unconditionally so the effect always tracks it.
     const revision = this.store.revision.value;
     const pending = this.pendingProbe;
     if (!pending || pending.dispatch.dispatchedAt.revision === revision) return;
-    if (pending.dispatch.doc.version !== pending.dispatch.dispatchedAt.version) return;
+    if (pending.dispatch.doc.version !== pending.dispatch.dispatchedAt.version) {
+      this.pendingProbe = null;
+      return;
+    }
     this.probe(pending.editor, pending.change).catch(() => this.clearBubble());
   }
 
