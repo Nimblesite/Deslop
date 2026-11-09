@@ -31,8 +31,15 @@ function checkFrame(seconds,expected) {
 }
 const headingText=text=>text.toLowerCase().replace(/-\s+/g,'-').replace(/\s+/g,' ').trim();
 const sceneChecks=timeline.scenes.map(scene=>{
-  const reader='import json,sys; from pathlib import Path; from factory.verify import read_video_text; print(json.dumps(read_video_text(Path(sys.argv[1]),float(sys.argv[2]),[])))';
-  const result=JSON.parse(execFileSync('python3',['-c',reader,media,String((scene.start+scene.end)/2)],{cwd:videos,encoding:'utf8'}));
+  const reader=`import json,sys,subprocess,tempfile
+from pathlib import Path
+from factory.verify import read_text
+with tempfile.TemporaryDirectory() as folder:
+ image=Path(folder)/"heading.png"
+ subprocess.run(["ffmpeg","-y","-v","error","-ss",sys.argv[2],"-i",sys.argv[1],"-frames:v","1","-vf",sys.argv[3],str(image)],check=True)
+ print(json.dumps({"text":read_text(image)}))`;
+  const crop=scene.image?'crop=1920:130:0:0':'crop=700:790:0:130';
+  const result=JSON.parse(execFileSync('python3',['-c',reader,media,String((scene.start+scene.end)/2),crop],{cwd:videos,encoding:'utf8'}));
   if(!headingText(result.text).includes(headingText(scene.title))) throw new Error(`Missing rendered chapter title: ${scene.title}`);
   return result;
 });
