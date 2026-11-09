@@ -11,26 +11,18 @@ run and a change. Do not pad films to reach a duration.
 - [x] Inventory all ten documentation pages and inspect the shared film pipeline.
 - [x] Review narration against each source page and choose real visual evidence.
 - [x] Produce a shared Deslop series template with distinct chapter compositions.
-- [ ] Render each film with narration, captions, chapters and a poster.
-- [ ] Inspect finished frames and verify narration, duration and media encoding.
-- [ ] Integrate accessible video players into the matching documentation pages.
+- [x] Render each film with narration, captions, chapters and a poster.
+- [x] Inspect finished frames, review narration text, and verify duration and encoding.
+- [x] Integrate accessible video players into the matching documentation pages.
 - [ ] Store delivered videos in Git LFS; verify desktop and mobile playback.
 - [ ] Remove disposable render intermediates and check disk space.
 
 ## Coverage [DOC-FILMS-COVERAGE]
 
-| Documentation source | Film focus | Delivery |
-| --- | --- | --- |
-| index.md | Install, find, inspect and compare | 82.9s rendered; codec/OCR verified; LFS committed; responsive playback passed |
-| ai-integration.md | Check for existing code before writing | 81.2s rendered; all chapter titles checked; English/Chinese playback passed |
-| vscode-cluster-panel.md | Navigate findings and compare copies | Script reviewed; previews rendered; narration pending |
-| github-action.md | Review duplicates in a pull request | Script reviewed; previews rendered; narration pending |
-| osprey.md | Analyse supported Osprey source | Script reviewed; previews rendered; narration pending |
-| configuration.md | Choose analysis settings deliberately | 79.5s rendered; imported with LFS; English/Chinese playback passed |
-| how-it-works.md | Follow source code into ranked findings | 86.9s rendered; delivery review running |
-| research-background.md | Understand clone types and evidence | Script reviewed; previews rendered; narration pending |
-| accuracy-transparency.md | Read accuracy evidence and limitations | Script reviewed; previews rendered; narration pending |
-| for-ai.md | Use the live MCP workflow correctly | Script reviewed; previews rendered; narration pending |
+The mechanically generated [delivery inventory](../../reports/videos/series-status.md)
+tracks every page, duration, delivery receipt and LFS rule. Individual media
+receipts and measured audio levels live beside it; do not duplicate their figures
+in this plan.
 
 ## Production constraints [DOC-FILMS-PRODUCTION]
 
@@ -48,8 +40,16 @@ are under `projects/deslop/videos/doc-series/`. Ten source-page snapshots and
 SHA-256 hashes are in its `sources/` directory. Preview frames were rendered
 and visually inspected before narration. The first publish rejected an
 intermediate quality setting of 20; the recipe now uses the supported maximum
-of 18. Final video review and delivery remain outstanding.
+of 18. All ten films are delivered. Final browser checks and repository cleanup are running.
 
 Reviewed production scripts live in Videos under `projects/deslop/videos/docs-*/`.
 Superseded pi drafts were removed after review; model outcomes and corrections
 are recorded in PiNotes/2026-11-09-deslop-doc-video-scripts.md.
+
+## Final validation [DOC-FILMS-VALIDATION]
+
+The browser checks cover both language routes, widths from 320px to 1440px,
+actual playback and seeking at phone and desktop sizes, caption/chapter tracks,
+and keyboard transcript expansion. Native controls remain visitor-operated.
+Audio encoding and level measurements do not establish subjective pronunciation
+quality; narration was reviewed as text against the corresponding documentation.
