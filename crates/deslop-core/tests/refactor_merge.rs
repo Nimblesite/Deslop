@@ -303,7 +303,10 @@ fn wire_edit_uri_percent_encodes_a_space_in_the_checkout_path() -> Result<()> {
     let plan = first_mechanical(merge_plans_under(&root, CSHARP_LEAFGAP.file)?)?;
     ensure_rfc8089_uri(&plan, "/Coding%20Tools/csharp-merge-leafgap/RateLimits.cs")?;
     let uri = edit_uri(&plan)?;
-    ensure!(!uri.contains(' '), "a raw space is not a URI character, got {uri}");
+    ensure!(
+        !uri.contains(' '),
+        "a raw space is not a URI character, got {uri}"
+    );
     Ok(())
 }
 

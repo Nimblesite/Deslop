@@ -33,7 +33,8 @@ const SEED_KEY_FILE: &str = "live-report.key";
 const SAVED_REPORT_FILE: &str = "live-report.json";
 /// A fixture file outside the clone, edited to prove an ordinary edit leaves the saved report alone.
 const UNRELATED_EDIT_FILE: &str = "Gamma.cs";
-const UNRELATED_SOURCE: &str = "namespace Unique { public class Isolated { public int Answer() { return 42; } } }\n";
+const UNRELATED_SOURCE: &str =
+    "namespace Unique { public class Isolated { public int Answer() { return 42; } } }\n";
 /// The key line for a run with no configuration at all.
 const NO_CONFIG_LINE: &str = "config=none";
 /// A config excluding [`EXCLUDED_FILE`], and the same config one byte longer.
@@ -73,7 +74,9 @@ fn excluded_occurrences(report: &Report) -> usize {
         .clusters
         .iter()
         .flat_map(|cluster| &cluster.occurrences)
-        .filter(|occurrence| Path::new(&occurrence.path).file_name() == Some(EXCLUDED_FILE.as_ref()))
+        .filter(|occurrence| {
+            Path::new(&occurrence.path).file_name() == Some(EXCLUDED_FILE.as_ref())
+        })
         .count()
 }
 
@@ -92,9 +95,18 @@ fn a_seed_written_before_the_workspace_config_appeared_is_refused() -> Result<()
     let root = tmp.path();
     let provider: Arc<dyn EmbeddingProvider> = Arc::new(StubProvider::new());
     let unconfigured = warm_start(root, &provider)?;
-    ensure!(excluded_occurrences(&unconfigured) > 0, "control: {EXCLUDED_FILE} clusters with no config");
-    ensure!(recorded_config_line(root)? == NO_CONFIG_LINE, "control: no config file, no config identity");
-    ensure!(seeded(root, &provider).is_some(), "control: an unchanged start re-uses its seed");
+    ensure!(
+        excluded_occurrences(&unconfigured) > 0,
+        "control: {EXCLUDED_FILE} clusters with no config"
+    );
+    ensure!(
+        recorded_config_line(root)? == NO_CONFIG_LINE,
+        "control: no config file, no config identity"
+    );
+    ensure!(
+        seeded(root, &provider).is_some(),
+        "control: an unchanged start re-uses its seed"
+    );
 
     fs::write(root.join(DEFAULT_CONFIG_FILENAME), EXCLUDING_CONFIG)?;
     ensure!(
@@ -103,16 +115,25 @@ fn a_seed_written_before_the_workspace_config_appeared_is_refused() -> Result<()
     );
 
     let configured = warm_start(root, &provider)?;
-    ensure!(excluded_occurrences(&configured) == 0, "the configured pass honours the exclusion");
+    ensure!(
+        excluded_occurrences(&configured) == 0,
+        "the configured pass honours the exclusion"
+    );
     let canonical = fs::canonicalize(root.join(DEFAULT_CONFIG_FILENAME))?;
     let line = recorded_config_line(root)?;
-    let digest = blake3::hash(EXCLUDING_CONFIG.as_bytes()).to_hex().to_string();
+    let digest = blake3::hash(EXCLUDING_CONFIG.as_bytes())
+        .to_hex()
+        .to_string();
     ensure!(
         line == format!("config={}#{digest}", canonical.display()),
         "the key names the discovered config and digests its bytes: {line}"
     );
-    let served = seeded(root, &provider).context("a seed written under the same config is served")?;
-    ensure!(excluded_occurrences(&served) == 0, "the served seed holds no excluded occurrence");
+    let served =
+        seeded(root, &provider).context("a seed written under the same config is served")?;
+    ensure!(
+        excluded_occurrences(&served) == 0,
+        "the served seed holds no excluded occurrence"
+    );
     Ok(())
 }
 
@@ -123,10 +144,16 @@ fn a_seed_written_under_a_since_edited_workspace_config_is_refused() -> Result<(
     let provider: Arc<dyn EmbeddingProvider> = Arc::new(StubProvider::new());
     fs::write(root.join(DEFAULT_CONFIG_FILENAME), EXCLUDING_CONFIG)?;
     let _report = warm_start(root, &provider)?;
-    ensure!(seeded(root, &provider).is_some(), "control: an untouched config re-uses its seed");
+    ensure!(
+        seeded(root, &provider).is_some(),
+        "control: an untouched config re-uses its seed"
+    );
 
     fs::write(root.join(DEFAULT_CONFIG_FILENAME), EDITED_CONFIG)?;
-    ensure!(seeded(root, &provider).is_none(), "one edited byte of .deslop.toml refuses the seed");
+    ensure!(
+        seeded(root, &provider).is_none(),
+        "one edited byte of .deslop.toml refuses the seed"
+    );
     Ok(())
 }
 
@@ -137,7 +164,10 @@ fn a_seed_written_under_a_since_deleted_workspace_config_is_refused() -> Result<
     let provider: Arc<dyn EmbeddingProvider> = Arc::new(StubProvider::new());
     fs::write(root.join(DEFAULT_CONFIG_FILENAME), EXCLUDING_CONFIG)?;
     let configured = warm_start(root, &provider)?;
-    ensure!(excluded_occurrences(&configured) == 0, "control: the config excludes {EXCLUDED_FILE}");
+    ensure!(
+        excluded_occurrences(&configured) == 0,
+        "control: the config excludes {EXCLUDED_FILE}"
+    );
 
     fs::remove_file(root.join(DEFAULT_CONFIG_FILENAME))?;
     ensure!(
@@ -149,7 +179,8 @@ fn a_seed_written_under_a_since_deleted_workspace_config_is_refused() -> Result<
 
 /// The saved report beside the seed key, as an agent reads it.
 fn saved_report(root: &Path) -> Result<Report> {
-    let text = fs::read_to_string(cache_dir(root).join(SAVED_REPORT_FILE)).context("saved report")?;
+    let text =
+        fs::read_to_string(cache_dir(root).join(SAVED_REPORT_FILE)).context("saved report")?;
     serde_json::from_str(&text).context("the saved report parses as a report")
 }
 
@@ -170,12 +201,18 @@ fn a_workspace_config_reload_rewrites_the_saved_report_agents_read() -> Result<(
     )
     .context("full pass")?;
     session.persist_seed_cache();
-    ensure!(excluded_occurrences(&saved_report(root)?) > 0, "control: the saved report lists {EXCLUDED_FILE}");
+    ensure!(
+        excluded_occurrences(&saved_report(root)?) > 0,
+        "control: the saved report lists {EXCLUDED_FILE}"
+    );
 
     let config = root.join(DEFAULT_CONFIG_FILENAME);
     fs::write(&config, EXCLUDING_CONFIG)?;
     let _delta = session.apply_changes(std::slice::from_ref(&config))?;
-    ensure!(excluded_occurrences(&session.report()) == 0, "the live report honours the new exclusion");
+    ensure!(
+        excluded_occurrences(&session.report()) == 0,
+        "the live report honours the new exclusion"
+    );
     let saved = saved_report(root)?;
     ensure!(
         excluded_occurrences(&saved) == 0,
@@ -187,7 +224,10 @@ fn a_workspace_config_reload_rewrites_the_saved_report_agents_read() -> Result<(
         "the saved report is the reload pass's report"
     );
     let served = seeded(root, &provider).context("the rewritten key matches the new config")?;
-    ensure!(excluded_occurrences(&served) == 0, "Reload Window serves the reloaded report");
+    ensure!(
+        excluded_occurrences(&served) == 0,
+        "Reload Window serves the reloaded report"
+    );
 
     let before = fs::read(cache_dir(root).join(SAVED_REPORT_FILE))?;
     fs::write(root.join(UNRELATED_EDIT_FILE), UNRELATED_SOURCE)?;
