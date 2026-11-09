@@ -1,5 +1,6 @@
 ---
 layout: layouts/docs.njk
+docFilm: ai-integration
 title: AI 智能体 — 面向 Claude Code、Cursor、Copilot 的 MCP 设置
 description: 将 Deslop MCP 服务器接入 Claude Code、Cursor、Continue、Copilot 或 Codex，让智能体在写出重复代码前调用 find-similar。
 eleventyNavigation:
@@ -19,6 +20,8 @@ lang: zh
 写给智能体本身的说明 —— 它在写代码前遵循的规则、相似度阈值、MCP 不可用时的 CLI 回退，以及如何解析报告 —— 都在 **[面向 AI](/zh/docs/for-ai/)**。那一页以第二人称写成，直接写给机器。请把你的智能体指向那个 URL。
 
 可直接粘贴到你项目 `AGENTS.md` / `CLAUDE.md` 的规则块参见[智能体配方](https://github.com/Nimblesite/Deslop/blob/main/docs/snippets/agents-md-recipe.md)。它适用于 Claude Code、Cursor、Copilot、Continue 与 Codex。
+
+{% include "partials/doc-film.njk" %}
 
 ## MCP 工具，全部实时
 

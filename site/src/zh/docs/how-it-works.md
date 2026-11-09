@@ -1,5 +1,6 @@
 ---
 layout: layouts/docs.njk
+docFilm: how-it-works
 title: 工作原理 — tree-sitter AST、MinHash LSH、HNSW 嵌入
 description: Deslop 如何使用 tree-sitter AST、Merkle 指纹、MinHash LSH、可选 HNSW 嵌入与最严重者优先排名来检测重复代码。
 eleventyNavigation:
@@ -15,6 +16,8 @@ lang: zh
 Deslop 使用 tree-sitter 解析源代码，寻找候选副本，检查内容，再将符合条件的结果分组。CLI、编辑器和 MCP 工具共用同一个 Rust 引擎。
 
 本指南适用于 [0.35.0](/zh/releases/)。
+
+{% include "partials/doc-film.njk" %}
 
 ## 寻找候选副本
 

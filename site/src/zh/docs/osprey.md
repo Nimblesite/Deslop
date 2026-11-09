@@ -1,5 +1,6 @@
 ---
 layout: layouts/docs.njk
+docFilm: osprey
 title: Osprey — 语法风格与重复代码检测
 description: 使用 Deslop 扫描 Osprey 的全部三种语法风格，包括原生 ML 布局与显式选择的 Python 风格。
 eleventyNavigation:
@@ -13,6 +14,8 @@ lang: zh
 # Osprey 支持
 
 Deslop 使用 tree-sitter 分析 Osprey，并通过 CLI、实时编辑器和 MCP 工具共用的同一个 Rust 引擎发送检测结果。在语言分组和报告视图中，Osprey 显示为官方青色 Osprey 图标。入门介绍请阅读 [Osprey in Deslop](/blog/osprey-first-class/)（英文）。
+
+{% include "partials/doc-film.njk" %}
 
 ## 语法支持
 

@@ -26,7 +26,17 @@ if(video?.codec_name!=='h264'||audio?.codec_name!=='aac'||video.width!==1920||vi
 if(seconds<film.durationBounds[0]||seconds>film.durationBounds[1]) throw new Error('Duration outside film bounds');
 const checks=read(path.resolve(ocrFile));
 if(!checks.expected?.length || !Number.isFinite(checks.seconds)) throw new Error('Missing OCR check specification');
-const ocr=JSON.parse(execFileSync('python3',['-m','factory.verify','--video',media,'--at',String(checks.seconds),...checks.expected.flatMap(text=>['--expect',text])],{cwd:videos,encoding:'utf8'}));
+function checkFrame(seconds,expected) {
+  return JSON.parse(execFileSync('python3',['-m','factory.verify','--video',media,'--at',String(seconds),...expected.flatMap(text=>['--expect',text])],{cwd:videos,encoding:'utf8'}));
+}
+const headingText=text=>text.toLowerCase().replace(/\s+/g,' ').trim();
+const sceneChecks=timeline.scenes.map(scene=>{
+  const reader='import json,sys; from pathlib import Path; from factory.verify import read_video_text; print(json.dumps(read_video_text(Path(sys.argv[1]),float(sys.argv[2]),[])))';
+  const result=JSON.parse(execFileSync('python3',['-c',reader,media,String((scene.start+scene.end)/2)],{cwd:videos,encoding:'utf8'}));
+  if(!headingText(result.text).includes(headingText(scene.title))) throw new Error(`Missing rendered chapter title: ${scene.title}`);
+  return result;
+});
+const ocr=checkFrame(checks.seconds,checks.expected);
 const suffixes=['.mp4','-poster.jpg','.en.vtt','.chapters.vtt'];
 for(const suffix of suffixes) if(!fs.statSync(path.join(dist,stem+suffix)).size) throw new Error(`Empty ${suffix}`);
 const destination=path.join(root,'site/src/assets/video/docs');
@@ -40,5 +50,5 @@ fs.writeFileSync(dataPath,JSON.stringify(data,null,2)+'\n');
 const digest=createHash('sha256').update(fs.readFileSync(media)).digest('hex');
 const report=path.join(root,'reports/videos',`${slug}-media.md`);
 fs.mkdirSync(path.dirname(report),{recursive:true});
-fs.writeFileSync(report,`# ${data[slug].title} media verification\n\n- Duration: ${seconds} seconds\n- Video: ${video.codec_name}, ${video.width} x ${video.height}\n- Audio: ${audio.codec_name}\n- Narration: ${expected.length} lines match the current film script\n- Delivery: MP4, poster, English captions and chapters present\n- OCR at ${ocr.seconds}s: ${ocr.expected.join(', ')}\n- SHA-256: ${digest}\n\nBrowser playback and visual review are separate checks.\n`);
+fs.writeFileSync(report,`# ${data[slug].title} media verification\n\n- Duration: ${seconds} seconds\n- Video: ${video.codec_name}, ${video.width} x ${video.height}\n- Audio: ${audio.codec_name}\n- Narration: ${expected.length} lines match the current film script\n- Delivery: MP4, poster, English captions and chapters present\n- Scene coverage: ${sceneChecks.length} of ${timeline.scenes.length} rendered chapter titles verified\n- OCR at ${ocr.seconds}s: ${ocr.expected.join(', ')}\n- SHA-256: ${digest}\n\nBrowser playback and visual review are separate checks.\n`);
 process.stdout.write(`Imported ${slug}: ${seconds}s; ${report}\n`);

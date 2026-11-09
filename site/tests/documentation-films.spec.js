@@ -6,9 +6,9 @@ const HEIGHT=900;
 const SEEK_SECONDS=20;
 const EXPECTED_CHAPTERS=4;
 // [DOC-FILMS-DELIVERY] Actual delivered media, tracks and responsive controls.
-for(const [slug,film] of Object.entries(FILMS)) {
-  test(`${slug}: responsive player and playable delivery`,async({page},testInfo)=>{
-    await page.goto(slug==='getting-started'?'/docs/':`/docs/${slug}/`);
+for(const [slug,film] of Object.entries(FILMS)) for(const locale of ['', '/zh']) {
+  test(`${locale || "en"} ${slug}: responsive player and playable delivery`,async({page},testInfo)=>{
+    await page.goto(locale+(slug==='getting-started'?'/docs/':`/docs/${slug}/`));
     const video=page.locator('.doc-film video');
     await expect(video).toHaveCount(1);
     await expect(video).toHaveAttribute('aria-label',film.title);

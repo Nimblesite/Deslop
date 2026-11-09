@@ -1,5 +1,6 @@
 ---
 layout: layouts/docs.njk
+docFilm: github-action
 title: GitHub Action — 在 CI 中为重复代码设置门禁
 description: 配置 Deslop GitHub Action，以度量重复代码、按阈值设置 CI 门禁、上传报告、校验发布产物并选择 CLI 版本。
 eleventyNavigation:
@@ -15,6 +16,8 @@ lang: zh
 [GitHub Marketplace 上的 **Deslop.live**](https://github.com/marketplace/actions/deslop-live) 会在运行器上安装已发布的 `deslop` CLI，分析工作区，渲染报告，并在重复率突破上限时让作业失败。
 
 它是一个复合（composite）Action。没有镜像需要拉取，也没有安装后的额外下载 — 它会获取与运行器匹配的预编译归档，在解压之前校验已发布的 SHA-256，然后把 `deslop` 放到 `PATH` 上。
+
+{% include "partials/doc-film.njk" %}
 
 ## 快速开始
 

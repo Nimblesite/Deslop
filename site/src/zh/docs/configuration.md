@@ -1,5 +1,6 @@
 ---
 layout: layouts/docs.njk
+docFilm: configuration
 title: 配置与报告 — .deslop.toml、命令行参数、JSON 输出
 description: 使用 .deslop.toml 和 CLI 参数配置 Deslop。查看排除项、阈值、排名、分析设置、JSON/HTML/文本报告与退出码。
 eleventyNavigation:
@@ -20,6 +21,8 @@ Deslop 从两处读取设置：
 - **命令行参数** — 单次运行的覆盖项。参数始终优先于对应的配置键。
 
 本页是一份参考手册。需要循序渐进的教程，请从[快速开始](/zh/docs/)读起。
+
+{% include "partials/doc-film.njk" %}
 
 ## `.deslop.toml` 文件
 

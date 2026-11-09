@@ -1,5 +1,6 @@
 ---
 layout: layouts/docs.njk
+docFilm: vscode-cluster-panel
 title: VS Code — 在编辑器中解读重复代码簇
 description: 使用 Deslop VS Code 扩展查看 Top Offenders、实时重复警告与代码簇信号，并比较规范出现位置。
 eleventyNavigation:
@@ -13,6 +14,8 @@ lang: zh
 # VS Code 簇面板
 
 面板展示一组出现位置，方便检查实际副本。本指南适用于 [0.35.0](/zh/releases/)。
+
+{% include "partials/doc-film.njk" %}
 
 ## 打开与比较
 
