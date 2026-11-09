@@ -421,8 +421,9 @@ fn ipc_socket_handles_refresh_report_request() -> Result<()> {
     Ok(())
 }
 
-/// True when any cluster in the live IPC report has occurrences in both
-/// `first` and `second` (matched on path suffix).
+/// [LSP-IPC] Unrecognised IPC methods must return a JSON-RPC method-not-found
+/// error rather than silently dropping the request.
+#[cfg(unix)]
 #[test]
 fn ipc_socket_returns_method_not_found_for_unknown_method() -> Result<()> {
     let (_workspace, _guard, _stdin, _stdout, socket_path) = fixture_socket_ready("csharp-small")?;

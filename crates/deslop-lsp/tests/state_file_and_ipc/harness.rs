@@ -19,6 +19,8 @@ use crate::common::{
     LspGuard,
 };
 
+/// True when any cluster in the live IPC report has occurrences in both
+/// `first` and `second` (matched on path suffix).
 pub(super) fn cluster_spans_files(report: &serde_json::Value, first: &str, second: &str) -> bool {
     let clusters = report
         .pointer("/result/clusters")
@@ -36,10 +38,7 @@ pub(super) fn cluster_spans_files(report: &serde_json::Value, first: &str, secon
     })
 }
 
-/// [LSP-IPC] Unrecognised IPC methods must return a JSON-RPC method-not-found
-/// error rather than silently dropping the request.
-#[cfg(unix)]
-
+/// Returns the LSP IPC socket path under `workspace`'s `.deslop/cache`.
 pub(super) fn socket_path_for(workspace: &Path) -> PathBuf {
     workspace.join(".deslop/cache").join("deslop.sock")
 }
