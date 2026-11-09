@@ -95,7 +95,9 @@ function shellPathOf(entries) {
 
 /** Runs the guard over `dirs.guardDir` with `pathEntries` on PATH. */
 function runGuard(dirs, pathEntries, args = [dirs.guardDir]) {
-  return spawnSync(BASH, [SCRIPT_FOR_SHELL, ...args.map((arg) => shellPath(arg))], {
+  // An empty argument is a usage probe, not a path: cygpath rejects "".
+  const shellArgs = args.map((arg) => (arg === "" ? arg : shellPath(arg)));
+  return spawnSync(BASH, [SCRIPT_FOR_SHELL, ...shellArgs], {
     encoding: "utf8",
     env: { PATH: shellPathOf(pathEntries), HOME: shellPath(dirs.homeDir) },
   });
