@@ -474,3 +474,8 @@ body.menu-open .docs-sidebar { visibility: visible; transform: translateX(0); }
 @media (max-width: 767.98px) {
   .prose .mcp-tool-table :is(th, td) { padding-inline: var(--space-2); }
 }
+
+.doc-film-transcript summary { cursor: pointer; padding: var(--space-3) 0; font-weight: 600; }
+.doc-film-transcript section { margin-top: var(--space-5); }
+.doc-film-transcript h3 { font-size: 1rem; margin-bottom: var(--space-2); }
+.doc-film-transcript time { color: var(--on-surface-variant); font-variant-numeric: tabular-nums; }

@@ -1,22 +1,152 @@
 {
   "getting-started": {
     "title": "Your first duplicate-code review",
-    "duration": "1:23"
+    "duration": "1:23",
+    "transcript": [
+      {
+        "title": "Your first duplicate-code review",
+        "seconds": 0,
+        "stamp": "0:00",
+        "text": "Start with a small review: find repeated code, inspect its locations, and compare the copies before changing anything. Install Deslop from the VS Code Extensions panel, or use the command shown here. One extension includes the live editor experience, coding-agent checks, and the command-line tools."
+      },
+      {
+        "title": "Start with a finding",
+        "seconds": 21,
+        "stamp": "0:21",
+        "text": "Open your project and a supported source file. Deslop updates its analysis as files change. The Top Offenders tree puts findings beside your code. This recording uses a real two-file C sharp example. Start with one finding so you can understand what it contains."
+      },
+      {
+        "title": "Inspect every occurrence",
+        "seconds": 39,
+        "stamp": "0:39",
+        "text": "Open the finding and inspect its occurrences. A cluster groups related copies; each location lets you navigate back to the source. The canonical copy gives the comparison a consistent starting point. Read the surrounding code as well as the highlighted section before deciding what should be shared."
+      },
+      {
+        "title": "Compare before changing code",
+        "seconds": 59,
+        "stamp": "0:59",
+        "text": "Compare a copy with the canonical version. Look for differences in inputs, behavior, and surrounding assumptions. A finding is evidence to review, not permission to delete code automatically. Make a focused change, run your tests, and let the live analysis update. Follow the Getting Started page for installation alternatives and command-line examples."
+      }
+    ]
   },
   "configuration": {
     "title": "Put policy beside your code",
-    "duration": "1:19"
+    "duration": "1:19",
+    "transcript": [
+      {
+        "title": "Put policy beside your code",
+        "seconds": 0,
+        "stamp": "0:00",
+        "text": "Keep shared policy in dot deslop dot toml, beside the scan root. That is the directory you ask Deslop to analyse. Use the config flag when your policy lives elsewhere. A missing configuration file uses built-in defaults, so commit your settings when the team needs consistent behavior."
+      },
+      {
+        "title": "Skip or hide?",
+        "seconds": 19,
+        "stamp": "0:19",
+        "text": "Choose exclusions carefully. Exclude removes a file before analysis. Report hide still analyses the file, but hides its occurrences. A cluster disappears only when all its members are hidden. This lets a match between handwritten and generated code remain visible, without showing every generated-only cluster."
+      },
+      {
+        "title": "Override one run",
+        "seconds": 40,
+        "stamp": "0:40",
+        "text": "Use command-line flags for a single run. A flag overrides its matching configuration key. Fail over supplies a duplication ceiling; no fail over clears the ceiling for that run. These options control the gate, rather than fixing or removing duplicated code."
+      },
+      {
+        "title": "Make the gate explicit",
+        "seconds": 58,
+        "stamp": "0:58",
+        "text": "A threshold makes excessive duplication fail the run with exit code three. The report remains available to inspect. Without a threshold, duplication alone does not fail the scan; runtime and usage errors still can. Review the report, agree on the policy, and keep that policy with your project."
+      }
+    ]
   },
   "ai-integration": {
     "title": "Ask before writing",
-    "duration": "1:21"
+    "duration": "1:21",
+    "transcript": [
+      {
+        "title": "Ask before writing",
+        "seconds": 0,
+        "stamp": "0:00",
+        "text": "Connect Deslop to your coding agent so it can check for existing code before writing another implementation. The key tool is find similar. Give the agent the For AI instructions linked from this page, and make the check part of its authoring workflow."
+      },
+      {
+        "title": "Use the bundled server",
+        "seconds": 16,
+        "stamp": "0:16",
+        "text": "For an extension-based setup, point your MCP client at the absolute path to the server bundled inside the installed VS Code extension. Use the correct version and platform, and set the repository root. Update that path when the extension version changes. The page includes configurations for supported clients."
+      },
+      {
+        "title": "Keep the request small",
+        "seconds": 38,
+        "stamp": "0:38",
+        "text": "Keep routine requests focused. Find similar checks a proposed snippet. Duplicates lists ranked findings, and cluster by ID retrieves the occurrences you need to review. Compare pair explains the evidence for two particular copies. Start with a small summary and request details only when needed."
+      },
+      {
+        "title": "Review, edit, check",
+        "seconds": 58,
+        "stamp": "0:58",
+        "text": "Read any existing implementation before reusing it. After editing, run your tests and query the findings again. Deslop answers from the workspace analysis maintained by the editor, which refreshes as files change. The agent still needs to inspect behavior and decide whether a suggested reuse is appropriate."
+      }
+    ]
   },
   "how-it-works": {
     "title": "From source to findings",
-    "duration": "1:27"
+    "duration": "1:27",
+    "transcript": [
+      {
+        "title": "From source to findings",
+        "seconds": 0,
+        "stamp": "0:00",
+        "text": "Deslop parses source code with tree sitter, finds candidate copies, checks their content, and groups the surviving findings. The editor, command-line tools and MCP share a Rust engine. A live session refreshes after edits; a command-line scan is a separate review of its selected input."
+      },
+      {
+        "title": "Structure is a starting point",
+        "seconds": 20,
+        "stamp": "0:20",
+        "text": "Syntax-tree normalization helps find copies despite changed names, literals or formatting. But normalization alone cannot establish a clone. Deslop also checks shared content, consistent renaming and the operations being performed. Matching structure is a starting point for comparison, rather than proof on its own."
+      },
+      {
+        "title": "Read the category",
+        "seconds": 41,
+        "stamp": "0:41",
+        "text": "Read the finding category before acting. Identical, nearly identical and similar code describe different degrees of copying. Same shape with different content is informational and contributes nothing to clone counts. Optional embedding candidates also need review: similarity does not prove interchangeable behavior or a safe extraction."
+      },
+      {
+        "title": "Size is not confidence",
+        "seconds": 64,
+        "stamp": "1:04",
+        "text": "Duplicated mass combines syntax-tree size with additional visible copies, bringing larger repeated work to the top. It is neither confidence nor a percentage. The duplication percentage counts covered source lines, counting overlaps once. Compare two explicit occurrences to inspect their evidence before making a change."
+      }
+    ]
   },
   "osprey": {
     "title": "Three syntax flavors",
-    "duration": "1:21"
+    "duration": "1:21",
+    "transcript": [
+      {
+        "title": "Three syntax flavors",
+        "seconds": 0,
+        "stamp": "0:00",
+        "text": "Osprey has three syntax flavors. Deslop documents native braces and ML support, plus explicit selection for Osprey Python. This page describes the development integration, so check your installed release before expecting every change. Ordinary Python files should keep their own language identity."
+      },
+      {
+        "title": "Choose Python deliberately",
+        "seconds": 21,
+        "stamp": "0:21",
+        "text": "For an Osprey Python source file, put the flavor marker in a leading source comment. The same words inside a string, or in a comment after code, do not select the flavor. This makes language selection deliberate instead of treating every Python file as Osprey."
+      },
+      {
+        "title": "Use the project manifest",
+        "seconds": 38,
+        "stamp": "0:38",
+        "text": "The project manifest can also select the Python entry file and individual Python sources. These are literal file paths relative to the manifest, not directory-wide patterns. Other Python files remain ordinary Python. Project flavor overrides and nested project rules are described in the page."
+      },
+      {
+        "title": "Review the actual copies",
+        "seconds": 58,
+        "stamp": "0:58",
+        "text": "Open the project with Deslop or scan it from the command line. Review the ranked findings and compare their occurrences before extracting shared code. Language support does not promise automatic Osprey refactoring, cross-flavor equivalence, or interchangeable behavior. Invalid ML syntax should surface as a parse error."
+      }
+    ]
   }
 }

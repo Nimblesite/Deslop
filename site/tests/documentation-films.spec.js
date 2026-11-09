@@ -23,6 +23,10 @@ for(const [slug,film] of Object.entries(FILMS)) for(const locale of ['', '/zh'])
       expect(box.x+box.width).toBeLessThanOrEqual(width+1);
       if(width===390 || width===1440) await page.screenshot({path:testInfo.outputPath(`player-${width}.png`)});
     }
+    const transcript=page.locator('.doc-film-transcript');
+    await transcript.locator('summary').click();
+    await expect(transcript.locator('section')).toHaveCount(EXPECTED_CHAPTERS);
+    await expect(transcript.locator('p').first()).toHaveText(film.transcript[0].text);
     expect(await video.evaluate(v=>v.paused)).toBe(true);
     await video.evaluate(v=>{v.muted=true;return v.play();});
     await expect.poll(()=>video.evaluate(v=>v.currentTime)).toBeGreaterThan(0);

@@ -52,7 +52,7 @@ for(const suffix of suffixes) fs.copyFileSync(path.join(dist,stem+suffix),path.j
 const dataPath=path.join(root,'site/src/_data/docFilms.json');
 const data=read(dataPath);
 const rounded=Math.round(seconds);
-data[slug]={title:film.scenes[0].title,duration:`${Math.floor(rounded/60)}:${String(rounded%60).padStart(2,'0')}`};
+data[slug]={title:film.scenes[0].title,duration:`${Math.floor(rounded/60)}:${String(rounded%60).padStart(2,'0')}`,transcript:timeline.lines.map(line=>({title:timeline.scenes.find(scene=>scene.id===line.scene).title,seconds:Math.floor(line.start),stamp:`${Math.floor(line.start/60)}:${String(Math.floor(line.start)%60).padStart(2,'0')}`,text:line.text}))};
 fs.writeFileSync(dataPath,JSON.stringify(data,null,2)+'\n');
 const digest=createHash('sha256').update(fs.readFileSync(media)).digest('hex');
 const report=path.join(root,'reports/videos',`${slug}-media.md`);
