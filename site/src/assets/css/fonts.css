@@ -4,14 +4,14 @@
   font-style: normal;
   font-weight: 100 900;
   font-display: swap;
-  src: url('/assets/fonts/inter-variable.ttf') format('truetype');
+  src: url('/assets/fonts/inter-variable.woff2') format('woff2');
 }
 @font-face {
   font-family: 'JetBrains Mono';
   font-style: normal;
   font-weight: 100 800;
   font-display: swap;
-  src: url('/assets/fonts/jetbrains-mono-variable.ttf') format('truetype');
+  src: url('/assets/fonts/jetbrains-mono-variable.woff2') format('woff2');
 }
 /* [SITE-NAV-FONTS] Navigation must not wait on a third-party icon font. */
 @font-face {

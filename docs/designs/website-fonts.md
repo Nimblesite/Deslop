@@ -16,8 +16,10 @@ Retain the upstream license with this derived font.
 Serving this font locally prevents navigation icons from disappearing or
 holding page load open when the external font service is unavailable.
 
-Inter and JetBrains Mono variable TrueType fonts are unmodified downloads from
-Google Fonts on 2026-11-09, under their accompanying SIL Open Font Licenses:
+Inter and JetBrains Mono variable fonts come from Google Fonts (2026-11-09),
+under their accompanying SIL Open Font Licenses. Their outlines and language
+coverage are unchanged; FontTools compresses the upstream TrueType files into
+WOFF2 for delivery:
 
 - https://github.com/google/fonts/tree/main/ofl/inter
 - https://github.com/google/fonts/tree/main/ofl/jetbrainsmono
@@ -25,3 +27,12 @@ Google Fonts on 2026-11-09, under their accompanying SIL Open Font Licenses:
 The complete upstream fonts preserve language coverage and variable weights.
 Reading and code fonts are local too, so the site keeps its typography when
 external font services cannot be reached.
+
+To reproduce the text-font compression with FontTools and WOFF support:
+
+```python
+from fontTools.ttLib import TTFont
+font = TTFont("upstream.ttf")
+font.flavor = "woff2"
+font.save("delivery.woff2")
+```
