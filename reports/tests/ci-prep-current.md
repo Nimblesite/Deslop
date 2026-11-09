@@ -138,3 +138,9 @@ Passed tests across TAP groups: 215. Fresh raw coverage: `coverage/repository/ci
 # fail 0
 # skipped 0
 ```
+
+## Coverage-phase correction verification
+
+Source commit: `79102ef0`. Command: `NODE_V8_COVERAGE=coverage/repository/ci-phases nice -n 15 make _ci-contract-tests`. Exit status: 0.
+
+The full contract suite passed 216 tests across 23 TAP groups, including the real-Make coverage-phase success/failure regression. Failed tests: 0.
