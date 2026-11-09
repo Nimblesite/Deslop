@@ -385,3 +385,38 @@ Source commit: `79eb2821d2c0e59069ae9e1ddad3d449d2c7b8b4`. Summary SHA-256: `f9c
   }
 }
 ```
+
+## Coverage-orchestration CI result
+
+[CI run](https://github.com/Nimblesite/Deslop/actions/runs/42722383742) at `16aaf22b8333404bcd1cce065c70f74759e76e80`: **success**.
+
+| Job | Result |
+| --- | --- |
+| security | success |
+| Detect changes | success |
+| Format + analyzers | success |
+| Windows tests + coverage collection | success |
+| Rust tests + coverage collection | success |
+| Build release | success |
+| Repository tests + coverage collection | success |
+| Website build | success |
+| JetBrains package gate | success |
+| VSIX tests + coverage | success |
+| Corpus targets | success |
+| Corpus accuracy score (date-fns) | success |
+| Corpus accuracy score (console) | success |
+| Corpus accuracy score (axios) | success |
+| Corpus accuracy score (BenchmarkDotNet) | success |
+| Corpus accuracy score (FSharpPlus) | success |
+| Corpus accuracy score (gin) | success |
+| Corpus accuracy score (express) | success |
+| Corpus accuracy score (rayon) | success |
+| Corpus accuracy score (monolog) | success |
+| Corpus accuracy score (vite) | success |
+| Corpus accuracy score (viper) | success |
+| Corpus accuracy score (zlib) | success |
+| Corpus accuracy score (fastapi) | success |
+| Corpus accuracy score (http) | success |
+| Corpus accuracy score (serde) | success |
+| Calculate coverage + thresholds | success |
+| CI | success |
