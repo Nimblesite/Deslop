@@ -5,8 +5,13 @@ The accompanying `material-symbols-LICENSE.txt` retains the upstream license.
 
 Source: https://github.com/google/material-design-icons
 Google Fonts delivery version: v383, downloaded 2026-11-09.
-The original WOFF2 is unmodified. It supports weight 100–700 and fill 0–1,
-matching the site's former Google Fonts stylesheet request.
+The shipped WOFF2 is subset to the icons found in the completed website build,
+with the original font's default regular, unfilled appearance. Regenerate with
+`scripts/site/subset-icons.py <original.woff2> site/_site <output.woff2>` using
+FontTools with WOFF support; alias ligatures are resolved from the upstream font.
+The release-card icon is preserved even when live release metadata is unavailable.
+The browser test checks every published icon still shapes to a single glyph.
+Retain the upstream license with this derived font.
 
 Serving this font locally prevents navigation icons from disappearing or
 holding page load open when the external font service is unavailable.

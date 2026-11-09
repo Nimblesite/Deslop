@@ -36,7 +36,9 @@ requires all ten topics to have imported deliveries and verification receipts.
 Material Symbols, Inter and JetBrains Mono ship with the website, including
 their upstream licenses. Icons and reading/code fonts must remain available
 when external font services are unreachable. `site/tests/navigation-fonts.spec.js` verifies that behavior with
-both external font endpoints blocked.
+both external font endpoints blocked and verifies every published icon still
+shapes to a single glyph. The icon subset retains the release-card icon even
+when live release metadata is unavailable.
 
 ## [SITE-LOAD-ANALYTICS] Analytics follows page readiness
 
