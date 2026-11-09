@@ -226,6 +226,8 @@ mod python_issue_133_constant_table;
 mod python_issue_467_copy_paste_pair;
 #[path = "python_issue_69_abstract_method.rs"]
 mod python_issue_69_abstract_method;
+#[path = "python_assert_only_blocks.rs"]
+mod python_assert_only_blocks;
 #[path = "python_issue_72_monkeypatch.rs"]
 mod python_issue_72_monkeypatch;
 #[path = "python_issue_96_all_exports.rs"]

@@ -1,4 +1,4 @@
-//! E2E regression for GH #224.
+//! E2E regression for GH #224 — [CLONE-NOISE-RUST-STRUCT-FIELDS].
 //!
 //! Deslop clustered runs of **distinct** Rust struct field declarations —
 //! different field names, different types — as duplicated code, because AST
