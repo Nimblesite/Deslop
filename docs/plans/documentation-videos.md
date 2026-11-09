@@ -9,8 +9,8 @@ run and a change. Do not pad films to reach a duration.
 ## Delivery checklist [DOC-FILMS-DELIVERY]
 
 - [x] Inventory all ten documentation pages and inspect the shared film pipeline.
-- [ ] Review narration against each source page and choose real visual evidence.
-- [ ] Produce a shared Deslop series template with distinct chapter compositions.
+- [x] Review narration against each source page and choose real visual evidence.
+- [x] Produce a shared Deslop series template with distinct chapter compositions.
 - [ ] Render each film with narration, captions, chapters and a poster.
 - [ ] Inspect finished frames and verify narration, duration and media encoding.
 - [ ] Integrate accessible video players into the matching documentation pages.
@@ -22,12 +22,12 @@ run and a change. Do not pad films to reach a duration.
 | Documentation source | Film focus | Delivery |
 | --- | --- | --- |
 | index.md | Install, find, inspect and compare | 82.9s rendered; codec/OCR verified; LFS committed; responsive playback passed |
-| ai-integration.md | Check for existing code before writing | Script reviewed; preview rendered |
+| ai-integration.md | Check for existing code before writing | 81.2s rendered; all chapter titles checked; English/Chinese playback passed |
 | vscode-cluster-panel.md | Navigate findings and compare copies | Script reviewed; previews rendered; narration pending |
 | github-action.md | Review duplicates in a pull request | Script reviewed; previews rendered; narration pending |
 | osprey.md | Analyse supported Osprey source | Script reviewed; previews rendered; narration pending |
-| configuration.md | Choose analysis settings deliberately | 79.5s rendered; media checks passed; OCR review in progress |
-| how-it-works.md | Follow source code into ranked findings | Script corrected; previews rendered |
+| configuration.md | Choose analysis settings deliberately | 79.5s rendered; imported with LFS; English/Chinese playback passed |
+| how-it-works.md | Follow source code into ranked findings | 86.9s rendered; delivery review running |
 | research-background.md | Understand clone types and evidence | Script reviewed; previews rendered; narration pending |
 | accuracy-transparency.md | Read accuracy evidence and limitations | Script reviewed; previews rendered; narration pending |
 | for-ai.md | Use the live MCP workflow correctly | Script reviewed; previews rendered; narration pending |
