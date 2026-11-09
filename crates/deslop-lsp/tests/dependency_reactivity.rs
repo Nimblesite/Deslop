@@ -4,7 +4,7 @@
 
 use std::{fs, path::Path, time::Duration};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use common::{
     at, fixture, handshake, path as json_path,
     reports::{assert_initialize_contract, assert_report_shell, dependency_workspace},
@@ -18,6 +18,12 @@ const FILES: [&str; 2] = ["Alpha.cs", "Beta.cs"];
 const CLUSTERS_FIELD: &str = "clusters";
 const METRICS_FIELD: &str = "metrics";
 const FILES_ANALYSED_FIELD: &str = "files_analysed";
+const DUPLICATED_FILES_FIELD: &str = "duplicated_files";
+const DUPLICATION_PERCENT_FIELD: &str = "duplication_percent";
+/// Root Alpha.cs, root Beta.cs and the dependency's Alpha.cs: the dependency's
+/// Beta.cs is rewritten to unrelated code, so it alone leaves the population.
+const DUPLICATED_AFTER_DEPENDENCY_EDIT: u64 = 3;
+const FULLY_DUPLICATED_PERCENT: f64 = 100.0;
 
 /// [PRINCIPLES-LIVE-IS-REACTIVE] `include_dependencies = true` governs the
 /// whole watcher → scheduler → report loop. A first-party edit proves the OS
@@ -114,19 +120,24 @@ fn opted_in_dependency_edit_refreshes_clusters_metrics_and_occurrences() -> Resu
         at(&initial, METRICS_FIELD),
         "repo metrics stayed stale"
     );
-    assert!(
-        json_path(&changed, &[METRICS_FIELD, "duplicated_files"])
-            .as_u64()
-            .unwrap_or_default()
-            < 4,
-        "the unrelated dependency must leave the duplicate population: {changed:#}"
+    let duplicated_files = json_path(&changed, &[METRICS_FIELD, DUPLICATED_FILES_FIELD])
+        .as_u64()
+        .with_context(|| {
+            format!("metrics.{DUPLICATED_FILES_FIELD} must be a count: {changed:#}")
+        })?;
+    assert_eq!(
+        duplicated_files, DUPLICATED_AFTER_DEPENDENCY_EDIT,
+        "the unrelated dependency leaves the duplicate population; both first-party copies \
+         and the dependency's own copy stay: {changed:#}"
     );
+    let percent = json_path(&changed, &[METRICS_FIELD, DUPLICATION_PERCENT_FIELD])
+        .as_f64()
+        .with_context(|| {
+            format!("metrics.{DUPLICATION_PERCENT_FIELD} must be a number: {changed:#}")
+        })?;
     assert!(
-        json_path(&changed, &[METRICS_FIELD, "duplication_percent"])
-            .as_f64()
-            .unwrap_or(100.0)
-            < 100.0,
-        "the report must stop claiming the edited corpus is 100% duplicated: {changed:#}"
+        percent > 0.0 && percent < FULLY_DUPLICATED_PERCENT,
+        "the edited corpus is part duplicated, not {percent}%: {changed:#}"
     );
     Ok(())
 }
