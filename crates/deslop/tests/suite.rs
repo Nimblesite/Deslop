@@ -49,6 +49,8 @@ mod corpus_commit_pins;
 mod corpus_manifest_contract;
 #[path = "corpus_register_contract.rs"]
 mod corpus_register_contract;
+#[path = "corpus_report_fields.rs"]
+mod corpus_report_fields;
 #[path = "corpus_selection_contract.rs"]
 mod corpus_selection_contract;
 #[path = "cross_cluster_collapse.rs"]
@@ -190,6 +192,8 @@ mod pair_size_coherence;
 mod perf_sample;
 #[path = "polymorphic_gate_hides_rename_clone.rs"]
 mod polymorphic_gate_hides_rename_clone;
+#[path = "python_assert_only_blocks.rs"]
+mod python_assert_only_blocks;
 #[path = "python_dict_assert_payload_proof.rs"]
 mod python_dict_assert_payload_proof;
 #[path = "python_dict_assert_reach.rs"]
@@ -226,8 +230,6 @@ mod python_issue_133_constant_table;
 mod python_issue_467_copy_paste_pair;
 #[path = "python_issue_69_abstract_method.rs"]
 mod python_issue_69_abstract_method;
-#[path = "python_assert_only_blocks.rs"]
-mod python_assert_only_blocks;
 #[path = "python_issue_72_monkeypatch.rs"]
 mod python_issue_72_monkeypatch;
 #[path = "python_issue_96_all_exports.rs"]

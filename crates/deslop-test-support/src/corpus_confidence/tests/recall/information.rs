@@ -2,7 +2,6 @@
 
 use super::*;
 
-const KIND_FIELD: &str = "kind";
 const EXACT_FIELD: &str = "must_find";
 const RENAMED_FIELD: &str = "must_find_type2";
 const FILES_FIELD: &str = "files";
@@ -24,10 +23,10 @@ const PRECISION_CHECK: &str = "precision";
 
 fn family_report(label: &str) -> Result<Value> {
     let mut cluster = spanning(FAMILY_ID, FAMILY_NODES, FIRST_RANK, &PAIR);
-    set_field(&mut cluster, KIND_FIELD, json!(label))?;
+    set_field(&mut cluster, ReportField::Kind, json!(label))?;
     if label != VERIFIED_LABEL {
-        set_field(&mut cluster, MASS, json!(NO_QUANTITY))?;
-        set_field(&mut cluster, RANK, json!(NO_QUANTITY))?;
+        set_field(&mut cluster, ReportField::Mass, json!(NO_QUANTITY))?;
+        set_field(&mut cluster, ReportField::Rank, json!(NO_QUANTITY))?;
     }
     Ok(report(&[cluster]))
 }
@@ -47,8 +46,13 @@ fn unclassified_report() -> Result<Value> {
     let mut cluster = spanning(FAMILY_ID, FAMILY_NODES, FIRST_RANK, &PAIR);
     let _label = cluster
         .as_object_mut()
-        .and_then(|fields| fields.remove(KIND_FIELD))
-        .ok_or_else(|| anyhow::anyhow!("the fixture cluster carries a {KIND_FIELD} field"))?;
+        .and_then(|fields| fields.remove(ReportField::Kind.name()))
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "the fixture cluster carries a {} field",
+                ReportField::Kind.name()
+            )
+        })?;
     Ok(report(&[cluster]))
 }
 

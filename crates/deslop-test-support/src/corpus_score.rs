@@ -37,7 +37,7 @@ use coverage::match_entry;
 pub use coverage::RangeCoverage;
 pub(crate) use coverage::{classification, is_clone_finding, is_informational_finding};
 
-use crate::corpus_measure::ProcessCost;
+use crate::{corpus_measure::ProcessCost, report_field::ReportField};
 
 /// The two judged verdicts. NOT CLEAR is recorded in a register and scores
 /// nothing, by design.
@@ -210,10 +210,7 @@ pub struct RepoScore {
 /// is not something the user was told, so it can neither satisfy a CLEARLY IN
 /// nor breach a CLEARLY OUT.
 fn is_visible(occurrence: &Value) -> bool {
-    !occurrence
-        .get("hidden")
-        .and_then(Value::as_bool)
-        .unwrap_or(false)
+    !ReportField::Hidden.is_set(occurrence)
 }
 
 /// Whether a published occurrence covers any line of a judged range.
@@ -229,15 +226,15 @@ type OccurrenceKey<'a> = (&'a str, u64, u64, Option<u64>, Option<u64>);
 
 /// A source location, including byte offsets when the report provides them.
 fn occurrence_key(occurrence: &Value) -> Option<OccurrenceKey<'_>> {
-    let path = occurrence.get("path")?.as_str()?;
-    let start = occurrence.get("start_line")?.as_u64()?;
-    let end = occurrence.get("end_line")?.as_u64()?;
+    let path = ReportField::Path.text(occurrence)?;
+    let start = ReportField::StartLine.count_of(occurrence)?;
+    let end = ReportField::EndLine.count_of(occurrence)?;
     (start > 0 && end >= start).then_some((
         path,
         start,
         end,
-        occurrence.get("start_byte").and_then(Value::as_u64),
-        occurrence.get("end_byte").and_then(Value::as_u64),
+        ReportField::StartByte.count_of(occurrence),
+        ReportField::EndByte.count_of(occurrence),
     ))
 }
 
@@ -256,24 +253,12 @@ fn record_once<'a>(seen: &mut Vec<OccurrenceKey<'a>>, occurrence: &'a Value) -> 
 /// The unique visible source locations of one cluster.
 fn visible(cluster: &Value) -> Vec<&Value> {
     let mut seen = Vec::new();
-    cluster
-        .get("occurrences")
-        .and_then(Value::as_array)
-        .map(|list| {
-            list.iter()
-                .filter(|occurrence| is_visible(occurrence))
-                .filter(|occurrence| record_once(&mut seen, occurrence))
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-/// The clusters a report published.
-fn clusters(report: &Value) -> &[Value] {
-    report
-        .get("clusters")
-        .and_then(Value::as_array)
-        .map_or(&[][..], Vec::as_slice)
+    ReportField::Occurrences
+        .items(cluster)
+        .iter()
+        .filter(|occurrence| is_visible(occurrence))
+        .filter(|occurrence| record_once(&mut seen, occurrence))
+        .collect()
 }
 
 /// Mark a candidate only once during this search for a range.
@@ -428,7 +413,7 @@ fn parsed_ranges(written: &[String]) -> Result<Vec<Range>> {
 /// The id of the cluster that answered an entry, when one did.
 fn cluster_id(found: Option<&(&Value, RangeCoverage)>) -> Option<String> {
     found
-        .and_then(|(cluster, _)| cluster.get("id").and_then(Value::as_str))
+        .and_then(|(cluster, _)| ReportField::Id.text(cluster))
         .map(ToOwned::to_owned)
 }
 
@@ -473,7 +458,7 @@ pub fn score_repo(name: &str, register: &Value, report: &Value) -> Result<RepoSc
         judged,
         correct,
         score_percent: percent(correct, judged),
-        clusters_total: clusters(report).len(),
+        clusters_total: ReportField::Clusters.items(report).len(),
         entries,
     })
 }

@@ -97,6 +97,18 @@ This is [CORPUS-RECALL]'s predicate read backwards — the same "does a shown cl
 
 Without this field no manifest could express the thing seven open false-positive issues all say — *these are not duplicates and Deslop clustered them* — so none of them could be pinned on the repository it was reported against. An entry naming fewer than two files fails rather than passing vacuously: one path cannot describe a pair the engine wrongly joined.
 
+### [CORPUS-CHECK-FIELDS] Every field a check reads is one the report writes
+
+A check that reads a field the report never writes sees zero, silently. The data-table rule read `size` and `category` that way for months: it called a cluster of 34 copies "a cluster of 0 occurrences", and the exemption it keyed on `category` could never open (gh #540).
+
+So the fields the corpus checks read are listed once, as a closed set, and the checks read a report only through that list. A test renders real reports and asserts every listed field is present, in the shape the checks read it as, wherever it should sit: on the report, in its `metrics`, on every cluster, on every occurrence. It then pins the values a check would see, so renaming a field fails one named test instead of reading as zero in every check.
+
+The scorer also reads `bucket`, an older engine's name for `kind`. That field is outside the list on purpose: current reports never write it, and it is read only when a version comparison scores the older engine's report.
+
+#### For AI
+
+`crates/deslop-test-support/src/report_field.rs` (`ReportField`, `ReportField::ALL`); enumeration test `crates/deslop/tests/corpus_report_fields.rs`. Add a field to the enum, never read a report with a string literal.
+
 ### [CORPUS-REGISTER] The clone register — independent ground truth
 
 `must_find` and `must_not_cluster` are curated by whoever is working on Deslop, which is the problem: read the engine's code and you start writing down the engine's opinion of itself. A register is the same idea with the contamination removed.

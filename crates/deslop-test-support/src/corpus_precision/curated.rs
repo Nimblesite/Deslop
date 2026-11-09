@@ -5,10 +5,11 @@
 
 use serde_json::Value;
 
-use super::{array, field_u64, Failure, MASS, OCCURRENCE_COUNT};
+use super::{array, Failure};
 use crate::{
     corpus::{cluster_shows_span, visible_clusters},
     corpus_score::{classification, is_informational_finding},
+    report_field::ReportField,
 };
 
 /// A pair needs two distinct file paths in this manifest contract.
@@ -19,8 +20,6 @@ const FILES_FIELD: &str = "files";
 const WHY_FIELD: &str = "why";
 /// Stable precision check identifier.
 const PRECISION_CHECK: &str = "precision";
-/// Stable cluster identifier field.
-const ID_FIELD: &str = "id";
 /// Visible fallback for a malformed identifier.
 const UNLABELLED: &str = "<unlabelled>";
 /// How a breach names a cluster that carries no classification.
@@ -67,13 +66,10 @@ fn malformed_entry(entry: &Value, count: usize) -> String {
 
 /// The breaching cluster, its classification and its visible extent.
 fn breach_detail(breach: &Value, files: &[String], why: &str) -> String {
-    let id = breach
-        .get(ID_FIELD)
-        .and_then(Value::as_str)
-        .unwrap_or(UNLABELLED);
+    let id = ReportField::Id.text(breach).unwrap_or(UNLABELLED);
     let kind = classification(breach).unwrap_or_else(|| UNCLASSIFIED.to_owned());
-    let mass = field_u64(breach, MASS);
-    let size = field_u64(breach, OCCURRENCE_COUNT);
+    let mass = ReportField::Mass.count(breach);
+    let size = ReportField::OccurrenceCount.count(breach);
     format!("cluster {id} ({kind}, mass {mass}, {size} occurrences) is shown spanning {files:?}, which a human verified is not duplication. Curated: {why}")
 }
 

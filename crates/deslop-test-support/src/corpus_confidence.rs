@@ -4,23 +4,14 @@ use serde_json::Value;
 
 use crate::{
     corpus::{
-        cluster_shows_span, field_u64, reports_clone_spanning, visible_clone_clusters,
-        visible_clusters, Failure,
+        cluster_shows_span, reports_clone_spanning, visible_clone_clusters, visible_clusters,
+        Failure,
     },
     // [RANK-STRUCTURAL-ONLY] Informational families are outside clone mass and ranking.
     corpus_score::is_informational_finding,
+    report_field::ReportField,
 };
 
-/// Canonical extent field on a mass-only cluster.
-const CANONICAL_NODE_COUNT: &str = "canonical_node_count";
-/// Visible member-count field on a mass-only cluster.
-const OCCURRENCE_COUNT: &str = "occurrence_count";
-/// Carried member-count field, hidden occurrences included.
-const OCCURRENCES_TOTAL: &str = "occurrences_total";
-/// Canonical duplicated-mass field.
-const MASS: &str = "mass";
-/// Engine-stamped global order field.
-const RANK: &str = "rank";
 /// Informational records carry no duplicate quantity.
 const INFORMATIONAL_QUANTITY: u64 = 0;
 /// A family requires two carried occurrences, including hidden copies.
@@ -89,9 +80,9 @@ fn check_forbidden_fields(cluster: &Value, index: usize, failures: &mut Vec<Fail
 /// publish. Such a cluster carries mass 0 by the same equation, which is
 /// what sinks it to the bottom of the ranking.
 fn check_mass(cluster: &Value, index: usize, failures: &mut Vec<Failure>) {
-    let carried = field_u64(cluster, OCCURRENCES_TOTAL);
+    let carried = ReportField::OccurrencesTotal.count(cluster);
     let expected = expected_mass(cluster);
-    let actual = field_u64(cluster, MASS);
+    let actual = ReportField::Mass.count(cluster);
     if carried < MIN_CARRIED_OCCURRENCES || actual != expected {
         failures.push(Failure::new(
             MASS_CHECK,
@@ -105,8 +96,13 @@ fn expected_mass(cluster: &Value) -> u64 {
     if is_informational_finding(cluster) {
         return INFORMATIONAL_QUANTITY;
     }
-    field_u64(cluster, CANONICAL_NODE_COUNT)
-        .saturating_mul(field_u64(cluster, OCCURRENCE_COUNT).saturating_sub(CANONICAL_OCCURRENCE))
+    ReportField::CanonicalNodeCount
+        .count(cluster)
+        .saturating_mul(
+            ReportField::OccurrenceCount
+                .count(cluster)
+                .saturating_sub(CANONICAL_OCCURRENCE),
+        )
 }
 
 /// The printed equation follows the record's actual clone eligibility.
@@ -116,17 +112,17 @@ fn mass_expectation(cluster: &Value, expected: u64) -> String {
     }
     format!(
         "{} × max({} - {CANONICAL_OCCURRENCE}, 0) = {expected}",
-        field_u64(cluster, CANONICAL_NODE_COUNT),
-        field_u64(cluster, OCCURRENCE_COUNT)
+        ReportField::CanonicalNodeCount.count(cluster),
+        ReportField::OccurrenceCount.count(cluster)
     )
 }
 
 /// Mass diagnostics explain both visible and carried counts without attributing mass to information.
 fn mass_detail(cluster: &Value, index: usize, expected: u64) -> String {
     let position = index.saturating_add(FIRST_POSITION);
-    let actual = field_u64(cluster, MASS);
-    let carried = field_u64(cluster, OCCURRENCES_TOTAL);
-    let occurrences = field_u64(cluster, OCCURRENCE_COUNT);
+    let actual = ReportField::Mass.count(cluster);
+    let carried = ReportField::OccurrencesTotal.count(cluster);
+    let occurrences = ReportField::OccurrenceCount.count(cluster);
     let equation = mass_expectation(cluster, expected);
     format!("cluster {position} has mass {actual} with {carried} carried and {occurrences} visible occurrences; expected {equation} from at least {MIN_CARRIED_OCCURRENCES} carried")
 }
@@ -138,7 +134,7 @@ fn check_rank(cluster: &Value, index: usize, failures: &mut Vec<Failure>) {
     } else {
         u64::try_from(index.saturating_add(FIRST_POSITION)).unwrap_or(u64::MAX)
     };
-    let actual = field_u64(cluster, RANK);
+    let actual = ReportField::Rank.count(cluster);
     if actual != expected {
         failures.push(Failure::new(
             RANK_CHECK,
@@ -227,7 +223,7 @@ fn widest_curated_clone(report: &Value, files: &[String]) -> (usize, u64) {
         .map(|(position, cluster)| {
             (
                 position.saturating_add(1),
-                field_u64(cluster, CANONICAL_NODE_COUNT),
+                ReportField::CanonicalNodeCount.count(cluster),
             )
         })
         .max_by_key(|(position, nodes)| (*nodes, std::cmp::Reverse(*position)))
