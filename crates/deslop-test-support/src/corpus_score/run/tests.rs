@@ -94,6 +94,8 @@ fn measured() -> RunCost {
         cpu_seconds: Some(CPU_SECONDS),
         peak_cpu_percent: Some(PEAK_CPU_PERCENT),
         binary_sha256: ENGINE_ID.to_owned(),
+        load_at_start: None,
+        logical_cores: None,
     }
 }
 

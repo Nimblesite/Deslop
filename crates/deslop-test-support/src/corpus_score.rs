@@ -71,6 +71,13 @@ pub struct RunCost {
     /// The exact binary that produced the numbers. A figure whose producing
     /// binary is unidentified is not comparable.
     pub binary_sha256: String,
+    /// [CORPUS-MEASURE-HOST] The one-minute load average when the scan
+    /// started, absent in a record written before it was kept.
+    #[serde(default)]
+    pub load_at_start: Option<f64>,
+    /// The logical cores that load is read against.
+    #[serde(default)]
+    pub logical_cores: Option<usize>,
 }
 
 impl RunCost {
@@ -83,6 +90,8 @@ impl RunCost {
             cpu_seconds: Some(cost.cpu_seconds),
             peak_cpu_percent: cost.peak_cpu_percent,
             binary_sha256: binary_sha256.to_owned(),
+            load_at_start: Some(cost.load_at_start.one_minute),
+            logical_cores: Some(cost.load_at_start.logical_cores),
         }
     }
 }

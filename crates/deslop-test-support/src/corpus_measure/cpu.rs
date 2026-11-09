@@ -146,7 +146,7 @@ fn tree_cpu_ms(system: &System, root: Pid) -> Option<u64> {
 }
 
 /// Whether `pid` is `root` or has it somewhere up its parent chain.
-fn descends_from(system: &System, pid: Pid, root: Pid) -> bool {
+pub(super) fn descends_from(system: &System, pid: Pid, root: Pid) -> bool {
     let mut current = Some(pid);
     for _ in 0..MAX_ANCESTRY_DEPTH {
         match current {
