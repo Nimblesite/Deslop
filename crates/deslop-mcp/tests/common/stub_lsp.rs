@@ -4,9 +4,11 @@
 //! not built with, and an LSP from another release cannot be linked into
 //! this test binary, so the two mismatch suites — a method the older
 //! release does not know (gh #148) and a report written by an older wire
-//! ([MCP-IPC-WIRE-MISMATCH]) — script the foreign reply instead. The
-//! `report/subscribe` ack is always honoured so the MCP's startup
-//! handshake never blocks.
+//! ([MCP-IPC-WIRE-MISMATCH]) — script the foreign reply instead. Each
+//! stub stamps its reply envelopes as the build it stands in for would:
+//! with this build's version, another release's, or — for a release
+//! older than the stamp — not at all. The `report/subscribe` ack is
+//! always honoured so the MCP's startup handshake never blocks.
 
 use std::{
     fs,
@@ -30,6 +32,31 @@ const SUBSCRIBE_METHOD: &str = "report/subscribe";
 pub const METHOD_NOT_FOUND_CODE: i64 = -32_601;
 /// JSON-RPC's message for that code.
 const METHOD_NOT_FOUND_MESSAGE: &str = "method not found";
+
+/// The envelope field a `deslop-lsp` stamps its build's version in.
+const PRODUCER_FIELD: &str = "tool_version";
+
+/// How the stub stamps its reply envelopes.
+#[derive(Clone, Copy)]
+pub enum Stamp {
+    /// As this build's own `deslop-lsp` does.
+    ThisBuild,
+    /// As another release that stamps its envelopes does.
+    Release(&'static str),
+    /// As a release older than the envelope stamp does: not at all.
+    Unstamped,
+}
+
+impl Stamp {
+    /// The version the envelope carries, if any.
+    fn version(self) -> Option<&'static str> {
+        match self {
+            Self::ThisBuild => Some(env!("CARGO_PKG_VERSION")),
+            Self::Release(version) => Some(version),
+            Self::Unstamped => None,
+        }
+    }
+}
 
 /// One scripted reply to a request.
 pub enum Reply {
@@ -55,8 +82,9 @@ pub fn method_not_found(_method: &str) -> Reply {
     }
 }
 
-/// Creates the IPC directory under `workspace` and binds the stub there.
-pub fn bind_stub_lsp(workspace: &Path, respond: Responder) -> Result<()> {
+/// Creates the IPC directory under `workspace` and binds the stub there,
+/// stamping every reply envelope as `stamp` says.
+pub fn bind_stub_lsp(workspace: &Path, stamp: Stamp, respond: Responder) -> Result<()> {
     let cache_dir = workspace.join(IPC_CACHE_DIR);
     fs::create_dir_all(&cache_dir)?;
     let listener = UnixListener::bind(cache_dir.join(IPC_SOCKET_NAME))?;
@@ -64,14 +92,14 @@ pub fn bind_stub_lsp(workspace: &Path, respond: Responder) -> Result<()> {
         for incoming in listener.incoming() {
             let Ok(stream) = incoming else { continue };
             let respond = Arc::clone(&respond);
-            let _connection = thread::spawn(move || serve_one_connection(stream, &respond));
+            let _connection = thread::spawn(move || serve_one_connection(stream, stamp, &respond));
         }
     });
     Ok(())
 }
 
 /// Answers the single request one MCP connection carries.
-fn serve_one_connection(stream: UnixStream, respond: &Responder) {
+fn serve_one_connection(stream: UnixStream, stamp: Stamp, respond: &Responder) {
     let Ok(writer) = stream.try_clone() else {
         return;
     };
@@ -89,7 +117,7 @@ fn serve_one_connection(stream: UnixStream, respond: &Responder) {
         .get("method")
         .and_then(Value::as_str)
         .unwrap_or_default();
-    let _written = write_frame(&writer, &frame_for(&id, method, respond));
+    let _written = write_frame(&writer, &stamped(frame_for(&id, method, respond), stamp));
 }
 
 /// The reply frame for one request: the subscribe ack, or the scripted reply.
@@ -105,6 +133,14 @@ fn frame_for(id: &Value, method: &str, respond: &Responder) -> Value {
             "error": { "code": code, "message": message }
         }),
     }
+}
+
+/// `frame` with its envelope stamped as `stamp` says.
+fn stamped(mut frame: Value, stamp: Stamp) -> Value {
+    if let (Some(version), Some(fields)) = (stamp.version(), frame.as_object_mut()) {
+        let _previous = fields.insert(PRODUCER_FIELD.to_owned(), json!(version));
+    }
+    frame
 }
 
 /// Writes one newline-delimited JSON-RPC frame.

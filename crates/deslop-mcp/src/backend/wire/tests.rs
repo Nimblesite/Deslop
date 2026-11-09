@@ -7,11 +7,14 @@ use std::path::PathBuf;
 
 use anyhow::{ensure, Result};
 use deslop_core::{
-    live::wire::FindSimilarResult, report::ReportCluster, report_fixtures::fixture_report, Report,
+    live::wire::FindSimilarResult,
+    report::ReportCluster,
+    report_fixtures::{fixture_cluster, fixture_occurrence, fixture_report},
+    Report,
 };
 use serde_json::{json, Value};
 
-use super::decode;
+use super::{decode, refuse_foreign_envelope};
 
 /// A report another Deslop release wrote: stamped with that release's
 /// version, carrying `weight` where this wire carries `mass`. It is the
@@ -166,5 +169,115 @@ fn an_incomplete_find_similar_reply_is_refused_without_empty_matches() -> Result
             "names the missing field: {message}"
         );
     }
+    Ok(())
+}
+
+/// The one-cluster IPC method: its page carries no stamp of its own.
+const CLUSTER_BY_ID: &str = "cluster/byId";
+/// A released build older than the envelope stamp.
+const OLDER_RELEASE_VERSION: &str = "0.40.1";
+/// Why an unstamped envelope is refused.
+const NO_STAMP: &str = "carries no tool_version stamp";
+
+/// A JSON-RPC reply envelope around `result`, stamped with `producer` when given.
+fn envelope(producer: Option<&str>, result: &Value) -> Value {
+    let mut frame = json!({ "jsonrpc": "2.0", "id": 1, "result": result });
+    if let (Some(version), Some(fields)) = (producer, frame.as_object_mut()) {
+        let _previous = fields.insert(TOOL_VERSION_FIELD.to_owned(), json!(version));
+    }
+    frame
+}
+
+/// A cluster page this binary decodes cleanly: another build's answer that
+/// happens to fit the current wire.
+fn decodable_cluster_page() -> Result<Value> {
+    let cluster = fixture_cluster(
+        "c0a74fd8fbb8e31f",
+        vec![
+            fixture_occurrence("a.py", 0, 359),
+            fixture_occurrence("b.py", 0, 359),
+        ],
+    );
+    let page = serde_json::to_value(&cluster)?;
+    ensure!(
+        decode::<ReportCluster>(CLUSTER_BY_ID, &endpoint(), page.clone()).is_ok(),
+        "control: the page decodes, so only the stamp can refuse it"
+    );
+    Ok(page)
+}
+
+/// The message an envelope is refused with.
+fn refused_envelope_message(method: &str, frame: &Value) -> Result<String> {
+    let refusal = refuse_foreign_envelope(method, &endpoint(), frame).err();
+    ensure!(
+        refusal.is_some(),
+        "the envelope guard must refuse this reply"
+    );
+    Ok(refusal.map(|err| err.to_string()).unwrap_or_default())
+}
+
+#[test]
+fn an_envelope_from_this_build_passes_whatever_its_page_carries() -> Result<()> {
+    for page in [
+        decodable_cluster_page()?,
+        json!({ "clusters": [] }),
+        json!(null),
+    ] {
+        let frame = envelope(Some(crate::version()), &page);
+        ensure!(
+            refuse_foreign_envelope(CLUSTER_BY_ID, &endpoint(), &frame).is_ok(),
+            "this build's own reply is never refused: {frame}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn a_decodable_page_from_another_build_is_refused_by_its_envelope_stamp() -> Result<()> {
+    for method in [CLUSTER_BY_ID, REPORT_FOR_RANGE, FIND_SIMILAR] {
+        let frame = envelope(Some(OLDER_RELEASE_VERSION), &decodable_cluster_page()?);
+        let message = refused_envelope_message(method, &frame)?;
+        ensure_names_the_condition(&message, method, OLDER_RELEASE_VERSION)?;
+        ensure!(
+            !message.contains(FIELD_ERROR),
+            "refused before decoding: {message}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn an_unstamped_envelope_is_refused_naming_the_missing_stamp() -> Result<()> {
+    let unstamped_page = envelope(None, &decodable_cluster_page()?);
+    let message = refused_envelope_message(CLUSTER_BY_ID, &unstamped_page)?;
+    ensure_names_the_condition(&message, CLUSTER_BY_ID, UNSTAMPED)?;
+    ensure!(
+        message.contains(NO_STAMP),
+        "says what is missing: {message}"
+    );
+
+    let older_report = envelope(None, &foreign_release_report()?);
+    let message = refused_envelope_message(REPORT_GET, &older_report)?;
+    ensure_names_the_condition(&message, REPORT_GET, FOREIGN_RELEASE_VERSION)?;
+    ensure!(
+        message.contains(NO_STAMP),
+        "an older engine that stamped only its whole reports is named by that stamp: {message}"
+    );
+    Ok(())
+}
+
+#[test]
+fn an_error_reply_from_another_build_is_refused_before_its_error_is_read() -> Result<()> {
+    let mut frame = json!({ "jsonrpc": "2.0", "id": 1, "error": { "code": -32601, "message": "method not found" } });
+    let stamped = frame
+        .as_object_mut()
+        .map(|fields| fields.insert(TOOL_VERSION_FIELD.to_owned(), json!(OLDER_RELEASE_VERSION)));
+    ensure!(stamped.is_some(), "the frame is a JSON object");
+    let message = refused_envelope_message(CLUSTER_BY_ID, &frame)?;
+    ensure_names_the_condition(&message, CLUSTER_BY_ID, OLDER_RELEASE_VERSION)?;
+    ensure!(
+        message.contains("-32601"),
+        "says what the other build answered: {message}"
+    );
     Ok(())
 }

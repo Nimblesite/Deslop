@@ -1,9 +1,10 @@
-//! [MCP-IPC-WIRE-MISMATCH] A report the MCP cannot read is refused by
-//! name. The stub LSP serves what another Deslop release serves — a
-//! report carrying `weight` where this wire carries `mass` — and every
-//! tool that reads it answers with the one named condition: both
-//! versions, the endpoint, the remedy. Never a raw field error, never an
-//! empty page an agent could read as "no duplicates" (gh #523).
+//! [MCP-IPC-WIRE-MISMATCH] A reply from another build is refused by name.
+//! The stub LSP serves what another Deslop release serves — a report
+//! carrying `weight` where this wire carries `mass`, or a page that fits
+//! the current wire — and every tool that reads it answers with the one
+//! named condition: both versions, the endpoint, the remedy. Never a raw
+//! field error, never another build's page, never an empty page an agent
+//! could read as "no duplicates" (gh #523, gh #558).
 
 #![cfg(unix)]
 
@@ -12,8 +13,9 @@ use std::{path::Path, sync::Arc};
 use anyhow::{ensure, Result};
 use common::{
     error_and_message, expected_socket_fragment, initialized_mcp,
-    stub_lsp::{bind_stub_lsp, method_not_found, Reply},
+    stub_lsp::{bind_stub_lsp, method_not_found, Reply, Stamp},
 };
+use deslop_core::report_fixtures::{fixture_cluster, fixture_occurrence};
 use serde_json::{json, Value};
 use tempfile::TempDir;
 
@@ -35,8 +37,15 @@ const REPORT_GET: &str = "report/get";
 const CLUSTER_BY_ID: &str = "cluster/byId";
 /// What the guard names as the engine version of a reply with no stamp.
 const UNSTAMPED_ENGINE: &str = "unknown (reply carries no tool_version)";
-/// The first required field absent from the foreign cluster's wire shape.
-const MISSING_FIELD: &str = "missing field `severity`";
+/// Why a reply envelope with no stamp is refused.
+const NO_STAMP: &str = "carries no tool_version stamp";
+/// A released build that stamps its envelopes but is not this one.
+const OTHER_STAMPED_RELEASE: &str = "0.40.1";
+/// The cluster a current-wire stub serves by id.
+const CURRENT_WIRE_CLUSTER_ID: &str = "c0a74fd8fbb8e31f";
+/// Its occurrences: two copies of one 359-byte function.
+const CURRENT_WIRE_PATHS: [&str; 2] = ["a.py", "b.py"];
+const CURRENT_WIRE_END_BYTE: usize = 359;
 /// The remedy the message must name.
 const REMEDY: &str = "reinstall the Deslop VSIX";
 /// The message the guard replaced, on every site: `ipc <thing> parse:`.
@@ -63,8 +72,48 @@ fn bind_foreign_release_lsp(workspace: &Path) -> Result<()> {
     let report: Value = serde_json::from_str(FOREIGN_RELEASE_REPORT)?;
     bind_stub_lsp(
         workspace,
+        Stamp::Unstamped,
         Arc::new(move |method| foreign_release_lsp(method, &report)),
     )
+}
+
+/// A cluster page that fits the current wire exactly.
+fn current_wire_cluster() -> Result<Value> {
+    let occurrences = CURRENT_WIRE_PATHS
+        .iter()
+        .map(|path| fixture_occurrence(path, 0, CURRENT_WIRE_END_BYTE))
+        .collect();
+    Ok(serde_json::to_value(fixture_cluster(
+        CURRENT_WIRE_CLUSTER_ID,
+        occurrences,
+    ))?)
+}
+
+/// Binds a stub, stamped as `stamp`, that serves the current-wire cluster by id.
+fn bind_current_wire_lsp(workspace: &Path, stamp: Stamp) -> Result<()> {
+    let cluster = current_wire_cluster()?;
+    bind_stub_lsp(
+        workspace,
+        stamp,
+        Arc::new(move |method| {
+            if method == CLUSTER_BY_ID {
+                return Reply::Result(cluster.clone());
+            }
+            method_not_found(method)
+        }),
+    )
+}
+
+/// The `cluster-by-id` response from a stub stamped as `stamp`.
+fn cluster_by_id_from(stamp: Stamp) -> Result<(Value, String)> {
+    let workspace = TempDir::new()?;
+    bind_current_wire_lsp(workspace.path(), stamp)?;
+    let mut mcp = initialized_mcp(workspace.path())?;
+    let response = mcp.request(
+        "tools/call",
+        &json!({ "name": "cluster-by-id", "arguments": { "id": CURRENT_WIRE_CLUSTER_ID } }),
+    )?;
+    Ok((response, expected_socket_fragment(workspace.path())?))
 }
 
 /// Calls `tool` with `arguments` against the foreign-release stub and
@@ -143,8 +192,65 @@ fn cluster_by_id_over_a_report_from_another_release_names_the_same_condition() -
     )?;
     ensure_named_mismatch(&message, &socket, CLUSTER_BY_ID, UNSTAMPED_ENGINE)?;
     ensure!(
-        message.contains(MISSING_FIELD),
-        "an unstamped cluster page names the field the wire moved: {message}"
+        message.contains(NO_STAMP),
+        "an envelope with no stamp is refused for that, by name: {message}"
+    );
+    ensure!(
+        !message.contains(FIELD_ERROR),
+        "refused before decoding, so no raw field error: {message}"
+    );
+    Ok(())
+}
+
+/// gh #558: a page from another build is refused even when it fits this
+/// wire. Released 0.41.0 served a 0.40.1 engine's cluster as if it were
+/// its own, because only whole reports carried a version stamp.
+#[test]
+fn cluster_by_id_refuses_another_builds_page_even_when_it_decodes() -> Result<()> {
+    for (stamp, engine) in [
+        (Stamp::Release(OTHER_STAMPED_RELEASE), OTHER_STAMPED_RELEASE),
+        (Stamp::Unstamped, UNSTAMPED_ENGINE),
+    ] {
+        let (response, socket) = cluster_by_id_from(stamp)?;
+        ensure!(
+            response.pointer("/result").is_none(),
+            "another build's page must not be served as this build's answer: {response}"
+        );
+        let (_error, message) = error_and_message(&response)?;
+        ensure_named_mismatch(&message, &socket, CLUSTER_BY_ID, engine)?;
+    }
+    Ok(())
+}
+
+/// The control: this build's own stamped page is served whole.
+#[test]
+fn cluster_by_id_serves_this_builds_page() -> Result<()> {
+    let (response, _socket) = cluster_by_id_from(Stamp::ThisBuild)?;
+    ensure!(
+        response.pointer("/error").is_none(),
+        "this build's page is served: {response}"
+    );
+    let text = response
+        .pointer("/result/content/0/text")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    let cluster: Value = serde_json::from_str(text)?;
+    ensure!(
+        cluster.pointer("/id").and_then(Value::as_str) == Some(CURRENT_WIRE_CLUSTER_ID),
+        "the served cluster is the one asked for: {cluster}"
+    );
+    let paths: Vec<&str> = cluster
+        .pointer("/occurrences")
+        .and_then(Value::as_array)
+        .map(|rows| {
+            rows.iter()
+                .filter_map(|row| row.get("path").and_then(Value::as_str))
+                .collect()
+        })
+        .unwrap_or_default();
+    ensure!(
+        paths == CURRENT_WIRE_PATHS,
+        "both occurrences, in order: {paths:?}"
     );
     Ok(())
 }
