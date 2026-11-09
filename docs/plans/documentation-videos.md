@@ -21,12 +21,12 @@ run and a change. Do not pad films to reach a duration.
 
 | Documentation source | Film focus | Delivery |
 | --- | --- | --- |
-| index.md | Install, find, inspect and compare | 82.9s rendered; codec/OCR verified; LFS committed; integration pending |
+| index.md | Install, find, inspect and compare | 82.9s rendered; codec/OCR verified; LFS committed; responsive playback passed |
 | ai-integration.md | Check for existing code before writing | Script reviewed; preview rendered |
 | vscode-cluster-panel.md | Navigate findings and compare copies | Script reviewed; previews rendered; narration pending |
 | github-action.md | Review duplicates in a pull request | Script reviewed; previews rendered; narration pending |
 | osprey.md | Analyse supported Osprey source | Script reviewed; previews rendered; narration pending |
-| configuration.md | Choose analysis settings deliberately | Narration complete; rendering |
+| configuration.md | Choose analysis settings deliberately | 79.5s rendered; media checks passed; OCR review in progress |
 | how-it-works.md | Follow source code into ranked findings | Script corrected; previews rendered |
 | research-background.md | Understand clone types and evidence | Script reviewed; previews rendered; narration pending |
 | accuracy-transparency.md | Read accuracy evidence and limitations | Script reviewed; previews rendered; narration pending |
