@@ -190,7 +190,7 @@ Tracked by **#422**, blocked on **#166**.
 
 | repository | measured cost | fits a hosted runner? |
 |---|---|---|
-| flutter/flutter | ~9.5 GB peak, 9m44s (#166) | no |
+| flutter/flutter | the `ceilings` in `corpus/flutter.json` (re-derived from a measured scan) | no |
 | dotnet/fsharp | >13 GB peak | no |
 | the other eight | minutes each, times ten | not as a PR gate |
 
