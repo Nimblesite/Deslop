@@ -18,6 +18,8 @@ const README = readFileSync(resolve(repoRoot, "README.md"), "utf8");
 
 /** The one hook the manifest publishes, and the fields pre-commit runs it with. */
 const HOOK_ID = "deslop";
+/** The exact `- repo:` value a user pins; compared whole, never as a substring. */
+const REPO_URL = "https://github.com/Nimblesite/Deslop";
 const EXPECTED_FIELDS = {
   name: "deslop",
   entry: "deslop",
@@ -50,6 +52,6 @@ test("[ACTION-PRE-COMMIT] the README's hook snippet names the published hook and
   const snippetIds = mappingValues(README, "- id");
   assert.ok(snippetIds.includes(HOOK_ID), "the README shows `- id: deslop`");
   const repos = mappingValues(README, "- repo");
-  assert.ok(repos.includes("https://github.com/Nimblesite/Deslop"), "the snippet pins this repository");
+  assert.ok(repos.some((repo) => repo === REPO_URL), "the snippet pins this repository");
   assert.ok(README.includes('args: ["--fail-over", "5.0"]'), "the snippet passes the threshold the CI section documents");
 });
