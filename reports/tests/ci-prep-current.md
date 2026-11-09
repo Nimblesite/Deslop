@@ -179,3 +179,12 @@ Commit: `5f8a0e6100f9e2e92af751a0b8282310746c9a21`. [Workflow run](https://githu
 | Corpus accuracy score (BenchmarkDotNet) | success |
 | Calculate coverage + thresholds | success |
 | CI | success |
+
+## Website evidence reuse
+
+The source commit in [the browser receipt](../videos/site-validation.md) is `1c6bf836fc0a0315b43ba5fec0f65f6cf1bf066d`. Git tree identities below prove the current website source, assets, tests and issue generator are unchanged.
+
+| Path | Git tree | Comparison |
+| --- | --- | --- |
+| `site` | `f5f7894af17190c485f95dd6839cca3093510eff` | identical |
+| `scripts/issues` | `ee1233d831604d037bc9c48954944badc77103e3` | identical |
