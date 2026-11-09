@@ -107,7 +107,7 @@ claude mcp add deslop -s user -- deslop-mcp --root .
 需要知道的两点：
 
 - **不存在 `deslop mcp` 子命令。** `deslop` CLI 只用于一次性运行和 CI 审计；MCP 由**独立的 `deslop-mcp` 二进制文件**提供。
-- **从源码构建不会把任何东西放到 `$PATH` 上。** 只有 `brew` / `scoop` 会这么做。这些包管理器会让二进制文件与发布版本步调一致地版本化；`cargo build` 不会。
+- **从源码构建不会把任何东西放到 `$PATH` 上。** 只有锁定发布版本的安装方式会这么做：`brew`、`scoop`，以及官方发布的 curl 安装脚本（它固定一个发布版本并校验其校验和）。`cargo build` 不固定任何版本。
 
 ## 智能体循环
 
