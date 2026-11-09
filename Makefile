@@ -255,6 +255,7 @@ _ci-contract-tests: _vsix-node-modules
 	@node --test scripts/repository/test-selection.test.mjs
 	@echo "==> Coverage-isolation gate ([CI-COVERAGE-ISOLATION])..."
 	@node --test scripts/repository/coverage-isolation.test.mjs
+	@node --test scripts/repository/ci-phases.test.mjs
 	@echo "==> Wire-model generator idempotence gate ([BUILD-GEN-IDEMPOTENT])..."
 	@node --test scripts/typediagram-gen.test.mjs
 
@@ -276,9 +277,8 @@ clean:
 	$(RM) lcov.info
 	$(RM) .deslop-cache
 
-## ci: [CI-RELEASE-BUILD] The three phases `.github/workflows/ci.yml` runs,
-##     in the same order and over the same artifacts, so a green `make ci`
-##     locally means exactly what a green pipeline means:
+## ci: [CI-RELEASE-BUILD] Local build, gates, collection and coverage enforcement.
+##     Platform-specific and other workflow jobs remain separate CI gates.
 ##
 ##       1. `_ci-build` — every release artifact, compiled once: the
 ##          workspace, every release test binary, and the VSIX bundle with
@@ -288,12 +288,16 @@ clean:
 ##          deployment manifest). Cheap, and they fail before a suite runs.
 ##       3. `_ci-test` — the Rust suite, the VSIX suites and coverage, in
 ##          parallel, executing what phase 1 built.
+##       4. `_coverage-report`, then `_vsix-coverage-check` — calculate and
+##          enforce thresholds only after both collectors succeed.
 ##
 ##     Ollama-gated suites are excluded; they run via `make _ci-ollama`.
 ci:
 	@$(MAKE) _ci-build
 	@$(MAKE) _ci-gate
 	@$(MAKE) _ci-test
+	@$(MAKE) _coverage-report
+	@$(MAKE) _vsix-coverage-check
 
 ## setup: Post-create dev environment setup (used by devcontainer).
 ##        Version pin for `typediagram` must match `.github/workflows/ci.yml`
