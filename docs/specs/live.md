@@ -127,7 +127,7 @@ pub struct AnalysisSession {
 
 ### [LIVE-SEED-CACHE] Warm-start seed cache
 
-After the **initial** full pipeline pass and after every **cold-pass install** (the post-cache-seed background refresh), the LSP writes the current report to:
+After the **initial** full pipeline pass, after every **cold-pass install** (the post-cache-seed background refresh), and after every pass that **reloads `.deslop.toml`**, the LSP writes the current report to:
 
 ```
 {workspace_root}/.deslop/cache/live-report.json
@@ -155,16 +155,18 @@ The LSP retains its latest startup state, including the exact error message when
 
 A cache seed is served to the editor **as an answer**, and an answer computed under different settings is a wrong answer, not a slightly old one. The seed was accepted on one condition — that the bytes deserialise as a `Report`. Nothing else was compared: not the tool version that produced it, not the `min_nodes` it was clustered at, not the configuration that scoped it, not the embedding provider that scored it. A report analysed at `--min-nodes 4` with embeddings on was therefore served verbatim to a session running at `--min-nodes 40` with embeddings off, and [LIVE-CLUSTER-OFFSET-FRESHNESS] then stamped current mtimes over those clusters, so the answer read as **fresh** rather than as a placeholder: byte offsets from a different analysis, pointing into files the editor has since changed, under a duplication figure the user is no longer asking for.
 
-The run that writes the state file therefore records its own identity in `{workspace_root}/.deslop/cache/live-report.key`, one component per line: tool version, canonicalised workspace root, `min_nodes`, the incremental flag, the resolved config path **and a digest of its bytes**, and the embedding mode plus provider/model/version/dimensions. The loader refuses a seed whose key is absent, unreadable, or different, and deletes the report so the next start is a cold pass. An absent key is a refusal, not a pass: a seed with no recorded provenance is a seed of unknown provenance, which is also how every cache written before the key existed is retired.
+The run that writes the state file therefore records its own identity in `{workspace_root}/.deslop/cache/live-report.key`, one component per line: tool version, canonicalised workspace root, `min_nodes`, the incremental flag, the config file the run actually read — an explicit `--config`, else `<root>/.deslop.toml` when one exists — **and a digest of its bytes** (`config=none` only when neither exists), and the embedding mode plus provider/model/version/dimensions. The loader refuses a seed whose key is absent, unreadable, or different, and deletes the report so the next start is a cold pass. An absent key is a refusal, not a pass: a seed with no recorded provenance is a seed of unknown provenance, which is also how every cache written before the key existed is retired.
 
-The config **digest** is what makes an edited `.deslop.toml` invalidate the seed — the path alone never changes when the user edits it.
+The config **digest** is what makes an edited `.deslop.toml` invalidate the seed — the path alone never changes when the user edits it. The editor never passes `--config`, so a key that recorded only an explicit path read `config=none` whatever the workspace file said, and Reload Window served duplicates in files the user had just excluded.
 
 Ordering is deliberate: the report is written first and the key second. A crash between them leaves the previous key, which either still describes the run — in which case the seed is an ordinary earlier generation, which is all a seed ever is — or does not, in which case it is refused. No interleaving produces an accepted incompatible seed. Implemented in `live/cache_seed_key.rs`.
 
-**Not written on:** per-keystroke incremental updates ([LIVE-SCHEDULER]) and embedding refresh commits — those used to spam the disk and contributed nothing to startup latency. The MCP no longer reads this file ([MCP-IPC-CLIENT]); it gets live state via the IPC socket. Stale-cache reads cannot leak hidden clusters because no one reads the cache except the LSP itself, post-restart, before its first cold pass overwrites it.
+**Written on a config reload:** a `.deslop.toml` edit rescopes the whole report, and the for-AI page tells agents to read this file when MCP is unavailable. So the pass that applies the reload rewrites the report and its key, and no reader of the file sees an occurrence in a path the current config excludes. The rewritten key also matches the next start, so Reload Window after a config edit is instant and current.
+
+**Not written on:** per-keystroke incremental updates ([LIVE-SCHEDULER]) and embedding refresh commits — those used to spam the disk and contributed nothing to startup latency. The MCP never reads this file ([MCP-IPC-CLIENT]); it gets live state via the IPC socket. An agent reading it gets a snapshot that may predate incremental edits, which the for-AI page says.
 
 ### [LIVE-STATE-FILE] State file (alias)
-`[LIVE-STATE-FILE]` is an alias for the `.deslop/cache/live-report.json` warm-start cache specified in full by [LIVE-SEED-CACHE]: written atomically on the initial full pass and on each cold-pass install, holding canonical `Report` JSON. It is the LSP's private startup cache and the on-disk path named in the MCP's `LspNotRunning` recovery payload ([MCP-IPC-DISCOVERY]); it is not an IPC channel and is not rewritten on incremental passes. Prefer the [LIVE-SEED-CACHE] tag for new references.
+`[LIVE-STATE-FILE]` is an alias for the `.deslop/cache/live-report.json` warm-start cache specified in full by [LIVE-SEED-CACHE]: written atomically on the initial full pass, on each cold-pass install and on each `.deslop.toml` reload, holding canonical `Report` JSON. It is the LSP's startup cache and the on-disk path named in the MCP's `LspNotRunning` recovery payload ([MCP-IPC-DISCOVERY]); it is not an IPC channel and is not rewritten on other incremental passes. Prefer the [LIVE-SEED-CACHE] tag for new references.
 
 ### [LIVE-IPC-SOCKET] IPC endpoint
 
@@ -230,7 +232,7 @@ After the watcher emits a coalesced changeset:
 4. Recomputes clustering + ranking over the updated fingerprint set.
 5. Atomically swaps `latest_report`; bumps `generation`.
 6. Broadcasts the new generation through `report_changed` so both LSP push notifications and IPC `report/subscribe` subscribers receive the same event ([LIVE-IPC-SOCKET]).
-7. **Does NOT** rewrite `live-report.json`. The seed cache is per-cold-pass only ([LIVE-SEED-CACHE]).
+7. **Does NOT** rewrite `live-report.json`, unless the changeset reloaded `.deslop.toml` ([LIVE-SEED-CACHE]).
 
 Single-threaded per session. Consecutive queued changesets merge before dispatch.
 

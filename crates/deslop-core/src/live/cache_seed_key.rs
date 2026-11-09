@@ -33,11 +33,17 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::embedding::{EmbeddingMode, EmbeddingSpec};
+use crate::{
+    embedding::{EmbeddingMode, EmbeddingSpec},
+    DEFAULT_CONFIG_FILENAME,
+};
 
 /// File written beside the state file, holding the key of the run that
 /// produced it.
 pub(super) const SEED_KEY_FILE_NAME: &str = "live-report.key";
+
+/// The config component of a run that read no configuration file at all.
+const NO_CONFIG: &str = "none";
 
 /// The identity of an analysis run, as far as a cached report's
 /// re-usability is concerned. Rendered as one line per component so a
@@ -75,7 +81,7 @@ impl CacheSeedKey {
                  incremental={incremental}\nconfig={config}\nembedding={embedding}\n",
                 tool_version = crate::version(),
                 root = normalised_root(root).display(),
-                config = config_identity(config_path),
+                config = config_identity(root, config_path),
             ),
         }
     }
@@ -93,14 +99,20 @@ fn normalised_root(root: &Path) -> PathBuf {
     root.canonicalize().unwrap_or_else(|_| root.to_path_buf())
 }
 
-/// The configuration's contribution to the key: the resolved path and a
-/// digest of its bytes. The digest is what makes an *edited* config
-/// invalidate the seed — the path alone would not — and an unreadable
-/// or absent file is recorded as such rather than skipped, so "no
-/// config" and "a config that has since appeared" are different keys.
-fn config_identity(config_path: Option<&Path>) -> String {
-    let Some(path) = config_path else {
-        return "none".to_owned();
+/// The configuration's contribution to the key: the file the run reads —
+/// the explicit `--config`, else `<root>/.deslop.toml` when one exists —
+/// and a digest of its bytes. The digest is what makes an *edited* config
+/// invalidate the seed — the path alone would not. The editor never passes
+/// `--config`, so the discovered file is the one that scopes its report:
+/// a key that skipped it read `none` whatever the workspace said.
+/// An unreadable explicit file is recorded as such rather than skipped, so
+/// "no config" and "a config that has since appeared" are different keys.
+fn config_identity(root: &Path, config_path: Option<&Path>) -> String {
+    let discovered = root.join(DEFAULT_CONFIG_FILENAME);
+    let path = match config_path {
+        Some(explicit) => explicit,
+        None if discovered.is_file() => discovered.as_path(),
+        None => return NO_CONFIG.to_owned(),
     };
     let digest = match std::fs::read(path) {
         Ok(bytes) => blake3::hash(&bytes).to_hex().to_string(),
