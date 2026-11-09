@@ -15,7 +15,7 @@ run and a change. Do not pad films to reach a duration.
 - [x] Inspect finished frames, review narration text, and verify duration and encoding.
 - [x] Integrate accessible video players into the matching documentation pages.
 - [x] Store delivered videos in Git LFS; verify desktop and mobile playback.
-- [ ] Remove disposable render intermediates and check disk space.
+- [x] Remove disposable render intermediates and check disk space.
 
 ## Coverage [DOC-FILMS-COVERAGE]
 
@@ -41,8 +41,9 @@ SHA-256 hashes are in its `sources/` directory. Preview frames were rendered
 and visually inspected before narration. The first publish rejected an
 intermediate quality setting of 20; the recipe now uses the supported maximum
 of 18. All ten films are delivered. The complete browser suite passes; its mechanical
-receipt is [site-validation.md](../../reports/videos/site-validation.md). Repository
-cleanup and remote upload verification remain.
+receipt is [site-validation.md](../../reports/videos/site-validation.md). The ten remote LFS objects were fetched into a fresh temporary store and their
+SHA-256 hashes match the committed pointers. Render intermediates are removed;
+remaining temporary verification files are removed before the midnight stop.
 
 Reviewed production scripts live in Videos under `projects/deslop/videos/docs-*/`.
 Superseded pi drafts were removed after review; model outcomes and corrections
