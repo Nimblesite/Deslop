@@ -22,12 +22,12 @@ run and a change. Do not pad films to reach a duration.
 | Documentation source | Film focus | Delivery |
 | --- | --- | --- |
 | index.md | Install, find, inspect and compare | Script reviewed; four previews checked; rendering |
-| ai-integration.md | Check for existing code before writing | Pending |
+| ai-integration.md | Check for existing code before writing | Script reviewed; preview rendered |
 | vscode-cluster-panel.md | Navigate findings and compare copies | Pending |
 | github-action.md | Review duplicates in a pull request | Pending |
 | osprey.md | Analyse supported Osprey source | Pending |
-| configuration.md | Choose analysis settings deliberately | Pending |
-| how-it-works.md | Follow source code into ranked findings | Pending |
+| configuration.md | Choose analysis settings deliberately | Script corrected; preview checked; narration generating |
+| how-it-works.md | Follow source code into ranked findings | Script corrected; preview rendering |
 | research-background.md | Understand clone types and evidence | Pending |
 | accuracy-transparency.md | Read accuracy evidence and limitations | Pending |
 | for-ai.md | Use the live MCP workflow correctly | Pending |
