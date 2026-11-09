@@ -99,7 +99,7 @@ claude mcp add deslop -s user -- deslop-mcp --root .
 }
 ```
 
-同样的 `"command": "deslop-mcp"` 形式适用于 Codex（`~/.codex/config.toml`）、Cursor 和 Continue。它也是签入 `.mcp.json` 或团队共享配置的正确取值——每台机器都通过 `$PATH` 解析它。
+同样的 `"command": "deslop-mcp"` 形式适用于 Codex（`~/.codex/config.toml`）、Cursor 和 Continue，前提是该机器上的 Deslop 通过 Homebrew 或 Scoop 安装。不要把它写进签入的 `.mcp.json` 或团队共享配置：使用 VS Code 扩展的队友在 `$PATH` 上没有任何 Deslop 程序，而扩展的绝对路径又随版本和平台而变。请让每个人自行注册服务器：使用 `claude mcp add … -s user`，或各自客户端的用户级配置。
 
 需要知道的两点：
 
