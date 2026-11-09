@@ -22,6 +22,10 @@ Implemented in `deslop-lsp/src/ipc/`, bound through `deslop-core`'s shared trans
 
 `deslop-lsp --help` lists every accepted flag with its purpose and exits successfully without starting a language server. `crates/deslop-lsp/src/help.rs` owns the help text and `app.rs` dispatches it; `crates/deslop-lsp/tests/cli.rs` runs the binary and asserts its advertised flags.
 
+### [LSP-RESOURCE-KNOBS] Background-ising the server
+
+`--worker-threads N` sizes the server's async runtime, and `--nice N` lowers its scheduling priority (macOS and Linux; ignored with a warning elsewhere). Both are recorded in the startup log line (`worker_threads=`, `nice=`). `--nice` only ever **lowers** priority. When the editor or agent that launched the server already runs it at an equal or lower priority, the server keeps the niceness it inherited and logs `process_nice_kept`. It does not try to raise priority, which an unprivileged process may not do, and it never exits over it: a refusal there would take the editor's analysis down to honour a knob meant to make it gentler. Pinned by `tests/cpu_throttle_knob.rs`.
+
 ### [LSP-LIFECYCLE] How the server ends
 
 The base protocol gives an editor three ways to end a session, and Deslop honours all three.

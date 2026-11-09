@@ -182,3 +182,58 @@ fn lsp_nice_and_worker_knobs_preserve_idle_cpu_report() -> Result<()> {
     );
     Ok(())
 }
+
+/// The niceness an editor or agent harness already runs the server at, and
+/// the higher priority `--nice` asks for.
+#[cfg(unix)]
+const PARENT_NICENESS: i32 = 19;
+#[cfg(unix)]
+const REQUESTED_NICENESS: &str = "5";
+/// Keeps the probe's log output plain, as an editor's pipe would.
+#[cfg(unix)]
+const NO_COLOR: (&str, &str) = ("NO_COLOR", "1");
+
+/// The niceness `ps` reports for `pid`.
+#[cfg(unix)]
+fn niceness_of(pid: u32) -> Result<i32> {
+    let output = std::process::Command::new("ps")
+        .args(["-o", "nice=", "-p", &pid.to_string()])
+        .output()?;
+    Ok(String::from_utf8(output.stdout)?.trim().parse()?)
+}
+
+/// `--nice` exists to lower the server's priority. When the process that
+/// launched it already runs lower — an editor or agent started under `nice`
+/// — raising it is neither permitted nor wanted, so the server keeps the
+/// lower priority it inherited and serves, instead of exiting before the
+/// handshake as `setpriority` refuses.
+#[cfg(unix)]
+#[test]
+fn a_server_already_lower_than_its_nice_knob_keeps_that_priority_and_serves() -> Result<()> {
+    let workspace = tempfile::tempdir()?;
+    let mut child = std::process::Command::new("/usr/bin/nice")
+        .args(["-n", &PARENT_NICENESS.to_string()])
+        .arg(assert_cmd::cargo::cargo_bin("deslop-lsp"))
+        .arg(workspace.path())
+        .args(["--nice", REQUESTED_NICENESS])
+        .env(NO_COLOR.0, NO_COLOR.1)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()?;
+    let (mut stdin, mut reader) = take_stdin_stdout(&mut child)?;
+    let handshake_result = handshake(&mut stdin, &mut reader);
+    let niceness = niceness_of(child.id());
+    let early_exit = child.try_wait().ok().flatten();
+    let _status = deslop_test_support::reap::reap(&mut child);
+    assert!(
+        handshake_result.is_ok(),
+        "a server asked for --nice {REQUESTED_NICENESS} under a nicer parent must still serve; \
+         early_exit={early_exit:?} handshake={handshake_result:?}"
+    );
+    assert!(
+        niceness? >= PARENT_NICENESS,
+        "the server keeps the lower priority it inherited instead of raising it"
+    );
+    Ok(())
+}
