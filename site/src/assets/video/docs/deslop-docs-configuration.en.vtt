@@ -1,0 +1,13 @@
+WEBVTT
+
+00:00.400 --> 00:18.781
+Keep shared policy in dot deslop dot toml, beside the scan root. That is the directory you ask Deslop to analyse. Use the config flag when your policy lives elsewhere. A missing configuration file uses built-in defaults, so commit your settings when the team needs consistent behavior.
+
+00:19.631 --> 00:39.874
+Choose exclusions carefully. Exclude removes a file before analysis. Report hide still analyses the file, but hides its occurrences. A cluster disappears only when all its members are hidden. This lets a match between handwritten and generated code remain visible, without showing every generated-only cluster.
+
+00:40.724 --> 00:57.934
+Use command-line flags for a single run. A flag overrides its matching configuration key. Fail over supplies a duplication ceiling; no fail over clears the ceiling for that run. These options control the gate, rather than fixing or removing duplicated code.
+
+00:58.784 --> 01:17.746
+A threshold makes excessive duplication fail the run with exit code three. The report remains available to inspect. Without a threshold, duplication alone does not fail the scan; runtime and usage errors still can. Review the report, agree on the policy, and keep that policy with your project.

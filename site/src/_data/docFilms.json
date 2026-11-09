@@ -1,3 +1,10 @@
 {
-  "getting-started": {"title": "Your first duplicate-code review", "duration": "1:23"}
+  "getting-started": {
+    "title": "Your first duplicate-code review",
+    "duration": "1:23"
+  },
+  "configuration": {
+    "title": "Put policy beside your code",
+    "duration": "1:19"
+  }
 }
