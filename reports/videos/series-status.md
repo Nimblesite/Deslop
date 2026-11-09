@@ -1,10 +1,10 @@
 # Documentation film delivery status
 
-7 of 10 documentation pages have imported media, captions, chapters, poster, LFS rules and a verification receipt.
+8 of 10 documentation pages have imported media, captions, chapters, poster, LFS rules and a verification receipt.
 
 | Page | Delivery | Duration | LFS rule |
 | --- | --- | --- | --- |
-| accuracy-transparency.md | Incomplete | Pending | Pending |
+| accuracy-transparency.md | Imported | 1:22 | Yes |
 | ai-integration.md | Imported | 1:21 | Yes |
 | configuration.md | Imported | 1:19 | Yes |
 | for-ai.md | Incomplete | Pending | Pending |
