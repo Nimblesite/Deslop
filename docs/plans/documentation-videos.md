@@ -14,7 +14,7 @@ run and a change. Do not pad films to reach a duration.
 - [x] Render each film with narration, captions, chapters and a poster.
 - [x] Inspect finished frames, review narration text, and verify duration and encoding.
 - [x] Integrate accessible video players into the matching documentation pages.
-- [ ] Store delivered videos in Git LFS; verify desktop and mobile playback.
+- [x] Store delivered videos in Git LFS; verify desktop and mobile playback.
 - [ ] Remove disposable render intermediates and check disk space.
 
 ## Coverage [DOC-FILMS-COVERAGE]
@@ -40,7 +40,9 @@ are under `projects/deslop/videos/doc-series/`. Ten source-page snapshots and
 SHA-256 hashes are in its `sources/` directory. Preview frames were rendered
 and visually inspected before narration. The first publish rejected an
 intermediate quality setting of 20; the recipe now uses the supported maximum
-of 18. All ten films are delivered. Final browser checks and repository cleanup are running.
+of 18. All ten films are delivered. The complete browser suite passes; its mechanical
+receipt is [site-validation.md](../../reports/videos/site-validation.md). Repository
+cleanup and remote upload verification remain.
 
 Reviewed production scripts live in Videos under `projects/deslop/videos/docs-*/`.
 Superseded pi drafts were removed after review; model outcomes and corrections
