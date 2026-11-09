@@ -238,5 +238,65 @@
         "text": "The gate fails when the full-precision percentage is greater than its ceiling. Equality passes, even if display rounding makes nearby values look identical. Read the report scope and the measured build together. Corpus results apply to judged examples; they do not guarantee perfect precision or recall everywhere."
       }
     ]
+  },
+  "research-background": {
+    "title": "Why repeated code matters",
+    "duration": "1:29",
+    "transcript": [
+      {
+        "title": "Why repeated code matters",
+        "seconds": 0,
+        "stamp": "0:00",
+        "text": "Repeated code is not automatically wrong. The maintenance risk is that fixes, security changes and new behavior must stay consistent across copies. Generating another implementation is easy; deciding whether to reuse existing code still requires judgment. The research page links the studies behind this motivation."
+      },
+      {
+        "title": "Four families of clones",
+        "seconds": 22,
+        "stamp": "0:22",
+        "text": "The research taxonomy distinguishes four clone families. Type one permits layout and comment changes. Type two allows changed names and literals. Type three includes edited statements. Type four describes equivalent behavior implemented differently. Deslop has its own report labels and a stricter text-identity rule, explained in How It Works."
+      },
+      {
+        "title": "Combine several techniques",
+        "seconds": 44,
+        "stamp": "0:44",
+        "text": "Deslop combines normalized syntax trees, subtree fingerprints, statement-run fingerprints and similarity retrieval. Optional embeddings add semantic candidates. These techniques help locate possible copies at different levels. Pair admission checks content as well as structure, and an explicit comparison provides evidence about the selected source ranges."
+      },
+      {
+        "title": "Evidence still needs review",
+        "seconds": 68,
+        "stamp": "1:08",
+        "text": "Use the page to follow implementation pointers and read the original papers. A detection technique is not proof that extracting shared code is safe. Review both implementations, test the behavior you intend to keep, and use the separate accuracy documentation to understand how findings are checked."
+      }
+    ]
+  },
+  "for-ai": {
+    "title": "Verify the session first",
+    "duration": "1:18",
+    "transcript": [
+      {
+        "title": "Verify the session first",
+        "seconds": 0,
+        "stamp": "0:00",
+        "text": "Before working in a new codebase, inspect the installed tool version and available tool parameters. Bind MCP to the absolute repository root, read the project instructions and configuration, then call session and verify its root. A connection to another repository is not a useful empty result."
+      },
+      {
+        "title": "Small summaries, all occurrences",
+        "seconds": 20,
+        "stamp": "0:20",
+        "text": "Request duplicates with detail summary and a small limit. Scope edits with path or path_contains, then use cluster-by-id and inspect every member, paging with offset, before editing. Keep overview pages small: full occurrences for one cluster, not hundreds of full clusters."
+      },
+      {
+        "title": "find-similar before writing",
+        "seconds": 40,
+        "stamp": "0:40",
+        "text": "Before adding a code unit, call find similar with a snippet and its language. Inspect clusters and also existing occurrences outside any cluster. An existing match still needs review, even when clusters is empty. A disk report cannot answer this in-memory snippet query."
+      },
+      {
+        "title": "Tests, then requery",
+        "seconds": 58,
+        "stamp": "0:58",
+        "text": "After editing, run the project's tests and query the changed paths again. The live index refreshes automatically; use rescan only for suspected watcher lag. A merge plan is optional. A verdict asking for agent or human judgment is not an executable merge."
+      }
+    ]
   }
 }

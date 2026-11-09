@@ -1,20 +1,44 @@
 # Website
 
-## [SITE-HOME-VIDEO] Homepage motion reel
+## [SITE-HOME-VIDEO] Homepage product demo
 
-The English and Chinese homepages open with the same short animation of what Deslop does. It plays five translated headlines in order: find duplicate code, the supported languages, worst offenders first, stop coding agents from creating more, and live in VS Code. Then it loops.
+The English and Chinese homepages place one narrated product demonstration in
+the hero beside the introduction. The same real extension footage is available
+on both routes, with a localized player label and English captions. Playback is
+visitor-controlled: native controls, no autoplay, no loop, and no media preload.
+The poster remains visible until playback starts. The player fits mobile and
+desktop widths and remains usable without JavaScript and with reduced motion.
 
-The reel is always in the first screen. It sits beside the headline on wide screens and above it once the hero stacks. The stage is wide on desktop and tablets and square on phones, and its type scales with the stage.
+`site/tests/homepage-motion.spec.js` and `site/tests/homepage-reel.spec.js` verify
+playback, pause, seeking, captions, poster loading and responsive placement.
 
-It plays silently on its own. Its only control is one small, faint pause icon. It stops while it is off screen or the tab is hidden, and resumes where it stopped. Visitors who prefer reduced motion see the finished opening scene until they press play; scenes then fade without moving. Without JavaScript the finished opening scene stays and no control is shown.
+## [DOC-FILMS-DELIVERY] Documentation films
 
-The animation is built in the page with JavaScript; no encoded video or audio is shipped. `site/tests/homepage-motion.spec.js` and `site/tests/homepage-reel.spec.js` drive it on the page's own clock through every scene, pause, reduced motion, off-screen and hidden-tab stops, both themes, each screen size and the Chinese translation. Together the script and styles must stay within 32 KiB.
+Each of the ten documentation topics has a concise narrated film, shared by its
+English and Chinese page. English narration and captions are explicitly labelled.
+Every delivery includes a 1920x1080 H.264/AAC MP4, poster, English captions and
+chapter track. A readable transcript comes from the delivered narration timeline.
+Players use native controls, never autoplay, and fit widths from 320px upward.
+
+The factory lives in Videos under `projects/deslop/videos/docs-*`, reusing its
+Osprey production templates and shared narration/rendering machinery. Deslop's
+importer rejects stale scripts or invalid media and verifies every rendered
+chapter title plus targeted visible content before adding a film to the catalog.
+MP4 files use Git LFS. Production intermediates are never published.
+
+`site/tests/documentation-films.spec.js` exercises each catalog entry on both
+language routes, including responsive geometry, playback, seeking, captions,
+chapters and transcript expansion. `scripts/videos/check-doc-films.mjs --complete`
+requires all ten topics to have imported deliveries and verification receipts.
 
 ## [SITE-ASSET-TYPE] Declared media types match served assets
 
-Every referenced script, stylesheet, image and social card is served successfully with a content type matching its declaration. The site source contains no encoded video or audio files.
-
-The homepage and website-audit tests share `site/tests/helpers/assets.js` to verify actual HTTP asset responses, and the website audit checks the site source for encoded media.
+Every referenced script, stylesheet, image and social card is served successfully
+with a content type matching its declaration. Encoded media is limited to the
+homepage product demo and the ten requested documentation films. The website
+audit verifies this exact inventory; unrelated audio/video and render masters
+are rejected. The homepage and audit tests share the HTTP checks in
+`site/tests/helpers/assets.js`.
 
 ## [SITE-ISSUES-FIXTURE] Issue tests run on a fixed set of issues
 
