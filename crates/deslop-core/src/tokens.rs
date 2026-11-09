@@ -245,7 +245,7 @@ fn collect_collapsed_leaves(
     // *which* positions disagreed rather than only that the shapes did.
     let collapsed = node.kind == crate::lang::shared::IDENTIFIER_KIND
         || node.kind == crate::lang::shared::LITERAL_KIND
-        || crate::lang::shared::is_operator_kind(node.kind);
+        || crate::lang::operators::is_operator_kind(node.kind);
     if collapsed && out.len() == frontier {
         out.push(CollapsedLeaf {
             kind: node.kind,

@@ -135,6 +135,7 @@ mod family;
 mod forwarding;
 mod fsharp_scaffolding;
 mod go_fixture_test;
+mod helpers;
 mod node_search;
 mod override_marker;
 mod php_accessors;
@@ -148,31 +149,31 @@ mod python_module_preamble;
 mod python_orm;
 mod role_compat;
 mod rust;
+mod signature_only;
 mod snippets;
 mod structural_families;
 mod verbatim_subgroup;
 
-use std::{
-    collections::{BTreeSet, HashMap},
-    hash::BuildHasher,
-    sync::Arc,
-};
+use std::{collections::HashMap, hash::BuildHasher};
 
 pub(crate) use declaration_family::is_single_file_declaration_family;
+pub(crate) use helpers::enclosing_kind;
+use helpers::{
+    contains_bytes, is_multi_member_language_cluster, language_cluster_shapes,
+    node_contains_identifier, node_contains_kind, node_intersects_range, raw_snippet_texts_differ,
+    snippet_range_text, source_head, spans_multiple_files, trim_ascii_start, trimmed_snippet_range,
+};
+pub(crate) use signature_only::function_kinds;
+use signature_only::{declaration_shell_kinds, is_signature_only_cluster};
 pub(crate) use snippets::locked;
 pub use snippets::ParseCache;
 use snippets::{collect_snippets, parse_for, uniform_language, Snippet};
 pub(crate) use structural_families::split_structural_families;
-use tree_sitter::Node;
 pub(crate) use verbatim_subgroup::{
     escapes_as_copy, noise_workers, split_noise_verbatim_families, NOISE_CHUNK_CLUSTERS,
 };
 
-use crate::{
-    ast::{named_children, named_children_touching, ByteRange},
-    fingerprint::Fingerprint,
-    state::FileId,
-};
+use crate::{fingerprint::Fingerprint, state::FileId};
 
 /// Decides whether `cluster` is a known noise pattern that must not be
 /// surfaced as duplication. Returns **which** filter recognised it, and
@@ -443,286 +444,4 @@ pub(crate) fn is_embedding_role_mismatch<S: BuildHasher>(
         return false;
     };
     role_compat::is_role_incompatible_embedding_match(&snippets)
-}
-
-/// Trims surrounding ASCII whitespace from a reported snippet range so
-/// parser lookups are not defeated by trailing newlines outside the AST
-/// node that produced the fingerprint.
-pub(super) fn trimmed_snippet_range(snippet: &Snippet<'_>) -> Option<ByteRange> {
-    let bytes = snippet_range_text(snippet)?;
-    let leading = bytes.iter().position(|byte| !byte.is_ascii_whitespace())?;
-    let trailing = bytes.iter().rposition(|byte| !byte.is_ascii_whitespace())?;
-    let start = snippet.range.start.checked_add(leading)?;
-    let end = snippet.range.start.checked_add(trailing)?.checked_add(1)?;
-    Some(ByteRange { start, end })
-}
-
-/// Returns true when `node` overlaps `range`.
-pub(super) fn node_intersects_range(node: Node<'_>, range: ByteRange) -> bool {
-    node.start_byte() < range.end && node.end_byte() > range.start
-}
-
-/// Returns true when `file_ids` cover at least two distinct files.
-///
-/// Cluster-noise filters require cross-file spread before they fire: a
-/// pattern repeated only within a single file is not the cross-file
-/// duplication they guard against. Centralising the `BTreeSet` count keeps
-/// every per-language filter's "≥ 2 distinct files" gate identical.
-pub(super) fn spans_multiple_files(file_ids: impl IntoIterator<Item = FileId>) -> bool {
-    file_ids.into_iter().collect::<BTreeSet<FileId>>().len() >= 2
-}
-
-/// Returns true when `snippets` is a multi-member cluster whose every member
-/// is written in `language`. This is the precondition every language-specific
-/// cluster filter shares before it inspects member shapes — centralising it
-/// keeps the "≥ 2 members, all one language" gate identical across filters.
-pub(super) fn is_multi_member_language_cluster(snippets: &[Snippet<'_>], language: &str) -> bool {
-    snippets.len() >= 2 && snippets.iter().all(|snippet| snippet.language == language)
-}
-
-/// Returns every member's shape when `snippets` is a multi-member cluster
-/// written wholly in `language` and `shape_of` recognises every member;
-/// `None` otherwise. Every shape-comparing language filter opens this
-/// way, so the gate and the all-or-nothing collection live here once.
-pub(super) fn language_cluster_shapes<'snip, 'src, Shape>(
-    snippets: &'snip [Snippet<'src>],
-    language: &str,
-    shape_of: impl FnMut(&'snip Snippet<'src>) -> Option<Shape>,
-) -> Option<Vec<Shape>> {
-    is_multi_member_language_cluster(snippets, language)
-        .then(|| snippets.iter().map(shape_of).collect())
-        .flatten()
-}
-
-/// Returns true when at least two raw reported snippet ranges differ.
-pub(super) fn raw_snippet_texts_differ(snippets: &[Snippet<'_>]) -> bool {
-    let Some(first) = snippets.first().and_then(snippet_range_text) else {
-        return false;
-    };
-    snippets
-        .iter()
-        .filter_map(snippet_range_text)
-        .any(|text| text != first)
-}
-
-/// Walks `node` looking for a named descendant of `kind`.
-pub(super) fn node_contains_kind(node: Node<'_>, kind: &str) -> bool {
-    if node.kind() == kind {
-        return true;
-    }
-    named_children(node)
-        .into_iter()
-        .any(|child| node_contains_kind(child, kind))
-}
-
-/// Returns true when `needle` occurs in `bytes`.
-pub(super) fn contains_bytes(bytes: &[u8], needle: &[u8]) -> bool {
-    !needle.is_empty() && bytes.windows(needle.len()).any(|window| window == needle)
-}
-
-/// Returns the bytes covered by one cluster occurrence.
-pub(super) fn snippet_range_text<'a>(snippet: &'a Snippet<'_>) -> Option<&'a [u8]> {
-    snippet.source.get(snippet.range.start..snippet.range.end)
-}
-
-/// Keeps generated-file detection focused on file headers.
-pub(super) fn source_head(source: &[u8]) -> &[u8] {
-    let end = source.len().min(1024);
-    source.get(..end).unwrap_or(source)
-}
-
-/// Trims ASCII whitespace without allocating.
-pub(super) fn trim_ascii_start(bytes: &[u8]) -> &[u8] {
-    let first = bytes
-        .iter()
-        .position(|byte| !byte.is_ascii_whitespace())
-        .unwrap_or(bytes.len());
-    bytes.get(first..).unwrap_or_default()
-}
-
-/// Detects **** [CLONE-NOISE-SIGNATURE-ONLY]: every cluster
-/// member's matched subtree sits entirely inside a function/method
-/// signature — it does not overlap the body. After identifier and
-/// literal normalisation, `fn check_foo(ctx: &mut Ctx)` collapses to
-/// the same shape as `fn check_bar(ctx: &mut Ctx)`, so the structural
-/// fingerprint is 1.0 but the function bodies are unrelated. Token
-/// Jaccard cannot refute the match because identifier normalisation
-/// erases the distinguishing tokens too.
-///
-/// We suppress these clusters only when at least two of the enclosing
-/// function bodies differ as normalised trees
-/// ([`body_shape::body_kind_stream`]). A real Type-1/Type-2 clone
-/// where two functions share the same signature and body — byte for
-/// byte or under a consistent rename — has equal streams, so genuine
-/// duplication keeps clustering.
-fn is_signature_only_cluster(snippets: &[Snippet<'_>], cache: &ParseCache) -> bool {
-    if snippets.len() < 2 {
-        return false;
-    }
-    let shapes: Option<Vec<Arc<Vec<body_shape::OwnedShapeToken>>>> = snippets
-        .iter()
-        .map(|snippet| {
-            cache.signature_shape(snippet, || {
-                snippet_body_shape_when_signature_only(snippet).map(|stream| {
-                    stream
-                        .iter()
-                        .map(body_shape::OwnedShapeToken::from)
-                        .collect()
-                })
-            })
-        })
-        .collect();
-    let Some(shapes) = shapes else { return false };
-    let Some(first) = shapes.first() else {
-        return false;
-    };
-    shapes.iter().any(|shape| shape != first)
-}
-
-/// Returns the enclosing function body's normalised kind stream
-/// ([`body_shape::body_kind_stream`]) when `snippet.range` lies
-/// entirely inside that function's signature (before the body) — the
-/// signature-only match condition for [CLONE-NOISE-SIGNATURE-ONLY].
-/// Two bodies that share AST shape (and differ only by literals,
-/// identifiers, or comments) compare equal — i.e. a legitimate
-/// near-miss cluster keeps clustering. Returns `None` when the snippet
-/// is not contained in a function, when the function has no `body`
-/// field, or when the range intersects the body in any way.
-fn snippet_body_shape_when_signature_only<'src>(
-    snippet: &Snippet<'src>,
-) -> Option<Vec<body_shape::ShapeToken<'src>>> {
-    let tree = parse_for(snippet)?;
-    let function = enclosing_kind(
-        tree.root_node(),
-        snippet.range,
-        function_kinds(snippet.language),
-    )?;
-    let body = function.child_by_field_name("body")?;
-    if snippet.range.end > body.start_byte() {
-        return None;
-    }
-    Some(body_shape::body_kind_stream(body, snippet.source))
-}
-
-/// Returns the set of tree-sitter node kinds that count as function
-/// declarations for the purpose of polymorphism detection.
-pub(super) const fn function_kinds(language: &str) -> &'static [&'static str] {
-    match language.as_bytes() {
-        // Python and C each have one function form exposing a `body` field.
-        b"python" | b"c" => &["function_definition"],
-        b"csharp" => &["method_declaration", "local_function_statement"],
-        b"rust" => &["function_item"],
-        // Dart `function_declaration`/`method_declaration` both expose a
-        // `body` field, so the signature-only filter can compare
-        // bodies after a signature-only structural match.
-        b"dart" => &["function_declaration", "method_declaration"],
-        // JS/TS/TSX function forms that expose a `body` field, so the
-        // signature-only and polymorphic-signature filters can
-        // compare bodies after a signature-only structural match — parity
-        // with the other languages.
-        b"javascript" | b"typescript" | b"tsx" => &[
-            "function_declaration",
-            "generator_function_declaration",
-            "method_definition",
-            "function_expression",
-            "arrow_function",
-        ],
-        // PHP functions and class methods that expose a `body` field so the
-        // signature-only and polymorphic-signature filters can
-        // compare bodies after a signature-only structural match.
-        b"php" => &["function_definition", "method_declaration"],
-        // F# `let`/`member` bindings both expose a `body` field so the
-        // signature-only and polymorphic-signature filters can
-        // compare bodies after a signature-only structural match. Only
-        // `method_or_prop_defn` carries a `name` field (members), so #69 is
-        // limited to members; top-level `let` bindings still get #154.
-        b"fsharp" => &["function_or_value_defn", "method_or_prop_defn"],
-        // Go functions, methods, and closures all expose a `body` field so
-        // the signature-only and polymorphic-signature filters
-        // can compare bodies after a signature-only structural match.
-        b"go" => &["function_declaration", "method_declaration", "func_literal"],
-        _ => &[],
-    }
-}
-
-/// The declaration shell the widened polymorphic-subject resolution may
-/// walk through ([CLONE-NOISE-POLYMORPHIC-SIGNATURE]): when a member
-/// view is wider than any single function, the subject is the sole
-/// function the range contains with nothing but declaration scaffolding
-/// around it. A row lists the grammar's inert shell kinds — the file
-/// root, the class/mixin/enum/extension containers, and constructor
-/// signatures, none of which execute; kinds that can carry behaviour
-/// (function bodies, field initialisers) are deliberately absent, so a
-/// member containing them vetoes the widened resolution and keeps the
-/// component surfaced. A language with no row keeps the
-/// containing-function behaviour.
-pub(super) const fn declaration_shell_kinds(language: &str) -> &'static [&'static str] {
-    match language.as_bytes() {
-        b"python" => &[
-            "module",
-            "class_definition",
-            "block",
-            "decorated_definition",
-            "decorator",
-        ],
-        b"dart" => &[
-            "source_file",
-            "class_declaration",
-            "class_body",
-            "class_member",
-            "declaration",
-            "constant_constructor_signature",
-            "constructor_signature",
-            "constructor_param",
-            "formal_parameter_list",
-            "optional_formal_parameters",
-            "formal_parameter",
-            "super_formal_parameter",
-            "super",
-            "superclass",
-            "type",
-            "type_identifier",
-            "identifier",
-            "annotation",
-            "enum_declaration",
-            "enum_body",
-            "mixin_declaration",
-            "extension_declaration",
-            "extension_body",
-            "function_signature",
-        ],
-        _ => &[],
-    }
-}
-
-/// Walks `node` looking for an identifier with the requested bytes.
-pub(super) fn node_contains_identifier(node: Node<'_>, source: &[u8], needle: &[u8]) -> bool {
-    if node.kind() == "identifier" && source.get(node.start_byte()..node.end_byte()) == Some(needle)
-    {
-        return true;
-    }
-    named_children(node)
-        .into_iter()
-        .any(|child| node_contains_identifier(child, source, needle))
-}
-
-/// Walks `root` looking for the smallest descendant of `kinds` whose
-/// byte range encloses `range`.
-pub(crate) fn enclosing_kind<'tree>(
-    root: Node<'tree>,
-    range: ByteRange,
-    kinds: &[&str],
-) -> Option<Node<'tree>> {
-    let mut best: Option<Node<'tree>> = None;
-    let mut stack: Vec<Node<'tree>> = vec![root];
-    while let Some(node) = stack.pop() {
-        if node.start_byte() > range.start || node.end_byte() < range.end {
-            continue;
-        }
-        if kinds.contains(&node.kind()) {
-            best = Some(node);
-        }
-        stack.extend(named_children_touching(node, range));
-    }
-    best
 }

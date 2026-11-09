@@ -7,7 +7,7 @@
 
 use tree_sitter::Node;
 
-use crate::lang::shared::is_behaviour_bearing_token;
+use crate::lang::operators::is_behaviour_bearing_token;
 
 /// Node kinds that reach *outside* the body: a call and a member
 /// access. Which collaborator a body reaches for is behaviour, so the
