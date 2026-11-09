@@ -1,5 +1,6 @@
 ---
 layout: layouts/docs.njk
+docFilm: osprey
 title: Osprey — Syntax Flavors and Duplicate Detection
 description: Scan all three Osprey syntax flavors with Deslop, including native ML layout and explicit Python-flavor selection.
 eleventyNavigation:
@@ -12,6 +13,8 @@ docsGroup: guides
 # Osprey support
 
 Deslop analyses Osprey with tree-sitter and sends findings through the same Rust engine used by the CLI, live editor and MCP tools. Osprey receives the official cyan Osprey icon in the language groups and report views. Start with [Osprey in Deslop](/blog/osprey-first-class/) for an introduction.
+
+{% include "partials/doc-film.njk" %}
 
 ## Syntax support
 

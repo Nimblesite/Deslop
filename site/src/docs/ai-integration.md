@@ -1,5 +1,6 @@
 ---
 layout: layouts/docs.njk
+docFilm: ai-integration
 title: AI Agents — MCP setup for Claude Code, Cursor, and Copilot
 description: Connect the Deslop MCP server to Claude Code, Cursor, Continue, Copilot, or Codex so agents can call find-similar before writing duplicate code.
 eleventyNavigation:
@@ -18,6 +19,8 @@ docsGroup: guides
 The instructions for the agent itself — the rule it follows before writing code, the similarity thresholds, the CLI fallback when MCP is unavailable, and how to parse the report — are on **[For AI](/docs/for-ai/)**. That page is written in the second person and addressed to the machine. Point your agent at that URL.
 
 The paste-ready rule block for your project's `AGENTS.md` / `CLAUDE.md` is in the [agent recipe](https://github.com/Nimblesite/Deslop/blob/main/docs/snippets/agents-md-recipe.md). It works with Claude Code, Cursor, Copilot, Continue, and Codex.
+
+{% include "partials/doc-film.njk" %}
 
 ## The MCP tools, all live
 

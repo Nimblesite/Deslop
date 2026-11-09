@@ -1,15 +1,10 @@
-{# [SITE-DEMO-VIDEO] Shared homepage demo player. The including page sets
-   demoLabel, demoTrackLabel and demoFallback before the include, so the player
-   is named and its fallback reads in the page language. The captions file is
-   English-only, so srclang stays "en" on both homepages. No autoplay: the
-   visitor starts it. #}
+{# [SITE-DEMO-VIDEO] One shared player for the homepage and documentation. #}
+{% from "partials/video-player.njk" import player %}
 <figure class="showcase__figure showcase__figure--demo">
-  <video controls playsinline preload="none"
-         poster="/assets/img/deslop-demo-poster.webp"
-         width="1600" height="1000"
-         aria-label="{{ demoLabel }}">
-    <source src="/assets/video/deslop-demo.mp4" type="video/mp4">
-    <track kind="captions" src="/assets/video/deslop-demo.vtt" srclang="en" label="{{ demoTrackLabel }}">
-    <p class="showcase__demo-fallback">{{ demoFallback }} <a href="/assets/video/deslop-demo.mp4" download>deslop-demo.mp4</a></p>
-  </video>
+{{ player({
+  src: "/assets/video/deslop-demo.mp4", poster: "/assets/img/deslop-demo-poster.webp",
+  captions: "/assets/video/deslop-demo.vtt", captionLabel: demoTrackLabel,
+  width: 1600, height: 1000, label: demoLabel,
+  fallback: demoFallback, downloadLabel: "deslop-demo.mp4"
+}) }}
 </figure>

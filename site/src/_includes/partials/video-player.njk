@@ -1,0 +1,9 @@
+{% macro player(video) -%}
+<video controls playsinline preload="none" poster="{{ video.poster }}"
+       width="{{ video.width }}" height="{{ video.height }}" aria-label="{{ video.label }}">
+  <source src="{{ video.src }}" type="video/mp4">
+  <track kind="captions" src="{{ video.captions }}" srclang="en" label="{{ video.captionLabel }}">
+  {% if video.chapters %}<track kind="chapters" src="{{ video.chapters }}" srclang="en" label="Chapters">{% endif %}
+  <p>{{ video.fallback }} <a href="{{ video.src }}" download>{{ video.downloadLabel }}</a></p>
+</video>
+{%- endmacro %}

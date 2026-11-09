@@ -418,7 +418,8 @@ body.menu-open .docs-sidebar { visibility: visible; transform: translateX(0); }
   height: auto;
 }
 /* ─────────── Inline content figure (docs screenshots & diagrams) ─────────── */
-.prose img { max-width: 100%; height: auto; }
+.prose img, .prose video { max-width: 100%; height: auto; }
+.prose .doc-film video { display: block; width: 100%; border-radius: var(--radius-sm); }
 .prose figure { margin: 0; }
 .prose figure a { display: block; }
 .prose figure img {

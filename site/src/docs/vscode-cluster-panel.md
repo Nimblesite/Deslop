@@ -1,5 +1,6 @@
 ---
 layout: layouts/docs.njk
+docFilm: vscode-cluster-panel
 title: VS Code — Inspect and Compare Duplicate Code
 description: Read clone categories and mass, compare canonical or arbitrary occurrences, and group Deslop findings in VS Code.
 eleventyNavigation:
@@ -12,6 +13,8 @@ docsGroup: guides
 # VS Code Cluster Panel
 
 The panel shows a group of code occurrences and lets you inspect the actual copies. This guide covers [0.35.0](/releases/).
+
+{% include "partials/doc-film.njk" %}
 
 ## Open and compare
 

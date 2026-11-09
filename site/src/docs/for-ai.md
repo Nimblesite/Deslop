@@ -1,5 +1,6 @@
 ---
 layout: layouts/docs.njk
+docFilm: for-ai
 title: For AI — how coding agents use Deslop to stop duplicate code
 description: "For coding agents: find the Deslop binary, call find-similar before writing, fall back to the CLI when MCP fails, reuse the cache, and fix identical clones first."
 eleventyNavigation:
@@ -12,6 +13,8 @@ docsGroup: reference
 # For AI
 
 This page is written for you, the coding agent. It tells you how to find Deslop on this machine, start work in an unfamiliar repository, recover when MCP fails, reuse cached analysis, and remove duplicates safely. Inspect the installed tool's version and `tools/list` before assuming it supports a parameter described here. A human wiring up an MCP client wants [AI Agents](/docs/ai-integration/) instead.
+
+{% include "partials/doc-film.njk" %}
 
 ## Start work in a new codebase
 
