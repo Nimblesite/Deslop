@@ -21,16 +21,16 @@ run and a change. Do not pad films to reach a duration.
 
 | Documentation source | Film focus | Delivery |
 | --- | --- | --- |
-| index.md | Install, find, inspect and compare | Script reviewed; four previews checked; rendering |
+| index.md | Install, find, inspect and compare | 82.9s rendered; codec/OCR verified; LFS committed; integration pending |
 | ai-integration.md | Check for existing code before writing | Script reviewed; preview rendered |
-| vscode-cluster-panel.md | Navigate findings and compare copies | Pending |
-| github-action.md | Review duplicates in a pull request | Pending |
-| osprey.md | Analyse supported Osprey source | Pending |
-| configuration.md | Choose analysis settings deliberately | Script corrected; preview checked; narration generating |
-| how-it-works.md | Follow source code into ranked findings | Script corrected; preview rendering |
-| research-background.md | Understand clone types and evidence | Pending |
-| accuracy-transparency.md | Read accuracy evidence and limitations | Pending |
-| for-ai.md | Use the live MCP workflow correctly | Pending |
+| vscode-cluster-panel.md | Navigate findings and compare copies | Script reviewed; previews rendered; narration pending |
+| github-action.md | Review duplicates in a pull request | Script reviewed; previews rendered; narration pending |
+| osprey.md | Analyse supported Osprey source | Script reviewed; previews rendered; narration pending |
+| configuration.md | Choose analysis settings deliberately | Narration complete; rendering |
+| how-it-works.md | Follow source code into ranked findings | Script corrected; previews rendered |
+| research-background.md | Understand clone types and evidence | Script reviewed; previews rendered; narration pending |
+| accuracy-transparency.md | Read accuracy evidence and limitations | Script reviewed; previews rendered; narration pending |
+| for-ai.md | Use the live MCP workflow correctly | Script reviewed; previews rendered; narration pending |
 
 ## Production constraints [DOC-FILMS-PRODUCTION]
 
