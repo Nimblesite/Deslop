@@ -21,7 +21,7 @@ run and a change. Do not pad films to reach a duration.
 
 | Documentation source | Film focus | Delivery |
 | --- | --- | --- |
-| index.md | Install, find, inspect and compare | Pending |
+| index.md | Install, find, inspect and compare | Script reviewed; four previews checked; rendering |
 | ai-integration.md | Check for existing code before writing | Pending |
 | vscode-cluster-panel.md | Navigate findings and compare copies | Pending |
 | github-action.md | Review duplicates in a pull request | Pending |
@@ -39,3 +39,13 @@ cleanWork option. The initial free disk measurement was 14 GiB. Do not download
 IDE dependencies or build the Rust workspace for film production. Existing
 uncommitted deployment changes belong to another task and are excluded.
 Stop production at midnight Australia/Melbourne as instructed by the user.
+
+## Current production evidence [DOC-FILMS-EVIDENCE]
+
+The Getting Started film recipe is in Videos at
+`projects/deslop/videos/docs-getting-started/film.mjs`; shared composition files
+are under `projects/deslop/videos/doc-series/`. Ten source-page snapshots and
+SHA-256 hashes are in its `sources/` directory. Preview frames were rendered
+and visually inspected before narration. The first publish rejected an
+intermediate quality setting of 20; the recipe now uses the supported maximum
+of 18. Final video review and delivery remain outstanding.
