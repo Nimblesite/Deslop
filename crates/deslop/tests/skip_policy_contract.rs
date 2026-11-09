@@ -526,7 +526,7 @@ fn assert_slice_resolves(slice: &[String], suite: &[String]) {
 /// they compile and run on their matching CI platform. The
 /// `profiling` entry is different in kind and is tracked, not blessed —
 /// see [`FEATURE_GATED_TEST`].
-const CONDITIONAL_TESTS: [(&str, &str); 12] = [
+const CONDITIONAL_TESTS: [(&str, &str); 13] = [
     (
         "crates/deslop-core/src/config/paths/tests.rs",
         "config_symlinks_keep_both_leaf_and_parent_aliases",
@@ -542,6 +542,10 @@ const CONDITIONAL_TESTS: [(&str, &str); 12] = [
     (
         "crates/deslop-core/tests/live/aliases.rs",
         "renamed_external_source_alias_preserves_the_complete_cold_report",
+    ),
+    (
+        "crates/deslop-lsp/tests/cpu_throttle_knob.rs",
+        "a_server_already_lower_than_its_nice_knob_keeps_that_priority_and_serves",
     ),
     (
         "crates/deslop-lsp/tests/observability_heartbeat.rs",
