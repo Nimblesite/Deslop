@@ -267,18 +267,25 @@ fn encloses_both(wide: &[Fingerprint], narrow: &[Fingerprint]) -> bool {
     })
 }
 
-/// The union as the fingerprint the scan would have emitted for it: its
-/// sibling run's normalised digest and node count, so the judge resolves
-/// exactly the nodes the run holds.
+/// The union as the fingerprint the scan would have emitted for it.
 fn member(
     file: FileId,
     range: ByteRange,
     trees: &HashMap<FileId, &NormalizedNode>,
 ) -> Option<Fingerprint> {
-    let run = sibling_run(trees.get(&file)?, range)?;
+    run_fingerprint(trees.get(&file)?, range)
+}
+
+/// The fingerprint the scan would have emitted for `range` of `tree`: its
+/// sibling run's normalised digest and node count, so the judge resolves
+/// exactly the nodes the run holds. `None` when the range cuts through a
+/// construct. The explicit pair comparison resolves a joined run the
+/// report renders through this same construction ([PAIR-COMPARE-CLI]).
+pub(crate) fn run_fingerprint(tree: &NormalizedNode, range: ByteRange) -> Option<Fingerprint> {
+    let run = sibling_run(tree, range)?;
     Some(Fingerprint {
         hash: run_hash(&run),
-        file_id: file,
+        file_id: tree.file_id,
         byte_range: range,
         node_count: run
             .iter()

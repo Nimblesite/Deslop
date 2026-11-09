@@ -50,7 +50,8 @@ impl PipelineSession {
         if params.left == params.right {
             return Err(CoreError::SamePairEndpoint);
         }
-        let pair = self.resolve_pair(params)?;
+        let joined = self.joined_runs(params)?;
+        let pair = self.resolve_pair(params, &joined)?;
         let evidence = self.measure_pair(&pair, provider)?;
         Ok(PairComparison {
             left: params.left.clone(),

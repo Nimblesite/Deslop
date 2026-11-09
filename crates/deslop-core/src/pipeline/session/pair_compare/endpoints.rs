@@ -8,6 +8,8 @@ use std::{
 
 use super::text_identity::SourceIdentity;
 use crate::{
+    ast::ByteRange,
+    cluster::run_fingerprint,
     error::CoreError,
     fingerprint::Fingerprint,
     lsh::{Signature, SignatureLookup},
@@ -17,29 +19,80 @@ use crate::{
 };
 
 impl PipelineSession {
-    /// Resolves both endpoint identities against the current flat corpus.
+    /// Resolves both endpoint identities against the current flat corpus,
+    /// falling back to the `joined` runs [`Self::joined_runs`] built.
     pub(super) fn resolve_pair<'corpus>(
         &'corpus self,
         params: &PairComparisonParams,
+        joined: &'corpus [Option<Fingerprint>; 2],
     ) -> Result<ResolvedPair<'corpus>, CoreError> {
-        let left = self.resolve_endpoint(&params.left)?;
-        let right = self.resolve_endpoint(&params.right)?;
+        let [left_run, right_run] = joined;
+        let left = self.resolve_endpoint(&params.left, left_run.as_ref())?;
+        let right = self.resolve_endpoint(&params.right, right_run.as_ref())?;
         Ok(ResolvedPair { left, right })
     }
 
-    /// Resolves one exact path/range to its fingerprint and signature index.
-    fn resolve_endpoint(&self, endpoint: &PairEndpoint) -> Result<ResolvedEndpoint<'_>, CoreError> {
+    /// [PIPELINE-CLUSTER-SUBSUME-STRADDLE] For each endpoint the scan never
+    /// fingerprinted, the copied run the cluster build would have joined
+    /// there: a report renders a long run as one finding several windows
+    /// wide, and every range a report renders must be comparable
+    /// ([PAIR-COMPARE-CLI]). The file is parsed only on this fallback.
+    pub(super) fn joined_runs(
+        &self,
+        params: &PairComparisonParams,
+    ) -> Result<[Option<Fingerprint>; 2], CoreError> {
+        Ok([
+            self.joined_run(&params.left)?,
+            self.joined_run(&params.right)?,
+        ])
+    }
+
+    /// The joined run at one endpoint, or `None` when the scan already
+    /// fingerprinted it or the range is not one authored run.
+    fn joined_run(&self, endpoint: &PairEndpoint) -> Result<Option<Fingerprint>, CoreError> {
         let requested = canonical_endpoint_path(&self.root, &endpoint.path);
+        if self.indexed_endpoint(endpoint, &requested).is_some() {
+            return Ok(None);
+        }
+        let Some(file_id) = self.file_id_for(&requested) else {
+            return Ok(None);
+        };
+        let tree = self.parse_tree(file_id)?;
+        let range = ByteRange {
+            start: endpoint.start_byte,
+            end: endpoint.end_byte,
+        };
+        Ok(run_fingerprint(&tree, range))
+    }
+
+    /// Resolves one exact path/range to its fingerprint and signature
+    /// index, or to the joined run built for it.
+    fn resolve_endpoint<'corpus>(
+        &'corpus self,
+        endpoint: &PairEndpoint,
+        joined: Option<&'corpus Fingerprint>,
+    ) -> Result<ResolvedEndpoint<'corpus>, CoreError> {
+        let requested = canonical_endpoint_path(&self.root, &endpoint.path);
+        self.indexed_endpoint(endpoint, &requested)
+            .or_else(|| joined.map(ResolvedEndpoint::unindexed))
+            .ok_or_else(|| unknown_endpoint(endpoint))
+    }
+
+    /// The fingerprint the scan emitted at exactly this path and range.
+    fn indexed_endpoint(
+        &self,
+        endpoint: &PairEndpoint,
+        requested: &Path,
+    ) -> Option<ResolvedEndpoint<'_>> {
         self.store
             .fingerprints()
             .iter()
             .enumerate()
-            .find(|(_, fingerprint)| self.endpoint_matches(fingerprint, endpoint, &requested))
+            .find(|(_, fingerprint)| self.endpoint_matches(fingerprint, endpoint, requested))
             .map(|(index, fingerprint)| ResolvedEndpoint {
                 index: Some(index),
                 fingerprint,
             })
-            .ok_or_else(|| unknown_endpoint(endpoint))
     }
 
     /// Tests exact file identity and byte range for one fingerprint.

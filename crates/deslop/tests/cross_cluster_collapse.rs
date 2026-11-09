@@ -244,14 +244,14 @@ const LONG_RUN_FIRST_LINE: u64 = 9;
 const LONG_RUN_LAST_LINE: u64 = 31;
 const LONG_RUN_MEMBERS: usize = 2;
 const LONG_RUN_RANK: u64 = 1;
-const LONG_RUN_PATHS: [&str; LONG_RUN_MEMBERS] = ["left.ts", "right.ts"];
-const LONG_RUN_ROOT: &str = "corpus";
+pub(crate) const LONG_RUN_PATHS: [&str; LONG_RUN_MEMBERS] = ["left.ts", "right.ts"];
+pub(crate) const LONG_RUN_ROOT: &str = "corpus";
 const LONG_RUN_KIND: &str = "identical";
 const LONG_RUN_CLUSTER_COUNT: usize = 1;
 const LONG_RUN_RANK_FIELD: &str = "rank";
 
 /// One authored run, with unrelated code on both sides in each file.
-fn write_long_run_fixture(root: &Path) -> Result<()> {
+pub(crate) fn write_long_run_fixture(root: &Path) -> Result<()> {
     fs::create_dir_all(root)?;
     for (path, prefix, suffix) in [
         (LONG_RUN_PATHS[0], LEFT_PREFIX, LEFT_SUFFIX),

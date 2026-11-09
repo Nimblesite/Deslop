@@ -24,6 +24,7 @@ pub(crate) mod scope;
 /// Cross-cluster subsumption ([PIPELINE-CLUSTER-SUBSUME]).
 mod subsume;
 use copied_runs::coalesce_copied_runs;
+pub(crate) use copied_runs::run_fingerprint;
 use election::collapse_overlapping_per_file;
 pub use identity::encode_short_id;
 use identity::{name_clusters, Unnamed};
