@@ -221,6 +221,8 @@ _ci-contract-tests: _vsix-node-modules
 	@node --test scripts/actions/verify-env-path-writes.test.mjs
 	@echo "==> Composite-action step scanner proof ([ACTION-TESTS])..."
 	@node --test scripts/actions/action-yaml.test.mjs
+	@echo "==> pre-commit hook manifest gate ([ACTION-PRE-COMMIT])..."
+	@node --test scripts/actions/pre-commit-hooks.test.mjs
 	@echo "==> Required CI status merge gate ([CI-MERGE-GATE])..."
 	@node --test scripts/actions/merge-gate.test.mjs
 	@echo "==> Docs installer snippet fail-closed gate ([DEPLOY-DOCS-INSTALLER-FAILCLOSED])..."
