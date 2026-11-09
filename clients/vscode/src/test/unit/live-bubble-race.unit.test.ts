@@ -7,7 +7,20 @@
 // revision (not the wire generation) is the freshness token.
 
 import * as assert from "node:assert/strict";
-import { FIXTURE_KIND_TITLE, bubbleCluster, bubbleFixture, deferredProbeClient, editAt, resolveProbe, withBubble } from "./bubble.helpers";
+import {
+  DEFAULT_BUBBLE_CLUSTER_MASS,
+  FIXTURE_KIND_TITLE,
+  PRIMARY_BUBBLE_CLUSTER_ID,
+  bubbleCluster,
+  bubbleFixture,
+  deferredProbeClient,
+  editAt,
+  probeCluster,
+  probeReport,
+  resolveProbe,
+  settled,
+  withBubble,
+} from "./bubble.helpers";
 import { reportWithClusters } from "./report.helpers";
 
 suite("LiveBubble stale-probe races", () => {
@@ -156,5 +169,37 @@ suite("LiveBubble stale-probe races", () => {
       0,
       "a completion landing after dispose must not touch the decoration surface",
     );
+  });
+});
+
+suite("LiveBubble probe outlived by a report refresh", () => {
+  // [VSIX-LIVE-BUBBLE] [LIVE-OPEN-BUFFERS] The debounce that dispatches the
+  // probe is the same pause that makes the server re-analyse the dirty
+  // buffer, so the refreshed report routinely lands while the probe is in
+  // flight. The probe's answer is then stale by the store's own rule and
+  // must not paint — but the edit cycle still earned its bubble.
+  test("a report refresh landing mid-probe re-issues the probe instead of dropping the edit cycle", async () => {
+    const { client, requests } = deferredProbeClient();
+    await withBubble({ generation: 1, client }, async ({ store, capture, bubble }) => {
+      const probeA = bubble.probe(capture.editor, editAt(0, "aaaa"));
+      assert.equal(requests.length, 1, "the edit dispatches one probe");
+
+      assert.equal(store.setSnapshot(probeReport(), 2), true, "the re-analysis of the dirty buffer is accepted");
+      assert.equal(requests.length, 2, "the refresh re-issues the probe against the new revision");
+      assert.equal(requests[0]?.token.isCancellationRequested, true, "the probe the refresh doomed is cancelled");
+      assert.equal(requests[1]?.token.isCancellationRequested, false, "the re-issued probe is live");
+      assert.deepEqual(requests[1]?.params, requests[0]?.params, "the re-issued probe asks about the same range");
+
+      await resolveProbe(requests[0], probeA);
+      assert.equal(capture.calls.length, 0, "the stale answer never touches the surface");
+
+      requests[1]?.resolve([probeCluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_MASS)]);
+      await settled();
+      const rendered = capture.visible();
+      assert.ok(rendered !== undefined, "the re-issued probe renders the bubble this edit earned");
+      assert.match(rendered ?? "", new RegExp(FIXTURE_KIND_TITLE), "with the clone kind verdict");
+      assert.match(rendered ?? "", /×\s*5/, "and the refreshed report's occurrence count");
+      assert.match(rendered ?? "", /A\.cs/, "naming the canonical file");
+    });
   });
 });

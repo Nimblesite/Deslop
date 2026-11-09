@@ -375,6 +375,15 @@ export function renderFullConfidenceBubble(
   return visible;
 }
 
+/** One macrotask turn, so a probe continuation the store itself triggered
+ * has settled before the test reads the surface. Not a wait on time: every
+ * pending microtask runs first, whatever the host's speed. */
+export function settled(): Promise<void> {
+  return new Promise((resolve) => {
+    setImmediate(resolve);
+  });
+}
+
 export function retractCluster(store: ReportStore, clusterId: string): void {
   store.applyDelta({
       routing: FIXTURE_ROUTING,
