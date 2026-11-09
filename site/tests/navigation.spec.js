@@ -9,6 +9,11 @@ const SLOT_RADIUS = "4px";
 const TRANSPARENT = "rgba(0, 0, 0, 0)";
 
 async function expectTargets(page, selector) {
+  // Measure settled geometry: a running reveal transform multiplies the rect
+  // through a float matrix and shaves fractions of a pixel off exact targets.
+  await page.evaluate(() => Promise.all(document.getAnimations()
+    .filter(animation => Number.isFinite(animation.effect.getComputedTiming().endTime))
+    .map(animation => animation.finished.catch(() => undefined))));
   const targets = await page.locator(selector).evaluateAll(elements => elements.map(element => {
     const { width, height } = element.getBoundingClientRect();
     return { label: element.textContent.trim(), width, height };
