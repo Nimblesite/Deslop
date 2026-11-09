@@ -110,18 +110,18 @@ fn lsp_nice_and_worker_knobs_preserve_idle_cpu_report() -> Result<()> {
     let workspace = tempfile::tempdir()?;
     let mut child = spawn_logging_lsp(workspace.path(), &["--worker-threads", "1", "--nice", "5"])?;
 
-    thread::sleep(Duration::from_millis(250));
-    if child.try_wait()?.is_some() {
+    let (mut stdin, mut reader) = take_stdin_stdout(&mut child)?;
+
+    // The handshake is the readiness signal: a server that died on its
+    // knobs fails it, and its stderr says why. No wall-clock wait (gh #352).
+    if let Err(error) = handshake(&mut stdin, &mut reader) {
+        drop(stdin);
         let output = child.wait_with_output()?;
         return Err(anyhow!(
-            "deslop-lsp exited before handshake; stderr:\n{}",
+            "deslop-lsp failed its handshake ({error}); stderr:\n{}",
             String::from_utf8_lossy(&output.stderr)
         ));
     }
-
-    let (mut stdin, mut reader) = take_stdin_stdout(&mut child)?;
-
-    let _init = handshake(&mut stdin, &mut reader)?;
     let response = call(&mut stdin, &mut reader, "deslop/cpuReport", &json!({}))?;
     let result = response
         .get("result")
