@@ -221,10 +221,17 @@ fn assert_rate_limits_signature(plan: &MergePlan) -> Result<()> {
     Ok(())
 }
 
+/// Percent-encodings that mark a mis-built URI rather than a character the
+/// checkout path really holds: an encoded drive colon, an encoded backslash
+/// separator, and a leaked Windows verbatim marker (issue #290). Any other
+/// escape — `%20` for a space in the checkout root — is correct RFC 8089.
+const MIS_ENCODINGS: [&str; 3] = ["%3A", "%5C", "%3F"];
+
 /// Asserts the RFC 8089 shape every wire `WorkspaceEdit` URI must have
 /// (issue #290): an empty authority and exactly three slashes, a
-/// forward-slash separated path ending at `tail`, and — because fixture
-/// paths are entirely unreserved — no percent-encoding whatsoever.
+/// forward-slash separated path ending at `tail`, and none of the
+/// [`MIS_ENCODINGS`]. The checkout root above the fixture is the
+/// developer's, so it may hold characters that must be escaped (#441).
 fn ensure_rfc8089_uri(plan: &MergePlan, tail: &str) -> Result<()> {
     let uri = edit_uri(plan)?;
     let path = uri
@@ -238,12 +245,14 @@ fn ensure_rfc8089_uri(plan: &MergePlan, tail: &str) -> Result<()> {
         path.ends_with(tail),
         "forward-slash separated path ending at {tail} expected, got {uri}"
     );
-    ensure!(
-        !uri.contains('%'),
-        "an unreserved path needs no percent-encoding — `%3A` is an \
-         encoded drive colon, `%5C` a backslash separator, `%3F` a \
-         leaked verbatim marker, got {uri}"
-    );
+    let upper = uri.to_ascii_uppercase();
+    for encoding in MIS_ENCODINGS {
+        ensure!(
+            !upper.contains(encoding),
+            "`{encoding}` marks a mis-built URI — `%3A` is an encoded drive colon, \
+             `%5C` a backslash separator, `%3F` a leaked verbatim marker — got {uri}"
+        );
+    }
     Ok(())
 }
 
@@ -271,6 +280,31 @@ fn wire_edit_uri_is_rfc8089_for_a_canonicalised_absolute_path() -> Result<()> {
     let root = fs::canonicalize(fixture(CSHARP_LEAFGAP.fixture)).context("canonical fixture")?;
     let plan = first_mechanical(merge_plans_under(&root, CSHARP_LEAFGAP.file)?)?;
     ensure_rfc8089_uri(&plan, "/csharp-merge-leafgap/RateLimits.cs")
+}
+
+/// A checkout directory whose name holds a space, as in
+/// `~/Coding Tools/Deslop` or `~/Library/Mobile Documents/…` (#441).
+const SPACED_DIRECTORY: &str = "Coding Tools";
+
+/// [AUTOFIX-MERGE-MCP] A checkout under a directory with a space in its
+/// name still edits an RFC 8089 URI. The space travels as `%20`, which is
+/// the encoding the RFC requires; a raw space is not a URI character.
+#[test]
+fn wire_edit_uri_percent_encodes_a_space_in_the_checkout_path() -> Result<()> {
+    let tmp = tempfile::tempdir().context("tempdir")?;
+    let root = fs::canonicalize(tmp.path())?
+        .join(SPACED_DIRECTORY)
+        .join(CSHARP_LEAFGAP.fixture);
+    fs::create_dir_all(&root)?;
+    let _bytes = fs::copy(
+        fixture(CSHARP_LEAFGAP.fixture).join(CSHARP_LEAFGAP.file),
+        root.join(CSHARP_LEAFGAP.file),
+    )?;
+    let plan = first_mechanical(merge_plans_under(&root, CSHARP_LEAFGAP.file)?)?;
+    ensure_rfc8089_uri(&plan, "/Coding%20Tools/csharp-merge-leafgap/RateLimits.cs")?;
+    let uri = edit_uri(&plan)?;
+    ensure!(!uri.contains(' '), "a raw space is not a URI character, got {uri}");
+    Ok(())
 }
 
 /// Determinism: recomputing the plan yields identical JSON.
