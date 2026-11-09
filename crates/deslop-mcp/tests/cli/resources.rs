@@ -1,6 +1,6 @@
 //! MCP resource tests: `resources/list` / `resources/read` over the
 //! `deslop://report` and `deslop://schema` uris, and the schema-doc
-//! tool that serves the same markdown.
+//! tool that serves the same markdown ([MCP-RESOURCES]).
 
 use anyhow::{anyhow, Result};
 use common::{

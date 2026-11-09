@@ -1,5 +1,6 @@
 //! Startup-surface tests: the version contract the binary prints and
-//! the flags it accepts or refuses before any workspace is opened.
+//! the flags it accepts or refuses before any workspace is opened
+//! ([DEPLOY-VERSION-CONTRACT]).
 
 use anyhow::Result;
 use common::{

@@ -1,5 +1,6 @@
 //! Workspace path-resolution safety tests: outside-root rejection,
-//! relative paths inside the workspace, and phantom-leaf handling.
+//! relative paths inside the workspace, and phantom-leaf handling
+//! ([MCP-SAFETY]).
 
 use std::fs;
 

@@ -1,5 +1,6 @@
 //! JSON-RPC protocol-level tests: the initialize handshake, capability
-//! shape, lifecycle (stdin EOF), and malformed / unknown frame handling.
+//! shape, lifecycle (stdin EOF), and malformed / unknown frame handling
+//! ([MCP-CAPABILITIES], [MCP-WIRE-FRAMING]).
 
 use std::time::Duration;
 

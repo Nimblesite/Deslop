@@ -1,5 +1,5 @@
 //! Cross-tool argument-validation tests: `tools/call` envelope shape
-//! and required-argument enforcement.
+//! and required-argument enforcement ([MCP-TOOLS], [MCP-SAFETY]).
 
 use anyhow::Result;
 use common::{
