@@ -1,0 +1,13 @@
+WEBVTT
+
+00:00.400 --> 00:16.416
+Open a finding and use its file links to navigate to the code. The selected range shows the reported occurrence, but read the surrounding implementation too. The category tells you what kind of relationship was found. A finding is a starting point for review.
+
+00:17.266 --> 00:34.375
+Compare To Canonical opens the reference occurrence on the left and your chosen copy on the right. Canonical does not mean best. It gives comparisons a consistent starting point. Review both implementations and their assumptions before deciding which behavior to preserve.
+
+00:35.225 --> 00:54.121
+To inspect a different pair, select the first occurrence for comparison, then choose Compare with Selected on the other. Clear Selection cancels the choice. Selection also clears after comparison or when you change clusters. Copy Context For AI provides finding context for a coding agent.
+
+00:54.971 --> 01:16.489
+Mass measures copied syntax-tree size multiplied by additional visible copies. Rank puts larger duplicated work first; neither is confidence. Severity is a configured diagnostic level. Use the sidebar grouping menu to organize findings, and the Duplication and Session views to inspect percentages and analysis state.

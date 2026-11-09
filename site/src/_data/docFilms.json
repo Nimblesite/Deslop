@@ -178,5 +178,35 @@
         "text": "Changed-code gating uses a supplied patch and the only changed option. The whole tree is still analysed; the report and gate are scoped to affected added lines. Reports and outputs help explain a breached gate. Inspect the scope as well as the percentage before deciding what to change."
       }
     ]
+  },
+  "vscode-cluster-panel": {
+    "title": "Open the occurrence",
+    "duration": "1:18",
+    "transcript": [
+      {
+        "title": "Open the occurrence",
+        "seconds": 0,
+        "stamp": "0:00",
+        "text": "Open a finding and use its file links to navigate to the code. The selected range shows the reported occurrence, but read the surrounding implementation too. The category tells you what kind of relationship was found. A finding is a starting point for review."
+      },
+      {
+        "title": "Compare against a reference",
+        "seconds": 17,
+        "stamp": "0:17",
+        "text": "Compare To Canonical opens the reference occurrence on the left and your chosen copy on the right. Canonical does not mean best. It gives comparisons a consistent starting point. Review both implementations and their assumptions before deciding which behavior to preserve."
+      },
+      {
+        "title": "Choose another pair",
+        "seconds": 35,
+        "stamp": "0:35",
+        "text": "To inspect a different pair, select the first occurrence for comparison, then choose Compare with Selected on the other. Clear Selection cancels the choice. Selection also clears after comparison or when you change clusters. Copy Context For AI provides finding context for a coding agent."
+      },
+      {
+        "title": "Read the numbers correctly",
+        "seconds": 54,
+        "stamp": "0:54",
+        "text": "Mass measures copied syntax-tree size multiplied by additional visible copies. Rank puts larger duplicated work first; neither is confidence. Severity is a configured diagnostic level. Use the sidebar grouping menu to organize findings, and the Duplication and Session views to inspect percentages and analysis state."
+      }
+    ]
   }
 }

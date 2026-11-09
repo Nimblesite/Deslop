@@ -1,6 +1,6 @@
 # Documentation film delivery status
 
-6 of 10 documentation pages have imported media, captions, chapters, poster, LFS rules and a verification receipt.
+7 of 10 documentation pages have imported media, captions, chapters, poster, LFS rules and a verification receipt.
 
 | Page | Delivery | Duration | LFS rule |
 | --- | --- | --- | --- |
@@ -13,6 +13,6 @@
 | index.md | Imported | 1:23 | Yes |
 | osprey.md | Imported | 1:21 | Yes |
 | research-background.md | Incomplete | Pending | Pending |
-| vscode-cluster-panel.md | Incomplete | Pending | Pending |
+| vscode-cluster-panel.md | Imported | 1:18 | Yes |
 
 This inventory does not replace browser playback, source review or finished-frame inspection.
