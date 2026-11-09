@@ -199,7 +199,7 @@ pre {
   background: color-mix(in srgb, var(--surface) 80%, transparent);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
-  box-shadow: 0 12px 32px rgba(14, 14, 14, 0.18);
+  border-bottom: 1px solid var(--outline-variant);
 }
 .nav {
   max-width: 90rem;
@@ -278,12 +278,8 @@ pre {
   padding: 0;
   gap: var(--space-1);
   align-items: center;
-  margin-left: auto;
 }
-/* [SITE-NAV-HIERARCHY] One control scale across the header and docs navigation.
-   Every destination is a visibly contained slot: a restrained tonal surface at
-   rest, one step higher on hover, and an accent-mixed fill with medium weight
-   for the current page. No underlines, no inset bars. */
+/* [SITE-NAV-HIERARCHY] Desktop links share one surface. */
 .nav-link {
   display: inline-flex;
   align-items: center;
@@ -294,14 +290,14 @@ pre {
   font-size: var(--type-nav);
   color: var(--on-surface-variant);
   padding: var(--space-2) var(--space-4);
-  background: var(--surface-container-low);
-  border-radius: var(--radius-md);
+  background: var(--nav-link-fill, transparent);
+  border-radius: var(--radius-lg);
   transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .nav-link:hover { color: var(--on-surface); background: var(--surface-container-high); }
 .nav-link.active {
   color: var(--on-surface);
-  background: color-mix(in srgb, var(--primary) 12%, var(--surface-container-high));
+  background: var(--surface-container-highest);
   font-weight: 600;
 }
 /* ─── Language switcher (en ⇄ zh) ─── */
@@ -316,9 +312,7 @@ pre {
   font-size: var(--type-nav-secondary);
   color: var(--on-surface-variant);
   padding: var(--space-1) var(--space-2);
-  background: var(--surface-container-low);
-  border: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .lang-link:hover { color: var(--on-surface); background: var(--surface-container-high); }
@@ -359,8 +353,17 @@ body.menu-open .drawer-scrim { opacity: 1; visibility: visible; }
   .mobile-menu-toggle { display: none; }
   /* Neutralise the techdoc package's max-width:768px mobile nav at the boundary
      (its display:none + position:absolute would otherwise win at exactly 768px). */
-  .nav-links { display: flex; position: static; transform: none; }
-  .logo-wrap { margin-right: auto; }
+  .nav { display: grid; grid-template-columns: 1fr auto 1fr; padding-block: var(--space-2); }
+  .nav-links {
+    display: flex;
+    position: static;
+    transform: none;
+    padding: var(--space-1);
+    border: 1px solid var(--outline-variant);
+    border-radius: 0.75rem;
+    background: var(--surface-container-lowest);
+  }
+  .nav-actions { justify-self: end; }
 }
 @media (max-width: 767.98px) {
   /* Lock background scroll while the drawer is open. The root scroller is
@@ -375,6 +378,7 @@ body.menu-open .drawer-scrim { opacity: 1; visibility: visible; }
   }
   /* Site nav becomes the drawer on every non-docs page. */
   .nav-links {
+    --nav-link-fill: var(--surface-container-low);
     display: flex;
     position: fixed;
     top: var(--header-height);
@@ -388,12 +392,13 @@ body.menu-open .drawer-scrim { opacity: 1; visibility: visible; }
     padding: var(--space-4);
     background: var(--surface);
     box-shadow: var(--shadow-lg);
+    visibility: hidden;
     transform: translateX(-100%);
-    transition: transform var(--dur) var(--ease);
+    transition: transform var(--dur) var(--ease), visibility var(--dur);
     overflow-y: auto;
     z-index: 95;
   }
-  body.menu-open .nav-links { transform: translateX(0); }
+  body.menu-open .nav-links { visibility: visible; transform: translateX(0); }
   .nav-links li { width: 100%; }
   .nav-link {
     display: block;
@@ -402,9 +407,17 @@ body.menu-open .drawer-scrim { opacity: 1; visibility: visible; }
     font-size: var(--type-nav);
     border-radius: var(--radius-md);
   }
-  /* On docs pages the doc nav (.docs-sidebar) is the drawer, so the duplicate
-     site nav in the bar is hidden — the drawer carries it instead. */
-  .is-docs .nav-links { display: none; }
+  .docs-sidebar .nav-links {
+    position: static;
+    flex-direction: row;
+    flex: none;
+    visibility: inherit;
+    width: auto;
+    transform: none;
+    box-shadow: none;
+    border-bottom: 1px solid var(--outline-variant);
+  }
+  .docs-sidebar .nav-link { padding-inline: var(--space-2); }
 }
 @media (max-width: 399.98px) {
   .nav { padding-inline: var(--space-4); gap: var(--space-2); }
@@ -414,14 +427,14 @@ body.menu-open .drawer-scrim { opacity: 1; visibility: visible; }
 .site-footer {
   background: var(--surface-container-lowest);
   margin-top: var(--space-20);
-  padding: var(--space-12) var(--space-8) 0;
+  padding: var(--space-8) clamp(var(--space-4), 4vw, var(--space-8)) 0;
 }
 .footer-content { max-width: var(--max-width); padding: 0; }
 .footer-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: var(--space-8);
-  padding-bottom: var(--space-12);
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: var(--space-4);
+  padding-bottom: var(--space-6);
 }
 .footer-section h2 {
   font-family: var(--font-mono);
@@ -433,7 +446,7 @@ body.menu-open .drawer-scrim { opacity: 1; visibility: visible; }
 }
 .footer-section ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
 .footer-section a {
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: var(--type-nav-secondary);
   color: var(--on-surface-variant);
   text-decoration: none;
@@ -441,7 +454,9 @@ body.menu-open .drawer-scrim { opacity: 1; visibility: visible; }
 }
 .footer-section a:hover { color: var(--on-surface); }
 .footer-bottom {
-  padding: var(--space-6) 0;
+  margin-top: 0;
+  border-top: 1px solid var(--outline-variant);
+  padding: var(--space-4) 0;
   text-align: left;
 }
 .footer-bottom p {

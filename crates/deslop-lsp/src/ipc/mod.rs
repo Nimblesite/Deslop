@@ -46,6 +46,10 @@ const JSON_RPC_FIELD: &str = "jsonrpc";
 const JSON_RPC_VERSION: &str = "2.0";
 /// Envelope field carrying a request's correlation id.
 const ID_FIELD: &str = "id";
+/// [MCP-IPC-WIRE-MISMATCH] Envelope field stamping every reply with the
+/// version of the build that produced it, so a client from another build
+/// refuses the reply by name before reading a field of it.
+const PRODUCER_FIELD: &str = "tool_version";
 
 /// IPC server bound under the workspace's `.deslop/cache`.
 ///
@@ -272,8 +276,18 @@ fn subscribe_notification_frame(notification: &ReportChangedNotification) -> Val
 /// Wraps a `Result<Value, Value>` into a JSON-RPC 2.0 response envelope.
 fn json_rpc_response(id: &Value, result: Result<Value, Value>) -> Value {
     match result {
-        Ok(value) => json!({(JSON_RPC_FIELD): JSON_RPC_VERSION, (ID_FIELD): id, "result": value}),
-        Err(error) => json!({(JSON_RPC_FIELD): JSON_RPC_VERSION, (ID_FIELD): id, "error": error}),
+        Ok(value) => json!({
+            (JSON_RPC_FIELD): JSON_RPC_VERSION,
+            (ID_FIELD): id,
+            (PRODUCER_FIELD): deslop_core::version(),
+            "result": value,
+        }),
+        Err(error) => json!({
+            (JSON_RPC_FIELD): JSON_RPC_VERSION,
+            (ID_FIELD): id,
+            (PRODUCER_FIELD): deslop_core::version(),
+            "error": error,
+        }),
     }
 }
 
@@ -282,6 +296,7 @@ fn parse_error() -> Value {
     json!({
         (JSON_RPC_FIELD): JSON_RPC_VERSION,
         (ID_FIELD): Value::Null,
+        (PRODUCER_FIELD): deslop_core::version(),
         "error": {"code": -32700, "message": "parse error"},
     })
 }

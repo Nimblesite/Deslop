@@ -1,5 +1,6 @@
 ---
 layout: layouts/docs.njk
+docFilm: for-ai
 title: 面向 AI — 编码智能体如何用 Deslop 阻止重复代码
 description: 面向编码智能体的操作说明：找到 Deslop 二进制；写代码前调用 find-similar；MCP 异常时改用 CLI；复用缓存；先从完全相同的克隆开始去重。
 eleventyNavigation:
@@ -11,6 +12,8 @@ lang: zh
 ---
 
 # 面向 AI
+
+{% include "partials/doc-film.njk" %}
 
 ## 在新代码库开始工作
 
@@ -95,6 +98,8 @@ deslop --version
 
 MCP 的每个回答都来自编辑器的实时分析，并随文件变化而更新，没有批处理步骤。每个工具在 `tools/list` 中都有自己的说明；它们的配合方式如下：
 
+<div class="mcp-tool-table">
+
 | 工具 | 用途 |
 | --- | --- |
 | `find-similar` | **写代码之前**询问是否已有等价代码。传入 `snippet` 和 `language`，或 `path` 加 `start_byte` 和 `end_byte`。同时读取 `clusters` 与 `existing`：后者列出片段代码已在簇之外出现过一次的位置。`clusters` 为空而 `existing` 非空，意味着你正要制造一个重复。 |
@@ -105,6 +110,8 @@ MCP 的每个回答都来自编辑器的实时分析，并随文件变化而更�
 | `rescan` | 分析看起来落后于你的编辑时强制刷新，可只针对你刚修改的 `paths`。 |
 | `session` | 查看工作区 `root`、设置和缓存状态。除非用户明确要求使用某个模型，否则不要调用 `set-embedding-model`。 |
 | `schema-doc` | 获取每个字段的含义。每个会话调用一次。 |
+
+</div>
 
 响应有大小上限。带 `truncated: true` 的响应或带 `occurrences_truncated: true` 的簇是不完整的，而不是错误的：用 `offset` 翻页、调小 `limit`、使用 `detail: "summary"`，或调用 `cluster-by-id`。
 

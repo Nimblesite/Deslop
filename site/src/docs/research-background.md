@@ -1,5 +1,6 @@
 ---
 layout: layouts/docs.njk
+docFilm: research-background
 title: Research Background — Code-clone detection algorithms
 description: Read the research behind Deslop's structural, token, MinHash LSH, and embedding-based code-clone detection, with links to the source papers.
 eleventyNavigation:
@@ -12,6 +13,8 @@ docsGroup: trust
 # Research Background
 
 Deslop combines established clone-detection techniques: normalized syntax trees, Merkle fingerprints, sibling windows, MinHash LSH, and optional embedding search. The implementation pointers below identify where each shipped technique lives.
+
+{% include "partials/doc-film.njk" %}
 
 ## Why AI changes the clone problem
 

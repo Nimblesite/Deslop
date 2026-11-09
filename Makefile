@@ -9,7 +9,7 @@
 # human entry points and are the only ones `make help` lists.
 # =============================================================================
 
-.PHONY: website-serve website-build _website-node-modules build _dup-gate test _test-ollama lint fmt clean ci _ci-ollama setup help _deployment-verify coverage _coverage-run _coverage-report _ci-analyze _ci-contract-tests _ci-build _ci-gate _ci-test _ci-test-rust _ci-test-vsix _vsix-package vsix-rebuild _android-studio-rebuild _android-studio-rebuild-reinstall _typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-node-modules _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-coverage-check _vsix-webview-coverage _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
+.PHONY: website-serve website-build _website-node-modules build _dup-gate test _test-ollama lint fmt clean ci _ci-ollama setup help _deployment-verify coverage _coverage-run _coverage-report _ci-analyze _ci-contract-tests _ci-build _ci-gate _ci-test _ci-test-rust _ci-test-vsix _vsix-package vsix-rebuild _android-studio-rebuild _android-studio-rebuild-reinstall _typediagram-gen _guard-path-binaries _kill-deslop-processes _vsix-install _vsix-node-modules _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-coverage-check _vsix-webview-coverage _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
 
 _JETBRAINS_DIR := clients/jetbrains
 
@@ -28,6 +28,15 @@ GIT_BASH ?= C:/Program Files/Git/usr/bin/bash.exe
 
 RM = rm -rf
 MKDIR = mkdir -p
+
+# [DEPLOY-EXTENSION-BUNDLED-TESTS] Every test suite runs with this directory
+# first on PATH. It holds stubs named deslop, deslop-lsp and deslop-mcp that
+# refuse to run, so a test can never pass on a Homebrew, Scoop or curl-installed
+# copy instead of the bundled binary — and no install is ever removed (#611).
+# GUARDED_PATH prefixes a recipe line; `$$PWD` keeps the shell's own spelling
+# of the path, which Git Bash on Windows needs.
+PATH_GUARD_DIR := target/path-guard
+GUARDED_PATH = export PATH="$$PWD/$(PATH_GUARD_DIR):$$PATH";
 
 ifeq ($(OS),Windows_NT)
   SHELL := $(GIT_BASH)
@@ -109,9 +118,9 @@ _typediagram-gen:
 ##       to `make coverage`, which owns its own cache and runs in parallel,
 ##       so this target is a cache hit against the release build every
 ##       other gate already uses and the suite reports in minutes.
-test: _delete-path-binaries _typediagram-gen
+test: _guard-path-binaries _typediagram-gen
 	@echo "==> Testing (fail-fast, release profile)..."
-	cargo test --release --workspace --all-targets --features $(_TEST_FEATURES)
+	$(GUARDED_PATH) cargo test --release --workspace --all-targets --features $(_TEST_FEATURES)
 
 _coverage_check:
 	@_lcov="$${RUST_LCOV:-lcov.info}"; \
@@ -212,14 +221,16 @@ _ci-contract-tests: _vsix-node-modules
 	@node --test scripts/actions/verify-env-path-writes.test.mjs
 	@echo "==> Composite-action step scanner proof ([ACTION-TESTS])..."
 	@node --test scripts/actions/action-yaml.test.mjs
+	@echo "==> pre-commit hook manifest gate ([ACTION-PRE-COMMIT])..."
+	@node --test scripts/actions/pre-commit-hooks.test.mjs
 	@echo "==> Required CI status merge gate ([CI-MERGE-GATE])..."
 	@node --test scripts/actions/merge-gate.test.mjs
 	@echo "==> Docs installer snippet fail-closed gate ([DEPLOY-DOCS-INSTALLER-FAILCLOSED])..."
 	@node --test scripts/deployment/installer-snippet.test.mjs
 	@echo "==> Archive reader/writer gate ([DEPLOY-VSIX-PACKAGE])..."
 	@node --test scripts/deployment/zip.test.mjs
-	@echo "==> PATH-scrub gate ([DEPLOY-EXTERNAL-MCP-CONSUMER])..."
-	@node --test scripts/repository/scrub-path-binaries.test.mjs
+	@echo "==> PATH guard gate ([DEPLOY-EXTENSION-BUNDLED-TESTS])..."
+	@node --test scripts/repository/guard-path-binaries.test.mjs
 	@echo "==> Profile-aware VSIX install gate ([DEPLOY-VSIX-INSTALL-PROFILES])..."
 	@node --test scripts/repository/install-vsix-profiles.test.mjs
 	@echo "==> Process-scrub + host-shell gate ([DEPLOY-EXTENSION-BUNDLED-TESTS])..."
@@ -353,9 +364,9 @@ _ci-test-vsix:
 ##             every core, so a shard is worth having for the crates it can
 ##             actually separate, not for balance.
 ##             Usage: `make _test-shard SHARD=1 SHARDS=4`.
-_test-shard: _delete-path-binaries _typediagram-gen
+_test-shard: _guard-path-binaries _typediagram-gen
 	@echo "==> Testing shard $(SHARD)/$(SHARDS) (fail-fast, release profile)..."
-	@node scripts/repository/test-shards.mjs --shard $(SHARD) --of $(SHARDS) --features $(_TEST_FEATURES)
+	@$(GUARDED_PATH) node scripts/repository/test-shards.mjs --shard $(SHARD) --of $(SHARDS) --features $(_TEST_FEATURES)
 
 ## coverage: [CI-RELEASE-BUILD] [COVERAGE-THRESHOLDS-JSON] Instrumented
 ##           release run + per-crate threshold enforcement. Split out of
@@ -382,16 +393,16 @@ _test-shard: _delete-path-binaries _typediagram-gen
 ##           object survives. `--workspace` drops only this repository's
 ##           artifacts, so third-party dependencies stay cached and the
 ##           honest number costs about a minute.
-##           Carries `_delete-path-binaries` for the same reason `test`
-##           does: this target runs the suite, and a Deslop binary leaked
-##           onto PATH would shadow the built one.
+##           Runs behind `_guard-path-binaries` for the same reason `test`
+##           does: this target runs the suite, and a Deslop binary on PATH
+##           must never answer for the built one.
 coverage: _coverage-run _coverage-report
 
-_coverage-run: _delete-path-binaries _typediagram-gen
+_coverage-run: _guard-path-binaries _typediagram-gen
 	@echo "==> Coverage test collection (instrumented release)..."
 	rustup component add llvm-tools-preview 2>/dev/null || true
 	cargo llvm-cov clean --workspace
-	cargo llvm-cov --release --workspace --all-targets --features $(_TEST_FEATURES) --no-report
+	$(GUARDED_PATH) cargo llvm-cov --release --workspace --all-targets --features $(_TEST_FEATURES) --no-report
 
 _coverage-report:
 	@echo "==> Coverage calculation and threshold enforcement..."
@@ -625,21 +636,19 @@ _deployment-verify: build
 #   `target/`. The matching, the two-phase kill, and the fail-closed re-check
 #   live in the script so they can be tested without this target's destructive
 #   side effect. Idempotent. Invoked by the rebuild targets; `test`/`vsix-*`
-#   scrub via `_delete-path-binaries`.
+#   run behind `_guard-path-binaries` instead.
 _kill-deslop-processes:
 	@bash scripts/repository/kill-deslop-processes.sh
 
-# [DEPLOY-EXTERNAL-MCP-CONSUMER] No install-binary target by design; this scrub
-#   keeps external MCP clients on the VSIX-bundled binary by absolute path.
-# _delete-path-binaries: Remove any Deslop binaries that have leaked onto the
-#   user's PATH (e.g. from `cargo install` or a package-manager install), and
-#   fail if one survives. Invoked by every `_vsix-*` and `test` target so a
-#   developer machine that previously installed Deslop is auto-scrubbed. The
-#   detection, the deletion, and the fail-closed re-check live in the script so
-#   they can be tested against a fixture PATH — running this target is
-#   destructive by design, so it is never what the test drives (#474).
-_delete-path-binaries:
-	@bash scripts/repository/scrub-path-binaries.sh
+# [DEPLOY-EXTENSION-BUNDLED-TESTS] _guard-path-binaries: Write the refusing
+#   deslop/deslop-lsp/deslop-mcp stubs into $(PATH_GUARD_DIR) and fail unless
+#   each name resolves to its stub under GUARDED_PATH. Every test target depends
+#   on it and runs its suite under GUARDED_PATH. It never uninstalls or deletes
+#   anything: Homebrew, Scoop and curl-installer copies are what this machine's
+#   agents run (#611). Tested against a fixture PATH by
+#   scripts/repository/guard-path-binaries.test.mjs.
+_guard-path-binaries:
+	@$(GUARDED_PATH) bash scripts/repository/guard-path-binaries.sh "$(PATH_GUARD_DIR)"
 
 # _vsix-install: Install Node deps for clients/vscode + webview-ui.
 _vsix-install:
@@ -671,15 +680,15 @@ _vsix-build: _vsix-install _typediagram-gen
 	cd clients/vscode && npm run build
 
 # _vsix-test: Run VS Code E2E tests against bundled extension binaries only.
-_vsix-test: _delete-path-binaries _vsix-install _vsix-build _vsix-stage-bundled-binaries
-	cd clients/vscode && npm test
+_vsix-test: _guard-path-binaries _vsix-install _vsix-build _vsix-stage-bundled-binaries
+	$(GUARDED_PATH) cd clients/vscode && npm test
 
 # _vsix-test-ollama: Run the Ollama-gated VSIX e2e suite (csharp-type4 fixture,
 #   provider=ollama, model=nomic-embed-text). NEVER runs in `make ci` /
 #   `make _vsix-test`. Requires a local Ollama daemon and the model pulled.
 #   Reached through the public `make _test-ollama` umbrella.
-_vsix-test-ollama: _delete-path-binaries _vsix-install _vsix-build _vsix-stage-bundled-binaries
-	cd clients/vscode && npm run test:ollama
+_vsix-test-ollama: _guard-path-binaries _vsix-install _vsix-build _vsix-stage-bundled-binaries
+	$(GUARDED_PATH) cd clients/vscode && npm run test:ollama
 
 # _vsix-coverage: Run the VS Code suite (extension host) and measure it. The
 #   desktop host writes no V8 profile for extension code (gh #440), so the
@@ -687,8 +696,8 @@ _vsix-test-ollama: _delete-path-binaries _vsix-install _vsix-build _vsix-stage-b
 #   see clients/vscode/scripts/extension-coverage.mjs. One suite execution
 #   yields both the pass/fail result and the coverage summary. The webview leg
 #   is measured by _vsix-webview-coverage below.
-_vsix-coverage: _delete-path-binaries _vsix-install _vsix-build _vsix-stage-bundled-binaries
-	cd clients/vscode && npm run coverage:extension
+_vsix-coverage: _guard-path-binaries _vsix-install _vsix-build _vsix-stage-bundled-binaries
+	$(GUARDED_PATH) cd clients/vscode && npm run coverage:extension
 
 # _vsix-playwright-html: Render the standalone HTML report from a fixture repo
 #   with the real deslop CLI, then assert in a headless browser (Playwright)
@@ -721,7 +730,7 @@ _vsix-coverage-check:
 ##               platform-specific VSIX via `vsce package --target`
 ##               ([VSIX-BINARY-VERSIONING]). CI stages every supported platform;
 ##               locally we only have the host toolchain so we only stage that one.
-_vsix-package: _delete-path-binaries _vsix-install _vsix-build _vsix-stage-and-package
+_vsix-package: _vsix-install _vsix-build _vsix-stage-and-package
 
 # [DEPLOY-EXTENSION-BUNDLED-TESTS] Stage binaries into the extension bundle so
 #   VSIX tests run against bundled binaries, never a PATH-visible build.
@@ -792,19 +801,15 @@ _vsix-install-code:
 ## vsix-rebuild: Nuke every build artifact (cargo target/, staged bin/, node_modules,
 ##               dist/, out/, old .vsix), rebuild the workspace + webview + extension
 ##               from scratch, repackage the .vsix, install it into the local `code`
-##               CLI, and scrub any cargo-installed PATH copies so the installed VSIX
-##               bundle is the only source of truth. Use when "why isn't my change
-##               showing up" strikes. Composes existing targets — does not duplicate
-##               their logic.
+##               CLI. Use when "why isn't my change showing up" strikes. Composes
+##               existing targets — does not duplicate their logic.
 vsix-rebuild:
 	@$(MAKE) _kill-deslop-processes
 	@$(MAKE) clean
 	@$(MAKE) _vsix-clean
 	@$(MAKE) _vsix-package
 	@$(MAKE) _vsix-install-code
-	@$(MAKE) _delete-path-binaries
 	@echo "==> vsix-rebuild done. Reload the VS Code window to pick up the new extension."
-	@echo "    PATH copies removed — the VSIX bundle is now the only source of truth."
 
 # _jetbrains-build: Build the JetBrains plugin zip (single LSP4IJ artifact, all IDE
 #   families). LSP4IJ reaches Android Studio, IntelliJ Community, and Rider/Ultimate

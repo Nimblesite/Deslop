@@ -1,0 +1,13 @@
+WEBVTT
+
+00:00.400 --> 00:20.309
+Osprey has three syntax flavors. Deslop documents native braces and ML support, plus explicit selection for Osprey Python. This page describes the development integration, so check your installed release before expecting every change. Ordinary Python files should keep their own language identity.
+
+00:21.159 --> 00:37.559
+For an Osprey Python source file, put the flavor marker in a leading source comment. The same words inside a string, or in a comment after code, do not select the flavor. This makes language selection deliberate instead of treating every Python file as Osprey.
+
+00:38.409 --> 00:58.119
+The project manifest can also select the Python entry file and individual Python sources. These are literal file paths relative to the manifest, not directory-wide patterns. Other Python files remain ordinary Python. Project flavor overrides and nested project rules are described in the page.
+
+00:58.969 --> 01:19.633
+Open the project with Deslop or scan it from the command line. Review the ranked findings and compare their occurrences before extracting shared code. Language support does not promise automatic Osprey refactoring, cross-flavor equivalence, or interchangeable behavior. Invalid ML syntax should surface as a parse error.

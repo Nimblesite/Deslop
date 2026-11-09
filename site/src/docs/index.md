@@ -1,5 +1,6 @@
 ---
 layout: layouts/docs.njk
+docFilm: getting-started
 title: Getting Started — Install Deslop and find duplicate code
 description: Install Deslop to find duplicate code in C, C#, Rust, Python, TypeScript, Go, Osprey and more. Live VS Code warnings, MCP checks for coding agents and the CLI in one extension.
 eleventyNavigation:
@@ -14,6 +15,8 @@ docsGroup: start
 **Find duplicate code, see what to remove first, and help your coding agent reuse existing code.** Deslop updates as you type. Your editor and coding agents read the same live analysis across C, C#, Rust, Python, Dart, JavaScript, TypeScript, PHP, F#, Go and Osprey.
 
 Start with the **VS Code extension**. One install includes live editor warnings, MCP checks for coding agents, and the CLI.
+
+{% include "partials/doc-film.njk" %}
 
 ## Install the VS Code extension
 

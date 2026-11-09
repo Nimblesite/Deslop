@@ -20,7 +20,7 @@ use std::{
 use deslop_core::live::transport::{self, IpcConnectError, IpcStream};
 use serde_json::{json, Value};
 
-use super::BackendError;
+use super::{wire, BackendError};
 
 /// Sends one JSON-RPC request to the LSP IPC endpoint and returns the
 /// `result` field. Errors with `LspNotRunning` when no endpoint is
@@ -35,13 +35,12 @@ use super::BackendError;
 /// LSP returns a JSON-RPC `error` envelope. (`StateFileCorrupt`
 /// doubles as the catch-all transport-failure variant — IPC failures
 /// are reported the same way as a corrupt state file because both
-/// indicate the LSP and MCP have drifted out of sync.) JSON-RPC
-/// `-32601 method not found` from the LSP is surfaced with a
-/// version-mismatch hint so agents diagnose stale bundled binaries
-/// instead of generic "ipc rpc error" noise.
+/// indicate the LSP and MCP have drifted out of sync.) A reply from
+/// another build, `-32601 method not found` included, is refused as
+/// [`BackendError::WireMismatch`] naming both builds and the remedy.
 pub fn ipc_call(root: &Path, method: &str, params: &Value) -> Result<Value, BackendError> {
     let stream = connect(root)?;
-    call_over(stream, method, params)
+    call_over(stream, method, params, &transport::socket_path(root))
 }
 
 /// Opens a connection to whichever transport the LSP published for
@@ -66,7 +65,12 @@ pub fn connect(root: &Path) -> Result<IpcStream, BackendError> {
 
 /// Writes the request frame, reads one line back, and decodes the
 /// JSON-RPC envelope.
-fn call_over(mut stream: IpcStream, method: &str, params: &Value) -> Result<Value, BackendError> {
+fn call_over(
+    mut stream: IpcStream,
+    method: &str,
+    params: &Value,
+    endpoint: &Path,
+) -> Result<Value, BackendError> {
     let request = json!({
         "jsonrpc": "2.0",
         "id": 1,
@@ -86,21 +90,19 @@ fn call_over(mut stream: IpcStream, method: &str, params: &Value) -> Result<Valu
     let _bytes = BufReader::new(stream)
         .read_line(&mut line)
         .map_err(|err| BackendError::StateFileCorrupt(format!("ipc read: {err}")))?;
-    decode_response(&line, method)
+    decode_response(&line, method, endpoint)
 }
 
-/// Parses the JSON-RPC response envelope, mapping `-32601` to the
-/// version-mismatch hint.
-fn decode_response(line: &str, method: &str) -> Result<Value, BackendError> {
+/// Parses the JSON-RPC response envelope, refusing one from another build
+/// before anything in it is read ([MCP-IPC-WIRE-MISMATCH]). A method the
+/// LSP does not know can then only mean another build, which the stamp
+/// has already refused by name, `-32601` included.
+fn decode_response(line: &str, method: &str, endpoint: &Path) -> Result<Value, BackendError> {
     let response: Value = serde_json::from_str(line.trim()).map_err(|err| {
         BackendError::StateFileCorrupt(format!("ipc response not valid JSON: {err}"))
     })?;
+    wire::refuse_foreign_envelope(method, endpoint, &response)?;
     if let Some(error) = response.get("error") {
-        if error.get("code").and_then(Value::as_i64) == Some(-32_601) {
-            return Err(BackendError::StateFileCorrupt(format!(
-                "LSP rejected {method:?} with method-not-found (-32601). The LSP and MCP binaries are from different Deslop releases — reinstall the Deslop VSIX so both come from the same bundle. See https://github.com/Nimblesite/Deslop/issues/148."
-            )));
-        }
         return Err(BackendError::StateFileCorrupt(format!(
             "ipc rpc error: {error}"
         )));

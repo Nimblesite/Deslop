@@ -1,5 +1,6 @@
 ---
 layout: layouts/docs.njk
+docFilm: research-background
 title: 研究背景 — 代码克隆检测算法
 description: 了解 Deslop 的结构、词元、MinHash LSH 与嵌入式代码克隆检测所依据的研究，并查阅原始论文。
 eleventyNavigation:
@@ -13,6 +14,8 @@ lang: zh
 # 研究背景
 
 Deslop 组合了成熟的克隆检测技术：归一化语法树、Merkle 指纹、兄弟窗口、MinHash LSH 与可选的嵌入搜索。下表中的实现指针标明了每项已交付技术所在的位置。
+
+{% include "partials/doc-film.njk" %}
 
 ## 为什么 AI 改变了克隆问题
 

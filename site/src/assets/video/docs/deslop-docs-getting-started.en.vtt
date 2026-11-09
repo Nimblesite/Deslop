@@ -1,0 +1,13 @@
+WEBVTT
+
+00:00.400 --> 00:20.294
+Start with a small review: find repeated code, inspect its locations, and compare the copies before changing anything. Install Deslop from the VS Code Extensions panel, or use the command shown here. One extension includes the live editor experience, coding-agent checks, and the command-line tools.
+
+00:21.144 --> 00:38.872
+Open your project and a supported source file. Deslop updates its analysis as files change. The Top Offenders tree puts findings beside your code. This recording uses a real two-file C sharp example. Start with one finding so you can understand what it contains.
+
+00:39.722 --> 00:58.206
+Open the finding and inspect its occurrences. A cluster groups related copies; each location lets you navigate back to the source. The canonical copy gives the comparison a consistent starting point. Read the surrounding code as well as the highlighted section before deciding what should be shared.
+
+00:59.056 --> 01:21.097
+Compare a copy with the canonical version. Look for differences in inputs, behavior, and surrounding assumptions. A finding is evidence to review, not permission to delete code automatically. Make a focused change, run your tests, and let the live analysis update. Follow the Getting Started page for installation alternatives and command-line examples.

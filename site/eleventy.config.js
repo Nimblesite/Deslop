@@ -368,8 +368,9 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
           {% if not item.external and not item.noLangPrefix and currentLang != defaultLanguage %}
             {% set navUrl = item.url | altLangUrl('en', currentLang) %}
           {% endif %}
+          {% set isCurrentSection = (item.url == '/' and (page.url == '/' or page.url == '/index.html' or page.url == ('/' + currentLang + '/') or page.url == ('/' + currentLang + '/index.html'))) or (item.url != '/' and item.url | length > 1 and (page.url.startsWith(item.url) or page.url.startsWith(navUrl))) %}
           <a href="{{ navUrl }}" {% if item.external %}target="_blank" rel="noopener noreferrer"{% endif %}
-             class="nav-link {% if (item.url == '/' and (page.url == '/' or page.url == '/index.html' or page.url == ('/' + currentLang + '/') or page.url == ('/' + currentLang + '/index.html'))) or (item.url != '/' and item.url | length > 1 and (page.url.startsWith(item.url) or page.url.startsWith(navUrl))) %}active{% endif %}">
+             class="nav-link{% if isCurrentSection %} active{% endif %}"{% if isCurrentSection %} aria-current="{% if page.url == navUrl %}page{% else %}location{% endif %}"{% endif %}>
             {% if item.i18nKey and currentLang != defaultLanguage %}{{ item.i18nKey | t(currentLang) | default(item.text) }}{% else %}{{ item.text }}{% endif %}
           </a>
         </li>

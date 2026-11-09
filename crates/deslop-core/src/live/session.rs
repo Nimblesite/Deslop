@@ -26,6 +26,7 @@ use super::{
     wire::{EmbeddingProgress, SessionConfig},
 };
 use crate::{
+    config::{is_config_path, watched_config_paths},
     delta::ReportDelta,
     embedding::{EmbeddingMode, EmbeddingProvider},
     pipeline::{language_for_path, EmbeddingSettings, OpenBuffers, PipelineSession},
@@ -264,10 +265,13 @@ impl AnalysisSession {
         // read of the same files does not re-trigger this same pass.
         self.freshness
             .record_from_report(&self.root, &self.latest_report);
-        // Per-keystroke writes were the dominant source of inotify
-        // chatter on large workspaces. The seed-cache file is now
-        // persisted only on cold-pass install ([LIVE-SEED-CACHE]); the
-        // MCP reads the live state via IPC, not this file.
+        // [LIVE-SEED-CACHE] Per-keystroke writes were the dominant source of
+        // inotify chatter on large workspaces, so an ordinary pass leaves the
+        // saved report alone. A `.deslop.toml` reload rescopes the whole
+        // report, and agents read the saved one, so that pass rewrites it.
+        if self.reloads_config(changed) {
+            self.write_state_file();
+        }
         Ok(ReportDelta::between(
             Some((prev_generation, &previous)),
             self.generation,
@@ -380,6 +384,12 @@ impl AnalysisSession {
             self.generation,
             &self.cache_seed_key(),
         );
+    }
+
+    /// True when `changed` holds a configuration file this session reads.
+    fn reloads_config(&self, changed: &[PathBuf]) -> bool {
+        let watched = watched_config_paths(&self.root, self.config_path.as_deref());
+        changed.iter().any(|path| is_config_path(path, &watched))
     }
 
     /// [LIVE-CACHE-SEED-KEY] The identity of this session's analysis

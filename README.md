@@ -59,6 +59,22 @@ the default `contents: read` permission.
 See the [GitHub Action reference](https://deslop.live/docs/github-action/) for
 all inputs, outputs, supported runners, and threshold rules.
 
+### pre-commit and prek
+
+Install the CLI (see below), then add Deslop as a remote hook:
+
+```yaml
+repos:
+  - repo: https://github.com/Nimblesite/Deslop
+    rev: vX.Y.Z
+    hooks:
+      - id: deslop
+        args: ["--fail-over", "5.0"]
+```
+
+The hook scans the whole repository with the `deslop` on your `PATH` and fails
+on exit code `3`, a breached threshold. Any CLI option can go in `args`.
+
 ### Other CI systems
 
 Install the CLI and run:

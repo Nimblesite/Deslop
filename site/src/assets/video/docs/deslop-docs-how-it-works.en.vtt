@@ -1,0 +1,13 @@
+WEBVTT
+
+00:00.400 --> 00:19.705
+Deslop parses source code with tree sitter, finds candidate copies, checks their content, and groups the surviving findings. The editor, command-line tools and MCP share a Rust engine. A live session refreshes after edits; a command-line scan is a separate review of its selected input.
+
+00:20.555 --> 00:41.094
+Syntax-tree normalization helps find copies despite changed names, literals or formatting. But normalization alone cannot establish a clone. Deslop also checks shared content, consistent renaming and the operations being performed. Matching structure is a starting point for comparison, rather than proof on its own.
+
+00:41.944 --> 01:03.752
+Read the finding category before acting. Identical, nearly identical and similar code describe different degrees of copying. Same shape with different content is informational and contributes nothing to clone counts. Optional embedding candidates also need review: similarity does not prove interchangeable behavior or a safe extraction.
+
+01:04.602 --> 01:25.099
+Duplicated mass combines syntax-tree size with additional visible copies, bringing larger repeated work to the top. It is neither confidence nor a percentage. The duplication percentage counts covered source lines, counting overlaps once. Compare two explicit occurrences to inspect their evidence before making a change.

@@ -20,11 +20,18 @@ const workflow = readFileSync(resolve(repoRoot, ".github/workflows/release.yml")
 const EXTENSION_DIRECTORY = "nimblesite.deslop-live-<VERSION>";
 const SKIPPED_DIRECTORIES = new Set(["node_modules", "target", ".git", "dist", "out", "_site", ".deslop-cache"]);
 const TEXT_EXTENSIONS = [".md", ".ts", ".mjs", ".json", ".njk", ".yml", ".rs", ".toml"];
+// [DEPLOY-EXTERNAL-MCP-CONSUMER] Words that put a paragraph about a config every
+// teammate shares, in each published locale, and the per-user registration such
+// a paragraph must steer readers to instead.
+const SHARED_CONFIG_PHRASES = ["checked-in", "shared team config", "签入", "团队共享"];
+const PER_USER_REGISTRATION = "-s user";
+const DOC_ROOTS = ["site/src", "docs/snippets", "README.md", "clients/vscode/README.md"];
 
 const tests = [
   releaseWorkflowPublishesPlatformSpecificVsixArtifacts,
   documentedExtensionDirectoryCarriesItsPlatformTarget,
   installerSnippetContractRunsWhereverTheSnippetCanChange,
+  sharedConfigsAreNeverToldToRelyOnPath,
 ];
 
 runContractSuite(tests, "deployment docs contract");
@@ -89,6 +96,34 @@ function installerSnippetContractRunsWhereverTheSnippetCanChange() {
 
 // Asserts each needle appears, and after the previous one — the shape of the
 // classifier's "match then emit" bash without parsing it.
+// [DEPLOY-EXTERNAL-MCP-CONSUMER] A checked-in `.mcp.json` reaches teammates on
+// the VS Code extension, which puts nothing on PATH, and the extension's absolute
+// path differs by version and platform. So no doc may present a bare
+// `deslop-mcp` as right for a shared config: a paragraph about one must send
+// readers to per-user registration (#465).
+function sharedConfigsAreNeverToldToRelyOnPath() {
+  const offenders = DOC_ROOTS.flatMap((root) => markdownUnder(resolve(repoRoot, root)))
+    .flatMap((file) => paragraphs(file).map((paragraph) => [file, paragraph]))
+    .filter(([, paragraph]) => paragraph.includes("deslop-mcp"))
+    .filter(([, paragraph]) => SHARED_CONFIG_PHRASES.some((phrase) => paragraph.includes(phrase)))
+    .filter(([, paragraph]) => !paragraph.includes(PER_USER_REGISTRATION))
+    .map(([file, paragraph]) => `${relative(repoRoot, file)}: ${paragraph.slice(0, 120)}…`);
+  if (offenders.length > 0) {
+    throw new Error(
+      `a shared MCP config cannot rely on PATH; these paragraphs must point at \`${PER_USER_REGISTRATION}\` registration:\n  ${offenders.join("\n  ")}`,
+    );
+  }
+}
+
+function markdownUnder(path) {
+  const files = path.endsWith(".md") ? [path] : filesUnder(path);
+  return files.filter((file) => file.endsWith(".md"));
+}
+
+function paragraphs(file) {
+  return readFileSync(file, "utf8").split("\n\n").map((block) => block.trim()).filter((block) => block.length > 0);
+}
+
 function requireInOrder(text, needles, message) {
   let at = 0;
   for (const needle of needles) {

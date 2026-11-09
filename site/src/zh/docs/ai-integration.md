@@ -1,5 +1,6 @@
 ---
 layout: layouts/docs.njk
+docFilm: ai-integration
 title: AI 智能体 — 面向 Claude Code、Cursor、Copilot 的 MCP 设置
 description: 将 Deslop MCP 服务器接入 Claude Code、Cursor、Continue、Copilot 或 Codex，让智能体在写出重复代码前调用 find-similar。
 eleventyNavigation:
@@ -19,6 +20,8 @@ lang: zh
 写给智能体本身的说明 —— 它在写代码前遵循的规则、相似度阈值、MCP 不可用时的 CLI 回退，以及如何解析报告 —— 都在 **[面向 AI](/zh/docs/for-ai/)**。那一页以第二人称写成，直接写给机器。请把你的智能体指向那个 URL。
 
 可直接粘贴到你项目 `AGENTS.md` / `CLAUDE.md` 的规则块参见[智能体配方](https://github.com/Nimblesite/Deslop/blob/main/docs/snippets/agents-md-recipe.md)。它适用于 Claude Code、Cursor、Copilot、Continue 与 Codex。
+
+{% include "partials/doc-film.njk" %}
 
 ## MCP 工具，全部实时
 
@@ -99,7 +102,7 @@ claude mcp add deslop -s user -- deslop-mcp --root .
 }
 ```
 
-同样的 `"command": "deslop-mcp"` 形式适用于 Codex（`~/.codex/config.toml`）、Cursor 和 Continue。它也是签入 `.mcp.json` 或团队共享配置的正确取值——每台机器都通过 `$PATH` 解析它。
+同样的 `"command": "deslop-mcp"` 形式适用于 Codex（`~/.codex/config.toml`）、Cursor 和 Continue，前提是该机器上的 Deslop 通过 Homebrew 或 Scoop 安装。不要把它写进签入的 `.mcp.json` 或团队共享配置：使用 VS Code 扩展的队友在 `$PATH` 上没有任何 Deslop 程序，而扩展的绝对路径又随版本和平台而变。请让每个人自行注册服务器：使用 `claude mcp add … -s user`，或各自客户端的用户级配置。
 
 需要知道的两点：
 

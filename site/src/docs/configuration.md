@@ -1,5 +1,6 @@
 ---
 layout: layouts/docs.njk
+docFilm: configuration
 title: Configuration and Reports — .deslop.toml, flags, output
 description: Configure Deslop with .deslop.toml and CLI flags. Review exclusions, thresholds, ranking, analysis settings, JSON/HTML/text reports, and exit codes.
 eleventyNavigation:
@@ -17,6 +18,8 @@ This reference covers [0.35.0](/releases/).
 - **CLI flags** — per-run overrides. A flag always wins over the matching config key.
 
 Everything on this page is a reference. For a guided walkthrough, start with [Getting Started](/docs/).
+
+{% include "partials/doc-film.njk" %}
 
 ## The `.deslop.toml` file
 

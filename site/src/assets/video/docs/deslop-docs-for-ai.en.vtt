@@ -1,0 +1,13 @@
+WEBVTT
+
+00:00.400 --> 00:20.084
+Before working in a new codebase, inspect the installed tool version and available tool parameters. Bind MCP to the absolute repository root, read the project instructions and configuration, then call session and verify its root. A connection to another repository is not a useful empty result.
+
+00:20.934 --> 00:39.362
+Request duplicates with detail summary and a small limit. Scope edits with path or path_contains, then use cluster-by-id and inspect every member, paging with offset, before editing. Keep overview pages small: full occurrences for one cluster, not hundreds of full clusters.
+
+00:40.212 --> 00:57.826
+Before adding a code unit, call find similar with a snippet and its language. Inspect clusters and also existing occurrences outside any cluster. An existing match still needs review, even when clusters is empty. A disk report cannot answer this in-memory snippet query.
+
+00:58.676 --> 01:15.985
+After editing, run the project's tests and query the changed paths again. The live index refreshes automatically; use rescan only for suspected watcher lag. A merge plan is optional. A verdict asking for agent or human judgment is not an executable merge.

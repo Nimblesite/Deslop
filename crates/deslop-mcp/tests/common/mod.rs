@@ -14,6 +14,14 @@
 /// The per-cluster `language` label contract over `duplicates`,
 /// shared by every language whose label regressed.
 pub mod language_label;
+/// Request/response and error-envelope helpers for the CLI suites.
+pub mod mcp_calls;
+/// The `deslop-mcp` child-process harness for the CLI suites.
+pub mod mcp_child;
+/// `duplicates`-page shape helpers for the CLI suites.
+pub mod mcp_pages;
+/// Wire-level names and knobs shared by the CLI suites.
+pub mod mcp_wire;
 /// Newline-delimited JSON-RPC over a child's stdio.
 pub mod rpc;
 /// A scripted stand-in for an LSP from another Deslop build.

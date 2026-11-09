@@ -1,0 +1,13 @@
+WEBVTT
+
+00:00.400 --> 00:15.878
+Connect Deslop to your coding agent so it can check for existing code before writing another implementation. The key tool is find similar. Give the agent the For AI instructions linked from this page, and make the check part of its authoring workflow.
+
+00:16.728 --> 00:37.372
+For an extension-based setup, point your MCP client at the absolute path to the server bundled inside the installed VS Code extension. Use the correct version and platform, and set the repository root. Update that path when the extension version changes. The page includes configurations for supported clients.
+
+00:38.222 --> 00:58.100
+Keep routine requests focused. Find similar checks a proposed snippet. Duplicates lists ranked findings, and cluster by ID retrieves the occurrences you need to review. Compare pair explains the evidence for two particular copies. Start with a small summary and request details only when needed.
+
+00:58.950 --> 01:19.454
+Read any existing implementation before reusing it. After editing, run your tests and query the findings again. Deslop answers from the workspace analysis maintained by the editor, which refreshes as files change. The agent still needs to inspect behavior and decide whether a suggested reuse is appropriate.

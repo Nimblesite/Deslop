@@ -8,20 +8,26 @@
  * crossing into the desktop breakpoint all close the drawer. Closing resets the
  * toggle's `aria-expanded` so techdoc's next click re-opens cleanly.
  */
-const DESKTOP_BREAKPOINT = 768;
+const desktop = window.matchMedia("(min-width: 768px)");
 
 const toggle = document.getElementById('mobile-menu-toggle');
 const scrim = document.querySelector('.drawer-scrim');
 const drawers = document.querySelectorAll('.docs-sidebar, .nav-links');
 const docsShell = document.querySelector('.docs-shell');
 const docsCollapse = document.querySelector('[data-docs-sidebar-collapse]');
-const isDocsIndex = /^\/(?:zh\/)?docs\/$/.test(window.location.pathname);
+const siteLinks = document.querySelector('.nav-links');
+const headerActions = document.querySelector('.nav-actions');
+const docsNav = document.querySelector('.docs-sidebar__nav');
 
-if (window.innerWidth < DESKTOP_BREAKPOINT && !isDocsIndex) {
-  document.querySelectorAll('.docs-nav-group:not([data-current])').forEach((group) => {
-    group.removeAttribute('open');
-  });
+function placeSiteLinks() {
+  closeDrawer();
+  if (!docsNav) return;
+  const sibling = desktop.matches ? headerActions : docsNav;
+  sibling.before(siteLinks);
 }
+
+placeSiteLinks();
+desktop.addEventListener('change', placeSiteLinks);
 
 docsCollapse?.addEventListener('click', () => {
   const collapsed = docsShell.classList.toggle('is-sidebar-collapsed');
@@ -47,8 +53,4 @@ drawers.forEach((drawer) => {
   drawer.addEventListener('click', (event) => {
     if (event.target.closest('a')) closeDrawer();
   });
-});
-
-window.addEventListener('resize', () => {
-  if (window.innerWidth >= DESKTOP_BREAKPOINT) closeDrawer();
 });

@@ -126,7 +126,7 @@ The unpacked VSIX is the canonical distribution surface per [DEPLOY-VSIX-PACKAGE
 Consequences for this repo:
 
 - The Makefile must not provide a target that puts source-built `deslop`, `deslop-lsp`, or `deslop-mcp` binaries onto the user's `PATH`. There is no `make install-binary` target. `cargo install --path crates/deslop-*` is forbidden.
-- `make _delete-path-binaries` is invoked from every `_vsix-*` and `test` target so a developer machine that previously leaked binaries onto `PATH` is scrubbed before tests run, and the rule is verifiable on a fresh checkout.
+- Nothing in this repo removes an install from a release-locked channel. Agents on the developer's machine run those copies, and a test run that uninstalled them broke every agent's MCP server (#611). Tests are kept off `PATH` copies by the guard in [DEPLOY-EXTENSION-BUNDLED-TESTS] instead.
 - Every doc that shows an MCP wiring snippet (`README.md`, `clients/vscode/README.md`, `docs/snippets/agents-md-recipe.md`, `site/src/docs/ai-integration.md`) leads with the absolute VSIX path and documents the release-locked PATH forms (brew/scoop, the published curl installer) as the only secondary alternatives.
 
 ### [DEPLOY-EXTENSION-BUNDLED-TESTS] Extension tests must use bundled binaries
@@ -135,7 +135,7 @@ IDE extension tests must run against binaries bundled inside the extension artif
 
 For VS Code, `vsix-test`, `vsix-coverage`, and `vsix-test-ollama` must stage `deslop`, `deslop-lsp`, and `deslop-mcp` under `clients/vscode/bin/<platform>/` before activation, clear `DESLOP_BINARY_DIR`, `DESLOP_LSP_PATH`, and `DESLOP_MCP_PATH`, and assert that the resolved LSP and MCP sources are `bundled`.
 
-Before test entry points run, the build must remove cargo-installed Deslop binaries and fail if `deslop`, `deslop-lsp`, or `deslop-mcp` still resolve on `PATH`. This keeps extension tests honest: a missing or stale bundle cannot be masked by a developer machine install.
+Every test entry point runs with a guard directory first on `PATH` (`make _guard-path-binaries`, then `GUARDED_PATH` on the recipe line). The guard holds stubs named `deslop`, `deslop-lsp` and `deslop-mcp` that refuse to run and cite this rule, and the target fails unless each name resolves to its stub. This keeps extension tests honest: a missing or stale bundle cannot be masked by a developer machine install. The guard never uninstalls or deletes anything; Homebrew, Scoop and curl-installer copies stay where they are, behind it. Code: `scripts/repository/guard-path-binaries.sh`. Assertions: `scripts/repository/guard-path-binaries.test.mjs`.
 
 A rebuild must also scrub *running* Deslop processes before it cleans anything. A `deslop`, `deslop-lsp`, or `deslop-mcp` left behind by an editor session or an abandoned test shadows the bundle the rebuild is about to produce, starves socket-bound integration tests, and on Windows — where the loader keeps an open handle to every running image — stops `cargo clean` from emptying `target/release` at all. Matching is by exact process name, so `cargo build -p deslop-lsp` survives untouched; a process that outlives a forced kill fails the target rather than being ignored. The matching, the terminate-then-force sequence, and the fail-closed re-check live in `scripts/repository/kill-deslop-processes.sh` so they can be tested without the target's destructive side effect, and `scripts/repository/kill-deslop-processes.test.mjs` (a `make lint` gate) drives that detection against a fixture process it owns and reaps.
 

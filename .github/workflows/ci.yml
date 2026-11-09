@@ -726,7 +726,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node --test scripts/deployment/zip.test.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node --test scripts/repository/scrub-path-binaries.test.mjs
+          node --test scripts/repository/guard-path-binaries.test.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node --test scripts/deployment/installer-snippet.test.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

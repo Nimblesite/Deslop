@@ -1,0 +1,16 @@
+# [ACTION-PRE-COMMIT] Deslop as a remote hook for pre-commit and prek.
+#
+# The hook runs the `deslop` CLI already on PATH, installed by Homebrew, Scoop
+# or the release installer. Those are the release-locked channels
+# ([DEPLOY-EXTERNAL-MCP-CONSUMER]), so the hook never builds from source. It scans
+# the whole repository rather than the staged files: duplication is a property
+# of the codebase, not of one file. Pass CLI options through `args`, for example
+# `args: ["--fail-over", "5.0"]`.
+- id: deslop
+  name: deslop
+  description: Find duplicated code across the repository with Deslop.
+  entry: deslop
+  language: system
+  pass_filenames: false
+  always_run: true
+  require_serial: true

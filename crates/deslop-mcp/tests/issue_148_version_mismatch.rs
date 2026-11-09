@@ -1,6 +1,8 @@
 //! [Deslop#148] Surfaces an actionable LSP/MCP version-mismatch hint
 //! when the LSP responds to a tool-driving IPC method with JSON-RPC
-//! `-32601 method not found`.
+//! `-32601 method not found`. The stub stands in for a release older
+//! than the envelope stamp, so the refusal is the named
+//! [MCP-IPC-WIRE-MISMATCH] condition carrying the other build's answer.
 //!
 //! Without this guard, agents see `MCP error -32004: ipc transport
 //! failure: ipc rpc error: {...,"code":-32601,...}` and assume the
@@ -14,7 +16,7 @@ use std::sync::Arc;
 use anyhow::{ensure, Result};
 use common::{
     error_and_message, initialized_mcp,
-    stub_lsp::{bind_stub_lsp, method_not_found},
+    stub_lsp::{bind_stub_lsp, method_not_found, Stamp},
 };
 use serde_json::{json, Value};
 use tempfile::TempDir;
@@ -28,7 +30,11 @@ const PAGE_LIMIT: u64 = 5;
 /// error message the MCP renders for it.
 fn rejection_message_for(tool: &str, arguments: &Value) -> Result<String> {
     let workspace = TempDir::new()?;
-    bind_stub_lsp(workspace.path(), Arc::new(method_not_found))?;
+    bind_stub_lsp(
+        workspace.path(),
+        Stamp::Unstamped,
+        Arc::new(method_not_found),
+    )?;
     let mut mcp = initialized_mcp(workspace.path())?;
     let response = mcp.request(
         "tools/call",

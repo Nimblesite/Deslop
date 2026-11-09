@@ -1,0 +1,19 @@
+{# [DOC-FILMS-DELIVERY] Only delivered entries produce a player. #}
+{% if docFilm and docFilms[docFilm] %}
+{% from "partials/video-player.njk" import player %}
+{% set film = docFilms[docFilm] %}
+{% set prefix = "/assets/video/docs/deslop-docs-" + docFilm %}
+<figure class="doc-film">
+{{ player({
+  src: prefix + ".mp4", poster: prefix + "-poster.jpg",
+  captions: prefix + ".en.vtt", chapters: prefix + ".chapters.vtt", captionLabel: "English",
+  width: 1920, height: 1080, label: film.title,
+  fallback: "Your browser cannot play this video.", downloadLabel: "Download the video"
+}) }}
+<figcaption>{{ film.title }} · {{ film.duration }} · English narration and captions</figcaption>
+</figure>
+<details class="doc-film-transcript">
+<summary>{% if lang == "zh" %}英文文字稿{% else %}Read the English transcript{% endif %}</summary>
+{% for chapter in film.transcript %}<section><h3><time datetime="PT{{ chapter.seconds }}S">{{ chapter.stamp }}</time> {{ chapter.title | escape }}</h3><p>{{ chapter.text | escape }}</p></section>{% endfor %}
+</details>
+{% endif %}

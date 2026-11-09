@@ -60,6 +60,8 @@ mod lang_registry_vsix_parity;
 mod live;
 #[path = "live_cache_seed.rs"]
 mod live_cache_seed;
+#[path = "live_cache_seed_config.rs"]
+mod live_cache_seed_config;
 #[path = "live_delta_field_coverage.rs"]
 mod live_delta_field_coverage;
 #[path = "live_find_similar.rs"]

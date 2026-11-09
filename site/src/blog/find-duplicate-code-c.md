@@ -50,7 +50,7 @@ A copied function with every local renamed and a buffer size changed is still th
 
 ## What it does report
 
-The fixture written for Osprey's request holds two loaders in two files. Each opens a handle, allocates, reads, and checks every step with a copied log-free-return rung. Deslop reports the shared rung across the two files as **Nearly identical code**, and inside one file it reports the short-read error path and the destructor releasing the same resources in the same order as **Identical code**. Those are the two findings a reviewer wants: the copy that will drift between files, and the cleanup sequence that should be one function.
+The fixture written for Osprey's request holds two loaders in two files. Each opens a handle, allocates, reads, and checks every step with a copied log-free-return rung. Deslop reports the shared rung across the two files as **Similar code**, and inside one file it reports the short-read error path and the destructor releasing the same resources in the same order as **Identical code**. Those are the two findings a reviewer wants: the copy that will drift between files, and the cleanup sequence that should be one function.
 
 ## Find duplicate C functions and copy-paste blocks
 
@@ -70,7 +70,7 @@ Deslop's MCP server gives coding agents a `find-similar` tool backed by the live
 
 ## Generated C
 
-Generated parsers are the biggest C files in many repositories, and the tree-sitter parser generator writes no "generated" banner, so Deslop analyses them like any other source. Osprey's own generated parser is 86,000 lines and 29% self-similar, enough on its own to breach a repository gate. The right answer is [`report_hide`](/docs/configuration/) for that directory, not `exclude`: the generated code stays in the analysis, so a hand-written file that duplicates it is still reported, while the generated file duplicating itself stays out of the headline number.
+Generated parsers are the biggest C files in many repositories, and the tree-sitter parser generator writes no "generated" banner, so Deslop analyses them like any other source. Osprey's own generated parser is 86,500 lines and 29% self-similar, enough on its own to breach a repository gate. The right answer is [`report_hide`](/docs/configuration/) for that directory, not `exclude`: the generated code stays in the analysis, so a hand-written file that duplicates it is still reported, while the generated file duplicating itself stays out of the headline number.
 
 ## Try it on a C repository
 

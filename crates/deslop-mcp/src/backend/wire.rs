@@ -26,6 +26,69 @@ const TOOL_VERSION_FIELD: &str = "tool_version";
 /// The engine version reported when the reply carries no stamp — a
 /// per-file or per-range page is not a whole report.
 const UNSTAMPED_ENGINE_VERSION: &str = "unknown (reply carries no tool_version)";
+/// The envelope field holding a reply's result.
+const RESULT_FIELD: &str = "result";
+/// The envelope field holding a reply's error.
+const ERROR_FIELD: &str = "error";
+/// Why a reply envelope with no producer stamp is refused.
+const UNSTAMPED_ENVELOPE: &str = "the reply carries no tool_version stamp, which every reply from this build carries, so deslop-lsp comes from an older build";
+
+/// Refuses an IPC reply envelope that this build did not produce, before
+/// its result or error is read. Every reply envelope stamps its
+/// producer's version, so a reply with no stamp comes from an engine
+/// older than the stamp, and is refused as surely as a foreign one: a
+/// page that happens to decode is still another build's answer.
+///
+/// # Errors
+///
+/// [`BackendError::WireMismatch`] when the envelope's `tool_version` is
+/// absent or is not this binary's.
+pub(super) fn refuse_foreign_envelope(
+    method: &str,
+    endpoint: &Path,
+    envelope: &Value,
+) -> Result<(), BackendError> {
+    let refusal = match stamped_version(envelope) {
+        Some(version) if version == crate::version() => return Ok(()),
+        Some(version) => mismatch(
+            method,
+            endpoint,
+            Some(version.clone()),
+            format!("its tool_version is {version}, so it was not decoded"),
+        ),
+        None => mismatch(
+            method,
+            endpoint,
+            envelope.get(RESULT_FIELD).and_then(stamped_version),
+            UNSTAMPED_ENVELOPE.to_owned(),
+        ),
+    };
+    Err(with_error_answer(refusal, envelope))
+}
+
+/// Adds what another build answered when its reply was an error, so a
+/// refused `-32601` still says which method the other build lacks.
+fn with_error_answer(refusal: BackendError, envelope: &Value) -> BackendError {
+    match (refusal, envelope.get(ERROR_FIELD)) {
+        (
+            BackendError::WireMismatch {
+                method,
+                mcp_version,
+                engine_version,
+                endpoint,
+                detail,
+            },
+            Some(error),
+        ) => BackendError::WireMismatch {
+            method,
+            mcp_version,
+            engine_version,
+            endpoint,
+            detail: format!("{detail}; it answered with the error {error}").into_boxed_str(),
+        },
+        (refusal, _) => refusal,
+    }
+}
 
 /// Decodes one IPC `result` into `T`, refusing a reply produced by
 /// another Deslop version and naming both versions, the endpoint and

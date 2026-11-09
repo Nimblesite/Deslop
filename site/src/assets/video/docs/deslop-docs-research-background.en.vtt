@@ -1,0 +1,13 @@
+WEBVTT
+
+00:00.400 --> 00:21.187
+Repeated code is not automatically wrong. The maintenance risk is that fixes, security changes and new behavior must stay consistent across copies. Generating another implementation is easy; deciding whether to reuse existing code still requires judgment. The research page links the studies behind this motivation.
+
+00:22.037 --> 00:44.125
+The research taxonomy distinguishes four clone families. Type one permits layout and comment changes. Type two allows changed names and literals. Type three includes edited statements. Type four describes equivalent behavior implemented differently. Deslop has its own report labels and a stricter text-identity rule, explained in How It Works.
+
+00:44.975 --> 01:07.425
+Deslop combines normalized syntax trees, subtree fingerprints, statement-run fingerprints and similarity retrieval. Optional embeddings add semantic candidates. These techniques help locate possible copies at different levels. Pair admission checks content as well as structure, and an explicit comparison provides evidence about the selected source ranges.
+
+01:08.275 --> 01:27.084
+Use the page to follow implementation pointers and read the original papers. A detection technique is not proof that extracting shared code is safe. Review both implementations, test the behavior you intend to keep, and use the separate accuracy documentation to understand how findings are checked.

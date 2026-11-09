@@ -1,5 +1,6 @@
 ---
 layout: layouts/docs.njk
+docFilm: accuracy-transparency
 title: Accuracy Transparency — What Duplication Percentage Measures
 description: Understand Deslop duplication percentages, shape-only exclusions, false positives, false negatives and clone-range coverage.
 eleventyNavigation:
@@ -12,6 +13,8 @@ docsGroup: trust
 # Accuracy Transparency
 
 Duplication percentage measures the code covered by reported clones. It does not measure how accurate the detector is. This page covers [0.35.0](/releases/).
+
+{% include "partials/doc-film.njk" %}
 
 ## How the percentage is calculated
 

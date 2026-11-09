@@ -1,7 +1,6 @@
 /* ─────────── Mobile ─────────── */
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
   .nav { padding: var(--space-3) var(--space-4); }
-  .footer-grid { padding-bottom: var(--space-8); }
   .logo,
   .skip-link:focus,
   .nav-link,

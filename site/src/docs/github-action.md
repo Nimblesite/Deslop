@@ -1,5 +1,6 @@
 ---
 layout: layouts/docs.njk
+docFilm: github-action
 title: GitHub Action — gate CI on duplicated code
 description: Configure the Deslop GitHub Action to measure duplicate code, gate CI by threshold, upload reports, verify release artifacts, and select the CLI version.
 eleventyNavigation:
@@ -14,6 +15,8 @@ docsGroup: guides
 [**Deslop.live** on the GitHub Marketplace](https://github.com/marketplace/actions/deslop-live) installs the released `deslop` CLI on the runner, analyses the workspace, renders the reports, and fails the job when duplication breaches your ceiling.
 
 It is a composite action. There is no container to pull and no post-install download — it fetches the prebuilt archive for the runner, verifies its published SHA-256 before extracting, and puts `deslop` on `PATH`.
+
+{% include "partials/doc-film.njk" %}
 
 ## Quickstart
 

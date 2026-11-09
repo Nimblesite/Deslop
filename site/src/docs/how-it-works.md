@@ -1,5 +1,6 @@
 ---
 layout: layouts/docs.njk
+docFilm: how-it-works
 title: How It Works — Finding and Comparing Duplicate Code
 description: How Deslop finds exact, renamed and edited copies, separates shape-only matches, and ranks duplicate code by mass.
 eleventyNavigation:
@@ -14,6 +15,8 @@ docsGroup: trust
 Deslop parses source code with tree-sitter, finds candidate copies, checks their content, and groups the surviving findings. The CLI, editor and MCP tools share the same Rust engine.
 
 This guide covers [0.35.0](/releases/).
+
+{% include "partials/doc-film.njk" %}
 
 ## Find candidate copies
 

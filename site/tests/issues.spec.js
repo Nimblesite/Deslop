@@ -40,7 +40,8 @@ test.describe("documentation navigation", () => {
     await expect(trustGroup.locator('a[href="/issues/statistics/"]')).toHaveCount(0);
   });
 
-  test("uses clear plus and minus accordion indicators", async ({ page }) => {
+  test("rotates the accordion chevron when sections expand or collapse", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/docs/vscode-cluster-panel/");
     const start = page.locator('[data-docs-group="start"]');
     const guides = page.locator('[data-docs-group="guides"]');
@@ -55,15 +56,18 @@ test.describe("documentation navigation", () => {
         };
       });
 
-    expect(await indicator(start)).toEqual({
-      content: "+",
+    const open = await indicator(guides);
+    expect(open).toEqual({
+      content: "›",
       borderRightWidth: "0px",
       borderBottomWidth: "0px",
-      transform: "none",
+      transform: "matrix(0, 1, -1, 0, 0, 0)",
     });
-    expect((await indicator(guides)).content).toBe("−");
+    expect(await indicator(start)).toEqual(open);
     await start.locator("summary").click();
-    expect((await indicator(start)).content).toBe("−");
+    await expect.poll(() => indicator(start)).toEqual({ ...open, transform: "none" });
+    await start.locator("summary").click();
+    await expect.poll(() => indicator(start)).toEqual(open);
   });
 
   test("localizes the grouped documentation navigation", async ({ page }) => {
@@ -95,6 +99,8 @@ test.describe("documentation navigation", () => {
     const sidebar = page.locator(".docs-sidebar");
     await expect(sidebar).toHaveClass(/open/);
     const trustGroup = sidebar.locator('[data-docs-group="trust"]');
+    await expect(trustGroup).toHaveAttribute("open", "");
+    await trustGroup.locator("summary").click();
     await expect(trustGroup).not.toHaveAttribute("open", "");
     await trustGroup.locator("summary").click();
     await expect(trustGroup).toHaveAttribute("open", "");

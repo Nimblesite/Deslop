@@ -1,5 +1,6 @@
 ---
 layout: layouts/docs.njk
+docFilm: accuracy-transparency
 title: 准确性透明度 — 重复率的计算方式
 description: 了解 Deslop 如何计算仓库重复率、哪些文件和代码范围会计入，以及实测值如何驱动 CI 阈值门禁。
 eleventyNavigation:
@@ -13,6 +14,8 @@ lang: zh
 # 准确性透明度
 
 重复百分比衡量报告中的克隆覆盖了多少代码，不是检测器的准确率。本页适用于 [0.35.0](/zh/releases/)。
+
+{% include "partials/doc-film.njk" %}
 
 ## 百分比的计算方式
 

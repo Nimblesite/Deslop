@@ -269,14 +269,18 @@ test("internal page links and fragments resolve", async ({ page }) => {
   }
 });
 
-// [SITE-DEMO-VIDEO] The narrated product demo is the only published encoded media.
+// [SITE-ASSET-TYPE] Publish exactly the requested demo and ten documentation films.
 const SITE_SOURCE = new URL("../src/", import.meta.url);
 const ENCODED_MEDIA = new Set([".aac", ".avi", ".flac", ".m4a", ".m4v", ".mkv", ".mov", ".mp3", ".mp4", ".ogg", ".wav", ".webm"]);
-const DEMO_MEDIA = ["assets/video/deslop-demo.mp4"];
+const DOC_FILM_SLUGS = [
+  "getting-started", "ai-integration", "vscode-cluster-panel", "github-action", "osprey",
+  "configuration", "how-it-works", "research-background", "accuracy-transparency", "for-ai",
+];
+const PUBLISHED_MEDIA = ["assets/video/deslop-demo.mp4", ...DOC_FILM_SLUGS.map(slug => `assets/video/docs/deslop-docs-${slug}.mp4`)];
 
-test("the site publishes only the requested product demo", async () => {
+test("the site publishes exactly the requested demo and documentation films", async () => {
   const files = await readdir(SITE_SOURCE, { recursive: true });
-  expect(files.filter((file) => ENCODED_MEDIA.has(extname(file).toLowerCase()))).toEqual(DEMO_MEDIA);
+  expect(files.filter((file) => ENCODED_MEDIA.has(extname(file).toLowerCase())).sort()).toEqual([...PUBLISHED_MEDIA].sort());
 });
 
 // [SITE-DEMO-VIDEO] Native controls keep narration opt-in and captions accessible.
