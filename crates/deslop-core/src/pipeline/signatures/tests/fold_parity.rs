@@ -35,15 +35,17 @@ fn fold_signatures_match_the_top_down_construction() {
     // chain so sequences pass KGRAM_WIDTH and junction grams read from
     // both sides.
     let mut statements = Vec::new();
-    // Statement `i` owns [i*40, i*40+40); its call chain lives inside at
-    // [+5, +35). Each binary wrap EXPANDS outward with depth so every
-    // child stays contained — the containment the range resolver and
-    // the window enumerator both assume.
+    // Statement `i` owns [i*40, i*40+40); its call lives inside at
+    // [+1, +35): the callee name at [+1, +5) and the argument chain at
+    // [+7, +35). Each binary wrap EXPANDS outward with depth so every
+    // child stays contained and no two siblings overlap — the
+    // containment and the source order the range resolver and the
+    // window enumerator both assume.
     let mut offset = 40;
     for _statement in 0..8 {
-        let mut argument = node(file_id, "argument_list", offset + 10, offset + 30, vec![]);
+        let mut argument = node(file_id, "argument_list", offset + 12, offset + 30, vec![]);
         for depth in 0..6 {
-            let start = offset + 10 - depth;
+            let start = offset + 12 - depth;
             let end = offset + 30 + depth;
             argument = node(file_id, "binary_expression", start, end, vec![argument]);
         }
@@ -55,10 +57,10 @@ fn fold_signatures_match_the_top_down_construction() {
             vec![node(
                 file_id,
                 "call",
-                offset + 5,
+                offset + 1,
                 offset.saturating_add(35),
                 vec![
-                    node(file_id, "__ident__", offset + 5, offset + 9, vec![]),
+                    node(file_id, "__ident__", offset + 1, offset + 5, vec![]),
                     argument,
                 ],
             )],
@@ -66,14 +68,16 @@ fn fold_signatures_match_the_top_down_construction() {
         offset = offset.saturating_add(40);
     }
     // A wrapper that re-describes its only child's range: both emit
-    // fingerprints today, and the resolver answers from the wrapper.
+    // fingerprints today, and the resolver answers from the wrapper. It
+    // follows the statements it is written after: children sit in
+    // source order, the invariant the range descents binary-search on.
     let inner = node(file_id, "block", offset, offset + 30, vec![]);
     let wrapper = node(file_id, "function_body", offset, offset + 30, vec![inner]);
     let tree = file_root(
         file_id,
-        vec![import, wrapper]
-            .into_iter()
+        std::iter::once(import)
             .chain(statements)
+            .chain(std::iter::once(wrapper))
             .collect(),
     );
 

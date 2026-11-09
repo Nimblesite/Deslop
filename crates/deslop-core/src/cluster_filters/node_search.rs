@@ -5,7 +5,7 @@
 use tree_sitter::Node;
 
 use super::{enclosing_kind, node_intersects_range, parse_for, Snippet};
-use crate::ast::{named_children, ByteRange};
+use crate::ast::{named_children_touching, ByteRange};
 
 /// Requires a nonempty run of covered children satisfying the caller's rule.
 /// Shared traversal for [CLONE-NOISE-DART-DATA-TABLE-LITERAL] and Dart fields.
@@ -20,9 +20,8 @@ pub(super) fn covered_children_satisfy(
     let Some(parent) = enclosing_kind(tree.root_node(), snippet.range, parent_kinds) else {
         return false;
     };
-    let mut children = named_children(parent)
+    let mut children = named_children_touching(parent, snippet.range)
         .into_iter()
-        .filter(|child| node_intersects_range(*child, snippet.range))
         .peekable();
     children.peek().is_some() && children.all(predicate)
 }
@@ -121,7 +120,7 @@ impl<IsKind: Fn(&str) -> bool> KindSearch<IsKind> {
                 return;
             }
         }
-        for child in named_children(node) {
+        for child in named_children_touching(node, self.range) {
             self.collect(child, out);
         }
     }

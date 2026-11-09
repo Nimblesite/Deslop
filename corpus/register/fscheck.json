@@ -1,0 +1,1369 @@
+{
+  "name": "fscheck",
+  "language": "fsharp",
+  "url": "https://github.com/fscheck/FsCheck.git",
+  "sha": "1ef52cfc65d5c318f5ee4da467df9087ad03e34c",
+  "protocol": {
+    "spec": "docs/specs/corpus.md",
+    "spec_section": "[CORPUS-REGISTER]",
+    "judging_skill": ".agents/skills/judge-clone-pairs/SKILL.md",
+    "preparer_skill": ".agents/skills/clone-register-prepare/SKILL.md"
+  },
+  "clearly_in": [
+    {
+      "why": "The code beginning with `[<Fact>]` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/FsCheck.Test/Arbitrary.fs:1018-1025 and tests/FsCheck.Test/Arbitrary.fs:1027-1034; 6 and 6 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"``gen { return () }``\", \"``async { return () }``\"], [\"\\\"gen { return () }\\\"\", \"\\\"async { return () }\\\"\"], [\"gen\", \"async\"], [\"``gen { return true }``\", \"``async { return true }``\"], [\"\\\"gen { return true }\\\"\", \"\\\"async { return true }\\\"\"], [\"``gen { return Prop.ofTestable () }``\", \"``async { return Prop.ofTestable () }``\"], [\"\\\"gen { return Prop.ofTestable () }\\\"\", \"\\\"async { return Prop.ofTestable () }\\\"\"]]. Raw core diff:\n--- tests/FsCheck.Test/Arbitrary.fs:1018-1025\n+++ tests/FsCheck.Test/Arbitrary.fs:1027-1034\n@@ -2 +2 @@\n-        let ``gen { return () }`` () = shouldBeTruthy \"gen { return () }\" (gen { return () })\n+        let ``async { return () }`` () = shouldBeTruthy \"async { return () }\" (async { return () })\n@@ -5 +5 @@\n-        let ``gen { return true }`` () = shouldBeTruthy \"gen { return true }\" (gen { return true })\n+        let ``async { return true }`` () = shouldBeTruthy \"async { return true }\" (async { return true })\n@@ -8 +8 @@\n-        let ``gen { return Prop.ofTestable () }`` () = shouldBeTruthy \"gen { return Prop.ofTestable () }\" (gen { return Prop.ofTestable () })\n+        let ``async { return Prop.ofTestable () }`` () = shouldBeTruthy \"async { return Prop.ofTestable () }\" (async { return Prop.ofTestable () })\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/FsCheck.Test/Arbitrary.fs:1018-1025\n+++ tests/FsCheck.Test/Arbitrary.fs:1027-1034\n@@ -1,8 +1,8 @@\n         [<Fact>]\n-        let ``gen { return () }`` () = shouldBeTruthy \"gen { return () }\" (gen { return () })\n+        let ``async { return () }`` () = shouldBeTruthy \"async { return () }\" (async { return () })\n \n         [<Fact>]\n-        let ``gen { return true }`` () = shouldBeTruthy \"gen { return true }\" (gen { return true })\n+        let ``async { return true }`` () = shouldBeTruthy \"async { return true }\" (async { return true })\n \n         [<Fact>]\n-        let ``gen { return Prop.ofTestable () }`` () = shouldBeTruthy \"gen { return Prop.ofTestable () }\" (gen { return Prop.ofTestable () })\n+        let ``async { return Prop.ofTestable () }`` () = shouldBeTruthy \"async { return Prop.ofTestable () }\" (async { return Prop.ofTestable () })",
+      "type": "Type II",
+      "occurrences": [
+        "tests/FsCheck.Test/Arbitrary.fs:1018-1025",
+        "tests/FsCheck.Test/Arbitrary.fs:1027-1034"
+      ]
+    },
+    {
+      "why": "The code beginning with `module FsCheck.Test.XUnit.PropertyAttribute` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/FsCheck.Test.Xunit.v3/PropertyAttributeTests.fs:3-87 and tests/FsCheck.Test.Xunit/PropertyAttributeTests.fs:3-87; 68 and 68 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/FsCheck.Test.Xunit.v3/PropertyAttributeTests.fs:1-94\n+++ tests/FsCheck.Test.Xunit/PropertyAttributeTests.fs:1-93\n@@ -1,3 +1,3 @@\n-module FsCheck.Test.XUnit.PropertyAttribute\n+﻿module FsCheck.Test.XUnit.PropertyAttribute\n \n open System.Threading.Tasks\n@@ -86,7 +86,6 @@\n                 |> Async.StartAsTask\n                 :> Task\n-                |> ValueTask\n-                \n-            member _.DisposeAsync() = ValueTask()\n+\n+            member _.DisposeAsync() = Task.CompletedTask\n \n         [<Property(MaxTest = 1)>]",
+      "occurrences": [
+        "tests/FsCheck.Test.Xunit.v3/PropertyAttributeTests.fs:1-94",
+        "tests/FsCheck.Test.Xunit/PropertyAttributeTests.fs:1-93"
+      ]
+    },
+    {
+      "why": "The code beginning with `let tree =` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: docs/TestData.fsx:133-142 and tests/FsCheck.Test/Runner.fs:95-104; 10 and 10 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n--- docs/TestData.fsx:133-142\n+++ tests/FsCheck.Test/Runner.fs:95-104\n@@ -1,10 +1,10 @@\n-let tree =\n-    let rec tree' s = \n-        match s with\n-        | 0 -> ArbMap.defaults |> ArbMap.generate<int> |> Gen.map Leaf\n-        | n when n>0 -> \n-            let subtree = tree' (n/2)\n-            Gen.oneof [ ArbMap.defaults |> ArbMap.generate<int> |> Gen.map Leaf\n-                        Gen.map2 (fun x y -> Branch (x,y)) subtree subtree]\n-        | _ -> invalidArg \"s\" \"Only positive arguments are allowed\"\n-    Gen.sized tree'\n+    let tree =\n+        let rec tree' s = \n+            match s with\n+            | 0 -> ArbMap.defaults |> ArbMap.generate<int> |> Gen.map Leaf\n+            | n when n>0 -> \n+                let subtree = tree' (n/2)\n+                Gen.oneof [ ArbMap.defaults |> ArbMap.generate<int> |> Gen.map Leaf\n+                            Gen.map2 (fun x y -> Branch (x,y)) subtree subtree]\n+            | _ -> invalidArg \"s\" \"Only positive arguments are allowed\"\n+        Gen.sized tree'\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- docs/TestData.fsx:133-142\n+++ tests/FsCheck.Test/Runner.fs:95-104\n@@ -1,10 +1,10 @@\n-let tree =\n-    let rec tree' s = \n-        match s with\n-        | 0 -> ArbMap.defaults |> ArbMap.generate<int> |> Gen.map Leaf\n-        | n when n>0 -> \n-            let subtree = tree' (n/2)\n-            Gen.oneof [ ArbMap.defaults |> ArbMap.generate<int> |> Gen.map Leaf\n-                        Gen.map2 (fun x y -> Branch (x,y)) subtree subtree]\n-        | _ -> invalidArg \"s\" \"Only positive arguments are allowed\"\n-    Gen.sized tree'\n+    let tree =\n+        let rec tree' s = \n+            match s with\n+            | 0 -> ArbMap.defaults |> ArbMap.generate<int> |> Gen.map Leaf\n+            | n when n>0 -> \n+                let subtree = tree' (n/2)\n+                Gen.oneof [ ArbMap.defaults |> ArbMap.generate<int> |> Gen.map Leaf\n+                            Gen.map2 (fun x y -> Branch (x,y)) subtree subtree]\n+            | _ -> invalidArg \"s\" \"Only positive arguments are allowed\"\n+        Gen.sized tree'",
+      "type": "Type I",
+      "occurrences": [
+        "docs/TestData.fsx:133-142",
+        "tests/FsCheck.Test/Runner.fs:95-104"
+      ]
+    },
+    {
+      "why": "The code beginning with `[<Fact>]` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/FsCheck.Test/Property.fs:322-328 and tests/FsCheck.Test/Property.fs:359-365; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/FsCheck.Test/Property.fs:315-338\n+++ tests/FsCheck.Test/Property.fs:352-388\n@@ -1,9 +1,9 @@\n     [<Fact>]\n-    let ``And should merge stamps from both properties when both pass``() =\n+    let ``Or should merge stamps from both properties when both pass``() =\n         let prop1 = true |> Prop.collect \"Property 1\"\n         let prop2 = true |> Prop.collect \"Property 2\"\n         let resultRunner = GetResultRunner()\n         let config = Config.Quick.WithRunner(resultRunner).WithMaxTest(1)\n-        Check.One(config, prop1 .&. prop2)\n+        Check.One(config, prop1 .|. prop2)\n         test <@ match resultRunner.Result with\n                 | TestResult.Passed (d, _) -> \n@@ -13,10 +13,23 @@\n \n     [<Fact>]\n-    let ``And should merge labels from both failing properties``() =\n+    let ``Or should merge stamps from both properties when one passes``() =\n+        let prop1 = true |> Prop.collect \"Property 1\"\n+        let prop2 = false |> Prop.collect \"Property 2\"\n+        let resultRunner = GetResultRunner()\n+        let config = Config.Quick.WithRunner(resultRunner).WithMaxTest(1)\n+        Check.One(config, prop1 .|. prop2)\n+        test <@ match resultRunner.Result with\n+                | TestResult.Passed (d, _) -> \n+                    let stamps = d.Stamps |> Seq.collect snd |> Set.ofSeq\n+                    stamps.Contains(\"\\\"Property 1\\\"\") && stamps.Contains(\"\\\"Property 2\\\"\")\n+                | _ -> false @>\n+\n+    [<Fact>]\n+    let ``Or should merge labels from both failing properties when both fail``() =\n         let prop1 = false |> Prop.label \"L1\"\n         let prop2 = false |> Prop.label \"L2\"\n         let resultRunner = GetResultRunner()\n         let config = Config.Quick.WithRunner(resultRunner).WithMaxTest(1)\n-        Check.One(config, prop1 .&. prop2)\n+        Check.One(config, prop1 .|. prop2)\n         test <@ match resultRunner.Result with\n                 | TestResult.Failed (d, _, _, _, _, _, _) -> ",
+      "occurrences": [
+        "tests/FsCheck.Test/Property.fs:315-338",
+        "tests/FsCheck.Test/Property.fs:352-388"
+      ]
+    },
+    {
+      "why": "The code beginning with `member _.OnStartFixture t =` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: src/FsCheck.Xunit.v3/CheckExtensions.fs:25-30 and src/FsCheck.Xunit/CheckExtensions.fs:23-28; 6 and 6 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"_\", \"__\"]]. Raw core diff:\n--- src/FsCheck.Xunit.v3/CheckExtensions.fs:25-30\n+++ src/FsCheck.Xunit/CheckExtensions.fs:23-28\n@@ -1 +1 @@\n-            member _.OnStartFixture t =\n+            member __.OnStartFixture t =\n@@ -3 +3 @@\n-            member _.OnArguments (ntest,args, every) =\n+            member __.OnArguments (ntest,args, every) =\n@@ -5 +5 @@\n-            member _.OnShrink(args, everyShrink) =\n+            member __.OnShrink(args, everyShrink) =\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/FsCheck.Xunit.v3/CheckExtensions.fs:25-30\n+++ src/FsCheck.Xunit/CheckExtensions.fs:23-28\n@@ -1,6 +1,6 @@\n-            member _.OnStartFixture t =\n+            member __.OnStartFixture t =\n                 testOutputHelper.WriteLine (Runner.onStartFixtureToString t)\n-            member _.OnArguments (ntest,args, every) =\n+            member __.OnArguments (ntest,args, every) =\n                 testOutputHelper.WriteLine (every ntest args)\n-            member _.OnShrink(args, everyShrink) =\n+            member __.OnShrink(args, everyShrink) =\n                 testOutputHelper.WriteLine (everyShrink args)",
+      "type": "Type II",
+      "occurrences": [
+        "src/FsCheck.Xunit.v3/CheckExtensions.fs:25-30",
+        "src/FsCheck.Xunit/CheckExtensions.fs:23-28"
+      ]
+    },
+    {
+      "why": "The code beginning with `type Counter(?init:int) =` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/FsCheck.Test/StateMachine.fs:194-212 and docs/StatefulTesting.fsx:36-54; 19 and 19 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n--- tests/FsCheck.Test/StateMachine.fs:194-212\n+++ docs/StatefulTesting.fsx:36-54\n@@ -1,19 +1,19 @@\n-    let spec =\n-        let inc = \n-            { new Operation<Counter,int>() with\n-                member __.Run m = m + 1\n-                member __.Check (c,m) = \n-                    let res = c.Inc() \n-                    m = res \n-                    |> Prop.label (sprintf \"Inc: model = %i, actual = %i\" m res)\n-                override __.ToString() = \"inc\"}\n-        let dec = \n-            { new Operation<Counter,int>() with\n-                member __.Run m = m - 1\n-                override __.Pre m = \n-                    m > 0\n-                member __.Check (c,m) = \n-                    let res = c.Dec()\n-                    m = res \n-                    |> Prop.label (sprintf \"Dec: model = %i, actual = %i\" m res)\n-                override __.ToString() = \"dec\"}\n+let spec =\n+    let inc = \n+        { new Operation<Counter,int>() with\n+            member __.Run m = m + 1\n+            member __.Check (c,m) = \n+                let res = c.Inc() \n+                m = res \n+                |> Prop.label (sprintf \"Inc: model = %i, actual = %i\" m res)\n+            override __.ToString() = \"inc\"}\n+    let dec = \n+        { new Operation<Counter,int>() with\n+            member __.Run m = m - 1\n+            override __.Pre m = \n+                m > 0\n+            member __.Check (c,m) = \n+                let res = c.Dec()\n+                m = res \n+                |> Prop.label (sprintf \"Dec: model = %i, actual = %i\" m res)\n+            override __.ToString() = \"dec\"}\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/FsCheck.Test/StateMachine.fs:184-222\n+++ docs/StatefulTesting.fsx:16-61\n@@ -1,39 +1,46 @@\n-    type Counter(?init:int) =\n-      let mutable n = defaultArg init 0\n-      member __.Inc() = \n-        //if n <= 3  then n <- n + 1 else n <- n + 2\n-        n <- n + 1\n+type Counter(?initial:int) =\n+    let mutable n = defaultArg initial 0\n+    member __.Inc() = \n+        //silly bug\n+        if n <= 3  then n <- n + 1 else n <- n + 2\n         n\n-      member __.Dec() = if n <= 0 then failwithf \"Precondition fail\" else n <- n - 1; n\n-      member __.Reset() = n <- 0\n-      override __.ToString() = sprintf \"Counter = %i, init = %A\" n init\n+    member __.Dec() = if n <= 0 then failwithf \"Precondition fail\" else n <- n - 1; n\n+    member __.Reset() = n <- 0\n+    override __.ToString() = sprintf \"Counter = %i\" n\n \n-    let spec =\n-        let inc = \n-            { new Operation<Counter,int>() with\n-                member __.Run m = m + 1\n-                member __.Check (c,m) = \n-                    let res = c.Inc() \n-                    m = res \n-                    |> Prop.label (sprintf \"Inc: model = %i, actual = %i\" m res)\n-                override __.ToString() = \"inc\"}\n-        let dec = \n-            { new Operation<Counter,int>() with\n-                member __.Run m = m - 1\n-                override __.Pre m = \n-                    m > 0\n-                member __.Check (c,m) = \n-                    let res = c.Dec()\n-                    m = res \n-                    |> Prop.label (sprintf \"Dec: model = %i, actual = %i\" m res)\n-                override __.ToString() = \"dec\"}\n-        let create init = \n-            { new Setup<Counter,int>() with\n-                member __.Actual() = new Counter(init)\n-                member __.Model() = init }\n-        { new Machine<Counter,int>() with\n-            member __.Setup = \n-                Arb.fromGenShrink(\n-                    Gen.choose (0,100) |> Gen.map create ,\n-                    fun setup -> seq { if setup.Model() > 0 then yield create (setup.Model()-1) })\n-            member __.Next _ = Gen.elements [ inc; dec ] }\n+(** In C#:\n+\n+    [lang=csharp,file=../examples/FsCheck.Docs.CSharpSnippets/StatefulTesting.cs,key=Counter]\n+\n+As a model to test this class we can use an `int` value which is an abstraction of the object's internal state. The\n+idea is that each operation on the class (in this case, `Inc`, `Dec` and `Reset`) affects both the model object and the actual object, and \n+after each such operation, the model and the actual instance should still be equivalent.\n+\n+With this idea in mind, you can write a specification of the `Counter` class using an int model as follows:*)\n+\n+let spec =\n+    let inc = \n+        { new Operation<Counter,int>() with\n+            member __.Run m = m + 1\n+            member __.Check (c,m) = \n+                let res = c.Inc() \n+                m = res \n+                |> Prop.label (sprintf \"Inc: model = %i, actual = %i\" m res)\n+            override __.ToString() = \"inc\"}\n+    let dec = \n+        { new Operation<Counter,int>() with\n+            member __.Run m = m - 1\n+            override __.Pre m = \n+                m > 0\n+            member __.Check (c,m) = \n+                let res = c.Dec()\n+                m = res \n+                |> Prop.label (sprintf \"Dec: model = %i, actual = %i\" m res)\n+            override __.ToString() = \"dec\"}\n+    let create initialValue = \n+        { new Setup<Counter,int>() with\n+            member __.Actual() = new Counter(initialValue)\n+            member __.Model() = initialValue }\n+    { new Machine<Counter,int>() with\n+        member __.Setup = Gen.choose (0,3) |> Gen.map create |> Arb.fromGen\n+        member __.Next _ = Gen.elements [ inc; dec ] }",
+      "occurrences": [
+        "tests/FsCheck.Test/StateMachine.fs:184-222",
+        "docs/StatefulTesting.fsx:16-61"
+      ]
+    },
+    {
+      "why": "The code beginning with `type MinValue =` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: src/FsCheck/Internals.Numeric.fs:9-31 and src/FsCheck/Internals.Numeric.fs:34-56; 22 and 22 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"MinValue\", \"MaxValue\"], [\"false\", \"true\"]]. Raw core diff:\n--- src/FsCheck/Internals.Numeric.fs:9-31\n+++ src/FsCheck/Internals.Numeric.fs:34-56\n@@ -1,18 +1,18 @@\n-    type MinValue =\n-        static member MinValue (_:unit          , _:MinValue) = ()\n-        static member MinValue (_:bool          , _:MinValue) = false\n-        static member MinValue (_:char          , _:MinValue) = Char.MinValue\n-        static member MinValue (_:byte          , _:MinValue) = Byte.MinValue\n-        static member MinValue (_:sbyte         , _:MinValue) = SByte.MinValue\n-        static member MinValue (_:float         , _:MinValue) = Double.MinValue\n-        static member MinValue (_:int16         , _:MinValue) = Int16.MinValue\n-        static member MinValue (_:int           , _:MinValue) = Int32.MinValue\n-        static member MinValue (_:int64         , _:MinValue) = Int64.MinValue\n-        static member MinValue (_:float32       , _:MinValue) = Single.MinValue\n-        static member MinValue (_:uint16        , _:MinValue) = UInt16.MinValue\n-        static member MinValue (_:uint32        , _:MinValue) = UInt32.MinValue\n-        static member MinValue (_:uint64        , _:MinValue) = UInt64.MinValue\n-        static member MinValue (_:decimal       , _:MinValue) = Decimal.MinValue\n-        static member MinValue (_:DateTime      , _:MinValue) = DateTime.MinValue\n-        static member MinValue (_:DateTimeOffset, _:MinValue) = DateTimeOffset.MinValue\n-        static member MinValue (_:TimeSpan      , _:MinValue) = TimeSpan.MinValue\n+    type MaxValue =\n+        static member MaxValue (_:unit          , _:MaxValue) = ()\n+        static member MaxValue (_:bool          , _:MaxValue) = true\n+        static member MaxValue (_:char          , _:MaxValue) = Char.MaxValue\n+        static member MaxValue (_:byte          , _:MaxValue) = Byte.MaxValue\n+        static member MaxValue (_:sbyte         , _:MaxValue) = SByte.MaxValue\n+        static member MaxValue (_:float         , _:MaxValue) = Double.MaxValue\n+        static member MaxValue (_:int16         , _:MaxValue) = Int16.MaxValue\n+        static member MaxValue (_:int           , _:MaxValue) = Int32.MaxValue\n+        static member MaxValue (_:int64         , _:MaxValue) = Int64.MaxValue\n+        static member MaxValue (_:float32       , _:MaxValue) = Single.MaxValue\n+        static member MaxValue (_:uint16        , _:MaxValue) = UInt16.MaxValue\n+        static member MaxValue (_:uint32        , _:MaxValue) = UInt32.MaxValue\n+        static member MaxValue (_:uint64        , _:MaxValue) = UInt64.MaxValue\n+        static member MaxValue (_:decimal       , _:MaxValue) = Decimal.MaxValue\n+        static member MaxValue (_:DateTime      , _:MaxValue) = DateTime.MaxValue\n+        static member MaxValue (_:DateTimeOffset, _:MaxValue) = DateTimeOffset.MaxValue\n+        static member MaxValue (_:TimeSpan      , _:MaxValue) = TimeSpan.MaxValue\n@@ -21 +21 @@\n-            let inline call2 (a:^a, b:^b) = ((^a or ^b) : (static member MinValue: _*_ -> _) b, a)\n+            let inline call2 (a:^a, b:^b) = ((^a or ^b) : (static member MaxValue: _*_ -> _) b, a)\n@@ -23 +23 @@\n-            call Unchecked.defaultof<MinValue>\n+            call Unchecked.defaultof<MaxValue>\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/FsCheck/Internals.Numeric.fs:9-31\n+++ src/FsCheck/Internals.Numeric.fs:34-56\n@@ -1,23 +1,23 @@\n-    type MinValue =\n-        static member MinValue (_:unit          , _:MinValue) = ()\n-        static member MinValue (_:bool          , _:MinValue) = false\n-        static member MinValue (_:char          , _:MinValue) = Char.MinValue\n-        static member MinValue (_:byte          , _:MinValue) = Byte.MinValue\n-        static member MinValue (_:sbyte         , _:MinValue) = SByte.MinValue\n-        static member MinValue (_:float         , _:MinValue) = Double.MinValue\n-        static member MinValue (_:int16         , _:MinValue) = Int16.MinValue\n-        static member MinValue (_:int           , _:MinValue) = Int32.MinValue\n-        static member MinValue (_:int64         , _:MinValue) = Int64.MinValue\n-        static member MinValue (_:float32       , _:MinValue) = Single.MinValue\n-        static member MinValue (_:uint16        , _:MinValue) = UInt16.MinValue\n-        static member MinValue (_:uint32        , _:MinValue) = UInt32.MinValue\n-        static member MinValue (_:uint64        , _:MinValue) = UInt64.MinValue\n-        static member MinValue (_:decimal       , _:MinValue) = Decimal.MinValue\n-        static member MinValue (_:DateTime      , _:MinValue) = DateTime.MinValue\n-        static member MinValue (_:DateTimeOffset, _:MinValue) = DateTimeOffset.MinValue\n-        static member MinValue (_:TimeSpan      , _:MinValue) = TimeSpan.MinValue\n+    type MaxValue =\n+        static member MaxValue (_:unit          , _:MaxValue) = ()\n+        static member MaxValue (_:bool          , _:MaxValue) = true\n+        static member MaxValue (_:char          , _:MaxValue) = Char.MaxValue\n+        static member MaxValue (_:byte          , _:MaxValue) = Byte.MaxValue\n+        static member MaxValue (_:sbyte         , _:MaxValue) = SByte.MaxValue\n+        static member MaxValue (_:float         , _:MaxValue) = Double.MaxValue\n+        static member MaxValue (_:int16         , _:MaxValue) = Int16.MaxValue\n+        static member MaxValue (_:int           , _:MaxValue) = Int32.MaxValue\n+        static member MaxValue (_:int64         , _:MaxValue) = Int64.MaxValue\n+        static member MaxValue (_:float32       , _:MaxValue) = Single.MaxValue\n+        static member MaxValue (_:uint16        , _:MaxValue) = UInt16.MaxValue\n+        static member MaxValue (_:uint32        , _:MaxValue) = UInt32.MaxValue\n+        static member MaxValue (_:uint64        , _:MaxValue) = UInt64.MaxValue\n+        static member MaxValue (_:decimal       , _:MaxValue) = Decimal.MaxValue\n+        static member MaxValue (_:DateTime      , _:MaxValue) = DateTime.MaxValue\n+        static member MaxValue (_:DateTimeOffset, _:MaxValue) = DateTimeOffset.MaxValue\n+        static member MaxValue (_:TimeSpan      , _:MaxValue) = TimeSpan.MaxValue\n \n         static member inline Get() =\n-            let inline call2 (a:^a, b:^b) = ((^a or ^b) : (static member MinValue: _*_ -> _) b, a)\n+            let inline call2 (a:^a, b:^b) = ((^a or ^b) : (static member MaxValue: _*_ -> _) b, a)\n             let inline call (a:'a) = call2 (a, Unchecked.defaultof<'r>) :'r\n-            call Unchecked.defaultof<MinValue>\n+            call Unchecked.defaultof<MaxValue>",
+      "type": "Type II",
+      "occurrences": [
+        "src/FsCheck/Internals.Numeric.fs:9-31",
+        "src/FsCheck/Internals.Numeric.fs:34-56"
+      ]
+    },
+    {
+      "why": "The code beginning with `type PropertyFailedException =` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: src/FsCheck.Xunit.v3/PropertyAttribute.fs:34-119 and src/FsCheck.Xunit/PropertyAttribute.fs:31-116; 76 and 76 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/FsCheck.Xunit.v3/PropertyAttribute.fs:16-169\n+++ src/FsCheck.Xunit/PropertyAttribute.fs:13-162\n@@ -9,12 +9,12 @@\n type XunitRunner() =\n     let mutable result = None\n-    member _.Result = result.Value\n+    member __.Result = result.Value\n     interface IRunner with\n-        override _.OnStartFixture _ = ()\n-        override _.OnArguments (ntest,args, every) =\n+        override __.OnStartFixture _ = ()\n+        override __.OnArguments (ntest,args, every) =\n             every ntest args |> ignore\n-        override _.OnShrink(args, everyShrink) =\n+        override __.OnShrink(args, everyShrink) =\n             everyShrink args |> ignore\n-        override _.OnFinished(_ ,testResult) =\n+        override __.OnFinished(_ ,testResult) =\n             result <- Some testResult\n \n@@ -103,5 +103,5 @@\n ///Run this method as an FsCheck test.\n [<AttributeUsage(AttributeTargets.Method ||| AttributeTargets.Property, AllowMultiple = false)>]\n-[<XunitTestCaseDiscoverer(typeof<PropertyDiscoverer>)>]\n+[<XunitTestCaseDiscoverer(\"FsCheck.Xunit.PropertyDiscoverer\", \"FsCheck.Xunit\")>]\n type public PropertyAttribute() =\n     inherit FactAttribute()\n@@ -120,22 +120,22 @@\n     ///the tuple from the output window, e.g. 12344,12312 or (123,123).\n     ///Additionally, you can also specify a start size as the third parameter, e.g. 12344,12312,10 or (123,123,10).\n-    member _.Replay with get() = replay and set(v) = replay <- v; config <- {config with Replay = if String.IsNullOrEmpty v then None else Some v}\n+    member __.Replay with get() = replay and set(v) = replay <- v; config <- {config with Replay = if String.IsNullOrEmpty v then None else Some v}\n     ///If set, run tests in parallel. Useful for Task/async related work and heavy number crunching\n     ///Environment.ProcessorCount have been found to be useful default.\n-    member _.Parallelism with get() = parallelism and set(v) = parallelism <- v; config <- {config with Parallelism = Some v}\n+    member __.Parallelism with get() = parallelism and set(v) = parallelism <- v; config <- {config with Parallelism = Some v}\n     ///The maximum number of tests that are run.\n-    member _.MaxTest with get() = maxTest and set(v) = maxTest <- v; config <- {config with MaxTest = Some v}\n+    member __.MaxTest with get() = maxTest and set(v) = maxTest <- v; config <- {config with MaxTest = Some v}\n     ///The maximum number of tests where values are rejected, e.g. as the result of ==>\n-    member _.MaxRejected with get() = maxRejected and set(v) = maxRejected <- v; config <- {config with MaxRejected = Some v}\n+    member __.MaxRejected with get() = maxRejected and set(v) = maxRejected <- v; config <- {config with MaxRejected = Some v}\n     ///The size to use for the first test.\n-    member _.StartSize with get() = startSize and set(v) = startSize <- v; config <- {config with StartSize = Some v}\n+    member __.StartSize with get() = startSize and set(v) = startSize <- v; config <- {config with StartSize = Some v}\n     ///The size to use for the last test, when all the tests are passing. The size increases linearly between Start- and EndSize.\n-    member _.EndSize with get() = endSize and set(v) = endSize <- v; config <- {config with EndSize = Some v}\n+    member __.EndSize with get() = endSize and set(v) = endSize <- v; config <- {config with EndSize = Some v}\n     ///Output all generated arguments.\n-    member _.Verbose with get() = verbose and set(v) = verbose <- v; config <- {config with Verbose = Some v}\n+    member __.Verbose with get() = verbose and set(v) = verbose <- v; config <- {config with Verbose = Some v}\n     ///The Arbitrary instances to use for this test method. The Arbitrary instances\n     ///are merged in back to front order i.e. instances for the same generated type\n     ///at the front of the array will override those at the back.\n-    member _.Arbitrary with get() = arbitrary and set(v) = arbitrary <- v; config <- {config with Arbitrary = v}\n+    member __.Arbitrary with get() = arbitrary and set(v) = arbitrary <- v; config <- {config with Arbitrary = v}\n     ///If set, suppresses the output from the test if the test is successful. This can be useful when running tests\n     ///with TestDriven.net, because TestDriven.net pops up the Output window in Visual Studio if a test fails; thus,\n@@ -144,11 +144,7 @@\n     ///FsCheck will suppress output in the case of a passing test. This setting doesn't affect the behaviour in case of\n     ///test failures.\n-    member _.QuietOnSuccess with get() = quietOnSuccess and set(v) = quietOnSuccess <- v; config <- {config with QuietOnSuccess = Some v}\n+    member __.QuietOnSuccess with get() = quietOnSuccess and set(v) = quietOnSuccess <- v; config <- {config with QuietOnSuccess = Some v}\n \n-    member internal _.Config = config\n+    member internal __.Config = config\n \n ///Set common configuration for all properties within this class or module\n-[<AttributeUsage(AttributeTargets.Class ||| AttributeTargets.Assembly, AllowMultiple = false)>]\n-type public PropertiesAttribute() = inherit PropertyAttribute()\n-\n-/// The xUnit.v3 test runner for the PropertyAttribute that executes the test via FsCheck",
+      "occurrences": [
+        "src/FsCheck.Xunit.v3/PropertyAttribute.fs:16-169",
+        "src/FsCheck.Xunit/PropertyAttribute.fs:13-162"
+      ]
+    },
+    {
+      "why": "The code beginning with `namespace System` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: src/FsCheck/AssemblyInfo.fs:3-23 and src/FsCheck.Xunit/AssemblyInfo.fs:3-23; 19 and 19 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"\\\"FsCheck\\\"\", \"\\\"FsCheck.Xunit\\\"\"], [\"\\\"FsCheck is a tool for testing .NET programs automatically using randomly generated test cases.\\\"\", \"\\\"Integrates FsCheck with xUnit.NET v2\\\"\"]]. Raw core diff:\n--- src/FsCheck/AssemblyInfo.fs:3-23\n+++ src/FsCheck.Xunit/AssemblyInfo.fs:3-23\n@@ -5,3 +5,3 @@\n-[<assembly: AssemblyTitle(\"FsCheck\")>]\n-[<assembly: AssemblyProduct(\"FsCheck\")>]\n-[<assembly: AssemblyDescription(\"FsCheck is a tool for testing .NET programs automatically using randomly generated test cases.\")>]\n+[<assembly: AssemblyTitle(\"FsCheck.Xunit\")>]\n+[<assembly: AssemblyProduct(\"FsCheck.Xunit\")>]\n+[<assembly: AssemblyDescription(\"Integrates FsCheck with xUnit.NET v2\")>]\n@@ -15,3 +15,3 @@\n-    let [<Literal>] AssemblyTitle = \"FsCheck\"\n-    let [<Literal>] AssemblyProduct = \"FsCheck\"\n-    let [<Literal>] AssemblyDescription = \"FsCheck is a tool for testing .NET programs automatically using randomly generated test cases.\"\n+    let [<Literal>] AssemblyTitle = \"FsCheck.Xunit\"\n+    let [<Literal>] AssemblyProduct = \"FsCheck.Xunit\"\n+    let [<Literal>] AssemblyDescription = \"Integrates FsCheck with xUnit.NET v2\"\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/FsCheck/AssemblyInfo.fs:3-23\n+++ src/FsCheck.Xunit/AssemblyInfo.fs:3-23\n@@ -3,7 +3,7 @@\n open System.Runtime.CompilerServices\n \n-[<assembly: AssemblyTitle(\"FsCheck\")>]\n-[<assembly: AssemblyProduct(\"FsCheck\")>]\n-[<assembly: AssemblyDescription(\"FsCheck is a tool for testing .NET programs automatically using randomly generated test cases.\")>]\n+[<assembly: AssemblyTitle(\"FsCheck.Xunit\")>]\n+[<assembly: AssemblyProduct(\"FsCheck.Xunit\")>]\n+[<assembly: AssemblyDescription(\"Integrates FsCheck with xUnit.NET v2\")>]\n [<assembly: AssemblyVersion(\"3.6.0\")>]\n [<assembly: AssemblyFileVersion(\"3.6.0\")>]\n@@ -13,7 +13,7 @@\n \n module internal AssemblyVersionInformation =\n-    let [<Literal>] AssemblyTitle = \"FsCheck\"\n-    let [<Literal>] AssemblyProduct = \"FsCheck\"\n-    let [<Literal>] AssemblyDescription = \"FsCheck is a tool for testing .NET programs automatically using randomly generated test cases.\"\n+    let [<Literal>] AssemblyTitle = \"FsCheck.Xunit\"\n+    let [<Literal>] AssemblyProduct = \"FsCheck.Xunit\"\n+    let [<Literal>] AssemblyDescription = \"Integrates FsCheck with xUnit.NET v2\"\n     let [<Literal>] AssemblyVersion = \"3.6.0\"\n     let [<Literal>] AssemblyFileVersion = \"3.6.0\"",
+      "type": "Type II",
+      "occurrences": [
+        "src/FsCheck/AssemblyInfo.fs:3-23",
+        "src/FsCheck.Xunit/AssemblyInfo.fs:3-23"
+      ]
+    },
+    {
+      "why": "The code beginning with `type NonEmptySet<'T when 'T : comparison> = NonEmptySet of Set<'T> with` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: src/FsCheck/DefaultArbTypes.fs:85-90 and src/FsCheck/DefaultArbTypes.fs:94-99; 6 and 6 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"NonEmptySet\", \"NonEmptyArray\"]]. Raw core diff:\n--- src/FsCheck/DefaultArbTypes.fs:85-90\n+++ src/FsCheck/DefaultArbTypes.fs:94-99\n@@ -1 +1 @@\n-    member x.Get = match x with NonEmptySet r -> r\n+    member x.Get = match x with NonEmptyArray r -> r\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/FsCheck/DefaultArbTypes.fs:84-92\n+++ src/FsCheck/DefaultArbTypes.fs:93-101\n@@ -1,4 +1,4 @@\n-type NonEmptySet<'T when 'T : comparison> = NonEmptySet of Set<'T> with\n-    member x.Get = match x with NonEmptySet r -> r\n+type NonEmptyArray<'T> = NonEmptyArray of 'T[] with\n+    member x.Get = match x with NonEmptyArray r -> r\n     interface IEnumerable<'T> with\n         member this.GetEnumerator(): IEnumerator = \n@@ -6,4 +6,4 @@\n         member this.GetEnumerator(): IEnumerator<'T> = \n             (this.Get :> IEnumerable<'T>).GetEnumerator()\n-    \n-///Represents a non-empty array.\n+\n+///Represents an array whose length does not change when shrinking.",
+      "occurrences": [
+        "src/FsCheck/DefaultArbTypes.fs:84-92",
+        "src/FsCheck/DefaultArbTypes.fs:93-101"
+      ]
+    },
+    {
+      "why": "The code beginning with `Prop.ForAll<int, int>((m, n) => {` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: examples/FsCheck.Docs.CSharpSnippets/Properties.cs:107-112 and examples/FsCheck.Examples.MsTest/SampleTests.cs:108-113; 6 and 6 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"QuickCheck\", \"QuickCheckThrowOnFailure\"]]. Raw core diff:\n--- examples/FsCheck.Docs.CSharpSnippets/Properties.cs:107-112\n+++ examples/FsCheck.Examples.MsTest/SampleTests.cs:108-113\n@@ -2,5 +2,5 @@\n-                var result = m + n;\n-                return (result >= m).Label(\"result > #1\")\n-                   .And(result >= n).Label(\"result > #2\")\n-                   .And(result < m + n).Label(\"result not sum\");\n-            }).QuickCheck();\n+                    var result = m + n;\n+                    return ( result >= m).Label(\"result > #1\")\n+                       .And( result >= n).Label(\"result > #2\")\n+                       .And( result < m + n).Label(\"result not sum\");\n+            }).QuickCheckThrowOnFailure();\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- examples/FsCheck.Docs.CSharpSnippets/Properties.cs:107-112\n+++ examples/FsCheck.Examples.MsTest/SampleTests.cs:106-114\n@@ -1,6 +1,9 @@\n+            Assert.ThrowsExactly<Exception>(() =>\n+            {\n             Prop.ForAll<int, int>((m, n) => {\n-                var result = m + n;\n-                return (result >= m).Label(\"result > #1\")\n-                   .And(result >= n).Label(\"result > #2\")\n-                   .And(result < m + n).Label(\"result not sum\");\n-            }).QuickCheck();\n+                    var result = m + n;\n+                    return ( result >= m).Label(\"result > #1\")\n+                       .And( result >= n).Label(\"result > #2\")\n+                       .And( result < m + n).Label(\"result not sum\");\n+            }).QuickCheckThrowOnFailure();\n+            });",
+      "occurrences": [
+        "examples/FsCheck.Docs.CSharpSnippets/Properties.cs:107-112",
+        "examples/FsCheck.Examples.MsTest/SampleTests.cs:106-114"
+      ]
+    },
+    {
+      "why": "The code beginning with `[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: src/FsCheck.Xunit.v3/PropertyAttribute.fs:48-84 and src/FsCheck.NUnit/FsCheckPropertyAttribute.fs:53-89; 32 and 32 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/FsCheck.Xunit.v3/PropertyAttribute.fs:48-118\n+++ src/FsCheck.NUnit/FsCheckPropertyAttribute.fs:53-123\n@@ -37,5 +37,5 @@\n         { Rnd = Rnd (seed,gamma); Size = size }\n \n-    let toConfig (output : TestOutputHelper) propertyConfig =\n+    let toConfig runner propertyConfig =\n         Config.Default\n               .WithReplay(\n@@ -55,14 +55,14 @@\n               .WithQuietOnSuccess(propertyConfig.QuietOnSuccess |> orDefault Config.Default.QuietOnSuccess)\n               .WithArbitrary(Seq.toList propertyConfig.Arbitrary)\n-              .WithRunner(XunitRunner())\n+              .WithRunner(runner)\n               .WithEvery(\n                   if propertyConfig.Verbose |> Option.exists id then \n-                      fun n args -> output.WriteLine (Config.Verbose.Every n args); \"\"\n-                  else \n+                      Runner.onArgumentsToStringWithFormatter NUnitFormatter.formatValue\n+                  else\n                       Config.Quick.Every\n               )\n               .WithEveryShrink(\n                   if propertyConfig.Verbose |> Option.exists id then \n-                      fun args -> output.WriteLine (Config.Verbose.EveryShrink args); \"\"\n+                      Runner.onShrinkToStringWithFormatter NUnitFormatter.formatValue\n                   else \n                       Config.Quick.EveryShrink",
+      "occurrences": [
+        "src/FsCheck.Xunit.v3/PropertyAttribute.fs:48-118",
+        "src/FsCheck.NUnit/FsCheckPropertyAttribute.fs:53-123"
+      ]
+    },
+    {
+      "why": "The code beginning with `public static IEnumerable<int> Insert(this IEnumerable<int> cs, int x)` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: examples/FsCheck.Examples.MsTest/ClassesToTest/EnumerableExtensions.cs:10-23 and examples/FsCheck.Examples.CSharp/Program.cs:13-26; 14 and 14 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "examples/FsCheck.Examples.MsTest/ClassesToTest/EnumerableExtensions.cs:10-23",
+        "examples/FsCheck.Examples.CSharp/Program.cs:13-26"
+      ]
+    },
+    {
+      "why": "The code beginning with `using System.Threading.Tasks;` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: examples/FsCheck.Examples.NUnit.CSharp/SyncVersusAsyncExamples.cs:9-26 and examples/FsCheck.Examples.Xunit.CSharp/SyncVersusAsyncExamples.cs:8-25; 16 and 16 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- examples/FsCheck.Examples.NUnit.CSharp/SyncVersusAsyncExamples.cs:1-58\n+++ examples/FsCheck.Examples.Xunit.CSharp/SyncVersusAsyncExamples.cs:1-57\n@@ -1,9 +1,8 @@\n-using System.Threading.Tasks;\n+﻿using System.Threading.Tasks;\n using FsCheck.Fluent;\n-using FsCheck.NUnit;\n-using NUnit.Framework;\n-using PropertyAttribute = FsCheck.NUnit.PropertyAttribute;\n+using FsCheck.Xunit;\n+using Xunit;\n \n-namespace FsCheck.Examples.NUnit.CSharp;\n+namespace FsCheck.Examples.Xunit.CSharp;\n \n public class SyncVersusAsyncExamples\n@@ -25,5 +24,5 @@\n     {\n         await DoSomethingAsync();\n-        Assert.That(b ^ !b);\n+        Assert.True(b ^ !b);\n     }\n \n@@ -32,5 +31,5 @@\n     {\n         await DoSomethingAsync();\n-        Assert.That(b && !b);\n+        Assert.True(b && !b);\n     }\n \n@@ -38,5 +37,5 @@\n     public async Task Task_Cancelled_ShouldFail(bool b)\n     {\n-        await Task.Run(() => Assert.That(b ^ !b), new System.Threading.CancellationToken(canceled: true));\n+        await Task.Run(() => Assert.True(b ^ !b), new System.Threading.CancellationToken(canceled: true));\n     }\n ",
+      "occurrences": [
+        "examples/FsCheck.Examples.NUnit.CSharp/SyncVersusAsyncExamples.cs:1-58",
+        "examples/FsCheck.Examples.Xunit.CSharp/SyncVersusAsyncExamples.cs:1-57"
+      ]
+    },
+    {
+      "why": "The code beginning with `static member RangeInt (l, h, s : Rnd, [<Out>] s' : byref<Rnd>) : int =` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: src/FsCheck/Random.fs:186-205 and src/FsCheck/Random.fs:150-176; 18 and 18 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"NextInt\", \"NextInt64\"], [\"0\", \"0L\"], [\"int\", \"int64\"], [\"uint32\", \"uint64\"]]. Raw core diff:\n--- src/FsCheck/Random.fs:186-205\n+++ src/FsCheck/Random.fs:150-176\n@@ -1 +1 @@\n-            let mutable candidate = Random.NextInt (&s'')\n+            let mutable candidate = Random.NextInt64 (&s'')\n@@ -3 +3,3 @@\n-            if (n > 0) then\n+            if (n > 0L) then\n+                //we have a range that is a positive int64, i.e. a \"small\" range relative to the total range - half of it or less.\n+                //So we need to be a bit smart on how to find an int64 in that range.\n@@ -5 +7,3 @@\n-                    let pcand = int (uint32 candidate >>> 1)\n+                    //since the range is half or less, we create a positive int64 by shifting right.\n+                    let pcand = int64 (uint64 candidate >>> 1)\n+                    //a good candidate offset from l, i.e. offset < n.\n@@ -7,2 +11,3 @@\n-                    if pcand + m - offset < 0 then\n-                        candidate <- Random.NextInt (&s'')\n+                    //\n+                    if pcand + m - offset < 0L then\n+                        candidate <- Random.NextInt64 (&s'')\n@@ -11,0 +17,2 @@\n+                //we have a range that is a negative int64, i.e. h -l overflowed and so we have \"large\" range - more than half the total range.\n+                //we can just keep generating until we find a number in the desired range.\n@@ -13,2 +20,2 @@\n-                    if candidate < l || candidate >= h then \n-                        candidate <- Random.NextInt (&s'')\n+                    if candidate < l || candidate >= h then\n+                        candidate <- Random.NextInt64 (&s'')\n@@ -17,2 +24,2 @@\n-\n-            // Return the result.\n+            \n+            // Return the result\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/FsCheck/Random.fs:179-205\n+++ src/FsCheck/Random.fs:143-178\n@@ -1,27 +1,36 @@\n-    static member RangeInt (l, h, s : Rnd, [<Out>] s' : byref<Rnd>) : int =\n+    static member RangeInt64 (l, h, s : Rnd, [<Out>] s' : byref<Rnd>) =\n         let mutable s'' = s\n-        if l > h then\n-            Random.RangeInt (h, l, s, &s')\n+        if l > h then //swap l and h\n+            Random.RangeInt64 (h, l, s, &s')\n         else\n-            let m = h - l\n-            let n = m + 1\n-            let mutable candidate = Random.NextInt (&s'')\n+            let m = h - l  //size of the exclusive range\n+            let n = m + 1L //size of the inclusive range\n+            let mutable candidate = Random.NextInt64 (&s'')\n             let mutable result = System.Nullable<_> ()\n-            if (n > 0) then\n+            if (n > 0L) then\n+                //we have a range that is a positive int64, i.e. a \"small\" range relative to the total range - half of it or less.\n+                //So we need to be a bit smart on how to find an int64 in that range.\n                 while not result.HasValue do\n-                    let pcand = int (uint32 candidate >>> 1)\n+                    //since the range is half or less, we create a positive int64 by shifting right.\n+                    let pcand = int64 (uint64 candidate >>> 1)\n+                    //a good candidate offset from l, i.e. offset < n.\n                     let offset = pcand % n\n-                    if pcand + m - offset < 0 then\n-                        candidate <- Random.NextInt (&s'')\n+                    //\n+                    if pcand + m - offset < 0L then\n+                        candidate <- Random.NextInt64 (&s'')\n                     else\n                         result <- System.Nullable<_> (l + offset)\n             else \n+                //we have a range that is a negative int64, i.e. h -l overflowed and so we have \"large\" range - more than half the total range.\n+                //we can just keep generating until we find a number in the desired range.\n                 while not result.HasValue do\n-                    if candidate < l || candidate >= h then \n-                        candidate <- Random.NextInt (&s'')\n+                    if candidate < l || candidate >= h then\n+                        candidate <- Random.NextInt64 (&s'')\n                     else\n                         result <- System.Nullable<_> (candidate)\n-\n-            // Return the result.\n+            \n+            // Return the result\n             s' <- s''\n             result.Value\n+\n+    ///Generate the next pseudo-random int in the given range (inclusive l and h) and returns the new Rnd.",
+      "occurrences": [
+        "src/FsCheck/Random.fs:179-205",
+        "src/FsCheck/Random.fs:143-178"
+      ]
+    },
+    {
+      "why": "The code beginning with `member _.Replay with get() = replay and set(v) = replay <- v; config <- {config with Replay = if String.IsNullOrEmpty v then None else Some v}` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: src/FsCheck.Xunit.v3/PropertyAttribute.fs:137-160 and src/FsCheck.Xunit/PropertyAttribute.fs:134-157; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"_\", \"__\"]]. Raw core diff:\n--- src/FsCheck.Xunit.v3/PropertyAttribute.fs:137-160\n+++ src/FsCheck.Xunit/PropertyAttribute.fs:134-157\n@@ -1 +1 @@\n-    member _.Replay with get() = replay and set(v) = replay <- v; config <- {config with Replay = if String.IsNullOrEmpty v then None else Some v}\n+    member __.Replay with get() = replay and set(v) = replay <- v; config <- {config with Replay = if String.IsNullOrEmpty v then None else Some v}\n@@ -4 +4 @@\n-    member _.Parallelism with get() = parallelism and set(v) = parallelism <- v; config <- {config with Parallelism = Some v}\n+    member __.Parallelism with get() = parallelism and set(v) = parallelism <- v; config <- {config with Parallelism = Some v}\n@@ -6 +6 @@\n-    member _.MaxTest with get() = maxTest and set(v) = maxTest <- v; config <- {config with MaxTest = Some v}\n+    member __.MaxTest with get() = maxTest and set(v) = maxTest <- v; config <- {config with MaxTest = Some v}\n@@ -8 +8 @@\n-    member _.MaxRejected with get() = maxRejected and set(v) = maxRejected <- v; config <- {config with MaxRejected = Some v}\n+    member __.MaxRejected with get() = maxRejected and set(v) = maxRejected <- v; config <- {config with MaxRejected = Some v}\n@@ -10 +10 @@\n-    member _.StartSize with get() = startSize and set(v) = startSize <- v; config <- {config with StartSize = Some v}\n+    member __.StartSize with get() = startSize and set(v) = startSize <- v; config <- {config with StartSize = Some v}\n@@ -12 +12 @@\n-    member _.EndSize with get() = endSize and set(v) = endSize <- v; config <- {config with EndSize = Some v}\n+    member __.EndSize with get() = endSize and set(v) = endSize <- v; config <- {config with EndSize = Some v}\n@@ -14 +14 @@\n-    member _.Verbose with get() = verbose and set(v) = verbose <- v; config <- {config with Verbose = Some v}\n+    member __.Verbose with get() = verbose and set(v) = verbose <- v; config <- {config with Verbose = Some v}\n@@ -18 +18 @@\n-    member _.Arbitrary with get() = arbitrary and set(v) = arbitrary <- v; config <- {config with Arbitrary = v}\n+    member __.Arbitrary with get() = arbitrary and set(v) = arbitrary <- v; config <- {config with Arbitrary = v}\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/FsCheck.Xunit.v3/PropertyAttribute.fs:137-160\n+++ src/FsCheck.Xunit/PropertyAttribute.fs:134-157\n@@ -1,20 +1,20 @@\n-    member _.Replay with get() = replay and set(v) = replay <- v; config <- {config with Replay = if String.IsNullOrEmpty v then None else Some v}\n+    member __.Replay with get() = replay and set(v) = replay <- v; config <- {config with Replay = if String.IsNullOrEmpty v then None else Some v}\n     ///If set, run tests in parallel. Useful for Task/async related work and heavy number crunching\n     ///Environment.ProcessorCount have been found to be useful default.\n-    member _.Parallelism with get() = parallelism and set(v) = parallelism <- v; config <- {config with Parallelism = Some v}\n+    member __.Parallelism with get() = parallelism and set(v) = parallelism <- v; config <- {config with Parallelism = Some v}\n     ///The maximum number of tests that are run.\n-    member _.MaxTest with get() = maxTest and set(v) = maxTest <- v; config <- {config with MaxTest = Some v}\n+    member __.MaxTest with get() = maxTest and set(v) = maxTest <- v; config <- {config with MaxTest = Some v}\n     ///The maximum number of tests where values are rejected, e.g. as the result of ==>\n-    member _.MaxRejected with get() = maxRejected and set(v) = maxRejected <- v; config <- {config with MaxRejected = Some v}\n+    member __.MaxRejected with get() = maxRejected and set(v) = maxRejected <- v; config <- {config with MaxRejected = Some v}\n     ///The size to use for the first test.\n-    member _.StartSize with get() = startSize and set(v) = startSize <- v; config <- {config with StartSize = Some v}\n+    member __.StartSize with get() = startSize and set(v) = startSize <- v; config <- {config with StartSize = Some v}\n     ///The size to use for the last test, when all the tests are passing. The size increases linearly between Start- and EndSize.\n-    member _.EndSize with get() = endSize and set(v) = endSize <- v; config <- {config with EndSize = Some v}\n+    member __.EndSize with get() = endSize and set(v) = endSize <- v; config <- {config with EndSize = Some v}\n     ///Output all generated arguments.\n-    member _.Verbose with get() = verbose and set(v) = verbose <- v; config <- {config with Verbose = Some v}\n+    member __.Verbose with get() = verbose and set(v) = verbose <- v; config <- {config with Verbose = Some v}\n     ///The Arbitrary instances to use for this test method. The Arbitrary instances\n     ///are merged in back to front order i.e. instances for the same generated type\n     ///at the front of the array will override those at the back.\n-    member _.Arbitrary with get() = arbitrary and set(v) = arbitrary <- v; config <- {config with Arbitrary = v}\n+    member __.Arbitrary with get() = arbitrary and set(v) = arbitrary <- v; config <- {config with Arbitrary = v}\n     ///If set, suppresses the output from the test if the test is successful. This can be useful when running tests\n     ///with TestDriven.net, because TestDriven.net pops up the Output window in Visual Studio if a test fails; thus,",
+      "type": "Type II",
+      "occurrences": [
+        "src/FsCheck.Xunit.v3/PropertyAttribute.fs:137-160",
+        "src/FsCheck.Xunit/PropertyAttribute.fs:134-157"
+      ]
+    },
+    {
+      "why": "The code beginning with `[<Fact>]` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/FsCheck.Test/Arbitrary.fs:869-875 and tests/FsCheck.Test/Arbitrary.fs:859-865; 6 and 6 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"``Derive generator for private two case union``\", \"``Derive generator for private two value record``\"], [\"PrivateUnion\", \"PrivateRecord\"], [\"``Shrink for private two case union``\", \"``Shrink for private two value record``\"]]. Raw core diff:\n--- tests/FsCheck.Test/Arbitrary.fs:869-875\n+++ tests/FsCheck.Test/Arbitrary.fs:859-865\n@@ -2,2 +2,2 @@\n-    let ``Derive generator for private two case union``() =\n-        generate<PrivateUnion> |> sample 10 |> ignore\n+    let ``Derive generator for private two value record``() =\n+        generate<PrivateRecord> |> sample 10 |> ignore\n@@ -6 +6 @@\n-    let ``Shrink for private two case union`` (DoNotShrink (value: PrivateUnion)) =\n+    let ``Shrink for private two value record`` (DoNotShrink (value: PrivateRecord)) =\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/FsCheck.Test/Arbitrary.fs:869-875\n+++ tests/FsCheck.Test/Arbitrary.fs:859-865\n@@ -1,7 +1,7 @@\n     [<Fact>]\n-    let ``Derive generator for private two case union``() =\n-        generate<PrivateUnion> |> sample 10 |> ignore\n+    let ``Derive generator for private two value record``() =\n+        generate<PrivateRecord> |> sample 10 |> ignore\n \n     [<Property>]\n-    let ``Shrink for private two case union`` (DoNotShrink (value: PrivateUnion)) =\n+    let ``Shrink for private two value record`` (DoNotShrink (value: PrivateRecord)) =\n         shrink value |> ignore",
+      "type": "Type II",
+      "occurrences": [
+        "tests/FsCheck.Test/Arbitrary.fs:869-875",
+        "tests/FsCheck.Test/Arbitrary.fs:859-865"
+      ]
+    },
+    {
+      "why": "The code beginning with `namespace System` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: src/FsCheck.Xunit.v3/AssemblyInfo.fs:3-22 and src/FsCheck.NUnit/AssemblyInfo.fs:3-22; 17 and 17 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"\\\"FsCheck.Xunit.v3\\\"\", \"\\\"FsCheck.NUnit\\\"\"], [\"\\\"Integrates FsCheck with xUnit.NET v3\\\"\", \"\\\"Integrates FsCheck with NUnit\\\"\"]]. Raw core diff:\n--- src/FsCheck.Xunit.v3/AssemblyInfo.fs:3-22\n+++ src/FsCheck.NUnit/AssemblyInfo.fs:3-22\n@@ -5,3 +5,3 @@\n-[<assembly: AssemblyTitle(\"FsCheck.Xunit.v3\")>]\n-[<assembly: AssemblyProduct(\"FsCheck.Xunit.v3\")>]\n-[<assembly: AssemblyDescription(\"Integrates FsCheck with xUnit.NET v3\")>]\n+[<assembly: AssemblyTitle(\"FsCheck.NUnit\")>]\n+[<assembly: AssemblyProduct(\"FsCheck.NUnit\")>]\n+[<assembly: AssemblyDescription(\"Integrates FsCheck with NUnit\")>]\n@@ -15,3 +15,3 @@\n-    let [<Literal>] AssemblyTitle = \"FsCheck.Xunit.v3\"\n-    let [<Literal>] AssemblyProduct = \"FsCheck.Xunit.v3\"\n-    let [<Literal>] AssemblyDescription = \"Integrates FsCheck with xUnit.NET v3\"\n+    let [<Literal>] AssemblyTitle = \"FsCheck.NUnit\"\n+    let [<Literal>] AssemblyProduct = \"FsCheck.NUnit\"\n+    let [<Literal>] AssemblyDescription = \"Integrates FsCheck with NUnit\"\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/FsCheck.Xunit.v3/AssemblyInfo.fs:3-22\n+++ src/FsCheck.NUnit/AssemblyInfo.fs:3-22\n@@ -3,7 +3,7 @@\n open System.Runtime.CompilerServices\n \n-[<assembly: AssemblyTitle(\"FsCheck.Xunit.v3\")>]\n-[<assembly: AssemblyProduct(\"FsCheck.Xunit.v3\")>]\n-[<assembly: AssemblyDescription(\"Integrates FsCheck with xUnit.NET v3\")>]\n+[<assembly: AssemblyTitle(\"FsCheck.NUnit\")>]\n+[<assembly: AssemblyProduct(\"FsCheck.NUnit\")>]\n+[<assembly: AssemblyDescription(\"Integrates FsCheck with NUnit\")>]\n [<assembly: AssemblyVersion(\"3.6.0\")>]\n [<assembly: AssemblyFileVersion(\"3.6.0\")>]\n@@ -13,7 +13,7 @@\n \n module internal AssemblyVersionInformation =\n-    let [<Literal>] AssemblyTitle = \"FsCheck.Xunit.v3\"\n-    let [<Literal>] AssemblyProduct = \"FsCheck.Xunit.v3\"\n-    let [<Literal>] AssemblyDescription = \"Integrates FsCheck with xUnit.NET v3\"\n+    let [<Literal>] AssemblyTitle = \"FsCheck.NUnit\"\n+    let [<Literal>] AssemblyProduct = \"FsCheck.NUnit\"\n+    let [<Literal>] AssemblyDescription = \"Integrates FsCheck with NUnit\"\n     let [<Literal>] AssemblyVersion = \"3.6.0\"\n     let [<Literal>] AssemblyFileVersion = \"3.6.0\"",
+      "type": "Type II",
+      "occurrences": [
+        "src/FsCheck.Xunit.v3/AssemblyInfo.fs:3-22",
+        "src/FsCheck.NUnit/AssemblyInfo.fs:3-22"
+      ]
+    },
+    {
+      "why": "The code beginning with `let ``should replay property with complex set of generators``() =` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/FsCheck.Test/Runner.fs:266-276 and tests/FsCheck.Test/Runner.fs:247-257; 11 and 11 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/FsCheck.Test/Runner.fs:260-276\n+++ tests/FsCheck.Test/Runner.fs:241-257\n@@ -1,8 +1,8 @@\n-    let ``should replay property with complex set of generators``() =\n+    let ``should replay property with one generator``() =\n         let doOne(s1,s2) =\n             try\n-                Check.One( \n-                    Config.QuickThrowOnFailure.WithReplay(Some {Rnd = Random.CreateWithSeedAndGamma (s1,s2); Size = None}),\n-                    fun a (_:list<char>, _:array<int*double>) (_:DateTime) -> a < 10\n+                Check.One(\n+                    Config.QuickThrowOnFailure.WithReplay(Some <| {Rnd = Random.CreateWithSeedAndGamma (s1,s2); Size = None}),\n+                    fun a -> a < 5\n                 )\n                 \"should have failed\"",
+      "occurrences": [
+        "tests/FsCheck.Test/Runner.fs:260-276",
+        "tests/FsCheck.Test/Runner.fs:241-257"
+      ]
+    },
+    {
+      "why": "The code beginning with `let ``should discover array types``() =` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/FsCheck.Test/TypeClass.fs:49-54 and tests/FsCheck.Test/TypeClass.fs:34-39; 6 and 6 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"``should discover array types``\", \"``should discover primitive types``\"], [\"ArrayInstance\", \"PrimitiveInstance\"]]. Raw core diff:\n--- tests/FsCheck.Test/TypeClass.fs:49-54\n+++ tests/FsCheck.Test/TypeClass.fs:34-39\n@@ -1 +1 @@\n-    let ``should discover array types``() = \n+    let ``should discover primitive types``() = \n@@ -5 +5 @@\n-                .Discover(true, typeof<ArrayInstance>)\n+                .Discover(true, typeof<PrimitiveInstance>)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/FsCheck.Test/TypeClass.fs:49-55\n+++ tests/FsCheck.Test/TypeClass.fs:34-41\n@@ -1,7 +1,8 @@\n-    let ``should discover array types``() = \n+    let ``should discover primitive types``() = \n         let typeClass = \n             TypeClass<ITypeClassUnderTest<_>>\n                 .New()\n-                .Discover(true, typeof<ArrayInstance>)\n+                .Discover(true, typeof<PrimitiveInstance>)\n         1 =! typeClass.Instances.Count\n-        test <@ typeClass.Instances.Contains (Array typeof<_[,]>) @>\n+        test <@ typeClass.Instances.Contains (Primitive typeof<int>) @>\n+        false =! typeClass.HasCatchAll",
+      "occurrences": [
+        "tests/FsCheck.Test/TypeClass.fs:49-55",
+        "tests/FsCheck.Test/TypeClass.fs:34-41"
+      ]
+    },
+    {
+      "why": "The code beginning with `static member val UInt16 =` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: src/FsCheck/Internals.DefaultArbs.fs:91-101 and src/FsCheck/Internals.DefaultArbs.fs:121-131; 9 and 9 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"DoNotSizeUInt16\", \"DoNotSizeUInt32\"], [\"choose\", \"choose64\"], [\"int\", \"int64\"], [\"UInt16\", \"UInt32\"], [\"uint16\", \"uint32\"]]. Raw core diff:\n--- src/FsCheck/Internals.DefaultArbs.fs:91-101\n+++ src/FsCheck/Internals.DefaultArbs.fs:121-131\n@@ -5,3 +5,3 @@\n-    /// Generate arbitrary uint16 that is uniformly distributed in the whole range of uint16 values.\n-    static member val DoNotSizeUInt16 =\n-            (Gen.choose(int UInt16.MinValue, int UInt16.MaxValue) |> Gen.map uint16, \n+    ///Generate arbitrary uint32 that is unrestricted by size.\n+    static member val DoNotSizeUInt32 =\n+            (Gen.choose64(int64 UInt32.MinValue, int64 UInt32.MaxValue) |> Gen.map uint32,\n@@ -10 +10 @@\n-            |> Arb.convert DoNotSize DoNotSize.Unwrap \n+            |> Arb.convert DoNotSize DoNotSize.Unwrap\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/FsCheck/Internals.DefaultArbs.fs:89-101\n+++ src/FsCheck/Internals.DefaultArbs.fs:119-131\n@@ -1,13 +1,13 @@\n-    static member val UInt16 =\n-            (Gen.sized( fun s -> Gen.choose(0, s) |> Gen.map uint16),\n+    static member val UInt32 =\n+            (Gen.sized( fun s -> Gen.choose(0, s) |> Gen.map uint32),\n              Shrink.unsignedNumber)\n             |> Arb.fromGenShrink\n         with get\n \n-    /// Generate arbitrary uint16 that is uniformly distributed in the whole range of uint16 values.\n-    static member val DoNotSizeUInt16 =\n-            (Gen.choose(int UInt16.MinValue, int UInt16.MaxValue) |> Gen.map uint16, \n+    ///Generate arbitrary uint32 that is unrestricted by size.\n+    static member val DoNotSizeUInt32 =\n+            (Gen.choose64(int64 UInt32.MinValue, int64 UInt32.MaxValue) |> Gen.map uint32,\n              Shrink.unsignedNumber)\n             |> Arb.fromGenShrink\n-            |> Arb.convert DoNotSize DoNotSize.Unwrap \n+            |> Arb.convert DoNotSize DoNotSize.Unwrap\n         with get",
+      "occurrences": [
+        "src/FsCheck/Internals.DefaultArbs.fs:89-101",
+        "src/FsCheck/Internals.DefaultArbs.fs:119-131"
+      ]
+    },
+    {
+      "why": "The code beginning with `static member CollectToArray (source:seq<Gen<'T>>) =` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: src/FsCheck/Fluent.Gen.fs:114-127 and src/FsCheck/Fluent.Gen.fs:128-141; 6 and 6 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"CollectToArray\", \"CollectToSequence\"], [\"sequenceToArray\", \"sequenceToSeq\"], [\"collectToArray\", \"collectToSeq\"]]. Raw core diff:\n--- src/FsCheck/Fluent.Gen.fs:114-127\n+++ src/FsCheck/Fluent.Gen.fs:128-141\n@@ -1 +1 @@\n-    static member CollectToArray (source:seq<Gen<'T>>) =\n+    static member CollectToSequence (source:seq<Gen<'T>>) =\n@@ -3 +3 @@\n-        |> Gen.sequenceToArray\n+        |> Gen.sequenceToSeq\n@@ -5 +5 @@\n-    /// Transform the given sequence into a generator of an array using the given function \n+    /// Transform the given sequence into a generator of sequences using the given function \n@@ -7,6 +6,0 @@\n-    ///[category: Create generators from generators]\n-    static member CollectToArray (source:seq<'T>, createGen:Func<'T,Gen<'U>>) =\n-        source\n-        |> Gen.collectToArray createGen.Invoke\n-\n-     /// Transform the given sequence of generators into a generator of an array.\n@@ -14,0 +9,6 @@\n+    static member CollectToSequence (source:seq<'T>, createGen:Func<'T,Gen<'U>>) =\n+        source\n+        |> Gen.collectToSeq createGen.Invoke\n+\n+    /// Generates random permutations of the given sequence.\n+    //[category: Creating generators]\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/FsCheck/Fluent.Gen.fs:114-127\n+++ src/FsCheck/Fluent.Gen.fs:128-141\n@@ -1,14 +1,14 @@\n-    static member CollectToArray (source:seq<Gen<'T>>) =\n+    static member CollectToSequence (source:seq<Gen<'T>>) =\n         source\n-        |> Gen.sequenceToArray\n+        |> Gen.sequenceToSeq\n \n-    /// Transform the given sequence into a generator of an array using the given function \n+    /// Transform the given sequence into a generator of sequences using the given function \n     /// to create a generator for each element of the sequence.\n-    ///[category: Create generators from generators]\n-    static member CollectToArray (source:seq<'T>, createGen:Func<'T,Gen<'U>>) =\n-        source\n-        |> Gen.collectToArray createGen.Invoke\n-\n-     /// Transform the given sequence of generators into a generator of an array.\n     /// Each sequence generated by the resulting generator can be infinite, if the source sequence is infinite.\n     ///[category: Create generators from generators]\n+    static member CollectToSequence (source:seq<'T>, createGen:Func<'T,Gen<'U>>) =\n+        source\n+        |> Gen.collectToSeq createGen.Invoke\n+\n+    /// Generates random permutations of the given sequence.\n+    //[category: Creating generators]",
+      "type": "Type II",
+      "occurrences": [
+        "src/FsCheck/Fluent.Gen.fs:114-127",
+        "src/FsCheck/Fluent.Gen.fs:128-141"
+      ]
+    },
+    {
+      "why": "The code beginning with `type FixedLengthArray<'T> = FixedLengthArray of 'T[] with` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: src/FsCheck/DefaultArbTypes.fs:102-110 and src/FsCheck/DefaultArbTypes.fs:93-101; 7 and 7 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"FixedLengthArray\", \"NonEmptyArray\"]]. Raw core diff:\n--- src/FsCheck/DefaultArbTypes.fs:102-110\n+++ src/FsCheck/DefaultArbTypes.fs:93-101\n@@ -1,2 +1,2 @@\n-type FixedLengthArray<'T> = FixedLengthArray of 'T[] with\n-    member x.Get = match x with FixedLengthArray r -> r\n+type NonEmptyArray<'T> = NonEmptyArray of 'T[] with\n+    member x.Get = match x with NonEmptyArray r -> r\n@@ -9 +9 @@\n-///Wrap a type in NonNull to prevent null being generated for the wrapped type.\n+///Represents an array whose length does not change when shrinking.\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/FsCheck/DefaultArbTypes.fs:102-110\n+++ src/FsCheck/DefaultArbTypes.fs:93-101\n@@ -1,4 +1,4 @@\n-type FixedLengthArray<'T> = FixedLengthArray of 'T[] with\n-    member x.Get = match x with FixedLengthArray r -> r\n+type NonEmptyArray<'T> = NonEmptyArray of 'T[] with\n+    member x.Get = match x with NonEmptyArray r -> r\n     interface IEnumerable<'T> with\n         member this.GetEnumerator(): IEnumerator = \n@@ -7,3 +7,3 @@\n             (this.Get :> IEnumerable<'T>).GetEnumerator()\n \n-///Wrap a type in NonNull to prevent null being generated for the wrapped type.\n+///Represents an array whose length does not change when shrinking.",
+      "type": "Type II",
+      "occurrences": [
+        "src/FsCheck/DefaultArbTypes.fs:102-110",
+        "src/FsCheck/DefaultArbTypes.fs:93-101"
+      ]
+    },
+    {
+      "why": "The code beginning with `public class Union : Doc` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: examples/FsCheck.Examples.MsTest/ClassesToTest/Doc.cs:45-60 and examples/FsCheck.Examples.MsTest/ClassesToTest/Doc.cs:62-77; 14 and 14 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"Union\", \"Concat\"]]. Raw core diff:\n--- examples/FsCheck.Examples.MsTest/ClassesToTest/Doc.cs:45-60\n+++ examples/FsCheck.Examples.MsTest/ClassesToTest/Doc.cs:62-77\n@@ -1 +1 @@\n-        public class Union : Doc\n+        public class Concat : Doc\n@@ -6 +6 @@\n-            public Union(Doc doc1, Doc doc2)\n+            public Concat(Doc doc1, Doc doc2)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- examples/FsCheck.Examples.MsTest/ClassesToTest/Doc.cs:45-60\n+++ examples/FsCheck.Examples.MsTest/ClassesToTest/Doc.cs:62-77\n@@ -1,8 +1,8 @@\n-        public class Union : Doc\n+        public class Concat : Doc\n         {\n             public Doc Doc1 { get; private set; }\n             public Doc Doc2 { get; private set; }\n \n-            public Union(Doc doc1, Doc doc2)\n+            public Concat(Doc doc1, Doc doc2)\n             {\n                 Doc1 = doc1;",
+      "type": "Type II",
+      "occurrences": [
+        "examples/FsCheck.Examples.MsTest/ClassesToTest/Doc.cs:45-60",
+        "examples/FsCheck.Examples.MsTest/ClassesToTest/Doc.cs:62-77"
+      ]
+    },
+    {
+      "why": "The code beginning with `let arbByte = Default.Byte` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: src/FsCheck/Internals.DefaultArbs.fs:1013-1023 and src/FsCheck/Internals.DefaultArbs.fs:999-1009; 10 and 10 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"16\", \"4\"], [\"IPv6Address\", \"IPv4Address\"]]. Raw core diff:\n--- src/FsCheck/Internals.DefaultArbs.fs:1013-1023\n+++ src/FsCheck/Internals.DefaultArbs.fs:999-1009\n@@ -4,3 +4,3 @@\n-                |> Gen.arrayOfLength 16\n-                |> Gen.map (IPAddress >> IPv6Address)\n-            let shrinker (IPv6Address a) =\n+                |> Gen.arrayOfLength 4\n+                |> Gen.map (IPAddress >> IPv4Address)\n+            let shrinker (IPv4Address a) =\n@@ -9 +9 @@\n-                |> Seq.map (IPAddress >> IPv6Address)\n+                |> Seq.map (IPAddress >> IPv4Address)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/FsCheck/Internals.DefaultArbs.fs:1013-1023\n+++ src/FsCheck/Internals.DefaultArbs.fs:999-1009\n@@ -2,10 +2,10 @@\n             let generator =\n                 arbByte.Generator\n-                |> Gen.arrayOfLength 16\n-                |> Gen.map (IPAddress >> IPv6Address)\n-            let shrinker (IPv6Address a) =\n+                |> Gen.arrayOfLength 4\n+                |> Gen.map (IPAddress >> IPv4Address)\n+            let shrinker (IPv4Address a) =\n                 a.GetAddressBytes()\n                 |> Shrink.arrayElements arbByte.Shrinker\n-                |> Seq.map (IPAddress >> IPv6Address)\n+                |> Seq.map (IPAddress >> IPv4Address)\n      \n             Arb.fromGenShrink (generator, shrinker)",
+      "type": "Type II",
+      "occurrences": [
+        "src/FsCheck/Internals.DefaultArbs.fs:1013-1023",
+        "src/FsCheck/Internals.DefaultArbs.fs:999-1009"
+      ]
+    },
+    {
+      "why": "The code beginning with `[<Fact>]` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: tests/FsCheck.Test/Arbitrary.fs:652-660 and tests/FsCheck.Test/Arbitrary.fs:642-650; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"``Generic ICollection``\", \"``Generic IList``\"], [\"ICollection\", \"IList\"], [\"``Generic ICollection shrinks``\", \"``Generic IList shrinks``\"]]. Raw core diff:\n--- tests/FsCheck.Test/Arbitrary.fs:652-660\n+++ tests/FsCheck.Test/Arbitrary.fs:642-650\n@@ -2,2 +2,2 @@\n-    let ``Generic ICollection``() =\n-        generate<ICollection<int>> |> sample 10 |> ignore\n+    let ``Generic IList``() =\n+        generate<IList<int>> |> sample 10 |> ignore\n@@ -6 +6 @@\n-    let ``Generic ICollection shrinks`` (value: int ICollection) =\n+    let ``Generic IList shrinks`` (value: int IList) =\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/FsCheck.Test/Arbitrary.fs:652-660\n+++ tests/FsCheck.Test/Arbitrary.fs:642-650\n@@ -1,8 +1,8 @@\n     [<Fact>]\n-    let ``Generic ICollection``() =\n-        generate<ICollection<int>> |> sample 10 |> ignore\n+    let ``Generic IList``() =\n+        generate<IList<int>> |> sample 10 |> ignore\n \n     [<Property>]\n-    let ``Generic ICollection shrinks`` (value: int ICollection) =\n+    let ``Generic IList shrinks`` (value: int IList) =\n         shrink value \n         |> Seq.forall (fun l -> l.Count <= value.Count)",
+      "type": "Type II",
+      "occurrences": [
+        "tests/FsCheck.Test/Arbitrary.fs:652-660",
+        "tests/FsCheck.Test/Arbitrary.fs:642-650"
+      ]
+    },
+    {
+      "why": "The code beginning with `﻿namespace FsCheck.Xunit` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: src/FsCheck.Xunit/CheckExtensions.fs:30-60 and src/FsCheck.Xunit.v3/CheckExtensions.fs:32-62; 28 and 28 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/FsCheck.Xunit/CheckExtensions.fs:1-60\n+++ src/FsCheck.Xunit.v3/CheckExtensions.fs:1-62\n@@ -3,17 +3,19 @@\n open System\n open System.Runtime.CompilerServices\n+open Xunit\n+open Xunit.v3\n+\n open FsCheck\n-open Xunit.Abstractions\n \n module private Helper =\n     let private runner (testOutputHelper: ITestOutputHelper) =\n         { new IRunner with\n-            member __.OnStartFixture t =\n+            member _.OnStartFixture t =\n                 Runner.onStartFixtureToString t |> testOutputHelper.WriteLine\n-            member __.OnArguments (ntest,args, every) =\n+            member _.OnArguments (ntest,args, every) =\n                 every ntest args |> testOutputHelper.WriteLine\n-            member __.OnShrink(args, everyShrink) =\n+            member _.OnShrink(args, everyShrink) =\n                 everyShrink args |> testOutputHelper.WriteLine\n-            member __.OnFinished(name,testResult) = \n+            member _.OnFinished(name,testResult) = \n                 Runner.onFinishedToString name testResult |> testOutputHelper.WriteLine\n         }\n@@ -21,11 +23,11 @@\n     let private throwingRunner (testOutputHelper: ITestOutputHelper) =\n         { new IRunner with\n-            member __.OnStartFixture t =\n+            member _.OnStartFixture t =\n                 testOutputHelper.WriteLine (Runner.onStartFixtureToString t)\n-            member __.OnArguments (ntest,args, every) =\n+            member _.OnArguments (ntest,args, every) =\n                 testOutputHelper.WriteLine (every ntest args)\n-            member __.OnShrink(args, everyShrink) =\n+            member _.OnShrink(args, everyShrink) =\n                 testOutputHelper.WriteLine (everyShrink args)\n-            member __.OnFinished(name,testResult) = \n+            member _.OnFinished(name,testResult) = \n                 match testResult with\n                 | TestResult.Passed _ -> testOutputHelper.WriteLine (Runner.onFinishedToString name testResult)",
+      "occurrences": [
+        "src/FsCheck.Xunit/CheckExtensions.fs:1-60",
+        "src/FsCheck.Xunit.v3/CheckExtensions.fs:1-62"
+      ]
+    },
+    {
+      "why": "The code beginning with `type XunitRunner() =` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: src/FsCheck.Xunit.v3/PropertyAttribute.fs:34-46 and src/FsCheck.NUnit/FsCheckPropertyAttribute.fs:39-51; 12 and 12 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/FsCheck.Xunit.v3/PropertyAttribute.fs:24-46\n+++ src/FsCheck.NUnit/FsCheckPropertyAttribute.fs:20-51\n@@ -1,12 +1,21 @@\n-type XunitRunner() =\n+type private NunitRunner() =\n     let mutable result = None\n-    member _.Result = result.Value\n+    member __.Result = result.Value\n     interface IRunner with\n-        override _.OnStartFixture _ = ()\n-        override _.OnArguments (ntest,args, every) =\n-            every ntest args |> ignore\n-        override _.OnShrink(args, everyShrink) =\n-            everyShrink args |> ignore\n-        override _.OnFinished(_ ,testResult) =\n+        override __.OnStartFixture _ = ()\n+        override __.OnArguments (ntest,args, every) =\n+            let argsForOutput = every ntest args\n+            // Only write the args if there's something to write.\n+            // Although it may seem harmless to write an empty string, writing anything at this stage seems to\n+            // trigger NUnit's formatting system, so that it adds a 'header' for the test in the output. That\n+            // doesn't look pretty in the cases where it turns out that there's truly nothing to write (e.g.\n+            // when QuietOnSuccess is true, and the Property passed.\n+            if not (String.IsNullOrWhiteSpace argsForOutput) then\n+                TestContext.WriteLine(argsForOutput)\n+        override __.OnShrink(args, everyShrink) =\n+            let argsForOutput = everyShrink args\n+            if not (String.IsNullOrWhiteSpace argsForOutput) then\n+                TestContext.WriteLine(argsForOutput)\n+        override __.OnFinished(_,testResult) =\n             result <- Some testResult\n ",
+      "occurrences": [
+        "src/FsCheck.Xunit.v3/PropertyAttribute.fs:24-46",
+        "src/FsCheck.NUnit/FsCheckPropertyAttribute.fs:20-51"
+      ]
+    },
+    {
+      "why": "The code beginning with `﻿namespace FsCheck.Xunit` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: src/FsCheck.Xunit.v3/Runner.fs:9-20 and src/FsCheck.Xunit/Runner.fs:9-20; 12 and 12 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/FsCheck.Xunit.v3/Runner.fs:1-20\n+++ src/FsCheck.Xunit/Runner.fs:1-20\n@@ -1,10 +1,10 @@\n ﻿namespace FsCheck.Xunit\n \n-open Xunit\n open FsCheck\n+   \n /// A runner for FsCheck (i.e. that you can use as Config.Runner) which outputs\n /// to Xunit's given ITestOutputHelper.\n /// For example, { Config.QuickThrowOnFailure with Runner = TestOutputRunner(output) }\n-type TestOutputRunner(output: ITestOutputHelper) =\n+type TestOutputRunner(output: Xunit.Abstractions.ITestOutputHelper) =\n     interface IRunner with\n         member _.OnStartFixture t =",
+      "occurrences": [
+        "src/FsCheck.Xunit.v3/Runner.fs:1-20",
+        "src/FsCheck.Xunit/Runner.fs:1-20"
+      ]
+    },
+    {
+      "why": "The code beginning with `type AttributeLevel =` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: tests/FsCheck.Test.Xunit.v3/PropertyAttributeTests.fs:8-70 and tests/FsCheck.Test.NUnit/PropertiesAttributeTests.fs:6-68; 52 and 52 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "tests/FsCheck.Test.Xunit.v3/PropertyAttributeTests.fs:8-70",
+        "tests/FsCheck.Test.NUnit/PropertiesAttributeTests.fs:6-68"
+      ]
+    },
+    {
+      "why": "The code beginning with `Prop.ForAll<int, int>((n, m) => {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: examples/FsCheck.Docs.CSharpSnippets/Properties.cs:116-122 and examples/FsCheck.Examples.CSharp/Program.cs:112-118; 7 and 7 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n--- examples/FsCheck.Docs.CSharpSnippets/Properties.cs:116-122\n+++ examples/FsCheck.Examples.CSharp/Program.cs:112-118\n@@ -4,4 +4,4 @@\n-                  .And((new Func<bool>(() => res / n == m)).When(n != 0.0).Label(\"div2\"))\n-                  .And((res > m).Label(\"lt1\"))\n-                  .And((res > n).Label(\"lt2\"))\n-                  .Label(string.Format(\"evidence = {0}\", res));\n+                   .And((new Func<bool>(() => res / n == m)).When(n != 0.0).Label(\"div2\"))\n+                   .And((res > m).Label(\"lt1\"))\n+                   .And((res > n).Label(\"lt2\"))\n+                   .Label(string.Format(\"evidence = {0}\", res));\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- examples/FsCheck.Docs.CSharpSnippets/Properties.cs:116-123\n+++ examples/FsCheck.Examples.CSharp/Program.cs:112-119\n@@ -2,7 +2,7 @@\n                 var res = n * m;\n                 return (new Func<bool>(() => res / m == n)).When(m != 0.0).Label(\"div1\")\n-                  .And((new Func<bool>(() => res / n == m)).When(n != 0.0).Label(\"div2\"))\n-                  .And((res > m).Label(\"lt1\"))\n-                  .And((res > n).Label(\"lt2\"))\n-                  .Label(string.Format(\"evidence = {0}\", res));\n-            }).QuickCheck();\n+                   .And((new Func<bool>(() => res / n == m)).When(n != 0.0).Label(\"div2\"))\n+                   .And((res > m).Label(\"lt1\"))\n+                   .And((res > n).Label(\"lt2\"))\n+                   .Label(string.Format(\"evidence = {0}\", res));\n+            }).QuickCheck(\"Multiple labels\");",
+      "occurrences": [
+        "examples/FsCheck.Docs.CSharpSnippets/Properties.cs:116-123",
+        "examples/FsCheck.Examples.CSharp/Program.cs:112-119"
+      ]
+    },
+    {
+      "why": "The code beginning with `member this.Init(output:TestOutputHelper) =` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: src/FsCheck.Xunit/PropertyAttribute.fs:181-186 and src/FsCheck.Xunit.v3/PropertyAttribute.fs:200-205; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/FsCheck.Xunit/PropertyAttribute.fs:178-197\n+++ src/FsCheck.Xunit.v3/PropertyAttribute.fs:197-216\n@@ -1,5 +1,5 @@\n     member this.Init(output:TestOutputHelper) =\n-        let getPropertiesOnDeclaringClasses (testClass: ITestClass) = \n-            [   let mutable current: Type = testClass.Class.ToRuntimeType()\n+        let getPropertiesOnDeclaringClasses (testClass: IXunitTestClass) = \n+            [   let mutable current: Type = testClass.Class\n                 while not (isNull current) do\n                     yield current.GetTypeInfo().GetCustomAttributes<PropertiesAttribute>()\n@@ -9,11 +9,11 @@\n             |> List.rev\n             \n-        let getConfig (attr: IAttributeInfo) =\n-            attr.GetNamedArgument<PropertyConfig> \"Config\"\n+        let getConfig (attr: PropertyAttribute) =\n+            attr.Config\n \n         let config = combineAttributes [\n-              yield this.TestMethod.TestClass.Class.Assembly.GetCustomAttributes(typeof<PropertiesAttribute>) |> Seq.tryHead |> Option.map getConfig\n+              yield this.TestMethod.TestClass.Class.Assembly.GetCustomAttributes<PropertiesAttribute>() |> Seq.tryHead |> Option.map getConfig\n               yield! getPropertiesOnDeclaringClasses this.TestMethod.TestClass\n-              yield this.TestMethod.Method.GetCustomAttributes(typeof<PropertyAttribute>) |> Seq.head |> getConfig |> Some]\n+              yield this.TestMethod.Method.GetCustomAttributes<PropertyAttribute>() |> Seq.head |> getConfig |> Some]\n         \n         { config with Arbitrary = config.Arbitrary }",
+      "occurrences": [
+        "src/FsCheck.Xunit/PropertyAttribute.fs:178-197",
+        "src/FsCheck.Xunit.v3/PropertyAttribute.fs:197-216"
+      ]
+    },
+    {
+      "why": "The code beginning with `[<Fact>]` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: tests/FsCheck.Test/Property.fs:356-363 and tests/FsCheck.Test/Property.fs:369-376; 8 and 8 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- tests/FsCheck.Test/Property.fs:352-363\n+++ tests/FsCheck.Test/Property.fs:365-376\n@@ -1,6 +1,6 @@\n     [<Fact>]\n-    let ``Or should merge stamps from both properties when both pass``() =\n+    let ``Or should merge stamps from both properties when one passes``() =\n         let prop1 = true |> Prop.collect \"Property 1\"\n-        let prop2 = true |> Prop.collect \"Property 2\"\n+        let prop2 = false |> Prop.collect \"Property 2\"\n         let resultRunner = GetResultRunner()\n         let config = Config.Quick.WithRunner(resultRunner).WithMaxTest(1)",
+      "occurrences": [
+        "tests/FsCheck.Test/Property.fs:352-363",
+        "tests/FsCheck.Test/Property.fs:365-376"
+      ]
+    },
+    {
+      "why": "The code beginning with `let map5 f (Gen a) (Gen b) (Gen c) (Gen d) (Gen e) =` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: src/FsCheck/FSharp.Gen.fs:117-122 and src/FsCheck/FSharp.Gen.fs:129-134; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- src/FsCheck/FSharp.Gen.fs:116-126\n+++ src/FsCheck/FSharp.Gen.fs:128-139\n@@ -1,3 +1,3 @@\n-    let map5 f (Gen a) (Gen b) (Gen c) (Gen d) (Gen e) = \n+    let map6 f (Gen a) (Gen b) (Gen c) (Gen d) (Gen e) (Gen g) = \n         Gen (fun size r0 ->\n                 let struct (a',r1) = a size r0\n@@ -6,6 +6,7 @@\n                 let struct (d',r4) = d size r3\n                 let struct (e',r5) = e size r4\n-                struct (f a' b' c' d' e', r5))\n-\n-        /// Create a new generator by applying f to each value in the given generators.\n-    //[category: Creating generators from generators]\n+                let struct (g',r6) = g size r5\n+                struct (f a' b' c' d' e' g', r6))\n+        \n+    /// Obtain the current size. sized g calls g, passing it the current size as a parameter.\n+    //[category: Managing size]",
+      "occurrences": [
+        "src/FsCheck/FSharp.Gen.fs:116-126",
+        "src/FsCheck/FSharp.Gen.fs:128-139"
+      ]
+    }
+  ],
+  "clearly_out": [],
+  "not_clear": [
+    {
+      "why": "The fragments around `Prop.ForAll<int, int[]>((x, xs) =>` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "examples/FsCheck.Examples.CSharp/Program.cs:88-93",
+        "examples/FsCheck.Examples.MsTest/SampleTests.cs:64-72"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck.Xunit/PropertyAttribute.fs:266-266",
+        "src/FsCheck.Xunit.v3/PropertyAttribute.fs:238-238"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Fluent.Gen.fs:136-136",
+        "src/FsCheck/Fluent.Gen.fs:107-107"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "src/FsCheck/Fluent.Prop.fs:136-137",
+        "src/FsCheck/Fluent.Prop.fs:130-131"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/FSharp.Arbitrary.fs:139-144",
+        "src/FsCheck/FSharp.Arbitrary.fs:97-101"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/StateMachine.fs:243-244",
+        "src/FsCheck/StateMachine.fs:239-240"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Internals.DefaultArbs.fs:690-690",
+        "src/FsCheck/Internals.DefaultArbs.fs:917-917"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Internals.ReflectiveGenerator.fs:45-46",
+        "src/FsCheck/Internals.ReflectiveGenerator.fs:43-44"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "src/FsCheck/DefaultArbTypes.fs:11-16",
+        "src/FsCheck/DefaultArbTypes.fs:35-40"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck.Xunit/PropertyAttribute.fs:158-162",
+        "src/FsCheck.Xunit.v3/PropertyAttribute.fs:161-165"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/TypeClass.fs:64-67",
+        "tests/FsCheck.Test/TypeClass.fs:35-38"
+      ]
+    },
+    {
+      "why": "The fragments around `static member ForAll(arb1:Arbitrary<'V1>,arb2:Arbitrary<'V2>, body:Func<'V1,'V2,Property>) = forAll arb1 (fun v1 -> forAll arb2 (fun v2 -> body.Invoke` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Fluent.Prop.fs:47-64",
+        "src/FsCheck/Fluent.Prop.fs:29-45"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "src/FsCheck/Internals.DefaultArbs.fs:912-914",
+        "src/FsCheck/Internals.DefaultArbs.fs:907-909"
+      ]
+    },
+    {
+      "why": "The fragments around `[<Extension>]` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 6; edited blocks in the comment/whitespace-normalized line diff: 6.",
+      "occurrences": [
+        "src/FsCheck/Fluent.Prop.fs:273-295",
+        "src/FsCheck/Fluent.Prop.fs:318-339"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "docs/TestData.fsx:119-120",
+        "tests/FsCheck.Test/Runner.fs:101-102"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (6 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Fluent.Prop.fs:91-105",
+        "src/FsCheck/Fluent.Prop.fs:57-66"
+      ]
+    },
+    {
+      "why": "The fragments around `[<Extension>]` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 4.",
+      "occurrences": [
+        "src/FsCheck/Fluent.Prop.fs:291-306",
+        "src/FsCheck/Fluent.Prop.fs:335-350"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/FSharp.Gen.fs:206-207",
+        "src/FsCheck/FSharp.Gen.fs:204-205"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Runner.fs:76-77",
+        "tests/FsCheck.Test/Runner.fs:90-91"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck.NUnit/FsCheckPropertyAttribute.fs:130-133",
+        "src/FsCheck.Xunit.v3/PropertyAttribute.fs:125-128"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Runner.fs:704-713",
+        "src/FsCheck/Runner.fs:695-703"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Internals.ReflectiveGenerator.fs:49-50",
+        "src/FsCheck/Internals.ReflectiveGenerator.fs:43-44"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "docs/Properties.fsx:226-229",
+        "docs/Properties.fsx:181-183"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "src/FsCheck/RunnerExtensions.fs:54-57",
+        "src/FsCheck/RunnerExtensions.fs:48-51"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Arbitrary.fs:48-51",
+        "tests/FsCheck.Test/Arbitrary.fs:70-73"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Fluent.Prop.fs:68-68",
+        "src/FsCheck/Fluent.Prop.fs:66-66"
+      ]
+    },
+    {
+      "why": "The fragments around `static member ForAll(arb1:Arbitrary<'V1>,arb2:Arbitrary<'V2>,arb3:Arbitrary<'V3>, body:Func<'V1,'V2,'V3,Property>) =` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Fluent.Prop.fs:77-98",
+        "src/FsCheck/Fluent.Prop.fs:47-64"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Internals.DefaultArbs.fs:68-70",
+        "src/FsCheck/Internals.DefaultArbs.fs:61-63"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Arbitrary.fs:814-816",
+        "tests/FsCheck.Test/Arbitrary.fs:805-807"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "src/FsCheck.Xunit/PropertyAttribute.fs:163-166",
+        "src/FsCheck.Xunit.v3/PropertyAttribute.fs:166-169"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "src/FsCheck/Internals.DefaultArbs.fs:840-844",
+        "src/FsCheck/Internals.DefaultArbs.fs:834-838"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Runner.fs:408-408",
+        "src/FsCheck/Runner.fs:406-406"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "examples/FsCheck.Examples.CSharp/Program.cs:81-85",
+        "examples/FsCheck.Docs.CSharpSnippets/Properties.cs:72-76"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "src/FsCheck/Internals.DefaultArbs.fs:752-754",
+        "src/FsCheck/Internals.DefaultArbs.fs:747-749"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Property.fs:151-151",
+        "tests/FsCheck.Test/Property.fs:150-150"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/StateMachine.fs:235-236",
+        "src/FsCheck/StateMachine.fs:239-240"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/FsCheck.Test/Runner.fs:390-396",
+        "tests/FsCheck.Test/Runner.fs:375-381"
+      ]
+    },
+    {
+      "why": "The fragments around `[<Property>]` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/FsCheck.Test/Arbitrary.fs:504-512",
+        "tests/FsCheck.Test/Arbitrary.fs:514-522"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Property.fs:148-149",
+        "tests/FsCheck.Test/Property.fs:145-146"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Arbitrary.fs:676-678",
+        "tests/FsCheck.Test/Arbitrary.fs:662-664"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "src/FsCheck/Random.fs:120-129",
+        "src/FsCheck/Random.fs:110-114"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "src/FsCheck.NUnit/FsCheckPropertyAttribute.fs:117-120",
+        "src/FsCheck.NUnit/FsCheckPropertyAttribute.fs:111-114"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "examples/FsCheck.Docs.CSharpSnippets/Properties.cs:59-60",
+        "examples/FsCheck.Examples.MsTest/SampleTests.cs:44-45"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/FsCheck.Test/Property.fs:261-264",
+        "tests/FsCheck.Test/Property.fs:273-276"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "build.fsx:578-582",
+        "build.fsx:557-561"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Internals.DefaultArbs.fs:151-155",
+        "src/FsCheck/Internals.DefaultArbs.fs:89-93"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/TypeClass.fs:74-77",
+        "tests/FsCheck.Test/TypeClass.fs:94-97"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Runner.fs:335-339",
+        "tests/FsCheck.Test/Runner.fs:341-345"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/FsCheck.Test/StateMachine.fs:85-86",
+        "tests/FsCheck.Test/StateMachine.fs:165-166"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Internals.Reflect.fs:126-129",
+        "src/FsCheck/Internals.Reflect.fs:165-169"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "docs/TestData.fsx:298-298",
+        "docs/TestData.fsx:308-308"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "src/FsCheck/Fluent.Prop.fs:191-192",
+        "src/FsCheck/Fluent.Prop.fs:180-181"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/FSharp.Gen.fs:347-353",
+        "src/FsCheck/FSharp.Gen.fs:341-346"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Arbitrary.fs:672-674",
+        "tests/FsCheck.Test/Arbitrary.fs:658-660"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Fluent.Gen.fs:136-136",
+        "src/FsCheck/Fluent.Gen.fs:121-121"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Fluent.Prop.fs:77-78",
+        "src/FsCheck/Fluent.Prop.fs:81-82"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Gen.fs:553-553",
+        "tests/FsCheck.Test/Gen.fs:555-555"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Internals.DefaultArbs.fs:912-914",
+        "src/FsCheck/Internals.DefaultArbs.fs:876-878"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Gen.fs:119-119",
+        "tests/FsCheck.Test/Gen.fs:125-125"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Fluent.Prop.fs:38-38",
+        "src/FsCheck/Fluent.Prop.fs:40-40"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Arbitrary.fs:859-861",
+        "tests/FsCheck.Test/Arbitrary.fs:449-451"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Fluent.Prop.fs:87-88",
+        "src/FsCheck/Fluent.Prop.fs:84-85"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Gen.fs:563-563",
+        "tests/FsCheck.Test/Gen.fs:564-564"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Testable.fs:218-220",
+        "src/FsCheck/Testable.fs:215-217"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Arbitrary.fs:428-431",
+        "tests/FsCheck.Test/Arbitrary.fs:413-416"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/FSharp.ArbMap.fs:41-44",
+        "src/FsCheck/FSharp.ArbMap.fs:33-36"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Runner.fs:737-744",
+        "src/FsCheck/Runner.fs:731-736"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Fluent.Arbitrary.fs:51-51",
+        "src/FsCheck/Fluent.Arbitrary.fs:36-36"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Fluent.Gen.fs:279-286",
+        "src/FsCheck/Fluent.Gen.fs:287-293"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Gen.fs:507-507",
+        "tests/FsCheck.Test/Gen.fs:506-506"
+      ]
+    },
+    {
+      "why": "The fragments around `[<Fact>]` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/FsCheck.Test/Arbitrary.fs:364-370",
+        "tests/FsCheck.Test/Arbitrary.fs:638-644"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/StateMachine.fs:221-225",
+        "src/FsCheck/StateMachine.fs:229-232"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "examples/FsCheck.Examples.MsTest/SampleTests.cs:122-124",
+        "examples/FsCheck.Examples.CSharp/Program.cs:129-131"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Internals.DefaultArbs.fs:876-878",
+        "src/FsCheck/Internals.DefaultArbs.fs:902-904"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Arbitrary.fs:969-969",
+        "tests/FsCheck.Test/Arbitrary.fs:971-971"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "examples/FsCheck.Examples.CSharp/Program.cs:71-75",
+        "examples/FsCheck.Docs.CSharpSnippets/Properties.cs:54-60"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Arbitrary.fs:527-527",
+        "tests/FsCheck.Test/Arbitrary.fs:745-745"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Fluent.Prop.fs:140-144",
+        "src/FsCheck/Fluent.Prop.fs:123-127"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "src/FsCheck/Internals.DefaultArbs.fs:573-577",
+        "src/FsCheck/Internals.DefaultArbs.fs:580-584"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/StateMachine.fs:60-63",
+        "tests/FsCheck.Test/StateMachine.fs:218-221"
+      ]
+    },
+    {
+      "why": "The fragments around `let ``Generic task-asynchronous tests should be passable``() =` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 8; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/FsCheck.Test/Property.fs:267-276",
+        "tests/FsCheck.Test/Property.fs:255-264"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Fluent.Prop.fs:98-98",
+        "src/FsCheck/Fluent.Prop.fs:93-93"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/TypeClass.fs:175-178",
+        "tests/FsCheck.Test/TypeClass.fs:137-140"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "src/FsCheck/Fluent.Prop.fs:88-88",
+        "src/FsCheck/Fluent.Prop.fs:72-72"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 5; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "src/FsCheck.Xunit/PropertyAttribute.fs:170-174",
+        "src/FsCheck.NUnit/FsCheckPropertyAttribute.fs:247-251"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "docs/TestData.fsx:577-578",
+        "docs/RunningTests.fsx:331-332"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/StateMachine.fs:133-134",
+        "tests/FsCheck.Test/StateMachine.fs:131-132"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Gen.fs:338-342",
+        "docs/TipsAndTricks.fsx:58-61"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/DefaultArbTypes.fs:115-116",
+        "src/FsCheck/DefaultArbTypes.fs:111-114"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Gen.fs:566-566",
+        "tests/FsCheck.Test/Gen.fs:567-567"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Internals.DefaultArbs.fs:512-512",
+        "src/FsCheck/Internals.DefaultArbs.fs:503-503"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Runner.fs:300-303",
+        "tests/FsCheck.Test/Runner.fs:11-14"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/FSharp.Gen.fs:52-54",
+        "src/FsCheck/FSharp.Gen.fs:14-14"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck.Xunit/PropertyAttribute.fs:261-263",
+        "src/FsCheck.Xunit/PropertyAttribute.fs:268-270"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Runner.fs:139-139",
+        "tests/FsCheck.Test/Runner.fs:116-116"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Gen.fs:401-405",
+        "tests/FsCheck.Test/Gen.fs:430-432"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Gen.fs:113-113",
+        "tests/FsCheck.Test/Gen.fs:125-125"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/FsCheck.Test/Gen.fs:305-308",
+        "tests/FsCheck.Test/Gen.fs:278-281"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "examples/FsCheck.Docs.CSharpSnippets/Properties.cs:73-75",
+        "examples/FsCheck.Examples.MsTest/SampleTests.cs:54-56"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Fluent.Gen.fs:121-121",
+        "src/FsCheck/Fluent.Gen.fs:186-186"
+      ]
+    },
+    {
+      "why": "The fragments around `let add res =` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 3.",
+      "occurrences": [
+        "src/FsCheck/FSharp.Prop.fs:38-43",
+        "src/FsCheck/Testable.fs:181-186"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "examples/FsCheck.Docs.CSharpSnippets/TestData.cs:78-84",
+        "examples/FsCheck.Examples.CSharp/Program.cs:136-140"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck.NUnit/FsCheckPropertyAttribute.fs:176-177",
+        "src/FsCheck.NUnit/FsCheckPropertyAttribute.fs:173-174"
+      ]
+    },
+    {
+      "why": "The fragments around `Prop.ForAll<int, int[]>((x, xs) =>` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "examples/FsCheck.Docs.CSharpSnippets/Properties.cs:80-93",
+        "examples/FsCheck.Examples.CSharp/Program.cs:88-100"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/RunnerExtensions.fs:46-47",
+        "src/FsCheck/RunnerExtensions.fs:50-51"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Internals.DefaultArbs.fs:193-196",
+        "src/FsCheck/Internals.DefaultArbs.fs:225-228"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Internals.DefaultArbs.fs:463-463",
+        "src/FsCheck/Internals.DefaultArbs.fs:464-464"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "examples/FsCheck.Docs.CSharpSnippets/QuickStart.cs:25-26",
+        "examples/FsCheck.Examples.CSharp/Program.cs:67-68"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "src/FsCheck/RunnerExtensions.fs:50-53",
+        "src/FsCheck/RunnerExtensions.fs:46-49"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "src/FsCheck/StateMachine.fs:234-234",
+        "src/FsCheck/StateMachine.fs:238-238"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "tests/FsCheck.Test/Gen.fs:327-327",
+        "tests/FsCheck.Test/Gen.fs:334-334"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Arbitrary.fs:67-68",
+        "tests/FsCheck.Test/Arbitrary.fs:89-90"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "examples/FsCheck.Docs.CSharpSnippets/Properties.cs:98-101",
+        "examples/FsCheck.Examples.MsTest/SampleTests.cs:94-97"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Internals.DefaultArbs.fs:263-266",
+        "src/FsCheck/Internals.DefaultArbs.fs:242-245"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "docs/QuickStart.fsx:78-78",
+        "docs/TestData.fsx:577-578"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "src/FsCheck.Xunit.v3/PropertyAttribute.fs:129-136",
+        "src/FsCheck.Xunit/PropertyAttribute.fs:126-133"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "src/FsCheck/Runner.fs:565-568",
+        "src/FsCheck/Runner.fs:658-661"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Fluent.Prop.fs:26-26",
+        "src/FsCheck/Fluent.Prop.fs:24-24"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Arbitrary.fs:76-79",
+        "tests/FsCheck.Test/Arbitrary.fs:54-57"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck.NUnit/FsCheckPropertyAttribute.fs:150-151",
+        "src/FsCheck.Xunit/PropertyAttribute.fs:139-140"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "examples/FsCheck.Examples.CSharp/Program.cs:71-72",
+        "examples/FsCheck.Examples.MsTest/SampleTests.cs:34-37"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "src/FsCheck/Internals.DefaultArbs.fs:607-611",
+        "src/FsCheck/Internals.DefaultArbs.fs:600-604"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Internals.DefaultArbs.fs:573-576",
+        "src/FsCheck/Internals.DefaultArbs.fs:580-583"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Runner.fs:534-537",
+        "tests/FsCheck.Test/Runner.fs:522-525"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Fluent.Gen.fs:39-51",
+        "src/FsCheck/Fluent.Gen.fs:52-65"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Arbitrary.fs:364-366",
+        "tests/FsCheck.Test/Arbitrary.fs:652-654"
+      ]
+    },
+    {
+      "why": "The fragments around `let ``TimeSpan shrinks`` (value: TimeSpan) =` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/FsCheck.Test/Arbitrary.fs:309-324",
+        "tests/FsCheck.Test/Arbitrary.fs:287-302"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Internals.DefaultArbs.fs:97-100",
+        "src/FsCheck/Internals.DefaultArbs.fs:127-130"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "src/FsCheck.Xunit/PropertyAttribute.fs:124-127",
+        "src/FsCheck.Xunit.v3/PropertyAttribute.fs:127-130"
+      ]
+    },
+    {
+      "why": "The fragments around `let read = getImmutableCollection1Reader elementType` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 5; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Internals.ReflectiveShrinker.fs:109-114",
+        "src/FsCheck/Internals.ReflectiveShrinker.fs:122-127"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Arbitrary.fs:892-892",
+        "tests/FsCheck.Test/Arbitrary.fs:888-888"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/StateMachine.fs:176-178",
+        "src/FsCheck/StateMachine.fs:184-186"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Arbitrary.fs:361-362",
+        "tests/FsCheck.Test/Arbitrary.fs:355-356"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Internals.ReflectiveShrinker.fs:16-16",
+        "src/FsCheck/Internals.ReflectiveShrinker.fs:12-12"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Gen.fs:316-316",
+        "tests/FsCheck.Test/Gen.fs:288-288"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "src/FsCheck/Internals.ReflectiveShrinker.fs:132-132",
+        "src/FsCheck/Internals.ReflectiveGenerator.fs:20-20"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "docs/RunningTests.fsx:154-156",
+        "tests/FsCheck.Test/Gen.fs:338-341"
+      ]
+    },
+    {
+      "why": "The fragments around `[<Extension>]` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 5; edited blocks in the comment/whitespace-normalized line diff: 5.",
+      "occurrences": [
+        "src/FsCheck/Fluent.Prop.fs:273-290",
+        "src/FsCheck/Fluent.Prop.fs:313-334"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Arbitrary.fs:297-297",
+        "tests/FsCheck.Test/Arbitrary.fs:319-319"
+      ]
+    },
+    {
+      "why": "The fragments around `Prop.ForAll<int, int[]>((x, xs) =>` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "examples/FsCheck.Docs.CSharpSnippets/Properties.cs:72-85",
+        "examples/FsCheck.Examples.CSharp/Program.cs:81-93"
+      ]
+    },
+    {
+      "why": "The fragments around `Prop.ForAll<int, int[]>((x, xs) =>` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 3.",
+      "occurrences": [
+        "examples/FsCheck.Examples.CSharp/Program.cs:103-109",
+        "examples/FsCheck.Examples.MsTest/SampleTests.cs:91-100"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "examples/FsCheck.Docs.CSharpSnippets/QuickStart.cs:34-35",
+        "examples/FsCheck.Examples.MsTest/SampleTests.cs:15-16"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "docs/Properties.fsx:7-15",
+        "docs/QuickStart.fsx:18-28"
+      ]
+    },
+    {
+      "why": "The fragments around `[<Properties(Arbitrary = [| typeof<NegativeDoublesOnly> |])>]` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "tests/FsCheck.Test/Runner.fs:351-373",
+        "docs/RunningTests.fsx:170-191"
+      ]
+    },
+    {
+      "why": "The fragments around `[TestMethod]` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "examples/FsCheck.Examples.MsTest/SampleTests.cs:12-17",
+        "examples/FsCheck.Docs.CSharpSnippets/QuickStart.cs:31-36"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Arbitrary.fs:62-62",
+        "tests/FsCheck.Test/Arbitrary.fs:791-791"
+      ]
+    },
+    {
+      "why": "The fragments around `[<Extension>]` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 5; edited blocks in the comment/whitespace-normalized line diff: 5.",
+      "occurrences": [
+        "src/FsCheck/Fluent.Prop.fs:296-312",
+        "src/FsCheck/Fluent.Prop.fs:340-356"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Fluent.Prop.fs:100-100",
+        "src/FsCheck/Fluent.Prop.fs:102-105"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "tests/FsCheck.Test/Arbitrary.fs:101-101",
+        "tests/FsCheck.Test/Arbitrary.fs:79-79"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Runner.fs:124-128",
+        "src/FsCheck/Runner.fs:108-113"
+      ]
+    },
+    {
+      "why": "The fragments around `let nonEmptyListOf gen :Gen<list<'T>> =` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "src/FsCheck/FSharp.Gen.fs:500-509",
+        "src/FsCheck/FSharp.Gen.fs:490-498"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "src/FsCheck/Fluent.Prop.fs:17-17",
+        "src/FsCheck/Fluent.Prop.fs:22-22"
+      ]
+    }
+  ],
+  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 200 candidates at this commit and no pair was called CLEARLY OUT by all of them. 3 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing."
+}

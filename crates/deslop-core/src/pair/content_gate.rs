@@ -1,6 +1,6 @@
 //! Pair-content admission guard before transitive closure ([FUSED-CONTENT-GATE]).
 
-use std::{collections::HashMap, hash::BuildHasher};
+use std::{collections::HashMap, hash::BuildHasher, num::NonZeroUsize};
 
 use super::{
     token_carried, CandidatePair, ExactClones, EMBEDDING_SUPPORT_FLOOR, FUSED_THRESHOLD,
@@ -11,7 +11,7 @@ use crate::{
     buckets::{CONTENT_PROMOTE_FLOOR, CONTENT_SUPPORT_FLOOR},
     cluster::scope::DeclarationScopes,
     cluster_filters::{is_embedding_role_mismatch, ParseCache},
-    content::{ContentContradiction, ContentEvidence, ContentMeasurer, PairScope},
+    content::{ContentEvidence, ContentMeasurer, PairScope},
     fingerprint::Fingerprint,
     state::FileId,
 };
@@ -21,6 +21,16 @@ mod verdict;
 use authored_scope::AuthoredScopeMemo;
 use verdict::GateVerdict;
 
+/// Fewest candidate edges per worker worth sharding the gate for
+/// ([`crate::shard::worker_count`]); every verdict is independent, so
+/// the kept edges are the same in the same order on any worker count
+/// ([PIPELINE-DETERMINISM]).
+const GATE_SHARD_MIN_PAIRS: NonZeroUsize = match NonZeroUsize::new(8_192) {
+    Some(floor) => floor,
+    None => NonZeroUsize::MIN,
+};
+/// Candidate edges per claimed chunk.
+const GATE_CHUNK_PAIRS: usize = 4_096;
 /// Structural overlap at which normalised shape saturates the content guard.
 const SHAPE_IDENTICAL_FLOOR: f64 = 0.99;
 /// Token overlap at which `MinHash` is echoing saturated normalised shape.
@@ -35,6 +45,7 @@ const EXACT_CONTENT_AGREEMENT: f64 = 1.0;
 /// This runs after rescue measurement, so `shared_subtree_overlap` is the
 /// measured `S` for rescue-eligible non-Merkle pairs, and before closure, so
 /// a rejected relation can never weld two component members together.
+/// Verdicts are dealt to workers in chunks and reassembled in input order.
 pub(crate) fn apply_pair_content_gate<L>(
     pairs: &mut Vec<CandidatePair>,
     fingerprints: &[Fingerprint],
@@ -43,88 +54,111 @@ pub(crate) fn apply_pair_content_gate<L>(
     languages: &HashMap<FileId, &'static str, L>,
     cache: &ParseCache,
 ) where
-    L: BuildHasher,
+    L: BuildHasher + Sync,
 {
-    let mut content = ContentMeasurer::default();
-    apply_pair_content_gate_with_content(
-        pairs,
-        fingerprints,
-        trees,
-        sources,
-        languages,
-        cache,
-        &mut content,
+    let shared = GateShared::new(pairs, fingerprints, trees, sources, languages, cache);
+    let workers = crate::shard::worker_count(pairs.len(), GATE_SHARD_MIN_PAIRS);
+    let (kept, _gates) = crate::shard::map_chunks(
+        pairs.chunks(GATE_CHUNK_PAIRS),
+        workers,
+        || PairGate::new(&shared, fingerprints.len()),
+        |gate, chunk: &[CandidatePair]| {
+            chunk
+                .iter()
+                .filter(|pair| gate.admits(pair, fingerprints))
+                .copied()
+                .collect::<Vec<CandidatePair>>()
+        },
     );
-}
-
-/// Uses one content measurer across every edge in this admission pass.
-fn apply_pair_content_gate_with_content<L>(
-    pairs: &mut Vec<CandidatePair>,
-    fingerprints: &[Fingerprint],
-    trees: &[NormalizedNode],
-    sources: &HashMap<FileId, Vec<u8>>,
-    languages: &HashMap<FileId, &'static str, L>,
-    cache: &ParseCache,
-    content: &mut ContentMeasurer,
-) where
-    L: BuildHasher,
-{
-    let tree_index: HashMap<FileId, &NormalizedNode> =
-        trees.iter().map(|tree| (tree.file_id, tree)).collect();
-    let scopes = DeclarationScopes::new(trees, languages);
-    let anchors = ExactClones::whole_functions_across_files(pairs, fingerprints, &scopes);
-    let mut gate = GateContext {
-        tree_index: &tree_index,
-        anchors: &anchors,
-        scopes: &scopes,
-        authored_scope: AuthoredScopeMemo::new(fingerprints.len()),
-        sources,
-        languages,
-        cache,
-        content,
-    };
-    pairs.retain(|pair| pair_passes_content_gate(pair, fingerprints, &mut gate));
+    *pairs = kept.into_iter().flatten().collect();
 }
 
 #[cfg(test)]
 #[path = "content_gate/memo_tests.rs"]
 mod memo_tests;
 
-/// Pass-wide inputs every gate verdict reads.
-struct GateContext<'a, L: BuildHasher> {
+/// Pass-wide inputs every gate verdict reads, built once per candidate
+/// corpus and shared by every [`PairGate`] over it — the admission pass
+/// and the copy-recovery walk ([FUSED-CANDIDATE-BUCKET-RECOVERY]) alike.
+pub(crate) struct GateShared<'a, L: BuildHasher> {
     /// Every member's normalised tree by file.
-    tree_index: &'a HashMap<FileId, &'a NormalizedNode>,
+    tree_index: HashMap<FileId, &'a NormalizedNode>,
     /// The exact whole-function clones a token-only pair may not merely
     /// wrap ([FUSED-SHARED-SUBTREE-ECHO]).
-    anchors: &'a ExactClones,
+    anchors: ExactClones,
     /// Authored declarations per file, for the interior-window rule
     /// ([FUSED-CONTENT-GATE-INTERIOR]).
-    scopes: &'a DeclarationScopes<'a, L>,
-    /// Cached authored-declaration roles for the one-vs-many guard.
-    authored_scope: AuthoredScopeMemo,
+    scopes: DeclarationScopes<'a, L>,
     /// Raw source per file.
     sources: &'a HashMap<FileId, Vec<u8>>,
     /// Language per file.
     languages: &'a HashMap<FileId, &'static str, L>,
     /// Parse cache for the role guard.
     cache: &'a ParseCache,
-    /// Pass-wide exact-fingerprint frontier reuse.
-    content: &'a mut ContentMeasurer,
 }
 
-/// Applies the content guard to one candidate edge.
-fn pair_passes_content_gate<L: BuildHasher>(
-    pair: &CandidatePair,
-    fingerprints: &[Fingerprint],
-    context: &mut GateContext<'_, L>,
-) -> bool {
-    let (Some(left), Some(right)) = (fingerprints.get(pair.left), fingerprints.get(pair.right))
-    else {
-        return false;
-    };
-    let verdict = gate_verdict(pair, left, right, context);
-    log_gate_verdict(left, right, &verdict);
-    verdict.admitted()
+impl<'a, L: BuildHasher> GateShared<'a, L> {
+    /// Indexes the corpus once; `pairs` are the candidates whose exact
+    /// whole-function clones anchor the echo rule.
+    pub(crate) fn new(
+        pairs: &[CandidatePair],
+        fingerprints: &[Fingerprint],
+        trees: &'a [NormalizedNode],
+        sources: &'a HashMap<FileId, Vec<u8>>,
+        languages: &'a HashMap<FileId, &'static str, L>,
+        cache: &'a ParseCache,
+    ) -> Self {
+        let scopes = DeclarationScopes::new(trees, languages);
+        let anchors = ExactClones::whole_functions_across_files(pairs, fingerprints, &scopes);
+        Self {
+            tree_index: crate::content::tree_index_of(trees),
+            anchors,
+            scopes,
+            sources,
+            languages,
+            cache,
+        }
+    }
+}
+
+/// One sequence of gate verdicts over a shared corpus: the memos the
+/// verdicts fill belong to this gate alone, so one gate per worker reads
+/// the same inputs without sharing mutable state.
+pub(crate) struct PairGate<'a, L: BuildHasher> {
+    /// The corpus every verdict reads.
+    shared: &'a GateShared<'a, L>,
+    /// Cached authored-declaration roles for the one-vs-many guard.
+    authored_scope: AuthoredScopeMemo,
+    /// Exact-fingerprint frontier reuse across this gate's verdicts.
+    content: ContentMeasurer,
+}
+
+impl<'a, L: BuildHasher> PairGate<'a, L> {
+    /// A gate with empty memos sized for `fingerprint_count` endpoints.
+    pub(crate) fn new(shared: &'a GateShared<'a, L>, fingerprint_count: usize) -> Self {
+        Self {
+            shared,
+            authored_scope: AuthoredScopeMemo::new(fingerprint_count),
+            content: ContentMeasurer::default(),
+        }
+    }
+
+    /// Applies the content guard to one candidate edge.
+    pub(crate) fn admits(&mut self, pair: &CandidatePair, fingerprints: &[Fingerprint]) -> bool {
+        let (Some(left), Some(right)) = (fingerprints.get(pair.left), fingerprints.get(pair.right))
+        else {
+            return false;
+        };
+        let verdict = gate_verdict(pair, left, right, self);
+        log_gate_verdict(left, right, &verdict);
+        verdict.admitted()
+    }
+
+    /// The frontier memo, for work-count tests ([FUSED-CONTENT-GATE-MEMO]).
+    #[cfg(test)]
+    fn content(&self) -> &ContentMeasurer {
+        &self.content
+    }
 }
 
 /// Decides one candidate edge's route through the content guard.
@@ -132,29 +166,30 @@ fn gate_verdict<L: BuildHasher>(
     pair: &CandidatePair,
     left: &Fingerprint,
     right: &Fingerprint,
-    context: &mut GateContext<'_, L>,
+    gate: &mut PairGate<'_, L>,
 ) -> GateVerdict {
     if embedding_needs_role_guard(pair)
         && is_embedding_role_mismatch(
             left,
             right,
-            context.sources,
-            context.languages,
-            context.cache,
+            gate.shared.sources,
+            gate.shared.languages,
+            gate.shared.cache,
         )
     {
         return GateVerdict::RoleMismatch;
     }
-    if context
+    if gate
         .authored_scope
-        .one_to_many(pair, left, right, context.scopes)
+        .one_to_many(pair, left, right, &gate.shared.scopes)
     {
         return GateVerdict::AuthoredScopeMismatch;
     }
     // [FUSED-SHARED-SUBTREE-ECHO] A token echo of an exact function plus
     // scraps is a wider view of that function, not a second clone.
     if lsh_only_pair_needs_content(pair, left, right)
-        && context
+        && gate
+            .shared
             .anchors
             .wraps_within(left, right, SHARED_SUBTREE_MIN_NODE_COUNT)
     {
@@ -163,28 +198,29 @@ fn gate_verdict<L: BuildHasher>(
     if !content_is_required(pair, left, right) {
         return GateVerdict::NotRequired;
     }
-    let content_pair = context.content.pair(
+    let content_pair = gate.content.pair(
         (left, right),
-        context.tree_index,
-        context.sources,
-        context.languages,
+        &gate.shared.tree_index,
+        gate.shared.sources,
+        gate.shared.languages,
     );
     let floor = content_floor(pair, left, right);
     if left.hash == right.hash
-        && content_pair.exact_frontier_match(context.sources)
+        && content_pair.exact_frontier_match(gate.shared.sources)
         && EXACT_CONTENT_AGREEMENT >= floor
     {
         return GateVerdict::ExactFrontier { floor };
     }
-    let interior =
-        context.scopes.enclosing(left).is_some() && context.scopes.enclosing(right).is_some();
-    let evidence = content_pair.whole(
-        context.sources,
+    let interior = gate.shared.scopes.enclosing(left).is_some()
+        && gate.shared.scopes.enclosing(right).is_some();
+    let evidence = content_pair.gate(
+        gate.shared.sources,
         PairScope {
             same_file: left.file_id == right.file_id,
             interior,
             core: false,
         },
+        floor,
     );
     GateVerdict::Measured {
         verified_async_core: async_core_satisfies_content(
@@ -210,10 +246,7 @@ pub(crate) fn async_core_satisfies_content(
         && whole.measured
         && overlap >= FUSED_THRESHOLD
         && token_jaccard >= SATURATING_TOKEN_FLOOR
-        && matches!(
-            whole.contradiction,
-            ContentContradiction::None | ContentContradiction::CallTargetAsyncEdit
-        )
+        && whole.clears_contradiction()
 }
 
 /// Records one content verdict so a surprising admission or refusal is

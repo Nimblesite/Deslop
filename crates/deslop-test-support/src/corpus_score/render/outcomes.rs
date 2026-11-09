@@ -1,10 +1,12 @@
 //! [CORPUS-SCORE-OUTCOMES] The judged pair record, as the scorecard shows it:
 //! whether every wrongly answered pair was already on record as failing, and
-//! which pairs this run fixed. The pairs answered wrongly are listed, with how
-//! each stands, under the defects that follow.
+//! which pairs this run fixed, then every judged pair with its result. The
+//! pairs answered wrongly are listed again, with why, under the defects that
+//! follow.
 
+use super::cells::{header, row};
 use super::Scorecard;
-use crate::corpus_score::outcomes::{PairOutcome, Standing, OUTCOMES_PATH};
+use crate::corpus_score::outcomes::{Outcome, PairOutcome, Standing, OUTCOMES_PATH};
 
 /// What the section says when no repository in the run has a clone register.
 const NO_RECORD: &str = "**No judged pairs** — no repository in this run has a clone register, \
@@ -31,7 +33,59 @@ pub(super) fn record_section(card: &Scorecard) -> Vec<String> {
         String::new(),
     ];
     lines.extend(fixed_lines(&card.outcomes));
+    lines.extend(every_pair_lines(&card.outcomes));
     lines
+}
+
+/// [CORPUS-SCORE-OUTCOMES] One row per judged pair this run scored: its
+/// result and how that stands against the record, so every result is read
+/// on its own and no gain can be read as offsetting a loss.
+fn every_pair_lines(outcomes: &[PairOutcome]) -> Vec<String> {
+    if outcomes.is_empty() {
+        return Vec::new();
+    }
+    let mut lines = vec![
+        "### Every judged pair".to_owned(),
+        String::new(),
+        "Each pair stands alone: one regression or unrecorded failure fails the run however \
+         many other pairs were fixed."
+            .to_owned(),
+        String::new(),
+    ];
+    lines.extend(header(&PAIR_COLUMNS.map(String::from)));
+    lines.extend(outcomes.iter().map(|pair| {
+        row(&[
+            pair.key.repo.clone(),
+            pair.key.verdict.clone(),
+            format!("`{}`", pair.key.occurrences.join("` + `")),
+            result_cell(pair.outcome).to_owned(),
+            standing_cell(pair.standing).to_owned(),
+        ])
+    }));
+    lines.push(String::new());
+    lines
+}
+
+/// The columns of the every-judged-pair table.
+const PAIR_COLUMNS: [&str; 5] = ["repository", "verdict", "judged pair", "result", "standing"];
+
+/// A pair's result in this run.
+const fn result_cell(outcome: Outcome) -> &'static str {
+    match outcome {
+        Outcome::Pass => "✅ pass",
+        Outcome::Fail => "🔴 fail",
+    }
+}
+
+/// How a pair's result stands against the record, and whether it fails the run.
+const fn standing_cell(standing: Standing) -> &'static str {
+    match standing {
+        Standing::Passing => "passing",
+        Standing::Fixed => "fixed — commit the record",
+        Standing::StillFailing => "on record as failing",
+        Standing::Unrecorded => "🔴 not on record — fails the run",
+        Standing::Regressed => "🔴 regressed — fails the run",
+    }
 }
 
 /// Whether the run kept to the record, in words.

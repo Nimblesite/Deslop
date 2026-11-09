@@ -259,7 +259,10 @@ fn c_cluster_occurrences_never_pair_a_whole_file_with_a_function_run() -> Result
                 .any(|(start, _)| *start == WHOLE_FILE_HELPER_START)
         })
     });
-    assert!(helper, "the copied assert helpers pair from row 27: {clusters:#?}");
+    assert!(
+        helper,
+        "the copied assert helpers pair from row 27: {clusters:#?}"
+    );
     for cluster in &clusters {
         for file in [WHOLE_FILE_FIRST, WHOLE_FILE_SECOND] {
             for (start, end) in spans_in(cluster, file) {
@@ -269,9 +272,8 @@ fn c_cluster_occurrences_never_pair_a_whole_file_with_a_function_run() -> Result
                 );
             }
         }
-        let reaches = |file: &str, main: u64| {
-            spans_in(cluster, file).iter().any(|(_, end)| *end >= main)
-        };
+        let reaches =
+            |file: &str, main: u64| spans_in(cluster, file).iter().any(|(_, end)| *end >= main);
         let first = !spans_in(cluster, WHOLE_FILE_FIRST).is_empty();
         let second = !spans_in(cluster, WHOLE_FILE_SECOND).is_empty();
         if first && second {
@@ -280,6 +282,51 @@ fn c_cluster_occurrences_never_pair_a_whole_file_with_a_function_run() -> Result
                 reaches(WHOLE_FILE_SECOND, WHOLE_FILE_MAIN_SECOND),
                 "one occurrence takes in its file's main and its partner does not: {cluster:#}"
             );
+        }
+    }
+    Ok(())
+}
+
+const WHOLE_COPY_FIXTURE: &str = "c-whole-file-copy";
+const WHOLE_COPY_FIRST: &str = "print_array.c";
+const WHOLE_COPY_SECOND: &str = "print_array_copy.c";
+/// Everything after the three `#include` rows: the copied helper, tests and `main`.
+const WHOLE_COPY_SPAN: (u64, u64) = (27, 100);
+const IDENTICAL_KIND: &str = "identical";
+const ONE_CLUSTER: usize = 1;
+
+// [PIPELINE-FINGERPRINT-MERKLE-ROOT] [LANG-CAND-C-PREPROC] Denying a C
+// translation unit its whole-file view must never cost the copy itself: a
+// file copied whole is still one identical cluster over everything after the
+// include block, the same rows in both files, and the includes are never
+// claimed.
+#[test]
+fn a_c_file_copied_whole_is_one_identical_cluster_without_its_includes() -> Result<()> {
+    let json = run_min_nodes(WHOLE_COPY_FIXTURE, WHOLE_FILE_MIN_NODES)?;
+    let clusters = report_clusters(&json)?;
+    assert_eq!(
+        clusters.len(),
+        ONE_CLUSTER,
+        "one copy, one cluster: {clusters:#?}"
+    );
+    require_cluster_with_spans(
+        &clusters,
+        (WHOLE_COPY_FIRST, WHOLE_COPY_SPAN),
+        (WHOLE_COPY_SECOND, WHOLE_COPY_SPAN),
+    )?;
+    for cluster in &clusters {
+        assert_eq!(
+            cluster.get("kind").and_then(Value::as_str),
+            Some(IDENTICAL_KIND),
+            "a byte-for-byte copy is identical code: {cluster:#}"
+        );
+        for file in [WHOLE_COPY_FIRST, WHOLE_COPY_SECOND] {
+            for (start, end) in spans_in(cluster, file) {
+                assert!(
+                    start > WHOLE_FILE_INCLUDE_ROWS.1,
+                    "{file}:{start}-{end} claims the #include block: {cluster:#}"
+                );
+            }
         }
     }
     Ok(())

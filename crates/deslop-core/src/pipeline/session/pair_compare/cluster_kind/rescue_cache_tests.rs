@@ -189,7 +189,7 @@ fn ranked_fold_reuses_exact_rescue_alignment() -> Result<(), String> {
     let fingerprints = session.store.fingerprints();
     let (left, right) = pair_endpoints(fingerprints, &pair)?;
     let judge = ClusterKindMeasurer::new(&session, fingerprints, &trees, &[], &[pair]);
-    let mut axes = judge.axes.lock().map_err(|_| "rank axes lock poisoned")?;
+    let mut axes = judge.lease();
     assert_eq!(axes.overlap.overlap(left, right).to_bits(), exact.to_bits());
     assert_eq!(axes.overlap.stats().alignments, NO_ALIGNMENTS);
     assert_eq!(axes.overlap.stats().exact_hits, ONE_HIT);
@@ -205,7 +205,7 @@ fn ranked_fold_does_not_promote_rescue_bound() -> Result<(), String> {
     let fingerprints = session.store.fingerprints();
     let (left, right) = pair_endpoints(fingerprints, &pair)?;
     let judge = ClusterKindMeasurer::new(&session, fingerprints, &trees, &[], &[pair]);
-    let mut axes = judge.axes.lock().map_err(|_| "rank axes lock poisoned")?;
+    let mut axes = judge.lease();
     assert_eq!(axes.overlap.overlap(left, right).to_bits(), exact.to_bits());
     assert_eq!(axes.overlap.stats().alignments, ONE_ALIGNMENT);
     assert_eq!(axes.overlap.stats().exact_hits, NO_HITS);

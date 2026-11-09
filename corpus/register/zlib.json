@@ -1,0 +1,1136 @@
+{
+  "name": "zlib",
+  "language": "c",
+  "url": "https://github.com/madler/zlib.git",
+  "sha": "99623ef7097352da7993ba614161fd6a311e046e",
+  "protocol": {
+    "spec": "docs/specs/corpus.md",
+    "spec_section": "[CORPUS-REGISTER]",
+    "judging_skill": ".agents/skills/judge-clone-pairs/SKILL.md",
+    "preparer_skill": ".agents/skills/clone-register-prepare/SKILL.md"
+  },
+  "clearly_in": [
+    {
+      "why": "The code beginning with `gz_statep state;` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: gzwrite.c:666-673 and gzwrite.c:543-550; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "gzwrite.c:666-673",
+        "gzwrite.c:543-550"
+      ]
+    },
+    {
+      "why": "The code beginning with `(void)opaque;` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: contrib/minizip/iowin32.c:161-182 and contrib/minizip/iowin32.c:91-112; 20 and 20 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "contrib/minizip/iowin32.c:161-182",
+        "contrib/minizip/iowin32.c:91-112"
+      ]
+    },
+    {
+      "why": "The code beginning with `{0x00000000, 0xef52b6e1, 0x05d46b83, 0xea86dd62, 0x0ba8d706,` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: crc32.h:7580-7631 and crc32.h:3602-3653; 52 and 52 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "crc32.h:7580-7631",
+        "crc32.h:3602-3653"
+      ]
+    },
+    {
+      "why": "The code beginning with `class gzifstream : public std::istream` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: contrib/iostream3/zfstream.h:234-313 and contrib/iostream3/zfstream.h:323-402; 26 and 26 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"gzifstream\", \"gzofstream\"], [\"istream\", \"ostream\"], [\"in\", \"out\"]]. Raw core diff:\n--- contrib/iostream3/zfstream.h:234-313\n+++ contrib/iostream3/zfstream.h:323-402\n@@ -1 +1 @@\n-class gzifstream : public std::istream\n+class gzofstream : public std::ostream\n@@ -5 +5 @@\n-  gzifstream();\n+  gzofstream();\n@@ -10 +10 @@\n-   *  @param  mode  Open mode flags (forced to contain ios::in).\n+   *  @param  mode  Open mode flags (forced to contain ios::out).\n@@ -13,2 +13,2 @@\n-  gzifstream(const char* name,\n-             std::ios_base::openmode mode = std::ios_base::in);\n+  gzofstream(const char* name,\n+             std::ios_base::openmode mode = std::ios_base::out);\n@@ -19 +19 @@\n-   *  @param  mode  Open mode flags (forced to contain ios::in).\n+   *  @param  mode  Open mode flags (forced to contain ios::out).\n@@ -22,2 +22,2 @@\n-  gzifstream(int fd,\n-             std::ios_base::openmode mode = std::ios_base::in);\n+  gzofstream(int fd,\n+             std::ios_base::openmode mode = std::ios_base::out);\n@@ -42 +42 @@\n-   *  @param  mode  Open mode flags (forced to contain ios::in).\n+   *  @param  mode  Open mode flags (forced to contain ios::out).\n@@ -46 +46 @@\n-   *  ifstream, which never sets the state to good() and therefore\n+   *  ofstream, which never sets the state to good() and therefore\n@@ -53 +53 @@\n-       std::ios_base::openmode mode = std::ios_base::in);\n+       std::ios_base::openmode mode = std::ios_base::out);\n@@ -58 +58 @@\n-   *  @param  mode  Open mode flags (forced to contain ios::in).\n+   *  @param  mode  Open mode flags (forced to contain ios::out).\n@@ -65 +65 @@\n-         std::ios_base::openmode mode = std::ios_base::in);\n+         std::ios_base::openmode mode = std::ios_base::out);\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- contrib/iostream3/zfstream.h:234-313\n+++ contrib/iostream3/zfstream.h:323-402\n@@ -1,25 +1,25 @@\n-class gzifstream : public std::istream\n+class gzofstream : public std::ostream\n {\n public:\n   //  Default constructor\n-  gzifstream();\n+  gzofstream();\n \n   /**\n    *  @brief  Construct stream on gzipped file to be opened.\n    *  @param  name  File name.\n-   *  @param  mode  Open mode flags (forced to contain ios::in).\n+   *  @param  mode  Open mode flags (forced to contain ios::out).\n   */\n   explicit\n-  gzifstream(const char* name,\n-             std::ios_base::openmode mode = std::ios_base::in);\n+  gzofstream(const char* name,\n+             std::ios_base::openmode mode = std::ios_base::out);\n \n   /**\n    *  @brief  Construct stream on already open gzipped file.\n    *  @param  fd    File descriptor.\n-   *  @param  mode  Open mode flags (forced to contain ios::in).\n+   *  @param  mode  Open mode flags (forced to contain ios::out).\n   */\n   explicit\n-  gzifstream(int fd,\n-             std::ios_base::openmode mode = std::ios_base::in);\n+  gzofstream(int fd,\n+             std::ios_base::openmode mode = std::ios_base::out);\n \n   /**\n@@ -40,9 +40,9 @@\n    *  @brief  Open gzipped file.\n    *  @param  name  File name.\n-   *  @param  mode  Open mode flags (forced to contain ios::in).\n+   *  @param  mode  Open mode flags (forced to contain ios::out).\n    *\n    *  Stream will be in state good() if file opens successfully;\n    *  otherwise in state fail(). This differs from the behavior of\n-   *  ifstream, which never sets the state to good() and therefore\n+   *  ofstream, which never sets the state to good() and therefore\n    *  won't allow you to reuse the stream for a second file unless\n    *  you manually clear() the state. The choice is a matter of\n@@ -51,10 +51,10 @@\n   void\n   open(const char* name,\n-       std::ios_base::openmode mode = std::ios_base::in);\n+       std::ios_base::openmode mode = std::ios_base::out);\n \n   /**\n    *  @brief  Attach to already open gzipped file.\n    *  @param  fd  File descriptor.\n-   *  @param  mode  Open mode flags (forced to contain ios::in).\n+   *  @param  mode  Open mode flags (forced to contain ios::out).\n    *\n    *  Stream will be in state good() if attach succeeded; otherwise\n@@ -63,5 +63,5 @@\n   void\n   attach(int fd,\n-         std::ios_base::openmode mode = std::ios_base::in);\n+         std::ios_base::openmode mode = std::ios_base::out);\n \n   /**",
+      "type": "Type II",
+      "occurrences": [
+        "contrib/iostream3/zfstream.h:234-313",
+        "contrib/iostream3/zfstream.h:323-402"
+      ]
+    },
+    {
+      "why": "The code beginning with `if (copy) {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: inflate.c:780-785 and infback.c:283-288; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- inflate.c:776-787\n+++ infback.c:281-288\n@@ -1,6 +1,4 @@\n-            if (copy) {\n                 if (copy > have) copy = have;\n                 if (copy > left) copy = left;\n-                if (copy == 0) goto inf_leave;\n                 zmemcpy(put, next, copy);\n                 have -= copy;\n@@ -9,4 +7,2 @@\n                 put += copy;\n                 state->length -= copy;\n-                break;\n-            }",
+      "occurrences": [
+        "inflate.c:776-787",
+        "infback.c:281-288"
+      ]
+    },
+    {
+      "why": "The code beginning with `case TABLE:` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: contrib/infback9/infback9.c:334-342 and infback.c:294-302; 8 and 8 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "contrib/infback9/infback9.c:334-342",
+        "infback.c:294-302"
+      ]
+    },
+    {
+      "why": "The code beginning with `HANDLE hFile = NULL;` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: contrib/minizip/iowin32.c:163-184 and contrib/minizip/iowin32.c:93-114; 19 and 19 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "contrib/minizip/iowin32.c:163-184",
+        "contrib/minizip/iowin32.c:93-114"
+      ]
+    },
+    {
+      "why": "The code beginning with `unsigned have;` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: examples/zpipe.c:40-48 and examples/zpipe.c:96-104; 7 and 7 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n--- examples/zpipe.c:40-48\n+++ examples/zpipe.c:96-104\n@@ -6 +6 @@\n-    /* allocate deflate state */\n+    /* allocate inflate state */\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- examples/zpipe.c:40-48\n+++ examples/zpipe.c:96-104\n@@ -4,5 +4,5 @@\n     unsigned char out[CHUNK];\n \n-    /* allocate deflate state */\n+    /* allocate inflate state */\n     strm.zalloc = Z_NULL;\n     strm.zfree = Z_NULL;",
+      "type": "Type I",
+      "occurrences": [
+        "examples/zpipe.c:40-48",
+        "examples/zpipe.c:96-104"
+      ]
+    },
+    {
+      "why": "The code beginning with `voidpf ZCALLBACK win32_open_file_func(voidpf opaque, const char* filename, int mode) {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: contrib/minizip/iowin32.c:161-185 and contrib/minizip/iowin32.c:91-115; 22 and 22 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- contrib/minizip/iowin32.c:160-185\n+++ contrib/minizip/iowin32.c:90-115\n@@ -1,3 +1,3 @@\n-voidpf ZCALLBACK win32_open_file_func(voidpf opaque, const char* filename, int mode) {\n+voidpf ZCALLBACK win32_open64_file_func(voidpf opaque, const void* filename, int mode) {\n     (void)opaque;\n     DWORD dwDesiredAccess,dwCreationDisposition,dwShareMode,dwFlagsAndAttributes ;",
+      "occurrences": [
+        "contrib/minizip/iowin32.c:160-185",
+        "contrib/minizip/iowin32.c:90-115"
+      ]
+    },
+    {
+      "why": "The code beginning with `{0x00000000, 0x172864c0, 0x2e50c980, 0x3978ad40, 0x5ca19300,` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: crc32.h:9118-9169 and crc32.h:3394-3445; 52 and 52 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "crc32.h:9118-9169",
+        "crc32.h:3394-3445"
+      ]
+    },
+    {
+      "why": "The code beginning with `static long ZCALLBACK fseek64_file_func(voidpf opaque, voidpf stream, ZPOS64_T offset, int origin) {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: contrib/minizip/ioapi.c:171-194 and contrib/minizip/ioapi.c:148-169; 22 and 22 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"fseek64_file_func\", \"fseek_file_func\"], [\"ZPOS64_T\", \"uLong\"], [\"FSEEKO_FUNC\", \"fseek\"], [\"z_off64_t\", \"long\"]]. Raw core diff:\n--- contrib/minizip/ioapi.c:171-194\n+++ contrib/minizip/ioapi.c:148-169\n@@ -1 +1 @@\n-static long ZCALLBACK fseek64_file_func(voidpf opaque, voidpf stream, ZPOS64_T offset, int origin) {\n+static long ZCALLBACK fseek_file_func(voidpf opaque, voidpf stream, uLong offset, int origin) {\n@@ -19,4 +19,2 @@\n-\n-    if(FSEEKO_FUNC((FILE *)stream, (z_off64_t)offset, fseek_origin) != 0)\n-                        ret = -1;\n-\n+    if (fseek((FILE *)stream, (long)offset, fseek_origin) != 0)\n+        ret = -1;\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- contrib/minizip/ioapi.c:171-194\n+++ contrib/minizip/ioapi.c:148-169\n@@ -1,3 +1,3 @@\n-static long ZCALLBACK fseek64_file_func(voidpf opaque, voidpf stream, ZPOS64_T offset, int origin) {\n+static long ZCALLBACK fseek_file_func(voidpf opaque, voidpf stream, uLong offset, int origin) {\n     int fseek_origin=0;\n     long ret;\n@@ -17,8 +17,6 @@\n     }\n     ret = 0;\n-\n-    if(FSEEKO_FUNC((FILE *)stream, (z_off64_t)offset, fseek_origin) != 0)\n-                        ret = -1;\n-\n+    if (fseek((FILE *)stream, (long)offset, fseek_origin) != 0)\n+        ret = -1;\n     return ret;\n }",
+      "occurrences": [
+        "contrib/minizip/ioapi.c:171-194",
+        "contrib/minizip/ioapi.c:148-169"
+      ]
+    },
+    {
+      "why": "The code beginning with `public sealed class Deflater : CodecBase` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: contrib/dotzlib/DotZLib/Deflater.cs:44-66 and contrib/dotzlib/DotZLib/Inflater.cs:43-66; 13 and 13 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n--- contrib/dotzlib/DotZLib/Deflater.cs:44-66\n+++ contrib/dotzlib/DotZLib/Inflater.cs:43-66\n@@ -2 +2,2 @@\n-\t\t}\n+        }\n+\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- contrib/dotzlib/DotZLib/Deflater.cs:18-105\n+++ contrib/dotzlib/DotZLib/Inflater.cs:18-104\n@@ -1,30 +1,30 @@\n-\tpublic sealed class Deflater : CodecBase\n+    public class Inflater : CodecBase\n \t{\n         #region Dll imports\n         [DllImport(\"ZLIB1.dll\", CallingConvention=CallingConvention.Cdecl, CharSet=CharSet.Ansi)]\n-        private static extern int deflateInit_(ref ZStream sz, int level, string vs, int size);\n+        private static extern int inflateInit_(ref ZStream sz, string vs, int size);\n \n         [DllImport(\"ZLIB1.dll\", CallingConvention=CallingConvention.Cdecl)]\n-        private static extern int deflate(ref ZStream sz, int flush);\n+        private static extern int inflate(ref ZStream sz, int flush);\n \n         [DllImport(\"ZLIB1.dll\", CallingConvention=CallingConvention.Cdecl)]\n-        private static extern int deflateReset(ref ZStream sz);\n+        private static extern int inflateReset(ref ZStream sz);\n \n         [DllImport(\"ZLIB1.dll\", CallingConvention=CallingConvention.Cdecl)]\n-        private static extern int deflateEnd(ref ZStream sz);\n+        private static extern int inflateEnd(ref ZStream sz);\n         #endregion\n \n         /// <summary>\n-        /// Constructs an new instance of the <c>Deflater</c>\n+        /// Constructs an new instance of the <c>Inflater</c>\n         /// </summary>\n-        /// <param name=\"level\">The compression level to use for this <c>Deflater</c></param>\n-\t\tpublic Deflater(CompressLevel level) : base()\n+        public Inflater() : base()\n \t\t{\n-            int retval = deflateInit_(ref _ztream, (int)level, Info.Version, Marshal.SizeOf(_ztream));\n+            int retval = inflateInit_(ref _ztream, Info.Version, Marshal.SizeOf(_ztream));\n             if (retval != 0)\n-                throw new ZLibException(retval, \"Could not initialize deflater\");\n+                throw new ZLibException(retval, \"Could not initialize inflater\");\n \n             resetOutput();\n-\t\t}\n+        }\n+\n \n         /// <summary>\n@@ -48,15 +48,13 @@\n             {\n                 copyInput(data, inputIndex, Math.Min(total - inputIndex, kBufferSize));\n-                while (err >= 0 && _ztream.avail_in > 0)\n-                {\n-                    err = deflate(ref _ztream, (int)FlushTypes.None);\n-                    if (err == 0)\n-                        while (_ztream.avail_out == 0)\n-                        {\n-                            OnDataAvailable();\n-                            err = deflate(ref _ztream, (int)FlushTypes.None);\n-                        }\n-                    inputIndex += (int)_ztream.total_in;\n-                }\n+                err = inflate(ref _ztream, (int)FlushTypes.None);\n+                if (err == 0)\n+                    while (_ztream.avail_out == 0)\n+                    {\n+                        OnDataAvailable();\n+                        err = inflate(ref _ztream, (int)FlushTypes.None);\n+                    }\n+\n+                inputIndex += (int)_ztream.total_in;\n             }\n             setChecksum( _ztream.adler );\n@@ -72,17 +70,18 @@\n             do\n             {\n-                err = deflate(ref _ztream, (int)FlushTypes.Finish);\n+                err = inflate(ref _ztream, (int)FlushTypes.Finish);\n                 OnDataAvailable();\n             }\n             while (err == 0);\n             setChecksum( _ztream.adler );\n-            deflateReset(ref _ztream);\n+            inflateReset(ref _ztream);\n             resetOutput();\n         }\n \n         /// <summary>\n-        /// Closes the internal zlib deflate stream\n+        /// Closes the internal zlib inflate stream\n         /// </summary>\n-        protected override void CleanUp() { deflateEnd(ref _ztream); }\n+        protected override void CleanUp() { inflateEnd(ref _ztream); }\n \n-    }\n+\n+\t}",
+      "occurrences": [
+        "contrib/dotzlib/DotZLib/Deflater.cs:18-105",
+        "contrib/dotzlib/DotZLib/Inflater.cs:18-104"
+      ]
+    },
+    {
+      "why": "The code beginning with `case STORED:` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: infback.c:264-274 and inflate.c:757-767; 11 and 11 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- infback.c:262-274\n+++ inflate.c:757-769\n@@ -1,4 +1,2 @@\n-        case STORED:\n-            /* get and verify stored block length */\n             BYTEBITS();                         /* go to byte boundary */\n             NEEDBITS(32);\n@@ -12,2 +10,4 @@\n                     state->length));\n             INITBITS();\n+            state->mode = COPY_;\n+            if (flush == Z_TREES) goto inf_leave;",
+      "occurrences": [
+        "infback.c:262-274",
+        "inflate.c:757-769"
+      ]
+    },
+    {
+      "why": "The code beginning with `Assert(*scan == *match, \"match[2]?\");` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: deflate.c:1595-1609 and deflate.c:1523-1538; 9 and 10 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n--- deflate.c:1595-1609\n+++ deflate.c:1523-1538\n@@ -1 +1 @@\n-    Assert(*scan == *match, \"match[2]?\");\n+        Assert(*scan == *match, \"match[2]?\");\n@@ -3,9 +3,9 @@\n-    /* We check for insufficient lookahead only every 8th comparison;\n-     * the 256th check will be made at strstart + 258.\n-     */\n-    do {\n-    } while (*++scan == *++match && *++scan == *++match &&\n-             *++scan == *++match && *++scan == *++match &&\n-             *++scan == *++match && *++scan == *++match &&\n-             *++scan == *++match && *++scan == *++match &&\n-             scan < strend);\n+        /* We check for insufficient lookahead only every 8th comparison;\n+         * the 256th check will be made at strstart + 258.\n+         */\n+        do {\n+        } while (*++scan == *++match && *++scan == *++match &&\n+                 *++scan == *++match && *++scan == *++match &&\n+                 *++scan == *++match && *++scan == *++match &&\n+                 *++scan == *++match && *++scan == *++match &&\n+                 scan < strend);\n@@ -13 +13,2 @@\n-    Assert(scan <= s->window + (unsigned)(s->window_size - 1), \"wild scan\");\n+        Assert(scan <= s->window + (unsigned)(s->window_size - 1),\n+               \"wild scan\");\n@@ -15 +16 @@\n-    len = MAX_MATCH - (int)(strend - scan);\n+        len = MAX_MATCH - (int)(strend - scan);\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- deflate.c:1595-1609\n+++ deflate.c:1523-1538\n@@ -1,15 +1,16 @@\n-    Assert(*scan == *match, \"match[2]?\");\n+        Assert(*scan == *match, \"match[2]?\");\n \n-    /* We check for insufficient lookahead only every 8th comparison;\n-     * the 256th check will be made at strstart + 258.\n-     */\n-    do {\n-    } while (*++scan == *++match && *++scan == *++match &&\n-             *++scan == *++match && *++scan == *++match &&\n-             *++scan == *++match && *++scan == *++match &&\n-             *++scan == *++match && *++scan == *++match &&\n-             scan < strend);\n+        /* We check for insufficient lookahead only every 8th comparison;\n+         * the 256th check will be made at strstart + 258.\n+         */\n+        do {\n+        } while (*++scan == *++match && *++scan == *++match &&\n+                 *++scan == *++match && *++scan == *++match &&\n+                 *++scan == *++match && *++scan == *++match &&\n+                 *++scan == *++match && *++scan == *++match &&\n+                 scan < strend);\n \n-    Assert(scan <= s->window + (unsigned)(s->window_size - 1), \"wild scan\");\n+        Assert(scan <= s->window + (unsigned)(s->window_size - 1),\n+               \"wild scan\");\n \n-    len = MAX_MATCH - (int)(strend - scan);\n+        len = MAX_MATCH - (int)(strend - scan);",
+      "type": "Type I",
+      "occurrences": [
+        "deflate.c:1595-1609",
+        "deflate.c:1523-1538"
+      ]
+    },
+    {
+      "why": "The code beginning with `low = 0;` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: contrib/infback9/infback9.c:86-94 and contrib/infback9/infback9.c:97-105; 9 and 9 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"6\", \"5\"], [\"lenfix\", \"distfix\"]]. Raw core diff:\n--- contrib/infback9/infback9.c:86-94\n+++ contrib/infback9/infback9.c:97-105\n@@ -3,3 +3,3 @@\n-        if ((low % 6) == 0) printf(\"\\n        \");\n-        printf(\"{%u,%u,%d}\", lenfix[low].op, lenfix[low].bits,\n-               lenfix[low].val);\n+        if ((low % 5) == 0) printf(\"\\n        \");\n+        printf(\"{%u,%u,%d}\", distfix[low].op, distfix[low].bits,\n+               distfix[low].val);\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- contrib/infback9/infback9.c:86-94\n+++ contrib/infback9/infback9.c:97-105\n@@ -1,7 +1,7 @@\n     low = 0;\n     for (;;) {\n-        if ((low % 6) == 0) printf(\"\\n        \");\n-        printf(\"{%u,%u,%d}\", lenfix[low].op, lenfix[low].bits,\n-               lenfix[low].val);\n+        if ((low % 5) == 0) printf(\"\\n        \");\n+        printf(\"{%u,%u,%d}\", distfix[low].op, distfix[low].bits,\n+               distfix[low].val);\n         if (++low == size) break;\n         putchar(',');",
+      "type": "Type II",
+      "occurrences": [
+        "contrib/infback9/infback9.c:86-94",
+        "contrib/infback9/infback9.c:97-105"
+      ]
+    },
+    {
+      "why": "The code beginning with `if (unz64local_getShort(&s->z_filefunc, s->filestream,&file_info.version) != UNZ_OK)` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: contrib/minizip/unzip.c:762-775 and contrib/minizip/unzip.c:790-803; 10 and 10 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"version\", \"size_filename\"], [\"version_needed\", \"size_file_extra\"], [\"flag\", \"size_file_comment\"], [\"compression_method\", \"disk_num_start\"], [\"unz64local_getLong\", \"unz64local_getShort\"], [\"dosDate\", \"internal_fa\"]]. Raw core diff:\n--- contrib/minizip/unzip.c:762-775\n+++ contrib/minizip/unzip.c:790-803\n@@ -1 +1 @@\n-    if (unz64local_getShort(&s->z_filefunc, s->filestream,&file_info.version) != UNZ_OK)\n+    if (unz64local_getShort(&s->z_filefunc, s->filestream,&file_info.size_filename) != UNZ_OK)\n@@ -4 +4 @@\n-    if (unz64local_getShort(&s->z_filefunc, s->filestream,&file_info.version_needed) != UNZ_OK)\n+    if (unz64local_getShort(&s->z_filefunc, s->filestream,&file_info.size_file_extra) != UNZ_OK)\n@@ -7 +7 @@\n-    if (unz64local_getShort(&s->z_filefunc, s->filestream,&file_info.flag) != UNZ_OK)\n+    if (unz64local_getShort(&s->z_filefunc, s->filestream,&file_info.size_file_comment) != UNZ_OK)\n@@ -10 +10 @@\n-    if (unz64local_getShort(&s->z_filefunc, s->filestream,&file_info.compression_method) != UNZ_OK)\n+    if (unz64local_getShort(&s->z_filefunc, s->filestream,&file_info.disk_num_start) != UNZ_OK)\n@@ -13 +13 @@\n-    if (unz64local_getLong(&s->z_filefunc, s->filestream,&file_info.dosDate) != UNZ_OK)\n+    if (unz64local_getShort(&s->z_filefunc, s->filestream,&file_info.internal_fa) != UNZ_OK)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- contrib/minizip/unzip.c:762-775\n+++ contrib/minizip/unzip.c:790-803\n@@ -1,14 +1,14 @@\n-    if (unz64local_getShort(&s->z_filefunc, s->filestream,&file_info.version) != UNZ_OK)\n+    if (unz64local_getShort(&s->z_filefunc, s->filestream,&file_info.size_filename) != UNZ_OK)\n         err=UNZ_ERRNO;\n \n-    if (unz64local_getShort(&s->z_filefunc, s->filestream,&file_info.version_needed) != UNZ_OK)\n+    if (unz64local_getShort(&s->z_filefunc, s->filestream,&file_info.size_file_extra) != UNZ_OK)\n         err=UNZ_ERRNO;\n \n-    if (unz64local_getShort(&s->z_filefunc, s->filestream,&file_info.flag) != UNZ_OK)\n+    if (unz64local_getShort(&s->z_filefunc, s->filestream,&file_info.size_file_comment) != UNZ_OK)\n         err=UNZ_ERRNO;\n \n-    if (unz64local_getShort(&s->z_filefunc, s->filestream,&file_info.compression_method) != UNZ_OK)\n+    if (unz64local_getShort(&s->z_filefunc, s->filestream,&file_info.disk_num_start) != UNZ_OK)\n         err=UNZ_ERRNO;\n \n-    if (unz64local_getLong(&s->z_filefunc, s->filestream,&file_info.dosDate) != UNZ_OK)\n+    if (unz64local_getShort(&s->z_filefunc, s->filestream,&file_info.internal_fa) != UNZ_OK)\n         err=UNZ_ERRNO;",
+      "occurrences": [
+        "contrib/minizip/unzip.c:762-775",
+        "contrib/minizip/unzip.c:790-803"
+      ]
+    },
+    {
+      "why": "The code beginning with `gz_statep state;` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: gzread.c:426-433 and gzread.c:552-559; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "gzread.c:426-433",
+        "gzread.c:552-559"
+      ]
+    },
+    {
+      "why": "The code beginning with `strm->avail_in += len;` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: gzwrite.c:617-630 and gzwrite.c:495-508; 11 and 11 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- gzwrite.c:616-630\n+++ gzwrite.c:495-508\n@@ -1,3 +1,2 @@\n-    strm->avail_in += len;\n     state->x.pos += len;\n ",
+      "occurrences": [
+        "gzwrite.c:616-630",
+        "gzwrite.c:495-508"
+      ]
+    },
+    {
+      "why": "The code beginning with `if (err==ZIP_OK)` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: contrib/minizip/zip.c:665-675 and contrib/minizip/zip.c:633-643; 9 and 9 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"ZPOS64_T\", \"uLong\"], [\"16\", \"8\"], [\"24\", \"16\"], [\"32\", \"24\"]]. Raw core diff:\n--- contrib/minizip/zip.c:665-675\n+++ contrib/minizip/zip.c:633-643\n@@ -1,3 +1,3 @@\n-  if (err==ZIP_OK)\n-    err = zip64local_getByte(pzlib_filefunc_def,filestream,&i);\n-  x += ((ZPOS64_T)i)<<16;\n+    if (err==ZIP_OK)\n+        err = zip64local_getByte(pzlib_filefunc_def,filestream,&i);\n+    x += ((uLong)i)<<8;\n@@ -5,3 +5,3 @@\n-  if (err==ZIP_OK)\n-    err = zip64local_getByte(pzlib_filefunc_def,filestream,&i);\n-  x += ((ZPOS64_T)i)<<24;\n+    if (err==ZIP_OK)\n+        err = zip64local_getByte(pzlib_filefunc_def,filestream,&i);\n+    x += ((uLong)i)<<16;\n@@ -9,3 +9,3 @@\n-  if (err==ZIP_OK)\n-    err = zip64local_getByte(pzlib_filefunc_def,filestream,&i);\n-  x += ((ZPOS64_T)i)<<32;\n+    if (err==ZIP_OK)\n+        err = zip64local_getByte(pzlib_filefunc_def,filestream,&i);\n+    x += ((uLong)i)<<24;\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- contrib/minizip/zip.c:665-675\n+++ contrib/minizip/zip.c:633-643\n@@ -1,11 +1,11 @@\n-  if (err==ZIP_OK)\n-    err = zip64local_getByte(pzlib_filefunc_def,filestream,&i);\n-  x += ((ZPOS64_T)i)<<16;\n+    if (err==ZIP_OK)\n+        err = zip64local_getByte(pzlib_filefunc_def,filestream,&i);\n+    x += ((uLong)i)<<8;\n \n-  if (err==ZIP_OK)\n-    err = zip64local_getByte(pzlib_filefunc_def,filestream,&i);\n-  x += ((ZPOS64_T)i)<<24;\n+    if (err==ZIP_OK)\n+        err = zip64local_getByte(pzlib_filefunc_def,filestream,&i);\n+    x += ((uLong)i)<<16;\n \n-  if (err==ZIP_OK)\n-    err = zip64local_getByte(pzlib_filefunc_def,filestream,&i);\n-  x += ((ZPOS64_T)i)<<32;\n+    if (err==ZIP_OK)\n+        err = zip64local_getByte(pzlib_filefunc_def,filestream,&i);\n+    x += ((uLong)i)<<24;",
+      "occurrences": [
+        "contrib/minizip/zip.c:665-675",
+        "contrib/minizip/zip.c:633-643"
+      ]
+    },
+    {
+      "why": "The code beginning with `{0x00000000, 0xb9fbdbe8, 0xa886b191, 0x117d6a79, 0x8a7c6563,` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: crc32.h:1804-1855 and crc32.h:5990-6041; 52 and 52 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "crc32.h:1804-1855",
+        "crc32.h:5990-6041"
+      ]
+    },
+    {
+      "why": "The code beginning with `ret = gz_vacate(state);` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: gzwrite.c:620-630 and gzwrite.c:498-508; 10 and 10 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- gzwrite.c:620-631\n+++ gzwrite.c:498-508\n@@ -10,3 +10,2 @@\n     if (state->err && !state->again)\n         return state->err;\n-    return (int)len;",
+      "occurrences": [
+        "gzwrite.c:620-631",
+        "gzwrite.c:498-508"
+      ]
+    },
+    {
+      "why": "The code beginning with `crc0 = byte_swap(crc);` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: crc32.c:812-850 and crc32.c:690-728; 33 and 33 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- crc32.c:811-888\n+++ crc32.c:690-766\n@@ -1,3 +1,2 @@\n-            crc0 = byte_swap(crc);\n #if N > 1\n             crc1 = 0;\n@@ -42,15 +41,15 @@\n                 /* Compute and update the CRC for each word. The loop should\n                    get unrolled. */\n-                crc0 = crc_braid_big_table[0][word0 & 0xff];\n+                crc0 = crc_braid_table[0][word0 & 0xff];\n #if N > 1\n-                crc1 = crc_braid_big_table[0][word1 & 0xff];\n+                crc1 = crc_braid_table[0][word1 & 0xff];\n #if N > 2\n-                crc2 = crc_braid_big_table[0][word2 & 0xff];\n+                crc2 = crc_braid_table[0][word2 & 0xff];\n #if N > 3\n-                crc3 = crc_braid_big_table[0][word3 & 0xff];\n+                crc3 = crc_braid_table[0][word3 & 0xff];\n #if N > 4\n-                crc4 = crc_braid_big_table[0][word4 & 0xff];\n+                crc4 = crc_braid_table[0][word4 & 0xff];\n #if N > 5\n-                crc5 = crc_braid_big_table[0][word5 & 0xff];\n+                crc5 = crc_braid_table[0][word5 & 0xff];\n #endif\n #endif\n@@ -59,15 +58,15 @@\n #endif\n                 for (k = 1; k < W; k++) {\n-                    crc0 ^= crc_braid_big_table[k][(word0 >> (k << 3)) & 0xff];\n+                    crc0 ^= crc_braid_table[k][(word0 >> (k << 3)) & 0xff];\n #if N > 1\n-                    crc1 ^= crc_braid_big_table[k][(word1 >> (k << 3)) & 0xff];\n+                    crc1 ^= crc_braid_table[k][(word1 >> (k << 3)) & 0xff];\n #if N > 2\n-                    crc2 ^= crc_braid_big_table[k][(word2 >> (k << 3)) & 0xff];\n+                    crc2 ^= crc_braid_table[k][(word2 >> (k << 3)) & 0xff];\n #if N > 3\n-                    crc3 ^= crc_braid_big_table[k][(word3 >> (k << 3)) & 0xff];\n+                    crc3 ^= crc_braid_table[k][(word3 >> (k << 3)) & 0xff];\n #if N > 4\n-                    crc4 ^= crc_braid_big_table[k][(word4 >> (k << 3)) & 0xff];\n+                    crc4 ^= crc_braid_table[k][(word4 >> (k << 3)) & 0xff];\n #if N > 5\n-                    crc5 ^= crc_braid_big_table[k][(word5 >> (k << 3)) & 0xff];\n+                    crc5 ^= crc_braid_table[k][(word5 >> (k << 3)) & 0xff];\n #endif\n #endif",
+      "occurrences": [
+        "crc32.c:811-888",
+        "crc32.c:690-766"
+      ]
+    },
+    {
+      "why": "The code beginning with `{0x00000000, 0xdd96d985, 0x605cb54b, 0xbdca6cce, 0xc0b96a96,` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: crc32.h:1908-1958 and crc32.h:6094-6144; 51 and 51 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- crc32.h:1908-1959\n+++ crc32.h:6094-6145\n@@ -50,3 +50,3 @@\n     0x07b1ea80, 0xba7b864e, 0x67ed5fcb, 0x409d8afe, 0x9d0b537b,\n     0x20c13fb5, 0xfd57e630, 0x8024e068, 0x5db239ed, 0xe0785523,\n-    0x3dee8ca6},\n+    0x3dee8ca6}};",
+      "occurrences": [
+        "crc32.h:1908-1959",
+        "crc32.h:6094-6145"
+      ]
+    },
+    {
+      "why": "The code beginning with `local int zip64local_getLong(const zlib_filefunc64_32_def* pzlib_filefunc_def, voidpf filestream, uLong* pX) {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: contrib/minizip/zip.c:626-637 and contrib/minizip/zip.c:607-618; 9 and 9 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- contrib/minizip/zip.c:625-650\n+++ contrib/minizip/zip.c:606-623\n@@ -1,3 +1,3 @@\n-local int zip64local_getLong(const zlib_filefunc64_32_def* pzlib_filefunc_def, voidpf filestream, uLong* pX) {\n+local int zip64local_getShort(const zlib_filefunc64_32_def* pzlib_filefunc_def, voidpf filestream, uLong* pX) {\n     uLong x ;\n     int i = 0;\n@@ -12,12 +12,4 @@\n \n     if (err==ZIP_OK)\n-        err = zip64local_getByte(pzlib_filefunc_def,filestream,&i);\n-    x += ((uLong)i)<<16;\n-\n-    if (err==ZIP_OK)\n-        err = zip64local_getByte(pzlib_filefunc_def,filestream,&i);\n-    x += ((uLong)i)<<24;\n-\n-    if (err==ZIP_OK)\n         *pX = x;\n     else",
+      "occurrences": [
+        "contrib/minizip/zip.c:625-650",
+        "contrib/minizip/zip.c:606-623"
+      ]
+    },
+    {
+      "why": "The code beginning with `low = 0;` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: contrib/infback9/infback9.c:97-104 and contrib/infback9/infback9.c:86-93; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"5\", \"6\"], [\"distfix\", \"lenfix\"]]. Raw core diff:\n--- contrib/infback9/infback9.c:97-104\n+++ contrib/infback9/infback9.c:86-93\n@@ -3,3 +3,3 @@\n-        if ((low % 5) == 0) printf(\"\\n        \");\n-        printf(\"{%u,%u,%d}\", distfix[low].op, distfix[low].bits,\n-               distfix[low].val);\n+        if ((low % 6) == 0) printf(\"\\n        \");\n+        printf(\"{%u,%u,%d}\", lenfix[low].op, lenfix[low].bits,\n+               lenfix[low].val);\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- contrib/infback9/infback9.c:97-104\n+++ contrib/infback9/infback9.c:86-93\n@@ -1,7 +1,7 @@\n     low = 0;\n     for (;;) {\n-        if ((low % 5) == 0) printf(\"\\n        \");\n-        printf(\"{%u,%u,%d}\", distfix[low].op, distfix[low].bits,\n-               distfix[low].val);\n+        if ((low % 6) == 0) printf(\"\\n        \");\n+        printf(\"{%u,%u,%d}\", lenfix[low].op, lenfix[low].bits,\n+               lenfix[low].val);\n         if (++low == size) break;\n         putchar(',');",
+      "type": "Type II",
+      "occurrences": [
+        "contrib/infback9/infback9.c:97-104",
+        "contrib/infback9/infback9.c:86-93"
+      ]
+    },
+    {
+      "why": "The code beginning with `if (file==NULL)` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: contrib/minizip/unzip.c:1792-1798 and contrib/minizip/unzip.c:1872-1878; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "contrib/minizip/unzip.c:1792-1798",
+        "contrib/minizip/unzip.c:1872-1878"
+      ]
+    },
+    {
+      "why": "The code beginning with `{0x00000000, 0xa6770bb4, 0x979f1129, 0x31e81a9d, 0xf44f2413,` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: crc32.h:266-317 and crc32.h:2914-2965; 52 and 52 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "crc32.h:266-317",
+        "crc32.h:2914-2965"
+      ]
+    },
+    {
+      "why": "The code beginning with `if (here.op && (here.op & 0xf0) == 0) {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: inflate.c:942-948 and inflate.c:994-1000; 7 and 7 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- inflate.c:938-948\n+++ inflate.c:990-1000\n@@ -1,6 +1,6 @@\n-            if (here.op && (here.op & 0xf0) == 0) {\n+            if ((here.op & 0xf0) == 0) {\n                 last = here;\n                 for (;;) {\n-                    here = state->lencode[last.val +\n+                    here = state->distcode[last.val +\n                             (BITS(last.bits + last.op) >> last.bits)];\n                     if ((unsigned)(last.bits + here.bits) <= bits) break;",
+      "occurrences": [
+        "inflate.c:938-948",
+        "inflate.c:990-1000"
+      ]
+    },
+    {
+      "why": "The code beginning with `local int construct(struct huffman *h, const unsigned char *rep, int n)` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: contrib/blast/blast.c:211-241 and contrib/puff/puff.c:348-379; 20 and 21 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n--- contrib/blast/blast.c:211-241\n+++ contrib/puff/puff.c:348-379\n@@ -13 +13,2 @@\n-        if (left < 0) return left;      /* over-subscribed--return negative */\n+        if (left < 0)\n+            return left;                /* over-subscribed--return negative */\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- contrib/blast/blast.c:190-241\n+++ contrib/puff/puff.c:340-379\n@@ -1,3 +1,3 @@\n-local int construct(struct huffman *h, const unsigned char *rep, int n)\n+local int construct(struct huffman *h, const short *length, int n)\n {\n     int symbol;         /* current symbol when stepping through length[] */\n@@ -5,17 +5,4 @@\n     int left;           /* number of possible codes left of current length */\n     short offs[MAXBITS+1];      /* offsets in symbol table for each length */\n-    short length[256];  /* code lengths */\n-\n-    /* convert compact repeat counts into symbol bit length list */\n-    symbol = 0;\n-    do {\n-        len = *rep++;\n-        left = (len >> 4) + 1;\n-        len &= 15;\n-        do {\n-            length[symbol++] = len;\n-        } while (--left);\n-    } while (--n);\n-    n = symbol;\n \n     /* count number of codes of each length */\n@@ -32,5 +19,6 @@\n         left <<= 1;                     /* one more bit, double codes left */\n         left -= h->count[len];          /* deduct count from possible codes */\n-        if (left < 0) return left;      /* over-subscribed--return negative */\n+        if (left < 0)\n+            return left;                /* over-subscribed--return negative */\n     }                                   /* left > 0 means incomplete */\n ",
+      "occurrences": [
+        "contrib/blast/blast.c:190-241",
+        "contrib/puff/puff.c:340-379"
+      ]
+    },
+    {
+      "why": "The code beginning with `while (state->have < state->ncode) {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: inflate.c:821-829 and infback.c:324-332; 9 and 9 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- inflate.c:812-829\n+++ infback.c:315-332\n@@ -7,5 +7,5 @@\n                 state->lens[order[state->have++]] = 0;\n             state->next = state->codes;\n-            state->lencode = state->distcode = (const code FAR *)(state->next);\n+            state->lencode = (code const FAR *)(state->next);\n             state->lenbits = 7;\n             ret = inflate_table(CODES, state->lens, 19, &(state->next),",
+      "occurrences": [
+        "inflate.c:812-829",
+        "infback.c:315-332"
+      ]
+    },
+    {
+      "why": "The code beginning with `flags += 1L << 25;` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: zutil.c:105-118 and zutil.c:89-102; 14 and 14 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"NO_snprintf\", \"NO_vsnprintf\"], [\"HAS_sprintf_void\", \"HAS_vsprintf_void\"], [\"HAS_snprintf_void\", \"HAS_vsnprintf_void\"]]. Raw core diff:\n--- zutil.c:105-118\n+++ zutil.c:89-102\n@@ -1 +1 @@\n-#   ifdef NO_snprintf\n+#   ifdef NO_vsnprintf\n@@ -7 +7 @@\n-#       ifdef HAS_sprintf_void\n+#       ifdef HAS_vsprintf_void\n@@ -11 +11 @@\n-#       ifdef HAS_snprintf_void\n+#       ifdef HAS_vsnprintf_void\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- zutil.c:105-118\n+++ zutil.c:89-102\n@@ -1,3 +1,3 @@\n-#   ifdef NO_snprintf\n+#   ifdef NO_vsnprintf\n #       ifdef ZLIB_INSECURE\n             flags += 1L << 25;\n@@ -5,9 +5,9 @@\n             flags += 1L << 27;\n #       endif\n-#       ifdef HAS_sprintf_void\n+#       ifdef HAS_vsprintf_void\n             flags += 1L << 26;\n #       endif\n #   else\n-#       ifdef HAS_snprintf_void\n+#       ifdef HAS_vsnprintf_void\n             flags += 1L << 26;\n #       endif",
+      "type": "Type II",
+      "occurrences": [
+        "zutil.c:105-118",
+        "zutil.c:89-102"
+      ]
+    },
+    {
+      "why": "The code beginning with `static voidpf ZCALLBACK fopen64_file_func(voidpf opaque, const void* filename, int mode) {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: contrib/minizip/ioapi.c:101-113 and contrib/minizip/ioapi.c:83-95; 12 and 12 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- contrib/minizip/ioapi.c:100-116\n+++ contrib/minizip/ioapi.c:82-98\n@@ -1,3 +1,3 @@\n-static voidpf ZCALLBACK fopen64_file_func(voidpf opaque, const void* filename, int mode) {\n+static voidpf ZCALLBACK fopen_file_func(voidpf opaque, const char* filename, int mode) {\n     FILE* file = NULL;\n     const char* mode_fopen = NULL;\n@@ -13,5 +13,5 @@\n \n     if ((filename!=NULL) && (mode_fopen != NULL))\n-        file = FOPEN_FUNC((const char*)filename, mode_fopen);\n+        file = fopen(filename, mode_fopen);\n     return file;\n }",
+      "occurrences": [
+        "contrib/minizip/ioapi.c:100-116",
+        "contrib/minizip/ioapi.c:82-98"
+      ]
+    },
+    {
+      "why": "The code beginning with `incr = 1U << (len - 1);` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: contrib/infback9/inftree9.c:228-236 and contrib/infback9/inftree9.c:302-310; 9 and 9 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "contrib/infback9/inftree9.c:228-236",
+        "contrib/infback9/inftree9.c:302-310"
+      ]
+    },
+    {
+      "why": "The code beginning with `unsigned lenbits;           /* index bits for lencode */` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: contrib/infback9/infback9.c:234-239 and infback.c:201-206; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- contrib/infback9/infback9.c:232-239\n+++ infback.c:198-206\n@@ -1,4 +1,5 @@\n-    unsigned lenbits;           /* index bits for lencode */\n-    unsigned distbits;          /* index bits for distcode */\n+    unsigned bits;              /* bits in bit buffer */\n+    unsigned copy;              /* number of stored or match bytes to copy */\n+    unsigned char FAR *from;    /* where to copy match bytes from */\n     code here;                  /* current decoding table entry */\n     code last;                  /* parent table entry */",
+      "occurrences": [
+        "contrib/infback9/infback9.c:232-239",
+        "infback.c:198-206"
+      ]
+    },
+    {
+      "why": "The code beginning with `do {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: deflate.c:601-606 and deflate.c:323-328; 6 and 6 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n--- deflate.c:601-606\n+++ deflate.c:323-328\n@@ -1 +1 @@\n-            UPDATE_HASH(s, s->ins_h, s->window[str + MIN_MATCH-1]);\n+                UPDATE_HASH(s, s->ins_h, s->window[str + MIN_MATCH-1]);\n@@ -3 +3 @@\n-            s->prev[str & s->w_mask] = s->head[s->ins_h];\n+                s->prev[str & s->w_mask] = s->head[s->ins_h];\n@@ -5,2 +5,2 @@\n-            s->head[s->ins_h] = (Pos)str;\n-            str++;\n+                s->head[s->ins_h] = (Pos)str;\n+                str++;\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- deflate.c:600-607\n+++ deflate.c:323-328\n@@ -1,8 +1,6 @@\n-        do {\n-            UPDATE_HASH(s, s->ins_h, s->window[str + MIN_MATCH-1]);\n+                UPDATE_HASH(s, s->ins_h, s->window[str + MIN_MATCH-1]);\n #ifndef FASTEST\n-            s->prev[str & s->w_mask] = s->head[s->ins_h];\n+                s->prev[str & s->w_mask] = s->head[s->ins_h];\n #endif\n-            s->head[s->ins_h] = (Pos)str;\n-            str++;\n-        } while (--n);\n+                s->head[s->ins_h] = (Pos)str;\n+                str++;",
+      "occurrences": [
+        "deflate.c:600-607",
+        "deflate.c:323-328"
+      ]
+    },
+    {
+      "why": "The code beginning with `ret = inflate_table(LENS, state->lens, state->nlen, &(state->next),` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: infback.c:410-418 and inflate.c:908-916; 9 and 9 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- infback.c:402-419\n+++ inflate.c:900-917\n@@ -6,5 +6,5 @@\n                 break;\n             }\n-            state->distcode = (code const FAR *)(state->next);\n+            state->distcode = (const code FAR *)(state->next);\n             state->distbits = 6;\n             ret = inflate_table(DISTS, state->lens + state->nlen, state->ndist,\n@@ -16,3 +16,3 @@\n             }\n             Tracev((stderr, \"inflate:       codes ok\\n\"));\n-            state->mode = LEN;\n+            state->mode = LEN_;",
+      "occurrences": [
+        "infback.c:402-419",
+        "inflate.c:900-917"
+      ]
+    },
+    {
+      "why": "The code beginning with `public override void Write(byte[] buffer, int offset, int count)` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: contrib/dotzlib/DotZLib/GZipStream.cs:211-217 and contrib/dotzlib/DotZLib/GZipStream.cs:167-173; 7 and 7 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- contrib/dotzlib/DotZLib/GZipStream.cs:199-218\n+++ contrib/dotzlib/DotZLib/GZipStream.cs:154-175\n@@ -1,5 +1,5 @@\n-        public override void Write(byte[] buffer, int offset, int count)\n+        public override int Read(byte[] buffer, int offset, int count)\n         {\n-            if (!CanWrite) throw new NotSupportedException();\n+            if (!CanRead) throw new NotSupportedException();\n             if (buffer == null) throw new ArgumentNullException();\n             if (offset < 0 || count < 0) throw new ArgumentOutOfRangeException();\n@@ -8,7 +8,8 @@\n \n             GCHandle h = GCHandle.Alloc(buffer, GCHandleType.Pinned);\n+            int result;\n             try\n             {\n-                int result = gzwrite(_gzFile, h.AddrOfPinnedObject().ToInt32() + offset, count);\n+                result = gzread(_gzFile, h.AddrOfPinnedObject().ToInt32() + offset, count);\n                 if (result < 0)\n                     throw new IOException();\n@@ -18,3 +19,4 @@\n                 h.Free();\n             }\n+            return result;\n         }",
+      "occurrences": [
+        "contrib/dotzlib/DotZLib/GZipStream.cs:199-218",
+        "contrib/dotzlib/DotZLib/GZipStream.cs:154-175"
+      ]
+    },
+    {
+      "why": "The code beginning with `gz_statep state;` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: gzread.c:426-442 and gzread.c:517-533; 11 and 11 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n--- gzread.c:426-442\n+++ gzread.c:517-533\n@@ -12 +12 @@\n-       the error */\n+       the error, as the gzgetc() macro does */\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- gzread.c:426-442\n+++ gzread.c:517-533\n@@ -10,5 +10,5 @@\n     /* check that there was no (serious) error -- if there was, deliver any\n        data read before the error until it is exhausted, and only then return\n-       the error */\n+       the error, as the gzgetc() macro does */\n     if (state->err != Z_OK && state->err != Z_BUF_ERROR && !state->again &&\n             state->x.have == 0)",
+      "type": "Type I",
+      "occurrences": [
+        "gzread.c:426-442",
+        "gzread.c:517-533"
+      ]
+    },
+    {
+      "why": "The code beginning with `byte[] data = { 1,2,3,4,5,6,7 };` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: contrib/dotzlib/DotZLib/UnitTests.cs:135-144 and contrib/dotzlib/DotZLib/UnitTests.cs:101-110; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"adler\", \"crc32\"], [\"0x5b001d\", \"0x70e46888\"], [\"AdlerChecksum\", \"CRC32Checksum\"], [\"0x0bcf02f6\", \"0x0e5c1a120\"]]. Raw core diff:\n--- contrib/dotzlib/DotZLib/UnitTests.cs:135-144\n+++ contrib/dotzlib/DotZLib/UnitTests.cs:101-110\n@@ -2,2 +2,2 @@\n-            adler.Update(data);\n-            Assert.AreEqual( 0x5b001d, adler.Value  );\n+            crc32.Update(data);\n+            Assert.AreEqual( 0x70e46888, crc32.Value  );\n@@ -5,3 +5,3 @@\n-            adler = new AdlerChecksum();\n-            adler.Update(\"penguin\");\n-            Assert.AreEqual(0x0bcf02f6, adler.Value );\n+            crc32 = new CRC32Checksum();\n+            crc32.Update(\"penguin\");\n+            Assert.AreEqual( 0x0e5c1a120, crc32.Value );\n@@ -9,2 +9,2 @@\n-            adler = new AdlerChecksum(1);\n-            adler.Update(\"penguin\");\n+            crc32 = new CRC32Checksum(1);\n+            crc32.Update(\"penguin\");\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- contrib/dotzlib/DotZLib/UnitTests.cs:135-144\n+++ contrib/dotzlib/DotZLib/UnitTests.cs:101-110\n@@ -1,10 +1,10 @@\n             byte[] data = { 1,2,3,4,5,6,7 };\n-            adler.Update(data);\n-            Assert.AreEqual( 0x5b001d, adler.Value  );\n+            crc32.Update(data);\n+            Assert.AreEqual( 0x70e46888, crc32.Value  );\n \n-            adler = new AdlerChecksum();\n-            adler.Update(\"penguin\");\n-            Assert.AreEqual(0x0bcf02f6, adler.Value );\n+            crc32 = new CRC32Checksum();\n+            crc32.Update(\"penguin\");\n+            Assert.AreEqual( 0x0e5c1a120, crc32.Value );\n \n-            adler = new AdlerChecksum(1);\n-            adler.Update(\"penguin\");\n+            crc32 = new CRC32Checksum(1);\n+            crc32.Update(\"penguin\");",
+      "type": "Type II",
+      "occurrences": [
+        "contrib/dotzlib/DotZLib/UnitTests.cs:135-144",
+        "contrib/dotzlib/DotZLib/UnitTests.cs:101-110"
+      ]
+    },
+    {
+      "why": "The code beginning with `ZPOS64_T x;` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: contrib/minizip/zip.c:654-666 and contrib/minizip/zip.c:626-638; 10 and 10 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"ZPOS64_T\", \"uLong\"]]. Raw core diff:\n--- contrib/minizip/zip.c:654-666\n+++ contrib/minizip/zip.c:626-638\n@@ -1,3 +1,3 @@\n-  ZPOS64_T x;\n-  int i = 0;\n-  int err;\n+    uLong x ;\n+    int i = 0;\n+    int err;\n@@ -5,2 +5,2 @@\n-  err = zip64local_getByte(pzlib_filefunc_def,filestream,&i);\n-  x = (ZPOS64_T)i;\n+    err = zip64local_getByte(pzlib_filefunc_def,filestream,&i);\n+    x = (uLong)i;\n@@ -8,3 +8,3 @@\n-  if (err==ZIP_OK)\n-    err = zip64local_getByte(pzlib_filefunc_def,filestream,&i);\n-  x += ((ZPOS64_T)i)<<8;\n+    if (err==ZIP_OK)\n+        err = zip64local_getByte(pzlib_filefunc_def,filestream,&i);\n+    x += ((uLong)i)<<8;\n@@ -12,2 +12,2 @@\n-  if (err==ZIP_OK)\n-    err = zip64local_getByte(pzlib_filefunc_def,filestream,&i);\n+    if (err==ZIP_OK)\n+        err = zip64local_getByte(pzlib_filefunc_def,filestream,&i);\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- contrib/minizip/zip.c:654-666\n+++ contrib/minizip/zip.c:626-638\n@@ -1,13 +1,13 @@\n-  ZPOS64_T x;\n-  int i = 0;\n-  int err;\n+    uLong x ;\n+    int i = 0;\n+    int err;\n \n-  err = zip64local_getByte(pzlib_filefunc_def,filestream,&i);\n-  x = (ZPOS64_T)i;\n+    err = zip64local_getByte(pzlib_filefunc_def,filestream,&i);\n+    x = (uLong)i;\n \n-  if (err==ZIP_OK)\n-    err = zip64local_getByte(pzlib_filefunc_def,filestream,&i);\n-  x += ((ZPOS64_T)i)<<8;\n+    if (err==ZIP_OK)\n+        err = zip64local_getByte(pzlib_filefunc_def,filestream,&i);\n+    x += ((uLong)i)<<8;\n \n-  if (err==ZIP_OK)\n-    err = zip64local_getByte(pzlib_filefunc_def,filestream,&i);\n+    if (err==ZIP_OK)\n+        err = zip64local_getByte(pzlib_filefunc_def,filestream,&i);",
+      "type": "Type II",
+      "occurrences": [
+        "contrib/minizip/zip.c:654-666",
+        "contrib/minizip/zip.c:626-638"
+      ]
+    },
+    {
+      "why": "The code beginning with `int code;           /* len bits being decoded */` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: contrib/blast/blast.c:131-143 and contrib/puff/puff.c:266-278; 12 and 12 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "contrib/blast/blast.c:131-143",
+        "contrib/puff/puff.c:266-278"
+      ]
+    },
+    {
+      "why": "The code beginning with `uInt len = (uInt)strlen(hello)+1;` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: test/example.c:341-351 and test/example.c:175-185; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"uInt\", \"uLong\"]]. Raw core diff:\n--- test/example.c:341-351\n+++ test/example.c:175-185\n@@ -1 +1 @@\n-    uInt len = (uInt)strlen(hello)+1;\n+    uLong len = (uLong)strlen(hello)+1;\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- test/example.c:341-351\n+++ test/example.c:175-185\n@@ -1,3 +1,3 @@\n-    uInt len = (uInt)strlen(hello)+1;\n+    uLong len = (uLong)strlen(hello)+1;\n \n     c_stream.zalloc = zalloc;",
+      "type": "Type II",
+      "occurrences": [
+        "test/example.c:341-351",
+        "test/example.c:175-185"
+      ]
+    },
+    {
+      "why": "The code beginning with `extern unzFile ZEXPORT unzOpen2(const char *path,` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: contrib/minizip/unzip.c:642-648 and contrib/minizip/zip.c:1116-1122; 7 and 7 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- contrib/minizip/unzip.c:628-653\n+++ contrib/minizip/zip.c:1104-1127\n@@ -1,16 +1,14 @@\n-extern unzFile ZEXPORT unzOpen2(const char *path,\n-                                zlib_filefunc_def* pzlib_filefunc32_def) {\n+extern zipFile ZEXPORT zipOpen2(const char *pathname, int append, zipcharpc* globalcomment, zlib_filefunc_def* pzlib_filefunc32_def) {\n     if (pzlib_filefunc32_def != NULL)\n     {\n         zlib_filefunc64_32_def zlib_filefunc64_32_def_fill;\n         fill_zlib_filefunc64_32_def_from_filefunc32(&zlib_filefunc64_32_def_fill,pzlib_filefunc32_def);\n-        return unzOpenInternal(path, &zlib_filefunc64_32_def_fill, 0);\n+        return zipOpen3(pathname, append, globalcomment, &zlib_filefunc64_32_def_fill);\n     }\n     else\n-        return unzOpenInternal(path, NULL, 0);\n+        return zipOpen3(pathname, append, globalcomment, NULL);\n }\n \n-extern unzFile ZEXPORT unzOpen2_64(const void *path,\n-                                   zlib_filefunc64_def* pzlib_filefunc_def) {\n+extern zipFile ZEXPORT zipOpen2_64(const void *pathname, int append, zipcharpc* globalcomment, zlib_filefunc64_def* pzlib_filefunc_def) {\n     if (pzlib_filefunc_def != NULL)\n     {\n@@ -20,7 +18,7 @@\n         zlib_filefunc64_32_def_fill.ztell32_file = NULL;\n         zlib_filefunc64_32_def_fill.zseek32_file = NULL;\n-        return unzOpenInternal(path, &zlib_filefunc64_32_def_fill, 1);\n+        return zipOpen3(pathname, append, globalcomment, &zlib_filefunc64_32_def_fill);\n     }\n     else\n-        return unzOpenInternal(path, NULL, 1);\n+        return zipOpen3(pathname, append, globalcomment, NULL);\n }",
+      "occurrences": [
+        "contrib/minizip/unzip.c:628-653",
+        "contrib/minizip/zip.c:1104-1127"
+      ]
+    },
+    {
+      "why": "The code beginning with `public override bool CanSeek` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: contrib/dotzlib/DotZLib/GZipStream.cs:110-128 and contrib/dotzlib/DotZLib/CodecBase.cs:116-134; 10 and 10 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"IDispose\", \"IDisposable\"], [\"GZipStream\", \"CodecBase\"], [\"cleanUp\", \"CleanUp\"]]. Raw core diff:\n--- contrib/dotzlib/DotZLib/GZipStream.cs:110-128\n+++ contrib/dotzlib/DotZLib/CodecBase.cs:116-134\n@@ -3 +3 @@\n-        #region Destructor & IDispose stuff\n+        #region Destructor & IDisposable stuff\n@@ -8 +8 @@\n-        ~GZipStream()\n+        ~CodecBase()\n@@ -10 +10 @@\n-            cleanUp(false);\n+            CleanUp(false);\n@@ -14 +14 @@\n-        /// Closes the external file handle\n+        /// Releases any unmanaged resources and calls the <see cref=\"CleanUp()\"/> method of the derived class\n@@ -18 +18 @@\n-            cleanUp(true);\n+            CleanUp(true);\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- contrib/dotzlib/DotZLib/GZipStream.cs:92-128\n+++ contrib/dotzlib/DotZLib/CodecBase.cs:114-134\n@@ -1,37 +1,21 @@\n-        public override bool CanSeek\n-        {\n-            get\n-            {\n-                return false;\n-            }\n-        }\n+        public uint Checksum { get { return _checksum; } }\n \n-        /// <summary>\n-        /// Returns true if this tsream is writeable, false otherwise\n-        /// </summary>\n-        public override bool CanWrite\n-        {\n-            get\n-            {\n-                return _isWriting;\n-            }\n-        }\n         #endregion\n \n-        #region Destructor & IDispose stuff\n+        #region Destructor & IDisposable stuff\n \n         /// <summary>\n         /// Destroys this instance\n         /// </summary>\n-        ~GZipStream()\n+        ~CodecBase()\n         {\n-            cleanUp(false);\n+            CleanUp(false);\n         }\n \n         /// <summary>\n-        /// Closes the external file handle\n+        /// Releases any unmanaged resources and calls the <see cref=\"CleanUp()\"/> method of the derived class\n         /// </summary>\n         public void Dispose()\n         {\n-            cleanUp(true);\n+            CleanUp(true);\n         }",
+      "occurrences": [
+        "contrib/dotzlib/DotZLib/GZipStream.cs:92-128",
+        "contrib/dotzlib/DotZLib/CodecBase.cs:114-134"
+      ]
+    },
+    {
+      "why": "The code beginning with `{0x00000000, 0x9ba54c6f, 0xec3b9e9f, 0x779ed2f0, 0x03063b7f,` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: crc32.h:1960-2011 and crc32.h:4400-4451; 52 and 52 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "crc32.h:1960-2011",
+        "crc32.h:4400-4451"
+      ]
+    },
+    {
+      "why": "The code beginning with `if (state->mode != GZ_WRITE || (state->err != Z_OK && !state->again))` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: gzwrite.c:440-469 and gzwrite.c:557-586; 18 and 18 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n--- gzwrite.c:440-469\n+++ gzwrite.c:557-586\n@@ -14,2 +14,2 @@\n-       buffer is double-sized just for this function, so there should be\n-       state->size bytes available after the current contents */\n+       buffer is double-sized just for this function, so there is guaranteed to\n+       be state->size bytes available after the current contents */\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- gzwrite.c:440-469\n+++ gzwrite.c:557-586\n@@ -12,6 +12,6 @@\n \n     /* do the printf() into the input buffer, put length in len -- the input\n-       buffer is double-sized just for this function, so there should be\n-       state->size bytes available after the current contents */\n+       buffer is double-sized just for this function, so there is guaranteed to\n+       be state->size bytes available after the current contents */\n     ret = gz_vacate(state);\n     if (state->err) {",
+      "type": "Type I",
+      "occurrences": [
+        "gzwrite.c:440-469",
+        "gzwrite.c:557-586"
+      ]
+    },
+    {
+      "why": "The code beginning with `case TYPE:` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: inflate.c:724-738 and infback.c:233-247; 15 and 15 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- inflate.c:717-755\n+++ infback.c:228-260\n@@ -1,9 +1,7 @@\n         case TYPE:\n-            if (flush == Z_BLOCK || flush == Z_TREES) goto inf_leave;\n-                /* fallthrough */\n-        case TYPEDO:\n+            /* determine and dispatch block type */\n             if (state->last) {\n                 BYTEBITS();\n-                state->mode = CHECK;\n+                state->mode = DONE;\n                 break;\n             }\n@@ -21,9 +19,5 @@\n                 Tracev((stderr, \"inflate:     fixed codes block%s\\n\",\n                         state->last ? \" (last)\" : \"\"));\n-                state->mode = LEN_;             /* decode codes */\n-                if (flush == Z_TREES) {\n-                    DROPBITS(2);\n-                    goto inf_leave;\n-                }\n+                state->mode = LEN;              /* decode codes */\n                 break;\n             case 2:                             /* dynamic block */",
+      "occurrences": [
+        "inflate.c:717-755",
+        "infback.c:228-260"
+      ]
+    },
+    {
+      "why": "The code beginning with `if (bits < 15) {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: inffast.c:132-143 and inffast.c:101-112; 12 and 12 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"dcode\", \"lcode\"], [\"dmask\", \"lmask\"], [\"dodist\", \"dolen\"]]. Raw core diff:\n--- inffast.c:132-143\n+++ inffast.c:101-112\n@@ -1,12 +1,12 @@\n-            if (bits < 15) {\n-                hold += (unsigned long)(*in++) << bits;\n-                bits += 8;\n-                hold += (unsigned long)(*in++) << bits;\n-                bits += 8;\n-            }\n-            here = dcode + (hold & dmask);\n-          dodist:\n-            op = (unsigned)(here->bits);\n-            hold >>= op;\n-            bits -= op;\n-            op = (unsigned)(here->op);\n+        if (bits < 15) {\n+            hold += (unsigned long)(*in++) << bits;\n+            bits += 8;\n+            hold += (unsigned long)(*in++) << bits;\n+            bits += 8;\n+        }\n+        here = lcode + (hold & lmask);\n+      dolen:\n+        op = (unsigned)(here->bits);\n+        hold >>= op;\n+        bits -= op;\n+        op = (unsigned)(here->op);\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- inffast.c:132-143\n+++ inffast.c:101-112\n@@ -1,12 +1,12 @@\n-            if (bits < 15) {\n-                hold += (unsigned long)(*in++) << bits;\n-                bits += 8;\n-                hold += (unsigned long)(*in++) << bits;\n-                bits += 8;\n-            }\n-            here = dcode + (hold & dmask);\n-          dodist:\n-            op = (unsigned)(here->bits);\n-            hold >>= op;\n-            bits -= op;\n-            op = (unsigned)(here->op);\n+        if (bits < 15) {\n+            hold += (unsigned long)(*in++) << bits;\n+            bits += 8;\n+            hold += (unsigned long)(*in++) << bits;\n+            bits += 8;\n+        }\n+        here = lcode + (hold & lmask);\n+      dolen:\n+        op = (unsigned)(here->bits);\n+        hold >>= op;\n+        bits -= op;\n+        op = (unsigned)(here->op);",
+      "type": "Type II",
+      "occurrences": [
+        "inffast.c:132-143",
+        "inffast.c:101-112"
+      ]
+    },
+    {
+      "why": "The code beginning with `us.isZip64 = 1;` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: contrib/minizip/unzip.c:493-509 and contrib/minizip/unzip.c:552-568; 10 and 10 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"1\", \"0\"], [\"unz64local_getLong64\", \"unz64local_getShort\"], [\"uL64\", \"number_disk\"], [\"uS\", \"number_disk_with_CD\"]]. Raw core diff:\n--- contrib/minizip/unzip.c:493-509\n+++ contrib/minizip/unzip.c:552-568\n@@ -1 +1 @@\n-        us.isZip64 = 1;\n+        us.isZip64 = 0;\n@@ -4,2 +4,2 @@\n-                                      central_pos,ZLIB_FILEFUNC_SEEK_SET)!=0)\n-        err=UNZ_ERRNO;\n+                                        central_pos,ZLIB_FILEFUNC_SEEK_SET)!=0)\n+            err=UNZ_ERRNO;\n@@ -11,2 +11,2 @@\n-        /* size of zip64 end of central directory record */\n-        if (unz64local_getLong64(&us.z_filefunc, us.filestream,&uL64)!=UNZ_OK)\n+        /* number of this disk */\n+        if (unz64local_getShort(&us.z_filefunc, us.filestream,&number_disk)!=UNZ_OK)\n@@ -15,2 +15,2 @@\n-        /* version made by */\n-        if (unz64local_getShort(&us.z_filefunc, us.filestream,&uS)!=UNZ_OK)\n+        /* number of the disk with the start of the central directory */\n+        if (unz64local_getShort(&us.z_filefunc, us.filestream,&number_disk_with_CD)!=UNZ_OK)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- contrib/minizip/unzip.c:493-513\n+++ contrib/minizip/unzip.c:552-572\n@@ -1,7 +1,7 @@\n-        us.isZip64 = 1;\n+        us.isZip64 = 0;\n \n         if (ZSEEK64(us.z_filefunc, us.filestream,\n-                                      central_pos,ZLIB_FILEFUNC_SEEK_SET)!=0)\n-        err=UNZ_ERRNO;\n+                                        central_pos,ZLIB_FILEFUNC_SEEK_SET)!=0)\n+            err=UNZ_ERRNO;\n \n         /* the signature, already checked */\n@@ -9,13 +9,13 @@\n             err=UNZ_ERRNO;\n \n-        /* size of zip64 end of central directory record */\n-        if (unz64local_getLong64(&us.z_filefunc, us.filestream,&uL64)!=UNZ_OK)\n+        /* number of this disk */\n+        if (unz64local_getShort(&us.z_filefunc, us.filestream,&number_disk)!=UNZ_OK)\n             err=UNZ_ERRNO;\n \n-        /* version made by */\n-        if (unz64local_getShort(&us.z_filefunc, us.filestream,&uS)!=UNZ_OK)\n+        /* number of the disk with the start of the central directory */\n+        if (unz64local_getShort(&us.z_filefunc, us.filestream,&number_disk_with_CD)!=UNZ_OK)\n             err=UNZ_ERRNO;\n \n-        /* version needed to extract */\n-        if (unz64local_getShort(&us.z_filefunc, us.filestream,&uS)!=UNZ_OK)\n+        /* total number of entries in the central dir on this disk */\n+        if (unz64local_getShort(&us.z_filefunc, us.filestream,&uL)!=UNZ_OK)\n             err=UNZ_ERRNO;",
+      "occurrences": [
+        "contrib/minizip/unzip.c:493-513",
+        "contrib/minizip/unzip.c:552-572"
+      ]
+    },
+    {
+      "why": "The code beginning with `int ret, err;` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: gzread.c:706-713 and gzwrite.c:704-713; 6 and 6 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"GZ_READ\", \"GZ_WRITE\"]]. Raw core diff:\n--- gzread.c:706-713\n+++ gzwrite.c:704-713\n@@ -3 +3 @@\n-    /* get internal structure and check that it's for reading */\n+    /* get internal structure */\n@@ -7 +7,3 @@\n-    if (state->mode != GZ_READ)\n+\n+    /* check that we're writing */\n+    if (state->mode != GZ_WRITE)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- gzread.c:705-713\n+++ gzwrite.c:703-713\n@@ -1,9 +1,11 @@\n-    int ret, err;\n+    int ret = Z_OK;\n     gz_statep state;\n \n-    /* get internal structure and check that it's for reading */\n+    /* get internal structure */\n     if (file == NULL)\n         return Z_STREAM_ERROR;\n     state = (gz_statep)file;\n-    if (state->mode != GZ_READ)\n+\n+    /* check that we're writing */\n+    if (state->mode != GZ_WRITE)\n         return Z_STREAM_ERROR;",
+      "occurrences": [
+        "gzread.c:705-713",
+        "gzwrite.c:703-713"
+      ]
+    },
+    {
+      "why": "The code beginning with `gz_statep state;` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: gzwrite.c:271-281 and gzwrite.c:298-308; 7 and 7 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "gzwrite.c:271-281",
+        "gzwrite.c:298-308"
+      ]
+    },
+    {
+      "why": "The code beginning with `err = deflate(&c_stream, Z_FINISH);` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: test/example.c:436-442 and test/example.c:400-406; 7 and 7 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"deflate\", \"inflate\"], [\"c_stream\", \"d_stream\"], [\"\\\"deflate should report Z_STREAM_END\\\\n\\\"\", \"\\\"inflate should report Z_STREAM_END\\\\n\\\"\"], [\"deflateEnd\", \"inflateEnd\"], [\"\\\"deflateEnd\\\"\", \"\\\"inflateEnd\\\"\"]]. Raw core diff:\n--- test/example.c:436-442\n+++ test/example.c:400-406\n@@ -1 +1 @@\n-    err = deflate(&c_stream, Z_FINISH);\n+    err = inflate(&d_stream, Z_FINISH);\n@@ -3 +3 @@\n-        fprintf(stderr, \"deflate should report Z_STREAM_END\\n\");\n+        fprintf(stderr, \"inflate should report Z_STREAM_END\\n\");\n@@ -6,2 +6,2 @@\n-    err = deflateEnd(&c_stream);\n-    CHECK_ERR(err, \"deflateEnd\");\n+    err = inflateEnd(&d_stream);\n+    CHECK_ERR(err, \"inflateEnd\");\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- test/example.c:436-442\n+++ test/example.c:400-406\n@@ -1,7 +1,7 @@\n-    err = deflate(&c_stream, Z_FINISH);\n+    err = inflate(&d_stream, Z_FINISH);\n     if (err != Z_STREAM_END) {\n-        fprintf(stderr, \"deflate should report Z_STREAM_END\\n\");\n+        fprintf(stderr, \"inflate should report Z_STREAM_END\\n\");\n         exit(1);\n     }\n-    err = deflateEnd(&c_stream);\n-    CHECK_ERR(err, \"deflateEnd\");\n+    err = inflateEnd(&d_stream);\n+    CHECK_ERR(err, \"inflateEnd\");",
+      "type": "Type II",
+      "occurrences": [
+        "test/example.c:436-442",
+        "test/example.c:400-406"
+      ]
+    },
+    {
+      "why": "The code beginning with `int ZEXPORT inflateBackEnd(z_streamp strm) {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: infback.c:573-579 and contrib/infback9/infback9.c:597-603; 7 and 7 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- infback.c:572-579\n+++ contrib/infback9/infback9.c:596-603\n@@ -1,3 +1,3 @@\n-int ZEXPORT inflateBackEnd(z_streamp strm) {\n+int ZEXPORT inflateBack9End(z_stream FAR *strm) {\n     if (strm == Z_NULL || strm->state == Z_NULL || strm->zfree == (free_func)0)\n         return Z_STREAM_ERROR;",
+      "occurrences": [
+        "infback.c:572-579",
+        "contrib/infback9/infback9.c:596-603"
+      ]
+    },
+    {
+      "why": "The code beginning with `{0x00000000, 0x87a6cb43, 0xd43c90c7, 0x539a5b84, 0x730827cf,` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: crc32.h:3654-3705 and crc32.h:7632-7683; 52 and 52 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "crc32.h:3654-3705",
+        "crc32.h:7632-7683"
+      ]
+    },
+    {
+      "why": "The code beginning with `if (s->lookahead < MIN_LOOKAHEAD) {` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: deflate.c:2002-2016 and deflate.c:1902-1916; 11 and 11 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "deflate.c:2002-2016",
+        "deflate.c:1902-1916"
+      ]
+    },
+    {
+      "why": "The code beginning with `typedef struct unz_file_info_s` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: contrib/minizip/unzip.h:134-140 and contrib/minizip/unzip.h:113-119; 7 and 7 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- contrib/minizip/unzip.h:133-152\n+++ contrib/minizip/unzip.h:112-131\n@@ -1,3 +1,3 @@\n-typedef struct unz_file_info_s\n+typedef struct unz_file_info64_s\n {\n     uLong version;              /* version made by                 2 bytes */\n@@ -7,6 +7,6 @@\n     uLong dosDate;              /* last mod file date in Dos fmt   4 bytes */\n     uLong crc;                  /* crc-32                          4 bytes */\n-    uLong compressed_size;      /* compressed size                 4 bytes */\n-    uLong uncompressed_size;    /* uncompressed size               4 bytes */\n+    ZPOS64_T compressed_size;   /* compressed size                 8 bytes */\n+    ZPOS64_T uncompressed_size; /* uncompressed size               8 bytes */\n     uLong size_filename;        /* filename length                 2 bytes */\n     uLong size_file_extra;      /* extra field length              2 bytes */\n@@ -18,3 +18,3 @@\n \n     tm_unz tmu_date;\n-} unz_file_info;\n+} unz_file_info64;",
+      "occurrences": [
+        "contrib/minizip/unzip.h:133-152",
+        "contrib/minizip/unzip.h:112-131"
+      ]
+    },
+    {
+      "why": "The code beginning with `crc32.Update(data);` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: contrib/dotzlib/DotZLib/UnitTests.cs:102-111 and contrib/dotzlib/DotZLib/UnitTests.cs:136-145; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"crc32\", \"adler\"], [\"0x70e46888\", \"0x5b001d\"], [\"CRC32Checksum\", \"AdlerChecksum\"], [\"0x0e5c1a120\", \"0x0bcf02f6\"], [\"0x43b6aa94\", \"0x0bd602f7\"]]. Raw core diff:\n--- contrib/dotzlib/DotZLib/UnitTests.cs:102-111\n+++ contrib/dotzlib/DotZLib/UnitTests.cs:136-145\n@@ -1,2 +1,2 @@\n-            crc32.Update(data);\n-            Assert.AreEqual( 0x70e46888, crc32.Value  );\n+            adler.Update(data);\n+            Assert.AreEqual( 0x5b001d, adler.Value  );\n@@ -4,3 +4,3 @@\n-            crc32 = new CRC32Checksum();\n-            crc32.Update(\"penguin\");\n-            Assert.AreEqual( 0x0e5c1a120, crc32.Value );\n+            adler = new AdlerChecksum();\n+            adler.Update(\"penguin\");\n+            Assert.AreEqual(0x0bcf02f6, adler.Value );\n@@ -8,3 +8,3 @@\n-            crc32 = new CRC32Checksum(1);\n-            crc32.Update(\"penguin\");\n-            Assert.AreEqual(0x43b6aa94, crc32.Value);\n+            adler = new AdlerChecksum(1);\n+            adler.Update(\"penguin\");\n+            Assert.AreEqual(0x0bd602f7, adler.Value);\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- contrib/dotzlib/DotZLib/UnitTests.cs:102-111\n+++ contrib/dotzlib/DotZLib/UnitTests.cs:136-145\n@@ -1,10 +1,10 @@\n-            crc32.Update(data);\n-            Assert.AreEqual( 0x70e46888, crc32.Value  );\n+            adler.Update(data);\n+            Assert.AreEqual( 0x5b001d, adler.Value  );\n \n-            crc32 = new CRC32Checksum();\n-            crc32.Update(\"penguin\");\n-            Assert.AreEqual( 0x0e5c1a120, crc32.Value );\n+            adler = new AdlerChecksum();\n+            adler.Update(\"penguin\");\n+            Assert.AreEqual(0x0bcf02f6, adler.Value );\n \n-            crc32 = new CRC32Checksum(1);\n-            crc32.Update(\"penguin\");\n-            Assert.AreEqual(0x43b6aa94, crc32.Value);\n+            adler = new AdlerChecksum(1);\n+            adler.Update(\"penguin\");\n+            Assert.AreEqual(0x0bd602f7, adler.Value);",
+      "type": "Type II",
+      "occurrences": [
+        "contrib/dotzlib/DotZLib/UnitTests.cs:102-111",
+        "contrib/dotzlib/DotZLib/UnitTests.cs:136-145"
+      ]
+    },
+    {
+      "why": "The code beginning with `for (;;) {` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "verified": "Copied core: infback.c:495-503 and contrib/infback9/infback9.c:522-530; 9 and 9 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- infback.c:486-510\n+++ contrib/infback9/infback9.c:518-537\n@@ -1,11 +1,6 @@\n-            for (;;) {\n-                here = state->distcode[BITS(state->distbits)];\n-                if ((unsigned)(here.bits) <= bits) break;\n-                PULLBYTE();\n-            }\n             if ((here.op & 0xf0) == 0) {\n                 last = here;\n                 for (;;) {\n-                    here = state->distcode[last.val +\n+                    here = distcode[last.val +\n                             (BITS(last.bits + last.op) >> last.bits)];\n                     if ((unsigned)(last.bits + here.bits) <= bits) break;\n@@ -17,9 +12,9 @@\n             if (here.op & 64) {\n                 strm->msg = (z_const char *)\"invalid distance code\";\n-                state->mode = BAD;\n+                mode = BAD;\n                 break;\n             }\n-            state->offset = (unsigned)here.val;\n+            offset = (unsigned)here.val;\n \n             /* get distance extra bits, if any */\n-            state->extra = (unsigned)(here.op) & 15;\n+            extra = (unsigned)(here.op) & 15;",
+      "occurrences": [
+        "infback.c:486-510",
+        "contrib/infback9/infback9.c:518-537"
+      ]
+    },
+    {
+      "why": "The code beginning with `{0x00000000, 0x9d0fe176, 0xe16ec4ad, 0x7c6125db, 0x19ac8f1b,` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: crc32.h:6042-6093 and crc32.h:1856-1907; 52 and 52 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "crc32.h:6042-6093",
+        "crc32.h:1856-1907"
+      ]
+    },
+    {
+      "why": "The code beginning with `{0x00000000, 0xb8bc6765, 0xaa09c88b, 0x12b5afee, 0x8f629757,` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: crc32.h:422-473 and crc32.h:1324-1375; 52 and 52 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "crc32.h:422-473",
+        "crc32.h:1324-1375"
+      ]
+    },
+    {
+      "why": "The code beginning with `lSizeUncpr=zcpr.total_out;` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "verified": "Copied core: contrib/testzlib/testzlib.c:256-263 and contrib/testzlib/testzlib.c:215-222; 8 and 8 real lines. The core statements align token for token; the complete consistent identifier/literal renaming is [[\"lSizeUncpr\", \"lSizeCpr\"], [\"inflateEnd\", \"deflateEnd\"], [\"\\\"total uncompress size = %u, in %u step\\\\n\\\"\", \"\\\"total compress size = %u, in %u step\\\\n\\\"\"], [\"\\\"uncpr  time QP = %u msec = %f sec\\\\n\\\"\", \"\\\"defcpr time QP = %u msec = %f sec\\\\n\\\"\"]]. Raw core diff:\n--- contrib/testzlib/testzlib.c:256-263\n+++ contrib/testzlib/testzlib.c:215-222\n@@ -1,2 +1,2 @@\n-        lSizeUncpr=zcpr.total_out;\n-        inflateEnd(&zcpr);\n+        lSizeCpr=zcpr.total_out;\n+        deflateEnd(&zcpr);\n@@ -6 +6 @@\n-        printf(\"total uncompress size = %u, in %u step\\n\",lSizeUncpr,step);\n+        printf(\"total compress size = %u, in %u step\\n\",lSizeCpr,step);\n@@ -8 +8 @@\n-        printf(\"uncpr  time QP = %u msec = %f sec\\n\",dwMsecQP,dwMsecQP/(double)1000.);\n+        printf(\"defcpr time QP = %u msec = %f sec\\n\",dwMsecQP,dwMsecQP/(double)1000.);\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n--- contrib/testzlib/testzlib.c:256-263\n+++ contrib/testzlib/testzlib.c:215-222\n@@ -1,8 +1,8 @@\n-        lSizeUncpr=zcpr.total_out;\n-        inflateEnd(&zcpr);\n+        lSizeCpr=zcpr.total_out;\n+        deflateEnd(&zcpr);\n         dwGetTick=GetTickCount()-dwGetTick;\n         dwMsecQP=GetMsecSincePerfCounter(li_qp,TRUE);\n         dwResRdtsc=GetResRdtsc(li_rdtsc,TRUE);\n-        printf(\"total uncompress size = %u, in %u step\\n\",lSizeUncpr,step);\n+        printf(\"total compress size = %u, in %u step\\n\",lSizeCpr,step);\n         printf(\"time = %u msec = %f sec\\n\",dwGetTick,dwGetTick/(double)1000.);\n-        printf(\"uncpr  time QP = %u msec = %f sec\\n\",dwMsecQP,dwMsecQP/(double)1000.);\n+        printf(\"defcpr time QP = %u msec = %f sec\\n\",dwMsecQP,dwMsecQP/(double)1000.);",
+      "type": "Type II",
+      "occurrences": [
+        "contrib/testzlib/testzlib.c:256-263",
+        "contrib/testzlib/testzlib.c:215-222"
+      ]
+    },
+    {
+      "why": "The code beginning with `char *next;` is repeated unchanged apart from comments or formatting.",
+      "verified": "Copied core: gzwrite.c:429-437 and gzwrite.c:542-550; 7 and 7 real lines. After removing comments (including Python documentation strings) and comparing lexical tokens, the core diff is empty. Raw core diff:\n(empty)\nExtracted the two inclusive ranges directly from source, with two surrounding lines read on each side. Raw unified diff (two context lines):\n(empty: byte-identical extracted lines)",
+      "type": "Type I",
+      "occurrences": [
+        "gzwrite.c:429-437",
+        "gzwrite.c:542-550"
+      ]
+    }
+  ],
+  "clearly_out": [],
+  "not_clear": [
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "test/infcover.c:383-385",
+        "test/infcover.c:356-358"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "contrib/minizip/unzip.c:246-246",
+        "contrib/minizip/unzip.c:225-225"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "deflate.c:615-617",
+        "deflate.c:685-687"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 5; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "inflate.c:985-989",
+        "infback.c:486-490"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "crc32.c:569-571",
+        "crc32.c:548-550"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "gzwrite.c:557-559",
+        "gzwrite.c:647-649"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "contrib/minizip/zip.c:1654-1655",
+        "contrib/minizip/zip.c:1776-1777"
+      ]
+    },
+    {
+      "why": "The fragments around `extern int ZEXPORT zipOpenNewFileInZip(zipFile file, const char* filename, const zip_fileinfo* zipfi,` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 3.",
+      "occurrences": [
+        "contrib/minizip/zip.c:1578-1588",
+        "contrib/minizip/zip.c:1566-1576"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "inflate.c:1014-1016",
+        "infback.c:479-481"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "contrib/infback9/inftree9.c:55-58",
+        "inftrees.c:69-71"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "inffast.c:274-277",
+        "inffast.c:264-267"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "contrib/minizip/unzip.c:1225-1230",
+        "contrib/minizip/unzip.c:1096-1100"
+      ]
+    },
+    {
+      "why": "The fragments around `extern int ZEXPORT zipOpenNewFileInZip3_64(zipFile file, const char* filename, const zip_fileinfo* zipfi,` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "contrib/minizip/zip.c:1528-1533",
+        "contrib/minizip/zip.c:1499-1505"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "gzlib.c:409-412",
+        "gzlib.c:79-82"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "contrib/minizip/unzip.c:597-598",
+        "contrib/minizip/unzip.c:524-525"
+      ]
+    },
+    {
+      "why": "The fragments around `local unsigned long bget4(bin *in)` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "examples/gzjoin.c:145-154",
+        "examples/gzappend.c:223-232"
+      ]
+    },
+    {
+      "why": "The fragments around `if ((c=='d') || (c=='D'))` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "contrib/minizip/miniunz.c:620-630",
+        "contrib/minizip/minizip.c:277-284"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "contrib/dotzlib/DotZLib/UnitTests.cs:220-224",
+        "contrib/dotzlib/DotZLib/UnitTests.cs:186-190"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "contrib/minizip/iowin32.c:98-100",
+        "contrib/minizip/iowin32.c:148-150"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "contrib/minizip/unzip.c:809-811",
+        "contrib/minizip/unzip.c:786-788"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "infback.c:456-459",
+        "inflate.c:1077-1080"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "contrib/infback9/inftree9.c:59-62",
+        "contrib/infback9/inftree9.c:55-58"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "gzread.c:110-113",
+        "examples/zran.c:177-179"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "contrib/minizip/zip.c:1761-1762",
+        "contrib/minizip/zip.c:1698-1700"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "contrib/iostream2/zstream.h:139-141",
+        "contrib/iostream2/zstream.h:147-149"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "deflate.c:1782-1784",
+        "deflate.c:1770-1772"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "contrib/iostream2/zstream.h:199-200",
+        "contrib/iostream2/zstream.h:247-248"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "gzread.c:587-590",
+        "gzread.c:611-614"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "contrib/minizip/zip.c:1155-1156",
+        "contrib/minizip/zip.c:1161-1162"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "contrib/infback9/infback9.c:393-395",
+        "infback.c:356-358"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "examples/fitblk.c:202-205",
+        "examples/fitblk.c:224-227"
+      ]
+    },
+    {
+      "why": "The fragments around `if (version == Z_NULL || version[0] != ZLIB_VERSION[0] ||` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 4; edited blocks in the comment/whitespace-normalized line diff: 4.",
+      "occurrences": [
+        "infback.c:30-53",
+        "contrib/infback9/infback9.c:23-36"
+      ]
+    },
+    {
+      "why": "The fragments around `state = (gz_statep)file;` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "gzread.c:628-639",
+        "gzread.c:431-442"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "deflate.c:1215-1216",
+        "deflate.c:1288-1289"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "contrib/minizip/unzip.c:592-594",
+        "contrib/minizip/unzip.c:586-588"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "deflate.c:457-459",
+        "deflate.c:1361-1363"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "contrib/minizip/zip.c:1395-1398",
+        "contrib/minizip/zip.c:1390-1393"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "contrib/minizip/zip.c:896-902",
+        "contrib/minizip/zip.c:919-924"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "inflate.c:90-92",
+        "deflate.c:539-541"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 1 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "contrib/puff/puff.c:453-456",
+        "trees.c:66-66"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "infback.c:399-401",
+        "infback.c:322-324"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "contrib/minizip/zip.c:1387-1388",
+        "contrib/minizip/zip.c:1377-1378"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "trees.c:853-854",
+        "trees.c:850-851"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "contrib/minizip/unzip.c:1689-1691",
+        "contrib/minizip/unzip.c:1670-1672"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "trees.c:1014-1016",
+        "trees.c:1010-1012"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "test/infcover.c:366-368",
+        "test/infcover.c:501-503"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 6 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "examples/enough.c:277-285",
+        "examples/enough.c:414-425"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "contrib/minizip/zip.c:1760-1761",
+        "contrib/minizip/zip.c:1779-1780"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "deflate.c:2081-2082",
+        "deflate.c:2100-2101"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "contrib/infback9/inftree9.c:239-243",
+        "inftrees.c:258-262"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "contrib/minizip/zip.c:1757-1758",
+        "contrib/minizip/zip.c:1434-1435"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "contrib/minizip/zip.c:1555-1557",
+        "contrib/minizip/zip.c:1515-1517"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "deflate.c:514-516",
+        "deflate.c:1390-1392"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "test/example.c:282-284",
+        "test/example.c:264-266"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "contrib/minizip/zip.c:685-687",
+        "contrib/minizip/zip.c:633-635"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "contrib/minizip/zip.c:2037-2038",
+        "contrib/minizip/zip.c:1985-1987"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "contrib/iostream2/zstream.h:177-179",
+        "contrib/iostream2/zstream.h:187-189"
+      ]
+    },
+    {
+      "why": "The fragments around `printf(\"\\n    static const code distfix[%u] = {\", size);` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 5; edited blocks in the comment/whitespace-normalized line diff: 3.",
+      "occurrences": [
+        "contrib/infback9/infback9.c:96-104",
+        "inftrees.c:412-422"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "deflate.c:1121-1123",
+        "deflate.c:1097-1099"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "trees.c:848-850",
+        "trees.c:851-853"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 6 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "examples/fitblk.c:182-185",
+        "examples/zpipe.c:104-109"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "contrib/minizip/zip.c:1433-1434",
+        "contrib/minizip/zip.c:1424-1425"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "contrib/puff/puff.c:742-743",
+        "contrib/puff/puff.c:737-738"
+      ]
+    },
+    {
+      "why": "The fragments around `extern int ZEXPORT zipOpenNewFileInZip3(zipFile file, const char* filename, const zip_fileinfo* zipfi,` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "contrib/minizip/zip.c:1514-1519",
+        "contrib/minizip/zip.c:1499-1505"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "inflate.c:126-129",
+        "inflate.c:1397-1400"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "contrib/minizip/zip.c:1948-1952",
+        "contrib/minizip/zip.c:1937-1941"
+      ]
+    },
+    {
+      "why": "The fragments around `if (state->lens[256] == 0) {` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "infback.c:389-401",
+        "contrib/infback9/infback9.c:425-435"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "contrib/minizip/ioapi.c:212-216",
+        "contrib/minizip/ioapi.c:223-227"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 2.",
+      "occurrences": [
+        "contrib/dotzlib/DotZLib/Deflater.cs:20-25",
+        "contrib/dotzlib/DotZLib/Inflater.cs:20-25"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "contrib/minizip/iowin32.c:109-111",
+        "contrib/minizip/iowin32.c:179-181"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "contrib/minizip/unzip.c:836-838",
+        "contrib/minizip/unzip.c:983-985"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "contrib/dotzlib/DotZLib/GZipStream.cs:203-204",
+        "contrib/dotzlib/DotZLib/ChecksumImpl.cs:135-136"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "deflate.c:1365-1366",
+        "deflate.c:507-508"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "test/infcover.c:385-387",
+        "test/infcover.c:505-507"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "test/minigzip.c:271-273",
+        "test/minigzip.c:249-251"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "contrib/dotzlib/DotZLib/Inflater.cs:56-58",
+        "contrib/dotzlib/DotZLib/Deflater.cs:56-58"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (3 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 3; edited blocks in the comment/whitespace-normalized line diff: 0.",
+      "occurrences": [
+        "gzread.c:667-669",
+        "gzread.c:299-301"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "deflate.c:889-892",
+        "deflate.c:882-885"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 2; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "contrib/infback9/infback9.c:529-533",
+        "contrib/infback9/infback9.c:497-501"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (1 and 3 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "trees.c:63-63",
+        "contrib/puff/puff.c:446-448"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (5 and 5 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "trees.c:408-412",
+        "trees.c:421-425"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (4 and 4 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 1; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "inftrees.c:79-82",
+        "contrib/infback9/inftree9.c:63-66"
+      ]
+    },
+    {
+      "why": "The fragments around `extern int ZEXPORT zipOpenNewFileInZip2_64(zipFile file, const char* filename, const zip_fileinfo* zipfi,` do not yield a non-overlapping six-real-line run with identical tokens or one consistent renaming. The remaining resemblance does not settle whether these are copies. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 3.",
+      "occurrences": [
+        "contrib/minizip/zip.c:1554-1564",
+        "contrib/minizip/zip.c:1542-1552"
+      ]
+    },
+    {
+      "why": "This is only a short fragment (2 and 2 real lines); there is not enough code on both sides to establish a six-line copy. Unchanged statement/declaration units: 0; edited blocks in the comment/whitespace-normalized line diff: 1.",
+      "occurrences": [
+        "test/infcover.c:258-259",
+        "test/infcover.c:260-261"
+      ]
+    }
+  ],
+  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 200 candidates at this commit and no pair was called CLEARLY OUT by all of them. 38 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing."
+}

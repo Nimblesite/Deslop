@@ -18,7 +18,7 @@ use std::{
 };
 
 use super::{
-    super::frontier::{leaf_bytes, population, MemberContent, Population},
+    super::frontier::{leaf_bytes, MemberContent, Population},
     substituted_pairs, LiteralPosition, ModalBijection,
 };
 use crate::state::FileId;
@@ -36,9 +36,9 @@ pub(super) fn literal_echoes<S: BuildHasher>(
     member: &MemberContent,
     sources: &HashMap<FileId, Vec<u8>, S>,
     positions: &[LiteralPosition],
+    identifiers: &[(u64, u64)],
 ) -> LiteralEchoes {
-    let identifiers = population(&canonical.keys, &member.keys, Population::Identifier);
-    let bijection = ModalBijection::over(&substituted_pairs(&identifiers));
+    let bijection = ModalBijection::over(&substituted_pairs(identifiers));
     let substitutions = explained_substitution_bytes(canonical, member, &bijection, sources);
     let mut echoes = LiteralEchoes::default();
     for index in substituted_literal_positions(positions) {
@@ -148,6 +148,11 @@ fn explained_substitution_bytes<'src, S: BuildHasher>(
 /// `"OrderService"`, a name inside a path or a message — never the
 /// inside of a longer word ([REPAIR-RENAME-LITERAL-ECHO], gh #409).
 fn replaced_matches(left: &[u8], from: &[u8], to: &[u8], right: &[u8]) -> bool {
+    // A transform that never replaces, or whose replacement the partner
+    // never shows, cannot match; refusing it here costs no allocation.
+    if find_bytes(left, from).is_none() || find_bytes(right, to).is_none() {
+        return false;
+    }
     let mut expected: Vec<u8> = Vec::with_capacity(right.len());
     let mut cursor = 0_usize;
     let mut replaced = false;

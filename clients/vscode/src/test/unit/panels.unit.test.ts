@@ -51,6 +51,24 @@ suite("webview handleMessage", () => {
     });
   });
 
+  test("compare/canonical dispatches only a cluster id with a well-formed row (#607)", async () => {
+    const store = new ReportStore();
+    const row = { path: "a.ts", start_byte: 0, end_byte: 1 };
+    for (const message of [
+      { kind: "compare/canonical" },
+      { kind: "compare/canonical", clusterId: 7, occurrence: row },
+      { kind: "compare/canonical", clusterId: "c", occurrence: { ...row, path: "" } },
+      { kind: "compare/canonical", clusterId: "c", occurrence: { ...row, start_byte: Number.NaN } },
+      { kind: "compare/canonical", clusterId: "c", occurrence: { ...row, end_byte: Number.POSITIVE_INFINITY } },
+      { kind: "compare/canonical", clusterId: "c", occurrence: { path: "a.ts" } },
+      { kind: "compare/canonical", clusterId: "c", occurrence: "a.ts" },
+      { kind: "compare/canonical", clusterId: "c", occurrence: row },
+    ]) {
+      await handleMessage(store, message);
+    }
+    store.dispose();
+  });
+
   test("refresh dispatches the workspace command", async () => {
     const store = new ReportStore();
     try {

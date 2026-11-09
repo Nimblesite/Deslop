@@ -1,6 +1,6 @@
 //! Materialises admitted and informational groups ([PIPELINE-CLUSTER-EXACT]).
 
-use std::{collections::HashMap, hash::BuildHasher, path::PathBuf};
+use std::{collections::HashMap, hash::BuildHasher, num::NonZeroUsize, path::PathBuf};
 
 use crate::{
     ast::NormalizedNode, buckets::ClusterKind, fingerprint::Fingerprint, pair::FusedCluster,
@@ -87,6 +87,19 @@ impl std::fmt::Debug for dyn ClusterKindJudge + '_ {
 /// duplicate cluster after same-file overlap collapse.
 const MIN_REPORTABLE_MEMBERS: usize = 2;
 
+/// Fewest fused clusters per worker worth sharding the fold for: below
+/// it the thread spawn and a worker's cold memo set cost more than the
+/// clusters it would fold ([`crate::shard::worker_count`]).
+const FOLD_SHARD_MIN_CLUSTERS: NonZeroUsize = match NonZeroUsize::new(256) {
+    Some(floor) => floor,
+    None => NonZeroUsize::MIN,
+};
+
+/// Fused clusters per claimed chunk: small enough that one family of
+/// hundreds of members cannot hold the stage open on one worker, large
+/// enough that a worker's memos stay warm across neighbouring clusters.
+const FOLD_CHUNK_CLUSTERS: usize = 16;
+
 /// Inputs to [`build_ranked_fused_clusters`]; stable ids come from [`identity`].
 #[derive(Debug)]
 pub struct ClusterBuildInputs<'a, L: BuildHasher> {
@@ -145,11 +158,23 @@ fn reportable_clusters<L: BuildHasher + Sync>(
     inputs: &ClusterBuildInputs<'_, L>,
     scopes: &DeclarationScopes<'_, impl BuildHasher + Sync>,
 ) -> Vec<Cluster> {
-    let drafts: Vec<Unnamed> = inputs
-        .fused_clusters
-        .iter()
-        .flat_map(|fused| build_fused_cluster(inputs, fused, scopes))
-        .collect();
+    // The fold is the render's costliest stage — every member pair of
+    // every cluster is measured — and each cluster folds independently,
+    // so the clusters are dealt to workers in small chunks and the drafts
+    // reassembled in cluster order ([PIPELINE-DETERMINISM]).
+    let workers = crate::shard::worker_count(inputs.fused_clusters.len(), FOLD_SHARD_MIN_CLUSTERS);
+    let (chunks, _states) = crate::shard::map_chunks(
+        inputs.fused_clusters.chunks(FOLD_CHUNK_CLUSTERS),
+        workers,
+        || (),
+        |(), chunk: &[FusedCluster]| {
+            chunk
+                .iter()
+                .flat_map(|fused| build_fused_cluster(inputs, fused, scopes))
+                .collect::<Vec<Unnamed>>()
+        },
+    );
+    let drafts: Vec<Unnamed> = chunks.into_iter().flatten().collect();
     name_clusters(
         coalesce_copied_runs(drafts, inputs.trees, inputs.kinds),
         inputs.file_paths,
