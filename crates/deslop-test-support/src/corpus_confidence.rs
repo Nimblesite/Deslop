@@ -162,7 +162,8 @@ pub fn check_curated_recall(manifest: &Value, report: &Value, failures: &mut Vec
     }
 }
 
-/// Verifies every curated Type-2 family is visible at its curated extent.
+/// Verifies every curated Type-2 family is visible at its curated extent
+/// and, when the entry curates one, within its rank ceiling.
 pub fn check_type2_curated_recall(manifest: &Value, report: &Value, failures: &mut Vec<Failure>) {
     let entries = manifest
         .get("must_find_type2")
@@ -207,19 +208,29 @@ fn check_one_curated_type2(entry: &Value, report: &Value, failures: &mut Vec<Fai
         ));
         return;
     }
-    let widest = widest_curated_clone(report, &files);
+    let (rank, widest) = widest_curated_clone(report, &files);
     if widest < min_nodes {
         failures.push(Failure::new("type2_recall", format!("widest cluster spanning {files:?} has {widest} canonical nodes; expected at least {min_nodes}. Hand-verified Type-2 rename: {why}")));
+        return;
     }
+    check_rank_ceiling(entry, rank, &files, why, failures);
 }
 
-/// Only published clones can establish a curated family's extent.
-fn widest_curated_clone(report: &Value, files: &[String]) -> u64 {
+/// The widest published clone spanning a curated family: its one-based
+/// position among the visible clones, and its canonical node count. Only
+/// published clones can establish a curated family's extent.
+fn widest_curated_clone(report: &Value, files: &[String]) -> (usize, u64) {
     visible_clone_clusters(report)
         .into_iter()
-        .filter(|cluster| cluster_shows_span(cluster, files))
-        .map(|cluster| field_u64(cluster, CANONICAL_NODE_COUNT))
-        .max()
+        .enumerate()
+        .filter(|(_, cluster)| cluster_shows_span(cluster, files))
+        .map(|(position, cluster)| {
+            (
+                position.saturating_add(1),
+                field_u64(cluster, CANONICAL_NODE_COUNT),
+            )
+        })
+        .max_by_key(|(position, nodes)| (*nodes, std::cmp::Reverse(*position)))
         .unwrap_or_default()
 }
 

@@ -103,3 +103,50 @@ fn empty_curated_list_asserts_nothing() {
     check_type2_curated_recall(&json!({"must_find_type2": []}), &report(&[]), &mut failures);
     assert!(failures.is_empty());
 }
+
+/// A ceiling one place above the curated pair's rank in [`buried_pair`].
+const CEILING: u64 = 1;
+
+/// The curated pair at its extent, ranked below one unrelated clone.
+fn buried_pair() -> [Value; 2] {
+    [
+        spanning("elsewhere", MIN_NODES, 1, &["src/c.ts", "src/d.ts"]),
+        spanning("pair", MIN_NODES, 2, &PAIR),
+    ]
+}
+
+/// Runs the Type-2 assertion against a manifest that also curates `max_rank`.
+fn judge_with_ceiling(clusters: &[Value], ceiling: u64) -> Vec<Failure> {
+    let mut entry = manifest(Some(MIN_NODES));
+    if let Some(fields) = entry
+        .pointer_mut("/must_find_type2/0")
+        .and_then(Value::as_object_mut)
+    {
+        let _previous = fields.insert("max_rank".to_owned(), json!(ceiling));
+    }
+    let mut failures = Vec::new();
+    check_type2_curated_recall(&entry, &report(clusters), &mut failures);
+    failures
+}
+
+/// gh #439: a curated Type-2 module reported whole but buried below its
+/// curated rank ceiling fails, as a `must_find` entry does.
+#[test]
+fn a_type2_pair_ranked_below_its_ceiling_fails() {
+    assert_only_failure(
+        &judge_with_ceiling(&buried_pair(), CEILING),
+        "recall_quality",
+        "a whole module buried below its curated ceiling is not reported where it belongs",
+        "ranks 2 below curated ceiling 1",
+        "the failure names the rank and the ceiling",
+    );
+}
+
+#[test]
+fn a_type2_pair_within_its_ceiling_passes() {
+    assert!(judge_with_ceiling(&buried_pair(), CEILING.saturating_add(1)).is_empty());
+    assert!(
+        judge(&buried_pair(), Some(MIN_NODES)).is_empty(),
+        "no ceiling curated, none applied"
+    );
+}
