@@ -9,7 +9,7 @@
 // where no binary has to run.
 
 import { spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { runContractSuite } from "../lib/contract-harness.mjs";
@@ -39,7 +39,10 @@ const validVersion = VALID_VERSION;
 const cases = [
   manifestRejectsMissingProductId, manifestRejectsLooseSemver,
   manifestRejectsHostVerifyingUnknownComponent, manifestRejectsExpectedVersionDrift,
-  manifestAcceptsRepoManifest, binariesRejectWrongVersion,
+  manifestAcceptsRepoManifest, manifestRejectsCargoBinSource,
+  manifestRejectsBundledSourceWithoutBundle, manifestRejectsBundleWithoutBundledSource,
+  manifestRejectsPathAheadOfBundle, manifestRejectsIdeHostComponentWithoutBundle,
+  manifestShipsEveryBundledBinaryAsBundled, binariesRejectWrongVersion,
   binariesRejectWrongComponentName, binariesRejectMissingBinary,
   binariesNameTheFileEachTargetPlatformSpells,
   binariesRejectStaleJsonManifestVersion, binariesAcceptValidContract,
@@ -95,6 +98,66 @@ function manifestRejectsExpectedVersionDrift(work) {
 function manifestAcceptsRepoManifest() {
   const path = join(repoRoot, "shipwright.json");
   expectSuccess(verifyManifest, [path], /valid deployment manifest/);
+}
+
+// [DEPLOY-MANIFEST-SOURCES] gh #470: the manifest sanctioned `cargo-bin`, put
+// `path` first, and declared no bundle for the CLI every VSIX ships. Each rule
+// below is one of those contradictions, refused by the gate.
+
+/** A bundle path as every bundled component declares it. A function, not a
+ * constant: the suite runs while this module is still being evaluated. */
+function bundle() {
+  return { bundlePath: "bin/${platform}/${binaryName}${exe}", perPlatformArtifact: true };
+}
+
+/** One CLI component with `sources` and an optional bundle, in a valid manifest. */
+function manifestWithSources(work, name, sources, bundled, hosts = {}) {
+  const path = join(work, `${name}.json`);
+  const component = { ...cliComponent(validVersion), sources, ...(bundled ? { bundled: bundle() } : {}) };
+  writeManifest(path, {
+    manifestVersion: 1,
+    product: { id: "deslop", version: validVersion },
+    components: [component],
+    hosts,
+  });
+  return path;
+}
+
+function manifestRejectsCargoBinSource(work) {
+  const path = manifestWithSources(work, "cargo-bin", ["bundled", "cargo-bin"], true);
+  expectFail(verifyManifest, [path], /deslop\.sources must not include cargo-bin/);
+}
+
+function manifestRejectsBundledSourceWithoutBundle(work) {
+  const path = manifestWithSources(work, "no-bundle", ["bundled", "pkgmgr"], false);
+  expectFail(verifyManifest, [path], /deslop lists the bundled source but declares no bundled block/);
+}
+
+function manifestRejectsBundleWithoutBundledSource(work) {
+  const path = manifestWithSources(work, "unlisted-bundle", ["pkgmgr", "path"], true);
+  expectFail(verifyManifest, [path], /deslop declares a bundled block but no bundled source/);
+}
+
+function manifestRejectsPathAheadOfBundle(work) {
+  const path = manifestWithSources(work, "path-first", ["path", "bundled"], true);
+  expectFail(verifyManifest, [path], /deslop\.sources must put bundled ahead of path/);
+}
+
+function manifestRejectsIdeHostComponentWithoutBundle(work) {
+  const hosts = { vscode: { activationVerifies: ["deslop"] } };
+  const path = manifestWithSources(work, "ide-unbundled", ["pkgmgr", "path"], false, hosts);
+  expectFail(verifyManifest, [path], /vscode verifies deslop, which declares no bundled binary/);
+}
+
+/** Every binary the VSIX ships is a component the manifest bundles. */
+function manifestShipsEveryBundledBinaryAsBundled() {
+  const manifest = JSON.parse(readFileSync(join(repoRoot, "shipwright.json"), "utf8"));
+  for (const binaryName of ["deslop", "deslop-lsp", "deslop-mcp"]) {
+    const component = manifest.components.find((candidate) => candidate.binaryName === binaryName);
+    if (!component?.bundled || !component.sources?.includes("bundled")) {
+      throw new Error(`${binaryName} ships in every VSIX, so shipwright.json must declare it bundled`);
+    }
+  }
 }
 
 // ---------- binary verifier ----------

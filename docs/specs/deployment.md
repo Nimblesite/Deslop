@@ -90,6 +90,17 @@ For Deslop's migration issues, mismatch behavior is:
 
 Errors must include product/extension version, component id, expected version, found version or `not found`, candidate path/source, and the next action.
 
+### [DEPLOY-MANIFEST-SOURCES] A component's sources describe what ships
+
+A component's `sources` list the places a host may resolve it from, in order, so they must agree with what is actually shipped:
+
+- `cargo-bin` is never a source. A source build is pinned to no release, and `cargo install --path crates/deslop-*` is forbidden.
+- A component declares a `bundled` block exactly when `bundled` is one of its sources. Every binary the VSIX ships — `deslop`, `deslop-lsp` and `deslop-mcp` ([DEPLOY-VSIX-PACKAGE]) — is a bundled component.
+- When both are listed, `bundled` comes before `path`: a release-locked PATH install ([DEPLOY-EXTERNAL-MCP-CONSUMER]) is a fallback for the standalone CLI, never a shadow over the bundle.
+- Every component an IDE host (`vscode`, `jetbrains`) verifies declares a bundle, because an IDE host resolves only overrides and the bundle ([DEPLOY-RESOLVER]); the VS Code host reads no other source, whatever `sources` lists.
+
+The bundled `deslop` CLI is not in the VS Code host's `activationVerifies`: the extension never runs it, and the package verifier already refuses a VSIX whose bundled binaries report the wrong version. Enforced by `scripts/deployment/verify-deployment-manifest.mjs`; its rules are proven by `scripts/deployment/test-verifiers.mjs`.
+
 A version probe that never replies is **inconclusive, not a mismatch**. Every bundled binary in a freshly installed package is on its first execution, and macOS validates an unsigned multi-megabyte binary before running it (Gatekeeper / `syspolicyd`) — hundreds of milliseconds, and more on a loaded machine. A host that reports that stall as a version mismatch fails the very first activation after install, with an error naming a cause that is not true. Hosts must therefore retry a timed-out probe once on a budget wide enough for first-exec validation before concluding anything, and keep the warm budget tight so a genuinely hung binary is still caught quickly. Only a probe that replies with the wrong id/version is a mismatch.
 
 ### [DEPLOY-VSIX-PACKAGE] VSIX package contract
