@@ -339,3 +339,49 @@ node scripts/actions/test-action-diff-gate.mjs
 action diff-gate black-box: 5 checks passed
 
 ```
+
+## Repository coverage calculation
+
+Command: `npx --yes c8@12.0.0 report --temp-directory coverage/repository/ci-phases --reporter=json-summary --reports-dir coverage/repository/current`
+
+Exit status: **0**. Inputs are the current 216-test repository contract run and the successful deployment run with V8 coverage enabled. This reports executed repository scripts; it does not prove Rust, extension, or webview coverage.
+
+Source commit: `79eb2821d2c0e59069ae9e1ddad3d449d2c7b8b4`. Summary SHA-256: `f9c5c6bc96e39201d9b83740fdefa2daa5fd137322758185f10de80c69d0aa93`.
+
+```json
+{
+  "files": 54,
+  "total": {
+    "lines": {
+      "total": 8682,
+      "covered": 8340,
+      "skipped": 0,
+      "pct": 96.06
+    },
+    "statements": {
+      "total": 8682,
+      "covered": 8340,
+      "skipped": 0,
+      "pct": 96.06
+    },
+    "functions": {
+      "total": 451,
+      "covered": 437,
+      "skipped": 0,
+      "pct": 96.89
+    },
+    "branches": {
+      "total": 1612,
+      "covered": 1406,
+      "skipped": 0,
+      "pct": 87.22
+    },
+    "branchesTrue": {
+      "total": 0,
+      "covered": 0,
+      "skipped": 0,
+      "pct": 100
+    }
+  }
+}
+```
