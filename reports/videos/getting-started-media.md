@@ -1,11 +1,12 @@
-# Getting Started media verification
+# Your first duplicate-code review media verification
 
-- seconds: 82.894
-- width: 1920
-- height: 1080
-- video: h264
-- audio: aac
-- bytes: 3332638
-- OCR at 40.0 seconds matched: Nearly identical code, Canonical
+- Duration: 82.894 seconds
+- Video: h264, 1920 x 1080
+- Audio: aac
+- Narration: 4 lines match the current film script
+- Delivery: MP4, poster, English captions and chapters present
+- Scene coverage: 4 of 4 rendered chapter titles verified
+- OCR at 40s: Nearly identical code, Canonical
+- SHA-256: a0afaaad06fafe7d014cacb4171bead2b2a86fbd429a74679a5ae7778f14dc62
 
-Visual frame inspection completed at 40 seconds. Responsive playback passed at 320, 390, 768 and 1440 pixels; captions and chapters loaded four cues each, seeking succeeded, and the mobile screenshot was inspected. Full speech review remains pending.
+Browser playback and visual review are separate checks.

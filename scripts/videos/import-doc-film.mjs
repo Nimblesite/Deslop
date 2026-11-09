@@ -29,7 +29,7 @@ if(!checks.expected?.length || !Number.isFinite(checks.seconds)) throw new Error
 function checkFrame(seconds,expected) {
   return JSON.parse(execFileSync('python3',['-m','factory.verify','--video',media,'--at',String(seconds),...expected.flatMap(text=>['--expect',text])],{cwd:videos,encoding:'utf8'}));
 }
-const headingText=text=>text.toLowerCase().replace(/\s+/g,' ').trim();
+const headingText=text=>text.toLowerCase().replace(/-\s+/g,'-').replace(/\s+/g,' ').trim();
 const sceneChecks=timeline.scenes.map(scene=>{
   const reader='import json,sys; from pathlib import Path; from factory.verify import read_video_text; print(json.dumps(read_video_text(Path(sys.argv[1]),float(sys.argv[2]),[])))';
   const result=JSON.parse(execFileSync('python3',['-c',reader,media,String((scene.start+scene.end)/2)],{cwd:videos,encoding:'utf8'}));
