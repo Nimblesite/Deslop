@@ -206,13 +206,19 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-F8YJ86ETVQ"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
 
     gtag('config', 'G-F8YJ86ETVQ');
+    // [SITE-LOAD-ANALYTICS] Analytics must not delay the page's load event.
+    window.addEventListener('load', function() {
+      var analytics = document.createElement('script');
+      analytics.async = true;
+      analytics.src = 'https://www.googletagmanager.com/gtag/js?id=G-F8YJ86ETVQ';
+      document.head.appendChild(analytics);
+    }, { once: true });
   </script>
 
   <title>{{ title | default(site.title) }}</title>
