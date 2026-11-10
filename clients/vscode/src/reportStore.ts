@@ -75,6 +75,28 @@ export interface ReportState {
  */
 const MAX_RETRACTED_CLUSTERS = 256;
 
+/**
+ * [LIVE-DELTA] `from_generation` of a restatement. Generations start at 1, so
+ * a delta "from 0" is never a diff: the server held no baseline for the
+ * generation the client asked about and lists every live cluster as added.
+ * The store's first report is seeded at this generation too.
+ */
+const RESTATEMENT_GENERATION = 0;
+
+/**
+ * The cluster ids `delta` withdraws from `current`. A diff names them. A
+ * restatement cannot — it has no baseline — so every current cluster it does
+ * not restate is withdrawn. Merging a restatement as though it were a diff
+ * kept every cluster the server had dropped since the seed: after a
+ * `.deslop.toml` exclusion the percentage moved but the excluded file's
+ * clusters stayed in Top Offenders.
+ */
+function removedBy(delta: ReportDelta, current: Report): readonly string[] {
+  if (delta.from_generation !== RESTATEMENT_GENERATION) return delta.clusters_removed;
+  const restated = new Set([...delta.clusters_added, ...delta.clusters_updated].map((cluster) => cluster.id));
+  return current.clusters.map((cluster) => cluster.id).filter((id) => !restated.has(id));
+}
+
 export class ReportStore implements vscode.Disposable {
   private readonly _report = signal<Report | null>(null);
   private readonly _dirtyFiles = signal<ReadonlyMap<string, number | undefined>>(new Map());
@@ -220,15 +242,6 @@ export class ReportStore implements vscode.Disposable {
     return true;
   }
 
-  /**
-   * Merges a delta onto the canonical report. Returns `false` without mutating
-   * when the delta cannot be applied safely — no seeded report, or the delta's
-   * `from_generation` does not match the store's current generation (#230). A
-   * mismatch means the client missed a `reportChanged` (lagged broadcast or an
-   * async gap), so the delta only carries the changes for a window the store
-   * never reached; merging it would leave clusters dropped in the skipped
-   * generations behind as phantoms. The caller falls back to a full snapshot.
-   */
   /** Drops the oldest retractions once the ledger exceeds its cap. */
   private pruneRetracted(retracted: Set<string>): void {
     const excess = retracted.size - MAX_RETRACTED_CLUSTERS;
@@ -237,13 +250,29 @@ export class ReportStore implements vscode.Disposable {
     for (const id of Array.from(retracted).slice(0, excess)) retracted.delete(id);
   }
 
+  /**
+   * Merges a delta onto the canonical report. Returns `false` without mutating
+   * when the delta cannot be applied safely — no seeded report, or a diff whose
+   * `from_generation` does not match the store's current generation (#230). A
+   * mismatch means the client missed a `reportChanged` (lagged broadcast or an
+   * async gap), so the delta only carries the changes for a window the store
+   * never reached; merging it would leave clusters dropped in the skipped
+   * generations behind as phantoms. The caller falls back to a full snapshot.
+   * A restatement (`from_generation` 0) replaces the cluster list instead of
+   * merging into it ([LIVE-DELTA]).
+   */
   applyDelta(delta: ReportDelta, analysedBuffer?: AnalysedBuffer | null): boolean {
     const current = this._report.value;
     if (!current) return false;
-    if (delta.from_generation !== this._generation.value) return false;
+    // A restatement carries the server's own current generation, so it is
+    // accepted whatever the store's label says — including a label that ran
+    // ahead of the server, which otherwise rejects every later report.
+    const restates = delta.from_generation === RESTATEMENT_GENERATION;
+    if (!restates && delta.from_generation !== this._generation.value) return false;
+    const removed = removedBy(delta, current);
     const byId = new Map<string, ReportCluster>();
     for (const cluster of current.clusters) byId.set(cluster.id, cluster);
-    for (const id of delta.clusters_removed) byId.delete(id);
+    for (const id of removed) byId.delete(id);
     for (const cluster of delta.clusters_updated) byId.set(cluster.id, cluster);
     for (const cluster of delta.clusters_added) byId.set(cluster.id, cluster);
     // Worst-first is the engine's ranking, restamped on every render and
@@ -252,7 +281,7 @@ export class ReportStore implements vscode.Disposable {
     // guess the engine's tie-break ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]).
     const clusters = Array.from(byId.values()).sort(compareClusterRank);
     const retracted = new Set(this._retractedClusters.value);
-    for (const id of delta.clusters_removed) retracted.add(id);
+    for (const id of removed) retracted.add(id);
     // A later generation that re-states a cluster un-retracts it: the
     // server has found it again, so the withdrawal no longer stands.
     for (const cluster of delta.clusters_updated) retracted.delete(cluster.id);

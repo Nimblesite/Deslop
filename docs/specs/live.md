@@ -273,6 +273,11 @@ Editors re-deliver the same buffer constantly — `textDocument/didChange` fires
 ### [LIVE-CONFIG-LIVE] Live `.deslop.toml` reload
 Editing `<root>/.deslop.toml` (or the explicit `--config` override) is a watched change ([LIVE-WATCHER]): the watch set always includes the canonical and as-given config paths. When such a file lands in a changeset, the scheduler reloads the exclusion config and re-evaluates the whole live corpus against it — dropping files the new `exclude` patterns now match and re-discovering files a removed pattern re-admits — then bumps the generation like any other pass ([LIVE-SCHEDULER]). A malformed config is logged at `warn` and the previous exclusion is kept; a typo never bricks the daemon or empties the report.
 
+### [LIVE-CONFIG-STARTUP] Config edits during the cold scan
+The session reads `.deslop.toml` when the cold scan starts, but the watcher only attaches once that scan returns — two minutes on a large checkout. An edit inside that window raises no event, so without a recovery step the live report keeps the old scope until the file happens to change again, while the CLI already reports the new figure for the same tree.
+
+The server therefore snapshots the bytes of every watched config path (`ConfigBaseline`) **before** the session reads them. The watcher attaches first and diffs second: any path whose bytes were created, rewritten or deleted since the snapshot is delivered to the scheduler exactly as a live edit would be, and [LIVE-CONFIG-LIVE] rescopes the corpus and publishes a new generation. An edit after the diff raises a real event, so nothing falls between the two. A cache-seeded startup needs no extra step: its watcher attaches before the cold pass reads the config, and edits during that pass are queued and replayed on install ([LIVE-CACHE-SEED]).
+
 ### [LIVE-DELTA] Report deltas
 
 `ReportDelta` is the wire diff between two generations. LSP subscribers consume deltas instead of full snapshots so update traffic stays small.
@@ -296,6 +301,8 @@ pub struct ReportDelta {
 `ChangeSummary` reports the three clone-cluster counts, the three literal-finding counts, and `worst_mass`; it contains no evidence score.
 
 Cluster ids are stable across runs ([REPORTING-CONTEXT §"How to read the report format"]). Clients that miss generations ask for a full snapshot via `report/get`, then resume delta consumption at the snapshot's generation.
+
+**A delta from generation 0 is a restatement, never a diff.** Generations start at 1, so when `since_generation` names a generation the server no longer holds (or 0), it answers with `from_generation: 0`, every live cluster in `clusters_added` and nothing in `clusters_removed` — it has no baseline to name removals against. A client **replaces** its cluster list with a restatement; it never merges one. The VSIX seeds its first report at generation 0, so the first change after startup always arrives as a restatement; merging it kept every cluster the server had dropped since the seed, and after a `.deslop.toml` exclusion the percentage moved while the excluded file's clusters stayed listed. A restatement carries the server's own current generation, so the client accepts it even when its own label has run ahead of the server, rather than rejecting every later report.
 
 **A cluster whose id survived is updated when any cluster field changed.** Cluster diffing covers occurrence membership and locations, canonical extent, mass, truncation, diff tags, and rank. Pair evidence and pair classification are not cluster fields and travel only in an explicit pair-comparison response. The comparison is derived from the wire model rather than a hand-written observed-field list, so new cluster fields cannot silently bypass live refresh.
 

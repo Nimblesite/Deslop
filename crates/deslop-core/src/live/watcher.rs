@@ -21,7 +21,7 @@ use notify::{
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
 use crate::{
-    config::{is_config_path, ExclusionConfig},
+    config::{is_config_path, ConfigBaseline, ExclusionConfig},
     discover::is_ignore_rule_path,
 };
 
@@ -68,36 +68,42 @@ impl LiveWatcher {
     /// Returns the underlying `notify` error when the watcher cannot
     /// be constructed (e.g. permission denied).
     ///
-    /// `config_paths` lists exact filesystem paths that bypass the
-    /// extension filter — used so `.deslop.toml` (and any explicit
-    /// override) reaches the scheduler as a first-class live change
-    /// ([LIVE-WATCHER]). Each entry is canonicalised before
-    /// comparison so notify-reported paths line up on macOS
-    /// (`/private/var/...` vs `/var/...`).
+    /// `config`'s paths bypass the extension filter — so `.deslop.toml`
+    /// (and any explicit override) reaches the scheduler as a
+    /// first-class live change ([LIVE-WATCHER]). Each is canonicalised
+    /// before comparison so notify-reported paths line up on macOS
+    /// (`/private/var/...` vs `/var/...`). Once attached, every config
+    /// path that drifted from `config` since it was captured is
+    /// delivered as though it had just been edited
+    /// ([LIVE-CONFIG-STARTUP]).
     pub fn start(
         root: &Path,
         extensions: Vec<String>,
         exclusion: LiveExclusion,
-        config_paths: Vec<PathBuf>,
+        config: &ConfigBaseline,
     ) -> Result<(Self, UnboundedReceiver<PathBuf>), notify::Error> {
         let (tx, rx) = mpsc::unbounded_channel::<PathBuf>();
         let allowed: HashSet<String> = extensions
             .into_iter()
             .map(|ext| ext.to_lowercase())
             .collect();
-        let watched_config_paths: Vec<PathBuf> = config_paths
+        let watched_config_paths: Vec<PathBuf> = config
+            .paths()
             .into_iter()
             .map(|path| std::fs::canonicalize(&path).unwrap_or(path))
             .collect();
         let handler = WatcherHandler {
             root: root.to_path_buf(),
-            sender: tx,
+            sender: tx.clone(),
             allowed,
             exclusion,
             watched_config_paths,
         };
         let mut watcher = recommended_watcher(handler)?;
         watcher.watch(root, RecursiveMode::Recursive)?;
+        // Watching first, then diffing: an edit after this line raises an
+        // event, an edit before it shows up as drift. Nothing falls between.
+        deliver_drift(&tx, config);
         Ok((Self { _watcher: watcher }, rx))
     }
 }
@@ -220,6 +226,21 @@ fn may_create_subtree(path: &Path, kind: EventKind) -> bool {
 fn may_remove_members(kind: EventKind) -> bool {
     matches!(kind, EventKind::Remove(_))
         || matches!(kind, EventKind::Modify(ModifyKind::Name(mode)) if mode != RenameMode::To)
+}
+
+/// [LIVE-CONFIG-STARTUP] Delivers every config path edited between the
+/// session reading it and the watcher attaching.
+fn deliver_drift(sender: &UnboundedSender<PathBuf>, config: &ConfigBaseline) {
+    let drifted = config.drifted();
+    if !drifted.is_empty() {
+        tracing::info!(
+            drifted = drifted.len(),
+            "config changed before the watcher attached; rescoping"
+        );
+    }
+    for path in drifted {
+        deliver(sender, path);
+    }
 }
 
 /// [LIVE-WATCHER-DELIVERY] Enqueues synchronously without blocking or dropping bursts.

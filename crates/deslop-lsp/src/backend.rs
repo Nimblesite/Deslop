@@ -5,6 +5,7 @@ use std::{
 };
 
 use deslop_core::{
+    config::ConfigBaseline,
     live::{
         read_analysed_buffers, read_report_snapshot, report_for_file_in, AnalysisState,
         EmbeddingProgress, EmbeddingProgressReporter, LiveApi, LiveService,
@@ -129,6 +130,9 @@ impl LspBackend {
     ) -> Result<Self, deslop_core::live::LiveError> {
         let (provider, resolved_mode) = resolve_startup_provider(embedding)?;
         let observability = Observability::default();
+        // [LIVE-CONFIG-STARTUP] Before the session reads the config, so an
+        // edit during the cold scan is replayed once the watcher attaches.
+        let config_baseline = ConfigBaseline::capture(&workspace_root, None);
         let (mut session, seeded_from_cache) = crate::cache_seed::open_session(
             workspace_root,
             min_nodes,
@@ -148,8 +152,13 @@ impl LspBackend {
         let exclusion = session.exclusion_handle();
         let session = Arc::new(Mutex::new(session));
         let service = Arc::new(LiveService::new(Arc::clone(&session)));
-        let (watcher, scheduler) =
-            crate::file_watch::start(&root, None, Arc::clone(&session), exclusion, client.clone())?;
+        let (watcher, scheduler) = crate::file_watch::start(
+            &root,
+            &config_baseline,
+            Arc::clone(&session),
+            exclusion,
+            client.clone(),
+        )?;
         let report_changed = scheduler.report_changed_sender();
         let diagnostics = DiagnosticSession::new(root.clone(), Arc::clone(&report_snapshot));
         diagnostics.watch(client.clone(), scheduler.subscribe_report_changed());

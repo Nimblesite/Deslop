@@ -17,6 +17,7 @@ use std::{
 
 use anyhow::{anyhow, bail, Context, Result};
 use deslop_core::{
+    config::ConfigBaseline,
     embedding::{test_support::StubProvider, EmbeddingMode},
     live::{
         live_exclusion, AnalysisSession, Clock, Debouncer, FindSimilarInput, FindSimilarRequest,
@@ -31,6 +32,9 @@ use crate::common::*;
 
 #[path = "live/directories.rs"]
 mod directories;
+
+#[path = "live/startup_config.rs"]
+mod startup_config;
 
 #[cfg(unix)]
 #[path = "live/aliases.rs"]
@@ -90,7 +94,7 @@ async fn start_live_loop(
     scan_root: &Path,
     session: AnalysisSession,
     extensions: &[&str],
-    config_paths: Vec<PathBuf>,
+    config: &ConfigBaseline,
 ) -> Result<(
     Arc<tokio::sync::Mutex<AnalysisSession>>,
     LiveWatcher,
@@ -100,9 +104,8 @@ async fn start_live_loop(
     let session_lock = Arc::new(tokio::sync::Mutex::new(session));
     let owned_extensions = extensions.iter().map(|ext| (*ext).to_owned()).collect();
     let exclusion = live_exclusion(Arc::new(ExclusionConfig::empty()));
-    let (watcher, watcher_rx) =
-        LiveWatcher::start(scan_root, owned_extensions, exclusion, config_paths)
-            .map_err(|err| anyhow!("watcher start: {err}"))?;
+    let (watcher, watcher_rx) = LiveWatcher::start(scan_root, owned_extensions, exclusion, config)
+        .map_err(|err| anyhow!("watcher start: {err}"))?;
     let scheduler = Scheduler::with_system_clock(Arc::clone(&session_lock), watcher_rx);
     let report_rx = scheduler.subscribe_report_changed();
     tokio::time::sleep(Duration::from_secs(1)).await;
@@ -151,8 +154,13 @@ async fn watch_root(
 ) -> Result<(LiveWatcher, tokio::sync::mpsc::UnboundedReceiver<PathBuf>)> {
     let owned_extensions = extensions.iter().map(|ext| (*ext).to_owned()).collect();
     let exclusion = live_exclusion(Arc::new(ExclusionConfig::empty()));
-    let started = LiveWatcher::start(root, owned_extensions, exclusion, Vec::new())
-        .map_err(|err| anyhow!("watcher start: {err}"))?;
+    let started = LiveWatcher::start(
+        root,
+        owned_extensions,
+        exclusion,
+        &ConfigBaseline::default(),
+    )
+    .map_err(|err| anyhow!("watcher start: {err}"))?;
     tokio::time::sleep(WATCHER_ATTACH_BEAT).await;
     Ok(started)
 }
@@ -179,6 +187,19 @@ fn assert_generation_advanced(
         "a {trigger} must bump the generation; pre={before}, post={}",
         notification.generation,
     );
+}
+
+/// Waits for the live loop's reaction to `trigger`, asserts it published a
+/// generation past `before`, and returns the report it now holds.
+async fn reacted_report(
+    report_rx: &mut tokio::sync::broadcast::Receiver<deslop_core::live::ReportChangedNotification>,
+    session_lock: &Arc<tokio::sync::Mutex<AnalysisSession>>,
+    before: u64,
+    trigger: &str,
+) -> Result<Arc<deslop_core::Report>> {
+    let notification = next_report_change(report_rx, trigger).await?;
+    assert_generation_advanced(&notification, before, trigger);
+    Ok(report_under_lock(session_lock).await)
 }
 
 /// The report the live loop is holding behind `session_lock`.
@@ -295,7 +316,7 @@ async fn live_loop_hides_cluster_after_deslop_toml_report_hide_edit() -> Result<
         &scan_root,
         session,
         &["cs", "rs", "py"],
-        vec![config_path.clone()],
+        &ConfigBaseline::capture(&scan_root, None),
     )
     .await?;
 
@@ -305,9 +326,13 @@ async fn live_loop_hides_cluster_after_deslop_toml_report_hide_edit() -> Result<
     )
     .context("rewrite .deslop.toml")?;
 
-    let notification = next_report_change(&mut report_rx, DESLOP_TOML_EDIT).await?;
-    assert_generation_advanced(&notification, pre_generation, DESLOP_TOML_EDIT);
-    let post = report_under_lock(&session_lock).await;
+    let post = reacted_report(
+        &mut report_rx,
+        &session_lock,
+        pre_generation,
+        DESLOP_TOML_EDIT,
+    )
+    .await?;
     assert!(
         post.clusters.is_empty(),
         "live `report_hide` edit must hide the cluster from the visible report; \
@@ -354,13 +379,17 @@ async fn live_loop_evicts_newly_gitignored_tree_after_gitignore_edit() -> Result
     let pre_generation = session.generation();
 
     let (session_lock, _watcher, _scheduler, mut report_rx) =
-        start_live_loop(&scan_root, session, &["cs"], vec![]).await?;
+        start_live_loop(&scan_root, session, &["cs"], &ConfigBaseline::default()).await?;
 
     fs::write(scan_root.join(".gitignore"), "/vendored/\n").context("write .gitignore")?;
 
-    let notification = next_report_change(&mut report_rx, GITIGNORE_EDIT).await?;
-    assert_generation_advanced(&notification, pre_generation, GITIGNORE_EDIT);
-    let post = report_under_lock(&session_lock).await;
+    let post = reacted_report(
+        &mut report_rx,
+        &session_lock,
+        pre_generation,
+        GITIGNORE_EDIT,
+    )
+    .await?;
     assert_eq!(
         post.files_analysed, 2,
         "the live loop must evict the newly-gitignored tree; files_analysed={}",

@@ -55,6 +55,7 @@ let resolvedLsp: ResolvedBinary | undefined;
 let resolvedMcp: ResolvedBinary | undefined;
 let mcpDefinition: vscode.McpStdioServerDefinition | undefined;
 let activeReportStore: ReportStore | undefined;
+let activeMetricsView: MetricsProvider | undefined;
 
 const REPORT_READY_CONTEXT = "deslop.reportReady";
 const SET_CONTEXT_COMMAND = "setContext";
@@ -75,6 +76,8 @@ export interface ExtensionApi {
   readonly resolvedMcp: ResolvedBinary | undefined;
   readonly mcpDefinition: vscode.McpStdioServerDefinition | undefined;
   readonly reportStore: ReportStore | undefined;
+  /** The Duplication panel VS Code is rendering ([VSIX-METRICS-PANEL]). */
+  readonly metricsView: MetricsProvider | undefined;
 }
 
 // [VSIX-ACTIVATION] Entry point: resolve binaries, start the LSP client,
@@ -96,6 +99,7 @@ export async function activate(
   context.subscriptions.push({
     dispose: () => {
       activeReportStore = undefined;
+      activeMetricsView = undefined;
     },
   });
   registerClusterDocumentProvider(context, reportStore);
@@ -116,6 +120,7 @@ export async function activate(
 
   const topOffenders = new TopOffendersProvider(reportStore, ticker);
   const metrics = new MetricsProvider(reportStore, ticker);
+  activeMetricsView = metrics;
   const session = new SessionProvider(reportStore, ticker, () => client);
   // [VSIX-TOP-OFFENDERS-TOOLBAR] Expand All / Collapse All are provider-driven
   // (setBulkExpansion) so they reliably reach every level and sit adjacent in the
@@ -290,6 +295,9 @@ export function currentApi(): ExtensionApi {
     },
     get reportStore() {
       return activeReportStore;
+    },
+    get metricsView() {
+      return activeMetricsView;
     },
   };
 }
