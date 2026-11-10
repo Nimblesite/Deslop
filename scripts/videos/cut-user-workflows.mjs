@@ -139,7 +139,6 @@ async function produce(slug) {
   fs.mkdirSync(directory, { recursive: true });
   try {
     const sources = data.scenes.map((scene, index) => camera(scene, directory, index));
-    data.scenes.forEach((scene, index) => { scene.speed = sources[index].speed; });
     const overlay = path.join(directory, 'captions.mov');
     const cues = await renderCaptionTrack(data, overlay);
     renderMovie(data, sources, directory, overlay, path.join(dist, base + '.mp4'));
