@@ -83,7 +83,12 @@ pub(super) const MAGIC: u32 = 0xC0DE_D180;
 /// wrappers and sibling windows by their structural mass before building
 /// token signatures. An epoch-5 blob holds range-only signatures for
 /// those fingerprints, so a warm scan could disagree with a cold scan.
-pub(super) const SEMANTIC_EPOCH: u32 = 6;
+///
+/// Epoch 7 (2026-11-11): [LANG-CAND-RUST-STRING-PARTS] collapses a Rust
+/// string's `string_content` and `escape_sequence` parts to literal
+/// leaves. An epoch-6 blob holds them as structural kinds, so a warm run
+/// would keep grouping unrelated escape-heavy strings as Similar code.
+pub(super) const SEMANTIC_EPOCH: u32 = 7;
 
 /// Bytes of blob header preceding the payload: the magic plus the
 /// 32-byte binding digest.

@@ -1,4 +1,4 @@
-// [TESTING-CLI-RUN-SCRATCH] `--run` on a test file keeps relative output out of
+// Osprey: `--run` on a test file keeps relative output out of
 // the caller's directory, in both flavors; an ordinary program still writes there.
 #[test]
 fn run_keeps_test_file_output_out_of_the_callers_directory() {
