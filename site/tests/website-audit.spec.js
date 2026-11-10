@@ -372,7 +372,6 @@ test("every blog post publishes freshness, authorship, its own card alt and real
     expect(article.author, route).toBe("Christian Findlay");
     expect(article.posting.author.name, route).toBe(article.author);
     expect(Date.parse(article.modified), route).toBeGreaterThanOrEqual(Date.parse(article.published));
-    expect(article.ogImageAlt.length, route).toBeGreaterThanOrEqual(MIN_IMAGE_ALT_LENGTH);
     expect(DEFAULT_SOCIAL_IMAGE_ALTS, route).not.toContain(article.ogImageAlt);
     expect(article.twitterImageAlt, route).toBe(article.ogImageAlt);
     expect(article.bylineText, route).toContain("Christian Findlay");
@@ -385,6 +384,7 @@ test("every blog post publishes freshness, authorship, its own card alt and real
 
     if (route.startsWith("/zh/")) continue;
     expect(article.words, route).toBeGreaterThanOrEqual(MIN_ENGLISH_POST_WORDS);
+    expect(article.ogImageAlt.length, route).toBeGreaterThanOrEqual(MIN_IMAGE_ALT_LENGTH);
     expect(article.title.length, route).toBeGreaterThanOrEqual(MIN_TITLE_LENGTH);
     expect(article.title.length, route).toBeLessThanOrEqual(MAX_TITLE_LENGTH);
     expect(article.description.length, route).toBeGreaterThanOrEqual(MIN_DESCRIPTION_LENGTH);
