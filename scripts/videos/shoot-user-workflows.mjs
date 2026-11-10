@@ -112,6 +112,7 @@ async function terminal(command, expected) {
   await runCommand(page, 'Terminal: Create New Terminal');
   await page.locator('.terminal-wrapper').last().click();
   await hold(400);
+  await point(600, 650);
   await typeText(page, command, 25); await page.keyboard.press('Enter');
   await hold(2000); await point(760, 560);
   const deadline = Date.now() + 30000;
