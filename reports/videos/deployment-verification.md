@@ -1,22 +1,22 @@
 # Public film deployment verification [DOC-FILMS-MOTION]
 
-- Verified at: 2026-11-10T12:38:33.544Z
-- Verification checkout: 679ed2f3b1f1ffeabfd80e16b6ffde7450e499f4
-- Deployment run: https://github.com/Nimblesite/Deslop/actions/runs/42817217040
+- Verified at: 2026-11-10T22:31:57.301Z
+- Verification checkout: d70492b3cce5da0783fffeb797d1de3894fab06f
+- Deployment run: https://github.com/Nimblesite/Deslop/actions/runs/42915202362
 - Public origin: https://deslop.live
 - Matching public videos: 10/10
 
 | Film | Public SHA-256, equal to local delivery |
 | --- | --- |
-| getting-started | c74e0faf1f74d250a7e1b63083cc69ad77ed4ac37884608154621d940add96a8 |
-| configuration | 697ae4dd8385dfec2d741e0b2fb913e419fe5e3023c6be111c0ca29e105fd057 |
-| ai-integration | 42d6c95fb0c9fc24b04c6f8b988648dca51c2d7ff09ceee2386af97272730ed1 |
-| how-it-works | 509d7aa18e3263d6a32eb9d6d615bac29f6aad2a3d0360e048a9ad17ce881d1f |
-| osprey | 590bc2c4e664e455e5cb9d1d25cdedcce854f12fd4080e7d772a2116d6933ea8 |
-| github-action | 520cdb72a3dfaddfbf3625b56e8d968527564d18ca7333056493a77ba5da8703 |
-| vscode-cluster-panel | 9a465faa76a957cad495bef6b79dc8269d69ced4d52b6147969067e9af20824b |
-| accuracy-transparency | a0df070bd955a09a9fe7cb211a0fdf138968d4284cbfc97bea23b88b13715d80 |
-| research-background | 10bfc74ad52762b7b2ff453ab8d711eed1b95abddb7ec55517d041b9e84025c3 |
-| for-ai | ae7d331d310ed7b5e331b314ddafdbb82dea93c3ae7d9a7b9a9558fd9c77cf8a |
+| getting-started | 3640f01799a6665fe30cc46ee495e30bb33064a2f597bd916d6d10887ad76a31 |
+| configuration | 61c9b46e92557e3d647f6c2f0441fcc078d061a536e1e49788fa285baf0df783 |
+| ai-integration | fb4cdd5319ad4589f8604a87572740e55d8396e1f8f39132ded6c31e293493bf |
+| how-it-works | 33a467642d69b2bdfb16e87fb41f12f9aac26c090a48f7b0c5499baa5672585c |
+| osprey | adeeafb005ed90d61b8038033d36f5d9631fc517dc46c742f61963966a3061bb |
+| github-action | fc7d793b5d1ce54f17ac22efc96be2bb5eef42d2ea5d31d9c03d0dbb9d9b503c |
+| vscode-cluster-panel | c403df8cc3aacea7e24c39e80b03ee033248b217277555e75615bca5f834006d |
+| accuracy-transparency | 9bd1f3183a838a50f8a115997cd4c1c00485efbb750fc1f544f2c53638c1b96b |
+| research-background | 4f8c3dc4edb579cbbc424d714156b87592baed37bea01668c03aafafa12b11dc |
+| for-ai | a4114682e872b2dd9b993f430c60a4af4b587f1a673106a669cca8bffc770bc4 |
 
 Every response was HTTP 200 with video/mp4 content. The verifier hashes the complete response body, not a poster or LFS pointer.
