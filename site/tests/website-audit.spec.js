@@ -296,6 +296,15 @@ test("homepage demo plays on demand with captions on desktop and mobile", async 
       await expect(video).toHaveAttribute('preload', 'none');
       await expect(video).not.toHaveAttribute('autoplay');
       await expect(video.locator('track')).toHaveAttribute('srclang', 'en');
+      const markup = await page.locator('.showcase__figure--demo script[type="application/ld+json"]').textContent();
+      expect(JSON.parse(markup)).toMatchObject({
+        '@type': 'VideoObject',
+        contentUrl: 'https://deslop.live/assets/video/deslop-demo.mp4',
+        thumbnailUrl: 'https://deslop.live/assets/img/deslop-demo-poster.webp',
+        duration: 'PT34S',
+        uploadDate: '2026-11-08',
+        inLanguage: 'en',
+      });
       await video.evaluate(element => { element.muted = true; return element.play(); });
       await expect.poll(() => video.evaluate(element => element.currentTime)).toBeGreaterThan(0);
       expect(await video.evaluate(element => element.videoWidth)).toBe(1600);

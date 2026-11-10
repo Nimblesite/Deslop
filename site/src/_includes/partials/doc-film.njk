@@ -8,8 +8,10 @@
   src: prefix + ".mp4", poster: prefix + "-poster.jpg",
   captions: prefix + ".en.vtt", chapters: prefix + ".chapters.vtt", captionLabel: "English",
   width: 1920, height: 1080, label: film.title,
+  description: film.description[lang or "en"], duration: film.duration | videoDuration,
+  uploadDate: "2026-11-10",
   fallback: "Your browser cannot play this video.", downloadLabel: "Download the video"
-}) }}
+}, site.url) }}
 <figcaption>{{ film.title }} · {{ film.duration }} · English narration and captions</figcaption>
 </figure>
 <details class="doc-film-transcript">

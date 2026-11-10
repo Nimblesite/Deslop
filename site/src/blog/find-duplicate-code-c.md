@@ -1,6 +1,6 @@
 ---
 layout: layouts/blog.njk
-title: "Find Duplicate Code in C: Deslop Adds C Support"
+title: "How to Find Duplicate Code in C"
 date: 2026-11-08
 author: Christian Findlay
 tags:
@@ -25,7 +25,7 @@ A bug fix in one C file can leave the same bug in another. Imagine two functions
 
 Deslop now finds duplicate code across `.c` and `.h` files. It can find repeated functions and smaller blocks, even when someone has renamed variables or changed a constant.
 
-## Find the cleanup code you copied
+## Find copied C error handling in VS Code
 
 In a two-file example, an audio loader and a frame reader both allocate a buffer and read from a file. Deslop flags the similar error handling across the two files. Once you open the frame reader, there’s another repetition worth reviewing. The short-read branch and the normal close function both free the buffer, close the file, and free the wrapper.
 

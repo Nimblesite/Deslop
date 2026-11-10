@@ -74,6 +74,23 @@ test('getting started fits the reading column without prose CSS', async ({page})
   }
 });
 
+// [DOC-FILMS-DELIVERY] Search crawlers get the same video and poster as the player.
+async function assertVideoMetadata(page, video, film, locale) {
+  const json = await page.locator('.doc-film script[type="application/ld+json"]').textContent();
+  const [minutes, seconds] = film.duration.split(':').map(Number);
+  const origin = 'https://deslop.live';
+  expect(JSON.parse(json)).toMatchObject({
+    '@type': 'VideoObject',
+    name: film.title,
+    description: film.description[locale === '/zh' ? 'zh' : 'en'],
+    thumbnailUrl: origin + await video.getAttribute('poster'),
+    contentUrl: origin + await video.locator('source').getAttribute('src'),
+    duration: `PT${minutes * 60 + seconds}S`,
+    uploadDate: '2026-11-10',
+    inLanguage: 'en',
+  });
+}
+
 function filmRoute(slug) {
   if (slug === 'osprey') return '/blog/osprey-first-class/';
   if (slug === 'getting-started') return '/docs/';
@@ -92,6 +109,7 @@ for(const [slug,film] of Object.entries(FILMS)) for(const locale of ['', '/zh'])
       await pauseAndHideTracks(video);
       await seekAndAssert(video);
     }
+    await assertVideoMetadata(page,video,film,locale);
     await assertTranscript(page,film);
     await assertDownloadLink(video,slug);
   });
