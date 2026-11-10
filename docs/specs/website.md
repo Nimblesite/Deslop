@@ -23,27 +23,27 @@ Every delivery includes a 1920x1080 H.264/AAC MP4, poster, English captions and
 chapter track. A readable transcript comes from the delivered narration timeline.
 Players use native controls, never autoplay, and fit widths from 320px upward.
 
-The factory lives in Videos under `projects/deslop/videos/docs-*`, reusing its
-Osprey production templates and shared narration/rendering machinery. Deslop's
-importer rejects stale scripts or invalid media and verifies every rendered
-chapter title plus targeted visible content before adding a film to the catalog.
-MP4 files use Git LFS. Production intermediates are never published.
+Production lives in Videos under `projects/deslop/videos/docs-*`. SharpLsp's
+capture and automatic camera modules record the real packaged extension and
+Deslop commands. Shared Videos sound and delivery modules supply narration,
+score, captions and encoding. The installer rejects stale scripts or invalid
+media. MP4 files use Git LFS; production intermediates are never published.
 
 `site/tests/documentation-films.spec.js` exercises each catalog entry on both
 language routes, including responsive geometry, playback, seeking, captions,
 chapters and transcript expansion. `scripts/videos/check-doc-films.mjs --complete`
 requires all ten films to have imported deliveries and verification receipts.
 
-## [DOC-FILMS-MOTION] Recorded activity and animated explanations
+## [DOC-FILMS-MOTION] Recorded user workflows
 
-The films retain their approved narration and caption/chapter timing. Reference
-sections use animated explanations of the described concepts, intercut with real
-application activity. Static reference slides are not used as delivered footage.
-Illustrations identify themselves as illustrations and do not claim measured
-repository results. The agent films show pi calling Deslop MCP and displaying
-returned findings. Recorded activity uses the SharpLsp automatic camera to frame
-the pointer, editor and tool results. Delivery checks compare the original and
-recut audio stream hashes and require full-length video streams.
+Every film shows real application footage throughout. Narration describes the
+visible editing, configuration, file navigation, comparisons or command results
+in plain English. No concept cards, diagrams or parser explanations substitute
+for using the product. Small step labels and short captions may overlay footage.
+The agent films show pi making real Deslop MCP calls and receiving useful file
+locations. SharpLsp's automatic camera follows the pointer, editor and results;
+zoom must visibly move without cutting off the action. Finished-frame checks,
+speech transcription checks and browser playback checks supplement media probes.
 
 ## [SITE-NAV-FONTS] Reliable navigation icons
 
