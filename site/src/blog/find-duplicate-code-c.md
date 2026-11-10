@@ -2,6 +2,7 @@
 layout: layouts/blog.njk
 title: "How to Find Duplicate Code in C: Functions and Headers"
 date: 2026-11-08
+updated: 2026-11-11
 author: Christian Findlay
 tags:
   - posts

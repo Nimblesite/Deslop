@@ -2,6 +2,7 @@
 layout: layouts/blog.njk
 title: How Deslop ranks duplicate-code clusters by duplicated mass
 date: 2026-04-15
+updated: 2026-11-11
 author: Christian Findlay
 tags: posts
 description: Deslop ranks duplicate code by syntax-tree size times additional visible copies. Shape-only findings have no duplicated mass and rank after clones.
@@ -13,7 +14,6 @@ heroImageAlt: Four stacks of graphite tiles ordered largest first, with a crimso
 ogImage: /assets/img/blog/ranking-mass-og.jpg
 ogImageWidth: '1200'
 ogImageHeight: '630'
-updated: '2026-09-27'
 ---
 
 Updated for **0.35.0**. The earlier ranking multiplied by a logarithmic byte-span term; current ranking uses duplicated mass alone.

@@ -2,6 +2,7 @@
 layout: layouts/blog.njk
 title: "Finding Duplicate Dart Code in Flutter Projects"
 date: 2026-06-05
+updated: 2026-11-11
 author: Christian Findlay
 tags:
   - posts

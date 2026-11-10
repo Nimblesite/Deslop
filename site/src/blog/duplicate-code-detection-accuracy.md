@@ -2,6 +2,7 @@
 layout: layouts/blog.njk
 title: "Deslop 0.35.0: Accuracy in Duplicate Code Detection"
 date: 2026-09-27
+updated: 2026-11-11
 author: Christian Findlay
 tags:
   - posts

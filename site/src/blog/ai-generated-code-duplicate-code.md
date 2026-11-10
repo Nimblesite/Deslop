@@ -2,6 +2,7 @@
 layout: layouts/blog.njk
 title: "AI-Generated Code and Duplicate Code: What to Check"
 date: 2026-04-23
+updated: 2026-11-11
 author: Christian Findlay
 tags:
   - posts

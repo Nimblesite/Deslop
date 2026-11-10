@@ -2,6 +2,7 @@
 layout: layouts/blog.njk
 title: Why Deslop parses source code with tree-sitter
 date: 2026-04-10
+updated: 2026-11-11
 author: Christian Findlay
 tags: posts
 description: Deslop parses source code with tree-sitter and compares normalized syntax trees so formatting and identifier changes do not hide structural duplicates.

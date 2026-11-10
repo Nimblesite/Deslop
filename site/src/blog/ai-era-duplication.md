@@ -2,6 +2,7 @@
 layout: layouts/blog.njk
 title: Why coding agents need fast duplicate-code feedback
 date: 2026-04-20
+updated: 2026-11-11
 author: Christian Findlay
 tags: posts
 description: Coding agents can reproduce logic that already exists elsewhere in a repository. Fast LSP and MCP feedback makes that duplication visible during the edit.
