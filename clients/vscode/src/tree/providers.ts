@@ -98,6 +98,13 @@ function scanStatus(
   return new StatusNode(`${spinner} ${label}…`, "busy");
 }
 
+// [VSIX-PRINCIPLES] An empty data panel. Never declare the codebase clean
+// until the server confirms a completed scan ("ready") — while it works, show
+// progress instead; once idle, a single calm row (principle 2).
+function cleanOrBusy(indicator: StatusNode | null): Node[] {
+  return indicator ? [indicator] : [new StatusNode("No duplication detected", INFORMATION_STATUS_KIND)];
+}
+
 export class StatusTicker implements vscode.Disposable {
   private readonly emitter = new vscode.EventEmitter<number>();
   readonly onTick = this.emitter.event;
@@ -199,6 +206,18 @@ abstract class LifecycleAwareProvider implements vscode.TreeDataProvider<Node>, 
 
   abstract getChildren(node?: Node): Node[];
 
+  /**
+   * [VSIX reactivity] The busy/error row for the current lifecycle, and the
+   * rows a data panel shows instead of its data when the server failed: the
+   * error row alone, never stale findings beneath it.
+   */
+  protected lifecycleRows(): { indicator: StatusNode | null; failed: Node[] | undefined } {
+    const { report, lifecycle } = this.store.current;
+    const indicator = scanStatus(lifecycle, !!report, this.ticker.currentFrame);
+    if (lifecycle.kind !== FAILED_LIFECYCLE_KIND) return { indicator, failed: undefined };
+    return { indicator, failed: indicator ? [indicator] : [] };
+  }
+
   /** Force a tree rebuild. Used by config-driven view-state changes. */
   refresh(): void {
     this.emitter.fire();
@@ -257,17 +276,10 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
     // [VSIX-STATE-DIRTY]: tree rows render from the visible projection so a
     // file the user is mid-edit drops out instantly. The canonical report
     // gates the scan-kind label (cold vs incremental).
-    const { visibleReport, report, lifecycle } = this.store.current;
-    const indicator = scanStatus(lifecycle, !!report, this.ticker.currentFrame);
-    if (lifecycle.kind === FAILED_LIFECYCLE_KIND) return indicator ? [indicator] : [];
-    if (!visibleReport || visibleReport.clusters.length === 0) {
-      // Never declare the codebase clean until the server confirms a
-      // completed scan ("ready"); while scanning, show progress instead.
-      if (indicator) return [indicator];
-      // [VSIX-PRINCIPLES] Silence when clean: a single calm empty-state row
-      // when there is no duplication (principle 2).
-      return [new StatusNode("No duplication detected", INFORMATION_STATUS_KIND)];
-    }
+    const { indicator, failed } = this.lifecycleRows();
+    if (failed) return failed;
+    const { visibleReport } = this.store.current;
+    if (!visibleReport || visibleReport.clusters.length === 0) return cleanOrBusy(indicator);
     const roots = buildRoots(visibleReport.clusters, totalIncludes);
     // [req: incremental indicator] Keep clusters visible during a
     // re-analysis (stale > blank) and lead with a busy badge so the user
@@ -334,20 +346,15 @@ export class MetricsProvider extends LifecycleAwareProvider {
   getChildren(node?: Node): Node[] {
     if (node instanceof FolderMetricNode) return node.children;
     if (node) return [];
-    const { visibleReport, report, lifecycle } = this.store.current;
-    const indicator = scanStatus(lifecycle, !!report, this.ticker.currentFrame);
-    if (lifecycle.kind === FAILED_LIFECYCLE_KIND) return indicator ? [indicator] : [];
+    const { indicator, failed } = this.lifecycleRows();
+    if (failed) return failed;
+    const { visibleReport } = this.store.current;
     const headline = this.headline.value;
     if (!visibleReport || !headline) {
       return indicator ? [indicator] : [new StatusNode("No session yet", INFORMATION_STATUS_KIND)];
     }
     const metrics = visibleReport.metrics;
-    if (metrics.duplicated_loc === 0 && metrics.clusters_total === 0) {
-      // Same completion gate as Top Offenders: only the server's idle
-      // state may render the terminal "clean" verdict ([VSIX reactivity]).
-      if (indicator) return [indicator];
-      return [new StatusNode("No duplication detected", INFORMATION_STATUS_KIND)];
-    }
+    if (metrics.duplicated_loc === 0 && metrics.clusters_total === 0) return cleanOrBusy(indicator);
     return [headline, ...buildMetricRows(metrics)];
   }
 }

@@ -189,6 +189,19 @@ fn assert_generation_advanced(
     );
 }
 
+/// Waits for the live loop's reaction to `trigger`, asserts it published a
+/// generation past `before`, and returns the report it now holds.
+async fn reacted_report(
+    report_rx: &mut tokio::sync::broadcast::Receiver<deslop_core::live::ReportChangedNotification>,
+    session_lock: &Arc<tokio::sync::Mutex<AnalysisSession>>,
+    before: u64,
+    trigger: &str,
+) -> Result<Arc<deslop_core::Report>> {
+    let notification = next_report_change(report_rx, trigger).await?;
+    assert_generation_advanced(&notification, before, trigger);
+    Ok(report_under_lock(session_lock).await)
+}
+
 /// The report the live loop is holding behind `session_lock`.
 async fn report_under_lock(
     session_lock: &Arc<tokio::sync::Mutex<AnalysisSession>>,
@@ -313,9 +326,13 @@ async fn live_loop_hides_cluster_after_deslop_toml_report_hide_edit() -> Result<
     )
     .context("rewrite .deslop.toml")?;
 
-    let notification = next_report_change(&mut report_rx, DESLOP_TOML_EDIT).await?;
-    assert_generation_advanced(&notification, pre_generation, DESLOP_TOML_EDIT);
-    let post = report_under_lock(&session_lock).await;
+    let post = reacted_report(
+        &mut report_rx,
+        &session_lock,
+        pre_generation,
+        DESLOP_TOML_EDIT,
+    )
+    .await?;
     assert!(
         post.clusters.is_empty(),
         "live `report_hide` edit must hide the cluster from the visible report; \
@@ -366,9 +383,13 @@ async fn live_loop_evicts_newly_gitignored_tree_after_gitignore_edit() -> Result
 
     fs::write(scan_root.join(".gitignore"), "/vendored/\n").context("write .gitignore")?;
 
-    let notification = next_report_change(&mut report_rx, GITIGNORE_EDIT).await?;
-    assert_generation_advanced(&notification, pre_generation, GITIGNORE_EDIT);
-    let post = report_under_lock(&session_lock).await;
+    let post = reacted_report(
+        &mut report_rx,
+        &session_lock,
+        pre_generation,
+        GITIGNORE_EDIT,
+    )
+    .await?;
     assert_eq!(
         post.files_analysed, 2,
         "the live loop must evict the newly-gitignored tree; files_analysed={}",

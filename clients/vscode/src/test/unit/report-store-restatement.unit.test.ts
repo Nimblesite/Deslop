@@ -41,6 +41,11 @@ function restatement(toGeneration: number) {
   });
 }
 
+/** A diff from `from` that withdraws `id`. */
+function removal(from: number, id: string) {
+  return delta({ from_generation: from, to_generation: NEXT_GENERATION, clusters_removed: [id] });
+}
+
 suite("report store restatements", () => {
   test("a restatement replaces the seeded clusters and retracts what it omits", () => {
     const store = seeded(SEED_GENERATION);
@@ -50,11 +55,9 @@ suite("report store restatements", () => {
     assert.equal(store.current.generation, RESTATED_GENERATION);
     assert.deepEqual(store.current.report?.metrics, RESTATED_METRICS, "the headline follows the restatement");
     assert.ok(store.current.retractedClusters.has(EXCLUDED), "the omitted cluster counts as withdrawn");
-    const diff = delta({ from_generation: RESTATED_GENERATION, to_generation: NEXT_GENERATION, clusters_removed: [MOVED] });
-    assert.equal(store.applyDelta(diff), true, "a diff from the restated generation still merges");
+    assert.equal(store.applyDelta(removal(RESTATED_GENERATION, MOVED)), true, "a diff from the restated generation still merges");
     assert.deepEqual(ids(store), [KEPT]);
-    const stale = delta({ from_generation: STALE_BASELINE, to_generation: NEXT_GENERATION, clusters_removed: [KEPT] });
-    assert.equal(store.applyDelta(stale), false, "a diff from a missed baseline is still refused");
+    assert.equal(store.applyDelta(removal(STALE_BASELINE, KEPT)), false, "a diff from a missed baseline is still refused");
     assert.deepEqual(ids(store), [KEPT], "a refused diff changes nothing");
   });
 

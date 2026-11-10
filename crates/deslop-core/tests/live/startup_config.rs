@@ -8,12 +8,16 @@
 //! no event, and the panel kept the old 10.3 % until the file happened
 //! to be edited again — while the CLI reported 5.61 % for the same tree.
 
+use std::cmp::Ordering;
+
+use deslop_core::Report;
+
 use super::*;
 
 const CONFIG_NAME: &str = ".deslop.toml";
 const LOADED_CONFIG: &str = "[defaults]\n";
 const EDITED_CONFIG: &str = "[defaults]\nreport_hide = [\"benchmarks/fixtures/**\"]\n";
-const DELETED_CONFIG_EXCLUDES: &str = "[defaults]\nexclude = [\"benchmarks/**\"]\n";
+const EXCLUDING_CONFIG: &str = "[defaults]\nexclude = [\"benchmarks/**\"]\n";
 const STARTUP_EDIT: &str = ".deslop.toml edit during the cold scan";
 const STARTUP_DELETE: &str = ".deslop.toml deletion during the cold scan";
 const EXTENSIONS: [&str; 1] = ["cs"];
@@ -21,51 +25,76 @@ const CLONE_FILES: usize = 2;
 const NO_FILES: usize = 0;
 const NOTHING_HIDDEN: usize = 0;
 
-/// An edit between the session reading its config and the watcher
-/// attaching is delivered on attach, so the visible report follows it.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn config_edited_during_the_cold_scan_rescopes_the_report_on_attach() -> Result<()> {
+/// What the session served before the watcher attached, and after.
+struct Rescoped {
+    before: Arc<Report>,
+    after: Arc<Report>,
+}
+
+/// Loads `loaded` as the session's config, lets `change` rewrite or delete
+/// it after the session read it but before the watcher exists — so no
+/// event will ever describe it — then attaches the live loop and returns
+/// the report the attach-time replay produced.
+async fn rescope_across_attach(
+    loaded: &str,
+    files_loaded: usize,
+    change: impl FnOnce(&Path) -> std::io::Result<()>,
+    trigger: &str,
+) -> Result<Rescoped> {
     let _slot = live_slot().await;
     let (_tmp, scan_root) = canonical_temp_root()?;
     seed_hidden_fixture_pair(&scan_root)?;
     let config_path = scan_root.join(CONFIG_NAME);
-    fs::write(&config_path, LOADED_CONFIG).context("seed .deslop.toml")?;
-
+    fs::write(&config_path, loaded).context("seed .deslop.toml")?;
     let baseline = ConfigBaseline::capture(&scan_root, None);
     assert!(
         baseline.drifted().is_empty(),
         "an untouched config has not drifted"
     );
     let session = live_session(&scan_root)?;
-    let before = session.report();
-    let before_generation = session.generation();
+    let (before, generation) = (session.report(), session.generation());
     assert_eq!(
-        before.files_analysed, CLONE_FILES,
-        "both fixture copies are analysed"
+        before.files_analysed, files_loaded,
+        "the loaded config's scope"
     );
-    assert!(
-        !before.clusters.is_empty(),
-        "the fixture pair clusters under the loaded config"
+    assert_eq!(
+        before.clusters.is_empty(),
+        files_loaded == NO_FILES,
+        "the pair clusters when analysed"
     );
+    change(&config_path).with_context(|| trigger.to_owned())?;
+    assert_eq!(
+        baseline.drifted(),
+        vec![config_path],
+        "the {trigger} is drift"
+    );
+    let (session_lock, _watcher, _scheduler, mut report_rx) =
+        start_live_loop(&scan_root, session, &EXTENSIONS, &baseline).await?;
+    let after = reacted_report(&mut report_rx, &session_lock, generation, trigger).await?;
+    Ok(Rescoped { before, after })
+}
+
+/// Asserts the headline duplicated lines moved in the `expected` direction.
+fn assert_duplication(before: &Report, after: &Report, expected: Ordering, what: &str) {
+    let (from, to) = (before.metrics.duplicated_loc, after.metrics.duplicated_loc);
+    assert_eq!(
+        to.cmp(&from),
+        expected,
+        "{what}: {from} -> {to} duplicated lines"
+    );
+}
+
+/// An edit between the session reading its config and the watcher
+/// attaching is delivered on attach, so the visible report follows it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn config_edited_during_the_cold_scan_rescopes_the_report_on_attach() -> Result<()> {
+    let edit = |path: &Path| fs::write(path, EDITED_CONFIG);
+    let Rescoped { before, after } =
+        rescope_across_attach(LOADED_CONFIG, CLONE_FILES, edit, STARTUP_EDIT).await?;
     assert_eq!(
         before.clusters_hidden, NOTHING_HIDDEN,
         "nothing is hidden under the loaded config"
     );
-
-    // The edit lands after the session read the config and before the
-    // watcher exists: no filesystem event will ever describe it.
-    fs::write(&config_path, EDITED_CONFIG).context("edit .deslop.toml")?;
-    assert_eq!(
-        baseline.drifted(),
-        vec![config_path.clone()],
-        "the edit is drift"
-    );
-
-    let (session_lock, _watcher, _scheduler, mut report_rx) =
-        start_live_loop(&scan_root, session, &EXTENSIONS, &baseline).await?;
-    let notification = next_report_change(&mut report_rx, STARTUP_EDIT).await?;
-    assert_generation_advanced(&notification, before_generation, STARTUP_EDIT);
-    let after = report_under_lock(&session_lock).await;
     assert!(
         after.clusters.is_empty(),
         "the edited config hides the pair: {:?}",
@@ -80,11 +109,11 @@ async fn config_edited_during_the_cold_scan_rescopes_the_report_on_attach() -> R
         after.files_analysed, CLONE_FILES,
         "report_hide keeps both files analysed"
     );
-    assert!(
-        after.metrics.duplicated_loc < before.metrics.duplicated_loc,
-        "the headline duplication must fall once the pair is hidden: {} -> {}",
-        before.metrics.duplicated_loc,
-        after.metrics.duplicated_loc,
+    assert_duplication(
+        &before,
+        &after,
+        Ordering::Less,
+        "hiding the pair lowers the headline duplication",
     );
     Ok(())
 }
@@ -93,37 +122,9 @@ async fn config_edited_during_the_cold_scan_rescopes_the_report_on_attach() -> R
 /// it carried is dropped and the excluded files rejoin the corpus.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn config_deleted_during_the_cold_scan_readmits_its_exclusions_on_attach() -> Result<()> {
-    let _slot = live_slot().await;
-    let (_tmp, scan_root) = canonical_temp_root()?;
-    seed_hidden_fixture_pair(&scan_root)?;
-    let config_path = scan_root.join(CONFIG_NAME);
-    fs::write(&config_path, DELETED_CONFIG_EXCLUDES).context("seed .deslop.toml")?;
-
-    let baseline = ConfigBaseline::capture(&scan_root, None);
-    let session = live_session(&scan_root)?;
-    let before = session.report();
-    let before_generation = session.generation();
-    assert_eq!(
-        before.files_analysed, NO_FILES,
-        "the loaded config excludes every copy"
-    );
-    assert!(
-        before.clusters.is_empty(),
-        "nothing is analysed, so nothing clusters"
-    );
-
-    fs::remove_file(&config_path).context("delete .deslop.toml")?;
-    assert_eq!(
-        baseline.drifted(),
-        vec![config_path.clone()],
-        "the deletion is drift"
-    );
-
-    let (session_lock, _watcher, _scheduler, mut report_rx) =
-        start_live_loop(&scan_root, session, &EXTENSIONS, &baseline).await?;
-    let notification = next_report_change(&mut report_rx, STARTUP_DELETE).await?;
-    assert_generation_advanced(&notification, before_generation, STARTUP_DELETE);
-    let after = report_under_lock(&session_lock).await;
+    let delete = |path: &Path| fs::remove_file(path);
+    let Rescoped { before, after } =
+        rescope_across_attach(EXCLUDING_CONFIG, NO_FILES, delete, STARTUP_DELETE).await?;
     assert_eq!(
         after.files_analysed, CLONE_FILES,
         "both copies rejoin the corpus"
@@ -132,9 +133,11 @@ async fn config_deleted_during_the_cold_scan_readmits_its_exclusions_on_attach()
         !after.clusters.is_empty(),
         "the readmitted pair clusters again"
     );
-    assert!(
-        after.metrics.duplicated_loc > 0,
-        "the headline duplication reappears"
+    assert_duplication(
+        &before,
+        &after,
+        Ordering::Greater,
+        "the readmitted pair raises the headline duplication",
     );
     Ok(())
 }
