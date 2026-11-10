@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { resolve, relative, sep } from "node:path";
 import v8toIstanbul from "v8-to-istanbul";
 import libCoverage from "istanbul-lib-coverage";
-import { runTool, vsixRoot } from "./coverage-paths.mjs";
+import { coverageRunExit, runTool, vsixRoot } from "./coverage-paths.mjs";
 
 const webviewSrc = resolve(vsixRoot, "webview-ui", "src");
 const rawDir = resolve(vsixRoot, "coverage", "webview", "raw");
@@ -24,11 +24,11 @@ const outDir = resolve(vsixRoot, "coverage", "webview");
 function collect() {
   rmSync(rawDir, { recursive: true, force: true });
   let status = runTool("npm", ["--prefix", "webview-ui", "run", "build", "--", "--coverage"]);
-  if (status !== 0) process.exit(status);
+  if (status !== 0) throw new Error(`webview coverage build failed (${status})`);
   status = runTool("npx", ["playwright", "test", "scripts/playwright-webview-smoke.spec.ts", "scripts/playwright-report-parity.spec.ts"], {
     WEBVIEW_COVERAGE: "1",
   });
-  if (status !== 0) process.exit(status);
+  if (status !== 0) throw new Error(`webview coverage suite failed (${status})`);
   return mapCoverage();
 }
 
@@ -44,9 +44,8 @@ async function mapCoverage() {
   let rawFiles = [];
   try {
     rawFiles = readdirSync(rawDir).filter((name) => name.endsWith(".json"));
-  } catch {
-    console.error(`no raw coverage written to ${rawDir} — did the Playwright run produce any?`);
-    process.exit(1);
+  } catch (cause) {
+    throw new Error(`no raw coverage written to ${rawDir} — did the Playwright run produce any?`, { cause });
   }
   const bundleBase = resolve(vsixRoot, "media", "webview", "bundle.js");
   for (const name of rawFiles) {
@@ -66,12 +65,22 @@ async function mapCoverage() {
 }
 
 let map;
+let failure;
+let restore;
 try {
   map = await collect();
+} catch (error) {
+  failure = error instanceof Error ? error.message : String(error);
 } finally {
   // A coverage run must never leave the unminified inline-sourcemap output
   // staged for packaging — restore the production bundle on every path.
-  runTool("npm", ["--prefix", "webview-ui", "run", "build"]);
+  restore = runTool("npm", ["--prefix", "webview-ui", "run", "build"]);
+}
+// [VSIX-TESTING-COVERAGE-RESTORE] Exit only after restoring the staged bundle.
+const outcome = coverageRunExit({ failure, restore, stagedPath: "media/webview" });
+if (outcome.code !== 0) {
+  console.error(outcome.reason);
+  process.exit(outcome.code);
 }
 
 // Summarise per file + total and write coverage-summary.json. The final CI
