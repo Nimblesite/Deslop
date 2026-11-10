@@ -1,0 +1,121 @@
+//! [PIPELINE-NORMALIZE-AST] [FUSED-CONTENT-GATE] Long Rust string literals
+//! that share nothing but their escape sequences are not duplicates.
+//!
+//! On the Osprey repository Deslop grouped 16 unrelated strings as "Similar
+//! code" — a CLI usage message, a JSON version line, an HTML sidebar and a
+//! dozen embedded test programs — ranked #2 of 647 on its Rust crates (#626).
+//! Their only common ground is a long run of `\n` and `\"` escapes. The
+//! fixture keeps three of them verbatim: the usage text, a test's embedded
+//! program and an HTML template.
+//!
+//! The positive control copies the usage text into a second constant, so the
+//! suite also proves a genuinely copied string is still reported — and
+//! reported on its own, without an unrelated string riding along.
+
+use std::{fs, path::Path};
+
+use anyhow::{Context, Result};
+use serde_json::Value;
+
+use crate::common::{
+    cluster_kind, cluster_spanning, cluster_touches, clusters, field, occurrences, run_report,
+    seeded_fixture_root, IDENTICAL_KIND, NEARLY_IDENTICAL_KIND,
+};
+
+const FIXTURE: &str = "rust-escaped-string-literals";
+/// The subtree floor the live server used when it reported the incident.
+const MIN_NODES: u32 = 30;
+const USAGE_FILE: &str = "usage.rs";
+const COPY_FILE: &str = "help.rs";
+const UNRELATED_FILES: [&str; 2] = ["run_output.rs", "navigation.rs"];
+const FIXTURE_FILES: u64 = 3;
+const WITH_COPY_FILES: u64 = 4;
+const COPY_OCCURRENCES: usize = 2;
+const USAGE_NAME: &str = "const USAGE";
+const COPY_NAME: &str = "const HELP";
+
+/// Every cluster the report holds, named by its files, for failure messages.
+fn cluster_files(report: &Value) -> Vec<Vec<String>> {
+    clusters(report)
+        .iter()
+        .map(|cluster| {
+            occurrences(cluster)
+                .iter()
+                .filter_map(|occurrence| field(occurrence, "path").as_str().map(str::to_owned))
+                .collect()
+        })
+        .collect()
+}
+
+/// Asserts no cluster pairs any of the unrelated strings with anything.
+fn assert_unrelated_strings_stay_out(report: &Value, scenario: &str) {
+    for file in UNRELATED_FILES {
+        let offender = clusters(report)
+            .iter()
+            .find(|cluster| cluster_touches(cluster, file));
+        assert!(
+            offender.is_none(),
+            "{scenario}: {file} holds a string unrelated to every other one, \
+             yet it was grouped: {:?}",
+            cluster_files(report),
+        );
+    }
+}
+
+/// Writes `help.rs`, a byte-identical copy of the usage string under a new name.
+fn add_copied_string(scan_root: &Path) -> Result<()> {
+    let source = scan_root.join(USAGE_FILE);
+    let usage = fs::read_to_string(&source).context("read usage.rs")?;
+    let copy = usage.replacen(USAGE_NAME, COPY_NAME, 1);
+    assert_ne!(copy, usage, "the copy renames the constant");
+    fs::write(scan_root.join(COPY_FILE), copy).context("write help.rs")
+}
+
+/// Three unrelated escape-heavy strings: nothing may be reported.
+#[test]
+fn unrelated_escaped_strings_are_never_grouped() -> Result<()> {
+    let (_tmp, scan_root) = seeded_fixture_root(FIXTURE)?;
+    let report = run_report(&scan_root, MIN_NODES)?;
+    assert_eq!(
+        field(&report, "files_analysed").as_u64(),
+        Some(FIXTURE_FILES)
+    );
+    assert_unrelated_strings_stay_out(&report, "unrelated strings only");
+    assert!(
+        clusters(&report).is_empty(),
+        "no two of these strings share any text, so the report must be empty: {:?}",
+        cluster_files(&report),
+    );
+    Ok(())
+}
+
+/// A real copy of the usage string is reported, alone, as a copy.
+#[test]
+fn a_copied_string_is_reported_without_the_unrelated_ones() -> Result<()> {
+    let (_tmp, scan_root) = seeded_fixture_root(FIXTURE)?;
+    add_copied_string(&scan_root)?;
+    let report = run_report(&scan_root, MIN_NODES)?;
+    assert_eq!(
+        field(&report, "files_analysed").as_u64(),
+        Some(WITH_COPY_FILES)
+    );
+    let copy = cluster_spanning(&report, &[USAGE_FILE, COPY_FILE]).with_context(|| {
+        format!(
+            "the copied usage string must be reported: {:?}",
+            cluster_files(&report)
+        )
+    })?;
+    assert_eq!(
+        occurrences(copy).len(),
+        COPY_OCCURRENCES,
+        "the copy group holds exactly the original and its copy: {:?}",
+        cluster_files(&report),
+    );
+    assert!(
+        [IDENTICAL_KIND, NEARLY_IDENTICAL_KIND].contains(&cluster_kind(copy)),
+        "a byte-identical string under a renamed constant is a near-verbatim copy, got {}",
+        cluster_kind(copy),
+    );
+    assert_unrelated_strings_stay_out(&report, "with a real copy present");
+    Ok(())
+}

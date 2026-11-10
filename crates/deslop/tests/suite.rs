@@ -260,6 +260,8 @@ mod rename_needs_an_anchor;
 mod report_golden;
 #[path = "rerun.rs"]
 mod rerun;
+#[path = "rust_escaped_string_literals.rs"]
+mod rust_escaped_string_literals;
 #[path = "rust_issue_147_iter_collect_idiom.rs"]
 mod rust_issue_147_iter_collect_idiom;
 #[path = "rust_issue_150_mod_declarations.rs"]
