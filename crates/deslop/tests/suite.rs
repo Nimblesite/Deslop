@@ -23,6 +23,8 @@ mod mock_ollama;
 
 #[path = "boilerplate.rs"]
 mod boilerplate;
+#[path = "builtin_artefact_exclusion.rs"]
+mod builtin_artefact_exclusion;
 #[path = "cache_blob_integrity.rs"]
 mod cache_blob_integrity;
 #[path = "cache_key_lossy_utf8_collision.rs"]

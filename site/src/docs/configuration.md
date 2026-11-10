@@ -164,7 +164,7 @@ These rules apply before user patterns. Exclusions remove files from analysis; r
 **Build output and tool caches**, excluded with no way to opt back in — none of it is source you wrote:
 
 ```
-target   dist   build   __pycache__   .dart_tool   .git   .claude
+target   dist   build   out   coverage   .vscode-test   __pycache__   .dart_tool   .git   .claude
 ```
 
 **Dependency trees**, excluded unless you set `[analysis] include_dependencies = true`:

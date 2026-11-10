@@ -144,7 +144,7 @@ Two fixed lists of directory names, matched case-insensitively against **path co
 
 **Dependency components** — `node_modules`, `vendor`, `.cargo`, `.pub-cache`, `.venv`. Third-party library source installed or vendored into the corpus. Real, readable source the user did not write. Governed by [CONFIG-EXCLUDE-DEPENDENCIES].
 
-**Artefact components** — `target`, `dist`, `build`, `__pycache__`, `.dart_tool`, `.git`, `.claude`. Compiler and codegen output, tool caches, and whole additional checkouts of the same repository (`.claude/worktrees/<id>/`, gh #222 — without this every file reports as N identical copies). No configuration opts back into these: none of it is source the user wrote, and none of it is a library the code depends on.
+**Artefact components** — `target`, `dist`, `build`, `out`, `coverage`, `.vscode-test`, `__pycache__`, `.dart_tool`, `.git`, `.claude`. Compiler and codegen output (`out` is the TypeScript and VS Code extension default), generated coverage reports, the VS Code copy an extension's test runner downloads, tool caches, and whole additional checkouts of the same repository (`.claude/worktrees/<id>/`, gh #222 — without this every file reports as N identical copies). No configuration opts back into these: none of it is source the user wrote, and none of it is a library the code depends on.
 
 **Corpus scope.** Only components **at or below the scan root** are tested. A component above the scan root records where the checkout happens to sit on disk and says nothing about its contents; the user's choice of scan root *is* the request to analyse what is under it.
 
@@ -152,7 +152,7 @@ Matching ancestors was gh #342: a checkout at `~/build/myrepo` (or under `dist`,
 
 **Unknown boundary.** When no scan root is bound, or the path lies outside it, the rule does not fire. That direction can only admit a file for analysis; it can never silently discard one. Every discovery path binds its root: batch discovery ([PIPELINE-DISCOVER-FILES]), incremental session updates, and the live watcher ([live.md §LIVE-WATCHER](live.md#live-watcher-file-watcher)). The latter two have neither a hidden-directory filter nor a `.gitignore` pass, so this rule is their only built-in filter and a missing root would silently widen what they analyse.
 
-Code: `crates/deslop-core/src/config/builtin.rs::corpus_built_in_excluded`. Tests: `crates/deslop/tests/issue_342_scan_root_under_excluded_ancestor.rs`, `crates/deslop/tests/go_vendor_exclusion.rs`.
+Code: `crates/deslop-core/src/config/builtin.rs::corpus_built_in_excluded`. Tests: `crates/deslop/tests/builtin_artefact_exclusion.rs`, `crates/deslop/tests/issue_342_scan_root_under_excluded_ancestor.rs`, `crates/deslop/tests/go_vendor_exclusion.rs`.
 
 ### [CONFIG-EXCLUDE-DEPENDENCIES] Analysing dependencies
 

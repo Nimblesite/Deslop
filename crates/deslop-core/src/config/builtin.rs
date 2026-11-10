@@ -58,14 +58,19 @@ const BUILTIN_DEPENDENCY_COMPONENTS: &[&str] =
 /// ([CONFIG-EXCLUDE-BUILTIN]). Excluded unconditionally: none of it is
 /// source the user wrote, and none of it is a "library the code depends
 /// on", so no configuration opts back in.
-/// `target`, `dist`, `build`, `__pycache__` and `.dart_tool` are compiler
-/// and codegen output; `.git` and `.claude` are whole additional checkouts
+/// `target`, `dist`, `build`, `out`, `__pycache__` and `.dart_tool` are
+/// compiler and codegen output; `coverage` is generated coverage reports;
+/// `.vscode-test` is the VS Code copy an extension's test runner downloads;
+/// `.git` and `.claude` are whole additional checkouts
 /// of the same repository which would otherwise report every file
 /// as N identical copies.
 const BUILTIN_ARTEFACT_COMPONENTS: &[&str] = &[
     "target",
     "dist",
     "build",
+    "out",
+    "coverage",
+    ".vscode-test",
     "__pycache__",
     ".dart_tool",
     ".git",
