@@ -55,6 +55,14 @@ suite("live bubble (real LSP)", () => {
           occurrence.end_byte > (originalCluster.occurrences[index]?.end_byte ?? occurrence.end_byte)),
       ), HOVER_REPORT_TIMEOUT_MS);
       assert.ok(editor.document.isDirty, "the editor source remains unsaved after analysis");
+      // [LIVE-OPEN-BUFFERS] [VSIX-STATE-DIRTY] The report that carries the
+      // unsaved offsets also acknowledges this buffer version, so the
+      // visible projection shows the cluster again and the bubble may paint.
+      assert.equal(
+        api.reportStore?.isFileDirty(editor.document.uri.fsPath),
+        false,
+        "the refreshed report acknowledges the unsaved buffer it analysed",
+      );
       assert.equal(refreshedCluster.kind, originalCluster.kind, "whitespace preserves the clone bucket");
       assert.equal(refreshedCluster.occurrence_count, SHIPPING_COPY_COUNT, "the unsaved report retains both copies");
       assert.deepEqual(

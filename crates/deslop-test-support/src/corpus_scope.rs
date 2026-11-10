@@ -19,7 +19,7 @@
 
 use serde_json::Value;
 
-use crate::corpus::Failure;
+use crate::{corpus::Failure, report_field::ReportField};
 
 /// [CORPUS-SCOPE] Asserts the scan reached the repository and produced a
 /// cluster population inside its curated band.
@@ -40,7 +40,7 @@ fn check_files_analysed(manifest: &Value, report: &Value, failures: &mut Vec<Fai
         ));
         return;
     };
-    let Some(analysed) = report.get("files_analysed").and_then(Value::as_u64) else {
+    let Some(analysed) = ReportField::FilesAnalysed.count_of(report) else {
         failures.push(Failure::new(
             "files_analysed",
             "the report has no `files_analysed` field, so the scan's reach cannot be judged",
@@ -85,11 +85,7 @@ fn check_cluster_count_band(manifest: &Value, report: &Value, failures: &mut Vec
         ));
         return;
     };
-    let count = report
-        .get("clusters")
-        .and_then(Value::as_array)
-        .map_or(0, Vec::len);
-    let count = u64::try_from(count).unwrap_or(u64::MAX);
+    let count = u64::try_from(ReportField::Clusters.items(report).len()).unwrap_or(u64::MAX);
     if count < min || count > max {
         failures.push(Failure::new(
             "cluster_count_band",

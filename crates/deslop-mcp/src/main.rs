@@ -142,6 +142,7 @@ fn install_tracing() {
         .unwrap_or_else(|_| EnvFilter::new("deslop_mcp=info,deslop_core=info"));
     let _guard = tracing_subscriber::fmt()
         .with_env_filter(filter)
+        .with_ansi(deslop_core::logging_colour::stderr_wants_colour())
         .with_writer(io::stderr)
         .try_init();
 }

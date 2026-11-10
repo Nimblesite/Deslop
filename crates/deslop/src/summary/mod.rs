@@ -7,7 +7,7 @@ mod body;
 mod chrome;
 mod theme;
 
-use std::{io::IsTerminal as _, path::Path};
+use std::path::Path;
 
 pub use body::summary;
 pub use chrome::{finish_err, finish_ok, preamble};
@@ -29,16 +29,7 @@ impl ColorChoice {
     /// precedence order.
     #[must_use]
     pub fn resolve(force_off: bool) -> Self {
-        if force_off {
-            return Self::Never;
-        }
-        if std::env::var_os("NO_COLOR").is_some() {
-            return Self::Never;
-        }
-        if std::env::var_os("DESLOP_FORCE_COLOR").is_some() {
-            return Self::Always;
-        }
-        if std::io::stderr().is_terminal() {
+        if !force_off && deslop_core::logging_colour::stderr_wants_colour() {
             Self::Always
         } else {
             Self::Never

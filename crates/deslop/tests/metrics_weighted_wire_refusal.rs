@@ -15,6 +15,7 @@
 use std::{fs, path::Path};
 
 use anyhow::Result;
+use predicates::str::contains;
 use serde_json::Value;
 
 use crate::common::*;
@@ -65,6 +66,19 @@ const FORBIDDEN_RENDER_MARKER: &str = "weighted";
 const FORBIDDEN_FLAGS: [&str; 2] = ["--fail-over-weighted", "--max-weighted-duplication-percent"];
 /// The exit code `clap` returns for an unknown argument.
 const USAGE_EXIT_CODE: i32 = 2;
+/// Retired metric and threshold tables must fail instead of silently disabling a gate.
+const FORBIDDEN_CONFIGS: [(&str, &str); 4] = [
+    ("[metrics.bucket_weights]\nidentical = 0.5\n", "metrics"),
+    ("[metrics.category_weights]\nlogic = 0.5\n", "metrics"),
+    (
+        "[metrics]\nweighted_duplication_percent = 10.0\n",
+        "metrics",
+    ),
+    (
+        "[threshold]\nmax_weighted_duplication_percent = 10.0\n",
+        "max_weighted_duplication_percent",
+    ),
+];
 
 /// Every key in the report, at every depth, with its path — so a
 /// forbidden field cannot hide inside a nested object.
@@ -226,6 +240,26 @@ fn a_weighted_threshold_flag_is_a_usage_error() -> Result<()> {
     for flag in FORBIDDEN_FLAGS {
         let mut command = deslop_cmd(&scan_root, &tmp.path().join("report"))?;
         let _assertion = command.arg(flag).arg("10.0").assert().code(USAGE_EXIT_CODE);
+    }
+    Ok(())
+}
+
+#[test]
+fn retired_metric_configuration_is_rejected_before_analysis() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let root = tmp.path().join("repo");
+    write_identical_pair(&root, DUPLICATED_EXTENSION, DUPLICATED_SOURCE)?;
+    let config = root.join(".deslop.toml");
+    for (body, field) in FORBIDDEN_CONFIGS {
+        fs::write(&config, body)?;
+        let mut command = deslop_cmd(&root, &tmp.path().join("report"))?;
+        let _assertion = command
+            .arg("--config")
+            .arg(&config)
+            .assert()
+            .failure()
+            .stderr(contains("failed to parse exclusion config"))
+            .stderr(contains(format!("unknown field `{field}`")));
     }
     Ok(())
 }

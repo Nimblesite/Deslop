@@ -18,7 +18,7 @@
 
 use serde_json::Value;
 
-use crate::corpus::Failure;
+use crate::{corpus::Failure, report_field::ReportField};
 
 /// The check id a disagreement is recorded under, matching the key in
 /// `corpus/known-failures.json`.
@@ -61,14 +61,16 @@ pub fn check_reports_agree(first: &Value, second: &Value, failures: &mut Vec<Fai
 /// without a string `id` is malformed input rather than a cluster to
 /// skip: skipping it is what let two disagreeing reports compare equal.
 fn malformed(report: &Value) -> Option<String> {
-    let clusters = report.get("clusters").and_then(Value::as_array)?;
-    clusters.iter().enumerate().find_map(|(rank, cluster)| {
-        cluster
-            .get("id")
-            .and_then(Value::as_str)
-            .is_none()
-            .then(|| format!("the cluster at rank {rank} carries no string `id`: {cluster}"))
-    })
+    ReportField::Clusters
+        .items(report)
+        .iter()
+        .enumerate()
+        .find_map(|(rank, cluster)| {
+            ReportField::Id
+                .text(cluster)
+                .is_none()
+                .then(|| format!("the cluster at rank {rank} carries no string `id`: {cluster}"))
+        })
 }
 
 /// The report without its run-history fields — the part two scans of one

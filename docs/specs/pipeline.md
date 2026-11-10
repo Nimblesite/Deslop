@@ -475,7 +475,7 @@ include = ["identical", "nearly_identical"]   # the default
 
 #### [METRICS-REPO-WEIGHTED] Evidence weighting is prohibited
 
-There is no evidence-weighted duplication percentage. Evidence decides whether a relation is a clone; shape-only non-clones are excluded before line counting, not discounted by a small weight. Every eligible clone line counts equally. `bucket_weights`, `category_weights`, `WeightedMetrics`, `weighted_duplicated_loc`, `weighted_duplication_percent`, and a `[metrics]` weight table are forbidden wire and configuration fields.
+There is no evidence-weighted duplication percentage. Evidence decides whether a relation is a clone; shape-only non-clones are excluded before line counting, not discounted by a small weight. Every eligible clone line counts equally. `bucket_weights`, `category_weights`, `WeightedMetrics`, `weighted_duplicated_loc`, `weighted_duplication_percent`, and a `[metrics]` weight table are forbidden wire and configuration fields. Unknown root configuration fields and threshold keys fail configuration parsing before analysis; retired settings must never be silently accepted.
 
 The text renderer prints one line: `repo: 12.4% duplicated (1 843 / 14 876 LOC, 27 clusters across 11 files)`. HTML renders the same engine-computed metric and colours it by the one fail-over threshold. JSON carries the same canonical value. No surface computes a companion figure.
 

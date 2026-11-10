@@ -54,8 +54,8 @@ use std::{path::Path, time::Duration};
 use anyhow::{anyhow, Result};
 use deslop_test_support::{
     corpus::{
-        array, clone_dir, cluster_paths, field_u64, first_occurrence_text, manifest, scan,
-        string_field, u64_field, CorpusRun, Failure,
+        clone_dir, cluster_paths, first_occurrence_text, manifest, scan, string_field, u64_field,
+        CorpusRun, Failure,
     },
     corpus_confidence::{
         check_cluster_mass_contract, check_curated_recall, check_type2_curated_recall,
@@ -65,6 +65,7 @@ use deslop_test_support::{
     corpus_judge::{accuracy_curated, publish_crash, publish_then_judge, Judged, Scan},
     corpus_precision::{check_boilerplate_not_ranked_first, check_curated_precision},
     corpus_scope::check_scan_scope,
+    report_field::ReportField,
 };
 use serde_json::Value;
 
@@ -229,27 +230,11 @@ fn scan_twice(root: &Path, work: &Path) -> Result<(CorpusRun, CorpusRun)> {
 fn print_rerun(name: &str, first: &CorpusRun, second: &CorpusRun) {
     println!(
         "{name}: run1 clusters={} dup={:.4}%  run2 clusters={} dup={:.4}%",
-        rendered_cluster_count(&first.report),
-        duplication_percent(&first.report),
-        rendered_cluster_count(&second.report),
-        duplication_percent(&second.report),
+        ReportField::Clusters.items(&first.report).len(),
+        ReportField::DuplicationPercent.number(&first.report),
+        ReportField::Clusters.items(&second.report).len(),
+        ReportField::DuplicationPercent.number(&second.report),
     );
-}
-
-/// How many clusters a report rendered.
-fn rendered_cluster_count(report: &Value) -> usize {
-    report
-        .get("clusters")
-        .and_then(Value::as_array)
-        .map_or(0, Vec::len)
-}
-
-/// The report's repo-level duplication percentage.
-fn duplication_percent(report: &Value) -> f64 {
-    report
-        .pointer("/metrics/duplication_percent")
-        .and_then(Value::as_f64)
-        .unwrap_or_default()
 }
 
 /// Scans one pinned repository and asserts every curated property of the
@@ -297,13 +282,10 @@ fn report_measurements(name: &str, manifest: &Value, run: &CorpusRun) {
     println!(
         "{name} [{}]: files={} loc={} clusters={} dup={:.1}% wall={:.1}s cpu={:.1}s peak_cpu={} peak_rss={}MB",
         string_field(manifest, "language").unwrap_or("?"),
-        field_u64(&run.report, "files_analysed"),
-        pointer_u64(&run.report, "/metrics/analysed_loc"),
+        ReportField::FilesAnalysed.count(&run.report),
+        ReportField::AnalysedLoc.count(&run.report),
         cluster_paths(&run.report).len(),
-        run.report
-            .pointer("/metrics/duplication_percent")
-            .and_then(Value::as_f64)
-            .unwrap_or_default(),
+        ReportField::DuplicationPercent.number(&run.report),
         run.cost.wall.as_secs_f64(),
         run.cost.cpu_seconds,
         run.cost
@@ -340,7 +322,8 @@ fn check_data_tables_not_ranked_as_logic(
     failures: &mut Vec<Failure>,
 ) -> Result<()> {
     let language = string_field(manifest, "language")?;
-    for (position, cluster) in array(&run.report, "clusters")
+    for (position, cluster) in ReportField::Clusters
+        .items(&run.report)
         .iter()
         .take(RANKED_HEAD)
         .enumerate()
@@ -383,12 +366,4 @@ fn check_ceilings(manifest: &Value, run: &CorpusRun, failures: &mut Vec<Failure>
         ));
     }
     Ok(())
-}
-
-/// Unsigned scalar at a JSON pointer, or `0` when absent.
-fn pointer_u64(value: &Value, pointer: &str) -> u64 {
-    value
-        .pointer(pointer)
-        .and_then(Value::as_u64)
-        .unwrap_or_default()
 }

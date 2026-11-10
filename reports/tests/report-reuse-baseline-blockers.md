@@ -163,3 +163,7 @@ test result: FAILED. 94 passed; 3 failed; 1 ignored; 0 measured; 0 filtered out;
 ## Osprey ML recovery (2026-11-08)
 
 The quarantine panic is replaced by `intact_root` ([LANG-CAND-OSPREY-RECOVERY]). `cli::detection::osprey_flavors` passes; `cli::detection::osprey_recovery` was red: the recovered `describe` occurrence spans `[0..85]` against the 84-byte fixture because the pinned ML grammar (Nimblesite/osprey `865f0469`) ends a declaration's block at the zero-width `_dedent` placed after the following blank line. Fix belongs in the grammar's layout scanner; see `docs/plans/osprey-recovery-and-compare.md`.
+
+## Upstream pin provenance (2026-11-10)
+
+Mechanically checked with GitHub compare and Git tree diff: current pin `093f04242c7d8b2f56d8d5051dd813b9e9d280f3` has upstream-main status `identical`. Verified both `src/toolchain/tree-sitter-osprey*/Cargo.toml` entries exist at the new revision. Changed paths across `src/toolchain/tree-sitter-osprey` and `src/toolchain/tree-sitter-osprey-ml` relative to `e82980cf11b9b45c957957d88f3427bb6caefbf0`: `0`. Historical failures above describe the old baseline; current test gates are tracked in [the pin plan](../../docs/plans/osprey-grammar-pin.md).

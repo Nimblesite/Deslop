@@ -47,11 +47,15 @@ use std::{num::NonZeroUsize, sync::Mutex};
 /// which is exactly the silent de-sharding this function exists to make
 /// impossible.
 pub(crate) fn worker_count(items: usize, min_per_worker: NonZeroUsize) -> usize {
-    if items < min_per_worker.get() {
-        return 1;
-    }
-    let available = std::thread::available_parallelism().map_or(1, NonZeroUsize::get);
-    available.min(items / min_per_worker).max(1)
+    let workers = if items < min_per_worker.get() {
+        1
+    } else {
+        crate::state::worker_budget()
+            .min(items / min_per_worker)
+            .max(1)
+    };
+    tracing::debug!(items, workers, "shard_workers");
+    workers
 }
 
 /// The per-chunk results in input order, paired with each worker's

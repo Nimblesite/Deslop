@@ -14,6 +14,8 @@
 //! typed `ReportCluster` values in the refactor suites. The predicate
 //! lives here once and both shapes convert into [`Span`].
 
+use crate::report_field::ReportField;
+
 /// One rendered occurrence reduced to the fields enclosure depends on.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Span {
@@ -47,20 +49,20 @@ impl Span {
 #[must_use]
 pub fn span_of(occurrence: &serde_json::Value) -> Option<Span> {
     Some(Span::new(
-        occurrence.get("path")?.as_str()?,
-        occurrence.get("start_byte")?.as_u64()?,
-        occurrence.get("end_byte")?.as_u64()?,
+        ReportField::Path.text(occurrence)?,
+        ReportField::StartByte.count_of(occurrence)?,
+        ReportField::EndByte.count_of(occurrence)?,
     ))
 }
 
 /// Every occurrence span of a rendered cluster.
 #[must_use]
 pub fn spans_of(cluster: &serde_json::Value) -> Vec<Span> {
-    cluster
-        .get("occurrences")
-        .and_then(serde_json::Value::as_array)
-        .map(|occurrences| occurrences.iter().filter_map(span_of).collect())
-        .unwrap_or_default()
+    ReportField::Occurrences
+        .items(cluster)
+        .iter()
+        .filter_map(span_of)
+        .collect()
 }
 
 /// True when every span of `nested` sits inside some span of

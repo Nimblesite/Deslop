@@ -11,11 +11,12 @@ use std::{
     io::{BufRead, BufReader, Write},
     os::unix::net::UnixStream,
     path::Path,
+    process::Command,
 };
 
 use anyhow::{anyhow, ensure, Context, Result};
 use common::{
-    array_field, call_tool, initialized_mcp, lsp_workspace_with_socket, str_field,
+    array_field, call_tool, initialized_mcp, lsp_child::lsp_workspace_with_socket, str_field,
     structured_content, McpHandle,
 };
 use serde_json::{json, Value};
@@ -81,7 +82,7 @@ fn cluster_by_id_accepts_seven_hex_slug() -> Result<()> {
         full_id.len() >= SLUG_LEN,
         "canonical cluster id must be at least {SLUG_LEN} hex chars; got {full_id:?}",
     );
-    let slug = full_id[..SLUG_LEN].to_owned();
+    let slug = cli_cluster_slug(workspace.path(), &full_id)?;
 
     let mut mcp = initialized_mcp(workspace.path())?;
     let full = mcp_cluster_by_id(&mut mcp, &full_id)?;
@@ -97,6 +98,25 @@ fn cluster_by_id_accepts_seven_hex_slug() -> Result<()> {
         "cluster-by-id with 7-hex slug {slug:?} must resolve to the same canonical id {full_id:?}; got {slug_resolved}",
     );
     Ok(())
+}
+
+/// [UX-CLUSTER-IDENTITY] Copy the actual CLI handle into the MCP request.
+fn cli_cluster_slug(root: &Path, full_id: &str) -> Result<String> {
+    let output = Command::new(assert_cmd::cargo::cargo_bin("deslop"))
+        .arg(root)
+        .arg("--output")
+        .arg(root.join(".deslop/cli-identity"))
+        .args(["--notext", "--nohtml", "--no-color", "--no-fail-over"])
+        .output()?;
+    ensure!(output.status.success(), "CLI failed: {output:?}");
+    let summary = String::from_utf8(output.stderr)?;
+    let expected = &full_id[..SLUG_LEN];
+    let slug = summary
+        .lines()
+        .filter_map(|line| line.split_whitespace().next())
+        .find(|token| *token == expected)
+        .with_context(|| format!("CLI must lead with {expected}: {summary}"))?;
+    Ok(slug.to_owned())
 }
 
 /// Reads the LSP's full `report/get` over IPC and extracts the cluster

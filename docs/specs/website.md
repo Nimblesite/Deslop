@@ -31,6 +31,22 @@ language routes, including responsive geometry, playback, seeking, captions,
 chapters and transcript expansion. `scripts/videos/check-doc-films.mjs --complete`
 requires all ten topics to have imported deliveries and verification receipts.
 
+## [SITE-NAV-FONTS] Reliable navigation icons
+
+Material Symbols, Inter and JetBrains Mono ship with the website, including
+their upstream licenses. Icons and reading/code fonts must remain available
+when external font services are unreachable. `site/tests/navigation-fonts.spec.js` verifies that behavior with
+both external font endpoints blocked and verifies every published icon still
+shapes to a single glyph. The icon subset retains the release-card icon even
+when live release metadata is unavailable.
+
+## [SITE-LOAD-ANALYTICS] Analytics follows page readiness
+
+Analytics commands are queued immediately, but its external script is requested
+only after the page's load event. An unavailable analytics service must not
+hold page loading open. `site/tests/page-loading.spec.js` stalls that service
+and verifies the page loads with its event queue intact.
+
 ## [SITE-ASSET-TYPE] Declared media types match served assets
 
 Every referenced script, stylesheet, image and social card is served successfully

@@ -22,7 +22,7 @@ use std::{fs, path::Path};
 
 use anyhow::{anyhow, ensure, Result};
 use common::{
-    call_tool, copied_fixture, initialized_mcp, lsp_workspace_with_socket,
+    call_tool, copied_fixture, initialized_mcp, lsp_child::lsp_workspace_with_socket,
     spawn_lsp_and_wait_for_socket, str_field, structured_content,
 };
 use serde_json::{json, Value};

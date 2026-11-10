@@ -23,12 +23,10 @@ use deslop_core::{
 use serde_json::Value;
 
 use crate::{
-    corpus::{array, field_u64, u64_field, CorpusRun, Failure, OCCURRENCE_COUNT},
+    corpus::{array, u64_field, CorpusRun, Failure},
     enclosure::{span_of, Span},
+    report_field::ReportField,
 };
-
-/// Canonical duplicated-mass field, the ranked figure a breach is judged by.
-const MASS: &str = "mass";
 
 mod curated;
 
@@ -85,7 +83,8 @@ pub fn check_boilerplate_not_ranked_first(
         .filter_map(Value::as_str)
         .collect();
 
-    for (position, cluster) in array(&run.report, "clusters")
+    for (position, cluster) in ReportField::Clusters
+        .items(&run.report)
         .iter()
         .take(top_n)
         .enumerate()
@@ -122,7 +121,7 @@ fn judge_cluster(
             "rank {rank}: cluster of {} occurrences declares `{supertype}`, a \
              framework-mandated base type that cannot be deduplicated. First \
              occurrence: {}:{}",
-            field_u64(cluster, OCCURRENCE_COUNT),
+            ReportField::OccurrenceCount.count(cluster),
             span.path,
             span.start,
         ),
@@ -137,10 +136,9 @@ fn judge_cluster(
 /// declaration does not parse into the declaration it came from: the
 /// heritage clause the rule is about may sit outside the reported range.
 fn first_occurrence_source(scan_root: &Path, cluster: &Value) -> Result<(String, Span)> {
-    let occurrence = cluster
-        .get("occurrences")
-        .and_then(Value::as_array)
-        .and_then(|occurrences| occurrences.first())
+    let occurrence = ReportField::Occurrences
+        .items(cluster)
+        .first()
         .ok_or_else(|| anyhow!("cluster has no occurrences"))?;
     let span = span_of(occurrence).ok_or_else(|| anyhow!("occurrence has no span"))?;
     let source = std::fs::read_to_string(scan_root.join(&span.path))

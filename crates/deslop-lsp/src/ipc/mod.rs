@@ -40,6 +40,9 @@ use deslop_core::live::{
 use serde_json::{json, Value};
 use tokio::{runtime::Handle, sync::broadcast};
 
+#[cfg(test)]
+mod tests;
+
 /// Envelope field declaring the JSON-RPC protocol version.
 const JSON_RPC_FIELD: &str = "jsonrpc";
 /// The only JSON-RPC protocol version this transport speaks.
@@ -50,6 +53,16 @@ const ID_FIELD: &str = "id";
 /// version of the build that produced it, so a client from another build
 /// refuses the reply by name before reading a field of it.
 const PRODUCER_FIELD: &str = "tool_version";
+/// [MCP-IPC-WIRE-MISMATCH] Envelope field naming the `deslop-mcp` that
+/// ships beside this `deslop-lsp`, so a client from another build can tell
+/// the agent exactly which binary to register (gh #584).
+const BUNDLED_MCP_FIELD: &str = "deslop_mcp";
+/// The bundled MCP binary's file name on this platform.
+const BUNDLED_MCP_NAME: &str = if cfg!(windows) {
+    "deslop-mcp.exe"
+} else {
+    "deslop-mcp"
+};
 
 /// IPC server bound under the workspace's `.deslop/cache`.
 ///
@@ -275,20 +288,28 @@ fn subscribe_notification_frame(notification: &ReportChangedNotification) -> Val
 
 /// Wraps a `Result<Value, Value>` into a JSON-RPC 2.0 response envelope.
 fn json_rpc_response(id: &Value, result: Result<Value, Value>) -> Value {
-    match result {
-        Ok(value) => json!({
-            (JSON_RPC_FIELD): JSON_RPC_VERSION,
-            (ID_FIELD): id,
-            (PRODUCER_FIELD): deslop_core::version(),
-            "result": value,
-        }),
-        Err(error) => json!({
-            (JSON_RPC_FIELD): JSON_RPC_VERSION,
-            (ID_FIELD): id,
-            (PRODUCER_FIELD): deslop_core::version(),
-            "error": error,
-        }),
-    }
+    let (key, payload) = match result {
+        Ok(value) => ("result", value),
+        Err(error) => ("error", error),
+    };
+    json!({
+        (JSON_RPC_FIELD): JSON_RPC_VERSION,
+        (ID_FIELD): id,
+        (PRODUCER_FIELD): deslop_core::version(),
+        (BUNDLED_MCP_FIELD): bundled_mcp_path(),
+        (key): payload,
+    })
+}
+
+/// The `deslop-mcp` beside this binary, as every bundle installs them, or
+/// null when this binary's own path cannot be read.
+fn bundled_mcp_path() -> Value {
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.join(BUNDLED_MCP_NAME)))
+        .map_or(Value::Null, |path| {
+            Value::String(path.display().to_string())
+        })
 }
 
 /// Returns a JSON-RPC parse-error response (id unknown).

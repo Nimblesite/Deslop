@@ -42,6 +42,7 @@ The decoration and inlay hint never steal the caret. Neither surface shows pair-
 **Cooldown + budget.**
 - Bubbles don't flicker: once shown for a range, the same cluster on the same range stays bubbled until the user moves out, even if debounce re-fires. Cluster stability across re-analyses ([LIVE-DELTA]) makes this trivial — same id, same bubble.
 - The live-bubble query has a 250 ms budget on the daemon side ([LIVE-PERF-BUDGETS]); if it misses, the bubble is skipped for that edit cycle and will try again on the next debounce. No stale bubbles.
+- The same pause that dispatches the probe is the pause that re-analyses the dirty buffer, so the refreshed report routinely lands around the probe. A refresh landing while the probe is in flight makes its answer stale ([VSIX-STATE-DIRTY]: the store's revision moved on), and a stale answer never paints. A probe that answered just before the refresh did so against a projection that still hid the edited file, so it could show nothing. In both cases the edit earned its bubble: the client re-issues the probe against the fresh report at once, cancelling an in-flight one, rather than skipping the edit cycle. A probe settled against an analysed buffer is final, and a buffer edited again in the meantime is left to its own debounce.
 - At most one bubble visible per editor at a time (the highest-mass cluster overlapping the most-recently-edited range). Users reading a report do not need N bubbles competing for attention; the tree view ([VSIX-ACTIVITY-BAR]) shows all of them.
 
 **Dismissal.**

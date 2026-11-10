@@ -14,11 +14,14 @@ use anyhow::{anyhow, Result};
 use serde_json::Value;
 
 use super::support::*;
-use crate::common::{
-    clone_corpus::{DUPLICATE_FN, MIN_NODES},
-    run_report,
-    scan_dir::temp_scan_dir,
-    write_identical_pair, IDENTICAL_KIND, NEARLY_IDENTICAL_KIND,
+use crate::{
+    common::{
+        clone_corpus::{DUPLICATE_FN, MIN_NODES},
+        run_report,
+        scan_dir::temp_scan_dir,
+        write_identical_pair, IDENTICAL_KIND, NEARLY_IDENTICAL_KIND,
+    },
+    cross_cluster_collapse::{write_long_run_fixture, LONG_RUN_PATHS, LONG_RUN_ROOT},
 };
 
 const COMPARE_FLAG: &str = "--compare";
@@ -62,6 +65,9 @@ const DIFFERENT_TEXT: &str = "different";
 const NEEDS_TWO_ENDPOINTS: &str = "exactly 2 endpoints";
 const NEEDS_DISTINCT_ENDPOINTS: &str = "two distinct endpoints";
 const UNKNOWN_ENDPOINT: &str = "unknown pair endpoint";
+/// The two occurrences the report renders for the joined long copied run:
+/// several statement windows wide, so no single fingerprint covers either.
+const LONG_RUN_ENDPOINTS: [&str; 2] = ["left.ts:292:1060", "right.ts:344:1112"];
 /// A one-byte range inside a real file that no fingerprint covers.
 const RANGE_THE_SCAN_NEVER_FINGERPRINTED: &str = "a.rs:1:2";
 
@@ -285,6 +291,61 @@ fn a_systematic_rename_is_admitted_as_nearly_identical() -> Result<()> {
     assert!(
         structural > 0.0,
         "a renamed copy keeps its shape, so structural overlap is not zero: {evidence}"
+    );
+    Ok(())
+}
+
+/// A long copied run the report joins from several statement windows is a
+/// pair the compare command can explain. Pasting the report's own two
+/// triples into `--compare` gets the engine's verdict — byte identical,
+/// admitted, identical — not "unknown pair endpoint" (gh #573).
+#[test]
+fn a_joined_copied_run_the_report_renders_is_a_comparable_pair() -> Result<()> {
+    let (tmp, scan_dir) = temp_scan_dir(SCAN_DIR)?;
+    let root = scan_dir.join(LONG_RUN_ROOT);
+    write_long_run_fixture(&root)?;
+    let report = run_report(&root, MIN_NODES)?;
+    let (left, right) = first_pair(&report)?;
+    assert_eq!(
+        [left.as_str(), right.as_str()],
+        LONG_RUN_ENDPOINTS,
+        "the report renders the whole joined run, in both files: {report}"
+    );
+    let run = compare(
+        &root,
+        &tmp.path().join(REPORT_OUTPUT_STEM),
+        &[&left, &right],
+    )?;
+    let verdict = verdict(&run)?;
+    for ((side, asked), path) in [("left", &left), ("right", &right)]
+        .into_iter()
+        .zip(LONG_RUN_PATHS)
+    {
+        let echoed = verdict
+            .get(side)
+            .ok_or_else(|| anyhow!("the verdict must echo `{side}`: {verdict}"))?;
+        assert_eq!(
+            &endpoint(echoed)?,
+            asked,
+            "the `{side}` endpoint is echoed exactly"
+        );
+        assert!(asked.starts_with(path), "`{side}` is in {path}");
+    }
+    let evidence = evidence(&verdict)?;
+    assert_eq!(
+        evidence.get("text_identity").and_then(Value::as_str),
+        Some(BYTE_IDENTICAL_TEXT),
+        "the two joined ranges are the same bytes: {evidence}"
+    );
+    assert_eq!(
+        evidence.get("admitted"),
+        Some(&Value::Bool(true)),
+        "the run is admitted: {evidence}"
+    );
+    assert_eq!(
+        evidence.get("classification").and_then(Value::as_str),
+        Some(IDENTICAL_KIND),
+        "the verdict agrees with the identical finding the report published: {evidence}"
     );
     Ok(())
 }

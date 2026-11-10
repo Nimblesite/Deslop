@@ -28,6 +28,7 @@ pub mod fsharp;
 pub mod go;
 pub mod javascript;
 mod merge_emit;
+pub mod operators;
 pub mod osprey;
 pub(crate) mod osprey_selection;
 pub mod php;

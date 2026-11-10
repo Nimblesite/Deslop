@@ -343,8 +343,19 @@ fn apply_process_nice(nice: i32) -> Result<()> {
 }
 
 /// Applies Unix process priority through `setpriority(PRIO_PROCESS)`.
+/// `--nice` only ever lowers priority: a server whose launcher already runs
+/// it lower keeps the niceness it inherited, because raising priority is
+/// neither what the knob is for nor permitted to an unprivileged process,
+/// and refusing to start over it would take the editor's analysis down.
 #[cfg(unix)]
 fn apply_process_nice_impl(nice: i32) -> Result<()> {
+    let current = rustix::process::getpriority_process(None).map_err(|error| {
+        anyhow!("failed to read the process niceness for --nice {nice}: {error}")
+    })?;
+    if current >= nice {
+        tracing::info!(requested = nice, current, "process_nice_kept");
+        return Ok(());
+    }
     rustix::process::setpriority_process(None, nice)
         .map_err(|error| anyhow!("failed to apply --nice {nice}: {error}"))?;
     Ok(())
@@ -358,12 +369,16 @@ fn apply_process_nice(nice: i32) {
     }
 }
 
-/// Initialises tracing diagnostics against `RUST_LOG`.
+/// Initialises tracing diagnostics against `RUST_LOG`. An editor reads
+/// stderr through a pipe into its log file, so log lines carry ANSI colour
+/// only on a terminal that has not opted out ([UX-NO-COLOR]); otherwise
+/// `key=value` fields would arrive split by escape codes.
 fn init_tracing() {
     let _result = tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
+        .with_ansi(deslop_core::logging_colour::stderr_wants_colour())
         .with_writer(std::io::stderr)
         .try_init();
 }

@@ -13,7 +13,9 @@
 #![cfg(unix)]
 
 use anyhow::{anyhow, ensure, Context, Result};
-use common::{lsp_workspace_with_socket, rescan_call, u64_field, wait_for_state_then_init_mcp};
+use common::{
+    lsp_child::lsp_workspace_with_socket, rescan_call, u64_field, wait_for_state_then_init_mcp,
+};
 use serde_json::Value;
 
 use crate::common;

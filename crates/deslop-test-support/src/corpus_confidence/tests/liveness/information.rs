@@ -2,7 +2,6 @@
 
 use super::*;
 
-const KIND_FIELD: &str = "kind";
 const INFORMATIONAL_KIND: &str = "structural_only";
 const INFO_ID: &str = "shape-family";
 const INFO_NODES: u64 = 40;
@@ -16,8 +15,8 @@ const CLAIMED_RANK: u64 = 2;
 
 fn information() -> Result<Value> {
     let mut cluster = spanning(INFO_ID, INFO_NODES, NO_RANK, &INFO_FILES);
-    set_field(&mut cluster, KIND_FIELD, json!(INFORMATIONAL_KIND))?;
-    set_field(&mut cluster, MASS, json!(NO_MASS))?;
+    set_field(&mut cluster, ReportField::Kind, json!(INFORMATIONAL_KIND))?;
+    set_field(&mut cluster, ReportField::Mass, json!(NO_MASS))?;
     Ok(cluster)
 }
 
@@ -32,7 +31,7 @@ fn informational_family_carries_zero_duplicate_mass_and_no_clone_rank() -> Resul
 #[test]
 fn informational_family_cannot_claim_positive_duplicate_mass() -> Result<()> {
     let mut cluster = information()?;
-    set_field(&mut cluster, MASS, json!(INFO_NODES))?;
+    set_field(&mut cluster, ReportField::Mass, json!(INFO_NODES))?;
     let failures = judge(&[cluster]);
     assert_eq!(only_check(&failures), Some(MASS_CHECK), "{failures:?}");
     Ok(())
@@ -41,7 +40,7 @@ fn informational_family_cannot_claim_positive_duplicate_mass() -> Result<()> {
 #[test]
 fn informational_family_cannot_claim_a_clone_rank() -> Result<()> {
     let mut cluster = information()?;
-    set_field(&mut cluster, RANK, json!(CLAIMED_RANK))?;
+    set_field(&mut cluster, ReportField::Rank, json!(CLAIMED_RANK))?;
     let failures = judge(&[cluster]);
     assert_eq!(only_check(&failures), Some(RANK_CHECK), "{failures:?}");
     Ok(())

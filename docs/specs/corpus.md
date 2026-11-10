@@ -35,6 +35,17 @@ Every corpus scan records four figures, and each means the same thing on Windows
 
 A figure that was not measured is an error or an explicit absence, never a zero: a zero reads as a scan that cost nothing. Implemented in `crates/deslop-test-support/src/corpus_measure.rs` and `corpus_measure/cpu.rs`; pinned by `corpus_measure/tests.rs`, including `gnu_and_windows_cpu_time_is_user_plus_system` and `peak_cpu_is_the_busiest_window_in_percent_of_one_core`.
 
+### [CORPUS-MEASURE-HOST] A measured scan shares its machine
+
+Corpus runs execute on developer machines beside editors, builds and other agents, and a run that takes every core starves them and makes every timing on the machine meaningless, its own included. So the harness that spawns every measured scan (`corpus_measure::measured_run`, used by `corpus-score measure` and the corpus ceiling suite) owes the host four things:
+
+- **Lowest priority.** POSIX scans run under `/usr/bin/nice -n 19`, which execs `/usr/bin/time` in its place so the measured tree is unchanged. Windows scans start in `BELOW_NORMAL_PRIORITY_CLASS`.
+- **One at a time.** Every measured scan on the machine takes one lock (`/tmp/deslop-corpus-measure.lock`, or the temp directory on Windows) holding its pid, and waits while a live process holds it. A lock left by an exited process is taken over. Two overlapping runs would corrupt each other's timing.
+- **A deadline.** A scan still running after an hour has its whole process tree killed, and the run fails naming the deadline. Every corpus ceiling sits far below it, so only a hung scan reaches it.
+- **The load it started under.** `timing.json` records the one-minute load average at start (`load_at_start`) and the logical cores it is read against (`logical_cores`), so a timing taken on a contended host can be read as one.
+
+The CLI's own thread cap is `--jobs` ([CLI-ARG-JOBS]). The harness does not pass it, because a version comparison scans with an older binary that has no such flag, and capping only one side would bias the comparison. Pinned by `crates/deslop-test-support/src/corpus_measure/host/tests.rs`.
+
 ### [CORPUS-SCOPE] The scan happened
 
 Every other check here reads the clusters a report contains, and none of them can see the report that contains *nothing*: a scan that analysed zero files renders cleanly, exits 0, and satisfies recall, precision, confidence and ceilings at once, because each iterates a set that is empty. gh #342 shipped exactly that — a repository under any folder named `dist`, `build` or `target` analysed as zero files.
@@ -85,6 +96,18 @@ Ranking *is* the product, so the head of the report is where a false positive do
 This is [CORPUS-RECALL]'s predicate read backwards — the same "does a shown cluster span every curated path" question, opposite verdict — and visibility works the same way for the same reason: a false positive nobody is shown is not a false positive, so a cluster whose curated side is entirely hidden does not breach the entry. Suppressing it is the fix, not a loophole.
 
 Without this field no manifest could express the thing seven open false-positive issues all say — *these are not duplicates and Deslop clustered them* — so none of them could be pinned on the repository it was reported against. An entry naming fewer than two files fails rather than passing vacuously: one path cannot describe a pair the engine wrongly joined.
+
+### [CORPUS-CHECK-FIELDS] Every field a check reads is one the report writes
+
+A check that reads a field the report never writes sees zero, silently. The data-table rule read `size` and `category` that way for months: it called a cluster of 34 copies "a cluster of 0 occurrences", and the exemption it keyed on `category` could never open (gh #540).
+
+So the fields the corpus checks read are listed once, as a closed set, and the checks read a report only through that list. A test renders real reports and asserts every listed field is present, in the shape the checks read it as, wherever it should sit: on the report, in its `metrics`, on every cluster, on every occurrence. It then pins the values a check would see, so renaming a field fails one named test instead of reading as zero in every check.
+
+The scorer also reads `bucket`, an older engine's name for `kind`. That field is outside the list on purpose: current reports never write it, and it is read only when a version comparison scores the older engine's report.
+
+#### For AI
+
+`crates/deslop-test-support/src/report_field.rs` (`ReportField`, `ReportField::ALL`); enumeration test `crates/deslop/tests/corpus_report_fields.rs`. Add a field to the enum, never read a report with a string literal.
 
 ### [CORPUS-REGISTER] The clone register — independent ground truth
 
@@ -377,6 +400,6 @@ The corpus workflow is scheduled and dispatchable, and has **no `pull_request` t
 
 Scheduled runs scan a slice sized to finish in about a minute, not the whole corpus. The job summary states which repositories were skipped, so a green scheduled run is never misread as full coverage. The slice is selected by `--exact`, never by substring: a filter that matches part of a test name selects nothing the day a test is renamed, and an empty run reports green (gh #412).
 
-Every test in the suite is `#[ignore]`d under [SKIP-TOO-LARGE-FOR-CI] and cites **gh #422**, which records the measurement — `flutter/flutter` at roughly 9.5 GB peak and 9m44s (#166), `dotnet/fsharp` above 13 GB — and the memory work that would let these tests move into the PR gate. `--ignored` is what selects them; nothing is selected by name. See [release.md §TEST-SELECTION-SKIP](release.md).
+Every test in the suite is `#[ignore]`d under [SKIP-TOO-LARGE-FOR-CI] and cites **gh #422**, which records why — each scan's measured cost is its manifest's `ceilings` (`corpus/flutter.json` alone needs gigabytes of memory and minutes of wall time, far past a hosted runner) — and the memory work that would let these tests move into the PR gate. `--ignored` is what selects them; nothing is selected by name. See [release.md §TEST-SELECTION-SKIP](release.md).
 
 `make test` and `make lint` still **compile and lint** the target. Skipping costs coverage of the suite's execution, never of its compilation: the earlier `required-features` gate removed it from `--all-targets` entirely, and commit `77bcbaed5` left it uncompilable, with nothing to notice until someone ran `make test-corpus`.

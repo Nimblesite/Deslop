@@ -33,7 +33,7 @@ use deslop_core::{lang::shared::parse_source, pipeline::default_parsers};
 use serde_json::Value;
 use tree_sitter::{Language, Node};
 
-use crate::corpus::{field_u64, Failure, OCCURRENCE_COUNT};
+use crate::{corpus::Failure, report_field::ReportField};
 
 mod grammar;
 
@@ -94,7 +94,7 @@ pub fn data_table_failure(
              extractable logic, yet it is visible in the ranked head — a noise \
              filter missed it and it outranks copy-paste a reader can act on. \
              Snippet: {}",
-            field_u64(cluster, OCCURRENCE_COUNT),
+            ReportField::OccurrenceCount.count(cluster),
             snippet(text),
         ),
     )))

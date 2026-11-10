@@ -6,7 +6,7 @@ Crate: `crates/deslop-lsp`. Transport: JSON-RPC over stdio. Framework: `tower-ls
 
 ### [LSP-TRANSPORT] Transport + framing
 
-Stdio JSON-RPC 2.0 per the LSP base protocol. No TCP, no named pipes, no WebSockets. The editor spawns the binary; the binary speaks LSP on stdin/stdout; `tracing` goes to stderr (picked up as the "server log" in the client). One process per workspace root.
+Stdio JSON-RPC 2.0 per the LSP base protocol. No TCP, no named pipes, no WebSockets. The editor spawns the binary; the binary speaks LSP on stdin/stdout; `tracing` goes to stderr (picked up as the "server log" in the client). That stderr is a pipe into the client's log file, so log lines carry no ANSI colour unless stderr is a terminal ([UX-NO-COLOR]; `NO_COLOR` and `DESLOP_FORCE_COLOR` apply as for the CLI): escape codes would split every `key=value` field a reader greps for. `deslop-mcp` follows the same rule, `deslop_core::logging_colour::stderr_wants_colour`. One process per workspace root.
 
 ### [LSP-IPC] A second endpoint, for tools that are not the editor
 
@@ -21,6 +21,10 @@ Implemented in `deslop-lsp/src/ipc/`, bound through `deslop-core`'s shared trans
 ### [LSP-CLI-HELP] Command-line help
 
 `deslop-lsp --help` lists every accepted flag with its purpose and exits successfully without starting a language server. `crates/deslop-lsp/src/help.rs` owns the help text and `app.rs` dispatches it; `crates/deslop-lsp/tests/cli.rs` runs the binary and asserts its advertised flags.
+
+### [LSP-RESOURCE-KNOBS] Background-ising the server
+
+`--worker-threads N` sizes the server's async runtime, and `--nice N` lowers its scheduling priority (macOS and Linux; ignored with a warning elsewhere). Both are recorded in the startup log line (`worker_threads=`, `nice=`). `--nice` only ever **lowers** priority. When the editor or agent that launched the server already runs it at an equal or lower priority, the server keeps the niceness it inherited and logs `process_nice_kept`. It does not try to raise priority, which an unprivileged process may not do, and it never exits over it: a refusal there would take the editor's analysis down to honour a knob meant to make it gentler. Pinned by `tests/cpu_throttle_knob.rs`.
 
 ### [LSP-LIFECYCLE] How the server ends
 
@@ -123,6 +127,8 @@ Identical code × 4 — mass 142 — jump to next
 ```
 
 The lens title states the category and occurrence count, plus mass for actual clones. Shape-only information is identified as a non-clone. Use plain text.
+
+A clone kind the total excludes ([METRICS-TOTAL-INCLUDE](pipeline.md#metrics-total-include-which-kinds-count-toward-the-total)) gets no lens, just as it gets no diagnostic under the defaults ([SEVERITY-DIAGNOSTICS-EXCLUDED](severity.md)). The editor greys that kind out, so nothing in the code may badge it as counted duplication. The server reads `metrics.total_includes` from its own report.
 
 Clicking the lens runs the Deslop-owned `deslop.jumpToNextOccurrence` command, which cycles through the remaining occurrences, wrapping at the end. It deliberately does **not** route through `textDocument/definition` ([LSP-NON-INTERFERENCE]) — the code lens carries its own command so canonical navigation never touches the editor's Go To Definition. Shift-click runs `deslop.openCluster` (see [LSP-CUSTOM-METHODS]).
 

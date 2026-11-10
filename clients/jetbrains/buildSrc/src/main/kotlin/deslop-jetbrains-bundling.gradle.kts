@@ -76,3 +76,8 @@ tasks.named<BuildPluginTask>("buildPlugin") {
         }
     }
 }
+
+// [DEPLOY-JETBRAINS-PACKAGE] Verify the completed sandbox, including bundled binaries.
+tasks.named("verifyPluginStructure") {
+    dependsOn(copyLspArtifactsToSandbox)
+}

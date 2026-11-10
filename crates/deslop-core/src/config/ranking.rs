@@ -7,7 +7,7 @@ use std::path::Path;
 
 use serde::Deserialize;
 
-use super::raw::RawRanking;
+use super::raw::{RawRanking, RawVisibility};
 use crate::error::CoreError;
 
 /// How a demotable clone class is ranked. One shared three-way policy
@@ -158,7 +158,11 @@ fn multiplier_for(policy: ClonePolicy, demote_weight: f64) -> f64 {
 pub(super) fn resolve_ranking_policy(
     source: &Path,
     raw: &RawRanking,
+    visibility: &RawVisibility,
 ) -> Result<RankingPolicy, CoreError> {
+    let data_clones = resolve_visibility_policy(source, visibility)?
+        .or(raw.data_clones)
+        .unwrap_or_default();
     let data_clone_weight = resolve_clone_weight(
         source,
         raw.data_clone_weight,
@@ -172,12 +176,31 @@ pub(super) fn resolve_ranking_policy(
         DEFAULT_STRUCTURAL_ONLY_WEIGHT,
     )?;
     Ok(RankingPolicy {
-        data_clones: raw.data_clones.unwrap_or_default(),
+        data_clones,
         data_clone_weight,
         structural_only: raw.structural_only.unwrap_or_default(),
         structural_only_weight,
     })
 }
+
+/// [EXCLUSION-CONFIG] `[visibility] data_clones` accepts only `keep` or
+/// `ignore`; `demote` names a retired ranking multiplier and fails the load.
+fn resolve_visibility_policy(
+    source: &Path,
+    visibility: &RawVisibility,
+) -> Result<Option<ClonePolicy>, CoreError> {
+    match visibility.data_clones {
+        Some(ClonePolicy::Demote) => Err(CoreError::ConfigThreshold {
+            path: source.to_path_buf(),
+            message: VISIBILITY_DEMOTE_REJECTED.to_owned(),
+        }),
+        policy => Ok(policy),
+    }
+}
+
+/// Diagnostic for a `[visibility] data_clones = "demote"` setting.
+const VISIBILITY_DEMOTE_REJECTED: &str =
+    "visibility.data_clones must be \"keep\" or \"ignore\"; \"demote\" is retired";
 
 /// Validates one optional `[ranking]` weight, inheriting `default`
 /// when the key is absent and failing the load with a

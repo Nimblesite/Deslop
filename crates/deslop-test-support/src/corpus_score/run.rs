@@ -24,7 +24,6 @@ use serde_json::Value;
 
 use super::{
     checks::CheckOutcome,
-    clusters,
     gate::{
         add_checks, add_costs, corpus_change, degradation, totals, CorpusChange, CorpusTotals,
         Degradation,
@@ -38,7 +37,7 @@ use super::{
     verdict::verdict,
     RepoScore, RunCost,
 };
-use crate::read_json;
+use crate::{read_json, report_field::ReportField};
 
 /// A degradation verdict needs exactly two engines to compare.
 const COMPARED_ENGINES: usize = 2;
@@ -187,7 +186,9 @@ fn engine_run(run: &Value, register: Option<&Value>, context: RunContext<'_>) ->
         .map(|path| read_json(&path))
         .transpose()?;
     Ok(EngineRun {
-        clusters: report.as_ref().map(|report| clusters(report).len()),
+        clusters: report
+            .as_ref()
+            .map(|report| ReportField::Clusters.items(report).len()),
         score,
         cost,
         checks,

@@ -142,7 +142,18 @@ To hide informational shape-only findings:
 structural_only = "ignore"
 ```
 
-`structural_only` accepts `demote` (default), `ignore` or `keep`. Visible shape-only findings remain after clones, with zero duplicated mass; none of these settings makes them count as duplication. The VS Code setting overrides this file setting. `data_clones = "ignore"` excludes data-category findings before ranking.
+`structural_only` accepts `demote` (default), `ignore` or `keep`. Visible shape-only findings remain after clones, with zero duplicated mass; none of these settings makes them count as duplication. The VS Code setting overrides this file setting.
+
+## `[visibility]`
+
+Drops proven data-table findings before ranking without changing the mass of anything that survives:
+
+```toml
+[visibility]
+data_clones = "keep"   # "keep" (default) | "ignore"
+```
+
+`demote` and weight multipliers are not accepted here: ranking uses duplicated mass alone. Unknown keys in any section fail the run with an error naming the key, so a retired setting can never silently switch a gate off.
 
 ## Built-in rules (always on)
 

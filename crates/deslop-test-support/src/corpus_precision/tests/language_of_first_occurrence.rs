@@ -19,7 +19,7 @@ use serde_json::{json, Value};
 use super::{super::check_boilerplate_not_ranked_first, FLAT_DECLARATION, STATELESS_WIDGET};
 use crate::{
     corpus::{repo_root, CorpusRun, Failure},
-    corpus_measure::ProcessCost,
+    corpus_measure::{HostLoad, ProcessCost},
 };
 
 /// Where the scan roots for these tests live: under `target`, the only
@@ -108,6 +108,10 @@ fn judged(case: &str, cluster: &Value) -> Result<Vec<Failure>> {
             peak_rss_mb: 0,
             cpu_seconds: 0.0,
             peak_cpu_percent: None,
+            load_at_start: HostLoad {
+                one_minute: 0.0,
+                logical_cores: 1,
+            },
         },
     };
     let mut failures = Vec::new();

@@ -52,6 +52,8 @@ fn cost(elapsed_ms: u64, peak_rss_mb: u64, peak_cpu_percent: f64) -> RunCost {
         cpu_seconds: Some(CPU_SECONDS),
         peak_cpu_percent: Some(peak_cpu_percent),
         binary_sha256: BINARY_SHA.to_owned(),
+        load_at_start: None,
+        logical_cores: None,
     }
 }
 

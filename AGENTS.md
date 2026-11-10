@@ -42,7 +42,7 @@ Deslop is a duplicate-code detector. **Accuracy-audit mode:** one measure outran
 - **Dependency versions stay in sync** across `Cargo.toml`, `.github/workflows/ci.yml`, `.devcontainer/`.
 - **Auto-memory is off.** Durable rules = reviewed changes to this file.
 - **VSIX is the only distribution**, plus Homebrew/Scoop for the CLI. Build output under `target/`; ❌ `cargo install --path crates/deslop-*`.
-- **Docs point external MCP clients at the absolute VSIX path** `~/.vscode/extensions/nimblesite.deslop-live-<VERSION>-<platform>/bin/<platform>/deslop-mcp` (Windows likewise); a `PATH` binary drifts off the wire contract. Bare `deslop-mcp` = Homebrew/Scoop only.
+- **Docs point external MCP clients at the absolute VSIX path** `~/.vscode/extensions/nimblesite.deslop-live-<VERSION>-<platform>/bin/<platform>/deslop-mcp` (Windows likewise); a `PATH` binary drifts off the wire contract. Bare `deslop-mcp` = release-locked installs only: Homebrew, Scoop, or the published fail-closed curl installer ([DEPLOY-EXTERNAL-MCP-CONSUMER]).
 - **Structured logging through `tracing` only** (❌ `println!`/`eprintln!`): the sink is configuration, never code. Log with fields (`tracing::info!(file_count = 42)`) at the entry/exit of significant operations — counts and hashes, **never** file contents, user paths or secrets. Reports are output (stdout or `--output <path>`), not logs.
 - **"Deslop.live"** = the whole reactive loop: watcher → scheduler → session → broadcast → UI refresh.
 

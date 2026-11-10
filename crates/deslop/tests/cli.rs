@@ -23,6 +23,8 @@ mod embedding_stub;
 mod from_report;
 #[path = "cli/invocation.rs"]
 mod invocation;
+#[path = "cli/jobs.rs"]
+mod jobs;
 #[path = "cli/language_sections.rs"]
 mod language_sections;
 #[path = "cli/logging.rs"]
@@ -35,6 +37,8 @@ mod pair_compare;
 mod report_css;
 #[path = "cli/routing.rs"]
 mod routing;
+#[path = "cli/summary.rs"]
+mod summary;
 #[path = "cli/thresholds.rs"]
 mod thresholds;
 #[path = "cli/total_include.rs"]

@@ -281,3 +281,60 @@ fn an_error_reply_from_another_build_is_refused_before_its_error_is_read() -> Re
     );
     Ok(())
 }
+
+/// The `deslop-mcp` a newer bundle ships beside its `deslop-lsp`.
+const BUNDLED_MCP: &str = "/home/u/.vscode/extensions/nimblesite.deslop-live-0.42.0-darwin-arm64/bin/darwin-arm64/deslop-mcp";
+/// The words that send an agent to the bundled binary.
+const POINT_AT: &str = "point your agent's MCP server at";
+
+/// An envelope from another build that names the `deslop-mcp` beside it.
+fn envelope_naming_its_mcp(producer: Option<&str>) -> Value {
+    let mut frame = envelope(producer, &json!({ "clusters": [] }));
+    if let Some(fields) = frame.as_object_mut() {
+        let _previous = fields.insert("deslop_mcp".to_owned(), json!(BUNDLED_MCP));
+    }
+    frame
+}
+
+/// gh #584: after a VSIX upgrade the agent still launches the old bundle's
+/// `deslop-mcp` by absolute path, and reinstalling never rewrites that path,
+/// so the refusal names the binary to register and the stale one in use.
+#[test]
+fn a_refusal_names_the_bundled_mcp_to_register_and_the_stale_one_in_use() -> Result<()> {
+    let this = std::env::current_exe()?.display().to_string();
+    for producer in [Some(OLDER_RELEASE_VERSION), None] {
+        let message = refused_envelope_message(CLUSTER_BY_ID, &envelope_naming_its_mcp(producer))?;
+        ensure!(
+            message.contains(REMEDY),
+            "reinstalling still fixes it: {message}"
+        );
+        ensure!(
+            message.contains(POINT_AT),
+            "the registration to change is named: {message}"
+        );
+        ensure!(
+            message.contains(BUNDLED_MCP),
+            "the bundled deslop-mcp is named: {message}"
+        );
+        ensure!(
+            message.contains(&this),
+            "the stale deslop-mcp in use is named: {message}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn a_refusal_without_a_bundled_mcp_names_only_the_reinstall() -> Result<()> {
+    let frame = envelope(Some(OLDER_RELEASE_VERSION), &json!({ "clusters": [] }));
+    let message = refused_envelope_message(CLUSTER_BY_ID, &frame)?;
+    ensure!(
+        message.contains(REMEDY),
+        "reinstalling is the remedy: {message}"
+    );
+    ensure!(
+        !message.contains(POINT_AT),
+        "no path is invented when the reply names none: {message}"
+    );
+    Ok(())
+}

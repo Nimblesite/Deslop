@@ -447,7 +447,10 @@ impl LanguageServer for LspBackend {
         // editor.
         let report = read_report_snapshot(&self.report_snapshot);
         let file_report = report_for_file_in(&report, &path);
-        Ok(Some(code_lens::build_for_file(&file_report)))
+        Ok(Some(code_lens::build_for_file(
+            &file_report,
+            &report.metrics.total_includes,
+        )))
     }
 
     async fn execute_command(

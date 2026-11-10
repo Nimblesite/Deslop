@@ -13,17 +13,17 @@
 ## One destructive removal
 
 - [x] Remove the weighted metric, weighted gate, weight tables, and multipliers from the governing specifications.
-- [ ] Delete `WeightedMetrics`, weighted file/folder fields, resolved weight-table fields, and weighted threshold fields from `docs/models/live-ipc.td`; regenerate every Rust and TypeScript model.
-- [ ] Delete `[metrics.bucket_weights]`, `[metrics.category_weights]`, validation, defaults, CLI overrides, environment plumbing, and serialization.
-- [ ] Delete `--fail-over-weighted`, `max_weighted_duplication_percent`, two-gate resolution, weighted verdicts, and weighted exit-code branches.
-- [ ] Delete weighted numerator calculation, per-line evidence lookup, bucket/category weight lookup, weighted folder rollup, and every helper used only by them.
-- [ ] Delete weighted text, HTML, JSON, LSP, MCP, VSIX, site, and documentation rendering. Do not leave hidden fields, empty placeholders, deprecated aliases, or no-op switches.
+- [x] Delete `WeightedMetrics`, weighted file/folder fields, resolved weight-table fields, and weighted threshold fields from `docs/models/live-ipc.td`; regenerate every Rust and TypeScript model.
+- [x] Delete `[metrics.bucket_weights]`, `[metrics.category_weights]`, validation, defaults, CLI overrides, environment plumbing, and serialization.
+- [x] Delete `--fail-over-weighted`, `max_weighted_duplication_percent`, two-gate resolution, weighted verdicts, and weighted exit-code branches.
+- [x] Delete weighted numerator calculation, per-line evidence lookup, bucket/category weight lookup, weighted folder rollup, and every helper used only by them.
+- [x] Delete weighted text, HTML, JSON, LSP, MCP, VSIX, site, and documentation rendering. Do not leave hidden fields, empty placeholders, deprecated aliases, or no-op switches.
 - [ ] Replace tests that assert weighted output with strict negative schema tests and positive mechanical-metric tests; never remove the underlying coverage assertions.
 
 ## Proof
 
 - [ ] Black-box CLI tests assert exact `analysed_loc`, `duplicated_loc`, `duplication_percent`, per-file values, folder values, threshold source, breach flag, exit code, and rendered text/HTML.
-- [ ] Configuration tests reject every retired weighted key and flag with a named invalid-configuration or invalid-argument error.
+- [x] Configuration tests reject every retired weighted key and flag with a named invalid-configuration or invalid-argument error (`metrics_weighted_wire_refusal`: four TOML forms and two CLI flags).
 - [ ] Generated-model tests prove no weighted field or table exists in Rust or TypeScript.
 - [ ] Tests prove changing pair evidence without changing clone eligibility or eligible occurrence coverage cannot change repository metrics; showing or hiding shape-only information and overriding its diagnostic severity also leave metrics unchanged.
 - [ ] CLI fixtures pin shape-only-only zero duplication and mixed-corpus true-clone coverage, including exact file/folder/diff percentages, clone counts, paths, ordering and threshold verdicts ([CLONE-KIND-TESTING](../specs/taxonomy.md#clone-kind-testing-required-examples-and-assertions), [METRICS-REPO](../specs/pipeline.md#metrics-repo-repo-wide-duplication-metrics)).
@@ -33,3 +33,7 @@
 ## Completion
 
 This plan is complete when the weighted design is absent from the wire, engine, configuration, CLI, renderers, clients, tests, and installed VSIX, and the one unweighted repository metric is identical on every surface.
+
+## Current verification
+
+The weighted types, calculations, flags and renderers have been removed. `make _ci-analyze` regenerated unchanged wire models at commit `9541eb6c`; the CLI refusal and rendered-surface tests ran in the passing workspace suite recorded in `reports/tests/rust-coverage-baseline.md`. A new black-box regression reproduced silent acceptance of retired TOML fields. Root and threshold tables now reject unknown fields; all three `metrics_weighted_wire_refusal` tests pass, including four retired TOML forms and two CLI flags. Installed VSIX verification and the remaining proof items are still required.

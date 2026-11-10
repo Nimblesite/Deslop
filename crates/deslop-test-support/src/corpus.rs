@@ -21,7 +21,10 @@ use std::{
 use anyhow::{anyhow, Context, Result};
 use serde_json::Value;
 
-use crate::corpus_measure::{measured_run, measurement, ProcessCost};
+use crate::{
+    corpus_measure::{measured_run, measurement, ProcessCost},
+    report_field::ReportField,
+};
 
 mod baseline;
 
@@ -70,15 +73,6 @@ pub fn describes_a_repository(path: &Path) -> Result<bool> {
         .is_some_and(|extension| extension == MANIFEST_EXTENSION)
         && !settings.iter().any(|listed| listed.as_str() == Some(name)))
 }
-
-/// The member-count field a rendered cluster actually carries.
-///
-/// Named once because reading a field the report does not emit is silent: the
-/// lookup returns zero and every breach is reported as an empty cluster. The
-/// wire model carries no `size` and no `category`; both were read anyway, in
-/// two separate checks, for as long as nothing asserted what they said
-/// (gh #540).
-pub const OCCURRENCE_COUNT: &str = "occurrence_count";
 
 /// [CORPUS-PIN] How much of a manifest's commit id names its clone directory.
 /// The pin itself is always the full object name; this is only how it reads on
@@ -316,26 +310,21 @@ impl std::error::Error for ScanCrashed {}
 /// Every occurrence path in the report's `clusters`, grouped per cluster.
 #[must_use]
 pub fn cluster_paths(report: &Value) -> Vec<Vec<String>> {
-    report
-        .get("clusters")
-        .and_then(Value::as_array)
-        .map(|clusters| clusters.iter().map(occurrence_paths).collect())
-        .unwrap_or_default()
+    ReportField::Clusters
+        .items(report)
+        .iter()
+        .map(occurrence_paths)
+        .collect()
 }
 
 /// The occurrence paths of a single cluster.
 fn occurrence_paths(cluster: &Value) -> Vec<String> {
-    cluster
-        .get("occurrences")
-        .and_then(Value::as_array)
-        .map(|occurrences| {
-            occurrences
-                .iter()
-                .filter_map(|occurrence| occurrence.get("path").and_then(Value::as_str))
-                .map(ToOwned::to_owned)
-                .collect()
-        })
-        .unwrap_or_default()
+    ReportField::Occurrences
+        .items(cluster)
+        .iter()
+        .filter_map(|occurrence| ReportField::Path.text(occurrence))
+        .map(ToOwned::to_owned)
+        .collect()
 }
 
 /// [CORPUS-RECALL] True when some reported cluster covers every path in
@@ -370,23 +359,19 @@ pub fn visible_clone_clusters(report: &Value) -> Vec<&Value> {
 /// nor breach precision.
 #[must_use]
 pub fn visible_clusters(report: &Value) -> Vec<&Value> {
-    match report.get("clusters").and_then(Value::as_array) {
-        None => Vec::new(),
-        Some(clusters) => clusters
-            .iter()
-            .filter(|cluster| !all_occurrences_hidden(cluster))
-            .collect(),
-    }
+    ReportField::Clusters
+        .items(report)
+        .iter()
+        .filter(|cluster| !all_occurrences_hidden(cluster))
+        .collect()
 }
 
 /// True when every occurrence of a cluster is hidden, so nothing is rendered.
 fn all_occurrences_hidden(cluster: &Value) -> bool {
-    match cluster.get("occurrences").and_then(Value::as_array) {
-        None => true,
-        Some(occurrences) => occurrences
-            .iter()
-            .all(|occurrence| occurrence.get("hidden").and_then(Value::as_bool) == Some(true)),
-    }
+    ReportField::Occurrences
+        .items(cluster)
+        .iter()
+        .all(|occurrence| ReportField::Hidden.is_set(occurrence))
 }
 
 /// True when every path in `files` appears among the cluster's **shown**
@@ -408,14 +393,11 @@ pub fn cluster_shows_span(cluster: &Value, files: &[String]) -> bool {
     if files.is_empty() {
         return false;
     }
-    let paths: Vec<&str> = cluster
-        .get("occurrences")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
+    let paths: Vec<&str> = ReportField::Occurrences
+        .items(cluster)
         .iter()
-        .filter(|occurrence| occurrence.get("hidden").and_then(Value::as_bool) != Some(true))
-        .filter_map(|occurrence| occurrence.get("path").and_then(Value::as_str))
+        .filter(|occurrence| !ReportField::Hidden.is_set(occurrence))
+        .filter_map(|occurrence| ReportField::Path.text(occurrence))
         .collect();
     files.iter().all(|file| paths.contains(&file.as_str()))
 }
@@ -426,18 +408,16 @@ pub fn cluster_shows_span(cluster: &Value, files: &[String]) -> bool {
 ///
 /// Returns an error when the occurrence is malformed or the file is unreadable.
 pub fn first_occurrence_text(scan_root: &Path, cluster: &Value) -> Result<String> {
-    let occurrence = cluster
-        .get("occurrences")
-        .and_then(Value::as_array)
-        .and_then(|occurrences| occurrences.first())
+    let occurrence = ReportField::Occurrences
+        .items(cluster)
+        .first()
         .ok_or_else(|| anyhow!("cluster has no occurrences"))?;
 
-    let path = occurrence
-        .get("path")
-        .and_then(Value::as_str)
+    let path = ReportField::Path
+        .text(occurrence)
         .ok_or_else(|| anyhow!("occurrence has no path"))?;
-    let start = byte_offset(occurrence, "start_byte")?;
-    let end = byte_offset(occurrence, "end_byte")?;
+    let start = byte_offset(occurrence, ReportField::StartByte)?;
+    let end = byte_offset(occurrence, ReportField::EndByte)?;
 
     let source = fs::read_to_string(scan_root.join(path))
         .with_context(|| format!("occurrence source unreadable: {path}"))?;
@@ -448,12 +428,11 @@ pub fn first_occurrence_text(scan_root: &Path, cluster: &Value) -> Result<String
 }
 
 /// Reads a byte-offset field off an occurrence.
-fn byte_offset(occurrence: &Value, name: &str) -> Result<usize> {
-    occurrence
-        .get(name)
-        .and_then(Value::as_u64)
+fn byte_offset(occurrence: &Value, field: ReportField) -> Result<usize> {
+    field
+        .count_of(occurrence)
         .and_then(|value| usize::try_from(value).ok())
-        .ok_or_else(|| anyhow!("occurrence is missing {name}"))
+        .ok_or_else(|| anyhow!("occurrence is missing {}", field.name()))
 }
 
 /// Array-valued field of `value`, or an empty slice when absent or not an
@@ -466,12 +445,6 @@ pub fn array<'a>(value: &'a Value, name: &str) -> &'a [Value] {
         .and_then(Value::as_array)
         .map(Vec::as_slice)
         .unwrap_or_default()
-}
-
-/// Unsigned scalar field of `value`, or `0` when absent.
-#[must_use]
-pub fn field_u64(value: &Value, name: &str) -> u64 {
-    value.get(name).and_then(Value::as_u64).unwrap_or_default()
 }
 
 #[cfg(test)]

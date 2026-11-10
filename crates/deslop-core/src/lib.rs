@@ -34,6 +34,7 @@ pub mod fpcache;
 pub mod lang;
 #[cfg(feature = "live")]
 pub mod live;
+pub mod logging_colour;
 pub mod lsh;
 pub mod observe;
 pub mod overlap;

@@ -8,6 +8,7 @@ const LOG_TO_CONSOLE_FLAG: &str = "--log-to-console";
 const LOG_LEVEL_FLAG: &str = "--log-level";
 const TECHNICAL_FLAG: &str = "--technical";
 const DESLOP_INVOKED_MESSAGE: &str = "deslop invoked";
+const CSHARP_SMALL_CLUSTER_SLUG: &str = "54a6b24";
 
 /// Builds a `deslop` command against the `csharp-small` fixture writing
 /// its report under `<tmp>/report`. Every logging test shares this scan
@@ -99,6 +100,49 @@ fn log_to_console_flag_routes_events_to_stderr() -> Result<()> {
         log_files.is_empty(),
         "--log-to-console must not create a log file: {log_files:?}",
     );
+    Ok(())
+}
+
+/// The escape byte every ANSI colour sequence starts with.
+const ESCAPE: char = '\u{1b}';
+/// The environment variable that turns colour off ([UX-COLOR-NO-COLOR-ENV]).
+const NO_COLOR_ENV: &str = "NO_COLOR";
+/// The override that forces colour on ([UX-COLOR-FORCE]), cleared so the probe is honest.
+const FORCE_COLOR_ENV: &str = "DESLOP_FORCE_COLOR";
+
+// [UX-NO-COLOR] [UX-LOG-CONSOLE] Console log lines follow the run's colour
+// policy. Written into a pipe or with colour switched off, they carry no
+// ANSI escapes, so a reader of `key=value` fields sees them whole.
+#[test]
+fn console_log_lines_carry_no_colour_when_colour_is_off() -> Result<()> {
+    for (how, flag, no_color_env) in [
+        ("--no-color", Some(NO_COLOR_FLAG), false),
+        ("NO_COLOR set", None, true),
+        ("stderr is a pipe", None, false),
+    ] {
+        let tmp = tempfile::tempdir()?;
+        let mut cmd = csharp_small_command(&tmp)?;
+        let _env = cmd.env_remove(RUST_LOG_ENV).env_remove(FORCE_COLOR_ENV);
+        let _no_color = if no_color_env {
+            cmd.env(NO_COLOR_ENV, "1")
+        } else {
+            cmd.env_remove(NO_COLOR_ENV)
+        };
+        let _args = cmd
+            .args([MIN_NODES_FLAG, MIN_NODES_VALUE, LOG_TO_CONSOLE_FLAG])
+            .args(flag);
+        let stderr = stderr_text(&cmd.assert().success())?;
+        assert_contains(
+            &stderr,
+            DESLOP_INVOKED_MESSAGE,
+            "the console sink is in use",
+        );
+        assert!(
+            !stderr.contains(ESCAPE),
+            "{how}: console log lines must carry no ANSI escapes: {:?}",
+            stderr.lines().find(|line| line.contains(ESCAPE))
+        );
+    }
     Ok(())
 }
 
@@ -355,12 +399,13 @@ fn technical_mode_names_the_clone_kind_in_the_breakdown_row() -> Result<()> {
     let stderr = stderr_text(&assertion)?;
     assert_contains(
         &stderr,
-        "columns: rank, kind, id, mass, occurrences, canonical AST nodes, files",
+        "columns: id, kind, rank, mass, occurrences, canonical AST nodes, files",
         "--technical must print the column legend naming the kind column",
     );
     assert!(
-        stderr.contains(&format!("#1  {NEARLY_IDENTICAL_TITLE} ["))
-            && stderr.contains("· mass 58 · 2 occurrences · 58 AST nodes"),
+        stderr.contains(&format!(
+            "{CSHARP_SMALL_CLUSTER_SLUG} {NEARLY_IDENTICAL_TITLE} — rank #1, mass 58, 2 occurrences, 58 AST nodes in Alpha.cs, Beta.cs"
+        )),
         "--technical must print the mass-ranked cluster row with kind, id, mass, \
          occurrences, nodes and files: {stderr}"
     );

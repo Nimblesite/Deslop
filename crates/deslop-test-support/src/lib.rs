@@ -26,6 +26,7 @@ pub mod enclosure;
 #[path = "protocol/tests.rs"]
 mod protocol_tests;
 pub mod reap;
+pub mod report_field;
 pub mod skip_contract;
 pub mod skip_policy;
 mod syntax;

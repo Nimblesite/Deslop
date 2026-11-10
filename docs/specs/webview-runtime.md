@@ -113,3 +113,5 @@ This gate closes the blind spot by exercising the real bundle in a real browser 
 - **Wiring.** `make ci` runs the gate via the `_vsix-webview-coverage` target (after `_vsix-coverage`); `npm run coverage:webview` runs it locally. After measuring, the run rebuilds the **production (minified, external-sourcemap)** bundle so a coverage run never leaves the unminified inline-sourcemap output staged for packaging.
 
 Acceptance is the gate itself: a webview-only regression like #254 lands a coverage drop (or a smoke-suite failure) instead of shipping silently.
+
+Production restoration follows [VSIX-TESTING-COVERAGE-RESTORE]: build, browser and mapping failures must all reach cleanup before the process exits. A failed restoration also fails the command and names `media/webview` as still instrumented, retaining any collection failure alongside it. `clients/vscode/scripts/webview-coverage.test.mjs` drives the real runner through these failure paths; the shared `coverageRunExit` decision also governs extension-host restoration.

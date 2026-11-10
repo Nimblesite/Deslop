@@ -21,6 +21,8 @@ use anyhow::{Context, Result};
 use tracing::Level;
 use tracing_subscriber::{fmt, EnvFilter};
 
+use crate::summary::ColorChoice;
+
 /// Where tracing writes its output for the current run.
 #[derive(Debug)]
 pub enum LogSink {
@@ -34,19 +36,27 @@ pub enum LogSink {
 ///
 /// When `log_to_console` is false (the default), creates a
 /// timestamped `deslop-<ts>.log` file under `log_dir` and writes
-/// all log events there. When true, writes to stderr. `level` is the
-/// minimum severity emitted; `RUST_LOG` overrides it when set.
+/// all log events there. When true, writes to stderr, coloured only when
+/// `color` says the run is coloured ([UX-NO-COLOR]): a pipe or `--no-color`
+/// gets plain `key=value` fields. `level` is the minimum severity emitted;
+/// `RUST_LOG` overrides it when set.
 ///
 /// # Errors
 ///
 /// Returns an error if the log file cannot be created, the filter
 /// cannot be parsed, or `tracing` has already been initialised.
-pub fn init(log_dir: &Path, log_to_console: bool, level: Level) -> Result<LogSink> {
+pub fn init(
+    log_dir: &Path,
+    log_to_console: bool,
+    level: Level,
+    color: ColorChoice,
+) -> Result<LogSink> {
     let filter = build_filter(level)?;
     if log_to_console {
         fmt()
             .with_env_filter(filter)
             .with_target(false)
+            .with_ansi(color == ColorChoice::Always)
             .with_writer(std::io::stderr)
             .try_init()
             .map_err(|err| anyhow::anyhow!("failed to initialise tracing: {err}"))?;

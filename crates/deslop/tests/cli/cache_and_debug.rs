@@ -1,6 +1,6 @@
 use std::fmt::Write as _;
 
-use deslop_core::lang::shared::OPERATOR_KIND_PREFIX;
+use deslop_core::lang::operators::OPERATOR_KIND_PREFIX;
 
 use super::support::*;
 use crate::common::{

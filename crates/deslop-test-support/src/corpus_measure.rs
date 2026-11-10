@@ -17,6 +17,7 @@
 //! window it is sampled over is part of its definition.
 
 mod cpu;
+mod host;
 
 use std::{
     ffi::OsString,
@@ -31,6 +32,8 @@ use anyhow::{anyhow, Context, Result};
 use sha2::{Digest, Sha256};
 
 pub use cpu::{peak_cpu_percent, CpuSample, CPU_SAMPLE_WINDOW};
+use host::{Deadline, NICE_PROGRAM, SCAN_NICENESS};
+pub use host::{HostLoad, MeasureLock, SCAN_DEADLINE};
 
 use crate::corpus::repo_root;
 
@@ -108,6 +111,9 @@ pub struct ProcessCost {
     /// one core. Absent when the process ended inside its first window, which
     /// leaves no interval to measure a rate over.
     pub peak_cpu_percent: Option<f64>,
+    /// [CORPUS-MEASURE-HOST] The machine's load when the scan started, so a
+    /// timing taken on a contended host reads as one.
+    pub load_at_start: HostLoad,
 }
 
 /// One command run under this platform's measurement.
@@ -126,6 +132,8 @@ pub struct MeasuredRun {
 /// Returns an error when the process cannot be spawned, or when the
 /// measurement reported no peak resident set size or no CPU time.
 pub fn measured_run(program: &Path, args: &[OsString]) -> Result<MeasuredRun> {
+    let _one_at_a_time = MeasureLock::acquire()?;
+    let load_at_start = HostLoad::now();
     let started = Instant::now();
     let (output, reading, samples) = match measurement() {
         Measurement::PosixTime { flag } => posix_run(flag, program, args)?,
@@ -139,6 +147,7 @@ pub fn measured_run(program: &Path, args: &[OsString]) -> Result<MeasuredRun> {
             peak_rss_mb: peak_rss_mb(&measured)?,
             cpu_seconds: cpu_seconds(&measured)?,
             peak_cpu_percent: peak_cpu_percent(&samples),
+            load_at_start,
         },
         output,
     })
@@ -150,9 +159,12 @@ type RunOutcome = (Output, String, Vec<CpuSample>);
 
 /// Runs the scan under `/usr/bin/time`, which reports the peak and the CPU
 /// time itself on the scan's own stderr, while the sampler watches the
-/// process tree it heads.
+/// process tree it heads. `nice` execs `time` in its own place, so the tree
+/// the sampler and the deadline watch is the same one, at the lowest
+/// priority ([CORPUS-MEASURE-HOST]).
 fn posix_run(flag: &str, program: &Path, args: &[OsString]) -> Result<RunOutcome> {
-    let child = Command::new("/usr/bin/time")
+    let child = Command::new(NICE_PROGRAM)
+        .args(["-n", SCAN_NICENESS, "/usr/bin/time"])
         .arg(flag)
         .arg(program)
         .args(args)
@@ -161,7 +173,9 @@ fn posix_run(flag: &str, program: &Path, args: &[OsString]) -> Result<RunOutcome
         .spawn()
         .context("failed to spawn /usr/bin/time")?;
     let cpu_sampler = cpu::Sampler::start(child.id());
+    let deadline = Deadline::arm(child.id(), SCAN_DEADLINE);
     let output = child.wait_with_output().context("scan did not complete")?;
+    deadline.disarm(SCAN_DEADLINE)?;
     Ok((output, String::new(), cpu_sampler.finish()?))
 }
 
@@ -171,15 +185,24 @@ fn posix_run(flag: &str, program: &Path, args: &[OsString]) -> Result<RunOutcome
 /// round-trip. Its reading is kept apart from the scan's own stderr, so a
 /// crashed scan's message is the scan's alone.
 fn windows_run(script: &Path, program: &Path, args: &[OsString]) -> Result<RunOutcome> {
-    let child = Command::new(program)
+    let mut command = Command::new(program);
+    let _piped = command
         .args(args)
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::piped());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt as _;
+        let _flagged = command.creation_flags(host::BELOW_NORMAL_PRIORITY_CLASS);
+    }
+    let child = command
         .spawn()
         .with_context(|| format!("failed to spawn {}", program.display()))?;
     let cpu_sampler = cpu::Sampler::start(child.id());
+    let deadline = Deadline::arm(child.id(), SCAN_DEADLINE);
     let monitor = spawn_process_monitor(script, child.id())?;
     let output = child.wait_with_output().context("scan did not complete")?;
+    deadline.disarm(SCAN_DEADLINE)?;
     let rate_readings = cpu_sampler.finish()?;
     Ok((output, monitor_reading(monitor)?, rate_readings))
 }

@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::{
-    clone_type::CloneType, clusters, has_distinct_matches, occurrence_key, overlaps, percent,
-    visible, Range,
+    clone_type::CloneType, has_distinct_matches, occurrence_key, overlaps, percent, visible, Range,
+    ReportField,
 };
 
 /// How much of a judged pair's source the matching cluster actually shows.
@@ -34,8 +34,12 @@ impl RangeCoverage {
     }
 }
 
+/// An older engine's spelling of the cluster classification. Current reports
+/// never emit it, so it sits outside [`ReportField`]: it is read only when a
+/// version comparison scores that older engine's report.
+const LEGACY_TAXONOMY_FIELD: &str = "bucket";
 /// Both serialized report spellings of the cluster classification.
-const TAXONOMY_FIELDS: &[&str] = &["kind", "bucket"];
+const TAXONOMY_FIELDS: &[&str] = &[ReportField::Kind.name(), LEGACY_TAXONOMY_FIELD];
 
 /// Old reports call the cluster taxonomy `bucket`; current ones call it `kind`.
 /// Either field can disprove a clone, and an absent or unknown taxonomy cannot
@@ -102,11 +106,12 @@ fn matching_cluster<'a>(
     ranges: &[Range],
     pinned: Option<CloneType>,
 ) -> Option<(&'a Value, RangeCoverage)> {
-    clusters(report)
+    ReportField::Clusters
+        .items(report)
         .iter()
         .filter(|cluster| {
             is_clone_finding(cluster, pinned)
-                && cluster.get("id").and_then(Value::as_str).is_some()
+                && ReportField::Id.text(cluster).is_some()
                 && has_distinct_matches(&visible(cluster), ranges)
         })
         .map(|cluster| (cluster, range_coverage(cluster, ranges)))

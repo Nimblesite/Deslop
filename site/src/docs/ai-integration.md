@@ -106,7 +106,7 @@ The same `"command": "deslop-mcp"` form works in Codex (`~/.codex/config.toml`),
 Two things to know:
 
 - **There is no `deslop mcp` subcommand.** The `deslop` CLI runs one-shot and CI audits only; MCP is served by the **separate `deslop-mcp` binary**.
-- **Building from source does not put anything on `$PATH`.** Only `brew` / `scoop` do. Those package managers version the binary lock-step with the release; a `cargo build` does not.
+- **Building from source does not put anything on `$PATH`.** Only the release-locked installers do: `brew`, `scoop`, and the published curl installer, which pins a release and verifies its checksum. A `cargo build` is pinned to nothing.
 
 ## The agent loop
 

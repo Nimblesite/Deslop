@@ -1,5 +1,6 @@
 //! `cluster-by-id` deep-dive tests: the round-trip from a page row to
-//! the full cluster, and its argument validation.
+//! the full cluster, and its argument validation ([MCP-TOOLS],
+//! [MCP-PAGE-CONTINUATION]).
 
 use anyhow::{anyhow, Result};
 use common::{

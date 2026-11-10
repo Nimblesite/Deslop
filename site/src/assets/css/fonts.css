@@ -1,13 +1,36 @@
-/*
- * Web-font @import for the live site only.
- *
- * Kept out of base.css so the design-system token/layer files
- * (base/home/prose/syntax) carry zero @import. The standalone HTML
- * report inlines those four files into a single <style> block, where a
- * relative or network @import cannot reliably resolve and would break
- * "opens offline, no external assets". The report falls back to the
- * system-font stacks declared in base.css's --font-* tokens; the site
- * imports this file via styles.css to load the branded webfonts.
- */
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap");
+/* Website fonts are local. Standalone reports retain their system-font fallback. */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/assets/fonts/inter-variable.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('/assets/fonts/jetbrains-mono-variable.woff2') format('woff2');
+}
+/* [SITE-NAV-FONTS] Navigation must not wait on a third-party icon font. */
+@font-face {
+  font-family: 'Material Symbols Outlined';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('/assets/fonts/material-symbols-outlined.woff2') format('woff2');
+}
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+}

@@ -18,7 +18,7 @@ use std::{
 use crate::{
     ast::{ByteRange, NormalizedNode},
     fingerprint::Fingerprint,
-    lang::shared::{is_operator_kind, LITERAL_KIND},
+    lang::{operators::is_operator_kind, shared::LITERAL_KIND},
     state::FileId,
     tokens::{collapsed_leaves, CollapsedLeaf},
 };

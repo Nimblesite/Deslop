@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 use super::{check_outcome, run_manifest, Record, CHECKS_FILE, REPORT_FILE, TIMING_FILE};
 use crate::{
     corpus::{Baseline, Failure},
-    corpus_measure::ProcessCost,
+    corpus_measure::{HostLoad, ProcessCost},
     corpus_score::checks::CheckOutcome,
 };
 
@@ -69,6 +69,10 @@ fn manifest_for(report_path: Option<&Path>, scored: bool) -> Result<Value> {
         peak_rss_mb: 1,
         cpu_seconds: 1.0,
         peak_cpu_percent: None,
+        load_at_start: HostLoad {
+            one_minute: 0.0,
+            logical_cores: 1,
+        },
     };
     let record = Record {
         run_name: RUN_NAME,
