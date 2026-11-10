@@ -1,5 +1,6 @@
 ---
 layout: layouts/blog.njk
+docFilm: osprey
 title: "Deslop 中的 Osprey：效应、处理器与更少的副本"
 date: 2026-10-25
 author: Christian Findlay
@@ -24,6 +25,8 @@ lang: zh
 一门围绕代数效应、类型推断和原生编译构建的函数式语言，值得拥有理解其代码的工具。Deslop 现在能读取全部三种 Osprey 风格：默认的 `.osp`、原生 ML 的 `.ospml`，以及显式选择的 Python 语法。它会发现被复制的结构，并把发现结果带进编辑器和智能体工作流。
 
 语言分组和报告视图使用 Osprey 官方的青色小鸟。
+
+{% include "partials/doc-film.njk" %}
 
 ## 值得大书特书的这门语言
 
@@ -88,7 +91,25 @@ Osprey 有默认的花括号语法、ML 缩进语法和一个看起来像 Python
 
 原生 ML 的 `.ospml` 所使用的语法，经过 Osprey 真实源码语料和独立结构检查的验证。缩进布局、插值表达式以及扁平调用与柯里化调用的差异都保持为可见语法。三种解析器身份在缓存和报告中保持独立，即便界面为它们呈现同一个官方 Osprey 图标。我们并不声称跨风格的克隆等价性。
 
-[Osprey 支持指南](/zh/docs/osprey/)包含配置细节和当前集成状态。这些变更描述的是开发树；在期待它们出现在旧版 VSIX 中之前，请先检查你安装的 Deslop 版本。
+## 配置 Python 风格
+
+普通 `.py` 文件保持 Python 身份。开发版集成只在源码开头的注释中识别 Osprey 风格标记：
+
+```python
+# osprey: flavor=python
+```
+
+包含该文本的字符串，或位于代码之后的注释，都无法选择风格。也可以在现有的 `osprey.toml` 中逐个列出源文件：
+
+```toml
+[project]
+entry = "src/main.py"
+python_sources = ["src/domain.py", "src/storage.py"]
+```
+
+Python 入口文件和列出的文件会加入 Osprey。路径是相对于清单文件的具体文件，不支持整个目录或通配符选择。其他 `.py` 文件保持普通 Python 身份。
+
+项目的 `flavor` 设置接受 `default`、`ml` 或 `python`，并覆盖该项目所包含源码的语法。若没有覆盖设置，与扩展名矛盾的标记会产生错误。格式错误的清单和未知的风格值同样会产生错误。源码根目录在存在 `src` 时默认为 `src`，否则为项目目录；`source_roots` 可覆盖此默认值。嵌套项目优先。
 
 ## 小鸟万岁
 

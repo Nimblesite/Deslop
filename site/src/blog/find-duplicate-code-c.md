@@ -25,7 +25,7 @@ C support runs through the same structural pipeline as every other Deslop langua
 
 ## Why C, and why now
 
-The [Osprey](/docs/osprey/) compiler ships a hand-written C runtime: around 190 files and 46,000 lines, compiled with warnings as errors. Its maintainers wanted the same duplication gate over that runtime that they already had over the Osprey and Python sources, and they named the shape they cared about most: copied error-path and cleanup blocks. A loader opens a file, allocates a buffer, reads it, and at each step has an `if (x == NULL) { fprintf(...); free(...); return NULL; }` rung. The next loader is written by copying the first. One of them later gets the fix.
+The [Osprey](/blog/osprey-first-class/) compiler ships a hand-written C runtime: around 190 files and 46,000 lines, compiled with warnings as errors. Its maintainers wanted the same duplication gate over that runtime that they already had over the Osprey and Python sources, and they named the shape they cared about most: copied error-path and cleanup blocks. A loader opens a file, allocates a buffer, reads it, and at each step has an `if (x == NULL) { fprintf(...); free(...); return NULL; }` rung. The next loader is written by copying the first. One of them later gets the fix.
 
 The first scan of that runtime measured 7.5% duplication, mostly repeated test set-up, and it also measured two false positives that are now pinned by fixtures. Both are described below, because what a detector refuses to report matters as much as what it finds.
 

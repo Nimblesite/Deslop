@@ -60,9 +60,29 @@ async function assertDownloadLink(video,slug) {
   await expect(video.locator('a')).toHaveAttribute('href',`/assets/video/docs/deslop-docs-${slug}.mp4`);
 }
 
+test('getting started fits the reading column without prose CSS', async ({page}) => {
+  await page.route('**/assets/css/prose.css', route => route.abort());
+  await page.goto('/docs/');
+  const video = page.locator('.doc-film video');
+  const column = page.locator('.prose--docs');
+  for (const width of WIDTHS) {
+    await page.setViewportSize({width, height: HEIGHT});
+    const columnBox = await column.boundingBox();
+    const playerBox = await video.boundingBox();
+    expect(playerBox.width).toBeCloseTo(columnBox.width, 0);
+    expect(playerBox.x + playerBox.width).toBeLessThanOrEqual(width);
+  }
+});
+
+function filmRoute(slug) {
+  if (slug === 'osprey') return '/blog/osprey-first-class/';
+  if (slug === 'getting-started') return '/docs/';
+  return `/docs/${slug}/`;
+}
+
 for(const [slug,film] of Object.entries(FILMS)) for(const locale of ['', '/zh']) {
   test(`${locale || "en"} ${slug}: responsive player and playable delivery`,async({page},testInfo)=>{
-    await page.goto(locale+(slug==='getting-started'?'/docs/':`/docs/${slug}/`));
+    await page.goto(locale+filmRoute(slug));
     const video=await assertPlayerAttributes(page,film);
     for(const width of WIDTHS) {
       await assertGeometry(page,video,width);
@@ -76,3 +96,16 @@ for(const [slug,film] of Object.entries(FILMS)) for(const locale of ['', '/zh'])
     await assertDownloadLink(video,slug);
   });
 }
+
+// [DOC-FILMS-DELIVERY] Language launch coverage belongs in the blog.
+test('retired Osprey docs open the localized launch film', async ({page}) => {
+  for (const locale of ['', '/zh']) {
+    await page.goto(`${locale}/docs/osprey/`);
+    await expect(page).toHaveURL(`${locale}/blog/osprey-first-class/`);
+    await expect(page.locator('.doc-film video')).toHaveCount(1);
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href',
+      `https://deslop.live${locale}/blog/osprey-first-class/`);
+    await page.goto(`${locale}/docs/`);
+    await expect(page.locator('.docs-sidebar a[href$="/docs/osprey/"]')).toHaveCount(0);
+  }
+});

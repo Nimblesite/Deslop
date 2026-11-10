@@ -1,5 +1,5 @@
 {% macro player(video) -%}
-<video controls playsinline preload="none" poster="{{ video.poster }}"
+<video style="display: block; width: 100%; max-width: 100%; height: auto;" controls playsinline preload="none" poster="{{ video.poster }}"
        width="{{ video.width }}" height="{{ video.height }}" aria-label="{{ video.label }}">
   <source src="{{ video.src }}" type="video/mp4">
   <track kind="captions" src="{{ video.captions }}" srclang="en" label="{{ video.captionLabel }}">

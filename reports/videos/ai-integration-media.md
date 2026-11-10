@@ -1,12 +1,8 @@
-# Ask before writing media verification
+# ai-integration media verification
 
 - Duration: 81.208 seconds
-- Video: h264, 1920 x 1080
-- Audio: aac
-- Narration: 4 lines match the current film script
-- Delivery: MP4, poster, English captions and chapters present
-- Scene coverage: 4 of 4 rendered chapter titles verified
-- OCR at 45s: find-similar, compare-pair
-- SHA-256: 609514eb78198b8cb96968bc96c7d18fac841f1db30b5b84ea1b411999e96bb2
-
-Browser playback and visual review are separate checks.
+- Live VS Code footage: 37.8 seconds
+- Video: H.264, 1920 × 1080
+- Audio: original AAC stream, verified by stream hash
+- English captions and chapters: original timestamps preserved
+- SHA-256: 83fcac82d672ea92d55b18ad0ab52f0e4f156a8b5d3710f98addbdd173cb83cc

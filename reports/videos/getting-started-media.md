@@ -1,12 +1,8 @@
-# Your first duplicate-code review media verification
+# getting-started media verification
 
 - Duration: 82.894 seconds
-- Video: h264, 1920 x 1080
-- Audio: aac
-- Narration: 4 lines match the current film script
-- Delivery: MP4, poster, English captions and chapters present
-- Scene coverage: 4 of 4 rendered chapter titles verified
-- OCR at 40s: Nearly identical code, Canonical
-- SHA-256: a0afaaad06fafe7d014cacb4171bead2b2a86fbd429a74679a5ae7778f14dc62
-
-Browser playback and visual review are separate checks.
+- Live VS Code footage: 36.0 seconds
+- Video: H.264, 1920 × 1080
+- Audio: original AAC stream, verified by stream hash
+- English captions and chapters: original timestamps preserved
+- SHA-256: 9a5b7806105b718b83d1b5b61f2beaa50c3a89e3ec5668f8c267488c0ccb6002

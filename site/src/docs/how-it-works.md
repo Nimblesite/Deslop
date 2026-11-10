@@ -22,7 +22,7 @@ This guide covers [0.35.0](/releases/).
 
 Deslop supports C, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, Go and Osprey. It respects `.gitignore` and excludes dependency trees and build artifacts by default. See [Configuration](/docs/configuration/#built-in-rules-always-on) for exclusions.
 
-For Osprey's `.osp` syntax, Python-flavor opt-in and the native ML integration status, see [Osprey support](/docs/osprey/).
+For Osprey's `.osp` syntax, Python-flavor opt-in and the native ML integration status, see [Osprey support](/blog/osprey-first-class/).
 
 The engine normalizes syntax trees so changes to names, literals and formatting do not hide candidates. It fingerprints both subtrees and consecutive statement runs, including copies inside a single file. Structural overlap and MinHash similarity help recover edited copies whose enclosing methods differ.
 
