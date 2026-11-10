@@ -4,7 +4,7 @@
 // file mode per [VSIX-TOP-OFFENDERS-GROUPING].
 
 import * as vscode from "vscode";
-import { effect } from "@preact/signals-core";
+import { computed, effect, ReadonlySignal } from "@preact/signals-core";
 import type { LanguageClient } from "vscode-languageclient/node";
 
 import { ReportStore, LifecyclePhase } from "../reportStore";
@@ -146,9 +146,17 @@ abstract class LifecycleAwareProvider implements vscode.TreeDataProvider<Node>, 
     protected readonly store: ReportStore,
     protected readonly ticker: StatusTicker,
   ) {
-    // effect() tracks store.lifecycle (read inside onLifecycleMaybeChanged).
-    // Runs immediately for the initial state, then on every lifecycle change.
-    this.disposables.push({ dispose: effect(() => this.onLifecycleMaybeChanged()) });
+    // [VSIX-REACTIVITY-INVARIANT] Reading `store.current` subscribes this
+    // effect to every store signal — the visible report, lifecycle, facet
+    // filter and the rest — so any change the panels render re-renders
+    // them. Narrowing the read to the lifecycle alone would freeze every
+    // figure on screen at the first report.
+    this.disposables.push({
+      dispose: effect(() => {
+        void this.store.current;
+        this.onLifecycleMaybeChanged();
+      }),
+    });
     this.disposables.push(ticker.onTick(() => {
       if (this.needsAnimation()) this.emitter.fire();
     }));
@@ -315,13 +323,22 @@ function filterStatusRow(filter: FacetFilter): Node[] {
 // projection's repo metrics ([METRICS-REPO]); refreshes on every report
 // change. Folder rows expand to their dup-bearing files.
 export class MetricsProvider extends LifecycleAwareProvider {
+  /** The headline row as a signal derived from the visible report: the
+   * repo-wide percentage on screen is this value, recomputed the moment
+   * the engine publishes new metrics ([VSIX-METRICS-PANEL]). */
+  readonly headline: ReadonlySignal<MetricsHeadlineNode | undefined> = computed(() => {
+    const report = this.store.visibleReport.value;
+    return report ? metricsHeadline(report.metrics) : undefined;
+  });
+
   getChildren(node?: Node): Node[] {
     if (node instanceof FolderMetricNode) return node.children;
     if (node) return [];
     const { visibleReport, report, lifecycle } = this.store.current;
     const indicator = scanStatus(lifecycle, !!report, this.ticker.currentFrame);
     if (lifecycle.kind === FAILED_LIFECYCLE_KIND) return indicator ? [indicator] : [];
-    if (!visibleReport) {
+    const headline = this.headline.value;
+    if (!visibleReport || !headline) {
       return indicator ? [indicator] : [new StatusNode("No session yet", INFORMATION_STATUS_KIND)];
     }
     const metrics = visibleReport.metrics;
@@ -331,7 +348,7 @@ export class MetricsProvider extends LifecycleAwareProvider {
       if (indicator) return [indicator];
       return [new StatusNode("No duplication detected", INFORMATION_STATUS_KIND)];
     }
-    return [metricsHeadline(metrics), ...buildMetricRows(metrics)];
+    return [headline, ...buildMetricRows(metrics)];
   }
 }
 
