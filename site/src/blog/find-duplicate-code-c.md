@@ -1,6 +1,6 @@
 ---
 layout: layouts/blog.njk
-title: "How to Find Duplicate Code in C"
+title: "How to Find Duplicate Code in C: Functions and Headers"
 date: 2026-11-08
 author: Christian Findlay
 tags:
@@ -9,7 +9,7 @@ tags:
   - duplicate-code
   - ai-generated-code
 category: engineering
-description: "Find duplicate C functions and copied cleanup code across .c and .h files. Review the matches in VS Code or from the command line."
+description: "Find duplicate C functions and copied cleanup code across .c and .h files with tree-sitter analysis. Review matches in VS Code or from the command line."
 excerpt: "When two C functions share a copied error path, a fix in one can leave the other leaking a file handle. Deslop now helps you find both copies."
 heroImage: "/assets/img/blog/c-structural-dedup.webp"
 heroImageWidth: "1600"

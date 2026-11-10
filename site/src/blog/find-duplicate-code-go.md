@@ -10,7 +10,7 @@ tags:
   - ai-generated-code
   - duplicate-code
 category: engineering
-description: "Find duplicate code in Go and Golang repositories with tree-sitter structural analysis, live LSP feedback, and MCP checks for coding agents."
+description: "Find duplicate code in Go and Golang repositories with tree-sitter structural analysis, live LSP feedback in VS Code, and MCP checks for coding agents."
 excerpt: "Deslop now understands Go. It parses .go syntax trees, catches renamed clone shapes, ranks the worst duplication first, and lets coding agents search before they write another copy."
 heroImage: "/assets/img/blog/find-duplicate-code-go-header.webp"
 heroImageWidth: "1600"

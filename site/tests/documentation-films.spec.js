@@ -1,6 +1,5 @@
 import {expect,test} from '@playwright/test';
-import fs from 'node:fs';
-const FILMS=JSON.parse(fs.readFileSync(new URL('../src/_data/docFilms.json',import.meta.url),'utf8'));
+import {FILMS,filmRoute} from './helpers/doc-films.js';
 const WIDTHS=[320,390,768,1440];
 const HEIGHT=900;
 const SEEK_SECONDS=20;
@@ -91,12 +90,6 @@ async function assertVideoMetadata(page, video, film, locale) {
     uploadDate: '2026-11-10',
     inLanguage: 'en',
   });
-}
-
-function filmRoute(slug) {
-  if (slug === 'osprey') return '/blog/osprey-first-class/';
-  if (slug === 'getting-started') return '/docs/';
-  return `/docs/${slug}/`;
 }
 
 for(const [slug,film] of Object.entries(FILMS)) for(const locale of ['', '/zh']) {

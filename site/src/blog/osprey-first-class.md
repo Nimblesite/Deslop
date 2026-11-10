@@ -10,7 +10,7 @@ tags:
   - algebraic-effects
   - duplicate-code
 category: engineering
-description: "Osprey gets native tree-sitter analysis in Deslop, live duplicate findings, agent checks, and the official cyan Osprey icon in the UI."
+description: "Osprey gets native tree-sitter analysis in Deslop: live duplicate code findings in VS Code, MCP checks for coding agents, and the official Osprey icon."
 excerpt: "Effects. Reusable handlers. Inferred types. Native compilation. Osprey has our attention—and now it has native duplicate detection with its official visual identity."
 heroImage: "/assets/img/blog/osprey-first-class.webp"
 heroImageWidth: "1600"
