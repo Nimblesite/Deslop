@@ -39,7 +39,8 @@ function camera(scene, directory, index) {
   const tighten = CAMERA.tighten;
   CAMERA.tighten = 1.05;
   const comparison = ['review-compare', 'review-pair', 'review-edited-compare', 'osprey-compare'].includes(scene.shot);
-  CAMERA.deepest = comparison ? 1.12 : 1.3;
+  const terminal = scene.shot.startsWith('agent-') || ['action-limit', 'action-changes', 'config-override', 'config-limit', 'osprey-config'].includes(scene.shot);
+  CAMERA.deepest = comparison ? 1.12 : terminal ? 1.15 : 1.3;
   const commands = path.join(directory, `${index}.cmd`);
   const moves = writeCamera(track, { file: commands, name: 'view', fps, frames: Math.ceil(sourceSeconds * fps), scale: video.width / track.size[0], speed });
   CAMERA.deepest = deepest;
@@ -104,7 +105,7 @@ async function produce(slug) {
     ffmpeg(['-f', 'concat', '-safe', '0', '-i', list, '-i', overlay, '-i', data.soundtrack,
       '-filter_complex_threads', '2', '-filter_complex', '[0:v][1:v]overlay=0:0:format=auto[v]', '-map', '[v]', '-map', '2:a:0',
       ...encode, '-c:a', 'aac', '-b:a', '160k', '-t', String(data.duration), '-movflags', '+faststart', media]);
-    ffmpeg(['-ss', '4', '-i', media, '-frames:v', '1', '-q:v', '3', path.join(dist, base + '-poster.jpg')]);
+    ffmpeg(['-ss', String(Math.max(0, data.scenes[0].end - 1)), '-i', media, '-frames:v', '1', '-q:v', '3', path.join(dist, base + '-poster.jpg')]);
     tracks(data, cues, dist, base);
     fs.writeFileSync(path.join(dist, base + '.timeline.json'), JSON.stringify(data, null, 2) + '\n');
     if (process.argv.includes('--install')) install(data, dist, base, sources, cues);

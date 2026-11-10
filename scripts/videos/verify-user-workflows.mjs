@@ -28,6 +28,17 @@ function inspect(media,scene) {
   for(const word of expected[scene.shot]) assert.ok(normalize(text).includes(normalize(word)),`${scene.shot}: delivered app frames did not show ${word}`);
   return expected[scene.shot].join(', ');
 }
+const events=fs.readFileSync(path.resolve(videos,'../captures/docs-tutorial/pi-session.jsonl'),'utf8').trim().split('\n').map(line=>JSON.parse(line));
+const calls=events.filter(row=>row.message?.role==='toolResult' && row.message.toolName.startsWith('mcp__deslop__'));
+assert.equal(calls.length,4);
+for(const call of calls) {
+  assert.ok(!call.message.isError);
+  const result=JSON.parse(call.message.content[0].text);
+  const finding=result.clusters?.[0] ?? result;
+  assert.equal(finding.occurrence_count,2);
+  assert.deepEqual(finding.occurrences.map(item=>item.path).sort(),['Eta.cs','Zeta.cs']);
+  assert.ok(finding.occurrences.every(item=>item.start_line===1 && item.end_line===19));
+}
 const rows=[];
 for(const slug of Object.keys(catalog)) {
   const base=`deslop-docs-${slug}`;
@@ -39,5 +50,5 @@ for(const slug of Object.keys(catalog)) {
 const speech=JSON.parse(fs.readFileSync(path.join(videos,'doc-series/dist/narration-check.json'),'utf8'));
 assert.equal(speech.length,40);
 assert.ok(speech.every(row=>row.word_match>=0.85));
-const report=['# Finished workflow verification [DOC-FILMS-MOTION]','','All checks below read the encoded website MP4s. OCR excludes the caption and step-label band and samples three frames from each step. These content checks supplement visual review; they do not measure editing quality.','','| Film | Recorded step | Visible application content |','| --- | --- | --- |',...rows,'','## Narration','','Independent local Whisper transcription checked all 40 Qwen3-TTS Aiden speech files against the current scripts.','','| Film | Step | Word-sequence match |','| --- | ---: | ---: |',...speech.map(row=>`| ${row.film} | ${row.step} | ${(row.word_match*100).toFixed(1)}% |`),'','Regenerate with `node scripts/videos/verify-user-workflows.mjs`.',''].join('\n');
+const report=['# Finished workflow verification [DOC-FILMS-MOTION]','','All checks below read the encoded website MP4s. OCR excludes the caption and step-label band and samples three frames from each step. These content checks supplement visual review; they do not measure editing quality.','','| Film | Recorded step | Visible application content |','| --- | --- | --- |',...rows,'','## Real agent evidence','','The saved pi session contains four successful Deslop MCP results: duplicates, finding details and two similarity requests. Every result identifies Eta.cs and Zeta.cs at lines 1–19, with exactly two copies.','','## Narration','','Independent local Whisper transcription checked all 40 Qwen3-TTS Aiden speech files against the current scripts.','','| Film | Step | Word-sequence match |','| --- | ---: | ---: |',...speech.map(row=>`| ${row.film} | ${row.step} | ${(row.word_match*100).toFixed(1)}% |`),'','Regenerate with `node scripts/videos/verify-user-workflows.mjs`.',''].join('\n');
 fs.writeFileSync(path.join(root,'reports/videos/workflow-verification.md'),report);

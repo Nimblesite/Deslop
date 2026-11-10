@@ -45,9 +45,8 @@ const rows = () => webview.locator('.occurrence-row');
 const tap = (locator, label) => ringClick(page, cues, locator, label);
 const hold = (milliseconds = 2000) => sleep(milliseconds);
 async function focusWorkbench() {
-  const tabs = page.locator('.tabs-container .tab');
-  if (await tabs.count()) await tabs.first().click();
-  else await page.locator('.part.editor').click({ position: { x: 100, y: 100 } });
+  await page.locator('.command-center .command-center-center').click();
+  await page.keyboard.press('Escape');
 }
 async function openFile(page, file) {
   await page.locator('.command-center .command-center-center').click();
@@ -58,7 +57,10 @@ async function openFile(page, file) {
 }
 async function runCommand(page, command) { await focusWorkbench(); await factoryRunCommand(page, command); }
 async function take(name, action) {
-  if (process.argv[2] && !name.startsWith(process.argv[2])) return;
+  const requested = process.argv[2];
+  if (requested === 'editor' && name.startsWith('action-')) return;
+  if (requested === 'final' && ['action-create', 'action-version'].includes(name)) return;
+  if (requested && requested !== 'editor' && requested !== 'final' && !name.startsWith(requested)) return;
   if (fs.existsSync(path.join(clips, name + '.mp4')) && !process.env.DESLOP_TUTORIAL_FORCE) return;
   process.stdout.write(`Recording ${name}\n`);
   try {
@@ -110,11 +112,13 @@ async function sourceFiles() {
 }
 async function terminal(command, expected) {
   await runCommand(page, 'Terminal: Create New Terminal');
+  const panel = await page.locator('.part.panel').boundingBox();
+  if (panel.height < 600) await runCommand(page, 'View: Toggle Maximized Panel');
   await page.locator('.terminal-wrapper').last().click();
   await hold(400);
-  await point(600, 650);
+  await point(650, 350);
   await typeText(page, command, 25); await page.keyboard.press('Enter');
-  await hold(2000); await point(760, 560);
+  await hold(2000); await point(850, 550);
   const deadline = Date.now() + 30000;
   while (Date.now() < deadline) {
     const text = execFileSync('tesseract', ['stdin', 'stdout', '--psm', '6'], { input: await page.locator('.terminal-wrapper').last().screenshot(), encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
@@ -129,6 +133,7 @@ async function closeTerminal() {
   if (await page.locator('.part.panel').isVisible()) await runCommand(page, 'View: Toggle Panel Visibility');
 }
 const workflow = version => `name: Deslop\non: [push, pull_request]\n\njobs:\n  repeated-code:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: Nimblesite/Deslop@${version}\n        with:\n          no-fail-over: "true"\n          upload-artifact: "false"\n`;
+if (process.argv[2] === 'action-limit') fs.writeFileSync(path.join(workspace, '.github/workflows/deslop.yml'), workflow('v0.41.0'));
 try {
   await focusWorkbench();
   while (await page.locator('.terminal-wrapper').count()) await closeTerminal();
