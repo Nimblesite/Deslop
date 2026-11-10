@@ -32,11 +32,13 @@ Clones appear in descending mass order, with stable IDs breaking ties. **Same sh
 
 ### Worked example
 
-| Cluster | Syntax-tree nodes | Visible copies | Mass |
-| --- | ---: | ---: | ---: |
-| A | 120 | 2 | 120 × 1 = 120 |
-| B | 40 | 4 | 40 × 3 = 120 |
-| C | 200 | 1 | 200 × 0 = 0 |
+| Cluster | Nodes | Visible copies | Extra copies | Mass |
+| --- | ---: | ---: | ---: | ---: |
+| A | 120 | 2 | 1 | 120 |
+| B | 40 | 4 | 3 | 120 |
+| C | 200 | 1 | 0 | 0 |
+
+Mass is nodes × extra copies.
 
 A and B tie on mass, so their stable IDs decide the order. Cluster C has one visible copy left — the others are hidden or excluded — so it adds no duplicated mass.
 
