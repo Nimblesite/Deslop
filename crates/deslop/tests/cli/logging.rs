@@ -8,6 +8,7 @@ const LOG_TO_CONSOLE_FLAG: &str = "--log-to-console";
 const LOG_LEVEL_FLAG: &str = "--log-level";
 const TECHNICAL_FLAG: &str = "--technical";
 const DESLOP_INVOKED_MESSAGE: &str = "deslop invoked";
+const CSHARP_SMALL_CLUSTER_SLUG: &str = "54a6b24";
 
 /// Builds a `deslop` command against the `csharp-small` fixture writing
 /// its report under `<tmp>/report`. Every logging test shares this scan
@@ -398,12 +399,13 @@ fn technical_mode_names_the_clone_kind_in_the_breakdown_row() -> Result<()> {
     let stderr = stderr_text(&assertion)?;
     assert_contains(
         &stderr,
-        "columns: rank, kind, id, mass, occurrences, canonical AST nodes, files",
+        "columns: id, kind, rank, mass, occurrences, canonical AST nodes, files",
         "--technical must print the column legend naming the kind column",
     );
     assert!(
-        stderr.contains(&format!("#1  {NEARLY_IDENTICAL_TITLE} ["))
-            && stderr.contains("· mass 58 · 2 occurrences · 58 AST nodes"),
+        stderr.contains(&format!(
+            "{CSHARP_SMALL_CLUSTER_SLUG} {NEARLY_IDENTICAL_TITLE} — rank #1, mass 58, 2 occurrences, 58 AST nodes in Alpha.cs, Beta.cs"
+        )),
         "--technical must print the mass-ranked cluster row with kind, id, mass, \
          occurrences, nodes and files: {stderr}"
     );
