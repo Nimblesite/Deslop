@@ -1,11 +1,11 @@
 # Website and film browser validation
 
-- Source commit: 0ac6d2058091f676d0719c8dd5dde5ee8091b7e9
+- Source commit: 7bb61014fd6b58bb32d717180969f570c172ffd7
 - Result: 22 passed in 16.7s
 - Documentation routes: 20
 - Playback and seeking checked at phone and desktop widths.
 - Command: `DESLOP_SITE_TEST_PORT=8097 npm test -- documentation-films.spec.js --workers=2`
-- Server: installed `@11ty/eleventy-dev-server`, serving an immutable completed website build on port 8097.
+- Server: Playwright-managed Eleventy development server on port 8097.
 
 Regenerate after a successful run with `node scripts/videos/record-site-check.mjs <captured-test-log>`. This receipt is emitted from the completed Playwright output; it does not claim subjective audio review.
 
