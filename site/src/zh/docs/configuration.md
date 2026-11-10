@@ -160,7 +160,7 @@ structural_only = "ignore"
 **构建产物与工具缓存**，一律排除且无法重新纳入 —— 它们都不是你写的源码：
 
 ```
-target   dist   build   __pycache__   .dart_tool   .git   .claude
+target   dist   build   out   coverage   .vscode-test   __pycache__   .dart_tool   .git   .claude
 ```
 
 **依赖树**，除非你设置 `[analysis] include_dependencies = true`，否则一律排除：
