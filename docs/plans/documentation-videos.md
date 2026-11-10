@@ -82,3 +82,17 @@ With the original narrated masters in Videos, run
 `target/docs-live/delivery`. Review the edits, then run the same command with
 `--install` to verify and install the media. The
 [live footage inventory](../../reports/videos/live-footage.md) records coverage.
+
+## Motion and agent recut [DOC-FILMS-MOTION]
+
+Keep the approved narration and original caption/chapter timestamps. Every
+chapter combines animated explanation with relevant real application footage;
+none of the old static reference slides remains. Motion sources are in Videos
+at `projects/deslop/videos/doc-series/motion.html` and `motion.js`.
+
+- [x] Record packaged-extension navigation, comparisons and terminal demonstrations.
+- [x] Record real pi Deslop MCP calls with returned duplicate and similarity findings.
+- [x] Render all chapter illustrations through Videos' shared frame renderer.
+- [x] Check SharpLsp camera moves and inspect finished pi tool/result frames.
+- [x] Verify all delivered video streams and unchanged audio hashes.
+- [ ] Deploy the tested website and verify public media against local hashes.

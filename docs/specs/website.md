@@ -34,6 +34,17 @@ language routes, including responsive geometry, playback, seeking, captions,
 chapters and transcript expansion. `scripts/videos/check-doc-films.mjs --complete`
 requires all ten films to have imported deliveries and verification receipts.
 
+## [DOC-FILMS-MOTION] Recorded activity and animated explanations
+
+The films retain their approved narration and caption/chapter timing. Reference
+sections use animated explanations of the described concepts, intercut with real
+application activity. Static reference slides are not used as delivered footage.
+Illustrations identify themselves as illustrations and do not claim measured
+repository results. The agent films show pi calling Deslop MCP and displaying
+returned findings. Recorded activity uses the SharpLsp automatic camera to frame
+the pointer, editor and tool results. Delivery checks compare the original and
+recut audio stream hashes and require full-length video streams.
+
 ## [SITE-NAV-FONTS] Reliable navigation icons
 
 Material Symbols, Inter and JetBrains Mono ship with the website, including

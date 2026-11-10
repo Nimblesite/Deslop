@@ -1,19 +1,19 @@
 {
   "meta": {
     "repo": "Nimblesite/Deslop",
-    "published_at": "2026-11-10T10:26:14Z",
+    "published_at": "2026-11-10T10:50:44Z",
     "published_at_long": "10th of November 2026, 10am",
     "source_url": "https://github.com/Nimblesite/Deslop/issues",
     "method": "GitHub metadata: the Priority field, lane/* labels, explicit relationships, and cross-references. No AI enrichment.",
     "planning_note": "Indicative only — not a schedule. Relative sequencing uses two parallel tracks per workstream, holds blocked work until every blocker finishes, and takes effort units from the Effort field (high 8, medium 4, low 2) or, when it is unset, the issue type: feature 8, bug 5, task 4."
   },
   "summary": {
-    "open": 131,
+    "open": 130,
     "verify": 0,
-    "showstoppers": 3,
-    "critical": 44,
-    "linked": 78,
-    "relationships": 94
+    "showstoppers": 2,
+    "critical": 45,
+    "linked": 76,
+    "relationships": 90
   },
   "workstreams": [
     {
@@ -48,8 +48,8 @@
       "name": "Editor experience",
       "description": "VS Code, JetBrains, diagnostics, panels, hovers, and webviews.",
       "color": "#9bcbff",
-      "count": 11,
-      "urgent": 6,
+      "count": 9,
+      "urgent": 5,
       "verify": 0
     },
     {
@@ -75,8 +75,8 @@
       "name": "Reporting & metrics",
       "description": "Human-readable reports, metrics, summaries, and documentation.",
       "color": "#89b4fa",
-      "count": 8,
-      "urgent": 2,
+      "count": 9,
+      "urgent": 3,
       "verify": 0
     },
     {
@@ -105,7 +105,7 @@
       "name": "Showstopper",
       "description": "reserved for regressions on main that haven't been released yet, or recent regressions in a release",
       "color": "#ff5449",
-      "count": 3
+      "count": 2
     },
     {
       "id": "critical",
@@ -113,7 +113,7 @@
       "name": "Critical",
       "description": "seriously impacting accuracy or the usefulness of the tool",
       "color": "#f06292",
-      "count": 44
+      "count": 45
     },
     {
       "id": "normal",
@@ -121,7 +121,7 @@
       "name": "Normal",
       "description": "a problem that impacts the usefulness of the tool",
       "color": "#ffd166",
-      "count": 37
+      "count": 36
     },
     {
       "id": "low",
@@ -141,38 +141,6 @@
     }
   ],
   "issues": [
-    {
-      "number": 521,
-      "title": "Restore evidence-driven cluster colour: red no longer means identical, amber no longer means nearly identical",
-      "url": "https://github.com/Nimblesite/Deslop/issues/521",
-      "excerpt": "Red used to mean \"these are identical\" and brown/orange used to mean \"these are nearly identical\". One pull request swapped what the colours are keyed to — red now just means \"one of the biggest findings\" and brown means \"one of the next biggest\" — while keeping the exact same…",
-      "type": "Bug",
-      "labels": [
-        {
-          "name": "spec-violation",
-          "color": "D73A4A",
-          "description": "Code logic does not match an approved spec section"
-        },
-        {
-          "name": "lane/editor",
-          "color": "9bcbff",
-          "description": "VS Code, JetBrains, diagnostics, panels, hovers, webviews"
-        }
-      ],
-      "assignees": [],
-      "milestone": null,
-      "created_at": "2026-09-06T21:17:01Z",
-      "updated_at": "2026-11-10T06:36:59Z",
-      "lifecycle": "active",
-      "priority": "showstopper",
-      "workstream": "editor",
-      "inbound_links": 2,
-      "plan": {
-        "offset": 0,
-        "effort_units": 5,
-        "track": 0
-      }
-    },
     {
       "number": 522,
       "title": "Three contradictory severity colour tables, and design.ts comments call the shipped one a defect",
@@ -198,11 +166,11 @@
       "lifecycle": "active",
       "priority": "showstopper",
       "workstream": "editor",
-      "inbound_links": 2,
+      "inbound_links": 1,
       "plan": {
         "offset": 0,
         "effort_units": 5,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -232,9 +200,9 @@
       "workstream": "editor",
       "inbound_links": 0,
       "plan": {
-        "offset": 5,
+        "offset": 0,
         "effort_units": 5,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -354,7 +322,7 @@
       ],
       "milestone": null,
       "created_at": "2026-08-10T22:36:46Z",
-      "updated_at": "2026-08-23T05:59:53Z",
+      "updated_at": "2026-11-10T10:49:21Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "detection",
@@ -396,7 +364,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-12T21:35:25Z",
-      "updated_at": "2026-09-28T00:42:08Z",
+      "updated_at": "2026-11-10T10:37:24Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "accuracy",
@@ -596,7 +564,7 @@
       ],
       "milestone": null,
       "created_at": "2026-05-02T09:14:15Z",
-      "updated_at": "2026-09-28T01:17:02Z",
+      "updated_at": "2026-11-10T10:37:25Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "accuracy",
@@ -781,7 +749,7 @@
       ],
       "milestone": null,
       "created_at": "2026-08-12T21:28:34Z",
-      "updated_at": "2026-08-23T05:59:50Z",
+      "updated_at": "2026-11-10T10:39:12Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "accuracy",
@@ -909,7 +877,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-18T12:10:37Z",
-      "updated_at": "2026-08-23T05:59:31Z",
+      "updated_at": "2026-11-10T10:39:12Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "accuracy",
@@ -1074,7 +1042,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-06-01T10:35:44Z",
-      "updated_at": "2026-08-24T09:14:55Z",
+      "updated_at": "2026-11-10T10:36:52Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "quality",
@@ -1114,7 +1082,7 @@
       "plan": {
         "offset": 5,
         "effort_units": 5,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -1214,7 +1182,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-07-28T11:01:02Z",
-      "updated_at": "2026-08-25T15:34:21Z",
+      "updated_at": "2026-11-10T10:43:11Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "quality",
@@ -1247,9 +1215,9 @@
       "workstream": "editor",
       "inbound_links": 0,
       "plan": {
-        "offset": 10,
+        "offset": 5,
         "effort_units": 5,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -1332,7 +1300,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-12T21:28:36Z",
-      "updated_at": "2026-08-23T05:59:50Z",
+      "updated_at": "2026-11-10T10:39:43Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "quality",
@@ -1559,7 +1527,7 @@
       "plan": {
         "offset": 10,
         "effort_units": 5,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -1686,6 +1654,38 @@
       }
     },
     {
+      "number": 633,
+      "title": "Duplication panel must say the same way for every group whether it counts toward the total (Same shape group lacks 'excluded')",
+      "url": "https://github.com/Nimblesite/Deslop/issues/633",
+      "excerpt": "The Duplication panel tells you inconsistently which groups count toward the duplication percentage. \"Similar code\" is labelled \"excluded\", but \"Same shape, different content\" is not, even though it doesn't count either. It also opens expanded with thousands of rows, so it loo…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "spec-violation",
+          "color": "D73A4A",
+          "description": "Code logic does not match an approved spec section"
+        },
+        {
+          "name": "lane/reporting",
+          "color": "89b4fa",
+          "description": "Human-readable reports, metrics, summaries, documentation"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-11-10T10:48:04Z",
+      "updated_at": "2026-11-10T10:48:09Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "reporting",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 5,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
       "number": 345,
       "title": "Doc/code drift around the fused confidence (REPORTING-CONTEXT, mcp.md top-offenders, embeddings default, SPEC.md, corpus gate)",
       "url": "https://github.com/Nimblesite/Deslop/issues/345",
@@ -1706,7 +1706,7 @@
       ],
       "milestone": null,
       "created_at": "2026-08-10T22:36:47Z",
-      "updated_at": "2026-08-24T08:45:26Z",
+      "updated_at": "2026-11-10T10:41:38Z",
       "lifecycle": "active",
       "priority": "normal",
       "workstream": "integrations",
@@ -1884,9 +1884,9 @@
       "workstream": "editor",
       "inbound_links": 1,
       "plan": {
-        "offset": 15,
+        "offset": 10,
         "effort_units": 8,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -1913,7 +1913,7 @@
       "plan": {
         "offset": 15,
         "effort_units": 5,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -1938,7 +1938,7 @@
       "workstream": "editor",
       "inbound_links": 1,
       "plan": {
-        "offset": 20,
+        "offset": 18,
         "effort_units": 8,
         "track": 1
       }
@@ -1965,7 +1965,7 @@
       "workstream": "editor",
       "inbound_links": 1,
       "plan": {
-        "offset": 23,
+        "offset": 20,
         "effort_units": 8,
         "track": 0
       }
@@ -2072,7 +2072,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-27T11:28:40Z",
-      "updated_at": "2026-11-09T11:45:41Z",
+      "updated_at": "2026-11-10T10:41:39Z",
       "lifecycle": "active",
       "priority": "normal",
       "workstream": "delivery",
@@ -2134,7 +2134,7 @@
       "plan": {
         "offset": 5,
         "effort_units": 8,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -2159,9 +2159,9 @@
       "workstream": "reporting",
       "inbound_links": 0,
       "plan": {
-        "offset": 5,
+        "offset": 10,
         "effort_units": 4,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -2240,34 +2240,7 @@
       "workstream": "reporting",
       "inbound_links": 0,
       "plan": {
-        "offset": 9,
-        "effort_units": 4,
-        "track": 1
-      }
-    },
-    {
-      "number": 186,
-      "title": "Verify version in JetBrains after resolving the binary",
-      "url": "https://github.com/Nimblesite/Deslop/issues/186",
-      "excerpt": "TODO: JetBrains resolution finds the binary but should also verify its version. Part of bringing this repo onto the Shipwright deployment contract (https://github.com/Nimblesite/Shipwright). Plain TODO — not a security incident.",
-      "type": "Task",
-      "labels": [
-        {
-          "name": "lane/editor",
-          "color": "9bcbff",
-          "description": "VS Code, JetBrains, diagnostics, panels, hovers, webviews"
-        }
-      ],
-      "assignees": [],
-      "milestone": null,
-      "created_at": "2026-06-05T21:37:07Z",
-      "updated_at": "2026-08-23T05:59:21Z",
-      "lifecycle": "active",
-      "priority": "normal",
-      "workstream": "editor",
-      "inbound_links": 0,
-      "plan": {
-        "offset": 28,
+        "offset": 13,
         "effort_units": 4,
         "track": 1
       }
@@ -2288,7 +2261,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-06-05T21:37:37Z",
-      "updated_at": "2026-08-23T05:59:20Z",
+      "updated_at": "2026-11-10T10:41:39Z",
       "lifecycle": "active",
       "priority": "normal",
       "workstream": "delivery",
@@ -2346,9 +2319,9 @@
       "lifecycle": "active",
       "priority": "normal",
       "workstream": "delivery",
-      "inbound_links": 3,
+      "inbound_links": 2,
       "plan": {
-        "offset": 32,
+        "offset": 14,
         "effort_units": 4,
         "track": 0
       }
@@ -2461,7 +2434,7 @@
       "workstream": "reporting",
       "inbound_links": 0,
       "plan": {
-        "offset": 13,
+        "offset": 14,
         "effort_units": 5,
         "track": 0
       }
@@ -2638,7 +2611,7 @@
       "workstream": "reporting",
       "inbound_links": 0,
       "plan": {
-        "offset": 13,
+        "offset": 17,
         "effort_units": 8,
         "track": 1
       }
@@ -2772,7 +2745,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-23T07:01:31Z",
-      "updated_at": "2026-11-09T12:02:03Z",
+      "updated_at": "2026-11-10T10:44:49Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "accuracy",
@@ -2831,9 +2804,9 @@
       "workstream": "delivery",
       "inbound_links": 2,
       "plan": {
-        "offset": 19,
+        "offset": 18,
         "effort_units": 4,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -2911,7 +2884,7 @@
       "workstream": "reporting",
       "inbound_links": 1,
       "plan": {
-        "offset": 18,
+        "offset": 19,
         "effort_units": 4,
         "track": 0
       }
@@ -2980,7 +2953,7 @@
       "workstream": "delivery",
       "inbound_links": 1,
       "plan": {
-        "offset": 23,
+        "offset": 19,
         "effort_units": 4,
         "track": 1
       }
@@ -3308,7 +3281,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-09-01T17:42:42Z",
-      "updated_at": "2026-09-01T17:42:42Z",
+      "updated_at": "2026-11-10T10:41:39Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "accuracy",
@@ -3329,7 +3302,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-09-02T08:56:26Z",
-      "updated_at": "2026-09-02T08:56:26Z",
+      "updated_at": "2026-11-10T10:39:43Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "unassigned",
@@ -3350,7 +3323,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-09-02T09:57:19Z",
-      "updated_at": "2026-09-02T09:57:19Z",
+      "updated_at": "2026-11-10T10:39:12Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "unassigned",
@@ -3392,7 +3365,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-09-03T07:40:51Z",
-      "updated_at": "2026-09-03T07:40:51Z",
+      "updated_at": "2026-11-10T10:46:15Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "unassigned",
@@ -3413,7 +3386,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-09-03T12:08:04Z",
-      "updated_at": "2026-09-03T12:08:04Z",
+      "updated_at": "2026-11-10T10:37:56Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "unassigned",
@@ -3867,7 +3840,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-11-10T09:49:49Z",
-      "updated_at": "2026-11-10T09:49:49Z",
+      "updated_at": "2026-11-10T10:44:49Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "unassigned",
@@ -3888,7 +3861,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-11-10T10:17:45Z",
-      "updated_at": "2026-11-10T10:17:45Z",
+      "updated_at": "2026-11-10T10:47:12Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "unassigned",
@@ -3955,11 +3928,6 @@
       "source": 178,
       "target": 177,
       "kind": "reference"
-    },
-    {
-      "source": 186,
-      "target": 183,
-      "kind": "blocks"
     },
     {
       "source": 187,
@@ -4229,21 +4197,6 @@
     {
       "source": 488,
       "target": 439,
-      "kind": "reference"
-    },
-    {
-      "source": 521,
-      "target": 522,
-      "kind": "reference"
-    },
-    {
-      "source": 522,
-      "target": 521,
-      "kind": "reference"
-    },
-    {
-      "source": 524,
-      "target": 521,
       "kind": "reference"
     },
     {

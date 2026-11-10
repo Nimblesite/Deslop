@@ -8,7 +8,7 @@ import { pointAt, ringClick } from '../../../SharpLsp/src/website/tools/video/ki
 
 const root = path.resolve(import.meta.dirname, '../..');
 const out = path.join(root, 'target/docs-live');
-const clips = path.join(out, 'clips');
+const clips = path.resolve(root, '../Videos/projects/deslop/captures/docs-live');
 const frames = path.join(out, 'frames-' + (process.env.DESLOP_FILM_CONTEXT ?? 'review'));
 const fixture = path.resolve(root, '../Videos/projects/deslop/videos/live-demo/workspace');
 const scratch = fs.mkdtempSync('/tmp/deslop-film-');

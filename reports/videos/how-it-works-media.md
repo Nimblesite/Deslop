@@ -1,8 +1,9 @@
 # how-it-works media verification
 
-- Duration: 86.898 seconds
+- Duration: 86.899 seconds
 - Live VS Code footage: 48.6 seconds
 - Video: H.264, 1920 × 1080
 - Audio: original AAC stream, verified by stream hash
 - English captions and chapters: original timestamps preserved
-- SHA-256: 30c30c820c3958acea68bb3373cdfbbb8e001e83cce6bb8f4ff069cba9bcb732
+- Visuals: recorded application footage, automatic camera and animated explanations
+- SHA-256: c1ad4ea9122f76218ff5cf04213a5a8e53355b84619c5725182f0718bfe07190

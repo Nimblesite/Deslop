@@ -9,9 +9,10 @@ import { CAMERA, writeCamera } from '../../../SharpLsp/src/website/tools/video/k
 
 const root = path.resolve(import.meta.dirname, '../..');
 const work = path.join(root, 'target/docs-live');
-const clips = path.join(work, 'clips');
+const clips = path.resolve(root, '../Videos/projects/deslop/captures/docs-live');
 const site = path.join(root, 'site/src/assets/video/docs');
 const series = path.join(root, '../Videos/projects/deslop/videos');
+const motion = path.join(root, '../Videos/projects/deslop/captures-motion');
 const delivery = path.join(work, 'delivery');
 const fps = 30;
 const size = '1920:1080';
@@ -25,8 +26,8 @@ const films = {
   configuration: ['policy', 'policy', null, 'gate'],
   'github-action': ['action', 'action', 'gate', null],
   osprey: ['osprey-native', 'osprey-python', 'osprey-manifest', 'osprey-scan'],
-  'ai-integration': ['mcp-status', 'mcp-config', null, 'canonical'],
-  'for-ai': ['mcp-status', 'mcp-query', 'mcp-query', 'canonical'],
+  'ai-integration': ['pi-find-similar', 'mcp-config', 'pi-duplicates', 'canonical'],
+  'for-ai': ['pi-duplicates', 'pi-find-similar', 'pi-find-similar', 'canonical'],
 };
 
 const ffmpeg = (args) => execFileSync('ffmpeg', ['-nostdin', '-y', '-v', 'error', ...args], { stdio: 'inherit' });
@@ -37,6 +38,8 @@ const stamp = (value) => value.split(':').reduce((total, part) => total * 60 + N
 const starts = (file) => fs.readFileSync(file, 'utf8').split('\n').filter((line) => line.includes(' --> '))
   .map((line) => stamp(line.split(' --> ')[0]));
 const cache = new Map();
+const lead = 2;
+const tail = 2;
 
 function zoom(name) {
   if (cache.has(name)) return cache.get(name);
@@ -46,7 +49,7 @@ function zoom(name) {
   assert.ok(cues.length, `No real clicks in ${name}`);
   const [{ width, height }] = probe(raw, 'stream=width,height').streams;
   const file = path.join(work, name + '.cmd');
-  const terminal = ['gate', 'osprey-scan', 'mcp-status', 'mcp-query'].includes(name);
+  const terminal = ['gate', 'osprey-scan', 'mcp-status', 'mcp-query', 'pi-duplicates', 'pi-find-similar'].includes(name);
   const panel = WIDGETS.findIndex(([selector]) => selector === '.part.panel');
   if (terminal) track.samples = track.samples.map((sample) => ({ ...sample, w: sample.w.filter(([index]) => index !== panel) }));
   const deepest = CAMERA.deepest;
@@ -64,10 +67,17 @@ function zoom(name) {
   return shot;
 }
 
-function segment(source, start, duration, target) {
-  ffmpeg(['-ss', String(start), '-i', source, '-t', duration.toFixed(4), '-an',
-    '-vf', `fps=${fps},scale=${size},setsar=1`, ...encode, target]);
+function segment(source, start, duration, target, speed = 1, loop = false) {
+  ffmpeg([...(loop ? ['-stream_loop', '-1'] : []), '-ss', String(start), '-i', source, '-t', duration.toFixed(4), '-an',
+    '-vf', `setpts=PTS/${speed},fps=${fps},scale=${size},setsar=1`, ...encode, target]);
   return target;
+}
+
+function placement(name, length, duration) {
+  const intro = name ? lead : 0;
+  const available = length - intro - tail;
+  const speed = name?.startsWith('pi-') ? Math.max(1, duration / available) : 1;
+  return { intro, speed, shown: name ? Math.min(available, duration / speed) : 0 };
 }
 
 function cut(slug, names) {
@@ -77,8 +87,9 @@ function cut(slug, names) {
   const boundaries = [...starts(path.join(site, base + '.chapters.vtt')), duration];
   assert.equal(boundaries.length, names.length + 1);
   const segments = [];
-  const insert = (file, offset, length) => {
-    if (length >= 1 / fps) segments.push(segment(file, offset, length, path.join(work, `${slug}-${segments.length}.mp4`)));
+  const edits = [];
+  const insert = (file, offset, length, speed = 1, loop = false) => {
+    if (length >= 1 / fps) segments.push(segment(file, offset, length, path.join(work, `${slug}-${segments.length}.mp4`), speed, loop));
   };
   let firstLive;
   let live = 0;
@@ -86,13 +97,19 @@ function cut(slug, names) {
     const start = boundaries[index];
     const length = boundaries[index + 1] - start;
     const shot = name ? zoom(name) : null;
-    const shown = shot ? Math.min(length, shot.duration) : 0;
+    const illustrated = path.join(motion, `${slug}-${index}.mp4`);
+    assert.ok(fs.existsSync(illustrated), `Missing animated explanation: ${slug} chapter ${index}`);
+    const { intro, speed, shown } = placement(name, length, shot?.duration ?? 0);
+    insert(illustrated, 0, intro, 1, true);
     if (shot) {
-      firstLive ??= start;
-      insert(shot.output, 0, shown);
+      firstLive ??= start + intro;
+      insert(shot.output, 0, shown, speed);
       live += shown;
     }
-    insert(source, start + shown, length - shown);
+    insert(illustrated, intro + shown, length - intro - shown, 1, true);
+    edits.push({ chapter: index, start, end: boundaries[index + 1], footage: name,
+      footageStart: start + intro, footageSeconds: shown, speed, motion: illustrated,
+      animatedSeconds: length - shown });
   }
   assert.ok(live > 0, `No live footage for ${slug}`);
   const manifest = path.join(work, slug + '.ffconcat');
@@ -103,6 +120,7 @@ function cut(slug, names) {
   const poster = path.join(delivery, base + '-poster.jpg');
   ffmpeg(['-ss', String(firstLive + 3), '-i', output, '-frames:v', '1', '-q:v', '3', poster]);
   assert.ok(Math.abs(seconds(output) - duration) < 0.18, `Audio or caption timing drift in ${slug}`);
+  fs.writeFileSync(path.join(delivery, base + '.edit.json'), JSON.stringify({ slug, duration, live, edits }, null, 2));
   fs.rmSync(manifest);
   for (const file of segments) fs.rmSync(file);
   return [slug, live.toFixed(1), duration.toFixed(1)];
@@ -126,10 +144,12 @@ function verifiedDelivery(slug) {
   assert.equal(audioHash(video), audioHash(original(slug)), `Audio changed in ${slug}`);
   const [{ width, height, codec_name: codec }] = probe(video, 'stream=width,height,codec_name').streams;
   assert.deepEqual([width, height, codec], [1920, 1080, 'h264']);
-  const chapters = starts(path.join(site, base + '.chapters.vtt'));
-  const live = films[slug].reduce((total, name, index) => name
-    ? total + Math.min((chapters[index + 1] ?? duration) - chapters[index],
-      seconds(path.join(work, name + '-zoom.mp4'))) : total, 0);
+  const edit = JSON.parse(fs.readFileSync(path.join(delivery, base + '.edit.json'), 'utf8'));
+  const live = edit.edits.reduce((total, scene) => total + scene.footageSeconds, 0);
+  assert.ok(Math.abs(edit.duration - duration) < 0.18);
+  assert.ok(edit.edits.every(scene => scene.animatedSeconds > 0));
+  const streams = probe(video, 'stream=codec_type,duration').streams;
+  assert.ok(Math.abs(Number(streams[0].duration) - duration) < 0.18, `Video ends early in ${slug}`);
   const hash = createHash('sha256').update(fs.readFileSync(video)).digest('hex');
   return { base, slug, video, poster, duration, live, hash };
 }
@@ -146,14 +166,15 @@ function install(items) {
       '- Video: H.264, 1920 × 1080',
       '- Audio: original AAC stream, verified by stream hash',
       '- English captions and chapters: original timestamps preserved',
+      '- Visuals: recorded application footage, automatic camera and animated explanations',
       `- SHA-256: ${hash}`, '',
     ].join('\n'));
   }
   fs.writeFileSync(path.join(reports, 'live-footage.md'), [
     '# Documentation film footage [DOC-FILMS-LIVE]', '',
-    '| Film | Live VS Code (s) | Total (s) |', '| --- | ---: | ---: |',
-    ...items.map(({ slug, live, duration }) => `| ${slug} | ${live.toFixed(1)} | ${duration.toFixed(1)} |`),
-    '', 'The recut keeps the original audio, captions and chapter timings. See each media receipt for its SHA-256.', '',
+    '| Film | Real application footage (s) | Animated explanation (s) | Total (s) |', '| --- | ---: | ---: | ---: |',
+    ...items.map(({ slug, live, duration }) => `| ${slug} | ${live.toFixed(1)} | ${(duration - live).toFixed(1)} | ${duration.toFixed(1)} |`),
+    '', 'The recut keeps the original audio, captions and chapter timings. Every chapter includes animated explanation; no original static slide is retained. The AI films show real pi MCP tool calls and returned findings. See each media receipt for its SHA-256.', '',
   ].join('\n'));
 }
 
