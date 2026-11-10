@@ -79,15 +79,10 @@ pub(super) const MAGIC: u32 = 0xC0DE_D180;
 /// keep publishing `alpha.go:1-13` against `beta.go:1-13`, `package`
 /// clause included, after the cold run had stopped.
 ///
-/// Epoch 6: [PIPELINE-SIGNATURE-FOLD] identifies same-range grammar
-/// wrappers and sibling windows by their structural mass before building
-/// token signatures. An epoch-5 blob holds range-only signatures for
-/// those fingerprints, so a warm scan could disagree with a cold scan.
-///
-/// Epoch 7 (2026-11-11): [LANG-CAND-RUST-STRING-PARTS] collapses a Rust
-/// string's `string_content` and `escape_sequence` parts to literal
-/// leaves. An epoch-6 blob holds them as structural kinds, so a warm run
-/// would keep grouping unrelated escape-heavy strings as Similar code.
+/// Epoch 6: [PIPELINE-SIGNATURE-FOLD] signs same-range wrappers and sibling
+/// windows by structural mass; epoch-5 blobs hold range-only signatures.
+/// Epoch 7: [LANG-CAND-RUST-STRING-PARTS] makes Rust string parts literal
+/// leaves; epoch-6 blobs hold them as structural kinds.
 pub(super) const SEMANTIC_EPOCH: u32 = 7;
 
 /// Bytes of blob header preceding the payload: the magic plus the
