@@ -155,6 +155,40 @@ fn invalid_data_clone_weight_is_rejected_with_a_clear_error() -> Result<()> {
     Ok(())
 }
 
+/// [EXCLUSION-CONFIG] `[visibility]` admits only `keep` and `ignore`:
+/// `demote` and any other key fail the load naming the offender.
+#[test]
+fn visibility_section_rejects_demote_and_unknown_keys() -> Result<()> {
+    let (tmp, src) = temp_scan_dir("src")?;
+    fs::write(src.join("a.dart"), "class A { int x = 1; }\n")?;
+    for (body, needle) in [
+        (
+            "[visibility]\ndata_clones = \"demote\"\n",
+            "visibility.data_clones",
+        ),
+        (
+            "[visibility]\ndata_clone_weight = 0.5\n",
+            "unknown field `data_clone_weight`",
+        ),
+    ] {
+        write_ranking_config(&src, body)?;
+        let mut cmd = deslop_cmd(&src, &tmp.path().join("r"))?;
+        let _assertion = cmd
+            .args([
+                "--min-nodes",
+                "30",
+                "--embeddings",
+                "off",
+                "--notext",
+                "--nohtml",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicates::str::contains(needle));
+    }
+    Ok(())
+}
+
 #[test]
 fn verbatim_copied_table_still_surfaces_as_duplication() -> Result<()> {
     let (tmp, src) = temp_scan_dir("src")?;

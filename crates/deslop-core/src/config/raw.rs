@@ -42,9 +42,22 @@ pub(super) struct RawConfig {
     /// Clone-category ranking policy ([RANK-CATEGORY]).
     #[serde(default)]
     pub(super) ranking: RawRanking,
+    /// [EXCLUSION-CONFIG] Pre-ranking visibility of proven data tables.
+    #[serde(default)]
+    pub(super) visibility: RawVisibility,
     /// [CLONE-BUCKETS-THRESHOLDS] Validated category tuning.
     #[serde(default)]
     pub(super) tuning: super::tuning::Tuning,
+}
+
+/// Raw on-disk shape of the `[visibility]` section ([EXCLUSION-CONFIG]):
+/// `data_clones` is `keep` (default) or `ignore`; `demote` is rejected.
+#[derive(Debug, Default, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct RawVisibility {
+    /// Whether proven data-table findings are dropped before ranking.
+    #[serde(default)]
+    pub(super) data_clones: Option<ClonePolicy>,
 }
 
 /// Raw on-disk shape of the `[ranking]` section ([RANK-CATEGORY],

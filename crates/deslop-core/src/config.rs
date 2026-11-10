@@ -250,7 +250,8 @@ impl ExclusionConfig {
         let fail_over_percent = resolve_threshold(path, raw.threshold.as_ref())?;
         let total_include = resolve_total_include(path, raw.total.as_ref())?;
         let kind_thresholds = resolve_kind_thresholds(path, raw.threshold.as_ref())?;
-        let ranking_policy = resolve_ranking_policy(path, &raw.ranking)?.with_global_override();
+        let ranking_policy =
+            resolve_ranking_policy(path, &raw.ranking, &raw.visibility)?.with_global_override();
         Ok(Self {
             source: path.to_path_buf(),
             scan_root: scan_root.map(Path::to_path_buf),
