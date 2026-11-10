@@ -146,7 +146,7 @@
   overflow: hidden;
   box-shadow: 0 20px 40px rgba(14, 14, 14, 0.6);
 }
-.showcase__figure img, .showcase__figure video { display: block; width: 100%; height: auto; }
+.showcase__figure img { display: block; width: 100%; height: auto; }
 .showcase__legend {
   display: grid;
   grid-template-columns: 1fr;

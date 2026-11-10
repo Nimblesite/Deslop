@@ -1,12 +1,9 @@
-# Put policy beside your code media verification
+# configuration media verification
 
-- Duration: 79.491 seconds
-- Video: h264, 1920 x 1080
-- Audio: aac
-- Narration: 4 lines match the current film script
-- Delivery: MP4, poster, English captions and chapters present
-- Scene coverage: 4 of 4 rendered chapter titles verified
-- OCR at 45s: fail-over, no-fail-over
-- SHA-256: 0c3b794d89a987357f89647fb30d5b325f23cc8198d7eb8327922e73172350f5
-
-Browser playback and visual review are separate checks.
+- Duration: 79.500 seconds
+- Live VS Code footage: 32.8 seconds
+- Video: H.264, 1920 × 1080
+- Audio: original AAC stream, verified by stream hash
+- English captions and chapters: original timestamps preserved
+- Visuals: recorded application footage, automatic camera and animated explanations
+- SHA-256: a65eab754752a233367930e4b0c128768e6cf0368b7dc203e256185566b83630

@@ -1,12 +1,9 @@
-# Put review in the workflow media verification
+# github-action media verification
 
-- Duration: 79.051 seconds
-- Video: h264, 1920 x 1080
-- Audio: aac
-- Narration: 4 lines match the current film script
-- Delivery: MP4, poster, English captions and chapters present
-- Scene coverage: 4 of 4 rendered chapter titles verified
-- OCR at 69.00006249999998s: Gate scope: added lines
-- SHA-256: 0bc4930c236316131be5efb3ffbb7ce3fe593d0144d05846d2f25fd6f393606e
-
-Browser playback and visual review are separate checks.
+- Duration: 79.067 seconds
+- Live VS Code footage: 29.7 seconds
+- Video: H.264, 1920 × 1080
+- Audio: original AAC stream, verified by stream hash
+- English captions and chapters: original timestamps preserved
+- Visuals: recorded application footage, automatic camera and animated explanations
+- SHA-256: a1a7b33e40a823dba8a8a086d39a9ce70603d71201152119b4e8354c196e754c

@@ -1,5 +1,6 @@
 ---
 layout: layouts/blog.njk
+docFilm: osprey
 title: "Osprey in Deslop: Effects, Handlers and Fewer Copies"
 date: 2026-10-25
 author: Christian Findlay
@@ -23,6 +24,8 @@ ogImageHeight: "630"
 A functional language built around algebraic effects, inferred types and native compilation deserves tools that understand its code. Deslop now reads all three Osprey flavors: default `.osp`, native ML `.ospml`, and explicitly selected Python syntax. It finds copied structure and brings the findings into the editor and the agent workflow.
 
 The language groups and report views use Osprey’s official cyan bird.
+
+{% include "partials/doc-film.njk" %}
 
 ## The language worth making a fuss about
 
@@ -87,7 +90,25 @@ All three flavors have verified CLI fixtures and real LSP/MCP language-label che
 
 Native ML `.ospml` uses a grammar verified against Osprey's real source corpus and independent structural checks. Layout, interpolation expressions, and flat-versus-curried calls remain visible syntax. The three parser identities stay distinct in caches and reports, even though the interface gives them the same official Osprey icon. Cross-flavor clone equivalence is not claimed.
 
-The [Osprey support guide](/docs/osprey/) has the configuration details and current integration status. These changes describe the development tree; check your installed Deslop version before expecting them in an older VSIX.
+## Configure the Python flavor
+
+Ordinary `.py` files retain Python identity. The development integration recognises an Osprey flavor marker only in a leading source comment:
+
+```python
+# osprey: flavor=python
+```
+
+A string containing that text or a comment after code cannot select the flavor. Alternatively, list individual source files in the existing `osprey.toml`:
+
+```toml
+[project]
+entry = "src/main.py"
+python_sources = ["src/domain.py", "src/storage.py"]
+```
+
+The Python entry file and the listed files opt into Osprey. Paths are literal files relative to the manifest, not directory-wide or glob selections. Other `.py` files retain ordinary Python identity.
+
+The project `flavor` setting accepts `default`, `ml` or `python` and overrides the syntax for sources claimed by that project. Without an override, a marker that contradicts the extension produces an error. Malformed manifests and unknown flavor values also produce errors. Source roots default to `src` when present, otherwise the project directory; `source_roots` overrides this default. Nested projects take precedence.
 
 ## Long live the bird
 

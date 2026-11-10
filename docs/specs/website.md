@@ -14,8 +14,11 @@ playback, pause, seeking, captions, poster loading and responsive placement.
 
 ## [DOC-FILMS-DELIVERY] Documentation films
 
-Each of the ten documentation topics has a concise narrated film, shared by its
-English and Chinese page. English narration and captions are explicitly labelled.
+Nine documentation topics and the Osprey launch post have concise narrated films,
+shared by their English and Chinese pages. The former Osprey docs URLs redirect
+to the corresponding launch posts. The shared player fits the reading column
+even if the prose stylesheet is stale or unavailable. English narration and
+captions are explicitly labelled.
 Every delivery includes a 1920x1080 H.264/AAC MP4, poster, English captions and
 chapter track. A readable transcript comes from the delivered narration timeline.
 Players use native controls, never autoplay, and fit widths from 320px upward.
@@ -29,7 +32,18 @@ MP4 files use Git LFS. Production intermediates are never published.
 `site/tests/documentation-films.spec.js` exercises each catalog entry on both
 language routes, including responsive geometry, playback, seeking, captions,
 chapters and transcript expansion. `scripts/videos/check-doc-films.mjs --complete`
-requires all ten topics to have imported deliveries and verification receipts.
+requires all ten films to have imported deliveries and verification receipts.
+
+## [DOC-FILMS-MOTION] Recorded activity and animated explanations
+
+The films retain their approved narration and caption/chapter timing. Reference
+sections use animated explanations of the described concepts, intercut with real
+application activity. Static reference slides are not used as delivered footage.
+Illustrations identify themselves as illustrations and do not claim measured
+repository results. The agent films show pi calling Deslop MCP and displaying
+returned findings. Recorded activity uses the SharpLsp automatic camera to frame
+the pointer, editor and tool results. Delivery checks compare the original and
+recut audio stream hashes and require full-length video streams.
 
 ## [SITE-NAV-FONTS] Reliable navigation icons
 
@@ -51,7 +65,7 @@ and verifies the page loads with its event queue intact.
 
 Every referenced script, stylesheet, image and social card is served successfully
 with a content type matching its declaration. Encoded media is limited to the
-homepage product demo and the ten requested documentation films. The website
+homepage product demo and the ten requested films. The website
 audit verifies this exact inventory; unrelated audio/video and render masters
 are rejected. The homepage and audit tests share the HTTP checks in
 `site/tests/helpers/assets.js`.

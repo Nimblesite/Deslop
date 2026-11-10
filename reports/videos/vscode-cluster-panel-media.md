@@ -1,12 +1,9 @@
-# Open the occurrence media verification
+# vscode-cluster-panel media verification
 
 - Duration: 78.278 seconds
-- Video: h264, 1920 x 1080
-- Audio: aac
-- Narration: 4 lines match the current film script
-- Delivery: MP4, poster, English captions and chapters present
-- Scene coverage: 4 of 4 rendered chapter titles verified
-- OCR at 44.84795833333333s: Nearly identical code, Canonical
-- SHA-256: b289cb1d5f33c6194008259faf57e385cd7bd8a09c800e4cc8b55b44972e7572
-
-Browser playback and visual review are separate checks.
+- Live VS Code footage: 48.4 seconds
+- Video: H.264, 1920 × 1080
+- Audio: original AAC stream, verified by stream hash
+- English captions and chapters: original timestamps preserved
+- Visuals: recorded application footage, automatic camera and animated explanations
+- SHA-256: 9dc6b22b33125d4f2fb472bd362a36442d201681f14db6839aae5f4bde5dee97
