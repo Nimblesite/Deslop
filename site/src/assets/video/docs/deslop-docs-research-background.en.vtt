@@ -1,13 +1,79 @@
 WEBVTT
 
-00:00.400 --> 00:21.187
-Repeated code is not automatically wrong. The maintenance risk is that fixes, security changes and new behavior must stay consistent across copies. Generating another implementation is easy; deciding whether to reuse existing code still requires judgment. The research page links the studies behind this motivation.
+00:00.300 --> 00:02.899
+Here are two files that repeat the
 
-00:22.037 --> 00:44.125
-The research taxonomy distinguishes four clone families. Type one permits layout and comment changes. Type two allows changed names and literals. Type three includes edited statements. Type four describes equivalent behavior implemented differently. Deslop has its own report labels and a stricter text-identity rule, explained in How It Works.
+00:02.899 --> 00:05.498
+same calculation. I open both to see
 
-00:44.975 --> 01:07.425
-Deslop combines normalized syntax trees, subtree fingerprints, statement-run fingerprints and similarity retrieval. Optional embeddings add semantic candidates. These techniques help locate possible copies at different levels. Pair admission checks content as well as structure, and an explicit comparison provides evidence about the selected source ranges.
+00:05.498 --> 00:08.097
+where that repeated work lives. The practical
 
-01:08.275 --> 01:27.084
-Use the page to follow implementation pointers and read the original papers. A detection technique is not proof that extracting shared code is safe. Review both implementations, test the behavior you intend to keep, and use the separate accuracy documentation to understand how findings are checked.
+00:08.097 --> 00:10.696
+question is simple: when this behavior needs
+
+00:10.696 --> 00:13.295
+a fix, will someone remember to update
+
+00:13.295 --> 00:14.780
+every copy of it?
+
+00:15.580 --> 00:17.642
+I change one of the copies and
+
+00:17.642 --> 00:19.705
+save it. The other file has not
+
+00:19.705 --> 00:21.767
+changed with it. That is the maintenance
+
+00:21.767 --> 00:23.830
+problem repeated code can create: a fix
+
+00:23.830 --> 00:25.892
+in one place does not automatically reach
+
+00:25.892 --> 00:27.660
+the other places that need it.
+
+00:28.460 --> 00:30.661
+I compare the files again to see
+
+00:30.661 --> 00:32.862
+the difference I just introduced. This view
+
+00:32.862 --> 00:35.063
+gives me something concrete to review with
+
+00:35.063 --> 00:37.264
+the team. I can point to the
+
+00:37.264 --> 00:39.465
+changed line, check its purpose, and decide
+
+00:39.465 --> 00:41.666
+whether the other copy needs the same
+
+00:41.666 --> 00:41.980
+change.
+
+00:42.780 --> 00:45.402
+A finding does not mean I should
+
+00:45.402 --> 00:48.024
+delete a copy automatically. I inspect both
+
+00:48.024 --> 00:50.645
+versions and the places that use them.
+
+00:50.645 --> 00:53.267
+If a shared implementation makes the code
+
+00:53.267 --> 00:55.889
+easier to maintain, I can make that
+
+00:55.889 --> 00:58.511
+change and test the behavior I intend
+
+00:58.511 --> 00:59.260
+to keep.

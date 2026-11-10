@@ -1,13 +1,82 @@
 WEBVTT
 
-00:00.400 --> 00:15.878
-Connect Deslop to your coding agent so it can check for existing code before writing another implementation. The key tool is find similar. Give the agent the For AI instructions linked from this page, and make the check part of its authoring workflow.
+00:00.300 --> 00:02.761
+Before asking my coding agent to write
 
-00:16.728 --> 00:37.372
-For an extension-based setup, point your MCP client at the absolute path to the server bundled inside the installed VS Code extension. Use the correct version and platform, and set the repository root. Update that path when the extension version changes. The page includes configurations for supported clients.
+00:02.761 --> 00:05.223
+another helper, I ask it to check
 
-00:38.222 --> 00:58.100
-Keep routine requests focused. Find similar checks a proposed snippet. Duplicates lists ranked findings, and cluster by ID retrieves the occurrences you need to review. Compare pair explains the evidence for two particular copies. Start with a small summary and request details only when needed.
+00:05.223 --> 00:07.684
+the project first. Here I am using
 
-00:58.950 --> 01:19.454
-Read any existing implementation before reusing it. After editing, run your tests and query the findings again. Deslop answers from the workspace analysis maintained by the editor, which refreshes as files change. The agent still needs to inspect behavior and decide whether a suggested reuse is appropriate.
+00:07.684 --> 00:10.146
+pi with the Deslop connection enabled. I
+
+00:10.146 --> 00:12.607
+give it the existing file so the
+
+00:12.607 --> 00:15.068
+request is about the code I actually
+
+00:15.068 --> 00:15.420
+have.
+
+00:16.220 --> 00:18.525
+The agent reads the file and calls
+
+00:18.525 --> 00:20.830
+Deslop to look for similar code. This
+
+00:20.830 --> 00:23.135
+is a real tool call against the
+
+00:23.135 --> 00:25.440
+open project. I can see the request
+
+00:25.440 --> 00:27.746
+and the returned result in the conversation,
+
+00:27.746 --> 00:30.051
+instead of relying on the agent to
+
+00:30.051 --> 00:30.380
+guess.
+
+00:31.180 --> 00:33.840
+Deslop returns two matching files, and pi
+
+00:33.840 --> 00:36.500
+points me to them. That gives me
+
+00:36.500 --> 00:39.160
+an existing implementation to review before I
+
+00:39.160 --> 00:41.820
+create another copy. I read the file
+
+00:41.820 --> 00:44.480
+names and the reported locations, then check
+
+00:44.480 --> 00:47.140
+the source rather than stopping at the
+
+00:47.140 --> 00:47.900
+agent's summary.
+
+00:48.700 --> 00:51.186
+I open the matching files side by
+
+00:51.186 --> 00:53.672
+side in Deslop. Now I can check
+
+00:53.672 --> 00:56.158
+the code and its differences myself. The
+
+00:56.158 --> 00:58.643
+agent helped me find a possible reuse;
+
+00:58.643 --> 01:01.129
+I still decide whether that implementation fits
+
+01:01.129 --> 01:03.260
+the change I want to make.

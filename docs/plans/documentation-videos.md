@@ -1,98 +1,67 @@
-# Documentation film series [DOC-FILMS]
+# Documentation films [DOC-FILMS]
 
-Create a narrated film for each of the ten English documentation pages, using
-Videos' existing Osprey production templates and shared speech/rendering pipeline.
-Keep Deslop branding, real source examples, accurate qualifications and readable
-captions. Short reference films are explainers; task tutorials demonstrate a real
-run and a change. Do not pad films to reach a duration.
+Record ten practical user workflows in Videos, using the real packaged Deslop
+extension, CLI and pi MCP connection. Follow SharpLsp's capture and automatic
+camera implementation. Show the application throughout; narration explains the
+visible action in plain English. No concept cards or parser explanations.
 
 ## Delivery checklist [DOC-FILMS-DELIVERY]
 
-- [x] Inventory all ten documentation pages and inspect the shared film pipeline.
-- [x] Review narration against each source page and choose real visual evidence.
-- [x] Produce a shared Deslop series template with distinct chapter compositions.
-- [x] Render each film with narration, captions, chapters and a poster.
-- [x] Inspect finished frames, review narration text, and verify duration and encoding.
-- [x] Integrate accessible video players into the matching documentation pages.
-- [x] Store delivered videos in Git LFS; verify desktop and mobile playback.
-- [x] Remove disposable render intermediates and check disk space.
+- [x] Inspect the SharpLsp scripts, recordings and automatic camera.
+- [x] Rewrite all forty spoken steps around useful visible user actions.
+- [x] Generate Aiden narration with local Qwen3-TTS and check its transcription.
+- [x] Record source navigation, both comparison methods, settings and CLI checks.
+- [x] Record and verify real pi tool calls and returned file locations.
+- [x] Cut all ten films with automatic zoom and short captions.
+- [x] Inspect finished application frames and verify all delivery streams.
+- [x] Test both language routes, mobile playback, tracks and transcripts.
+- [x] Commit, push and deploy the website; verify public media hashes.
+- [x] Remove owned temporary files and model caches; check disk space.
 
-## Coverage [DOC-FILMS-COVERAGE]
+## Production [DOC-FILMS-PRODUCTION]
 
-The mechanically generated [delivery inventory](../../reports/videos/series-status.md)
-tracks every page, duration, delivery receipt and LFS rule. Individual media
-receipts and measured audio levels live beside it; do not duplicate their figures
-in this plan.
+Stop at 12:01 am Australia/Melbourne on 11 November 2026. Generate speech locally,
+use one encoding job at a time and reuse Videos' sound and delivery modules.
+Source footage and voice receipts remain in Videos; website media uses Git LFS.
+Never stop a VS Code process with a signal.
 
-## Production constraints [DOC-FILMS-PRODUCTION]
+## Recorded workflows [DOC-FILMS-LIVE]
 
-Use local cached narration, one rendering job at a time and the factory's
-cleanWork option. The initial free disk measurement was 14 GiB. Do not download
-IDE dependencies or build the Rust workspace for film production. Existing
-uncommitted deployment changes belong to another task and are excluded.
-Stop production at midnight Australia/Melbourne as instructed by the user.
+`node scripts/videos/shoot-user-workflows.mjs` records the real packaged
+extension. Its session receipt supports resuming with `DESLOP_TUTORIAL_CDP`.
+`shoot-agent-workflows.mjs` records pi against that workspace and Deslop MCP.
+Raw recordings include pointer tracks and click cues. Failed takes are removed.
 
-## Current production evidence [DOC-FILMS-EVIDENCE]
+In Videos, run `doc-series/narrate-workflows.py`, `check-narration.py`, then
+`prepare-workflows.mjs` under `projects/deslop/videos/`. In Deslop, run
+`node scripts/videos/cut-user-workflows.mjs --install`, with
+`CHROMIUM_EXECUTABLE` pointing to an installed browser. The installer checks
+current narration receipts and emits per-film Markdown media receipts.
 
-The Getting Started film recipe is in Videos at
-`projects/deslop/videos/docs-getting-started/film.mjs`; shared composition files
-are under `projects/deslop/videos/doc-series/`. Ten source-page snapshots and
-SHA-256 hashes are in its `sources/` directory. Preview frames were rendered
-and visually inspected before narration. The first publish rejected an
-intermediate quality setting of 20; the recipe now uses the supported maximum
-of 18. All ten films are delivered. The complete browser suite passes; its mechanical
-receipt is [site-validation.md](../../reports/videos/site-validation.md). The ten remote LFS objects were fetched into a fresh temporary store and their
-SHA-256 hashes match the committed pointers. Render intermediates are removed;
-remaining temporary verification files are removed before the midnight stop.
+## Picture and sound [DOC-FILMS-MOTION]
 
-Reviewed production scripts live in Videos under `projects/deslop/videos/docs-*/`.
-Superseded pi drafts were removed after review; model outcomes and corrections
-are recorded in PiNotes/2026-11-09-deslop-doc-video-scripts.md.
+Real application footage fills the complete timeline. SharpLsp's camera follows
+pointer and editor activity; captions contain at most seven words per cue.
+Narration uses Qwen3-TTS Aiden with a quiet score. Diagrams, slide decks and
+standalone text compositions are excluded. Finished-frame review must establish
+that each spoken action has useful visible evidence.
 
-## Final validation [DOC-FILMS-VALIDATION]
+## Evidence [DOC-FILMS-COVERAGE]
 
-The browser checks cover both language routes, widths from 320px to 1440px,
-actual playback and seeking at phone and desktop sizes, caption/chapter tracks,
-and keyboard transcript expansion. Native controls remain visitor-operated.
-Audio encoding and level measurements do not establish subjective pronunciation
-quality; narration was reviewed as text against the corresponding documentation.
+`check-doc-films.mjs --complete` emits the delivery inventory in
+`reports/videos/series-status.md`. Per-film receipts record raw source duration,
+playback speed, automatic camera movement and delivered hashes. These checks
+supplement visual review; they cannot establish useful footage on their own.
 
-## Live VS Code footage [DOC-FILMS-LIVE]
+## Browser and deployment checks [DOC-FILMS-VALIDATION]
 
-The documentation films open real files, inspect findings, compare source
-occurrences, and run the Deslop CLI or MCP in an isolated VS Code profile.
-For these takes, Deslop uses the same cursor, click rings, and automatic
-camera as SharpLsp. Reference cards remain for the parts that explain concepts.
-The recut preserves the narration, score, captions, and chapter timing.
+Website tests exercise both languages, responsive geometry, playback, seeking,
+caption counts, four chapters, transcript access and Osprey blog redirects.
+`record-site-check.mjs` emits evidence from a successful browser run.
+`verify-deployed-films.mjs <Pages-run-URL>` downloads the public videos and
+compares their hashes with the local deliveries.
 
-- [x] Review the SharpLsp walkthroughs and use their capture and camera modules.
-- [x] Record live VS Code with the packaged Deslop extension and real fixtures.
-- [x] Verify visible clicks, source navigation, and both comparison workflows.
-- [x] Verify Osprey scan output, MCP responses, and a real threshold failure.
-- [x] Verify all recut assets on the website before release.
-
-With the Videos and SharpLsp repositories beside Deslop, run
-`node scripts/videos/shoot-doc-footage.mjs <packaged.vsix>`. Run it again with
-`DESLOP_FILM_CONTEXT` set to each of `finding`, `files`, `commands`, `mcp`
-and `mcp-config` to capture the remaining footage. The terminal takes use
-`target/release` for Deslop CLI and MCP binaries.
-
-With the original narrated masters in Videos, run
-`node scripts/videos/cut-doc-footage.mjs` to stage the cuts in
-`target/docs-live/delivery`. Review the edits, then run the same command with
-`--install` to verify and install the media. The
-[live footage inventory](../../reports/videos/live-footage.md) records coverage.
-
-## Motion and agent recut [DOC-FILMS-MOTION]
-
-Keep the approved narration and original caption/chapter timestamps. Every
-chapter combines animated explanation with relevant real application footage;
-none of the old static reference slides remains. Motion sources are in Videos
-at `projects/deslop/videos/doc-series/motion.html` and `motion.js`.
-
-- [x] Record packaged-extension navigation, comparisons and terminal demonstrations.
-- [x] Record real pi Deslop MCP calls with returned duplicate and similarity findings.
-- [x] Render all chapter illustrations through Videos' shared frame renderer.
-- [x] Check SharpLsp camera moves and inspect finished pi tool/result frames.
-- [x] Verify all delivered video streams and unchanged audio hashes.
-- [ ] Deploy the tested website and verify public media against local hashes.
+The replacement films are live from `vsite-2026-11-10-recorded-workflows`.
+All public media hashes and both language routes passed verification. The
+feature branch still contains the separate Rust accuracy tests; its full CI
+gate must pass before the replacement assets can be merged to main.

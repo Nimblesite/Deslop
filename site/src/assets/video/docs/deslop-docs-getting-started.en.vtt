@@ -1,13 +1,73 @@
 WEBVTT
 
-00:00.400 --> 00:20.294
-Start with a small review: find repeated code, inspect its locations, and compare the copies before changing anything. Install Deslop from the VS Code Extensions panel, or use the command shown here. One extension includes the live editor experience, coding-agent checks, and the command-line tools.
+00:00.300 --> 00:02.702
+I open the Extensions view and find
 
-00:21.144 --> 00:38.872
-Open your project and a supported source file. Deslop updates its analysis as files change. The Top Offenders tree puts findings beside your code. This recording uses a real two-file C sharp example. Start with one finding so you can understand what it contains.
+00:02.702 --> 00:05.104
+Deslop. This is the extension that adds
 
-00:39.722 --> 00:58.206
-Open the finding and inspect its occurrences. A cluster groups related copies; each location lets you navigate back to the source. The canonical copy gives the comparison a consistent starting point. Read the surrounding code as well as the highlighted section before deciding what should be shared.
+00:05.104 --> 00:07.506
+the duplicate-code panel to VS Code. With
 
-00:59.056 --> 01:21.097
-Compare a copy with the canonical version. Look for differences in inputs, behavior, and surrounding assumptions. A finding is evidence to review, not permission to delete code automatically. Make a focused change, run your tests, and let the live analysis update. Follow the Getting Started page for installation alternatives and command-line examples.
+00:07.506 --> 00:09.908
+it installed, I open this small project
+
+00:09.908 --> 00:12.311
+so we can review one finding from
+
+00:12.311 --> 00:13.340
+beginning to end.
+
+00:14.140 --> 00:16.433
+The Deslop panel lists the repeated code
+
+00:16.433 --> 00:18.727
+it found in this project. I click
+
+00:18.727 --> 00:21.020
+one finding to open its details. The
+
+00:21.020 --> 00:23.313
+file links tell me where the copies
+
+00:23.313 --> 00:25.607
+live, so I can go straight to
+
+00:25.607 --> 00:27.900
+the code instead of searching through folders.
+
+00:28.700 --> 00:31.104
+I open the first file, then the
+
+00:31.104 --> 00:33.508
+second one. Deslop takes me to the
+
+00:33.508 --> 00:35.912
+relevant lines in each file. I read
+
+00:35.912 --> 00:38.316
+the code around the highlighted section too,
+
+00:38.316 --> 00:40.720
+because two similar pieces of code may
+
+00:40.720 --> 00:42.780
+still be used in different ways.
+
+00:43.580 --> 00:45.820
+I use Compare to put the two
+
+00:45.820 --> 00:48.060
+copies side by side. Now I can
+
+00:48.060 --> 00:50.300
+see what stayed the same and what
+
+00:50.300 --> 00:52.540
+changed. This gives me a useful starting
+
+00:52.540 --> 00:54.780
+point for a cleanup, while I still
+
+00:54.780 --> 00:56.700
+decide which behavior the project needs.

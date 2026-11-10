@@ -157,10 +157,16 @@ pub(crate) const NOISE_TOTALS_RUN_STAGE: &str = "run_cumulative_after_report_ren
 /// Writes one trace line per hidden cluster so the routing decision is
 /// recoverable without re-running the pipeline.
 pub(crate) fn log_hidden_cluster(cluster: &ReportCluster, why: &str) {
+    let spans: Vec<String> = cluster
+        .occurrences
+        .iter()
+        .map(|occurrence| format!("{}..{}", occurrence.start_byte, occurrence.end_byte))
+        .collect();
     tracing::debug!(
         cluster = cluster.id.as_str(),
         kind = cluster.kind.wire_label(),
         occurrences = cluster.occurrences.len(),
+        spans = spans.join(","),
         why,
         "cluster hidden from report",
     );

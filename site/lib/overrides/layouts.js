@@ -143,6 +143,7 @@ layout: layouts/base.njk
     <p class="post-article__meta">
       <time datetime="{{ date | isoDate }}">{{ date | dateFormat(lang) }}</time>
       {% if author %} · <span class="post-article__author">{{ author }}</span>{% endif %}
+      {% if updated and (updated | isoDate) != (date | isoDate) %} · {{ "blog.updated" | t(lang) | default("Updated") }} <time datetime="{{ updated | isoDate }}">{{ updated | dateFormat(lang) }}</time>{% endif %}
     </p>
   </header>
 
@@ -218,9 +219,9 @@ export const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
     }, { once: true });
   </script>
 
-  <title>{{ title | default(site.title) }}</title>
-  <meta name="title" content="{{ title | default(site.title) }}">
-  <meta name="description" content="{{ description | default(site.description) }}">
+  <title>{{ currentTitle }}</title>
+  <meta name="title" content="{{ currentTitle }}">
+  <meta name="description" content="{{ currentDescription }}">
   {% if site.author %}<meta name="author" content="{{ site.author }}">{% endif %}
   <meta name="robots" content="index, follow">
   <meta name="generator" content="Eleventy + techdoc">
@@ -228,6 +229,7 @@ export const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
   {% set pageOgImage = ogImage | default(site.ogImage) %}
   {% set pageOgImageWidth = ogImageWidth | default(site.ogImageWidth) | default('1200') %}
   {% set pageOgImageHeight = ogImageHeight | default(site.ogImageHeight) | default('630') %}
+  {% set pageOgImageAlt = ogImageAlt | default(heroImageAlt) | default('social.defaultImageAlt' | t(effLang)) | default(site.title) %}
 
   <link rel="canonical" href="{{ site.url }}{{ page.url }}">
   <link rel="icon" type="image/svg+xml" href="/assets/img/logo.svg">
@@ -246,8 +248,8 @@ export const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
 
   <meta property="og:type" content="{% if isBlogPost %}article{% else %}website{% endif %}">
   <meta property="og:url" content="{{ site.url }}{{ page.url }}">
-  <meta property="og:title" content="{{ title | default(site.title) }}">
-  <meta property="og:description" content="{{ description | default(site.description) }}">
+  <meta property="og:title" content="{{ currentTitle }}">
+  <meta property="og:description" content="{{ currentDescription }}">
   <meta property="og:site_name" content="{{ site.title }}">
   <meta property="og:locale" content="{{ effLang | toOgLocale }}">
   {%- if not noTranslation %}
@@ -261,17 +263,25 @@ export const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
   <meta property="og:image:type" content="{{ pageOgImage | toImageMimeType }}">
   <meta property="og:image:width" content="{{ pageOgImageWidth }}">
   <meta property="og:image:height" content="{{ pageOgImageHeight }}">
-  <meta property="og:image:alt" content="{{ ogImageAlt | default('social.defaultImageAlt' | t(effLang)) | default(site.title) }}">
+  <meta property="og:image:alt" content="{{ pageOgImageAlt }}">
   {% endif %}
+  {#- [SITE-BLOG-ARTICLE] -#}
+  {%- if isBlogPost %}
+  <meta property="article:published_time" content="{{ date | dateToRfc3339 }}">
+  <meta property="article:modified_time" content="{{ (updated | default(date)) | dateToRfc3339 }}">
+  {% if author %}<meta property="article:author" content="{{ author }}">{% endif %}
+  {% for tag in tags %}{% if tag != 'posts' %}<meta property="article:tag" content="{{ tag }}">
+  {% endif %}{% endfor %}
+  {%- endif %}
 
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:url" content="{{ site.url }}{{ page.url }}">
-  <meta name="twitter:title" content="{{ title | default(site.title) }}">
-  <meta name="twitter:description" content="{{ description | default(site.description) }}">
+  <meta name="twitter:title" content="{{ currentTitle }}">
+  <meta name="twitter:description" content="{{ currentDescription }}">
   {% if site.twitterSite %}<meta name="twitter:site" content="{{ site.twitterSite }}">{% endif %}
   {% if site.twitterCreator %}<meta name="twitter:creator" content="{{ site.twitterCreator }}">{% endif %}
   {% if pageOgImage %}<meta name="twitter:image" content="{{ site.url }}{{ pageOgImage }}">
-  <meta name="twitter:image:alt" content="{{ ogImageAlt | default('social.defaultImageAlt' | t(effLang)) | default(site.title) }}">{% endif %}
+  <meta name="twitter:image:alt" content="{{ pageOgImageAlt }}">{% endif %}
 
   <script type="application/ld+json">
   {

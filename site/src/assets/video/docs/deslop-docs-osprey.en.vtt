@@ -1,13 +1,76 @@
 WEBVTT
 
-00:00.400 --> 00:20.309
-Osprey has three syntax flavors. Deslop documents native braces and ML support, plus explicit selection for Osprey Python. This page describes the development integration, so check your installed release before expecting every change. Ordinary Python files should keep their own language identity.
+00:00.300 --> 00:02.511
+Here is an Osprey project. I open
 
-00:21.159 --> 00:37.559
-For an Osprey Python source file, put the flavor marker in a leading source comment. The same words inside a string, or in a comment after code, do not select the flavor. This makes language selection deliberate instead of treating every Python file as Osprey.
+00:02.511 --> 00:04.723
+one of its files, then click a
 
-00:38.409 --> 00:58.119
-The project manifest can also select the Python entry file and individual Python sources. These are literal file paths relative to the manifest, not directory-wide patterns. Other Python files remain ordinary Python. Project flavor overrides and nested project rules are described in the page.
+00:04.723 --> 00:06.934
+finding in the Deslop sidebar. The file
 
-00:58.969 --> 01:19.633
-Open the project with Deslop or scan it from the command line. Review the ranked findings and compare their occurrences before extracting shared code. Language support does not promise automatic Osprey refactoring, cross-flavor equivalence, or interchangeable behavior. Invalid ML syntax should surface as a parse error.
+00:06.934 --> 00:09.145
+links lead to the repeated code. I
+
+00:09.145 --> 00:11.356
+can review those copies in the same
+
+00:11.356 --> 00:12.620
+way as other languages.
+
+00:13.420 --> 00:15.884
+I compare the two Osprey files side
+
+00:15.884 --> 00:18.348
+by side. I can see the repeated
+
+00:18.348 --> 00:20.812
+calculation and check any differences before I
+
+00:20.812 --> 00:23.276
+edit it. The useful result is the
+
+00:23.276 --> 00:25.740
+source comparison in front of me, with
+
+00:25.740 --> 00:27.500
+both copies available to inspect.
+
+00:28.300 --> 00:30.805
+This Osprey file uses Python-looking syntax. Its
+
+00:30.805 --> 00:33.311
+leading comment tells Deslop how to read
+
+00:33.311 --> 00:35.816
+it. I open the file and its
+
+00:35.816 --> 00:38.321
+finding to check that it is treated
+
+00:38.321 --> 00:40.826
+as Osprey, while ordinary Python files keep
+
+00:40.826 --> 00:41.900
+their usual identity.
+
+00:42.700 --> 00:45.169
+I open the Osprey project file and
+
+00:45.169 --> 00:47.638
+list the Python-looking source files that belong
+
+00:47.638 --> 00:50.107
+to it. After saving the setting, I
+
+00:50.107 --> 00:52.576
+run Deslop on the project and inspect
+
+00:52.576 --> 00:55.045
+the result. That makes the choice visible
+
+00:55.045 --> 00:57.515
+in the project instead of leaving it
+
+00:57.515 --> 00:58.220
+to guesswork.

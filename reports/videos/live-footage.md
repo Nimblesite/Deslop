@@ -1,16 +1,20 @@
 # Documentation film footage [DOC-FILMS-LIVE]
 
-| Film | Real application footage (s) | Animated explanation (s) | Total (s) |
-| --- | ---: | ---: | ---: |
-| vscode-cluster-panel | 48.4 | 29.9 | 78.3 |
-| getting-started | 34.2 | 48.7 | 82.9 |
-| how-it-works | 48.6 | 38.3 | 86.9 |
-| accuracy-transparency | 28.5 | 53.8 | 82.3 |
-| research-background | 24.4 | 64.5 | 88.9 |
-| configuration | 32.8 | 46.7 | 79.5 |
-| github-action | 29.7 | 49.4 | 79.1 |
-| osprey | 42.7 | 38.7 | 81.4 |
-| ai-integration | 48.1 | 33.1 | 81.2 |
-| for-ai | 57.3 | 20.5 | 77.8 |
+10 films use 26 distinct recorded application takes across their complete timelines. Only captions, step labels and playback-speed labels overlay those recordings. Finished-frame content verification is in workflow-verification.md.
 
-The recut keeps the original audio, captions and chapter timings. Every chapter includes animated explanation; no original static slide is retained. The AI films show real pi MCP tool calls and returned findings. See each media receipt for its SHA-256.
+| Film | Recorded application timeline (seconds) | Recorded takes |
+| --- | ---: | --- |
+| getting-started | 57.90 | start-extension, review-finding, review-sources, review-compare |
+| configuration | 54.70 | config-create, config-exclude, config-override, config-limit |
+| ai-integration | 64.46 | agent-ask, agent-search, agent-results, review-compare |
+| how-it-works | 56.62 | review-finding, review-compare, review-sources, review-refresh |
+| osprey | 59.42 | osprey-finding, osprey-compare, osprey-python, osprey-config |
+| github-action | 55.82 | action-create, action-version, action-limit, action-changes |
+| vscode-cluster-panel | 67.82 | review-finding, review-compare, review-pair, review-counts |
+| accuracy-transparency | 59.18 | review-counts, review-sources, review-compare, config-exclude |
+| research-background | 60.46 | review-sources, review-edit, review-edited-compare, review-pair |
+| for-ai | 63.82 | agent-duplicates, agent-details, agent-search, review-pair |
+
+The timeline accounts for the complete encoded duration; this inventory supplements finished-frame review and playback checks. Narration is Qwen3-TTS Aiden.
+
+Regenerate with `node scripts/videos/record-footage-inventory.mjs`.

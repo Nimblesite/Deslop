@@ -324,3 +324,70 @@ test("English articles have distinct header artwork", async ({ page }) => {
   const unique = new Set(contents.map(bytes => bytes.toString('base64')));
   expect(unique.size, 'different filenames must not hide duplicate images').toBe(sources.length);
 });
+
+// [SITE-BLOG-ARTICLE] Search-result display limits and the minimum article
+// length the site commits to for every English post.
+const MIN_ENGLISH_POST_WORDS = 1000;
+const MIN_TITLE_LENGTH = 30;
+const MAX_TITLE_LENGTH = 60;
+const MIN_DESCRIPTION_LENGTH = 120;
+const MAX_DESCRIPTION_LENGTH = 160;
+const MIN_IMAGE_ALT_LENGTH = 30;
+const DEFAULT_SOCIAL_IMAGE_ALTS = [
+  "Deslop duplicate-code analysis for editors and coding agents",
+  "面向编辑器与编码智能体的 Deslop 重复代码分析",
+];
+
+test("every blog post publishes freshness, authorship, its own card alt and real substance", async ({ page }) => {
+  const sitemap = await (await page.request.get("/sitemap.xml")).text();
+  const posts = [...sitemap.matchAll(/<loc>https:\/\/deslop\.live(\/(?:zh\/)?blog\/[^/<]+\/)<\/loc>/g)].map(([, route]) => route);
+  expect(posts.filter((route) => !route.startsWith("/zh/"))).toHaveLength(ENGLISH_BLOG_POST_COUNT);
+  expect(posts.filter((route) => route.startsWith("/zh/"))).toHaveLength(ENGLISH_BLOG_POST_COUNT);
+
+  for (const route of posts) {
+    await page.goto(route);
+    const article = await page.evaluate(() => {
+      const meta = (property) => document.querySelector(`meta[property="${property}"]`)?.content;
+      const posting = [...document.querySelectorAll('script[type="application/ld+json"]')]
+        .flatMap((node) => JSON.parse(node.textContent)["@graph"] || [])
+        .find((entity) => entity["@type"] === "BlogPosting");
+      const bylineTimes = [...document.querySelectorAll(".post-article__meta time")].map((node) => node.dateTime);
+      return {
+        published: meta("article:published_time"),
+        modified: meta("article:modified_time"),
+        author: meta("article:author"),
+        ogImageAlt: meta("og:image:alt"),
+        twitterImageAlt: document.querySelector('meta[name="twitter:image:alt"]')?.content,
+        posting,
+        bylineTimes,
+        bylineText: document.querySelector(".post-article__meta")?.textContent.replace(/\s+/g, " ").trim(),
+        title: document.title,
+        description: document.querySelector('meta[name="description"]')?.content,
+        words: document.querySelector(".prose").innerText.split(/\s+/).filter(Boolean).length,
+      };
+    });
+
+    expect(article.published, route).toBe(article.posting.datePublished);
+    expect(article.modified, route).toBe(article.posting.dateModified);
+    expect(article.author, route).toBe("Christian Findlay");
+    expect(article.posting.author.name, route).toBe(article.author);
+    expect(Date.parse(article.modified), route).toBeGreaterThanOrEqual(Date.parse(article.published));
+    expect(DEFAULT_SOCIAL_IMAGE_ALTS, route).not.toContain(article.ogImageAlt);
+    expect(article.twitterImageAlt, route).toBe(article.ogImageAlt);
+    expect(article.bylineText, route).toContain("Christian Findlay");
+
+    const isUpdated = article.modified.slice(0, 10) !== article.published.slice(0, 10);
+    expect(article.bylineTimes, route).toEqual(
+      isUpdated ? [article.published, article.modified] : [article.published]
+    );
+    if (isUpdated) expect(article.bylineText, route).toMatch(/Updated|更新于/);
+
+    if (route.startsWith("/zh/")) continue;
+    expect(article.words, route).toBeGreaterThanOrEqual(MIN_ENGLISH_POST_WORDS);
+    expect(article.ogImageAlt.length, route).toBeGreaterThanOrEqual(MIN_IMAGE_ALT_LENGTH);
+    expect(article.title.length, route).toBeGreaterThanOrEqual(MIN_TITLE_LENGTH);
+    expect(article.title.length, route).toBeLessThanOrEqual(MAX_TITLE_LENGTH);
+    expect(article.description.length, route).toBeGreaterThanOrEqual(MIN_DESCRIPTION_LENGTH);
+    expect(article.description.length, route).toBeLessThanOrEqual(MAX_DESCRIPTION_LENGTH);
+  }
+});

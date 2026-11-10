@@ -1,13 +1,76 @@
 WEBVTT
 
-00:00.400 --> 00:17.506
-Duplication percentage tells you how much analysed source is covered by reported clones. It does not tell you how accurate the detector is. A false positive can inflate the percentage, and a missed clone can reduce it. Correct arithmetic does not establish correct detection.
+00:00.300 --> 00:02.922
+I expand the Duplication section to read
 
-00:18.356 --> 00:38.890
-Analysed lines include physical source lines, including blanks and comments. Duplicated lines are the union of visible clone ranges within each file, so overlaps count once. Hidden occurrences do not enter the numerator, while their analysed files remain in the denominator. Excluded files leave analysis entirely.
+00:02.922 --> 00:05.545
+the project total. Deslop shows how many
 
-00:39.740 --> 01:00.293
-Accuracy checks use judged source pairs pinned to repository commits. Clearly in identifies a known clone; clearly out identifies a pair that should not be reported. Unclear cases assert neither verdict. Range coverage separately asks whether the report covers the whole judged copy rather than just a small fragment.
+00:05.545 --> 00:08.167
+lines it analysed and how many it
 
-01:01.143 --> 01:20.613
-The gate fails when the full-precision percentage is greater than its ceiling. Equality passes, even if display rounding makes nearby values look identical. Read the report scope and the measured build together. Corpus results apply to judged examples; they do not guarantee perfect precision or recall everywhere.
+00:08.167 --> 00:10.790
+found in repeated code. The percentage describes
+
+00:10.790 --> 00:13.412
+those files; it does not tell me
+
+00:13.412 --> 00:15.660
+that a cleanup is automatically safe.
+
+00:16.460 --> 00:18.673
+I open the file rows behind that
+
+00:18.673 --> 00:20.885
+total and inspect the highlighted code. This
+
+00:20.885 --> 00:23.098
+lets me connect the number to real
+
+00:23.098 --> 00:25.311
+source lines. When I review a result,
+
+00:25.311 --> 00:27.523
+I want to understand which files were
+
+00:27.523 --> 00:29.420
+checked and what work was counted.
+
+00:30.220 --> 00:32.353
+Next I put the reported copies side
+
+00:32.353 --> 00:34.487
+by side. I check that they really
+
+00:34.487 --> 00:36.620
+repeat the same work and look at
+
+00:36.620 --> 00:38.753
+their differences. This is the evidence I
+
+00:38.753 --> 00:40.887
+use to decide what deserves attention, rather
+
+00:40.887 --> 00:43.020
+than treating a percentage as a verdict.
+
+00:43.820 --> 00:46.125
+I exclude a folder in the settings
+
+00:46.125 --> 00:48.430
+file and save it. The sidebar updates
+
+00:48.430 --> 00:50.735
+because those files are no longer part
+
+00:50.735 --> 00:53.040
+of the analysis. Before comparing two results,
+
+00:53.040 --> 00:55.346
+I check settings like this so I
+
+00:55.346 --> 00:57.651
+know that both runs measured the same
+
+00:57.651 --> 00:57.980
+files.

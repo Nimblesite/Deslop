@@ -1,9 +1,18 @@
-# how-it-works media verification
+# how-it-works recorded workflow verification [DOC-FILMS-LIVE]
 
-- Duration: 86.899 seconds
-- Live VS Code footage: 48.6 seconds
-- Video: H.264, 1920 × 1080
-- Audio: original AAC stream, verified by stream hash
-- English captions and chapters: original timestamps preserved
-- Visuals: recorded application footage, automatic camera and animated explanations
-- SHA-256: c1ad4ea9122f76218ff5cf04213a5a8e53355b84619c5725182f0718bfe07190
+- Duration: 56.620 seconds
+- Picture: real application footage for the entire film; captions and small step labels only
+- Narrator: Qwen3 TTS / Aiden
+- Spoken script: 4 current lines, matching the cached speech receipts
+- Caption cues: 24
+- Video: H.264, 1920 x 1080; audio: AAC
+- SHA-256: 33a467642d69b2bdfb16e87fb41f12f9aac26c090a48f7b0c5499baa5672585c
+
+| Step | Recorded action | Source seconds | Playback speed | Automatic camera moves |
+| --- | --- | ---: | ---: | ---: |
+| Find a copy worth reviewing | review-finding | 19.33 | 1.39 | 5 |
+| See past different names | review-compare | 11.47 | 1.00 | 2 |
+| Read the surrounding code | review-sources | 17.33 | 1.18 | 4 |
+| Watch the result update | review-refresh | 30.97 | 2.23 | 8 |
+
+Narration and visible workflow must also receive finished-frame review. Encoding checks alone do not establish usefulness.

@@ -1,6 +1,7 @@
 import techdoc from "eleventy-plugin-techdoc";
 import syntaxHighlight from "@11ty/eleventy-plugin-syntaxhighlight";
 import { overrideVirtualTemplates } from "./lib/overrides/index.js";
+import siteData from "./src/_data/site.json" with { type: "json" };
 
 // The MIME type each social-card extension actually serves. `og:image:type`
 // used to be the literal string "image/png" for every page, so seven of the
@@ -46,13 +47,12 @@ export default function (eleventyConfig) {
 
   eleventyConfig.addPlugin(techdoc, {
     site: {
-      name: "Deslop",
-      url: "https://deslop.live",
-      description:
-        "Find duplicate code in nine languages. Deslop ranks what to remove first and tells your coding agent when similar code already exists — live in VS Code.",
-      ogImage: "/assets/img/og-card.png",
-      ogImageWidth: "1200",
-      ogImageHeight: "630",
+      name: siteData.title,
+      url: siteData.url,
+      description: siteData.description,
+      ogImage: siteData.ogImage,
+      ogImageWidth: siteData.ogImageWidth,
+      ogImageHeight: siteData.ogImageHeight,
     },
     features: {
       blog: true,

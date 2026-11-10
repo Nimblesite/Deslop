@@ -1,13 +1,82 @@
 WEBVTT
 
-00:00.400 --> 00:20.084
-Before working in a new codebase, inspect the installed tool version and available tool parameters. Bind MCP to the absolute repository root, read the project instructions and configuration, then call session and verify its root. A connection to another repository is not a useful empty result.
+00:00.300 --> 00:02.595
+I ask pi to check the repeated
 
-00:20.934 --> 00:39.362
-Request duplicates with detail summary and a small limit. Scope edits with path or path_contains, then use cluster-by-id and inspect every member, paging with offset, before editing. Keep overview pages small: full occurrences for one cluster, not hundreds of full clusters.
+00:02.595 --> 00:04.889
+code in this project before making a
 
-00:40.212 --> 00:57.826
-Before adding a code unit, call find similar with a snippet and its language. Inspect clusters and also existing occurrences outside any cluster. An existing match still needs review, even when clusters is empty. A disk report cannot answer this in-memory snippet query.
+00:04.889 --> 00:07.184
+change. It calls Deslop and brings the
 
-00:58.676 --> 01:15.985
-After editing, run the project's tests and query the changed paths again. The live index refreshes automatically; use rescan only for suspected watcher lag. A merge plan is optional. A verdict asking for agent or human judgment is not an executable merge.
+00:07.184 --> 00:09.479
+result into the conversation. I start with
+
+00:09.479 --> 00:11.773
+one finding so the review stays small
+
+00:11.773 --> 00:13.740
+enough to understand and act on.
+
+00:14.540 --> 00:16.780
+I ask the agent for the files
+
+00:16.780 --> 00:19.020
+behind that finding. The reply shows where
+
+00:19.020 --> 00:21.260
+the repeated code lives and how many
+
+00:21.260 --> 00:23.500
+copies were found. I use those locations
+
+00:23.500 --> 00:25.740
+to guide the next step, rather than
+
+00:25.740 --> 00:27.980
+asking for a broad rewrite of the
+
+00:27.980 --> 00:28.300
+project.
+
+00:29.100 --> 00:31.731
+Before adding another helper, I ask pi
+
+00:31.731 --> 00:34.361
+to read the existing file and search
+
+00:34.361 --> 00:36.992
+for similar code. Deslop returns the matching
+
+00:36.992 --> 00:39.623
+files. This is the useful moment to
+
+00:39.623 --> 00:42.253
+spot something I can reuse, while there
+
+00:42.253 --> 00:44.884
+is still time to avoid writing another
+
+00:44.884 --> 00:45.260
+copy.
+
+00:46.060 --> 00:48.756
+I finish by opening the source comparison
+
+00:48.756 --> 00:51.452
+in the editor. I check that the
+
+00:51.452 --> 00:54.147
+proposed reuse preserves the behavior I need.
+
+00:54.147 --> 00:56.843
+After a focused change, I run the
+
+00:56.843 --> 00:59.539
+project's tests and review Deslop again instead
+
+00:59.539 --> 01:02.235
+of assuming the agent's first answer is
+
+01:02.235 --> 01:02.620
+enough.

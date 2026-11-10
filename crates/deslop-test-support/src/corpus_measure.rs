@@ -171,7 +171,9 @@ fn posix_run(flag: &str, program: &Path, args: &[OsString]) -> Result<RunOutcome
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .context("failed to spawn /usr/bin/time")?;
+        .with_context(|| {
+            format!("failed to spawn {NICE_PROGRAM} -n {SCAN_NICENESS} /usr/bin/time")
+        })?;
     let cpu_sampler = cpu::Sampler::start(child.id());
     let deadline = Deadline::arm(child.id(), SCAN_DEADLINE);
     let output = child.wait_with_output().context("scan did not complete")?;

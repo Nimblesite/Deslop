@@ -7,6 +7,7 @@
       "subtitle": "Notes on duplicate detection, AI-era codebases, and the decisions behind Deslop.",
       "eyebrow": "Field notes",
       "readMore": "Read Article",
+      "updated": "Updated",
       "empty": "No blog posts yet."
     },
     "a11y": {
@@ -99,6 +100,7 @@
       "subtitle": "关于重复检测、AI 时代的代码库，以及 Deslop 背后设计取舍的技术札记。",
       "eyebrow": "技术札记",
       "readMore": "阅读全文",
+      "updated": "更新于",
       "empty": "暂无博客文章。"
     },
     "a11y": {

@@ -2,6 +2,7 @@
 layout: layouts/blog.njk
 title: "Deslop 0.35.0: Accuracy in Duplicate Code Detection"
 date: 2026-09-27
+updated: 2026-11-11
 author: Christian Findlay
 tags:
   - posts
@@ -9,7 +10,7 @@ tags:
   - code-quality
   - technical-debt
 category: engineering
-description: "Deslop 0.35.0 improves duplicate code detection with clearer comparisons, code duplication metrics, and fixes for false matches, missed copies and incomplete ranges."
+description: "Deslop 0.35.0 improves duplicate code detection: clearer comparisons, code duplication metrics, and fixes for false matches, missed copies and partial ranges."
 excerpt: "Finding a pair is only part of accuracy. Deslop also needs to report the complete copied code, reject unrelated lookalikes and count the right lines."
 heroImage: "/assets/img/blog/accuracy-complete-shapes.webp"
 heroImageWidth: "1600"
@@ -23,6 +24,16 @@ ogImageHeight: "630"
 A duplicate code detector earns its place in code review by finding copies worth inspecting. False positives waste review time. False negatives leave the same bug waiting to be fixed in another location. Incomplete findings can identify a copy while hiding most of it.
 
 Deslop **0.35.0** addresses these problems through clone classification, complete-range recovery and clearer comparison evidence. [Download the release](/releases/).
+
+## Why accuracy decides whether a detector gets used
+
+A duplicate code detector produces a list of claims: *these ranges are copies of each other*. Each kind of error costs something different.
+
+- **A false positive** sends a reviewer, or an AI agent, to merge code that should stay separate. Merge two functions that only look alike and you couple code that was never meant to change together.
+- **A false negative** leaves a copy unreported. The next bug fix lands in one place, and the other copy keeps the bug.
+- **An incomplete range** reports the right copy but shows only part of it. A refactor based on that range extracts half a function and leaves the rest duplicated.
+
+Teams stop reading a report when it is noisy, and AI agents act on whatever they are given. Both need findings that are correct when they arrive. That is why this release concentrates on finding the right copies and reporting their full extent, rather than adding features.
 
 ## Find the whole copy
 
@@ -57,3 +68,20 @@ We also inspect **clone-range coverage**: how much of the judged copied ranges t
 A repository's duplication percentage answers a separate question: what fraction of analysed lines is covered by reported clones? It is not an accuracy score. Overlapping ranges count once, and shape-only findings count zero. [Accuracy Transparency](/docs/accuracy-transparency/) documents the calculation and the limits of corpus measurements.
 
 The release work makes specific defects testable and comparisons easier to inspect. That is the evidence to ask of a static code analysis tool: which false matches were rejected, which missed copies were recovered, and whether the report shows the code a reviewer actually needs.
+
+## Check a finding yourself
+
+You do not have to take a cluster on trust. Every occurrence in the JSON report carries exact byte offsets, and the CLI can recompute the verdict for any two of them:
+
+```text
+deslop . --compare "src/orders.ts:1204:1980" --compare "src/invoices.ts:310:1086"
+```
+
+The command scans the project, recomputes the evidence for that pair, and prints a JSON verdict. Offsets are bytes, the end is exclusive, and each range has to match an occurrence in the report. In VS Code the same check runs from the cluster panel, with the two ranges side by side in the diff editor.
+
+If a verdict looks wrong, that is the most useful bug report Deslop can receive: two paths, two ranges and the version number. Confirmed false positives and false negatives become fixtures in the test suite, so the same mistake fails the build if it comes back. The [public issue graph](/issues/) shows which accuracy work is open, and [Towards 100% Accuracy](/blog/towards-100-percent-accuracy/) explains why those failures are published.
+
+## Upgrading to 0.35.0
+
+Category names changed in this release. Reports now use **Identical code**, **Nearly identical code**, **Similar code**, **Same behavior, different code** and **Same shape, different content**. If your scripts read the JSON report, check the [category guide](/docs/how-it-works/#read-the-categories) before upgrading. Ranking now uses duplicated mass alone, so cluster order can change even where the findings did not; [the ranking post](/blog/ranking-formula/) explains the formula. Duplication percentages exclude shape-only findings, so a repository with many repeated control-flow skeletons may report a lower figure than before. A lower figure here reflects a more accurate count, not deleted duplicates.
+
