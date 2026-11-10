@@ -265,6 +265,7 @@ export const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
   <meta property="og:image:height" content="{{ pageOgImageHeight }}">
   <meta property="og:image:alt" content="{{ pageOgImageAlt }}">
   {% endif %}
+  {#- [SITE-BLOG-ARTICLE] -#}
   {%- if isBlogPost %}
   <meta property="article:published_time" content="{{ date | dateToRfc3339 }}">
   <meta property="article:modified_time" content="{{ (updated | default(date)) | dateToRfc3339 }}">

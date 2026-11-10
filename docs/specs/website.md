@@ -72,6 +72,10 @@ audit verifies this exact inventory; unrelated audio/video and render masters
 are rejected. The homepage and audit tests share the HTTP checks in
 `site/tests/helpers/assets.js`.
 
+## [SITE-BLOG-ARTICLE] Blog posts carry their own freshness, authorship and substance
+
+Every blog post, in both languages, publishes `article:published_time`, `article:modified_time` and `article:author`, matching the `BlogPosting` dates and author. When a post has an `updated` date that differs from its publication date, the byline shows it as a visible "Updated" date. A post's social-image alt text describes its own card, falling back to its hero image alt text rather than the site-wide default. Every English post body has at least 1,000 words, and its title and description stay within search-result display limits. Implemented in `site/lib/overrides/layouts.js`; verified by `site/tests/website-audit.spec.js`.
+
 ## [SITE-ISSUES-FIXTURE] Issue tests run on a fixed set of issues
 
 The published issue pages are built from live GitHub, but their tests are not. `site/tests/fixtures/github-issues.json` is a committed snapshot of the open issues. Each body is cut down to the parts the report reads: its TL;DR and the issues it references. Two of the issues are labelled `fixed-on-main` so the release-verification views always have something to show. Before the tests run, `npm test` generates the issue report from that snapshot with a fixed publication time. `site/tests/helpers/issues.js` then serves that report to every page in `issues.spec.js` and `issues-publication.spec.js`. The tests pass or fail the same way whatever is open on GitHub that day.
