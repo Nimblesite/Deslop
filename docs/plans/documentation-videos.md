@@ -15,7 +15,7 @@ visible action in plain English. No concept cards or parser explanations.
 - [x] Cut all ten films with automatic zoom and short captions.
 - [x] Inspect finished application frames and verify all delivery streams.
 - [x] Test both language routes, mobile playback, tracks and transcripts.
-- [ ] Commit, push and deploy the website; verify public media hashes.
+- [x] Commit, push and deploy the website; verify public media hashes.
 - [ ] Remove owned temporary files and model caches; check disk space.
 
 ## Production [DOC-FILMS-PRODUCTION]
@@ -60,3 +60,8 @@ caption counts, four chapters, transcript access and Osprey blog redirects.
 `record-site-check.mjs` emits evidence from a successful browser run.
 `verify-deployed-films.mjs <Pages-run-URL>` downloads the public videos and
 compares their hashes with the local deliveries.
+
+The replacement films are live from `vsite-2026-11-10-recorded-workflows`.
+All public media hashes and both language routes passed verification. The
+feature branch still contains the separate Rust accuracy tests; its full CI
+gate must pass before the replacement assets can be merged to main.
