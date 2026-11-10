@@ -6,7 +6,7 @@
 - Spoken script: 4 current lines, matching the cached speech receipts
 - Caption cues: 27
 - Video: H.264, 1920 x 1080; audio: AAC
-- SHA-256: 42d6c95fb0c9fc24b04c6f8b988648dca51c2d7ff09ceee2386af97272730ed1
+- SHA-256: 1f6d323a17b540d11d2e222b41d39f12340701b984c43fb6df83d2e2bfa9adfb
 
 | Step | Recorded action | Source seconds | Playback speed | Automatic camera moves |
 | --- | --- | ---: | ---: | ---: |

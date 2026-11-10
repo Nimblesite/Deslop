@@ -15,7 +15,10 @@ const captures = path.join(videos, 'projects/deslop/captures/docs-tutorial');
 const work = path.join(root, 'target/docs-tutorial/render');
 const stories = JSON.parse(fs.readFileSync(path.join(series, 'doc-series/user-workflows.json'), 'utf8'));
 const fps = 30;
-const encode = ['-c:v', 'libx264', '-threads', '2', '-preset', 'veryfast', '-crf', '18', '-pix_fmt', 'yuv420p'];
+// [DOC-FILMS-DELIVERY] WebKit restarts decoding at the previous keyframe on every playback-rate change.
+const keyframeInterval = fps;
+const encode = ['-c:v', 'libx264', '-threads', '2', '-preset', 'veryfast', '-crf', '18', '-pix_fmt', 'yuv420p',
+  '-g', String(keyframeInterval), '-keyint_min', String(keyframeInterval), '-sc_threshold', '0'];
 const run = (command, args) => execFileSync(command, args, { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
 const ffmpeg = args => run('ffmpeg', ['-nostdin', '-y', '-v', 'error', ...args]);
 const probe = file => JSON.parse(run('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', file]));
@@ -76,6 +79,9 @@ function verifyMedia(data, media) {
   const audio = result.streams.find(stream => stream.codec_type === 'audio');
   assert.deepEqual([video.codec_name, video.width, video.height, audio.codec_name], ['h264', 1920, 1080, 'aac']);
   assert.ok(Math.abs(Number(video.duration) - data.duration) < 0.18);
+  const flags = run('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'packet=flags', '-of', 'csv=p=0', media]).trim().split('\n');
+  const keyframes = flags.flatMap((flag, frame) => flag.includes('K') ? [frame] : []);
+  assert.ok(keyframes.every((frame, index) => frame - (keyframes[index - 1] ?? 0) <= keyframeInterval), 'Keyframes too sparse for playback-rate changes');
 }
 
 function updateCatalog(data, cues) {

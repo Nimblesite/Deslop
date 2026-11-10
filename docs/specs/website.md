@@ -22,6 +22,8 @@ captions are explicitly labelled.
 Every delivery includes a 1920x1080 H.264/AAC MP4, poster, English captions and
 chapter track. A readable transcript comes from the delivered narration timeline.
 Players use native controls, never autoplay, and fit widths from 320px upward.
+Video carries a keyframe every second so Safari changes playback speed
+immediately instead of freezing while it decodes back to a distant keyframe.
 
 Production lives in Videos under `projects/deslop/videos/docs-*`. SharpLsp's
 capture and automatic camera modules record the real packaged extension and
