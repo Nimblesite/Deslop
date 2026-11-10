@@ -16,7 +16,7 @@ visible action in plain English. No concept cards or parser explanations.
 - [x] Inspect finished application frames and verify all delivery streams.
 - [x] Test both language routes, mobile playback, tracks and transcripts.
 - [x] Commit, push and deploy the website; verify public media hashes.
-- [ ] Remove owned temporary files and model caches; check disk space.
+- [x] Remove owned temporary files and model caches; check disk space.
 
 ## Production [DOC-FILMS-PRODUCTION]
 

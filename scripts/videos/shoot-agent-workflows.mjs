@@ -49,36 +49,38 @@ async function waitForResult(tool, before) {
   throw new Error(`pi did not return a successful ${tool} result`);
 }
 
+async function waitForAnswer(before) {
+  const deadline = Date.now() + 60000;
+  while (Date.now() < deadline) {
+    const answer = responses().slice(before).find(row => row.message?.role === 'assistant' && row.message.stopReason === 'stop');
+    if (answer) return answer;
+    await sleep(500);
+  }
+  throw new Error('pi must finish its answer');
+}
+
+async function askAgent(prompt, tool, before) {
+  await ringClick(page, cues, page.locator('.terminal-wrapper').last(), 'Ask pi to consult Deslop MCP');
+  await pointAt(page, { x: 600, y: 440 });
+  await typeText(page, prompt + ' Reply briefly in plain English: file names, line ranges, and what to review. Do not mention internal statistics or assume a refactor is safe.', 12);
+  await page.keyboard.press('Enter');
+  await pointAt(page, { x: 850, y: 210 });
+  if (tool) {
+    const result = await waitForResult(`mcp__deslop__${tool}`, before);
+    const data = JSON.parse(result.message.content[0].text);
+    assert.ok(!result.message.isError && Object.keys(data).length, 'The tool must return real results');
+  }
+  await waitForAnswer(before);
+  await pointAt(page, { x: 850, y: 360 });
+  await sleep(5000);
+  await pointAt(page, { x: 700, y: 510 });
+  await sleep(1800);
+}
+
 async function take(name, prompt, tool) {
   process.stdout.write(`Recording ${name}\n`);
   const before = responses().length;
-
-  await record({ page, cdp, cues, frames, clips }, name, async () => {
-    await ringClick(page, cues, page.locator('.terminal-wrapper').last(), 'Ask pi to consult Deslop MCP');
-    await pointAt(page, { x: 600, y: 440 });
-    await typeText(page, prompt + ' Reply briefly in plain English: file names, line ranges, and what to review. Do not mention internal statistics or assume a refactor is safe.', 12);
-    await page.keyboard.press('Enter');
-    await pointAt(page, { x: 850, y: 210 });
-    if (tool) {
-      const result = await waitForResult(`mcp__deslop__${tool}`, before);
-      const data = JSON.parse(result.message.content[0].text);
-      assert.ok(!result.message.isError && Object.keys(data).length, 'The tool must return real results');
-    }
-    {
-      const deadline = Date.now() + 60000;
-
-      while (Date.now() < deadline) {
-        const answer = responses().slice(before).find(row => row.message?.role === 'assistant' && row.message.stopReason === 'stop');
-        if (answer) { break; }
-        await sleep(500);
-      }
-    }
-    assert.ok(responses().slice(before).some(row => row.message?.role === 'assistant' && row.message.stopReason === 'stop'), 'pi must finish its answer');
-    await pointAt(page, { x: 850, y: 360 });
-    await sleep(5000);
-    await pointAt(page, { x: 700, y: 510 });
-    await sleep(1800);
-  });
+  await record({ page, cdp, cues, frames, clips }, name, () => askAgent(prompt, tool, before));
 }
 
 try {
