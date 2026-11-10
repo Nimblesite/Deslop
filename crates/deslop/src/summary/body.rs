@@ -15,6 +15,8 @@ const TOP_CLUSTERS_IN_SUMMARY: usize = 10;
 const SKIPPED_FILES_IN_SUMMARY: usize = 10;
 /// Maximum distinct file names listed inline in a cluster row.
 const MAX_FILE_COUNT_SUMMARY_SEGMENTS: usize = 3;
+/// Matches VSIX display slugs and the MCP cluster-id prefix floor.
+const CLUSTER_SLUG_LENGTH: usize = 7;
 
 /// Prints the summary block to stderr.
 pub fn summary(color: ColorChoice, report: &Report, technical: bool) {
@@ -224,53 +226,49 @@ fn write_top_clusters_header(theme: &Theme, report: &Report, technical: bool) {
     );
     if technical {
         eprintln!(
-            "  {dim}columns: rank, kind, id, mass, occurrences, canonical AST nodes, files{reset}",
+            "  {dim}columns: id, kind, rank, mass, occurrences, canonical AST nodes, files{reset}",
             dim = theme.dim,
             reset = theme.reset,
         );
     }
 }
 
-/// Renders one cluster row, titled by its clone kind ([CLONE-KIND-LABELS]).
+/// [UX-CLUSTER-IDENTITY] Stable identity leads every row; rank is only ordering.
 fn render_cluster(theme: &Theme, cluster: &ReportCluster, technical: bool) {
-    let files = summarise_files(&cluster.occurrences);
-    let title = cluster.kind.labels().title;
+    let facts = cluster_facts(cluster, technical);
+    eprintln!(
+        "  {bold}{id}{reset} {title} — {facts} in {cyan}{files}{reset}",
+        bold = theme.bold,
+        reset = theme.reset,
+        cyan = theme.cyan,
+        id = short_id(&cluster.id),
+        title = cluster.kind.labels().title,
+        files = summarise_files(&cluster.occurrences),
+    );
+}
+
+/// Informational rows have no rank; technical clone rows add canonical AST size.
+fn cluster_facts(cluster: &ReportCluster, technical: bool) -> String {
     if !cluster.kind.is_clone() {
-        eprintln!(
-            "  {title} — {INFORMATIONAL_FINDING_NOTE} {matches} matches in {files}",
-            matches = cluster.occurrence_count
+        return format!(
+            "{INFORMATIONAL_FINDING_NOTE} {} matches",
+            cluster.occurrence_count
         );
-        return;
     }
+    let facts = format!(
+        "rank #{}, mass {}, {} occurrences",
+        cluster.rank, cluster.mass, cluster.occurrence_count
+    );
     if technical {
-        eprintln!(
-            "  {bold}#{rank:<2}{reset} {title} [{dim}{id}{reset}] · mass {mass} · {occurrences} occurrences · {nodes} AST nodes · {cyan}{files}{reset}",
-            bold = theme.bold,
-            reset = theme.reset,
-            dim = theme.dim,
-            cyan = theme.cyan,
-            rank = cluster.rank,
-            id = short_id(&cluster.id),
-            mass = cluster.mass,
-            occurrences = cluster.occurrence_count,
-            nodes = cluster.canonical_node_count,
-        );
+        format!("{facts}, {} AST nodes", cluster.canonical_node_count)
     } else {
-        eprintln!(
-            "  {bold}#{rank:<2}{reset} {title} — mass {mass}, {occurrences} occurrences in {cyan}{files}{reset}",
-            bold = theme.bold,
-            reset = theme.reset,
-            cyan = theme.cyan,
-            rank = cluster.rank,
-            mass = cluster.mass,
-            occurrences = cluster.occurrence_count,
-        );
+        facts
     }
 }
 
 /// Stable short id for display.
 fn short_id(id: &str) -> &str {
-    id.get(..8).unwrap_or(id)
+    id.get(..CLUSTER_SLUG_LENGTH).unwrap_or(id)
 }
 
 /// Reports rows omitted from the terminal summary.

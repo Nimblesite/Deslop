@@ -37,6 +37,8 @@ mod pair_compare;
 mod report_css;
 #[path = "cli/routing.rs"]
 mod routing;
+#[path = "cli/summary.rs"]
+mod summary;
 #[path = "cli/thresholds.rs"]
 mod thresholds;
 #[path = "cli/total_include.rs"]

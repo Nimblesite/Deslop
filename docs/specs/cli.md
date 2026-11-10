@@ -69,8 +69,12 @@ The default stderr summary is plain English aimed at a human in a terminal: a `F
 
 `--technical` upgrades this to the researcher view ([UX-TECHNICAL-BREAKDOWN]); it changes verbosity without adding pair evidence to clusters.
 
+### [UX-CLUSTER-IDENTITY] Cluster handles precede ordering
+
+Every summary row leads with the first seven hexadecimal characters of its canonical cluster id, matching VSIX slugs and MCP `cluster-by-id` prefixes ([VSIX-CLUSTER-ID-CONSISTENCY]). Clone ranks are labelled `rank #N`; they are ordering, never identity. Changing another group's mass may reorder an unchanged cluster but must not change its displayed handle. Both default and technical modes follow this rule; informational rows also carry their id but have no clone rank.
+
 ### [UX-TECHNICAL-BREAKDOWN] Technical summary (`--technical`)
-`--technical` switches the stderr summary from plain English to the researcher view without adding pair evidence to a cluster. The technical view adds a column legend (`rank, id, copies, AST nodes, mass, files`) and, per ranked cluster, the truncated cluster id, AST node count, mass, and file count. Structural, Jaccard, embedding, and content values appear only when the user explicitly compares two occurrences. It is purely additive verbosity layered on the [UX-PLAIN-SUMMARY] structure.
+`--technical` switches the stderr summary from plain English to the researcher view without adding pair evidence to a cluster. The technical view adds a column legend (`id, kind, rank, mass, occurrences, canonical AST nodes, files`) and the canonical AST node count to each clone row. Structural, Jaccard, embedding, and content values appear only when the user explicitly compares two occurrences. It is purely additive verbosity layered on the [UX-PLAIN-SUMMARY] structure.
 
 ### [UX-TECHNICAL-CACHE] Cache statistics line
 When the incremental cache ([pipeline.md §PIPELINE-INCREMENTAL](pipeline.md)) is active and recorded any activity, the summary surfaces cache statistics. Under `--technical` it prints the raw `cache: <hits> hit / <misses> miss` line; in plain mode it prints the friendly `skipped <hits> unchanged file(s) using the cache` only when there were hits, and stays silent when the cache neither hit nor missed. The counts come from `Report.cache_stats`, the same source the text renderer uses, so the surfaces never disagree.
