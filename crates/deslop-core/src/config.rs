@@ -29,7 +29,7 @@ pub use builtin::DEFAULT_MAX_AVERAGE_LINE_BYTES;
 use builtin::{built_in_report_hidden, corpus_built_in_excluded, is_minified_artifact};
 pub(crate) use generated_banner::opens_with_generated_banner;
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
-pub use paths::{is_config_path, watched_config_paths};
+pub use paths::{is_config_path, watched_config_paths, ConfigBaseline};
 use ranking::resolve_ranking_policy;
 pub use ranking::{
     ClonePolicy, RankingPolicy, DEFAULT_DATA_CLONE_WEIGHT, DEFAULT_STRUCTURAL_ONLY_WEIGHT,

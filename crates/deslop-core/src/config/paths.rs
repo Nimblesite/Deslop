@@ -20,6 +20,52 @@ pub fn watched_config_paths(root: &Path, override_path: Option<&Path>) -> Vec<Pa
     paths
 }
 
+/// [LIVE-CONFIG-STARTUP] The bytes every watched config path held
+/// before a session read it. A cold scan loads `.deslop.toml` long
+/// before the watcher attaches, so an edit landing in between raises no
+/// event; comparing this snapshot against disk once the watcher is live
+/// recovers that edit instead of serving the old scope until the next
+/// one.
+#[derive(Debug, Clone, Default)]
+pub struct ConfigBaseline {
+    /// Each watched path with its bytes, `None` when it did not exist.
+    entries: Vec<(PathBuf, Option<Vec<u8>>)>,
+}
+
+impl ConfigBaseline {
+    /// Snapshots `<root>/.deslop.toml` and the explicit override, if any.
+    /// Capture it before the session loads its config, never after.
+    #[must_use]
+    pub fn capture(root: &Path, override_path: Option<&Path>) -> Self {
+        let root = canonicalise_or_clone(root);
+        let entries = watched_config_paths(&root, override_path)
+            .into_iter()
+            .map(|path| {
+                let bytes = std::fs::read(&path).ok();
+                (path, bytes)
+            })
+            .collect();
+        Self { entries }
+    }
+
+    /// The watched config paths, in [`watched_config_paths`] order.
+    #[must_use]
+    pub fn paths(&self) -> Vec<PathBuf> {
+        self.entries.iter().map(|(path, _)| path.clone()).collect()
+    }
+
+    /// Paths whose bytes on disk no longer match the snapshot: created,
+    /// rewritten or deleted since [`Self::capture`].
+    #[must_use]
+    pub fn drifted(&self) -> Vec<PathBuf> {
+        self.entries
+            .iter()
+            .filter(|(path, bytes)| std::fs::read(path).ok() != *bytes)
+            .map(|(path, _)| path.clone())
+            .collect()
+    }
+}
+
 /// Returns `true` when `candidate` matches one of the watched config
 /// paths in either canonical or as-given form.
 #[must_use]

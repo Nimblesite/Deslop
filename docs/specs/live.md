@@ -273,6 +273,11 @@ Editors re-deliver the same buffer constantly — `textDocument/didChange` fires
 ### [LIVE-CONFIG-LIVE] Live `.deslop.toml` reload
 Editing `<root>/.deslop.toml` (or the explicit `--config` override) is a watched change ([LIVE-WATCHER]): the watch set always includes the canonical and as-given config paths. When such a file lands in a changeset, the scheduler reloads the exclusion config and re-evaluates the whole live corpus against it — dropping files the new `exclude` patterns now match and re-discovering files a removed pattern re-admits — then bumps the generation like any other pass ([LIVE-SCHEDULER]). A malformed config is logged at `warn` and the previous exclusion is kept; a typo never bricks the daemon or empties the report.
 
+### [LIVE-CONFIG-STARTUP] Config edits during the cold scan
+The session reads `.deslop.toml` when the cold scan starts, but the watcher only attaches once that scan returns — two minutes on a large checkout. An edit inside that window raises no event, so without a recovery step the live report keeps the old scope until the file happens to change again, while the CLI already reports the new figure for the same tree.
+
+The server therefore snapshots the bytes of every watched config path (`ConfigBaseline`) **before** the session reads them. The watcher attaches first and diffs second: any path whose bytes were created, rewritten or deleted since the snapshot is delivered to the scheduler exactly as a live edit would be, and [LIVE-CONFIG-LIVE] rescopes the corpus and publishes a new generation. An edit after the diff raises a real event, so nothing falls between the two. A cache-seeded startup needs no extra step: its watcher attaches before the cold pass reads the config, and edits during that pass are queued and replayed on install ([LIVE-CACHE-SEED]).
+
 ### [LIVE-DELTA] Report deltas
 
 `ReportDelta` is the wire diff between two generations. LSP subscribers consume deltas instead of full snapshots so update traffic stays small.

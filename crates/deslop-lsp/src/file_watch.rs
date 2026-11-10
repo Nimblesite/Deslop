@@ -22,7 +22,7 @@
 use std::{path::Path, sync::Arc};
 
 use deslop_core::{
-    config::watched_config_paths,
+    config::ConfigBaseline,
     live::{
         AnalysisSession, AnalysisState, LiveError, LiveExclusion, LiveWatcher,
         ReportChangedNotification, Scheduler,
@@ -45,6 +45,10 @@ use crate::notifications::{AnalysisStateLspNotification, ReportChangedLspNotific
 /// stay excluded through that shared policy — the dependency opt-in
 /// widens the corpus, it does not disable exclusion.
 ///
+/// `config` is the snapshot of the watched config files taken before the
+/// session read them, so an edit made during the cold scan is replayed
+/// the moment the watcher attaches ([LIVE-CONFIG-STARTUP]).
+///
 /// The returned `(LiveWatcher, Scheduler)` must be kept alive for the
 /// duration of the server — dropping either stops the analysis loop.
 ///
@@ -54,7 +58,7 @@ use crate::notifications::{AnalysisStateLspNotification, ReportChangedLspNotific
 /// `root` (e.g. permission denied on the workspace directory).
 pub fn start(
     root: &Path,
-    config_path: Option<&Path>,
+    config: &ConfigBaseline,
     session: Arc<Mutex<AnalysisSession>>,
     exclusion: LiveExclusion,
     client: Client,
@@ -63,9 +67,8 @@ pub fn start(
         .into_iter()
         .map(str::to_owned)
         .collect();
-    let config_paths = watched_config_paths(root, config_path);
     let (watcher, watcher_rx) =
-        LiveWatcher::start(root, extensions, exclusion, config_paths.clone()).map_err(|err| {
+        LiveWatcher::start(root, extensions, exclusion, config).map_err(|err| {
             LiveError::WatcherInit {
                 message: err.to_string(),
             }
@@ -76,7 +79,7 @@ pub fn start(
     let _join = tokio::spawn(forward_broadcasts(client, report_rx, state_rx));
     tracing::info!(
         root = %root.display(),
-        config_paths = ?config_paths,
+        config_paths = config.paths().len(),
         "file_watch started",
     );
     Ok((watcher, scheduler))
