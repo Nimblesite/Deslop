@@ -386,9 +386,7 @@ fn is_identifier_kind(raw: &str) -> bool {
 fn is_literal_kind(raw: &str) -> bool {
     matches!(
         raw,
-        "string_literal"
-            | "raw_string_literal"
-            | "string_content"
+        "string_content"
             | "escape_sequence"
             | "char_literal"
             | "integer_literal"
