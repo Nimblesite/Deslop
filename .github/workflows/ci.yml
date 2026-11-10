@@ -1006,9 +1006,9 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: npm run build
 
-      - name: Install Playwright browser
+      - name: Install Playwright browsers
         working-directory: site
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium webkit
 
       - name: Test published issue experience
         working-directory: site
