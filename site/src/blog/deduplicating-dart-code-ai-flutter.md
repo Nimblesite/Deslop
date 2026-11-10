@@ -42,6 +42,40 @@ Common candidates include:
 - repositories, data mappers, and validation paths that differ mainly by names;
 - `copyWith` methods, retry wrappers, and repeated `*_test.dart` setup.
 
+Here is a typical pair. A `CustomerCard` widget was copied to build an `AccountCard`:
+
+```dart
+class CustomerCard extends StatelessWidget {
+  const CustomerCard({super.key, required this.customer});
+  final Customer customer;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        leading: CircleAvatar(child: Text(customer.initials)),
+        title: Text(customer.name),
+        subtitle: Text(customer.email),
+        trailing: const Icon(Icons.chevron_right),
+      ),
+    );
+  }
+}
+```
+
+`AccountCard` has the same `build` body with `account` in place of `customer`. When a design change adds a badge to one card, the other falls out of step. Copied `build` bodies like this stay in the report even when the widget names change.
+
+## What Deslop does not report in Flutter code
+
+Flutter has a lot of necessary repetition, and reporting it would bury the real copies. Deslop leaves out:
+
+- **Widget shells.** A `StatelessWidget`, `StatefulWidget` or `State<T>` declaration whose body only constructs widgets and returns them is framework scaffolding. Any local variables, control flow, arithmetic, mutation or closures make it ordinary code again, and copied `build` bodies are still reported.
+- **Renamed signatures alone.** Two declarations that share only a signature shape are not evidence of a copied body.
+- **Generated Dart.** Files ending in `.g.dart`, `.freezed.dart`, `.gr.dart`, `.config.dart`, `.gen.dart`, `.mocks.dart` and the protobuf `.pb*.dart` family are analysed but hidden from the report, along with files that open with a generator banner such as `// GENERATED CODE - DO NOT MODIFY BY HAND`.
+- **Tooling and dependencies.** `.dart_tool` is always excluded, and `.pub-cache` is excluded unless you opt in.
+
+Hidden generated files still count when *your* code duplicates them. If a hand-written mapper copies what `json_serializable` already generates, that cluster survives. See [Configuration](/docs/configuration/#built-in-rules-always-on) for the full list.
+
 ## What a Dart duplicate-code check should look for
 
 A useful check does not stop at exact line matches. It should find four levels of similarity:
@@ -62,7 +96,7 @@ Line-based tools catch literal copy-paste but are sensitive to surface changes:
 - `setState` logic is rewritten as a `Riverpod` notifier that does the same thing.
 - the same validation rule is rebuilt with the branches in a different order.
 
-That is why Deslop starts from the parsed syntax tree, not the text. It parses each `.dart` file with **tree-sitter**, strips out identifier and literal names so renamed copies still match, fingerprints the tree *structure*, widens the net to near-duplicates with sibling windows and MinHash, and can optionally add embeddings for same-behaviour matches. The short version: it compares structure first, lines never. The full audit trail is in [How It Works](/docs/how-it-works/).
+That is why Deslop starts from the parsed syntax tree, not the text. It parses each `.dart` file with **tree-sitter**, strips out identifier and literal names so renamed copies still match, fingerprints the tree *structure*, widens the net to near-duplicates with sibling windows and MinHash, and can optionally add embeddings for same-behaviour matches. Structure finds candidates; a content check then confirms that the copies perform the same operations, so two widgets that merely share a layout are not reported as clones. The full audit trail is in [How It Works](/docs/how-it-works/).
 
 ## Check before writing
 
@@ -72,9 +106,9 @@ If you use a coding agent for Flutter work, configure it to call Deslop's `find-
 
 ## Ranking: the worst offender is line one
 
-Deslop ranks clusters by measured impact using AST node count, additional copies, and logarithmically dampened byte span. The exact formula is documented in [How It Works](/docs/how-it-works/#rank).
+Deslop ranks clusters by duplicated mass: the syntax-tree size of the reference copy multiplied by its additional visible copies. A 200-node `build` method copied into three screens outranks a short helper copied once. The formula and its reasoning are in [How Deslop ranks duplicate-code clusters](/blog/ranking-formula/) and [How It Works](/docs/how-it-works/#rank-by-duplicated-mass).
 
-The JSON report gives agents the cluster order, byte ranges, bucket, and signals without a separate representation.
+The JSON report gives agents the cluster order, byte ranges and category without a separate representation, and the VS Code cluster panel shows the same order.
 
 ## What to do when you find duplicate Dart
 
@@ -83,3 +117,13 @@ Do not treat every clone as a bug. Treat it as a decision.
 - **Extract** when the copies are clearly the same abstraction and will change together — pull the repeated layout into a custom widget, lift the shared styling into `ThemeData`.
 - **Reuse** when one implementation is already the better source of truth and the others should call it.
 - **Accept** when the duplication is deliberate: generated code, fixtures, platform shims, or two paths that look alike today but are expected to diverge.
+
+## Keep new copies out of pull requests
+
+Cleaning up existing duplicates is a one-off job. Keeping new ones out takes a check in the workflow:
+
+- **In the editor.** The VS Code extension updates its findings as you edit, so a copied widget appears in the cluster panel before you commit.
+- **In the agent.** Claude Code, Cursor, Codex and other MCP clients can call `find-similar` before generating a widget or repository class.
+- **In CI.** The [GitHub Action](/docs/github-action/) runs the same CLI on every pull request. Use `--diff` with `--only-changed` to judge only the lines a pull request adds, so existing debt cannot fail a new change.
+
+Together, these checks keep a Flutter codebase consistent as AI-assisted work speeds up: one card widget, one repository per resource, one validation rule per field.
