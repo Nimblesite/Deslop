@@ -137,11 +137,9 @@ struct RefusedPair {
 
 /// The two whole authored functions: unsaturated shape, so the content
 /// guard is never asked, and the pair falls at the LSH-only floors.
-/// The kind strings' contents are literal tokens ([LANG-CAND-RUST-STRING-PARTS]),
-/// so the two functions share more tokens than when they were structural.
 const ACCESSOR_FUNCTIONS: RefusedPair = RefusedPair {
     structural: 0.689_655_172_413_793_1,
-    token_jaccard: 0.484_375,
+    token_jaccard: 0.453_125,
     agreement: 0.3,
     rename_consistency: 0.0,
     content_required: false,

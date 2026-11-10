@@ -34,8 +34,7 @@
 use tree_sitter::Node;
 
 use super::{
-    node_intersects_range, parse_for, raw_snippet_texts_differ,
-    rust_constant_values::rust_table_values_differ, trimmed_snippet_range, Snippet,
+    node_intersects_range, parse_for, raw_snippet_texts_differ, trimmed_snippet_range, Snippet,
 };
 use crate::ast::named_children;
 
@@ -56,12 +55,7 @@ pub(super) fn is_constant_table_cluster(snippets: &[Snippet<'_>]) -> bool {
     if first.language == "fsharp" {
         return fsharp_table_cells_differ(snippets);
     }
-    let differ = if first.language == "rust" {
-        rust_table_values_differ
-    } else {
-        raw_snippet_texts_differ
-    };
-    snippets.iter().all(covers_only_constants) && differ(snippets)
+    snippets.iter().all(covers_only_constants) && raw_snippet_texts_differ(snippets)
 }
 
 /// Returns true when the member's range lies at module top level and

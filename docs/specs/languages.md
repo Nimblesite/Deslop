@@ -52,10 +52,6 @@ Implemented by `lang/javascript.rs` and `lang/ecmascript.rs` in `deslop-core`; e
 
 Implemented by `lang/typescript.rs` and `lang/ecmascript.rs` in `deslop-core`; exercised by `typescript_features.rs`, `jsx_tsx_components.rs`, `js_ts_signatures.rs`, and the TypeScript/TSX AST goldens in `deslop`'s CLI suite.
 
-## [LANG-CAND-RUST] Rust
-
-**[LANG-CAND-RUST-STRING-PARTS]** A Rust string's `string_content` and `escape_sequence` parts collapse to `__literal__`, as C's do ([LANG-CAND-C]). Left as structural kinds, a long usage message and an unrelated embedded test program — sharing nothing but runs of `\n` and `\"` — formed matching 44-node subtrees with no literal leaves, so [FUSED-CONTENT-GATE] had no content to compare and admitted them as Similar code (Osprey, gh #626). As literal leaves they are content evidence: unrelated strings are rejected and a byte-identical copy is still reported. Implemented by `crates/deslop-core/src/lang/rust_lang.rs`; pinned by `crates/deslop/tests/rust_escaped_string_literals.rs`.
-
 ## [LANG-CAND-KOTLIN] Kotlin is not registered
 
 Kotlin is not a supported parser in [PIPELINE-LANG-TRAIT]. A live `find_similar` request naming Kotlin must return `UnsupportedLanguage`, rather than an empty match list. `crates/deslop-core/tests/live.rs` pins that refusal; adding Kotlin requires a parser and the same fixture coverage as a shipped language.

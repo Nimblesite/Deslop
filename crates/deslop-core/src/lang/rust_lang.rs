@@ -379,17 +379,12 @@ fn is_identifier_kind(raw: &str) -> bool {
 }
 
 /// Rust literal leaves, collapsed so constant edits do not perturb
-/// fingerprints. A string's `string_content` and `escape_sequence` parts
-/// are literal leaves too ([LANG-CAND-RUST-STRING-PARTS]): left as
-/// structural kinds, two unrelated escape-heavy strings shared a long
-/// "structure" with no literal content for [FUSED-CONTENT-GATE] to read.
+/// fingerprints.
 fn is_literal_kind(raw: &str) -> bool {
     matches!(
         raw,
         "string_literal"
             | "raw_string_literal"
-            | "string_content"
-            | "escape_sequence"
             | "char_literal"
             | "integer_literal"
             | "float_literal"
