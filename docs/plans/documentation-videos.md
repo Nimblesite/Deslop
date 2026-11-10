@@ -11,10 +11,10 @@ visible action in plain English. No concept cards or parser explanations.
 - [x] Rewrite all forty spoken steps around useful visible user actions.
 - [x] Generate Aiden narration with local Qwen3-TTS and check its transcription.
 - [x] Record source navigation, both comparison methods, settings and CLI checks.
-- [ ] Record and verify real pi tool calls and returned file locations.
-- [ ] Cut all ten films with automatic zoom and short captions.
-- [ ] Inspect finished application frames and verify all delivery streams.
-- [ ] Test both language routes, mobile playback, tracks and transcripts.
+- [x] Record and verify real pi tool calls and returned file locations.
+- [x] Cut all ten films with automatic zoom and short captions.
+- [x] Inspect finished application frames and verify all delivery streams.
+- [x] Test both language routes, mobile playback, tracks and transcripts.
 - [ ] Commit, push and deploy the website; verify public media hashes.
 - [ ] Remove owned temporary files and model caches; check disk space.
 

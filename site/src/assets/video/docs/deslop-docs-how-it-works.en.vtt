@@ -1,13 +1,73 @@
 WEBVTT
 
-00:00.400 --> 00:19.705
-Deslop parses source code with tree sitter, finds candidate copies, checks their content, and groups the surviving findings. The editor, command-line tools and MCP share a Rust engine. A live session refreshes after edits; a command-line scan is a separate review of its selected input.
+00:00.300 --> 00:02.582
+Deslop looks through the project and brings
 
-00:20.555 --> 00:41.094
-Syntax-tree normalization helps find copies despite changed names, literals or formatting. But normalization alone cannot establish a clone. Deslop also checks shared content, consistent renaming and the operations being performed. Matching structure is a starting point for comparison, rather than proof on its own.
+00:02.582 --> 00:04.864
+possible copies into the sidebar. I open
 
-00:41.944 --> 01:03.752
-Read the finding category before acting. Identical, nearly identical and similar code describe different degrees of copying. Same shape with different content is informational and contributes nothing to clone counts. Optional embedding candidates also need review: similarity does not prove interchangeable behavior or a safe extraction.
+00:04.864 --> 00:07.146
+one of those findings here. Instead of
 
-01:04.602 --> 01:25.099
-Duplicated mass combines syntax-tree size with additional visible copies, bringing larger repeated work to the top. It is neither confidence nor a percentage. The duplication percentage counts covered source lines, counting overlaps once. Compare two explicit occurrences to inspect their evidence before making a change.
+00:07.146 --> 00:09.428
+taking a number on trust, I can
+
+00:09.428 --> 00:11.710
+follow its file links and inspect the
+
+00:11.710 --> 00:13.340
+exact code that was reported.
+
+00:14.140 --> 00:16.353
+These two files use different names, but
+
+00:16.353 --> 00:18.567
+the calculation is the same. I open
+
+00:18.567 --> 00:20.780
+the comparison to see that directly. Renaming
+
+00:20.780 --> 00:22.993
+a class or a variable has not
+
+00:22.993 --> 00:25.207
+made the repeated work disappear, and the
+
+00:25.207 --> 00:27.420
+side-by-side view makes that easy to check.
+
+00:28.220 --> 00:30.597
+I visit each original file and look
+
+00:30.597 --> 00:32.973
+beyond the highlighted lines. The surrounding code
+
+00:32.973 --> 00:35.350
+tells me how the calculation is used.
+
+00:35.350 --> 00:37.726
+This is where I decide whether one
+
+00:37.726 --> 00:40.103
+shared helper would make sense, or whether
+
+00:40.103 --> 00:42.140
+the two copies should stay separate.
+
+00:42.940 --> 00:45.020
+I make an edit in the source
+
+00:45.020 --> 00:47.100
+file and save it. Deslop checks the
+
+00:47.100 --> 00:49.180
+changed project and refreshes the finding in
+
+00:49.180 --> 00:51.260
+the editor. I can compare again straight
+
+00:51.260 --> 00:53.340
+away, which keeps the review connected to
+
+00:53.340 --> 00:55.420
+the code I am actually working on.

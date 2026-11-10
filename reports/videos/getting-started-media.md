@@ -1,9 +1,18 @@
-# getting-started media verification
+# getting-started recorded workflow verification [DOC-FILMS-LIVE]
 
-- Duration: 82.899 seconds
-- Live VS Code footage: 34.2 seconds
-- Video: H.264, 1920 × 1080
-- Audio: original AAC stream, verified by stream hash
-- English captions and chapters: original timestamps preserved
-- Visuals: recorded application footage, automatic camera and animated explanations
-- SHA-256: cc0f393b6983020d6fdc25a3f083dc794134a0210f0e570c417f8faae3309b9c
+- Duration: 57.900 seconds
+- Picture: real application footage for the entire film; captions and small step labels only
+- Narrator: Qwen3 TTS / Aiden
+- Spoken script: 4 current lines, matching the cached speech receipts
+- Caption cues: 24
+- Video: H.264, 1920 x 1080; audio: AAC
+- SHA-256: c74e0faf1f74d250a7e1b63083cc69ad77ed4ac37884608154621d940add96a8
+
+| Step | Recorded action | Source seconds | Playback speed | Automatic camera moves |
+| --- | --- | ---: | ---: | ---: |
+| Open Deslop in VS Code | start-extension | 15.40 | 1.10 | 1 |
+| Open a finding | review-finding | 19.33 | 1.33 | 5 |
+| Visit both copies | review-sources | 17.33 | 1.16 | 4 |
+| Compare before editing | review-compare | 11.47 | 1.00 | 2 |
+
+Narration and visible workflow must also receive finished-frame review. Encoding checks alone do not establish usefulness.

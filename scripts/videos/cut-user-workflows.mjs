@@ -27,7 +27,10 @@ function camera(scene, directory, index) {
   const source = path.join(captures, scene.shot + '.mp4');
   assert.ok(fs.existsSync(source), `Record ${scene.shot} before producing ${scene.title}`);
   const track = readTrack(path.join(captures, scene.shot + '.track.json'));
-  const sourceSeconds = duration(source);
+  const sourceStart = scene.sourceStart ?? 0;
+  const sourceSeconds = duration(source) - sourceStart;
+  assert.ok(sourceSeconds > 0);
+  track.samples = track.samples.filter(sample => sample.t >= sourceStart).map(sample => ({ ...sample, t: sample.t - sourceStart }));
   const seconds = scene.end - scene.start;
   const speed = Math.max(1, sourceSeconds / seconds);
   const video = probe(source).streams.find(stream => stream.codec_type === 'video');
@@ -47,10 +50,10 @@ function camera(scene, directory, index) {
   CAMERA.tighten = tighten;
   assert.ok(moves.length > 1, `No camera movement in ${scene.shot}`);
   const output = path.join(directory, `${index}.mp4`);
-  ffmpeg(['-filter_threads', '2', '-i', source, '-an', '-vf',
+  ffmpeg(['-filter_threads', '2', '-ss', String(sourceStart), '-i', source, '-an', '-vf',
     `format=yuv444p,sendcmd=f='${commands}',crop@view=w=${video.width}:h=${video.height}:x=0:y=0:exact=1,setpts=PTS/${speed},fps=${fps},${fit},tpad=stop_mode=clone:stop_duration=${seconds}`,
     '-t', String(seconds), ...encode, output]);
-  return { output, source, sourceSeconds, speed, cameraMoves: moves.length - 1, sha256: digest(source) };
+  return { output, source, sourceStart, sourceSeconds, speed, cameraMoves: moves.length - 1, sha256: digest(source) };
 }
 
 function tracks(data, cues, dist, base) {
@@ -81,7 +84,7 @@ function install(data, dist, base, sources, cues) {
     `- Narrator: ${data.voice}`, `- Spoken script: ${data.lines.length} current lines, matching the cached speech receipts`,
     `- Caption cues: ${cues.length}`, '- Video: H.264, 1920 x 1080; audio: AAC', `- SHA-256: ${digest(media)}`, '',
     '| Step | Recorded action | Source seconds | Playback speed | Automatic camera moves |', '| --- | --- | ---: | ---: | ---: |',
-    ...sources.map((shot, index) => `| ${data.scenes[index].title} | ${data.scenes[index].shot} | ${shot.sourceSeconds.toFixed(2)} | ${shot.speed.toFixed(2)} | ${shot.cameraMoves} |`), '',
+    ...sources.map((shot, index) => `| ${data.scenes[index].title} | ${data.scenes[index].shot}${shot.sourceStart ? ` (from ${shot.sourceStart.toFixed(2)}s)` : ''} | ${shot.sourceSeconds.toFixed(2)} | ${shot.speed.toFixed(2)} | ${shot.cameraMoves} |`), '',
     'Narration and visible workflow must also receive finished-frame review. Encoding checks alone do not establish usefulness.', '',
   ].join('\n');
   fs.writeFileSync(path.join(root, 'reports/videos', data.slug + '-media.md'), report);

@@ -60,7 +60,9 @@ async function take(name, action) {
   const requested = process.argv[2];
   if (requested === 'editor' && name.startsWith('action-')) return;
   if (requested === 'final' && ['action-create', 'action-version'].includes(name)) return;
-  if (requested && requested !== 'editor' && requested !== 'final' && !name.startsWith(requested)) return;
+  const commands = ['action-limit', 'action-changes', 'config-override', 'config-limit', 'osprey-config'];
+  if (requested === 'commands' && !commands.includes(name)) return;
+  if (requested && requested !== 'commands' && requested !== 'editor' && requested !== 'final' && !name.startsWith(requested)) return;
   if (fs.existsSync(path.join(clips, name + '.mp4')) && !process.env.DESLOP_TUTORIAL_FORCE) return;
   process.stdout.write(`Recording ${name}\n`);
   try {
@@ -121,7 +123,7 @@ async function terminal(command, expected) {
   await hold(2000); await point(850, 550);
   const deadline = Date.now() + 30000;
   while (Date.now() < deadline) {
-    const text = execFileSync('tesseract', ['stdin', 'stdout', '--psm', '6'], { input: await page.locator('.terminal-wrapper').last().screenshot(), encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
+    const text = execFileSync('tesseract', ['stdin', 'stdout', '--psm', '6'], { input: await page.screenshot(), encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
     const normalized = value => value.toLowerCase().split(/\s+/).join('').replace(/exitstatus:[qo@]/g, 'exitstatus:0');
     if (normalized(text).includes(normalized(expected))) { await hold(3000); return; }
     await hold(500);
@@ -133,7 +135,7 @@ async function closeTerminal() {
   if (await page.locator('.part.panel').isVisible()) await runCommand(page, 'View: Toggle Panel Visibility');
 }
 const workflow = version => `name: Deslop\non: [push, pull_request]\n\njobs:\n  repeated-code:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: Nimblesite/Deslop@${version}\n        with:\n          no-fail-over: "true"\n          upload-artifact: "false"\n`;
-if (process.argv[2] === 'action-limit') fs.writeFileSync(path.join(workspace, '.github/workflows/deslop.yml'), workflow('v0.41.0'));
+if (['action-limit', 'commands'].includes(process.argv[2])) fs.writeFileSync(path.join(workspace, '.github/workflows/deslop.yml'), workflow('v0.41.0'));
 try {
   await focusWorkbench();
   while (await page.locator('.terminal-wrapper').count()) await closeTerminal();
@@ -205,7 +207,10 @@ try {
     await edit('Zeta.cs', originals['Zeta.cs'].replaceAll('bound', 'limit'), true);
     await hold(2300); await openFile(page, 'Eta.cs'); await point(750, 440); await hold(2500);
   });
-  await take('review-edited-compare', compare);
+  await take('review-edited-compare', async () => {
+    await runCommand(page, 'View: Close All Editors');
+    await compare();
+  });
   for (const [file, text] of Object.entries(originals)) fs.writeFileSync(path.join(workspace, file), text);
   await take('config-create', async () => {
     await edit('.deslop.toml', '[defaults]\nexclude = []\n\n[threshold]\nmax_duplication_percent = 5.0\n', true);

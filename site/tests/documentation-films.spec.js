@@ -35,10 +35,12 @@ async function playAndAssertProgress(video) {
   await expect.poll(()=>video.evaluate(v=>v.currentTime)).toBeGreaterThan(before);
 }
 
-async function pauseAndHideTracks(video) {
+async function pauseAndHideTracks(video,film) {
   await video.evaluate(v=>{v.pause();for(const track of v.textTracks)track.mode='hidden';});
-  await expect.poll(()=>video.evaluate(v=>v.textTracks[0].cues?.length)).toBe(EXPECTED_CHAPTERS);
+  await expect.poll(()=>video.evaluate(v=>v.textTracks[0].cues?.length)).toBe(film.captionCueCount);
   await expect.poll(()=>video.evaluate(v=>v.textTracks[1].cues?.length)).toBe(EXPECTED_CHAPTERS);
+  const lengths=await video.evaluate(v=>Array.from(v.textTracks[0].cues,cue=>cue.text.trim().split(/\s+/).length));
+  expect(Math.max(...lengths)).toBeLessThanOrEqual(7);
 }
 
 async function seekAndAssert(video) {
@@ -74,6 +76,23 @@ test('getting started fits the reading column without prose CSS', async ({page})
   }
 });
 
+// [DOC-FILMS-DELIVERY] Search crawlers get the same video and poster as the player.
+async function assertVideoMetadata(page, video, film, locale) {
+  const json = await page.locator('.doc-film script[type="application/ld+json"]').textContent();
+  const [minutes, seconds] = film.duration.split(':').map(Number);
+  const origin = 'https://deslop.live';
+  expect(JSON.parse(json)).toMatchObject({
+    '@type': 'VideoObject',
+    name: film.title,
+    description: film.description[locale === '/zh' ? 'zh' : 'en'],
+    thumbnailUrl: origin + await video.getAttribute('poster'),
+    contentUrl: origin + await video.locator('source').getAttribute('src'),
+    duration: `PT${minutes * 60 + seconds}S`,
+    uploadDate: '2026-11-10',
+    inLanguage: 'en',
+  });
+}
+
 function filmRoute(slug) {
   if (slug === 'osprey') return '/blog/osprey-first-class/';
   if (slug === 'getting-started') return '/docs/';
@@ -89,9 +108,10 @@ for(const [slug,film] of Object.entries(FILMS)) for(const locale of ['', '/zh'])
       if(!PROBED_WIDTHS.includes(width)) continue;
       await page.screenshot({path:testInfo.outputPath(`player-${width}.png`)});
       await playAndAssertProgress(video);
-      await pauseAndHideTracks(video);
+      await pauseAndHideTracks(video,film);
       await seekAndAssert(video);
     }
+    await assertVideoMetadata(page,video,film,locale);
     await assertTranscript(page,film);
     await assertDownloadLink(video,slug);
   });

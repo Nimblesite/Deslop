@@ -1,302 +1,352 @@
 {
   "getting-started": {
-    "title": "Your first duplicate-code review",
-    "duration": "1:23",
+    "title": "Find duplicate code in VS Code",
+    "duration": "0:58",
     "transcript": [
       {
-        "title": "Your first duplicate-code review",
+        "title": "Open Deslop in VS Code",
         "seconds": 0,
         "stamp": "0:00",
-        "text": "Start with a small review: find repeated code, inspect its locations, and compare the copies before changing anything. Install Deslop from the VS Code Extensions panel, or use the command shown here. One extension includes the live editor experience, coding-agent checks, and the command-line tools."
+        "text": "I open the Extensions view and find Deslop. This is the extension that adds the duplicate-code panel to VS Code. With it installed, I open this small project so we can review one finding from beginning to end."
       },
       {
-        "title": "Start with a finding",
-        "seconds": 21,
-        "stamp": "0:21",
-        "text": "Open your project and a supported source file. Deslop updates its analysis as files change. The Top Offenders tree puts findings beside your code. This recording uses a real two-file C sharp example. Start with one finding so you can understand what it contains."
+        "title": "Open a finding",
+        "seconds": 14,
+        "stamp": "0:14",
+        "text": "The Deslop panel lists the repeated code it found in this project. I click one finding to open its details. The file links tell me where the copies live, so I can go straight to the code instead of searching through folders."
       },
       {
-        "title": "Inspect every occurrence",
-        "seconds": 39,
-        "stamp": "0:39",
-        "text": "Open the finding and inspect its occurrences. A cluster groups related copies; each location lets you navigate back to the source. The canonical copy gives the comparison a consistent starting point. Read the surrounding code as well as the highlighted section before deciding what should be shared."
+        "title": "Visit both copies",
+        "seconds": 28,
+        "stamp": "0:28",
+        "text": "I open the first file, then the second one. Deslop takes me to the relevant lines in each file. I read the code around the highlighted section too, because two similar pieces of code may still be used in different ways."
       },
       {
-        "title": "Compare before changing code",
-        "seconds": 59,
-        "stamp": "0:59",
-        "text": "Compare a copy with the canonical version. Look for differences in inputs, behavior, and surrounding assumptions. A finding is evidence to review, not permission to delete code automatically. Make a focused change, run your tests, and let the live analysis update. Follow the Getting Started page for installation alternatives and command-line examples."
+        "title": "Compare before editing",
+        "seconds": 43,
+        "stamp": "0:43",
+        "text": "I use Compare to put the two copies side by side. Now I can see what stayed the same and what changed. This gives me a useful starting point for a cleanup, while I still decide which behavior the project needs."
       }
-    ]
+    ],
+    "description": {
+      "en": "Install Deslop, scan a project for duplicate code, and compare two copies in the VS Code diff editor.",
+      "zh": "安装 Deslop，扫描项目中的重复代码，并在 VS Code 中并排比较两处副本。"
+    },
+    "captionCueCount": 24
   },
   "configuration": {
-    "title": "Put policy beside your code",
-    "duration": "1:19",
+    "title": "Configure duplicate code detection with .deslop.toml",
+    "duration": "0:55",
     "transcript": [
       {
-        "title": "Put policy beside your code",
+        "title": "Create the project settings",
         "seconds": 0,
         "stamp": "0:00",
-        "text": "Keep shared policy in dot deslop dot toml, beside the scan root. That is the directory you ask Deslop to analyse. Use the config flag when your policy lives elsewhere. A missing configuration file uses built-in defaults, so commit your settings when the team needs consistent behavior."
+        "text": "I create the Deslop settings file at the root of this project. Keeping it with the code gives the team the same starting point. I save the file here, then use the sidebar to check the effect of my changes."
       },
       {
-        "title": "Skip or hide?",
-        "seconds": 19,
-        "stamp": "0:19",
-        "text": "Choose exclusions carefully. Exclude removes a file before analysis. Report hide still analyses the file, but hides its occurrences. A cluster disappears only when all its members are hidden. This lets a match between handwritten and generated code remain visible, without showing every generated-only cluster."
+        "title": "Choose what to skip",
+        "seconds": 13,
+        "stamp": "0:13",
+        "text": "I add the archive folder to the exclusions and save the file. Those files are skipped when Deslop checks the project. Hiding a reported file is a different choice: it changes what I see in the results while the file is still checked."
       },
       {
         "title": "Override one run",
-        "seconds": 40,
-        "stamp": "0:40",
-        "text": "Use command-line flags for a single run. A flag overrides its matching configuration key. Fail over supplies a duplication ceiling; no fail over clears the ceiling for that run. These options control the gate, rather than fixing or removing duplicated code."
+        "seconds": 27,
+        "stamp": "0:27",
+        "text": "For a single run, I can choose a different limit on the command line. Here I ask Deslop to report without failing because of repeated code. This changes the check for this run, without rewriting the settings the team has saved."
       },
       {
-        "title": "Make the gate explicit",
-        "seconds": 58,
-        "stamp": "0:58",
-        "text": "A threshold makes excessive duplication fail the run with exit code three. The report remains available to inspect. Without a threshold, duplication alone does not fail the scan; runtime and usage errors still can. Review the report, agree on the policy, and keep that policy with your project."
-      }
-    ]
-  },
-  "ai-integration": {
-    "title": "Ask before writing",
-    "duration": "1:21",
-    "transcript": [
-      {
-        "title": "Ask before writing",
-        "seconds": 0,
-        "stamp": "0:00",
-        "text": "Connect Deslop to your coding agent so it can check for existing code before writing another implementation. The key tool is find similar. Give the agent the For AI instructions linked from this page, and make the check part of its authoring workflow."
-      },
-      {
-        "title": "Use the bundled server",
-        "seconds": 16,
-        "stamp": "0:16",
-        "text": "For an extension-based setup, point your MCP client at the absolute path to the server bundled inside the installed VS Code extension. Use the correct version and platform, and set the repository root. Update that path when the extension version changes. The page includes configurations for supported clients."
-      },
-      {
-        "title": "Keep the request small",
-        "seconds": 38,
-        "stamp": "0:38",
-        "text": "Keep routine requests focused. Find similar checks a proposed snippet. Duplicates lists ranked findings, and cluster by ID retrieves the occurrences you need to review. Compare pair explains the evidence for two particular copies. Start with a small summary and request details only when needed."
-      },
-      {
-        "title": "Review, edit, check",
-        "seconds": 58,
-        "stamp": "0:58",
-        "text": "Read any existing implementation before reusing it. After editing, run your tests and query the findings again. Deslop answers from the workspace analysis maintained by the editor, which refreshes as files change. The agent still needs to inspect behavior and decide whether a suggested reuse is appropriate."
-      }
-    ]
-  },
-  "how-it-works": {
-    "title": "From source to findings",
-    "duration": "1:27",
-    "transcript": [
-      {
-        "title": "From source to findings",
-        "seconds": 0,
-        "stamp": "0:00",
-        "text": "Deslop parses source code with tree sitter, finds candidate copies, checks their content, and groups the surviving findings. The editor, command-line tools and MCP share a Rust engine. A live session refreshes after edits; a command-line scan is a separate review of its selected input."
-      },
-      {
-        "title": "Structure is a starting point",
-        "seconds": 20,
-        "stamp": "0:20",
-        "text": "Syntax-tree normalization helps find copies despite changed names, literals or formatting. But normalization alone cannot establish a clone. Deslop also checks shared content, consistent renaming and the operations being performed. Matching structure is a starting point for comparison, rather than proof on its own."
-      },
-      {
-        "title": "Read the category",
-        "seconds": 41,
-        "stamp": "0:41",
-        "text": "Read the finding category before acting. Identical, nearly identical and similar code describe different degrees of copying. Same shape with different content is informational and contributes nothing to clone counts. Optional embedding candidates also need review: similarity does not prove interchangeable behavior or a safe extraction."
-      },
-      {
-        "title": "Size is not confidence",
-        "seconds": 64,
-        "stamp": "1:04",
-        "text": "Duplicated mass combines syntax-tree size with additional visible copies, bringing larger repeated work to the top. It is neither confidence nor a percentage. The duplication percentage counts covered source lines, counting overlaps once. Compare two explicit occurrences to inspect their evidence before making a change."
-      }
-    ]
-  },
-  "osprey": {
-    "title": "Three syntax flavors",
-    "duration": "1:21",
-    "transcript": [
-      {
-        "title": "Three syntax flavors",
-        "seconds": 0,
-        "stamp": "0:00",
-        "text": "Osprey has three syntax flavors. Deslop documents native braces and ML support, plus explicit selection for Osprey Python. This page describes the development integration, so check your installed release before expecting every change. Ordinary Python files should keep their own language identity."
-      },
-      {
-        "title": "Choose Python deliberately",
-        "seconds": 21,
-        "stamp": "0:21",
-        "text": "For an Osprey Python source file, put the flavor marker in a leading source comment. The same words inside a string, or in a comment after code, do not select the flavor. This makes language selection deliberate instead of treating every Python file as Osprey."
-      },
-      {
-        "title": "Use the project manifest",
-        "seconds": 38,
-        "stamp": "0:38",
-        "text": "The project manifest can also select the Python entry file and individual Python sources. These are literal file paths relative to the manifest, not directory-wide patterns. Other Python files remain ordinary Python. Project flavor overrides and nested project rules are described in the page."
-      },
-      {
-        "title": "Review the actual copies",
-        "seconds": 58,
-        "stamp": "0:58",
-        "text": "Open the project with Deslop or scan it from the command line. Review the ranked findings and compare their occurrences before extracting shared code. Language support does not promise automatic Osprey refactoring, cross-flavor equivalence, or interchangeable behavior. Invalid ML syntax should surface as a parse error."
-      }
-    ]
-  },
-  "github-action": {
-    "title": "Put review in the workflow",
-    "duration": "1:19",
-    "transcript": [
-      {
-        "title": "Put review in the workflow",
-        "seconds": 0,
-        "stamp": "0:00",
-        "text": "The Deslop GitHub Action brings duplicate-code review into your workflow. It installs the released command-line tool, analyses the workspace and renders reports. Start with the complete workflow on the documentation page, including repository checkout, and choose whether you want measurement or a blocking gate."
-      },
-      {
-        "title": "Pin the release",
-        "seconds": 20,
-        "stamp": "0:20",
-        "text": "Pin an exact release tag. By default, that tag selects the matching command-line version, keeping the action and tool aligned. If you pin a commit or branch instead, supply the version input explicitly. The downloaded archive is checked against its published checksum before extraction."
-      },
-      {
-        "title": "Measure, then choose a ceiling",
-        "seconds": 40,
-        "stamp": "0:40",
-        "text": "For a measurement-only run, use no fail over. To make duplication above your ceiling fail the job, set fail over, or leave it unset to honor the project configuration. The five-percent value shown is an example, not a recommendation for every codebase. Review your baseline first."
-      },
-      {
-        "title": "Understand the gate scope",
-        "seconds": 59,
-        "stamp": "0:59",
-        "text": "Changed-code gating uses a supplied patch and the only changed option. The whole tree is still analysed; the report and gate are scoped to affected added lines. Reports and outputs help explain a breached gate. Inspect the scope as well as the percentage before deciding what to change."
-      }
-    ]
-  },
-  "vscode-cluster-panel": {
-    "title": "Open the occurrence",
-    "duration": "1:18",
-    "transcript": [
-      {
-        "title": "Open the occurrence",
-        "seconds": 0,
-        "stamp": "0:00",
-        "text": "Open a finding and use its file links to navigate to the code. The selected range shows the reported occurrence, but read the surrounding implementation too. The category tells you what kind of relationship was found. A finding is a starting point for review."
-      },
-      {
-        "title": "Compare against a reference",
-        "seconds": 17,
-        "stamp": "0:17",
-        "text": "Compare To Canonical opens the reference occurrence on the left and your chosen copy on the right. Canonical does not mean best. It gives comparisons a consistent starting point. Review both implementations and their assumptions before deciding which behavior to preserve."
-      },
-      {
-        "title": "Choose another pair",
-        "seconds": 35,
-        "stamp": "0:35",
-        "text": "To inspect a different pair, select the first occurrence for comparison, then choose Compare with Selected on the other. Clear Selection cancels the choice. Selection also clears after comparison or when you change clusters. Copy Context For AI provides finding context for a coding agent."
-      },
-      {
-        "title": "Read the numbers correctly",
-        "seconds": 54,
-        "stamp": "0:54",
-        "text": "Mass measures copied syntax-tree size multiplied by additional visible copies. Rank puts larger duplicated work first; neither is confidence. Severity is a configured diagnostic level. Use the sidebar grouping menu to organize findings, and the Duplication and Session views to inspect percentages and analysis state."
-      }
-    ]
-  },
-  "accuracy-transparency": {
-    "title": "Percentage is not accuracy",
-    "duration": "1:22",
-    "transcript": [
-      {
-        "title": "Percentage is not accuracy",
-        "seconds": 0,
-        "stamp": "0:00",
-        "text": "Duplication percentage tells you how much analysed source is covered by reported clones. It does not tell you how accurate the detector is. A false positive can inflate the percentage, and a missed clone can reduce it. Correct arithmetic does not establish correct detection."
-      },
-      {
-        "title": "Count covered lines once",
-        "seconds": 18,
-        "stamp": "0:18",
-        "text": "Analysed lines include physical source lines, including blanks and comments. Duplicated lines are the union of visible clone ranges within each file, so overlaps count once. Hidden occurrences do not enter the numerator, while their analysed files remain in the denominator. Excluded files leave analysis entirely."
-      },
-      {
-        "title": "Check known examples",
+        "title": "Set a limit and inspect the result",
         "seconds": 39,
         "stamp": "0:39",
-        "text": "Accuracy checks use judged source pairs pinned to repository commits. Clearly in identifies a known clone; clearly out identifies a pair that should not be reported. Unclear cases assert neither verdict. Range coverage separately asks whether the report covers the whole judged copy rather than just a small fragment."
+        "text": "Now I set a five-percent limit as an example and run the check again. This project is over that limit, so the command fails and still writes its report. I inspect the result to see which repeated code caused the failure."
+      }
+    ],
+    "description": {
+      "en": "Exclude vendor files, hide generated-only findings, and set a duplicate code threshold in .deslop.toml.",
+      "zh": "用 .deslop.toml 排除第三方文件、隐藏仅涉及生成代码的结果，并设置重复率阈值。"
+    },
+    "captionCueCount": 25
+  },
+  "ai-integration": {
+    "title": "Connect a coding agent to the Deslop MCP server",
+    "duration": "1:04",
+    "transcript": [
+      {
+        "title": "Ask the agent before writing",
+        "seconds": 0,
+        "stamp": "0:00",
+        "text": "Before asking my coding agent to write another helper, I ask it to check the project first. Here I am using pi with the Deslop connection enabled. I give it the existing file so the request is about the code I actually have."
       },
       {
-        "title": "Interpret the gate",
-        "seconds": 61,
-        "stamp": "1:01",
-        "text": "The gate fails when the full-precision percentage is greater than its ceiling. Equality passes, even if display rounding makes nearby values look identical. Read the report scope and the measured build together. Corpus results apply to judged examples; they do not guarantee perfect precision or recall everywhere."
+        "title": "Let the agent check Deslop",
+        "seconds": 16,
+        "stamp": "0:16",
+        "text": "The agent reads the file and calls Deslop to look for similar code. This is a real tool call against the open project. I can see the request and the returned result in the conversation, instead of relying on the agent to guess."
+      },
+      {
+        "title": "Review the returned files",
+        "seconds": 31,
+        "stamp": "0:31",
+        "text": "Deslop returns two matching files, and pi points me to them. That gives me an existing implementation to review before I create another copy. I read the file names and the reported locations, then check the source rather than stopping at the agent's summary."
+      },
+      {
+        "title": "Check the source yourself",
+        "seconds": 48,
+        "stamp": "0:48",
+        "text": "I open the matching files side by side in Deslop. Now I can check the code and its differences myself. The agent helped me find a possible reuse; I still decide whether that implementation fits the change I want to make."
       }
-    ]
+    ],
+    "description": {
+      "en": "Configure the Deslop MCP server for a coding agent and query the workspace for duplicate code before editing.",
+      "zh": "为编程智能体配置 Deslop MCP 服务器，在编辑前查询工作区中的重复代码。"
+    },
+    "captionCueCount": 27
+  },
+  "how-it-works": {
+    "title": "How Deslop finds copied and similar code",
+    "duration": "0:57",
+    "transcript": [
+      {
+        "title": "Find a copy worth reviewing",
+        "seconds": 0,
+        "stamp": "0:00",
+        "text": "Deslop looks through the project and brings possible copies into the sidebar. I open one of those findings here. Instead of taking a number on trust, I can follow its file links and inspect the exact code that was reported."
+      },
+      {
+        "title": "See past different names",
+        "seconds": 14,
+        "stamp": "0:14",
+        "text": "These two files use different names, but the calculation is the same. I open the comparison to see that directly. Renaming a class or a variable has not made the repeated work disappear, and the side-by-side view makes that easy to check."
+      },
+      {
+        "title": "Read the surrounding code",
+        "seconds": 28,
+        "stamp": "0:28",
+        "text": "I visit each original file and look beyond the highlighted lines. The surrounding code tells me how the calculation is used. This is where I decide whether one shared helper would make sense, or whether the two copies should stay separate."
+      },
+      {
+        "title": "Watch the result update",
+        "seconds": 42,
+        "stamp": "0:42",
+        "text": "I make an edit in the source file and save it. Deslop checks the changed project and refreshes the finding in the editor. I can compare again straight away, which keeps the review connected to the code I am actually working on."
+      }
+    ],
+    "description": {
+      "en": "See why renamed variables can still produce a match and how Deslop ranks duplicate code by the amount copied.",
+      "zh": "了解变量改名后为何仍能找到副本，以及 Deslop 如何按重复规模排序。"
+    },
+    "captionCueCount": 24
+  },
+  "osprey": {
+    "title": "Find duplicate code in Osprey",
+    "duration": "0:59",
+    "transcript": [
+      {
+        "title": "Open an Osprey finding",
+        "seconds": 0,
+        "stamp": "0:00",
+        "text": "Here is an Osprey project. I open one of its files, then click a finding in the Deslop sidebar. The file links lead to the repeated code. I can review those copies in the same way as other languages."
+      },
+      {
+        "title": "Compare the Osprey files",
+        "seconds": 13,
+        "stamp": "0:13",
+        "text": "I compare the two Osprey files side by side. I can see the repeated calculation and check any differences before I edit it. The useful result is the source comparison in front of me, with both copies available to inspect."
+      },
+      {
+        "title": "Select the Python-looking syntax",
+        "seconds": 28,
+        "stamp": "0:28",
+        "text": "This Osprey file uses Python-looking syntax. Its leading comment tells Deslop how to read it. I open the file and its finding to check that it is treated as Osprey, while ordinary Python files keep their usual identity."
+      },
+      {
+        "title": "Save the project selection",
+        "seconds": 42,
+        "stamp": "0:42",
+        "text": "I open the Osprey project file and list the Python-looking source files that belong to it. After saving the setting, I run Deslop on the project and inspect the result. That makes the choice visible in the project instead of leaving it to guesswork."
+      }
+    ],
+    "description": {
+      "en": "Scan Osprey code and see how a Python flavor marker or osprey.toml selects files for analysis.",
+      "zh": "扫描 Osprey 代码，并了解如何通过 Python 语法标记或 osprey.toml 选择要分析的文件。"
+    },
+    "captionCueCount": 25
+  },
+  "github-action": {
+    "title": "Check duplicate code in GitHub Actions",
+    "duration": "0:56",
+    "transcript": [
+      {
+        "title": "Create the workflow",
+        "seconds": 0,
+        "stamp": "0:00",
+        "text": "I start by creating a workflow file for this project. The first step checks out the code. I add Deslop immediately after it, so GitHub can check the files and produce a report whenever I run this workflow."
+      },
+      {
+        "title": "Choose the version",
+        "seconds": 13,
+        "stamp": "0:13",
+        "text": "Here I choose the released version of Deslop that this workflow will use. I keep the version written in the file, so another release cannot silently change the check. The settings are saved alongside the rest of the project."
+      },
+      {
+        "title": "Report first, then set a limit",
+        "seconds": 27,
+        "stamp": "0:27",
+        "text": "For the first run, I ask for a report without blocking the build. Once I have reviewed the result, I can set a limit. Here I use five percent as an example, then run the same check locally and inspect why it fails."
+      },
+      {
+        "title": "Check the changed code",
+        "seconds": 42,
+        "stamp": "0:42",
+        "text": "For a check on new code, I save my changes to a file and select only the added lines. Deslop still looks through the project for matching copies. I read the result to see which new code caused the check to fail."
+      }
+    ],
+    "description": {
+      "en": "Add Deslop to GitHub Actions and fail a pull request check when the duplicate code percentage exceeds a threshold.",
+      "zh": "在 GitHub Actions 中运行 Deslop，当代码重复率超过阈值时让拉取请求检查失败。"
+    },
+    "captionCueCount": 25
+  },
+  "vscode-cluster-panel": {
+    "title": "Compare duplicate code side by side in VS Code",
+    "duration": "1:08",
+    "transcript": [
+      {
+        "title": "Find the repeated code",
+        "seconds": 0,
+        "stamp": "0:00",
+        "text": "I open a finding from the Deslop sidebar. Its details show the files containing the repeated code. I can follow either file link to see the original source, without leaving the editor or copying line numbers into a search."
+      },
+      {
+        "title": "Compare with the first copy",
+        "seconds": 21,
+        "stamp": "0:21",
+        "text": "I click the comparison button beside the second copy. Deslop opens both files together, with their differences highlighted. I can read the same section on each side and check whether the differences matter before I change either file."
+      },
+      {
+        "title": "Choose two files to compare",
+        "seconds": 36,
+        "stamp": "0:36",
+        "text": "When I want a different pair, I select one copy first, then choose Compare with Selected on the other. The editor opens those two files together. I can repeat this for another pair when a finding contains several copies."
+      },
+      {
+        "title": "Check the file totals",
+        "seconds": 53,
+        "stamp": "0:53",
+        "text": "Back in the sidebar, I expand Duplication to see the project and file totals. The file rows help me choose where to investigate next. I open a file from that list, then return to its finding to review the actual repeated code."
+      }
+    ],
+    "description": {
+      "en": "Jump to each copy from a Deslop finding and compare any two occurrences in the VS Code diff editor.",
+      "zh": "从 Deslop 的结果跳转到每处副本，并在 VS Code 的差异编辑器中比较任意两处。"
+    },
+    "captionCueCount": 24
+  },
+  "accuracy-transparency": {
+    "title": "How to read code duplication percentages",
+    "duration": "0:59",
+    "transcript": [
+      {
+        "title": "Read the project total",
+        "seconds": 0,
+        "stamp": "0:00",
+        "text": "I expand the Duplication section to read the project total. Deslop shows how many lines it analysed and how many it found in repeated code. The percentage describes those files; it does not tell me that a cleanup is automatically safe."
+      },
+      {
+        "title": "Follow the file counts",
+        "seconds": 16,
+        "stamp": "0:16",
+        "text": "I open the file rows behind that total and inspect the highlighted code. This lets me connect the number to real source lines. When I review a result, I want to understand which files were checked and what work was counted."
+      },
+      {
+        "title": "Check the actual copies",
+        "seconds": 30,
+        "stamp": "0:30",
+        "text": "Next I put the reported copies side by side. I check that they really repeat the same work and look at their differences. This is the evidence I use to decide what deserves attention, rather than treating a percentage as a verdict."
+      },
+      {
+        "title": "See what an exclusion changes",
+        "seconds": 43,
+        "stamp": "0:43",
+        "text": "I exclude a folder in the settings file and save it. The sidebar updates because those files are no longer part of the analysis. Before comparing two results, I check settings like this so I know that both runs measured the same files."
+      }
+    ],
+    "description": {
+      "en": "Learn which lines count toward a duplicate code percentage and how Deslop checks its findings against known examples.",
+      "zh": "了解哪些代码行计入重复率，以及 Deslop 如何用已知示例检验检测结果。"
+    },
+    "captionCueCount": 25
   },
   "research-background": {
-    "title": "Why repeated code matters",
-    "duration": "1:29",
+    "title": "Types of duplicate code and how to detect them",
+    "duration": "1:00",
     "transcript": [
       {
-        "title": "Why repeated code matters",
+        "title": "Start with two copies",
         "seconds": 0,
         "stamp": "0:00",
-        "text": "Repeated code is not automatically wrong. The maintenance risk is that fixes, security changes and new behavior must stay consistent across copies. Generating another implementation is easy; deciding whether to reuse existing code still requires judgment. The research page links the studies behind this motivation."
+        "text": "Here are two files that repeat the same calculation. I open both to see where that repeated work lives. The practical question is simple: when this behavior needs a fix, will someone remember to update every copy of it?"
       },
       {
-        "title": "Four families of clones",
-        "seconds": 22,
-        "stamp": "0:22",
-        "text": "The research taxonomy distinguishes four clone families. Type one permits layout and comment changes. Type two allows changed names and literals. Type three includes edited statements. Type four describes equivalent behavior implemented differently. Deslop has its own report labels and a stricter text-identity rule, explained in How It Works."
+        "title": "Change one copy",
+        "seconds": 15,
+        "stamp": "0:15",
+        "text": "I change one of the copies and save it. The other file has not changed with it. That is the maintenance problem repeated code can create: a fix in one place does not automatically reach the other places that need it."
       },
       {
-        "title": "Combine several techniques",
-        "seconds": 44,
-        "stamp": "0:44",
-        "text": "Deslop combines normalized syntax trees, subtree fingerprints, statement-run fingerprints and similarity retrieval. Optional embeddings add semantic candidates. These techniques help locate possible copies at different levels. Pair admission checks content as well as structure, and an explicit comparison provides evidence about the selected source ranges."
+        "title": "See what now differs",
+        "seconds": 28,
+        "stamp": "0:28",
+        "text": "I compare the files again to see the difference I just introduced. This view gives me something concrete to review with the team. I can point to the changed line, check its purpose, and decide whether the other copy needs the same change."
       },
       {
-        "title": "Evidence still needs review",
-        "seconds": 68,
-        "stamp": "1:08",
-        "text": "Use the page to follow implementation pointers and read the original papers. A detection technique is not proof that extracting shared code is safe. Review both implementations, test the behavior you intend to keep, and use the separate accuracy documentation to understand how findings are checked."
+        "title": "Decide what to share",
+        "seconds": 42,
+        "stamp": "0:42",
+        "text": "A finding does not mean I should delete a copy automatically. I inspect both versions and the places that use them. If a shared implementation makes the code easier to maintain, I can make that change and test the behavior I intend to keep."
       }
-    ]
+    ],
+    "description": {
+      "en": "Compare exact copies, renamed copies, and edited copies, and see what makes a similar code finding worth reviewing.",
+      "zh": "对比完全相同、改名和改动过的代码副本，了解哪些相似代码值得审查。"
+    },
+    "captionCueCount": 26
   },
   "for-ai": {
-    "title": "Verify the session first",
-    "duration": "1:18",
+    "title": "Find similar code before writing with an AI coding agent",
+    "duration": "1:04",
     "transcript": [
       {
-        "title": "Verify the session first",
+        "title": "Ask what is repeated",
         "seconds": 0,
         "stamp": "0:00",
-        "text": "Before working in a new codebase, inspect the installed tool version and available tool parameters. Bind MCP to the absolute repository root, read the project instructions and configuration, then call session and verify its root. A connection to another repository is not a useful empty result."
+        "text": "I ask pi to check the repeated code in this project before making a change. It calls Deslop and brings the result into the conversation. I start with one finding so the review stays small enough to understand and act on."
       },
       {
-        "title": "Small summaries, all occurrences",
-        "seconds": 20,
-        "stamp": "0:20",
-        "text": "Request duplicates with detail summary and a small limit. Scope edits with path or path_contains, then use cluster-by-id and inspect every member, paging with offset, before editing. Keep overview pages small: full occurrences for one cluster, not hundreds of full clusters."
+        "title": "Read the files behind the result",
+        "seconds": 14,
+        "stamp": "0:14",
+        "text": "I ask the agent for the files behind that finding. The reply shows where the repeated code lives and how many copies were found. I use those locations to guide the next step, rather than asking for a broad rewrite of the project."
       },
       {
-        "title": "find-similar before writing",
-        "seconds": 40,
-        "stamp": "0:40",
-        "text": "Before adding a code unit, call find similar with a snippet and its language. Inspect clusters and also existing occurrences outside any cluster. An existing match still needs review, even when clusters is empty. A disk report cannot answer this in-memory snippet query."
+        "title": "Check before adding a helper",
+        "seconds": 29,
+        "stamp": "0:29",
+        "text": "Before adding another helper, I ask pi to read the existing file and search for similar code. Deslop returns the matching files. This is the useful moment to spot something I can reuse, while there is still time to avoid writing another copy."
       },
       {
-        "title": "Tests, then requery",
-        "seconds": 58,
-        "stamp": "0:58",
-        "text": "After editing, run the project's tests and query the changed paths again. The live index refreshes automatically; use rescan only for suspected watcher lag. A merge plan is optional. A verdict asking for agent or human judgment is not an executable merge."
+        "title": "Review before accepting a change",
+        "seconds": 46,
+        "stamp": "0:46",
+        "text": "I finish by opening the source comparison in the editor. I check that the proposed reuse preserves the behavior I need. After a focused change, I run the project's tests and review Deslop again instead of assuming the agent's first answer is enough."
       }
-    ]
+    ],
+    "description": {
+      "en": "Use the Deslop MCP find-similar tool to find reusable code in the live workspace, then test and check again after editing.",
+      "zh": "通过 Deslop MCP 的 find-similar 工具查找工作区中可复用的代码，并在修改后测试和复查。"
+    },
+    "captionCueCount": 27
   }
 }

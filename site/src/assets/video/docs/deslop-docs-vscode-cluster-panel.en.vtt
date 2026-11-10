@@ -1,13 +1,73 @@
 WEBVTT
 
-00:00.400 --> 00:16.416
-Open a finding and use its file links to navigate to the code. The selected range shows the reported occurrence, but read the surrounding implementation too. The category tells you what kind of relationship was found. A finding is a starting point for review.
+00:00.300 --> 00:03.990
+I open a finding from the Deslop
 
-00:17.266 --> 00:34.375
-Compare To Canonical opens the reference occurrence on the left and your chosen copy on the right. Canonical does not mean best. It gives comparisons a consistent starting point. Review both implementations and their assumptions before deciding which behavior to preserve.
+00:03.990 --> 00:07.681
+sidebar. Its details show the files containing
 
-00:35.225 --> 00:54.121
-To inspect a different pair, select the first occurrence for comparison, then choose Compare with Selected on the other. Clear Selection cancels the choice. Selection also clears after comparison or when you change clusters. Copy Context For AI provides finding context for a coding agent.
+00:07.681 --> 00:11.371
+the repeated code. I can follow either
 
-00:54.971 --> 01:16.489
-Mass measures copied syntax-tree size multiplied by additional visible copies. Rank puts larger duplicated work first; neither is confidence. Severity is a configured diagnostic level. Use the sidebar grouping menu to organize findings, and the Duplication and Session views to inspect percentages and analysis state.
+00:11.371 --> 00:15.061
+file link to see the original source,
+
+00:15.061 --> 00:18.751
+without leaving the editor or copying line
+
+00:18.751 --> 00:20.860
+numbers into a search.
+
+00:21.660 --> 00:24.268
+I click the comparison button beside the
+
+00:24.268 --> 00:26.877
+second copy. Deslop opens both files together,
+
+00:26.877 --> 00:29.485
+with their differences highlighted. I can read
+
+00:29.485 --> 00:32.094
+the same section on each side and
+
+00:32.094 --> 00:34.702
+check whether the differences matter before I
+
+00:34.702 --> 00:35.820
+change either file.
+
+00:36.620 --> 00:39.592
+When I want a different pair, I
+
+00:39.592 --> 00:42.565
+select one copy first, then choose Compare
+
+00:42.565 --> 00:45.537
+with Selected on the other. The editor
+
+00:45.537 --> 00:48.509
+opens those two files together. I can
+
+00:48.509 --> 00:51.482
+repeat this for another pair when a
+
+00:51.482 --> 00:53.180
+finding contains several copies.
+
+00:53.980 --> 00:56.087
+Back in the sidebar, I expand Duplication
+
+00:56.087 --> 00:58.193
+to see the project and file totals.
+
+00:58.193 --> 01:00.300
+The file rows help me choose where
+
+01:00.300 --> 01:02.407
+to investigate next. I open a file
+
+01:02.407 --> 01:04.513
+from that list, then return to its
+
+01:04.513 --> 01:06.620
+finding to review the actual repeated code.

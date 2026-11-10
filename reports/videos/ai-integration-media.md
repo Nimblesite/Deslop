@@ -1,9 +1,18 @@
-# ai-integration media verification
+# ai-integration recorded workflow verification [DOC-FILMS-LIVE]
 
-- Duration: 81.208 seconds
-- Live VS Code footage: 48.1 seconds
-- Video: H.264, 1920 × 1080
-- Audio: original AAC stream, verified by stream hash
-- English captions and chapters: original timestamps preserved
-- Visuals: recorded application footage, automatic camera and animated explanations
-- SHA-256: ebb5d0f153d3109cb0dd2965062db859ee13ee1986198ffd379592bcf28a6375
+- Duration: 64.460 seconds
+- Picture: real application footage for the entire film; captions and small step labels only
+- Narrator: Qwen3 TTS / Aiden
+- Spoken script: 4 current lines, matching the cached speech receipts
+- Caption cues: 27
+- Video: H.264, 1920 x 1080; audio: AAC
+- SHA-256: 42d6c95fb0c9fc24b04c6f8b988648dca51c2d7ff09ceee2386af97272730ed1
+
+| Step | Recorded action | Source seconds | Playback speed | Automatic camera moves |
+| --- | --- | ---: | ---: | ---: |
+| Ask the agent before writing | agent-ask | 47.73 | 2.98 | 5 |
+| Let the agent check Deslop | agent-search | 36.33 | 2.43 | 4 |
+| Review the returned files | agent-results | 31.57 | 1.80 | 4 |
+| Check the source yourself | review-compare | 11.47 | 1.00 | 2 |
+
+Narration and visible workflow must also receive finished-frame review. Encoding checks alone do not establish usefulness.

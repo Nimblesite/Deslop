@@ -1,4 +1,4 @@
-{% macro player(video) -%}
+{% macro player(video, origin) -%}
 <video style="display: block; width: 100%; max-width: 100%; height: auto;" controls playsinline preload="none" poster="{{ video.poster }}"
        width="{{ video.width }}" height="{{ video.height }}" aria-label="{{ video.label }}">
   <source src="{{ video.src }}" type="video/mp4">
@@ -6,4 +6,12 @@
   {% if video.chapters %}<track kind="chapters" src="{{ video.chapters }}" srclang="en" label="Chapters">{% endif %}
   <p>{{ video.fallback }} <a href="{{ video.src }}" download>{{ video.downloadLabel }}</a></p>
 </video>
+<script type="application/ld+json">
+{{ {
+  "@context": "https://schema.org", "@type": "VideoObject",
+  name: video.label, description: video.description,
+  thumbnailUrl: origin + video.poster, contentUrl: origin + video.src,
+  duration: video.duration, uploadDate: video.uploadDate, inLanguage: "en"
+} | jsonValue | safe }}
+</script>
 {%- endmacro %}

@@ -1,9 +1,18 @@
-# github-action media verification
+# github-action recorded workflow verification [DOC-FILMS-LIVE]
 
-- Duration: 79.067 seconds
-- Live VS Code footage: 29.7 seconds
-- Video: H.264, 1920 × 1080
-- Audio: original AAC stream, verified by stream hash
-- English captions and chapters: original timestamps preserved
-- Visuals: recorded application footage, automatic camera and animated explanations
-- SHA-256: a1a7b33e40a823dba8a8a086d39a9ce70603d71201152119b4e8354c196e754c
+- Duration: 55.820 seconds
+- Picture: real application footage for the entire film; captions and small step labels only
+- Narrator: Qwen3 TTS / Aiden
+- Spoken script: 4 current lines, matching the cached speech receipts
+- Caption cues: 25
+- Video: H.264, 1920 x 1080; audio: AAC
+- SHA-256: 520cdb72a3dfaddfbf3625b56e8d968527564d18ca7333056493a77ba5da8703
+
+| Step | Recorded action | Source seconds | Playback speed | Automatic camera moves |
+| --- | --- | ---: | ---: | ---: |
+| Create the workflow | action-create | 23.60 | 1.73 | 8 |
+| Choose the version | action-version | 14.47 | 1.08 | 4 |
+| Report first, then set a limit | action-limit | 26.03 | 1.73 | 2 |
+| Check the changed code | action-changes (from 16.00s) | 27.47 | 1.99 | 2 |
+
+Narration and visible workflow must also receive finished-frame review. Encoding checks alone do not establish usefulness.

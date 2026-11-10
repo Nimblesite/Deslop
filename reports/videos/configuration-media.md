@@ -1,9 +1,18 @@
-# configuration media verification
+# configuration recorded workflow verification [DOC-FILMS-LIVE]
 
-- Duration: 79.500 seconds
-- Live VS Code footage: 32.8 seconds
-- Video: H.264, 1920 × 1080
-- Audio: original AAC stream, verified by stream hash
-- English captions and chapters: original timestamps preserved
-- Visuals: recorded application footage, automatic camera and animated explanations
-- SHA-256: a65eab754752a233367930e4b0c128768e6cf0368b7dc203e256185566b83630
+- Duration: 54.700 seconds
+- Picture: real application footage for the entire film; captions and small step labels only
+- Narrator: Qwen3 TTS / Aiden
+- Spoken script: 4 current lines, matching the cached speech receipts
+- Caption cues: 25
+- Video: H.264, 1920 x 1080; audio: AAC
+- SHA-256: 697ae4dd8385dfec2d741e0b2fb913e419fe5e3023c6be111c0ca29e105fd057
+
+| Step | Recorded action | Source seconds | Playback speed | Automatic camera moves |
+| --- | --- | ---: | ---: | ---: |
+| Create the project settings | config-create | 17.13 | 1.30 | 4 |
+| Choose what to skip | config-exclude | 20.73 | 1.46 | 4 |
+| Override one run | config-override | 20.80 | 1.72 | 2 |
+| Set a limit and inspect the result | config-limit | 19.47 | 1.28 | 2 |
+
+Narration and visible workflow must also receive finished-frame review. Encoding checks alone do not establish usefulness.

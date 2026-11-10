@@ -39,6 +39,11 @@ export default function (eleventyConfig) {
       .replaceAll("&", "\\u0026")
   );
 
+  eleventyConfig.addFilter("videoDuration", (time) => {
+    const [minutes, seconds] = time.split(":").map(Number);
+    return `PT${minutes * 60 + seconds}S`;
+  });
+
   eleventyConfig.addPlugin(techdoc, {
     site: {
       name: "Deslop",

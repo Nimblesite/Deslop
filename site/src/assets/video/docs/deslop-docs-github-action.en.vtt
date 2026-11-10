@@ -1,13 +1,76 @@
 WEBVTT
 
-00:00.400 --> 00:19.919
-The Deslop GitHub Action brings duplicate-code review into your workflow. It installs the released command-line tool, analyses the workspace and renders reports. Start with the complete workflow on the documentation page, including repository checkout, and choose whether you want measurement or a blocking gate.
+00:00.300 --> 00:02.643
+I start by creating a workflow file
 
-00:20.769 --> 00:39.185
-Pin an exact release tag. By default, that tag selects the matching command-line version, keeping the action and tool aligned. If you pin a commit or branch instead, supply the version input explicitly. The downloaded archive is checked against its published checksum before extraction.
+00:02.643 --> 00:04.986
+for this project. The first step checks
 
-00:40.035 --> 00:58.306
-For a measurement-only run, use no fail over. To make duplication above your ceiling fail the job, set fail over, or leave it unset to honor the project configuration. The five-percent value shown is an example, not a recommendation for every codebase. Review your baseline first.
+00:04.986 --> 00:07.329
+out the code. I add Deslop immediately
 
-00:59.156 --> 01:17.294
-Changed-code gating uses a supplied patch and the only changed option. The whole tree is still analysed; the report and gate are scoped to affected added lines. Reports and outputs help explain a breached gate. Inspect the scope as well as the percentage before deciding what to change.
+00:07.329 --> 00:09.673
+after it, so GitHub can check the
+
+00:09.673 --> 00:12.016
+files and produce a report whenever I
+
+00:12.016 --> 00:13.020
+run this workflow.
+
+00:13.820 --> 00:16.074
+Here I choose the released version of
+
+00:16.074 --> 00:18.329
+Deslop that this workflow will use. I
+
+00:18.329 --> 00:20.583
+keep the version written in the file,
+
+00:20.583 --> 00:22.837
+so another release cannot silently change the
+
+00:22.837 --> 00:25.092
+check. The settings are saved alongside the
+
+00:25.092 --> 00:26.380
+rest of the project.
+
+00:27.180 --> 00:29.498
+For the first run, I ask for
+
+00:29.498 --> 00:31.816
+a report without blocking the build. Once
+
+00:31.816 --> 00:34.134
+I have reviewed the result, I can
+
+00:34.134 --> 00:36.453
+set a limit. Here I use five
+
+00:36.453 --> 00:38.771
+percent as an example, then run the
+
+00:38.771 --> 00:41.089
+same check locally and inspect why it
+
+00:41.089 --> 00:41.420
+fails.
+
+00:42.220 --> 00:44.287
+For a check on new code, I
+
+00:44.287 --> 00:46.353
+save my changes to a file and
+
+00:46.353 --> 00:48.420
+select only the added lines. Deslop still
+
+00:48.420 --> 00:50.487
+looks through the project for matching copies.
+
+00:50.487 --> 00:52.553
+I read the result to see which
+
+00:52.553 --> 00:54.620
+new code caused the check to fail.

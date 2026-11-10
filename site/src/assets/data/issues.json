@@ -1,8 +1,8 @@
 {
   "meta": {
     "repo": "Nimblesite/Deslop",
-    "published_at": "2026-11-10T10:50:44Z",
-    "published_at_long": "10th of November 2026, 10am",
+    "published_at": "2026-11-10T12:21:57Z",
+    "published_at_long": "10th of November 2026, 12pm",
     "source_url": "https://github.com/Nimblesite/Deslop/issues",
     "method": "GitHub metadata: the Priority field, lane/* labels, explicit relationships, and cross-references. No AI enrichment.",
     "planning_note": "Indicative only — not a schedule. Relative sequencing uses two parallel tracks per workstream, holds blocked work until every blocker finishes, and takes effort units from the Effort field (high 8, medium 4, low 2) or, when it is unset, the issue type: feature 8, bug 5, task 4."
@@ -11,7 +11,7 @@
     "open": 130,
     "verify": 0,
     "showstoppers": 2,
-    "critical": 45,
+    "critical": 46,
     "linked": 76,
     "relationships": 90
   },
@@ -48,8 +48,8 @@
       "name": "Editor experience",
       "description": "VS Code, JetBrains, diagnostics, panels, hovers, and webviews.",
       "color": "#9bcbff",
-      "count": 9,
-      "urgent": 5,
+      "count": 10,
+      "urgent": 6,
       "verify": 0
     },
     {
@@ -93,7 +93,7 @@
       "name": "Unassigned",
       "description": "No lane/* label on the issue — triage owes it one.",
       "color": "#8e8b8a",
-      "count": 29,
+      "count": 28,
       "urgent": 0,
       "verify": 0
     }
@@ -113,7 +113,7 @@
       "name": "Critical",
       "description": "seriously impacting accuracy or the usefulness of the tool",
       "color": "#f06292",
-      "count": 45
+      "count": 46
     },
     {
       "id": "normal",
@@ -137,7 +137,7 @@
       "name": "No priority set",
       "description": "No Priority value on the issue — triage owes it one.",
       "color": "#8e8b8a",
-      "count": 46
+      "count": 45
     }
   ],
   "issues": [
@@ -226,7 +226,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-06-01T10:35:42Z",
-      "updated_at": "2026-08-24T11:16:39Z",
+      "updated_at": "2026-11-10T11:11:40Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "performance",
@@ -258,7 +258,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-14T10:12:23Z",
-      "updated_at": "2026-08-24T09:15:05Z",
+      "updated_at": "2026-11-10T11:31:46Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "quality",
@@ -290,7 +290,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-18T21:44:07Z",
-      "updated_at": "2026-08-23T05:59:27Z",
+      "updated_at": "2026-11-10T11:15:24Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "performance",
@@ -396,7 +396,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-14T10:12:07Z",
-      "updated_at": "2026-08-23T05:59:46Z",
+      "updated_at": "2026-11-10T10:57:11Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "accuracy",
@@ -495,7 +495,7 @@
       ],
       "milestone": null,
       "created_at": "2026-08-14T22:45:18Z",
-      "updated_at": "2026-08-24T11:16:31Z",
+      "updated_at": "2026-11-10T10:52:44Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "accuracy",
@@ -527,7 +527,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-22T09:11:49Z",
-      "updated_at": "2026-08-24T11:16:41Z",
+      "updated_at": "2026-11-10T11:15:24Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "performance",
@@ -564,7 +564,7 @@
       ],
       "milestone": null,
       "created_at": "2026-05-02T09:14:15Z",
-      "updated_at": "2026-11-10T10:37:25Z",
+      "updated_at": "2026-11-10T12:03:50Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "accuracy",
@@ -638,7 +638,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-06-17T21:44:17Z",
-      "updated_at": "2026-11-10T07:04:55Z",
+      "updated_at": "2026-11-10T11:25:27Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "integrations",
@@ -665,7 +665,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-07-07T21:47:21Z",
-      "updated_at": "2026-11-10T06:56:19Z",
+      "updated_at": "2026-11-10T12:17:28Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "integrations",
@@ -786,7 +786,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-16T11:20:15Z",
-      "updated_at": "2026-08-23T05:59:41Z",
+      "updated_at": "2026-11-10T11:03:20Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "accuracy",
@@ -845,7 +845,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-16T12:20:19Z",
-      "updated_at": "2026-11-10T07:12:05Z",
+      "updated_at": "2026-11-10T12:05:12Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "reporting",
@@ -1042,7 +1042,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-06-01T10:35:44Z",
-      "updated_at": "2026-11-10T10:36:52Z",
+      "updated_at": "2026-11-10T12:09:12Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "quality",
@@ -1241,7 +1241,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-01T15:38:59Z",
-      "updated_at": "2026-08-24T11:16:46Z",
+      "updated_at": "2026-11-10T11:09:52Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "delivery",
@@ -1268,7 +1268,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-11T23:36:59Z",
-      "updated_at": "2026-11-10T01:54:13Z",
+      "updated_at": "2026-11-10T10:59:29Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "quality",
@@ -1359,7 +1359,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-18T21:44:27Z",
-      "updated_at": "2026-11-09T11:25:38Z",
+      "updated_at": "2026-11-10T10:55:09Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "performance",
@@ -1519,7 +1519,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-11-08T08:52:54Z",
-      "updated_at": "2026-11-10T06:58:05Z",
+      "updated_at": "2026-11-10T11:59:27Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "editor",
@@ -1551,7 +1551,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-11-08T08:52:57Z",
-      "updated_at": "2026-11-10T06:52:24Z",
+      "updated_at": "2026-11-10T12:11:44Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "integrations",
@@ -1583,7 +1583,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-11-08T08:53:00Z",
-      "updated_at": "2026-11-09T10:38:56Z",
+      "updated_at": "2026-11-10T11:06:40Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "integrations",
@@ -1615,7 +1615,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-11-10T04:34:09Z",
-      "updated_at": "2026-11-10T06:51:40Z",
+      "updated_at": "2026-11-10T12:21:27Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "accuracy",
@@ -1642,7 +1642,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-11-10T06:53:39Z",
-      "updated_at": "2026-11-10T06:53:44Z",
+      "updated_at": "2026-11-10T12:14:25Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "integrations",
@@ -1674,7 +1674,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-11-10T10:48:04Z",
-      "updated_at": "2026-11-10T10:48:09Z",
+      "updated_at": "2026-11-10T11:05:59Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "reporting",
@@ -1683,6 +1683,33 @@
         "offset": 5,
         "effort_units": 5,
         "track": 0
+      }
+    },
+    {
+      "number": 634,
+      "title": "Duplication panel rows are dead: clicking a file or folder does not open the file or jump to its cluster",
+      "url": "https://github.com/Nimblesite/Deslop/issues/634",
+      "excerpt": "In the \"Deslop: Duplication\" panel, clicking a file or folder does nothing. A file row should open that file at its duplicates, and a folder row should expand, collapse or show its clusters.",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/editor",
+          "color": "9bcbff",
+          "description": "VS Code, JetBrains, diagnostics, panels, hovers, webviews"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-11-10T10:55:01Z",
+      "updated_at": "2026-11-10T11:05:01Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "editor",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 10,
+        "effort_units": 5,
+        "track": 1
       }
     },
     {
@@ -1770,7 +1797,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-21T09:47:03Z",
-      "updated_at": "2026-08-23T05:59:18Z",
+      "updated_at": "2026-11-10T11:18:03Z",
       "lifecycle": "active",
       "priority": "normal",
       "workstream": "quality",
@@ -1797,7 +1824,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-21T15:01:41Z",
-      "updated_at": "2026-08-23T05:59:17Z",
+      "updated_at": "2026-11-10T11:07:41Z",
       "lifecycle": "active",
       "priority": "normal",
       "workstream": "performance",
@@ -1824,7 +1851,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-09-23T22:05:06Z",
-      "updated_at": "2026-11-10T06:52:21Z",
+      "updated_at": "2026-11-10T11:20:17Z",
       "lifecycle": "active",
       "priority": "normal",
       "workstream": "integrations",
@@ -1851,7 +1878,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-05-02T21:41:31Z",
-      "updated_at": "2026-08-23T05:59:00Z",
+      "updated_at": "2026-11-10T11:39:37Z",
       "lifecycle": "active",
       "priority": "normal",
       "workstream": "integrations",
@@ -1878,15 +1905,15 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-05-03T21:39:17Z",
-      "updated_at": "2026-11-10T07:06:38Z",
+      "updated_at": "2026-11-10T11:50:24Z",
       "lifecycle": "active",
       "priority": "normal",
       "workstream": "editor",
       "inbound_links": 1,
       "plan": {
-        "offset": 10,
+        "offset": 15,
         "effort_units": 8,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -1905,7 +1932,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-06-01T18:27:43Z",
-      "updated_at": "2026-11-10T07:06:41Z",
+      "updated_at": "2026-11-10T11:32:37Z",
       "lifecycle": "active",
       "priority": "normal",
       "workstream": "editor",
@@ -1913,7 +1940,7 @@
       "plan": {
         "offset": 15,
         "effort_units": 5,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -1932,13 +1959,13 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-06-04T11:05:26Z",
-      "updated_at": "2026-11-10T07:06:40Z",
+      "updated_at": "2026-11-10T11:33:36Z",
       "lifecycle": "active",
       "priority": "normal",
       "workstream": "editor",
       "inbound_links": 1,
       "plan": {
-        "offset": 18,
+        "offset": 20,
         "effort_units": 8,
         "track": 1
       }
@@ -1965,7 +1992,7 @@
       "workstream": "editor",
       "inbound_links": 1,
       "plan": {
-        "offset": 20,
+        "offset": 23,
         "effort_units": 8,
         "track": 0
       }
@@ -1986,7 +2013,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-17T11:50:59Z",
-      "updated_at": "2026-08-23T05:58:38Z",
+      "updated_at": "2026-11-10T11:09:52Z",
       "lifecycle": "active",
       "priority": "normal",
       "workstream": "quality",
@@ -2040,7 +2067,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-17T12:52:04Z",
-      "updated_at": "2026-08-23T05:59:19Z",
+      "updated_at": "2026-11-10T10:58:38Z",
       "lifecycle": "active",
       "priority": "normal",
       "workstream": "detection",
@@ -2126,7 +2153,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-04-22T05:57:10Z",
-      "updated_at": "2026-08-23T05:59:03Z",
+      "updated_at": "2026-11-10T11:02:21Z",
       "lifecycle": "active",
       "priority": "normal",
       "workstream": "reporting",
@@ -2180,7 +2207,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-04-25T08:20:13Z",
-      "updated_at": "2026-08-23T05:59:01Z",
+      "updated_at": "2026-11-10T11:02:21Z",
       "lifecycle": "active",
       "priority": "normal",
       "workstream": "integrations",
@@ -2207,7 +2234,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-05-02T21:41:18Z",
-      "updated_at": "2026-08-23T05:59:01Z",
+      "updated_at": "2026-11-10T11:39:38Z",
       "lifecycle": "active",
       "priority": "normal",
       "workstream": "integrations",
@@ -2234,7 +2261,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-05-02T23:12:27Z",
-      "updated_at": "2026-08-23T05:58:59Z",
+      "updated_at": "2026-11-10T11:40:52Z",
       "lifecycle": "active",
       "priority": "normal",
       "workstream": "reporting",
@@ -2261,7 +2288,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-06-05T21:37:37Z",
-      "updated_at": "2026-11-10T10:41:39Z",
+      "updated_at": "2026-11-10T11:51:11Z",
       "lifecycle": "active",
       "priority": "normal",
       "workstream": "delivery",
@@ -2288,7 +2315,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-06-05T21:37:43Z",
-      "updated_at": "2026-08-23T05:59:20Z",
+      "updated_at": "2026-11-10T11:52:59Z",
       "lifecycle": "active",
       "priority": "normal",
       "workstream": "delivery",
@@ -2315,7 +2342,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-06-05T21:16:00Z",
-      "updated_at": "2026-08-23T05:59:22Z",
+      "updated_at": "2026-11-10T11:08:36Z",
       "lifecycle": "active",
       "priority": "normal",
       "workstream": "delivery",
@@ -2347,7 +2374,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-06-28T22:33:55Z",
-      "updated_at": "2026-09-28T01:19:14Z",
+      "updated_at": "2026-11-10T10:50:29Z",
       "lifecycle": "active",
       "priority": "normal",
       "workstream": "quality",
@@ -2374,7 +2401,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-07-15T01:58:26Z",
-      "updated_at": "2026-08-24T09:14:58Z",
+      "updated_at": "2026-11-10T11:01:39Z",
       "lifecycle": "active",
       "priority": "normal",
       "workstream": "performance",
@@ -2460,7 +2487,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-12T21:44:12Z",
-      "updated_at": "2026-09-28T01:19:13Z",
+      "updated_at": "2026-11-10T11:30:27Z",
       "lifecycle": "active",
       "priority": "normal",
       "workstream": "integrations",
@@ -2487,7 +2514,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-15T00:18:55Z",
-      "updated_at": "2026-08-23T05:59:21Z",
+      "updated_at": "2026-11-10T10:58:39Z",
       "lifecycle": "active",
       "priority": "normal",
       "workstream": "detection",
@@ -2605,7 +2632,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-10-10T05:18:50Z",
-      "updated_at": "2026-11-10T07:13:25Z",
+      "updated_at": "2026-11-10T12:10:52Z",
       "lifecycle": "active",
       "priority": "normal",
       "workstream": "reporting",
@@ -2659,7 +2686,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-11-10T06:49:26Z",
-      "updated_at": "2026-11-10T06:49:31Z",
+      "updated_at": "2026-11-10T12:15:14Z",
       "lifecycle": "active",
       "priority": "normal",
       "workstream": "integrations",
@@ -2686,7 +2713,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-11-10T06:49:33Z",
-      "updated_at": "2026-11-10T06:49:37Z",
+      "updated_at": "2026-11-10T12:15:15Z",
       "lifecycle": "active",
       "priority": "normal",
       "workstream": "integrations",
@@ -2713,7 +2740,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-28T10:23:08Z",
-      "updated_at": "2026-08-28T10:23:18Z",
+      "updated_at": "2026-11-10T11:07:41Z",
       "lifecycle": "active",
       "priority": "low",
       "workstream": "quality",
@@ -2798,7 +2825,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-27T11:26:22Z",
-      "updated_at": "2026-11-09T11:37:51Z",
+      "updated_at": "2026-11-10T10:53:40Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "delivery",
@@ -2910,7 +2937,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-27T11:27:33Z",
-      "updated_at": "2026-11-10T07:02:26Z",
+      "updated_at": "2026-11-10T12:02:16Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "accuracy",
@@ -2989,7 +3016,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-11-10T04:26:43Z",
-      "updated_at": "2026-11-10T06:59:37Z",
+      "updated_at": "2026-11-10T12:19:42Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "unassigned",
@@ -3037,7 +3064,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-23T08:13:28Z",
-      "updated_at": "2026-08-25T20:42:16Z",
+      "updated_at": "2026-11-10T11:12:44Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "quality",
@@ -3064,7 +3091,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-24T09:19:51Z",
-      "updated_at": "2026-11-09T11:01:52Z",
+      "updated_at": "2026-11-10T12:16:33Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "quality",
@@ -3101,7 +3128,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-24T10:56:17Z",
-      "updated_at": "2026-11-10T07:10:40Z",
+      "updated_at": "2026-11-10T12:20:23Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "accuracy",
@@ -3122,7 +3149,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-25T11:17:24Z",
-      "updated_at": "2026-08-25T11:17:24Z",
+      "updated_at": "2026-11-10T11:02:21Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "unassigned",
@@ -3143,7 +3170,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-26T02:20:51Z",
-      "updated_at": "2026-11-09T11:36:16Z",
+      "updated_at": "2026-11-10T11:00:13Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "unassigned",
@@ -3196,7 +3223,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-27T11:29:15Z",
-      "updated_at": "2026-11-10T07:02:24Z",
+      "updated_at": "2026-11-10T12:18:05Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "accuracy",
@@ -3228,7 +3255,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-27T11:30:28Z",
-      "updated_at": "2026-11-10T07:02:23Z",
+      "updated_at": "2026-11-10T12:04:32Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "accuracy",
@@ -3477,27 +3504,6 @@
       }
     },
     {
-      "number": 536,
-      "title": "[CLONE-TYPE-TAXONOMY] nearly_identical is assigned on structural overlap alone, with rename_consistency = 0",
-      "url": "https://github.com/Nimblesite/Deslop/issues/536",
-      "excerpt": "Code and spec disagree classify_admitted in crates/deslop-core/src/pipeline/session/pair_compare/admission.rs assigns NearlyIdentical from structural overlap alone: It never reads rename_consistency or consistent_rename. But nearly_identical is specified and published as the *…",
-      "type": "Unclassified",
-      "labels": [],
-      "assignees": [],
-      "milestone": null,
-      "created_at": "2026-09-09T21:59:05Z",
-      "updated_at": "2026-11-10T06:56:48Z",
-      "lifecycle": "active",
-      "priority": "unset",
-      "workstream": "unassigned",
-      "inbound_links": 0,
-      "plan": {
-        "offset": 32,
-        "effort_units": 4,
-        "track": 0
-      }
-    },
-    {
       "number": 540,
       "title": "data_table_rank reads two fields the report never emits: every cluster reports 0 occurrences and the demotion exemption is dead",
       "url": "https://github.com/Nimblesite/Deslop/issues/540",
@@ -3550,7 +3556,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-09-20T23:31:19Z",
-      "updated_at": "2026-11-10T06:38:00Z",
+      "updated_at": "2026-11-10T11:37:05Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "accuracy",
@@ -3579,7 +3585,7 @@
       "plan": {
         "offset": 32,
         "effort_units": 4,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -3603,7 +3609,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-09-27T03:18:19Z",
-      "updated_at": "2026-09-27T03:40:08Z",
+      "updated_at": "2026-11-10T11:15:24Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "performance",
@@ -3630,9 +3636,9 @@
       "workstream": "unassigned",
       "inbound_links": 0,
       "plan": {
-        "offset": 36,
+        "offset": 32,
         "effort_units": 4,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -3653,7 +3659,7 @@
       "plan": {
         "offset": 36,
         "effort_units": 4,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -3672,9 +3678,9 @@
       "workstream": "unassigned",
       "inbound_links": 0,
       "plan": {
-        "offset": 40,
+        "offset": 36,
         "effort_units": 4,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -3687,7 +3693,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-10-03T22:05:49Z",
-      "updated_at": "2026-11-10T06:56:20Z",
+      "updated_at": "2026-11-10T12:13:17Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "unassigned",
@@ -3695,7 +3701,7 @@
       "plan": {
         "offset": 40,
         "effort_units": 4,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -3708,15 +3714,15 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-10-03T23:10:40Z",
-      "updated_at": "2026-11-10T06:58:58Z",
+      "updated_at": "2026-11-10T12:06:02Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "unassigned",
       "inbound_links": 0,
       "plan": {
-        "offset": 44,
+        "offset": 40,
         "effort_units": 4,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -3729,7 +3735,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-11-08T02:49:26Z",
-      "updated_at": "2026-11-09T12:01:56Z",
+      "updated_at": "2026-11-10T11:29:24Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "unassigned",
@@ -3737,7 +3743,7 @@
       "plan": {
         "offset": 44,
         "effort_units": 4,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -3756,7 +3762,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-11-09T12:07:05Z",
-      "updated_at": "2026-11-10T06:34:10Z",
+      "updated_at": "2026-11-10T12:10:07Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "performance",
@@ -3777,15 +3783,15 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-11-10T04:20:48Z",
-      "updated_at": "2026-11-10T06:59:33Z",
+      "updated_at": "2026-11-10T11:54:38Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "unassigned",
       "inbound_links": 0,
       "plan": {
-        "offset": 48,
+        "offset": 44,
         "effort_units": 4,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -3806,7 +3812,7 @@
       "plan": {
         "offset": 48,
         "effort_units": 4,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -3825,9 +3831,9 @@
       "workstream": "unassigned",
       "inbound_links": 0,
       "plan": {
-        "offset": 52,
+        "offset": 48,
         "effort_units": 4,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -3840,7 +3846,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-11-10T09:49:49Z",
-      "updated_at": "2026-11-10T10:44:49Z",
+      "updated_at": "2026-11-10T11:32:58Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "unassigned",
@@ -3848,7 +3854,7 @@
       "plan": {
         "offset": 52,
         "effort_units": 4,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -3867,9 +3873,9 @@
       "workstream": "unassigned",
       "inbound_links": 0,
       "plan": {
-        "offset": 56,
+        "offset": 52,
         "effort_units": 4,
-        "track": 0
+        "track": 1
       }
     }
   ],
