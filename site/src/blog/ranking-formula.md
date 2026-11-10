@@ -67,6 +67,10 @@ Each of those exclusions is deliberate:
 
 A ranking you can recompute from the report alone is one you can trust in code review. Every input to the formula is in the JSON output.
 
+## Reading mass in a report
+
+Every cluster in the JSON report carries its category, its occurrences, its mass and its rank. Mass is printed as a whole number, so two reports from the same code can be compared line by line. The text and HTML reports show the same figure next to each cluster, and the VS Code panel lists clusters in the same order. If a cluster's position surprises you, multiply its node count by its extra copies and compare the result with the clusters above it. No hidden factor is involved.
+
 ## Mass is not the duplication percentage
 
 The two figures answer different questions:

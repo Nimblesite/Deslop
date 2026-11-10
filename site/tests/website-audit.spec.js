@@ -378,7 +378,7 @@ test("every blog post publishes freshness, authorship, its own card alt and real
 
     const isUpdated = article.modified.slice(0, 10) !== article.published.slice(0, 10);
     expect(article.bylineTimes, route).toEqual(
-      isUpdated ? [article.published.slice(0, 10), article.modified.slice(0, 10)] : [article.published.slice(0, 10)]
+      isUpdated ? [article.published, article.modified] : [article.published]
     );
     if (isUpdated) expect(article.bylineText, route).toMatch(/Updated|更新于/);
 
