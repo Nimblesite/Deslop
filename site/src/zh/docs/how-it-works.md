@@ -23,7 +23,7 @@ Deslop 使用 tree-sitter 解析源代码，寻找候选副本，检查内容，
 
 支持 C、C#、Rust、Python、Dart、JavaScript、TypeScript/TSX、PHP、F#、Go 和 Osprey。默认遵循 `.gitignore`，排除依赖目录和构建产物。详见[配置](/zh/docs/configuration/)。
 
-Osprey 的 `.osp` 语法、Python 风格的显式选择规则及原生 ML 集成状态，详见 [Osprey 支持指南（英文）](/docs/osprey/)。
+Osprey 的 `.osp` 语法、Python 风格的显式选择规则及原生 ML 集成状态，详见 [Osprey 支持介绍](/blog/osprey-first-class/)。
 
 引擎归一化语法树，使名称、字面量和格式差异不会遮蔽候选副本。它对语法子树和连续语句生成指纹，也会查找同一文件中的复制。结构重叠和 MinHash 相似度帮助找回外层方法已经变化的副本。
 

@@ -1,6 +1,6 @@
 {
   "getting-started": {
-    "title": "Your first duplicate-code review",
+    "title": "Find duplicate code in VS Code",
     "duration": "1:23",
     "transcript": [
       {
@@ -27,10 +27,14 @@
         "stamp": "0:59",
         "text": "Compare a copy with the canonical version. Look for differences in inputs, behavior, and surrounding assumptions. A finding is evidence to review, not permission to delete code automatically. Make a focused change, run your tests, and let the live analysis update. Follow the Getting Started page for installation alternatives and command-line examples."
       }
-    ]
+    ],
+    "description": {
+      "en": "Install Deslop, scan a project for duplicate code, and compare two copies in the VS Code diff editor.",
+      "zh": "安装 Deslop，扫描项目中的重复代码，并在 VS Code 中并排比较两处副本。"
+    }
   },
   "configuration": {
-    "title": "Put policy beside your code",
+    "title": "Configure duplicate code detection with .deslop.toml",
     "duration": "1:19",
     "transcript": [
       {
@@ -57,10 +61,14 @@
         "stamp": "0:58",
         "text": "A threshold makes excessive duplication fail the run with exit code three. The report remains available to inspect. Without a threshold, duplication alone does not fail the scan; runtime and usage errors still can. Review the report, agree on the policy, and keep that policy with your project."
       }
-    ]
+    ],
+    "description": {
+      "en": "Exclude vendor files, hide generated-only findings, and set a duplicate code threshold in .deslop.toml.",
+      "zh": "用 .deslop.toml 排除第三方文件、隐藏仅涉及生成代码的结果，并设置重复率阈值。"
+    }
   },
   "ai-integration": {
-    "title": "Ask before writing",
+    "title": "Connect a coding agent to the Deslop MCP server",
     "duration": "1:21",
     "transcript": [
       {
@@ -87,10 +95,14 @@
         "stamp": "0:58",
         "text": "Read any existing implementation before reusing it. After editing, run your tests and query the findings again. Deslop answers from the workspace analysis maintained by the editor, which refreshes as files change. The agent still needs to inspect behavior and decide whether a suggested reuse is appropriate."
       }
-    ]
+    ],
+    "description": {
+      "en": "Configure the Deslop MCP server for a coding agent and query the workspace for duplicate code before editing.",
+      "zh": "为编程智能体配置 Deslop MCP 服务器，在编辑前查询工作区中的重复代码。"
+    }
   },
   "how-it-works": {
-    "title": "From source to findings",
+    "title": "How Deslop finds copied and similar code",
     "duration": "1:27",
     "transcript": [
       {
@@ -117,10 +129,14 @@
         "stamp": "1:04",
         "text": "Duplicated mass combines syntax-tree size with additional visible copies, bringing larger repeated work to the top. It is neither confidence nor a percentage. The duplication percentage counts covered source lines, counting overlaps once. Compare two explicit occurrences to inspect their evidence before making a change."
       }
-    ]
+    ],
+    "description": {
+      "en": "See why renamed variables can still produce a match and how Deslop ranks duplicate code by the amount copied.",
+      "zh": "了解变量改名后为何仍能找到副本，以及 Deslop 如何按重复规模排序。"
+    }
   },
   "osprey": {
-    "title": "Three syntax flavors",
+    "title": "Find duplicate code in Osprey",
     "duration": "1:21",
     "transcript": [
       {
@@ -147,10 +163,14 @@
         "stamp": "0:58",
         "text": "Open the project with Deslop or scan it from the command line. Review the ranked findings and compare their occurrences before extracting shared code. Language support does not promise automatic Osprey refactoring, cross-flavor equivalence, or interchangeable behavior. Invalid ML syntax should surface as a parse error."
       }
-    ]
+    ],
+    "description": {
+      "en": "Scan Osprey code and see how a Python flavor marker or osprey.toml selects files for analysis.",
+      "zh": "扫描 Osprey 代码，并了解如何通过 Python 语法标记或 osprey.toml 选择要分析的文件。"
+    }
   },
   "github-action": {
-    "title": "Put review in the workflow",
+    "title": "Check duplicate code in GitHub Actions",
     "duration": "1:19",
     "transcript": [
       {
@@ -177,10 +197,14 @@
         "stamp": "0:59",
         "text": "Changed-code gating uses a supplied patch and the only changed option. The whole tree is still analysed; the report and gate are scoped to affected added lines. Reports and outputs help explain a breached gate. Inspect the scope as well as the percentage before deciding what to change."
       }
-    ]
+    ],
+    "description": {
+      "en": "Add Deslop to GitHub Actions and fail a pull request check when the duplicate code percentage exceeds a threshold.",
+      "zh": "在 GitHub Actions 中运行 Deslop，当代码重复率超过阈值时让拉取请求检查失败。"
+    }
   },
   "vscode-cluster-panel": {
-    "title": "Open the occurrence",
+    "title": "Compare duplicate code side by side in VS Code",
     "duration": "1:18",
     "transcript": [
       {
@@ -207,10 +231,14 @@
         "stamp": "0:54",
         "text": "Mass measures copied syntax-tree size multiplied by additional visible copies. Rank puts larger duplicated work first; neither is confidence. Severity is a configured diagnostic level. Use the sidebar grouping menu to organize findings, and the Duplication and Session views to inspect percentages and analysis state."
       }
-    ]
+    ],
+    "description": {
+      "en": "Jump to each copy from a Deslop finding and compare any two occurrences in the VS Code diff editor.",
+      "zh": "从 Deslop 的结果跳转到每处副本，并在 VS Code 的差异编辑器中比较任意两处。"
+    }
   },
   "accuracy-transparency": {
-    "title": "Percentage is not accuracy",
+    "title": "How to read code duplication percentages",
     "duration": "1:22",
     "transcript": [
       {
@@ -237,10 +265,14 @@
         "stamp": "1:01",
         "text": "The gate fails when the full-precision percentage is greater than its ceiling. Equality passes, even if display rounding makes nearby values look identical. Read the report scope and the measured build together. Corpus results apply to judged examples; they do not guarantee perfect precision or recall everywhere."
       }
-    ]
+    ],
+    "description": {
+      "en": "Learn which lines count toward a duplicate code percentage and how Deslop checks its findings against known examples.",
+      "zh": "了解哪些代码行计入重复率，以及 Deslop 如何用已知示例检验检测结果。"
+    }
   },
   "research-background": {
-    "title": "Why repeated code matters",
+    "title": "Types of duplicate code and how to detect them",
     "duration": "1:29",
     "transcript": [
       {
@@ -267,10 +299,14 @@
         "stamp": "1:08",
         "text": "Use the page to follow implementation pointers and read the original papers. A detection technique is not proof that extracting shared code is safe. Review both implementations, test the behavior you intend to keep, and use the separate accuracy documentation to understand how findings are checked."
       }
-    ]
+    ],
+    "description": {
+      "en": "Compare exact copies, renamed copies, and edited copies, and see what makes a similar code finding worth reviewing.",
+      "zh": "对比完全相同、改名和改动过的代码副本，了解哪些相似代码值得审查。"
+    }
   },
   "for-ai": {
-    "title": "Verify the session first",
+    "title": "Find similar code before writing with an AI coding agent",
     "duration": "1:18",
     "transcript": [
       {
@@ -297,6 +333,10 @@
         "stamp": "0:58",
         "text": "After editing, run the project's tests and query the changed paths again. The live index refreshes automatically; use rescan only for suspected watcher lag. A merge plan is optional. A verdict asking for agent or human judgment is not an executable merge."
       }
-    ]
+    ],
+    "description": {
+      "en": "Use the Deslop MCP find-similar tool to find reusable code in the live workspace, then test and check again after editing.",
+      "zh": "通过 Deslop MCP 的 find-similar 工具查找工作区中可复用的代码，并在修改后测试和复查。"
+    }
   }
 }

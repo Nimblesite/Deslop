@@ -1,6 +1,6 @@
 import { expect, test } from "./helpers/issues.js";
 
-const DOCS_LINK_COUNT = 13;
+const DOCS_LINK_COUNT = 12;
 
 // The org-level Priority field options and lane labels — see scripts/issues/rules.py.
 const PRIORITY_LADDER = ["showstopper", "critical", "normal", "low", "unset"];
@@ -29,6 +29,7 @@ test.describe("documentation navigation", () => {
     await expect(page.locator(".docs-sidebar").getByText(/Live duplicate-code analysis/)).toHaveCount(0);
     await expect(docsNav.locator("details.docs-nav-group")).toHaveCount(4);
     await expect(docsNav.locator("a")).toHaveCount(DOCS_LINK_COUNT);
+    await expect(docsNav.locator('a[href$="/docs/osprey/"]')).toHaveCount(0);
     await expect(
       docsNav.locator('[data-docs-group="guides"]'),
     ).toHaveAttribute("open", "");
@@ -76,6 +77,7 @@ test.describe("documentation navigation", () => {
 
     const docsNav = page.locator(".docs-sidebar__nav");
     await expect(docsNav.locator("a")).toHaveCount(DOCS_LINK_COUNT);
+    await expect(docsNav.locator('a[href$="/docs/osprey/"]')).toHaveCount(0);
     await expect(docsNav.locator("summary")).toHaveText([
       "入门",
       "使用指南",

@@ -60,9 +60,46 @@ async function assertDownloadLink(video,slug) {
   await expect(video.locator('a')).toHaveAttribute('href',`/assets/video/docs/deslop-docs-${slug}.mp4`);
 }
 
+test('getting started fits the reading column without prose CSS', async ({page}) => {
+  await page.route('**/assets/css/prose.css', route => route.abort());
+  await page.goto('/docs/');
+  const video = page.locator('.doc-film video');
+  const column = page.locator('.prose--docs');
+  for (const width of WIDTHS) {
+    await page.setViewportSize({width, height: HEIGHT});
+    const columnBox = await column.boundingBox();
+    const playerBox = await video.boundingBox();
+    expect(playerBox.width).toBeCloseTo(columnBox.width, 0);
+    expect(playerBox.x + playerBox.width).toBeLessThanOrEqual(width);
+  }
+});
+
+// [DOC-FILMS-DELIVERY] Search crawlers get the same video and poster as the player.
+async function assertVideoMetadata(page, video, film, locale) {
+  const json = await page.locator('.doc-film script[type="application/ld+json"]').textContent();
+  const [minutes, seconds] = film.duration.split(':').map(Number);
+  const origin = 'https://deslop.live';
+  expect(JSON.parse(json)).toMatchObject({
+    '@type': 'VideoObject',
+    name: film.title,
+    description: film.description[locale === '/zh' ? 'zh' : 'en'],
+    thumbnailUrl: origin + await video.getAttribute('poster'),
+    contentUrl: origin + await video.locator('source').getAttribute('src'),
+    duration: `PT${minutes * 60 + seconds}S`,
+    uploadDate: '2026-11-10',
+    inLanguage: 'en',
+  });
+}
+
+function filmRoute(slug) {
+  if (slug === 'osprey') return '/blog/osprey-first-class/';
+  if (slug === 'getting-started') return '/docs/';
+  return `/docs/${slug}/`;
+}
+
 for(const [slug,film] of Object.entries(FILMS)) for(const locale of ['', '/zh']) {
   test(`${locale || "en"} ${slug}: responsive player and playable delivery`,async({page},testInfo)=>{
-    await page.goto(locale+(slug==='getting-started'?'/docs/':`/docs/${slug}/`));
+    await page.goto(locale+filmRoute(slug));
     const video=await assertPlayerAttributes(page,film);
     for(const width of WIDTHS) {
       await assertGeometry(page,video,width);
@@ -72,7 +109,21 @@ for(const [slug,film] of Object.entries(FILMS)) for(const locale of ['', '/zh'])
       await pauseAndHideTracks(video);
       await seekAndAssert(video);
     }
+    await assertVideoMetadata(page,video,film,locale);
     await assertTranscript(page,film);
     await assertDownloadLink(video,slug);
   });
 }
+
+// [DOC-FILMS-DELIVERY] Language launch coverage belongs in the blog.
+test('retired Osprey docs open the localized launch film', async ({page}) => {
+  for (const locale of ['', '/zh']) {
+    await page.goto(`${locale}/docs/osprey/`);
+    await expect(page).toHaveURL(`${locale}/blog/osprey-first-class/`);
+    await expect(page.locator('.doc-film video')).toHaveCount(1);
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href',
+      `https://deslop.live${locale}/blog/osprey-first-class/`);
+    await page.goto(`${locale}/docs/`);
+    await expect(page.locator('.docs-sidebar a[href$="/docs/osprey/"]')).toHaveCount(0);
+  }
+});

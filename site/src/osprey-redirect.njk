@@ -1,0 +1,19 @@
+---js
+{
+  layout: false,
+  eleventyExcludeFromCollections: true,
+  locales: ["", "/zh"],
+  pagination: { data: "locales", size: 1, alias: "locale" },
+  permalink: "{{ locale }}/docs/osprey/index.html"
+}
+---
+<!doctype html>
+<html lang="{% if locale %}zh{% else %}en{% endif %}">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="refresh" content="0; url={{ locale }}/blog/osprey-first-class/">
+  <link rel="canonical" href="https://deslop.live{{ locale }}/blog/osprey-first-class/">
+  <title>Osprey in Deslop</title>
+</head>
+<body><a href="{{ locale }}/blog/osprey-first-class/">Osprey in Deslop</a></body>
+</html>
