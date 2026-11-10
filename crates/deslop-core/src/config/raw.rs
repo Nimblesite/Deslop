@@ -16,6 +16,7 @@ use crate::{
 
 /// Raw on-disk TOML shape.
 #[derive(Debug, Default, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(super) struct RawConfig {
     /// Shared patterns applied to every language.
     #[serde(default)]
@@ -151,6 +152,7 @@ pub(super) struct RawReport {
 
 /// Raw on-disk shape of the `[threshold]` section.
 #[derive(Debug, Default, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(super) struct RawThreshold {
     /// Percentage above which the analysis run exits `3` per
     /// [EXIT-CODES]. `None` means "key not set" — the gate is off.
