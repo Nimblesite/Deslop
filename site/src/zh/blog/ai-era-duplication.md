@@ -34,7 +34,7 @@ Claude Code、Cursor、GitHub Copilot 和 Codex 都基于所给的上下文工�
 这一风险有文献记载，而不只是坊间传闻：
 
 - [*Code Copycat Conundrum*](https://arxiv.org/abs/2504.12608) 研究了 19 个代码 LLM，报告了字符、语句和块级别的重复，包括结构上冗余的代码。
-- [*An Empirical Study of Code Clones from Commercial AI Code Generators*](https://conf.researchr.org/details/fse-2025/fse-2025-research-papers/111/An-Empirical-Study-of-Code-Clones-from-Commercial-AI-Code-Generators)（FSE 2025）测量了商业代码生成器输出中 Type-1 和 Type-2 克隆的出现率。
+- [*An Empirical Study of Code Clones from Commercial AI Code Generators*](https://conf.researchr.org/details/fse-2025/fse-2025-research-papers/111/An-Empirical-Study-of-Code-Clones-from-Commercial-AI-Code-Generators)（FSE 2025）测量了商业代码生成器输出中 Type-1 和 Type-2 克隆的出现率：即完全相同和重命名后的副本，大致对应 Deslop 报告中的 **Identical code** 和 **Nearly identical code**。
 - [*Debt Behind the AI Boom*](https://arxiv.org/abs/2603.28592) 追踪了真实仓库中经确认由 AI 编写的提交所引入的静态分析问题。
 
 这些并不意味着 AI 编写的代码比人写的代码更差。人类也会复制粘贴。它说明的是新代码的量增加了，重复代码检查也应该与之保持同步。[研究背景](/zh/docs/research-background/)汇总了完整的阅读清单。

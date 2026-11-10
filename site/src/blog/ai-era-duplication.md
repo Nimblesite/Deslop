@@ -33,7 +33,7 @@ The result is rarely a verbatim copy. It is the same idea with new names: `parse
 The risk is documented, not just anecdotal:
 
 - [*Code Copycat Conundrum*](https://arxiv.org/abs/2504.12608) studies 19 code LLMs and reports repetition at character, statement and block level, including structurally redundant code.
-- [*An Empirical Study of Code Clones from Commercial AI Code Generators*](https://conf.researchr.org/details/fse-2025/fse-2025-research-papers/111/An-Empirical-Study-of-Code-Clones-from-Commercial-AI-Code-Generators) (FSE 2025) measures Type-1 and Type-2 clone rates in the output of commercial code generators.
+- [*An Empirical Study of Code Clones from Commercial AI Code Generators*](https://conf.researchr.org/details/fse-2025/fse-2025-research-papers/111/An-Empirical-Study-of-Code-Clones-from-Commercial-AI-Code-Generators) (FSE 2025) measures Type-1 and Type-2 clone rates in the output of commercial code generators: exact and renamed copies, broadly what Deslop reports as **Identical code** and **Nearly identical code**.
 - [*Debt Behind the AI Boom*](https://arxiv.org/abs/2603.28592) tracks static-analysis issues introduced by verified AI-authored commits in real repositories.
 
 None of this means AI-written code is worse than human code. Humans copy and paste too. It means the volume of new code has gone up, and duplicate-code checks should keep pace with it. [Research Background](/docs/research-background/) collects the full reading list.
