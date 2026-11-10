@@ -76,6 +76,22 @@ Do not treat every clone as a bug. Treat it as a decision.
 
 The mistake is not accepting duplication. The mistake is accepting it accidentally because no one measured it.
 
+## A review checklist for AI-generated pull requests
+
+AI code review tools comment on the diff in front of them. Duplicate code is usually a problem with code *outside* the diff: the new function is fine, but the repository already had one. A reviewer can work through five questions on any AI-assisted pull request:
+
+1. **Does this already exist?** Search for the job the new code does, not its name. An agent seldom reuses the name of the function it duplicates.
+2. **Is it a renamed copy?** Compare the new function's structure with the nearest existing one. Different names and constants with the same control flow is a Type-2 clone.
+3. **Did a fix get copied, or only the bug?** If the original had a later bug fix, check whether the copy has it.
+4. **Will these change together?** If a change to one would always need the same change in the other, they belong in one function.
+5. **Is the duplication deliberate?** Test fixtures and generated code can repeat by design. Mark them so the report stays readable.
+
+The first two questions are the hardest to answer by eye in a large repository, so that is where a tool helps. Deslop answers them with structural analysis across the whole repository rather than the diff alone. With `--diff` and `--only-changed`, the CLI reports only clusters that touch the pull request's added lines, so older debt does not drown out the new copy.
+
+## Vibe coding and duplicate code
+
+When code is accepted mostly because it runs, as in [vibe coding](https://en.wikipedia.org/wiki/Vibe_coding), nobody is reading it closely enough to remember that a helper already exists. That is not an argument against fast iteration. It is an argument for an automated check that does remember. Deslop's MCP server gives Claude Code, Cursor, Codex and other MCP clients a `find-similar` tool to call before writing new code, and the VS Code extension shows new clusters as files change. [AI Agents](/docs/ai-integration/) covers the setup.
+
 ## Why Deslop ranks findings
 
 Deslop ranks clusters by impact so higher-impact findings appear first.
@@ -84,7 +100,7 @@ That matters for AI coding agents. An agent does not need a wall of clone data. 
 
 - which duplicate cluster matters most,
 - where the byte ranges are,
-- why the cluster was flagged,
-- whether the signal came from structure, token similarity, or embeddings.
+- which category the cluster falls into,
+- how to check any two copies with `compare-pair` before editing.
 
 That is why Deslop is JSON-first and why the LSP/MCP path exists: the same structured findings are available to the editor and the coding agent close to the edit.
