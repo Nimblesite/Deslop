@@ -271,12 +271,13 @@ test("internal page links and fragments resolve", async ({ page }) => {
   }
 });
 
-// [SITE-ASSET-TYPE] Publish exactly the requested demo and ten documentation films.
+// [SITE-ASSET-TYPE] Publish exactly the requested demo, ten documentation films and the Python film [DOC-FILMS-PYTHON].
 const SITE_SOURCE = new URL("../src/", import.meta.url);
 const ENCODED_MEDIA = new Set([".aac", ".avi", ".flac", ".m4a", ".m4v", ".mkv", ".mov", ".mp3", ".mp4", ".ogg", ".wav", ".webm"]);
 const DOC_FILM_SLUGS = [
   "getting-started", "ai-integration", "vscode-cluster-panel", "github-action", "osprey",
   "configuration", "how-it-works", "research-background", "accuracy-transparency", "for-ai",
+  "python-click",
 ];
 const PUBLISHED_MEDIA = ["assets/video/deslop-demo.mp4", ...DOC_FILM_SLUGS.map(slug => `assets/video/docs/deslop-docs-${slug}.mp4`)];
 
