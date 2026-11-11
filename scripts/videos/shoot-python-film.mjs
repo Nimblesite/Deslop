@@ -35,10 +35,13 @@ function sourceCheckout() {
 function freshWorkspace() {
   const workspace = path.join(fs.mkdtempSync('/tmp/deslop-python-'), 'click');
   fs.mkdirSync(workspace);
-  execFileSync('sh', ['-c', `git -C "$0" archive HEAD | tar -x -C "$1"`, sourceCheckout(), workspace]);
+  const archive = path.join(work, 'click.tar');
+  git(['archive', '-o', archive, 'HEAD'], sourceCheckout());
+  execFileSync('tar', ['-x', '-f', archive, '-C', workspace]);
+  fs.rmSync(archive);
   fs.writeFileSync(path.join(workspace, '.deslop.toml'), LIBRARY_ONLY);
   for (const args of [['init', '-q'], ['add', '.'], ['-c', 'user.name=Demo', '-c', 'user.email=demo@example.test', 'commit', '-qm', `click ${corpus.sha}`]]) git(args, workspace);
-  execFileSync('sh', ['-c', TESTS], { cwd: workspace, stdio: 'ignore' });
+  execFileSync('uv', TESTS.split(' ').slice(1), { cwd: workspace, stdio: 'ignore' });
   return workspace;
 }
 

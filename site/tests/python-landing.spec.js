@@ -5,6 +5,7 @@ const COPY = JSON.parse(fs.readFileSync(new URL('../src/_data/pythonLanding.json
 const INSTALL = 'vscode:extension/Nimblesite.deslop-live';
 const MARKETPLACE = 'https://marketplace.visualstudio.com/items?itemName=Nimblesite.deslop-live';
 const FILM = '/assets/video/docs/deslop-docs-python-click.mp4';
+const PYLINT_DUPLICATE_CODE = 'https://pylint.readthedocs.io/en/stable/user_guide/messages/refactor/duplicate-code.html';
 const INSTALL_BUTTONS = 2;
 const CLONE_CARDS = 3;
 const ROUTES = {en: '/python/', zh: '/zh/python/'};
@@ -55,7 +56,7 @@ for (const [lang, route] of Object.entries(ROUTES)) {
     }
     await expect(page.locator('.py-step h3')).toHaveText(copy.steps.map(step => step.title));
     const pylint = page.locator('.py-lint a');
-    await expect(pylint).toHaveAttribute('href', /pylint\.readthedocs\.io\/.+duplicate-code/);
+    await expect(pylint).toHaveAttribute('href', PYLINT_DUPLICATE_CODE);
     const faq = page.locator('.py-faq__item');
     await expect(faq.locator('summary')).toHaveText(copy.faq.map(item => item.q));
     await expect(faq.first()).toHaveAttribute('open', '');
